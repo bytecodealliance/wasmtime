@@ -113,11 +113,11 @@ impl TypeCollection {
     pub fn new_for_module(engine: &Engine, module_types: &ModuleTypes) -> Self {
         let engine = engine.clone();
         let registry = engine.signatures();
-        let gc_runtime = engine.gc_runtime();
+        let gc_runtime = engine.gc_runtime().ok().map(|rt| &**rt);
         let (rec_groups, types) = registry
             .0
             .write()
-            .register_module_types(&**gc_runtime, module_types);
+            .register_module_types(gc_runtime, module_types);
 
         log::trace!("Begin building module's shared-to-module-trampoline-types map");
         let mut trampolines = SecondaryMap::with_capacity(types.len());
@@ -294,7 +294,7 @@ impl RegisteredType {
         let (entry, index, ty, layout) = {
             log::trace!("RegisteredType::new({ty:?})");
 
-            let gc_runtime = engine.gc_runtime();
+            let gc_runtime = engine.gc_runtime().ok().map(|rt| &**rt);
             let mut inner = engine.signatures().0.write();
 
             // It shouldn't be possible for users to construct non-canonical
@@ -305,7 +305,7 @@ impl RegisteredType {
             // engine mismatch; those should be caught earlier.
             inner.assert_canonicalized_for_runtime_usage_in_this_registry(&ty);
 
-            let entry = inner.register_singleton_rec_group(&**gc_runtime, ty);
+            let entry = inner.register_singleton_rec_group(gc_runtime, ty);
 
             let index = entry.0.shared_type_indices[0];
             let id = shared_type_index_to_slab_id(index);
@@ -547,7 +547,7 @@ struct TypeRegistryInner {
 impl TypeRegistryInner {
     fn register_module_types(
         &mut self,
-        gc_runtime: &dyn GcRuntime,
+        gc_runtime: Option<&dyn GcRuntime>,
         types: &ModuleTypes,
     ) -> (
         Vec<RecGroupEntry>,
@@ -611,7 +611,7 @@ impl TypeRegistryInner {
     /// on behalf of callers.
     fn register_rec_group(
         &mut self,
-        gc_runtime: &dyn GcRuntime,
+        gc_runtime: Option<&dyn GcRuntime>,
         map: &PrimaryMap<ModuleInternedTypeIndex, VMSharedTypeIndex>,
         range: Range<ModuleInternedTypeIndex>,
         types: impl ExactSizeIterator<Item = WasmSubType>,
@@ -791,7 +791,7 @@ impl TypeRegistryInner {
     /// an already-registered rec group.
     fn insert_one_type_from_rec_group(
         &mut self,
-        gc_runtime: &dyn GcRuntime,
+        gc_runtime: Option<&dyn GcRuntime>,
         module_index: ModuleInternedTypeIndex,
         ty: WasmSubType,
     ) -> VMSharedTypeIndex {
@@ -808,12 +808,20 @@ impl TypeRegistryInner {
 
         let gc_layout = match &ty.composite_type {
             wasmtime_environ::WasmCompositeType::Func(_) => None,
-            wasmtime_environ::WasmCompositeType::Array(a) => {
-                Some(gc_runtime.layouts().array_layout(a).into())
-            }
-            wasmtime_environ::WasmCompositeType::Struct(s) => {
-                Some(gc_runtime.layouts().struct_layout(s).into())
-            }
+            wasmtime_environ::WasmCompositeType::Array(a) => Some(
+                gc_runtime
+                    .expect("must have a GC runtime to register array types")
+                    .layouts()
+                    .array_layout(a)
+                    .into(),
+            ),
+            wasmtime_environ::WasmCompositeType::Struct(s) => Some(
+                gc_runtime
+                    .expect("must have a GC runtime to register array types")
+                    .layouts()
+                    .struct_layout(s)
+                    .into(),
+            ),
         };
 
         // Add the type to our slab.
@@ -868,7 +876,7 @@ impl TypeRegistryInner {
     /// on behalf of callers.
     fn register_singleton_rec_group(
         &mut self,
-        gc_runtime: &dyn GcRuntime,
+        gc_runtime: Option<&dyn GcRuntime>,
         ty: WasmSubType,
     ) -> RecGroupEntry {
         self.assert_canonicalized_for_runtime_usage_in_this_registry(&ty);

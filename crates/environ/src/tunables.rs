@@ -1,3 +1,5 @@
+use core::fmt;
+
 use anyhow::{anyhow, bail, Result};
 use serde_derive::{Deserialize, Serialize};
 use target_lexicon::{PointerWidth, Triple};
@@ -5,6 +7,10 @@ use target_lexicon::{PointerWidth, Triple};
 /// Tunable parameters for WebAssembly compilation.
 #[derive(Clone, Hash, Serialize, Deserialize, Debug)]
 pub struct Tunables {
+    /// The garbage collector implementation to use, which implies the layout of
+    /// GC objects and barriers that must be emitted in Wasm code.
+    pub collector: Option<Collector>,
+
     /// For static heaps, the size in bytes of virtual memory reservation for
     /// the heap.
     pub static_memory_reservation: u64,
@@ -97,6 +103,8 @@ impl Tunables {
     /// Returns the default set of tunables for running under MIRI.
     pub fn default_miri() -> Tunables {
         Tunables {
+            collector: None,
+
             // No virtual memory tricks are available on miri so make these
             // limits quite conservative.
             static_memory_reservation: 1 << 20,
@@ -161,6 +169,24 @@ impl Tunables {
             dynamic_memory_growth_reserve: 2 << 30, // 2GB
 
             ..Tunables::default_miri()
+        }
+    }
+}
+
+/// The garbage collector implementation to use.
+#[derive(Clone, Copy, Hash, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub enum Collector {
+    /// The deferred reference-counting collector.
+    DeferredReferenceCounting,
+    /// The null collector.
+    Null,
+}
+
+impl fmt::Display for Collector {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Collector::DeferredReferenceCounting => write!(f, "deferred reference-counting"),
+            Collector::Null => write!(f, "null"),
         }
     }
 }

@@ -504,23 +504,38 @@ impl<T, U> DiffEqResult<T, U> {
         match (lhs_result, rhs_result) {
             (Ok(lhs_result), Ok(rhs_result)) => DiffEqResult::Success(lhs_result, rhs_result),
 
-            // Both sides failed. If either one hits a stack overflow then that's an
-            // engine defined limit which means we can no longer compare the state
-            // of the two instances, so `None` is returned and nothing else is
-            // compared.
+            // Both sides failed. Check that the trap and state at the time of
+            // failure is the same, when possible.
             (Err(lhs), Err(rhs)) => {
                 let err = match rhs.downcast::<Trap>() {
                     Ok(trap) => trap,
+
+                    // For general, unknown errors, we can't rely on this being
+                    // a deterministic Wasm failure that both engines handled
+                    // identically, leaving Wasm in identical states. We could
+                    // just as easily be hitting engine-specific failures, like
+                    // different implementation-defined limits. So simply report
+                    // failure and move on to the next test.
                     Err(err) => {
                         log::debug!("rhs failed: {err:?}");
                         return DiffEqResult::Failed;
                     }
                 };
-                let poisoned = err == Trap::StackOverflow || lhs_engine.is_stack_overflow(&lhs);
 
+                // Even some traps are nondeterministic, and we can't rely on
+                // the errors matching or leaving Wasm in the same state.
+                let poisoned =
+                    // Allocations being too large for the GC are
+                    // implementation-defined.
+                    err == Trap::AllocationTooLarge
+                    // Stack size, and therefore when overflow happens, is
+                    // implementation-defined.
+                    || err == Trap::StackOverflow
+                    || lhs_engine.is_stack_overflow(&lhs);
                 if poisoned {
                     return DiffEqResult::Poisoned;
                 }
+
                 lhs_engine.assert_error_match(&err, &lhs);
                 DiffEqResult::Failed
             }

@@ -34,6 +34,8 @@ default = [
   'demangle',
   'threads',
   'gc',
+  'gc-drc',
+  'gc-null',
   'cranelift',
   'winch',
   # ... if you add a line above this be sure to change the other locations
@@ -52,6 +54,8 @@ demangle = ["wasmtime-c-api/demangle"]
 wat = ["wasmtime-c-api/wat"]
 threads = ["wasmtime-c-api/threads"]
 gc = ["wasmtime-c-api/gc"]
+gc-drc = ["wasmtime-c-api/gc-drc"]
+gc-null = ["wasmtime-c-api/gc-null"]
 cranelift = ["wasmtime-c-api/cranelift"]
 winch = ["wasmtime-c-api/winch"]
 # ... if you add a line above this be sure to read the comment at the end of

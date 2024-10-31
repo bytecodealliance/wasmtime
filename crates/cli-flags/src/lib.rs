@@ -182,6 +182,16 @@ wasmtime_option_group! {
         /// Currently only `cranelift` and `winch` are supported, but not all
         /// builds of Wasmtime have both built in.
         pub compiler: Option<wasmtime::Strategy>,
+        /// Which garbage collector to use: `drc` or `null`.
+        ///
+        /// `drc` is the deferred reference-counting collector.
+        ///
+        /// `null` is the null garbage collector, which does not collect any
+        /// garbage.
+        ///
+        /// Note that not all builds of Wasmtime will have support for garbage
+        /// collection included.
+        pub collector: Option<wasmtime::Collector>,
         /// Enable Cranelift's internal debug verifier (expensive)
         pub cranelift_debug_verifier: Option<bool>,
         /// Whether or not to enable caching of compiled modules.
@@ -533,6 +543,11 @@ impl CommonOptions {
         match_feature! {
             ["cranelift" : self.codegen.compiler]
             strategy => config.strategy(strategy),
+            _ => err,
+        }
+        match_feature! {
+            ["gc" : self.codegen.collector]
+            collector => config.collector(collector),
             _ => err,
         }
         match_feature! {

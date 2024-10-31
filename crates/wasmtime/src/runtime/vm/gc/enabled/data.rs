@@ -129,7 +129,13 @@ impl<'a> VMGcObjectDataMut<'a> {
         assert_eq!(N, mem::size_of::<T>());
         let offset = usize::try_from(offset).unwrap();
         let end = offset.checked_add(N).unwrap();
-        let into = self.data.get_mut(offset..end).expect("out of bounds field");
+        let into = match self.data.get_mut(offset..end) {
+            Some(into) => into,
+            None => panic!(
+                "out of bounds field! field range = {offset:#x}..{end:#x}; object len = {:#x}",
+                self.data.len(),
+            ),
+        };
         val.write_le(into.try_into().unwrap());
     }
 
