@@ -21,9 +21,9 @@ use wasmparser::{Operator, WasmFeatures};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DataIndex, ElemIndex, EngineOrModuleTypeIndex, FuncIndex, GlobalIndex,
     IndexType, Memory, MemoryIndex, MemoryPlan, MemoryStyle, Module, ModuleInternedTypeIndex,
-    ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex, TableStyle, Tunables,
-    TypeConvert, TypeIndex, VMOffsets, WasmCompositeType, WasmFuncType, WasmHeapTopType,
-    WasmHeapType, WasmRefType, WasmResult, WasmValType,
+    ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex, Tunables, TypeConvert,
+    TypeIndex, VMOffsets, WasmCompositeType, WasmFuncType, WasmHeapTopType, WasmHeapType,
+    WasmRefType, WasmResult, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -869,7 +869,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         table_index: TableIndex,
         index: ir::Value,
         cold_blocks: bool,
-        lazy_init: bool,
     ) -> ir::Value {
         let pointer_type = self.pointer_type();
         self.ensure_table_exists(builder.func, table_index);
@@ -882,7 +881,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let (table_entry_addr, flags) = table_data.prepare_table_addr(self, builder, index);
         let value = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
 
-        if !lazy_init {
+        if !self.tunables.table_lazy_init {
             return value;
         }
 
@@ -1325,15 +1324,11 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         cold_blocks: bool,
     ) -> WasmResult<Option<(ir::Value, ir::Value)>> {
         // Get the funcref pointer from the table.
-        let table = &self.env.module.tables[table_index];
-        let TableStyle::CallerChecksSignature { lazy_init } =
-            TableStyle::for_table(*table, self.env.tunables);
         let funcref_ptr = self.env.get_or_init_func_ref_table_elem(
             self.builder,
             table_index,
             callee,
             cold_blocks,
-            lazy_init,
         );
 
         // If necessary, check the signature.
@@ -1380,11 +1375,6 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         let table = &self.env.module.tables[table_index];
         let sig_id_size = self.env.offsets.size_of_vmshared_type_index();
         let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
-
-        // Generate a rustc compile error here if more styles are added in
-        // the future as the following code is tailored to just this style.
-        let TableStyle::CallerChecksSignature { .. } =
-            TableStyle::for_table(*table, self.env.tunables);
 
         // Test if a type check is necessary for this table. If this table is a
         // table of typed functions and that type matches `ty_index`, then
@@ -1802,16 +1792,9 @@ impl<'module_environment> crate::translate::FuncEnvironment
             }
 
             // Function types.
-            WasmHeapTopType::Func => match TableStyle::for_table(table, self.tunables) {
-                TableStyle::CallerChecksSignature { lazy_init } => Ok(self
-                    .get_or_init_func_ref_table_elem(
-                        builder,
-                        table_index,
-                        index,
-                        false,
-                        lazy_init,
-                    )),
-            },
+            WasmHeapTopType::Func => {
+                Ok(self.get_or_init_func_ref_table_elem(builder, table_index, index, false))
+            }
         }
     }
 
@@ -1842,26 +1825,21 @@ impl<'module_environment> crate::translate::FuncEnvironment
 
             // Function types.
             WasmHeapTopType::Func => {
-                match TableStyle::for_table(table, self.tunables) {
-                    TableStyle::CallerChecksSignature { lazy_init } => {
-                        let (elem_addr, flags) =
-                            table_data.prepare_table_addr(self, builder, index);
-                        // Set the "initialized bit". See doc-comment on
-                        // `FUNCREF_INIT_BIT` in
-                        // crates/environ/src/ref_bits.rs for details.
-                        let value_with_init_bit = if lazy_init {
-                            builder
-                                .ins()
-                                .bor_imm(value, Imm64::from(FUNCREF_INIT_BIT as i64))
-                        } else {
-                            value
-                        };
-                        builder
-                            .ins()
-                            .store(flags, value_with_init_bit, elem_addr, 0);
-                        Ok(())
-                    }
-                }
+                let (elem_addr, flags) = table_data.prepare_table_addr(self, builder, index);
+                // Set the "initialized bit". See doc-comment on
+                // `FUNCREF_INIT_BIT` in
+                // crates/environ/src/ref_bits.rs for details.
+                let value_with_init_bit = if self.tunables.table_lazy_init {
+                    builder
+                        .ins()
+                        .bor_imm(value, Imm64::from(FUNCREF_INIT_BIT as i64))
+                } else {
+                    value
+                };
+                builder
+                    .ins()
+                    .store(flags, value_with_init_bit, elem_addr, 0);
+                Ok(())
             }
         }
     }

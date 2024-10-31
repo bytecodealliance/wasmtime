@@ -13,8 +13,7 @@ use core::slice;
 use core::{cmp, usize};
 use sptr::Strict;
 use wasmtime_environ::{
-    IndexType, TableStyle, Trap, Tunables, WasmHeapTopType, WasmRefType, FUNCREF_INIT_BIT,
-    FUNCREF_MASK,
+    IndexType, Trap, Tunables, WasmHeapTopType, WasmRefType, FUNCREF_INIT_BIT, FUNCREF_MASK,
 };
 
 /// An element going into or coming out of a table.
@@ -275,15 +274,11 @@ impl Table {
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(ty, store)?;
         match wasm_to_table_type(ty.ref_type) {
-            TableElementType::Func => {
-                let TableStyle::CallerChecksSignature { lazy_init } =
-                    TableStyle::for_table(*ty, tunables);
-                Ok(Self::from(DynamicFuncTable {
-                    elements: vec![None; minimum],
-                    maximum,
-                    lazy_init,
-                }))
-            }
+            TableElementType::Func => Ok(Self::from(DynamicFuncTable {
+                elements: vec![None; minimum],
+                maximum,
+                lazy_init: tunables.table_lazy_init,
+            })),
             TableElementType::GcRef => Ok(Self::from(DynamicGcRefTable {
                 elements: (0..minimum).map(|_| None).collect(),
                 maximum,
@@ -321,12 +316,10 @@ impl Table {
                     data.as_non_null().cast::<FuncTableElem>(),
                     cmp::min(len, max),
                 ));
-                let TableStyle::CallerChecksSignature { lazy_init } =
-                    TableStyle::for_table(*ty, tunables);
                 Ok(Self::from(StaticFuncTable {
                     data,
                     size,
-                    lazy_init,
+                    lazy_init: tunables.table_lazy_init,
                 }))
             }
             TableElementType::GcRef => {

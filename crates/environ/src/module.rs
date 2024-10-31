@@ -310,26 +310,6 @@ pub trait InitMemory {
     fn write(&mut self, memory_index: MemoryIndex, init: &StaticMemoryInitializer) -> bool;
 }
 
-/// Implementation styles for WebAssembly tables.
-#[derive(Debug, Clone, Hash, Serialize, Deserialize)]
-pub enum TableStyle {
-    /// Signatures are stored in the table and checked in the caller.
-    CallerChecksSignature {
-        /// Whether this table is initialized lazily and requires an
-        /// initialization check on every access.
-        lazy_init: bool,
-    },
-}
-
-impl TableStyle {
-    /// Decide on an implementation style for the given `Table`.
-    pub fn for_table(_table: Table, tunables: &Tunables) -> Self {
-        Self::CallerChecksSignature {
-            lazy_init: tunables.table_lazy_init,
-        }
-    }
-}
-
 /// Table initialization data for all tables in the module.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TableInitialization {
