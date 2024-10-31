@@ -17,8 +17,8 @@ use smallvec::SmallVec;
 use wasmparser::{BlockType, BrTable, Ieee32, Ieee64, MemArg, VisitOperator, V128};
 use wasmtime_cranelift::TRAP_INDIRECT_CALL_TO_NULL;
 use wasmtime_environ::{
-    FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TableStyle, TypeIndex, WasmHeapType,
-    WasmValType, FUNCREF_INIT_BIT,
+    FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmHeapType, WasmValType,
+    FUNCREF_INIT_BIT,
 };
 
 /// A macro to define unsupported WebAssembly operators.
@@ -1405,18 +1405,10 @@ where
         // Perform the indirect call.
         // This code assumes that [`Self::emit_lazy_init_funcref`] will
         // push the funcref to the value stack.
-        match TableStyle::for_table(
-            self.env.translation.module.tables[table_index],
-            self.tunables,
-        ) {
-            TableStyle::CallerChecksSignature { lazy_init: true } => {
-                let funcref_ptr = self.context.stack.peek().map(|v| v.unwrap_reg()).unwrap();
-                self.masm
-                    .trapz(funcref_ptr.into(), TRAP_INDIRECT_CALL_TO_NULL);
-                self.emit_typecheck_funcref(funcref_ptr.into(), type_index);
-            }
-            _ => unimplemented!("Support for eager table init"),
-        }
+        let funcref_ptr = self.context.stack.peek().map(|v| v.unwrap_reg()).unwrap();
+        self.masm
+            .trapz(funcref_ptr.into(), TRAP_INDIRECT_CALL_TO_NULL);
+        self.emit_typecheck_funcref(funcref_ptr.into(), type_index);
 
         let callee = self.env.funcref(type_index);
         FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, callee)
@@ -1461,12 +1453,7 @@ where
         let heap_type = table.ref_type.heap_type;
 
         match heap_type {
-            WasmHeapType::Func => match TableStyle::for_table(*table, self.tunables) {
-                TableStyle::CallerChecksSignature { lazy_init: true } => {
-                    self.emit_lazy_init_funcref(table_index)
-                }
-                _ => unimplemented!("Support for eager table init"),
-            },
+            WasmHeapType::Func => self.emit_lazy_init_funcref(table_index),
             WasmHeapType::Extern => {
                 self.found_unsupported_instruction =
                     Some("unsupported table.get of externref table");
@@ -1543,29 +1530,29 @@ where
         let table_data = self.env.resolve_table_data(table_index);
         let table = self.env.table(table_index);
         match table.ref_type.heap_type {
-            WasmHeapType::Func => match TableStyle::for_table(*table, self.tunables) {
-                TableStyle::CallerChecksSignature { lazy_init: true } => {
-                    let value = self.context.pop_to_reg(self.masm, None);
-                    let index = self.context.pop_to_reg(self.masm, None);
-                    let base = self.context.any_gpr(self.masm);
-                    let elem_addr =
-                        self.emit_compute_table_elem_addr(index.into(), base, &table_data);
-                    // Set the initialized bit.
-                    self.masm.or(
-                        writable!(value.into()),
-                        value.into(),
-                        RegImm::i64(FUNCREF_INIT_BIT as i64),
-                        ptr_type.into(),
-                    );
+            WasmHeapType::Func => {
+                assert!(
+                    self.tunables.table_lazy_init,
+                    "unsupported table eager init"
+                );
+                let value = self.context.pop_to_reg(self.masm, None);
+                let index = self.context.pop_to_reg(self.masm, None);
+                let base = self.context.any_gpr(self.masm);
+                let elem_addr = self.emit_compute_table_elem_addr(index.into(), base, &table_data);
+                // Set the initialized bit.
+                self.masm.or(
+                    writable!(value.into()),
+                    value.into(),
+                    RegImm::i64(FUNCREF_INIT_BIT as i64),
+                    ptr_type.into(),
+                );
 
-                    self.masm.store_ptr(value.into(), elem_addr);
+                self.masm.store_ptr(value.into(), elem_addr);
 
-                    self.context.free_reg(value);
-                    self.context.free_reg(index);
-                    self.context.free_reg(base);
-                }
-                _ => unimplemented!("Support for eager table init"),
-            },
+                self.context.free_reg(value);
+                self.context.free_reg(index);
+                self.context.free_reg(base);
+            }
             ty => unimplemented!("Support for WasmHeapType: {ty}"),
         };
     }
