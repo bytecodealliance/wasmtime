@@ -2,7 +2,7 @@ use crate::runtime::vm::vmcontext::{
     VMContext, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition, VMTableDefinition,
 };
 use core::ptr::NonNull;
-use wasmtime_environ::{DefinedMemoryIndex, Global, MemoryPlan, Table};
+use wasmtime_environ::{DefinedMemoryIndex, Global, Memory, Table};
 
 /// The value of an export passed from one instance to another.
 pub enum Export {
@@ -70,7 +70,7 @@ pub struct ExportMemory {
     /// Pointer to the containing `VMContext`.
     pub vmctx: *mut VMContext,
     /// The memory declaration, used for compatibility checking.
-    pub memory: MemoryPlan,
+    pub memory: Memory,
     /// The index at which the memory is defined within the `vmctx`.
     pub index: DefinedMemoryIndex,
 }

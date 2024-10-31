@@ -112,7 +112,7 @@ impl Extern {
                 Extern::Func(Func::from_wasmtime_function(f, store))
             }
             crate::runtime::vm::Export::Memory(m) => {
-                if m.memory.memory.shared {
+                if m.memory.shared {
                     Extern::SharedMemory(SharedMemory::from_wasmtime_memory(m, store))
                 } else {
                     Extern::Memory(Memory::from_wasmtime_memory(m, store))

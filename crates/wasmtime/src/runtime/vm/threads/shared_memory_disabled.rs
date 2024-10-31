@@ -4,16 +4,16 @@ use crate::prelude::*;
 use crate::runtime::vm::{RuntimeLinearMemory, VMMemoryDefinition, VMStore, WaitResult};
 use core::ops::Range;
 use core::time::Duration;
-use wasmtime_environ::{MemoryPlan, Trap};
+use wasmtime_environ::{Trap, Tunables};
 
 #[derive(Clone)]
 pub enum SharedMemory {}
 
 impl SharedMemory {
     pub fn wrap(
-        _plan: &MemoryPlan,
+        _ty: &wasmtime_environ::Memory,
+        _tunables: &Tunables,
         _memory: Box<dyn RuntimeLinearMemory>,
-        _ty: wasmtime_environ::Memory,
     ) -> Result<Self> {
         bail!("support for shared memories was disabled at compile time");
     }

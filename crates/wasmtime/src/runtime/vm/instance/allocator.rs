@@ -11,8 +11,8 @@ use crate::vm::VMGlobalDefinition;
 use core::{any::Any, mem, ptr};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
-    MemoryInitializer, MemoryPlan, Module, PrimaryMap, SizeOverflow, TableInitialValue, Trap,
-    Tunables, VMOffsets, WasmHeapTopType,
+    MemoryInitializer, Module, PrimaryMap, SizeOverflow, TableInitialValue, Trap, Tunables,
+    VMOffsets, WasmHeapTopType,
 };
 
 #[cfg(feature = "gc")]
@@ -239,7 +239,8 @@ pub unsafe trait InstanceAllocatorImpl {
     unsafe fn allocate_memory(
         &self,
         request: &mut InstanceAllocationRequest,
-        memory_plan: &MemoryPlan,
+        ty: &wasmtime_environ::Memory,
+        tunables: &Tunables,
         memory_index: DefinedMemoryIndex,
     ) -> Result<(MemoryAllocationIndex, Memory)>;
 
@@ -386,7 +387,7 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
 
         self.increment_core_instance_count()?;
 
-        let num_defined_memories = module.memory_plans.len() - module.num_imported_memories;
+        let num_defined_memories = module.num_defined_memories();
         let mut memories = PrimaryMap::with_capacity(num_defined_memories);
 
         let num_defined_tables = module.num_defined_tables();
@@ -397,12 +398,7 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
             self.allocate_tables(&mut request, &mut tables)?;
             Ok(())
         })() {
-            Ok(_) => Ok(Instance::new(
-                request,
-                memories,
-                tables,
-                &module.memory_plans,
-            )),
+            Ok(_) => Ok(Instance::new(request, memories, tables, &module.memories)),
             Err(e) => {
                 self.deallocate_memories(&mut memories);
                 self.deallocate_tables(&mut tables);
@@ -450,16 +446,12 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
         InstanceAllocatorImpl::validate_module_impl(self, module, request.runtime_info.offsets())
             .expect("module should have already been validated before allocation");
 
-        for (memory_index, memory_plan) in module
-            .memory_plans
-            .iter()
-            .skip(module.num_imported_memories)
-        {
+        for (memory_index, ty) in module.memories.iter().skip(module.num_imported_memories) {
             let memory_index = module
                 .defined_memory_index(memory_index)
                 .expect("should be a defined memory since we skipped imported ones");
 
-            memories.push(self.allocate_memory(request, memory_plan, memory_index)?);
+            memories.push(self.allocate_memory(request, ty, request.tunables, memory_index)?);
         }
 
         Ok(())
@@ -639,10 +631,7 @@ fn get_memory_init_start(init: &MemoryInitializer, instance: &mut Instance) -> R
     let mut context = ConstEvalContext::new(instance);
     let mut const_evaluator = ConstExprEvaluator::default();
     unsafe { const_evaluator.eval(&mut context, &init.offset) }.map(|v| {
-        match instance.env_module().memory_plans[init.memory_index]
-            .memory
-            .idx_type
-        {
+        match instance.env_module().memories[init.memory_index].idx_type {
             wasmtime_environ::IndexType::I32 => v.get_u32().into(),
             wasmtime_environ::IndexType::I64 => v.get_u64(),
         }
@@ -711,10 +700,7 @@ fn initialize_memories(
             let val = unsafe { self.const_evaluator.eval(self.context, expr) }
                 .expect("const expression should be valid");
             Some(
-                match self.context.instance.env_module().memory_plans[memory]
-                    .memory
-                    .idx_type
-                {
+                match self.context.instance.env_module().memories[memory].idx_type {
                     wasmtime_environ::IndexType::I32 => val.get_u32().into(),
                     wasmtime_environ::IndexType::I64 => val.get_u64(),
                 },

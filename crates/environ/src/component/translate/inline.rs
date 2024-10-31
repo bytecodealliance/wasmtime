@@ -966,8 +966,8 @@ impl<'a> Inliner<'a> {
             Some(memory) => match &self.runtime_instances[memory.instance] {
                 InstanceModule::Static(idx) => match &memory.item {
                     ExportItem::Index(i) => {
-                        let plan = &self.nested_modules[*idx].module.memory_plans[*i];
-                        match plan.memory.idx_type {
+                        let ty = &self.nested_modules[*idx].module.memories[*i];
+                        match ty.idx_type {
                             IndexType::I32 => false,
                             IndexType::I64 => true,
                         }

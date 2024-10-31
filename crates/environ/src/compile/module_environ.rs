@@ -1,6 +1,6 @@
 use crate::module::{
-    FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, MemoryPlan, Module,
-    TableSegment, TableSegmentElements,
+    FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, Module, TableSegment,
+    TableSegmentElements,
 };
 use crate::prelude::*;
 use crate::{
@@ -373,12 +373,11 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 self.validator.memory_section(&memories)?;
 
                 let cnt = usize::try_from(memories.count()).unwrap();
-                self.result.module.memory_plans.reserve_exact(cnt);
+                self.result.module.memories.reserve_exact(cnt);
 
                 for entry in memories {
                     let memory = entry?;
-                    let plan = MemoryPlan::for_memory(memory.into(), &self.tunables);
-                    self.result.module.memory_plans.push(plan);
+                    self.result.module.memories.push(memory.into());
                 }
             }
 
@@ -767,10 +766,7 @@ and for re-adding support for interface types you can see this issue:
                 func_index
             }),
             EntityType::Table(ty) => EntityIndex::Table(self.result.module.tables.push(ty)),
-            EntityType::Memory(ty) => {
-                let plan = MemoryPlan::for_memory(ty, &self.tunables);
-                EntityIndex::Memory(self.result.module.memory_plans.push(plan))
-            }
+            EntityType::Memory(ty) => EntityIndex::Memory(self.result.module.memories.push(ty)),
             EntityType::Global(ty) => EntityIndex::Global(self.result.module.globals.push(ty)),
             EntityType::Tag(_) => unimplemented!(),
         }
@@ -920,8 +916,8 @@ impl ModuleTranslation<'_> {
             // wasm module.
             segments: Vec<(usize, StaticMemoryInitializer)>,
         }
-        let mut info = PrimaryMap::with_capacity(self.module.memory_plans.len());
-        for _ in 0..self.module.memory_plans.len() {
+        let mut info = PrimaryMap::with_capacity(self.module.memories.len());
+        for _ in 0..self.module.memories.len() {
             info.push(Memory {
                 data_size: 0,
                 min_addr: u64::MAX,
@@ -940,16 +936,11 @@ impl ModuleTranslation<'_> {
                 &mut self,
                 memory_index: MemoryIndex,
             ) -> Result<u64, SizeOverflow> {
-                self.module.memory_plans[memory_index]
-                    .memory
-                    .minimum_byte_size()
+                self.module.memories[memory_index].minimum_byte_size()
             }
 
             fn eval_offset(&mut self, memory_index: MemoryIndex, expr: &ConstExpr) -> Option<u64> {
-                match (
-                    expr.ops(),
-                    self.module.memory_plans[memory_index].memory.idx_type,
-                ) {
+                match (expr.ops(), self.module.memories[memory_index].idx_type) {
                     (&[ConstOp::I32Const(offset)], IndexType::I32) => {
                         Some(offset.unsigned().into())
                     }
@@ -1002,7 +993,7 @@ impl ModuleTranslation<'_> {
             // initializer can be created. This can be handled technically but
             // would require some more changes to help fix the assert elsewhere
             // that this protects against.
-            if self.module.memory_plans[i].memory.page_size() < page_size {
+            if self.module.memories[i].page_size() < page_size {
                 return;
             }
 
