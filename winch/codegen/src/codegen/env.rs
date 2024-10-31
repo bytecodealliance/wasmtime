@@ -12,7 +12,7 @@ use std::mem;
 use wasmparser::BlockType;
 use wasmtime_environ::{
     BuiltinFunctionIndex, FuncIndex, GlobalIndex, MemoryIndex, MemoryPlan, MemoryStyle,
-    ModuleTranslation, ModuleTypesBuilder, PrimaryMap, PtrSize, TableIndex, TablePlan, TypeConvert,
+    ModuleTranslation, ModuleTypesBuilder, PrimaryMap, PtrSize, Table, TableIndex, TypeConvert,
     TypeIndex, VMOffsets, WasmHeapType, WasmValType,
 };
 
@@ -311,9 +311,9 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         }
     }
 
-    /// Get a [`TablePlan`] from a [`TableIndex`].
-    pub fn table_plan(&mut self, index: TableIndex) -> &TablePlan {
-        &self.translation.module.table_plans[index]
+    /// Get a [`Table`] from a [`TableIndex`].
+    pub fn table(&mut self, index: TableIndex) -> &Table {
+        &self.translation.module.tables[index]
     }
 
     /// Returns true if Spectre mitigations are enabled for heap bounds check.

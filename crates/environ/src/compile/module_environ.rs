@@ -1,6 +1,6 @@
 use crate::module::{
     FuncRefIndex, Initializer, MemoryInitialization, MemoryInitializer, MemoryPlan, Module,
-    TablePlan, TableSegment, TableSegmentElements,
+    TableSegment, TableSegmentElements,
 };
 use crate::prelude::*;
 use crate::{
@@ -343,13 +343,12 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::TableSection(tables) => {
                 self.validator.table_section(&tables)?;
                 let cnt = usize::try_from(tables.count()).unwrap();
-                self.result.module.table_plans.reserve_exact(cnt);
+                self.result.module.tables.reserve_exact(cnt);
 
                 for entry in tables {
                     let wasmparser::Table { ty, init } = entry?;
                     let table = self.convert_table_type(&ty)?;
-                    let plan = TablePlan::for_table(table, &self.tunables);
-                    self.result.module.table_plans.push(plan);
+                    self.result.module.tables.push(table);
                     let init = match init {
                         wasmparser::TableInit::RefNull => TableInitialValue::Null {
                             precomputed: Vec::new(),
@@ -767,10 +766,7 @@ and for re-adding support for interface types you can see this issue:
                 self.flag_func_escaped(func_index);
                 func_index
             }),
-            EntityType::Table(ty) => {
-                let plan = TablePlan::for_table(ty, &self.tunables);
-                EntityIndex::Table(self.result.module.table_plans.push(plan))
-            }
+            EntityType::Table(ty) => EntityIndex::Table(self.result.module.tables.push(ty)),
             EntityType::Memory(ty) => {
                 let plan = MemoryPlan::for_memory(ty, &self.tunables);
                 EntityIndex::Memory(self.result.module.memory_plans.push(plan))
@@ -1141,19 +1137,19 @@ impl ModuleTranslation<'_> {
 
         // First convert any element-initialized tables to images of just that
         // single function if the minimum size of the table allows doing so.
-        for ((_, init), (_, plan)) in self
+        for ((_, init), (_, table)) in self
             .module
             .table_initialization
             .initial_values
             .iter_mut()
             .zip(
                 self.module
-                    .table_plans
+                    .tables
                     .iter()
                     .skip(self.module.num_imported_tables),
             )
         {
-            let table_size = plan.table.limits.min;
+            let table_size = table.limits.min;
             if table_size > MAX_FUNC_TABLE_SIZE {
                 continue;
             }
@@ -1206,16 +1202,12 @@ impl ModuleTranslation<'_> {
                 Some(top) => top,
                 None => break,
             };
-            let table_size = self.module.table_plans[segment.table_index]
-                .table
-                .limits
-                .min;
+            let table_size = self.module.tables[segment.table_index].limits.min;
             if top > table_size || top > MAX_FUNC_TABLE_SIZE {
                 break;
             }
 
-            match self.module.table_plans[segment.table_index]
-                .table
+            match self.module.tables[segment.table_index]
                 .ref_type
                 .heap_type
                 .top()

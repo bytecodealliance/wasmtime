@@ -175,6 +175,7 @@ impl Engine {
         }
     }
 
+    #[inline]
     pub(crate) fn tunables(&self) -> &Tunables {
         &self.inner.tunables
     }

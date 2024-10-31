@@ -289,6 +289,7 @@ impl Instance {
                     store: StorePtr::new(store.traitobj()),
                     wmemcheck: store.engine().config().wmemcheck,
                     pkey: store.get_pkey(),
+                    tunables: store.engine().tunables(),
                 })?;
 
         // The instance still has lots of setup, for example

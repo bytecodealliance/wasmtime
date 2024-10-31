@@ -701,7 +701,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     /// Get the Table for the given index.
     fn table(&self, index: TableIndex) -> Table {
-        self.module.table_plans[index].table
+        self.module.tables[index]
     }
 
     /// Cast the value to I64 and sign extend if necessary.
@@ -817,7 +817,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             }
         };
 
-        let table = &self.module.table_plans[index].table;
+        let table = &self.module.tables[index];
         let element_size = if table.ref_type.is_vmgcref_type() {
             // For GC-managed references, tables store `Option<VMGcRef>`s.
             ir::types::I32.bytes()
@@ -1325,8 +1325,9 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         cold_blocks: bool,
     ) -> WasmResult<Option<(ir::Value, ir::Value)>> {
         // Get the funcref pointer from the table.
-        let table = &self.env.module.table_plans[table_index];
-        let TableStyle::CallerChecksSignature { lazy_init } = table.style;
+        let table = &self.env.module.tables[table_index];
+        let TableStyle::CallerChecksSignature { lazy_init } =
+            TableStyle::for_table(*table, self.env.tunables);
         let funcref_ptr = self.env.get_or_init_func_ref_table_elem(
             self.builder,
             table_index,
@@ -1376,18 +1377,19 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         ty_index: TypeIndex,
         funcref_ptr: ir::Value,
     ) -> CheckIndirectCallTypeSignature {
-        let table = &self.env.module.table_plans[table_index];
+        let table = &self.env.module.tables[table_index];
         let sig_id_size = self.env.offsets.size_of_vmshared_type_index();
         let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
 
         // Generate a rustc compile error here if more styles are added in
         // the future as the following code is tailored to just this style.
-        let TableStyle::CallerChecksSignature { .. } = table.style;
+        let TableStyle::CallerChecksSignature { .. } =
+            TableStyle::for_table(*table, self.env.tunables);
 
         // Test if a type check is necessary for this table. If this table is a
         // table of typed functions and that type matches `ty_index`, then
         // there's no need to perform a typecheck.
-        match table.table.ref_type.heap_type {
+        match table.ref_type.heap_type {
             // Functions do not have a statically known type in the table, a
             // typecheck is required. Fall through to below to perform the
             // actual typecheck.
@@ -1403,7 +1405,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 let specified_ty = self.env.module.types[ty_index];
                 if specified_ty == table_ty {
                     return CheckIndirectCallTypeSignature::StaticMatch {
-                        may_be_null: table.table.ref_type.nullable,
+                        may_be_null: table.ref_type.nullable,
                     };
                 }
 
@@ -1421,7 +1423,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                     // a null pointer, then this was a call to null. Otherwise
                     // if it succeeds then we know it won't match, so trap
                     // anyway.
-                    if table.table.ref_type.nullable {
+                    if table.ref_type.nullable {
                         if self.env.signals_based_traps() {
                             let mem_flags = ir::MemFlags::trusted().with_readonly();
                             self.builder.ins().load(
@@ -1446,7 +1448,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // Tables of `nofunc` can only be inhabited by null, so go ahead and
             // trap with that.
             WasmHeapType::NoFunc => {
-                assert!(table.table.ref_type.nullable);
+                assert!(table.ref_type.nullable);
                 self.env
                     .trap(self.builder, crate::TRAP_INDIRECT_CALL_TO_NULL);
                 return CheckIndirectCallTypeSignature::StaticTrap;
@@ -1782,8 +1784,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         table_index: TableIndex,
         index: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let plan = &self.module.table_plans[table_index];
-        let table = plan.table;
+        let table = self.module.tables[table_index];
         self.ensure_table_exists(builder.func, table_index);
         let table_data = self.tables[table_index].clone().unwrap();
         let heap_ty = table.ref_type.heap_type;
@@ -1801,7 +1802,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
             }
 
             // Function types.
-            WasmHeapTopType::Func => match plan.style {
+            WasmHeapTopType::Func => match TableStyle::for_table(table, self.tunables) {
                 TableStyle::CallerChecksSignature { lazy_init } => Ok(self
                     .get_or_init_func_ref_table_elem(
                         builder,
@@ -1821,8 +1822,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         value: ir::Value,
         index: ir::Value,
     ) -> WasmResult<()> {
-        let plan = &self.module.table_plans[table_index];
-        let table = plan.table;
+        let table = self.module.tables[table_index];
         self.ensure_table_exists(builder.func, table_index);
         let table_data = self.tables[table_index].clone().unwrap();
         let heap_ty = table.ref_type.heap_type;
@@ -1842,7 +1842,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
 
             // Function types.
             WasmHeapTopType::Func => {
-                match plan.style {
+                match TableStyle::for_table(table, self.tunables) {
                     TableStyle::CallerChecksSignature { lazy_init } => {
                         let (elem_addr, flags) =
                             table_data.prepare_table_addr(self, builder, index);

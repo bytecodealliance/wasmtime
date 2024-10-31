@@ -47,6 +47,7 @@ fn create_handle(
             runtime_info,
             wmemcheck: false,
             pkey: None,
+            tunables: store.engine().tunables(),
         })?;
 
         Ok(store.add_dummy_instance(handle))

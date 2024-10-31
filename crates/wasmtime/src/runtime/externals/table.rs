@@ -128,7 +128,7 @@ impl Table {
     }
 
     fn _ty(&self, store: &StoreOpaque) -> TableType {
-        let ty = &store[self.0].table.table;
+        let ty = &store[self.0].table;
         TableType::from_wasmtime_table(store.engine(), ty)
     }
 
@@ -405,7 +405,6 @@ impl Table {
         // Ensure that the table's type is engine-level canonicalized.
         wasmtime_export
             .table
-            .table
             .ref_type
             .canonicalize_for_runtime_usage(&mut |module_index| {
                 crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |instance| {
@@ -417,7 +416,7 @@ impl Table {
     }
 
     pub(crate) fn wasmtime_ty<'a>(&self, data: &'a StoreData) -> &'a wasmtime_environ::Table {
-        &data[self.0].table.table
+        &data[self.0].table
     }
 
     pub(crate) fn vmimport(&self, store: &StoreOpaque) -> crate::runtime::vm::VMTableImport {

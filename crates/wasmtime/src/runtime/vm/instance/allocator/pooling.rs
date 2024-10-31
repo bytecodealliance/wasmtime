@@ -60,8 +60,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 use wasmtime_environ::{
-    DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryPlan, Module, TablePlan, Tunables,
-    VMOffsets,
+    DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryPlan, Module, Tunables, VMOffsets,
 };
 
 #[cfg(feature = "gc")]
@@ -515,7 +514,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
                     self.validate_module_impl(module, &offsets)?;
                     num_core_instances += 1;
                     num_memories += module.memory_plans.len() - module.num_imported_memories;
-                    num_tables += module.table_plans.len() - module.num_imported_tables;
+                    num_tables += module.num_defined_tables();
                 }
                 LowerImport { .. }
                 | ExtractMemory(_)
@@ -628,10 +627,11 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
     unsafe fn allocate_table(
         &self,
         request: &mut InstanceAllocationRequest,
-        table_plan: &TablePlan,
+        ty: &wasmtime_environ::Table,
+        tunables: &Tunables,
         _table_index: DefinedTableIndex,
     ) -> Result<(super::TableAllocationIndex, Table)> {
-        self.with_flush_and_retry(|| self.tables.allocate(request, table_plan))
+        self.with_flush_and_retry(|| self.tables.allocate(request, ty, tunables))
     }
 
     unsafe fn deallocate_table(
