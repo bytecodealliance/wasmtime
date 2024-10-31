@@ -1060,7 +1060,8 @@
 (decl imul128 (Gpr Gpr GprMem GprMem) ValueRegs)
 (rule (imul128 x_lo x_hi y_lo y_hi)
       ;; Put `x` into registers and unpack its hi/lo halves.
-      (let (;; lo_hi = mul x_lo, y_hi
+      (let (
+            ;; lo_hi = mul x_lo, y_hi
             (lo_hi Gpr (x64_imul $I64 x_lo y_hi))
             ;; hi_lo = mul x_hi, y_lo
             (hi_lo Gpr (x64_imul $I64 x_hi y_lo))

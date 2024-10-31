@@ -1020,7 +1020,8 @@
 (rule 1 (gen_bswap (ty_int_ref_16_to_64 ty) x)
   (if-let half_ty (ty_half_width ty))
   (if-let half_size (u64_to_imm12 (ty_bits half_ty)))
-  (let (;; This swaps the top bytes and zeroes the bottom bytes, so that
+  (let (
+        ;; This swaps the top bytes and zeroes the bottom bytes, so that
         ;; we can or it with the bottom bytes later.
         (swap_top XReg (gen_bswap half_ty x))
         (top XReg (rv_slli swap_top half_size))
@@ -1205,7 +1206,8 @@
   (if-let two (u64_to_uimm5 2))
   (if-let four (u64_to_uimm5 4))
 
-  (let (;; x = x - ((x >> 1) & 0x55555555);
+  (let (
+        ;; x = x - ((x >> 1) & 0x55555555);
         (mask_55 XReg (imm (lane_type ty) (u64_and 0x5555555555555555 (ty_mask (lane_type ty)))))
         (count2_shr VReg (rv_vsrl_vi x one (unmasked) ty))
         (count2_and VReg (rv_vand_vx count2_shr mask_55 (unmasked) ty))
@@ -1793,7 +1795,8 @@
 ;; NaN. We handle this by manually checking if one of the inputs is a NaN
 ;; and selecting based on that result.
 (rule 0 (lower (has_type (ty_supported_float ty) (fmin x y)))
-  (let (;; Check if both inputs are not nan.
+  (let (
+        ;; Check if both inputs are not nan.
         (is_ordered FloatCompare (fcmp_to_float_compare (FloatCC.Ordered) ty x y))
         ;; `fadd` returns a nan if any of the inputs is a NaN.
         (nan FReg (rv_fadd ty (FRM.RNE) x y))
@@ -1825,7 +1828,8 @@
 ;; NaN. We handle this by manually checking if one of the inputs is a NaN
 ;; and selecting based on that result.
 (rule 0 (lower (has_type (ty_supported_float ty) (fmax x y)))
-  (let (;; Check if both inputs are not nan.
+  (let (
+        ;; Check if both inputs are not nan.
         (is_ordered FloatCompare (fcmp_to_float_compare (FloatCC.Ordered) ty x y))
         ;; `fadd` returns a NaN if any of the inputs is a NaN.
         (nan FReg (rv_fadd ty (FRM.RNE) x y))

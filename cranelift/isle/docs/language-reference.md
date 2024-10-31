@@ -1430,10 +1430,30 @@ for more information regarding the trie construction algorithm.
 
 ## Reference: ISLE Language Grammar
 
-Baseline: allow arbitrary whitespace, and Lisp-style comments (`;` to
-newline). The grammar accepted by the parser is as follows:
+Baseline: allow arbitrary whitespace, and wasm-style comments (`;` to
+newline, or nested block-comments with `(;` and `;)`).
+
+The grammar accepted by the parser is as follows:
 
 ```bnf
+<skip> ::= <whitespace> | <comment>
+
+<whitespace> ::= " "
+               | "\t"
+               | "\n"
+               | "\r"
+
+<comment> ::= <line-comment> | <block-comment>
+
+<line-comment> ::= ";" <line-char>* (<newline> | eof)
+<newline> ::= "\n" | "\r"
+<line-char> ::= <any character other than "\n" or "\r">
+
+<block-comment> ::= "(;" <block-char>* ";)"
+<block-char> ::= <any character other than ";" or "(">
+               | ";" if the next character is not ")"
+               | "(" if the next character is not ";"
+               | <block-comment>
 
 <ISLE> ::= <def>*
 
