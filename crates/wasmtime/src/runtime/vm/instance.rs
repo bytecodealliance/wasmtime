@@ -572,7 +572,7 @@ impl Instance {
         ExportTable {
             definition,
             vmctx,
-            table: self.env_module().table_plans[index].clone(),
+            table: self.env_module().tables[index],
         }
     }
 
@@ -918,12 +918,7 @@ impl Instance {
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
                 let mut context = ConstEvalContext::new(self);
-                match module.table_plans[table_index]
-                    .table
-                    .ref_type
-                    .heap_type
-                    .top()
-                {
+                match module.tables[table_index].ref_type.heap_type.top() {
                     WasmHeapTopType::Extern => table.init_gc_refs(
                         dst,
                         exprs.iter().map(|expr| unsafe {
@@ -1288,7 +1283,7 @@ impl Instance {
 
         // Initialize the defined tables
         let mut ptr = self.vmctx_plus_offset_mut(offsets.vmctx_tables_begin());
-        for i in 0..module.table_plans.len() - module.num_imported_tables {
+        for i in 0..module.num_defined_tables() {
             ptr::write(ptr, self.tables[DefinedTableIndex::new(i)].1.vmtable());
             ptr = ptr.add(1);
         }
@@ -1439,7 +1434,7 @@ impl InstanceHandle {
     pub fn all_tables<'a>(
         &'a mut self,
     ) -> impl ExactSizeIterator<Item = (TableIndex, ExportTable)> + 'a {
-        let indices = (0..self.module().table_plans.len())
+        let indices = (0..self.module().tables.len())
             .map(|i| TableIndex::new(i))
             .collect::<Vec<_>>();
         indices.into_iter().map(|i| (i, self.get_exported_table(i)))

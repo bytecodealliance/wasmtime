@@ -11,8 +11,8 @@ use crate::vm::VMGlobalDefinition;
 use core::{any::Any, mem, ptr};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
-    MemoryInitializer, MemoryPlan, Module, PrimaryMap, SizeOverflow, TableInitialValue, TablePlan,
-    Trap, VMOffsets, WasmHeapTopType,
+    MemoryInitializer, MemoryPlan, Module, PrimaryMap, SizeOverflow, TableInitialValue, Trap,
+    Tunables, VMOffsets, WasmHeapTopType,
 };
 
 #[cfg(feature = "gc")]
@@ -74,6 +74,9 @@ pub struct InstanceAllocationRequest<'a> {
     /// Request that the instance's memories be protected by a specific
     /// protection key.
     pub pkey: Option<ProtectionKey>,
+
+    /// Tunable configuration options the engine is using.
+    pub tunables: &'a Tunables,
 }
 
 /// A pointer to a Store. This Option<*mut dyn Store> is wrapped in a struct
@@ -263,7 +266,8 @@ pub unsafe trait InstanceAllocatorImpl {
     unsafe fn allocate_table(
         &self,
         req: &mut InstanceAllocationRequest,
-        table_plan: &TablePlan,
+        table: &wasmtime_environ::Table,
+        tunables: &Tunables,
         table_index: DefinedTableIndex,
     ) -> Result<(TableAllocationIndex, Table)>;
 
@@ -385,7 +389,7 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
         let num_defined_memories = module.memory_plans.len() - module.num_imported_memories;
         let mut memories = PrimaryMap::with_capacity(num_defined_memories);
 
-        let num_defined_tables = module.table_plans.len() - module.num_imported_tables;
+        let num_defined_tables = module.num_defined_tables();
         let mut tables = PrimaryMap::with_capacity(num_defined_tables);
 
         match (|| {
@@ -498,12 +502,12 @@ pub trait InstanceAllocator: InstanceAllocatorImpl {
         InstanceAllocatorImpl::validate_module_impl(self, module, request.runtime_info.offsets())
             .expect("module should have already been validated before allocation");
 
-        for (index, plan) in module.table_plans.iter().skip(module.num_imported_tables) {
+        for (index, table) in module.tables.iter().skip(module.num_imported_tables) {
             let def_index = module
                 .defined_table_index(index)
                 .expect("should be a defined table since we skipped imported ones");
 
-            tables.push(self.allocate_table(request, plan, def_index)?);
+            tables.push(self.allocate_table(request, table, request.tunables, def_index)?);
         }
 
         Ok(())
@@ -575,7 +579,7 @@ fn initialize_tables(
                 };
                 let idx = module.table_index(table);
                 let table = unsafe { context.instance.get_defined_table(table).as_mut().unwrap() };
-                match module.table_plans[idx].table.ref_type.heap_type.top() {
+                match module.tables[idx].ref_type.heap_type.top() {
                     WasmHeapTopType::Extern => {
                         let gc_ref = VMGcRef::from_raw_u32(raw.get_externref());
                         let gc_store = unsafe { (*context.instance.store()).gc_store_mut()? };

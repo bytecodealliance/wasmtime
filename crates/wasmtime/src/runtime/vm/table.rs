@@ -13,7 +13,7 @@ use core::slice;
 use core::{cmp, usize};
 use sptr::Strict;
 use wasmtime_environ::{
-    IndexType, TablePlan, TableStyle, Trap, WasmHeapTopType, WasmRefType, FUNCREF_INIT_BIT,
+    IndexType, TableStyle, Trap, Tunables, WasmHeapTopType, WasmRefType, FUNCREF_INIT_BIT,
     FUNCREF_MASK,
 };
 
@@ -268,11 +268,16 @@ fn wasm_to_table_type(ty: WasmRefType) -> TableElementType {
 
 impl Table {
     /// Create a new dynamic (movable) table instance for the specified table plan.
-    pub fn new_dynamic(plan: &TablePlan, store: &mut dyn VMStore) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(plan, store)?;
-        match wasm_to_table_type(plan.table.ref_type) {
+    pub fn new_dynamic(
+        ty: &wasmtime_environ::Table,
+        tunables: &Tunables,
+        store: &mut dyn VMStore,
+    ) -> Result<Self> {
+        let (minimum, maximum) = Self::limit_new(ty, store)?;
+        match wasm_to_table_type(ty.ref_type) {
             TableElementType::Func => {
-                let TableStyle::CallerChecksSignature { lazy_init } = plan.style;
+                let TableStyle::CallerChecksSignature { lazy_init } =
+                    TableStyle::for_table(*ty, tunables);
                 Ok(Self::from(DynamicFuncTable {
                     elements: vec![None; minimum],
                     maximum,
@@ -288,15 +293,16 @@ impl Table {
 
     /// Create a new static (immovable) table instance for the specified table plan.
     pub unsafe fn new_static(
-        plan: &TablePlan,
+        ty: &wasmtime_environ::Table,
+        tunables: &Tunables,
         data: SendSyncPtr<[u8]>,
         store: &mut dyn VMStore,
     ) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(plan, store)?;
+        let (minimum, maximum) = Self::limit_new(ty, store)?;
         let size = minimum;
         let max = maximum.unwrap_or(usize::MAX);
 
-        match wasm_to_table_type(plan.table.ref_type) {
+        match wasm_to_table_type(ty.ref_type) {
             TableElementType::Func => {
                 let len = {
                     let data = data.as_non_null().as_ref();
@@ -306,16 +312,17 @@ impl Table {
                     data.len()
                 };
                 ensure!(
-                    usize::try_from(plan.table.limits.min).unwrap() <= len,
+                    usize::try_from(ty.limits.min).unwrap() <= len,
                     "initial table size of {} exceeds the pooling allocator's \
                      configured maximum table size of {len} elements",
-                    plan.table.limits.min,
+                    ty.limits.min,
                 );
                 let data = SendSyncPtr::new(NonNull::slice_from_raw_parts(
                     data.as_non_null().cast::<FuncTableElem>(),
                     cmp::min(len, max),
                 ));
-                let TableStyle::CallerChecksSignature { lazy_init } = plan.style;
+                let TableStyle::CallerChecksSignature { lazy_init } =
+                    TableStyle::for_table(*ty, tunables);
                 Ok(Self::from(StaticFuncTable {
                     data,
                     size,
@@ -331,10 +338,10 @@ impl Table {
                     data.len()
                 };
                 ensure!(
-                    usize::try_from(plan.table.limits.min).unwrap() <= len,
+                    usize::try_from(ty.limits.min).unwrap() <= len,
                     "initial table size of {} exceeds the pooling allocator's \
                      configured maximum table size of {len} elements",
-                    plan.table.limits.min,
+                    ty.limits.min,
                 );
                 let data = SendSyncPtr::new(NonNull::slice_from_raw_parts(
                     data.as_non_null().cast::<Option<VMGcRef>>(),
@@ -348,20 +355,23 @@ impl Table {
     // Calls the `store`'s limiter to optionally prevent the table from being created.
     //
     // Returns the minimum and maximum size of the table if the table can be created.
-    fn limit_new(plan: &TablePlan, store: &mut dyn VMStore) -> Result<(usize, Option<usize>)> {
+    fn limit_new(
+        ty: &wasmtime_environ::Table,
+        store: &mut dyn VMStore,
+    ) -> Result<(usize, Option<usize>)> {
         // No matter how the table limits are specified
         // The table size is limited by the host's pointer size
         let absolute_max = usize::MAX;
 
         // If the minimum overflows the host's pointer size, then we can't satisfy this request.
         // We defer the error to later so the `store` can be informed.
-        let minimum = usize::try_from(plan.table.limits.min).ok();
+        let minimum = usize::try_from(ty.limits.min).ok();
 
         // The maximum size of the table is limited by:
         // * the host's pointer size.
         // * the table's maximum size if defined.
         // * if the table is 64-bit.
-        let maximum = match (plan.table.limits.max, plan.table.idx_type) {
+        let maximum = match (ty.limits.max, ty.idx_type) {
             (Some(max), _) => usize::try_from(max).ok(),
             (None, IndexType::I64) => usize::try_from(u64::MAX).ok(),
             (None, IndexType::I32) => usize::try_from(u32::MAX).ok(),
@@ -371,7 +381,7 @@ impl Table {
         if !store.table_growing(0, minimum.unwrap_or(absolute_max), maximum)? {
             bail!(
                 "table minimum size of {} elements exceeds table limits",
-                plan.table.limits.min
+                ty.limits.min
             );
         }
 
@@ -380,7 +390,7 @@ impl Table {
         let minimum = minimum.ok_or_else(|| {
             format_err!(
                 "table minimum size of {} elements exceeds table limits",
-                plan.table.limits.min
+                ty.limits.min
             )
         })?;
         Ok((minimum, maximum))

@@ -13,7 +13,7 @@ use alloc::sync::Arc;
 use core::ops::Range;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryPlan, MemoryStyle, Module,
-    VMOffsets,
+    Tunables, VMOffsets,
 };
 
 #[cfg(feature = "component-model")]
@@ -64,6 +64,7 @@ pub fn create_memory(
         runtime_info,
         wmemcheck: false,
         pkey: None,
+        tunables: store.engine().tunables(),
     };
 
     unsafe {
@@ -234,10 +235,11 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
     unsafe fn allocate_table(
         &self,
         req: &mut InstanceAllocationRequest,
-        table_plan: &wasmtime_environ::TablePlan,
+        ty: &wasmtime_environ::Table,
+        tunables: &Tunables,
         table_index: DefinedTableIndex,
     ) -> Result<(TableAllocationIndex, Table)> {
-        self.ondemand.allocate_table(req, table_plan, table_index)
+        self.ondemand.allocate_table(req, ty, tunables, table_index)
     }
 
     unsafe fn deallocate_table(

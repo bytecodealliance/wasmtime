@@ -602,6 +602,7 @@ impl<T> Store<T> {
                         runtime_info: &shim,
                         wmemcheck: engine.config().wmemcheck,
                         pkey: None,
+                        tunables: engine.tunables(),
                     })
                     .expect("failed to allocate default callee")
             };
@@ -1293,7 +1294,7 @@ impl StoreOpaque {
 
         let module = module.env_module();
         let memories = module.memory_plans.len() - module.num_imported_memories;
-        let tables = module.table_plans.len() - module.num_imported_tables;
+        let tables = module.num_defined_tables();
 
         bump(&mut self.instance_count, self.instance_limit, 1, "instance")?;
         bump(

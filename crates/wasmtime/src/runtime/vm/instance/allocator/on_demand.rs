@@ -9,7 +9,7 @@ use crate::runtime::vm::table::Table;
 use crate::runtime::vm::CompiledModuleId;
 use alloc::sync::Arc;
 use wasmtime_environ::{
-    DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryPlan, Module, TablePlan, VMOffsets,
+    DefinedMemoryIndex, DefinedTableIndex, HostPtr, MemoryPlan, Module, Tunables, VMOffsets,
 };
 
 #[cfg(feature = "gc")]
@@ -130,12 +130,14 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
     unsafe fn allocate_table(
         &self,
         request: &mut InstanceAllocationRequest,
-        table_plan: &TablePlan,
+        ty: &wasmtime_environ::Table,
+        tunables: &Tunables,
         _table_index: DefinedTableIndex,
     ) -> Result<(TableAllocationIndex, Table)> {
         let allocation_index = TableAllocationIndex::default();
         let table = Table::new_dynamic(
-            table_plan,
+            ty,
+            tunables,
             request
                 .store
                 .get()

@@ -330,24 +330,6 @@ impl TableStyle {
     }
 }
 
-/// A WebAssembly table description along with our chosen style for
-/// implementing it.
-#[derive(Debug, Clone, Hash, Serialize, Deserialize)]
-pub struct TablePlan {
-    /// The WebAssembly table description.
-    pub table: Table,
-    /// Our chosen implementation style.
-    pub style: TableStyle,
-}
-
-impl TablePlan {
-    /// Draw up a plan for implementing a `Table`.
-    pub fn for_table(table: Table, tunables: &Tunables) -> Self {
-        let style = TableStyle::for_table(table, tunables);
-        Self { table, style }
-    }
-}
-
 /// Table initialization data for all tables in the module.
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct TableInitialization {
@@ -481,7 +463,7 @@ pub struct Module {
     pub functions: PrimaryMap<FuncIndex, FunctionType>,
 
     /// WebAssembly tables.
-    pub table_plans: PrimaryMap<TableIndex, TablePlan>,
+    pub tables: PrimaryMap<TableIndex, Table>,
 
     /// WebAssembly linear memory plans.
     pub memory_plans: PrimaryMap<MemoryIndex, MemoryPlan>,
@@ -651,7 +633,7 @@ impl Module {
     pub fn type_of(&self, index: EntityIndex) -> EntityType {
         match index {
             EntityIndex::Global(i) => EntityType::Global(self.globals[i]),
-            EntityIndex::Table(i) => EntityType::Table(self.table_plans[i].table),
+            EntityIndex::Table(i) => EntityType::Table(self.tables[i]),
             EntityIndex::Memory(i) => EntityType::Memory(self.memory_plans[i].memory),
             EntityIndex::Function(i) => {
                 EntityType::Function(EngineOrModuleTypeIndex::Module(self.functions[i].signature))
@@ -673,6 +655,12 @@ impl Module {
     /// module.
     pub fn defined_func_indices(&self) -> impl Iterator<Item = DefinedFuncIndex> {
         (0..self.functions.len() - self.num_imported_funcs).map(|i| DefinedFuncIndex::new(i))
+    }
+
+    /// Returns the number of tables defined by this module itself: all tables
+    /// minus imported tables.
+    pub fn num_defined_tables(&self) -> usize {
+        self.tables.len() - self.num_imported_tables
     }
 }
 

@@ -351,7 +351,7 @@ impl<P: PtrSize> VMOffsets<P> {
             num_imported_tables: cast_to_u32(module.num_imported_tables),
             num_imported_memories: cast_to_u32(module.num_imported_memories),
             num_imported_globals: cast_to_u32(module.num_imported_globals),
-            num_defined_tables: cast_to_u32(module.table_plans.len() - module.num_imported_tables),
+            num_defined_tables: cast_to_u32(module.num_defined_tables()),
             num_defined_memories: cast_to_u32(
                 module.memory_plans.len() - module.num_imported_memories,
             ),
