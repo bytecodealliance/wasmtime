@@ -1,7 +1,6 @@
 use anyhow::{bail, Context};
 use bstr::ByteSlice;
 use libtest_mimic::{Arguments, FormatSetting, Trial};
-use rustix::path::Arg;
 use std::path::Path;
 use std::sync::{Condvar, LazyLock, Mutex};
 use wasmtime::{
@@ -43,7 +42,7 @@ fn add_tests(trials: &mut Vec<Trial>, path: &Path) {
         }
 
         let test_uses_gc_types = path.iter().any(|part| {
-            part.as_str().map_or(false, |s| {
+            part.to_str().map_or(false, |s| {
                 s.contains("gc")
                     || s.contains("function-references")
                     || s.contains("reference-types")

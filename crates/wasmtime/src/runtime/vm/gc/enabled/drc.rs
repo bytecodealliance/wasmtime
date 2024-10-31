@@ -685,8 +685,8 @@ unsafe impl GcHeap for DrcHeap {
         activations_table.reset();
     }
 
-    fn heap_slice(&self) -> &[u8] {
-        let ptr = self.heap.as_ptr();
+    fn heap_slice(&self) -> &[UnsafeCell<u8>] {
+        let ptr = self.heap.as_ptr().cast();
         let len = self.heap.len();
         unsafe { core::slice::from_raw_parts(ptr, len) }
     }

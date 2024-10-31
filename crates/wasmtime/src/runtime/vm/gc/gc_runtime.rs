@@ -5,7 +5,9 @@ use crate::runtime::vm::{
     ExternRefHostDataId, ExternRefHostDataTable, GcHeapObject, SendSyncPtr, TypedGcRef, VMArrayRef,
     VMExternRef, VMGcHeader, VMGcObjectDataMut, VMGcRef, VMStructRef,
 };
-use core::{alloc::Layout, any::Any, marker, mem, num::NonZeroUsize, ops::Range, ptr};
+use core::{
+    alloc::Layout, any::Any, cell::UnsafeCell, marker, mem, num::NonZeroUsize, ops::Range, ptr,
+};
 use wasmtime_environ::{GcArrayLayout, GcStructLayout, GcTypeLayouts, VMSharedTypeIndex};
 
 /// Trait for integrating a garbage collector with the runtime.
@@ -383,7 +385,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// The heap slice must be the GC heap region, and the region must remain
     /// valid (i.e. not moved or resized) for JIT code until `self` is dropped
     /// or `self.reset()` is called.
-    fn heap_slice(&self) -> &[u8];
+    fn heap_slice(&self) -> &[UnsafeCell<u8>];
 
     /// Get a mutable slice of the raw bytes of the GC heap.
     ///

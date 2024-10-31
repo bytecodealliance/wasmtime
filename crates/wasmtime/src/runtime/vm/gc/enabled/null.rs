@@ -16,6 +16,7 @@ use crate::{
 use core::{
     alloc::Layout,
     any::Any,
+    cell::UnsafeCell,
     num::{NonZeroU32, NonZeroUsize},
 };
 use wasmtime_environ::{
@@ -199,8 +200,8 @@ unsafe impl GcHeap for NullHeap {
         self.no_gc_count -= 1;
     }
 
-    fn heap_slice(&self) -> &[u8] {
-        let ptr = self.heap.as_ptr();
+    fn heap_slice(&self) -> &[UnsafeCell<u8>] {
+        let ptr = self.heap.as_ptr().cast();
         let len = self.heap.len();
         unsafe { core::slice::from_raw_parts(ptr, len) }
     }
