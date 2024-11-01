@@ -74,7 +74,7 @@ features = [
   "Win32_Security",
 ]
 
-[target.'cfg(all(target_arch = "x86_64", not(target_os = "android")))'.dependencies]
+[target.'cfg(all(target_arch = "x86_64", not(any(target_os = "android", target_os = "illumos"))))'.dependencies]
 ittapi = { version = "0.4.0", optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
