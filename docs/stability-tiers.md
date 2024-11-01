@@ -94,6 +94,7 @@ For explanations of what each tier means see below.
 | Target               | `x86_64-linux-android`            | CI testing, full-time maintainer |
 | Target               | `x86_64-unknown-linux-musl` [^4]  | CI testing, full-time maintainer |
 | Target               | `x86_64-unknown-illumos`          | CI testing, full-time maintainer |
+| Target               | `x86_64-unknown-freebsd`          | CI testing, full-time maintainer |
 | Compiler Backend     | Winch on x86\_64                  | WebAssembly proposals (`simd`, `relaxed-simd`, `tail-call`, `reference-types`, `threads`)     |
 | Compiler Backend     | Winch on aarch64                  | Complete implementation     |
 | WebAssembly Proposal | [`gc`]                            | Complete implementation     |
@@ -142,7 +143,7 @@ features to figure out how best to implement them and at least move them to Tier
 3 above.
 
 * Target: ARM 32-bit
-* Target: [FreeBSD](https://github.com/bytecodealliance/wasmtime/issues/5499)
+* Target: [AArch64 FreeBSD](https://github.com/bytecodealliance/wasmtime/issues/5499)
 * Target: [NetBSD/OpenBSD](https://github.com/bytecodealliance/wasmtime/issues/6962)
 * Target: [i686 (32-bit Intel targets)](https://github.com/bytecodealliance/wasmtime/issues/1980)
 * Target: MIPS
