@@ -101,8 +101,7 @@ fn offsets_static_dynamic_oh_my(config: &mut Config) -> Result<()> {
         for &guard_size in sizes.iter() {
             for &guard_before_linear_memory in [true, false].iter() {
                 config.static_memory_maximum_size(static_memory_maximum_size);
-                config.dynamic_memory_guard_size(guard_size);
-                config.static_memory_guard_size(guard_size);
+                config.memory_guard_size(guard_size);
                 config.guard_before_linear_memory(guard_before_linear_memory);
                 config.cranelift_debug_verifier(true);
                 engines.push(Engine::new(&config)?);
@@ -141,8 +140,7 @@ fn guards_present() -> Result<()> {
 
     let mut config = Config::new();
     config.static_memory_maximum_size(1 << 20);
-    config.dynamic_memory_guard_size(GUARD_SIZE);
-    config.static_memory_guard_size(GUARD_SIZE);
+    config.memory_guard_size(GUARD_SIZE);
     config.guard_before_linear_memory(true);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
@@ -193,8 +191,7 @@ fn guards_present_pooling(config: &mut Config) -> Result<()> {
         .max_memory_size(10 << 16)
         .memory_protection_keys(MpkEnabled::Disable);
     config.static_memory_maximum_size(1 << 20);
-    config.dynamic_memory_guard_size(GUARD_SIZE);
-    config.static_memory_guard_size(GUARD_SIZE);
+    config.memory_guard_size(GUARD_SIZE);
     config.guard_before_linear_memory(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config)?;
@@ -255,8 +252,7 @@ fn guards_present_pooling_mpk(config: &mut Config) -> Result<()> {
         .memory_protection_keys(MpkEnabled::Enable)
         .max_memory_protection_keys(2);
     config.static_memory_maximum_size(1 << 20);
-    config.dynamic_memory_guard_size(GUARD_SIZE);
-    config.static_memory_guard_size(GUARD_SIZE);
+    config.memory_guard_size(GUARD_SIZE);
     config.guard_before_linear_memory(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
     let engine = Engine::new(&config)?;

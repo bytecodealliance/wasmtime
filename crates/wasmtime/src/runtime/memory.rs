@@ -1048,8 +1048,7 @@ mod tests {
     #[test]
     fn respect_tunables() {
         let mut cfg = Config::new();
-        cfg.static_memory_maximum_size(0)
-            .dynamic_memory_guard_size(0);
+        cfg.static_memory_maximum_size(0).memory_guard_size(0);
         let mut store = Store::new(&Engine::new(&cfg).unwrap(), ());
         let ty = MemoryType::new(1, None);
         let mem = Memory::new(&mut store, ty).unwrap();

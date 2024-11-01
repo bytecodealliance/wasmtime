@@ -267,8 +267,7 @@ impl Config {
             let memory_config = if pcc {
                 MemoryConfig::Normal(NormalMemoryConfig {
                     static_memory_maximum_size: Some(4 << 30), // 4 GiB
-                    static_memory_guard_size: Some(2 << 30),   // 2 GiB
-                    dynamic_memory_guard_size: Some(0),
+                    memory_guard_size: Some(2 << 30),          // 2 GiB
                     dynamic_memory_reserved_for_growth: Some(0),
                     guard_before_linear_memory: false,
                     memory_init_cow: true,
@@ -286,9 +285,8 @@ impl Config {
                 MemoryConfig::CustomUnaligned => {
                     cfg.with_host_memory(Arc::new(UnalignedMemoryCreator))
                         .static_memory_maximum_size(0)
-                        .dynamic_memory_guard_size(0)
+                        .memory_guard_size(0)
                         .dynamic_memory_reserved_for_growth(0)
-                        .static_memory_guard_size(0)
                         .guard_before_linear_memory(false)
                         .memory_init_cow(false);
                 }

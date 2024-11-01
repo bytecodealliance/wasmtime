@@ -6,8 +6,7 @@ fn successful_instantiation() -> Result<()> {
     let pool = crate::small_pool_config();
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
-    config.dynamic_memory_guard_size(0);
-    config.static_memory_guard_size(0);
+    config.memory_guard_size(0);
     config.static_memory_maximum_size(1 << 16);
 
     let engine = Engine::new(&config)?;
@@ -27,8 +26,7 @@ fn memory_limit() -> Result<()> {
     pool.max_memory_size(3 << 16);
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
-    config.dynamic_memory_guard_size(0);
-    config.static_memory_guard_size(1 << 16);
+    config.memory_guard_size(1 << 16);
     config.static_memory_maximum_size(3 << 16);
     config.wasm_multi_memory(true);
 
@@ -201,8 +199,7 @@ fn memory_zeroed() -> Result<()> {
     pool.max_memory_size(1 << 16).table_elements(0);
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
-    config.dynamic_memory_guard_size(0);
-    config.static_memory_guard_size(0);
+    config.memory_guard_size(0);
     config.static_memory_maximum_size(1 << 16);
 
     let engine = Engine::new(&config)?;
@@ -239,8 +236,7 @@ fn table_limit() -> Result<()> {
     pool.table_elements(TABLE_ELEMENTS);
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
-    config.dynamic_memory_guard_size(0);
-    config.static_memory_guard_size(0);
+    config.memory_guard_size(0);
     config.static_memory_maximum_size(1 << 16);
 
     let engine = Engine::new(&config)?;
@@ -375,8 +371,7 @@ fn table_zeroed() -> Result<()> {
     let pool = crate::small_pool_config();
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
-    config.dynamic_memory_guard_size(0);
-    config.static_memory_guard_size(0);
+    config.memory_guard_size(0);
     config.static_memory_maximum_size(1 << 16);
 
     let engine = Engine::new(&config)?;
@@ -411,8 +406,7 @@ fn total_core_instances_limit() -> Result<()> {
     pool.total_core_instances(INSTANCE_LIMIT);
     let mut config = Config::new();
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
-    config.dynamic_memory_guard_size(0);
-    config.static_memory_guard_size(0);
+    config.memory_guard_size(0);
     config.static_memory_maximum_size(1 << 16);
 
     let engine = Engine::new(&config)?;
@@ -702,7 +696,7 @@ fn dynamic_memory_pooling_allocator() -> Result<()> {
         pool.max_memory_size(max_size as usize);
         let mut config = Config::new();
         config.static_memory_maximum_size(max_size);
-        config.dynamic_memory_guard_size(guard_size);
+        config.memory_guard_size(guard_size);
         config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
 
         let engine = Engine::new(&config)?;

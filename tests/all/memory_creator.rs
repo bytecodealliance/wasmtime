@@ -130,7 +130,7 @@ mod not_for_windows {
         config
             .with_host_memory(mem_creator.clone())
             .static_memory_maximum_size(0)
-            .dynamic_memory_guard_size(0);
+            .memory_guard_size(0);
         (Store::new(&Engine::new(&config).unwrap(), ()), mem_creator)
     }
 

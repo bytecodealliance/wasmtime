@@ -87,8 +87,7 @@ mod pcc_memory_tests {
                             );
                             let mut cfg = Config::new();
                             cfg.static_memory_maximum_size(static_memory_maximum_size);
-                            cfg.static_memory_guard_size(guard_size);
-                            cfg.dynamic_memory_guard_size(guard_size);
+                            cfg.memory_guard_size(guard_size);
                             cfg.cranelift_pcc(true);
                             unsafe {
                                 cfg.cranelift_flag_set(
