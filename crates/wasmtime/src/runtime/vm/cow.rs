@@ -450,9 +450,9 @@ impl MemoryImageSlot {
         // and/or is static), then we need to reset memory protections. Put
         // another way, the only time it is safe to not reset protections is
         // when we are using dynamic memory without any guard pages.
-        let (style, offset_guard_size) = MemoryStyle::for_memory(*ty, tunables);
+        let style = MemoryStyle::for_memory(*ty, tunables);
         if initial_size_bytes_page_aligned < self.accessible
-            && (offset_guard_size > 0 || matches!(style, MemoryStyle::Static { .. }))
+            && (tunables.memory_guard_size > 0 || matches!(style, MemoryStyle::Static { .. }))
         {
             self.set_protection(initial_size_bytes_page_aligned..self.accessible, false)?;
             self.accessible = initial_size_bytes_page_aligned;

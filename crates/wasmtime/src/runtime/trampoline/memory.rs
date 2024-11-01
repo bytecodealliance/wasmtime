@@ -128,7 +128,7 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
         maximum: Option<usize>,
         _: Option<&Arc<MemoryImage>>,
     ) -> Result<Box<dyn RuntimeLinearMemory>> {
-        let (style, offset_guard_size) = MemoryStyle::for_memory(*ty, tunables);
+        let style = MemoryStyle::for_memory(*ty, tunables);
         let reserved_size_in_bytes = match style {
             MemoryStyle::Static { byte_reservation } => {
                 Some(usize::try_from(byte_reservation).unwrap())
@@ -141,7 +141,7 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
                 minimum,
                 maximum,
                 reserved_size_in_bytes,
-                usize::try_from(offset_guard_size).unwrap(),
+                usize::try_from(tunables.memory_guard_size).unwrap(),
             )
             .map(|mem| {
                 Box::new(LinearMemoryProxy {

@@ -2373,7 +2373,8 @@ impl<'module_environment> crate::translate::FuncEnvironment
 
         // If we have a declared maximum, we can make this a "static" heap, which is
         // allocated up front and never moved.
-        let (style, offset_guard_size) = MemoryStyle::for_memory(memory, self.tunables);
+        let style = MemoryStyle::for_memory(memory, self.tunables);
+        let offset_guard_size = self.tunables.memory_guard_size;
         let (heap_style, readonly_base, base_fact, memory_type) = match style {
             MemoryStyle::Dynamic { .. } => {
                 let heap_bound = func.create_global_value(ir::GlobalValueData::Load {

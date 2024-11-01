@@ -295,8 +295,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
 
                 let memory = &self.translation.module.memories[index];
                 let (min_size, max_size) = heap_limits(memory);
-                let (style, offset_guard_size) =
-                    heap_style_and_offset_guard_size(memory, self.tunables);
+                let style = heap_style_and_offset_guard_size(memory, self.tunables);
 
                 *entry.insert(HeapData {
                     offset: base_offset,
@@ -310,7 +309,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                     min_size,
                     max_size,
                     page_size_log2: memory.page_size_log2,
-                    offset_guard_size,
+                    offset_guard_size: self.tunables.memory_guard_size,
                 })
             }
         }
@@ -425,17 +424,14 @@ impl<'a, 'data> TypeConverter<'a, 'data> {
     }
 }
 
-fn heap_style_and_offset_guard_size(memory: &Memory, tunables: &Tunables) -> (HeapStyle, u64) {
-    let (style, offset_guard_size) = MemoryStyle::for_memory(*memory, tunables);
+fn heap_style_and_offset_guard_size(memory: &Memory, tunables: &Tunables) -> HeapStyle {
+    let style = MemoryStyle::for_memory(*memory, tunables);
     match style {
-        MemoryStyle::Static { byte_reservation } => (
-            HeapStyle::Static {
-                bound: byte_reservation,
-            },
-            offset_guard_size,
-        ),
+        MemoryStyle::Static { byte_reservation } => HeapStyle::Static {
+            bound: byte_reservation,
+        },
 
-        MemoryStyle::Dynamic { .. } => (HeapStyle::Dynamic, offset_guard_size),
+        MemoryStyle::Dynamic { .. } => HeapStyle::Dynamic,
     }
 }
 

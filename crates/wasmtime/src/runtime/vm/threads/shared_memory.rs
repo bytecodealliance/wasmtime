@@ -45,7 +45,7 @@ impl SharedMemory {
         if !ty.shared {
             bail!("shared memory must have a `shared` memory type");
         }
-        let (style, _) = MemoryStyle::for_memory(*ty, tunables);
+        let style = MemoryStyle::for_memory(*ty, tunables);
         if !matches!(style, MemoryStyle::Static { .. }) {
             bail!("shared memory can only be built from a static memory allocation")
         }

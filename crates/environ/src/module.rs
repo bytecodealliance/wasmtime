@@ -26,7 +26,7 @@ pub enum MemoryStyle {
 
 impl MemoryStyle {
     /// Decide on an implementation style for the given `Memory`.
-    pub fn for_memory(memory: Memory, tunables: &Tunables) -> (Self, u64) {
+    pub fn for_memory(memory: Memory, tunables: &Tunables) -> Self {
         let is_static =
             // Ideally we would compare against (an upper bound on) the target's
             // page size, but unfortunately that is a little hard to plumb
@@ -55,21 +55,15 @@ impl MemoryStyle {
             };
 
         if is_static {
-            return (
-                Self::Static {
-                    byte_reservation: tunables.memory_reservation,
-                },
-                tunables.memory_guard_size,
-            );
+            return Self::Static {
+                byte_reservation: tunables.memory_reservation,
+            };
         }
 
         // Otherwise, make it dynamic.
-        (
-            Self::Dynamic {
-                reserve: tunables.memory_reservation_for_growth,
-            },
-            tunables.memory_guard_size,
-        )
+        Self::Dynamic {
+            reserve: tunables.memory_reservation_for_growth,
+        }
     }
 }
 
