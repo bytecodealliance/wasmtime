@@ -278,6 +278,6 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
 /// Get the current source location from a reader.
 fn cur_srcloc(reader: &BinaryReader) -> ir::SourceLoc {
     // We record source locations as byte code offsets relative to the beginning of the file.
-    // This will wrap around if byte code is larger than 4 GB.
-    ir::SourceLoc::new(reader.original_position() as u32)
+    // This will panic if bytecode is larger than 4 GB.
+    ir::SourceLoc::new(reader.original_position().try_into().unwrap())
 }

@@ -833,8 +833,8 @@ impl FunctionCompiler<'_> {
             let offset = data.original_position();
             let len = data.bytes_remaining();
             compiled_function.set_address_map(
-                offset as u32,
-                len as u32,
+                offset.try_into().unwrap(),
+                len.try_into().unwrap(),
                 tunables.generate_address_map,
             );
         }

@@ -78,7 +78,6 @@ use crate::translate::state::{ControlStackFrame, ElseData, FuncTranslationState}
 use crate::translate::translation_utils::{
     block_with_params, blocktype_params_results, f32_translation, f64_translation,
 };
-use core::{i32, u32};
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::types::*;
@@ -93,8 +92,8 @@ use std::collections::{hash_map, HashMap};
 use std::vec::Vec;
 use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
 use wasmtime_environ::{
-    wasm_unsupported, DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex,
-    TypeIndex, WasmRefType, WasmResult,
+    wasm_unsupported, DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, Signed,
+    TableIndex, TypeIndex, Unsigned, WasmRefType, WasmResult,
 };
 
 /// Given a `Reachability<T>`, unwrap the inner `T` or, when unreachable, set
@@ -930,7 +929,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
         }
         /****************************** Nullary Operators ************************************/
         Operator::I32Const { value } => {
-            state.push1(builder.ins().iconst(I32, *value as u32 as i64))
+            state.push1(builder.ins().iconst(I32, i64::from(value.unsigned())));
         }
         Operator::I64Const { value } => state.push1(builder.ins().iconst(I64, *value)),
         Operator::F32Const { value } => {
@@ -3289,9 +3288,7 @@ fn align_atomic_addr<FE: FuncEnvironment + ?Sized>(
         let effective_addr = if memarg.offset == 0 {
             addr
         } else {
-            builder
-                .ins()
-                .iadd_imm(addr, i64::from(memarg.offset as i32))
+            builder.ins().iadd_imm(addr, memarg.offset.signed())
         };
         debug_assert!(loaded_bytes.is_power_of_two());
         let misalignment = builder
