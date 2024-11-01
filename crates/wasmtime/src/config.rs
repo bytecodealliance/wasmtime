@@ -11,7 +11,7 @@ use std::path::Path;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
-use wasmtime_environ::Tunables;
+use wasmtime_environ::{ConfigTunables, Tunables};
 
 #[cfg(feature = "runtime")]
 use crate::memory::MemoryCreator;
@@ -143,24 +143,6 @@ pub struct Config {
     pub(crate) coredump_on_trap: bool,
     pub(crate) macos_use_mach_ports: bool,
     pub(crate) detect_host_feature: Option<fn(&str) -> Option<bool>>,
-}
-
-#[derive(Default, Clone)]
-struct ConfigTunables {
-    static_memory_reservation: Option<u64>,
-    memory_guard_size: Option<u64>,
-    dynamic_memory_growth_reserve: Option<u64>,
-    generate_native_debuginfo: Option<bool>,
-    parse_wasm_debuginfo: Option<bool>,
-    consume_fuel: Option<bool>,
-    epoch_interruption: Option<bool>,
-    static_memory_bound_is_maximum: Option<bool>,
-    guard_before_linear_memory: Option<bool>,
-    table_lazy_init: Option<bool>,
-    generate_address_map: Option<bool>,
-    debug_adapter_modules: Option<bool>,
-    relaxed_simd_deterministic: Option<bool>,
-    signals_based_traps: Option<bool>,
 }
 
 /// User-provided configuration for the compiler.
@@ -1916,36 +1898,7 @@ impl Config {
             None => Tunables::default_host(),
         };
 
-        macro_rules! set_fields {
-            ($($field:ident)*) => (
-                let ConfigTunables {
-                    $($field,)*
-                } = &self.tunables;
-
-                $(
-                    if let Some(e) = $field {
-                        tunables.$field = *e;
-                    }
-                )*
-            )
-        }
-
-        set_fields! {
-            static_memory_reservation
-            memory_guard_size
-            dynamic_memory_growth_reserve
-            generate_native_debuginfo
-            parse_wasm_debuginfo
-            consume_fuel
-            epoch_interruption
-            static_memory_bound_is_maximum
-            guard_before_linear_memory
-            table_lazy_init
-            generate_address_map
-            debug_adapter_modules
-            relaxed_simd_deterministic
-            signals_based_traps
-        }
+        self.tunables.configure(&mut tunables);
 
         // If we're going to compile with winch, we must use the winch calling convention.
         #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -2318,7 +2271,6 @@ impl Default for Config {
 impl fmt::Debug for Config {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut f = f.debug_struct("Config");
-        f.field("debug_info", &self.tunables.generate_native_debuginfo);
 
         // Not every flag in WasmFeatures can be enabled as part of creating
         // a Config. This impl gives a complete picture of all WasmFeatures
@@ -2339,18 +2291,7 @@ impl fmt::Debug for Config {
             f.field("compiler_config", &self.compiler_config);
         }
 
-        if let Some(enable) = self.tunables.parse_wasm_debuginfo {
-            f.field("parse_wasm_debuginfo", &enable);
-        }
-        if let Some(size) = self.tunables.static_memory_reservation {
-            f.field("static_memory_maximum_reservation", &size);
-        }
-        if let Some(size) = self.tunables.memory_guard_size {
-            f.field("memory_guard_size", &size);
-        }
-        if let Some(enable) = self.tunables.guard_before_linear_memory {
-            f.field("guard_before_linear_memory", &enable);
-        }
+        self.tunables.format(&mut f);
         f.finish()
     }
 }
