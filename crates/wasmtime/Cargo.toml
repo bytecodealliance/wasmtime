@@ -74,8 +74,15 @@ features = [
   "Win32_Security",
 ]
 
-[target.'cfg(all(target_arch = "x86_64", not(any(target_os = "android", target_os = "illumos"))))'.dependencies]
-ittapi = { version = "0.4.0", optional = true }
+# Allow-list the platforms that `ittapi` builds on since it's got C code that
+# doesn't compile by default on all platforms just yet. Also note that this is
+# only enabled for `x86_64` targets as well.
+[target.'cfg(all(target_arch = "x86_64", target_os = "linux"))'.dependencies]
+ittapi = { workspace = true, optional = true }
+[target.'cfg(all(target_arch = "x86_64", target_os = "macos"))'.dependencies]
+ittapi = { workspace = true, optional = true }
+[target.'cfg(all(target_arch = "x86_64", target_os = "windows"))'.dependencies]
+ittapi = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 memfd = { workspace = true, optional = true }

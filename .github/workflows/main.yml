@@ -505,9 +505,8 @@ jobs:
         CARGO_PROFILE_DEV_DEBUG_ASSERTIONS: false
 
     # Check whether `wasmtime` cross-compiles to x86_64-unknown-freebsd
-    # TODO: We aren't building with default features since the `ittapi` crate fails to compile on freebsd.
     - run: rustup target add x86_64-unknown-freebsd
-    - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache --target x86_64-unknown-freebsd
+    - run: cargo check --target x86_64-unknown-freebsd
 
     # Re-vendor all WIT files and ensure that they're all up-to-date by ensuring
     # that there's no git changes.
