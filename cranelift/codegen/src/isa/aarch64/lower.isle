@@ -1055,7 +1055,7 @@
 ;; TODO: Add SDiv32 to implement 32-bit directly, rather
 ;; than extending the input.
 ;;
-;; The sequence of checks here should look like:
+;; The sequence of checks here should look like this for 32 or 64 bits:
 ;;
 ;;   cbnz rm, #8
 ;;   udf ; divide by zero
@@ -1063,6 +1063,9 @@
 ;;   ccmp rn, 1, #nzcv, eq
 ;;   b.vc #8
 ;;   udf ; signed overflow
+;;
+;; In the narrow 8 or 16 bit case, we need to insert an additional left-shift
+;; to check for the minimum value using the 32-bit ccmp instruction.
 ;;
 ;; Note The div instruction does not trap on divide by zero or overflow, so
 ;; checks need to be manually inserted.
@@ -1072,7 +1075,8 @@
 (rule sdiv_base_case (lower (has_type (fits_in_64 ty) (sdiv x y)))
       (let ((x64 Reg (put_in_reg_sext64 x))
             (y64 Reg (put_nonzero_in_reg_sext64 y))
-            (valid_x64 Reg (trap_if_div_overflow ty x64 y64))
+            (intmin_check_x Reg (intmin_check ty x64))
+            (valid_x64 Reg (trap_if_div_overflow ty intmin_check_x x64 y64))
             (result Reg (a64_sdiv $I64 valid_x64 y64)))
         result))
 
