@@ -1259,7 +1259,7 @@ fn tricky_empty_table_with_empty_virtual_memory_alloc() -> Result<()> {
 }
 
 #[test]
-fn custom_page_sizes_resuing_same_slot() -> Result<()> {
+fn custom_page_sizes_reusing_same_slot() -> Result<()> {
     let mut config = Config::new();
     config.wasm_custom_page_sizes(true);
     let mut cfg = PoolingAllocationConfig::default();
