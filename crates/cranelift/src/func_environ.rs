@@ -1,6 +1,6 @@
 use crate::translate::{
-    FuncEnvironment as _, FuncTranslationState, GlobalVariable, Heap, HeapData, HeapStyle,
-    StructFieldsVec, TableData, TableSize, TargetEnvironment,
+    FuncEnvironment as _, FuncTranslationState, GlobalVariable, Heap, HeapData, StructFieldsVec,
+    TableData, TableSize, TargetEnvironment,
 };
 use crate::{gc, BuiltinFunctionSignatures, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::cursor::FuncCursor;
@@ -2309,18 +2309,6 @@ impl<'module_environment> crate::translate::FuncEnvironment
         let memory = self.module.memories[index];
         let is_shared = memory.shared;
 
-        let min_size = memory.minimum_byte_size().unwrap_or_else(|_| {
-            // The only valid Wasm memory size that won't fit in a 64-bit
-            // integer is the maximum memory64 size (2^64) which is one
-            // larger than `u64::MAX` (2^64 - 1). In this case, just say the
-            // minimum heap size is `u64::MAX`.
-            debug_assert_eq!(memory.limits.min, 1 << 48);
-            debug_assert_eq!(memory.page_size(), 1 << 16);
-            u64::MAX
-        });
-
-        let max_size = memory.maximum_byte_size().ok();
-
         let (ptr, base_offset, current_length_offset, ptr_memtype) = {
             let vmctx = self.vmctx(func);
             if let Some(def_index) = self.module.defined_memory_index(index) {
@@ -2373,20 +2361,18 @@ impl<'module_environment> crate::translate::FuncEnvironment
             }
         };
 
-        let page_size_log2 = memory.page_size_log2;
+        let heap_bound = func.create_global_value(ir::GlobalValueData::Load {
+            base: ptr,
+            offset: Offset32::new(current_length_offset),
+            global_type: pointer_type,
+            flags: MemFlags::trusted(),
+        });
 
         // If we have a declared maximum, we can make this a "static" heap, which is
         // allocated up front and never moved.
         let style = MemoryStyle::for_memory(memory, self.tunables);
-        let (heap_style, readonly_base, base_fact, memory_type) = match style {
+        let (readonly_base, base_fact, memory_type) = match style {
             MemoryStyle::Dynamic { .. } => {
-                let heap_bound = func.create_global_value(ir::GlobalValueData::Load {
-                    base: ptr,
-                    offset: Offset32::new(current_length_offset),
-                    global_type: pointer_type,
-                    flags: MemFlags::trusted(),
-                });
-
                 let (base_fact, data_mt) = if let Some(ptr_memtype) = ptr_memtype {
                     // Create a memtype representing the untyped memory region.
                     let data_mt = func.create_memory_type(ir::MemoryTypeData::DynamicMemory {
@@ -2442,14 +2428,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
                     (None, None)
                 };
 
-                (
-                    HeapStyle::Dynamic {
-                        bound_gv: heap_bound,
-                    },
-                    false,
-                    base_fact,
-                    data_mt,
-                )
+                (false, base_fact, data_mt)
             }
             MemoryStyle::Static {
                 byte_reservation: bound_bytes,
@@ -2497,12 +2476,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
                 } else {
                     (None, None)
                 };
-                (
-                    HeapStyle::Static { bound: bound_bytes },
-                    true,
-                    base_fact,
-                    data_mt,
-                )
+                (true, base_fact, data_mt)
             }
         };
 
@@ -2520,12 +2494,9 @@ impl<'module_environment> crate::translate::FuncEnvironment
 
         Ok(self.heaps.push(HeapData {
             base: heap_base,
-            min_size,
-            max_size,
-            style: heap_style,
-            index_type: index_type_to_ir_type(self.memory(index).idx_type),
-            memory_type,
-            page_size_log2,
+            bound: heap_bound,
+            pcc_memory_type: memory_type,
+            memory,
         }))
     }
 

@@ -1,7 +1,8 @@
 //! Heaps to implement WebAssembly linear memories.
 
-use cranelift_codegen::ir::{GlobalValue, MemoryType, Type};
+use cranelift_codegen::ir::{self, GlobalValue, MemoryType, Type};
 use cranelift_entity::entity_impl;
+use wasmtime_environ::{IndexType, Memory};
 
 /// An opaque reference to a [`HeapData`][crate::HeapData].
 ///
@@ -62,43 +63,21 @@ pub struct HeapData {
     /// The address of the start of the heap's storage.
     pub base: GlobalValue,
 
-    /// Guaranteed minimum heap size in bytes. Heap accesses before `min_size`
-    /// don't need bounds checking.
-    pub min_size: u64,
+    /// The dynamic byte length of this heap, if needed.
+    pub bound: GlobalValue,
 
-    /// The maximum heap size in bytes.
-    ///
-    /// Heap accesses larger than this will always trap.
-    pub max_size: Option<u64>,
-
-    /// Heap style, with additional style-specific info.
-    pub style: HeapStyle,
-
-    /// The index type for the heap.
-    pub index_type: Type,
+    /// The type of wasm memory that this heap is operating on.
+    pub memory: Memory,
 
     /// The memory type for the pointed-to memory, if using proof-carrying code.
-    pub memory_type: Option<MemoryType>,
-
-    /// The log2 of this memory's page size.
-    pub page_size_log2: u8,
+    pub pcc_memory_type: Option<MemoryType>,
 }
 
-/// Style of heap including style-specific information.
-#[derive(Clone, PartialEq, Hash)]
-pub enum HeapStyle {
-    /// A dynamic heap can be relocated to a different base address when it is
-    /// grown.
-    Dynamic {
-        /// Global value providing the current bound of the heap in bytes.
-        bound_gv: GlobalValue,
-    },
-
-    /// A static heap has a fixed base address and a number of not-yet-allocated
-    /// pages before the offset-guard pages.
-    Static {
-        /// Heap bound in bytes. The offset-guard pages are allocated after the
-        /// bound.
-        bound: u64,
-    },
+impl HeapData {
+    pub fn index_type(&self) -> Type {
+        match self.memory.idx_type {
+            IndexType::I32 => ir::types::I32,
+            IndexType::I64 => ir::types::I64,
+        }
+    }
 }

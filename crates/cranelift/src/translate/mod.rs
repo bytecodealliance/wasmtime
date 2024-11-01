@@ -20,7 +20,7 @@ mod translation_utils;
 
 pub use self::environ::{FuncEnvironment, GlobalVariable, StructFieldsVec, TargetEnvironment};
 pub use self::func_translator::FuncTranslator;
-pub use self::heap::{Heap, HeapData, HeapStyle};
+pub use self::heap::{Heap, HeapData};
 pub use self::state::FuncTranslationState;
 pub use self::table::{TableData, TableSize};
 pub use self::translation_utils::*;
