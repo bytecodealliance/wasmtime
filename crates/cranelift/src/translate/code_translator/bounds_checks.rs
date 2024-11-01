@@ -65,6 +65,7 @@ where
     let host_page_size_log2 = env.target_config().page_size_align_log2;
     let can_use_virtual_memory =
         heap.page_size_log2 >= host_page_size_log2 && env.signals_based_traps();
+    let memory_guard_size = env.tunables().memory_guard_size;
 
     let make_compare = |builder: &mut FunctionBuilder,
                         compare_kind: IntCC,
@@ -193,7 +194,7 @@ where
         //    multiple fields in the same struct that is in linear memory --
         //    will all emit the same `index > bound` check, which we can GVN.
         HeapStyle::Dynamic { bound_gv }
-            if can_use_virtual_memory && offset_and_size <= heap.offset_guard_size =>
+            if can_use_virtual_memory && offset_and_size <= memory_guard_size =>
         {
             let bound = get_dynamic_heap_bound(builder, env, heap);
             let oob = make_compare(
@@ -371,7 +372,7 @@ where
             if can_use_virtual_memory
                 && heap.index_type == ir::types::I32
                 && u64::from(u32::MAX)
-                    <= u64::from(bound) + u64::from(heap.offset_guard_size) - offset_and_size =>
+                    <= u64::from(bound) + u64::from(memory_guard_size) - offset_and_size =>
         {
             assert!(
                 can_use_virtual_memory,
@@ -385,7 +386,7 @@ where
                 offset,
                 AddrPcc::static32(
                     heap.memory_type,
-                    u64::from(bound) + u64::from(heap.offset_guard_size),
+                    u64::from(bound) + u64::from(memory_guard_size),
                 ),
             ))
         }
@@ -604,7 +605,7 @@ fn explicit_check_oob_condition_and_compute_addr<FE: FuncEnvironment + ?Sized>(
                     min: Expr::constant(0),
                     max: Expr::offset(
                         &Expr::global_value(gv),
-                        i64::try_from(heap.offset_guard_size)
+                        i64::try_from(env.tunables().memory_guard_size)
                             .unwrap()
                             .checked_sub(i64::from(access_size))
                             .unwrap(),

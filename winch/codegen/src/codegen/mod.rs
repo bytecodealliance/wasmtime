@@ -711,7 +711,7 @@ where
             HeapStyle::Static { bound }
                 if heap.ty == WasmValType::I32
                     && u64::from(u32::MAX)
-                        <= u64::from(bound) + u64::from(heap.offset_guard_size)
+                        <= u64::from(bound) + u64::from(self.tunables.memory_guard_size)
                             - offset_with_access_size =>
             {
                 let addr = self.context.any_gpr(self.masm);

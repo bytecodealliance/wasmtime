@@ -84,8 +84,6 @@ pub struct HeapData {
     /// By default the page size is 64KiB (0x10000; 2**16; 1<<16; 65536) but the
     /// custom-page-sizes proposal allows opting into a page size of `1`.
     pub page_size_log2: u8,
-    /// Size in bytes of the offset guard pages, located after the heap bounds.
-    pub offset_guard_size: u64,
 }
 
 /// A function callee.
@@ -309,7 +307,6 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                     min_size,
                     max_size,
                     page_size_log2: memory.page_size_log2,
-                    offset_guard_size: self.tunables.memory_guard_size,
                 })
             }
         }

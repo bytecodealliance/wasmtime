@@ -71,9 +71,6 @@ pub struct HeapData {
     /// Heap accesses larger than this will always trap.
     pub max_size: Option<u64>,
 
-    /// Size in bytes of the offset-guard pages following the heap.
-    pub offset_guard_size: u64,
-
     /// Heap style, with additional style-specific info.
     pub style: HeapStyle,
 

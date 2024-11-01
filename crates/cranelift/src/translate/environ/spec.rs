@@ -17,8 +17,8 @@ use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
 use wasmparser::{Operator, WasmFeatures};
 use wasmtime_environ::{
-    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeConvert, TypeIndex,
-    WasmHeapType, WasmRefType, WasmResult,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, Tunables, TypeConvert,
+    TypeIndex, WasmHeapType, WasmRefType, WasmResult,
 };
 
 /// The value of a WebAssembly global variable.
@@ -62,6 +62,9 @@ pub trait TargetEnvironment: TypeConvert {
     /// Returns a pair of the CLIF reference type to use and a boolean that
     /// describes whether the value should be included in GC stack maps or not.
     fn reference_type(&self, ty: WasmHeapType) -> (ir::Type, bool);
+
+    /// Returns the compilation knobs that are in effect.
+    fn tunables(&self) -> &Tunables;
 }
 
 /// A smallvec that holds the IR values for a struct's fields.

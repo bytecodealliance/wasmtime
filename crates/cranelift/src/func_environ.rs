@@ -1695,6 +1695,10 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
     fn proof_carrying_code(&self) -> bool {
         self.isa.flags().enable_pcc()
     }
+
+    fn tunables(&self) -> &Tunables {
+        self.tunables
+    }
 }
 
 impl<'module_environment> crate::translate::FuncEnvironment
@@ -2374,7 +2378,6 @@ impl<'module_environment> crate::translate::FuncEnvironment
         // If we have a declared maximum, we can make this a "static" heap, which is
         // allocated up front and never moved.
         let style = MemoryStyle::for_memory(memory, self.tunables);
-        let offset_guard_size = self.tunables.memory_guard_size;
         let (heap_style, readonly_base, base_fact, memory_type) = match style {
             MemoryStyle::Dynamic { .. } => {
                 let heap_bound = func.create_global_value(ir::GlobalValueData::Load {
@@ -2388,7 +2391,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
                     // Create a memtype representing the untyped memory region.
                     let data_mt = func.create_memory_type(ir::MemoryTypeData::DynamicMemory {
                         gv: heap_bound,
-                        size: offset_guard_size,
+                        size: self.tunables.memory_guard_size,
                     });
                     // This fact applies to any pointer to the start of the memory.
                     let base_fact = ir::Fact::dynamic_base_ptr(data_mt);
@@ -2455,7 +2458,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
                     // Create a memtype representing the untyped memory region.
                     let data_mt = func.create_memory_type(ir::MemoryTypeData::Memory {
                         size: bound_bytes
-                            .checked_add(offset_guard_size)
+                            .checked_add(self.tunables.memory_guard_size)
                             .expect("Memory plan has overflowing size plus guard"),
                     });
                     // This fact applies to any pointer to the start of the memory.
@@ -2519,7 +2522,6 @@ impl<'module_environment> crate::translate::FuncEnvironment
             base: heap_base,
             min_size,
             max_size,
-            offset_guard_size,
             style: heap_style,
             index_type: index_type_to_ir_type(self.memory(index).idx_type),
             memory_type,
