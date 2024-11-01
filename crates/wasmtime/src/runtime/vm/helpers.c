@@ -111,7 +111,7 @@ __declspec(dllexport)
 // important.
 __attribute__((weak))
 #endif
-struct JITDescriptor __jit_debug_descriptor = {1, 0, NULL, NULL};
+    struct JITDescriptor __jit_debug_descriptor = {1, 0, NULL, NULL};
 
 struct JITDescriptor *VERSIONED_SYMBOL(wasmtime_jit_debug_descriptor)() {
   return &__jit_debug_descriptor;
