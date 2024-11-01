@@ -3697,9 +3697,6 @@
 ;; values of I8 and I16.
 ;; E.g., I8's 0x00000080 left-shifted by 24 is 0x80000000, which overflows.
 (decl intmin_check (Type Reg) Reg)
-(attr intmin_check (veri chain))
-
-(attr rule intmin_check_fits_in_16 (veri priority))
 (rule intmin_check_fits_in_16 (intmin_check (fits_in_16 ty) x)
       (alu_rr_imm_shift (ALUOp.Lsl) ty x (imm_shift_from_u8 (diff_from_32 ty))))
 
