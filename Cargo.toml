@@ -343,6 +343,7 @@ criterion = { version = "0.5.0", default-features = false, features = ["html_rep
 rustc-hash = "2.0.0"
 libtest-mimic = "0.7.0"
 semver = { version = "1.0.17", default-features = false }
+ittapi = "0.4.0"
 
 # =============================================================================
 #
