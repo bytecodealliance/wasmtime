@@ -8,7 +8,9 @@
 use super::sys::DecommitBehavior;
 use crate::prelude::*;
 use crate::runtime::vm::sys::vm::{self, MemoryImageSource};
-use crate::runtime::vm::{MmapVec, SendSyncPtr};
+use crate::runtime::vm::{
+    round_usize_up_to_host_pages, usize_is_multiple_of_host_page_size, MmapVec, SendSyncPtr,
+};
 use alloc::sync::Arc;
 use core::ffi::c_void;
 use core::ops::Range;
@@ -302,6 +304,8 @@ pub struct MemoryImageSlot {
     /// the case of dynamic memories in use. Memory accesses to memory below
     /// `self.accessible` may still page fault as pages are lazily brought in
     /// but the faults will always be resolved by the kernel.
+    ///
+    /// Also note that this is always page-aligned.
     accessible: usize,
 
     /// Whether this slot may have "dirty" pages (pages written by an
@@ -369,7 +373,9 @@ impl MemoryImageSlot {
     }
 
     pub(crate) fn set_heap_limit(&mut self, size_bytes: usize) -> Result<()> {
+        let size_bytes_page_aligned = round_usize_up_to_host_pages(size_bytes)?;
         assert!(size_bytes <= self.static_size);
+        assert!(size_bytes_page_aligned <= self.static_size);
 
         // If the heap limit already addresses accessible bytes then no syscalls
         // are necessary since the data is already mapped into the process and
@@ -377,13 +383,14 @@ impl MemoryImageSlot {
         //
         // This is used for "dynamic" memories where memory is not always
         // decommitted during recycling (but it's still always reset).
-        if size_bytes <= self.accessible {
+        if size_bytes_page_aligned <= self.accessible {
             return Ok(());
         }
 
         // Otherwise use `mprotect` to make the new pages read/write.
-        self.set_protection(self.accessible..size_bytes, true)?;
-        self.accessible = size_bytes;
+        self.set_protection(self.accessible..size_bytes_page_aligned, true)?;
+        self.accessible = size_bytes_page_aligned;
+        debug_assert!(usize_is_multiple_of_host_page_size(self.accessible));
 
         Ok(())
     }
@@ -416,6 +423,7 @@ impl MemoryImageSlot {
     ) -> Result<()> {
         assert!(!self.dirty);
         assert!(initial_size_bytes <= self.static_size);
+        let initial_size_bytes_page_aligned = round_usize_up_to_host_pages(initial_size_bytes)?;
 
         // First order of business is to blow away the previous linear memory
         // image if it doesn't match the image specified here. If one is
@@ -432,9 +440,9 @@ impl MemoryImageSlot {
         // The next order of business is to ensure that `self.accessible` is
         // appropriate. First up is to grow the read/write portion of memory if
         // it's not large enough to accommodate `initial_size_bytes`.
-        if self.accessible < initial_size_bytes {
-            self.set_protection(self.accessible..initial_size_bytes, true)?;
-            self.accessible = initial_size_bytes;
+        if self.accessible < initial_size_bytes_page_aligned {
+            self.set_protection(self.accessible..initial_size_bytes_page_aligned, true)?;
+            self.accessible = initial_size_bytes_page_aligned;
         }
 
         // If (1) the accessible region is not in its initial state, and (2) the
@@ -443,17 +451,20 @@ impl MemoryImageSlot {
         // another way, the only time it is safe to not reset protections is
         // when we are using dynamic memory without any guard pages.
         let (style, offset_guard_size) = MemoryStyle::for_memory(*ty, tunables);
-        if initial_size_bytes < self.accessible
+        if initial_size_bytes_page_aligned < self.accessible
             && (offset_guard_size > 0 || matches!(style, MemoryStyle::Static { .. }))
         {
-            self.set_protection(initial_size_bytes..self.accessible, false)?;
-            self.accessible = initial_size_bytes;
+            self.set_protection(initial_size_bytes_page_aligned..self.accessible, false)?;
+            self.accessible = initial_size_bytes_page_aligned;
         }
+
+        debug_assert!(usize_is_multiple_of_host_page_size(self.accessible));
 
         // Now that memory is sized appropriately the final operation is to
         // place the new image into linear memory. Note that this operation is
         // skipped if `self.image` matches `maybe_image`.
         assert!(initial_size_bytes <= self.accessible);
+        assert!(initial_size_bytes_page_aligned <= self.accessible);
         if self.image.as_ref() != maybe_image {
             if let Some(image) = maybe_image.as_ref() {
                 assert!(
