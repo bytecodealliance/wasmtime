@@ -79,6 +79,7 @@ pub fn dummy_memory<T>(store: &mut Store<T>, ty: MemoryType) -> Result<Memory> {
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     fn store() -> Store<()> {
