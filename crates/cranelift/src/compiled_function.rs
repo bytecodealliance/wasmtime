@@ -111,7 +111,7 @@ impl CompiledFunction {
             .into_iter()
             .map(|&MachSrcLoc { start, end, loc }| (loc, start, (end - start)));
         let instructions = if with_instruction_addresses {
-            collect_address_maps(len as u32, srclocs)
+            collect_address_maps(len.try_into().unwrap(), srclocs)
         } else {
             Default::default()
         };
@@ -123,7 +123,7 @@ impl CompiledFunction {
             start_srcloc,
             end_srcloc,
             body_offset: 0,
-            body_len: len as u32,
+            body_len: len.try_into().unwrap(),
         };
 
         self.metadata.address_map = address_map;

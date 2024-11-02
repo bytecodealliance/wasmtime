@@ -11,6 +11,23 @@ pub struct Mmap {
     memory: SendSyncPtr<[u8]>,
 }
 
+cfg_if::cfg_if! {
+    if #[cfg(any(target_os = "illumos", target_os = "linux"))] {
+        // On illumos, by default, mmap reserves what it calls "swap space" ahead of time, so that
+        // memory accesses are guaranteed not to fail once mmap succeeds. NORESERVE is for cases
+        // where that memory is never meant to be accessed -- e.g. memory that's used as guard
+        // pages.
+        //
+        // This is less crucial on Linux because Linux tends to overcommit memory by default, but is
+        // still a good idea to pass in for large allocations that don't need to be backed by
+        // physical memory.
+        pub(super) const MMAP_NORESERVE_FLAG: rustix::mm::MapFlags =
+            rustix::mm::MapFlags::NORESERVE;
+    } else {
+        pub(super) const MMAP_NORESERVE_FLAG: rustix::mm::MapFlags = rustix::mm::MapFlags::empty();
+    }
+}
+
 impl Mmap {
     pub fn new_empty() -> Mmap {
         Mmap {
@@ -24,7 +41,7 @@ impl Mmap {
                 ptr::null_mut(),
                 size,
                 rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
-                rustix::mm::MapFlags::PRIVATE,
+                rustix::mm::MapFlags::PRIVATE | MMAP_NORESERVE_FLAG,
             )
             .err2anyhow()?
         };
@@ -39,7 +56,18 @@ impl Mmap {
                 ptr::null_mut(),
                 size,
                 rustix::mm::ProtFlags::empty(),
-                rustix::mm::MapFlags::PRIVATE,
+                // Astute readers might be wondering why a function called "reserve" passes in a
+                // NORESERVE flag. That's because "reserve" in this context means one of two
+                // different things.
+                //
+                // * This method is used to allocate virtual memory that starts off in a state where
+                //   it cannot be accessed (i.e. causes a segfault if accessed).
+                // * NORESERVE is meant for virtual memory space for which backing physical/swap
+                //   pages are reserved on first access.
+                //
+                // Virtual memory that cannot be accessed should not have a backing store reserved
+                // for it. Hence, passing in NORESERVE is correct here.
+                rustix::mm::MapFlags::PRIVATE | MMAP_NORESERVE_FLAG,
             )
             .err2anyhow()?
         };

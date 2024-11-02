@@ -9,7 +9,6 @@ use core::fmt;
 use core::ops::Range;
 use core::slice;
 use core::time::Duration;
-use wasmtime_environ::MemoryPlan;
 
 pub use crate::runtime::vm::WaitResult;
 
@@ -294,7 +293,7 @@ impl Memory {
     /// ```
     pub fn ty(&self, store: impl AsContext) -> MemoryType {
         let store = store.as_context();
-        let ty = &store[self.0].memory.memory;
+        let ty = &store[self.0].memory;
         MemoryType::from_wasmtime_memory(&ty)
     }
 
@@ -499,7 +498,7 @@ impl Memory {
     }
 
     pub(crate) fn _page_size(&self, store: &StoreOpaque) -> u64 {
-        store[self.0].memory.memory.page_size()
+        store[self.0].memory.page_size()
     }
 
     /// Returns the log2 of this memory's page size, in bytes.
@@ -519,7 +518,7 @@ impl Memory {
     }
 
     pub(crate) fn _page_size_log2(&self, store: &StoreOpaque) -> u8 {
-        store[self.0].memory.memory.page_size_log2
+        store[self.0].memory.page_size_log2
     }
 
     /// Grows this WebAssembly memory by `delta` pages.
@@ -632,7 +631,7 @@ impl Memory {
     }
 
     pub(crate) fn wasmtime_ty<'a>(&self, store: &'a StoreData) -> &'a wasmtime_environ::Memory {
-        &store[self.0].memory.memory
+        &store[self.0].memory
     }
 
     pub(crate) fn vmimport(&self, store: &StoreOpaque) -> crate::runtime::vm::VMMemoryImport {
@@ -808,9 +807,9 @@ impl SharedMemory {
         debug_assert!(ty.maximum().is_some());
 
         let tunables = engine.tunables();
-        let plan = MemoryPlan::for_memory(*ty.wasmtime_memory(), tunables);
-        let page_size_log2 = plan.memory.page_size_log2;
-        let memory = crate::runtime::vm::SharedMemory::new(plan)?;
+        let ty = ty.wasmtime_memory();
+        let page_size_log2 = ty.page_size_log2;
+        let memory = crate::runtime::vm::SharedMemory::new(ty, tunables)?;
 
         Ok(Self {
             vm: memory,
@@ -1049,14 +1048,18 @@ mod tests {
     #[test]
     fn respect_tunables() {
         let mut cfg = Config::new();
-        cfg.static_memory_maximum_size(0)
-            .dynamic_memory_guard_size(0);
+        cfg.static_memory_maximum_size(0).memory_guard_size(0);
         let mut store = Store::new(&Engine::new(&cfg).unwrap(), ());
         let ty = MemoryType::new(1, None);
         let mem = Memory::new(&mut store, ty).unwrap();
         let store = store.as_context();
-        assert_eq!(store[mem.0].memory.offset_guard_size, 0);
-        match &store[mem.0].memory.style {
+        let (style, offset_guard_size) = wasmtime_environ::MemoryStyle::for_memory(
+            store[mem.0].memory,
+            store.engine().tunables(),
+        );
+
+        assert_eq!(offset_guard_size, 0);
+        match style {
             wasmtime_environ::MemoryStyle::Dynamic { .. } => {}
             other => panic!("unexpected style {other:?}"),
         }

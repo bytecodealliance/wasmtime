@@ -363,9 +363,9 @@ impl Metadata<'_> {
 
     fn check_tunables(&mut self, other: &Tunables) -> Result<()> {
         let Tunables {
+            collector,
             static_memory_reservation,
-            static_memory_offset_guard_size,
-            dynamic_memory_offset_guard_size,
+            memory_guard_size,
             generate_native_debuginfo,
             parse_wasm_debuginfo,
             consume_fuel,
@@ -389,20 +389,16 @@ impl Metadata<'_> {
             debug_adapter_modules: _,
         } = self.tunables;
 
+        Self::check_collector(collector, other.collector)?;
         Self::check_int(
             static_memory_reservation,
             other.static_memory_reservation,
             "static memory reservation",
         )?;
         Self::check_int(
-            static_memory_offset_guard_size,
-            other.static_memory_offset_guard_size,
-            "static memory guard size",
-        )?;
-        Self::check_int(
-            dynamic_memory_offset_guard_size,
-            other.dynamic_memory_offset_guard_size,
-            "dynamic memory guard size",
+            memory_guard_size,
+            other.memory_guard_size,
+            "memory guard size",
         )?;
         Self::check_bool(
             generate_native_debuginfo,
@@ -591,6 +587,30 @@ impl Metadata<'_> {
 
         Ok(())
     }
+
+    fn check_collector(
+        module: Option<wasmtime_environ::Collector>,
+        host: Option<wasmtime_environ::Collector>,
+    ) -> Result<()> {
+        match (module, host) {
+            (None, None) => Ok(()),
+            (Some(module), Some(host)) if module == host => Ok(()),
+
+            (None, Some(_)) => {
+                bail!("module was compiled without GC but GC is enabled in the host")
+            }
+            (Some(_), None) => {
+                bail!("module was compiled with GC however GC is disabled in the host")
+            }
+
+            (Some(module), Some(host)) => {
+                bail!(
+                    "module was compiled for the {module} collector but \
+                     the host is configured to use the {host} collector",
+                )
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -696,11 +716,11 @@ Caused by:
         let engine = Engine::default();
         let mut metadata = Metadata::new(&engine);
 
-        metadata.tunables.static_memory_offset_guard_size = 0;
+        metadata.tunables.memory_guard_size = 0;
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(e.to_string(), "Module was compiled with a static memory guard size of '0' but '2147483648' is expected for the host"),
+            Err(e) => assert_eq!(e.to_string(), "Module was compiled with a memory guard size of '0' but '2147483648' is expected for the host"),
         }
 
         Ok(())

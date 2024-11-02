@@ -1,3 +1,5 @@
+use core::fmt;
+
 use anyhow::{anyhow, bail, Result};
 use serde_derive::{Deserialize, Serialize};
 use target_lexicon::{PointerWidth, Triple};
@@ -5,15 +7,16 @@ use target_lexicon::{PointerWidth, Triple};
 /// Tunable parameters for WebAssembly compilation.
 #[derive(Clone, Hash, Serialize, Deserialize, Debug)]
 pub struct Tunables {
+    /// The garbage collector implementation to use, which implies the layout of
+    /// GC objects and barriers that must be emitted in Wasm code.
+    pub collector: Option<Collector>,
+
     /// For static heaps, the size in bytes of virtual memory reservation for
     /// the heap.
     pub static_memory_reservation: u64,
 
-    /// The size in bytes of the offset guard for static heaps.
-    pub static_memory_offset_guard_size: u64,
-
-    /// The size in bytes of the offset guard for dynamic heaps.
-    pub dynamic_memory_offset_guard_size: u64,
+    /// The size, in bytes, of the guard page region for linear memories.
+    pub memory_guard_size: u64,
 
     /// The size, in bytes, of reserved memory at the end of a "dynamic" memory,
     /// before the guard page, that memory can grow into. This is intended to
@@ -97,11 +100,12 @@ impl Tunables {
     /// Returns the default set of tunables for running under MIRI.
     pub fn default_miri() -> Tunables {
         Tunables {
+            collector: None,
+
             // No virtual memory tricks are available on miri so make these
             // limits quite conservative.
             static_memory_reservation: 1 << 20,
-            static_memory_offset_guard_size: 0,
-            dynamic_memory_offset_guard_size: 0,
+            memory_guard_size: 0,
             dynamic_memory_growth_reserve: 0,
 
             // General options which have the same defaults regardless of
@@ -128,8 +132,7 @@ impl Tunables {
             // impacts performance severely but allows us to have more than a
             // few instances running around.
             static_memory_reservation: 10 * (1 << 20),
-            static_memory_offset_guard_size: 0x1_0000,
-            dynamic_memory_offset_guard_size: 0x1_0000,
+            memory_guard_size: 0x1_0000,
             dynamic_memory_growth_reserve: 1 << 20, // 1MB
 
             ..Tunables::default_miri()
@@ -146,13 +149,7 @@ impl Tunables {
             // Coupled with a 2 GiB address space guard it lets us translate
             // wasm offsets into x86 offsets as aggressively as we can.
             static_memory_reservation: 1 << 32,
-            static_memory_offset_guard_size: 0x8000_0000,
-
-            // Size in bytes of the offset guard for dynamic memories.
-            //
-            // Allocate a small guard to optimize common cases but without
-            // wasting too much memory.
-            dynamic_memory_offset_guard_size: 0x1_0000,
+            memory_guard_size: 0x8000_0000,
 
             // We've got lots of address space on 64-bit so use a larger
             // grow-into-this area, but on 32-bit we aren't as lucky. Miri is
@@ -161,6 +158,24 @@ impl Tunables {
             dynamic_memory_growth_reserve: 2 << 30, // 2GB
 
             ..Tunables::default_miri()
+        }
+    }
+}
+
+/// The garbage collector implementation to use.
+#[derive(Clone, Copy, Hash, Serialize, Deserialize, Debug, PartialEq, Eq)]
+pub enum Collector {
+    /// The deferred reference-counting collector.
+    DeferredReferenceCounting,
+    /// The null collector.
+    Null,
+}
+
+impl fmt::Display for Collector {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Collector::DeferredReferenceCounting => write!(f, "deferred reference-counting"),
+            Collector::Null => write!(f, "null"),
         }
     }
 }

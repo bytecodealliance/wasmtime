@@ -478,6 +478,7 @@ where
     }
 
     pub fn emit_lazy_init_funcref(&mut self, table_index: TableIndex) {
+        assert!(self.tunables.table_lazy_init, "unsupported eager init");
         let table_data = self.env.resolve_table_data(table_index);
         let ptr_type = self.env.ptr_type();
         let builtin = self

@@ -9,19 +9,51 @@ use cranelift_codegen::{
 };
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_frontend::FunctionBuilder;
+use smallvec::SmallVec;
 use wasmtime_environ::{
-    GcArrayLayout, GcLayout, GcStructLayout, ModuleInternedTypeIndex, PtrSize, TypeIndex, VMGcKind,
-    WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
-    I31_DISCRIMINANT, NON_NULL_NON_I31_MASK,
+    wasm_unsupported, Collector, GcArrayLayout, GcLayout, GcStructLayout, ModuleInternedTypeIndex,
+    PtrSize, TypeIndex, VMGcKind, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
+    WasmStorageType, WasmValType, I31_DISCRIMINANT, NON_NULL_NON_I31_MASK,
 };
 
+#[cfg(feature = "gc-drc")]
 mod drc;
+#[cfg(feature = "gc-null")]
+mod null;
 
 /// Get the default GC compiler.
-pub fn gc_compiler(_func_env: &FuncEnvironment<'_>) -> WasmResult<Box<dyn GcCompiler>> {
-    Ok(Box::new(drc::DrcCompiler::default()))
+pub fn gc_compiler(func_env: &FuncEnvironment<'_>) -> WasmResult<Box<dyn GcCompiler>> {
+    match func_env.tunables.collector {
+        #[cfg(feature = "gc-drc")]
+        Some(Collector::DeferredReferenceCounting) => Ok(Box::new(drc::DrcCompiler::default())),
+        #[cfg(not(feature = "gc-drc"))]
+        Some(Collector::DeferredReferenceCounting) => Err(wasm_unsupported!(
+            "the null collector is unavailable because the `gc-drc` feature \
+             was disabled at compile time",
+        )),
+
+        #[cfg(feature = "gc-null")]
+        Some(Collector::Null) => Ok(Box::new(null::NullCompiler::default())),
+        #[cfg(not(feature = "gc-null"))]
+        Some(Collector::Null) => Err(wasm_unsupported!(
+            "the null collector is unavailable because the `gc-null` feature \
+             was disabled at compile time",
+        )),
+
+        #[cfg(any(feature = "gc-drc", feature = "gc-null"))]
+        None => Err(wasm_unsupported!(
+            "support for GC types disabled at configuration time"
+        )),
+        #[cfg(not(any(feature = "gc-drc", feature = "gc-null")))]
+        None => Err(wasm_unsupported!(
+            "support for GC types disabled because no collector implementation \
+             was selected at compile time; enable one of the `gc-drc` or \
+             `gc-null` features",
+        )),
+    }
 }
 
+#[cfg_attr(not(feature = "gc-drc"), allow(dead_code))]
 fn unbarriered_load_gc_ref(
     builder: &mut FunctionBuilder,
     ty: WasmHeapType,
@@ -36,6 +68,7 @@ fn unbarriered_load_gc_ref(
     Ok(gc_ref)
 }
 
+#[cfg_attr(not(any(feature = "gc-drc", feature = "gc-null")), allow(dead_code))]
 fn unbarriered_store_gc_ref(
     builder: &mut FunctionBuilder,
     ty: WasmHeapType,
@@ -446,6 +479,77 @@ pub fn translate_array_new_fixed(
     elems: &[ir::Value],
 ) -> WasmResult<ir::Value> {
     gc_compiler(func_env)?.alloc_array(func_env, builder, array_type_index, ArrayInit::Elems(elems))
+}
+
+impl ArrayInit<'_> {
+    /// Get the length (as an `i32`-typed `ir::Value`) of these array elements.
+    #[cfg_attr(not(any(feature = "gc-drc", feature = "gc-null")), allow(dead_code))]
+    fn len(self, pos: &mut FuncCursor) -> ir::Value {
+        match self {
+            ArrayInit::Fill { len, .. } => len,
+            ArrayInit::Elems(e) => {
+                let len = u32::try_from(e.len()).unwrap();
+                pos.ins().iconst(ir::types::I32, i64::from(len))
+            }
+        }
+    }
+
+    /// Initialize a newly-allocated array's elements.
+    #[cfg_attr(not(any(feature = "gc-drc", feature = "gc-null")), allow(dead_code))]
+    fn initialize(
+        self,
+        func_env: &mut FuncEnvironment<'_>,
+        builder: &mut FunctionBuilder<'_>,
+        interned_type_index: ModuleInternedTypeIndex,
+        base_size: u32,
+        size: ir::Value,
+        elems_addr: ir::Value,
+        mut init_field: impl FnMut(
+            &mut FuncEnvironment<'_>,
+            &mut FunctionBuilder<'_>,
+            WasmStorageType,
+            ir::Value,
+            ir::Value,
+        ) -> WasmResult<()>,
+    ) -> WasmResult<()> {
+        assert!(!func_env.types[interned_type_index].composite_type.shared);
+        let array_ty = func_env.types[interned_type_index]
+            .composite_type
+            .inner
+            .unwrap_array();
+        let elem_ty = array_ty.0.element_type;
+        let elem_size = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&elem_ty);
+        let pointer_type = func_env.pointer_type();
+        let elem_size = builder.ins().iconst(pointer_type, i64::from(elem_size));
+        match self {
+            ArrayInit::Elems(elems) => {
+                let mut elem_addr = elems_addr;
+                for val in elems {
+                    init_field(func_env, builder, elem_ty, elem_addr, *val)?;
+                    elem_addr = builder.ins().iadd(elem_addr, elem_size);
+                }
+            }
+            ArrayInit::Fill { elem, len: _ } => {
+                // Compute the end address of the elements.
+                let base_size = builder.ins().iconst(pointer_type, i64::from(base_size));
+                let array_addr = builder.ins().isub(elems_addr, base_size);
+                let size = uextend_i32_to_pointer_type(builder, pointer_type, size);
+                let elems_end = builder.ins().iadd(array_addr, size);
+
+                emit_array_fill_impl(
+                    func_env,
+                    builder,
+                    elems_addr,
+                    elem_size,
+                    elems_end,
+                    |func_env, builder, elem_addr| {
+                        init_field(func_env, builder, elem_ty, elem_addr, elem)
+                    },
+                )?;
+            }
+        }
+        Ok(())
+    }
 }
 
 fn emit_array_fill_impl(
@@ -1065,6 +1169,92 @@ fn uextend_i32_to_pointer_type(
     }
 }
 
+/// Emit CLIF to compute an array object's total size, given the dynamic length
+/// in its initialization.
+///
+/// Traps if the size overflows.
+#[cfg_attr(not(any(feature = "gc-drc", feature = "gc-null")), allow(dead_code))]
+fn emit_array_size(
+    builder: &mut FunctionBuilder<'_>,
+    array_layout: &GcArrayLayout,
+    init: ArrayInit<'_>,
+) -> ir::Value {
+    let base_size = builder
+        .ins()
+        .iconst(ir::types::I32, i64::from(array_layout.base_size));
+    let len = init.len(&mut builder.cursor());
+
+    // `elems_size = len * elem_size`
+    //
+    // Check for multiplication overflow and trap if it occurs, since that
+    // means Wasm is attempting to allocate an array that is larger than our
+    // implementation limits. (Note: there is no standard implementation
+    // limit for array length beyond `u32::MAX`.)
+    //
+    // We implement this check by encoding our logically-32-bit operands as
+    // i64 values, doing a 64-bit multiplication, and then checking the high
+    // 32 bits of the multiplication's result. If the high 32 bits are not
+    // all zeros, then the multiplication overflowed.
+    let len = builder.ins().uextend(ir::types::I64, len);
+    let elems_size_64 = builder
+        .ins()
+        .imul_imm(len, i64::from(array_layout.elem_size));
+    let high_bits = builder.ins().ushr_imm(elems_size_64, 32);
+    builder
+        .ins()
+        .trapnz(high_bits, crate::TRAP_ALLOCATION_TOO_LARGE);
+    let elems_size = builder.ins().ireduce(ir::types::I32, elems_size_64);
+
+    // And if adding the base size and elements size overflows, then the
+    // allocation is too large.
+    let size =
+        builder
+            .ins()
+            .uadd_overflow_trap(base_size, elems_size, crate::TRAP_ALLOCATION_TOO_LARGE);
+
+    size
+}
+
+/// Common helper for struct-field initialization that can be reused across
+/// collectors.
+#[cfg_attr(not(any(feature = "gc-drc", feature = "gc-null")), allow(dead_code))]
+fn initialize_struct_fields(
+    func_env: &mut FuncEnvironment<'_>,
+    builder: &mut FunctionBuilder<'_>,
+    struct_ty: ModuleInternedTypeIndex,
+    raw_ptr_to_struct: ir::Value,
+    field_values: &[ir::Value],
+    mut init_field: impl FnMut(
+        &mut FuncEnvironment<'_>,
+        &mut FunctionBuilder<'_>,
+        WasmStorageType,
+        ir::Value,
+        ir::Value,
+    ) -> WasmResult<()>,
+) -> WasmResult<()> {
+    let struct_layout = func_env.struct_layout(struct_ty);
+    let struct_size = struct_layout.size;
+    let field_offsets: SmallVec<[_; 8]> = struct_layout.fields.iter().copied().collect();
+    assert_eq!(field_offsets.len(), field_values.len());
+
+    assert!(!func_env.types[struct_ty].composite_type.shared);
+    let struct_ty = func_env.types[struct_ty]
+        .composite_type
+        .inner
+        .unwrap_struct();
+    let field_types: SmallVec<[_; 8]> = struct_ty.fields.iter().cloned().collect();
+    assert_eq!(field_types.len(), field_values.len());
+
+    for ((ty, val), offset) in field_types.into_iter().zip(field_values).zip(field_offsets) {
+        let size_of_access = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&ty.element_type);
+        assert!(offset + size_of_access <= struct_size);
+        let field_addr = builder.ins().iadd_imm(raw_ptr_to_struct, i64::from(offset));
+        init_field(func_env, builder, ty.element_type, field_addr, *val)?;
+    }
+
+    Ok(())
+}
+
 impl FuncEnvironment<'_> {
     fn gc_layout(&mut self, type_index: ModuleInternedTypeIndex) -> &GcLayout {
         // Lazily compute and cache the layout.
@@ -1207,6 +1397,7 @@ impl FuncEnvironment<'_> {
     /// reference is null or is an `i31ref`; otherwise, it will be zero.
     ///
     /// This method is collector-agnostic.
+    #[cfg_attr(not(feature = "gc-drc"), allow(dead_code))]
     fn gc_ref_is_null_or_i31(
         &mut self,
         builder: &mut FunctionBuilder,

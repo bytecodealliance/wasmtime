@@ -1,5 +1,10 @@
 //! Debug utils for WebAssembly using Cranelift.
 
+// FIXME: this whole crate opts-in to these two noisier-than-default lints, but
+// this module has lots of hits on this warning which aren't the easiest to
+// resolve. Ideally all warnings would be resolved here though.
+#![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+
 use crate::CompiledFunctionMetadata;
 use cranelift_codegen::isa::TargetIsa;
 use object::write::SymbolId;

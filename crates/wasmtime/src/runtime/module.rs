@@ -876,19 +876,19 @@ impl Module {
     /// ```
     pub fn resources_required(&self) -> ResourcesRequired {
         let em = self.env_module();
-        let num_memories = u32::try_from(em.memory_plans.len() - em.num_imported_memories).unwrap();
+        let num_memories = u32::try_from(em.num_defined_memories()).unwrap();
         let max_initial_memory_size = em
-            .memory_plans
+            .memories
             .values()
             .skip(em.num_imported_memories)
-            .map(|plan| plan.memory.limits.min)
+            .map(|memory| memory.limits.min)
             .max();
-        let num_tables = u32::try_from(em.table_plans.len() - em.num_imported_tables).unwrap();
+        let num_tables = u32::try_from(em.num_defined_tables()).unwrap();
         let max_initial_table_size = em
-            .table_plans
+            .tables
             .values()
             .skip(em.num_imported_tables)
-            .map(|plan| plan.table.limits.min)
+            .map(|table| table.limits.min)
             .max();
         ResourcesRequired {
             num_memories,

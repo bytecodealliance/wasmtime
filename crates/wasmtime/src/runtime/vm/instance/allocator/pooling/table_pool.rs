@@ -9,7 +9,7 @@ use crate::runtime::vm::{
 use crate::{runtime::vm::sys::vm::commit_pages, vm::round_usize_up_to_host_pages};
 use std::mem;
 use std::ptr::NonNull;
-use wasmtime_environ::{Module, TablePlan};
+use wasmtime_environ::{Module, Tunables};
 
 /// Represents a pool of WebAssembly tables.
 ///
@@ -63,7 +63,7 @@ impl TablePool {
 
     /// Validate whether this module's tables are allocatable by this pool.
     pub fn validate(&self, module: &Module) -> Result<()> {
-        let tables = module.table_plans.len() - module.num_imported_tables;
+        let tables = module.num_defined_tables();
 
         if tables > usize::try_from(self.tables_per_instance).unwrap() {
             bail!(
@@ -81,12 +81,12 @@ impl TablePool {
             );
         }
 
-        for (i, plan) in module.table_plans.iter().skip(module.num_imported_tables) {
-            if plan.table.limits.min > u64::try_from(self.table_elements)? {
+        for (i, table) in module.tables.iter().skip(module.num_imported_tables) {
+            if table.limits.min > u64::try_from(self.table_elements)? {
                 bail!(
                     "table index {} has a minimum element size of {} which exceeds the limit of {}",
                     i.as_u32(),
-                    plan.table.limits.min,
+                    table.limits.min,
                     self.table_elements,
                 );
             }
@@ -116,7 +116,8 @@ impl TablePool {
     pub fn allocate(
         &self,
         request: &mut InstanceAllocationRequest,
-        table_plan: &TablePlan,
+        ty: &wasmtime_environ::Table,
+        tunables: &Tunables,
     ) -> Result<(TableAllocationIndex, Table)> {
         let allocation_index = self
             .index_allocator
@@ -140,7 +141,8 @@ impl TablePool {
             .unwrap();
             unsafe {
                 Table::new_static(
-                    table_plan,
+                    ty,
+                    tunables,
                     SendSyncPtr::new(ptr),
                     &mut *request.store.get().unwrap(),
                 )

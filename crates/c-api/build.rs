@@ -15,6 +15,8 @@ const FEATURES: &[&str] = &[
     "DEMANGLE",
     "THREADS",
     "GC",
+    "GC_DRC",
+    "GC_NULL",
     "CRANELIFT",
     "WINCH",
 ];

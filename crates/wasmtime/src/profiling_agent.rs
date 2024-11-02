@@ -27,9 +27,17 @@ cfg_if::cfg_if! {
 }
 
 cfg_if::cfg_if! {
-    // Note: VTune support is disabled on windows mingw because the ittapi crate doesn't compile
-    // there; see also https://github.com/bytecodealliance/wasmtime/pull/4003 for rationale.
-    if #[cfg(all(feature = "profiling", target_arch = "x86_64", not(any(target_os = "android", all(target_os = "windows", target_env = "gnu")))))] {
+    // Note that the `#[cfg]` here should be kept in sync with the
+    // corresponding dependency directive on `ittapi` in `Cargo.toml`.
+    if #[cfg(all(
+        feature = "profiling",
+        target_arch = "x86_64",
+        any(
+            target_os = "windows",
+            target_os = "macos",
+            target_os = "linux",
+        ),
+    ))] {
         mod vtune;
         pub use vtune::new as new_vtune;
     } else {

@@ -1289,6 +1289,12 @@
             (Size64 64)
             (Size128 128)))
 
+;; Difference (32 - ty), useful for narrow calculations with 32-bit
+;; instructions.
+(decl diff_from_32 (Type) u8)
+(rule (diff_from_32 $I8) 24)
+(rule (diff_from_32 $I16) 16)
+
 (type ScalarSize extern
       (enum Size8
             Size16
@@ -3664,24 +3670,18 @@
 
 ;; Check for signed overflow. The only case is min_value / -1.
 ;; The following checks must be done in 32-bit or 64-bit, depending
-;; on the input type.
-(spec (trap_if_div_overflow ty x y)
-      (provide (= x result)
-      (if (= ty 32)
-          (not (and (= #x00000000 (extract 31 0 y))
-                 (= #x80000000 (extract 31 0 y))))
-          (not (and (= #x0000000000000000 y)
-                    (= #x8000000000000000 y))))))
-(decl trap_if_div_overflow (Type Reg Reg) Reg)
-(rule (trap_if_div_overflow ty x y)
+;; on the input type. For 8- and 16- bit, the check for x == min_value
+;; must use a possibly-shifted value, xcheck, to overflow as expected.
+(decl trap_if_div_overflow (Type Reg Reg Reg) Reg)
+(rule (trap_if_div_overflow ty xcheck x y)
       (let (
           ;; Check RHS is -1.
           (_ Unit (emit (MInst.AluRRImm12 (ALUOp.AddS) (operand_size ty) (writable_zero_reg) y (u8_into_imm12 1))))
 
-          ;; Check LHS is min_value, by subtracting 1 and branching if
-          ;; there is overflow.
+          ;; Check LHS is min_value, by subtracting 1 from the possibly-shifted
+          ;; value and branching if there is overflow.
           (_ Unit (emit (MInst.CCmpImm (size_from_ty ty)
-                                       x
+                                       xcheck
                                        (u8_into_uimm5 1)
                                        (nzcv $false $false $false $false)
                                        (Cond.Eq))))
@@ -3689,6 +3689,19 @@
                                       (trap_code_integer_overflow))))
         )
         x))
+
+;; In the cases narrower than a register width, subtracting 1 from the
+;; min_value will not cause overflow (e.g., I8's min_value of -128 stored in
+;; a 32-bit register produces -129 with no overflow). However, if we left shift
+;; x by (32 - ty), we then produce the 32-bit min_value for the respective min
+;; values of I8 and I16.
+;; E.g., I8's 0x00000080 left-shifted by 24 is 0x80000000, which overflows.
+(decl intmin_check (Type Reg) Reg)
+(rule intmin_check_fits_in_16 (intmin_check (fits_in_16 ty) x)
+      (alu_rr_imm_shift (ALUOp.Lsl) ty x (imm_shift_from_u8 (diff_from_32 ty))))
+
+;; In the I32 or I64 case, checking x itself against the min_value is fine.
+(rule -1 (intmin_check ty x) x)
 
 ;; Check for unsigned overflow.
 (decl trap_if_overflow (ProducesFlags TrapCode) Reg)

@@ -1,7 +1,7 @@
 use crate::{wasm_externtype_t, wasm_limits_t, CExternType};
 use std::cell::OnceCell;
 use std::convert::TryFrom;
-use wasmtime::MemoryType;
+use wasmtime::{MemoryType, MemoryTypeBuilder};
 
 #[repr(transparent)]
 #[derive(Clone)]
@@ -71,20 +71,23 @@ pub extern "C" fn wasmtime_memorytype_new(
     maximum_specified: bool,
     maximum: u64,
     memory64: bool,
+    shared: bool,
 ) -> Box<wasm_memorytype_t> {
     let maximum = if maximum_specified {
         Some(maximum)
     } else {
         None
     };
-    Box::new(wasm_memorytype_t::new(if memory64 {
-        MemoryType::new64(minimum, maximum)
-    } else {
-        MemoryType::new(
-            u32::try_from(minimum).unwrap(),
-            maximum.map(|i| u32::try_from(i).unwrap()),
-        )
-    }))
+
+    Box::new(wasm_memorytype_t::new(
+        MemoryTypeBuilder::default()
+            .min(minimum)
+            .max(maximum)
+            .memory64(memory64)
+            .shared(shared)
+            .build()
+            .unwrap(),
+    ))
 }
 
 #[no_mangle]

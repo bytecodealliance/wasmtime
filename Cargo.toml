@@ -343,6 +343,7 @@ criterion = { version = "0.5.0", default-features = false, features = ["html_rep
 rustc-hash = "2.0.0"
 libtest-mimic = "0.7.0"
 semver = { version = "1.0.17", default-features = false }
+ittapi = "0.4.0"
 
 # =============================================================================
 #
@@ -391,6 +392,8 @@ default = [
   "component-model",
   "threads",
   "gc",
+  "gc-drc",
+  "gc-null",
   "winch",
 
   # Enable some nice features of clap by default, but they come at a binary size
@@ -441,7 +444,9 @@ coredump = ["wasmtime-cli-flags/coredump"]
 addr2line = ["wasmtime/addr2line"]
 debug-builtins = ["wasmtime/debug-builtins"]
 threads = ["wasmtime-cli-flags/threads"]
-gc = ["wasmtime-cli-flags/gc"]
+gc = ["wasmtime-cli-flags/gc", "wasmtime/gc"]
+gc-drc = ["gc", "wasmtime/gc-drc", "wasmtime-cli-flags/gc-drc"]
+gc-null = ["gc", "wasmtime/gc-null", "wasmtime-cli-flags/gc-null"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.

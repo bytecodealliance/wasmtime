@@ -22,10 +22,9 @@ extern "C" {
  * Note that this function is preferred over #wasm_memorytype_new for
  * compatibility with the memory64 proposal.
  */
-WASM_API_EXTERN wasm_memorytype_t *wasmtime_memorytype_new(uint64_t min,
-                                                           bool max_present,
-                                                           uint64_t max,
-                                                           bool is_64);
+WASM_API_EXTERN wasm_memorytype_t *
+wasmtime_memorytype_new(uint64_t min, bool max_present, uint64_t max,
+                        bool is_64, bool shared);
 
 /**
  * \brief Returns the minimum size, in pages, of the specified memory type.

@@ -5,18 +5,19 @@
 // warnings
 #![cfg_attr(any(not(unix), miri), allow(unreachable_patterns))]
 
+use super::sys::DecommitBehavior;
 use crate::prelude::*;
 use crate::runtime::vm::sys::vm::{self, MemoryImageSource};
-use crate::runtime::vm::{MmapVec, SendSyncPtr};
+use crate::runtime::vm::{
+    round_usize_up_to_host_pages, usize_is_multiple_of_host_page_size, MmapVec, SendSyncPtr,
+};
 use alloc::sync::Arc;
 use core::ffi::c_void;
 use core::ops::Range;
 use core::ptr::{self, NonNull};
 use wasmtime_environ::{
-    DefinedMemoryIndex, MemoryInitialization, MemoryPlan, MemoryStyle, Module, PrimaryMap,
+    DefinedMemoryIndex, MemoryInitialization, MemoryStyle, Module, PrimaryMap, Tunables,
 };
-
-use super::sys::DecommitBehavior;
 
 /// Backing images for memories in a module.
 ///
@@ -196,8 +197,7 @@ impl ModuleMemoryImages {
             // creation files then we fail creating `ModuleMemoryImages` since this
             // memory couldn't be represented.
             let data = &wasm_data[init.data.start as usize..init.data.end as usize];
-            if module.memory_plans[memory_index]
-                .memory
+            if module.memories[memory_index]
                 .minimum_byte_size()
                 .map_or(false, |mem_initial_len| {
                     init.offset + u64::try_from(data.len()).unwrap() > mem_initial_len
@@ -304,6 +304,8 @@ pub struct MemoryImageSlot {
     /// the case of dynamic memories in use. Memory accesses to memory below
     /// `self.accessible` may still page fault as pages are lazily brought in
     /// but the faults will always be resolved by the kernel.
+    ///
+    /// Also note that this is always page-aligned.
     accessible: usize,
 
     /// Whether this slot may have "dirty" pages (pages written by an
@@ -371,7 +373,9 @@ impl MemoryImageSlot {
     }
 
     pub(crate) fn set_heap_limit(&mut self, size_bytes: usize) -> Result<()> {
+        let size_bytes_page_aligned = round_usize_up_to_host_pages(size_bytes)?;
         assert!(size_bytes <= self.static_size);
+        assert!(size_bytes_page_aligned <= self.static_size);
 
         // If the heap limit already addresses accessible bytes then no syscalls
         // are necessary since the data is already mapped into the process and
@@ -379,13 +383,14 @@ impl MemoryImageSlot {
         //
         // This is used for "dynamic" memories where memory is not always
         // decommitted during recycling (but it's still always reset).
-        if size_bytes <= self.accessible {
+        if size_bytes_page_aligned <= self.accessible {
             return Ok(());
         }
 
         // Otherwise use `mprotect` to make the new pages read/write.
-        self.set_protection(self.accessible..size_bytes, true)?;
-        self.accessible = size_bytes;
+        self.set_protection(self.accessible..size_bytes_page_aligned, true)?;
+        self.accessible = size_bytes_page_aligned;
+        debug_assert!(usize_is_multiple_of_host_page_size(self.accessible));
 
         Ok(())
     }
@@ -413,10 +418,12 @@ impl MemoryImageSlot {
         &mut self,
         initial_size_bytes: usize,
         maybe_image: Option<&Arc<MemoryImage>>,
-        plan: &MemoryPlan,
+        ty: &wasmtime_environ::Memory,
+        tunables: &Tunables,
     ) -> Result<()> {
         assert!(!self.dirty);
         assert!(initial_size_bytes <= self.static_size);
+        let initial_size_bytes_page_aligned = round_usize_up_to_host_pages(initial_size_bytes)?;
 
         // First order of business is to blow away the previous linear memory
         // image if it doesn't match the image specified here. If one is
@@ -433,9 +440,9 @@ impl MemoryImageSlot {
         // The next order of business is to ensure that `self.accessible` is
         // appropriate. First up is to grow the read/write portion of memory if
         // it's not large enough to accommodate `initial_size_bytes`.
-        if self.accessible < initial_size_bytes {
-            self.set_protection(self.accessible..initial_size_bytes, true)?;
-            self.accessible = initial_size_bytes;
+        if self.accessible < initial_size_bytes_page_aligned {
+            self.set_protection(self.accessible..initial_size_bytes_page_aligned, true)?;
+            self.accessible = initial_size_bytes_page_aligned;
         }
 
         // If (1) the accessible region is not in its initial state, and (2) the
@@ -443,17 +450,21 @@ impl MemoryImageSlot {
         // and/or is static), then we need to reset memory protections. Put
         // another way, the only time it is safe to not reset protections is
         // when we are using dynamic memory without any guard pages.
-        if initial_size_bytes < self.accessible
-            && (plan.offset_guard_size > 0 || matches!(plan.style, MemoryStyle::Static { .. }))
+        let (style, offset_guard_size) = MemoryStyle::for_memory(*ty, tunables);
+        if initial_size_bytes_page_aligned < self.accessible
+            && (offset_guard_size > 0 || matches!(style, MemoryStyle::Static { .. }))
         {
-            self.set_protection(initial_size_bytes..self.accessible, false)?;
-            self.accessible = initial_size_bytes;
+            self.set_protection(initial_size_bytes_page_aligned..self.accessible, false)?;
+            self.accessible = initial_size_bytes_page_aligned;
         }
+
+        debug_assert!(usize_is_multiple_of_host_page_size(self.accessible));
 
         // Now that memory is sized appropriately the final operation is to
         // place the new image into linear memory. Note that this operation is
         // skipped if `self.image` matches `maybe_image`.
         assert!(initial_size_bytes <= self.accessible);
+        assert!(initial_size_bytes_page_aligned <= self.accessible);
         if self.image.as_ref() != maybe_image {
             if let Some(image) = maybe_image.as_ref() {
                 assert!(
@@ -774,25 +785,22 @@ mod test {
         })
     }
 
-    fn dummy_memory_plan(style: MemoryStyle) -> MemoryPlan {
-        MemoryPlan {
-            style,
-            memory: Memory {
-                idx_type: IndexType::I32,
-                limits: Limits { min: 0, max: None },
-                shared: false,
-                page_size_log2: Memory::DEFAULT_PAGE_SIZE_LOG2,
-            },
-            pre_guard_size: 0,
-            offset_guard_size: 0,
+    fn dummy_memory() -> Memory {
+        Memory {
+            idx_type: IndexType::I32,
+            limits: Limits { min: 0, max: None },
+            shared: false,
+            page_size_log2: Memory::DEFAULT_PAGE_SIZE_LOG2,
         }
     }
 
     #[test]
     fn instantiate_no_image() {
-        let plan = dummy_memory_plan(MemoryStyle::Static {
-            byte_reservation: 4 << 30,
-        });
+        let ty = dummy_memory();
+        let tunables = Tunables {
+            static_memory_reservation: 4 << 30,
+            ..Tunables::default_miri()
+        };
         // 4 MiB mmap'd area, not accessible
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
         // Create a MemoryImageSlot on top of it
@@ -800,7 +808,7 @@ mod test {
         memfd.no_clear_on_drop();
         assert!(!memfd.is_dirty());
         // instantiate with 64 KiB initial size
-        memfd.instantiate(64 << 10, None, &plan).unwrap();
+        memfd.instantiate(64 << 10, None, &ty, &tunables).unwrap();
         assert!(memfd.is_dirty());
         // We should be able to access this 64 KiB (try both ends) and
         // it should consist of zeroes.
@@ -820,7 +828,7 @@ mod test {
             .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
             .unwrap();
         assert!(!memfd.is_dirty());
-        memfd.instantiate(64 << 10, None, &plan).unwrap();
+        memfd.instantiate(64 << 10, None, &ty, &tunables).unwrap();
         let slice = unsafe { mmap.slice(0..65536) };
         assert_eq!(0, slice[1024]);
     }
@@ -828,9 +836,11 @@ mod test {
     #[test]
     fn instantiate_image() {
         let page_size = host_page_size();
-        let plan = dummy_memory_plan(MemoryStyle::Static {
-            byte_reservation: 4 << 30,
-        });
+        let ty = dummy_memory();
+        let tunables = Tunables {
+            static_memory_reservation: 4 << 30,
+            ..Tunables::default_miri()
+        };
         // 4 MiB mmap'd area, not accessible
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
         // Create a MemoryImageSlot on top of it
@@ -839,7 +849,9 @@ mod test {
         // Create an image with some data.
         let image = Arc::new(create_memfd_with_data(page_size, &[1, 2, 3, 4]).unwrap());
         // Instantiate with this image
-        memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
+        memfd
+            .instantiate(64 << 10, Some(&image), &ty, &tunables)
+            .unwrap();
         assert!(memfd.has_image());
         let slice = unsafe { mmap.slice_mut(0..65536) };
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
@@ -848,7 +860,9 @@ mod test {
         memfd
             .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
             .unwrap();
-        memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
+        memfd
+            .instantiate(64 << 10, Some(&image), &ty, &tunables)
+            .unwrap();
         let slice = unsafe { mmap.slice_mut(0..65536) };
         // Should not see mutation from above
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
@@ -856,7 +870,7 @@ mod test {
         memfd
             .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
             .unwrap();
-        memfd.instantiate(64 << 10, None, &plan).unwrap();
+        memfd.instantiate(64 << 10, None, &ty, &tunables).unwrap();
         assert!(!memfd.has_image());
         let slice = unsafe { mmap.slice_mut(0..65536) };
         assert_eq!(&[0, 0, 0, 0], &slice[page_size..][..4]);
@@ -864,7 +878,9 @@ mod test {
         memfd
             .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
             .unwrap();
-        memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
+        memfd
+            .instantiate(64 << 10, Some(&image), &ty, &tunables)
+            .unwrap();
         let slice = unsafe { mmap.slice_mut(0..65536) };
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
         // Create another image with different data.
@@ -872,7 +888,9 @@ mod test {
         memfd
             .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
             .unwrap();
-        memfd.instantiate(128 << 10, Some(&image2), &plan).unwrap();
+        memfd
+            .instantiate(128 << 10, Some(&image2), &ty, &tunables)
+            .unwrap();
         let slice = unsafe { mmap.slice_mut(0..65536) };
         assert_eq!(&[10, 11, 12, 13], &slice[page_size..][..4]);
         // Instantiate the original image again; we should notice it's
@@ -880,7 +898,9 @@ mod test {
         memfd
             .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
             .unwrap();
-        memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
+        memfd
+            .instantiate(64 << 10, Some(&image), &ty, &tunables)
+            .unwrap();
         let slice = unsafe { mmap.slice_mut(0..65536) };
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
     }
@@ -889,9 +909,11 @@ mod test {
     #[cfg(target_os = "linux")]
     fn memset_instead_of_madvise() {
         let page_size = host_page_size();
-        let plan = dummy_memory_plan(MemoryStyle::Static {
-            byte_reservation: 100 << 16,
-        });
+        let ty = dummy_memory();
+        let tunables = Tunables {
+            static_memory_reservation: 100 << 16,
+            ..Tunables::default_miri()
+        };
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
         let mut memfd = MemoryImageSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
         memfd.no_clear_on_drop();
@@ -900,7 +922,9 @@ mod test {
         for image_off in [0, page_size, page_size * 2] {
             let image = Arc::new(create_memfd_with_data(image_off, &[1, 2, 3, 4]).unwrap());
             for amt_to_memset in [0, page_size, page_size * 10, 1 << 20, 10 << 20] {
-                memfd.instantiate(64 << 10, Some(&image), &plan).unwrap();
+                memfd
+                    .instantiate(64 << 10, Some(&image), &ty, &tunables)
+                    .unwrap();
                 assert!(memfd.has_image());
                 let slice = unsafe { mmap.slice_mut(0..64 << 10) };
                 if image_off > 0 {
@@ -920,7 +944,7 @@ mod test {
 
         // Test without an image
         for amt_to_memset in [0, page_size, page_size * 10, 1 << 20, 10 << 20] {
-            memfd.instantiate(64 << 10, None, &plan).unwrap();
+            memfd.instantiate(64 << 10, None, &ty, &tunables).unwrap();
             let mem = unsafe { mmap.slice_mut(0..64 << 10) };
             for chunk in mem.chunks_mut(1024) {
                 assert_eq!(chunk[0], 0);
@@ -938,7 +962,12 @@ mod test {
     #[cfg(target_os = "linux")]
     fn dynamic() {
         let page_size = host_page_size();
-        let plan = dummy_memory_plan(MemoryStyle::Dynamic { reserve: 200 });
+        let ty = dummy_memory();
+        let tunables = Tunables {
+            static_memory_reservation: 0,
+            dynamic_memory_growth_reserve: 200,
+            ..Tunables::default_miri()
+        };
 
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
         let mut memfd = MemoryImageSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
@@ -948,7 +977,9 @@ mod test {
 
         // Instantiate the image and test that memory remains accessible after
         // it's cleared.
-        memfd.instantiate(initial, Some(&image), &plan).unwrap();
+        memfd
+            .instantiate(initial, Some(&image), &ty, &tunables)
+            .unwrap();
         assert!(memfd.has_image());
         let slice = unsafe { mmap.slice_mut(0..(64 << 10) + page_size) };
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
@@ -961,7 +992,9 @@ mod test {
 
         // Re-instantiate make sure it preserves memory. Grow a bit and set data
         // beyond the initial size.
-        memfd.instantiate(initial, Some(&image), &plan).unwrap();
+        memfd
+            .instantiate(initial, Some(&image), &ty, &tunables)
+            .unwrap();
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
         memfd.set_heap_limit(initial * 2).unwrap();
         assert_eq!(&[0, 0], &slice[initial..initial + 2]);
@@ -976,7 +1009,9 @@ mod test {
 
         // Instantiate again, and again memory beyond the initial size should
         // still be accessible. Grow into it again and make sure it works.
-        memfd.instantiate(initial, Some(&image), &plan).unwrap();
+        memfd
+            .instantiate(initial, Some(&image), &ty, &tunables)
+            .unwrap();
         assert_eq!(&[0, 0], &slice[initial..initial + 2]);
         memfd.set_heap_limit(initial * 2).unwrap();
         assert_eq!(&[0, 0], &slice[initial..initial + 2]);
@@ -987,7 +1022,7 @@ mod test {
             .unwrap();
 
         // Reset the image to none and double-check everything is back to zero
-        memfd.instantiate(64 << 10, None, &plan).unwrap();
+        memfd.instantiate(64 << 10, None, &ty, &tunables).unwrap();
         assert!(!memfd.has_image());
         assert_eq!(&[0, 0, 0, 0], &slice[page_size..][..4]);
         assert_eq!(&[0, 0], &slice[initial..initial + 2]);

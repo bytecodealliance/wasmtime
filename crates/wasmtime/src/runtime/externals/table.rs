@@ -111,7 +111,7 @@ impl Table {
             let table = Table::from_wasmtime_table(wasmtime_export, store);
             let wasmtime_table = table.wasmtime_table(store, iter::empty());
             (*wasmtime_table)
-                .fill(store.gc_store_mut()?, 0, init, ty.minimum())
+                .fill(store.optional_gc_store_mut()?, 0, init, ty.minimum())
                 .err2anyhow()?;
             Ok(table)
         }
@@ -128,7 +128,7 @@ impl Table {
     }
 
     fn _ty(&self, store: &StoreOpaque) -> TableType {
-        let ty = &store[self.0].table.table;
+        let ty = &store[self.0].table;
         TableType::from_wasmtime_table(store.engine(), ty)
     }
 
@@ -156,8 +156,9 @@ impl Table {
     pub fn get(&self, mut store: impl AsContextMut, index: u64) -> Option<Ref> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
         let table = self.wasmtime_table(&mut store, iter::once(index));
+        let gc_store = store.optional_gc_store_mut().ok().and_then(|s| s);
         unsafe {
-            match (*table).get(store.unwrap_gc_store_mut(), index)? {
+            match (*table).get(gc_store, index)? {
                 runtime::TableElement::FuncRef(f) => {
                     let func = Func::from_vm_func_ref(&mut store, f);
                     Some(func.into())
@@ -334,7 +335,7 @@ impl Table {
         let src_table = src_table.wasmtime_table(store, src_range);
         unsafe {
             runtime::Table::copy(
-                store.gc_store_mut()?,
+                store.optional_gc_store_mut()?,
                 dst_table,
                 src_table,
                 dst_index,
@@ -370,7 +371,7 @@ impl Table {
         let table = self.wasmtime_table(store, iter::empty());
         unsafe {
             (*table)
-                .fill(store.gc_store_mut()?, dst, val, len)
+                .fill(store.optional_gc_store_mut()?, dst, val, len)
                 .err2anyhow()?;
         }
 
@@ -405,7 +406,6 @@ impl Table {
         // Ensure that the table's type is engine-level canonicalized.
         wasmtime_export
             .table
-            .table
             .ref_type
             .canonicalize_for_runtime_usage(&mut |module_index| {
                 crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |instance| {
@@ -417,7 +417,7 @@ impl Table {
     }
 
     pub(crate) fn wasmtime_ty<'a>(&self, data: &'a StoreData) -> &'a wasmtime_environ::Table {
-        &data[self.0].table.table
+        &data[self.0].table
     }
 
     pub(crate) fn vmimport(&self, store: &StoreOpaque) -> crate::runtime::vm::VMTableImport {

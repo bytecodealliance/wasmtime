@@ -114,6 +114,7 @@ impl TargetIsa for X64 {
             translation,
             types,
             builtins,
+            tunables,
             self,
             abi::X64ABI::ptr_type(),
         );

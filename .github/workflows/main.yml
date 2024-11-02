@@ -369,6 +369,12 @@ jobs:
               -p wasmtime --no-default-features --features gc
               -p wasmtime --no-default-features --features runtime,gc
               -p wasmtime --no-default-features --features cranelift,gc
+              -p wasmtime --no-default-features --features gc-drc
+              -p wasmtime --no-default-features --features runtime,gc-drc
+              -p wasmtime --no-default-features --features cranelift,gc-drc
+              -p wasmtime --no-default-features --features gc-null
+              -p wasmtime --no-default-features --features runtime,gc-null
+              -p wasmtime --no-default-features --features cranelift,gc-null
               -p wasmtime --no-default-features --features runtime
               -p wasmtime --no-default-features --features threads
               -p wasmtime --no-default-features --features runtime,threads
@@ -499,9 +505,8 @@ jobs:
         CARGO_PROFILE_DEV_DEBUG_ASSERTIONS: false
 
     # Check whether `wasmtime` cross-compiles to x86_64-unknown-freebsd
-    # TODO: We aren't building with default features since the `ittapi` crate fails to compile on freebsd.
     - run: rustup target add x86_64-unknown-freebsd
-    - run: cargo check -p wasmtime --no-default-features --features cranelift,wat,async,cache --target x86_64-unknown-freebsd
+    - run: cargo check --target x86_64-unknown-freebsd
 
     # Re-vendor all WIT files and ensure that they're all up-to-date by ensuring
     # that there's no git changes.
@@ -513,6 +518,31 @@ jobs:
     - name: Re-vendor C API
       run: ./ci/vendor-c-api-headers.sh
     - run: git diff --exit-code
+
+    # common logic to cancel the entire run if this job fails
+    - run: gh run cancel ${{ github.run_id }}
+      if: failure() && github.event_name != 'pull_request'
+      env:
+        GH_TOKEN: ${{ github.token }}
+
+  checks_illumos:
+    name: Check illumos
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+
+    # Check whether `wasmtime` cross-compiles to illumos. We need to use `cross` for this (even for
+    # cargo check) because of non-Rust dependencies.
+    - name: Install cross
+      run: |
+        curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+        cargo binstall --no-confirm cross
+    - name: Cross-compile to illumos
+      run:
+        cross build --target x86_64-unknown-illumos
 
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
@@ -1163,6 +1193,7 @@ jobs:
       - no_std_checks
       - clippy
       - monolith_checks
+      - checks_illumos
       - checks_winarm64
       - bench
       - meta_deterministic_check

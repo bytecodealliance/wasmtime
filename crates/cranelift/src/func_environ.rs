@@ -20,10 +20,10 @@ use std::mem;
 use wasmparser::{Operator, WasmFeatures};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DataIndex, ElemIndex, EngineOrModuleTypeIndex, FuncIndex, GlobalIndex,
-    IndexType, Memory, MemoryIndex, MemoryPlan, MemoryStyle, Module, ModuleInternedTypeIndex,
-    ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex, TableStyle, Tunables,
-    TypeConvert, TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType,
-    WasmHeapType, WasmRefType, WasmResult, WasmValType,
+    IndexType, Memory, MemoryIndex, MemoryStyle, Module, ModuleInternedTypeIndex,
+    ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex, Tunables, TypeConvert,
+    TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType,
+    WasmRefType, WasmResult, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -118,7 +118,7 @@ pub struct FuncEnvironment<'module_environment> {
     /// Offsets to struct fields accessed by JIT code.
     pub(crate) offsets: VMOffsets<u8>,
 
-    tunables: &'module_environment Tunables,
+    pub(crate) tunables: &'module_environment Tunables,
 
     /// A function-local variable which stores the cached value of the amount of
     /// fuel remaining to execute. If used this is modified frequently so it's
@@ -696,12 +696,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     /// Get the Memory for the given index.
     fn memory(&self, index: MemoryIndex) -> Memory {
-        self.module.memory_plans[index].memory
+        self.module.memories[index]
     }
 
     /// Get the Table for the given index.
     fn table(&self, index: TableIndex) -> Table {
-        self.module.table_plans[index].table
+        self.module.tables[index]
     }
 
     /// Cast the value to I64 and sign extend if necessary.
@@ -817,7 +817,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             }
         };
 
-        let table = &self.module.table_plans[index].table;
+        let table = &self.module.tables[index];
         let element_size = if table.ref_type.is_vmgcref_type() {
             // For GC-managed references, tables store `Option<VMGcRef>`s.
             ir::types::I32.bytes()
@@ -869,7 +869,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         table_index: TableIndex,
         index: ir::Value,
         cold_blocks: bool,
-        lazy_init: bool,
     ) -> ir::Value {
         let pointer_type = self.pointer_type();
         self.ensure_table_exists(builder.func, table_index);
@@ -882,7 +881,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let (table_entry_addr, flags) = table_data.prepare_table_addr(self, builder, index);
         let value = builder.ins().load(pointer_type, flags, table_entry_addr, 0);
 
-        if !lazy_init {
+        if !self.tunables.table_lazy_init {
             return value;
         }
 
@@ -953,7 +952,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             .name_section
             .func_names
             .get(&func_index)
-            .map(|s| *s)
+            .copied()
     }
 
     /// Proof-carrying code: create a memtype describing an empty
@@ -1130,7 +1129,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         *builder.func.dfg.inst_results(call).first().unwrap()
     }
 
-    fn vmshared_type_index_ty(&self) -> Type {
+    /// Get the `ir::Type` for a `VMSharedTypeIndex`.
+    pub(crate) fn vmshared_type_index_ty(&self) -> Type {
         Type::int_with_byte_size(self.offsets.size_of_vmshared_type_index().into()).unwrap()
     }
 
@@ -1325,14 +1325,11 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         cold_blocks: bool,
     ) -> WasmResult<Option<(ir::Value, ir::Value)>> {
         // Get the funcref pointer from the table.
-        let table = &self.env.module.table_plans[table_index];
-        let TableStyle::CallerChecksSignature { lazy_init } = table.style;
         let funcref_ptr = self.env.get_or_init_func_ref_table_elem(
             self.builder,
             table_index,
             callee,
             cold_blocks,
-            lazy_init,
         );
 
         // If necessary, check the signature.
@@ -1376,18 +1373,14 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         ty_index: TypeIndex,
         funcref_ptr: ir::Value,
     ) -> CheckIndirectCallTypeSignature {
-        let table = &self.env.module.table_plans[table_index];
+        let table = &self.env.module.tables[table_index];
         let sig_id_size = self.env.offsets.size_of_vmshared_type_index();
         let sig_id_type = Type::int(u16::from(sig_id_size) * 8).unwrap();
-
-        // Generate a rustc compile error here if more styles are added in
-        // the future as the following code is tailored to just this style.
-        let TableStyle::CallerChecksSignature { .. } = table.style;
 
         // Test if a type check is necessary for this table. If this table is a
         // table of typed functions and that type matches `ty_index`, then
         // there's no need to perform a typecheck.
-        match table.table.ref_type.heap_type {
+        match table.ref_type.heap_type {
             // Functions do not have a statically known type in the table, a
             // typecheck is required. Fall through to below to perform the
             // actual typecheck.
@@ -1403,7 +1396,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 let specified_ty = self.env.module.types[ty_index];
                 if specified_ty == table_ty {
                     return CheckIndirectCallTypeSignature::StaticMatch {
-                        may_be_null: table.table.ref_type.nullable,
+                        may_be_null: table.ref_type.nullable,
                     };
                 }
 
@@ -1421,7 +1414,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                     // a null pointer, then this was a call to null. Otherwise
                     // if it succeeds then we know it won't match, so trap
                     // anyway.
-                    if table.table.ref_type.nullable {
+                    if table.ref_type.nullable {
                         if self.env.signals_based_traps() {
                             let mem_flags = ir::MemFlags::trusted().with_readonly();
                             self.builder.ins().load(
@@ -1446,7 +1439,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             // Tables of `nofunc` can only be inhabited by null, so go ahead and
             // trap with that.
             WasmHeapType::NoFunc => {
-                assert!(table.table.ref_type.nullable);
+                assert!(table.ref_type.nullable);
                 self.env
                     .trap(self.builder, crate::TRAP_INDIRECT_CALL_TO_NULL);
                 return CheckIndirectCallTypeSignature::StaticTrap;
@@ -1782,8 +1775,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         table_index: TableIndex,
         index: ir::Value,
     ) -> WasmResult<ir::Value> {
-        let plan = &self.module.table_plans[table_index];
-        let table = plan.table;
+        let table = self.module.tables[table_index];
         self.ensure_table_exists(builder.func, table_index);
         let table_data = self.tables[table_index].clone().unwrap();
         let heap_ty = table.ref_type.heap_type;
@@ -1801,16 +1793,9 @@ impl<'module_environment> crate::translate::FuncEnvironment
             }
 
             // Function types.
-            WasmHeapTopType::Func => match plan.style {
-                TableStyle::CallerChecksSignature { lazy_init } => Ok(self
-                    .get_or_init_func_ref_table_elem(
-                        builder,
-                        table_index,
-                        index,
-                        false,
-                        lazy_init,
-                    )),
-            },
+            WasmHeapTopType::Func => {
+                Ok(self.get_or_init_func_ref_table_elem(builder, table_index, index, false))
+            }
         }
     }
 
@@ -1821,8 +1806,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         value: ir::Value,
         index: ir::Value,
     ) -> WasmResult<()> {
-        let plan = &self.module.table_plans[table_index];
-        let table = plan.table;
+        let table = self.module.tables[table_index];
         self.ensure_table_exists(builder.func, table_index);
         let table_data = self.tables[table_index].clone().unwrap();
         let heap_ty = table.ref_type.heap_type;
@@ -1842,26 +1826,21 @@ impl<'module_environment> crate::translate::FuncEnvironment
 
             // Function types.
             WasmHeapTopType::Func => {
-                match plan.style {
-                    TableStyle::CallerChecksSignature { lazy_init } => {
-                        let (elem_addr, flags) =
-                            table_data.prepare_table_addr(self, builder, index);
-                        // Set the "initialized bit". See doc-comment on
-                        // `FUNCREF_INIT_BIT` in
-                        // crates/environ/src/ref_bits.rs for details.
-                        let value_with_init_bit = if lazy_init {
-                            builder
-                                .ins()
-                                .bor_imm(value, Imm64::from(FUNCREF_INIT_BIT as i64))
-                        } else {
-                            value
-                        };
-                        builder
-                            .ins()
-                            .store(flags, value_with_init_bit, elem_addr, 0);
-                        Ok(())
-                    }
-                }
+                let (elem_addr, flags) = table_data.prepare_table_addr(self, builder, index);
+                // Set the "initialized bit". See doc-comment on
+                // `FUNCREF_INIT_BIT` in
+                // crates/environ/src/ref_bits.rs for details.
+                let value_with_init_bit = if self.tunables.table_lazy_init {
+                    builder
+                        .ins()
+                        .bor_imm(value, Imm64::from(FUNCREF_INIT_BIT as i64))
+                } else {
+                    value
+                };
+                builder
+                    .ins()
+                    .store(flags, value_with_init_bit, elem_addr, 0);
+                Ok(())
             }
         }
     }
@@ -2323,25 +2302,20 @@ impl<'module_environment> crate::translate::FuncEnvironment
 
     fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<Heap> {
         let pointer_type = self.pointer_type();
-        let is_shared = self.module.memory_plans[index].memory.shared;
+        let memory = self.module.memories[index];
+        let is_shared = memory.shared;
 
-        let min_size = self.module.memory_plans[index]
-            .memory
-            .minimum_byte_size()
-            .unwrap_or_else(|_| {
-                // The only valid Wasm memory size that won't fit in a 64-bit
-                // integer is the maximum memory64 size (2^64) which is one
-                // larger than `u64::MAX` (2^64 - 1). In this case, just say the
-                // minimum heap size is `u64::MAX`.
-                debug_assert_eq!(self.module.memory_plans[index].memory.limits.min, 1 << 48);
-                debug_assert_eq!(self.module.memory_plans[index].memory.page_size(), 1 << 16);
-                u64::MAX
-            });
+        let min_size = memory.minimum_byte_size().unwrap_or_else(|_| {
+            // The only valid Wasm memory size that won't fit in a 64-bit
+            // integer is the maximum memory64 size (2^64) which is one
+            // larger than `u64::MAX` (2^64 - 1). In this case, just say the
+            // minimum heap size is `u64::MAX`.
+            debug_assert_eq!(memory.limits.min, 1 << 48);
+            debug_assert_eq!(memory.page_size(), 1 << 16);
+            u64::MAX
+        });
 
-        let max_size = self.module.memory_plans[index]
-            .memory
-            .maximum_byte_size()
-            .ok();
+        let max_size = memory.maximum_byte_size().ok();
 
         let (ptr, base_offset, current_length_offset, ptr_memtype) = {
             let vmctx = self.vmctx(func);
@@ -2395,151 +2369,138 @@ impl<'module_environment> crate::translate::FuncEnvironment
             }
         };
 
-        let page_size_log2 = self.module.memory_plans[index].memory.page_size_log2;
+        let page_size_log2 = memory.page_size_log2;
 
         // If we have a declared maximum, we can make this a "static" heap, which is
         // allocated up front and never moved.
-        let (offset_guard_size, heap_style, readonly_base, base_fact, memory_type) =
-            match self.module.memory_plans[index] {
-                MemoryPlan {
-                    style: MemoryStyle::Dynamic { .. },
-                    offset_guard_size,
-                    pre_guard_size: _,
-                    memory: _,
-                } => {
-                    let heap_bound = func.create_global_value(ir::GlobalValueData::Load {
-                        base: ptr,
-                        offset: Offset32::new(current_length_offset),
-                        global_type: pointer_type,
-                        flags: MemFlags::trusted(),
+        let (style, offset_guard_size) = MemoryStyle::for_memory(memory, self.tunables);
+        let (heap_style, readonly_base, base_fact, memory_type) = match style {
+            MemoryStyle::Dynamic { .. } => {
+                let heap_bound = func.create_global_value(ir::GlobalValueData::Load {
+                    base: ptr,
+                    offset: Offset32::new(current_length_offset),
+                    global_type: pointer_type,
+                    flags: MemFlags::trusted(),
+                });
+
+                let (base_fact, data_mt) = if let Some(ptr_memtype) = ptr_memtype {
+                    // Create a memtype representing the untyped memory region.
+                    let data_mt = func.create_memory_type(ir::MemoryTypeData::DynamicMemory {
+                        gv: heap_bound,
+                        size: offset_guard_size,
                     });
+                    // This fact applies to any pointer to the start of the memory.
+                    let base_fact = ir::Fact::dynamic_base_ptr(data_mt);
+                    // This fact applies to the length.
+                    let length_fact = ir::Fact::global_value(
+                        u16::try_from(self.isa.pointer_type().bits()).unwrap(),
+                        heap_bound,
+                    );
+                    // Create a field in the vmctx for the base pointer.
+                    match &mut func.memory_types[ptr_memtype] {
+                        ir::MemoryTypeData::Struct { size, fields } => {
+                            let base_offset = u64::try_from(base_offset).unwrap();
+                            fields.push(ir::MemoryTypeField {
+                                offset: base_offset,
+                                ty: self.isa.pointer_type(),
+                                // Read-only field from the PoV of PCC checks:
+                                // don't allow stores to this field. (Even if
+                                // it is a dynamic memory whose base can
+                                // change, that update happens inside the
+                                // runtime, not in generated code.)
+                                readonly: true,
+                                fact: Some(base_fact.clone()),
+                            });
+                            let current_length_offset =
+                                u64::try_from(current_length_offset).unwrap();
+                            fields.push(ir::MemoryTypeField {
+                                offset: current_length_offset,
+                                ty: self.isa.pointer_type(),
+                                // As above, read-only; only the runtime modifies it.
+                                readonly: true,
+                                fact: Some(length_fact),
+                            });
 
-                    let (base_fact, data_mt) = if let Some(ptr_memtype) = ptr_memtype {
-                        // Create a memtype representing the untyped memory region.
-                        let data_mt = func.create_memory_type(ir::MemoryTypeData::DynamicMemory {
-                            gv: heap_bound,
-                            size: offset_guard_size,
-                        });
-                        // This fact applies to any pointer to the start of the memory.
-                        let base_fact = ir::Fact::dynamic_base_ptr(data_mt);
-                        // This fact applies to the length.
-                        let length_fact = ir::Fact::global_value(
-                            u16::try_from(self.isa.pointer_type().bits()).unwrap(),
-                            heap_bound,
-                        );
-                        // Create a field in the vmctx for the base pointer.
-                        match &mut func.memory_types[ptr_memtype] {
-                            ir::MemoryTypeData::Struct { size, fields } => {
-                                let base_offset = u64::try_from(base_offset).unwrap();
-                                fields.push(ir::MemoryTypeField {
-                                    offset: base_offset,
-                                    ty: self.isa.pointer_type(),
-                                    // Read-only field from the PoV of PCC checks:
-                                    // don't allow stores to this field. (Even if
-                                    // it is a dynamic memory whose base can
-                                    // change, that update happens inside the
-                                    // runtime, not in generated code.)
-                                    readonly: true,
-                                    fact: Some(base_fact.clone()),
-                                });
-                                let current_length_offset =
-                                    u64::try_from(current_length_offset).unwrap();
-                                fields.push(ir::MemoryTypeField {
-                                    offset: current_length_offset,
-                                    ty: self.isa.pointer_type(),
-                                    // As above, read-only; only the runtime modifies it.
-                                    readonly: true,
-                                    fact: Some(length_fact),
-                                });
-
-                                let pointer_size = u64::from(self.isa.pointer_type().bytes());
-                                let fields_end = std::cmp::max(
-                                    base_offset + pointer_size,
-                                    current_length_offset + pointer_size,
-                                );
-                                *size = std::cmp::max(*size, fields_end);
-                            }
-                            _ => {
-                                panic!("Bad memtype");
-                            }
+                            let pointer_size = u64::from(self.isa.pointer_type().bytes());
+                            let fields_end = std::cmp::max(
+                                base_offset + pointer_size,
+                                current_length_offset + pointer_size,
+                            );
+                            *size = std::cmp::max(*size, fields_end);
                         }
-                        // Apply a fact to the base pointer.
-                        (Some(base_fact), Some(data_mt))
-                    } else {
-                        (None, None)
-                    };
-
-                    (
-                        offset_guard_size,
-                        HeapStyle::Dynamic {
-                            bound_gv: heap_bound,
-                        },
-                        false,
-                        base_fact,
-                        data_mt,
-                    )
-                }
-                MemoryPlan {
-                    style:
-                        MemoryStyle::Static {
-                            byte_reservation: bound_bytes,
-                        },
-                    offset_guard_size,
-                    pre_guard_size: _,
-                    memory: _,
-                } => {
-                    let (base_fact, data_mt) = if let Some(ptr_memtype) = ptr_memtype {
-                        // Create a memtype representing the untyped memory region.
-                        let data_mt = func.create_memory_type(ir::MemoryTypeData::Memory {
-                            size: bound_bytes
-                                .checked_add(offset_guard_size)
-                                .expect("Memory plan has overflowing size plus guard"),
-                        });
-                        // This fact applies to any pointer to the start of the memory.
-                        let base_fact = Fact::Mem {
-                            ty: data_mt,
-                            min_offset: 0,
-                            max_offset: 0,
-                            nullable: false,
-                        };
-                        // Create a field in the vmctx for the base pointer.
-                        match &mut func.memory_types[ptr_memtype] {
-                            ir::MemoryTypeData::Struct { size, fields } => {
-                                let offset = u64::try_from(base_offset).unwrap();
-                                fields.push(ir::MemoryTypeField {
-                                    offset,
-                                    ty: self.isa.pointer_type(),
-                                    // Read-only field from the PoV of PCC checks:
-                                    // don't allow stores to this field. (Even if
-                                    // it is a dynamic memory whose base can
-                                    // change, that update happens inside the
-                                    // runtime, not in generated code.)
-                                    readonly: true,
-                                    fact: Some(base_fact.clone()),
-                                });
-                                *size = std::cmp::max(
-                                    *size,
-                                    offset + u64::from(self.isa.pointer_type().bytes()),
-                                );
-                            }
-                            _ => {
-                                panic!("Bad memtype");
-                            }
+                        _ => {
+                            panic!("Bad memtype");
                         }
-                        // Apply a fact to the base pointer.
-                        (Some(base_fact), Some(data_mt))
-                    } else {
-                        (None, None)
+                    }
+                    // Apply a fact to the base pointer.
+                    (Some(base_fact), Some(data_mt))
+                } else {
+                    (None, None)
+                };
+
+                (
+                    HeapStyle::Dynamic {
+                        bound_gv: heap_bound,
+                    },
+                    false,
+                    base_fact,
+                    data_mt,
+                )
+            }
+            MemoryStyle::Static {
+                byte_reservation: bound_bytes,
+            } => {
+                let (base_fact, data_mt) = if let Some(ptr_memtype) = ptr_memtype {
+                    // Create a memtype representing the untyped memory region.
+                    let data_mt = func.create_memory_type(ir::MemoryTypeData::Memory {
+                        size: bound_bytes
+                            .checked_add(offset_guard_size)
+                            .expect("Memory plan has overflowing size plus guard"),
+                    });
+                    // This fact applies to any pointer to the start of the memory.
+                    let base_fact = Fact::Mem {
+                        ty: data_mt,
+                        min_offset: 0,
+                        max_offset: 0,
+                        nullable: false,
                     };
-                    (
-                        offset_guard_size,
-                        HeapStyle::Static { bound: bound_bytes },
-                        true,
-                        base_fact,
-                        data_mt,
-                    )
-                }
-            };
+                    // Create a field in the vmctx for the base pointer.
+                    match &mut func.memory_types[ptr_memtype] {
+                        ir::MemoryTypeData::Struct { size, fields } => {
+                            let offset = u64::try_from(base_offset).unwrap();
+                            fields.push(ir::MemoryTypeField {
+                                offset,
+                                ty: self.isa.pointer_type(),
+                                // Read-only field from the PoV of PCC checks:
+                                // don't allow stores to this field. (Even if
+                                // it is a dynamic memory whose base can
+                                // change, that update happens inside the
+                                // runtime, not in generated code.)
+                                readonly: true,
+                                fact: Some(base_fact.clone()),
+                            });
+                            *size = std::cmp::max(
+                                *size,
+                                offset + u64::from(self.isa.pointer_type().bytes()),
+                            );
+                        }
+                        _ => {
+                            panic!("Bad memtype");
+                        }
+                    }
+                    // Apply a fact to the base pointer.
+                    (Some(base_fact), Some(data_mt))
+                } else {
+                    (None, None)
+                };
+                (
+                    HeapStyle::Static { bound: bound_bytes },
+                    true,
+                    base_fact,
+                    data_mt,
+                )
+            }
+        };
 
         let mut flags = MemFlags::trusted().with_checked();
         if readonly_base {
@@ -2756,7 +2717,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
     ) -> WasmResult<ir::Value> {
         let pointer_type = self.pointer_type();
         let vmctx = self.vmctx(&mut pos.func);
-        let is_shared = self.module.memory_plans[index].memory.shared;
+        let is_shared = self.module.memories[index].shared;
         let base = pos.ins().global_value(pointer_type, vmctx);
         let current_length_in_bytes = match self.module.defined_memory_index(index) {
             Some(def_index) => {
@@ -2818,7 +2779,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
             }
         };
 
-        let page_size_log2 = i64::from(self.module.memory_plans[index].memory.page_size_log2);
+        let page_size_log2 = i64::from(self.module.memories[index].page_size_log2);
         let current_length_in_pages = pos.ins().ushr_imm(current_length_in_bytes, page_size_log2);
         let single_byte_pages = match page_size_log2 {
             16 => false,

@@ -42,9 +42,6 @@ wasmtime_option_group! {
         /// Optimization level of generated code (0-2, s; default: 2)
         pub opt_level: Option<wasmtime::OptLevel>,
 
-        /// Byte size of the guard region after dynamic memories are allocated
-        pub dynamic_memory_guard_size: Option<u64>,
-
         /// Force using a "static" style for all wasm memories
         pub static_memory_forced: Option<bool>,
 
@@ -52,8 +49,8 @@ wasmtime_option_group! {
         /// relocatable instead of up-front-reserved.
         pub static_memory_maximum_size: Option<u64>,
 
-        /// Byte size of the guard region after static memories are allocated
-        pub static_memory_guard_size: Option<u64>,
+        /// Size, in bytes, of guard pages for linear memories.
+        pub memory_guard_size: Option<u64>,
 
         /// Bytes to reserve at the end of linear memory for growth for dynamic
         /// memories.
@@ -167,6 +164,12 @@ wasmtime_option_group! {
 
         /// Enable or disable the use of host signal handlers for traps.
         pub signals_based_traps: Option<bool>,
+
+        /// DEPRECATED: Use `-Cmemory-guard-size=N` instead.
+        pub dynamic_memory_guard_size: Option<u64>,
+
+        /// DEPRECATED: Use `-Cmemory-guard-size=N` instead.
+        pub static_memory_guard_size: Option<u64>,
     }
 
     enum Optimize {
@@ -182,6 +185,16 @@ wasmtime_option_group! {
         /// Currently only `cranelift` and `winch` are supported, but not all
         /// builds of Wasmtime have both built in.
         pub compiler: Option<wasmtime::Strategy>,
+        /// Which garbage collector to use: `drc` or `null`.
+        ///
+        /// `drc` is the deferred reference-counting collector.
+        ///
+        /// `null` is the null garbage collector, which does not collect any
+        /// garbage.
+        ///
+        /// Note that not all builds of Wasmtime will have support for garbage
+        /// collection included.
+        pub collector: Option<wasmtime::Collector>,
         /// Enable Cranelift's internal debug verifier (expensive)
         pub cranelift_debug_verifier: Option<bool>,
         /// Whether or not to enable caching of compiled modules.
@@ -536,6 +549,11 @@ impl CommonOptions {
             _ => err,
         }
         match_feature! {
+            ["gc" : self.codegen.collector]
+            collector => config.collector(collector),
+            _ => err,
+        }
+        match_feature! {
             ["cranelift" : target]
             target => config.target(target)?,
             _ => err,
@@ -621,13 +639,15 @@ impl CommonOptions {
             config.static_memory_forced(enable);
         }
 
-        if let Some(size) = self.opts.static_memory_guard_size {
-            config.static_memory_guard_size(size);
+        if let Some(size) = self
+            .opts
+            .static_memory_guard_size
+            .or(self.opts.dynamic_memory_guard_size)
+            .or(self.opts.memory_guard_size)
+        {
+            config.memory_guard_size(size);
         }
 
-        if let Some(size) = self.opts.dynamic_memory_guard_size {
-            config.dynamic_memory_guard_size(size);
-        }
         if let Some(size) = self.opts.dynamic_memory_reserved_for_growth {
             config.dynamic_memory_reserved_for_growth(size);
         }

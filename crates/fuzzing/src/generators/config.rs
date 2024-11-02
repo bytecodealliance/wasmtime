@@ -200,6 +200,7 @@ impl Config {
         let compiler_strategy = &self.wasmtime.compiler_strategy;
         let cranelift_strategy = *compiler_strategy == CompilerStrategy::Cranelift;
         cfg.strategy(self.wasmtime.compiler_strategy.to_wasmtime());
+        cfg.collector(self.wasmtime.collector.to_wasmtime());
 
         self.wasmtime.codegen.configure(&mut cfg);
 
@@ -266,8 +267,7 @@ impl Config {
             let memory_config = if pcc {
                 MemoryConfig::Normal(NormalMemoryConfig {
                     static_memory_maximum_size: Some(4 << 30), // 4 GiB
-                    static_memory_guard_size: Some(2 << 30),   // 2 GiB
-                    dynamic_memory_guard_size: Some(0),
+                    memory_guard_size: Some(2 << 30),          // 2 GiB
                     dynamic_memory_reserved_for_growth: Some(0),
                     guard_before_linear_memory: false,
                     memory_init_cow: true,
@@ -285,9 +285,8 @@ impl Config {
                 MemoryConfig::CustomUnaligned => {
                     cfg.with_host_memory(Arc::new(UnalignedMemoryCreator))
                         .static_memory_maximum_size(0)
-                        .dynamic_memory_guard_size(0)
+                        .memory_guard_size(0)
                         .dynamic_memory_reserved_for_growth(0)
-                        .static_memory_guard_size(0)
                         .guard_before_linear_memory(false)
                         .memory_init_cow(false);
                 }
@@ -429,6 +428,7 @@ pub struct WasmtimeConfig {
     native_unwind_info: bool,
     /// Configuration for the compiler to use.
     pub compiler_strategy: CompilerStrategy,
+    collector: Collector,
     table_lazy_init: bool,
 
     /// Whether or not fuzzing should enable PCC.
@@ -638,5 +638,20 @@ impl Arbitrary<'_> for CompilerStrategy {
         // compiler features for things such as trampolines, so it's only used
         // on fuzz targets that don't need those trampolines.
         Ok(Self::Cranelift)
+    }
+}
+
+#[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
+pub enum Collector {
+    DeferredReferenceCounting,
+    Null,
+}
+
+impl Collector {
+    fn to_wasmtime(&self) -> wasmtime::Collector {
+        match self {
+            Collector::DeferredReferenceCounting => wasmtime::Collector::DeferredReferenceCounting,
+            Collector::Null => wasmtime::Collector::Null,
+        }
     }
 }

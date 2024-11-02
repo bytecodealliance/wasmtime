@@ -21,7 +21,7 @@
       a
       (Ext1 x)
       (Ext2 x)))
-  (C #t))
+  (C 1))
 
 (type Opcode (enum A B C))
 (type MachInst (enum D E F))

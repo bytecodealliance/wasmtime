@@ -334,20 +334,12 @@ WASMTIME_CONFIG_PROP(void, static_memory_forced, bool)
 WASMTIME_CONFIG_PROP(void, static_memory_maximum_size, uint64_t)
 
 /**
- * \brief Configures the guard region size for "static" memory.
+ * \brief Configures the guard region size for linear memory.
  *
  * For more information see the Rust documentation at
- * https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.static_memory_guard_size.
+ * https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.memory_guard_size.
  */
-WASMTIME_CONFIG_PROP(void, static_memory_guard_size, uint64_t)
-
-/**
- * \brief Configures the guard region size for "dynamic" memory.
- *
- * For more information see the Rust documentation at
- * https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.dynamic_memory_guard_size.
- */
-WASMTIME_CONFIG_PROP(void, dynamic_memory_guard_size, uint64_t)
+WASMTIME_CONFIG_PROP(void, memory_guard_size, uint64_t)
 
 /**
  * \brief Configures the size, in bytes, of the extra virtual memory space

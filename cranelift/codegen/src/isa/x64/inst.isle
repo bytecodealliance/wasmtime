@@ -5074,7 +5074,8 @@
 ;; worse.)
 (decl jmp_table_seq (Type Gpr MachLabel BoxVecMachLabel) SideEffectNoResult)
 (rule (jmp_table_seq ty idx default_target jt_targets)
-      (let (;; This temporary is used as a signed integer of 64-bits (to hold
+      (let (
+            ;; This temporary is used as a signed integer of 64-bits (to hold
             ;; addresses).
             (tmp1 WritableGpr (temp_writable_gpr))
 

@@ -8,7 +8,7 @@ use std::ops::Range;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
-use wasmtime_environ::{MemoryPlan, MemoryStyle, Trap};
+use wasmtime_environ::{MemoryStyle, Trap, Tunables};
 
 /// For shared memory (and only for shared memory), this lock-version restricts
 /// access when growing the memory or checking its size. This is to conform with
@@ -30,22 +30,23 @@ struct SharedMemoryInner {
 
 impl SharedMemory {
     /// Construct a new [`SharedMemory`].
-    pub fn new(plan: MemoryPlan) -> Result<Self> {
-        let (minimum_bytes, maximum_bytes) = Memory::limit_new(&plan, None)?;
-        let mmap_memory = MmapMemory::new(&plan, minimum_bytes, maximum_bytes, None)?;
-        Self::wrap(&plan, Box::new(mmap_memory), plan.memory)
+    pub fn new(ty: &wasmtime_environ::Memory, tunables: &Tunables) -> Result<Self> {
+        let (minimum_bytes, maximum_bytes) = Memory::limit_new(ty, None)?;
+        let mmap_memory = MmapMemory::new(ty, tunables, minimum_bytes, maximum_bytes, None)?;
+        Self::wrap(ty, tunables, Box::new(mmap_memory))
     }
 
     /// Wrap an existing [Memory] with the locking provided by a [SharedMemory].
     pub fn wrap(
-        plan: &MemoryPlan,
+        ty: &wasmtime_environ::Memory,
+        tunables: &Tunables,
         mut memory: Box<dyn RuntimeLinearMemory>,
-        ty: wasmtime_environ::Memory,
     ) -> Result<Self> {
         if !ty.shared {
             bail!("shared memory must have a `shared` memory type");
         }
-        if !matches!(plan.style, MemoryStyle::Static { .. }) {
+        let (style, _) = MemoryStyle::for_memory(*ty, tunables);
+        if !matches!(style, MemoryStyle::Static { .. }) {
             bail!("shared memory can only be built from a static memory allocation")
         }
         assert!(
@@ -53,7 +54,7 @@ impl SharedMemory {
             "cannot re-wrap a shared memory"
         );
         Ok(Self(Arc::new(SharedMemoryInner {
-            ty,
+            ty: *ty,
             spot: ParkingSpot::default(),
             def: LongTermVMMemoryDefinition(memory.vmmemory()),
             memory: RwLock::new(memory),

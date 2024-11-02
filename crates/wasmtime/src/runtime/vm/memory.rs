@@ -13,14 +13,15 @@ use alloc::sync::Arc;
 use core::ops::Range;
 use core::ptr::NonNull;
 use core::time::Duration;
-use wasmtime_environ::{MemoryPlan, MemoryStyle, Trap};
+use wasmtime_environ::{MemoryStyle, Trap, Tunables};
 
 /// A memory allocator
 pub trait RuntimeMemoryCreator: Send + Sync {
     /// Create new RuntimeLinearMemory
     fn new_memory(
         &self,
-        plan: &MemoryPlan,
+        ty: &wasmtime_environ::Memory,
+        tunables: &Tunables,
         minimum: usize,
         maximum: Option<usize>,
         // Optionally, a memory image for CoW backing.
@@ -35,13 +36,15 @@ impl RuntimeMemoryCreator for DefaultMemoryCreator {
     /// Create new MmapMemory
     fn new_memory(
         &self,
-        plan: &MemoryPlan,
+        ty: &wasmtime_environ::Memory,
+        tunables: &Tunables,
         minimum: usize,
         maximum: Option<usize>,
         memory_image: Option<&Arc<MemoryImage>>,
     ) -> Result<Box<dyn RuntimeLinearMemory>> {
         Ok(Box::new(MmapMemory::new(
-            plan,
+            ty,
+            tunables,
             minimum,
             maximum,
             memory_image,
@@ -214,22 +217,29 @@ impl MmapMemory {
     /// Create a new linear memory instance with specified minimum and maximum
     /// number of wasm pages.
     pub fn new(
-        plan: &MemoryPlan,
+        ty: &wasmtime_environ::Memory,
+        tunables: &Tunables,
         minimum: usize,
         mut maximum: Option<usize>,
         memory_image: Option<&Arc<MemoryImage>>,
     ) -> Result<Self> {
+        let (style, offset_guard_size) = MemoryStyle::for_memory(*ty, tunables);
+
         // It's a programmer error for these two configuration values to exceed
         // the host available address space, so panic if such a configuration is
         // found (mostly an issue for hypothetical 32-bit hosts).
-        let offset_guard_bytes = usize::try_from(plan.offset_guard_size).unwrap();
-        let pre_guard_bytes = usize::try_from(plan.pre_guard_size).unwrap();
+        let offset_guard_bytes = usize::try_from(offset_guard_size).unwrap();
+        let pre_guard_bytes = if tunables.guard_before_linear_memory {
+            offset_guard_bytes
+        } else {
+            0
+        };
 
         // Ensure that our guard regions are multiples of the host page size.
         let offset_guard_bytes = round_usize_up_to_host_pages(offset_guard_bytes)?;
         let pre_guard_bytes = round_usize_up_to_host_pages(pre_guard_bytes)?;
 
-        let (alloc_bytes, extra_to_reserve_on_growth) = match plan.style {
+        let (alloc_bytes, extra_to_reserve_on_growth) = match style {
             // Dynamic memories start with the minimum size plus the `reserve`
             // amount specified to grow into.
             MemoryStyle::Dynamic { reserve } => (
@@ -243,7 +253,7 @@ impl MmapMemory {
             // of the two is, the `maximum` given or the `bound` specified for
             // this memory.
             MemoryStyle::Static { byte_reservation } => {
-                assert!(byte_reservation >= plan.memory.minimum_byte_size().unwrap());
+                assert!(byte_reservation >= ty.minimum_byte_size().unwrap());
                 let bound_bytes = usize::try_from(byte_reservation).unwrap();
                 let bound_bytes = round_usize_up_to_host_pages(bound_bytes)?;
                 maximum = Some(bound_bytes.min(maximum.unwrap_or(usize::MAX)));
@@ -276,7 +286,7 @@ impl MmapMemory {
                     minimum,
                     alloc_bytes + extra_to_reserve_on_growth,
                 );
-                slot.instantiate(minimum, Some(image), &plan)?;
+                slot.instantiate(minimum, Some(image), ty, tunables)?;
                 // On drop, we will unmap our mmap'd range that this slot was
                 // mapped on top of, so there is no need for the slot to wipe
                 // it with an anonymous mapping first.
@@ -290,7 +300,7 @@ impl MmapMemory {
             mmap,
             len: minimum,
             maximum,
-            page_size_log2: plan.memory.page_size_log2,
+            page_size_log2: ty.page_size_log2,
             pre_guard_size: pre_guard_bytes,
             offset_guard_size: offset_guard_bytes,
             extra_to_reserve_on_growth,
@@ -537,15 +547,16 @@ pub struct Memory(pub(crate) Box<dyn RuntimeLinearMemory>);
 impl Memory {
     /// Create a new dynamic (movable) memory instance for the specified plan.
     pub fn new_dynamic(
-        plan: &MemoryPlan,
+        ty: &wasmtime_environ::Memory,
+        tunables: &Tunables,
         creator: &dyn RuntimeMemoryCreator,
         store: &mut dyn VMStore,
         memory_image: Option<&Arc<MemoryImage>>,
     ) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(plan, Some(store))?;
-        let allocation = creator.new_memory(plan, minimum, maximum, memory_image)?;
-        let allocation = if plan.memory.shared {
-            Box::new(SharedMemory::wrap(plan, allocation, plan.memory)?)
+        let (minimum, maximum) = Self::limit_new(ty, Some(store))?;
+        let allocation = creator.new_memory(ty, tunables, minimum, maximum, memory_image)?;
+        let allocation = if ty.shared {
+            Box::new(SharedMemory::wrap(ty, tunables, allocation)?)
         } else {
             allocation
         };
@@ -554,25 +565,25 @@ impl Memory {
 
     /// Create a new static (immovable) memory instance for the specified plan.
     pub fn new_static(
-        plan: &MemoryPlan,
+        ty: &wasmtime_environ::Memory,
         base_ptr: *mut u8,
         base_capacity: usize,
         memory_image: MemoryImageSlot,
         memory_and_guard_size: usize,
         store: &mut dyn VMStore,
     ) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(plan, Some(store))?;
+        let (minimum, maximum) = Self::limit_new(ty, Some(store))?;
         let pooled_memory = StaticMemory::new(
             base_ptr,
             base_capacity,
             minimum,
             maximum,
-            plan.memory.page_size_log2,
+            ty.page_size_log2,
             memory_image,
             memory_and_guard_size,
         )?;
         let allocation = Box::new(pooled_memory);
-        let allocation: Box<dyn RuntimeLinearMemory> = if plan.memory.shared {
+        let allocation: Box<dyn RuntimeLinearMemory> = if ty.shared {
             // FIXME: since the pooling allocator owns the memory allocation
             // (which is torn down with the instance), the current shared memory
             // implementation will cause problems; see
@@ -589,10 +600,10 @@ impl Memory {
     /// Returns a tuple of the minimum size, optional maximum size, and log(page
     /// size) of the memory, all in bytes.
     pub(crate) fn limit_new(
-        plan: &MemoryPlan,
+        ty: &wasmtime_environ::Memory,
         store: Option<&mut dyn VMStore>,
     ) -> Result<(usize, Option<usize>)> {
-        let page_size = usize::try_from(plan.memory.page_size()).unwrap();
+        let page_size = usize::try_from(ty.page_size()).unwrap();
 
         // This is the absolute possible maximum that the module can try to
         // allocate, which is our entire address space minus a wasm page. That
@@ -608,10 +619,10 @@ impl Memory {
         let absolute_max = 0usize.wrapping_sub(page_size);
 
         // Sanity-check what should already be true from wasm module validation.
-        if let Ok(size) = plan.memory.minimum_byte_size() {
+        if let Ok(size) = ty.minimum_byte_size() {
             assert!(size <= u64::try_from(absolute_max).unwrap());
         }
-        if let Ok(max) = plan.memory.maximum_byte_size() {
+        if let Ok(max) = ty.maximum_byte_size() {
             assert!(max <= u64::try_from(absolute_max).unwrap());
         }
 
@@ -619,8 +630,7 @@ impl Memory {
         // space, then we can't satisfy this request, but defer the error to
         // later so the `store` can be informed that an effective oom is
         // happening.
-        let minimum = plan
-            .memory
+        let minimum = ty
             .minimum_byte_size()
             .ok()
             .and_then(|m| usize::try_from(m).ok());
@@ -631,8 +641,7 @@ impl Memory {
         // maximum size exceeds `usize` or `u64` then there's no need to further
         // keep track of it as some sort of runtime limit will kick in long
         // before we reach the statically declared maximum size.
-        let maximum = plan
-            .memory
+        let maximum = ty
             .maximum_byte_size()
             .ok()
             .and_then(|m| usize::try_from(m).ok());
@@ -647,11 +656,11 @@ impl Memory {
             // We ignore the store limits for shared memories since they are
             // technically not created within a store (though, trickily, they
             // may be associated with one in order to get a `vmctx`).
-            if !plan.memory.shared {
+            if !ty.shared {
                 if !store.memory_growing(0, minimum.unwrap_or(absolute_max), maximum)? {
                     bail!(
                         "memory minimum size of {} pages exceeds memory limits",
-                        plan.memory.limits.min
+                        ty.limits.min
                     );
                 }
             }
@@ -662,7 +671,7 @@ impl Memory {
         let minimum = minimum.ok_or_else(|| {
             format_err!(
                 "memory minimum size of {} pages exceeds memory limits",
-                plan.memory.limits.min
+                ty.limits.min
             )
         })?;
 

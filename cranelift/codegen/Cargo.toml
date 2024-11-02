@@ -17,7 +17,7 @@ rust-version.workspace = true
 workspace = true
 
 [package.metadata.docs.rs]
-# Ask Cargo to build docs with the feature `all-arch` 
+# Ask Cargo to build docs with the feature `all-arch`
 features = ["all-arch"]
 
 [dependencies]
@@ -62,7 +62,7 @@ default = ["std", "unwind", "host-arch", "timing"]
 # The "std" feature enables use of libstd. The "core" feature enables use
 # of some minimal std-like replacement libraries. At least one of these two
 # features need to be enabled.
-std = []
+std = ["serde?/std"]
 
 # The "core" feature used to enable a hashmap workaround, but is now
 # deprecated (we (i) always use hashbrown, and (ii) don't support a

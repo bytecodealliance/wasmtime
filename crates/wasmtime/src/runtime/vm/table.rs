@@ -13,8 +13,7 @@ use core::slice;
 use core::{cmp, usize};
 use sptr::Strict;
 use wasmtime_environ::{
-    IndexType, TablePlan, TableStyle, Trap, WasmHeapTopType, WasmRefType, FUNCREF_INIT_BIT,
-    FUNCREF_MASK,
+    IndexType, Trap, Tunables, WasmHeapTopType, WasmRefType, FUNCREF_INIT_BIT, FUNCREF_MASK,
 };
 
 /// An element going into or coming out of a table.
@@ -268,17 +267,18 @@ fn wasm_to_table_type(ty: WasmRefType) -> TableElementType {
 
 impl Table {
     /// Create a new dynamic (movable) table instance for the specified table plan.
-    pub fn new_dynamic(plan: &TablePlan, store: &mut dyn VMStore) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(plan, store)?;
-        match wasm_to_table_type(plan.table.ref_type) {
-            TableElementType::Func => {
-                let TableStyle::CallerChecksSignature { lazy_init } = plan.style;
-                Ok(Self::from(DynamicFuncTable {
-                    elements: vec![None; minimum],
-                    maximum,
-                    lazy_init,
-                }))
-            }
+    pub fn new_dynamic(
+        ty: &wasmtime_environ::Table,
+        tunables: &Tunables,
+        store: &mut dyn VMStore,
+    ) -> Result<Self> {
+        let (minimum, maximum) = Self::limit_new(ty, store)?;
+        match wasm_to_table_type(ty.ref_type) {
+            TableElementType::Func => Ok(Self::from(DynamicFuncTable {
+                elements: vec![None; minimum],
+                maximum,
+                lazy_init: tunables.table_lazy_init,
+            })),
             TableElementType::GcRef => Ok(Self::from(DynamicGcRefTable {
                 elements: (0..minimum).map(|_| None).collect(),
                 maximum,
@@ -288,15 +288,16 @@ impl Table {
 
     /// Create a new static (immovable) table instance for the specified table plan.
     pub unsafe fn new_static(
-        plan: &TablePlan,
+        ty: &wasmtime_environ::Table,
+        tunables: &Tunables,
         data: SendSyncPtr<[u8]>,
         store: &mut dyn VMStore,
     ) -> Result<Self> {
-        let (minimum, maximum) = Self::limit_new(plan, store)?;
+        let (minimum, maximum) = Self::limit_new(ty, store)?;
         let size = minimum;
         let max = maximum.unwrap_or(usize::MAX);
 
-        match wasm_to_table_type(plan.table.ref_type) {
+        match wasm_to_table_type(ty.ref_type) {
             TableElementType::Func => {
                 let len = {
                     let data = data.as_non_null().as_ref();
@@ -306,20 +307,19 @@ impl Table {
                     data.len()
                 };
                 ensure!(
-                    usize::try_from(plan.table.limits.min).unwrap() <= len,
+                    usize::try_from(ty.limits.min).unwrap() <= len,
                     "initial table size of {} exceeds the pooling allocator's \
                      configured maximum table size of {len} elements",
-                    plan.table.limits.min,
+                    ty.limits.min,
                 );
                 let data = SendSyncPtr::new(NonNull::slice_from_raw_parts(
                     data.as_non_null().cast::<FuncTableElem>(),
                     cmp::min(len, max),
                 ));
-                let TableStyle::CallerChecksSignature { lazy_init } = plan.style;
                 Ok(Self::from(StaticFuncTable {
                     data,
                     size,
-                    lazy_init,
+                    lazy_init: tunables.table_lazy_init,
                 }))
             }
             TableElementType::GcRef => {
@@ -331,10 +331,10 @@ impl Table {
                     data.len()
                 };
                 ensure!(
-                    usize::try_from(plan.table.limits.min).unwrap() <= len,
+                    usize::try_from(ty.limits.min).unwrap() <= len,
                     "initial table size of {} exceeds the pooling allocator's \
                      configured maximum table size of {len} elements",
-                    plan.table.limits.min,
+                    ty.limits.min,
                 );
                 let data = SendSyncPtr::new(NonNull::slice_from_raw_parts(
                     data.as_non_null().cast::<Option<VMGcRef>>(),
@@ -348,20 +348,23 @@ impl Table {
     // Calls the `store`'s limiter to optionally prevent the table from being created.
     //
     // Returns the minimum and maximum size of the table if the table can be created.
-    fn limit_new(plan: &TablePlan, store: &mut dyn VMStore) -> Result<(usize, Option<usize>)> {
+    fn limit_new(
+        ty: &wasmtime_environ::Table,
+        store: &mut dyn VMStore,
+    ) -> Result<(usize, Option<usize>)> {
         // No matter how the table limits are specified
         // The table size is limited by the host's pointer size
         let absolute_max = usize::MAX;
 
         // If the minimum overflows the host's pointer size, then we can't satisfy this request.
         // We defer the error to later so the `store` can be informed.
-        let minimum = usize::try_from(plan.table.limits.min).ok();
+        let minimum = usize::try_from(ty.limits.min).ok();
 
         // The maximum size of the table is limited by:
         // * the host's pointer size.
         // * the table's maximum size if defined.
         // * if the table is 64-bit.
-        let maximum = match (plan.table.limits.max, plan.table.idx_type) {
+        let maximum = match (ty.limits.max, ty.idx_type) {
             (Some(max), _) => usize::try_from(max).ok(),
             (None, IndexType::I64) => usize::try_from(u64::MAX).ok(),
             (None, IndexType::I32) => usize::try_from(u32::MAX).ok(),
@@ -371,7 +374,7 @@ impl Table {
         if !store.table_growing(0, minimum.unwrap_or(absolute_max), maximum)? {
             bail!(
                 "table minimum size of {} elements exceeds table limits",
-                plan.table.limits.min
+                ty.limits.min
             );
         }
 
@@ -380,7 +383,7 @@ impl Table {
         let minimum = minimum.ok_or_else(|| {
             format_err!(
                 "table minimum size of {} elements exceeds table limits",
-                plan.table.limits.min
+                ty.limits.min
             )
         })?;
         Ok((minimum, maximum))
@@ -483,10 +486,11 @@ impl Table {
     ///
     /// # Panics
     ///
-    /// Panics if `val` does not have a type that matches this table.
+    /// Panics if `val` does not have a type that matches this table, or if
+    /// `gc_store.is_none()` and this is a table of GC references.
     pub fn fill(
         &mut self,
-        gc_store: &mut GcStore,
+        gc_store: Option<&mut GcStore>,
         dst: u64,
         val: TableElement,
         len: u64,
@@ -507,6 +511,9 @@ impl Table {
                 funcrefs[start..end].fill(TaggedFuncRef::from(f, lazy_init));
             }
             TableElement::GcRef(r) => {
+                let gc_store =
+                    gc_store.expect("must provide a GcStore for tables of GC references");
+
                 // Clone the init GC reference into each table slot.
                 for slot in &mut self.gc_refs_mut()[start..end] {
                     gc_store.write_gc_ref(slot, r.as_ref());
@@ -619,7 +626,7 @@ impl Table {
         }
 
         self.fill(
-            store.store_opaque_mut().unwrap_gc_store_mut(),
+            store.store_opaque_mut().optional_gc_store_mut()?,
             u64::try_from(old_size).unwrap(),
             init_value,
             u64::try_from(delta).unwrap(),
@@ -632,7 +639,9 @@ impl Table {
     /// Get reference to the specified element.
     ///
     /// Returns `None` if the index is out of bounds.
-    pub fn get(&self, gc_store: &mut GcStore, index: u64) -> Option<TableElement> {
+    ///
+    /// Panics if this is a table of GC references and `gc_store` is `None`.
+    pub fn get(&self, gc_store: Option<&mut GcStore>, index: u64) -> Option<TableElement> {
         let index = usize::try_from(index).ok()?;
         match self.element_type() {
             TableElementType::Func => {
@@ -643,7 +652,7 @@ impl Table {
                     .map(|e| e.into_table_element(lazy_init))
             }
             TableElementType::GcRef => self.gc_refs().get(index).map(|r| {
-                let r = r.as_ref().map(|r| gc_store.clone_gc_ref(r));
+                let r = r.as_ref().map(|r| gc_store.unwrap().clone_gc_ref(r));
                 TableElement::GcRef(r)
             }),
         }
@@ -684,7 +693,7 @@ impl Table {
     /// Returns an error if the range is out of bounds of either the source or
     /// destination tables.
     pub unsafe fn copy(
-        gc_store: &mut GcStore,
+        gc_store: Option<&mut GcStore>,
         dst_table: *mut Self,
         src_table: *mut Self,
         dst_index: u64,
@@ -835,7 +844,7 @@ impl Table {
     }
 
     fn copy_elements(
-        gc_store: &mut GcStore,
+        gc_store: Option<&mut GcStore>,
         dst_table: &mut Self,
         src_table: &Self,
         dst_range: Range<usize>,
@@ -860,6 +869,7 @@ impl Table {
                 );
                 assert!(dst_range.end <= dst_table.gc_refs().len());
                 assert!(src_range.end <= src_table.gc_refs().len());
+                let gc_store = gc_store.unwrap();
                 for (dst, src) in dst_range.zip(src_range) {
                     gc_store.write_gc_ref(
                         &mut dst_table.gc_refs_mut()[dst],
@@ -872,7 +882,7 @@ impl Table {
 
     fn copy_elements_within(
         &mut self,
-        gc_store: &mut GcStore,
+        gc_store: Option<&mut GcStore>,
         dst_range: Range<usize>,
         src_range: Range<usize>,
     ) {
@@ -894,6 +904,8 @@ impl Table {
                 funcrefs.copy_within(src_range, dst_range.start);
             }
             TableElementType::GcRef => {
+                let gc_store = gc_store.unwrap();
+
                 // We need to clone each `externref` while handling overlapping
                 // ranges
                 let elements = self.gc_refs_mut();
