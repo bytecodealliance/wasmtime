@@ -36,6 +36,7 @@ pub use wasmtime_environ::CacheStore;
 
 /// Represents the module instance allocation strategy to use.
 #[derive(Clone)]
+#[non_exhaustive]
 pub enum InstanceAllocationStrategy {
     /// The on-demand instance allocation strategy.
     ///
@@ -67,6 +68,7 @@ impl Default for InstanceAllocationStrategy {
     }
 }
 
+#[cfg(feature = "pooling-allocator")]
 impl From<PoolingAllocationConfig> for InstanceAllocationStrategy {
     fn from(cfg: PoolingAllocationConfig) -> InstanceAllocationStrategy {
         InstanceAllocationStrategy::Pooling(cfg)
