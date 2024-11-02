@@ -42,19 +42,17 @@ wasmtime_option_group! {
         /// Optimization level of generated code (0-2, s; default: 2)
         pub opt_level: Option<wasmtime::OptLevel>,
 
-        /// Force using a "static" style for all wasm memories
-        pub static_memory_forced: Option<bool>,
+        /// Do not allow memories to grow beyond `-O memory-reservation`
+        pub memory_may_move: Option<bool>,
 
-        /// Maximum size in bytes of wasm memory before it becomes dynamically
-        /// relocatable instead of up-front-reserved.
-        pub static_memory_maximum_size: Option<u64>,
+        /// Initial virtual memory allocation size for memories.
+        pub memory_reservation: Option<u64>,
+
+        /// Bytes to reserve at the end of linear memory for growth into.
+        pub memory_reservation_for_growth: Option<u64>,
 
         /// Size, in bytes, of guard pages for linear memories.
         pub memory_guard_size: Option<u64>,
-
-        /// Bytes to reserve at the end of linear memory for growth for dynamic
-        /// memories.
-        pub dynamic_memory_reserved_for_growth: Option<u64>,
 
         /// Indicates whether an unmapped region of memory is placed before all
         /// linear memories.
@@ -170,6 +168,15 @@ wasmtime_option_group! {
 
         /// DEPRECATED: Use `-Cmemory-guard-size=N` instead.
         pub static_memory_guard_size: Option<u64>,
+
+        /// DEPRECATED: Use `-Cmemory-may-move` instead.
+        pub static_memory_forced: Option<bool>,
+
+        /// DEPRECATED: Use `-Cmemory-reservation=N` instead.
+        pub static_memory_maximum_size: Option<u64>,
+
+        /// DEPRECATED: Use `-Cmemory-reservation-for-growth=N` instead.
+        pub dynamic_memory_reserved_for_growth: Option<u64>,
     }
 
     enum Optimize {
@@ -631,12 +638,16 @@ impl CommonOptions {
             true => err,
         }
 
-        if let Some(max) = self.opts.static_memory_maximum_size {
-            config.static_memory_maximum_size(max);
+        if let Some(max) = self
+            .opts
+            .memory_reservation
+            .or(self.opts.static_memory_maximum_size)
+        {
+            config.memory_reservation(max);
         }
 
-        if let Some(enable) = self.opts.static_memory_forced {
-            config.static_memory_forced(enable);
+        if let Some(enable) = self.opts.memory_may_move.or(self.opts.static_memory_forced) {
+            config.memory_may_move(enable);
         }
 
         if let Some(size) = self
@@ -648,8 +659,12 @@ impl CommonOptions {
             config.memory_guard_size(size);
         }
 
-        if let Some(size) = self.opts.dynamic_memory_reserved_for_growth {
-            config.dynamic_memory_reserved_for_growth(size);
+        if let Some(size) = self
+            .opts
+            .memory_reservation_for_growth
+            .or(self.opts.dynamic_memory_reserved_for_growth)
+        {
+            config.memory_reservation_for_growth(size);
         }
         if let Some(enable) = self.opts.guard_before_linear_memory {
             config.guard_before_linear_memory(enable);

@@ -62,18 +62,15 @@ define_tunables! {
         /// GC objects and barriers that must be emitted in Wasm code.
         pub collector: Option<Collector>,
 
-        /// For static heaps, the size in bytes of virtual memory reservation for
-        /// the heap.
-        pub static_memory_reservation: u64,
+        /// Initial size, in bytes, to be allocated for linear memories.
+        pub memory_reservation: u64,
 
         /// The size, in bytes, of the guard page region for linear memories.
         pub memory_guard_size: u64,
 
-        /// The size, in bytes, of reserved memory at the end of a "dynamic" memory,
-        /// before the guard page, that memory can grow into. This is intended to
-        /// amortize the cost of `memory.grow` in the same manner that `Vec<T>` has
-        /// space not in use to grow into.
-        pub dynamic_memory_growth_reserve: u64,
+        /// The size, in bytes, to allocate at the end of a relocated linear
+        /// memory for growth.
+        pub memory_reservation_for_growth: u64,
 
         /// Whether or not to generate native DWARF debug information.
         pub generate_native_debuginfo: bool,
@@ -88,9 +85,9 @@ define_tunables! {
         /// Whether or not we use epoch-based interruption.
         pub epoch_interruption: bool,
 
-        /// Whether or not to treat the static memory bound as the maximum for
-        /// unbounded heaps.
-        pub static_memory_bound_is_maximum: bool,
+        /// Whether or not linear memories are allowed to be reallocated after
+        /// initial allocation at runtime.
+        pub memory_may_move: bool,
 
         /// Whether or not linear memory allocations will have a guard region at the
         /// beginning of the allocation in addition to the end.
@@ -160,9 +157,9 @@ impl Tunables {
 
             // No virtual memory tricks are available on miri so make these
             // limits quite conservative.
-            static_memory_reservation: 1 << 20,
+            memory_reservation: 1 << 20,
             memory_guard_size: 0,
-            dynamic_memory_growth_reserve: 0,
+            memory_reservation_for_growth: 0,
 
             // General options which have the same defaults regardless of
             // architecture.
@@ -170,7 +167,7 @@ impl Tunables {
             parse_wasm_debuginfo: true,
             consume_fuel: false,
             epoch_interruption: false,
-            static_memory_bound_is_maximum: false,
+            memory_may_move: true,
             guard_before_linear_memory: true,
             table_lazy_init: true,
             generate_address_map: true,
@@ -187,9 +184,9 @@ impl Tunables {
             // For 32-bit we scale way down to 10MB of reserved memory. This
             // impacts performance severely but allows us to have more than a
             // few instances running around.
-            static_memory_reservation: 10 * (1 << 20),
+            memory_reservation: 10 * (1 << 20),
             memory_guard_size: 0x1_0000,
-            dynamic_memory_growth_reserve: 1 << 20, // 1MB
+            memory_reservation_for_growth: 1 << 20, // 1MB
 
             ..Tunables::default_miri()
         }
@@ -204,14 +201,14 @@ impl Tunables {
             //
             // Coupled with a 2 GiB address space guard it lets us translate
             // wasm offsets into x86 offsets as aggressively as we can.
-            static_memory_reservation: 1 << 32,
+            memory_reservation: 1 << 32,
             memory_guard_size: 0x8000_0000,
 
             // We've got lots of address space on 64-bit so use a larger
             // grow-into-this area, but on 32-bit we aren't as lucky. Miri is
             // not exactly fast so reduce memory consumption instead of trying
             // to avoid memory movement.
-            dynamic_memory_growth_reserve: 2 << 30, // 2GB
+            memory_reservation_for_growth: 2 << 30, // 2GB
 
             ..Tunables::default_miri()
         }

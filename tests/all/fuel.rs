@@ -182,7 +182,7 @@ fn manual_edge_cases(config: &mut Config) {
 #[cfg_attr(miri, ignore)]
 fn unconditionally_trapping_memory_accesses_save_fuel_before_trapping(config: &mut Config) {
     config.consume_fuel(true);
-    config.static_memory_maximum_size(0x1_0000);
+    config.memory_reservation(0x1_0000);
 
     let engine = Engine::new(&config).unwrap();
 

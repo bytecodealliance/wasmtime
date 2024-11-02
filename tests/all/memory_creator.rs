@@ -129,7 +129,7 @@ mod not_for_windows {
         let mut config = Config::new();
         config
             .with_host_memory(mem_creator.clone())
-            .static_memory_maximum_size(0)
+            .memory_reservation(0)
             .memory_guard_size(0);
         (Store::new(&Engine::new(&config).unwrap(), ()), mem_creator)
     }

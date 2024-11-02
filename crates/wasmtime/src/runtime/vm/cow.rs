@@ -798,7 +798,7 @@ mod test {
     fn instantiate_no_image() {
         let ty = dummy_memory();
         let tunables = Tunables {
-            static_memory_reservation: 4 << 30,
+            memory_reservation: 4 << 30,
             ..Tunables::default_miri()
         };
         // 4 MiB mmap'd area, not accessible
@@ -838,7 +838,7 @@ mod test {
         let page_size = host_page_size();
         let ty = dummy_memory();
         let tunables = Tunables {
-            static_memory_reservation: 4 << 30,
+            memory_reservation: 4 << 30,
             ..Tunables::default_miri()
         };
         // 4 MiB mmap'd area, not accessible
@@ -911,7 +911,7 @@ mod test {
         let page_size = host_page_size();
         let ty = dummy_memory();
         let tunables = Tunables {
-            static_memory_reservation: 100 << 16,
+            memory_reservation: 100 << 16,
             ..Tunables::default_miri()
         };
         let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
@@ -964,8 +964,8 @@ mod test {
         let page_size = host_page_size();
         let ty = dummy_memory();
         let tunables = Tunables {
-            static_memory_reservation: 0,
-            dynamic_memory_growth_reserve: 200,
+            memory_reservation: 0,
+            memory_reservation_for_growth: 200,
             ..Tunables::default_miri()
         };
 

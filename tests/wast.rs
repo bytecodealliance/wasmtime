@@ -360,11 +360,11 @@ fn run_wast(wast: &Path, config: WastConfig) -> anyhow::Result<()> {
         // also don't reserve lots of memory after dynamic memories for growth
         // (makes growth slower).
         if use_shared_memory {
-            cfg.static_memory_maximum_size(2 * u64::from(Memory::DEFAULT_PAGE_SIZE));
+            cfg.memory_reservation(2 * u64::from(Memory::DEFAULT_PAGE_SIZE));
         } else {
-            cfg.static_memory_maximum_size(0);
+            cfg.memory_reservation(0);
         }
-        cfg.dynamic_memory_reserved_for_growth(0);
+        cfg.memory_reservation_for_growth(0);
 
         let small_guard = 64 * 1024;
         cfg.memory_guard_size(small_guard);
@@ -390,8 +390,8 @@ fn run_wast(wast: &Path, config: WastConfig) -> anyhow::Result<()> {
         // impact.
         let max_memory_size = 805 << 16;
         if multi_memory {
-            cfg.static_memory_maximum_size(max_memory_size as u64);
-            cfg.dynamic_memory_reserved_for_growth(0);
+            cfg.memory_reservation(max_memory_size as u64);
+            cfg.memory_reservation_for_growth(0);
             cfg.memory_guard_size(0);
         }
 

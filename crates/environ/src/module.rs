@@ -35,28 +35,29 @@ impl MemoryStyle {
             && tunables.signals_based_traps
             && match memory.maximum_byte_size() {
                 Ok(mut maximum) => {
-                    if tunables.static_memory_bound_is_maximum {
-                        maximum = maximum.min(tunables.static_memory_reservation);
+                    if tunables.memory_may_move {
+                        maximum = maximum.min(tunables.memory_reservation);
                     }
 
-                    // Ensure the minimum is less than the maximum; the minimum might exceed the maximum
-                    // when the memory is artificially bounded via `static_memory_bound_is_maximum` above
+                    // Ensure the minimum is less than the maximum; the minimum
+                    // might exceed the maximum when the memory is artificially
+                    // bounded via `memory_may_move` above
                     memory.minimum_byte_size().unwrap() <= maximum
-                        && maximum <= tunables.static_memory_reservation
+                        && maximum <= tunables.memory_reservation
                 }
 
                 // If the maximum size of this memory is not representable with
-                // `u64` then use the `static_memory_bound_is_maximum` to indicate
-                // whether it's a static memory or not. It should be ok to discard
-                // the linear memory's maximum size here as growth to the maximum is
-                // always fallible and never guaranteed.
-                Err(_) => tunables.static_memory_bound_is_maximum,
+                // `u64` then use the `memory_may_move` to indicate whether
+                // it's a static memory or not. It should be ok to discard the
+                // linear memory's maximum size here as growth to the maximum
+                // is always fallible and never guaranteed.
+                Err(_) => tunables.memory_may_move,
             };
 
         if is_static {
             return (
                 Self::Static {
-                    byte_reservation: tunables.static_memory_reservation,
+                    byte_reservation: tunables.memory_reservation,
                 },
                 tunables.memory_guard_size,
             );
@@ -65,7 +66,7 @@ impl MemoryStyle {
         // Otherwise, make it dynamic.
         (
             Self::Dynamic {
-                reserve: tunables.dynamic_memory_growth_reserve,
+                reserve: tunables.memory_reservation_for_growth,
             },
             tunables.memory_guard_size,
         )

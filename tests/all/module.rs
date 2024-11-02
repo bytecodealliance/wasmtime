@@ -37,7 +37,7 @@ fn caches_across_engines() {
 
         // differ in runtime settings
         let res = Module::deserialize(
-            &Engine::new(Config::new().static_memory_maximum_size(0)).unwrap(),
+            &Engine::new(Config::new().memory_reservation(0)).unwrap(),
             &bytes,
         );
         assert!(res.is_err());

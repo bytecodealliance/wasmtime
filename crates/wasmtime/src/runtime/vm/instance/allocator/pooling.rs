@@ -136,7 +136,7 @@ pub struct InstanceLimits {
     pub max_memories_per_module: u32,
 
     /// Maximum byte size of a linear memory, must be smaller than
-    /// `static_memory_reservation` in `Tunables`.
+    /// `memory_reservation` in `Tunables`.
     pub max_memory_size: usize,
 
     /// The total number of GC heaps in the pool, across all instances.
@@ -716,14 +716,14 @@ mod test {
             PoolingInstanceAllocator::new(
                 &config,
                 &Tunables {
-                    static_memory_reservation: 0x10000,
+                    memory_reservation: 0x10000,
                     ..Tunables::default_host()
                 },
             )
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
             "maximum memory size of 0x100010000 bytes exceeds the configured \
-             static memory reservation of 0x10000 bytes"
+             memory reservation of 0x10000 bytes"
         );
     }
 
