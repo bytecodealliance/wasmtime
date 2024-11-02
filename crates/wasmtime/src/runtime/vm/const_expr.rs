@@ -7,8 +7,8 @@ use crate::{
 };
 use smallvec::SmallVec;
 use wasmtime_environ::{
-    ConstExpr, ConstOp, FuncIndex, GlobalIndex, ModuleInternedTypeIndex, WasmCompositeType,
-    WasmSubType,
+    ConstExpr, ConstOp, FuncIndex, GlobalIndex, ModuleInternedTypeIndex, WasmCompositeInnerType,
+    WasmCompositeType, WasmSubType,
 };
 
 /// An interpreter for const expressions.
@@ -55,8 +55,8 @@ impl<'a> ConstEvalContext<'a> {
             .runtime_module()
             .expect("should never be allocating a struct type defined in a dummy module");
 
-        let struct_ty = match &module.types()[struct_type_index].composite_type {
-            WasmCompositeType::Struct(s) => s,
+        let struct_ty = match &module.types()[struct_type_index].composite_type.inner {
+            WasmCompositeInnerType::Struct(s) => s,
             _ => unreachable!(),
         };
 
@@ -118,7 +118,11 @@ impl<'a> ConstEvalContext<'a> {
             .borrow(shared_ty)
             .expect("should have a registered type for struct");
         let WasmSubType {
-            composite_type: WasmCompositeType::Struct(struct_ty),
+            composite_type:
+                WasmCompositeType {
+                    shared: false,
+                    inner: WasmCompositeInnerType::Struct(struct_ty),
+                },
             ..
         } = &*borrowed
         else {

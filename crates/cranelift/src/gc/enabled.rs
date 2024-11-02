@@ -12,8 +12,8 @@ use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
 use wasmtime_environ::{
     wasm_unsupported, Collector, GcArrayLayout, GcLayout, GcStructLayout, ModuleInternedTypeIndex,
-    PtrSize, TypeIndex, VMGcKind, WasmCompositeType, WasmHeapTopType, WasmHeapType, WasmRefType,
-    WasmResult, WasmStorageType, WasmValType, I31_DISCRIMINANT, NON_NULL_NON_I31_MASK,
+    PtrSize, TypeIndex, VMGcKind, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
+    WasmStorageType, WasmValType, I31_DISCRIMINANT, NON_NULL_NON_I31_MASK,
 };
 
 #[cfg(feature = "gc-drc")]
@@ -285,10 +285,7 @@ pub fn translate_struct_new_default(
     struct_type_index: TypeIndex,
 ) -> WasmResult<ir::Value> {
     let interned_ty = func_env.module.types[struct_type_index];
-    let struct_ty = match &func_env.types[interned_ty].composite_type {
-        WasmCompositeType::Struct(s) => s,
-        _ => unreachable!(),
-    };
+    let struct_ty = func_env.types.unwrap_struct(interned_ty)?;
     let fields = struct_ty
         .fields
         .iter()
@@ -317,12 +314,7 @@ pub fn translate_struct_get(
     let struct_size_val = builder.ins().iconst(ir::types::I32, i64::from(struct_size));
 
     let field_offset = struct_layout.fields[field_index];
-
-    let field_ty = match &func_env.types[interned_type_index].composite_type {
-        WasmCompositeType::Struct(s) => &s.fields[field_index],
-        _ => unreachable!(),
-    };
-
+    let field_ty = &func_env.types.unwrap_struct(interned_type_index)?.fields[field_index];
     let field_size = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&field_ty.element_type);
     assert!(field_offset + field_size <= struct_size);
 
@@ -355,12 +347,7 @@ fn translate_struct_get_and_extend(
     let struct_size_val = builder.ins().iconst(ir::types::I32, i64::from(struct_size));
 
     let field_offset = struct_layout.fields[field_index];
-
-    let field_ty = match &func_env.types[interned_type_index].composite_type {
-        WasmCompositeType::Struct(s) => &s.fields[field_index],
-        _ => unreachable!(),
-    };
-
+    let field_ty = &func_env.types.unwrap_struct(interned_type_index)?.fields[field_index];
     let field_size = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&field_ty.element_type);
     assert!(field_offset + field_size <= struct_size);
 
@@ -433,12 +420,7 @@ pub fn translate_struct_set(
     let struct_size_val = builder.ins().iconst(ir::types::I32, i64::from(struct_size));
 
     let field_offset = struct_layout.fields[field_index];
-
-    let field_ty = match &func_env.types[interned_type_index].composite_type {
-        WasmCompositeType::Struct(s) => &s.fields[field_index],
-        _ => unreachable!(),
-    };
-
+    let field_ty = &func_env.types.unwrap_struct(interned_type_index)?.fields[field_index];
     let field_size = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&field_ty.element_type);
     assert!(field_offset + field_size <= struct_size);
 
@@ -480,9 +462,7 @@ pub fn translate_array_new_default(
     len: ir::Value,
 ) -> WasmResult<ir::Value> {
     let interned_ty = func_env.module.types[array_type_index];
-    let WasmCompositeType::Array(array_ty) = &func_env.types[interned_ty].composite_type else {
-        unreachable!()
-    };
+    let array_ty = func_env.types.unwrap_array(interned_ty)?;
     let elem = default_value(&mut builder.cursor(), func_env, &array_ty.0.element_type);
     gc_compiler(func_env)?.alloc_array(
         func_env,
@@ -532,8 +512,10 @@ impl ArrayInit<'_> {
             ir::Value,
         ) -> WasmResult<()>,
     ) -> WasmResult<()> {
+        assert!(!func_env.types[interned_type_index].composite_type.shared);
         let array_ty = func_env.types[interned_type_index]
             .composite_type
+            .inner
             .unwrap_array();
         let elem_ty = array_ty.0.element_type;
         let elem_size = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&elem_ty);
@@ -698,9 +680,9 @@ pub fn translate_array_fill(
         one_elem_size,
         fill_end,
         |func_env, builder, elem_addr| {
-            let elem_ty = func_env.types[interned_type_index]
-                .composite_type
-                .unwrap_array()
+            let elem_ty = func_env
+                .types
+                .unwrap_array(interned_type_index)?
                 .0
                 .element_type;
             write_field_at_addr(func_env, builder, elem_ty, elem_addr, value)
@@ -865,9 +847,7 @@ pub fn translate_array_get(
     let array_type_index = func_env.module.types[array_type_index];
     let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index);
 
-    let array_ty = func_env.types[array_type_index]
-        .composite_type
-        .unwrap_array();
+    let array_ty = func_env.types.unwrap_array(array_type_index)?;
     let elem_ty = array_ty.0.element_type;
 
     read_field_at_addr(func_env, builder, elem_ty, elem_addr, None)
@@ -883,9 +863,7 @@ pub fn translate_array_get_s(
     let array_type_index = func_env.module.types[array_type_index];
     let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index);
 
-    let array_ty = func_env.types[array_type_index]
-        .composite_type
-        .unwrap_array();
+    let array_ty = func_env.types.unwrap_array(array_type_index)?;
     let elem_ty = array_ty.0.element_type;
 
     read_field_at_addr(func_env, builder, elem_ty, elem_addr, Some(Extension::Sign))
@@ -901,9 +879,7 @@ pub fn translate_array_get_u(
     let array_type_index = func_env.module.types[array_type_index];
     let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index);
 
-    let array_ty = func_env.types[array_type_index]
-        .composite_type
-        .unwrap_array();
+    let array_ty = func_env.types.unwrap_array(array_type_index)?;
     let elem_ty = array_ty.0.element_type;
 
     read_field_at_addr(func_env, builder, elem_ty, elem_addr, Some(Extension::Zero))
@@ -920,9 +896,7 @@ pub fn translate_array_set(
     let array_type_index = func_env.module.types[array_type_index];
     let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index);
 
-    let array_ty = func_env.types[array_type_index]
-        .composite_type
-        .unwrap_array();
+    let array_ty = func_env.types.unwrap_array(array_type_index)?;
     let elem_ty = array_ty.0.element_type;
 
     write_field_at_addr(func_env, builder, elem_ty, elem_addr, value)
@@ -1263,7 +1237,11 @@ fn initialize_struct_fields(
     let field_offsets: SmallVec<[_; 8]> = struct_layout.fields.iter().copied().collect();
     assert_eq!(field_offsets.len(), field_values.len());
 
-    let struct_ty = func_env.types[struct_ty].composite_type.unwrap_struct();
+    assert!(!func_env.types[struct_ty].composite_type.shared);
+    let struct_ty = func_env.types[struct_ty]
+        .composite_type
+        .inner
+        .unwrap_struct();
     let field_types: SmallVec<[_; 8]> = struct_ty.fields.iter().cloned().collect();
     assert_eq!(field_types.len(), field_values.len());
 
