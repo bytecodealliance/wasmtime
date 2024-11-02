@@ -1890,7 +1890,6 @@ pub trait TypeConvert {
     }
 
     fn convert_composite_type(&self, ty: &wasmparser::CompositeType) -> WasmCompositeType {
-        assert!(!ty.shared);
         let inner = match &ty.inner {
             wasmparser::CompositeInnerType::Func(f) => {
                 WasmCompositeInnerType::Func(self.convert_func_type(f))
