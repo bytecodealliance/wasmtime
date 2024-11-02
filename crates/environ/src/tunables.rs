@@ -1,74 +1,130 @@
-use core::fmt;
-
 use anyhow::{anyhow, bail, Result};
+use core::fmt;
 use serde_derive::{Deserialize, Serialize};
 use target_lexicon::{PointerWidth, Triple};
 
-/// Tunable parameters for WebAssembly compilation.
-#[derive(Clone, Hash, Serialize, Deserialize, Debug)]
-pub struct Tunables {
-    /// The garbage collector implementation to use, which implies the layout of
-    /// GC objects and barriers that must be emitted in Wasm code.
-    pub collector: Option<Collector>,
+macro_rules! define_tunables {
+    (
+        $(#[$outer_attr:meta])*
+        pub struct $tunables:ident {
+            $(
+                $(#[$field_attr:meta])*
+                pub $field:ident : $field_ty:ty,
+            )*
+        }
 
-    /// For static heaps, the size in bytes of virtual memory reservation for
-    /// the heap.
-    pub static_memory_reservation: u64,
+        pub struct $config_tunables:ident {
+            ...
+        }
+    ) => {
+        $(#[$outer_attr])*
+        pub struct $tunables {
+            $(
+                $(#[$field_attr])*
+                pub $field: $field_ty,
+            )*
+        }
 
-    /// The size, in bytes, of the guard page region for linear memories.
-    pub memory_guard_size: u64,
+        /// Optional tunable configuration options used in `wasmtime::Config`
+        #[derive(Default, Clone)]
+        #[allow(missing_docs)]
+        pub struct $config_tunables {
+            $(pub $field: Option<$field_ty>,)*
+        }
 
-    /// The size, in bytes, of reserved memory at the end of a "dynamic" memory,
-    /// before the guard page, that memory can grow into. This is intended to
-    /// amortize the cost of `memory.grow` in the same manner that `Vec<T>` has
-    /// space not in use to grow into.
-    pub dynamic_memory_growth_reserve: u64,
+        impl $config_tunables {
+            /// Formats configured fields into `f`.
+            pub fn format(&self, f: &mut fmt::DebugStruct<'_,'_>) {
+                $(
+                    if let Some(val) = &self.$field {
+                        f.field(stringify!($field), val);
+                    }
+                )*
+            }
 
-    /// Whether or not to generate native DWARF debug information.
-    pub generate_native_debuginfo: bool,
+            /// Configure the `Tunables` provided.
+            pub fn configure(&self, tunables: &mut Tunables) {
+                $(
+                    if let Some(val) = self.$field {
+                        tunables.$field = val;
+                    }
+                )*
+            }
+        }
+    };
+}
 
-    /// Whether or not to retain DWARF sections in compiled modules.
-    pub parse_wasm_debuginfo: bool,
+define_tunables! {
+    /// Tunable parameters for WebAssembly compilation.
+    #[derive(Clone, Hash, Serialize, Deserialize, Debug)]
+    pub struct Tunables {
+        /// The garbage collector implementation to use, which implies the layout of
+        /// GC objects and barriers that must be emitted in Wasm code.
+        pub collector: Option<Collector>,
 
-    /// Whether or not fuel is enabled for generated code, meaning that fuel
-    /// will be consumed every time a wasm instruction is executed.
-    pub consume_fuel: bool,
+        /// For static heaps, the size in bytes of virtual memory reservation for
+        /// the heap.
+        pub static_memory_reservation: u64,
 
-    /// Whether or not we use epoch-based interruption.
-    pub epoch_interruption: bool,
+        /// The size, in bytes, of the guard page region for linear memories.
+        pub memory_guard_size: u64,
 
-    /// Whether or not to treat the static memory bound as the maximum for
-    /// unbounded heaps.
-    pub static_memory_bound_is_maximum: bool,
+        /// The size, in bytes, of reserved memory at the end of a "dynamic" memory,
+        /// before the guard page, that memory can grow into. This is intended to
+        /// amortize the cost of `memory.grow` in the same manner that `Vec<T>` has
+        /// space not in use to grow into.
+        pub dynamic_memory_growth_reserve: u64,
 
-    /// Whether or not linear memory allocations will have a guard region at the
-    /// beginning of the allocation in addition to the end.
-    pub guard_before_linear_memory: bool,
+        /// Whether or not to generate native DWARF debug information.
+        pub generate_native_debuginfo: bool,
 
-    /// Whether to initialize tables lazily, so that instantiation is fast but
-    /// indirect calls are a little slower. If false, tables are initialized
-    /// eagerly from any active element segments that apply to them during
-    /// instantiation.
-    pub table_lazy_init: bool,
+        /// Whether or not to retain DWARF sections in compiled modules.
+        pub parse_wasm_debuginfo: bool,
 
-    /// Indicates whether an address map from compiled native code back to wasm
-    /// offsets in the original file is generated.
-    pub generate_address_map: bool,
+        /// Whether or not fuel is enabled for generated code, meaning that fuel
+        /// will be consumed every time a wasm instruction is executed.
+        pub consume_fuel: bool,
 
-    /// Flag for the component module whether adapter modules have debug
-    /// assertions baked into them.
-    pub debug_adapter_modules: bool,
+        /// Whether or not we use epoch-based interruption.
+        pub epoch_interruption: bool,
 
-    /// Whether or not lowerings for relaxed simd instructions are forced to
-    /// be deterministic.
-    pub relaxed_simd_deterministic: bool,
+        /// Whether or not to treat the static memory bound as the maximum for
+        /// unbounded heaps.
+        pub static_memory_bound_is_maximum: bool,
 
-    /// Whether or not Wasm functions target the winch abi.
-    pub winch_callable: bool,
+        /// Whether or not linear memory allocations will have a guard region at the
+        /// beginning of the allocation in addition to the end.
+        pub guard_before_linear_memory: bool,
 
-    /// Whether or not the host will be using native signals (e.g. SIGILL,
-    /// SIGSEGV, etc) to implement traps.
-    pub signals_based_traps: bool,
+        /// Whether to initialize tables lazily, so that instantiation is fast but
+        /// indirect calls are a little slower. If false, tables are initialized
+        /// eagerly from any active element segments that apply to them during
+        /// instantiation.
+        pub table_lazy_init: bool,
+
+        /// Indicates whether an address map from compiled native code back to wasm
+        /// offsets in the original file is generated.
+        pub generate_address_map: bool,
+
+        /// Flag for the component module whether adapter modules have debug
+        /// assertions baked into them.
+        pub debug_adapter_modules: bool,
+
+        /// Whether or not lowerings for relaxed simd instructions are forced to
+        /// be deterministic.
+        pub relaxed_simd_deterministic: bool,
+
+        /// Whether or not Wasm functions target the winch abi.
+        pub winch_callable: bool,
+
+        /// Whether or not the host will be using native signals (e.g. SIGILL,
+        /// SIGSEGV, etc) to implement traps.
+        pub signals_based_traps: bool,
+    }
+
+    pub struct ConfigTunables {
+        ...
+    }
 }
 
 impl Tunables {
