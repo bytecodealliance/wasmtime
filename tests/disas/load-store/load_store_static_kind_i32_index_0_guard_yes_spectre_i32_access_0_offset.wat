@@ -23,14 +23,15 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
+;;     gv4 = load.i64 notrap aligned gv3+104
+;;     gv5 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
 ;; @0040                               v4 = uextend.i64 v2
 ;; @0040                               v5 = iconst.i64 0xffff_fffc
 ;; @0040                               v6 = icmp ugt v4, v5  ; v5 = 0xffff_fffc
-;; @0040                               v7 = global_value.i64 gv4
+;; @0040                               v7 = global_value.i64 gv5
 ;; @0040                               v8 = iadd v7, v4
 ;; @0040                               v9 = iconst.i64 0
 ;; @0040                               v10 = select_spectre_guard v6, v9, v8  ; v9 = 0
@@ -46,14 +47,15 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
+;;     gv4 = load.i64 notrap aligned gv3+104
+;;     gv5 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0048                               v4 = uextend.i64 v2
 ;; @0048                               v5 = iconst.i64 0xffff_fffc
 ;; @0048                               v6 = icmp ugt v4, v5  ; v5 = 0xffff_fffc
-;; @0048                               v7 = global_value.i64 gv4
+;; @0048                               v7 = global_value.i64 gv5
 ;; @0048                               v8 = iadd v7, v4
 ;; @0048                               v9 = iconst.i64 0
 ;; @0048                               v10 = select_spectre_guard v6, v9, v8  ; v9 = 0

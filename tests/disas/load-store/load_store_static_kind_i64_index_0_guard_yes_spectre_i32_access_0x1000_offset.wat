@@ -23,13 +23,14 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
+;;     gv4 = load.i64 notrap aligned gv3+104
+;;     gv5 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i32):
 ;; @0040                               v4 = iconst.i64 0xffff_effc
 ;; @0040                               v5 = icmp ugt v2, v4  ; v4 = 0xffff_effc
-;; @0040                               v6 = global_value.i64 gv4
+;; @0040                               v6 = global_value.i64 gv5
 ;; @0040                               v7 = iadd v6, v2
 ;; @0040                               v8 = iconst.i64 4096
 ;; @0040                               v9 = iadd v7, v8  ; v8 = 4096
@@ -47,13 +48,14 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly checked gv3+96
+;;     gv4 = load.i64 notrap aligned gv3+104
+;;     gv5 = load.i64 notrap aligned readonly checked gv3+96
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
 ;; @0049                               v4 = iconst.i64 0xffff_effc
 ;; @0049                               v5 = icmp ugt v2, v4  ; v4 = 0xffff_effc
-;; @0049                               v6 = global_value.i64 gv4
+;; @0049                               v6 = global_value.i64 gv5
 ;; @0049                               v7 = iadd v6, v2
 ;; @0049                               v8 = iconst.i64 4096
 ;; @0049                               v9 = iadd v7, v8  ; v8 = 4096
