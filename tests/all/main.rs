@@ -86,7 +86,7 @@ pub(crate) fn skip_pooling_allocator_tests() -> bool {
 /// Get the default pooling allocator configuration for tests, which is a
 /// smaller pool than the normal default.
 pub(crate) fn small_pool_config() -> wasmtime::PoolingAllocationConfig {
-    let mut config = wasmtime::PoolingAllocationConfig::default();
+    let mut config = wasmtime::PoolingAllocationConfig::new();
 
     config.total_memories(1);
     config.max_memory_size(1 << 16);

@@ -67,6 +67,12 @@ impl Default for InstanceAllocationStrategy {
     }
 }
 
+impl From<PoolingAllocationConfig> for InstanceAllocationStrategy {
+    fn from(cfg: PoolingAllocationConfig) -> InstanceAllocationStrategy {
+        InstanceAllocationStrategy::Pooling(cfg)
+    }
+}
+
 #[derive(Clone)]
 /// Configure the strategy used for versioning in serializing and deserializing [`crate::Module`].
 pub enum ModuleVersionStrategy {
@@ -1288,8 +1294,11 @@ impl Config {
     /// [`Config::static_memory_maximum_size`] and
     /// [`Config::memory_guard_size`] options will be used to configure
     /// the virtual memory allocations of linear memories.
-    pub fn allocation_strategy(&mut self, strategy: InstanceAllocationStrategy) -> &mut Self {
-        self.allocation_strategy = strategy;
+    pub fn allocation_strategy(
+        &mut self,
+        strategy: impl Into<InstanceAllocationStrategy>,
+    ) -> &mut Self {
+        self.allocation_strategy = strategy.into();
         self
     }
 
@@ -2613,6 +2622,12 @@ pub struct PoolingAllocationConfig {
 
 #[cfg(feature = "pooling-allocator")]
 impl PoolingAllocationConfig {
+    /// Returns a new configuration builder with all default settings
+    /// configured.
+    pub fn new() -> PoolingAllocationConfig {
+        return PoolingAllocationConfig::default();
+    }
+
     /// Configures the maximum number of "unused warm slots" to retain in the
     /// pooling allocator.
     ///
