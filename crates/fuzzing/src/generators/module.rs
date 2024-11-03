@@ -39,10 +39,7 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         config.custom_page_sizes_enabled = u.arbitrary()?;
         config.wide_arithmetic_enabled = u.arbitrary()?;
         config.memory64_enabled = u.ratio(1, 20)?;
-        // Allow the threads proposal if memory64 is not already enabled. FIXME:
-        // to allow threads and memory64 to coexist, see
-        // https://github.com/bytecodealliance/wasmtime/issues/4267.
-        config.threads_enabled = !config.memory64_enabled && u.ratio(1, 20)?;
+        config.threads_enabled = u.ratio(1, 20)?;
         // Allow multi-memory but make it unlikely
         if u.ratio(1, 20)? {
             config.max_memories = config.max_memories.max(2);
@@ -55,12 +52,6 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         // We get better differential execution when we disallow traps, so we'll
         // do that most of the time.
         config.disallow_traps = u.ratio(9, 10)?;
-
-        // FIXME(#9523) this `if` should ideally be deleted, requires some
-        // refactoring internally.
-        if config.custom_page_sizes_enabled && config.threads_enabled {
-            config.custom_page_sizes_enabled = false;
-        }
 
         Ok(ModuleConfig { config })
     }

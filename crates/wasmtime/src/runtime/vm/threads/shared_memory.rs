@@ -8,7 +8,7 @@ use std::ops::Range;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
-use wasmtime_environ::{MemoryStyle, Trap, Tunables};
+use wasmtime_environ::{Trap, Tunables};
 
 /// For shared memory (and only for shared memory), this lock-version restricts
 /// access when growing the memory or checking its size. This is to conform with
@@ -33,21 +33,19 @@ impl SharedMemory {
     pub fn new(ty: &wasmtime_environ::Memory, tunables: &Tunables) -> Result<Self> {
         let (minimum_bytes, maximum_bytes) = Memory::limit_new(ty, None)?;
         let mmap_memory = MmapMemory::new(ty, tunables, minimum_bytes, maximum_bytes, None)?;
-        Self::wrap(ty, tunables, Box::new(mmap_memory))
+        Self::wrap(ty, Box::new(mmap_memory))
     }
 
     /// Wrap an existing [Memory] with the locking provided by a [SharedMemory].
     pub fn wrap(
         ty: &wasmtime_environ::Memory,
-        tunables: &Tunables,
         mut memory: Box<dyn RuntimeLinearMemory>,
     ) -> Result<Self> {
         if !ty.shared {
             bail!("shared memory must have a `shared` memory type");
         }
-        let style = MemoryStyle::for_memory(*ty, tunables);
-        if !matches!(style, MemoryStyle::Static { .. }) {
-            bail!("shared memory can only be built from a static memory allocation")
+        if memory.memory_may_move() {
+            bail!("shared memory cannot use a memory which may relocate the base pointer")
         }
         assert!(
             memory.as_any_mut().type_id() != std::any::TypeId::of::<SharedMemory>(),
@@ -232,5 +230,10 @@ impl RuntimeLinearMemory for SharedMemory {
 
     fn wasm_accessible(&self) -> Range<usize> {
         self.0.memory.read().unwrap().wasm_accessible()
+    }
+
+    fn memory_may_move(&self) -> bool {
+        debug_assert!(!self.0.memory.read().unwrap().memory_may_move());
+        false
     }
 }
