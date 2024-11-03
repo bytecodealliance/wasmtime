@@ -1297,3 +1297,27 @@ fn custom_page_sizes_reusing_same_slot() -> Result<()> {
     }
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn instantiate_non_page_aligned_sizes() -> Result<()> {
+    let mut config = Config::new();
+    config.wasm_custom_page_sizes(true);
+    let mut cfg = PoolingAllocationConfig::default();
+    cfg.total_memories(1);
+    cfg.max_memory_size(761927);
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(cfg));
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (memory 761927 761927 (pagesize 0x1))
+            )
+        "#,
+    )?;
+    let mut store = Store::new(&engine, ());
+    Instance::new(&mut store, &module, &[])?;
+    Ok(())
+}
