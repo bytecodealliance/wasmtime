@@ -2627,7 +2627,7 @@ impl PoolingAllocationConfig {
     /// Returns a new configuration builder with all default settings
     /// configured.
     pub fn new() -> PoolingAllocationConfig {
-        return PoolingAllocationConfig::default();
+        PoolingAllocationConfig::default()
     }
 
     /// Configures the maximum number of "unused warm slots" to retain in the
