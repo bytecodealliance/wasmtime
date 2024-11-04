@@ -65,10 +65,6 @@ impl CompilerBuilder for Builder {
             bail!("Winch requires the signals-based-traps option to be enabled");
         }
 
-        if tunables.epoch_interruption {
-            bail!("Winch does not currently support epoch based interruption");
-        }
-
         if tunables.generate_native_debuginfo {
             bail!("Winch does not currently support generating native debug information");
         }

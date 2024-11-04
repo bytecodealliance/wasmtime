@@ -80,7 +80,7 @@ async fn run_and_count_yields_or_trap<F: Fn(Arc<Engine>)>(
     return result.ok().map(|_| (yields, *store));
 }
 
-#[wasmtime_test(with = "#[tokio::test]", strategies(not(Winch)))]
+#[wasmtime_test(with = "#[tokio::test]")]
 async fn epoch_yield_at_func_entry(config: &mut Config) {
     // Should yield at start of call to func $subfunc.
     assert_eq!(
@@ -103,7 +103,7 @@ async fn epoch_yield_at_func_entry(config: &mut Config) {
     );
 }
 
-#[wasmtime_test(with = "#[tokio::test]", strategies(not(Winch)))]
+#[wasmtime_test(with = "#[tokio::test]")]
 async fn epoch_yield_at_loop_header(config: &mut Config) {
     // Should yield at top of loop, once per five iters.
     assert_eq!(
@@ -128,7 +128,7 @@ async fn epoch_yield_at_loop_header(config: &mut Config) {
     );
 }
 
-#[wasmtime_test(with = "#[tokio::test]", strategies(not(Winch)))]
+#[wasmtime_test(with = "#[tokio::test]")]
 async fn epoch_yield_immediate(config: &mut Config) {
     // We should see one yield immediately when the initial deadline
     // is zero.
@@ -149,7 +149,7 @@ async fn epoch_yield_immediate(config: &mut Config) {
     );
 }
 
-#[wasmtime_test(with = "#[tokio::test]", strategies(not(Winch)))]
+#[wasmtime_test(with = "#[tokio::test]")]
 async fn epoch_yield_only_once(config: &mut Config) {
     // We should yield from the subfunction, and then when we return
     // to the outer function and hit another loop header, we should
@@ -180,7 +180,7 @@ async fn epoch_yield_only_once(config: &mut Config) {
     );
 }
 
-#[wasmtime_test(with = "#[tokio::test]", strategies(not(Winch)))]
+#[wasmtime_test(with = "#[tokio::test]")]
 async fn epoch_interrupt_infinite_loop(config: &mut Config) {
     assert_eq!(
         None,
@@ -206,7 +206,7 @@ async fn epoch_interrupt_infinite_loop(config: &mut Config) {
     );
 }
 
-#[wasmtime_test(with = "#[tokio::test]", strategies(not(Winch)))]
+#[wasmtime_test(with = "#[tokio::test]")]
 async fn epoch_interrupt_function_entries(config: &mut Config) {
     assert_eq!(
         None,
@@ -329,7 +329,7 @@ async fn epoch_interrupt_function_entries(config: &mut Config) {
     );
 }
 
-#[wasmtime_test(with = "#[tokio::test]", strategies(not(Winch)))]
+#[wasmtime_test(with = "#[tokio::test]")]
 async fn epoch_callback_continue(config: &mut Config) {
     assert_eq!(
         Some((0, 1)),
@@ -355,7 +355,7 @@ async fn epoch_callback_continue(config: &mut Config) {
     );
 }
 
-#[wasmtime_test(with = "#[tokio::test]", strategies(not(Winch)))]
+#[wasmtime_test(with = "#[tokio::test]")]
 async fn epoch_callback_yield(config: &mut Config) {
     assert_eq!(
         Some((1, 1)),
@@ -381,7 +381,7 @@ async fn epoch_callback_yield(config: &mut Config) {
     );
 }
 
-#[wasmtime_test(with = "#[tokio::test]", strategies(not(Winch)))]
+#[wasmtime_test(with = "#[tokio::test]")]
 async fn epoch_callback_trap(config: &mut Config) {
     assert_eq!(
         None,
@@ -403,7 +403,7 @@ async fn epoch_callback_trap(config: &mut Config) {
     );
 }
 
-#[wasmtime_test(with = "#[tokio::test]", strategies(not(Winch)))]
+#[wasmtime_test(with = "#[tokio::test]")]
 async fn drop_future_on_epoch_yield(config: &mut Config) {
     let wasm = "
     (module
@@ -457,22 +457,4 @@ async fn drop_future_on_epoch_yield(config: &mut Config) {
     let _ = PollOnce::new(Box::pin(f.call_async(&mut store, &[], &mut []))).await;
 
     assert_eq!(true, alive_flag.load(Ordering::Acquire));
-}
-
-#[wasmtime_test(strategies(not(Cranelift)))]
-#[cfg_attr(miri, ignore)]
-fn ensure_compatibility_between_winch_and_epoch(config: &mut Config) -> Result<()> {
-    config.epoch_interruption(true);
-    let result = Engine::new(&config);
-    match result {
-        Ok(_) => anyhow::bail!("Expected incompatibility between epoch interruption and Winch"),
-        Err(e) => {
-            assert_eq!(
-                e.to_string(),
-                "Winch does not currently support epoch based interruption"
-            );
-        }
-    }
-
-    Ok(())
 }
