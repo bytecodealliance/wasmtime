@@ -573,7 +573,9 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                             let arm = &arms[0];
                             let scope = ctx.enter_scope();
                             match arm.constraint {
-                                Constraint::ConstInt { .. } | Constraint::ConstPrim { .. } => {
+                                Constraint::ConstBool { .. }
+                                | Constraint::ConstInt { .. }
+                                | Constraint::ConstPrim { .. } => {
                                     write!(ctx.out, "{}if ", &ctx.indent)?;
                                     self.emit_expr(ctx, *source)?;
                                     write!(ctx.out, " == ")?;
@@ -841,6 +843,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
             }
         }
         match *constraint {
+            Constraint::ConstBool { val, .. } => self.emit_bool(ctx, val),
             Constraint::ConstInt { val, ty } => self.emit_int(ctx, val, ty),
             Constraint::ConstPrim { val } => {
                 write!(ctx.out, "{}", &self.typeenv.syms[val.index()])

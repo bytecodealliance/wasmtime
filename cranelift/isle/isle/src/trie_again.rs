@@ -156,6 +156,13 @@ pub enum Constraint {
         /// convenience, to avoid needing to look up the variant in a [sema::TypeEnv].
         fields: TupleIndex,
     },
+    /// The value must equal this boolean literal.
+    ConstBool {
+        /// The constant value.
+        val: bool,
+        /// The constant's type.
+        ty: sema::TypeId,
+    },
     /// The value must equal this integer literal.
     ConstInt {
         /// The constant value.
@@ -275,7 +282,9 @@ impl Constraint {
     pub fn bindings_for(self, source: BindingId) -> Vec<Binding> {
         match self {
             // These constraints never introduce any bindings.
-            Constraint::ConstInt { .. } | Constraint::ConstPrim { .. } => vec![],
+            Constraint::ConstBool { .. }
+            | Constraint::ConstInt { .. }
+            | Constraint::ConstPrim { .. } => vec![],
             Constraint::Some => vec![Binding::MatchSome { source }],
             Constraint::Variant {
                 variant, fields, ..
@@ -531,6 +540,11 @@ impl sema::PatternVisitor for RuleSetBuilder {
         if a != b {
             self.current_rule.equals.merge(a, b);
         }
+    }
+
+    fn add_match_bool(&mut self, input: BindingId, ty: sema::TypeId, val: bool) {
+        let bindings = self.set_constraint(input, Constraint::ConstBool { val, ty });
+        debug_assert_eq!(bindings, &[]);
     }
 
     fn add_match_int(&mut self, input: BindingId, ty: sema::TypeId, val: i128) {

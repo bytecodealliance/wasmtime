@@ -318,6 +318,8 @@ pub enum Pattern {
         subpat: Box<Pattern>,
         pos: Pos,
     },
+    /// An operator that matches a constant boolean value.
+    ConstBool { val: bool, pos: Pos },
     /// An operator that matches a constant integer value.
     ConstInt { val: i128, pos: Pos },
     /// An operator that matches an external constant value.
@@ -362,6 +364,7 @@ impl Pattern {
                 subpat.terms(f);
             }
             Pattern::Var { .. }
+            | Pattern::ConstBool { .. }
             | Pattern::ConstInt { .. }
             | Pattern::ConstPrim { .. }
             | Pattern::Wildcard { .. }
@@ -423,9 +426,10 @@ impl Pattern {
                 }
             }
 
-            &Pattern::Wildcard { .. } | &Pattern::ConstInt { .. } | &Pattern::ConstPrim { .. } => {
-                self.clone()
-            }
+            &Pattern::Wildcard { .. }
+            | &Pattern::ConstBool { .. }
+            | &Pattern::ConstInt { .. }
+            | &Pattern::ConstPrim { .. } => self.clone(),
             &Pattern::MacroArg { .. } => unreachable!(),
         }
     }
@@ -467,6 +471,7 @@ impl Pattern {
 
             &Pattern::Var { .. }
             | &Pattern::Wildcard { .. }
+            | &Pattern::ConstBool { .. }
             | &Pattern::ConstInt { .. }
             | &Pattern::ConstPrim { .. } => Some(self.clone()),
             &Pattern::MacroArg { index, .. } => macro_args.get(index).cloned(),
@@ -475,7 +480,8 @@ impl Pattern {
 
     pub fn pos(&self) -> Pos {
         match self {
-            &Pattern::ConstInt { pos, .. }
+            &Pattern::ConstBool { pos, .. }
+            | &Pattern::ConstInt { pos, .. }
             | &Pattern::ConstPrim { pos, .. }
             | &Pattern::And { pos, .. }
             | &Pattern::Term { pos, .. }

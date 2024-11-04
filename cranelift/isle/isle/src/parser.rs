@@ -814,6 +814,10 @@ impl<'a> Parser<'a> {
             Ok(Pattern::ConstPrim { val, pos })
         } else if self.eat_sym_str("_")? {
             Ok(Pattern::Wildcard { pos })
+        } else if self.eat_sym_str("true")? {
+            Ok(Pattern::ConstBool { val: true, pos })
+        } else if self.eat_sym_str("false")? {
+            Ok(Pattern::ConstBool { val: false, pos })
         } else if self.is_sym() {
             let var = self.parse_ident()?;
             if self.is_at() {

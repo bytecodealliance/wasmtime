@@ -548,6 +548,9 @@ pub enum Pattern {
     /// type.
     Var(TypeId, VarId),
 
+    /// Match the current value against a constant boolean.
+    ConstBool(TypeId, bool),
+
     /// Match the current value against a constant integer of the given integer
     /// type.
     ConstInt(TypeId, i128),
@@ -600,6 +603,8 @@ pub trait PatternVisitor {
 
     /// Match if `a` and `b` have equal values.
     fn add_match_equal(&mut self, a: Self::PatternId, b: Self::PatternId, ty: TypeId);
+    /// Match if `input` is the given boolean constant.
+    fn add_match_bool(&mut self, input: Self::PatternId, ty: TypeId, bool_val: bool);
     /// Match if `input` is the given integer constant.
     fn add_match_int(&mut self, input: Self::PatternId, ty: TypeId, int_val: i128);
     /// Match if `input` is the given primitive constant.
@@ -635,6 +640,7 @@ impl Pattern {
         match *self {
             Self::BindPattern(t, ..) => t,
             Self::Var(t, ..) => t,
+            Self::ConstBool(t, ..) => t,
             Self::ConstInt(t, ..) => t,
             Self::ConstPrim(t, ..) => t,
             Self::Term(t, ..) => t,
@@ -666,6 +672,7 @@ impl Pattern {
                     .expect("Variable should already be bound");
                 visitor.add_match_equal(input, var_val, ty);
             }
+            Pattern::ConstBool(ty, value) => visitor.add_match_bool(input, ty, value),
             Pattern::ConstInt(ty, value) => visitor.add_match_int(input, ty, value),
             Pattern::ConstPrim(ty, value) => visitor.add_match_prim(input, ty, value),
             Pattern::Term(ty, term, ref args) => {
@@ -1937,6 +1944,19 @@ impl TermEnv {
                     );
                 }
                 Some(Pattern::ConstInt(expected_ty, val))
+            }
+            &ast::Pattern::ConstBool { val, pos } => {
+                if expected_ty != TypeId::BOOL {
+                    tyenv.report_error(
+                        pos,
+                        format!(
+                            "Boolean literal '{val}' has type {} but we need {} in context",
+                            BuiltinType::Bool.name(),
+                            tyenv.types[expected_ty.index()].name(tyenv)
+                        ),
+                    )
+                }
+                Some(Pattern::ConstBool(TypeId::BOOL, val))
             }
             &ast::Pattern::ConstPrim { ref val, pos } => {
                 let val = tyenv.intern_mut(val);
