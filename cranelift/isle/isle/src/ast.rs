@@ -99,7 +99,7 @@ pub enum SpecExpr {
     },
     /// An operator that matches a constant boolean value.
     ConstBool {
-        val: i8,
+        val: bool,
         pos: Pos,
     },
     /// The Unit constant value.
