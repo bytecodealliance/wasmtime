@@ -668,6 +668,11 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
         guard_before_slots,
     } = *constraints;
 
+    // Page-align the maximum size of memory since that's the granularity that
+    // permissions are going to be controlled at.
+    let max_memory_bytes = round_usize_up_to_host_pages(max_memory_bytes)
+        .context("maximum size of memory is too large")?;
+
     // If the user specifies a guard region, we always need to allocate a
     // `PROT_NONE` region for it before any memory slots. Recall that we can
     // avoid bounds checks for loads and stores with immediates up to
@@ -728,11 +733,7 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
     };
 
     // The page-aligned slot size; equivalent to `memory_and_guard_size`.
-    let page_alignment = crate::runtime::vm::host_page_size() - 1;
-    let slot_bytes = slot_bytes
-        .checked_add(page_alignment)
-        .and_then(|slot_bytes| Some(slot_bytes & !page_alignment))
-        .ok_or_else(|| anyhow!("slot size is too large"))?;
+    let slot_bytes = round_usize_up_to_host_pages(slot_bytes).context("slot size is too large")?;
 
     // We may need another guard region (like `pre_slab_guard_bytes`) at the end
     // of our slab to maintain our `faulting_region_bytes` guarantee. We could
