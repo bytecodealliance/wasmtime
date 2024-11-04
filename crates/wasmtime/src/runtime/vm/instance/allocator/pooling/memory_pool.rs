@@ -281,6 +281,17 @@ impl MemoryPool {
                     self.layout.max_memory_bytes,
                 );
             }
+            if memory.shared {
+                // FIXME(#4244): since the pooling allocator owns the memory
+                // allocation (which is torn down with the instance), that
+                // can't be used with shared memory where threads or the host
+                // might persist the memory beyond the lifetime of the instance
+                // itself.
+                bail!(
+                    "memory index {} is shared which is not supported in the pooling allocator",
+                    i.as_u32(),
+                );
+            }
         }
         Ok(())
     }
