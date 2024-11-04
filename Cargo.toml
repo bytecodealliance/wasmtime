@@ -196,7 +196,7 @@ unnecessary_cast = 'warn'
 allow_attributes_without_reason = 'warn'
 
 [workspace.dependencies]
-arbitrary = { version = "1.3.1" }
+arbitrary = { version = "1.4.0" }
 wasmtime-wmemcheck = { path = "crates/wmemcheck", version = "=29.0.0" }
 wasmtime = { path = "crates/wasmtime", version = "29.0.0", default-features = false }
 wasmtime-c-api-macros = { path = "crates/c-api-macros", version = "=29.0.0" }
