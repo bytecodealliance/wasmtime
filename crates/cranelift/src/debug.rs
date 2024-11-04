@@ -6,6 +6,7 @@
 #![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
 use crate::CompiledFunctionMetadata;
+use core::fmt;
 use cranelift_codegen::isa::TargetIsa;
 use object::write::SymbolId;
 use std::collections::HashMap;
@@ -173,6 +174,26 @@ impl<'a> Compilation<'a> {
     /// `SymbolId`.
     pub fn symbol_id(&self, sym: usize) -> SymbolId {
         self.symbol_index_to_id[sym]
+    }
+}
+
+impl<'a> fmt::Debug for Compilation<'a> {
+    // Sample output: '[#0: OneModule, #1: TwoModule, #3]'.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "[")?;
+        let mut is_first_module = true;
+        for (i, translation) in self.translations {
+            if !is_first_module {
+                write!(f, ", ")?;
+            } else {
+                is_first_module = false;
+            }
+            write!(f, "#{}", i.as_u32())?;
+            if let Some(name) = translation.debuginfo.name_section.module_name {
+                write!(f, ": {name}")?;
+            }
+        }
+        write!(f, "]")
     }
 }
 

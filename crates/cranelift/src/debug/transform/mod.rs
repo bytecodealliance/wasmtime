@@ -1,3 +1,4 @@
+use self::debug_transform_logging::dbi_log;
 use self::refs::DebugInfoRefsMap;
 use self::simulate::generate_simulated_dwarf;
 use self::unit::clone_unit;
@@ -16,6 +17,7 @@ pub use address_transform::AddressTransform;
 
 mod address_transform;
 mod attr;
+mod debug_transform_logging;
 mod expression;
 mod line_program;
 mod range_info_builder;
@@ -141,6 +143,8 @@ pub fn transform_dwarf(
     isa: &dyn TargetIsa,
     compilation: &mut Compilation<'_>,
 ) -> Result<write::Dwarf, Error> {
+    dbi_log!("Commencing DWARF transform for {:?}", compilation);
+
     let mut transforms = PrimaryMap::new();
     for (i, _) in compilation.translations.iter() {
         transforms.push(AddressTransform::new(compilation, i));
@@ -176,6 +180,8 @@ pub fn transform_dwarf(
     let mut translated = HashSet::new();
 
     for (module, translation) in compilation.translations.iter() {
+        dbi_log!("[== Transforming CUs for module #{} ==]", module.as_u32());
+
         let addr_tr = &transforms[module];
         let di = &translation.debuginfo;
         let context = DebugInputContext {

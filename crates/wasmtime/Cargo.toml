@@ -214,6 +214,9 @@ wmemcheck = [
   "std",
 ]
 
+# Enables detailed internal compiler logging via WASMTIME_LOG
+trace-log = ["wasmtime-cranelift?/trace-log"]
+
 # Enables support for demangling WebAssembly function names at runtime in
 # errors such as backtraces.
 demangle = ["wasmtime-environ/demangle", "std"]

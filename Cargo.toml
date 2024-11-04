@@ -411,6 +411,7 @@ all-arch = ["wasmtime/all-arch"]
 winch = ["wasmtime/winch"]
 pulley = ["wasmtime/pulley"]
 wmemcheck = ["wasmtime/wmemcheck"]
+trace-log = ["wasmtime/trace-log"]
 memory-protection-keys = ["wasmtime-cli-flags/memory-protection-keys"]
 
 # This feature, when enabled, will statically compile out all logging statements
