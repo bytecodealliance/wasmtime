@@ -646,7 +646,10 @@ impl CommonOptions {
             config.memory_reservation(max);
         }
 
-        if let Some(enable) = self.opts.memory_may_move.or(self.opts.static_memory_forced) {
+        if let Some(enable) = self.opts.static_memory_forced {
+            config.memory_may_move(!enable);
+        }
+        if let Some(enable) = self.opts.memory_may_move {
             config.memory_may_move(enable);
         }
 

@@ -421,7 +421,7 @@ fn tiny_static_heap(config: &mut Config) -> Result<()> {
 fn static_forced_max() -> Result<()> {
     let mut config = Config::new();
     config.memory_reservation(5 << 16);
-    config.memory_may_move(true);
+    config.memory_may_move(false);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -674,7 +674,7 @@ fn init_with_negative_segment(_: &mut Config) -> Result<()> {
 fn non_page_aligned_static_memory() -> Result<()> {
     let mut config = Config::new();
     config.memory_reservation(100_000);
-    config.memory_may_move(true);
+    config.memory_may_move(false);
     let engine = Engine::new(&config)?;
     let ty = MemoryType::new(1, None);
     Memory::new(&mut Store::new(&engine, ()), ty)?;

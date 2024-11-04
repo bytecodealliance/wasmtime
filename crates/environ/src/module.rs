@@ -35,7 +35,7 @@ impl MemoryStyle {
             && tunables.signals_based_traps
             && match memory.maximum_byte_size() {
                 Ok(mut maximum) => {
-                    if tunables.memory_may_move {
+                    if !tunables.memory_may_move {
                         maximum = maximum.min(tunables.memory_reservation);
                     }
 
@@ -51,7 +51,7 @@ impl MemoryStyle {
                 // it's a static memory or not. It should be ok to discard the
                 // linear memory's maximum size here as growth to the maximum
                 // is always fallible and never guaranteed.
-                Err(_) => tunables.memory_may_move,
+                Err(_) => !tunables.memory_may_move,
             };
 
         if is_static {
