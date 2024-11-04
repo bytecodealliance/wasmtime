@@ -4,7 +4,7 @@ use anyhow::{bail, Result};
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output, Stdio};
+use std::process::{Command, ExitStatus, Output, Stdio};
 use tempfile::{NamedTempFile, TempDir};
 
 // Run the wasmtime CLI with the provided args and return the `Output`.
@@ -174,10 +174,13 @@ fn run_wasmtime_unreachable_wat() -> Result<()> {
 
     assert_ne!(output.stderr, b"");
     assert_eq!(output.stdout, b"");
-    assert!(!output.status.success());
 
-    let code = output
-        .status
+    assert_trap_code(&output.status);
+    Ok(())
+}
+
+fn assert_trap_code(status: &ExitStatus) {
+    let code = status
         .code()
         .expect("wasmtime process should exit normally");
 
@@ -186,7 +189,6 @@ fn run_wasmtime_unreachable_wat() -> Result<()> {
     assert_eq!(code, 128 + libc::SIGABRT);
     #[cfg(windows)]
     assert_eq!(code, 3);
-    Ok(())
 }
 
 // Run a simple WASI hello world, snapshot0 edition.
@@ -2034,4 +2036,21 @@ fn profile_with_vtune() -> Result<()> {
 #[cfg(target_arch = "x86_64")]
 fn is_vtune_available() -> bool {
     Command::new("vtune").arg("-version").output().is_ok()
+}
+
+#[test]
+fn unreachable_without_wasi() -> Result<()> {
+    let output = run_wasmtime_for_output(
+        &[
+            "-Scli=n",
+            "-Ccache=n",
+            "tests/all/cli_tests/unreachable.wat",
+        ],
+        None,
+    )?;
+
+    assert_ne!(output.stderr, b"");
+    assert_eq!(output.stdout, b"");
+    assert_trap_code(&output.status);
+    Ok(())
 }
