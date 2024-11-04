@@ -5,7 +5,7 @@ use wasmtime::*;
 fn successful_instantiation() -> Result<()> {
     let pool = crate::small_pool_config();
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
     config.memory_guard_size(0);
     config.static_memory_maximum_size(1 << 16);
 
@@ -25,7 +25,7 @@ fn memory_limit() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.max_memory_size(3 << 16);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
     config.memory_guard_size(1 << 16);
     config.static_memory_maximum_size(3 << 16);
     config.wasm_multi_memory(true);
@@ -97,7 +97,7 @@ fn memory_init() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.max_memory_size(2 << 16).table_elements(0);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
 
     let engine = Engine::new(&config)?;
 
@@ -131,7 +131,7 @@ fn memory_guard_page_trap() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.max_memory_size(2 << 16).table_elements(0);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
 
     let engine = Engine::new(&config)?;
 
@@ -198,7 +198,7 @@ fn memory_zeroed() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.max_memory_size(1 << 16).table_elements(0);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
     config.memory_guard_size(0);
     config.static_memory_maximum_size(1 << 16);
 
@@ -235,7 +235,7 @@ fn table_limit() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.table_elements(TABLE_ELEMENTS);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
     config.memory_guard_size(0);
     config.static_memory_maximum_size(1 << 16);
 
@@ -316,7 +316,7 @@ fn table_init() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.max_memory_size(0).table_elements(6);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
 
     let engine = Engine::new(&config)?;
 
@@ -370,7 +370,7 @@ fn table_zeroed() -> Result<()> {
 
     let pool = crate::small_pool_config();
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
     config.memory_guard_size(0);
     config.static_memory_maximum_size(1 << 16);
 
@@ -405,7 +405,7 @@ fn total_core_instances_limit() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.total_core_instances(INSTANCE_LIMIT);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
     config.memory_guard_size(0);
     config.static_memory_maximum_size(1 << 16);
 
@@ -442,7 +442,7 @@ fn preserve_data_segments() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.total_memories(2);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
     let engine = Engine::new(&config)?;
     let m = Module::new(
         &engine,
@@ -490,7 +490,7 @@ fn multi_memory_with_imported_memories() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.total_memories(2).max_memories_per_module(2);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
     config.wasm_multi_memory(true);
 
     let engine = Engine::new(&config)?;
@@ -529,7 +529,7 @@ fn drop_externref_global_during_module_init() -> Result<()> {
     let pool = crate::small_pool_config();
     let mut config = Config::new();
     config.wasm_reference_types(true);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
 
     let engine = Engine::new(&config)?;
 
@@ -572,7 +572,7 @@ fn drop_externref_global_during_module_init() -> Result<()> {
 fn switch_image_and_non_image() -> Result<()> {
     let pool = crate::small_pool_config();
     let mut c = Config::new();
-    c.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    c.allocation_strategy(pool);
     let engine = Engine::new(&c)?;
     let module1 = Module::new(
         &engine,
@@ -631,7 +631,7 @@ fn instance_too_large() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.max_core_instance_size(16);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
 
     let engine = Engine::new(&config)?;
     let expected = if cfg!(feature = "wmemcheck") {
@@ -697,7 +697,7 @@ fn dynamic_memory_pooling_allocator() -> Result<()> {
         let mut config = Config::new();
         config.static_memory_maximum_size(max_size);
         config.memory_guard_size(guard_size);
-        config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+        config.allocation_strategy(pool);
 
         let engine = Engine::new(&config)?;
 
@@ -801,7 +801,7 @@ fn zero_memory_pages_disallows_oob() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.max_memory_size(0);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
 
     let engine = Engine::new(&config)?;
     let module = Module::new(
@@ -841,7 +841,7 @@ fn total_component_instances_limit() -> Result<()> {
     pool.total_component_instances(TOTAL_COMPONENT_INSTANCES);
     let mut config = Config::new();
     config.wasm_component_model(true);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
 
     let engine = Engine::new(&config)?;
     let linker = wasmtime::component::Linker::new(&engine);
@@ -873,7 +873,7 @@ fn component_instance_size_limit() -> Result<()> {
     pool.max_component_instance_size(1);
     let mut config = Config::new();
     config.wasm_component_model(true);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
     let engine = Engine::new(&config)?;
 
     match wasmtime::component::Component::new(&engine, "(component)") {
@@ -897,7 +897,7 @@ fn total_tables_limit() -> Result<()> {
     pool.total_tables(TOTAL_TABLES)
         .total_core_instances(TOTAL_TABLES + 1);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
 
     let engine = Engine::new(&config)?;
     let linker = Linker::new(&engine);
@@ -934,7 +934,7 @@ async fn total_stacks_limit() -> Result<()> {
         .total_core_instances(TOTAL_STACKS + 1);
     let mut config = Config::new();
     config.async_support(true);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
 
     let engine = Engine::new(&config)?;
 
@@ -1015,7 +1015,7 @@ fn component_core_instances_limit() -> Result<()> {
     pool.max_core_instances_per_component(1);
     let mut config = Config::new();
     config.wasm_component_model(true);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
     let engine = Engine::new(&config)?;
 
     // One core instance works.
@@ -1058,7 +1058,7 @@ fn component_memories_limit() -> Result<()> {
     pool.max_memories_per_component(1).total_memories(2);
     let mut config = Config::new();
     config.wasm_component_model(true);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
     let engine = Engine::new(&config)?;
 
     // One memory works.
@@ -1101,7 +1101,7 @@ fn component_tables_limit() -> Result<()> {
     pool.max_tables_per_component(1).total_tables(2);
     let mut config = Config::new();
     config.wasm_component_model(true);
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
     let engine = Engine::new(&config)?;
 
     // One table works.
@@ -1147,7 +1147,7 @@ fn total_memories_limit() -> Result<()> {
         .total_core_instances(TOTAL_MEMORIES + 1)
         .memory_protection_keys(MpkEnabled::Disable);
     let mut config = Config::new();
-    config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+    config.allocation_strategy(pool);
 
     let engine = Engine::new(&config)?;
     let linker = Linker::new(&engine);
@@ -1191,7 +1191,7 @@ fn decommit_batching() -> Result<()> {
             .decommit_batch_size(batch_size)
             .memory_protection_keys(MpkEnabled::Disable);
         let mut config = Config::new();
-        config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
+        config.allocation_strategy(pool);
 
         let engine = Engine::new(&config)?;
         let linker = Linker::new(&engine);
