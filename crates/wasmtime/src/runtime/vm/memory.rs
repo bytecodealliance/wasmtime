@@ -584,10 +584,9 @@ impl Memory {
         )?;
         let allocation = Box::new(pooled_memory);
         let allocation: Box<dyn RuntimeLinearMemory> = if ty.shared {
-            // FIXME: since the pooling allocator owns the memory allocation
-            // (which is torn down with the instance), the current shared memory
-            // implementation will cause problems; see
-            // https://github.com/bytecodealliance/wasmtime/issues/4244.
+            // FIXME(#4244): not supported with the pooling allocator (which
+            // `new_static` is always used with), see `MemoryPool::validate` as
+            // well).
             todo!("using shared memory with the pooling allocator is a work in progress");
         } else {
             allocation

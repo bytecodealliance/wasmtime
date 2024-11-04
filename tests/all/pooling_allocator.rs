@@ -1254,6 +1254,36 @@ fn tricky_empty_table_with_empty_virtual_memory_alloc() -> Result<()> {
 
 #[test]
 #[cfg_attr(miri, ignore)]
+fn shared_memory_unsupported() -> Result<()> {
+    let mut config = Config::new();
+    let mut cfg = PoolingAllocationConfig::default();
+    // shrink the size of this allocator
+    cfg.total_memories(1);
+    config.allocation_strategy(InstanceAllocationStrategy::Pooling(cfg));
+    let engine = Engine::new(&config)?;
+
+    let err = Module::new(
+        &engine,
+        r#"
+            (module
+                (memory 5 5 shared)
+            )
+        "#,
+    )
+    .unwrap_err();
+    let err = err.to_string();
+    assert!(
+        err.contains(
+            "memory index 0 is shared which is not supported \
+             in the pooling allocator"
+        ),
+        "bad error: {err}"
+    );
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(miri, ignore)]
 fn custom_page_sizes_reusing_same_slot() -> Result<()> {
     let mut config = Config::new();
     config.wasm_custom_page_sizes(true);

@@ -23,7 +23,7 @@ column is below.
 | [`component-model`]      | ❌[^1]  | ✅    | ✅       | ⚠️[^2]  | ✅  | ❌[^5]|
 | [`relaxed-simd`]         | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`multi-memory`]         | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`threads`]              | ✅      | ✅    | ✅       | ❌[^3] | ✅  | ✅    |
+| [`threads`]              | ✅      | ✅    | ✅[^9]   | ❌[^3] | ✅  | ✅    |
 | [`tail-call`]            | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`extended-const`]       | ✅      | ✅    | ✅       | ❌[^4] | ✅  | ✅    |
 
@@ -37,6 +37,11 @@ column is below.
     [`extended-const`] is not yet implemented in `wasm-smith`.
 [^5]: Support for the C API for components is desired by many embedders but
     does not currently have anyone lined up to implement it.
+[^9]: There are [known
+    issues](https://github.com/bytecodealliance/wasmtime/issues/4245) with
+    shared memories and the implementation/API in Wasmtime, for example they
+    aren't well integrated with resource-limiting features in `Store`.
+    Additionally `shared` memories aren't supported in the pooling allocator.
 
 ## Off-by-default proposals
 
