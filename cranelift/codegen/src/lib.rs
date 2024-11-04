@@ -97,8 +97,9 @@ pub mod incremental_cache;
 #[macro_export]
 macro_rules! trace {
     ($($tt:tt)*) => {
-        #[cfg(any(feature = "trace-log", debug_assertions))]
-        ::log::trace!($($tt)*);
+        if cfg!(any(feature = "trace-log", debug_assertions)) {
+            ::log::trace!($($tt)*);
+        }
     };
 }
 

@@ -4,8 +4,9 @@ use gimli::{write, AttributeValue, DebuggingInformationEntry, Dwarf, LittleEndia
 
 macro_rules! dbi_log {
     ($($tt:tt)*) => {
-        #[cfg(any(feature = "trace-log", debug_assertions))]
-        ::log::trace!(target: "debug-info-transform", $($tt)*);
+        if cfg!(any(feature = "trace-log", debug_assertions)) {
+            ::log::trace!(target: "debug-info-transform", $($tt)*);
+        }
     };
 }
 pub(crate) use dbi_log;
