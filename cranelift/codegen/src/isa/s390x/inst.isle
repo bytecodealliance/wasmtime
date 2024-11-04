@@ -1496,10 +1496,10 @@
 
 ;; Check whether two lane order values are equal.
 (decl pure lane_order_equal (LaneOrder LaneOrder) bool)
-(rule (lane_order_equal (LaneOrder.LittleEndian) (LaneOrder.LittleEndian)) $true)
-(rule (lane_order_equal (LaneOrder.LittleEndian) (LaneOrder.BigEndian)) $false)
-(rule (lane_order_equal (LaneOrder.BigEndian) (LaneOrder.LittleEndian)) $false)
-(rule (lane_order_equal (LaneOrder.BigEndian) (LaneOrder.BigEndian)) $true)
+(rule (lane_order_equal (LaneOrder.LittleEndian) (LaneOrder.LittleEndian)) true)
+(rule (lane_order_equal (LaneOrder.LittleEndian) (LaneOrder.BigEndian)) false)
+(rule (lane_order_equal (LaneOrder.BigEndian) (LaneOrder.LittleEndian)) false)
+(rule (lane_order_equal (LaneOrder.BigEndian) (LaneOrder.BigEndian)) true)
 
 ;; Return lane order matching memory byte order.
 (decl pure lane_order_from_memflags (MemFlags) LaneOrder)
@@ -2884,10 +2884,10 @@
 (rule 3 (abi_vec_elt_rev _ $I128 reg) reg)
 (rule 2 (abi_vec_elt_rev _ (ty_scalar_float ty) reg) reg)
 (rule 0 (abi_vec_elt_rev callee_lane_order _ reg)
-      (if-let $true (lane_order_equal callee_lane_order (lane_order)))
+      (if-let true (lane_order_equal callee_lane_order (lane_order)))
       reg)
 (rule 1 (abi_vec_elt_rev callee_lane_order (ty_vec128 ty) reg)
-      (if-let $false (lane_order_equal callee_lane_order (lane_order)))
+      (if-let false (lane_order_equal callee_lane_order (lane_order)))
       (vec_elt_rev ty reg))
 
 ;; Prepare a stack copy of a single (oversized) argument.
@@ -3093,28 +3093,28 @@
 (decl zext32_reg (Type Reg) Reg)
 (rule (zext32_reg ty src)
       (let ((dst WritableReg (temp_writable_reg $I32))
-            (_ Unit (emit (MInst.Extend dst src $false (ty_bits ty) 32))))
+            (_ Unit (emit (MInst.Extend dst src false (ty_bits ty) 32))))
         dst))
 
 ;; Sign-extend a register from a smaller `Type` into a 32-bit register.
 (decl sext32_reg (Type Reg) Reg)
 (rule (sext32_reg ty src)
       (let ((dst WritableReg (temp_writable_reg $I32))
-            (_ Unit (emit (MInst.Extend dst src $true (ty_bits ty) 32))))
+            (_ Unit (emit (MInst.Extend dst src true (ty_bits ty) 32))))
         dst))
 
 ;; Zero-extend a register from a smaller `Type` into a 64-bit register.
 (decl zext64_reg (Type Reg) Reg)
 (rule (zext64_reg ty src)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.Extend dst src $false (ty_bits ty) 64))))
+            (_ Unit (emit (MInst.Extend dst src false (ty_bits ty) 64))))
         dst))
 
 ;; Sign-extend a register from a smaller `Type` into a 64-bit register.
 (decl sext64_reg (Type Reg) Reg)
 (rule (sext64_reg ty src)
       (let ((dst WritableReg (temp_writable_reg $I64))
-            (_ Unit (emit (MInst.Extend dst src $true (ty_bits ty) 64))))
+            (_ Unit (emit (MInst.Extend dst src true (ty_bits ty) 64))))
         dst))
 
 

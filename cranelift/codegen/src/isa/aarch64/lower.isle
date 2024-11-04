@@ -262,13 +262,13 @@
 ;; extended. This maps directly to `umulh` and `smulh`.
 (rule 1 (lower i @ (isplit (has_type $I128 (imul (uextend x) (uextend y)))))
   (if-let (first_result lo) i)
-  (if-let $true (value_is_unused lo))
+  (if-let true (value_is_unused lo))
   (output_pair (invalid_reg)
                (umulh $I64 (put_in_reg_zext64 x) (put_in_reg_zext64 y))))
 
 (rule 1 (lower i @ (isplit (has_type $I128 (imul (sextend x) (sextend y)))))
   (if-let (first_result lo) i)
-  (if-let $true (value_is_unused lo))
+  (if-let true (value_is_unused lo))
   (output_pair (invalid_reg)
                (smulh $I64 (put_in_reg_sext64 x) (put_in_reg_sext64 y))))
 
@@ -315,7 +315,7 @@
                     (OperandSize.Size32)
                     x1
                     (u8_into_uimm5 0)
-                    (nzcv $false $true $false $false)
+                    (nzcv false true false false)
                     (Cond.Ne)))))
 
 ;; This operation is implemented by using uminv to create a scalar value, which
@@ -591,16 +591,16 @@
 ;; a `bitcast` is matched here explicitly since that's the main way a shuffle
 ;; output will be fed into this instruction.
 (rule 3 (lower_fmla op (bitcast _ (shuffle x x (shuffle32_from_imm n n n n))) y z size @ (VectorSize.Size32x4))
-        (if-let $true (u64_lt n 4))
+        (if-let true (u64_lt n 4))
         (vec_fmla_elem op z y x size n))
 (rule 4 (lower_fmla op x (bitcast _ (shuffle y y (shuffle32_from_imm n n n n))) z size @ (VectorSize.Size32x4))
-        (if-let $true (u64_lt n 4))
+        (if-let true (u64_lt n 4))
         (vec_fmla_elem op z x y size n))
 (rule 3 (lower_fmla op (bitcast _ (shuffle x x (shuffle64_from_imm n n))) y z size @ (VectorSize.Size64x2))
-        (if-let $true (u64_lt n 2))
+        (if-let true (u64_lt n 2))
         (vec_fmla_elem op z y x size n))
 (rule 4 (lower_fmla op x (bitcast _ (shuffle y y (shuffle64_from_imm n n))) z size @ (VectorSize.Size64x2))
-        (if-let $true (u64_lt n 2))
+        (if-let true (u64_lt n 2))
         (vec_fmla_elem op z x y size n))
 
 ;; Special case: if one of the multiplicands is `fneg` then peel that away,
@@ -626,30 +626,30 @@
 ;;;; Rules for `fcvt_to_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_32 out_ty) (fcvt_to_uint x @ (value_type $F32))))
-      (fpu_to_int_cvt (FpuToIntOp.F32ToU32) x $false $F32 out_ty))
+      (fpu_to_int_cvt (FpuToIntOp.F32ToU32) x false $F32 out_ty))
 
 (rule 1 (lower (has_type $I64 (fcvt_to_uint x @ (value_type $F32))))
-      (fpu_to_int_cvt (FpuToIntOp.F32ToU64) x $false $F32 $I64))
+      (fpu_to_int_cvt (FpuToIntOp.F32ToU64) x false $F32 $I64))
 
 (rule (lower (has_type (fits_in_32 out_ty) (fcvt_to_uint x @ (value_type $F64))))
-      (fpu_to_int_cvt (FpuToIntOp.F64ToU32) x $false $F64 out_ty))
+      (fpu_to_int_cvt (FpuToIntOp.F64ToU32) x false $F64 out_ty))
 
 (rule 1 (lower (has_type $I64 (fcvt_to_uint x @ (value_type $F64))))
-      (fpu_to_int_cvt (FpuToIntOp.F64ToU64) x $false $F64 $I64))
+      (fpu_to_int_cvt (FpuToIntOp.F64ToU64) x false $F64 $I64))
 
 ;;;; Rules for `fcvt_to_sint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_32 out_ty) (fcvt_to_sint x @ (value_type $F32))))
-      (fpu_to_int_cvt (FpuToIntOp.F32ToI32) x $true $F32 out_ty))
+      (fpu_to_int_cvt (FpuToIntOp.F32ToI32) x true $F32 out_ty))
 
 (rule 1 (lower (has_type $I64 (fcvt_to_sint x @ (value_type $F32))))
-      (fpu_to_int_cvt (FpuToIntOp.F32ToI64) x $true $F32 $I64))
+      (fpu_to_int_cvt (FpuToIntOp.F32ToI64) x true $F32 $I64))
 
 (rule (lower (has_type (fits_in_32 out_ty) (fcvt_to_sint x @ (value_type $F64))))
-      (fpu_to_int_cvt (FpuToIntOp.F64ToI32) x $true $F64 out_ty))
+      (fpu_to_int_cvt (FpuToIntOp.F64ToI32) x true $F64 out_ty))
 
 (rule 1 (lower (has_type $I64 (fcvt_to_sint x @ (value_type $F64))))
-      (fpu_to_int_cvt (FpuToIntOp.F64ToI64) x $true $F64 $I64))
+      (fpu_to_int_cvt (FpuToIntOp.F64ToI64) x true $F64 $I64))
 
 ;;;; Rules for `fcvt_from_uint` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -700,16 +700,16 @@
       (vec_misc (VecMisc2.Fcvtzu) x (vector_size ty)))
 
 (rule (lower (has_type (fits_in_32 out_ty) (fcvt_to_uint_sat x @ (value_type $F32))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToU32) x $false out_ty))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToU32) x false out_ty))
 
 (rule 1 (lower (has_type $I64 (fcvt_to_uint_sat x @ (value_type $F32))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToU64) x $false $I64))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToU64) x false $I64))
 
 (rule (lower (has_type (fits_in_32 out_ty) (fcvt_to_uint_sat x @ (value_type $F64))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToU32) x $false out_ty))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToU32) x false out_ty))
 
 (rule 1 (lower (has_type $I64 (fcvt_to_uint_sat x @ (value_type $F64))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToU64) x $false $I64))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToU64) x false $I64))
 
 ;;;; Rules for `fcvt_to_sint_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -720,16 +720,16 @@
       (vec_misc (VecMisc2.Fcvtzs) x (vector_size ty)))
 
 (rule (lower (has_type (fits_in_32 out_ty) (fcvt_to_sint_sat x @ (value_type $F32))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToI32) x $true out_ty))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToI32) x true out_ty))
 
 (rule 1 (lower (has_type $I64 (fcvt_to_sint_sat x @ (value_type $F32))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToI64) x $true $I64))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F32ToI64) x true $I64))
 
 (rule (lower (has_type (fits_in_32 out_ty) (fcvt_to_sint_sat x @ (value_type $F64))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToI32) x $true out_ty))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToI32) x true out_ty))
 
 (rule 1 (lower (has_type $I64 (fcvt_to_sint_sat x @ (value_type $F64))))
-      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToI64) x $true $I64))
+      (fpu_to_int_cvt_sat (FpuToIntOp.F64ToI64) x true $I64))
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -920,85 +920,85 @@
 
             ;; Shift the high half components, into the high half.
             ;;   rd = |dg+ch << 32|be+af << 32|
-            (shift Reg (shll32 sum $false))
+            (shift Reg (shll32 sum false))
 
             ;; Multiply the low components together, and accumulate with the high
             ;; half.
             ;;   rd = |rd[1] + cg|rd[0] + ae|
-            (result Reg (umlal32 shift tmp2 tmp1 $false)))
+            (result Reg (umlal32 shift tmp2 tmp1 false)))
         result))
 
 ;; Special case for `i16x8.extmul_low_i8x16_s`.
 (rule (lower (has_type $I16X8
                        (imul (swiden_low x @ (value_type $I8X16))
                              (swiden_low y @ (value_type $I8X16)))))
-      (smull8 x y $false))
+      (smull8 x y false))
 
 ;; Special case for `i16x8.extmul_high_i8x16_s`.
 (rule (lower (has_type $I16X8
                        (imul (swiden_high x @ (value_type $I8X16))
                              (swiden_high y @ (value_type $I8X16)))))
-      (smull8 x y $true))
+      (smull8 x y true))
 
 ;; Special case for `i16x8.extmul_low_i8x16_u`.
 (rule (lower (has_type $I16X8
                        (imul (uwiden_low x @ (value_type $I8X16))
                              (uwiden_low y @ (value_type $I8X16)))))
-      (umull8 x y $false))
+      (umull8 x y false))
 
 ;; Special case for `i16x8.extmul_high_i8x16_u`.
 (rule (lower (has_type $I16X8
                        (imul (uwiden_high x @ (value_type $I8X16))
                              (uwiden_high y @ (value_type $I8X16)))))
-      (umull8 x y $true))
+      (umull8 x y true))
 
 ;; Special case for `i32x4.extmul_low_i16x8_s`.
 (rule (lower (has_type $I32X4
                        (imul (swiden_low x @ (value_type $I16X8))
                              (swiden_low y @ (value_type $I16X8)))))
-      (smull16 x y $false))
+      (smull16 x y false))
 
 ;; Special case for `i32x4.extmul_high_i16x8_s`.
 (rule (lower (has_type $I32X4
                        (imul (swiden_high x @ (value_type $I16X8))
                              (swiden_high y @ (value_type $I16X8)))))
-      (smull16 x y $true))
+      (smull16 x y true))
 
 ;; Special case for `i32x4.extmul_low_i16x8_u`.
 (rule (lower (has_type $I32X4
                        (imul (uwiden_low x @ (value_type $I16X8))
                              (uwiden_low y @ (value_type $I16X8)))))
-      (umull16 x y $false))
+      (umull16 x y false))
 
 ;; Special case for `i32x4.extmul_high_i16x8_u`.
 (rule (lower (has_type $I32X4
                        (imul (uwiden_high x @ (value_type $I16X8))
                              (uwiden_high y @ (value_type $I16X8)))))
-      (umull16 x y $true))
+      (umull16 x y true))
 
 ;; Special case for `i64x2.extmul_low_i32x4_s`.
 (rule (lower (has_type $I64X2
                        (imul (swiden_low x @ (value_type $I32X4))
                              (swiden_low y @ (value_type $I32X4)))))
-      (smull32 x y $false))
+      (smull32 x y false))
 
 ;; Special case for `i64x2.extmul_high_i32x4_s`.
 (rule (lower (has_type $I64X2
                        (imul (swiden_high x @ (value_type $I32X4))
                              (swiden_high y @ (value_type $I32X4)))))
-      (smull32 x y $true))
+      (smull32 x y true))
 
 ;; Special case for `i64x2.extmul_low_i32x4_u`.
 (rule (lower (has_type $I64X2
                        (imul (uwiden_low x @ (value_type $I32X4))
                              (uwiden_low y @ (value_type $I32X4)))))
-      (umull32 x y $false))
+      (umull32 x y false))
 
 ;; Special case for `i64x2.extmul_high_i32x4_u`.
 (rule (lower (has_type $I64X2
                        (imul (uwiden_high x @ (value_type $I32X4))
                              (uwiden_high y @ (value_type $I32X4)))))
-      (umull32 x y $true))
+      (umull32 x y true))
 
 ;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1169,13 +1169,13 @@
                       (csel cc x y))))
 
 (rule umin 2 (lower (has_type (and (fits_in_64 ty) (ty_int _)) (umin x y)))
-      (cmp_and_choose ty (Cond.Lo) $false x y))
+      (cmp_and_choose ty (Cond.Lo) false x y))
 (rule smin 2 (lower (has_type (and (fits_in_64 ty) (ty_int _)) (smin x y)))
-      (cmp_and_choose ty (Cond.Lt) $true x y))
+      (cmp_and_choose ty (Cond.Lt) true x y))
 (rule umax 2 (lower (has_type (and (fits_in_64 ty) (ty_int _)) (umax x y)))
-      (cmp_and_choose ty (Cond.Hi) $false x y))
+      (cmp_and_choose ty (Cond.Hi) false x y))
 (rule smax 2 (lower (has_type (and (fits_in_64 ty) (ty_int _)) (smax x y)))
-      (cmp_and_choose ty (Cond.Gt) $true x y))
+      (cmp_and_choose ty (Cond.Gt) true x y))
 
 ;; Vector types.
 
@@ -1208,7 +1208,7 @@
 ;; General rule for extending input to an output which fits in a single
 ;; register.
 (rule uextend -2 (lower (has_type (fits_in_64 out) (uextend x @ (value_type in))))
-      (extend x $false (ty_bits in) (ty_bits out)))
+      (extend x false (ty_bits in) (ty_bits out)))
 
 ;; Extraction of a vector lane automatically extends as necessary, so we can
 ;; skip an explicit extending instruction.
@@ -1252,7 +1252,7 @@
 ;; General rule for extending input to an output which fits in a single
 ;; register.
 (rule sextend -4 (lower (has_type (fits_in_64 out) (sextend x @ (value_type in))))
-      (extend x $true (ty_bits in) (ty_bits out)))
+      (extend x true (ty_bits in) (ty_bits out)))
 
 ;; Extraction of a vector lane automatically extends as necessary, so we can
 ;; skip an explicit extending instruction.
@@ -1492,14 +1492,14 @@
        ((ALUOp.Lsr) (switch t
          (8 (= (extract 31 0 a) (zero_ext 32 (extract 7 0 a))))
          (16 (= (extract 31 0 a) (zero_ext 32 (extract 15 0 a))))
-         (32 $true)
-         (64 $true)))
+         (32 true)
+         (64 true)))
       ((ALUOp.Asr) (switch t
         (8 (= (extract 31 0 a) (sign_ext 32 (extract 7 0 a))))
         (16 (= (extract 31 0 a) (sign_ext 32 (extract 15 0 a))))
-        (32 $true)
-        (64 $true)))
-      ((ALUOp.Lsl) $true))))
+        (32 true)
+        (64 true)))
+      ((ALUOp.Lsl) true))))
 (instantiate do_shift
     ((args (bv 8) Int (bv 64) (bv 8)) (ret (bv 64)) (canon (bv 8)))
     ((args (bv 8) Int (bv 64) (bv 16)) (ret (bv 64)) (canon (bv 16)))
@@ -2387,32 +2387,32 @@
 ;;;; Rules for `swiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty (swiden_low x)))
-      (vec_extend (VecExtendOp.Sxtl) x $false (lane_size ty)))
+      (vec_extend (VecExtendOp.Sxtl) x false (lane_size ty)))
 
 ;;;; Rules for `swiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 1 (lower (has_type (ty_vec128 ty) (swiden_high x)))
-      (vec_extend (VecExtendOp.Sxtl) x $true (lane_size ty)))
+      (vec_extend (VecExtendOp.Sxtl) x true (lane_size ty)))
 
 (rule (lower (has_type ty (swiden_high x)))
       (if (ty_vec64 ty))
       (let ((tmp Reg (fpu_move_from_vec x 1 (VectorSize.Size32x2))))
-       (vec_extend (VecExtendOp.Sxtl) tmp $false (lane_size ty))))
+       (vec_extend (VecExtendOp.Sxtl) tmp false (lane_size ty))))
 
 ;;;; Rules for `uwiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty (uwiden_low x)))
-      (vec_extend (VecExtendOp.Uxtl) x $false (lane_size ty)))
+      (vec_extend (VecExtendOp.Uxtl) x false (lane_size ty)))
 
 ;;;; Rules for `uwiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 1 (lower (has_type (ty_vec128 ty) (uwiden_high x)))
-      (vec_extend (VecExtendOp.Uxtl) x $true (lane_size ty)))
+      (vec_extend (VecExtendOp.Uxtl) x true (lane_size ty)))
 
 (rule (lower (has_type ty (uwiden_high x)))
       (if (ty_vec64 ty))
       (let ((tmp Reg (fpu_move_from_vec x 1 (VectorSize.Size32x2))))
-       (vec_extend (VecExtendOp.Uxtl) tmp $false (lane_size ty))))
+       (vec_extend (VecExtendOp.Uxtl) tmp false (lane_size ty))))
 
 ;;;; Rules for `Fence` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -2536,37 +2536,37 @@
        (sload8x8 flags address offset))
       (vec_extend (VecExtendOp.Sxtl)
                   (aarch64_fpuload64 (amode $F64 address offset) flags)
-                  $false
+                  false
                   (ScalarSize.Size16)))
 (rule (lower
        (uload8x8 flags address offset))
       (vec_extend (VecExtendOp.Uxtl)
                   (aarch64_fpuload64 (amode $F64 address offset) flags)
-                  $false
+                  false
                   (ScalarSize.Size16)))
 (rule (lower
        (sload16x4 flags address offset))
       (vec_extend (VecExtendOp.Sxtl)
                   (aarch64_fpuload64 (amode $F64 address offset) flags)
-                  $false
+                  false
                   (ScalarSize.Size32)))
 (rule (lower
        (uload16x4 flags address offset))
       (vec_extend (VecExtendOp.Uxtl)
                   (aarch64_fpuload64 (amode $F64 address offset) flags)
-                  $false
+                  false
                   (ScalarSize.Size32)))
 (rule (lower
        (sload32x2 flags address offset))
       (vec_extend (VecExtendOp.Sxtl)
                   (aarch64_fpuload64 (amode $F64 address offset) flags)
-                  $false
+                  false
                   (ScalarSize.Size64)))
 (rule (lower
        (uload32x2 flags address offset))
       (vec_extend (VecExtendOp.Uxtl)
                   (aarch64_fpuload64 (amode $F64 address offset) flags)
-                  $false
+                  false
                   (ScalarSize.Size64)))
 
 ;;;; Rules for stores ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -3048,7 +3048,7 @@
 ;;; Rules for `fvpromote_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (fvpromote_low val))
-      (vec_rr_long (VecRRLongOp.Fcvtl32) val $false))
+      (vec_rr_long (VecRRLongOp.Fcvtl32) val false))
 
 ;;; Rules for `brif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

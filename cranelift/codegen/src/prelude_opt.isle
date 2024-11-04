@@ -78,7 +78,7 @@
 (rule 0 (iconst_s ty c)
 	(if-let c_masked (u64_and (i64_as_u64 c) (ty_umax ty)))
 	(if-let c_reextended (i64_sextend_u64 ty c_masked))
-	(if-let $true (u64_eq (i64_as_u64 c) (i64_as_u64 c_reextended)))
+	(if-let true (u64_eq (i64_as_u64 c) (i64_as_u64 c_reextended)))
 	(iconst ty (imm64 c_masked)))
 (rule 1 (iconst_s $I128 c) (sextend $I128 (iconst_s $I64 c)))
 
@@ -91,7 +91,7 @@
 (decl iconst_u (Type u64) Value)
 (extractor (iconst_u ty c) (iconst ty (u64_from_imm64 c)))
 (rule 0 (iconst_u ty c)
-	(if-let $true (u64_le c (ty_umax ty)))
+	(if-let true (u64_le c (ty_umax ty)))
     (iconst ty (imm64 c)))
 (rule 1 (iconst_u $I128 c) (uextend $I128 (iconst_u $I64 c)))
 
