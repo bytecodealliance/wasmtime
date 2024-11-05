@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift"
-version = "0.111.1"
+version = "0.111.2"
 description = "Umbrella for commonly-used cranelift crates"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift"
