@@ -1797,6 +1797,19 @@ impl Memory {
             IndexType::I32 => WASM32_MAX_SIZE,
         }
     }
+
+    /// Returns the static size of this heap in bytes at runtime, if available.
+    ///
+    /// This is only computable when the minimum size equals the maximum size.
+    pub fn static_heap_size(&self) -> Option<u64> {
+        let min = self.minimum_byte_size().ok()?;
+        let max = self.maximum_byte_size().ok()?;
+        if min == max {
+            Some(min)
+        } else {
+            None
+        }
+    }
 }
 
 #[derive(Copy, Clone, Debug)]

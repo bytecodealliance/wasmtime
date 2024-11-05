@@ -1254,7 +1254,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let effective_addr = if memarg.offset == 0 {
                 addr
             } else {
-                let index_type = environ.heaps()[heap].index_type;
+                let index_type = environ.heaps()[heap].index_type();
                 let offset = builder.ins().iconst(index_type, memarg.offset as i64);
                 environ.uadd_overflow_trap(builder, addr, offset, ir::TrapCode::HEAP_OUT_OF_BOUNDS)
             };
@@ -1278,7 +1278,7 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let effective_addr = if memarg.offset == 0 {
                 addr
             } else {
-                let index_type = environ.heaps()[heap].index_type;
+                let index_type = environ.heaps()[heap].index_type();
                 let offset = builder.ins().iconst(index_type, memarg.offset as i64);
                 environ.uadd_overflow_trap(builder, addr, offset, ir::TrapCode::HEAP_OUT_OF_BOUNDS)
             };
@@ -3222,7 +3222,9 @@ where
         // relatively odd/rare. In the future if needed we can look into
         // optimizing this more.
         Err(_) => {
-            let offset = builder.ins().iconst(heap.index_type, memarg.offset as i64);
+            let offset = builder
+                .ins()
+                .iconst(heap.index_type(), memarg.offset.signed());
             let adjusted_index = environ.uadd_overflow_trap(
                 builder,
                 index,
@@ -3251,7 +3253,7 @@ where
     let mut flags = MemFlags::new();
     flags.set_endianness(ir::Endianness::Little);
 
-    if heap.memory_type.is_some() {
+    if heap.pcc_memory_type.is_some() {
         // Proof-carrying code is enabled; check this memory access.
         flags.set_checked();
     }

@@ -1,7 +1,7 @@
 //! Exposes heap bounds checks functionality for WebAssembly.
 //! Bounds checks in WebAssembly are critical for safety, so extreme caution is
 //! recommended when working on this area of Winch.
-use super::env::{HeapData, HeapStyle};
+use super::env::HeapData;
 use crate::{
     abi::{scratch, vmctx},
     codegen::CodeGenContext,
@@ -9,6 +9,7 @@ use crate::{
     masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, TrapCode},
     stack::TypedReg,
 };
+use wasmtime_environ::Signed;
 
 /// A newtype to represent an immediate offset argument for a heap access.
 #[derive(Debug, Copy, Clone)]
@@ -90,12 +91,11 @@ where
     M: MacroAssembler,
 {
     let dst = context.any_gpr(masm);
-    match (heap.max_size, &heap.style) {
+    match heap.memory.static_heap_size() {
         // Constant size, no need to perform a load.
-        (Some(max_size), HeapStyle::Dynamic) if heap.min_size == max_size => {
-            masm.mov(writable!(dst), RegImm::i64(max_size as i64), ptr_size)
-        }
-        (_, HeapStyle::Dynamic) => {
+        Some(size) => masm.mov(writable!(dst), RegImm::i64(size.signed()), ptr_size),
+
+        None => {
             let scratch = scratch!(M);
             let base = if let Some(offset) = heap.import_from {
                 let addr = masm.address_at_vmctx(offset);
@@ -107,10 +107,9 @@ where
             let addr = masm.address_at_reg(base, heap.current_length_offset);
             masm.load_ptr(addr, writable!(dst));
         }
-        (_, HeapStyle::Static { .. }) => unreachable!("Loading dynamic bounds of a static heap"),
     }
 
-    Bounds::from_typed_reg(TypedReg::new(heap.ty, dst))
+    Bounds::from_typed_reg(TypedReg::new(heap.index_type(), dst))
 }
 
 /// This function ensures the following:

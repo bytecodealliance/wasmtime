@@ -8,20 +8,19 @@ use crate::{
     stack::TypedReg,
 };
 use anyhow::Result;
-use smallvec::SmallVec;
-use wasmparser::{
-    BinaryReader, FuncValidator, MemArg, Operator, ValidatorResources, VisitOperator,
-};
-use wasmtime_environ::{
-    GlobalIndex, MemoryIndex, PtrSize, TableIndex, Tunables, TypeIndex, WasmHeapType, WasmValType,
-    FUNCREF_MASK,
-};
-
 use cranelift_codegen::{
     binemit::CodeOffset,
     ir::{RelSourceLoc, SourceLoc},
 };
+use smallvec::SmallVec;
+use wasmparser::{
+    BinaryReader, FuncValidator, MemArg, Operator, ValidatorResources, VisitOperator,
+};
 use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_TABLE_OUT_OF_BOUNDS};
+use wasmtime_environ::{
+    GlobalIndex, MemoryIndex, MemoryStyle, PtrSize, TableIndex, Tunables, TypeIndex, WasmHeapType,
+    WasmValType, FUNCREF_MASK,
+};
 
 mod context;
 pub(crate) use context::*;
@@ -585,11 +584,16 @@ where
         let memory_index = MemoryIndex::from_u32(memarg.memory);
         let heap = self.env.resolve_heap(memory_index);
         let index = Index::from_typed_reg(self.context.pop_to_reg(self.masm, None));
-        let offset =
-            bounds::ensure_index_and_offset(self.masm, index, memarg.offset, heap.ty.into());
+        let offset = bounds::ensure_index_and_offset(
+            self.masm,
+            index,
+            memarg.offset,
+            heap.index_type().into(),
+        );
         let offset_with_access_size = add_offset_and_access_size(offset, access_size);
 
-        let addr = match heap.style {
+        let style = MemoryStyle::for_memory(heap.memory, self.tunables);
+        let addr = match style {
             // == Dynamic Heaps ==
 
             // Account for the general case for dynamic memories. The access is
@@ -597,7 +601,7 @@ where
             // * index + offset + access_size overflows
             //   OR
             // * index + offset + access_size > bound
-            HeapStyle::Dynamic => {
+            MemoryStyle::Dynamic { .. } => {
                 let bounds =
                     bounds::load_dynamic_heap_bounds(&mut self.context, self.masm, &heap, ptr_size);
 
@@ -621,7 +625,7 @@ where
                 self.masm.mov(
                     writable!(index_offset_and_access_size),
                     index_reg.into(),
-                    heap.ty.into(),
+                    heap.index_type().into(),
                 );
                 // Perform
                 // index = index + offset + access_size, trapping if the
@@ -675,7 +679,9 @@ where
             // optimizing the work that the compiler has to do until the
             // reachability is restored or when reaching the end of the
             // function.
-            HeapStyle::Static { bound } if offset_with_access_size > bound => {
+            MemoryStyle::Static { byte_reservation }
+                if offset_with_access_size > byte_reservation =>
+            {
                 self.emit_fuel_increment();
                 self.masm.trap(TrapCode::HEAP_OUT_OF_BOUNDS);
                 self.context.reachable = false;
@@ -708,10 +714,10 @@ where
             // * If the heap type is 32-bits, the offset is at most u32::MAX, so
             // no  adjustment is needed as part of
             // [bounds::ensure_index_and_offset].
-            HeapStyle::Static { bound }
-                if heap.ty == WasmValType::I32
+            MemoryStyle::Static { byte_reservation }
+                if heap.index_type() == WasmValType::I32
                     && u64::from(u32::MAX)
-                        <= u64::from(bound) + u64::from(heap.offset_guard_size)
+                        <= byte_reservation + u64::from(self.tunables.memory_guard_size)
                             - offset_with_access_size =>
             {
                 let addr = self.context.any_gpr(self.masm);
@@ -726,8 +732,8 @@ where
             //
             // bound - (offset + access_size) cannot wrap, because we already
             // checked that (offset + access_size) > bound, above.
-            HeapStyle::Static { bound } => {
-                let bounds = Bounds::from_u64(bound);
+            MemoryStyle::Static { byte_reservation } => {
+                let bounds = Bounds::from_u64(byte_reservation);
                 let addr = bounds::load_heap_addr_checked(
                     self.masm,
                     &mut self.context,
@@ -908,14 +914,14 @@ where
             .address_at_reg(base, heap_data.current_length_offset);
         self.masm.load_ptr(size_addr, writable!(size_reg));
         // Emit a shift to get the size in pages rather than in bytes.
-        let dst = TypedReg::new(heap_data.ty, size_reg);
-        let pow = heap_data.page_size_log2;
+        let dst = TypedReg::new(heap_data.index_type(), size_reg);
+        let pow = heap_data.memory.page_size_log2;
         self.masm.shift_ir(
             writable!(dst.reg),
             pow as u64,
             dst.into(),
             ShiftKind::ShrU,
-            heap_data.ty.into(),
+            heap_data.index_type().into(),
         );
         self.context.stack.push(dst.into());
     }

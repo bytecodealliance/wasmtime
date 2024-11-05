@@ -1653,7 +1653,7 @@ where
         // The memory32_grow builtin returns a pointer type, therefore we must
         // ensure that the return type is representative of the address space of
         // the heap type.
-        match (self.env.ptr_type(), heap.ty) {
+        match (self.env.ptr_type(), heap.index_type()) {
             (WasmValType::I64, WasmValType::I64) => {}
             // When the heap type is smaller than the pointer type, we adjust
             // the result of the memory32_grow builtin.

@@ -20,14 +20,14 @@
 //! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 use super::Reachability;
-use crate::translate::{FuncEnvironment, HeapData, HeapStyle};
+use crate::translate::{FuncEnvironment, HeapData};
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
     ir::{self, condcodes::IntCC, InstBuilder, RelSourceLoc},
     ir::{Expr, Fact},
 };
 use cranelift_frontend::FunctionBuilder;
-use wasmtime_environ::WasmResult;
+use wasmtime_environ::{MemoryStyle, WasmResult};
 use Reachability::*;
 
 /// Helper used to emit bounds checks (as necessary) and compute the native
@@ -50,12 +50,13 @@ where
     Env: FuncEnvironment + ?Sized,
 {
     let pointer_bit_width = u16::try_from(env.pointer_type().bits()).unwrap();
+    let bound_gv = heap.bound;
     let orig_index = index;
     let index = cast_index_to_pointer_ty(
         index,
-        heap.index_type,
+        heap.index_type(),
         env.pointer_type(),
-        heap.memory_type.is_some(),
+        heap.pcc_memory_type.is_some(),
         &mut builder.cursor(),
     );
     let offset_and_size = offset_plus_size(offset, access_size);
@@ -64,7 +65,8 @@ where
 
     let host_page_size_log2 = env.target_config().page_size_align_log2;
     let can_use_virtual_memory =
-        heap.page_size_log2 >= host_page_size_log2 && env.signals_based_traps();
+        heap.memory.page_size_log2 >= host_page_size_log2 && env.signals_based_traps();
+    let memory_guard_size = env.tunables().memory_guard_size;
 
     let make_compare = |builder: &mut FunctionBuilder,
                         compare_kind: IntCC,
@@ -137,14 +139,15 @@ where
     // different bounds checks and optimizations of those bounds checks. It is
     // intentionally written in a straightforward case-matching style that will
     // hopefully make it easy to port to ISLE one day.
-    Ok(match heap.style {
+    let style = MemoryStyle::for_memory(heap.memory, env.tunables());
+    Ok(match style {
         // ====== Dynamic Memories ======
         //
         // 1. First special case for when `offset + access_size == 1`:
         //
         //            index + 1 > bound
         //        ==> index >= bound
-        HeapStyle::Dynamic { bound_gv } if offset_and_size == 1 => {
+        MemoryStyle::Dynamic { .. } if offset_and_size == 1 => {
             let bound = get_dynamic_heap_bound(builder, env, heap);
             let oob = make_compare(
                 builder,
@@ -162,7 +165,7 @@ where
                 offset,
                 access_size,
                 spectre_mitigations_enabled,
-                AddrPcc::dynamic(heap.memory_type, bound_gv),
+                AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
                 oob,
             ))
         }
@@ -192,8 +195,8 @@ where
         //    offset immediates -- which is a common code pattern when accessing
         //    multiple fields in the same struct that is in linear memory --
         //    will all emit the same `index > bound` check, which we can GVN.
-        HeapStyle::Dynamic { bound_gv }
-            if can_use_virtual_memory && offset_and_size <= heap.offset_guard_size =>
+        MemoryStyle::Dynamic { .. }
+            if can_use_virtual_memory && offset_and_size <= memory_guard_size =>
         {
             let bound = get_dynamic_heap_bound(builder, env, heap);
             let oob = make_compare(
@@ -212,7 +215,7 @@ where
                 offset,
                 access_size,
                 spectre_mitigations_enabled,
-                AddrPcc::dynamic(heap.memory_type, bound_gv),
+                AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
                 oob,
             ))
         }
@@ -224,7 +227,9 @@ where
         //
         //            index + offset + access_size > bound
         //        ==> index > bound - (offset + access_size)
-        HeapStyle::Dynamic { bound_gv } if offset_and_size <= heap.min_size.into() => {
+        MemoryStyle::Dynamic { .. }
+            if offset_and_size <= heap.memory.minimum_byte_size().unwrap_or(u64::MAX) =>
+        {
             let bound = get_dynamic_heap_bound(builder, env, heap);
             let adjustment = offset_and_size as i64;
             let adjustment_value = builder.ins().iconst(env.pointer_type(), adjustment);
@@ -256,7 +261,7 @@ where
                 offset,
                 access_size,
                 spectre_mitigations_enabled,
-                AddrPcc::dynamic(heap.memory_type, bound_gv),
+                AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
                 oob,
             ))
         }
@@ -266,7 +271,7 @@ where
         //        index + offset + access_size > bound
         //
         //    And we have to handle the overflow case in the left-hand side.
-        HeapStyle::Dynamic { bound_gv } => {
+        MemoryStyle::Dynamic { .. } => {
             let access_size_val = builder
                 .ins()
                 // Explicit cast from u64 to i64: we just want the raw
@@ -306,7 +311,7 @@ where
                 offset,
                 access_size,
                 spectre_mitigations_enabled,
-                AddrPcc::dynamic(heap.memory_type, bound_gv),
+                AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
                 oob,
             ))
         }
@@ -319,7 +324,7 @@ where
         // 1. First special case: trap immediately if `offset + access_size >
         //    bound`, since we will end up being out-of-bounds regardless of the
         //    given `index`.
-        HeapStyle::Static { bound } if offset_and_size > bound.into() => {
+        MemoryStyle::Static { byte_reservation } if offset_and_size > byte_reservation => {
             assert!(
                 can_use_virtual_memory,
                 "static memories require the ability to use virtual memory"
@@ -367,11 +372,11 @@ where
         //    `u32::MAX`. This means that `index` is always either in bounds or
         //    within the guard page region, neither of which require emitting an
         //    explicit bounds check.
-        HeapStyle::Static { bound }
+        MemoryStyle::Static { byte_reservation }
             if can_use_virtual_memory
-                && heap.index_type == ir::types::I32
+                && heap.index_type() == ir::types::I32
                 && u64::from(u32::MAX)
-                    <= u64::from(bound) + u64::from(heap.offset_guard_size) - offset_and_size =>
+                    <= byte_reservation + memory_guard_size - offset_and_size =>
         {
             assert!(
                 can_use_virtual_memory,
@@ -383,10 +388,7 @@ where
                 env.pointer_type(),
                 index,
                 offset,
-                AddrPcc::static32(
-                    heap.memory_type,
-                    u64::from(bound) + u64::from(heap.offset_guard_size),
-                ),
+                AddrPcc::static32(heap.pcc_memory_type, byte_reservation + memory_guard_size),
             ))
         }
 
@@ -401,14 +403,14 @@ where
         //    Since we have to emit explicit bounds checks, we might as well be
         //    precise, not rely on the virtual memory subsystem at all, and not
         //    factor in the guard pages here.
-        HeapStyle::Static { bound } => {
+        MemoryStyle::Static { byte_reservation } => {
             assert!(
                 can_use_virtual_memory,
                 "static memories require the ability to use virtual memory"
             );
             // NB: this subtraction cannot wrap because we didn't hit the first
             // special case.
-            let adjusted_bound = u64::from(bound) - offset_and_size;
+            let adjusted_bound = byte_reservation - offset_and_size;
             let adjusted_bound_value = builder
                 .ins()
                 .iconst(env.pointer_type(), adjusted_bound as i64);
@@ -432,7 +434,7 @@ where
                 offset,
                 access_size,
                 spectre_mitigations_enabled,
-                AddrPcc::static32(heap.memory_type, u64::from(bound)),
+                AddrPcc::static32(heap.pcc_memory_type, byte_reservation),
                 oob,
             ))
         }
@@ -448,9 +450,9 @@ fn get_dynamic_heap_bound<Env>(
 where
     Env: FuncEnvironment + ?Sized,
 {
-    let enable_pcc = heap.memory_type.is_some();
+    let enable_pcc = heap.pcc_memory_type.is_some();
 
-    let (value, gv) = match (heap.max_size, &heap.style) {
+    let (value, gv) = match heap.memory.static_heap_size() {
         // The heap has a constant size, no need to actually load the
         // bound.  TODO: this is currently disabled for PCC because we
         // can't easily prove that the GV load indeed results in a
@@ -459,22 +461,16 @@ where
         // in the GV, then re-enable this opt. (Or, alternately,
         // compile such memories with a static-bound memtype and
         // facts.)
-        (Some(max_size), HeapStyle::Dynamic { bound_gv })
-            if heap.min_size == max_size && !enable_pcc =>
-        {
-            (
-                builder.ins().iconst(env.pointer_type(), max_size as i64),
-                *bound_gv,
-            )
-        }
-
-        // Load the heap bound from its global variable.
-        (_, HeapStyle::Dynamic { bound_gv }) => (
-            builder.ins().global_value(env.pointer_type(), *bound_gv),
-            *bound_gv,
+        Some(max_size) if !enable_pcc => (
+            builder.ins().iconst(env.pointer_type(), max_size as i64),
+            heap.bound,
         ),
 
-        (_, HeapStyle::Static { .. }) => unreachable!("not a dynamic heap"),
+        // Load the heap bound from its global variable.
+        _ => (
+            builder.ins().global_value(env.pointer_type(), heap.bound),
+            heap.bound,
+        ),
     };
 
     // If proof-carrying code is enabled, apply a fact to the range to
@@ -604,7 +600,7 @@ fn explicit_check_oob_condition_and_compute_addr<FE: FuncEnvironment + ?Sized>(
                     min: Expr::constant(0),
                     max: Expr::offset(
                         &Expr::global_value(gv),
-                        i64::try_from(heap.offset_guard_size)
+                        i64::try_from(env.tunables().memory_guard_size)
                             .unwrap()
                             .checked_sub(i64::from(access_size))
                             .unwrap(),

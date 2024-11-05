@@ -223,12 +223,12 @@ impl MmapMemory {
         mut maximum: Option<usize>,
         memory_image: Option<&Arc<MemoryImage>>,
     ) -> Result<Self> {
-        let (style, offset_guard_size) = MemoryStyle::for_memory(*ty, tunables);
+        let style = MemoryStyle::for_memory(*ty, tunables);
 
         // It's a programmer error for these two configuration values to exceed
         // the host available address space, so panic if such a configuration is
         // found (mostly an issue for hypothetical 32-bit hosts).
-        let offset_guard_bytes = usize::try_from(offset_guard_size).unwrap();
+        let offset_guard_bytes = usize::try_from(tunables.memory_guard_size).unwrap();
         let pre_guard_bytes = if tunables.guard_before_linear_memory {
             offset_guard_bytes
         } else {

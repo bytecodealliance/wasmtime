@@ -338,7 +338,7 @@ impl MemoryPool {
             // satisfied by the configuration of this pooling allocator. This
             // should be returned as an error through `validate_memory_plans`
             // but double-check here to be sure.
-            let (style, _) = MemoryStyle::for_memory(*ty, tunables);
+            let style = MemoryStyle::for_memory(*ty, tunables);
             match style {
                 MemoryStyle::Static { byte_reservation } => {
                     assert!(
