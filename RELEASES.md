@@ -1,3 +1,15 @@
+## 26.0.1
+
+Released 2024-11-05.
+
+### Fixed
+
+* Update to cap-std 3.4.1, for #9559, which fixes a wasi-filesystem sandbox
+  escape on Windows.
+  [CVE-2024-51745](https://github.com/bytecodealliance/wasmtime/security/advisories/GHSA-c2f5-jxjv-2hh8).
+
+--------------------------------------------------------------------------------
+
 ## 26.0.0
 
 Released 2024-10-22.
