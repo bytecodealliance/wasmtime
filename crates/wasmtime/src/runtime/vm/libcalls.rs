@@ -1119,7 +1119,7 @@ fn new_epoch(store: &mut (dyn VMStore + 'static), _instance: &mut Instance) -> R
 // Hook for validating malloc using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
 unsafe fn check_malloc(
-    store: &mut (dyn VMStore + 'static),
+    _store: &mut (dyn VMStore + 'static),
     instance: &mut Instance,
     addr: u32,
     len: u32,
@@ -1148,7 +1148,7 @@ unsafe fn check_malloc(
 // Hook for validating free using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
 unsafe fn check_free(
-    store: &mut (dyn VMStore + 'static),
+    _store: &mut (dyn VMStore + 'static),
     instance: &mut Instance,
     addr: u32,
 ) -> Result<u32> {
@@ -1173,7 +1173,7 @@ unsafe fn check_free(
 // Hook for validating load using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
 fn check_load(
-    store: &mut (dyn VMStore + 'static),
+    _store: &mut (dyn VMStore + 'static),
     instance: &mut Instance,
     num_bytes: u32,
     addr: u32,
@@ -1202,7 +1202,7 @@ fn check_load(
 // Hook for validating store using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
 fn check_store(
-    store: &mut (dyn VMStore + 'static),
+    _store: &mut (dyn VMStore + 'static),
     instance: &mut Instance,
     num_bytes: u32,
     addr: u32,
@@ -1230,7 +1230,7 @@ fn check_store(
 
 // Hook for turning wmemcheck load/store validation off when entering a malloc function.
 #[cfg(feature = "wmemcheck")]
-fn malloc_start(instance: &mut Instance) {
+fn malloc_start(_store: &mut (dyn VMStore + 'static), instance: &mut Instance) {
     if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
         wmemcheck_state.memcheck_off();
     }
@@ -1238,7 +1238,7 @@ fn malloc_start(instance: &mut Instance) {
 
 // Hook for turning wmemcheck load/store validation off when entering a free function.
 #[cfg(feature = "wmemcheck")]
-fn free_start(instance: &mut Instance) {
+fn free_start(_store: &mut (dyn VMStore + 'static), instance: &mut Instance) {
     if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
         wmemcheck_state.memcheck_off();
     }
@@ -1261,7 +1261,7 @@ fn update_stack_pointer(
 
 // Hook updating wmemcheck_state memory state vector every time memory.grow is called.
 #[cfg(feature = "wmemcheck")]
-fn update_mem_size(store: &mut (dyn VMStore + 'static), instance: &mut Instance, num_pages: u32) {
+fn update_mem_size(_store: &mut (dyn VMStore + 'static), instance: &mut Instance, num_pages: u32) {
     if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
         const KIB: usize = 1024;
         let num_bytes = num_pages as usize * 64 * KIB;
