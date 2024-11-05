@@ -1,3 +1,5 @@
+;;! gc = true
+
 (module
   (type (struct))
   (type (struct (field)))

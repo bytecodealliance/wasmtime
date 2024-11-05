@@ -1,3 +1,6 @@
+;;! multi_memory = true
+;;! component_model_more_flags = true
+
 ;; smoke test with no arguments and no results
 (component
   (core module $m

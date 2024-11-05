@@ -1,3 +1,5 @@
+;;! gc = true
+
 (module
   (table $t 10 externref)
 

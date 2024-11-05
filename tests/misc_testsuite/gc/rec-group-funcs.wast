@@ -1,3 +1,5 @@
+;;! gc = true
+
 ;; Test that we properly canonicalize function types across modules, at the
 ;; engine level. We rely on this canonicalization to make cross-module imports
 ;; work among other things.

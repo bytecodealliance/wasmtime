@@ -1,3 +1,5 @@
+;;! memory64 = true
+
 (module
   (memory i64 1)
   (func (export "load1") (result i32)

@@ -1,3 +1,5 @@
+;;! memory64 = true
+
 (module $export32 (memory (export "m") 1))
 (module $export64 (memory (export "m") i64 1))
 

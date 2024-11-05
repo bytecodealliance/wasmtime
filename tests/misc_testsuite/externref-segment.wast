@@ -1,3 +1,5 @@
+;;! reference_types = true
+
 (module
   (table 2 externref)
   (elem (i32.const 0) externref (ref.null extern))

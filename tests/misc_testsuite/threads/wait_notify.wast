@@ -1,3 +1,5 @@
+;;! threads = true
+
 ;; test that looping notify eventually unblocks a parallel waiting thread
 (module $Mem
   (memory (export "shared") 1 1 shared)

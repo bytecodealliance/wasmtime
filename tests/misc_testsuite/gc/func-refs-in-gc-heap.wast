@@ -1,3 +1,5 @@
+;;! gc = true
+
 (module
   (type $f0 (func (result i32)))
 

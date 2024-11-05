@@ -1,3 +1,5 @@
+;;! gc = true
+
 (module
   (type $ty (struct (field (mut f32))
                     (field (mut i8))

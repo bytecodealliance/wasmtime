@@ -1,3 +1,5 @@
+;;! threads = true
+
 ;; From https://github.com/bytecodealliance/wasmtime/pull/5255
 ;;
 

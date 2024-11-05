@@ -1,3 +1,5 @@
+;;! threads = true
+
 (module
   ;; NB this should use a shared memory when it's supported
   (memory 1)

@@ -1,3 +1,5 @@
+;;! gc = true
+
 (module
   (type $res-i32 (func (result i32)))
   (table $t2 1 externref)

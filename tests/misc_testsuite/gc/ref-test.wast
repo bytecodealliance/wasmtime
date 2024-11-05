@@ -1,3 +1,5 @@
+;;! gc = true
+
 (module
   (func (export "nulls-to-nullable-tops") (result i32)
     (ref.test anyref (ref.null any))

@@ -1,3 +1,6 @@
+;;! memory64 = true
+;;! multi_memory = true
+
 ;; 64 => 64
 (module
   (memory $a i64 1)

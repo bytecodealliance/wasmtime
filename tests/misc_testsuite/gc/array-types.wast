@@ -1,3 +1,5 @@
+;;! gc = true
+
 (module
   (type (array i8))
   (type (array i16))

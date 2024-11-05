@@ -1,3 +1,5 @@
+;;! reference_types = true
+
 (module
   (table $t 0 0 externref)
 

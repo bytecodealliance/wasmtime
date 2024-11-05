@@ -1,3 +1,5 @@
+;;! gc = true
+
 (module $tables_of_i31ref
   (table $table 3 10 i31ref)
   (elem (table $table) (i32.const 0) i31ref (item (ref.i31 (i32.const 999)))

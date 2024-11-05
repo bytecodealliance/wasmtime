@@ -1,3 +1,5 @@
+;;! multi_memory = true
+
 (module
   (memory $m1 1)
   (memory $m2 1)

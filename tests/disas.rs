@@ -46,7 +46,6 @@ use cranelift_codegen::isa::{lookup_by_name, TargetIsa};
 use cranelift_codegen::settings::{Configurable, Flags, SetError};
 use libtest_mimic::{Arguments, Trial};
 use pulley_interpreter::decode::OpVisitor;
-use serde::de::DeserializeOwned;
 use serde_derive::Deserialize;
 use similar::TextDiff;
 use std::fmt::Write;
@@ -55,6 +54,8 @@ use std::sync::Arc;
 use tempfile::TempDir;
 use wasmtime::{Engine, OptLevel, Strategy};
 use wasmtime_cli_flags::CommonOptions;
+
+mod support;
 
 fn main() -> Result<()> {
     if cfg!(miri) {
@@ -152,7 +153,7 @@ impl Test {
     fn new(path: &Path) -> Result<Test> {
         let contents =
             std::fs::read_to_string(path).with_context(|| format!("failed to read {path:?}"))?;
-        let config: TestConfig = Test::parse_test_config(&contents)
+        let config: TestConfig = support::parse_test_config(&contents)
             .context("failed to parse test configuration as TOML")?;
         let mut flags = vec!["wasmtime"];
         match &config.flags {
@@ -168,24 +169,6 @@ impl Test {
             opts,
             contents,
         })
-    }
-
-    /// Parse test configuration from the specified test, comments starting with
-    /// `;;!`.
-    fn parse_test_config<T>(wat: &str) -> Result<T>
-    where
-        T: DeserializeOwned,
-    {
-        // The test config source is the leading lines of the WAT file that are
-        // prefixed with `;;!`.
-        let config_lines: Vec<_> = wat
-            .lines()
-            .take_while(|l| l.starts_with(";;!"))
-            .map(|l| &l[3..])
-            .collect();
-        let config_text = config_lines.join("\n");
-
-        toml::from_str(&config_text).context("failed to parse the test configuration")
     }
 
     /// Generates CLIF for all the wasm functions in this test.

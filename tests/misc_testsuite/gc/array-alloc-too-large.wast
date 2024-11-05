@@ -1,3 +1,5 @@
+;;! gc = true
+
 (module
   (type $arr_i8 (array i8))
   (type $arr_i64 (array i64))

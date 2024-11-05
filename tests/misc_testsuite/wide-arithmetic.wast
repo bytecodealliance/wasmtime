@@ -1,3 +1,5 @@
+;;! wide_arithmetic = true
+
 (module
   (func (export "i64.add128") (param i64 i64 i64 i64) (result i64 i64)
     local.get 0
