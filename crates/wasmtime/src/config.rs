@@ -1334,7 +1334,7 @@ impl Config {
     /// * Memory `$a` initially allocates 4 WebAssembly pages (256KiB) and can
     ///   grow up to 4GiB, the limit of the 32-bit index space.
     /// * Memory `$b` initially allocates 4096 WebAssembly pages, but in this
-    ///   case the page size is 1, so it's 4096 bytes. Memory can also grow no
+    ///   case its page size is 1, so it's 4096 bytes. Memory can also grow no
     ///   further meaning that it will always be 4096 bytes.
     /// * Memory `$c` is a 64-bit linear memory which starts with 640KiB of
     ///   memory and can theoretically grow up to 2^64 bytes, although most
@@ -1502,12 +1502,12 @@ impl Config {
     ///
     /// * Modules can be compiled with static knowledge the base pointer of
     ///   linear memory never changes to enable optimizations such as
-    ///   loop-invariant-code-motion (hosting the base pointer out of a loop).
+    ///   loop invariant code motion (hoisting the base pointer out of a loop).
     ///
     /// * Memories cannot grow in excess of their original allocation. This
     ///   means that [`Config::memory_reservation`] and
     ///   [`Config::memory_reservation_for_growth`] may need tuning to ensure
-    ///   the memory work at runtime.
+    ///   the memory configuration works at runtime.
     ///
     /// The default value for this option is `true`.
     pub fn memory_may_move(&mut self, enable: bool) -> &mut Self {

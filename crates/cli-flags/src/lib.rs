@@ -42,7 +42,8 @@ wasmtime_option_group! {
         /// Optimization level of generated code (0-2, s; default: 2)
         pub opt_level: Option<wasmtime::OptLevel>,
 
-        /// Do not allow memories to grow beyond `-O memory-reservation`
+        /// Do not allow Wasm linear memories to move in the host process's
+        /// address space.
         pub memory_may_move: Option<bool>,
 
         /// Initial virtual memory allocation size for memories.
