@@ -1,3 +1,5 @@
+;;! reference_types = true
+
 (module
   (func (export "func_is_null") (param funcref) (result i32)
     (ref.is_null (local.get 0))

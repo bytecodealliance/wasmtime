@@ -1,3 +1,5 @@
+;;! threads = true
+
 (module $Mem
   (memory (export "shared") 1 1 shared)
 )

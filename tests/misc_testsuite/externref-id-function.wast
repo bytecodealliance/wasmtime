@@ -1,3 +1,5 @@
+;;! reference_types = true
+
 (module
   (func (export "identity") (param externref) (result externref)
     local.get 0))

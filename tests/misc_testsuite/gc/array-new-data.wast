@@ -1,3 +1,5 @@
+;;! gc = true
+
 (module
   (type $arr (array (mut i8)))
 

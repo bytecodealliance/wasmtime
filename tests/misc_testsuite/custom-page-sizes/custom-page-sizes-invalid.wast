@@ -1,3 +1,6 @@
+;;! custom_page_sizes = true
+;;! multi_memory = true
+
 ;; Page size that is not a power of two.
 (assert_malformed
   (module quote "(memory 0 (pagesize 3))")

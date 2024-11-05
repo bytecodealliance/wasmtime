@@ -1,3 +1,5 @@
+;;! gc = true
+
 (module
   (func (export "get_u-null") (result i32)
     (i31.get_u (ref.null i31))

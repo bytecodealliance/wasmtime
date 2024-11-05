@@ -1,3 +1,5 @@
+;;! reference_types = true
+
 (module $m
   (global (export "g i32") i32 (i32.const 0))
   (global (export "g mut i32") (mut i32)  (i32.const 0))

@@ -1,3 +1,5 @@
+;;! multi_memory = true
+
 ;; unaligned utf16 string
 (assert_trap
   (component

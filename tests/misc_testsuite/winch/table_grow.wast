@@ -1,3 +1,5 @@
+;;! reference_types = true
+
 (module
   (table $t1 0 funcref)
 

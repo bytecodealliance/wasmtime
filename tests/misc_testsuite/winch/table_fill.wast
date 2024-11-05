@@ -1,3 +1,5 @@
+;;! reference_types = true
+
 (module
   (type $t0 (func))
   (func $f1 (type $t0))

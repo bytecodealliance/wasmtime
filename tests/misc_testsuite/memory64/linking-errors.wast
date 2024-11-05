@@ -1,3 +1,5 @@
+;;! memory64 = true
+
 (module $m
   (memory (export "mem") 0)
 )

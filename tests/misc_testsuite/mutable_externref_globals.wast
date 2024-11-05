@@ -1,3 +1,5 @@
+;;! reference_types = true
+
 ;; This test contains the changes in
 ;; https://github.com/WebAssembly/reference-types/pull/104, and can be deleted
 ;; once that merges and we update our upstream tests.

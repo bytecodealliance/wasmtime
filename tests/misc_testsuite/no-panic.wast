@@ -1,3 +1,5 @@
+;;! reference_types = true
+
 (module
   (func $test (param i32) (result externref)
         i32.const 0

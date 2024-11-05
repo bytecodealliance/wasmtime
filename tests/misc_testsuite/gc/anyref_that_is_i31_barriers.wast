@@ -1,3 +1,5 @@
+;;! gc = true
+
 ;; Test that our inline GC barriers detect `i31`s and don't attempt to actually
 ;; deref them or anything like that.
 

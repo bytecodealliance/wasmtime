@@ -1,3 +1,5 @@
+;;! memory64 = true
+
 ;; make sure everything codegens correctly and has no cranelift verifier errors
 (module
   (memory i64 1)

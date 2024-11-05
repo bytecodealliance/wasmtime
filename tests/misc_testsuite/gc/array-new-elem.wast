@@ -1,3 +1,5 @@
+;;! gc = true
+
 (module
   (type $arr (array i31ref))
 

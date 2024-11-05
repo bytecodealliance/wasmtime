@@ -1,3 +1,5 @@
+;;! memory64 = true
+
 (assert_unlinkable
   (module
     (memory i64 1)

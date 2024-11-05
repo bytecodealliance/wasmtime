@@ -1,3 +1,5 @@
+;;! nan_canonicalization = true
+
 ;; This *.wast test should be run with `cranelift_nan_canonicalization` set to
 ;; `true` in `wast.rs`
 

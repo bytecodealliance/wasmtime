@@ -1,3 +1,5 @@
+;;! reference_types = true
+
 (component $foo
   (core module (export "a-module"))
 )

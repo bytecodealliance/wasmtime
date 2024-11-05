@@ -1,3 +1,6 @@
+;;! gc = true
+;;! function_references = true
+
 (module
   (table $t1 2 funcref)
   (elem (table $t1) (i32.const 0) func $nop)

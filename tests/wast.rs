@@ -1,6 +1,6 @@
 use anyhow::{bail, Context};
-use bstr::ByteSlice;
 use libtest_mimic::{Arguments, FormatSetting, Trial};
+use serde_derive::Deserialize;
 use std::path::Path;
 use std::sync::{Condvar, LazyLock, Mutex};
 use wasmtime::{
@@ -9,6 +9,8 @@ use wasmtime::{
 };
 use wasmtime_environ::Memory;
 use wasmtime_wast::{SpectestConfig, WastContext};
+
+mod support;
 
 fn main() {
     env_logger::init();
@@ -92,14 +94,25 @@ fn add_tests(trials: &mut Vec<Trial>, path: &Path) {
     }
 }
 
-fn should_fail(test: &Path, strategy: Strategy) -> bool {
+fn should_fail(test: &Path, wast_config: &WastConfig, test_config: &TestConfig) -> bool {
     // Winch only supports x86_64 at this time.
-    if strategy == Strategy::Winch && !cfg!(target_arch = "x86_64") {
+    if wast_config.strategy == Strategy::Winch && !cfg!(target_arch = "x86_64") {
         return true;
     }
 
     // Disable spec tests for proposals that Winch does not implement yet.
-    if strategy == Strategy::Winch {
+    if wast_config.strategy == Strategy::Winch {
+        // A few proposals that winch has no support for.
+        if test_config.gc == Some(true)
+            || test_config.threads == Some(true)
+            || test_config.tail_call == Some(true)
+            || test_config.function_references == Some(true)
+            || test_config.gc == Some(true)
+            || test_config.relaxed_simd == Some(true)
+        {
+            return true;
+        }
+
         let unsupported = [
             // externref/reference-types related
             "component-model/modules.wast",
@@ -209,27 +222,6 @@ fn should_fail(test: &Path, strategy: Strategy) -> bool {
         if unsupported.iter().any(|part| test.ends_with(part)) {
             return true;
         }
-
-        // A few proposals that winch has no support for.
-        let unsupported_proposals = [
-            "function-references",
-            "gc",
-            "tail-call",
-            "relaxed-simd",
-            "threads",
-            // Winch technically supports memory64 but the upstream tests have
-            // gc/function-references/exceptions/etc all merged in now so Winch
-            // can no longer run those tests without panicking.
-            "memory64",
-        ];
-        if let Some(parent) = test.parent() {
-            if unsupported_proposals
-                .iter()
-                .any(|part| parent.ends_with(part))
-            {
-                return true;
-            }
-        }
     }
 
     for part in test.iter() {
@@ -258,48 +250,200 @@ fn should_fail(test: &Path, strategy: Strategy) -> bool {
         }
     }
 
+    // Some tests are known to fail with the pooling allocator
+    if wast_config.pooling {
+        let unsupported = [
+            // allocates too much memory for the pooling configuration here
+            "misc_testsuite/memory64/more-than-4gb.wast",
+            // shared memories + pooling allocator aren't supported yet
+            "misc_testsuite/memory-combos.wast",
+            "misc_testsuite/threads/LB.wast",
+            "misc_testsuite/threads/LB_atomic.wast",
+            "misc_testsuite/threads/MP.wast",
+            "misc_testsuite/threads/MP_atomic.wast",
+            "misc_testsuite/threads/MP_wait.wast",
+            "misc_testsuite/threads/SB.wast",
+            "misc_testsuite/threads/SB_atomic.wast",
+            "misc_testsuite/threads/atomics_notify.wast",
+            "misc_testsuite/threads/atomics_wait_address.wast",
+            "misc_testsuite/threads/wait_notify.wast",
+            "spec_testsuite/proposals/threads/atomic.wast",
+            "spec_testsuite/proposals/threads/exports.wast",
+            "spec_testsuite/proposals/threads/memory.wast",
+        ];
+
+        if unsupported.iter().any(|part| test.ends_with(part)) {
+            return true;
+        }
+    }
+
     false
 }
 
+/// Configuration where the main function will generate a combinatorial
+/// matrix of these top-level configurations to run the entire test suite with
+/// that configuration.
 struct WastConfig {
     strategy: Strategy,
     pooling: bool,
     collector: Collector,
 }
 
+/// Per-test configuration which is written down in the test file itself for
+/// `misc_testsuite/**/*.wast` or in `spec_test_config` below for spec tests.
+#[derive(Debug, PartialEq, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TestConfig {
+    memory64: Option<bool>,
+    custom_page_sizes: Option<bool>,
+    multi_memory: Option<bool>,
+    threads: Option<bool>,
+    gc: Option<bool>,
+    function_references: Option<bool>,
+    relaxed_simd: Option<bool>,
+    reference_types: Option<bool>,
+    tail_call: Option<bool>,
+    extended_const: Option<bool>,
+    wide_arithmetic: Option<bool>,
+    hogs_memory: Option<bool>,
+    nan_canonicalization: Option<bool>,
+    component_model_more_flags: Option<bool>,
+}
+
+fn spec_test_config(wast: &Path) -> TestConfig {
+    let mut ret = TestConfig::default();
+
+    match wast.strip_prefix("proposals") {
+        // This lists the features require to run the various spec tests suites
+        // in their `proposals` folder.
+        Ok(rest) => {
+            let proposal = rest.iter().next().unwrap().to_str().unwrap();
+            match proposal {
+                "multi-memory" => {
+                    ret.multi_memory = Some(true);
+                    ret.reference_types = Some(true);
+                }
+                "wide-arithmetic" => {
+                    ret.wide_arithmetic = Some(true);
+                }
+                "threads" => {
+                    ret.threads = Some(true);
+                    ret.reference_types = Some(false);
+                }
+                "tail-call" => {
+                    ret.tail_call = Some(true);
+                    ret.reference_types = Some(true);
+                }
+                "relaxed-simd" => {
+                    ret.relaxed_simd = Some(true);
+                }
+                "memory64" => {
+                    ret.memory64 = Some(true);
+                    ret.tail_call = Some(true);
+                    ret.gc = Some(true);
+                    ret.extended_const = Some(true);
+                    ret.multi_memory = Some(true);
+                    ret.relaxed_simd = Some(true);
+                }
+                "extended-const" => {
+                    ret.extended_const = Some(true);
+                    ret.reference_types = Some(true);
+                }
+                "custom-page-sizes" => {
+                    ret.custom_page_sizes = Some(true);
+                    ret.multi_memory = Some(true);
+                }
+                "exception-handling" => {
+                    ret.reference_types = Some(true);
+                }
+                "gc" => {
+                    ret.gc = Some(true);
+                    ret.tail_call = Some(true);
+                }
+                "function-references" => {
+                    ret.function_references = Some(true);
+                    ret.tail_call = Some(true);
+                }
+                "annotations" => {}
+                _ => panic!("unsuported proposal {proposal:?}"),
+            }
+        }
+
+        // This lists the features required to run the top-level of spec tests
+        // outside of the `proposals` directory.
+        Err(_) => {
+            ret.reference_types = Some(true);
+        }
+    }
+    ret
+}
+
 // Each of the tests included from `wast_testsuite_tests` will call this
 // function which actually executes the `wast` test suite given the `strategy`
 // to compile it.
 fn run_wast(wast: &Path, config: WastConfig) -> anyhow::Result<()> {
-    let should_fail = should_fail(wast, config.strategy);
-    let wast_bytes =
-        std::fs::read(wast).with_context(|| format!("failed to read `{}`", wast.display()))?;
+    let wast_contents = std::fs::read_to_string(wast)
+        .with_context(|| format!("failed to read `{}`", wast.display()))?;
+
+    // If this is a spec test then the configuration for it is loaded via
+    // `spec_test_config`, but otherwise it's required to be listed in the top
+    // of the file as we control the contents of the file.
+    let mut test_config = match wast.strip_prefix("tests/spec_testsuite") {
+        Ok(test) => spec_test_config(test),
+        Err(_) => support::parse_test_config(&wast_contents)?,
+    };
+
+    // FIXME: this is a bit of a hack to get Winch working here for now. Winch
+    // passes some tests on aarch64 so returning `true` from `should_fail`
+    // doesn't work. Winch doesn't pass many tests though as it either panics or
+    // segfaults as AArch64 support isn't finished yet. That means that we can't
+    // have, for example, an allow-list of tests that should pass and assume
+    // everything else fails. In lieu of all of this we feign all tests as
+    // requiring references types which Wasmtime understands that Winch doesn't
+    // support on aarch64 which means that all tests fail quickly in config
+    // validation.
+    //
+    // Ideally the aarch64 backend for Winch would return a normal error on
+    // unsupported opcodes and not segfault, meaning that this would not be
+    // needed.
+    if cfg!(target_arch = "aarch64") && test_config.reference_types.is_none() {
+        test_config.reference_types = Some(true);
+    }
+
+    let should_fail = should_fail(wast, &config, &test_config);
 
     let wast = Path::new(wast);
 
-    let misc = feature_found(wast, "misc_testsuite");
-    let memory64 = feature_found(wast, "memory64");
-    let custom_page_sizes = feature_found(wast, "custom-page-sizes");
-    let multi_memory = feature_found(wast, "multi-memory")
-        || feature_found(wast, "component-model")
-        || custom_page_sizes
-        || memory64
-        || misc;
-    let threads = feature_found(wast, "threads");
-    let gc = feature_found(wast, "gc") || memory64;
-    let function_references = gc || memory64 || feature_found(wast, "function-references");
-    let reference_types = !(threads && feature_found(wast, "proposals"));
-    let relaxed_simd = feature_found(wast, "relaxed-simd") || memory64;
-    let tail_call = function_references || feature_found(wast, "tail-call");
-    let use_shared_memory = feature_found_src(&wast_bytes, "shared_memory")
-        || feature_found_src(&wast_bytes, "shared)");
-    let extended_const = feature_found(wast, "extended-const") || memory64;
-    let wide_arithmetic = feature_found(wast, "wide-arithmetic");
+    // Note that all of these proposals/features are currently default-off to
+    // ensure that we annotate all tests accurately with what features they
+    // need, even in the future when features are stabilized.
+    let memory64 = test_config.memory64.unwrap_or(false);
+    let custom_page_sizes = test_config.custom_page_sizes.unwrap_or(false);
+    let multi_memory = test_config.multi_memory.unwrap_or(false);
+    let threads = test_config.threads.unwrap_or(false);
+    let gc = test_config.gc.unwrap_or(false);
+    let tail_call = test_config.tail_call.unwrap_or(false);
+    let extended_const = test_config.extended_const.unwrap_or(false);
+    let wide_arithmetic = test_config.wide_arithmetic.unwrap_or(false);
+    let test_hogs_memory = test_config.hogs_memory.unwrap_or(false);
+    let component_model_more_flags = test_config.component_model_more_flags.unwrap_or(false);
+    let nan_canonicalization = test_config.nan_canonicalization.unwrap_or(false);
+    let relaxed_simd = test_config.relaxed_simd.unwrap_or(false);
 
-    if config.pooling && use_shared_memory {
-        log::warn!("skipping pooling test with shared memory");
-        return Ok(());
-    }
+    // Some proposals in wasm depend on previous proposals. For example the gc
+    // proposal depends on function-references which depends on reference-types.
+    // To avoid needing to enable all of them at once implicitly enable
+    // downstream proposals once the end proposal is enabled (e.g. when enabling
+    // gc that also enables function-references and reference-types).
+    let function_references = test_config
+        .function_references
+        .or(test_config.gc)
+        .unwrap_or(false);
+    let reference_types = test_config
+        .reference_types
+        .or(test_config.function_references)
+        .or(test_config.gc)
+        .unwrap_or(false);
 
     let is_cranelift = match config.strategy {
         Strategy::Cranelift => true,
@@ -318,21 +462,14 @@ fn run_wast(wast: &Path, config: WastConfig) -> anyhow::Result<()> {
         .wasm_custom_page_sizes(custom_page_sizes)
         .wasm_extended_const(extended_const)
         .wasm_wide_arithmetic(wide_arithmetic)
+        .wasm_component_model_more_flags(component_model_more_flags)
         .strategy(config.strategy)
-        .collector(config.collector);
+        .collector(config.collector)
+        .cranelift_nan_canonicalization(nan_canonicalization);
 
     if is_cranelift {
         cfg.cranelift_debug_verifier(true);
     }
-
-    let component_model = feature_found(wast, "component-model");
-    cfg.wasm_component_model(component_model)
-        .wasm_component_model_more_flags(component_model);
-
-    if feature_found(wast, "canonicalize-nan") && is_cranelift {
-        cfg.cranelift_nan_canonicalization(true);
-    }
-    let test_allocates_lots_of_memory = wast.ends_with("more-than-4gb.wast");
 
     // By default we'll allocate huge chunks (6gb) of the address space for each
     // linear memory. This is typically fine but when we emulate tests with QEMU
@@ -352,18 +489,14 @@ fn run_wast(wast: &Path, config: WastConfig) -> anyhow::Result<()> {
 
         // If the test allocates a lot of memory, that's considered "hogging"
         // memory, so skip it.
-        if test_allocates_lots_of_memory {
+        if test_hogs_memory {
             return Ok(());
         }
 
         // Don't use 4gb address space reservations when not hogging memory, and
         // also don't reserve lots of memory after dynamic memories for growth
         // (makes growth slower).
-        if use_shared_memory {
-            cfg.memory_reservation(2 * u64::from(Memory::DEFAULT_PAGE_SIZE));
-        } else {
-            cfg.memory_reservation(0);
-        }
+        cfg.memory_reservation(2 * u64::from(Memory::DEFAULT_PAGE_SIZE));
         cfg.memory_reservation_for_growth(0);
 
         let small_guard = 64 * 1024;
@@ -374,7 +507,7 @@ fn run_wast(wast: &Path, config: WastConfig) -> anyhow::Result<()> {
         // Some memory64 tests take more than 4gb of resident memory to test,
         // but we don't want to configure the pooling allocator to allow that
         // (that's a ton of memory to reserve), so we skip those tests.
-        if test_allocates_lots_of_memory {
+        if test_hogs_memory {
             return Ok(());
         }
 
@@ -436,11 +569,11 @@ fn run_wast(wast: &Path, config: WastConfig) -> anyhow::Result<()> {
             let store = Store::new(&engine, ());
             let mut wast_context = WastContext::new(store);
             wast_context.register_spectest(&SpectestConfig {
-                use_shared_memory,
+                use_shared_memory: true,
                 suppress_prints: true,
             })?;
             wast_context
-                .run_buffer(wast.to_str().unwrap(), &wast_bytes)
+                .run_buffer(wast.to_str().unwrap(), wast_contents.as_bytes())
                 .with_context(|| format!("failed to run spec test with {desc} engine"))
         });
 
@@ -454,17 +587,6 @@ fn run_wast(wast: &Path, config: WastConfig) -> anyhow::Result<()> {
     }
 
     Ok(())
-}
-
-fn feature_found(path: &Path, name: &str) -> bool {
-    path.iter().any(|part| match part.to_str() {
-        Some(s) => s.contains(name),
-        None => false,
-    })
-}
-
-fn feature_found_src(bytes: &[u8], name: &str) -> bool {
-    bytes.contains_str(name)
 }
 
 // The pooling tests make about 6TB of address space reservation which means

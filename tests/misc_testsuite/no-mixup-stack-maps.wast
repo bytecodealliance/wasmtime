@@ -1,3 +1,5 @@
+;;! reference_types = true
+
 (module
   (global $g (mut externref) (ref.null extern))
 

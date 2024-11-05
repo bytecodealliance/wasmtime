@@ -1,3 +1,6 @@
+;;! tail_call = true
+;;! reference_types = true
+
 ;; Do the following loop: `A.f` indirect tail calls through the table, which is
 ;; populated by `B.start` to contain `B.g`, which in turn tail calls `A.f` and
 ;; the loop begins again.

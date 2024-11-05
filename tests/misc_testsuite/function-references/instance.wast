@@ -1,3 +1,6 @@
+;;! gc = true
+;;! multi_memory = true
+
 ;; Instantiation is generative
 
 (module definition $M

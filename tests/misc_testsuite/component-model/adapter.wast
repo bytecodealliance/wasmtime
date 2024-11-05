@@ -1,3 +1,5 @@
+;;! multi_memory = true
+
 ;; basic function lifting
 (component
   (core module $m
