@@ -92,7 +92,7 @@ impl Config {
             pooling.core_instance_size = 1_000_000;
 
             if let MemoryConfig::Normal(cfg) = &mut self.wasmtime.memory_config {
-                match &mut cfg.static_memory_maximum_size {
+                match &mut cfg.memory_reservation {
                     Some(size) => *size = (*size).max(pooling.max_memory_size as u64),
                     other @ None => *other = Some(pooling.max_memory_size as u64),
                 }
@@ -266,9 +266,9 @@ impl Config {
             // supported when bounds checks are elided.
             let memory_config = if pcc {
                 MemoryConfig::Normal(NormalMemoryConfig {
-                    static_memory_maximum_size: Some(4 << 30), // 4 GiB
-                    memory_guard_size: Some(2 << 30),          // 2 GiB
-                    dynamic_memory_reserved_for_growth: Some(0),
+                    memory_reservation: Some(4 << 30), // 4 GiB
+                    memory_guard_size: Some(2 << 30),  // 2 GiB
+                    memory_reservation_for_growth: Some(0),
                     guard_before_linear_memory: false,
                     memory_init_cow: true,
                     // Doesn't matter, only using virtual memory.
@@ -284,9 +284,9 @@ impl Config {
                 }
                 MemoryConfig::CustomUnaligned => {
                     cfg.with_host_memory(Arc::new(UnalignedMemoryCreator))
-                        .static_memory_maximum_size(0)
+                        .memory_reservation(0)
                         .memory_guard_size(0)
-                        .dynamic_memory_reserved_for_growth(0)
+                        .memory_reservation_for_growth(0)
                         .guard_before_linear_memory(false)
                         .memory_init_cow(false);
                 }
@@ -519,7 +519,7 @@ impl WasmtimeConfig {
                 .min(config.max_memory64_bytes.try_into().unwrap_or(u64::MAX));
             let mut min = min_bytes.min(pooling.max_memory_size as u64);
             if let MemoryConfig::Normal(cfg) = &self.memory_config {
-                min = min.min(cfg.static_memory_maximum_size.unwrap_or(0));
+                min = min.min(cfg.memory_reservation.unwrap_or(0));
             }
             pooling.max_memory_size = min as usize;
             config.max_memory32_bytes = min;
@@ -534,7 +534,7 @@ impl WasmtimeConfig {
                     config.max_memory32_bytes = 1 << 16;
                     config.max_memory64_bytes = 1 << 16;
                     if let MemoryConfig::Normal(cfg) = &mut self.memory_config {
-                        match &mut cfg.static_memory_maximum_size {
+                        match &mut cfg.memory_reservation {
                             Some(size) => *size = (*size).max(pooling.max_memory_size as u64),
                             size @ None => *size = Some(pooling.max_memory_size as u64),
                         }

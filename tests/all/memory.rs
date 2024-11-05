@@ -97,10 +97,10 @@ fn offsets_static_dynamic_oh_my(config: &mut Config) -> Result<()> {
 
     let mut engines = Vec::new();
     let sizes = [0, 1 * GB, 4 * GB];
-    for &static_memory_maximum_size in sizes.iter() {
+    for &memory_reservation in sizes.iter() {
         for &guard_size in sizes.iter() {
             for &guard_before_linear_memory in [true, false].iter() {
-                config.static_memory_maximum_size(static_memory_maximum_size);
+                config.memory_reservation(memory_reservation);
                 config.memory_guard_size(guard_size);
                 config.guard_before_linear_memory(guard_before_linear_memory);
                 config.cranelift_debug_verifier(true);
@@ -139,7 +139,7 @@ fn guards_present() -> Result<()> {
     const GUARD_SIZE: u64 = 65536;
 
     let mut config = Config::new();
-    config.static_memory_maximum_size(1 << 20);
+    config.memory_reservation(1 << 20);
     config.memory_guard_size(GUARD_SIZE);
     config.guard_before_linear_memory(true);
     let engine = Engine::new(&config)?;
@@ -190,7 +190,7 @@ fn guards_present_pooling(config: &mut Config) -> Result<()> {
     pool.total_memories(2)
         .max_memory_size(10 << 16)
         .memory_protection_keys(MpkEnabled::Disable);
-    config.static_memory_maximum_size(1 << 20);
+    config.memory_reservation(1 << 20);
     config.memory_guard_size(GUARD_SIZE);
     config.guard_before_linear_memory(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
@@ -251,7 +251,7 @@ fn guards_present_pooling_mpk(config: &mut Config) -> Result<()> {
         .max_memory_size(10 << 16)
         .memory_protection_keys(MpkEnabled::Enable)
         .max_memory_protection_keys(2);
-    config.static_memory_maximum_size(1 << 20);
+    config.memory_reservation(1 << 20);
     config.memory_guard_size(GUARD_SIZE);
     config.guard_before_linear_memory(true);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(pool));
@@ -387,7 +387,7 @@ fn tiny_static_heap(config: &mut Config) -> Result<()> {
     // the static memory size limit in the configuration. This is intended to
     // specifically test that a load of all the valid addresses of the memory
     // all pass bounds-checks in cranelift to help weed out any off-by-one bugs.
-    config.static_memory_maximum_size(1 << 16);
+    config.memory_reservation(1 << 16);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -420,8 +420,8 @@ fn tiny_static_heap(config: &mut Config) -> Result<()> {
 #[test]
 fn static_forced_max() -> Result<()> {
     let mut config = Config::new();
-    config.static_memory_maximum_size(5 << 16);
-    config.static_memory_forced(true);
+    config.memory_reservation(5 << 16);
+    config.memory_may_move(false);
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -434,9 +434,9 @@ fn static_forced_max() -> Result<()> {
 #[wasmtime_test]
 fn dynamic_extra_growth_unchanged_pointer(config: &mut Config) -> Result<()> {
     const EXTRA_PAGES: u64 = 5;
-    config.static_memory_maximum_size(0);
+    config.memory_reservation(0);
     // 5 wasm pages extra
-    config.dynamic_memory_reserved_for_growth(EXTRA_PAGES * (1 << 16));
+    config.memory_reservation_for_growth(EXTRA_PAGES * (1 << 16));
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -673,8 +673,8 @@ fn init_with_negative_segment(_: &mut Config) -> Result<()> {
 #[test]
 fn non_page_aligned_static_memory() -> Result<()> {
     let mut config = Config::new();
-    config.static_memory_maximum_size(100_000);
-    config.static_memory_forced(true);
+    config.memory_reservation(100_000);
+    config.memory_may_move(false);
     let engine = Engine::new(&config)?;
     let ty = MemoryType::new(1, None);
     Memory::new(&mut Store::new(&engine, ()), ty)?;

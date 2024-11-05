@@ -222,13 +222,13 @@ pub unsafe extern "C" fn wasmtime_config_cache_config_load(
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_config_static_memory_forced_set(c: &mut wasm_config_t, enable: bool) {
-    c.config.static_memory_forced(enable);
+pub extern "C" fn wasmtime_config_memory_may_move_set(c: &mut wasm_config_t, enable: bool) {
+    c.config.memory_may_move(enable);
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_config_static_memory_maximum_size_set(c: &mut wasm_config_t, size: u64) {
-    c.config.static_memory_maximum_size(size);
+pub extern "C" fn wasmtime_config_memory_reservation_set(c: &mut wasm_config_t, size: u64) {
+    c.config.memory_reservation(size);
 }
 
 #[no_mangle]
@@ -237,11 +237,11 @@ pub extern "C" fn wasmtime_config_memory_guard_size_set(c: &mut wasm_config_t, s
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_config_dynamic_memory_reserved_for_growth_set(
+pub extern "C" fn wasmtime_config_memory_reservation_reserved_for_growth_set(
     c: &mut wasm_config_t,
     size: u64,
 ) {
-    c.config.dynamic_memory_reserved_for_growth(size);
+    c.config.memory_reservation_for_growth(size);
 }
 
 #[no_mangle]

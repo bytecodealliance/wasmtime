@@ -135,9 +135,9 @@ pub enum MemoryConfig {
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 #[allow(missing_docs)]
 pub struct NormalMemoryConfig {
-    pub static_memory_maximum_size: Option<u64>,
+    pub memory_reservation: Option<u64>,
     pub memory_guard_size: Option<u64>,
-    pub dynamic_memory_reserved_for_growth: Option<u64>,
+    pub memory_reservation_for_growth: Option<u64>,
     pub guard_before_linear_memory: bool,
     pub cranelift_enable_heap_access_spectre_mitigations: Option<bool>,
     pub memory_init_cow: bool,
@@ -148,9 +148,9 @@ impl<'a> Arbitrary<'a> for NormalMemoryConfig {
         // This attempts to limit memory and guard sizes to 32-bit ranges so
         // we don't exhaust a 64-bit address space easily.
         Ok(Self {
-            static_memory_maximum_size: <Option<u32> as Arbitrary>::arbitrary(u)?.map(Into::into),
+            memory_reservation: <Option<u32> as Arbitrary>::arbitrary(u)?.map(Into::into),
             memory_guard_size: <Option<u32> as Arbitrary>::arbitrary(u)?.map(Into::into),
-            dynamic_memory_reserved_for_growth: <Option<u32> as Arbitrary>::arbitrary(u)?
+            memory_reservation_for_growth: <Option<u32> as Arbitrary>::arbitrary(u)?
                 .map(Into::into),
             guard_before_linear_memory: u.arbitrary()?,
             cranelift_enable_heap_access_spectre_mitigations: u.arbitrary()?,
@@ -163,11 +163,9 @@ impl NormalMemoryConfig {
     /// Apply this memory configuration to the given `wasmtime::Config`.
     pub fn apply_to(&self, config: &mut wasmtime::Config) {
         config
-            .static_memory_maximum_size(self.static_memory_maximum_size.unwrap_or(0))
+            .memory_reservation(self.memory_reservation.unwrap_or(0))
             .memory_guard_size(self.memory_guard_size.unwrap_or(0))
-            .dynamic_memory_reserved_for_growth(
-                self.dynamic_memory_reserved_for_growth.unwrap_or(0),
-            )
+            .memory_reservation_for_growth(self.memory_reservation_for_growth.unwrap_or(0))
             .guard_before_linear_memory(self.guard_before_linear_memory)
             .memory_init_cow(self.memory_init_cow);
 

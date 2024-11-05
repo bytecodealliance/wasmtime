@@ -69,10 +69,10 @@ struct Args {
     memory_size: usize,
 
     /// The maximum number of bytes a memory is considered static; see
-    /// `Config::static_memory_maximum_size` for more details and the default
+    /// `Config::memory_reservation` for more details and the default
     /// value if unset.
     #[arg(long, value_parser = parse_byte_size)]
-    static_memory_maximum_size: Option<u64>,
+    memory_reservation: Option<u64>,
 
     /// The size in bytes of the guard region to expect between static memory
     /// slots; see [`Config::memory_guard_size`] for more details and the
@@ -192,8 +192,8 @@ fn build_engine(args: &Args, num_memories: u32, enable_mpk: MpkEnabled) -> Resul
 
     // Configure the engine itself.
     let mut config = Config::new();
-    if let Some(static_memory_maximum_size) = args.static_memory_maximum_size {
-        config.static_memory_maximum_size(static_memory_maximum_size);
+    if let Some(memory_reservation) = args.memory_reservation {
+        config.memory_reservation(memory_reservation);
     }
     if let Some(memory_guard_size) = args.memory_guard_size {
         config.memory_guard_size(memory_guard_size);

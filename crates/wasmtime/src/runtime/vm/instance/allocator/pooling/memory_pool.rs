@@ -139,14 +139,12 @@ pub struct MemoryPool {
 impl MemoryPool {
     /// Create a new `MemoryPool`.
     pub fn new(config: &PoolingInstanceAllocatorConfig, tunables: &Tunables) -> Result<Self> {
-        if u64::try_from(config.limits.max_memory_size).unwrap()
-            > tunables.static_memory_reservation
-        {
+        if u64::try_from(config.limits.max_memory_size).unwrap() > tunables.memory_reservation {
             bail!(
                 "maximum memory size of {:#x} bytes exceeds the configured \
-                 static memory reservation of {:#x} bytes",
+                 memory reservation of {:#x} bytes",
                 config.limits.max_memory_size,
-                tunables.static_memory_reservation
+                tunables.memory_reservation
             );
         }
         let pkeys = match config.memory_protection_keys {
@@ -556,8 +554,8 @@ impl SlabConstraints {
         tunables: &Tunables,
         num_pkeys_available: usize,
     ) -> Result<Self> {
-        // `static_memory_reservation` is the configured number of bytes for a
-        // static memory slot (see `Config::static_memory_maximum_size`); even
+        // `memory_reservation` is the configured number of bytes for a
+        // static memory slot (see `Config::memory_reservation`); even
         // if the memory never grows to this size (e.g., it has a lower memory
         // maximum), codegen will assume that this unused memory is mapped
         // `PROT_NONE`. Typically `static_memory_bound` is 4GiB which helps
@@ -566,9 +564,9 @@ impl SlabConstraints {
         // MPK-protected stripes, the slot size can be lower than the
         // `static_memory_bound`.
         let expected_slot_bytes: usize = tunables
-            .static_memory_reservation
+            .memory_reservation
             .try_into()
-            .context("static memory bound is too large")?;
+            .context("memory reservation is too large")?;
         let expected_slot_bytes = round_usize_up_to_host_pages(expected_slot_bytes)?;
 
         let guard_bytes: usize = tunables
@@ -781,7 +779,7 @@ mod tests {
                 ..Default::default()
             },
             &Tunables {
-                static_memory_reservation: WASM_PAGE_SIZE as u64,
+                memory_reservation: WASM_PAGE_SIZE as u64,
                 memory_guard_size: 0,
                 ..Tunables::default_host()
             },

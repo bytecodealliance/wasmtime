@@ -364,20 +364,20 @@ impl Metadata<'_> {
     fn check_tunables(&mut self, other: &Tunables) -> Result<()> {
         let Tunables {
             collector,
-            static_memory_reservation,
+            memory_reservation,
             memory_guard_size,
             generate_native_debuginfo,
             parse_wasm_debuginfo,
             consume_fuel,
             epoch_interruption,
-            static_memory_bound_is_maximum,
+            memory_may_move,
             guard_before_linear_memory,
             table_lazy_init,
             relaxed_simd_deterministic,
             winch_callable,
             signals_based_traps,
             // This doesn't affect compilation, it's just a runtime setting.
-            dynamic_memory_growth_reserve: _,
+            memory_reservation_for_growth: _,
 
             // This does technically affect compilation but modules with/without
             // trap information can be loaded into engines with the opposite
@@ -391,9 +391,9 @@ impl Metadata<'_> {
 
         Self::check_collector(collector, other.collector)?;
         Self::check_int(
-            static_memory_reservation,
-            other.static_memory_reservation,
-            "static memory reservation",
+            memory_reservation,
+            other.memory_reservation,
+            "memory reservation",
         )?;
         Self::check_int(
             memory_guard_size,
@@ -416,11 +416,7 @@ impl Metadata<'_> {
             other.epoch_interruption,
             "epoch interruption",
         )?;
-        Self::check_bool(
-            static_memory_bound_is_maximum,
-            other.static_memory_bound_is_maximum,
-            "pooling allocation support",
-        )?;
+        Self::check_bool(memory_may_move, other.memory_may_move, "memory may move")?;
         Self::check_bool(
             guard_before_linear_memory,
             other.guard_before_linear_memory,

@@ -316,22 +316,24 @@ WASMTIME_CONFIG_PROP(void, cranelift_opt_level, wasmtime_opt_level_t)
 WASMTIME_CONFIG_PROP(void, profiler, wasmtime_profiling_strategy_t)
 
 /**
- * \brief Configures the “static” style of memory to always be used.
+ * \brief Configures whether `memory_reservation` is the maximal size of linear
+ * memory.
  *
  * This setting is `false` by default.
  *
  * For more information see the Rust documentation at
- * https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.static_memory_forced.
+ * https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.memory_may_move.
  */
-WASMTIME_CONFIG_PROP(void, static_memory_forced, bool)
+WASMTIME_CONFIG_PROP(void, memory_may_move, bool)
 
 /**
- * \brief Configures the maximum size for memory to be considered "static"
+ * \brief Configures the size, in bytes, of initial memory reservation size for
+ * linear memories.
  *
  * For more information see the Rust documentation at
- * https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.static_memory_maximum_size.
+ * https://bytecodealliance.github.io/wasmtime/api/wasmtime/struct.Config.html#method.memory_reservation.
  */
-WASMTIME_CONFIG_PROP(void, static_memory_maximum_size, uint64_t)
+WASMTIME_CONFIG_PROP(void, memory_reservation, uint64_t)
 
 /**
  * \brief Configures the guard region size for linear memory.
@@ -343,12 +345,12 @@ WASMTIME_CONFIG_PROP(void, memory_guard_size, uint64_t)
 
 /**
  * \brief Configures the size, in bytes, of the extra virtual memory space
- * reserved after a “dynamic” memory for growing into.
+ * reserved for memories to grow into after being relocated.
  *
  * For more information see the Rust documentation at
- * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.dynamic_memory_reserved_for_growth
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.memory_reservation_for_growth
  */
-WASMTIME_CONFIG_PROP(void, dynamic_memory_reserved_for_growth, uint64_t)
+WASMTIME_CONFIG_PROP(void, memory_reservation_for_growth, uint64_t)
 
 /**
  * \brief Configures whether to generate native unwind information (e.g.
