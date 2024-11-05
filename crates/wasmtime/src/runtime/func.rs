@@ -2049,18 +2049,22 @@ impl<T> Caller<'_, T> {
         R: 'static,
     {
         debug_assert!(!caller.is_null());
-        crate::runtime::vm::Instance::from_vmctx(caller, |instance| {
-            let store = StoreContextMut::from_raw(instance.store());
-            let gc_lifo_scope = store.0.gc_roots().enter_lifo_scope();
+        crate::runtime::vm::InstanceAndStore::from_vmctx(caller, |pair| {
+            let (instance, mut store) = pair.unpack_context_mut::<T>();
 
-            let ret = f(Caller {
-                store,
-                caller: &instance,
-            });
+            let (gc_lifo_scope, ret) = {
+                let gc_lifo_scope = store.0.gc_roots().enter_lifo_scope();
+
+                let ret = f(Caller {
+                    store: store.as_context_mut(),
+                    caller: &instance,
+                });
+
+                (gc_lifo_scope, ret)
+            };
 
             // Safe to recreate a mutable borrow of the store because `ret`
             // cannot be borrowing from the store.
-            let store = StoreContextMut::<T>::from_raw(instance.store());
             store.0.exit_gc_lifo_scope(gc_lifo_scope);
 
             ret

@@ -57,8 +57,8 @@ pub use crate::runtime::vm::gc::*;
 pub use crate::runtime::vm::imports::Imports;
 pub use crate::runtime::vm::instance::{
     GcHeapAllocationIndex, Instance, InstanceAllocationRequest, InstanceAllocator,
-    InstanceAllocatorImpl, InstanceHandle, MemoryAllocationIndex, OnDemandInstanceAllocator,
-    StorePtr, TableAllocationIndex,
+    InstanceAllocatorImpl, InstanceAndStore, InstanceHandle, MemoryAllocationIndex,
+    OnDemandInstanceAllocator, StorePtr, TableAllocationIndex,
 };
 #[cfg(feature = "pooling-allocator")]
 pub use crate::runtime::vm::instance::{
@@ -155,14 +155,14 @@ pub unsafe trait VMStore {
     ///
     /// If the async GC was cancelled, returns an error. This should be raised
     /// as a trap to clean up Wasm execution.
-    fn gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>>;
+    fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>>;
 
     /// Metadata required for resources for the component model.
     #[cfg(feature = "component-model")]
     fn component_calls(&mut self) -> &mut component::CallContexts;
 }
 
-impl Deref for dyn VMStore {
+impl Deref for dyn VMStore + '_ {
     type Target = StoreOpaque;
 
     fn deref(&self) -> &Self::Target {
@@ -170,7 +170,7 @@ impl Deref for dyn VMStore {
     }
 }
 
-impl DerefMut for dyn VMStore {
+impl DerefMut for dyn VMStore + '_ {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.store_opaque_mut()
     }

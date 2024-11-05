@@ -18,26 +18,6 @@ pub struct StoreContext<'a, T>(pub(crate) &'a StoreInner<T>);
 #[repr(transparent)]
 pub struct StoreContextMut<'a, T>(pub(crate) &'a mut StoreInner<T>);
 
-impl<'a, T> StoreContextMut<'a, T> {
-    /// One of the unsafe lynchpins of Wasmtime.
-    ///
-    /// This method is called from one location, `Caller::with`, and is where we
-    /// load the raw unsafe trait object pointer from a `*mut VMContext` and
-    /// then cast it back to a `StoreContextMut`. This is naturally unsafe due
-    /// to the raw pointer usage, but it's also unsafe because `T` here needs to
-    /// line up with the `T` used to define the trait object itself.
-    ///
-    /// This should generally be achieved with various trait bounds throughout
-    /// Wasmtime that might give access to the `Caller<'_, T>` type.
-    /// Unfortunately there's not a ton of debug asserts we can add here, so we
-    /// rely on testing to largely help show that this is correctly used.
-    pub(crate) unsafe fn from_raw(
-        store: *mut dyn crate::runtime::vm::VMStore,
-    ) -> StoreContextMut<'a, T> {
-        StoreContextMut(&mut *(store as *mut StoreInner<T>))
-    }
-}
-
 /// A trait used to get shared access to a [`Store`] in Wasmtime.
 ///
 /// This trait is used as a bound on the first argument of many methods within
