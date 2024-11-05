@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-jit"
-version = "0.114.0"
+version = "0.115.0"
 authors = ["The Cranelift Project Developers"]
 description = "A JIT library backed by Cranelift"
 repository = "https://github.com/bytecodealliance/wasmtime"
