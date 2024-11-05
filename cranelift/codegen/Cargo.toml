@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-codegen"
-version = "0.113.0"
+version = "0.113.1"
 description = "Low-level code generator library"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-codegen"
@@ -20,7 +20,7 @@ workspace = true
 anyhow = { workspace = true, optional = true, features = ['std'] }
 bumpalo = "3"
 capstone = { workspace = true, optional = true }
-cranelift-codegen-shared = { path = "./shared", version = "0.113.0" }
+cranelift-codegen-shared = { path = "./shared", version = "0.113.1" }
 cranelift-entity = { workspace = true }
 cranelift-bforest = { workspace = true }
 cranelift-bitset = { workspace = true }
@@ -49,8 +49,8 @@ similar = "2.1.0"
 env_logger = { workspace = true }
 
 [build-dependencies]
-cranelift-codegen-meta = { path = "meta", version = "0.113.0" }
-cranelift-isle = { path = "../isle/isle", version = "=0.113.0" }
+cranelift-codegen-meta = { path = "meta", version = "0.113.1" }
+cranelift-isle = { path = "../isle/isle", version = "=0.113.1" }
 
 [features]
 default = ["std", "unwind", "host-arch", "timing"]
