@@ -179,6 +179,8 @@ impl ConstExprEvaluator {
         // store's lifetime.
         #[cfg(feature = "gc")]
         let mut store = crate::OpaqueRootScope::new(store);
+        #[cfg(not(feature = "gc"))]
+        let mut store = store;
 
         // We cannot allow GC during const evaluation because the stack of
         // `ValRaw`s are not rooted. If we had a GC reference on our stack, and

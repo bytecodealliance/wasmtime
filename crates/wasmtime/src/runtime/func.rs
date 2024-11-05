@@ -2050,12 +2050,13 @@ impl<T> Caller<'_, T> {
     {
         debug_assert!(!caller.is_null());
         crate::runtime::vm::InstanceAndStore::from_vmctx(caller, |pair| {
+            let (instance, mut store) = pair.unpack_context_mut::<T>();
+
             let (gc_lifo_scope, ret) = {
-                let (instance, store) = pair.unpack_context_mut::<T>();
                 let gc_lifo_scope = store.0.gc_roots().enter_lifo_scope();
 
                 let ret = f(Caller {
-                    store,
+                    store: store.as_context_mut(),
                     caller: &instance,
                 });
 
@@ -2064,7 +2065,7 @@ impl<T> Caller<'_, T> {
 
             // Safe to recreate a mutable borrow of the store because `ret`
             // cannot be borrowing from the store.
-            pair.store_mut().exit_gc_lifo_scope(gc_lifo_scope);
+            store.0.exit_gc_lifo_scope(gc_lifo_scope);
 
             ret
         })

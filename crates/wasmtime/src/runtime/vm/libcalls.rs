@@ -193,7 +193,7 @@ pub mod raw {
 }
 
 fn memory32_grow(
-    store: &mut (dyn VMStore + 'static),
+    store: &mut dyn VMStore,
     instance: &mut Instance,
     delta: u64,
     memory_index: u32,
@@ -213,7 +213,7 @@ fn memory32_grow(
 
 /// Implementation of `table.grow` for `funcref` tables.
 unsafe fn table_grow_func_ref(
-    store: &mut (dyn VMStore + 'static),
+    store: &mut dyn VMStore,
     instance: &mut Instance,
     table_index: u32,
     delta: u64,
@@ -236,7 +236,7 @@ unsafe fn table_grow_func_ref(
 /// Implementation of `table.grow` for GC-reference tables.
 #[cfg(feature = "gc")]
 unsafe fn table_grow_gc_ref(
-    store: &mut (dyn VMStore + 'static),
+    store: &mut dyn VMStore,
     instance: &mut Instance,
     table_index: u32,
     delta: u64,
@@ -265,7 +265,7 @@ unsafe fn table_grow_gc_ref(
 
 /// Implementation of `table.fill` for `funcref`s.
 unsafe fn table_fill_func_ref(
-    store: &mut (dyn VMStore + 'static),
+    store: &mut dyn VMStore,
     instance: &mut Instance,
     table_index: u32,
     dst: u64,
@@ -288,7 +288,7 @@ unsafe fn table_fill_func_ref(
 
 #[cfg(feature = "gc")]
 unsafe fn table_fill_gc_ref(
-    store: &mut (dyn VMStore + 'static),
+    store: &mut dyn VMStore,
     instance: &mut Instance,
     table_index: u32,
     dst: u64,
@@ -313,7 +313,7 @@ unsafe fn table_fill_gc_ref(
 
 // Implementation of `table.copy`.
 unsafe fn table_copy(
-    store: &mut (dyn VMStore + 'static),
+    store: &mut dyn VMStore,
     instance: &mut Instance,
     dst_table_index: u32,
     src_table_index: u32,
@@ -335,7 +335,7 @@ unsafe fn table_copy(
 
 // Implementation of `table.init`.
 fn table_init(
-    store: &mut (dyn VMStore + 'static),
+    store: &mut dyn VMStore,
     instance: &mut Instance,
     table_index: u32,
     elem_index: u32,
@@ -356,14 +356,14 @@ fn table_init(
 }
 
 // Implementation of `elem.drop`.
-fn elem_drop(_store: &mut (dyn VMStore + 'static), instance: &mut Instance, elem_index: u32) {
+fn elem_drop(_store: &mut dyn VMStore, instance: &mut Instance, elem_index: u32) {
     let elem_index = ElemIndex::from_u32(elem_index);
     instance.elem_drop(elem_index)
 }
 
 // Implementation of `memory.copy`.
 fn memory_copy(
-    _store: &mut (dyn VMStore + 'static),
+    _store: &mut dyn VMStore,
     instance: &mut Instance,
     dst_index: u32,
     dst: u64,
@@ -378,7 +378,7 @@ fn memory_copy(
 
 // Implementation of `memory.fill` for locally defined memories.
 fn memory_fill(
-    _store: &mut (dyn VMStore + 'static),
+    _store: &mut dyn VMStore,
     instance: &mut Instance,
     memory_index: u32,
     dst: u64,
@@ -392,7 +392,7 @@ fn memory_fill(
 
 // Implementation of `memory.init`.
 fn memory_init(
-    _store: &mut (dyn VMStore + 'static),
+    _store: &mut dyn VMStore,
     instance: &mut Instance,
     memory_index: u32,
     data_index: u32,
@@ -406,11 +406,7 @@ fn memory_init(
 }
 
 // Implementation of `ref.func`.
-fn ref_func(
-    _store: &mut (dyn VMStore + 'static),
-    instance: &mut Instance,
-    func_index: u32,
-) -> *mut u8 {
+fn ref_func(_store: &mut dyn VMStore, instance: &mut Instance, func_index: u32) -> *mut u8 {
     instance
         .get_func_ref(FuncIndex::from_u32(func_index))
         .expect("ref_func: funcref should always be available for given func index")
@@ -418,14 +414,14 @@ fn ref_func(
 }
 
 // Implementation of `data.drop`.
-fn data_drop(_store: &mut (dyn VMStore + 'static), instance: &mut Instance, data_index: u32) {
+fn data_drop(_store: &mut dyn VMStore, instance: &mut Instance, data_index: u32) {
     let data_index = DataIndex::from_u32(data_index);
     instance.data_drop(data_index)
 }
 
 // Returns a table entry after lazily initializing it.
 unsafe fn table_get_lazy_init_func_ref(
-    _store: &mut (dyn VMStore + 'static),
+    _store: &mut dyn VMStore,
     instance: &mut Instance,
     table_index: u32,
     index: u64,
@@ -441,7 +437,7 @@ unsafe fn table_get_lazy_init_func_ref(
 
 /// Drop a GC reference.
 #[cfg(feature = "gc-drc")]
-unsafe fn drop_gc_ref(store: &mut (dyn VMStore + 'static), _instance: &mut Instance, gc_ref: u32) {
+unsafe fn drop_gc_ref(store: &mut dyn VMStore, _instance: &mut Instance, gc_ref: u32) {
     log::trace!("libcalls::drop_gc_ref({gc_ref:#x})");
     let gc_ref = VMGcRef::from_raw_u32(gc_ref).expect("non-null VMGcRef");
     store
@@ -453,11 +449,7 @@ unsafe fn drop_gc_ref(store: &mut (dyn VMStore + 'static), _instance: &mut Insta
 /// Do a GC, keeping `gc_ref` rooted and returning the updated `gc_ref`
 /// reference.
 #[cfg(feature = "gc-drc")]
-unsafe fn gc(
-    store: &mut (dyn VMStore + 'static),
-    _instance: &mut Instance,
-    gc_ref: u32,
-) -> Result<u32> {
+unsafe fn gc(store: &mut dyn VMStore, _instance: &mut Instance, gc_ref: u32) -> Result<u32> {
     let gc_ref = VMGcRef::from_raw_u32(gc_ref);
     let gc_ref = gc_ref.map(|r| {
         store
@@ -497,7 +489,7 @@ unsafe fn gc(
 /// The Wasm code is responsible for initializing the object.
 #[cfg(feature = "gc-drc")]
 unsafe fn gc_alloc_raw(
-    store: &mut (dyn VMStore + 'static),
+    store: &mut dyn VMStore,
     instance: &mut Instance,
     kind: u32,
     module_interned_type_index: u32,
@@ -554,7 +546,7 @@ unsafe fn gc_alloc_raw(
 // This libcall may not GC.
 #[cfg(feature = "gc")]
 unsafe fn intern_func_ref_for_gc_heap(
-    store: &mut (dyn VMStore + 'static),
+    store: &mut dyn VMStore,
     _instance: &mut Instance,
     func_ref: *mut u8,
 ) -> Result<u32> {
@@ -576,7 +568,7 @@ unsafe fn intern_func_ref_for_gc_heap(
 // This libcall may not GC.
 #[cfg(feature = "gc")]
 unsafe fn get_interned_func_ref(
-    store: &mut (dyn VMStore + 'static),
+    store: &mut dyn VMStore,
     instance: &mut Instance,
     func_ref_id: u32,
     module_interned_type_index: u32,
@@ -610,7 +602,7 @@ unsafe fn get_interned_func_ref(
 /// Implementation of the `array.new_data` instruction.
 #[cfg(feature = "gc")]
 unsafe fn array_new_data(
-    store: &mut (dyn VMStore + 'static),
+    store: &mut dyn VMStore,
     instance: &mut Instance,
     array_type_index: u32,
     data_index: u32,
@@ -690,7 +682,7 @@ unsafe fn array_new_data(
 /// Implementation of the `array.init_data` instruction.
 #[cfg(feature = "gc")]
 unsafe fn array_init_data(
-    store: &mut (dyn VMStore + 'static),
+    store: &mut dyn VMStore,
     instance: &mut Instance,
     array_type_index: u32,
     array: u32,
@@ -775,7 +767,7 @@ unsafe fn array_init_data(
 
 #[cfg(feature = "gc")]
 unsafe fn array_new_elem(
-    store: &mut (dyn VMStore + 'static),
+    store: &mut dyn VMStore,
     instance: &mut Instance,
     array_type_index: u32,
     elem_index: u32,
@@ -862,7 +854,7 @@ unsafe fn array_new_elem(
 
 #[cfg(feature = "gc")]
 unsafe fn array_init_elem(
-    store: &mut (dyn VMStore + 'static),
+    store: &mut dyn VMStore,
     instance: &mut Instance,
     array_type_index: u32,
     array: u32,
@@ -966,7 +958,7 @@ unsafe fn array_init_elem(
 // `memcpy`-style APIs to do the actual copies here.
 #[cfg(feature = "gc")]
 unsafe fn array_copy(
-    store: &mut (dyn VMStore + 'static),
+    store: &mut dyn VMStore,
     _instance: &mut Instance,
     dst_array: u32,
     dst: u32,
@@ -1037,7 +1029,7 @@ unsafe fn array_copy(
 
 #[cfg(feature = "gc")]
 unsafe fn is_subtype(
-    store: &mut (dyn VMStore + 'static),
+    store: &mut dyn VMStore,
     _instance: &mut Instance,
     actual_engine_type: u32,
     expected_engine_type: u32,
@@ -1060,7 +1052,7 @@ unsafe fn is_subtype(
 // Implementation of `memory.atomic.notify` for locally defined memories.
 #[cfg(feature = "threads")]
 fn memory_atomic_notify(
-    _store: &mut (dyn VMStore + 'static),
+    _store: &mut dyn VMStore,
     instance: &mut Instance,
     memory_index: u32,
     addr_index: u64,
@@ -1075,7 +1067,7 @@ fn memory_atomic_notify(
 // Implementation of `memory.atomic.wait32` for locally defined memories.
 #[cfg(feature = "threads")]
 fn memory_atomic_wait32(
-    _store: &mut (dyn VMStore + 'static),
+    _store: &mut dyn VMStore,
     instance: &mut Instance,
     memory_index: u32,
     addr_index: u64,
@@ -1092,7 +1084,7 @@ fn memory_atomic_wait32(
 // Implementation of `memory.atomic.wait64` for locally defined memories.
 #[cfg(feature = "threads")]
 fn memory_atomic_wait64(
-    _store: &mut (dyn VMStore + 'static),
+    _store: &mut dyn VMStore,
     instance: &mut Instance,
     memory_index: u32,
     addr_index: u64,
@@ -1107,19 +1099,19 @@ fn memory_atomic_wait64(
 }
 
 // Hook for when an instance runs out of fuel.
-fn out_of_gas(store: &mut (dyn VMStore + 'static), _instance: &mut Instance) -> Result<()> {
+fn out_of_gas(store: &mut dyn VMStore, _instance: &mut Instance) -> Result<()> {
     store.out_of_gas()
 }
 
 // Hook for when an instance observes that the epoch has changed.
-fn new_epoch(store: &mut (dyn VMStore + 'static), _instance: &mut Instance) -> Result<u64> {
+fn new_epoch(store: &mut dyn VMStore, _instance: &mut Instance) -> Result<u64> {
     store.new_epoch()
 }
 
 // Hook for validating malloc using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
 unsafe fn check_malloc(
-    _store: &mut (dyn VMStore + 'static),
+    _store: &mut dyn VMStore,
     instance: &mut Instance,
     addr: u32,
     len: u32,
@@ -1147,11 +1139,7 @@ unsafe fn check_malloc(
 
 // Hook for validating free using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
-unsafe fn check_free(
-    _store: &mut (dyn VMStore + 'static),
-    instance: &mut Instance,
-    addr: u32,
-) -> Result<u32> {
+unsafe fn check_free(_store: &mut dyn VMStore, instance: &mut Instance, addr: u32) -> Result<u32> {
     if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
         let result = wmemcheck_state.free(addr as usize);
         wmemcheck_state.memcheck_on();
@@ -1173,7 +1161,7 @@ unsafe fn check_free(
 // Hook for validating load using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
 fn check_load(
-    _store: &mut (dyn VMStore + 'static),
+    _store: &mut dyn VMStore,
     instance: &mut Instance,
     num_bytes: u32,
     addr: u32,
@@ -1202,7 +1190,7 @@ fn check_load(
 // Hook for validating store using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
 fn check_store(
-    _store: &mut (dyn VMStore + 'static),
+    _store: &mut dyn VMStore,
     instance: &mut Instance,
     num_bytes: u32,
     addr: u32,
@@ -1230,7 +1218,7 @@ fn check_store(
 
 // Hook for turning wmemcheck load/store validation off when entering a malloc function.
 #[cfg(feature = "wmemcheck")]
-fn malloc_start(_store: &mut (dyn VMStore + 'static), instance: &mut Instance) {
+fn malloc_start(_store: &mut dyn VMStore, instance: &mut Instance) {
     if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
         wmemcheck_state.memcheck_off();
     }
@@ -1238,7 +1226,7 @@ fn malloc_start(_store: &mut (dyn VMStore + 'static), instance: &mut Instance) {
 
 // Hook for turning wmemcheck load/store validation off when entering a free function.
 #[cfg(feature = "wmemcheck")]
-fn free_start(_store: &mut (dyn VMStore + 'static), instance: &mut Instance) {
+fn free_start(_store: &mut dyn VMStore, instance: &mut Instance) {
     if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
         wmemcheck_state.memcheck_off();
     }
@@ -1246,11 +1234,7 @@ fn free_start(_store: &mut (dyn VMStore + 'static), instance: &mut Instance) {
 
 // Hook for tracking wasm stack updates using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
-fn update_stack_pointer(
-    _store: &mut (dyn VMStore + 'static),
-    _instance: &mut Instance,
-    _value: u32,
-) {
+fn update_stack_pointer(_store: &mut dyn VMStore, _instance: &mut Instance, _value: u32) {
     // TODO: stack-tracing has yet to be finalized. All memory below
     // the address of the top of the stack is marked as valid for
     // loads and stores.
@@ -1261,7 +1245,7 @@ fn update_stack_pointer(
 
 // Hook updating wmemcheck_state memory state vector every time memory.grow is called.
 #[cfg(feature = "wmemcheck")]
-fn update_mem_size(_store: &mut (dyn VMStore + 'static), instance: &mut Instance, num_pages: u32) {
+fn update_mem_size(_store: &mut dyn VMStore, instance: &mut Instance, num_pages: u32) {
     if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
         const KIB: usize = 1024;
         let num_bytes = num_pages as usize * 64 * KIB;
@@ -1269,18 +1253,14 @@ fn update_mem_size(_store: &mut (dyn VMStore + 'static), instance: &mut Instance
     }
 }
 
-fn trap(
-    _store: &mut (dyn VMStore + 'static),
-    _instance: &mut Instance,
-    code: u8,
-) -> Result<(), TrapReason> {
+fn trap(_store: &mut dyn VMStore, _instance: &mut Instance, code: u8) -> Result<(), TrapReason> {
     Err(TrapReason::Wasm(
         wasmtime_environ::Trap::from_u8(code).unwrap(),
     ))
 }
 
 fn f64_to_i64(
-    _store: &mut (dyn VMStore + 'static),
+    _store: &mut dyn VMStore,
     _instance: &mut Instance,
     val: f64,
 ) -> Result<u64, TrapReason> {
@@ -1296,7 +1276,7 @@ fn f64_to_i64(
 }
 
 fn f64_to_u64(
-    _store: &mut (dyn VMStore + 'static),
+    _store: &mut dyn VMStore,
     _instance: &mut Instance,
     val: f64,
 ) -> Result<u64, TrapReason> {
@@ -1312,7 +1292,7 @@ fn f64_to_u64(
 }
 
 fn f64_to_i32(
-    _store: &mut (dyn VMStore + 'static),
+    _store: &mut dyn VMStore,
     _instance: &mut Instance,
     val: f64,
 ) -> Result<u32, TrapReason> {
@@ -1328,7 +1308,7 @@ fn f64_to_i32(
 }
 
 fn f64_to_u32(
-    _store: &mut (dyn VMStore + 'static),
+    _store: &mut dyn VMStore,
     _instance: &mut Instance,
     val: f64,
 ) -> Result<u32, TrapReason> {

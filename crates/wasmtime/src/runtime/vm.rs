@@ -162,7 +162,7 @@ pub unsafe trait VMStore {
     fn component_calls(&mut self) -> &mut component::CallContexts;
 }
 
-impl Deref for dyn VMStore {
+impl Deref for dyn VMStore + '_ {
     type Target = StoreOpaque;
 
     fn deref(&self) -> &Self::Target {
@@ -170,7 +170,7 @@ impl Deref for dyn VMStore {
     }
 }
 
-impl DerefMut for dyn VMStore {
+impl DerefMut for dyn VMStore + '_ {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.store_opaque_mut()
     }

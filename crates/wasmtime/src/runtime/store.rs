@@ -2661,7 +2661,7 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
     }
 
     #[cfg(not(feature = "gc"))]
-    fn gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>> {
+    fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>> {
         Ok(root)
     }
 

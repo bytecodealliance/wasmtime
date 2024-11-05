@@ -125,17 +125,10 @@ impl InstanceAndStore {
         f(&mut *ptr)
     }
 
-    /// Get the underlying `dyn VMStore` trait object for this
-    /// `InstanceAndStore`.
-    #[inline]
-    pub(crate) fn store_mut(&mut self) -> &mut (dyn VMStore + 'static) {
-        unsafe { &mut *self.store_ptr() }
-    }
-
     /// Unpacks this `InstanceAndStore` into its underlying `Instance` and `dyn
     /// VMStore`.
     #[inline]
-    pub(crate) fn unpack_mut(&mut self) -> (&mut Instance, &mut (dyn VMStore + 'static)) {
+    pub(crate) fn unpack_mut(&mut self) -> (&mut Instance, &mut dyn VMStore) {
         unsafe {
             let store = &mut *self.store_ptr();
             (&mut self.instance, store)
@@ -168,7 +161,7 @@ impl InstanceAndStore {
     /// functions are shared amongst threads and don't all share the same
     /// store).
     #[inline]
-    fn store_ptr(&self) -> *mut (dyn VMStore + 'static) {
+    fn store_ptr(&self) -> *mut dyn VMStore {
         let ptr = unsafe {
             *self
                 .instance
