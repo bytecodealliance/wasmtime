@@ -258,3 +258,23 @@ fn get_fuel_clamps_at_zero(config: &mut Config) -> Result<()> {
 
     Ok(())
 }
+
+#[wasmtime_test(strategies(not(Cranelift)))]
+#[cfg_attr(miri, ignore)]
+fn ensure_stack_alignment(config: &mut Config) -> Result<()> {
+    config.consume_fuel(true);
+    let engine = Engine::new(config)?;
+    let mut store = Store::new(&engine, ());
+    store.set_fuel(100000000)?;
+
+    let bytes = include_bytes!("fuel_stack_alignment.wat");
+    let module = Module::new(&engine, bytes)?;
+    let instance = Instance::new(&mut store, &module, &[])?;
+    let func = instance.get_typed_func::<f32, ()>(&mut store, "")?;
+    let trap = func.call(&mut store, 50397184.0).unwrap_err();
+    assert_eq!(
+        trap.downcast::<Trap>().unwrap(),
+        Trap::UnreachableCodeReached
+    );
+    Ok(())
+}
