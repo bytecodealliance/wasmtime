@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-bitset"
-version = "0.114.0"
+version = "0.115.0"
 description = "Various bitset stuff for use inside Cranelift"
 license = "Apache-2.0 WITH LLVM-exception"
 documentation = "https://docs.rs/cranelift-bitset"
