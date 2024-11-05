@@ -486,9 +486,23 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.cap-fs-ext]]
+version = "3.2.0"
+when = "2024-07-08"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.cap-net-ext]]
 version = "3.0.0"
 when = "2024-01-11"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.cap-net-ext]]
+version = "3.2.0"
+when = "2024-07-08"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -500,9 +514,23 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.cap-primitives]]
+version = "3.2.0"
+when = "2024-07-08"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.cap-rand]]
 version = "3.0.0"
 when = "2024-01-11"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.cap-rand]]
+version = "3.2.0"
+when = "2024-07-08"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -514,9 +542,23 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.cap-std]]
+version = "3.2.0"
+when = "2024-07-08"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.cap-time-ext]]
 version = "3.0.0"
 when = "2024-01-11"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.cap-time-ext]]
+version = "3.2.0"
+when = "2024-07-08"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -856,6 +898,13 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.io-extras]]
+version = "0.18.2"
+when = "2024-03-29"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.io-lifetimes]]
 version = "2.0.3"
 when = "2023-12-01"
@@ -894,6 +943,13 @@ user-name = "Amanieu d'Antras"
 [[publisher.linux-raw-sys]]
 version = "0.4.12"
 when = "2023-11-30"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.linux-raw-sys]]
+version = "0.4.14"
+when = "2024-05-17"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -978,6 +1034,13 @@ user-name = "Andrew Gallant"
 [[publisher.rustix]]
 version = "0.38.31"
 when = "2024-02-01"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.rustix]]
+version = "0.38.34"
+when = "2024-04-22"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"

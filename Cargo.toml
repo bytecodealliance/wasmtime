@@ -247,12 +247,12 @@ regalloc2 = "0.9.3"
 
 # cap-std family:
 target-lexicon = "0.12.16"
-cap-std = "3.0.0"
-cap-rand = { version = "3.0.0", features = ["small_rng"] }
-cap-fs-ext = "3.0.0"
-cap-net-ext = "3.0.0"
-cap-time-ext = "3.0.0"
-cap-tempfile = "3.0.0"
+cap-std = "3.4.1"
+cap-rand = { version = "3.4.1", features = ["small_rng"] }
+cap-fs-ext = "3.4.1"
+cap-net-ext = "3.4.1"
+cap-time-ext = "3.4.1"
+cap-tempfile = "3.4.1"
 fs-set-times = "0.20.1"
 system-interface = { version = "0.27.1", features = ["cap_std_impls"] }
 io-lifetimes = { version = "2.0.3", default-features = false }
