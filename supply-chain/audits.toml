@@ -1125,6 +1125,11 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.3.0 -> 3.4.0"
 
+[[audits.cap-fs-ext]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.4.0 -> 3.4.1"
+
 [[audits.cap-net-ext]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -1134,6 +1139,11 @@ delta = "3.2.0 -> 3.3.0"
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.3.0 -> 3.4.0"
+
+[[audits.cap-net-ext]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.4.0 -> 3.4.1"
 
 [[audits.cap-primitives]]
 who = "Dan Gohman <dev@sunfishcode.online>"
@@ -1168,6 +1178,11 @@ delta = "3.2.0 -> 3.3.0"
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.3.0 -> 3.4.0"
+
+[[audits.cap-primitives]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.4.0 -> 3.4.1"
 
 [[audits.cap-rand]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -1197,6 +1212,11 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.3.0 -> 3.4.0"
 
+[[audits.cap-rand]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.4.0 -> 3.4.1"
+
 [[audits.cap-std]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -1230,6 +1250,11 @@ delta = "3.2.0 -> 3.3.0"
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.3.0 -> 3.4.0"
+
+[[audits.cap-std]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.4.0 -> 3.4.1"
 
 [[audits.cap-tempfile]]
 who = "Dan Gohman <dev@sunfishcode.online>"
@@ -1282,6 +1307,11 @@ delta = "3.2.0 -> 3.3.0"
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.3.0 -> 3.4.0"
+
+[[audits.cap-time-ext]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "3.4.0 -> 3.4.1"
 
 [[audits.cargo-platform]]
 who = "Pat Hickey <phickey@fastly.com>"
