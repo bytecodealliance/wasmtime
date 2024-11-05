@@ -328,6 +328,7 @@ fn spec_test_config(wast: &Path) -> TestConfig {
                 }
                 "threads" => {
                     ret.threads = Some(true);
+                    ret.reference_types = Some(false);
                 }
                 "tail-call" => {
                     ret.tail_call = Some(true);
@@ -387,10 +388,28 @@ fn run_wast(wast: &Path, config: WastConfig) -> anyhow::Result<()> {
     // If this is a spec test then the configuration for it is loaded via
     // `spec_test_config`, but otherwise it's required to be listed in the top
     // of the file as we control the contents of the file.
-    let test_config = match wast.strip_prefix("tests/spec_testsuite") {
+    let mut test_config = match wast.strip_prefix("tests/spec_testsuite") {
         Ok(test) => spec_test_config(test),
         Err(_) => support::parse_test_config(&wast_contents)?,
     };
+
+    // FIXME: this is a bit of a hack to get Winch working here for now. Winch
+    // passes some tests on aarch64 so returning `true` from `should_fail`
+    // doesn't work. Winch doesn't pass many tests though as it either panics or
+    // segfaults as AArch64 support isn't finished yet. That means that we can't
+    // have, for example, an allow-list of tests that should pass and assume
+    // everything else fails. In lieu of all of this we feign all tests as
+    // requiring references types which Wasmtime understands that Winch doesn't
+    // support on aarch64 which means that all tests fail quickly in config
+    // validation.
+    //
+    // Ideally the aarch64 backend for Winch would return a normal error on
+    // unsupported opcodes and not segfault, meaning that this would not be
+    // needed.
+    if cfg!(target_arch = "aarch64") && test_config.reference_types.is_none() {
+        test_config.reference_types = Some(true);
+    }
+
     let should_fail = should_fail(wast, &config, &test_config);
 
     let wast = Path::new(wast);
