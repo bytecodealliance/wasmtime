@@ -267,7 +267,7 @@ fn ensure_stack_alignment(config: &mut Config) -> Result<()> {
     let mut store = Store::new(&engine, ());
     store.set_fuel(100000000)?;
 
-    let bytes = include_bytes!("fuel_stack_alignment.wat");
+    let bytes = include_bytes!("../misc_testsuite/winch/fuel_stack_alignment.wat");
     let module = Module::new(&engine, bytes)?;
     let instance = Instance::new(&mut store, &module, &[])?;
     let func = instance.get_typed_func::<f32, ()>(&mut store, "")?;
