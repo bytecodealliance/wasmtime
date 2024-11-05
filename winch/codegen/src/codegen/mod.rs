@@ -927,6 +927,9 @@ where
         let fuel_var = self.emit_load_fuel_consumed();
         let continuation = self.masm.get_label();
 
+        // Spill locals and registers to avoid conflicts at the out-of-fuel
+        // control flow merge.
+        self.context.spill(self.masm);
         // Fuel is stored as a negative i64, so if the number is less than zero,
         // we're still under the fuel limits.
         self.masm.branch(
