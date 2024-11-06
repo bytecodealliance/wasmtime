@@ -71,9 +71,8 @@ pub trait RuntimeLinearMemory: Send + Sync {
     /// of bytes.
     fn grow_to(&mut self, size: usize) -> Result<()>;
 
-    /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm
-    /// code.
-    fn vmmemory(&mut self) -> VMMemoryDefinition;
+    /// Returns a pointer to the base of this linear memory allocation.
+    fn base_ptr(&mut self) -> *mut u8;
 
     /// Does this memory need initialization? It may not if it already
     /// has initial contents courtesy of the `MemoryImage` passed to
@@ -337,11 +336,8 @@ impl RuntimeLinearMemory for MmapMemory {
         Ok(())
     }
 
-    fn vmmemory(&mut self) -> VMMemoryDefinition {
-        VMMemoryDefinition {
-            base: unsafe { self.mmap.as_mut_ptr().add(self.pre_guard_size) },
-            current_length: self.len.into(),
-        }
+    fn base_ptr(&mut self) -> *mut u8 {
+        unsafe { self.mmap.as_mut_ptr().add(self.pre_guard_size) }
     }
 
     fn needs_init(&self) -> bool {
@@ -438,11 +434,8 @@ impl RuntimeLinearMemory for StaticMemory {
         Ok(())
     }
 
-    fn vmmemory(&mut self) -> VMMemoryDefinition {
-        VMMemoryDefinition {
-            base: self.base.as_ptr(),
-            current_length: self.size.into(),
-        }
+    fn base_ptr(&mut self) -> *mut u8 {
+        self.base.as_ptr()
     }
 
     fn needs_init(&self) -> bool {
@@ -845,7 +838,10 @@ impl LocalMemory {
     }
 
     pub fn vmmemory(&mut self) -> VMMemoryDefinition {
-        self.alloc.vmmemory()
+        VMMemoryDefinition {
+            base: self.alloc.base_ptr(),
+            current_length: self.alloc.byte_size().into(),
+        }
     }
 
     pub fn byte_size(&self) -> usize {

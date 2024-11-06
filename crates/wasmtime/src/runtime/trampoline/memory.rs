@@ -5,7 +5,7 @@ use crate::runtime::vm::{
     CompiledModuleId, GcHeapAllocationIndex, Imports, InstanceAllocationRequest, InstanceAllocator,
     InstanceAllocatorImpl, Memory, MemoryAllocationIndex, MemoryImage, ModuleRuntimeInfo,
     OnDemandInstanceAllocator, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory, StorePtr,
-    Table, TableAllocationIndex, VMMemoryDefinition,
+    Table, TableAllocationIndex,
 };
 use crate::store::{InstanceId, StoreOpaque};
 use crate::MemoryType;
@@ -91,11 +91,8 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
         self.mem.grow_to(new_size)
     }
 
-    fn vmmemory(&mut self) -> VMMemoryDefinition {
-        VMMemoryDefinition {
-            base: self.mem.as_ptr(),
-            current_length: self.mem.byte_size().into(),
-        }
+    fn base_ptr(&mut self) -> *mut u8 {
+        self.mem.as_ptr()
     }
 
     fn needs_init(&self) -> bool {
