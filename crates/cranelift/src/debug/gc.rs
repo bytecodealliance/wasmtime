@@ -108,8 +108,8 @@ fn build_unit_dependencies(
     Ok(())
 }
 
-fn has_die_back_edge(die: &read::DebuggingInformationEntry<Reader<'_>>) -> bool {
-    match die.tag() {
+fn has_die_back_edge(die: &read::DebuggingInformationEntry<Reader<'_>>) -> read::Result<bool> {
+    let result = match die.tag() {
         constants::DW_TAG_variable
         | constants::DW_TAG_constant
         | constants::DW_TAG_inlined_subroutine
@@ -124,8 +124,10 @@ fn has_die_back_edge(die: &read::DebuggingInformationEntry<Reader<'_>>) -> bool 
         | constants::DW_TAG_variant_part
         | constants::DW_TAG_variant
         | constants::DW_TAG_formal_parameter => true,
+        constants::DW_TAG_subprogram => die.attr(constants::DW_AT_declaration)?.is_some(),
         _ => false,
-    }
+    };
+    Ok(result)
 }
 
 fn has_valid_code_range(
@@ -223,7 +225,7 @@ fn build_die_dependencies(
         let child_entry = child.entry();
         let child_offset = child_entry.offset().to_unit_section_offset(unit);
         deps.add_edge(child_offset, offset);
-        if has_die_back_edge(child_entry) {
+        if has_die_back_edge(child_entry)? {
             deps.add_edge(offset, child_offset);
         }
         if has_valid_code_range(child_entry, dwarf, unit, at)? {
