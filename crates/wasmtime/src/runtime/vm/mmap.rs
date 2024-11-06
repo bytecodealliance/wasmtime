@@ -5,7 +5,7 @@ use crate::runtime::vm::sys::mmap;
 use crate::{prelude::*, vm::usize_is_multiple_of_host_page_size};
 use core::ops::Range;
 #[cfg(feature = "std")]
-use std::{fs::File, path::Path, sync::Arc};
+use std::{fs::File, sync::Arc};
 
 /// A simple struct consisting of a page-aligned pointer to page-aligned
 /// and initially-zeroed memory and a length.
@@ -34,8 +34,8 @@ impl Mmap {
     /// The memory mapping and the length of the file within the mapping are
     /// returned.
     #[cfg(feature = "std")]
-    pub fn from_file(path: &Path) -> Result<Self> {
-        let (sys, file) = mmap::Mmap::from_file(path)?;
+    pub fn from_file(file: File) -> Result<Self> {
+        let sys = mmap::Mmap::from_file(&file)?;
         Ok(Mmap {
             sys,
             file: Some(Arc::new(file)),

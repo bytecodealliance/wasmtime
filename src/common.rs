@@ -3,7 +3,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use clap::Parser;
 use std::net::TcpListener;
-use std::{path::Path, time::Duration};
+use std::{fs::File, path::Path, time::Duration};
 use wasmtime::{Engine, Module, Precompiled, StoreLimits, StoreLimitsBuilder};
 use wasmtime_cli_flags::{opt::WasmtimeOptionValue, CommonOptions};
 use wasmtime_wasi::bindings::LinkOptions;
@@ -160,6 +160,7 @@ impl RunCommon {
             Some("-") => "/dev/stdin".as_ref(),
             _ => path,
         };
+        let file = File::open(path)?;
 
         // First attempt to load the module as an mmap. If this succeeds then
         // detection can be done with the contents of the mmap and if a
@@ -179,7 +180,7 @@ impl RunCommon {
         // which isn't ready to happen at this time). It's hoped though that
         // opening a file twice isn't too bad in the grand scheme of things with
         // respect to the CLI.
-        match wasmtime::_internal::MmapVec::from_file(path) {
+        match wasmtime::_internal::MmapVec::from_file(file) {
             Ok(map) => self.load_module_contents(
                 engine,
                 path,

@@ -10,6 +10,22 @@ use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::Storage::FileSystem::*;
 use windows_sys::Win32::System::Memory::*;
 
+/// Open a file so that it can be mmap'd for executing.
+///
+/// Open the file with read/execute access and only share for
+/// read. This will enable us to perform the proper mmap below
+/// while also disallowing other processes modifying the file
+/// and having those modifications show up in our address space.
+pub fn open_file_for_mmap(path: &Path) -> Result<File> {
+    let file = OpenOptions::new()
+        .read(true)
+        .access_mode(FILE_GENERIC_READ | FILE_GENERIC_EXECUTE)
+        .share_mode(FILE_SHARE_READ)
+        .open(path)
+        .err2anyhow()
+        .context("failed to open file")?;
+}
+
 #[derive(Debug)]
 pub struct Mmap {
     memory: SendSyncPtr<[u8]>,
@@ -58,20 +74,8 @@ impl Mmap {
         })
     }
 
-    pub fn from_file(path: &Path) -> Result<(Self, File)> {
+    pub fn from_file(file: &File) -> Result<Self> {
         unsafe {
-            // Open the file with read/execute access and only share for
-            // read. This will enable us to perform the proper mmap below
-            // while also disallowing other processes modifying the file
-            // and having those modifications show up in our address space.
-            let file = OpenOptions::new()
-                .read(true)
-                .access_mode(FILE_GENERIC_READ | FILE_GENERIC_EXECUTE)
-                .share_mode(FILE_SHARE_READ)
-                .open(path)
-                .err2anyhow()
-                .context("failed to open file")?;
-
             let len = file
                 .metadata()
                 .err2anyhow()

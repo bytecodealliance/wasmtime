@@ -103,6 +103,14 @@ fn test_deserialize_from_file() -> Result<()> {
         let instance = Instance::new(&mut store, &module, &[])?;
         let func = instance.get_typed_func::<(), i32>(&mut store, "run")?;
         assert_eq!(func.call(&mut store, ())?, 42);
+
+        // Try an alreeady opened file as well.
+        let file = fs::File::open(&path)?;
+        let module = unsafe { Module::deserialize_open_file(store.engine(), file)? };
+        let instance = Instance::new(&mut store, &module, &[])?;
+        let func = instance.get_typed_func::<(), i32>(&mut store, "run")?;
+        assert_eq!(func.call(&mut store, ())?, 42);
+
         Ok(())
     }
 }
