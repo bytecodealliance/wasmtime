@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::runtime::vm::memory::{validate_atomic_addr, MmapMemory, RuntimeLinearMemory};
+use crate::runtime::vm::memory::{validate_atomic_addr, LocalMemory, MmapMemory};
 use crate::runtime::vm::threads::parking_spot::{ParkingSpot, Waiter};
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
 use crate::runtime::vm::{Memory, VMStore, WaitResult};
@@ -22,7 +22,7 @@ use wasmtime_environ::{Trap, Tunables};
 pub struct SharedMemory(Arc<SharedMemoryInner>);
 
 struct SharedMemoryInner {
-    memory: RwLock<Box<dyn RuntimeLinearMemory>>,
+    memory: RwLock<LocalMemory>,
     spot: ParkingSpot,
     ty: wasmtime_environ::Memory,
     def: LongTermVMMemoryDefinition,
@@ -33,14 +33,11 @@ impl SharedMemory {
     pub fn new(ty: &wasmtime_environ::Memory, tunables: &Tunables) -> Result<Self> {
         let (minimum_bytes, maximum_bytes) = Memory::limit_new(ty, None)?;
         let mmap_memory = MmapMemory::new(ty, tunables, minimum_bytes, maximum_bytes, None)?;
-        Self::wrap(ty, Box::new(mmap_memory))
+        Self::wrap(ty, LocalMemory::new(ty, Box::new(mmap_memory)))
     }
 
     /// Wrap an existing [Memory] with the locking provided by a [SharedMemory].
-    pub fn wrap(
-        ty: &wasmtime_environ::Memory,
-        mut memory: Box<dyn RuntimeLinearMemory>,
-    ) -> Result<Self> {
+    pub fn wrap(ty: &wasmtime_environ::Memory, mut memory: LocalMemory) -> Result<Self> {
         if !ty.shared {
             bail!("shared memory must have a `shared` memory type");
         }

@@ -54,16 +54,6 @@ impl RuntimeMemoryCreator for DefaultMemoryCreator {
 
 /// A linear memory and its backing storage.
 pub trait RuntimeLinearMemory: Send + Sync {
-    /// Returns the log2 of this memory's page size, in bytes.
-    fn page_size_log2(&self) -> u8;
-
-    /// Returns this memory's page size, in bytes.
-    fn page_size(&self) -> u64 {
-        let log2 = self.page_size_log2();
-        debug_assert!(log2 == 16 || log2 == 0);
-        1 << self.page_size_log2()
-    }
-
     /// Returns the number of allocated bytes.
     fn byte_size(&self) -> usize;
 
@@ -74,80 +64,6 @@ pub trait RuntimeLinearMemory: Send + Sync {
     /// Returns whether the base pointer of this memory may be relocated over
     /// time to accommodate requests for growth.
     fn memory_may_move(&self) -> bool;
-
-    /// Grows a memory by `delta_pages`.
-    ///
-    /// This performs the necessary checks on the growth before delegating to
-    /// the underlying `grow_to` implementation. A default implementation of
-    /// this memory is provided here since this is assumed to be the same for
-    /// most kinds of memory; one exception is shared memory, which must perform
-    /// all the steps of the default implementation *plus* the required locking.
-    ///
-    /// The `store` is used only for error reporting.
-    fn grow(
-        &mut self,
-        delta_pages: u64,
-        mut store: Option<&mut dyn VMStore>,
-    ) -> Result<Option<(usize, usize)>, Error> {
-        let old_byte_size = self.byte_size();
-
-        // Wasm spec: when growing by 0 pages, always return the current size.
-        if delta_pages == 0 {
-            return Ok(Some((old_byte_size, old_byte_size)));
-        }
-
-        let page_size = usize::try_from(self.page_size()).unwrap();
-
-        // The largest wasm-page-aligned region of memory is possible to
-        // represent in a `usize`. This will be impossible for the system to
-        // actually allocate.
-        let absolute_max = 0usize.wrapping_sub(page_size);
-
-        // Calculate the byte size of the new allocation. Let it overflow up to
-        // `usize::MAX`, then clamp it down to `absolute_max`.
-        let new_byte_size = usize::try_from(delta_pages)
-            .unwrap_or(usize::MAX)
-            .saturating_mul(page_size)
-            .saturating_add(old_byte_size)
-            .min(absolute_max);
-
-        let maximum = self.maximum_byte_size();
-
-        // Store limiter gets first chance to reject memory_growing.
-        if let Some(store) = &mut store {
-            if !store.memory_growing(old_byte_size, new_byte_size, maximum)? {
-                return Ok(None);
-            }
-        }
-
-        // Never exceed maximum, even if limiter permitted it.
-        if let Some(max) = maximum {
-            if new_byte_size > max {
-                if let Some(store) = store {
-                    // FIXME: shared memories may not have an associated store
-                    // to report the growth failure to but the error should not
-                    // be dropped
-                    // (https://github.com/bytecodealliance/wasmtime/issues/4240).
-                    store.memory_grow_failed(format_err!("Memory maximum size exceeded"))?;
-                }
-                return Ok(None);
-            }
-        }
-
-        match self.grow_to(new_byte_size) {
-            Ok(_) => Ok(Some((old_byte_size, new_byte_size))),
-            Err(e) => {
-                // FIXME: shared memories may not have an associated store to
-                // report the growth failure to but the error should not be
-                // dropped
-                // (https://github.com/bytecodealliance/wasmtime/issues/4240).
-                if let Some(store) = store {
-                    store.memory_grow_failed(e)?;
-                }
-                Ok(None)
-            }
-        }
-    }
 
     /// Grow memory to the specified amount of bytes.
     ///
@@ -200,9 +116,6 @@ pub struct MmapMemory {
     // custom page size due to `self.accessible()`'s rounding up to the host
     // page size.
     maximum: Option<usize>,
-
-    // The log2 of this Wasm memory's page size, in bytes.
-    page_size_log2: u8,
 
     // The amount of extra bytes to reserve whenever memory grows. This is
     // specified so that the cost of repeated growth is amortized.
@@ -311,7 +224,6 @@ impl MmapMemory {
             mmap,
             len: minimum,
             maximum,
-            page_size_log2: ty.page_size_log2,
             pre_guard_size: pre_guard_bytes,
             offset_guard_size: offset_guard_bytes,
             extra_to_reserve_on_growth,
@@ -332,10 +244,6 @@ impl MmapMemory {
 }
 
 impl RuntimeLinearMemory for MmapMemory {
-    fn page_size_log2(&self) -> u8 {
-        self.page_size_log2
-    }
-
     fn byte_size(&self) -> usize {
         self.len
     }
@@ -462,9 +370,6 @@ struct StaticMemory {
     /// The current size, in bytes, of this memory.
     size: usize,
 
-    /// The log2 of this memory's page size.
-    page_size_log2: u8,
-
     /// The size, in bytes, of the virtual address allocation starting at `base`
     /// and going to the end of the guard pages at the end of the linear memory.
     memory_and_guard_size: usize,
@@ -480,7 +385,6 @@ impl StaticMemory {
         base_capacity: usize,
         initial_size: usize,
         maximum_size: Option<usize>,
-        page_size_log2: u8,
         memory_image: MemoryImageSlot,
         memory_and_guard_size: usize,
     ) -> Result<Self> {
@@ -503,7 +407,6 @@ impl StaticMemory {
             base: SendSyncPtr::new(NonNull::new(base_ptr).unwrap()),
             capacity: base_capacity,
             size: initial_size,
-            page_size_log2,
             memory_image,
             memory_and_guard_size,
         })
@@ -511,10 +414,6 @@ impl StaticMemory {
 }
 
 impl RuntimeLinearMemory for StaticMemory {
-    fn page_size_log2(&self) -> u8 {
-        self.page_size_log2
-    }
-
     fn byte_size(&self) -> usize {
         self.size
     }
@@ -563,7 +462,7 @@ impl RuntimeLinearMemory for StaticMemory {
 
 /// Representation of a runtime wasm linear memory.
 pub enum Memory {
-    Local(Box<dyn RuntimeLinearMemory>),
+    Local(LocalMemory),
     Shared(SharedMemory),
 }
 
@@ -595,10 +494,11 @@ impl Memory {
             "this linear memory should not be able to move its base pointer",
         );
 
+        let memory = LocalMemory::new(ty, allocation);
         Ok(if ty.shared {
-            Memory::Shared(SharedMemory::wrap(ty, allocation)?)
+            Memory::Shared(SharedMemory::wrap(ty, memory)?)
         } else {
-            Memory::Local(allocation)
+            Memory::Local(memory)
         })
     }
 
@@ -617,18 +517,18 @@ impl Memory {
             base_capacity,
             minimum,
             maximum,
-            ty.page_size_log2,
             memory_image,
             memory_and_guard_size,
         )?;
         let allocation = Box::new(pooled_memory);
+        let memory = LocalMemory::new(ty, allocation);
         Ok(if ty.shared {
             // FIXME(#4244): not supported with the pooling allocator (which
             // `new_static` is always used with), see `MemoryPool::validate` as
             // well).
             todo!("using shared memory with the pooling allocator is a work in progress");
         } else {
-            Memory::Local(allocation)
+            Memory::Local(memory)
         })
     }
 
@@ -851,6 +751,121 @@ impl Memory {
             Memory::Local(mem) => mem.wasm_accessible(),
             Memory::Shared(mem) => mem.wasm_accessible(),
         }
+    }
+}
+
+/// An owned allocation of a wasm linear memory.
+///
+/// This might be part of a `Memory` via `Memory::Local` but it might also be
+/// the implementation basis for a `SharedMemory` behind an `RwLock` for
+/// example.
+pub struct LocalMemory {
+    alloc: Box<dyn RuntimeLinearMemory>,
+    ty: wasmtime_environ::Memory,
+}
+
+impl LocalMemory {
+    pub fn new(ty: &wasmtime_environ::Memory, alloc: Box<dyn RuntimeLinearMemory>) -> LocalMemory {
+        LocalMemory { ty: *ty, alloc }
+    }
+
+    pub fn page_size(&self) -> u64 {
+        self.ty.page_size()
+    }
+
+    /// Grows a memory by `delta_pages`.
+    ///
+    /// This performs the necessary checks on the growth before delegating to
+    /// the underlying `grow_to` implementation.
+    ///
+    /// The `store` is used only for error reporting.
+    pub fn grow(
+        &mut self,
+        delta_pages: u64,
+        mut store: Option<&mut dyn VMStore>,
+    ) -> Result<Option<(usize, usize)>, Error> {
+        let old_byte_size = self.alloc.byte_size();
+
+        // Wasm spec: when growing by 0 pages, always return the current size.
+        if delta_pages == 0 {
+            return Ok(Some((old_byte_size, old_byte_size)));
+        }
+
+        let page_size = usize::try_from(self.page_size()).unwrap();
+
+        // The largest wasm-page-aligned region of memory is possible to
+        // represent in a `usize`. This will be impossible for the system to
+        // actually allocate.
+        let absolute_max = 0usize.wrapping_sub(page_size);
+
+        // Calculate the byte size of the new allocation. Let it overflow up to
+        // `usize::MAX`, then clamp it down to `absolute_max`.
+        let new_byte_size = usize::try_from(delta_pages)
+            .unwrap_or(usize::MAX)
+            .saturating_mul(page_size)
+            .saturating_add(old_byte_size)
+            .min(absolute_max);
+
+        let maximum = self.alloc.maximum_byte_size();
+
+        // Store limiter gets first chance to reject memory_growing.
+        if let Some(store) = &mut store {
+            if !store.memory_growing(old_byte_size, new_byte_size, maximum)? {
+                return Ok(None);
+            }
+        }
+
+        // Never exceed maximum, even if limiter permitted it.
+        if let Some(max) = maximum {
+            if new_byte_size > max {
+                if let Some(store) = store {
+                    // FIXME: shared memories may not have an associated store
+                    // to report the growth failure to but the error should not
+                    // be dropped
+                    // (https://github.com/bytecodealliance/wasmtime/issues/4240).
+                    store.memory_grow_failed(format_err!("Memory maximum size exceeded"))?;
+                }
+                return Ok(None);
+            }
+        }
+
+        match self.alloc.grow_to(new_byte_size) {
+            Ok(_) => Ok(Some((old_byte_size, new_byte_size))),
+            Err(e) => {
+                // FIXME: shared memories may not have an associated store to
+                // report the growth failure to but the error should not be
+                // dropped
+                // (https://github.com/bytecodealliance/wasmtime/issues/4240).
+                if let Some(store) = store {
+                    store.memory_grow_failed(e)?;
+                }
+                Ok(None)
+            }
+        }
+    }
+
+    pub fn vmmemory(&mut self) -> VMMemoryDefinition {
+        self.alloc.vmmemory()
+    }
+
+    pub fn byte_size(&self) -> usize {
+        self.alloc.byte_size()
+    }
+
+    pub fn needs_init(&self) -> bool {
+        self.alloc.needs_init()
+    }
+
+    pub fn memory_may_move(&self) -> bool {
+        self.alloc.memory_may_move()
+    }
+
+    pub fn wasm_accessible(&self) -> Range<usize> {
+        self.alloc.wasm_accessible()
+    }
+
+    pub fn unwrap_static_image(self) -> MemoryImageSlot {
+        self.alloc.unwrap_static_image()
     }
 }
 
