@@ -60,13 +60,7 @@ pub trait RuntimeLinearMemory: Send + Sync {
     fn grow_to(&mut self, size: usize) -> Result<()>;
 
     /// Returns a pointer to the base of this linear memory allocation.
-    fn base_ptr(&mut self) -> *mut u8;
-
-    /// Returns the range of addresses that may be reached by WebAssembly.
-    ///
-    /// This starts at the base of linear memory and ends at the end of the
-    /// guard pages, if any.
-    fn wasm_accessible(&self) -> Range<usize>;
+    fn base_ptr(&self) -> *mut u8;
 
     /// Internal method for Wasmtime when used in conjunction with CoW images.
     /// This is used to inform the underlying memory that the size of memory has
@@ -282,14 +276,8 @@ impl RuntimeLinearMemory for MmapMemory {
         self.len = len;
     }
 
-    fn base_ptr(&mut self) -> *mut u8 {
+    fn base_ptr(&self) -> *mut u8 {
         unsafe { self.mmap.as_mut_ptr().add(self.pre_guard_size) }
-    }
-
-    fn wasm_accessible(&self) -> Range<usize> {
-        let base = self.mmap.as_ptr() as usize + self.pre_guard_size;
-        let end = base + (self.mmap.len() - self.pre_guard_size);
-        base..end
     }
 }
 
@@ -305,10 +293,6 @@ struct StaticMemory {
 
     /// The current size, in bytes, of this memory.
     size: usize,
-
-    /// The size, in bytes, of the virtual address allocation starting at `base`
-    /// and going to the end of the guard pages at the end of the linear memory.
-    memory_and_guard_size: usize,
 }
 
 impl StaticMemory {
@@ -317,7 +301,6 @@ impl StaticMemory {
         base_capacity: usize,
         initial_size: usize,
         maximum_size: Option<usize>,
-        memory_and_guard_size: usize,
     ) -> Result<Self> {
         if base_capacity < initial_size {
             bail!(
@@ -338,7 +321,6 @@ impl StaticMemory {
             base: SendSyncPtr::new(NonNull::new(base_ptr).unwrap()),
             capacity: base_capacity,
             size: initial_size,
-            memory_and_guard_size,
         })
     }
 }
@@ -366,14 +348,8 @@ impl RuntimeLinearMemory for StaticMemory {
         self.size = len;
     }
 
-    fn base_ptr(&mut self) -> *mut u8 {
+    fn base_ptr(&self) -> *mut u8 {
         self.base.as_ptr()
-    }
-
-    fn wasm_accessible(&self) -> Range<usize> {
-        let base = self.base.as_ptr() as usize;
-        let end = base + self.memory_and_guard_size;
-        base..end
     }
 }
 
@@ -409,17 +385,10 @@ impl Memory {
         base_ptr: *mut u8,
         base_capacity: usize,
         memory_image: MemoryImageSlot,
-        memory_and_guard_size: usize,
         store: &mut dyn VMStore,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(ty, Some(store))?;
-        let pooled_memory = StaticMemory::new(
-            base_ptr,
-            base_capacity,
-            minimum,
-            maximum,
-            memory_and_guard_size,
-        )?;
+        let pooled_memory = StaticMemory::new(base_ptr, base_capacity, minimum, maximum)?;
         let allocation = Box::new(pooled_memory);
 
         // Configure some defaults a bit differently for this memory within the
@@ -672,6 +641,8 @@ pub struct LocalMemory {
     alloc: Box<dyn RuntimeLinearMemory>,
     ty: wasmtime_environ::Memory,
     memory_may_move: bool,
+    memory_guard_size: usize,
+    memory_reservation: usize,
 
     /// An optional CoW mapping that provides the initial content of this
     /// memory.
@@ -682,7 +653,7 @@ impl LocalMemory {
     pub fn new(
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
-        mut alloc: Box<dyn RuntimeLinearMemory>,
+        alloc: Box<dyn RuntimeLinearMemory>,
         memory_image: Option<&Arc<MemoryImage>>,
     ) -> Result<LocalMemory> {
         // If a memory image was specified, try to create the MemoryImageSlot on
@@ -708,6 +679,8 @@ impl LocalMemory {
             alloc,
             memory_may_move: ty.memory_may_move(tunables),
             memory_image,
+            memory_guard_size: tunables.memory_guard_size.try_into().unwrap(),
+            memory_reservation: tunables.memory_reservation.try_into().unwrap(),
         })
     }
 
@@ -849,7 +822,19 @@ impl LocalMemory {
     }
 
     pub fn wasm_accessible(&self) -> Range<usize> {
-        self.alloc.wasm_accessible()
+        let base = self.alloc.base_ptr() as usize;
+        // From the base add:
+        //
+        // * max(capacity, reservation) -- all memory is guaranteed to have at
+        //   least `memory_reservation`, but capacity may go beyond that.
+        // * memory_guard_size - wasm is allowed to hit the guard page for
+        //   sigsegv for example.
+        //
+        // and this computes the range that wasm is allowed to load from and
+        // deterministically trap or succeed.
+        let end =
+            base + self.alloc.byte_capacity().max(self.memory_reservation) + self.memory_guard_size;
+        base..end
     }
 
     pub fn unwrap_static_image(self) -> MemoryImageSlot {

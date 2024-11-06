@@ -6,7 +6,6 @@ use crate::Trap;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use core::cell::UnsafeCell;
 use core::fmt;
-use core::ops::Range;
 use core::slice;
 use core::time::Duration;
 
@@ -691,10 +690,6 @@ pub unsafe trait LinearMemory: Send + Sync + 'static {
 
     /// Return the allocated memory as a mutable pointer to u8.
     fn as_ptr(&self) -> *mut u8;
-
-    /// Returns the range of native addresses that WebAssembly can natively
-    /// access from this linear memory, including guard pages.
-    fn wasm_accessible(&self) -> Range<usize>;
 }
 
 /// A memory creator. Can be used to provide a memory creator

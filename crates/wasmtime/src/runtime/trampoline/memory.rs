@@ -10,7 +10,6 @@ use crate::runtime::vm::{
 use crate::store::{InstanceId, StoreOpaque};
 use crate::MemoryType;
 use alloc::sync::Arc;
-use core::ops::Range;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryStyle, Module, Tunables,
     VMOffsets,
@@ -91,12 +90,8 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
         self.mem.grow_to(new_size)
     }
 
-    fn base_ptr(&mut self) -> *mut u8 {
+    fn base_ptr(&self) -> *mut u8 {
         self.mem.as_ptr()
-    }
-
-    fn wasm_accessible(&self) -> Range<usize> {
-        self.mem.wasm_accessible()
     }
 }
 

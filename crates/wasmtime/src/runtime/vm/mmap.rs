@@ -143,7 +143,7 @@ impl Mmap {
 
     /// Return the allocated memory as a mutable pointer to u8.
     #[inline]
-    pub fn as_mut_ptr(&mut self) -> *mut u8 {
+    pub fn as_mut_ptr(&self) -> *mut u8 {
         self.sys.as_mut_ptr()
     }
 
