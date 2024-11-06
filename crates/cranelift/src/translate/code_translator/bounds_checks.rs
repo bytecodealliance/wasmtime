@@ -27,7 +27,7 @@ use cranelift_codegen::{
     ir::{Expr, Fact},
 };
 use cranelift_frontend::FunctionBuilder;
-use wasmtime_environ::{MemoryStyle, WasmResult};
+use wasmtime_environ::WasmResult;
 use Reachability::*;
 
 /// Helper used to emit bounds checks (as necessary) and compute the native
@@ -64,9 +64,14 @@ where
     let pcc = env.proof_carrying_code();
 
     let host_page_size_log2 = env.target_config().page_size_align_log2;
-    let can_use_virtual_memory =
-        heap.memory.page_size_log2 >= host_page_size_log2 && env.signals_based_traps();
+    let can_use_virtual_memory = heap
+        .memory
+        .can_use_virtual_memory(env.tunables(), host_page_size_log2);
+    let can_elide_bounds_check = heap
+        .memory
+        .can_elide_bounds_check(env.tunables(), host_page_size_log2);
     let memory_guard_size = env.tunables().memory_guard_size;
+    let memory_reservation = env.tunables().memory_reservation;
 
     let make_compare = |builder: &mut FunctionBuilder,
                         compare_kind: IntCC,
@@ -133,312 +138,288 @@ where
     // as `u64`s without fear of overflow, and we only have to be concerned with
     // whether adding in `index` will overflow.
     //
-    // Finally, the following right-hand sides of the matches do have a little
+    // Finally, the following if/else chains do have a little
     // bit of duplicated code across them, but I think writing it this way is
     // worth it for readability and seeing very clearly each of our cases for
     // different bounds checks and optimizations of those bounds checks. It is
     // intentionally written in a straightforward case-matching style that will
     // hopefully make it easy to port to ISLE one day.
-    let style = MemoryStyle::for_memory(heap.memory, env.tunables());
-    Ok(match style {
-        // ====== Dynamic Memories ======
+    let result = if offset_and_size >= heap.memory.maximum_byte_size().unwrap_or(u64::MAX) {
+        // Special case: trap immediately if `offset + access_size >
+        // max_memory_size`, since we will end up being out-of-bounds regardless
+        // of the given `index`.
+        env.before_unconditionally_trapping_memory_access(builder)?;
+        env.trap(builder, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+        Unreachable
+    } else if can_elide_bounds_check
+        && u64::from(u32::MAX) <= memory_reservation + memory_guard_size - offset_and_size
+    {
+        // Special case for when we can completely omit explicit
+        // bounds checks for 32-bit memories.
         //
-        // 1. First special case for when `offset + access_size == 1`:
+        // First, let's rewrite our comparison to move all of the constants
+        // to one side:
         //
-        //            index + 1 > bound
-        //        ==> index >= bound
-        MemoryStyle::Dynamic { .. } if offset_and_size == 1 => {
-            let bound = get_dynamic_heap_bound(builder, env, heap);
-            let oob = make_compare(
-                builder,
-                IntCC::UnsignedGreaterThanOrEqual,
-                index,
-                Some(0),
-                bound,
-                Some(0),
-            );
-            Reachable(explicit_check_oob_condition_and_compute_addr(
-                env,
-                builder,
-                heap,
-                index,
-                offset,
-                access_size,
-                spectre_mitigations_enabled,
-                AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
-                oob,
-            ))
+        //         index + offset + access_size > bound
+        //     ==> index > bound - (offset + access_size)
+        //
+        // We know the subtraction on the right-hand side won't wrap because
+        // we didn't hit the unconditional trap case above.
+        //
+        // Additionally, we add our guard pages (if any) to the right-hand
+        // side, since we can rely on the virtual memory subsystem at runtime
+        // to catch out-of-bound accesses within the range `bound .. bound +
+        // guard_size`. So now we are dealing with
+        //
+        //     index > bound + guard_size - (offset + access_size)
+        //
+        // Note that `bound + guard_size` cannot overflow for
+        // correctly-configured heaps, as otherwise the heap wouldn't fit in
+        // a 64-bit memory space.
+        //
+        // The complement of our should-this-trap comparison expression is
+        // the should-this-not-trap comparison expression:
+        //
+        //     index <= bound + guard_size - (offset + access_size)
+        //
+        // If we know the right-hand side is greater than or equal to
+        // `u32::MAX`, then
+        //
+        //     index <= u32::MAX <= bound + guard_size - (offset + access_size)
+        //
+        // This expression is always true when the heap is indexed with
+        // 32-bit integers because `index` cannot be larger than
+        // `u32::MAX`. This means that `index` is always either in bounds or
+        // within the guard page region, neither of which require emitting an
+        // explicit bounds check.
+        assert!(heap.index_type() == ir::types::I32);
+        assert!(
+            can_use_virtual_memory,
+            "static memories require the ability to use virtual memory"
+        );
+        Reachable(compute_addr(
+            &mut builder.cursor(),
+            heap,
+            env.pointer_type(),
+            index,
+            offset,
+            AddrPcc::static32(heap.pcc_memory_type, memory_reservation + memory_guard_size),
+        ))
+    } else if can_use_virtual_memory
+        && heap.memory.minimum_byte_size().unwrap_or(u64::MAX) <= memory_reservation
+        && !heap.memory.memory_may_move(env.tunables())
+    {
+        // Special case for when we can rely on virtual memory, the minimum
+        // byte size of this memory fits within the memory reservation, and
+        // memory isn't allowed to move. In this situation we know that
+        // memory will statically not grow beyond `memory_reservation` so we
+        // and we know that memory from 0 to that limit is guaranteed to be
+        // valid or trap. Here we effectively assume that the dynamic size
+        // of linear memory is its maximal value, `memory_reservation`, and
+        // we can avoid loading the actual length of memory.
+        //
+        // We have to explicitly test whether
+        //
+        //     index > bound - (offset + access_size)
+        //
+        // and trap if so.
+        //
+        // Since we have to emit explicit bounds checks, we might as well be
+        // precise, not rely on the virtual memory subsystem at all, and not
+        // factor in the guard pages here.
+        //
+        // NB: this subtraction cannot wrap because we didn't hit the above
+        // special case.
+        let adjusted_bound = memory_reservation - offset_and_size;
+        let adjusted_bound_value = builder
+            .ins()
+            .iconst(env.pointer_type(), adjusted_bound as i64);
+        if pcc {
+            builder.func.dfg.facts[adjusted_bound_value] =
+                Some(Fact::constant(pointer_bit_width, adjusted_bound));
         }
-
-        // 2. Second special case for when we know that there are enough guard
-        //    pages to cover the offset and access size.
+        let oob = make_compare(
+            builder,
+            IntCC::UnsignedGreaterThan,
+            index,
+            Some(0),
+            adjusted_bound_value,
+            Some(0),
+        );
+        Reachable(explicit_check_oob_condition_and_compute_addr(
+            env,
+            builder,
+            heap,
+            index,
+            offset,
+            access_size,
+            spectre_mitigations_enabled,
+            AddrPcc::static32(heap.pcc_memory_type, memory_reservation),
+            oob,
+        ))
+    } else if offset_and_size == 1 {
+        // Special case for when `offset + access_size == 1`:
         //
-        //    The precise should-we-trap condition is
+        //         index + 1 > bound
+        //     ==> index >= bound
+        let bound = get_dynamic_heap_bound(builder, env, heap);
+        let oob = make_compare(
+            builder,
+            IntCC::UnsignedGreaterThanOrEqual,
+            index,
+            Some(0),
+            bound,
+            Some(0),
+        );
+        Reachable(explicit_check_oob_condition_and_compute_addr(
+            env,
+            builder,
+            heap,
+            index,
+            offset,
+            access_size,
+            spectre_mitigations_enabled,
+            AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
+            oob,
+        ))
+    } else if can_use_virtual_memory && offset_and_size <= memory_guard_size {
+        // Special case for when we know that there are enough guard
+        // pages to cover the offset and access size.
         //
-        //        index + offset + access_size > bound
+        // The precise should-we-trap condition is
         //
-        //    However, if we instead check only the partial condition
+        //     index + offset + access_size > bound
         //
-        //        index > bound
+        // However, if we instead check only the partial condition
         //
-        //    then the most out of bounds that the access can be, while that
-        //    partial check still succeeds, is `offset + access_size`.
+        //     index > bound
         //
-        //    However, when we have a guard region that is at least as large as
-        //    `offset + access_size`, we can rely on the virtual memory
-        //    subsystem handling these out-of-bounds errors at
-        //    runtime. Therefore, the partial `index > bound` check is
-        //    sufficient for this heap configuration.
+        // then the most out of bounds that the access can be, while that
+        // partial check still succeeds, is `offset + access_size`.
         //
-        //    Additionally, this has the advantage that a series of Wasm loads
-        //    that use the same dynamic index operand but different static
-        //    offset immediates -- which is a common code pattern when accessing
-        //    multiple fields in the same struct that is in linear memory --
-        //    will all emit the same `index > bound` check, which we can GVN.
-        MemoryStyle::Dynamic { .. }
-            if can_use_virtual_memory && offset_and_size <= memory_guard_size =>
-        {
-            let bound = get_dynamic_heap_bound(builder, env, heap);
-            let oob = make_compare(
-                builder,
-                IntCC::UnsignedGreaterThan,
-                index,
-                Some(0),
-                bound,
-                Some(0),
-            );
-            Reachable(explicit_check_oob_condition_and_compute_addr(
-                env,
-                builder,
-                heap,
-                index,
-                offset,
-                access_size,
-                spectre_mitigations_enabled,
-                AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
-                oob,
-            ))
+        // However, when we have a guard region that is at least as large as
+        // `offset + access_size`, we can rely on the virtual memory
+        // subsystem handling these out-of-bounds errors at
+        // runtime. Therefore, the partial `index > bound` check is
+        // sufficient for this heap configuration.
+        //
+        // Additionally, this has the advantage that a series of Wasm loads
+        // that use the same dynamic index operand but different static
+        // offset immediates -- which is a common code pattern when accessing
+        // multiple fields in the same struct that is in linear memory --
+        // will all emit the same `index > bound` check, which we can GVN.
+        let bound = get_dynamic_heap_bound(builder, env, heap);
+        let oob = make_compare(
+            builder,
+            IntCC::UnsignedGreaterThan,
+            index,
+            Some(0),
+            bound,
+            Some(0),
+        );
+        Reachable(explicit_check_oob_condition_and_compute_addr(
+            env,
+            builder,
+            heap,
+            index,
+            offset,
+            access_size,
+            spectre_mitigations_enabled,
+            AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
+            oob,
+        ))
+    } else if offset_and_size <= heap.memory.minimum_byte_size().unwrap_or(u64::MAX) {
+        // Special case for when `offset + access_size <= min_size`.
+        //
+        // We know that `bound >= min_size`, so we can do the following
+        // comparison, without fear of the right-hand side wrapping around:
+        //
+        //         index + offset + access_size > bound
+        //     ==> index > bound - (offset + access_size)
+        let bound = get_dynamic_heap_bound(builder, env, heap);
+        let adjustment = offset_and_size as i64;
+        let adjustment_value = builder.ins().iconst(env.pointer_type(), adjustment);
+        if pcc {
+            builder.func.dfg.facts[adjustment_value] =
+                Some(Fact::constant(pointer_bit_width, offset_and_size));
         }
-
-        // 3. Third special case for when `offset + access_size <= min_size`.
-        //
-        //    We know that `bound >= min_size`, so we can do the following
-        //    comparison, without fear of the right-hand side wrapping around:
-        //
-        //            index + offset + access_size > bound
-        //        ==> index > bound - (offset + access_size)
-        MemoryStyle::Dynamic { .. }
-            if offset_and_size <= heap.memory.minimum_byte_size().unwrap_or(u64::MAX) =>
-        {
-            let bound = get_dynamic_heap_bound(builder, env, heap);
-            let adjustment = offset_and_size as i64;
-            let adjustment_value = builder.ins().iconst(env.pointer_type(), adjustment);
-            if pcc {
-                builder.func.dfg.facts[adjustment_value] =
-                    Some(Fact::constant(pointer_bit_width, offset_and_size));
-            }
-            let adjusted_bound = builder.ins().isub(bound, adjustment_value);
-            if pcc {
-                builder.func.dfg.facts[adjusted_bound] = Some(Fact::global_value_offset(
-                    pointer_bit_width,
-                    bound_gv,
-                    -adjustment,
-                ));
-            }
-            let oob = make_compare(
-                builder,
-                IntCC::UnsignedGreaterThan,
-                index,
-                Some(0),
-                adjusted_bound,
-                Some(adjustment),
-            );
-            Reachable(explicit_check_oob_condition_and_compute_addr(
-                env,
-                builder,
-                heap,
-                index,
-                offset,
-                access_size,
-                spectre_mitigations_enabled,
-                AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
-                oob,
-            ))
+        let adjusted_bound = builder.ins().isub(bound, adjustment_value);
+        if pcc {
+            builder.func.dfg.facts[adjusted_bound] = Some(Fact::global_value_offset(
+                pointer_bit_width,
+                bound_gv,
+                -adjustment,
+            ));
         }
-
-        // 4. General case for dynamic memories:
+        let oob = make_compare(
+            builder,
+            IntCC::UnsignedGreaterThan,
+            index,
+            Some(0),
+            adjusted_bound,
+            Some(adjustment),
+        );
+        Reachable(explicit_check_oob_condition_and_compute_addr(
+            env,
+            builder,
+            heap,
+            index,
+            offset,
+            access_size,
+            spectre_mitigations_enabled,
+            AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
+            oob,
+        ))
+    } else {
+        // General case for dynamic bounds checks:
         //
-        //        index + offset + access_size > bound
+        //     index + offset + access_size > bound
         //
-        //    And we have to handle the overflow case in the left-hand side.
-        MemoryStyle::Dynamic { .. } => {
-            let access_size_val = builder
-                .ins()
-                // Explicit cast from u64 to i64: we just want the raw
-                // bits, and iconst takes an `Imm64`.
-                .iconst(env.pointer_type(), offset_and_size as i64);
-            if pcc {
-                builder.func.dfg.facts[access_size_val] =
-                    Some(Fact::constant(pointer_bit_width, offset_and_size));
-            }
-            let adjusted_index = env.uadd_overflow_trap(
-                builder,
-                index,
-                access_size_val,
-                ir::TrapCode::HEAP_OUT_OF_BOUNDS,
-            );
-            if pcc {
-                builder.func.dfg.facts[adjusted_index] = Some(Fact::value_offset(
-                    pointer_bit_width,
-                    index,
-                    i64::try_from(offset_and_size).unwrap(),
-                ));
-            }
-            let bound = get_dynamic_heap_bound(builder, env, heap);
-            let oob = make_compare(
-                builder,
-                IntCC::UnsignedGreaterThan,
-                adjusted_index,
-                i64::try_from(offset_and_size).ok(),
-                bound,
-                Some(0),
-            );
-            Reachable(explicit_check_oob_condition_and_compute_addr(
-                env,
-                builder,
-                heap,
-                index,
-                offset,
-                access_size,
-                spectre_mitigations_enabled,
-                AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
-                oob,
-            ))
+        // And we have to handle the overflow case in the left-hand side.
+        let access_size_val = builder
+            .ins()
+            // Explicit cast from u64 to i64: we just want the raw
+            // bits, and iconst takes an `Imm64`.
+            .iconst(env.pointer_type(), offset_and_size as i64);
+        if pcc {
+            builder.func.dfg.facts[access_size_val] =
+                Some(Fact::constant(pointer_bit_width, offset_and_size));
         }
-
-        // ====== Static Memories ======
-        //
-        // With static memories we know the size of the heap bound at compile
-        // time.
-        //
-        // 1. First special case: trap immediately if `offset + access_size >
-        //    bound`, since we will end up being out-of-bounds regardless of the
-        //    given `index`.
-        MemoryStyle::Static { byte_reservation } if offset_and_size > byte_reservation => {
-            assert!(
-                can_use_virtual_memory,
-                "static memories require the ability to use virtual memory"
-            );
-            env.before_unconditionally_trapping_memory_access(builder)?;
-            env.trap(builder, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
-            Unreachable
-        }
-
-        // 2. Second special case for when we can completely omit explicit
-        //    bounds checks for 32-bit static memories.
-        //
-        //    First, let's rewrite our comparison to move all of the constants
-        //    to one side:
-        //
-        //            index + offset + access_size > bound
-        //        ==> index > bound - (offset + access_size)
-        //
-        //    We know the subtraction on the right-hand side won't wrap because
-        //    we didn't hit the first special case.
-        //
-        //    Additionally, we add our guard pages (if any) to the right-hand
-        //    side, since we can rely on the virtual memory subsystem at runtime
-        //    to catch out-of-bound accesses within the range `bound .. bound +
-        //    guard_size`. So now we are dealing with
-        //
-        //        index > bound + guard_size - (offset + access_size)
-        //
-        //    Note that `bound + guard_size` cannot overflow for
-        //    correctly-configured heaps, as otherwise the heap wouldn't fit in
-        //    a 64-bit memory space.
-        //
-        //    The complement of our should-this-trap comparison expression is
-        //    the should-this-not-trap comparison expression:
-        //
-        //        index <= bound + guard_size - (offset + access_size)
-        //
-        //    If we know the right-hand side is greater than or equal to
-        //    `u32::MAX`, then
-        //
-        //        index <= u32::MAX <= bound + guard_size - (offset + access_size)
-        //
-        //    This expression is always true when the heap is indexed with
-        //    32-bit integers because `index` cannot be larger than
-        //    `u32::MAX`. This means that `index` is always either in bounds or
-        //    within the guard page region, neither of which require emitting an
-        //    explicit bounds check.
-        MemoryStyle::Static { byte_reservation }
-            if can_use_virtual_memory
-                && heap.index_type() == ir::types::I32
-                && u64::from(u32::MAX)
-                    <= byte_reservation + memory_guard_size - offset_and_size =>
-        {
-            assert!(
-                can_use_virtual_memory,
-                "static memories require the ability to use virtual memory"
-            );
-            Reachable(compute_addr(
-                &mut builder.cursor(),
-                heap,
-                env.pointer_type(),
+        let adjusted_index = env.uadd_overflow_trap(
+            builder,
+            index,
+            access_size_val,
+            ir::TrapCode::HEAP_OUT_OF_BOUNDS,
+        );
+        if pcc {
+            builder.func.dfg.facts[adjusted_index] = Some(Fact::value_offset(
+                pointer_bit_width,
                 index,
-                offset,
-                AddrPcc::static32(heap.pcc_memory_type, byte_reservation + memory_guard_size),
-            ))
+                i64::try_from(offset_and_size).unwrap(),
+            ));
         }
-
-        // 3. General case for static memories.
-        //
-        //    We have to explicitly test whether
-        //
-        //        index > bound - (offset + access_size)
-        //
-        //    and trap if so.
-        //
-        //    Since we have to emit explicit bounds checks, we might as well be
-        //    precise, not rely on the virtual memory subsystem at all, and not
-        //    factor in the guard pages here.
-        MemoryStyle::Static { byte_reservation } => {
-            assert!(
-                can_use_virtual_memory,
-                "static memories require the ability to use virtual memory"
-            );
-            // NB: this subtraction cannot wrap because we didn't hit the first
-            // special case.
-            let adjusted_bound = byte_reservation - offset_and_size;
-            let adjusted_bound_value = builder
-                .ins()
-                .iconst(env.pointer_type(), adjusted_bound as i64);
-            if pcc {
-                builder.func.dfg.facts[adjusted_bound_value] =
-                    Some(Fact::constant(pointer_bit_width, adjusted_bound));
-            }
-            let oob = make_compare(
-                builder,
-                IntCC::UnsignedGreaterThan,
-                index,
-                Some(0),
-                adjusted_bound_value,
-                Some(0),
-            );
-            Reachable(explicit_check_oob_condition_and_compute_addr(
-                env,
-                builder,
-                heap,
-                index,
-                offset,
-                access_size,
-                spectre_mitigations_enabled,
-                AddrPcc::static32(heap.pcc_memory_type, byte_reservation),
-                oob,
-            ))
-        }
-    })
+        let bound = get_dynamic_heap_bound(builder, env, heap);
+        let oob = make_compare(
+            builder,
+            IntCC::UnsignedGreaterThan,
+            adjusted_index,
+            i64::try_from(offset_and_size).ok(),
+            bound,
+            Some(0),
+        );
+        Reachable(explicit_check_oob_condition_and_compute_addr(
+            env,
+            builder,
+            heap,
+            index,
+            offset,
+            access_size,
+            spectre_mitigations_enabled,
+            AddrPcc::dynamic(heap.pcc_memory_type, bound_gv),
+            oob,
+        ))
+    };
+    Ok(result)
 }
 
 /// Get the bound of a dynamic heap as an `ir::Value`.

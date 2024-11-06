@@ -1798,6 +1798,46 @@ impl Memory {
         }
     }
 
+    /// Returns whether this memory can be implemented with virtual memory on
+    /// a host with `host_page_size_log2`.
+    ///
+    /// When this function returns `true` then it means that signals such as
+    /// SIGSEGV on the host are compatible with wasm and can be used to
+    /// represent out-of-bounds memory accesses.
+    ///
+    /// When this function returns `false` then it means that this memory must,
+    /// for example, have explicit bounds checks. This additionally means that
+    /// virtual memory traps (e.g. SIGSEGV) cannot be relied on to implement
+    /// linear memory semantics.
+    pub fn can_use_virtual_memory(&self, tunables: &Tunables, host_page_size_log2: u8) -> bool {
+        tunables.signals_based_traps && self.page_size_log2 >= host_page_size_log2
+    }
+
+    /// Returns whether this memory is a candidate for bounds check elision
+    /// given the configuration and host page size.
+    ///
+    /// This function determines whether the given compilation configuration and
+    /// hos enables possible bounds check elision for this memory. Bounds checks
+    /// can only be elided if [`Memory::can_use_virtual_memory`] returns `true`
+    /// for example but there are additionally requirements on the index size of
+    /// this memory and the memory reservation in `tunables`.
+    ///
+    /// Currently the only case that supports bounds check elision is when all
+    /// of these apply:
+    ///
+    /// * When [`Memory::can_use_virtual_memory`] returns `true`.
+    /// * This is a 32-bit linear memory (e.g. not 64-bit)
+    /// * `tunables.memory_reservation` is in excess of 4GiB
+    ///
+    /// In this situation all computable addresses fall within the reserved
+    /// space (modulo static offsets factoring in guard pages) so bounds checks
+    /// may be elidable.
+    pub fn can_elide_bounds_check(&self, tunables: &Tunables, host_page_size_log2: u8) -> bool {
+        self.can_use_virtual_memory(tunables, host_page_size_log2)
+            && self.idx_type == IndexType::I32
+            && tunables.memory_reservation >= (1 << 32)
+    }
+
     /// Returns the static size of this heap in bytes at runtime, if available.
     ///
     /// This is only computable when the minimum size equals the maximum size.
