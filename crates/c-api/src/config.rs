@@ -3,7 +3,6 @@
 #![cfg_attr(not(feature = "cache"), allow(unused_imports))]
 
 use crate::{handle_result, wasm_memorytype_t, wasmtime_error_t};
-use std::ops::Range;
 use std::os::raw::c_char;
 use std::ptr;
 use std::{ffi::CStr, sync::Arc};
