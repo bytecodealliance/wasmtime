@@ -30,7 +30,7 @@
 ;;       movl    $0, %esi
 ;;       movl    $0xa, %edx
 ;;       movq    8(%rsp), %rcx
-;;       callq   0x180
+;;       callq   0x16b
 ;;       addq    $8, %rsp
 ;;       addq    $8, %rsp
 ;;       movq    0x18(%rsp), %r14
