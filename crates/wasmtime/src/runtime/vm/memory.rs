@@ -13,7 +13,7 @@ use alloc::sync::Arc;
 use core::ops::Range;
 use core::ptr::NonNull;
 use core::time::Duration;
-use wasmtime_environ::{MemoryStyle, Trap, Tunables};
+use wasmtime_environ::{Trap, Tunables};
 
 /// A memory allocator
 pub trait RuntimeMemoryCreator: Send + Sync {
@@ -227,62 +227,54 @@ impl MmapMemory {
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
         minimum: usize,
-        mut maximum: Option<usize>,
+        maximum: Option<usize>,
         memory_image: Option<&Arc<MemoryImage>>,
     ) -> Result<Self> {
-        let style = MemoryStyle::for_memory(*ty, tunables);
-
         // It's a programmer error for these two configuration values to exceed
         // the host available address space, so panic if such a configuration is
         // found (mostly an issue for hypothetical 32-bit hosts).
+        //
+        // Also be sure to round up to the host page size for this value.
         let offset_guard_bytes = usize::try_from(tunables.memory_guard_size).unwrap();
+        let offset_guard_bytes = round_usize_up_to_host_pages(offset_guard_bytes)?;
         let pre_guard_bytes = if tunables.guard_before_linear_memory {
             offset_guard_bytes
         } else {
             0
         };
 
-        // Ensure that our guard regions are multiples of the host page size.
-        let offset_guard_bytes = round_usize_up_to_host_pages(offset_guard_bytes)?;
-        let pre_guard_bytes = round_usize_up_to_host_pages(pre_guard_bytes)?;
-
-        let (alloc_bytes, extra_to_reserve_on_growth) = match style {
-            // Dynamic memories start with the larger of the minimum size of
-            // memory or the configured memory reservation. This ensures that
-            // the allocation fits the constraints in `tunables` where it must
-            // be as large as the specified reservation.
-            //
-            // Then `reserve` amount is added extra to the virtual memory
-            // allocation for memory to grow into.
-            MemoryStyle::Dynamic { reserve } => {
-                let minimum = round_usize_up_to_host_pages(minimum)?;
-                let reservation = usize::try_from(tunables.memory_reservation).unwrap();
-                let reservation = round_usize_up_to_host_pages(reservation)?;
-
-                (
-                    minimum.max(reservation),
-                    round_usize_up_to_host_pages(usize::try_from(reserve).unwrap())?,
-                )
+        // Calculate how much is going to be allocated for this linear memory in
+        // addition to how much extra space we're reserving to grow into.
+        //
+        // If the minimum size of this linear memory fits within the initial
+        // allocation (tunables.memory_reservation) then that's how many bytes
+        // are going to be allocated. If the maximum size of linear memory
+        // additionally fits within the entire allocation then there's no need
+        // to reserve any extra for growth.
+        //
+        // If the minimum size doesn't fit within this linear memory.
+        let mut alloc_bytes = tunables.memory_reservation;
+        let mut extra_to_reserve_on_growth = tunables.memory_reservation_for_growth;
+        let minimum_u64 = u64::try_from(minimum).unwrap();
+        if minimum_u64 <= alloc_bytes {
+            if let Ok(max) = ty.maximum_byte_size() {
+                if max <= alloc_bytes {
+                    extra_to_reserve_on_growth = 0;
+                }
             }
+        } else {
+            alloc_bytes = minimum_u64.saturating_add(extra_to_reserve_on_growth);
+        }
 
-            // Static memories will never move in memory and consequently get
-            // their entire allocation up-front with no extra room to grow into.
-            // Note that the `maximum` is adjusted here to whatever the smaller
-            // of the two is, the `maximum` given or the `bound` specified for
-            // this memory.
-            MemoryStyle::Static { byte_reservation } => {
-                assert!(byte_reservation >= ty.minimum_byte_size().unwrap());
-                let bound_bytes = usize::try_from(byte_reservation).unwrap();
-                let bound_bytes = round_usize_up_to_host_pages(bound_bytes)?;
-                maximum = Some(bound_bytes.min(maximum.unwrap_or(usize::MAX)));
-                (bound_bytes, 0)
-            }
-        };
-        assert!(usize_is_multiple_of_host_page_size(alloc_bytes));
+        // Convert `alloc_bytes` and `extra_to_reserve_on_growth` to
+        // page-aligned `usize` values.
+        let alloc_bytes = usize::try_from(alloc_bytes).unwrap();
+        let extra_to_reserve_on_growth = usize::try_from(extra_to_reserve_on_growth).unwrap();
+        let alloc_bytes = round_usize_up_to_host_pages(alloc_bytes)?;
+        let extra_to_reserve_on_growth = round_usize_up_to_host_pages(extra_to_reserve_on_growth)?;
 
         let request_bytes = pre_guard_bytes
             .checked_add(alloc_bytes)
-            .and_then(|i| i.checked_add(extra_to_reserve_on_growth))
             .and_then(|i| i.checked_add(offset_guard_bytes))
             .ok_or_else(|| format_err!("cannot allocate {} with guard regions", minimum))?;
         assert!(usize_is_multiple_of_host_page_size(request_bytes));
