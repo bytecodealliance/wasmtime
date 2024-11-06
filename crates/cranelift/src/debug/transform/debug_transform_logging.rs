@@ -1,6 +1,8 @@
 use crate::debug::Reader;
 use core::fmt;
-use gimli::{write, AttributeValue, DebuggingInformationEntry, Dwarf, LittleEndian, Unit};
+use gimli::{
+    write, AttributeValue, DebuggingInformationEntry, Dwarf, LittleEndian, Unit, UnitSectionOffset,
+};
 
 macro_rules! dbi_log {
     ($($tt:tt)*) => {
@@ -18,7 +20,7 @@ pub struct CompileUnitSummary<'a> {
 impl<'a> fmt::Debug for CompileUnitSummary<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let unit = self.unit;
-        let offs: usize = unit.header.offset().as_debug_info_offset().unwrap().0;
+        let offs = get_offset_value(unit.header.offset());
         write!(f, "0x{offs:08x} [")?;
         let comp_dir = match unit.comp_dir {
             Some(dir) => &dir.to_string_lossy(),
@@ -51,7 +53,7 @@ pub fn log_begin_input_die(
 ) {
     dbi_log!(
         "=== Begin DIE at 0x{:08x} (depth = {}):\n{:?}",
-        die.offset().0,
+        get_offset_value(die.offset().to_unit_section_offset(unit)),
         depth,
         DieDetailedSummary { dwarf, unit, die }
     );
@@ -210,6 +212,7 @@ impl<'a> fmt::Debug for OutDieDetailedSummary<'a> {
 
 pub fn log_end_output_die(
     input_die: &DebuggingInformationEntry<Reader<'_>>,
+    input_unit: &Unit<Reader<'_>, usize>,
     die_id: write::UnitEntryId,
     unit: &write::Unit,
     strings: &write::StringTable,
@@ -217,7 +220,7 @@ pub fn log_end_output_die(
 ) {
     dbi_log!(
         "=== End DIE at 0x{:08x} (depth = {}):\n{:?}",
-        input_die.offset().0,
+        get_offset_value(input_die.offset().to_unit_section_offset(input_unit)),
         depth,
         OutDieDetailedSummary {
             die_id,
@@ -229,13 +232,21 @@ pub fn log_end_output_die(
 
 pub fn log_end_output_die_skipped(
     input_die: &DebuggingInformationEntry<Reader<'_>>,
+    input_unit: &Unit<Reader<'_>, usize>,
     reason: &str,
     depth: isize,
 ) {
     dbi_log!(
         "=== End DIE at 0x{:08x} (depth = {}):\n  Skipped as {}\n",
-        input_die.offset().0,
+        get_offset_value(input_die.offset().to_unit_section_offset(input_unit)),
         depth,
         reason
     );
+}
+
+fn get_offset_value(offset: UnitSectionOffset) -> usize {
+    match offset {
+        UnitSectionOffset::DebugInfoOffset(offs) => offs.0,
+        UnitSectionOffset::DebugTypesOffset(offs) => offs.0,
+    }
 }
