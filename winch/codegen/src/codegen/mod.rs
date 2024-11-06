@@ -18,8 +18,8 @@ use wasmparser::{
 };
 use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_TABLE_OUT_OF_BOUNDS};
 use wasmtime_environ::{
-    GlobalIndex, MemoryIndex, MemoryStyle, PtrSize, TableIndex, Tunables, TypeIndex, WasmHeapType,
-    WasmValType, FUNCREF_MASK,
+    GlobalIndex, MemoryIndex, PtrSize, TableIndex, Tunables, TypeIndex, WasmHeapType, WasmValType,
+    FUNCREF_MASK,
 };
 
 mod context;
@@ -592,175 +592,170 @@ where
         );
         let offset_with_access_size = add_offset_and_access_size(offset, access_size);
 
-        let style = MemoryStyle::for_memory(heap.memory, self.tunables);
-        let addr = match style {
-            // == Dynamic Heaps ==
+        let can_elide_bounds_check = heap
+            .memory
+            .can_elide_bounds_check(self.tunables, self.env.page_size_log2);
 
-            // Account for the general case for dynamic memories. The access is
-            // out of bounds if:
-            // * index + offset + access_size overflows
-            //   OR
-            // * index + offset + access_size > bound
-            MemoryStyle::Dynamic { .. } => {
-                let bounds =
-                    bounds::load_dynamic_heap_bounds(&mut self.context, self.masm, &heap, ptr_size);
-
-                let index_reg = index.as_typed_reg().reg;
-                // Allocate a temporary register to hold
-                //      index + offset + access_size
-                //  which will serve as the check condition.
-                let index_offset_and_access_size = self.context.any_gpr(self.masm);
-
-                // Move the value of the index to the
-                // index_offset_and_access_size register to perform the overflow
-                // check to avoid clobbering the initial index value.
-                //
-                // We derive size of the operation from the heap type since:
-                //
-                // * This is the first assignment to the
-                // `index_offset_and_access_size` register
-                //
-                // * The memory64 proposal specifies that the index is bound to
-                // the heap type instead of hardcoding it to 32-bits (i32).
-                self.masm.mov(
-                    writable!(index_offset_and_access_size),
-                    index_reg.into(),
-                    heap.index_type().into(),
-                );
-                // Perform
-                // index = index + offset + access_size, trapping if the
-                // addition overflows.
-                //
-                // We use the target's pointer size rather than depending on the heap
-                // type since we want to check for overflow; even though the
-                // offset and access size are guaranteed to be bounded by the heap
-                // type, when added, if used with the wrong operand size, their
-                // result could be clamped, resulting in an erroneus overflow
-                // check.
-                self.masm.checked_uadd(
-                    writable!(index_offset_and_access_size),
-                    index_offset_and_access_size,
-                    RegImm::i64(offset_with_access_size as i64),
-                    ptr_size,
-                    TrapCode::HEAP_OUT_OF_BOUNDS,
-                );
-
-                let addr = bounds::load_heap_addr_checked(
-                    self.masm,
-                    &mut self.context,
-                    ptr_size,
-                    &heap,
-                    enable_spectre_mitigation,
-                    bounds,
-                    index,
-                    offset,
-                    |masm, bounds, _| {
-                        let bounds_reg = bounds.as_typed_reg().reg;
-                        masm.cmp(
-                            index_offset_and_access_size.into(),
-                            bounds_reg.into(),
-                            // We use the pointer size to keep the bounds
-                            // comparison consistent with the result of the
-                            // overflow check above.
-                            ptr_size,
-                        );
-                        IntCmpKind::GtU
-                    },
-                );
-                self.context.free_reg(bounds.as_typed_reg().reg);
-                self.context.free_reg(index_offset_and_access_size);
-                Some(addr)
-            }
-
-            // == Static Heaps ==
-
+        let addr = if offset_with_access_size > heap.memory.maximum_byte_size().unwrap_or(u64::MAX)
+        {
             // Detect at compile time if the access is out of bounds.
             // Doing so will put the compiler in an unreachable code state,
             // optimizing the work that the compiler has to do until the
             // reachability is restored or when reaching the end of the
             // function.
-            MemoryStyle::Static { byte_reservation }
-                if offset_with_access_size > byte_reservation =>
-            {
-                self.emit_fuel_increment();
-                self.masm.trap(TrapCode::HEAP_OUT_OF_BOUNDS);
-                self.context.reachable = false;
-                None
-            }
 
-            // Account for the case in which we can completely elide the bounds
-            // checks.
-            //
-            // This case, makes use of the fact that if a memory access uses
-            // a 32-bit index, then we be certain that
-            //
-            //      index <= u32::MAX
-            //
-            // Therefore if any 32-bit index access occurs in the region
-            // represented by
-            //
-            //      bound + guard_size - (offset + access_size)
-            //
-            // We are certain that it's in bounds or that the underlying virtual
-            // memory subsystem will report an illegal access at runtime.
-            //
-            // Note:
-            //
-            // * bound - (offset + access_size) cannot wrap, because it's checked
-            // in the condition above.
-            // * bound + heap.offset_guard_size is guaranteed to not overflow if
-            // the heap configuration is correct, given that it's address must
-            // fit in 64-bits.
-            // * If the heap type is 32-bits, the offset is at most u32::MAX, so
-            // no  adjustment is needed as part of
-            // [bounds::ensure_index_and_offset].
-            MemoryStyle::Static { byte_reservation }
-                if heap.index_type() == WasmValType::I32
-                    && u64::from(u32::MAX)
-                        <= byte_reservation + u64::from(self.tunables.memory_guard_size)
-                            - offset_with_access_size =>
-            {
-                let addr = self.context.any_gpr(self.masm);
-                bounds::load_heap_addr_unchecked(self.masm, &heap, index, offset, addr, ptr_size);
-                Some(addr)
-            }
+            self.emit_fuel_increment();
+            self.masm.trap(TrapCode::HEAP_OUT_OF_BOUNDS);
+            self.context.reachable = false;
+            None
+        } else if !can_elide_bounds_check {
+            // Account for the general case for bounds-checked memories. The
+            // access is out of bounds if:
+            // * index + offset + access_size overflows
+            //   OR
+            // * index + offset + access_size > bound
+            let bounds =
+                bounds::load_dynamic_heap_bounds(&mut self.context, self.masm, &heap, ptr_size);
 
-            // Account for the general case of static memories. The access is out
-            // of bounds if:
+            let index_reg = index.as_typed_reg().reg;
+            // Allocate a temporary register to hold
+            //      index + offset + access_size
+            //  which will serve as the check condition.
+            let index_offset_and_access_size = self.context.any_gpr(self.masm);
+
+            // Move the value of the index to the
+            // index_offset_and_access_size register to perform the overflow
+            // check to avoid clobbering the initial index value.
             //
-            // index > bound - (offset + access_size)
+            // We derive size of the operation from the heap type since:
             //
-            // bound - (offset + access_size) cannot wrap, because we already
-            // checked that (offset + access_size) > bound, above.
-            MemoryStyle::Static { byte_reservation } => {
-                let bounds = Bounds::from_u64(byte_reservation);
-                let addr = bounds::load_heap_addr_checked(
-                    self.masm,
-                    &mut self.context,
-                    ptr_size,
-                    &heap,
-                    enable_spectre_mitigation,
-                    bounds,
-                    index,
-                    offset,
-                    |masm, bounds, index| {
-                        let adjusted_bounds = bounds.as_u64() - offset_with_access_size;
-                        let index_reg = index.as_typed_reg().reg;
-                        masm.cmp(
-                            index_reg,
-                            RegImm::i64(adjusted_bounds as i64),
-                            // Similar to the dynamic heap case, even though the
-                            // offset and access size are bound through the heap
-                            // type, when added they can overflow, resulting in
-                            // an erroneus comparison, therfore we rely on the
-                            // target pointer size.
-                            ptr_size,
-                        );
-                        IntCmpKind::GtU
-                    },
-                );
-                Some(addr)
-            }
+            // * This is the first assignment to the
+            // `index_offset_and_access_size` register
+            //
+            // * The memory64 proposal specifies that the index is bound to
+            // the heap type instead of hardcoding it to 32-bits (i32).
+            self.masm.mov(
+                writable!(index_offset_and_access_size),
+                index_reg.into(),
+                heap.index_type().into(),
+            );
+            // Perform
+            // index = index + offset + access_size, trapping if the
+            // addition overflows.
+            //
+            // We use the target's pointer size rather than depending on the heap
+            // type since we want to check for overflow; even though the
+            // offset and access size are guaranteed to be bounded by the heap
+            // type, when added, if used with the wrong operand size, their
+            // result could be clamped, resulting in an erroneus overflow
+            // check.
+            self.masm.checked_uadd(
+                writable!(index_offset_and_access_size),
+                index_offset_and_access_size,
+                RegImm::i64(offset_with_access_size as i64),
+                ptr_size,
+                TrapCode::HEAP_OUT_OF_BOUNDS,
+            );
+
+            let addr = bounds::load_heap_addr_checked(
+                self.masm,
+                &mut self.context,
+                ptr_size,
+                &heap,
+                enable_spectre_mitigation,
+                bounds,
+                index,
+                offset,
+                |masm, bounds, _| {
+                    let bounds_reg = bounds.as_typed_reg().reg;
+                    masm.cmp(
+                        index_offset_and_access_size.into(),
+                        bounds_reg.into(),
+                        // We use the pointer size to keep the bounds
+                        // comparison consistent with the result of the
+                        // overflow check above.
+                        ptr_size,
+                    );
+                    IntCmpKind::GtU
+                },
+            );
+            self.context.free_reg(bounds.as_typed_reg().reg);
+            self.context.free_reg(index_offset_and_access_size);
+            Some(addr)
+
+        // Account for the case in which we can completely elide the bounds
+        // checks.
+        //
+        // This case, makes use of the fact that if a memory access uses
+        // a 32-bit index, then we be certain that
+        //
+        //      index <= u32::MAX
+        //
+        // Therefore if any 32-bit index access occurs in the region
+        // represented by
+        //
+        //      bound + guard_size - (offset + access_size)
+        //
+        // We are certain that it's in bounds or that the underlying virtual
+        // memory subsystem will report an illegal access at runtime.
+        //
+        // Note:
+        //
+        // * bound - (offset + access_size) cannot wrap, because it's checked
+        // in the condition above.
+        // * bound + heap.offset_guard_size is guaranteed to not overflow if
+        // the heap configuration is correct, given that it's address must
+        // fit in 64-bits.
+        // * If the heap type is 32-bits, the offset is at most u32::MAX, so
+        // no  adjustment is needed as part of
+        // [bounds::ensure_index_and_offset].
+        } else if u64::from(u32::MAX)
+            <= self.tunables.memory_reservation + self.tunables.memory_guard_size
+                - offset_with_access_size
+        {
+            assert!(can_elide_bounds_check);
+            assert!(heap.index_type() == WasmValType::I32);
+            let addr = self.context.any_gpr(self.masm);
+            bounds::load_heap_addr_unchecked(self.masm, &heap, index, offset, addr, ptr_size);
+            Some(addr)
+
+        // Account for the all remaining cases, aka. The access is out
+        // of bounds if:
+        //
+        // index > bound - (offset + access_size)
+        //
+        // bound - (offset + access_size) cannot wrap, because we already
+        // checked that (offset + access_size) > bound, above.
+        } else {
+            assert!(can_elide_bounds_check);
+            assert!(heap.index_type() == WasmValType::I32);
+            let bounds = Bounds::from_u64(self.tunables.memory_reservation);
+            let addr = bounds::load_heap_addr_checked(
+                self.masm,
+                &mut self.context,
+                ptr_size,
+                &heap,
+                enable_spectre_mitigation,
+                bounds,
+                index,
+                offset,
+                |masm, bounds, index| {
+                    let adjusted_bounds = bounds.as_u64() - offset_with_access_size;
+                    let index_reg = index.as_typed_reg().reg;
+                    masm.cmp(
+                        index_reg,
+                        RegImm::i64(adjusted_bounds as i64),
+                        // Similar to the dynamic heap case, even though the
+                        // offset and access size are bound through the heap
+                        // type, when added they can overflow, resulting in
+                        // an erroneus comparison, therfore we rely on the
+                        // target pointer size.
+                        ptr_size,
+                    );
+                    IntCmpKind::GtU
+                },
+            );
+            Some(addr)
         };
 
         self.context.free_reg(index.as_typed_reg().reg);
