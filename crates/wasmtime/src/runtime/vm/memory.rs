@@ -1,6 +1,78 @@
 //! Memory management for linear memories.
 //!
-//! `RuntimeLinearMemory` is to WebAssembly linear memories what `Table` is to WebAssembly tables.
+//! This module implements the runtime data structures that manage linear
+//! memories for WebAssembly. There's a number of types here each with various
+//! purposes, and this is the high level relationships between types where an
+//! arrow here means "builds on top of".
+//!
+//! ```text
+//! ┌─────────────────────┐
+//! │                     │
+//! │        Memory       ├─────────────┐
+//! │                     │             │
+//! └──────────┬──────────┘             │
+//!            │                        │
+//!            │                        │
+//!            ▼                        ▼
+//! ┌─────────────────────┐     ┌──────────────┐
+//! │                     │     │              │
+//! │     LocalMemory     │◄────┤ SharedMemory │
+//! │                     │     │              │
+//! └──────────┬──────────┘     └──────────────┘
+//!            │
+//!            │
+//!            ▼
+//! ┌─────────────────────┐
+//! │                     │
+//! │ RuntimeLinearMemory ├─────┬───────┐
+//! │                     │     │       │
+//! └──────────┬──────────┘     └───────┼───────────────┐
+//!            │                        │               │
+//!            │                        │               │
+//!            ▼                        ▼               ▼
+//! ┌─────────────────────┐     ┌──────────────┐     ┌─────┐
+//! │                     │     │              │     │     │
+//! │      MmapMemory     │     │ StaticMemory │     │ ... │
+//! │                     │     │              │     │     │
+//! └─────────────────────┘     └──────────────┘     └─────┘
+//! ```
+//!
+//! In more detail:
+//!
+//! * `Memory` - the root of what's actually stored in a wasm instance. This
+//!   implements the high-level embedder APIs one would expect from a wasm
+//!   linear memory.
+//!
+//! * `SharedMemory` - this is one of the variants of a local memory. A shared
+//!   memory contains `RwLock<LocalMemory>` where all the real bits happen
+//!   within the lock.
+//!
+//! * `LocalMemory` - this is an owned allocation of a linear memory which
+//!   maintains low-level state that's shared between `SharedMemory` and the
+//!   instance-local state of `Memory`. One example is that `LocalMemory::grow`
+//!   has most of the logic around memory growth.
+//!
+//! * `RuntimeLinearMemory` - this is a trait which `LocalMemory` delegates to.
+//!   This trait is intentionally relatively simple to be exposed in Wasmtime's
+//!   embedder API. This is exposed all the way through `wasmtime::Config` so
+//!   embedders can provide arbitrary implementations.
+//!
+//! * `MmapMemory` - this is an implementation of `RuntimeLinearMemory` in terms
+//!   of the platform's mmap primitive.
+//!
+//! * `StaticMemory` - this is an implementation of `RuntimeLinearMemory`
+//!   for the pooling allocator where the base pointer is already allocated
+//!   and contents are managed through `MemoryImageSlot`.
+//!
+//! Other important types for memories are `MemoryImage` and `MemoryImageSlot`
+//! which manage CoW state for memories. This is implemented at the
+//! `LocalMemory` layer.
+//!
+//! FIXME: don't have both RuntimeLinearMemory and wasmtime::LinearMemory, they
+//! should be merged together.
+//!
+//! FIXME: don't have both RuntimeMemoryCreator and wasmtime::MemoryCreator,
+//! they should be merged together.
 
 use crate::prelude::*;
 use crate::runtime::vm::mmap::Mmap;
