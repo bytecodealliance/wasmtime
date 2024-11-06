@@ -12,7 +12,6 @@ pub enum SharedMemory {}
 impl SharedMemory {
     pub fn wrap(
         _ty: &wasmtime_environ::Memory,
-        _tunables: &Tunables,
         _memory: Box<dyn RuntimeLinearMemory>,
     ) -> Result<Self> {
         bail!("support for shared memories was disabled at compile time");
@@ -99,6 +98,10 @@ impl RuntimeLinearMemory for SharedMemory {
     }
 
     fn wasm_accessible(&self) -> Range<usize> {
+        match *self {}
+    }
+
+    fn memory_may_move(&self) -> bool {
         match *self {}
     }
 }

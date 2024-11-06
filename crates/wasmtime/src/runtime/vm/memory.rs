@@ -71,6 +71,10 @@ pub trait RuntimeLinearMemory: Send + Sync {
     /// Returns `None` if the memory is unbounded.
     fn maximum_byte_size(&self) -> Option<usize>;
 
+    /// Returns whether the base pointer of this memory may be relocated over
+    /// time to accommodate requests for growth.
+    fn memory_may_move(&self) -> bool;
+
     /// Grows a memory by `delta_pages`.
     ///
     /// This performs the necessary checks on the growth before delegating to
@@ -203,6 +207,9 @@ pub struct MmapMemory {
     // specified so that the cost of repeated growth is amortized.
     extra_to_reserve_on_growth: usize,
 
+    // Whether or not this memory is allowed to relocate the base pointer.
+    memory_may_move: bool,
+
     // Size in bytes of extra guard pages before the start and after the end to
     // optimize loads and stores with constant offsets.
     pre_guard_size: usize,
@@ -240,12 +247,23 @@ impl MmapMemory {
         let pre_guard_bytes = round_usize_up_to_host_pages(pre_guard_bytes)?;
 
         let (alloc_bytes, extra_to_reserve_on_growth) = match style {
-            // Dynamic memories start with the minimum size plus the `reserve`
-            // amount specified to grow into.
-            MemoryStyle::Dynamic { reserve } => (
-                round_usize_up_to_host_pages(minimum)?,
-                round_usize_up_to_host_pages(usize::try_from(reserve).unwrap())?,
-            ),
+            // Dynamic memories start with the larger of the minimum size of
+            // memory or the configured memory reservation. This ensures that
+            // the allocation fits the constraints in `tunables` where it must
+            // be as large as the specified reservation.
+            //
+            // Then `reserve` amount is added extra to the virtual memory
+            // allocation for memory to grow into.
+            MemoryStyle::Dynamic { reserve } => {
+                let minimum = round_usize_up_to_host_pages(minimum)?;
+                let reservation = usize::try_from(tunables.memory_reservation).unwrap();
+                let reservation = round_usize_up_to_host_pages(reservation)?;
+
+                (
+                    minimum.max(reservation),
+                    round_usize_up_to_host_pages(usize::try_from(reserve).unwrap())?,
+                )
+            }
 
             // Static memories will never move in memory and consequently get
             // their entire allocation up-front with no extra room to grow into.
@@ -305,6 +323,7 @@ impl MmapMemory {
             offset_guard_size: offset_guard_bytes,
             extra_to_reserve_on_growth,
             memory_image,
+            memory_may_move: ty.memory_may_move(tunables),
         })
     }
 
@@ -332,6 +351,10 @@ impl RuntimeLinearMemory for MmapMemory {
         self.maximum
     }
 
+    fn memory_may_move(&self) -> bool {
+        self.memory_may_move
+    }
+
     fn grow_to(&mut self, new_size: usize) -> Result<()> {
         assert!(usize_is_multiple_of_host_page_size(self.offset_guard_size));
         assert!(usize_is_multiple_of_host_page_size(self.pre_guard_size));
@@ -339,6 +362,10 @@ impl RuntimeLinearMemory for MmapMemory {
 
         let new_accessible = round_usize_up_to_host_pages(new_size)?;
         if new_accessible > self.mmap.len() - self.offset_guard_size - self.pre_guard_size {
+            if !self.memory_may_move {
+                bail!("disallowing growth as base pointer of memory cannot move");
+            }
+
             // If the new size of this heap exceeds the current size of the
             // allocation we have, then this must be a dynamic heap. Use
             // `new_size` to calculate a new size of an allocation, allocate it,
@@ -507,6 +534,10 @@ impl RuntimeLinearMemory for StaticMemory {
         Some(self.capacity)
     }
 
+    fn memory_may_move(&self) -> bool {
+        false
+    }
+
     fn grow_to(&mut self, new_byte_size: usize) -> Result<()> {
         // Never exceed the static memory size; this check should have been made
         // prior to arriving here.
@@ -556,10 +587,27 @@ impl Memory {
         let (minimum, maximum) = Self::limit_new(ty, Some(store))?;
         let allocation = creator.new_memory(ty, tunables, minimum, maximum, memory_image)?;
         let allocation = if ty.shared {
-            Box::new(SharedMemory::wrap(ty, tunables, allocation)?)
+            Box::new(SharedMemory::wrap(ty, allocation)?)
         } else {
             allocation
         };
+
+        // Double-check that the created memory respects the safety invariant of
+        // whether the memory may move or not at runtime.
+        //
+        // * If the memory is allowed to move, that's ok.
+        // * If the allocation doesn't allow the memory to move, that's ok.
+        // * If the heap has a static size meaning the min is the same as the
+        //   max, that's ok since it'll never be requested to move.
+        //
+        // Otherwise something went wrong so trigger an assert.
+        assert!(
+            ty.memory_may_move(tunables)
+                || !allocation.memory_may_move()
+                || ty.static_heap_size().is_some(),
+            "this linear memory should not be able to move its base pointer",
+        );
+
         Ok(Memory(allocation))
     }
 
@@ -652,16 +700,11 @@ impl Memory {
         // informing the limiter is lossy and may not be 100% accurate, but for
         // now the expected uses of limiter means that's ok.
         if let Some(store) = store {
-            // We ignore the store limits for shared memories since they are
-            // technically not created within a store (though, trickily, they
-            // may be associated with one in order to get a `vmctx`).
-            if !ty.shared {
-                if !store.memory_growing(0, minimum.unwrap_or(absolute_max), maximum)? {
-                    bail!(
-                        "memory minimum size of {} pages exceeds memory limits",
-                        ty.limits.min
-                    );
-                }
+            if !store.memory_growing(0, minimum.unwrap_or(absolute_max), maximum)? {
+                bail!(
+                    "memory minimum size of {} pages exceeds memory limits",
+                    ty.limits.min
+                );
             }
         }
 

@@ -2371,7 +2371,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         // If we have a declared maximum, we can make this a "static" heap, which is
         // allocated up front and never moved.
         let style = MemoryStyle::for_memory(memory, self.tunables);
-        let (readonly_base, base_fact, memory_type) = match style {
+        let (base_fact, memory_type) = match style {
             MemoryStyle::Dynamic { .. } => {
                 let (base_fact, data_mt) = if let Some(ptr_memtype) = ptr_memtype {
                     // Create a memtype representing the untyped memory region.
@@ -2428,7 +2428,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
                     (None, None)
                 };
 
-                (false, base_fact, data_mt)
+                (base_fact, data_mt)
             }
             MemoryStyle::Static {
                 byte_reservation: bound_bytes,
@@ -2476,12 +2476,12 @@ impl<'module_environment> crate::translate::FuncEnvironment
                 } else {
                     (None, None)
                 };
-                (true, base_fact, data_mt)
+                (base_fact, data_mt)
             }
         };
 
         let mut flags = MemFlags::trusted().with_checked();
-        if readonly_base {
+        if !memory.memory_may_move(self.tunables) {
             flags.set_readonly();
         }
         let heap_base = func.create_global_value(ir::GlobalValueData::Load {

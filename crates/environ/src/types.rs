@@ -1,4 +1,4 @@
-use crate::{wasm_unsupported, WasmResult};
+use crate::{wasm_unsupported, Tunables, WasmResult};
 use alloc::borrow::Cow;
 use alloc::boxed::Box;
 use core::{fmt, ops::Range};
@@ -1809,6 +1809,32 @@ impl Memory {
         } else {
             None
         }
+    }
+
+    /// Returs whether or not the base pointer of this memory is allowed to be
+    /// relocated at runtime.
+    ///
+    /// When this function returns `false` then it means that after the initial
+    /// allocation the base pointer is constant for the entire lifetime of a
+    /// memory. This can enable compiler optimizations, for example.
+    pub fn memory_may_move(&self, tunables: &Tunables) -> bool {
+        // Shared memories cannot ever relocate their base pointer so the
+        // settings configured in the engine must be appropriate for them ahead
+        // of time.
+        if self.shared {
+            return false;
+        }
+
+        // If movement is disallowed in engine configuration, then the answer is
+        // "no".
+        if !tunables.memory_may_move {
+            return false;
+        }
+
+        // If the maximum size of this memory is above the threshold of the
+        // initial memory reservation then the memory may move.
+        let max = self.maximum_byte_size().unwrap_or(u64::MAX);
+        max > tunables.memory_reservation
     }
 }
 

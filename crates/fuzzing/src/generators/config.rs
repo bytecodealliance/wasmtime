@@ -496,15 +496,20 @@ impl WasmtimeConfig {
             self.debug_info = false;
         }
 
+        // Forcibly don't use the `CustomUnaligned` memory configuration when
+        // wasm threads are enabled or when the pooling allocator is used. For
+        // the pooling allocator it doesn't use custom memory creators anyway
+        // and for wasm threads that will require some refactoring of the
+        // `LinearMemory` trait to bubble up the request that the linear memory
+        // not move. Otherwise that just generates a panic right now.
+        if config.threads_enabled || matches!(self.strategy, InstanceAllocationStrategy::Pooling(_))
+        {
+            self.avoid_custom_unaligned_memory(u)?;
+        }
+
         // If using the pooling allocator, constrain the memory and module configurations
         // to the module limits.
         if let InstanceAllocationStrategy::Pooling(pooling) = &mut self.strategy {
-            // Forcibly don't use the `CustomUnaligned` memory configuration
-            // with the pooling allocator active.
-            if let MemoryConfig::CustomUnaligned = self.memory_config {
-                self.memory_config = MemoryConfig::Normal(u.arbitrary()?);
-            }
-
             // If the pooling allocator is used, do not allow shared memory to
             // be created. FIXME: see
             // https://github.com/bytecodealliance/wasmtime/issues/4244.
@@ -575,6 +580,15 @@ impl WasmtimeConfig {
 
         self.make_internally_consistent();
 
+        Ok(())
+    }
+
+    /// Helper to switch `MemoryConfig::CustomUnaligned` to
+    /// `MemoryConfig::Normal`
+    fn avoid_custom_unaligned_memory(&mut self, u: &mut Unstructured<'_>) -> arbitrary::Result<()> {
+        if let MemoryConfig::CustomUnaligned = self.memory_config {
+            self.memory_config = MemoryConfig::Normal(u.arbitrary()?);
+        }
         Ok(())
     }
 
