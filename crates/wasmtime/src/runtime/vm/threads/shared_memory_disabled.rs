@@ -1,7 +1,8 @@
 #![allow(missing_docs)]
 
 use crate::prelude::*;
-use crate::runtime::vm::{RuntimeLinearMemory, VMMemoryDefinition, VMStore, WaitResult};
+use crate::runtime::vm::memory::LocalMemory;
+use crate::runtime::vm::{VMMemoryDefinition, VMStore, WaitResult};
 use core::ops::Range;
 use core::time::Duration;
 use wasmtime_environ::{Trap, Tunables};
@@ -10,10 +11,7 @@ use wasmtime_environ::{Trap, Tunables};
 pub enum SharedMemory {}
 
 impl SharedMemory {
-    pub fn wrap(
-        _ty: &wasmtime_environ::Memory,
-        _memory: Box<dyn RuntimeLinearMemory>,
-    ) -> Result<Self> {
+    pub fn wrap(_ty: &wasmtime_environ::Memory, _memory: LocalMemory) -> Result<Self> {
         bail!("support for shared memories was disabled at compile time");
     }
 
@@ -80,10 +78,6 @@ impl SharedMemory {
     }
 
     pub(crate) fn wasm_accessible(&self) -> Range<usize> {
-        match *self {}
-    }
-
-    fn memory_may_move(&self) -> bool {
         match *self {}
     }
 }

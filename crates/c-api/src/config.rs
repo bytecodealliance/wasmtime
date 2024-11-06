@@ -322,37 +322,23 @@ struct CHostLinearMemory {
 unsafe impl LinearMemory for CHostLinearMemory {
     fn byte_size(&self) -> usize {
         let mut byte_size = 0;
-        let mut maximum_byte_size = 0;
+        let mut byte_capacity = 0;
         let cb = self.get_memory;
-        cb(self.foreign.data, &mut byte_size, &mut maximum_byte_size);
+        cb(self.foreign.data, &mut byte_size, &mut byte_capacity);
         return byte_size;
     }
-    fn maximum_byte_size(&self) -> Option<usize> {
+    fn byte_capacity(&self) -> usize {
         let mut byte_size = 0;
-        let mut maximum_byte_size = 0;
+        let mut byte_capacity = 0;
         let cb = self.get_memory;
-        cb(self.foreign.data, &mut byte_size, &mut maximum_byte_size);
-        if maximum_byte_size == 0 {
-            None
-        } else {
-            Some(maximum_byte_size)
-        }
+        cb(self.foreign.data, &mut byte_size, &mut byte_capacity);
+        byte_capacity
     }
     fn as_ptr(&self) -> *mut u8 {
         let mut byte_size = 0;
-        let mut maximum_byte_size = 0;
+        let mut byte_capacity = 0;
         let cb = self.get_memory;
-        cb(self.foreign.data, &mut byte_size, &mut maximum_byte_size)
-    }
-    fn wasm_accessible(&self) -> Range<usize> {
-        let mut byte_size = 0;
-        let mut maximum_byte_size = 0;
-        let cb = self.get_memory;
-        let ptr = cb(self.foreign.data, &mut byte_size, &mut maximum_byte_size);
-        Range {
-            start: ptr as usize,
-            end: ptr as usize + byte_size,
-        }
+        cb(self.foreign.data, &mut byte_size, &mut byte_capacity)
     }
     fn grow_to(&mut self, new_size: usize) -> Result<()> {
         let cb = self.grow_memory;
