@@ -174,6 +174,40 @@ check: exited with status
 
 #[test]
 #[ignore]
+pub fn test_debug_dwarf_generic_lldb() -> Result<()> {
+    let output = lldb_with_script(
+        &[
+            "-Ccache=n",
+            "-Ddebug-info",
+            "tests/all/debug/testsuite/generic.wasm",
+        ],
+        r#"b MainDefinedFunction
+r
+p __vmctx->set()
+n
+p (x + x)
+b SatelliteFunction
+c
+n
+p (x + x)
+c"#,
+    )?;
+
+    check_lldb_output(
+        &output,
+        r#"
+check: stop reason = breakpoint 1.1
+check: 2
+check: stop reason = breakpoint 2.1
+check: 4
+check: exited with status = 0
+"#,
+    )?;
+    Ok(())
+}
+
+#[test]
+#[ignore]
 pub fn test_debug_dwarf_ref() -> Result<()> {
     let output = lldb_with_script(
         &[

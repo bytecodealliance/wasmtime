@@ -336,7 +336,7 @@ pub(crate) fn clone_unit(
                 let (wp_die_id, vmctx_die_id) =
                     add_internal_types(out_unit, out_root_id, out_strings, memory_offset);
 
-                log_end_output_die(entry, out_root_id, out_unit, out_strings, 0);
+                log_end_output_die(entry, unit, out_root_id, out_unit, out_strings, 0);
                 stack.push(out_root_id);
                 (
                     out_unit,
@@ -376,7 +376,7 @@ pub(crate) fn clone_unit(
             // if D is below B continue to skip
             if new_depth > 0 {
                 skip_at_depth = Some((new_depth, cached));
-                log_end_output_die_skipped(entry, "unreachable", current_depth);
+                log_end_output_die_skipped(entry, unit, "unreachable", current_depth);
                 continue;
             }
             // otherwise process D with `depth_delta` being the difference from A to D
@@ -395,7 +395,7 @@ pub(crate) fn clone_unit(
             // Here B = C so `depth` is 0. A is the previous node so `cached` =
             // `depth_delta`.
             skip_at_depth = Some((0, depth_delta));
-            log_end_output_die_skipped(entry, "unreachable", current_depth);
+            log_end_output_die_skipped(entry, unit, "unreachable", current_depth);
             continue;
         }
 
@@ -467,7 +467,7 @@ pub(crate) fn clone_unit(
             stack.push(die_id);
             assert_eq!(stack.len(), new_stack_len);
             die_ref_map.insert(entry.offset(), die_id);
-            log_end_output_die(entry, die_id, out_unit, out_strings, current_depth);
+            log_end_output_die(entry, unit, die_id, out_unit, out_strings, current_depth);
             continue;
         }
 
@@ -524,7 +524,14 @@ pub(crate) fn clone_unit(
             )?;
         }
 
-        log_end_output_die(entry, out_die_id, out_unit, out_strings, current_depth);
+        log_end_output_die(
+            entry,
+            unit,
+            out_die_id,
+            out_unit,
+            out_strings,
+            current_depth,
+        );
     }
     die_ref_map.patch(pending_die_refs, out_unit);
     Ok(Some((out_unit_id, die_ref_map, pending_di_refs)))
