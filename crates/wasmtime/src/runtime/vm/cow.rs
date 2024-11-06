@@ -348,22 +348,6 @@ impl MemoryImageSlot {
         }
     }
 
-    #[cfg(feature = "pooling-allocator")]
-    pub(crate) fn dummy() -> MemoryImageSlot {
-        MemoryImageSlot {
-            // This pointer isn't ever actually used so its value doesn't
-            // matter but we need to satisfy `NonNull` requirement so create a
-            // `dangling` pointer as a sentinel that should cause problems if
-            // it's actually used.
-            base: NonNull::dangling().into(),
-            static_size: 0,
-            image: None,
-            accessible: 0,
-            dirty: false,
-            clear_on_drop: false,
-        }
-    }
-
     /// Inform the MemoryImageSlot that it should *not* clear the underlying
     /// address space when dropped. This should be used only when the
     /// caller will clear or reuse the address space in some other

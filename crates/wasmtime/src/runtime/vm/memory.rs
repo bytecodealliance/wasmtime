@@ -164,14 +164,15 @@ pub trait RuntimeLinearMemory: Send + Sync {
     /// `RuntimeMemoryCreator::new_memory()`.
     fn needs_init(&self) -> bool;
 
-    /// Used for optional dynamic downcasting.
-    fn as_any_mut(&mut self) -> &mut dyn core::any::Any;
-
     /// Returns the range of addresses that may be reached by WebAssembly.
     ///
     /// This starts at the base of linear memory and ends at the end of the
     /// guard pages, if any.
     fn wasm_accessible(&self) -> Range<usize>;
+
+    fn unwrap_static_image(self: Box<Self>) -> MemoryImageSlot {
+        panic!("not a static memory")
+    }
 }
 
 /// A linear memory instance.
@@ -441,10 +442,6 @@ impl RuntimeLinearMemory for MmapMemory {
         self.memory_image.is_none()
     }
 
-    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
-        self
-    }
-
     fn wasm_accessible(&self) -> Range<usize> {
         let base = self.mmap.as_ptr() as usize + self.pre_guard_size;
         let end = base + (self.mmap.len() - self.pre_guard_size);
@@ -553,19 +550,22 @@ impl RuntimeLinearMemory for StaticMemory {
         !self.memory_image.has_image()
     }
 
-    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
-        self
-    }
-
     fn wasm_accessible(&self) -> Range<usize> {
         let base = self.base.as_ptr() as usize;
         let end = base + self.memory_and_guard_size;
         base..end
     }
+
+    fn unwrap_static_image(self: Box<Self>) -> MemoryImageSlot {
+        self.memory_image
+    }
 }
 
 /// Representation of a runtime wasm linear memory.
-pub struct Memory(pub(crate) Box<dyn RuntimeLinearMemory>);
+pub enum Memory {
+    Local(Box<dyn RuntimeLinearMemory>),
+    Shared(SharedMemory),
+}
 
 impl Memory {
     /// Create a new dynamic (movable) memory instance for the specified plan.
@@ -578,11 +578,6 @@ impl Memory {
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(ty, Some(store))?;
         let allocation = creator.new_memory(ty, tunables, minimum, maximum, memory_image)?;
-        let allocation = if ty.shared {
-            Box::new(SharedMemory::wrap(ty, allocation)?)
-        } else {
-            allocation
-        };
 
         // Double-check that the created memory respects the safety invariant of
         // whether the memory may move or not at runtime.
@@ -600,7 +595,11 @@ impl Memory {
             "this linear memory should not be able to move its base pointer",
         );
 
-        Ok(Memory(allocation))
+        Ok(if ty.shared {
+            Memory::Shared(SharedMemory::wrap(ty, allocation)?)
+        } else {
+            Memory::Local(allocation)
+        })
     }
 
     /// Create a new static (immovable) memory instance for the specified plan.
@@ -623,15 +622,14 @@ impl Memory {
             memory_and_guard_size,
         )?;
         let allocation = Box::new(pooled_memory);
-        let allocation: Box<dyn RuntimeLinearMemory> = if ty.shared {
+        Ok(if ty.shared {
             // FIXME(#4244): not supported with the pooling allocator (which
             // `new_static` is always used with), see `MemoryPool::validate` as
             // well).
             todo!("using shared memory with the pooling allocator is a work in progress");
         } else {
-            allocation
-        };
-        Ok(Memory(allocation))
+            Memory::Local(allocation)
+        })
     }
 
     /// Calls the `store`'s limiter to optionally prevent a memory from being allocated.
@@ -714,19 +712,28 @@ impl Memory {
 
     /// Returns this memory's page size, in bytes.
     pub fn page_size(&self) -> u64 {
-        self.0.page_size()
+        match self {
+            Memory::Local(mem) => mem.page_size(),
+            Memory::Shared(mem) => mem.page_size(),
+        }
     }
 
     /// Returns the number of allocated wasm pages.
     pub fn byte_size(&self) -> usize {
-        self.0.byte_size()
+        match self {
+            Memory::Local(mem) => mem.byte_size(),
+            Memory::Shared(mem) => mem.byte_size(),
+        }
     }
 
     /// Returns whether or not this memory needs initialization. It
     /// may not if it already has initial content thanks to a CoW
     /// mechanism.
     pub(crate) fn needs_init(&self) -> bool {
-        self.0.needs_init()
+        match self {
+            Memory::Local(mem) => mem.needs_init(),
+            Memory::Shared(mem) => mem.needs_init(),
+        }
     }
 
     /// Grow memory by the specified amount of wasm pages.
@@ -751,39 +758,51 @@ impl Memory {
         delta_pages: u64,
         store: Option<&mut dyn VMStore>,
     ) -> Result<Option<usize>, Error> {
-        self.0
-            .grow(delta_pages, store)
-            .map(|opt| opt.map(|(old, _new)| old))
+        let result = match self {
+            Memory::Local(mem) => mem.grow(delta_pages, store)?,
+            Memory::Shared(mem) => mem.grow(delta_pages, store)?,
+        };
+        match result {
+            Some((old, _new)) => Ok(Some(old)),
+            None => Ok(None),
+        }
     }
 
     /// Return a `VMMemoryDefinition` for exposing the memory to compiled wasm code.
     pub fn vmmemory(&mut self) -> VMMemoryDefinition {
-        self.0.vmmemory()
+        match self {
+            Memory::Local(mem) => mem.vmmemory(),
+            // `vmmemory()` is used for writing the `VMMemoryDefinition` of a
+            // memory into its `VMContext`; this should never be possible for a
+            // shared memory because the only `VMMemoryDefinition` for it should
+            // be stored in its own `def` field.
+            Memory::Shared(_) => unreachable!(),
+        }
     }
 
     /// Consume the memory, returning its [`MemoryImageSlot`] if any is present.
     /// The image should only be present for a subset of memories created with
     /// [`Memory::new_static()`].
     #[cfg(feature = "pooling-allocator")]
-    pub fn unwrap_static_image(mut self) -> MemoryImageSlot {
-        let mem = self.0.as_any_mut().downcast_mut::<StaticMemory>().unwrap();
-        core::mem::replace(&mut mem.memory_image, MemoryImageSlot::dummy())
+    pub fn unwrap_static_image(self) -> MemoryImageSlot {
+        match self {
+            Memory::Local(mem) => mem.unwrap_static_image(),
+            Memory::Shared(_) => panic!("expected a local memory"),
+        }
     }
 
     /// If the [Memory] is a [SharedMemory], unwrap it and return a clone to
     /// that shared memory.
     pub fn as_shared_memory(&mut self) -> Option<&mut SharedMemory> {
-        let as_any = self.0.as_any_mut();
-        if let Some(m) = as_any.downcast_mut::<SharedMemory>() {
-            Some(m)
-        } else {
-            None
+        match self {
+            Memory::Local(_) => None,
+            Memory::Shared(mem) => Some(mem),
         }
     }
 
     /// Implementation of `memory.atomic.notify` for all memories.
     pub fn atomic_notify(&mut self, addr: u64, count: u32) -> Result<u32, Trap> {
-        match self.0.as_any_mut().downcast_mut::<SharedMemory>() {
+        match self.as_shared_memory() {
             Some(m) => m.atomic_notify(addr, count),
             None => {
                 validate_atomic_addr(&self.vmmemory(), addr, 4, 4)?;
@@ -799,7 +818,7 @@ impl Memory {
         expected: u32,
         timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
-        match self.0.as_any_mut().downcast_mut::<SharedMemory>() {
+        match self.as_shared_memory() {
             Some(m) => m.atomic_wait32(addr, expected, timeout),
             None => {
                 validate_atomic_addr(&self.vmmemory(), addr, 4, 4)?;
@@ -815,7 +834,7 @@ impl Memory {
         expected: u64,
         timeout: Option<Duration>,
     ) -> Result<WaitResult, Trap> {
-        match self.0.as_any_mut().downcast_mut::<SharedMemory>() {
+        match self.as_shared_memory() {
             Some(m) => m.atomic_wait64(addr, expected, timeout),
             None => {
                 validate_atomic_addr(&self.vmmemory(), addr, 8, 8)?;
@@ -828,7 +847,10 @@ impl Memory {
     /// this linear memory. Note that this includes guard pages which wasm can
     /// hit.
     pub fn wasm_accessible(&self) -> Range<usize> {
-        self.0.wasm_accessible()
+        match self {
+            Memory::Local(mem) => mem.wasm_accessible(),
+            Memory::Shared(mem) => mem.wasm_accessible(),
+        }
     }
 }
 

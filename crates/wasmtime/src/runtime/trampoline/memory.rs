@@ -107,10 +107,6 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
         true
     }
 
-    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
-        self
-    }
-
     fn wasm_accessible(&self) -> Range<usize> {
         self.mem.wasm_accessible()
     }
