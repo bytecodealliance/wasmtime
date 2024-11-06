@@ -247,12 +247,23 @@ impl MmapMemory {
         let pre_guard_bytes = round_usize_up_to_host_pages(pre_guard_bytes)?;
 
         let (alloc_bytes, extra_to_reserve_on_growth) = match style {
-            // Dynamic memories start with the minimum size plus the `reserve`
-            // amount specified to grow into.
-            MemoryStyle::Dynamic { reserve } => (
-                round_usize_up_to_host_pages(minimum)?,
-                round_usize_up_to_host_pages(usize::try_from(reserve).unwrap())?,
-            ),
+            // Dynamic memories start with the larger of the minimum size of
+            // memory or the configured memory reservation. This ensures that
+            // the allocation fits the constraints in `tunables` where it must
+            // be as large as the specified reservation.
+            //
+            // Then `reserve` amount is added extra to the virtual memory
+            // allocation for memory to grow into.
+            MemoryStyle::Dynamic { reserve } => {
+                let minimum = round_usize_up_to_host_pages(minimum)?;
+                let reservation = usize::try_from(tunables.memory_reservation).unwrap();
+                let reservation = round_usize_up_to_host_pages(reservation)?;
+
+                (
+                    minimum.max(reservation),
+                    round_usize_up_to_host_pages(usize::try_from(reserve).unwrap())?,
+                )
+            }
 
             // Static memories will never move in memory and consequently get
             // their entire allocation up-front with no extra room to grow into.
