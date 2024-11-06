@@ -21,44 +21,44 @@
 ;; wasm[0]::function[0]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    %rdx, %r10
-;;       addq    0x32(%rip), %r10
-;;       jb      0x36
-;;   14: cmpq    0x68(%rdi), %r10
-;;       seta    %sil
-;;       testb   %sil, %sil
-;;       jne     0x38
-;;   25: addq    0x60(%rdi), %rdx
-;;       movl    $0xffff0000, %eax
-;;       movb    %cl, (%rdx, %rax)
+;;       movq    %rdx, %r9
+;;       addq    0x2a(%rip), %r9
+;;       jb      0x2f
+;;   14: cmpq    0x68(%rdi), %r9
+;;       ja      0x31
+;;   1e: addq    0x60(%rdi), %rdx
+;;       movl    $0xffff0000, %esi
+;;       movb    %cl, (%rdx, %rsi)
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   36: ud2
-;;   38: ud2
-;;   3a: addb    %al, (%rax)
-;;   3c: addb    %al, (%rax)
-;;   3e: addb    %al, (%rax)
-;;   40: addl    %eax, (%rax)
+;;   2f: ud2
+;;   31: ud2
+;;   33: addb    %al, (%rax)
+;;   35: addb    %al, (%rax)
+;;   37: addb    %al, (%rcx)
+;;   39: addb    %bh, %bh
+;;   3b: incl    (%rax)
+;;   3d: addb    %al, (%rax)
 ;;
 ;; wasm[0]::function[1]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    %rdx, %r10
-;;       addq    0x32(%rip), %r10
-;;       jb      0x98
-;;   74: cmpq    0x68(%rdi), %r10
-;;       seta    %sil
-;;       testb   %sil, %sil
-;;       jne     0x9a
-;;   85: addq    0x60(%rdi), %rdx
-;;       movl    $0xffff0000, %eax
-;;       movzbq  (%rdx, %rax), %rax
+;;       movq    %rdx, %r9
+;;       addq    0x2a(%rip), %r9
+;;       jb      0x71
+;;   54: cmpq    0x68(%rdi), %r9
+;;       ja      0x73
+;;   5e: addq    0x60(%rdi), %rdx
+;;       movl    $0xffff0000, %esi
+;;       movzbq  (%rdx, %rsi), %rax
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   98: ud2
-;;   9a: ud2
-;;   9c: addb    %al, (%rax)
-;;   9e: addb    %al, (%rax)
-;;   a0: addl    %eax, (%rax)
+;;   71: ud2
+;;   73: ud2
+;;   75: addb    %al, (%rax)
+;;   77: addb    %al, (%rcx)
+;;   79: addb    %bh, %bh
+;;   7b: incl    (%rax)
+;;   7d: addb    %al, (%rax)
