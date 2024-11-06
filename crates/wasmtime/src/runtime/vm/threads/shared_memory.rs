@@ -44,9 +44,6 @@ impl SharedMemory {
         if !ty.shared {
             bail!("shared memory must have a `shared` memory type");
         }
-        if memory.memory_may_move() {
-            bail!("shared memory cannot use a memory which may relocate the base pointer")
-        }
         Ok(Self(Arc::new(SharedMemoryInner {
             ty: *ty,
             spot: ParkingSpot::default(),

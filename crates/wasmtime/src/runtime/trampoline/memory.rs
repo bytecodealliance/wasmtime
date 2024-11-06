@@ -98,13 +98,6 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
     fn wasm_accessible(&self) -> Range<usize> {
         self.mem.wasm_accessible()
     }
-
-    fn memory_may_move(&self) -> bool {
-        // FIXME(#9568): should propagate this up to the `LinearMemory` trait,
-        // but for now pessimistically assume that consumers might move linear
-        // memory.
-        true
-    }
 }
 
 #[derive(Clone)]

@@ -53,10 +53,6 @@ pub trait RuntimeLinearMemory: Send + Sync {
     /// Growth up to this value should not relocate the base pointer.
     fn byte_capacity(&self) -> usize;
 
-    /// Returns whether the base pointer of this memory may be relocated over
-    /// time to accommodate requests for growth.
-    fn memory_may_move(&self) -> bool;
-
     /// Grow memory to the specified amount of bytes.
     ///
     /// Returns an error if memory can't be grown by the specified amount
@@ -114,9 +110,6 @@ pub struct MmapMemory {
     // The amount of extra bytes to reserve whenever memory grows. This is
     // specified so that the cost of repeated growth is amortized.
     extra_to_reserve_on_growth: usize,
-
-    // Whether or not this memory is allowed to relocate the base pointer.
-    memory_may_move: bool,
 
     // Size in bytes of extra guard pages before the start and after the end to
     // optimize loads and stores with constant offsets.
@@ -196,7 +189,6 @@ impl MmapMemory {
             pre_guard_size: pre_guard_bytes,
             offset_guard_size: offset_guard_bytes,
             extra_to_reserve_on_growth,
-            memory_may_move: ty.memory_may_move(tunables),
         })
     }
 
@@ -220,10 +212,6 @@ impl RuntimeLinearMemory for MmapMemory {
         self.mmap.len() - self.offset_guard_size - self.pre_guard_size
     }
 
-    fn memory_may_move(&self) -> bool {
-        self.memory_may_move
-    }
-
     fn grow_to(&mut self, new_size: usize) -> Result<()> {
         assert!(usize_is_multiple_of_host_page_size(self.offset_guard_size));
         assert!(usize_is_multiple_of_host_page_size(self.pre_guard_size));
@@ -231,10 +219,6 @@ impl RuntimeLinearMemory for MmapMemory {
 
         let new_accessible = round_usize_up_to_host_pages(new_size)?;
         if new_accessible > self.mmap.len() - self.offset_guard_size - self.pre_guard_size {
-            if !self.memory_may_move {
-                bail!("disallowing growth as base pointer of memory cannot move");
-            }
-
             // If the new size of this heap exceeds the current size of the
             // allocation we have, then this must be a dynamic heap. Use
             // `new_size` to calculate a new size of an allocation, allocate it,
@@ -368,10 +352,6 @@ impl RuntimeLinearMemory for StaticMemory {
         self.capacity
     }
 
-    fn memory_may_move(&self) -> bool {
-        false
-    }
-
     fn grow_to(&mut self, new_byte_size: usize) -> Result<()> {
         // Never exceed the static memory size; this check should have been made
         // prior to arriving here.
@@ -414,23 +394,6 @@ impl Memory {
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(ty, Some(store))?;
         let allocation = creator.new_memory(ty, tunables, minimum, maximum)?;
-
-        // Double-check that the created memory respects the safety invariant of
-        // whether the memory may move or not at runtime.
-        //
-        // * If the memory is allowed to move, that's ok.
-        // * If the allocation doesn't allow the memory to move, that's ok.
-        // * If the heap has a static size meaning the min is the same as the
-        //   max, that's ok since it'll never be requested to move.
-        //
-        // Otherwise something went wrong so trigger an assert.
-        assert!(
-            ty.memory_may_move(tunables)
-                || !allocation.memory_may_move()
-                || ty.static_heap_size().is_some(),
-            "this linear memory should not be able to move its base pointer",
-        );
-
         let memory = LocalMemory::new(ty, tunables, allocation, memory_image)?;
         Ok(if ty.shared {
             Memory::Shared(SharedMemory::wrap(ty, memory)?)
@@ -458,9 +421,16 @@ impl Memory {
             memory_and_guard_size,
         )?;
         let allocation = Box::new(pooled_memory);
+
+        // Configure some defaults a bit differently for this memory within the
+        // `LocalMemory` structure created, notably we already have
+        // `memory_image` and regardless of configuration settings this memory
+        // can't move its base pointer since it's a fixed allocation.
         let mut memory = LocalMemory::new(ty, tunables, allocation, None)?;
         assert!(memory.memory_image.is_none());
         memory.memory_image = Some(memory_image);
+        memory.memory_may_move = false;
+
         Ok(if ty.shared {
             // FIXME(#4244): not supported with the pooling allocator (which
             // `new_static` is always used with), see `MemoryPool::validate` as
@@ -701,6 +671,7 @@ impl Memory {
 pub struct LocalMemory {
     alloc: Box<dyn RuntimeLinearMemory>,
     ty: wasmtime_environ::Memory,
+    memory_may_move: bool,
 
     /// An optional CoW mapping that provides the initial content of this
     /// memory.
@@ -735,6 +706,7 @@ impl LocalMemory {
         Ok(LocalMemory {
             ty: *ty,
             alloc,
+            memory_may_move: ty.memory_may_move(tunables),
             memory_image,
         })
     }
@@ -789,6 +761,11 @@ impl LocalMemory {
             }
         }
 
+        // Save the original base pointer to assert the invariant that growth up
+        // to the byte capacity never relocates the base pointer.
+        let base_ptr_before = self.alloc.base_ptr();
+        let required_to_not_move_memory = new_byte_size <= self.alloc.byte_capacity();
+
         let result = (|| -> Result<()> {
             // Never exceed maximum, even if limiter permitted it.
             if let Some(max) = maximum {
@@ -799,7 +776,7 @@ impl LocalMemory {
 
             // If memory isn't allowed to move then don't let growth happen
             // beyond the initial capacity
-            if !self.alloc.memory_may_move() && new_byte_size > self.alloc.byte_capacity() {
+            if !self.memory_may_move && new_byte_size > self.alloc.byte_capacity() {
                 bail!("Memory maximum size exceeded");
             }
 
@@ -821,7 +798,7 @@ impl LocalMemory {
                     return Ok(());
                 }
                 assert!(cfg!(unix));
-                assert!(self.alloc.memory_may_move());
+                assert!(self.memory_may_move);
                 self.memory_image = None;
             }
 
@@ -831,7 +808,15 @@ impl LocalMemory {
         })();
 
         match result {
-            Ok(()) => Ok(Some((old_byte_size, new_byte_size))),
+            Ok(()) => {
+                // On successful growth double-check that the base pointer
+                // didn't move if it shouldn't have.
+                if required_to_not_move_memory {
+                    assert_eq!(base_ptr_before, self.alloc.base_ptr());
+                }
+
+                Ok(Some((old_byte_size, new_byte_size)))
+            }
             Err(e) => {
                 // FIXME: shared memories may not have an associated store to
                 // report the growth failure to but the error should not be
@@ -861,10 +846,6 @@ impl LocalMemory {
             Some(image) => !image.has_image(),
             None => true,
         }
-    }
-
-    pub fn memory_may_move(&self) -> bool {
-        self.alloc.memory_may_move()
     }
 
     pub fn wasm_accessible(&self) -> Range<usize> {
