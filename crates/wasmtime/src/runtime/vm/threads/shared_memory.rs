@@ -32,8 +32,11 @@ impl SharedMemory {
     /// Construct a new [`SharedMemory`].
     pub fn new(ty: &wasmtime_environ::Memory, tunables: &Tunables) -> Result<Self> {
         let (minimum_bytes, maximum_bytes) = Memory::limit_new(ty, None)?;
-        let mmap_memory = MmapMemory::new(ty, tunables, minimum_bytes, maximum_bytes, None)?;
-        Self::wrap(ty, LocalMemory::new(ty, Box::new(mmap_memory)))
+        let mmap_memory = MmapMemory::new(ty, tunables, minimum_bytes, maximum_bytes)?;
+        Self::wrap(
+            ty,
+            LocalMemory::new(ty, tunables, Box::new(mmap_memory), None)?,
+        )
     }
 
     /// Wrap an existing [Memory] with the locking provided by a [SharedMemory].

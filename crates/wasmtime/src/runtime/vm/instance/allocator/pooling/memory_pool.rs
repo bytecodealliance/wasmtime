@@ -376,6 +376,7 @@ impl MemoryPool {
 
             Memory::new_static(
                 ty,
+                tunables,
                 base_ptr,
                 base_capacity,
                 slot,

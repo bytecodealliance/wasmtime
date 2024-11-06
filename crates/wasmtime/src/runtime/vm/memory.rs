@@ -24,8 +24,6 @@ pub trait RuntimeMemoryCreator: Send + Sync {
         tunables: &Tunables,
         minimum: usize,
         maximum: Option<usize>,
-        // Optionally, a memory image for CoW backing.
-        memory_image: Option<&Arc<MemoryImage>>,
     ) -> Result<Box<dyn RuntimeLinearMemory>>;
 }
 
@@ -40,26 +38,20 @@ impl RuntimeMemoryCreator for DefaultMemoryCreator {
         tunables: &Tunables,
         minimum: usize,
         maximum: Option<usize>,
-        memory_image: Option<&Arc<MemoryImage>>,
     ) -> Result<Box<dyn RuntimeLinearMemory>> {
-        Ok(Box::new(MmapMemory::new(
-            ty,
-            tunables,
-            minimum,
-            maximum,
-            memory_image,
-        )?))
+        Ok(Box::new(MmapMemory::new(ty, tunables, minimum, maximum)?))
     }
 }
 
 /// A linear memory and its backing storage.
 pub trait RuntimeLinearMemory: Send + Sync {
-    /// Returns the number of allocated bytes.
+    /// Returns the number bytes that this linear memory can access.
     fn byte_size(&self) -> usize;
 
-    /// Returns the maximum number of bytes the memory can grow to.
-    /// Returns `None` if the memory is unbounded.
-    fn maximum_byte_size(&self) -> Option<usize>;
+    /// Returns the maximal number of bytes the current allocation can access.
+    ///
+    /// Growth up to this value should not relocate the base pointer.
+    fn byte_capacity(&self) -> usize;
 
     /// Returns whether the base pointer of this memory may be relocated over
     /// time to accommodate requests for growth.
@@ -74,19 +66,22 @@ pub trait RuntimeLinearMemory: Send + Sync {
     /// Returns a pointer to the base of this linear memory allocation.
     fn base_ptr(&mut self) -> *mut u8;
 
-    /// Does this memory need initialization? It may not if it already
-    /// has initial contents courtesy of the `MemoryImage` passed to
-    /// `RuntimeMemoryCreator::new_memory()`.
-    fn needs_init(&self) -> bool;
-
     /// Returns the range of addresses that may be reached by WebAssembly.
     ///
     /// This starts at the base of linear memory and ends at the end of the
     /// guard pages, if any.
     fn wasm_accessible(&self) -> Range<usize>;
 
-    fn unwrap_static_image(self: Box<Self>) -> MemoryImageSlot {
-        panic!("not a static memory")
+    /// Internal method for Wasmtime when used in conjunction with CoW images.
+    /// This is used to inform the underlying memory that the size of memory has
+    /// changed.
+    ///
+    /// Note that this is hidden and panics by default as embedders using custom
+    /// memory without CoW images shouldn't have to worry about this.
+    #[doc(hidden)]
+    fn set_byte_size(&mut self, len: usize) {
+        let _ = len;
+        panic!("CoW images used with this memory and it doesn't support it");
     }
 }
 
@@ -127,10 +122,6 @@ pub struct MmapMemory {
     // optimize loads and stores with constant offsets.
     pre_guard_size: usize,
     offset_guard_size: usize,
-
-    // An optional CoW mapping that provides the initial content of this
-    // MmapMemory, if mapped.
-    memory_image: Option<MemoryImageSlot>,
 }
 
 impl MmapMemory {
@@ -141,7 +132,6 @@ impl MmapMemory {
         tunables: &Tunables,
         minimum: usize,
         maximum: Option<usize>,
-        memory_image: Option<&Arc<MemoryImage>>,
     ) -> Result<Self> {
         // It's a programmer error for these two configuration values to exceed
         // the host available address space, so panic if such a configuration is
@@ -199,26 +189,6 @@ impl MmapMemory {
             mmap.make_accessible(pre_guard_bytes, accessible)?;
         }
 
-        // If a memory image was specified, try to create the MemoryImageSlot on
-        // top of our mmap.
-        let memory_image = match memory_image {
-            Some(image) => {
-                let base = unsafe { mmap.as_mut_ptr().add(pre_guard_bytes) };
-                let mut slot = MemoryImageSlot::create(
-                    base.cast(),
-                    minimum,
-                    alloc_bytes + extra_to_reserve_on_growth,
-                );
-                slot.instantiate(minimum, Some(image), ty, tunables)?;
-                // On drop, we will unmap our mmap'd range that this slot was
-                // mapped on top of, so there is no need for the slot to wipe
-                // it with an anonymous mapping first.
-                slot.no_clear_on_drop();
-                Some(slot)
-            }
-            None => None,
-        };
-
         Ok(Self {
             mmap,
             len: minimum,
@@ -226,7 +196,6 @@ impl MmapMemory {
             pre_guard_size: pre_guard_bytes,
             offset_guard_size: offset_guard_bytes,
             extra_to_reserve_on_growth,
-            memory_image,
             memory_may_move: ty.memory_may_move(tunables),
         })
     }
@@ -247,8 +216,8 @@ impl RuntimeLinearMemory for MmapMemory {
         self.len
     }
 
-    fn maximum_byte_size(&self) -> Option<usize> {
-        self.maximum
+    fn byte_capacity(&self) -> usize {
+        self.mmap.len() - self.offset_guard_size - self.pre_guard_size
     }
 
     fn memory_may_move(&self) -> bool {
@@ -291,18 +260,7 @@ impl RuntimeLinearMemory for MmapMemory {
                 dst.copy_from_slice(src);
             }
 
-            // Now drop the MemoryImageSlot, if any. We've lost the CoW
-            // advantages by explicitly copying all data, but we have
-            // preserved all of its content; so we no longer need the
-            // mapping. We need to do this before we (implicitly) drop the
-            // `mmap` field by overwriting it below.
-            drop(self.memory_image.take());
-
             self.mmap = new_mmap;
-        } else if let Some(image) = self.memory_image.as_mut() {
-            // MemoryImageSlot has its own growth mechanisms; defer to its
-            // implementation.
-            image.set_heap_limit(new_size)?;
         } else {
             // If the new size of this heap fits within the existing allocation
             // then all we need to do is to make the new pages accessible. This
@@ -336,14 +294,12 @@ impl RuntimeLinearMemory for MmapMemory {
         Ok(())
     }
 
-    fn base_ptr(&mut self) -> *mut u8 {
-        unsafe { self.mmap.as_mut_ptr().add(self.pre_guard_size) }
+    fn set_byte_size(&mut self, len: usize) {
+        self.len = len;
     }
 
-    fn needs_init(&self) -> bool {
-        // If we're using a CoW mapping, then no initialization
-        // is needed.
-        self.memory_image.is_none()
+    fn base_ptr(&mut self) -> *mut u8 {
+        unsafe { self.mmap.as_mut_ptr().add(self.pre_guard_size) }
     }
 
     fn wasm_accessible(&self) -> Range<usize> {
@@ -369,10 +325,6 @@ struct StaticMemory {
     /// The size, in bytes, of the virtual address allocation starting at `base`
     /// and going to the end of the guard pages at the end of the linear memory.
     memory_and_guard_size: usize,
-
-    /// The image management, if any, for this memory. Owned here and
-    /// returned to the pooling allocator when termination occurs.
-    memory_image: MemoryImageSlot,
 }
 
 impl StaticMemory {
@@ -381,7 +333,6 @@ impl StaticMemory {
         base_capacity: usize,
         initial_size: usize,
         maximum_size: Option<usize>,
-        memory_image: MemoryImageSlot,
         memory_and_guard_size: usize,
     ) -> Result<Self> {
         if base_capacity < initial_size {
@@ -403,7 +354,6 @@ impl StaticMemory {
             base: SendSyncPtr::new(NonNull::new(base_ptr).unwrap()),
             capacity: base_capacity,
             size: initial_size,
-            memory_image,
             memory_and_guard_size,
         })
     }
@@ -414,8 +364,8 @@ impl RuntimeLinearMemory for StaticMemory {
         self.size
     }
 
-    fn maximum_byte_size(&self) -> Option<usize> {
-        Some(self.capacity)
+    fn byte_capacity(&self) -> usize {
+        self.capacity
     }
 
     fn memory_may_move(&self) -> bool {
@@ -427,29 +377,23 @@ impl RuntimeLinearMemory for StaticMemory {
         // prior to arriving here.
         assert!(new_byte_size <= self.capacity);
 
-        self.memory_image.set_heap_limit(new_byte_size)?;
-
         // Update our accounting of the available size.
         self.size = new_byte_size;
         Ok(())
+    }
+
+    fn set_byte_size(&mut self, len: usize) {
+        self.size = len;
     }
 
     fn base_ptr(&mut self) -> *mut u8 {
         self.base.as_ptr()
     }
 
-    fn needs_init(&self) -> bool {
-        !self.memory_image.has_image()
-    }
-
     fn wasm_accessible(&self) -> Range<usize> {
         let base = self.base.as_ptr() as usize;
         let end = base + self.memory_and_guard_size;
         base..end
-    }
-
-    fn unwrap_static_image(self: Box<Self>) -> MemoryImageSlot {
-        self.memory_image
     }
 }
 
@@ -469,7 +413,7 @@ impl Memory {
         memory_image: Option<&Arc<MemoryImage>>,
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(ty, Some(store))?;
-        let allocation = creator.new_memory(ty, tunables, minimum, maximum, memory_image)?;
+        let allocation = creator.new_memory(ty, tunables, minimum, maximum)?;
 
         // Double-check that the created memory respects the safety invariant of
         // whether the memory may move or not at runtime.
@@ -487,7 +431,7 @@ impl Memory {
             "this linear memory should not be able to move its base pointer",
         );
 
-        let memory = LocalMemory::new(ty, allocation);
+        let memory = LocalMemory::new(ty, tunables, allocation, memory_image)?;
         Ok(if ty.shared {
             Memory::Shared(SharedMemory::wrap(ty, memory)?)
         } else {
@@ -498,6 +442,7 @@ impl Memory {
     /// Create a new static (immovable) memory instance for the specified plan.
     pub fn new_static(
         ty: &wasmtime_environ::Memory,
+        tunables: &Tunables,
         base_ptr: *mut u8,
         base_capacity: usize,
         memory_image: MemoryImageSlot,
@@ -510,11 +455,12 @@ impl Memory {
             base_capacity,
             minimum,
             maximum,
-            memory_image,
             memory_and_guard_size,
         )?;
         let allocation = Box::new(pooled_memory);
-        let memory = LocalMemory::new(ty, allocation);
+        let mut memory = LocalMemory::new(ty, tunables, allocation, None)?;
+        assert!(memory.memory_image.is_none());
+        memory.memory_image = Some(memory_image);
         Ok(if ty.shared {
             // FIXME(#4244): not supported with the pooling allocator (which
             // `new_static` is always used with), see `MemoryPool::validate` as
@@ -755,11 +701,42 @@ impl Memory {
 pub struct LocalMemory {
     alloc: Box<dyn RuntimeLinearMemory>,
     ty: wasmtime_environ::Memory,
+
+    /// An optional CoW mapping that provides the initial content of this
+    /// memory.
+    memory_image: Option<MemoryImageSlot>,
 }
 
 impl LocalMemory {
-    pub fn new(ty: &wasmtime_environ::Memory, alloc: Box<dyn RuntimeLinearMemory>) -> LocalMemory {
-        LocalMemory { ty: *ty, alloc }
+    pub fn new(
+        ty: &wasmtime_environ::Memory,
+        tunables: &Tunables,
+        mut alloc: Box<dyn RuntimeLinearMemory>,
+        memory_image: Option<&Arc<MemoryImage>>,
+    ) -> Result<LocalMemory> {
+        // If a memory image was specified, try to create the MemoryImageSlot on
+        // top of our mmap.
+        let memory_image = match memory_image {
+            Some(image) => {
+                let mut slot = MemoryImageSlot::create(
+                    alloc.base_ptr().cast(),
+                    alloc.byte_size(),
+                    alloc.byte_capacity(),
+                );
+                // On drop, we will unmap our mmap'd range that this slot was
+                // mapped on top of, so there is no need for the slot to wipe
+                // it with an anonymous mapping first.
+                slot.no_clear_on_drop();
+                slot.instantiate(alloc.byte_size(), Some(image), ty, tunables)?;
+                Some(slot)
+            }
+            None => None,
+        };
+        Ok(LocalMemory {
+            ty: *ty,
+            alloc,
+            memory_image,
+        })
     }
 
     pub fn page_size(&self) -> u64 {
@@ -799,7 +776,11 @@ impl LocalMemory {
             .saturating_add(old_byte_size)
             .min(absolute_max);
 
-        let maximum = self.alloc.maximum_byte_size();
+        let maximum = self
+            .ty
+            .maximum_byte_size()
+            .ok()
+            .and_then(|n| usize::try_from(n).ok());
 
         // Store limiter gets first chance to reject memory_growing.
         if let Some(store) = &mut store {
@@ -808,22 +789,49 @@ impl LocalMemory {
             }
         }
 
-        // Never exceed maximum, even if limiter permitted it.
-        if let Some(max) = maximum {
-            if new_byte_size > max {
-                if let Some(store) = store {
-                    // FIXME: shared memories may not have an associated store
-                    // to report the growth failure to but the error should not
-                    // be dropped
-                    // (https://github.com/bytecodealliance/wasmtime/issues/4240).
-                    store.memory_grow_failed(format_err!("Memory maximum size exceeded"))?;
+        let result = (|| -> Result<()> {
+            // Never exceed maximum, even if limiter permitted it.
+            if let Some(max) = maximum {
+                if new_byte_size > max {
+                    bail!("Memory maximum size exceeded");
                 }
-                return Ok(None);
             }
-        }
 
-        match self.alloc.grow_to(new_byte_size) {
-            Ok(_) => Ok(Some((old_byte_size, new_byte_size))),
+            // If memory isn't allowed to move then don't let growth happen
+            // beyond the initial capacity
+            if !self.alloc.memory_may_move() && new_byte_size > self.alloc.byte_capacity() {
+                bail!("Memory maximum size exceeded");
+            }
+
+            // If we have a CoW image overlay then let it manage accessible
+            // bytes. Once the heap limit is modified inform the underlying
+            // allocation that the size has changed.
+            //
+            // If the growth is going beyond the size of the heap image then
+            // discard it. This should only happen for `MmapMemory` where
+            // `no_clear_on_drop` is set so the destructor doesn't do anything.
+            // For now be maximally sure about this by asserting that memory can
+            // indeed move and that we're on unix. If this wants to run
+            // somewhere else like Windows or with other allocations this may
+            // need adjusting.
+            if let Some(image) = &mut self.memory_image {
+                if new_byte_size <= self.alloc.byte_capacity() {
+                    image.set_heap_limit(new_byte_size)?;
+                    self.alloc.set_byte_size(new_byte_size);
+                    return Ok(());
+                }
+                assert!(cfg!(unix));
+                assert!(self.alloc.memory_may_move());
+                self.memory_image = None;
+            }
+
+            // And failing all that fall back to the underlying allocation to
+            // grow it.
+            self.alloc.grow_to(new_byte_size)
+        })();
+
+        match result {
+            Ok(()) => Ok(Some((old_byte_size, new_byte_size))),
             Err(e) => {
                 // FIXME: shared memories may not have an associated store to
                 // report the growth failure to but the error should not be
@@ -849,7 +857,10 @@ impl LocalMemory {
     }
 
     pub fn needs_init(&self) -> bool {
-        self.alloc.needs_init()
+        match &self.memory_image {
+            Some(image) => !image.has_image(),
+            None => true,
+        }
     }
 
     pub fn memory_may_move(&self) -> bool {
@@ -861,7 +872,7 @@ impl LocalMemory {
     }
 
     pub fn unwrap_static_image(self) -> MemoryImageSlot {
-        self.alloc.unwrap_static_image()
+        self.memory_image.unwrap()
     }
 }
 

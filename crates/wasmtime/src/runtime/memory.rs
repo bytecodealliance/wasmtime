@@ -676,11 +676,11 @@ pub unsafe trait LinearMemory: Send + Sync + 'static {
     /// Returns the number of allocated bytes which are accessible at this time.
     fn byte_size(&self) -> usize;
 
-    /// Returns the maximum number of bytes the memory can grow to.
+    /// Returns byte capacity of this linear memory's current allocation.
     ///
-    /// Returns `None` if the memory is unbounded, or `Some` if memory cannot
-    /// grow beyond a specified limit.
-    fn maximum_byte_size(&self) -> Option<usize>;
+    /// Growth up to this value should not relocate the linear memory base
+    /// pointer.
+    fn byte_capacity(&self) -> usize;
 
     /// Grows this memory to have the `new_size`, in bytes, specified.
     ///

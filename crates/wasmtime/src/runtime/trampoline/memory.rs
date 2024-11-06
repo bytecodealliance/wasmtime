@@ -3,7 +3,7 @@ use crate::prelude::*;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
     CompiledModuleId, GcHeapAllocationIndex, Imports, InstanceAllocationRequest, InstanceAllocator,
-    InstanceAllocatorImpl, Memory, MemoryAllocationIndex, MemoryImage, ModuleRuntimeInfo,
+    InstanceAllocatorImpl, Memory, MemoryAllocationIndex, ModuleRuntimeInfo,
     OnDemandInstanceAllocator, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory, StorePtr,
     Table, TableAllocationIndex,
 };
@@ -83,8 +83,8 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
         self.mem.byte_size()
     }
 
-    fn maximum_byte_size(&self) -> Option<usize> {
-        self.mem.maximum_byte_size()
+    fn byte_capacity(&self) -> usize {
+        self.mem.byte_capacity()
     }
 
     fn grow_to(&mut self, new_size: usize) -> Result<()> {
@@ -93,10 +93,6 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
 
     fn base_ptr(&mut self) -> *mut u8 {
         self.mem.as_ptr()
-    }
-
-    fn needs_init(&self) -> bool {
-        true
     }
 
     fn wasm_accessible(&self) -> Range<usize> {
@@ -121,7 +117,6 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
         tunables: &Tunables,
         minimum: usize,
         maximum: Option<usize>,
-        _: Option<&Arc<MemoryImage>>,
     ) -> Result<Box<dyn RuntimeLinearMemory>> {
         let style = MemoryStyle::for_memory(*ty, tunables);
         let reserved_size_in_bytes = match style {

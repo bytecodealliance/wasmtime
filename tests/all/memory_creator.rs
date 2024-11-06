@@ -57,8 +57,8 @@ mod not_for_windows {
             self.used_wasm_bytes
         }
 
-        fn maximum_byte_size(&self) -> Option<usize> {
-            Some(self.size - self.guard_size)
+        fn byte_capacity(&self) -> usize {
+            self.size - self.guard_size
         }
 
         fn grow_to(&mut self, new_size: usize) -> wasmtime::Result<()> {
