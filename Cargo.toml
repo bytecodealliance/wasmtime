@@ -317,7 +317,7 @@ serde = { version = "1.0.188", default-features = false, features = ['alloc'] }
 serde_derive = "1.0.188"
 serde_json = "1.0.80"
 glob = "0.3.0"
-libfuzzer-sys = "0.4.0"
+libfuzzer-sys = "0.4.8"
 walkdir = "2.3.3"
 cfg-if = "1.0"
 tempfile = "3.1.0"
