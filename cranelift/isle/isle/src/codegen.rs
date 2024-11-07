@@ -127,7 +127,7 @@ impl<'a> Codegen<'a> {
             "// Generated automatically from the instruction-selection DSL code in:",
         )
         .unwrap();
-        for file in &self.files.file_names {
+        for file in &self.files.file_names_relative() {
             writeln!(code, "// - {file}").unwrap();
         }
 
