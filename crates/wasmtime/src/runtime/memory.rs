@@ -1,12 +1,11 @@
 use crate::prelude::*;
-use crate::runtime::vm::{RuntimeLinearMemory, VMMemoryImport};
+use crate::runtime::vm::VMMemoryImport;
 use crate::store::{StoreData, StoreOpaque, Stored};
 use crate::trampoline::generate_memory_export;
 use crate::Trap;
 use crate::{AsContext, AsContextMut, Engine, MemoryType, StoreContext, StoreContextMut};
 use core::cell::UnsafeCell;
 use core::fmt;
-use core::ops::Range;
 use core::slice;
 use core::time::Duration;
 
@@ -676,11 +675,11 @@ pub unsafe trait LinearMemory: Send + Sync + 'static {
     /// Returns the number of allocated bytes which are accessible at this time.
     fn byte_size(&self) -> usize;
 
-    /// Returns the maximum number of bytes the memory can grow to.
+    /// Returns byte capacity of this linear memory's current allocation.
     ///
-    /// Returns `None` if the memory is unbounded, or `Some` if memory cannot
-    /// grow beyond a specified limit.
-    fn maximum_byte_size(&self) -> Option<usize>;
+    /// Growth up to this value should not relocate the linear memory base
+    /// pointer.
+    fn byte_capacity(&self) -> usize;
 
     /// Grows this memory to have the `new_size`, in bytes, specified.
     ///
@@ -691,10 +690,6 @@ pub unsafe trait LinearMemory: Send + Sync + 'static {
 
     /// Return the allocated memory as a mutable pointer to u8.
     fn as_ptr(&self) -> *mut u8;
-
-    /// Returns the range of native addresses that WebAssembly can natively
-    /// access from this linear memory, including guard pages.
-    fn wasm_accessible(&self) -> Range<usize>;
 }
 
 /// A memory creator. Can be used to provide a memory creator

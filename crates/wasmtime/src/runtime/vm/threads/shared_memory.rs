@@ -1,8 +1,8 @@
 use crate::prelude::*;
-use crate::runtime::vm::memory::{validate_atomic_addr, MmapMemory};
+use crate::runtime::vm::memory::{validate_atomic_addr, LocalMemory, MmapMemory};
 use crate::runtime::vm::threads::parking_spot::{ParkingSpot, Waiter};
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
-use crate::runtime::vm::{Memory, RuntimeLinearMemory, VMStore, WaitResult};
+use crate::runtime::vm::{Memory, VMStore, WaitResult};
 use std::cell::RefCell;
 use std::ops::Range;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
@@ -22,7 +22,7 @@ use wasmtime_environ::{Trap, Tunables};
 pub struct SharedMemory(Arc<SharedMemoryInner>);
 
 struct SharedMemoryInner {
-    memory: RwLock<Box<dyn RuntimeLinearMemory>>,
+    memory: RwLock<LocalMemory>,
     spot: ParkingSpot,
     ty: wasmtime_environ::Memory,
     def: LongTermVMMemoryDefinition,
@@ -32,25 +32,18 @@ impl SharedMemory {
     /// Construct a new [`SharedMemory`].
     pub fn new(ty: &wasmtime_environ::Memory, tunables: &Tunables) -> Result<Self> {
         let (minimum_bytes, maximum_bytes) = Memory::limit_new(ty, None)?;
-        let mmap_memory = MmapMemory::new(ty, tunables, minimum_bytes, maximum_bytes, None)?;
-        Self::wrap(ty, Box::new(mmap_memory))
+        let mmap_memory = MmapMemory::new(ty, tunables, minimum_bytes, maximum_bytes)?;
+        Self::wrap(
+            ty,
+            LocalMemory::new(ty, tunables, Box::new(mmap_memory), None)?,
+        )
     }
 
     /// Wrap an existing [Memory] with the locking provided by a [SharedMemory].
-    pub fn wrap(
-        ty: &wasmtime_environ::Memory,
-        mut memory: Box<dyn RuntimeLinearMemory>,
-    ) -> Result<Self> {
+    pub fn wrap(ty: &wasmtime_environ::Memory, mut memory: LocalMemory) -> Result<Self> {
         if !ty.shared {
             bail!("shared memory must have a `shared` memory type");
         }
-        if memory.memory_may_move() {
-            bail!("shared memory cannot use a memory which may relocate the base pointer")
-        }
-        assert!(
-            memory.as_any_mut().type_id() != std::any::TypeId::of::<SharedMemory>(),
-            "cannot re-wrap a shared memory"
-        );
         Ok(Self(Arc::new(SharedMemoryInner {
             ty: *ty,
             spot: ParkingSpot::default(),
@@ -66,7 +59,7 @@ impl SharedMemory {
 
     /// Convert this shared memory into a [`Memory`].
     pub fn as_memory(self) -> Memory {
-        Memory(Box::new(self))
+        Memory::Shared(self)
     }
 
     /// Return a pointer to the shared memory's [VMMemoryDefinition].
@@ -166,6 +159,22 @@ impl SharedMemory {
             Ok(self.0.spot.wait64(atomic, expected, deadline, &mut waiter))
         })
     }
+
+    pub(crate) fn page_size(&self) -> u64 {
+        self.0.ty.page_size()
+    }
+
+    pub(crate) fn byte_size(&self) -> usize {
+        self.0.memory.read().unwrap().byte_size()
+    }
+
+    pub(crate) fn needs_init(&self) -> bool {
+        self.0.memory.read().unwrap().needs_init()
+    }
+
+    pub(crate) fn wasm_accessible(&self) -> Range<usize> {
+        self.0.memory.read().unwrap().wasm_accessible()
+    }
 }
 
 thread_local! {
@@ -185,55 +194,3 @@ thread_local! {
 struct LongTermVMMemoryDefinition(VMMemoryDefinition);
 unsafe impl Send for LongTermVMMemoryDefinition {}
 unsafe impl Sync for LongTermVMMemoryDefinition {}
-
-/// Proxy all calls through the [`RwLock`].
-impl RuntimeLinearMemory for SharedMemory {
-    fn page_size_log2(&self) -> u8 {
-        self.0.memory.read().unwrap().page_size_log2()
-    }
-
-    fn byte_size(&self) -> usize {
-        self.0.memory.read().unwrap().byte_size()
-    }
-
-    fn maximum_byte_size(&self) -> Option<usize> {
-        self.0.memory.read().unwrap().maximum_byte_size()
-    }
-
-    fn grow(
-        &mut self,
-        delta_pages: u64,
-        store: Option<&mut dyn VMStore>,
-    ) -> Result<Option<(usize, usize)>, Error> {
-        SharedMemory::grow(self, delta_pages, store)
-    }
-
-    fn grow_to(&mut self, size: usize) -> Result<()> {
-        self.0.memory.write().unwrap().grow_to(size)
-    }
-
-    fn vmmemory(&mut self) -> VMMemoryDefinition {
-        // `vmmemory()` is used for writing the `VMMemoryDefinition` of a memory
-        // into its `VMContext`; this should never be possible for a shared
-        // memory because the only `VMMemoryDefinition` for it should be stored
-        // in its own `def` field.
-        unreachable!()
-    }
-
-    fn needs_init(&self) -> bool {
-        self.0.memory.read().unwrap().needs_init()
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-
-    fn wasm_accessible(&self) -> Range<usize> {
-        self.0.memory.read().unwrap().wasm_accessible()
-    }
-
-    fn memory_may_move(&self) -> bool {
-        debug_assert!(!self.0.memory.read().unwrap().memory_may_move());
-        false
-    }
-}

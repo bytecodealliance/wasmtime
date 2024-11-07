@@ -3,14 +3,13 @@ use crate::prelude::*;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
     CompiledModuleId, GcHeapAllocationIndex, Imports, InstanceAllocationRequest, InstanceAllocator,
-    InstanceAllocatorImpl, Memory, MemoryAllocationIndex, MemoryImage, ModuleRuntimeInfo,
+    InstanceAllocatorImpl, Memory, MemoryAllocationIndex, ModuleRuntimeInfo,
     OnDemandInstanceAllocator, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory, StorePtr,
-    Table, TableAllocationIndex, VMMemoryDefinition,
+    Table, TableAllocationIndex,
 };
 use crate::store::{InstanceId, StoreOpaque};
 use crate::MemoryType;
 use alloc::sync::Arc;
-use core::ops::Range;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryStyle, Module, Tunables,
     VMOffsets,
@@ -76,50 +75,23 @@ pub fn create_memory(
 
 struct LinearMemoryProxy {
     mem: Box<dyn LinearMemory>,
-    page_size_log2: u8,
 }
 
 impl RuntimeLinearMemory for LinearMemoryProxy {
-    fn page_size_log2(&self) -> u8 {
-        self.page_size_log2
-    }
-
     fn byte_size(&self) -> usize {
         self.mem.byte_size()
     }
 
-    fn maximum_byte_size(&self) -> Option<usize> {
-        self.mem.maximum_byte_size()
+    fn byte_capacity(&self) -> usize {
+        self.mem.byte_capacity()
     }
 
     fn grow_to(&mut self, new_size: usize) -> Result<()> {
         self.mem.grow_to(new_size)
     }
 
-    fn vmmemory(&mut self) -> VMMemoryDefinition {
-        VMMemoryDefinition {
-            base: self.mem.as_ptr(),
-            current_length: self.mem.byte_size().into(),
-        }
-    }
-
-    fn needs_init(&self) -> bool {
-        true
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
-        self
-    }
-
-    fn wasm_accessible(&self) -> Range<usize> {
-        self.mem.wasm_accessible()
-    }
-
-    fn memory_may_move(&self) -> bool {
-        // FIXME(#9568): should propagate this up to the `LinearMemory` trait,
-        // but for now pessimistically assume that consumers might move linear
-        // memory.
-        true
+    fn base_ptr(&self) -> *mut u8 {
+        self.mem.as_ptr()
     }
 }
 
@@ -133,7 +105,6 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
         tunables: &Tunables,
         minimum: usize,
         maximum: Option<usize>,
-        _: Option<&Arc<MemoryImage>>,
     ) -> Result<Box<dyn RuntimeLinearMemory>> {
         let style = MemoryStyle::for_memory(*ty, tunables);
         let reserved_size_in_bytes = match style {
@@ -150,12 +121,7 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
                 reserved_size_in_bytes,
                 usize::try_from(tunables.memory_guard_size).unwrap(),
             )
-            .map(|mem| {
-                Box::new(LinearMemoryProxy {
-                    mem,
-                    page_size_log2: ty.page_size_log2,
-                }) as Box<dyn RuntimeLinearMemory>
-            })
+            .map(|mem| Box::new(LinearMemoryProxy { mem }) as Box<dyn RuntimeLinearMemory>)
             .map_err(|e| anyhow!(e))
     }
 }

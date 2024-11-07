@@ -446,7 +446,7 @@ WASMTIME_CONFIG_PROP(void, macos_use_mach_ports, bool)
  * https://docs.wasmtime.dev/api/wasmtime/trait.LinearMemory.html
  */
 typedef uint8_t *(*wasmtime_memory_get_callback_t)(void *env, size_t *byte_size,
-                                                   size_t *maximum_byte_size);
+                                                   size_t *byte_capacity);
 
 /**
  * Grow the memory to the `new_size` in bytes.

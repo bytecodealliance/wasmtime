@@ -63,7 +63,7 @@ use crate::{prelude::*, vm::round_usize_up_to_host_pages};
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
-use wasmtime_environ::{DefinedMemoryIndex, MemoryStyle, Module, Tunables};
+use wasmtime_environ::{DefinedMemoryIndex, Module, Tunables};
 
 /// A set of allocator slots.
 ///
@@ -338,16 +338,10 @@ impl MemoryPool {
             // satisfied by the configuration of this pooling allocator. This
             // should be returned as an error through `validate_memory_plans`
             // but double-check here to be sure.
-            let style = MemoryStyle::for_memory(*ty, tunables);
-            match style {
-                MemoryStyle::Static { byte_reservation } => {
-                    assert!(
-                        byte_reservation
-                            <= u64::try_from(self.layout.bytes_to_next_stripe_slot()).unwrap()
-                    );
-                }
-                MemoryStyle::Dynamic { .. } => {}
-            }
+            assert!(
+                tunables.memory_reservation + tunables.memory_guard_size
+                    <= u64::try_from(self.layout.bytes_to_next_stripe_slot()).unwrap()
+            );
 
             let base_ptr = self.get_base(allocation_index);
             let base_capacity = self.layout.max_memory_bytes;
@@ -374,14 +368,9 @@ impl MemoryPool {
             let initial_size = usize::try_from(initial_size).unwrap();
             slot.instantiate(initial_size, image, ty, tunables)?;
 
-            Memory::new_static(
-                ty,
-                base_ptr,
-                base_capacity,
-                slot,
-                self.layout.bytes_to_next_stripe_slot(),
-                unsafe { &mut *request.store.get().unwrap() },
-            )
+            Memory::new_static(ty, tunables, base_ptr, base_capacity, slot, unsafe {
+                &mut *request.store.get().unwrap()
+            })
         })() {
             Ok(memory) => Ok((allocation_index, memory)),
             Err(e) => {

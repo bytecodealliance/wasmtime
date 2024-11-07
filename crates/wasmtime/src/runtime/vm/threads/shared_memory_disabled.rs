@@ -1,7 +1,8 @@
 #![allow(missing_docs)]
 
 use crate::prelude::*;
-use crate::runtime::vm::{RuntimeLinearMemory, VMMemoryDefinition, VMStore, WaitResult};
+use crate::runtime::vm::memory::LocalMemory;
+use crate::runtime::vm::{VMMemoryDefinition, VMStore, WaitResult};
 use core::ops::Range;
 use core::time::Duration;
 use wasmtime_environ::{Trap, Tunables};
@@ -10,10 +11,7 @@ use wasmtime_environ::{Trap, Tunables};
 pub enum SharedMemory {}
 
 impl SharedMemory {
-    pub fn wrap(
-        _ty: &wasmtime_environ::Memory,
-        _memory: Box<dyn RuntimeLinearMemory>,
-    ) -> Result<Self> {
+    pub fn wrap(_ty: &wasmtime_environ::Memory, _memory: LocalMemory) -> Result<Self> {
         bail!("support for shared memories was disabled at compile time");
     }
 
@@ -58,50 +56,28 @@ impl SharedMemory {
     ) -> Result<WaitResult, Trap> {
         match *self {}
     }
-}
 
-impl RuntimeLinearMemory for SharedMemory {
-    fn page_size_log2(&self) -> u8 {
+    pub(crate) fn page_size(&self) -> u64 {
         match *self {}
     }
 
-    fn byte_size(&self) -> usize {
+    pub(crate) fn byte_size(&self) -> usize {
         match *self {}
     }
 
-    fn maximum_byte_size(&self) -> Option<usize> {
+    pub(crate) fn grow_to(&mut self, _size: usize) -> Result<()> {
         match *self {}
     }
 
-    fn grow(
-        &mut self,
-        _delta_pages: u64,
-        _store: Option<&mut dyn VMStore>,
-    ) -> Result<Option<(usize, usize)>> {
+    pub(crate) fn vmmemory(&mut self) -> VMMemoryDefinition {
         match *self {}
     }
 
-    fn grow_to(&mut self, _size: usize) -> Result<()> {
+    pub(crate) fn needs_init(&self) -> bool {
         match *self {}
     }
 
-    fn vmmemory(&mut self) -> VMMemoryDefinition {
-        match *self {}
-    }
-
-    fn needs_init(&self) -> bool {
-        match *self {}
-    }
-
-    fn as_any_mut(&mut self) -> &mut dyn core::any::Any {
-        match *self {}
-    }
-
-    fn wasm_accessible(&self) -> Range<usize> {
-        match *self {}
-    }
-
-    fn memory_may_move(&self) -> bool {
+    pub(crate) fn wasm_accessible(&self) -> Range<usize> {
         match *self {}
     }
 }

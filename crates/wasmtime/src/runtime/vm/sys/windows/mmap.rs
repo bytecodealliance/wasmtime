@@ -118,7 +118,7 @@ impl Mmap {
 
             let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), len);
             let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
-            let mut ret = Self {
+            let ret = Self {
                 memory,
                 is_file: true,
             };
@@ -158,7 +158,7 @@ impl Mmap {
     }
 
     #[inline]
-    pub fn as_mut_ptr(&mut self) -> *mut u8 {
+    pub fn as_mut_ptr(&self) -> *mut u8 {
         self.memory.as_ptr().cast()
     }
 

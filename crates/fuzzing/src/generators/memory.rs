@@ -2,7 +2,6 @@
 
 use anyhow::Result;
 use arbitrary::{Arbitrary, Unstructured};
-use std::ops::Range;
 use wasmtime::{LinearMemory, MemoryCreator, MemoryType};
 
 /// A description of a memory config, image, etc... that can be used to test
@@ -232,7 +231,6 @@ pub struct UnalignedMemory {
     /// This memory is always one byte larger than the actual size of linear
     /// memory.
     src: Vec<u8>,
-    maximum: Option<usize>,
 }
 
 unsafe impl LinearMemory for UnalignedMemory {
@@ -242,8 +240,8 @@ unsafe impl LinearMemory for UnalignedMemory {
         self.src.len() - 1
     }
 
-    fn maximum_byte_size(&self) -> Option<usize> {
-        self.maximum
+    fn byte_capacity(&self) -> usize {
+        self.src.capacity() - 1
     }
 
     fn grow_to(&mut self, new_size: usize) -> Result<()> {
@@ -257,12 +255,6 @@ unsafe impl LinearMemory for UnalignedMemory {
         // of memory is always unaligned.
         self.src[1..].as_ptr() as *mut _
     }
-
-    fn wasm_accessible(&self) -> Range<usize> {
-        let base = self.as_ptr() as usize;
-        let len = self.byte_size();
-        base..base + len
-    }
 }
 
 /// A mechanism to generate [`UnalignedMemory`] at runtime.
@@ -273,7 +265,7 @@ unsafe impl MemoryCreator for UnalignedMemoryCreator {
         &self,
         _ty: MemoryType,
         minimum: usize,
-        maximum: Option<usize>,
+        _maximum: Option<usize>,
         reserved_size_in_bytes: Option<usize>,
         guard_size_in_bytes: usize,
     ) -> Result<Box<dyn LinearMemory>, String> {
@@ -281,7 +273,6 @@ unsafe impl MemoryCreator for UnalignedMemoryCreator {
         assert!(reserved_size_in_bytes.is_none() || reserved_size_in_bytes == Some(0));
         Ok(Box::new(UnalignedMemory {
             src: vec![0; minimum + 1],
-            maximum,
         }))
     }
 }

@@ -5,7 +5,6 @@ mod not_for_windows {
 
     use rustix::mm::{mmap_anonymous, mprotect, munmap, MapFlags, MprotectFlags, ProtFlags};
 
-    use std::ops::Range;
     use std::ptr::null_mut;
     use std::sync::{Arc, Mutex};
 
@@ -57,8 +56,8 @@ mod not_for_windows {
             self.used_wasm_bytes
         }
 
-        fn maximum_byte_size(&self) -> Option<usize> {
-            Some(self.size - self.guard_size)
+        fn byte_capacity(&self) -> usize {
+            self.size - self.guard_size
         }
 
         fn grow_to(&mut self, new_size: usize) -> wasmtime::Result<()> {
@@ -77,12 +76,6 @@ mod not_for_windows {
 
         fn as_ptr(&self) -> *mut u8 {
             self.mem as *mut u8
-        }
-
-        fn wasm_accessible(&self) -> Range<usize> {
-            let base = self.mem;
-            let end = base + self.size;
-            base..end
         }
     }
 
