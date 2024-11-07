@@ -171,7 +171,7 @@ notes = "The Bytecode Alliance is the author of this crate."
 [[wildcard-audits.regalloc2]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
-user-id = 3726 # Chris Fallin (cfallin)
+user-id = 3726
 start = "2021-12-03"
 end = "2025-07-30"
 notes = "We (Bytecode Alliance) are the primary authors of regalloc2 and co-develop it with Cranelift/Wasmtime, with the same code-review, testing/fuzzing, and security standards."

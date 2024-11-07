@@ -266,14 +266,6 @@ criteria = "safe-to-deploy"
 version = "0.8.10"
 criteria = "safe-to-deploy"
 
-[[exemptions.crunchy]]
-version = "0.2.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.deranged]]
-version = "0.3.11"
-criteria = "safe-to-deploy"
-
 [[exemptions.digest]]
 version = "0.9.0"
 criteria = "safe-to-deploy"
@@ -376,10 +368,6 @@ criteria = "safe-to-deploy"
 version = "1.0.0"
 criteria = "safe-to-deploy"
 
-[[exemptions.mach]]
-version = "0.3.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.matrixmultiply]]
 version = "0.3.9"
 criteria = "safe-to-deploy"
@@ -392,10 +380,6 @@ criteria = "safe-to-deploy"
 version = "0.2.3"
 criteria = "safe-to-deploy"
 
-[[exemptions.memoffset]]
-version = "0.6.5"
-criteria = "safe-to-deploy"
-
 [[exemptions.mio]]
 version = "0.8.11"
 criteria = "safe-to-deploy"
@@ -406,14 +390,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.num-complex]]
 version = "0.4.6"
-criteria = "safe-to-deploy"
-
-[[exemptions.num-conv]]
-version = "0.1.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.num-integer]]
-version = "0.1.46"
 criteria = "safe-to-deploy"
 
 [[exemptions.num_cpus]]
@@ -446,10 +422,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.pbkdf2]]
 version = "0.11.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.powerfmt]]
-version = "0.2.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.ppv-lite86]]
@@ -568,10 +540,6 @@ criteria = "safe-to-deploy"
 version = "0.3.36"
 criteria = "safe-to-deploy"
 
-[[exemptions.time-core]]
-version = "0.1.2"
-criteria = "safe-to-deploy"
-
 [[exemptions.tokio]]
 version = "1.30.0"
 criteria = "safe-to-deploy"
@@ -583,10 +551,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.tokio-rustls]]
 version = "0.25.0"
-criteria = "safe-to-deploy"
-
-[[exemptions.tracing]]
-version = "0.1.34"
 criteria = "safe-to-deploy"
 
 [[exemptions.tracing-attributes]]
