@@ -1,0 +1,23 @@
+[package]
+name = "cranelift-assembler-x64"
+description = "A Cranelift-specific x64 assembler"
+version = "0.1.0"
+license = "Apache-2.0 WITH LLVM-exception"
+edition.workspace = true
+
+[dependencies]
+arbitrary = { version = "1.3.2", features = ["derive"] }
+capstone = "0.12.0"
+
+[dev-dependencies]
+arbtest = "0.3.1"
+
+[build-dependencies]
+cranelift-assembler-x64-meta = { path = "meta" }
+
+[lints.clippy]
+all = "deny"
+pedantic = "warn"
+module_name_repetitions = { level = "allow", priority = 1 }
+similar_names = { level = "allow", priority = 1 }
+wildcard_imports = { level = "allow", priority = 1 }

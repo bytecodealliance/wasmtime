@@ -13,9 +13,10 @@ rust-version.workspace = true
 workspace = true
 
 [package.metadata.docs.rs]
-rustdoc-args = [ "--document-private-items" ]
+rustdoc-args = ["--document-private-items"]
 
 [dependencies]
+cranelift-assembler-x64 = { path = "../../assembler-x64", version = "0.1.0" }
 cranelift-codegen-shared = { path = "../shared", version = "0.117.0" }
 pulley-interpreter = { workspace = true, optional = true }
 

@@ -81,6 +81,13 @@ pub fn get_isle_compilations(
         .join("isa")
         .join("pulley_shared");
 
+    // Assembler definitions.
+    let asm_isle_definitions = cranelift_assembler_x64::generated_files()
+        .into_iter()
+        .filter(|p| p.extension() == Some(std::ffi::OsStr::new("isle")))
+        .next()
+        .unwrap();
+
     // This is a set of ISLE compilation units.
     //
     // The format of each entry is:
@@ -126,6 +133,7 @@ pub fn get_isle_compilations(
                     prelude_lower_isle.clone(),
                     src_isa_x64.join("inst.isle"),
                     src_isa_x64.join("lower.isle"),
+                    asm_isle_definitions.clone(),
                 ],
                 untracked_inputs: vec![clif_lower_isle.clone()],
             },

@@ -1,0 +1,15 @@
+[package]
+name = "cranelift-assembler-x64-meta"
+description = "Generate a Cranelift-specific assembler for x64 instructions"
+version = "0.1.0"
+license = "Apache-2.0 WITH LLVM-exception"
+edition.workspace = true
+
+[dependencies]
+
+[lints.clippy]
+all = "deny"
+pedantic = "warn"
+enum_glob_use = { level = "allow", priority = 1 }
+just_underscores_and_digits = { level = "allow", priority = 1 }
+wildcard_imports = { level = "allow", priority = 1 }

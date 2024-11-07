@@ -22,6 +22,8 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-math",
     "pulley-interpreter",
     // cranelift
+    "cranelift-assembler-x64-meta",
+    "cranelift-assembler-x64",
     "cranelift-isle",
     "cranelift-entity",
     "cranelift-bforest",
