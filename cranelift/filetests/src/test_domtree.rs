@@ -58,26 +58,31 @@ impl SubTest for TestDomtree {
                         );
                     }
                 };
+
+                let expected_block = match func.layout.inst_block(inst) {
+                    Some(expected_block) => expected_block,
+                    _ => anyhow::bail!("instruction {} is not in layout", inst),
+                };
                 for src_block in tail.split_whitespace() {
                     let block = match context.details.map.lookup_str(src_block) {
                         Some(AnyEntity::Block(block)) => block,
                         _ => anyhow::bail!("expected defined block, got {}", src_block),
                     };
 
-                    // Annotations say that `inst` is the idom of `block`.
-                    if expected.insert(block, inst).is_some() {
+                    // Annotations say that `expected_block` is the idom of `block`.
+                    if expected.insert(block, expected_block).is_some() {
                         anyhow::bail!("multiple dominators for {}", src_block);
                     }
 
                     // Compare to computed domtree.
                     match domtree.idom(block) {
-                        Some(got_inst) if got_inst != inst => {
+                        Some(got_block) if got_block != expected_block => {
                             anyhow::bail!(
                                 "mismatching idoms for {}:\n\
                                  want: {}, got: {}",
                                 src_block,
                                 inst,
-                                got_inst
+                                got_block
                             );
                         }
                         None => {
@@ -102,12 +107,12 @@ impl SubTest for TestDomtree {
             .skip(1)
             .filter(|block| !expected.contains_key(block))
         {
-            if let Some(got_inst) = domtree.idom(block) {
+            if let Some(got_block) = domtree.idom(block) {
                 anyhow::bail!(
                     "mismatching idoms for renumbered {}:\n\
                      want: unreachable, got: {}",
                     block,
-                    got_inst
+                    got_block
                 );
             }
         }
@@ -130,7 +135,7 @@ fn filecheck_text(func: &Function, domtree: &DominatorTree) -> Result<String, fm
     // Compute and print out a pre-order of the dominator tree.
     writeln!(s, "domtree_preorder {{")?;
     let mut dtpo = DominatorTreePreorder::new();
-    dtpo.compute(domtree, &func.layout);
+    dtpo.compute(domtree);
     let mut stack = Vec::new();
     stack.extend(func.layout.entry_block());
     while let Some(block) = stack.pop() {
