@@ -20,10 +20,10 @@ use std::mem;
 use wasmparser::{Operator, WasmFeatures};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DataIndex, ElemIndex, EngineOrModuleTypeIndex, FuncIndex, GlobalIndex,
-    IndexType, Memory, MemoryIndex, MemoryStyle, Module, ModuleInternedTypeIndex,
-    ModuleTranslation, ModuleTypesBuilder, PtrSize, Table, TableIndex, Tunables, TypeConvert,
-    TypeIndex, VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType,
-    WasmRefType, WasmResult, WasmValType,
+    IndexType, Memory, MemoryIndex, Module, ModuleInternedTypeIndex, ModuleTranslation,
+    ModuleTypesBuilder, PtrSize, Table, TableIndex, Tunables, TypeConvert, TypeIndex, VMOffsets,
+    WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
+    WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -2370,113 +2370,108 @@ impl<'module_environment> crate::translate::FuncEnvironment
 
         // If we have a declared maximum, we can make this a "static" heap, which is
         // allocated up front and never moved.
-        let style = MemoryStyle::for_memory(memory, self.tunables);
-        let (base_fact, memory_type) = match style {
-            MemoryStyle::Dynamic { .. } => {
-                let (base_fact, data_mt) = if let Some(ptr_memtype) = ptr_memtype {
-                    // Create a memtype representing the untyped memory region.
-                    let data_mt = func.create_memory_type(ir::MemoryTypeData::DynamicMemory {
-                        gv: heap_bound,
-                        size: self.tunables.memory_guard_size,
-                    });
-                    // This fact applies to any pointer to the start of the memory.
-                    let base_fact = ir::Fact::dynamic_base_ptr(data_mt);
-                    // This fact applies to the length.
-                    let length_fact = ir::Fact::global_value(
-                        u16::try_from(self.isa.pointer_type().bits()).unwrap(),
-                        heap_bound,
-                    );
-                    // Create a field in the vmctx for the base pointer.
-                    match &mut func.memory_types[ptr_memtype] {
-                        ir::MemoryTypeData::Struct { size, fields } => {
-                            let base_offset = u64::try_from(base_offset).unwrap();
-                            fields.push(ir::MemoryTypeField {
-                                offset: base_offset,
-                                ty: self.isa.pointer_type(),
-                                // Read-only field from the PoV of PCC checks:
-                                // don't allow stores to this field. (Even if
-                                // it is a dynamic memory whose base can
-                                // change, that update happens inside the
-                                // runtime, not in generated code.)
-                                readonly: true,
-                                fact: Some(base_fact.clone()),
-                            });
-                            let current_length_offset =
-                                u64::try_from(current_length_offset).unwrap();
-                            fields.push(ir::MemoryTypeField {
-                                offset: current_length_offset,
-                                ty: self.isa.pointer_type(),
-                                // As above, read-only; only the runtime modifies it.
-                                readonly: true,
-                                fact: Some(length_fact),
-                            });
+        let host_page_size_log2 = self.target_config().page_size_align_log2;
+        let (base_fact, memory_type) = if !memory
+            .can_elide_bounds_check(self.tunables, host_page_size_log2)
+        {
+            if let Some(ptr_memtype) = ptr_memtype {
+                // Create a memtype representing the untyped memory region.
+                let data_mt = func.create_memory_type(ir::MemoryTypeData::DynamicMemory {
+                    gv: heap_bound,
+                    size: self.tunables.memory_guard_size,
+                });
+                // This fact applies to any pointer to the start of the memory.
+                let base_fact = ir::Fact::dynamic_base_ptr(data_mt);
+                // This fact applies to the length.
+                let length_fact = ir::Fact::global_value(
+                    u16::try_from(self.isa.pointer_type().bits()).unwrap(),
+                    heap_bound,
+                );
+                // Create a field in the vmctx for the base pointer.
+                match &mut func.memory_types[ptr_memtype] {
+                    ir::MemoryTypeData::Struct { size, fields } => {
+                        let base_offset = u64::try_from(base_offset).unwrap();
+                        fields.push(ir::MemoryTypeField {
+                            offset: base_offset,
+                            ty: self.isa.pointer_type(),
+                            // Read-only field from the PoV of PCC checks:
+                            // don't allow stores to this field. (Even if
+                            // it is a dynamic memory whose base can
+                            // change, that update happens inside the
+                            // runtime, not in generated code.)
+                            readonly: true,
+                            fact: Some(base_fact.clone()),
+                        });
+                        let current_length_offset = u64::try_from(current_length_offset).unwrap();
+                        fields.push(ir::MemoryTypeField {
+                            offset: current_length_offset,
+                            ty: self.isa.pointer_type(),
+                            // As above, read-only; only the runtime modifies it.
+                            readonly: true,
+                            fact: Some(length_fact),
+                        });
 
-                            let pointer_size = u64::from(self.isa.pointer_type().bytes());
-                            let fields_end = std::cmp::max(
-                                base_offset + pointer_size,
-                                current_length_offset + pointer_size,
-                            );
-                            *size = std::cmp::max(*size, fields_end);
-                        }
-                        _ => {
-                            panic!("Bad memtype");
-                        }
+                        let pointer_size = u64::from(self.isa.pointer_type().bytes());
+                        let fields_end = std::cmp::max(
+                            base_offset + pointer_size,
+                            current_length_offset + pointer_size,
+                        );
+                        *size = std::cmp::max(*size, fields_end);
                     }
-                    // Apply a fact to the base pointer.
-                    (Some(base_fact), Some(data_mt))
-                } else {
-                    (None, None)
-                };
-
-                (base_fact, data_mt)
+                    _ => {
+                        panic!("Bad memtype");
+                    }
+                }
+                // Apply a fact to the base pointer.
+                (Some(base_fact), Some(data_mt))
+            } else {
+                (None, None)
             }
-            MemoryStyle::Static {
-                byte_reservation: bound_bytes,
-            } => {
-                let (base_fact, data_mt) = if let Some(ptr_memtype) = ptr_memtype {
-                    // Create a memtype representing the untyped memory region.
-                    let data_mt = func.create_memory_type(ir::MemoryTypeData::Memory {
-                        size: bound_bytes
-                            .checked_add(self.tunables.memory_guard_size)
-                            .expect("Memory plan has overflowing size plus guard"),
-                    });
-                    // This fact applies to any pointer to the start of the memory.
-                    let base_fact = Fact::Mem {
-                        ty: data_mt,
-                        min_offset: 0,
-                        max_offset: 0,
-                        nullable: false,
-                    };
-                    // Create a field in the vmctx for the base pointer.
-                    match &mut func.memory_types[ptr_memtype] {
-                        ir::MemoryTypeData::Struct { size, fields } => {
-                            let offset = u64::try_from(base_offset).unwrap();
-                            fields.push(ir::MemoryTypeField {
-                                offset,
-                                ty: self.isa.pointer_type(),
-                                // Read-only field from the PoV of PCC checks:
-                                // don't allow stores to this field. (Even if
-                                // it is a dynamic memory whose base can
-                                // change, that update happens inside the
-                                // runtime, not in generated code.)
-                                readonly: true,
-                                fact: Some(base_fact.clone()),
-                            });
-                            *size = std::cmp::max(
-                                *size,
-                                offset + u64::from(self.isa.pointer_type().bytes()),
-                            );
-                        }
-                        _ => {
-                            panic!("Bad memtype");
-                        }
-                    }
-                    // Apply a fact to the base pointer.
-                    (Some(base_fact), Some(data_mt))
-                } else {
-                    (None, None)
+        } else {
+            if let Some(ptr_memtype) = ptr_memtype {
+                // Create a memtype representing the untyped memory region.
+                let data_mt = func.create_memory_type(ir::MemoryTypeData::Memory {
+                    size: self
+                        .tunables
+                        .memory_reservation
+                        .checked_add(self.tunables.memory_guard_size)
+                        .expect("Memory plan has overflowing size plus guard"),
+                });
+                // This fact applies to any pointer to the start of the memory.
+                let base_fact = Fact::Mem {
+                    ty: data_mt,
+                    min_offset: 0,
+                    max_offset: 0,
+                    nullable: false,
                 };
-                (base_fact, data_mt)
+                // Create a field in the vmctx for the base pointer.
+                match &mut func.memory_types[ptr_memtype] {
+                    ir::MemoryTypeData::Struct { size, fields } => {
+                        let offset = u64::try_from(base_offset).unwrap();
+                        fields.push(ir::MemoryTypeField {
+                            offset,
+                            ty: self.isa.pointer_type(),
+                            // Read-only field from the PoV of PCC checks:
+                            // don't allow stores to this field. (Even if
+                            // it is a dynamic memory whose base can
+                            // change, that update happens inside the
+                            // runtime, not in generated code.)
+                            readonly: true,
+                            fact: Some(base_fact.clone()),
+                        });
+                        *size = std::cmp::max(
+                            *size,
+                            offset + u64::from(self.isa.pointer_type().bytes()),
+                        );
+                    }
+                    _ => {
+                        panic!("Bad memtype");
+                    }
+                }
+                // Apply a fact to the base pointer.
+                (Some(base_fact), Some(data_mt))
+            } else {
+                (None, None)
             }
         };
 
