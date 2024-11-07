@@ -35,29 +35,6 @@ entity_impl!(Heap, "heap");
 ///    to always cause a trap when accessed. It is used to optimize bounds
 ///    checking for heap accesses with a shared base pointer. They are
 ///    addressable but not accessible.
-///
-/// The *heap bound* is the total size of the mapped and unmapped pages. This is
-/// the bound that `heap_addr` checks against. Memory accesses inside the heap
-/// bounds can trap if they hit an unmapped page (which is not accessible).
-///
-/// Two styles of heaps are supported, *static* and *dynamic*. They behave
-/// differently when resized.
-///
-/// #### Static heaps
-///
-/// A *static heap* starts out with all the address space it will ever need, so
-/// it never moves to a different address. At the base address is a number of
-/// mapped pages corresponding to the heap's current size. Then follows a number
-/// of unmapped pages where the heap can grow up to its maximum size. After the
-/// unmapped pages follow the offset-guard pages which are also guaranteed to
-/// generate a trap when accessed.
-///
-/// #### Dynamic heaps
-///
-/// A *dynamic heap* can be relocated to a different base address when it is
-/// resized, and its bound can move dynamically. The offset-guard pages move
-/// when the heap is resized. The bound of a dynamic heap is stored in a global
-/// value.
 #[derive(Clone, PartialEq, Hash)]
 pub struct HeapData {
     /// The address of the start of the heap's storage.

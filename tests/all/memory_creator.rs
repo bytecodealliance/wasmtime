@@ -103,7 +103,7 @@ mod not_for_windows {
             guard_size: usize,
         ) -> Result<Box<dyn LinearMemory>, String> {
             assert_eq!(guard_size, 0);
-            assert!(reserved_size.is_none());
+            assert_eq!(reserved_size, Some(0));
             assert!(!ty.is_64());
             unsafe {
                 let mem = Box::new(CustomMemory::new(

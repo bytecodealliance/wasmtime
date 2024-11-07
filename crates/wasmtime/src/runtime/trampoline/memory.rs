@@ -11,8 +11,7 @@ use crate::store::{InstanceId, StoreOpaque};
 use crate::MemoryType;
 use alloc::sync::Arc;
 use wasmtime_environ::{
-    DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, MemoryStyle, Module, Tunables,
-    VMOffsets,
+    DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, Module, Tunables, VMOffsets,
 };
 
 #[cfg(feature = "component-model")]
@@ -106,13 +105,7 @@ impl RuntimeMemoryCreator for MemoryCreatorProxy {
         minimum: usize,
         maximum: Option<usize>,
     ) -> Result<Box<dyn RuntimeLinearMemory>> {
-        let style = MemoryStyle::for_memory(*ty, tunables);
-        let reserved_size_in_bytes = match style {
-            MemoryStyle::Static { byte_reservation } => {
-                Some(usize::try_from(byte_reservation).unwrap())
-            }
-            MemoryStyle::Dynamic { .. } => None,
-        };
+        let reserved_size_in_bytes = Some(tunables.memory_reservation.try_into().unwrap());
         self.0
             .new_memory(
                 MemoryType::from_wasmtime_memory(ty),

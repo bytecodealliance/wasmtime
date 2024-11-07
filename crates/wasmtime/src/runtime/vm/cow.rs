@@ -9,15 +9,14 @@ use super::sys::DecommitBehavior;
 use crate::prelude::*;
 use crate::runtime::vm::sys::vm::{self, MemoryImageSource};
 use crate::runtime::vm::{
-    round_usize_up_to_host_pages, usize_is_multiple_of_host_page_size, MmapVec, SendSyncPtr,
+    host_page_size, round_usize_up_to_host_pages, usize_is_multiple_of_host_page_size, MmapVec,
+    SendSyncPtr,
 };
 use alloc::sync::Arc;
 use core::ffi::c_void;
 use core::ops::Range;
 use core::ptr::{self, NonNull};
-use wasmtime_environ::{
-    DefinedMemoryIndex, MemoryInitialization, MemoryStyle, Module, PrimaryMap, Tunables,
-};
+use wasmtime_environ::{DefinedMemoryIndex, MemoryInitialization, Module, PrimaryMap, Tunables};
 
 /// Backing images for memories in a module.
 ///
@@ -430,13 +429,14 @@ impl MemoryImageSlot {
         }
 
         // If (1) the accessible region is not in its initial state, and (2) the
-        // memory relies on virtual memory at all (i.e. has offset guard pages
-        // and/or is static), then we need to reset memory protections. Put
-        // another way, the only time it is safe to not reset protections is
-        // when we are using dynamic memory without any guard pages.
-        let style = MemoryStyle::for_memory(*ty, tunables);
+        // memory relies on virtual memory at all (i.e. has offset guard
+        // pages), then we need to reset memory protections. Put another way,
+        // the only time it is safe to not reset protections is when we are
+        // using dynamic memory without any guard pages.
+        let host_page_size_log2 = u8::try_from(host_page_size().ilog2()).unwrap();
         if initial_size_bytes_page_aligned < self.accessible
-            && (tunables.memory_guard_size > 0 || matches!(style, MemoryStyle::Static { .. }))
+            && (tunables.memory_guard_size > 0
+                || ty.can_elide_bounds_check(tunables, host_page_size_log2))
         {
             self.set_protection(initial_size_bytes_page_aligned..self.accessible, false)?;
             self.accessible = initial_size_bytes_page_aligned;
