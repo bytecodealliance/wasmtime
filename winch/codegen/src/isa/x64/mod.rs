@@ -167,4 +167,8 @@ impl TargetIsa for X64 {
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         Some(cranelift_codegen::isa::x64::create_cie())
     }
+
+    fn page_size_align_log2(&self) -> u8 {
+        12
+    }
 }

@@ -116,6 +116,8 @@ pub struct FuncEnv<'a, 'translation: 'a, 'data: 'translation, P: PtrSize> {
     heap_access_spectre_mitigation: bool,
     /// Whether or not to enable Spectre mitigation on table element accesses.
     table_access_spectre_mitigation: bool,
+    /// Size of pages on the compilation target.
+    pub page_size_log2: u8,
     name_map: PrimaryMap<UserExternalNameRef, UserExternalName>,
     name_intern: HashMap<UserExternalName, UserExternalNameRef>,
 }
@@ -148,6 +150,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
             ptr_type,
             heap_access_spectre_mitigation: isa.flags().enable_heap_access_spectre_mitigation(),
             table_access_spectre_mitigation: isa.flags().enable_table_access_spectre_mitigation(),
+            page_size_log2: isa.page_size_align_log2(),
             builtins,
             name_map: Default::default(),
             name_intern: Default::default(),

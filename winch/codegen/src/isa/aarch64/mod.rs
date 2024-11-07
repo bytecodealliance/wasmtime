@@ -154,4 +154,21 @@ impl TargetIsa for Aarch64 {
         // TODO: should fill this in with an actual implementation
         Ok(None)
     }
+
+    fn page_size_align_log2(&self) -> u8 {
+        use target_lexicon::*;
+        match self.triple().operating_system {
+            OperatingSystem::MacOSX { .. }
+            | OperatingSystem::Darwin
+            | OperatingSystem::Ios
+            | OperatingSystem::Tvos => {
+                debug_assert_eq!(1 << 14, 0x4000);
+                14
+            }
+            _ => {
+                debug_assert_eq!(1 << 16, 0x10000);
+                16
+            }
+        }
+    }
 }

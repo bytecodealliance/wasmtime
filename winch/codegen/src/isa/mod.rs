@@ -210,6 +210,12 @@ pub trait TargetIsa: Send + Sync {
         let width = self.triple().pointer_width().unwrap();
         width.bytes()
     }
+
+    /// The log2 of the target's page size and alignment.
+    ///
+    /// Note that this may be an upper-bound that is larger than necessary for
+    /// some platforms since it may depend on runtime configuration.
+    fn page_size_align_log2(&self) -> u8;
 }
 
 impl Debug for &dyn TargetIsa {
