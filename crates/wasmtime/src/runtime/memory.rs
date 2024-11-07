@@ -1049,7 +1049,7 @@ mod tests {
         let mem = Memory::new(&mut store, ty).unwrap();
         let store = store.as_context();
         let tunables = store.engine().tunables();
-        assert_eq!(tunables.guard_size, 0);
+        assert_eq!(tunables.memory_guard_size, 0);
         assert!(!store[mem.0].memory.can_elide_bounds_check(tunables, 12));
     }
 
