@@ -512,7 +512,7 @@ impl<'a> EgraphPass<'a> {
     ) -> Self {
         let num_values = func.dfg.num_values();
         let mut domtree = DominatorTreePreorder::new();
-        domtree.compute(raw_domtree, &func.layout);
+        domtree.compute(raw_domtree);
         Self {
             func,
             domtree,
