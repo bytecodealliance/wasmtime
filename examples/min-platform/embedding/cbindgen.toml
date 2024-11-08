@@ -15,6 +15,16 @@ header = """
 // These symbols can be defined either in C/C++ or in Rust (using
 // `#[no_mangle]`).
 //
+// Note that there are some `#define`s here which can be added before this
+// header file is included to indicate how Wasmtime was built. This corresponds
+// to the `wasmtime` crate's Cargo features where if the feature is disabled
+// then the symbols will not be required.
+//
+// * `WASMTIME_SIGNALS_BASED_TRAPS` - corresponds to `signals-based-traps`
+//
 // Some more information about this header can additionally be found at
 // <https://docs.wasmtime.dev/stability-platform-support.html>.
 """
+
+[defines]
+'feature = signals-based-traps' = 'WASMTIME_SIGNALS_BASED_TRAPS'

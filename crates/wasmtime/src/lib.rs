@@ -266,6 +266,12 @@
 //!   with the same overhead as the `call-hook` feature where entries/exits into
 //!   WebAssembly will have more overhead than before.
 //!
+//! * `signals-based-traps` - Enabled by default, this enables support for using
+//!   host signal handlers to implement WebAssembly traps. For example virtual
+//!   memory is used to catch out-of-bounds accesses in WebAssembly that result
+//!   in segfaults. This is implicitly enabled by the `std` feature and is the
+//!   best way to get high-performance WebAssembly.
+//!
 //! More crate features can be found in the [manifest] of Wasmtime itself for
 //! seeing what can be enabled and disabled.
 //!

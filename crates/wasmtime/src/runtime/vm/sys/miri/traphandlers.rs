@@ -9,6 +9,7 @@
 // Note that no actual JIT code runs in MIRI so this is purely here for
 // host-to-host calls.
 
+use crate::prelude::*;
 use crate::runtime::vm::VMContext;
 
 pub fn wasmtime_setjmp(
@@ -28,21 +29,6 @@ pub fn wasmtime_longjmp(_jmp_buf: *const u8) -> ! {
 }
 
 #[allow(missing_docs)]
-pub type SignalHandler<'a> = dyn Fn() + Send + Sync + 'a;
-
-pub struct TrapHandler;
-
-impl TrapHandler {
-    pub unsafe fn new(_macos_use_mach_ports: bool) -> TrapHandler {
-        TrapHandler
-    }
-
-    pub fn validate_config(&self, _macos_use_mach_ports: bool) {}
-}
+pub type SignalHandler = Box<dyn Fn() + Send + Sync>;
 
 pub fn lazy_per_thread_init() {}
-
-#[cfg(target_os = "macos")]
-pub fn using_mach_ports() -> bool {
-    false
-}

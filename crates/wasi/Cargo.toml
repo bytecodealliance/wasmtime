@@ -42,7 +42,7 @@ test-log = { workspace = true }
 tracing-subscriber = { workspace = true }
 test-programs-artifacts = { workspace = true }
 tempfile = { workspace = true }
-wasmtime = { workspace = true, features = ['cranelift', 'incremental-cache'] }
+wasmtime = { workspace = true, features = ['cranelift', 'incremental-cache', 'signals-based-traps'] }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["event", "fs", "net"] }

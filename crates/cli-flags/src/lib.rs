@@ -642,39 +642,51 @@ impl CommonOptions {
             true => err,
         }
 
-        if let Some(max) = self
+        let memory_reservation = self
             .opts
             .memory_reservation
-            .or(self.opts.static_memory_maximum_size)
-        {
-            config.memory_reservation(max);
+            .or(self.opts.static_memory_maximum_size);
+        match_feature! {
+            ["signals-based-traps" : memory_reservation]
+            size => config.memory_reservation(size),
+            _ => err,
         }
 
-        if let Some(enable) = self.opts.static_memory_forced {
-            config.memory_may_move(!enable);
+        match_feature! {
+            ["signals-based-traps" : self.opts.static_memory_forced]
+            enable => config.memory_may_move(!enable),
+            _ => err,
         }
-        if let Some(enable) = self.opts.memory_may_move {
-            config.memory_may_move(enable);
+        match_feature! {
+            ["signals-based-traps" : self.opts.memory_may_move]
+            enable => config.memory_may_move(enable),
+            _ => err,
         }
 
-        if let Some(size) = self
+        let memory_guard_size = self
             .opts
             .static_memory_guard_size
             .or(self.opts.dynamic_memory_guard_size)
-            .or(self.opts.memory_guard_size)
-        {
-            config.memory_guard_size(size);
+            .or(self.opts.memory_guard_size);
+        match_feature! {
+            ["signals-based-traps" : memory_guard_size]
+            size => config.memory_guard_size(size),
+            _ => err,
         }
 
-        if let Some(size) = self
+        let mem_for_growth = self
             .opts
             .memory_reservation_for_growth
-            .or(self.opts.dynamic_memory_reserved_for_growth)
-        {
-            config.memory_reservation_for_growth(size);
+            .or(self.opts.dynamic_memory_reserved_for_growth);
+        match_feature! {
+            ["signals-based-traps" : mem_for_growth]
+            size => config.memory_reservation_for_growth(size),
+            _ => err,
         }
-        if let Some(enable) = self.opts.guard_before_linear_memory {
-            config.guard_before_linear_memory(enable);
+        match_feature! {
+            ["signals-based-traps" : self.opts.guard_before_linear_memory]
+            enable => config.guard_before_linear_memory(enable),
+            _ => err,
         }
         if let Some(enable) = self.opts.table_lazy_init {
             config.table_lazy_init(enable);
@@ -694,8 +706,10 @@ impl CommonOptions {
         if let Some(enable) = self.opts.memory_init_cow {
             config.memory_init_cow(enable);
         }
-        if let Some(enable) = self.opts.signals_based_traps {
-            config.signals_based_traps(enable);
+        match_feature! {
+            ["signals-based-traps" : self.opts.signals_based_traps]
+            enable => config.signals_based_traps(enable),
+            _ => err,
         }
         if let Some(enable) = self.codegen.native_unwind_info {
             config.native_unwind_info(enable);

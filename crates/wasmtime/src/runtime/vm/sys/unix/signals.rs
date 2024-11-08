@@ -1,30 +1,16 @@
 //! Trap handling on Unix based on POSIX signals.
 
+use crate::prelude::*;
+use crate::runtime::vm::sys::traphandlers::wasmtime_longjmp;
 use crate::runtime::vm::traphandlers::{tls, TrapRegisters, TrapTest};
-use crate::runtime::vm::VMContext;
 use std::cell::RefCell;
 use std::io;
 use std::mem;
 use std::ptr::{self, addr_of, addr_of_mut, null_mut};
 
-#[link(name = "wasmtime-helpers")]
-extern "C" {
-    #[wasmtime_versioned_export_macros::versioned_link]
-    #[allow(improper_ctypes)]
-    pub fn wasmtime_setjmp(
-        jmp_buf: *mut *const u8,
-        callback: extern "C" fn(*mut u8, *mut VMContext),
-        payload: *mut u8,
-        callee: *mut VMContext,
-    ) -> i32;
-
-    #[wasmtime_versioned_export_macros::versioned_link]
-    pub fn wasmtime_longjmp(jmp_buf: *const u8) -> !;
-}
-
 /// Function which may handle custom signals while processing traps.
-pub type SignalHandler<'a> =
-    dyn Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool + Send + Sync + 'a;
+pub type SignalHandler =
+    Box<dyn Fn(libc::c_int, *const libc::siginfo_t, *const libc::c_void) -> bool + Send + Sync>;
 
 const UNINIT_SIGACTION: libc::sigaction = unsafe { mem::zeroed() };
 static mut PREV_SIGSEGV: libc::sigaction = UNINIT_SIGACTION;

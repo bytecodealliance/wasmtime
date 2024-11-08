@@ -5,9 +5,8 @@ use crate::runtime::vm::{libcalls, MmapVec, UnwindRegistration};
 use core::ops::Range;
 use object::endian::NativeEndian;
 use object::read::{elf::ElfFile64, Object, ObjectSection};
-use object::ObjectSymbol;
+use object::{ObjectSymbol, SectionFlags};
 use wasmtime_environ::{lookup_trap_code, obj, Trap};
-use wasmtime_jit_icache_coherence as icache_coherence;
 
 /// Management of executable memory within a `MmapVec`
 ///
@@ -20,6 +19,7 @@ pub struct CodeMemory {
     debug_registration: Option<crate::runtime::vm::GdbJitImageRegistration>,
     published: bool,
     enable_branch_protection: bool,
+    needs_executable: bool,
     #[cfg(feature = "debug-builtins")]
     has_native_debug_info: bool,
 
@@ -65,6 +65,7 @@ impl CodeMemory {
         let mut text = 0..0;
         let mut unwind = 0..0;
         let mut enable_branch_protection = None;
+        let mut needs_executable = true;
         #[cfg(feature = "debug-builtins")]
         let mut has_native_debug_info = false;
         let mut trap_data = 0..0;
@@ -96,6 +97,12 @@ impl CodeMemory {
                 },
                 ".text" => {
                     text = range;
+
+                    if let SectionFlags::Elf { sh_flags } = section.flags() {
+                        if sh_flags & obj::SH_WASMTIME_NOT_EXECUTED != 0 {
+                            needs_executable = false;
+                        }
+                    }
 
                     // The text section might have relocations for things like
                     // libcalls which need to be applied, so handle those here.
@@ -141,6 +148,7 @@ impl CodeMemory {
             published: false,
             enable_branch_protection: enable_branch_protection
                 .ok_or_else(|| anyhow!("missing `{}` section", obj::ELF_WASM_BTI))?,
+            needs_executable,
             #[cfg(feature = "debug-builtins")]
             has_native_debug_info,
             text,
@@ -253,24 +261,38 @@ impl CodeMemory {
             // loaded-from-disk images this shouldn't result in IPIs so long as
             // there weren't any relocations because nothing should have
             // otherwise written to the image at any point either.
+            //
+            // Note that if virtual memory is disabled this is skipped because
+            // we aren't able to make it readonly, but this is just a
+            // defense-in-depth measure and isn't required for correctness.
+            #[cfg(feature = "signals-based-traps")]
             self.mmap.make_readonly(0..self.mmap.len())?;
 
-            let text = self.text();
-
-            // Clear the newly allocated code from cache if the processor requires it
-            //
-            // Do this before marking the memory as R+X, technically we should be able to do it after
-            // but there are some CPU's that have had errata about doing this with read only memory.
-            icache_coherence::clear_cache(text.as_ptr().cast(), text.len())
-                .expect("Failed cache clear");
-
             // Switch the executable portion from readonly to read/execute.
-            self.mmap
-                .make_executable(self.text.clone(), self.enable_branch_protection)
-                .context("unable to make memory executable")?;
+            if self.needs_executable {
+                #[cfg(feature = "signals-based-traps")]
+                {
+                    let text = self.text();
 
-            // Flush any in-flight instructions from the pipeline
-            icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
+                    use wasmtime_jit_icache_coherence as icache_coherence;
+
+                    // Clear the newly allocated code from cache if the processor requires it
+                    //
+                    // Do this before marking the memory as R+X, technically we should be able to do it after
+                    // but there are some CPU's that have had errata about doing this with read only memory.
+                    icache_coherence::clear_cache(text.as_ptr().cast(), text.len())
+                        .expect("Failed cache clear");
+
+                    self.mmap
+                        .make_executable(self.text.clone(), self.enable_branch_protection)
+                        .context("unable to make memory executable")?;
+
+                    // Flush any in-flight instructions from the pipeline
+                    icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
+                }
+                #[cfg(not(feature = "signals-based-traps"))]
+                bail!("this target requires virtual memory to be enabled");
+            }
 
             // With all our memory set up use the platform-specific
             // `UnwindRegistration` implementation to inform the general

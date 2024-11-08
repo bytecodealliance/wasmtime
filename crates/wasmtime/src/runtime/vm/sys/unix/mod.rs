@@ -5,22 +5,17 @@
 
 use core::cell::Cell;
 
+#[cfg(feature = "signals-based-traps")]
 pub mod mmap;
+pub mod traphandlers;
 pub mod unwind;
+#[cfg(feature = "signals-based-traps")]
 pub mod vm;
 
+#[cfg(all(feature = "signals-based-traps", target_os = "macos"))]
+pub mod machports;
+#[cfg(feature = "signals-based-traps")]
 pub mod signals;
-
-cfg_if::cfg_if! {
-    if #[cfg(target_os = "macos")] {
-        pub mod machports;
-
-        pub mod macos_traphandlers;
-        pub use macos_traphandlers as traphandlers;
-    } else {
-        pub use signals as traphandlers;
-    }
-}
 
 std::thread_local!(static TLS: Cell<*mut u8> = const { Cell::new(std::ptr::null_mut()) });
 

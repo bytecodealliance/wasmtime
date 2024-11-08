@@ -108,6 +108,7 @@ pub(crate) fn from_runtime_box(
             );
             (error, None)
         }
+        #[cfg(all(feature = "signals-based-traps", not(miri)))]
         crate::runtime::vm::TrapReason::Jit {
             pc,
             faulting_addr,

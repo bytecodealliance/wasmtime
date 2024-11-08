@@ -246,7 +246,9 @@ impl Config {
             async_support: false,
             module_version: ModuleVersionStrategy::default(),
             parallel_compilation: !cfg!(miri),
-            memory_init_cow: true,
+            // If signals are disabled then virtual memory is probably mostly
+            // disabled so also disable the use of CoW by default.
+            memory_init_cow: cfg!(feature = "signals-based-traps"),
             memory_guaranteed_dense_image_size: 16 << 20,
             force_memory_init_memfd: false,
             wmemcheck: false,
@@ -1496,6 +1498,7 @@ impl Config {
     ///
     /// For 32-bit platforms this value defaults to 10MiB. This means that
     /// bounds checks will be required on 32-bit platforms.
+    #[cfg(feature = "signals-based-traps")]
     pub fn memory_reservation(&mut self, bytes: u64) -> &mut Self {
         self.tunables.memory_reservation = Some(bytes);
         self
@@ -1531,6 +1534,7 @@ impl Config {
     ///   the memory configuration works at runtime.
     ///
     /// The default value for this option is `true`.
+    #[cfg(feature = "signals-based-traps")]
     pub fn memory_may_move(&mut self, enable: bool) -> &mut Self {
         self.tunables.memory_may_move = Some(enable);
         self
@@ -1579,6 +1583,7 @@ impl Config {
     /// allows eliminating almost all bounds checks on loads/stores with an
     /// immediate offset of less than 32MiB. On 32-bit platforms this defaults
     /// to 64KiB.
+    #[cfg(feature = "signals-based-traps")]
     pub fn memory_guard_size(&mut self, bytes: u64) -> &mut Self {
         self.tunables.memory_guard_size = Some(bytes);
         self
@@ -1668,6 +1673,7 @@ impl Config {
     /// ## Default
     ///
     /// This value defaults to `true`.
+    #[cfg(feature = "signals-based-traps")]
     pub fn guard_before_linear_memory(&mut self, enable: bool) -> &mut Self {
         self.tunables.guard_before_linear_memory = Some(enable);
         self
@@ -1783,6 +1789,7 @@ impl Config {
     /// [`Module::deserialize_file`]: crate::Module::deserialize_file
     /// [`Module`]: crate::Module
     /// [IPI]: https://en.wikipedia.org/wiki/Inter-processor_interrupt
+    #[cfg(feature = "signals-based-traps")]
     pub fn memory_init_cow(&mut self, enable: bool) -> &mut Self {
         self.memory_init_cow = enable;
         self
@@ -2055,6 +2062,16 @@ impl Config {
             None => Tunables::default_host(),
         };
 
+        // When signals-based traps are disabled use slightly different defaults
+        // for tunables to be more amenable to `MallocMemory`. Note that these
+        // can still be overridden by config options.
+        if !cfg!(feature = "signals-based-traps") {
+            tunables.signals_based_traps = false;
+            tunables.memory_reservation = 0;
+            tunables.memory_guard_size = 0;
+            tunables.memory_reservation_for_growth = 1 << 20; // 1MB
+        }
+
         self.tunables.configure(&mut tunables);
 
         // If we're going to compile with winch, we must use the winch calling convention.
@@ -2078,6 +2095,13 @@ impl Config {
         } else {
             None
         };
+
+        // These `Config` accessors are disabled at compile time so double-check
+        // the defaults here.
+        if !cfg!(feature = "signals-based-traps") {
+            assert!(!tunables.signals_based_traps);
+            assert!(!self.memory_init_cow);
+        }
 
         Ok((tunables, features))
     }
@@ -2413,6 +2437,7 @@ impl Config {
     /// are enabled by default.
     ///
     /// **Note** Disabling this option is not compatible with the Winch compiler.
+    #[cfg(feature = "signals-based-traps")]
     pub fn signals_based_traps(&mut self, enable: bool) -> &mut Self {
         self.tunables.signals_based_traps = Some(enable);
         self

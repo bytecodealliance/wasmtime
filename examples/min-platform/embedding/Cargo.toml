@@ -23,3 +23,6 @@ dlmalloc = "0.2.4"
 crate-type = ['staticlib']
 test = false
 doctest = false
+
+[features]
+signals-based-traps = ['wasmtime/signals-based-traps']

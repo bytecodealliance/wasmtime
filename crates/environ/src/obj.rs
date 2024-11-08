@@ -15,6 +15,12 @@ pub const EF_WASMTIME_MODULE: u32 = 1 << 0;
 /// component.
 pub const EF_WASMTIME_COMPONENT: u32 = 1 << 1;
 
+/// Flag for the `sh_flags` field in the ELF text section that indicates that
+/// the text section does not itself need to be executable. This is used for the
+/// Pulley target, for example, to indicate that it does not need to be made
+/// natively executable as it does not contain actual native code.
+pub const SH_WASMTIME_NOT_EXECUTED: u64 = 1 << 0;
+
 /// A custom Wasmtime-specific section of our compilation image which stores
 /// mapping data from offsets in the image to offset in the original wasm
 /// binary.

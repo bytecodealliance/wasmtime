@@ -21,6 +21,11 @@ EMBEDDING_DIR=$HOST_DIR/embedding
 
 set -ex
 
+if [ "$WASMTIME_SIGNALS_BASED_TRAPS" = "1" ]; then
+  cflags="$cflags -DWASMTIME_SIGNALS_BASED_TRAPS"
+  features="$features,signals-based-traps"
+fi
+
 # First compile the C implementation of the platform symbols that will be
 # required by our embedding. This is the `embedding/wasmtime-platform.c` file.
 # The header file used is generated from Rust source code with the `cbindgen`
@@ -32,7 +37,7 @@ set -ex
 cbindgen "$REPO_DIR/crates/wasmtime/src/runtime/vm/sys/custom/capi.rs" \
     --config "$EMBEDDING_DIR/cbindgen.toml" > "$EMBEDDING_DIR/wasmtime-platform.h"
 clang -shared -O2 -o "$HOST_DIR/libwasmtime-platform.so" "$EMBEDDING_DIR/wasmtime-platform.c" \
-  -D_GNU_SOURCE
+  -D_GNU_SOURCE $cflags
 
 # Next the embedding itself is built.
 #
@@ -44,6 +49,7 @@ clang -shared -O2 -o "$HOST_DIR/libwasmtime-platform.so" "$EMBEDDING_DIR/wasmtim
 cargo build \
   --manifest-path $EMBEDDING_DIR/Cargo.toml \
   --target $target \
+  --features "$features" \
   --release
 cc \
   -Wl,--gc-sections \
@@ -55,7 +61,7 @@ cc \
 
 # The final step here is running the host, in the current directory, which will
 # load the embedding and execute it.
-cargo run --manifest-path "$HOST_DIR/Cargo.toml" --release -- \
+cargo run --manifest-path "$HOST_DIR/Cargo.toml" --release --features "$features" -- \
   "$target" \
   "$HOST_DIR/libembedding.so" \
   "$HOST_DIR/libwasmtime-platform.so"

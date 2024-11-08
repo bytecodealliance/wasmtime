@@ -9,6 +9,8 @@
 
 #include "wasmtime-platform.h"
 
+#ifdef WASMTIME_SIGNALS_BASED_TRAPS
+
 static int wasmtime_to_mmap_prot_flags(uint32_t prot_flags) {
   int flags = 0;
   if (prot_flags & WASMTIME_PROT_READ)
@@ -53,6 +55,8 @@ int wasmtime_mprotect(uint8_t *ptr, uintptr_t size, uint32_t prot_flags) {
 
 uintptr_t wasmtime_page_size(void) { return sysconf(_SC_PAGESIZE); }
 
+#endif // WASMTIME_SIGNALS_BASED_TRAPS
+
 int32_t wasmtime_setjmp(const uint8_t **jmp_buf_out,
                         void (*callback)(uint8_t *, uint8_t *),
                         uint8_t *payload, uint8_t *callee) {
@@ -67,6 +71,8 @@ int32_t wasmtime_setjmp(const uint8_t **jmp_buf_out,
 void wasmtime_longjmp(const uint8_t *jmp_buf_ptr) {
   longjmp(*(jmp_buf *)jmp_buf_ptr, 1);
 }
+
+#ifdef WASMTIME_SIGNALS_BASED_TRAPS
 
 static wasmtime_trap_handler_t g_handler = NULL;
 
@@ -133,6 +139,8 @@ int wasmtime_memory_image_map_at(struct wasmtime_memory_image *image,
 void wasmtime_memory_image_free(struct wasmtime_memory_image *image) {
   abort();
 }
+
+#endif // WASMTIME_SIGNALS_BASED_TRAPS
 
 // Pretend that this platform doesn't have threads where storing in a static is
 // ok.
