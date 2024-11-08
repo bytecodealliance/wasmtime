@@ -1,7 +1,7 @@
 use super::GcCompiler;
 use crate::func_environ::FuncEnvironment;
 use crate::gc::ArrayInit;
-use crate::translate::{StructFieldsVec, TargetEnvironment};
+use crate::translate::{FuncEnvironment as _, StructFieldsVec, TargetEnvironment};
 use crate::TRAP_INTERNAL_ASSERT;
 use cranelift_codegen::{
     cursor::FuncCursor,
@@ -304,7 +304,7 @@ pub fn translate_struct_get(
     // TODO: If we know we have a `(ref $my_struct)` here, instead of maybe a
     // `(ref null $my_struct)`, we could omit the `trapz`. But plumbing that
     // type info from `wasmparser` and through to here is a bit funky.
-    builder.ins().trapz(struct_ref, crate::TRAP_NULL_REFERENCE);
+    func_env.trapz(builder, struct_ref, crate::TRAP_NULL_REFERENCE);
 
     let field_index = usize::try_from(field_index).unwrap();
     let interned_type_index = func_env.module.types[struct_type_index];
@@ -337,7 +337,7 @@ fn translate_struct_get_and_extend(
     extension: Extension,
 ) -> WasmResult<ir::Value> {
     // TODO: See comment in `translate_struct_get` about the `trapz`.
-    builder.ins().trapz(struct_ref, crate::TRAP_NULL_REFERENCE);
+    func_env.trapz(builder, struct_ref, crate::TRAP_NULL_REFERENCE);
 
     let field_index = usize::try_from(field_index).unwrap();
     let interned_type_index = func_env.module.types[struct_type_index];
@@ -410,7 +410,7 @@ pub fn translate_struct_set(
     new_val: ir::Value,
 ) -> WasmResult<()> {
     // TODO: See comment in `translate_struct_get` about the `trapz`.
-    builder.ins().trapz(struct_ref, crate::TRAP_NULL_REFERENCE);
+    func_env.trapz(builder, struct_ref, crate::TRAP_NULL_REFERENCE);
 
     let field_index = usize::try_from(field_index).unwrap();
     let interned_type_index = func_env.module.types[struct_type_index];
@@ -640,15 +640,11 @@ pub fn translate_array_fill(
     let len = translate_array_len(func_env, builder, array_ref)?;
 
     // Check that the full range of elements we want to fill is within bounds.
-    let end_index = builder
-        .ins()
-        .uadd_overflow_trap(index, n, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
+    let end_index = func_env.uadd_overflow_trap(builder, index, n, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
     let out_of_bounds = builder
         .ins()
         .icmp(IntCC::UnsignedGreaterThan, end_index, len);
-    builder
-        .ins()
-        .trapnz(out_of_bounds, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
+    func_env.trapnz(builder, out_of_bounds, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
 
     // Get the address of the first element we want to fill.
     let interned_type_index = func_env.module.types[array_type_index];
@@ -695,7 +691,7 @@ pub fn translate_array_len(
     builder: &mut FunctionBuilder,
     array_ref: ir::Value,
 ) -> WasmResult<ir::Value> {
-    builder.ins().trapz(array_ref, crate::TRAP_NULL_REFERENCE);
+    func_env.trapz(builder, array_ref, crate::TRAP_NULL_REFERENCE);
 
     let len_offset = gc_compiler(func_env)?.layouts().array_length_field_offset();
     let len_field = func_env.prepare_gc_ref_access(
@@ -794,9 +790,7 @@ fn array_elem_addr(
     let len = translate_array_len(func_env, builder, array_ref).unwrap();
 
     let in_bounds = builder.ins().icmp(IntCC::UnsignedLessThan, index, len);
-    builder
-        .ins()
-        .trapz(in_bounds, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
+    func_env.trapz(builder, in_bounds, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
 
     // Compute the size (in bytes) of the whole array object.
     let ArraySizeInfo {
@@ -1175,6 +1169,7 @@ fn uextend_i32_to_pointer_type(
 /// Traps if the size overflows.
 #[cfg_attr(not(any(feature = "gc-drc", feature = "gc-null")), allow(dead_code))]
 fn emit_array_size(
+    func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
     array_layout: &GcArrayLayout,
     init: ArrayInit<'_>,
@@ -1200,17 +1195,17 @@ fn emit_array_size(
         .ins()
         .imul_imm(len, i64::from(array_layout.elem_size));
     let high_bits = builder.ins().ushr_imm(elems_size_64, 32);
-    builder
-        .ins()
-        .trapnz(high_bits, crate::TRAP_ALLOCATION_TOO_LARGE);
+    func_env.trapnz(builder, high_bits, crate::TRAP_ALLOCATION_TOO_LARGE);
     let elems_size = builder.ins().ireduce(ir::types::I32, elems_size_64);
 
     // And if adding the base size and elements size overflows, then the
     // allocation is too large.
-    let size =
-        builder
-            .ins()
-            .uadd_overflow_trap(base_size, elems_size, crate::TRAP_ALLOCATION_TOO_LARGE);
+    let size = func_env.uadd_overflow_trap(
+        builder,
+        base_size,
+        elems_size,
+        crate::TRAP_ALLOCATION_TOO_LARGE,
+    );
 
     size
 }

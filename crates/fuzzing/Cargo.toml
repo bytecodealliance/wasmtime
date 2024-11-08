@@ -11,6 +11,9 @@ license = "Apache-2.0 WITH LLVM-exception"
 [lints]
 workspace = true
 
+[build-dependencies]
+wasmtime-wast-util = { path = '../wast-util' }
+
 [dependencies]
 anyhow = { workspace = true }
 arbitrary = { workspace = true, features = ["derive"] }
@@ -24,13 +27,14 @@ tempfile = "3.3.0"
 wasmparser = { workspace = true }
 wasmprinter = { workspace = true }
 wasmtime = { workspace = true, features = ['default', 'winch', 'gc', 'memory-protection-keys'] }
-wasmtime-wast = { workspace = true }
+wasmtime-wast = { workspace = true, features = ['component-model'] }
 wasm-encoder = { workspace = true }
 wasm-smith = { workspace = true }
 wasm-mutate = { workspace = true }
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true }
 wasmi = "0.39.1"
 futures = { workspace = true }
+wasmtime-wast-util = { path = '../wast-util' }
 
 # We rely on precompiled v8 binaries, but rusty-v8 doesn't have a precompiled
 # binary for MinGW which is built on our CI. It does have one for Windows-msvc,

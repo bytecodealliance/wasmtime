@@ -303,14 +303,14 @@ impl GcCompiler for DrcCompiler {
         let interned_type_index = func_env.module.types[array_type_index];
 
         let len_offset = gc_compiler(func_env)?.layouts().array_length_field_offset();
-        let array_layout = func_env.array_layout(interned_type_index);
+        let array_layout = func_env.array_layout(interned_type_index).clone();
         let base_size = array_layout.base_size;
         let align = array_layout.align;
         let len_to_elems_delta = base_size.checked_sub(len_offset).unwrap();
 
         // First, compute the array's total size from its base size, element
         // size, and length.
-        let size = emit_array_size(builder, array_layout, init);
+        let size = emit_array_size(func_env, builder, &array_layout, init);
 
         // Second, now that we have the array object's total size, call the
         // `gc_alloc_raw` builtin libcall to allocate the array.

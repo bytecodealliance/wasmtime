@@ -1,58 +1,29 @@
 use anyhow::{bail, Context};
 use libtest_mimic::{Arguments, FormatSetting, Trial};
-use serde_derive::Deserialize;
-use std::path::Path;
 use std::sync::{Condvar, LazyLock, Mutex};
 use wasmtime::{
-    Collector, Config, Engine, InstanceAllocationStrategy, MpkEnabled, PoolingAllocationConfig,
-    Store, Strategy,
+    Config, Engine, InstanceAllocationStrategy, MpkEnabled, PoolingAllocationConfig, Store,
 };
 use wasmtime_environ::Memory;
 use wasmtime_wast::{SpectestConfig, WastContext};
-
-mod support;
+use wasmtime_wast_util::{limits, Collector, Compiler, WastConfig, WastTest};
 
 fn main() {
     env_logger::init();
 
+    let tests = if cfg!(miri) {
+        Vec::new()
+    } else {
+        wasmtime_wast_util::find_tests(".".as_ref()).unwrap()
+    };
+
     let mut trials = Vec::new();
-    if !cfg!(miri) {
-        add_tests(&mut trials, "tests/spec_testsuite".as_ref());
-        add_tests(&mut trials, "tests/misc_testsuite".as_ref());
-    }
 
-    // There's a lot of tests so print only a `.` to keep the output a
-    // bit more terse by default.
-    let mut args = Arguments::from_args();
-    if args.format.is_none() {
-        args.format = Some(FormatSetting::Terse);
-    }
-    libtest_mimic::run(&args, trials).exit()
-}
-
-fn add_tests(trials: &mut Vec<Trial>, path: &Path) {
-    for entry in path.read_dir().unwrap() {
-        let entry = entry.unwrap();
-        let path = entry.path();
-        if entry.file_type().unwrap().is_dir() {
-            add_tests(trials, &path);
-            continue;
-        }
-
-        if path.extension().and_then(|s| s.to_str()) != Some("wast") {
-            continue;
-        }
-
-        let test_uses_gc_types = path.iter().any(|part| {
-            part.to_str().map_or(false, |s| {
-                s.contains("gc")
-                    || s.contains("function-references")
-                    || s.contains("reference-types")
-                    || s.contains("exception-handling")
-            })
-        });
-
-        for strategy in [Strategy::Cranelift, Strategy::Winch] {
+    // For each test generate a combinatorial matrix of all configurations to
+    // run this test in.
+    for test in tests {
+        let test_uses_gc_types = test.test_uses_gc_types();
+        for compiler in [Compiler::Cranelift, Compiler::Winch] {
             for pooling in [true, false] {
                 let collectors: &[_] = if !pooling && test_uses_gc_types {
                     &[Collector::DeferredReferenceCounting, Collector::Null]
@@ -63,22 +34,22 @@ fn add_tests(trials: &mut Vec<Trial>, path: &Path) {
                 for collector in collectors.iter().copied() {
                     let trial = Trial::test(
                         format!(
-                            "{strategy:?}/{}{}{}",
+                            "{compiler:?}/{}{}{}",
                             if pooling { "pooling/" } else { "" },
                             if collector != Collector::Auto {
                                 format!("{collector:?}/")
                             } else {
                                 String::new()
                             },
-                            path.to_str().unwrap()
+                            test.path.to_str().unwrap()
                         ),
                         {
-                            let path = path.clone();
+                            let test = test.clone();
                             move || {
                                 run_wast(
-                                    &path,
+                                    &test,
                                     WastConfig {
-                                        strategy,
+                                        compiler,
                                         pooling,
                                         collector,
                                     },
@@ -92,306 +63,21 @@ fn add_tests(trials: &mut Vec<Trial>, path: &Path) {
             }
         }
     }
-}
 
-fn should_fail(test: &Path, wast_config: &WastConfig, test_config: &TestConfig) -> bool {
-    // Winch only supports x86_64 at this time.
-    if wast_config.strategy == Strategy::Winch && !cfg!(target_arch = "x86_64") {
-        return true;
+    // There's a lot of tests so print only a `.` to keep the output a
+    // bit more terse by default.
+    let mut args = Arguments::from_args();
+    if args.format.is_none() {
+        args.format = Some(FormatSetting::Terse);
     }
-
-    // Disable spec tests for proposals that Winch does not implement yet.
-    if wast_config.strategy == Strategy::Winch {
-        // A few proposals that winch has no support for.
-        if test_config.gc == Some(true)
-            || test_config.threads == Some(true)
-            || test_config.tail_call == Some(true)
-            || test_config.function_references == Some(true)
-            || test_config.gc == Some(true)
-            || test_config.relaxed_simd == Some(true)
-        {
-            return true;
-        }
-
-        let unsupported = [
-            // externref/reference-types related
-            "component-model/modules.wast",
-            "extended-const/elem.wast",
-            "extended-const/global.wast",
-            "memory64/threads.wast",
-            "misc_testsuite/externref-id-function.wast",
-            "misc_testsuite/externref-segment.wast",
-            "misc_testsuite/externref-segments.wast",
-            "misc_testsuite/externref-table-dropped-segment-issue-8281.wast",
-            "misc_testsuite/linking-errors.wast",
-            "misc_testsuite/many_table_gets_lead_to_gc.wast",
-            "misc_testsuite/mutable_externref_globals.wast",
-            "misc_testsuite/no-mixup-stack-maps.wast",
-            "misc_testsuite/no-panic.wast",
-            "misc_testsuite/simple_ref_is_null.wast",
-            "misc_testsuite/table_grow_with_funcref.wast",
-            "spec_testsuite/br_table.wast",
-            "spec_testsuite/data-invalid.wast",
-            "spec_testsuite/elem.wast",
-            "spec_testsuite/global.wast",
-            "spec_testsuite/linking.wast",
-            "spec_testsuite/ref_func.wast",
-            "spec_testsuite/ref_is_null.wast",
-            "spec_testsuite/ref_null.wast",
-            "spec_testsuite/select.wast",
-            "spec_testsuite/table-sub.wast",
-            "spec_testsuite/table_fill.wast",
-            "spec_testsuite/table_get.wast",
-            "spec_testsuite/table_grow.wast",
-            "spec_testsuite/table_set.wast",
-            "spec_testsuite/table_size.wast",
-            "spec_testsuite/unreached-invalid.wast",
-            "spec_testsuite/call_indirect.wast",
-            // simd-related failures
-            "annotations/simd_lane.wast",
-            "memory64/simd.wast",
-            "misc_testsuite/int-to-float-splat.wast",
-            "misc_testsuite/issue6562.wast",
-            "misc_testsuite/simd/almost-extmul.wast",
-            "misc_testsuite/simd/canonicalize-nan.wast",
-            "misc_testsuite/simd/cvt-from-uint.wast",
-            "misc_testsuite/simd/issue4807.wast",
-            "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
-            "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
-            "misc_testsuite/simd/load_splat_out_of_bounds.wast",
-            "misc_testsuite/simd/replace-lane-preserve.wast",
-            "misc_testsuite/simd/spillslot-size-fuzzbug.wast",
-            "misc_testsuite/simd/unaligned-load.wast",
-            "multi-memory/simd_memory-multi.wast",
-            "spec_testsuite/simd_align.wast",
-            "spec_testsuite/simd_bit_shift.wast",
-            "spec_testsuite/simd_bitwise.wast",
-            "spec_testsuite/simd_boolean.wast",
-            "spec_testsuite/simd_const.wast",
-            "spec_testsuite/simd_conversions.wast",
-            "spec_testsuite/simd_f32x4.wast",
-            "spec_testsuite/simd_f32x4_arith.wast",
-            "spec_testsuite/simd_f32x4_cmp.wast",
-            "spec_testsuite/simd_f32x4_pmin_pmax.wast",
-            "spec_testsuite/simd_f32x4_rounding.wast",
-            "spec_testsuite/simd_f64x2.wast",
-            "spec_testsuite/simd_f64x2_arith.wast",
-            "spec_testsuite/simd_f64x2_cmp.wast",
-            "spec_testsuite/simd_f64x2_pmin_pmax.wast",
-            "spec_testsuite/simd_f64x2_rounding.wast",
-            "spec_testsuite/simd_i16x8_arith.wast",
-            "spec_testsuite/simd_i16x8_arith2.wast",
-            "spec_testsuite/simd_i16x8_cmp.wast",
-            "spec_testsuite/simd_i16x8_extadd_pairwise_i8x16.wast",
-            "spec_testsuite/simd_i16x8_extmul_i8x16.wast",
-            "spec_testsuite/simd_i16x8_q15mulr_sat_s.wast",
-            "spec_testsuite/simd_i16x8_sat_arith.wast",
-            "spec_testsuite/simd_i32x4_arith.wast",
-            "spec_testsuite/simd_i32x4_arith2.wast",
-            "spec_testsuite/simd_i32x4_cmp.wast",
-            "spec_testsuite/simd_i32x4_dot_i16x8.wast",
-            "spec_testsuite/simd_i32x4_extadd_pairwise_i16x8.wast",
-            "spec_testsuite/simd_i32x4_extmul_i16x8.wast",
-            "spec_testsuite/simd_i32x4_trunc_sat_f32x4.wast",
-            "spec_testsuite/simd_i32x4_trunc_sat_f64x2.wast",
-            "spec_testsuite/simd_i64x2_arith.wast",
-            "spec_testsuite/simd_i64x2_arith2.wast",
-            "spec_testsuite/simd_i64x2_cmp.wast",
-            "spec_testsuite/simd_i64x2_extmul_i32x4.wast",
-            "spec_testsuite/simd_i8x16_arith.wast",
-            "spec_testsuite/simd_i8x16_arith2.wast",
-            "spec_testsuite/simd_i8x16_cmp.wast",
-            "spec_testsuite/simd_i8x16_sat_arith.wast",
-            "spec_testsuite/simd_int_to_int_extend.wast",
-            "spec_testsuite/simd_lane.wast",
-            "spec_testsuite/simd_load.wast",
-            "spec_testsuite/simd_load16_lane.wast",
-            "spec_testsuite/simd_load32_lane.wast",
-            "spec_testsuite/simd_load64_lane.wast",
-            "spec_testsuite/simd_load8_lane.wast",
-            "spec_testsuite/simd_load_extend.wast",
-            "spec_testsuite/simd_load_splat.wast",
-            "spec_testsuite/simd_load_zero.wast",
-            "spec_testsuite/simd_splat.wast",
-            "spec_testsuite/simd_store16_lane.wast",
-            "spec_testsuite/simd_store32_lane.wast",
-            "spec_testsuite/simd_store64_lane.wast",
-            "spec_testsuite/simd_store8_lane.wast",
-        ];
-
-        if unsupported.iter().any(|part| test.ends_with(part)) {
-            return true;
-        }
-    }
-
-    for part in test.iter() {
-        // Not implemented in Wasmtime yet
-        if part == "exception-handling" {
-            return !test.ends_with("binary.wast");
-        }
-
-        if part == "memory64" {
-            if [
-                // wasmtime doesn't implement exceptions yet
-                "imports.wast",
-                "ref_null.wast",
-                "exports.wast",
-                "throw.wast",
-                "throw_ref.wast",
-                "try_table.wast",
-                "tag.wast",
-                "instance.wast",
-            ]
-            .iter()
-            .any(|i| test.ends_with(i))
-            {
-                return true;
-            }
-        }
-    }
-
-    // Some tests are known to fail with the pooling allocator
-    if wast_config.pooling {
-        let unsupported = [
-            // allocates too much memory for the pooling configuration here
-            "misc_testsuite/memory64/more-than-4gb.wast",
-            // shared memories + pooling allocator aren't supported yet
-            "misc_testsuite/memory-combos.wast",
-            "misc_testsuite/threads/LB.wast",
-            "misc_testsuite/threads/LB_atomic.wast",
-            "misc_testsuite/threads/MP.wast",
-            "misc_testsuite/threads/MP_atomic.wast",
-            "misc_testsuite/threads/MP_wait.wast",
-            "misc_testsuite/threads/SB.wast",
-            "misc_testsuite/threads/SB_atomic.wast",
-            "misc_testsuite/threads/atomics_notify.wast",
-            "misc_testsuite/threads/atomics_wait_address.wast",
-            "misc_testsuite/threads/wait_notify.wast",
-            "spec_testsuite/proposals/threads/atomic.wast",
-            "spec_testsuite/proposals/threads/exports.wast",
-            "spec_testsuite/proposals/threads/memory.wast",
-        ];
-
-        if unsupported.iter().any(|part| test.ends_with(part)) {
-            return true;
-        }
-    }
-
-    false
-}
-
-/// Configuration where the main function will generate a combinatorial
-/// matrix of these top-level configurations to run the entire test suite with
-/// that configuration.
-struct WastConfig {
-    strategy: Strategy,
-    pooling: bool,
-    collector: Collector,
-}
-
-/// Per-test configuration which is written down in the test file itself for
-/// `misc_testsuite/**/*.wast` or in `spec_test_config` below for spec tests.
-#[derive(Debug, PartialEq, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct TestConfig {
-    memory64: Option<bool>,
-    custom_page_sizes: Option<bool>,
-    multi_memory: Option<bool>,
-    threads: Option<bool>,
-    gc: Option<bool>,
-    function_references: Option<bool>,
-    relaxed_simd: Option<bool>,
-    reference_types: Option<bool>,
-    tail_call: Option<bool>,
-    extended_const: Option<bool>,
-    wide_arithmetic: Option<bool>,
-    hogs_memory: Option<bool>,
-    nan_canonicalization: Option<bool>,
-    component_model_more_flags: Option<bool>,
-}
-
-fn spec_test_config(wast: &Path) -> TestConfig {
-    let mut ret = TestConfig::default();
-
-    match wast.strip_prefix("proposals") {
-        // This lists the features require to run the various spec tests suites
-        // in their `proposals` folder.
-        Ok(rest) => {
-            let proposal = rest.iter().next().unwrap().to_str().unwrap();
-            match proposal {
-                "multi-memory" => {
-                    ret.multi_memory = Some(true);
-                    ret.reference_types = Some(true);
-                }
-                "wide-arithmetic" => {
-                    ret.wide_arithmetic = Some(true);
-                }
-                "threads" => {
-                    ret.threads = Some(true);
-                    ret.reference_types = Some(false);
-                }
-                "tail-call" => {
-                    ret.tail_call = Some(true);
-                    ret.reference_types = Some(true);
-                }
-                "relaxed-simd" => {
-                    ret.relaxed_simd = Some(true);
-                }
-                "memory64" => {
-                    ret.memory64 = Some(true);
-                    ret.tail_call = Some(true);
-                    ret.gc = Some(true);
-                    ret.extended_const = Some(true);
-                    ret.multi_memory = Some(true);
-                    ret.relaxed_simd = Some(true);
-                }
-                "extended-const" => {
-                    ret.extended_const = Some(true);
-                    ret.reference_types = Some(true);
-                }
-                "custom-page-sizes" => {
-                    ret.custom_page_sizes = Some(true);
-                    ret.multi_memory = Some(true);
-                }
-                "exception-handling" => {
-                    ret.reference_types = Some(true);
-                }
-                "gc" => {
-                    ret.gc = Some(true);
-                    ret.tail_call = Some(true);
-                }
-                "function-references" => {
-                    ret.function_references = Some(true);
-                    ret.tail_call = Some(true);
-                }
-                "annotations" => {}
-                _ => panic!("unsuported proposal {proposal:?}"),
-            }
-        }
-
-        // This lists the features required to run the top-level of spec tests
-        // outside of the `proposals` directory.
-        Err(_) => {
-            ret.reference_types = Some(true);
-        }
-    }
-    ret
+    libtest_mimic::run(&args, trials).exit()
 }
 
 // Each of the tests included from `wast_testsuite_tests` will call this
 // function which actually executes the `wast` test suite given the `strategy`
 // to compile it.
-fn run_wast(wast: &Path, config: WastConfig) -> anyhow::Result<()> {
-    let wast_contents = std::fs::read_to_string(wast)
-        .with_context(|| format!("failed to read `{}`", wast.display()))?;
-
-    // If this is a spec test then the configuration for it is loaded via
-    // `spec_test_config`, but otherwise it's required to be listed in the top
-    // of the file as we control the contents of the file.
-    let mut test_config = match wast.strip_prefix("tests/spec_testsuite") {
-        Ok(test) => spec_test_config(test),
-        Err(_) => support::parse_test_config(&wast_contents)?,
-    };
+fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
+    let mut test_config = test.config.clone();
 
     // FIXME: this is a bit of a hack to get Winch working here for now. Winch
     // passes some tests on aarch64 so returning `true` from `should_fail`
@@ -410,9 +96,14 @@ fn run_wast(wast: &Path, config: WastConfig) -> anyhow::Result<()> {
         test_config.reference_types = Some(true);
     }
 
-    let should_fail = should_fail(wast, &config, &test_config);
-
-    let wast = Path::new(wast);
+    // Determine whether this test is expected to fail or pass. Regardless the
+    // test is executed and the result of the execution is asserted to match
+    // this expectation. Note that this means that the test can't, for example,
+    // panic or segfault as a result.
+    //
+    // Updates to whether a test should pass or fail should be done in the
+    // `crates/wast-util/src/lib.rs` file.
+    let should_fail = test.should_fail(&config);
 
     // Note that all of these proposals/features are currently default-off to
     // ensure that we annotate all tests accurately with what features they
@@ -445,8 +136,8 @@ fn run_wast(wast: &Path, config: WastConfig) -> anyhow::Result<()> {
         .or(test_config.gc)
         .unwrap_or(false);
 
-    let is_cranelift = match config.strategy {
-        Strategy::Cranelift => true,
+    let is_cranelift = match config.compiler {
+        Compiler::Cranelift => true,
         _ => false,
     };
 
@@ -463,8 +154,15 @@ fn run_wast(wast: &Path, config: WastConfig) -> anyhow::Result<()> {
         .wasm_extended_const(extended_const)
         .wasm_wide_arithmetic(wide_arithmetic)
         .wasm_component_model_more_flags(component_model_more_flags)
-        .strategy(config.strategy)
-        .collector(config.collector)
+        .strategy(match config.compiler {
+            Compiler::Cranelift => wasmtime::Strategy::Cranelift,
+            Compiler::Winch => wasmtime::Strategy::Winch,
+        })
+        .collector(match config.collector {
+            Collector::Auto => wasmtime::Collector::Auto,
+            Collector::Null => wasmtime::Collector::Null,
+            Collector::DeferredReferenceCounting => wasmtime::Collector::DeferredReferenceCounting,
+        })
         .cranelift_nan_canonicalization(nan_canonicalization);
 
     if is_cranelift {
@@ -521,24 +219,23 @@ fn run_wast(wast: &Path, config: WastConfig) -> anyhow::Result<()> {
         // When multiple memories are used and are configured in the pool then
         // force the usage of static memories without guards to reduce the VM
         // impact.
-        let max_memory_size = 805 << 16;
+        let max_memory_size = limits::MEMORY_SIZE;
         if multi_memory {
             cfg.memory_reservation(max_memory_size as u64);
             cfg.memory_reservation_for_growth(0);
             cfg.memory_guard_size(0);
         }
 
-        // The limits here are crafted such that the wast tests should pass.
-        // However, these limits may become insufficient in the future as the
-        // wast tests change. If a wast test fails because of a limit being
-        // "exceeded" or if memory/table fails to grow, the values here will
-        // need to be adjusted.
         let mut pool = PoolingAllocationConfig::default();
-        pool.total_memories(450 * 2)
+        pool.total_memories(limits::MEMORIES * 2)
             .max_memory_protection_keys(2)
             .max_memory_size(max_memory_size)
-            .max_memories_per_module(if multi_memory { 9 } else { 1 })
-            .max_tables_per_module(5);
+            .max_memories_per_module(if multi_memory {
+                limits::MEMORIES_PER_MODULE
+            } else {
+                1
+            })
+            .max_tables_per_module(limits::TABLES_PER_MODULE);
 
         // When testing, we may choose to start with MPK force-enabled to ensure
         // we use that functionality.
@@ -573,7 +270,7 @@ fn run_wast(wast: &Path, config: WastConfig) -> anyhow::Result<()> {
                 suppress_prints: true,
             })?;
             wast_context
-                .run_buffer(wast.to_str().unwrap(), wast_contents.as_bytes())
+                .run_buffer(test.path.to_str().unwrap(), test.contents.as_bytes())
                 .with_context(|| format!("failed to run spec test with {desc} engine"))
         });
 

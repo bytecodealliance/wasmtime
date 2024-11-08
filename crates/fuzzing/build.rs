@@ -4,39 +4,39 @@
 
 use std::env;
 use std::path::PathBuf;
+use wasmtime_wast_util::WastTest;
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
 
-    let dirs = [
-        "tests/spec_testsuite",
-        "tests/misc_testsuite",
-        "tests/misc_testsuite/multi-memory",
-        "tests/misc_testsuite/simd",
-        "tests/misc_testsuite/threads",
-    ];
     let mut root = env::current_dir().unwrap();
     root.pop(); // chop off 'fuzzing'
     root.pop(); // chop off 'crates'
-    let mut code = format!("static FILES: &[(&str, &str)] = &[\n");
 
-    let mut entries = Vec::new();
-    for dir in dirs {
-        for entry in root.join(dir).read_dir().unwrap() {
-            let entry = entry.unwrap();
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("wast") {
-                entries.push(path);
-            }
-        }
+    let tests = wasmtime_wast_util::find_tests(&root).unwrap();
+
+    let mut code = format!("static FILES: &[fn() -> wasmtime_wast_util::WastTest] = &[\n");
+
+    for test in tests {
+        let WastTest {
+            path,
+            contents: _,
+            config,
+        } = test;
+        println!("cargo:rerun-if-changed={}", path.to_str().unwrap());
+        code.push_str(&format!(
+            "|| {{
+                wasmtime_wast_util::WastTest {{
+                    path: {path:?}.into(),
+                    contents: include_str!({path:?}).into(),
+                    config: wasmtime_wast_util::{config:?},
+                }}
+            }},"
+        ));
     }
-    entries.sort();
-    for path in entries {
-        let path = path.to_str().expect("path is not valid utf-8");
-        code.push_str(&format!("({path:?}, include_str!({path:?})),\n"));
-    }
+
     code.push_str("];\n");
     std::fs::write(out_dir.join("wasttests.rs"), code).unwrap();
 }

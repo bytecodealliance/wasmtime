@@ -10,6 +10,7 @@ use arbitrary::{Arbitrary, Unstructured};
 use std::sync::Arc;
 use std::time::Duration;
 use wasmtime::{Engine, Module, MpkEnabled, Store};
+use wasmtime_wast_util::{limits, WastConfig, WastTest};
 
 /// Configuration for `wasmtime::Config` and generated modules for a session of
 /// fuzzing.
@@ -114,49 +115,111 @@ impl Config {
         self.module_config.generate(input, default_fuel)
     }
 
-    /// Tests whether this configuration is capable of running all wast tests.
-    pub fn is_wast_test_compliant(&self) -> bool {
-        let config = &self.module_config.config;
+    /// Updates this configuration to be able to run the `test` specified.
+    ///
+    /// This primarily updates `self.module_config` to ensure that it enables
+    /// all features and proposals necessary to execute the `test` specified.
+    /// This will additionally update limits in the pooling allocator to be able
+    /// to execute all tests.
+    pub fn make_wast_test_compliant(&mut self, test: &WastTest) -> WastConfig {
+        // Enable/disable some proposals that aren't configurable in wasm-smith
+        // but are configurable in Wasmtime.
+        self.module_config.extended_const_enabled = test.config.extended_const.unwrap_or(false);
+        self.module_config.function_references_enabled = test
+            .config
+            .function_references
+            .or(test.config.gc)
+            .unwrap_or(false);
+        self.module_config.component_model_more_flags =
+            test.config.component_model_more_flags.unwrap_or(false);
 
-        // Check for wasm features that must be disabled to run spec tests
-        if config.memory64_enabled {
-            return false;
+        // Enable/disable proposals that wasm-smith has knobs for which will be
+        // read when creating `wasmtime::Config`.
+        let config = &mut self.module_config.config;
+        config.bulk_memory_enabled = true;
+        config.multi_value_enabled = true;
+        config.simd_enabled = true;
+        config.wide_arithmetic_enabled = test.config.wide_arithmetic.unwrap_or(false);
+        config.memory64_enabled = test.config.memory64.unwrap_or(false);
+        config.tail_call_enabled = test.config.tail_call.unwrap_or(false);
+        config.custom_page_sizes_enabled = test.config.custom_page_sizes.unwrap_or(false);
+        config.threads_enabled = test.config.threads.unwrap_or(false);
+        config.gc_enabled = test.config.gc.unwrap_or(false);
+        config.reference_types_enabled = config.gc_enabled
+            || self.module_config.function_references_enabled
+            || test.config.reference_types.unwrap_or(false);
+        if test.config.multi_memory.unwrap_or(false) {
+            config.max_memories = limits::MEMORIES_PER_MODULE as usize;
+        } else {
+            config.max_memories = 1;
         }
 
-        // Check for wasm features that must be enabled to run spec tests
-        if !config.bulk_memory_enabled
-            || !config.reference_types_enabled
-            || !config.multi_value_enabled
-            || !config.simd_enabled
-            || !config.threads_enabled
-            || config.max_memories <= 1
-        {
-            return false;
-        }
-
-        // Make sure the runtime limits allow for the instantiation of all spec
-        // tests. Note that the max memories must be precisely one since 0 won't
-        // instantiate spec tests and more than one is multi-memory which is
-        // disabled for spec tests.
-        if config.max_memories != 1 || config.max_tables < 5 {
-            return false;
-        }
-
-        if let InstanceAllocationStrategy::Pooling(pooling) = &self.wasmtime.strategy {
-            // Check to see if any item limit is less than the required
-            // threshold to execute the spec tests.
-            if pooling.total_memories < 1
-                || pooling.total_tables < 5
-                || pooling.table_elements < 1_000
-                || pooling.max_memory_size < (900 << 16)
-                || pooling.total_core_instances < 500
-                || pooling.core_instance_size < 64 * 1024
-            {
-                return false;
+        match &mut self.wasmtime.memory_config {
+            MemoryConfig::Normal(config) => {
+                if let Some(n) = &mut config.memory_reservation {
+                    *n = (*n).max(limits::MEMORY_SIZE as u64);
+                }
             }
+            MemoryConfig::CustomUnaligned => {}
         }
 
-        true
+        // FIXME: it might be more ideal to avoid the need for this entirely
+        // and to just let the test fail. If a test fails due to a pooling
+        // allocator resource limit being met we could ideally detect that and
+        // let the fuzz test case pass. That would avoid the need to hardcode
+        // so much here and in theory wouldn't reduce the usefulness of fuzzers
+        // all that much. At this time though we can't easily test this configuration.
+        if let InstanceAllocationStrategy::Pooling(pooling) = &mut self.wasmtime.strategy {
+            // Clamp protection keys between 1 & 2 to reduce the number of
+            // slots and then multiply the total memories by the number of keys
+            // we have since a single store has access to only one key.
+            pooling.max_memory_protection_keys = pooling.max_memory_protection_keys.max(1).min(2);
+            pooling.total_memories = pooling
+                .total_memories
+                .max(limits::MEMORIES * (pooling.max_memory_protection_keys as u32));
+
+            // For other limits make sure they meet the minimum threshold
+            // required for our wast tests.
+            pooling.total_component_instances = pooling
+                .total_component_instances
+                .max(limits::COMPONENT_INSTANCES);
+            pooling.total_tables = pooling.total_tables.max(limits::TABLES);
+            pooling.max_tables_per_module =
+                pooling.max_tables_per_module.max(limits::TABLES_PER_MODULE);
+            pooling.max_memories_per_module = pooling
+                .max_memories_per_module
+                .max(limits::MEMORIES_PER_MODULE);
+            pooling.max_memories_per_component = pooling
+                .max_memories_per_component
+                .max(limits::MEMORIES_PER_MODULE);
+            pooling.total_core_instances = pooling.total_core_instances.max(limits::CORE_INSTANCES);
+            pooling.max_memory_size = pooling.max_memory_size.max(limits::MEMORY_SIZE);
+            pooling.table_elements = pooling.table_elements.max(limits::TABLE_ELEMENTS);
+            pooling.core_instance_size = pooling.core_instance_size.max(limits::CORE_INSTANCE_SIZE);
+            pooling.component_instance_size = pooling
+                .component_instance_size
+                .max(limits::CORE_INSTANCE_SIZE);
+        }
+
+        // Return the test configuration that this fuzz configuration represents
+        // which is used afterwards to test if the `test` here is expected to
+        // fail or not.
+        WastConfig {
+            collector: match self.wasmtime.collector {
+                Collector::Null => wasmtime_wast_util::Collector::Null,
+                Collector::DeferredReferenceCounting => {
+                    wasmtime_wast_util::Collector::DeferredReferenceCounting
+                }
+            },
+            pooling: matches!(
+                self.wasmtime.strategy,
+                InstanceAllocationStrategy::Pooling(_)
+            ),
+            compiler: match self.wasmtime.compiler_strategy {
+                CompilerStrategy::Cranelift => wasmtime_wast_util::Compiler::Cranelift,
+                CompilerStrategy::Winch => wasmtime_wast_util::Compiler::Winch,
+            },
+        }
     }
 
     /// Converts this to a `wasmtime::Config` object
@@ -166,7 +229,7 @@ impl Config {
 
         let mut cfg = wasmtime::Config::new();
         cfg.wasm_bulk_memory(true)
-            .wasm_reference_types(true)
+            .wasm_reference_types(self.module_config.config.reference_types_enabled)
             .wasm_multi_value(self.module_config.config.multi_value_enabled)
             .wasm_multi_memory(self.module_config.config.max_memories > 1)
             .wasm_simd(self.module_config.config.simd_enabled)
@@ -174,10 +237,12 @@ impl Config {
             .wasm_tail_call(self.module_config.config.tail_call_enabled)
             .wasm_custom_page_sizes(self.module_config.config.custom_page_sizes_enabled)
             .wasm_threads(self.module_config.config.threads_enabled)
-            .wasm_function_references(self.module_config.config.gc_enabled)
+            .wasm_function_references(self.module_config.function_references_enabled)
             .wasm_gc(self.module_config.config.gc_enabled)
             .wasm_custom_page_sizes(self.module_config.config.custom_page_sizes_enabled)
             .wasm_wide_arithmetic(self.module_config.config.wide_arithmetic_enabled)
+            .wasm_extended_const(self.module_config.extended_const_enabled)
+            .wasm_component_model_more_flags(self.module_config.component_model_more_flags)
             .native_unwind_info(cfg!(target_os = "windows") || self.wasmtime.native_unwind_info)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())

@@ -55,8 +55,6 @@ use tempfile::TempDir;
 use wasmtime::{Engine, OptLevel, Strategy};
 use wasmtime_cli_flags::CommonOptions;
 
-mod support;
-
 fn main() -> Result<()> {
     if cfg!(miri) {
         return Ok(());
@@ -153,7 +151,7 @@ impl Test {
     fn new(path: &Path) -> Result<Test> {
         let contents =
             std::fs::read_to_string(path).with_context(|| format!("failed to read {path:?}"))?;
-        let config: TestConfig = support::parse_test_config(&contents)
+        let config: TestConfig = wasmtime_wast_util::parse_test_config(&contents)
             .context("failed to parse test configuration as TOML")?;
         let mut flags = vec!["wasmtime"];
         match &config.flags {

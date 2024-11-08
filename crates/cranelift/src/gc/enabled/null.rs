@@ -54,9 +54,7 @@ impl NullCompiler {
             .ins()
             .iconst(ir::types::I32, i64::from(VMGcKind::MASK));
         let masked = builder.ins().band(size, mask);
-        builder
-            .ins()
-            .trapnz(masked, crate::TRAP_ALLOCATION_TOO_LARGE);
+        func_env.trapnz(builder, masked, crate::TRAP_ALLOCATION_TOO_LARGE);
 
         // Load the bump "pointer" (it is actually an index into the GC heap,
         // not a raw pointer).
@@ -81,7 +79,8 @@ impl NullCompiler {
         // a power of two.
         let minus_one = builder.ins().iconst(ir::types::I32, -1);
         let align_minus_one = builder.ins().iadd(align, minus_one);
-        let next_plus_align_minus_one = builder.ins().uadd_overflow_trap(
+        let next_plus_align_minus_one = func_env.uadd_overflow_trap(
+            builder,
             next,
             align_minus_one,
             crate::TRAP_ALLOCATION_TOO_LARGE,
@@ -93,9 +92,7 @@ impl NullCompiler {
 
         // Check whether the allocation fits in the heap space we have left.
         let end_of_object =
-            builder
-                .ins()
-                .uadd_overflow_trap(aligned, size, crate::TRAP_ALLOCATION_TOO_LARGE);
+            func_env.uadd_overflow_trap(builder, aligned, size, crate::TRAP_ALLOCATION_TOO_LARGE);
         let uext_end_of_object = uextend_i32_to_pointer_type(builder, pointer_type, end_of_object);
         let (base, bound) = func_env.get_gc_heap_base_bound(builder);
         let is_in_bounds = builder.ins().icmp(
@@ -103,9 +100,7 @@ impl NullCompiler {
             uext_end_of_object,
             bound,
         );
-        builder
-            .ins()
-            .trapz(is_in_bounds, crate::TRAP_ALLOCATION_TOO_LARGE);
+        func_env.trapz(builder, is_in_bounds, crate::TRAP_ALLOCATION_TOO_LARGE);
 
         // Write the header, update the bump "pointer", and return the newly
         // allocated object.
@@ -162,14 +157,14 @@ impl GcCompiler for NullCompiler {
         let interned_type_index = func_env.module.types[array_type_index];
 
         let len_offset = gc_compiler(func_env)?.layouts().array_length_field_offset();
-        let array_layout = func_env.array_layout(interned_type_index);
+        let array_layout = func_env.array_layout(interned_type_index).clone();
         let base_size = array_layout.base_size;
         let align = array_layout.align;
         let len_to_elems_delta = base_size.checked_sub(len_offset).unwrap();
 
         // First, compute the array's total size from its base size, element
         // size, and length.
-        let size = emit_array_size(builder, array_layout, init);
+        let size = emit_array_size(func_env, builder, &array_layout, init);
 
         // Next, allocate the array.
         assert!(align.is_power_of_two());
