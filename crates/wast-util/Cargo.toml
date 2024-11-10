@@ -5,6 +5,9 @@ authors.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 publish = false
+description = "Utilities for `*.wast` files and tests in Wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
 
 [dependencies]
 anyhow = { workspace = true }
