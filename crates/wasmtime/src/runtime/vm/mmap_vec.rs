@@ -61,11 +61,9 @@ impl MmapVec {
     /// fully mapped into memory.
     #[cfg(feature = "std")]
     pub fn from_file(file: File) -> Result<MmapVec> {
-        use std::os::fd::AsRawFd;
-        let fd = file.as_raw_fd();
-
-        let mmap = Mmap::from_file(file)
-            .with_context(|| format!("failed to create mmap for file descriptor: {fd}"))?;
+        let file = Arc::new(file);
+        let mmap = Mmap::from_file(Arc::clone(&file))
+            .with_context(move || format!("failed to create mmap for file {:?}", file))?;
         let len = mmap.len();
         Ok(MmapVec::new(mmap, len))
     }

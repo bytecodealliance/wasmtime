@@ -34,11 +34,11 @@ impl Mmap {
     /// The memory mapping and the length of the file within the mapping are
     /// returned.
     #[cfg(feature = "std")]
-    pub fn from_file(file: File) -> Result<Self> {
+    pub fn from_file(file: Arc<File>) -> Result<Self> {
         let sys = mmap::Mmap::from_file(&file)?;
         Ok(Mmap {
             sys,
-            file: Some(Arc::new(file)),
+            file: Some(file),
         })
     }
 
