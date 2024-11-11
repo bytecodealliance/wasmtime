@@ -109,7 +109,7 @@ fn test_deserialize_from_file() -> Result<()> {
         open_options.read(true);
         #[cfg(target_os = "windows")]
         {
-            use std::os::windows::OpenOptionsExt;
+            use std::os::windows::fs::OpenOptionsExt;
             open_options.access_mode(FILE_GENERIC_READ | FILE_GENERIC_EXECUTE);
         }
 
