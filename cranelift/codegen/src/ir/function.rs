@@ -7,8 +7,8 @@ use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir::{
     self, pcc::Fact, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData,
     DynamicStackSlots, DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst,
-    JumpTable, JumpTableData, Layout, MemoryType, MemoryTypeData, Opcode, SigRef, Signature,
-    SourceLocs, StackSlot, StackSlotData, StackSlots, Type,
+    JumpTable, JumpTableData, Layout, MemoryType, MemoryTypeData, SigRef, Signature, SourceLocs,
+    StackSlot, StackSlotData, StackSlots, Type,
 };
 use crate::isa::CallConv;
 use crate::write::write_function;
@@ -299,14 +299,9 @@ impl FunctionStencil {
         // Ignore all instructions prior to the first branch.
         let mut inst_iter = inst_iter.skip_while(|&inst| !dfg.insts[inst].opcode().is_branch());
 
-        // A conditional branch is permitted in a basic block only when followed
-        // by a terminal jump instruction.
         if let Some(_branch) = inst_iter.next() {
             if let Some(next) = inst_iter.next() {
-                match dfg.insts[next].opcode() {
-                    Opcode::Jump => (),
-                    _ => return Err((next, "post-branch instruction not jump")),
-                }
+                return Err((next, "post-terminator instruction"));
             }
         }
 
