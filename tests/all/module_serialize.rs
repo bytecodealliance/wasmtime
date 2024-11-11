@@ -104,7 +104,7 @@ fn test_deserialize_from_file() -> Result<()> {
         let func = instance.get_typed_func::<(), i32>(&mut store, "run")?;
         assert_eq!(func.call(&mut store, ())?, 42);
 
-        // Try an alreeady opened file as well.
+        // Try an already opened file as well.
         let mut open_options = OpenOptions::new();
         open_options.read(true);
         #[cfg(target_os = "windows")]
