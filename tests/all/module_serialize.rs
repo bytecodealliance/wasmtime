@@ -1,5 +1,5 @@
 use anyhow::bail;
-use std::fs;
+use std::fs::{self, OpenOptions};
 use wasmtime::*;
 
 fn serialize(engine: &Engine, wat: &str) -> Result<Vec<u8>> {
@@ -105,7 +105,15 @@ fn test_deserialize_from_file() -> Result<()> {
         assert_eq!(func.call(&mut store, ())?, 42);
 
         // Try an alreeady opened file as well.
-        let file = fs::File::open(&path)?;
+        let mut open_options = OpenOptions::new();
+        open_options.read(true);
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::OpenOptionsExt;
+            open_options.access_mode(FILE_GENERIC_READ | FILE_GENERIC_EXECUTE);
+        }
+
+        let file = open_options.open(&path)?;
         let module = unsafe { Module::deserialize_open_file(store.engine(), file)? };
         let instance = Instance::new(&mut store, &module, &[])?;
         let func = instance.get_typed_func::<(), i32>(&mut store, "run")?;
