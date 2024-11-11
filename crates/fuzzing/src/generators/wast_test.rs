@@ -8,18 +8,16 @@ include!(concat!(env!("OUT_DIR"), "/wasttests.rs"));
 /// A wast test from this repository.
 #[derive(Debug)]
 pub struct WastTest {
-    /// The filename of the spec test
-    pub file: &'static str,
-    /// The `*.wast` contents of the spec test
-    pub contents: &'static str,
+    #[allow(missing_docs)]
+    pub test: wasmtime_wast_util::WastTest,
 }
 
 impl<'a> Arbitrary<'a> for WastTest {
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
-        // NB: this does get a uniform value in the provided range.
-        let i = u.int_in_range(0..=FILES.len() - 1)?;
-        let (file, contents) = FILES[i];
-        Ok(WastTest { file, contents })
+        log::debug!("{}", u.is_empty());
+        Ok(WastTest {
+            test: u.choose(FILES)?(),
+        })
     }
 
     fn size_hint(_depth: usize) -> (usize, Option<usize>) {

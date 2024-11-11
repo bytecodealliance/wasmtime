@@ -382,6 +382,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             | Operator::CallIndirect { .. }
             | Operator::Call { .. }
             | Operator::ReturnCall { .. }
+            | Operator::ReturnCallRef { .. }
             | Operator::ReturnCallIndirect { .. } => {
                 self.fuel_increment_var(builder);
                 self.fuel_save_from_var(builder);

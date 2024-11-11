@@ -1,4 +1,5 @@
 ;;! memory64 = true
+;;! hogs_memory = true
 
 ;; try to create as few 4gb memories as we can to reduce the memory consumption
 ;; of this test, so create one up front here and use it below.

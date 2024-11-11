@@ -4017,6 +4017,7 @@ dependencies = [
  "wasmtime-wasi-nn",
  "wasmtime-wasi-threads",
  "wasmtime-wast",
+ "wasmtime-wast-util",
  "wast 219.0.1",
  "wat",
  "windows-sys 0.59.0",
@@ -4208,6 +4209,7 @@ dependencies = [
  "wasmprinter",
  "wasmtime",
  "wasmtime-wast",
+ "wasmtime-wast-util",
  "wat",
 ]
 
@@ -4374,6 +4376,16 @@ dependencies = [
  "log",
  "wasmtime",
  "wast 219.0.1",
+]
+
+[[package]]
+name = "wasmtime-wast-util"
+version = "28.0.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_derive",
+ "toml",
 ]
 
 [[package]]
