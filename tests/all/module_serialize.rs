@@ -110,6 +110,7 @@ fn test_deserialize_from_file() -> Result<()> {
         #[cfg(target_os = "windows")]
         {
             use std::os::windows::prelude::*;
+            use windows_sys::Win32::Storage::FileSystem::*;
             open_options.access_mode(FILE_GENERIC_READ | FILE_GENERIC_EXECUTE);
         }
 
