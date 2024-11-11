@@ -444,6 +444,13 @@ impl Module {
     ///
     /// [`deserialize_file`]: Module::deserialize_file
     ///
+    /// Note that the corresponding will be mapped as private writeable
+    /// (copy-on-write) and executable. For `windows` this means the file needs
+    /// to be opened with at least `FILE_GENERIC_READ | FILE_GENERIC_EXECUTE`
+    /// [`access_mode`].
+    ///
+    /// [`access_mode`]: https://doc.rust-lang.org/std/os/windows/fs/trait.OpenOptionsExt.html#tymethod.access_mode
+    ///
     /// # Unsafety
     ///
     /// All of the reasons that [`deserialize_file`] is `unsafe` applies to this
