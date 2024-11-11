@@ -17,13 +17,13 @@ use windows_sys::Win32::System::Memory::*;
 /// while also disallowing other processes modifying the file
 /// and having those modifications show up in our address space.
 pub fn open_file_for_mmap(path: &Path) -> Result<File> {
-    let file = OpenOptions::new()
+    OpenOptions::new()
         .read(true)
         .access_mode(FILE_GENERIC_READ | FILE_GENERIC_EXECUTE)
         .share_mode(FILE_SHARE_READ)
         .open(path)
         .err2anyhow()
-        .context("failed to open file")?;
+        .context("failed to open file")
 }
 
 #[derive(Debug)]
@@ -135,7 +135,7 @@ impl Mmap {
                     .context("failed change pages to `PAGE_READONLY`");
             }
 
-            Ok((ret, file))
+            Ok(ret)
         }
     }
 
