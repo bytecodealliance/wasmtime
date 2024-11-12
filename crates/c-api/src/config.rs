@@ -236,7 +236,7 @@ pub extern "C" fn wasmtime_config_memory_guard_size_set(c: &mut wasm_config_t, s
 }
 
 #[no_mangle]
-pub extern "C" fn wasmtime_config_memory_reservation_reserved_for_growth_set(
+pub extern "C" fn wasmtime_config_memory_reservation_for_growth_set(
     c: &mut wasm_config_t,
     size: u64,
 ) {
