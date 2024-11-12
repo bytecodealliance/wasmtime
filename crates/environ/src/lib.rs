@@ -48,6 +48,8 @@ pub use crate::types::*;
 pub use crate::vmoffsets::*;
 pub use object;
 
+pub use wasmparser;
+
 #[cfg(feature = "compile")]
 mod compile;
 #[cfg(feature = "compile")]
