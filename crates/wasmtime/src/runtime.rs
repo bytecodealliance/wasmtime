@@ -107,6 +107,9 @@ mod coredump;
 #[cfg(feature = "coredump")]
 pub use coredump::*;
 
+#[cfg(feature = "wave")]
+mod wave;
+
 fn _assertions_runtime() {
     use crate::_assert_send_and_sync;
 
