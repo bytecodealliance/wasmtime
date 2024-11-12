@@ -48,6 +48,13 @@ impl BindingId {
 /// such as constants or function calls; but it also includes names bound in pattern matches.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
 pub enum Binding {
+    /// Evaluates to the given boolean literal.
+    ConstBool {
+        /// The constant value.
+        val: bool,
+        /// The constant's type.
+        ty: sema::TypeId,
+    },
     /// Evaluates to the given integer literal.
     ConstInt {
         /// The constant value.
@@ -247,6 +254,7 @@ impl Binding {
     /// Returns the binding sites which must be evaluated before this binding.
     pub fn sources(&self) -> &[BindingId] {
         match self {
+            Binding::ConstBool { .. } => &[][..],
             Binding::ConstInt { .. } => &[][..],
             Binding::ConstPrim { .. } => &[][..],
             Binding::Argument { .. } => &[][..],
@@ -593,6 +601,10 @@ impl sema::PatternVisitor for RuleSetBuilder {
 
 impl sema::ExprVisitor for RuleSetBuilder {
     type ExprId = BindingId;
+
+    fn add_const_bool(&mut self, ty: sema::TypeId, val: bool) -> BindingId {
+        self.dedup_binding(Binding::ConstBool { val, ty })
+    }
 
     fn add_const_int(&mut self, ty: sema::TypeId, val: i128) -> BindingId {
         self.dedup_binding(Binding::ConstInt { val, ty })

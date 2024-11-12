@@ -80,9 +80,36 @@ pub struct TypeEnv {
     pub errors: Vec<Error>,
 }
 
+/// A built-in type.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum BuiltinType {
+    /// The type of booleans, with values `true` and `false`.
+    Bool,
+}
+
+impl BuiltinType {
+    /// All the built-in types.
+    pub const ALL: &'static [Self] = &[Self::Bool];
+
+    /// Get the built-in type's name.
+    pub fn name(&self) -> &'static str {
+        match self {
+            BuiltinType::Bool => "bool",
+        }
+    }
+}
+
+impl TypeId {
+    /// TypeId for `bool`.
+    pub const BOOL: Self = Self(0);
+}
+
 /// A type.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Type {
+    /// Built-in types. Always in scope, not defined anywhere in source.
+    Builtin(BuiltinType),
+
     /// A primitive, `Copy` type.
     ///
     /// These are always defined externally, and we allow literals of these
@@ -117,14 +144,16 @@ impl Type {
     /// Get the name of this `Type`.
     pub fn name<'a>(&self, tyenv: &'a TypeEnv) -> &'a str {
         match self {
+            Self::Builtin(ty) => ty.name(),
             Self::Primitive(_, name, _) | Self::Enum { name, .. } => &tyenv.syms[name.index()],
         }
     }
 
     /// Get the position where this type was defined.
-    pub fn pos(&self) -> Pos {
+    pub fn pos(&self) -> Option<Pos> {
         match self {
-            Self::Primitive(_, _, pos) | Self::Enum { pos, .. } => *pos,
+            Self::Builtin(..) => None,
+            Self::Primitive(_, _, pos) | Self::Enum { pos, .. } => Some(*pos),
         }
     }
 
@@ -545,6 +574,8 @@ pub enum Expr {
     Term(TypeId, TermId, Vec<Expr>),
     /// Get the value of a variable that was bound in the left-hand side.
     Var(TypeId, VarId),
+    /// Get a constant boolean.
+    ConstBool(TypeId, bool),
     /// Get a constant integer.
     ConstInt(TypeId, i128),
     /// Get a constant primitive.
@@ -697,6 +728,8 @@ pub trait ExprVisitor {
     /// The type of subexpression identifiers.
     type ExprId: Copy;
 
+    /// Construct a constant boolean.
+    fn add_const_bool(&mut self, ty: TypeId, val: bool) -> Self::ExprId;
     /// Construct a constant integer.
     fn add_const_int(&mut self, ty: TypeId, val: i128) -> Self::ExprId;
     /// Construct a primitive constant.
@@ -728,6 +761,7 @@ impl Expr {
         match *self {
             Self::Term(t, ..) => t,
             Self::Var(t, ..) => t,
+            Self::ConstBool(t, ..) => t,
             Self::ConstInt(t, ..) => t,
             Self::ConstPrim(t, ..) => t,
             Self::Let { ty: t, .. } => t,
@@ -743,6 +777,7 @@ impl Expr {
     ) -> V::ExprId {
         log!("Expr::visit: expr {:?}", self);
         match *self {
+            Expr::ConstBool(ty, val) => visitor.add_const_bool(ty, val),
             Expr::ConstInt(ty, val) => visitor.add_const_int(ty, val),
             Expr::ConstPrim(ty, val) => visitor.add_const_prim(ty, val),
             Expr::Let {
@@ -905,17 +940,37 @@ macro_rules! unwrap_or_continue {
     };
 }
 
+impl Default for TypeEnv {
+    fn default() -> Self {
+        Self {
+            syms: BuiltinType::ALL
+                .iter()
+                .map(|bt| String::from(bt.name()))
+                .collect(),
+            sym_map: BuiltinType::ALL
+                .iter()
+                .enumerate()
+                .map(|(idx, bt)| (String::from(bt.name()), Sym(idx)))
+                .collect(),
+            types: BuiltinType::ALL
+                .iter()
+                .map(|bt| Type::Builtin(*bt))
+                .collect(),
+            type_map: BuiltinType::ALL
+                .iter()
+                .enumerate()
+                .map(|(idx, _)| (Sym(idx), TypeId(idx)))
+                .collect(),
+            const_types: StableMap::new(),
+            errors: vec![],
+        }
+    }
+}
+
 impl TypeEnv {
     /// Construct the type environment from the AST.
     pub fn from_ast(defs: &[ast::Def]) -> Result<TypeEnv, Vec<Error>> {
-        let mut tyenv = TypeEnv {
-            syms: vec![],
-            sym_map: StableMap::new(),
-            types: vec![],
-            type_map: StableMap::new(),
-            const_types: StableMap::new(),
-            errors: vec![],
-        };
+        let mut tyenv = TypeEnv::default();
 
         // Traverse defs, assigning type IDs to type names. We'll fill
         // in types on a second pass.
@@ -931,10 +986,16 @@ impl TypeEnv {
                             format!("Type with name '{}' defined more than once", td.name.0),
                         );
                         let pos = unwrap_or_continue!(tyenv.types.get(existing.index())).pos();
-                        tyenv.report_error(
-                            pos,
-                            format!("Type with name '{}' already defined here", td.name.0),
-                        );
+                        match pos {
+                            Some(pos) => tyenv.report_error(
+                                pos,
+                                format!("Type with name '{}' already defined here", td.name.0),
+                            ),
+                            None => tyenv.report_error(
+                                td.pos,
+                                format!("Type with name '{}' is a built-in type", td.name.0),
+                            ),
+                        }
                         continue;
                     }
 
@@ -2263,6 +2324,20 @@ impl TermEnv {
 
                 Some(Expr::Var(bv.ty, bv.id))
             }
+            &ast::Expr::ConstBool { val, pos } => {
+                match ty {
+                    Some(ty) if ty != TypeId::BOOL => tyenv.report_error(
+                        pos,
+                        format!(
+                            "Boolean literal '{val}' has type {} but we need {} in context",
+                            BuiltinType::Bool.name(),
+                            tyenv.types[ty.index()].name(tyenv)
+                        ),
+                    ),
+                    Some(..) | None => {}
+                };
+                Some(Expr::ConstBool(TypeId::BOOL, val))
+            }
             &ast::Expr::ConstInt { val, pos } => {
                 if ty.is_none() {
                     tyenv.report_error(
@@ -2437,12 +2512,12 @@ mod test {
             .intern(&Ident("f2".to_string(), Default::default()))
             .unwrap();
 
-        assert_eq!(tyenv.type_map.get(&sym_u32).unwrap(), &TypeId(0));
-        assert_eq!(tyenv.type_map.get(&sym_a).unwrap(), &TypeId(1));
+        assert_eq!(tyenv.type_map.get(&sym_u32).unwrap(), &TypeId(1));
+        assert_eq!(tyenv.type_map.get(&sym_a).unwrap(), &TypeId(2));
 
         let expected_types = vec![
             Type::Primitive(
-                TypeId(0),
+                TypeId(1),
                 sym_u32,
                 Pos {
                     file: 0,
@@ -2451,7 +2526,7 @@ mod test {
             ),
             Type::Enum {
                 name: sym_a,
-                id: TypeId(1),
+                id: TypeId(2),
                 is_extern: true,
                 is_nodebug: false,
                 variants: vec![
@@ -2463,12 +2538,12 @@ mod test {
                             Field {
                                 name: sym_f1,
                                 id: FieldId(0),
-                                ty: TypeId(0),
+                                ty: TypeId(1),
                             },
                             Field {
                                 name: sym_f2,
                                 id: FieldId(1),
-                                ty: TypeId(0),
+                                ty: TypeId(1),
                             },
                         ],
                     },
@@ -2479,7 +2554,7 @@ mod test {
                         fields: vec![Field {
                             name: sym_f1,
                             id: FieldId(0),
-                            ty: TypeId(0),
+                            ty: TypeId(1),
                         }],
                     },
                 ],
@@ -2490,8 +2565,17 @@ mod test {
             },
         ];
 
-        assert_eq!(tyenv.types.len(), expected_types.len());
-        for (i, (actual, expected)) in tyenv.types.iter().zip(&expected_types).enumerate() {
+        assert_eq!(
+            tyenv.types.len(),
+            expected_types.len() + BuiltinType::ALL.len()
+        );
+        for (i, (actual, expected)) in tyenv
+            .types
+            .iter()
+            .skip(BuiltinType::ALL.len())
+            .zip(&expected_types)
+            .enumerate()
+        {
             assert_eq!(expected, actual, "`{i}`th type is not equal!");
         }
     }

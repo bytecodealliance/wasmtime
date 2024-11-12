@@ -14,7 +14,6 @@
 (extern constructor unit unit)
 
 (model bool (type Bool))
-(type bool (primitive bool))
 (extern const $true bool)
 (extern const $false bool)
 
@@ -442,7 +441,7 @@
 (extern constructor ty_bits ty_bits)
 
 ;; Get the bit width of a given type.
-(spec (ty_bits_u16 x) 
+(spec (ty_bits_u16 x)
       (provide (= result (int2bv 16 x))))
 (decl pure ty_bits_u16 (Type) u16)
 (extern constructor ty_bits_u16 ty_bits_u16)

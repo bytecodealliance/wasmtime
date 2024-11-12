@@ -893,6 +893,10 @@ impl<'a> Parser<'a> {
         } else if self.is_const() {
             let val = self.parse_const()?;
             Ok(Expr::ConstPrim { val, pos })
+        } else if self.eat_sym_str("true")? {
+            Ok(Expr::ConstBool { val: true, pos })
+        } else if self.eat_sym_str("false")? {
+            Ok(Expr::ConstBool { val: false, pos })
         } else if self.is_sym() {
             let name = self.parse_ident()?;
             Ok(Expr::Var { name, pos })

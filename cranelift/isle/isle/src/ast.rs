@@ -502,6 +502,8 @@ pub enum Expr {
     },
     /// A variable use.
     Var { name: Ident, pos: Pos },
+    /// A constant boolean.
+    ConstBool { val: bool, pos: Pos },
     /// A constant integer.
     ConstInt { val: i128, pos: Pos },
     /// A constant of some other primitive type.
@@ -519,6 +521,7 @@ impl Expr {
         match self {
             &Expr::Term { pos, .. }
             | &Expr::Var { pos, .. }
+            | &Expr::ConstBool { pos, .. }
             | &Expr::ConstInt { pos, .. }
             | &Expr::ConstPrim { pos, .. }
             | &Expr::Let { pos, .. } => pos,
@@ -540,7 +543,10 @@ impl Expr {
                 }
                 body.terms(f);
             }
-            Expr::Var { .. } | Expr::ConstInt { .. } | Expr::ConstPrim { .. } => {}
+            Expr::Var { .. }
+            | Expr::ConstBool { .. }
+            | Expr::ConstInt { .. }
+            | Expr::ConstPrim { .. } => {}
         }
     }
 }
