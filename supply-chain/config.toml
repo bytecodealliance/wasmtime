@@ -368,6 +368,21 @@ criteria = "safe-to-deploy"
 version = "1.0.0"
 criteria = "safe-to-deploy"
 
+[[exemptions.logos]]
+version = "0.14.2"
+criteria = "safe-to-deploy"
+notes = "safe when forbid_unsafe feature enabled, which it is in our dep through wasm-wave"
+
+[[exemptions.logos-codegen]]
+version = "0.14.2"
+criteria = "safe-to-deploy"
+notes = "safe when forbid_unsafe feature enabled, which it is in our dep through wasm-wave"
+
+[[exemptions.logos-derive]]
+version = "0.14.2"
+criteria = "safe-to-deploy"
+notes = "safe when forbid_unsafe feature enabled, which it is in our dep through wasm-wave"
+
 [[exemptions.matrixmultiply]]
 version = "0.3.9"
 criteria = "safe-to-deploy"

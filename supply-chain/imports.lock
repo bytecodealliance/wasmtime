@@ -710,6 +710,13 @@ user-id = 189
 user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
+[[publisher.regex-syntax]]
+version = "0.8.5"
+when = "2024-09-29"
+user-id = 189
+user-login = "BurntSushi"
+user-name = "Andrew Gallant"
+
 [[publisher.rustix]]
 version = "0.38.34"
 when = "2024-04-22"
@@ -808,15 +815,15 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.thiserror]]
-version = "1.0.43"
-when = "2023-07-07"
+version = "1.0.65"
+when = "2024-10-22"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.thiserror-impl]]
-version = "1.0.43"
-when = "2023-07-07"
+version = "1.0.65"
+when = "2024-10-22"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -937,6 +944,12 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasm-metadata]]
+version = "0.220.0"
+when = "2024-11-12"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasm-wave]]
 version = "0.220.0"
 when = "2024-11-12"
 user-id = 73222
