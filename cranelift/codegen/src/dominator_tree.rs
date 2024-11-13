@@ -11,6 +11,397 @@ use core::cmp;
 use core::cmp::Ordering;
 use core::mem;
 
+/// Spanning tree node, used during domtree computation.
+#[derive(Clone, Default)]
+struct SpanningTreeNode {
+    block: PackedOption<Block>,
+    ancestor: u32,
+    label: u32,
+    semi: u32,
+    idom: u32,
+}
+
+/// Spanning tree, in DFS preorder.
+/// Node 0 is the virtual root and doesn't have a corresponding block.
+/// It's not required because function's CFG in Cranelift always have
+/// a singular root, but helps to avoid additional checks.
+/// Numbering nodes from 0 also follows the convention in
+/// `SimpleDominatorTree` and `DominatorTreePreorder`
+#[derive(Clone, Default)]
+struct SpanningTree {
+    nodes: Vec<SpanningTreeNode>,
+}
+
+impl SpanningTree {
+    fn new() -> Self {
+        Self { nodes: Vec::new() }
+    }
+
+    fn with_capacity(capacity: usize) -> Self {
+        Self {
+            // Include the virtual root
+            nodes: Vec::with_capacity(capacity + 1),
+        }
+    }
+
+    fn len(&self) -> usize {
+        self.nodes.len()
+    }
+
+    fn reserve(&mut self, capacity: usize) {
+        // Include the virtual root
+        self.nodes.reserve(capacity + 1);
+    }
+
+    fn clear(&mut self) {
+        self.nodes.clear();
+    }
+
+    /// Returns pre_number for the new node
+    fn push(&mut self, ancestor: u32, block: Block) -> u32 {
+        // Push the virtual root if not present
+        if self.nodes.is_empty() {
+            self.nodes.push(Default::default())
+        }
+
+        let pre_number = self.nodes.len() as u32;
+
+        self.nodes.push(SpanningTreeNode {
+            block: block.into(),
+            ancestor: ancestor,
+            label: pre_number,
+            semi: pre_number,
+            idom: ancestor,
+        });
+
+        pre_number
+    }
+}
+
+impl std::ops::Index<u32> for SpanningTree {
+    type Output = SpanningTreeNode;
+
+    fn index(&self, idx: u32) -> &Self::Output {
+        &self.nodes[idx as usize]
+    }
+}
+
+impl std::ops::IndexMut<u32> for SpanningTree {
+    fn index_mut(&mut self, idx: u32) -> &mut Self::Output {
+        &mut self.nodes[idx as usize]
+    }
+}
+
+/// Traversal event to compute both preorder spanning tree
+/// and postorder block list. Don't use `Dfs` from traversals.rs
+/// because parent links are needed.
+enum TraversalEvent {
+    Enter(u32, Block),
+    Exit(Block),
+}
+
+/// Dominator tree node. We keep one of these per block.
+#[derive(Clone, Default)]
+struct DominatorTreeNode {
+    idom: PackedOption<Block>,
+    /// 0 for unreachable blocks
+    pre_number: u32,
+}
+
+/// The dominator tree for a single function,
+/// computed using Semi-NCA algorithm
+pub struct DominatorTree {
+    stree: SpanningTree,
+    postorder: Vec<Block>,
+    nodes: SecondaryMap<Block, DominatorTreeNode>,
+
+    dfs_worklist: Vec<TraversalEvent>,
+    eval_worklist: Vec<u32>,
+
+    valid: bool,
+}
+
+/// Query methods
+impl DominatorTree {
+    /// Is `block` reachable from the entry block?
+    pub fn is_reachable(&self, block: Block) -> bool {
+        self.nodes[block].pre_number != 0
+    }
+
+    /// Get the CFG post-order of blocks that was used to compute the dominator tree.
+    ///
+    /// Note that this post-order is not updated automatically when the CFG is modified. It is
+    /// computed from scratch and cached by `compute()`.
+    pub fn cfg_postorder(&self) -> &[Block] {
+        debug_assert!(self.is_valid());
+        &self.postorder
+    }
+
+    /// Returns the immediate dominator of `block`.
+    ///
+    /// `block_a` is said to *dominate* `block_b` if all control flow paths from the function
+    /// entry to `block_b` must go through `block_a`.
+    ///
+    /// The *immediate dominator* is the dominator that is closest to `block`. All other dominators
+    /// also dominate the immediate dominator.
+    ///
+    /// This returns `None` if `block` is not reachable from the entry block, or if it is the entry block
+    /// which has no dominators.
+    pub fn idom(&self, block: Block) -> Option<Block> {
+        self.nodes[block].idom.into()
+    }
+
+    /// Returns `true` if `a` dominates `b`.
+    ///
+    /// This means that every control-flow path from the function entry to `b` must go through `a`.
+    ///
+    /// Dominance is ill defined for unreachable blocks. This function can always determine
+    /// dominance for instructions in the same block, but otherwise returns `false` if either block
+    /// is unreachable.
+    ///
+    /// An instruction is considered to dominate itself.
+    /// A block is also considered to dominate itself.
+    pub fn dominates<A, B>(&self, a: A, b: B, layout: &Layout) -> bool
+    where
+        A: Into<ProgramPoint>,
+        B: Into<ProgramPoint>,
+    {
+        let a = a.into();
+        let b = b.into();
+        match a {
+            ProgramPoint::Block(block_a) => match b {
+                ProgramPoint::Block(block_b) => self.block_dominates(block_a, block_b),
+                ProgramPoint::Inst(inst_b) => {
+                    let block_b = layout
+                        .inst_block(inst_b)
+                        .expect("Instruction not in layout.");
+                    self.block_dominates(block_a, block_b)
+                }
+            },
+            ProgramPoint::Inst(inst_a) => {
+                let block_a: Block = layout
+                    .inst_block(inst_a)
+                    .expect("Instruction not in layout.");
+                match b {
+                    ProgramPoint::Block(block_b) => {
+                        block_a != block_b && self.block_dominates(block_a, block_b)
+                    }
+                    ProgramPoint::Inst(inst_b) => {
+                        let block_b = layout
+                            .inst_block(inst_b)
+                            .expect("Instruction not in layout.");
+                        if block_a == block_b {
+                            layout.pp_cmp(a, b) != Ordering::Greater
+                        } else {
+                            self.block_dominates(block_a, block_b)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Returns `true` if `block_a` dominates `block_b`.
+    ///
+    /// A block is considered to dominate itself.
+    fn block_dominates(&self, block_a: Block, mut block_b: Block) -> bool {
+        let pre_a = self.nodes[block_a].pre_number;
+
+        // Run a finger up the dominator tree from b until we see a.
+        // Do nothing if b is unreachable.
+        while pre_a < self.nodes[block_b].pre_number {
+            let idom = match self.idom(block_b) {
+                Some(idom) => idom,
+                None => return false, // a is unreachable, so we climbed past the entry
+            };
+            block_b = idom;
+        }
+
+        block_a == block_b
+    }
+}
+
+impl DominatorTree {
+    /// Allocate a new blank dominator tree. Use `compute` to compute the dominator tree for a
+    /// function.
+    pub fn new() -> Self {
+        Self {
+            stree: SpanningTree::new(),
+            nodes: SecondaryMap::new(),
+            postorder: Vec::new(),
+            dfs_worklist: Vec::new(),
+            eval_worklist: Vec::new(),
+            valid: false,
+        }
+    }
+
+    /// Allocate and compute a dominator tree.
+    pub fn with_function(func: &Function, cfg: &ControlFlowGraph) -> Self {
+        let block_capacity = func.layout.block_capacity();
+        let mut domtree = Self {
+            stree: SpanningTree::with_capacity(block_capacity),
+            nodes: SecondaryMap::with_capacity(block_capacity),
+            postorder: Vec::with_capacity(block_capacity),
+            dfs_worklist: Vec::new(),
+            eval_worklist: Vec::new(),
+            valid: false,
+        };
+        domtree.compute(func, cfg);
+        domtree
+    }
+
+    /// Reset and compute a CFG post-order and dominator tree,
+    /// using Semi-NCA algorithm, described in the paper:
+    ///
+    /// Linear-Time Algorithms for Dominators and Related Problems.
+    /// Loukas Georgiadis, Princeton University, November 2005.
+    ///
+    /// The same algorithm is used by Julia, SpiderMonkey and LLVM,
+    /// the implementation is heavily inspired by them.
+    pub fn compute(&mut self, func: &Function, cfg: &ControlFlowGraph) {
+        let _tt = timing::domtree();
+        debug_assert!(cfg.is_valid());
+
+        self.clear();
+        self.compute_spanning_tree(func);
+        self.compute_domtree(cfg);
+
+        self.valid = true;
+    }
+
+    /// Clear the data structures used to represent the dominator tree. This will leave the tree in
+    /// a state where `is_valid()` returns false.
+    pub fn clear(&mut self) {
+        self.stree.clear();
+        self.nodes.clear();
+        self.postorder.clear();
+        self.valid = false;
+    }
+
+    /// Check if the dominator tree is in a valid state.
+    ///
+    /// Note that this doesn't perform any kind of validity checks. It simply checks if the
+    /// `compute()` method has been called since the last `clear()`. It does not check that the
+    /// dominator tree is consistent with the CFG.
+    pub fn is_valid(&self) -> bool {
+        self.valid
+    }
+
+    /// Reset all internal data structures, build spanning tree
+    /// and compute a post-order of the control flow graph.
+    fn compute_spanning_tree(&mut self, func: &Function) {
+        self.nodes.resize(func.dfg.num_blocks());
+        self.stree.reserve(func.dfg.num_blocks());
+
+        if let Some(block) = func.layout.entry_block() {
+            self.dfs_worklist.push(TraversalEvent::Enter(0, block));
+        }
+
+        loop {
+            match self.dfs_worklist.pop() {
+                Some(TraversalEvent::Enter(parent, block)) => {
+                    let node = &mut self.nodes[block];
+                    // The node has been visited
+                    if node.pre_number != 0 {
+                        continue;
+                    }
+
+                    self.dfs_worklist.push(TraversalEvent::Exit(block));
+
+                    let pre_number = self.stree.push(parent, block);
+                    node.pre_number = pre_number;
+
+                    // Use the same traversal heuristics as in traversals.rs
+                    self.dfs_worklist.extend(
+                        func.block_successors(block)
+                            .rev()
+                            .filter(|successor| self.nodes[*successor].pre_number == 0)
+                            .map(|successor| TraversalEvent::Enter(pre_number, successor)),
+                    );
+                }
+                Some(TraversalEvent::Exit(block)) => self.postorder.push(block),
+                None => break,
+            }
+        }
+    }
+
+    /// Eval-compress
+    fn eval(&mut self, v: u32, last_linked: u32) -> u32 {
+        if self.stree[v].ancestor < last_linked {
+            return self.stree[v].label;
+        }
+
+        let mut root = v;
+        loop {
+            self.eval_worklist.push(root);
+            root = self.stree[root].ancestor;
+
+            if self.stree[root].ancestor < last_linked {
+                break;
+            }
+        }
+
+        let mut prev = root;
+        let root = self.stree[prev].ancestor;
+
+        while let Some(curr) = self.eval_worklist.pop() {
+            if self.stree[prev].label < self.stree[curr].label {
+                self.stree[curr].label = self.stree[prev].label;
+            }
+
+            self.stree[curr].ancestor = root;
+            prev = curr;
+        }
+
+        self.stree[v].label
+    }
+
+    fn compute_domtree(&mut self, cfg: &ControlFlowGraph) {
+        // Compute semi-dominators
+        for v in (1..self.stree.len() as u32).rev() {
+            let v_node = &mut self.stree[v];
+            let block = v_node.block.expect("Virtual root must have been excluded");
+            let mut semi = v_node.ancestor;
+
+            let last_linked = v + 1;
+
+            for pred in cfg
+                .pred_iter(block)
+                .map(|pred: BlockPredecessor| pred.block)
+            {
+                // Skip unreachable nodes
+                if self.nodes[pred].pre_number == 0 {
+                    continue;
+                }
+
+                let semi_candidate = self.eval(self.nodes[pred].pre_number, last_linked);
+                semi = std::cmp::min(semi, semi_candidate);
+            }
+
+            let v_node = &mut self.stree[v];
+            v_node.label = semi;
+            v_node.semi = semi;
+        }
+
+        // Compute immediate dominators
+        for v in 1..self.stree.len() as u32 {
+            let semi = self.stree[v].semi;
+            let block = self.stree[v]
+                .block
+                .expect("Virtual root must have been excluded");
+            let mut idom = self.stree[v].idom;
+
+            while idom > semi {
+                idom = self.stree[idom].idom;
+            }
+
+            self.stree[v].idom = idom;
+
+            self.nodes[block].idom = self.stree[idom].block;
+        }
+    }
+}
+
 /// RPO numbers are not first assigned in a contiguous way but as multiples of STRIDE, to leave
 /// room for modifications of the dominator tree.
 const STRIDE: u32 = 4;
@@ -32,7 +423,7 @@ struct DomNode {
 }
 
 /// The dominator tree for a single function.
-pub struct DominatorTree {
+pub struct SimpleDominatorTree {
     nodes: SecondaryMap<Block, DomNode>,
 
     /// CFG post-order of all reachable blocks.
@@ -45,7 +436,7 @@ pub struct DominatorTree {
 }
 
 /// Methods for querying the dominator tree.
-impl DominatorTree {
+impl SimpleDominatorTree {
     /// Is `block` reachable from the entry block?
     pub fn is_reachable(&self, block: Block) -> bool {
         self.nodes[block].rpo_number != 0
@@ -191,7 +582,7 @@ impl DominatorTree {
     }
 }
 
-impl DominatorTree {
+impl SimpleDominatorTree {
     /// Allocate a new blank dominator tree. Use `compute` to compute the dominator tree for a
     /// function.
     pub fn new() -> Self {
@@ -616,20 +1007,6 @@ mod tests {
         ));
         assert!(!dt.dominates(br_block1_block0_block2, jmp_block3_block1, &cur.func.layout));
         assert!(dt.dominates(jmp_block3_block1, br_block1_block0_block2, &cur.func.layout));
-
-        assert_eq!(
-            dt.rpo_cmp(block3, block3, &cur.func.layout),
-            Ordering::Equal
-        );
-        assert_eq!(dt.rpo_cmp(block3, block1, &cur.func.layout), Ordering::Less);
-        assert_eq!(
-            dt.rpo_cmp(block3, jmp_block3_block1, &cur.func.layout),
-            Ordering::Less
-        );
-        assert_eq!(
-            dt.rpo_cmp(jmp_block3_block1, br_block1_block0_block2, &cur.func.layout),
-            Ordering::Less
-        );
     }
 
     #[test]

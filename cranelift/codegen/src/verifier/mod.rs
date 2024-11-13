@@ -64,7 +64,7 @@
 //!   of arguments must match the destination type, and the lane indexes must be in range.
 
 use crate::dbg::DisplayList;
-use crate::dominator_tree::DominatorTree;
+use crate::dominator_tree::{DominatorTree, SimpleDominatorTree};
 use crate::entity::SparseSet;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::entities::AnyEntity;
@@ -300,14 +300,14 @@ pub fn verify_context<'a, FOI: Into<FlagsOrIsa<'a>>>(
 struct Verifier<'a> {
     func: &'a Function,
     expected_cfg: ControlFlowGraph,
-    expected_domtree: DominatorTree,
+    expected_domtree: SimpleDominatorTree,
     isa: Option<&'a dyn TargetIsa>,
 }
 
 impl<'a> Verifier<'a> {
     pub fn new(func: &'a Function, fisa: FlagsOrIsa<'a>) -> Self {
         let expected_cfg = ControlFlowGraph::with_function(func);
-        let expected_domtree = DominatorTree::with_function(func, &expected_cfg);
+        let expected_domtree = SimpleDominatorTree::with_function(func, &expected_cfg);
         Self {
             func,
             expected_cfg,
