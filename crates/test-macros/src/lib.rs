@@ -49,6 +49,8 @@ struct TestConfig {
     wasm_features: Vec<Ident>,
     /// Flag to track if there are Wasm features not supported by Winch.
     wasm_features_unsupported_by_winch: bool,
+    /// The test attribute to use. Defaults to `#[test]`.
+    test_attribute: Option<proc_macro2::TokenStream>,
 }
 
 impl TestConfig {
@@ -106,6 +108,12 @@ impl TestConfig {
 
         Ok(())
     }
+
+    fn test_attribute_from(&mut self, meta: &ParseNestedMeta) -> Result<()> {
+        let v: syn::LitStr = meta.value()?.parse()?;
+        self.test_attribute = Some(v.value().parse()?);
+        Ok(())
+    }
 }
 
 impl Default for TestConfig {
@@ -117,6 +125,7 @@ impl Default for TestConfig {
             ],
             wasm_features: vec![],
             wasm_features_unsupported_by_winch: false,
+            test_attribute: None,
         }
     }
 }
@@ -191,6 +200,8 @@ pub fn wasmtime_test(attrs: TokenStream, item: TokenStream) -> TokenStream {
             test_config.strategies_from(&meta)
         } else if meta.path.is_ident("wasm_features") {
             test_config.wasm_features_from(&meta)
+        } else if meta.path.is_ident("with") {
+            test_config.test_attribute_from(&meta)
         } else {
             Err(meta.error("Unsupported attributes"))
         }
@@ -220,6 +231,11 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
     };
     let attrs = &func.attrs;
 
+    let test_attr = test_config
+        .test_attribute
+        .clone()
+        .unwrap_or_else(|| quote! { #[test] });
+
     for ident in &test_config.strategies {
         let strategy_name = ident.to_string();
         // Winch currently only offers support for x64.
@@ -227,6 +243,11 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
             quote! { #[cfg(target_arch = "x86_64")] }
         } else {
             quote! {}
+        };
+        let (asyncness, await_) = if func.sig.asyncness.is_some() {
+            (quote! { async }, quote! { .await })
+        } else {
+            (quote! {}, quote! {})
         };
         let func_name = &func.sig.ident;
         let ret = match &func.sig.output {
@@ -246,14 +267,14 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
         });
 
         let tok = quote! {
-            #[test]
+            #test_attr
             #target
             #(#attrs)*
-            fn #test_name() #ret {
+            #asyncness fn #test_name() #ret {
                 let mut config = Config::new();
                 config.strategy(Strategy::#ident);
                 #(#config_setup)*
-                #func_name(&mut config)
+                #func_name(&mut config) #await_
             }
         };
 
