@@ -57,7 +57,7 @@ gimli = { workspace = true, optional = true }
 addr2line = { workspace = true, optional = true }
 semver = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true }
-hashbrown = { workspace = true }
+hashbrown = { workspace = true, features = ["ahash"] }
 libm = "0.2.7"
 bitflags = { workspace = true }
 

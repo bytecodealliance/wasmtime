@@ -186,7 +186,7 @@ where
                     .iter()
                     .map(|v| match v {
                         WastArg::Core(v) => core::val(&mut self.store, v),
-                        WastArg::Component(_) => bail!("expected component function, found core"),
+                        _ => bail!("expected core function, found other other argument {v:?}"),
                     })
                     .collect::<Result<Vec<_>>>()?;
 
@@ -203,7 +203,7 @@ where
                     .iter()
                     .map(|v| match v {
                         WastArg::Component(v) => component::val(v),
-                        WastArg::Core(_) => bail!("expected core function, found component"),
+                        _ => bail!("expected component function, found other argument {v:?}"),
                     })
                     .collect::<Result<Vec<_>>>()?;
 
@@ -347,9 +347,7 @@ where
                 for (i, (v, e)) in values.iter().zip(results).enumerate() {
                     let e = match e {
                         WastRet::Core(core) => core,
-                        WastRet::Component(_) => {
-                            bail!("expected component value found core value")
-                        }
+                        _ => bail!("expected core value found other value {e:?}"),
                     };
                     core::match_val(&mut self.store, v, e)
                         .with_context(|| format!("result {i} didn't match"))?;
@@ -362,10 +360,8 @@ where
                 }
                 for (i, (v, e)) in values.iter().zip(results).enumerate() {
                     let e = match e {
-                        WastRet::Core(_) => {
-                            bail!("expected component value found core value")
-                        }
                         WastRet::Component(val) => val,
+                        _ => bail!("expected component value found other value {e:?}"),
                     };
                     component::match_val(e, v)
                         .with_context(|| format!("result {i} didn't match"))?;

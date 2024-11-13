@@ -205,7 +205,7 @@ fn parse_source(
             };
             let (pkg, sources) = resolve.push_path(normalized_path)?;
             pkgs.push(pkg);
-            files.extend(sources);
+            files.extend(sources.paths().map(|p| p.to_owned()));
         }
         Ok(())
     };

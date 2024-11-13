@@ -856,6 +856,13 @@ user-id = 1139
 user-login = "Manishearth"
 user-name = "Manish Goregaokar"
 
+[[publisher.unicode-width]]
+version = "0.1.12"
+when = "2024-04-26"
+user-id = 1139
+user-login = "Manishearth"
+user-name = "Manish Goregaokar"
+
 [[publisher.unicode-xid]]
 version = "0.2.3"
 when = "2022-05-02"
@@ -917,9 +924,21 @@ when = "2024-10-10"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasm-encoder]]
+version = "0.220.0"
+when = "2024-11-12"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasm-metadata]]
 version = "0.219.1"
 when = "2024-10-10"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasm-metadata]]
+version = "0.220.0"
+when = "2024-11-12"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -929,9 +948,15 @@ when = "2024-10-10"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wasmparser]]
+version = "0.220.0"
+when = "2024-11-12"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wasmprinter]]
-version = "0.219.1"
-when = "2024-10-10"
+version = "0.220.0"
+when = "2024-11-12"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1074,14 +1099,14 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wast]]
-version = "219.0.1"
-when = "2024-10-10"
+version = "220.0.0"
+when = "2024-11-12"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wat]]
-version = "1.219.1"
-when = "2024-10-10"
+version = "1.220.0"
+when = "2024-11-12"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1299,32 +1324,32 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.wit-bindgen]]
-version = "0.34.0"
-when = "2024-10-08"
+version = "0.35.0"
+when = "2024-11-13"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-core]]
-version = "0.34.0"
-when = "2024-10-08"
+version = "0.35.0"
+when = "2024-11-13"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rt]]
-version = "0.34.0"
-when = "2024-10-08"
+version = "0.35.0"
+when = "2024-11-13"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rust]]
-version = "0.34.0"
-when = "2024-10-08"
+version = "0.35.0"
+when = "2024-11-13"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rust-macro]]
-version = "0.34.0"
-when = "2024-10-08"
+version = "0.35.0"
+when = "2024-11-13"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1334,9 +1359,21 @@ when = "2024-10-10"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wit-component]]
+version = "0.220.0"
+when = "2024-11-12"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wit-parser]]
 version = "0.219.1"
 when = "2024-10-10"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wit-parser]]
+version = "0.220.0"
+when = "2024-11-12"
 user-id = 73222
 user-login = "wasmtime-publish"
 
