@@ -264,13 +264,6 @@ by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
 """
 
 [[wildcard-audits.wasm-mutate]]
-who = "Nick Fitzgerald <fitzgen@gmail.com>"
-criteria = "safe-to-deploy"
-user-id = 696 # Nick Fitzgerald (fitzgen)
-start = "2022-02-17"
-end = "2025-07-30"
-
-[[wildcard-audits.wasm-mutate]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
@@ -282,6 +275,13 @@ repository of which I'm one of the primary maintainers and publishers for.
 I am employed by a member of the Bytecode Alliance and plan to continue doing
 so and will actively maintain this crate over time.
 """
+
+[[wildcard-audits.wasm-mutate]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 696 # Nick Fitzgerald (fitzgen)
+start = "2022-02-17"
+end = "2025-07-30"
 
 [[wildcard-audits.wasm-smith]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -322,13 +322,6 @@ by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
 """
 
 [[wildcard-audits.wasmprinter]]
-who = "Nick Fitzgerald <fitzgen@gmail.com>"
-criteria = "safe-to-deploy"
-user-id = 696 # Nick Fitzgerald (fitzgen)
-start = "2021-04-28"
-end = "2025-07-30"
-
-[[wildcard-audits.wasmprinter]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
@@ -352,6 +345,13 @@ The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
 by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
 """
+
+[[wildcard-audits.wasmprinter]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 696 # Nick Fitzgerald (fitzgen)
+start = "2021-04-28"
+end = "2025-07-30"
 
 [[wildcard-audits.wasmtime]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
@@ -834,13 +834,6 @@ so and will actively maintain this crate over time.
 """
 
 [[wildcard-audits.wit-component]]
-who = "Nick Fitzgerald <fitzgen@gmail.com>"
-criteria = "safe-to-deploy"
-user-id = 696 # Nick Fitzgerald (fitzgen)
-start = "2019-03-16"
-end = "2025-07-30"
-
-[[wildcard-audits.wit-component]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
@@ -851,6 +844,13 @@ The Bytecode Alliance uses the `wasmtime-publish` crates.io account to automate
 publication of this crate from CI. This repository requires all PRs are reviewed
 by a Bytecode Alliance maintainer and it owned by the Bytecode Alliance itself.
 """
+
+[[wildcard-audits.wit-component]]
+who = "Nick Fitzgerald <fitzgen@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 696 # Nick Fitzgerald (fitzgen)
+start = "2019-03-16"
+end = "2025-07-30"
 
 [[wildcard-audits.wit-parser]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -3049,6 +3049,12 @@ throughout the ecosystem and skimming the crate shows no usage of `std::*` APIs
 and nothing suspicious.
 """
 
+[[audits.unicode-width]]
+who = "Pat Hickey <pat@moreproductive.org>"
+criteria = "safe-to-deploy"
+delta = "0.1.12 -> 0.2.0"
+notes = "large changes to an auto-generated table file, which contains no unsafe code. code generator is checked-in and looks sensible."
+
 [[audits.ureq]]
 who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
@@ -3906,15 +3912,15 @@ end = "2024-07-06"
 
 [[trusted.backtrace]]
 criteria = "safe-to-deploy"
-user-id = 2915 # Amanieu d'Antras (Amanieu)
-start = "2023-06-29"
-end = "2024-07-14"
-
-[[trusted.backtrace]]
-criteria = "safe-to-deploy"
 user-id = 539 # Josh Stone (cuviper)
 start = "2024-03-21"
 end = "2025-09-20"
+
+[[trusted.backtrace]]
+criteria = "safe-to-deploy"
+user-id = 2915 # Amanieu d'Antras (Amanieu)
+start = "2023-06-29"
+end = "2024-07-14"
 
 [[trusted.bstr]]
 criteria = "safe-to-deploy"
@@ -4278,15 +4284,15 @@ end = "2025-02-15"
 
 [[trusted.target-lexicon]]
 criteria = "safe-to-deploy"
-user-id = 6825 # Dan Gohman (sunfishcode)
-start = "2019-03-06"
-end = "2024-07-14"
-
-[[trusted.target-lexicon]]
-criteria = "safe-to-deploy"
 user-id = 696 # Nick Fitzgerald (fitzgen)
 start = "2024-07-30"
 end = "2025-07-30"
+
+[[trusted.target-lexicon]]
+criteria = "safe-to-deploy"
+user-id = 6825 # Dan Gohman (sunfishcode)
+start = "2019-03-06"
+end = "2024-07-14"
 
 [[trusted.termcolor]]
 criteria = "safe-to-deploy"
