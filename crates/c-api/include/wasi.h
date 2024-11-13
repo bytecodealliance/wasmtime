@@ -166,7 +166,7 @@ WASI_API_EXTERN void wasi_config_inherit_stderr(wasi_config_t *config);
 /**
  * \brief The permissions granted for a directory when preopening it.
  */
-enum wasi_dir_perms_enum {
+enum wasi_dir_perms_flags {
   /**
    * \brief This directory can be read, for example its entries can be iterated
    */
@@ -181,14 +181,14 @@ enum wasi_dir_perms_enum {
 
 /**
  * \brief The permissions granted for directories when preopening them,
- * which is a bitmask with flag values from enum #wasi_dir_perms_enum.
+ * which is a bitmask with flag values from wasi_dir_perms_flags.
  */
 typedef size_t wasi_dir_perms;
 
 /**
  * \brief The permissions granted for files when preopening a directory.
  */
-enum wasi_file_perms_enum {
+enum wasi_file_perms_flags {
   /**
    * \brief Files can be read.
    */
@@ -202,7 +202,7 @@ enum wasi_file_perms_enum {
 
 /**
  * \brief The max permissions granted a file within a preopened directory,
- * which is a bitmask with flag values from enum #wasi_file_perms_enum.
+ * which is a bitmask with flag values from wasi_file_perms_flags.
  */
 typedef size_t wasi_file_perms;
 
