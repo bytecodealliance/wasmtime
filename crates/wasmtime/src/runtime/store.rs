@@ -335,6 +335,7 @@ pub struct StoreOpaque {
     table_limit: usize,
     #[cfg(feature = "async")]
     async_state: AsyncState,
+
     // If fuel_yield_interval is enabled, then we store the remaining fuel (that isn't in
     // runtime_limits) here. The total amount of fuel is the runtime limits and reserve added
     // together. Then when we run out of gas, we inject the yield amount from the reserve
@@ -392,6 +393,8 @@ pub struct StoreOpaque {
 struct AsyncState {
     current_suspend: UnsafeCell<*mut wasmtime_fiber::Suspend<Result<()>, (), Result<()>>>,
     current_poll_cx: UnsafeCell<PollContext>,
+    /// The last fiber stack that was in use by this store.
+    last_fiber_stack: Option<wasmtime_fiber::FiberStack>,
 }
 
 #[cfg(feature = "async")]
@@ -556,6 +559,7 @@ impl<T> Store<T> {
                 async_state: AsyncState {
                     current_suspend: UnsafeCell::new(ptr::null_mut()),
                     current_poll_cx: UnsafeCell::new(PollContext::default()),
+                    last_fiber_stack: None,
                 },
                 fuel_reserve: 0,
                 fuel_yield_interval: None,
@@ -2099,6 +2103,29 @@ at https://bytecodealliance.org/security.
             core::ptr::null_mut()..core::ptr::null_mut()
         }
     }
+
+    #[cfg(feature = "async")]
+    fn allocate_fiber_stack(&mut self) -> Result<wasmtime_fiber::FiberStack> {
+        if let Some(stack) = self.async_state.last_fiber_stack.take() {
+            return Ok(stack);
+        }
+        self.engine().allocator().allocate_fiber_stack()
+    }
+
+    #[cfg(feature = "async")]
+    fn deallocate_fiber_stack(&mut self, stack: wasmtime_fiber::FiberStack) {
+        self.flush_fiber_stack();
+        self.async_state.last_fiber_stack = Some(stack);
+    }
+
+    #[cfg(feature = "async")]
+    fn flush_fiber_stack(&mut self) {
+        if let Some(stack) = self.async_state.last_fiber_stack.take() {
+            unsafe {
+                self.engine.allocator().deallocate_fiber_stack(stack);
+            }
+        }
+    }
 }
 
 impl<T> StoreContextMut<'_, T> {
@@ -2124,13 +2151,14 @@ impl<T> StoreContextMut<'_, T> {
         debug_assert!(config.async_stack_size > 0);
 
         let mut slot = None;
-        let future = {
+        let mut future = {
             let current_poll_cx = self.0.async_state.current_poll_cx.get();
             let current_suspend = self.0.async_state.current_suspend.get();
-            let stack = self.engine().allocator().allocate_fiber_stack()?;
+            let stack = self.0.allocate_fiber_stack()?;
 
             let engine = self.engine().clone();
             let slot = &mut slot;
+            let this = &mut *self;
             let fiber = wasmtime_fiber::Fiber::new(stack, move |keep_going, suspend| {
                 // First check and see if we were interrupted/dropped, and only
                 // continue if we haven't been.
@@ -2148,7 +2176,7 @@ impl<T> StoreContextMut<'_, T> {
                     let _reset = Reset(current_suspend, *current_suspend);
                     *current_suspend = suspend;
 
-                    *slot = Some(func(self));
+                    *slot = Some(func(this));
                     Ok(())
                 }
             })?;
@@ -2163,7 +2191,12 @@ impl<T> StoreContextMut<'_, T> {
                 state: Some(crate::runtime::vm::AsyncWasmCallState::new()),
             }
         };
-        future.await?;
+        (&mut future).await?;
+        let stack = future.fiber.take().map(|f| f.into_stack());
+        drop(future);
+        if let Some(stack) = stack {
+            self.0.deallocate_fiber_stack(stack);
+        }
 
         return Ok(slot.unwrap());
 
@@ -2373,6 +2406,10 @@ impl<T> StoreContextMut<'_, T> {
         // completion.
         impl Drop for FiberFuture<'_> {
             fn drop(&mut self) {
+                if self.fiber.is_none() {
+                    return;
+                }
+
                 if !self.fiber().done() {
                     let result = self.resume(Err(anyhow!("future dropped")));
                     // This resumption with an error should always complete the
@@ -2737,6 +2774,8 @@ impl<T: fmt::Debug> fmt::Debug for Store<T> {
 
 impl<T> Drop for Store<T> {
     fn drop(&mut self) {
+        self.inner.flush_fiber_stack();
+
         // for documentation on this `unsafe`, see `into_data`.
         unsafe {
             ManuallyDrop::drop(&mut self.inner.data);

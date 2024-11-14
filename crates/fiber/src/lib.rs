@@ -21,6 +21,14 @@ cfg_if::cfg_if! {
 /// Represents an execution stack to use for a fiber.
 pub struct FiberStack(imp::FiberStack);
 
+fn _assert_send_sync() {
+    fn _assert_send<T: Send>() {}
+    fn _assert_sync<T: Sync>() {}
+
+    _assert_send::<FiberStack>();
+    _assert_sync::<FiberStack>();
+}
+
 impl FiberStack {
     /// Creates a new fiber stack of the given size.
     pub fn new(size: usize) -> io::Result<Self> {
