@@ -199,10 +199,13 @@ impl Tunables {
             // address space reservations liberally by default, allowing us to
             // help eliminate bounds checks.
             //
-            // Coupled with a 2 GiB address space guard it lets us translate
-            // wasm offsets into x86 offsets as aggressively as we can.
+            // A 32MiB default guard size is then allocated so we can remove
+            // explicit bounds checks if any static offset is less than this
+            // value. SpiderMonkey found, for example, that in a large corpus of
+            // wasm modules 20MiB was the maximum offset so this is the
+            // power-of-two-rounded up from that and matches SpiderMonkey.
             memory_reservation: 1 << 32,
-            memory_guard_size: 0x8000_0000,
+            memory_guard_size: 32 << 20,
 
             // We've got lots of address space on 64-bit so use a larger
             // grow-into-this area, but on 32-bit we aren't as lucky. Miri is
