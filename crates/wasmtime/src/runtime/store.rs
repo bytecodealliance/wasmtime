@@ -2118,8 +2118,10 @@ at https://bytecodealliance.org/security.
         self.async_state.last_fiber_stack = Some(stack);
     }
 
-    #[cfg(feature = "async")]
+    /// Releases the last fiber stack to the underlying instance allocator, if
+    /// present.
     fn flush_fiber_stack(&mut self) {
+        #[cfg(feature = "async")]
         if let Some(stack) = self.async_state.last_fiber_stack.take() {
             unsafe {
                 self.engine.allocator().deallocate_fiber_stack(stack);
