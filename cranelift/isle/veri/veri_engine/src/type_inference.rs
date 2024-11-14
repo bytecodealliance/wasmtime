@@ -45,6 +45,7 @@ pub enum TypeVarConstruct {
     BindPattern,
     Wildcard(u32),
     Term(TermId),
+    Bool(bool),
     Const(i128),
     Let(Vec<String>),
     And,
@@ -1455,6 +1456,17 @@ fn add_rule_constraints(
                 curr.type_var,
             )))
         }
+        TypeVarConstruct::Bool(val) => {
+            // If constant is known, add the value to the tree. Useful for
+            // capturing isleTypes
+            tree.type_var_to_val_map
+                .insert(curr.type_var, i128::from(*val));
+
+            Some(veri_ir::Expr::Terminal(veri_ir::Terminal::Const(
+                i128::from(*val),
+                curr.type_var,
+            )))
+        }
         TypeVarConstruct::And => {
             tree.quantified_vars
                 .insert((curr.ident.clone(), curr.type_var));
@@ -2159,6 +2171,18 @@ fn create_parse_tree_pattern(
                 assertions: vec![],
             }
         }
+        isle::sema::Pattern::ConstBool(_, val) => {
+            let type_var = tree.next_type_var;
+            tree.next_type_var += 1;
+            let name = format!("{}__{}", val, type_var);
+            TypeVarNode {
+                ident: name,
+                construct: TypeVarConstruct::Bool(*val),
+                type_var,
+                children: vec![],
+                assertions: vec![],
+            }
+        }
         isle::sema::Pattern::ConstInt(_, num) => {
             let type_var = tree.next_type_var;
             tree.next_type_var += 1;
@@ -2273,6 +2297,18 @@ fn create_parse_tree_expr(
             TypeVarNode {
                 ident: name,
                 construct: TypeVarConstruct::Const(val),
+                type_var,
+                children: vec![],
+                assertions: vec![],
+            }
+        }
+        isle::sema::Expr::ConstBool(_, val) => {
+            let type_var = tree.next_type_var;
+            tree.next_type_var += 1;
+            let name = format!("{}__{}", val, type_var);
+            TypeVarNode {
+                ident: name,
+                construct: TypeVarConstruct::Bool(*val),
                 type_var,
                 children: vec![],
                 assertions: vec![],

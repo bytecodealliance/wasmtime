@@ -70,7 +70,7 @@
 (rule (simplify (bor ty
                      (band ty x (iconst_u ty y))
                      z @ (iconst_u ty zk)))
-      (if-let $true (u64_eq (u64_and (ty_mask ty) zk)
+      (if-let true (u64_eq (u64_and (ty_mask ty) zk)
                             (u64_and (ty_mask ty) (u64_not y))))
       (bor ty x z))
 
@@ -83,11 +83,11 @@
 ;; (x | -x) sets the sign bit to 1 if x is nonzero, and 0 if x is zero. sshr propagates
 ;; the sign bit to the rest of the value.
 (rule (simplify (sshr ty (bor ty x (ineg ty x)) (iconst_u ty shift_amt)))
-      (if-let $true (u64_eq shift_amt (ty_shift_mask ty)))
+      (if-let true (u64_eq shift_amt (ty_shift_mask ty)))
       (bmask ty x))
 
 (rule (simplify (sshr ty (bor ty (ineg ty x) x) (iconst_u ty shift_amt)))
-      (if-let $true (u64_eq shift_amt (ty_shift_mask ty)))
+      (if-let true (u64_eq shift_amt (ty_shift_mask ty)))
       (bmask ty x))
 
 ;; Since icmp is always 0 or 1, bmask is just a negation.

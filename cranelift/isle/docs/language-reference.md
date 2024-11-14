@@ -1499,6 +1499,7 @@ The grammar accepted by the parser is as follows:
 <etor> ::= "(" <ident> <ident>* ")" <pattern>
 
 <pattern> ::= <int>
+            | "true" | "false"
             | <const-ident>
             | "_"
             | <ident>
@@ -1513,6 +1514,7 @@ The grammar accepted by the parser is as follows:
          | "(" "if" <expr> ")"
 
 <expr> ::= <int>
+         | "true" | "false"
          | <const-ident>
          | <ident>
          | "(" "let" "(" <let-binding>* ")" <expr> ")"
@@ -1555,7 +1557,7 @@ The grammar accepted by the parser is as follows:
 
 <spec-expr> ::= <int>
               | <spec-bv>
-              | <spec-bool>
+              | "true" | "false"
               | <ident>
               | "(" "switch" <spec-expr> <spec-pair>* ")"
               | "(" <spec-op> <spec-expr>* ")"

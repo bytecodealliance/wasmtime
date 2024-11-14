@@ -116,11 +116,11 @@
 ;; Get or match the invalid register.
 (decl invalid_reg () Reg)
 (extern constructor invalid_reg invalid_reg)
-(extractor (invalid_reg) (is_valid_reg $false))
+(extractor (invalid_reg) (is_valid_reg false))
 
 ;; Match any register but the invalid register.
 (decl valid_reg (Reg) Reg)
-(extractor (valid_reg reg) (and (is_valid_reg $true) reg))
+(extractor (valid_reg reg) (and (is_valid_reg true) reg))
 
 ;; Mark this value as used, to ensure that it gets lowered.
 (decl mark_value_used (Value) Unit)

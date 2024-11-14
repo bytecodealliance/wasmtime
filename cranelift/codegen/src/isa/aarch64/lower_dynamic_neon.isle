@@ -90,9 +90,9 @@
 ;;;; Rules for `swiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (has_type ty (swiden_high x)))
-      (vec_extend (VecExtendOp.Sxtl) x $true (lane_size ty)))
+      (vec_extend (VecExtendOp.Sxtl) x true (lane_size ty)))
 
 ;;;; Rules for `uwiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule -1 (lower (has_type ty (uwiden_high x)))
-      (vec_extend (VecExtendOp.Uxtl) x $true (lane_size ty)))
+      (vec_extend (VecExtendOp.Uxtl) x true (lane_size ty)))

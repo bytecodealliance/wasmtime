@@ -34,9 +34,9 @@
 
 ;; Note that 4094 = 0xffe and 16773119 = 0xffefff
 (spec (sub_imm ty a b)
-  (provide 
-    (= result 
-       (if (<= ty 32) 
+  (provide
+    (= result
+       (if (<= ty 32)
            (conv_to 64 (bvsub (extract 31 0 a) (zero_ext 32 b)))
            (bvsub a (zero_ext 64 b)))))
   (require (or (bvult (zero_ext 64 b) #x0000000000000fff)
@@ -46,9 +46,9 @@
 (decl sub_imm (Type Reg Imm12) Reg)
 (rule (sub_imm ty x y) (alu_rr_imm12 (ALUOp.Sub) ty x y))
 
-(spec (a64_cls ty a) 
-  (provide 
-    (= result 
+(spec (a64_cls ty a)
+  (provide
+    (= result
        (if (= ty 32)
            (conv_to 64 (cls (extract 31 0 a)))
            (cls a))))
@@ -64,14 +64,14 @@
 
 ;; Place a `Value` into a register, zero extending it to 32-bits
 (spec (put_in_reg_zext32 arg)
-  (provide 
+  (provide
     (= result
-       (if (<= (widthof arg) 32) 
+       (if (<= (widthof arg) 32)
            (conv_to 64 (zero_ext 32 arg))
            (conv_to 64 arg)))))
 (decl put_in_reg_zext32 (Value) Reg)
 (rule (put_in_reg_zext32 val @ (value_type (fits_in_32 ty)))
-      (extend val $false (ty_bits ty) 32))
+      (extend val false (ty_bits ty) 32))
 (rule (put_in_reg_zext32 val @ (value_type $I32)) val)
 (rule (put_in_reg_zext32 val @ (value_type $I64)) val)
 

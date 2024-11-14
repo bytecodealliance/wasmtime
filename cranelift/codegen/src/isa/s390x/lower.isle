@@ -628,8 +628,8 @@
 (decl div_overflow_check_needed (Value) bool)
 (rule 1 (div_overflow_check_needed (i64_from_value x))
       (if (i64_not_neg1 x))
-      $false)
-(rule (div_overflow_check_needed _) $true)
+      false)
+(rule (div_overflow_check_needed _) true)
 
 ;; Perform the integer-overflow check if necessary.   This implements:
 ;;
@@ -641,8 +641,8 @@
 ;;
 ;; instead, using a single conditional trap instruction.
 (decl maybe_trap_if_sdiv_overflow (bool Type Type Reg Reg) Reg)
-(rule (maybe_trap_if_sdiv_overflow $false ext_ty _ _ _) (invalid_reg))
-(rule (maybe_trap_if_sdiv_overflow $true ext_ty ty x y)
+(rule (maybe_trap_if_sdiv_overflow false ext_ty _ _ _) (invalid_reg))
+(rule (maybe_trap_if_sdiv_overflow true ext_ty ty x y)
       (let ((int_max Reg (imm ext_ty (int_max ty)))
             (reg Reg (and_reg ext_ty (xor_reg ext_ty int_max x) y)))
         (icmps_simm16_and_trap ext_ty reg -1
@@ -669,9 +669,9 @@
 ;; at all in this case, but that would require introducing
 ;; control flow.)
 (decl maybe_avoid_srem_overflow (bool Type Reg Reg) Reg)
-(rule (maybe_avoid_srem_overflow $false _ x _) x)
-(rule (maybe_avoid_srem_overflow $true $I32 x _) x)
-(rule (maybe_avoid_srem_overflow $true $I64 x y)
+(rule (maybe_avoid_srem_overflow false _ x _) x)
+(rule (maybe_avoid_srem_overflow true $I32 x _) x)
+(rule (maybe_avoid_srem_overflow true $I64 x y)
       (with_flags_reg (icmps_simm16 $I64 y -1)
                       (cmov_imm $I64 (intcc_as_cond (IntCC.Equal)) 0 x)))
 
@@ -3281,7 +3281,7 @@
 ;; integer comparison and immediately lower it to a 0/1 integer result.
 ;; In this case, it is safe to sink memory loads.
 (rule -1 (lower (has_type (fits_in_64 ty) (icmp int_cc x y)))
-      (lower_bool ty (icmp_val $true int_cc x y)))
+      (lower_bool ty (icmp_val true int_cc x y)))
 
 
 ;; Return a `ProducesBool` to implement any integer comparison.
@@ -3315,17 +3315,17 @@
       (icmps_simm32 (ty_ext32 ty) (put_in_reg_sext32 x) y))
 
 ;; Compare (signed) a register and memory (32/64-bit types).
-(rule 4 (icmps_val $true x @ (value_type (fits_in_64 ty)) (sinkable_load_32_64 y))
+(rule 4 (icmps_val true x @ (value_type (fits_in_64 ty)) (sinkable_load_32_64 y))
       (icmps_mem ty x (sink_load y)))
 
 ;; Compare (signed) a register and memory (16-bit types).
-(rule 5 (icmps_val $true x @ (value_type (fits_in_64 ty)) (sinkable_load_16 y))
+(rule 5 (icmps_val true x @ (value_type (fits_in_64 ty)) (sinkable_load_16 y))
       (icmps_mem_sext16 (ty_ext32 ty) (put_in_reg_sext32 x) (sink_load y)))
 
 ;; Compare (signed) a register and sign-extended memory.
-(rule 4 (icmps_val $true x @ (value_type (fits_in_64 ty)) (sinkable_sload16 y))
+(rule 4 (icmps_val true x @ (value_type (fits_in_64 ty)) (sinkable_sload16 y))
       (icmps_mem_sext16 ty x (sink_sload16 y)))
-(rule 4 (icmps_val $true x @ (value_type (fits_in_64 ty)) (sinkable_sload32 y))
+(rule 4 (icmps_val true x @ (value_type (fits_in_64 ty)) (sinkable_sload32 y))
       (icmps_mem_sext32 ty x (sink_sload32 y)))
 
 
@@ -3345,13 +3345,13 @@
       (icmpu_uimm32 (ty_ext32 ty) (put_in_reg_zext32 x) y))
 
 ;; Compare (unsigned) a register and memory (32/64-bit types).
-(rule 4 (icmpu_val $true x @ (value_type (fits_in_64 ty)) (sinkable_load_32_64 y))
+(rule 4 (icmpu_val true x @ (value_type (fits_in_64 ty)) (sinkable_load_32_64 y))
       (icmpu_mem ty x (sink_load y)))
 
 ;; Compare (unsigned) a register and memory (16-bit types).
 ;; Note that the ISA only provides instructions with a PC-relative memory
 ;; address here, so we need to check whether the sinkable load matches this.
-(rule 3 (icmpu_val $true x @ (value_type (fits_in_64 ty))
+(rule 3 (icmpu_val true x @ (value_type (fits_in_64 ty))
                  (sinkable_load_16 ld))
       (if-let y (load_sym ld))
       (icmpu_mem_zext16 (ty_ext32 ty) (put_in_reg_zext32 x) (sink_load y)))
@@ -3359,11 +3359,11 @@
 ;; Compare (unsigned) a register and zero-extended memory.
 ;; Note that the ISA only provides instructions with a PC-relative memory
 ;; address here, so we need to check whether the sinkable load matches this.
-(rule 3 (icmpu_val $true x @ (value_type (fits_in_64 ty))
+(rule 3 (icmpu_val true x @ (value_type (fits_in_64 ty))
                  (sinkable_uload16 ld))
       (if-let y (uload16_sym ld))
       (icmpu_mem_zext16 ty x (sink_uload16 y)))
-(rule 3 (icmpu_val $true x @ (value_type (fits_in_64 ty)) (sinkable_uload32 y))
+(rule 3 (icmpu_val true x @ (value_type (fits_in_64 ty)) (sinkable_uload32 y))
       (icmpu_mem_zext32 ty x (sink_uload32 y)))
 
 
@@ -3680,7 +3680,7 @@
 ;; instruction, directly use that compare. Note that it is not safe to sink
 ;; memory loads here, see the `icmp` comment.
 (decl value_nonzero (Value) ProducesBool)
-(rule (value_nonzero (icmp int_cc x y)) (icmp_val $false int_cc x y))
+(rule (value_nonzero (icmp int_cc x y)) (icmp_val false int_cc x y))
 (rule (value_nonzero (fcmp float_cc x y)) (fcmp_val float_cc x y))
 (rule -1 (value_nonzero val @ (value_type (gpr32_ty ty)))
       (bool (icmps_simm16 $I32 (put_in_reg_sext32 val) 0)

@@ -2,8 +2,7 @@
 (type Value (primitive Value))
 (type u64 (primitive u64))
 (type Imm64 (primitive Imm64))
-(type bool (primitive bool))
-(extern const $true bool)
+(extern const true bool)
 
 (spec (simplify x) (provide (= x result)))
 (instantiate simplify

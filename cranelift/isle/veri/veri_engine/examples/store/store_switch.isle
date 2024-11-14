@@ -10,16 +10,16 @@
 )
 
 (spec (lhs cond val2 val3)
-  (provide (= result (store_effect #x0000 (widthof (switch cond ($true val2) ($false val3))) (switch cond ($true val2) ($false val3)) #x0000000000000000)))
+  (provide (= result (store_effect #x0000 (widthof (switch cond (true val2) (false val3))) (switch cond (true val2) (false val3)) #x0000000000000000)))
   )
 (decl lhs (bool Value Value) Inst)
 (extern extractor lhs lhs)
 (instantiate lhs lhs_form)
 
-(spec (rhs val2 val3) 
+(spec (rhs val2 val3)
   (provide (= result (store_effect #x0000 (widthof val2) val2 #x0000000000000000))))
 (decl rhs (Value Value) Inst)
 (extern constructor rhs rhs)
 
-(rule (lhs $true val2 val3)
+(rule (lhs true val2 val3)
   (rhs val2 val3))

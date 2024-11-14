@@ -109,7 +109,7 @@ impl<'a> Parser<'a> {
 
     fn is_spec_bool(&self) -> bool {
         self.is(|tok| match tok {
-            Token::Symbol(tok_s) if tok_s == "$true" || tok_s == "$false" => true,
+            Token::Symbol(tok_s) if tok_s == "true" || tok_s == "false" => true,
             _ => false,
         })
     }
@@ -528,12 +528,12 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_spec_bool(&mut self) -> Result<i8> {
+    fn parse_spec_bool(&mut self) -> Result<bool> {
         let pos = self.pos();
         let s = self.expect_symbol()?;
         match s.as_str() {
-            "$true" => Ok(1),
-            "$false" => Ok(0),
+            "true" => Ok(true),
+            "false" => Ok(false),
             x => Err(self.error(pos, format!("Not a valid spec boolean: {x}"))),
         }
     }
@@ -814,6 +814,10 @@ impl<'a> Parser<'a> {
             Ok(Pattern::ConstPrim { val, pos })
         } else if self.eat_sym_str("_")? {
             Ok(Pattern::Wildcard { pos })
+        } else if self.eat_sym_str("true")? {
+            Ok(Pattern::ConstBool { val: true, pos })
+        } else if self.eat_sym_str("false")? {
+            Ok(Pattern::ConstBool { val: false, pos })
         } else if self.is_sym() {
             let var = self.parse_ident()?;
             if self.is_at() {
@@ -893,6 +897,10 @@ impl<'a> Parser<'a> {
         } else if self.is_const() {
             let val = self.parse_const()?;
             Ok(Expr::ConstPrim { val, pos })
+        } else if self.eat_sym_str("true")? {
+            Ok(Expr::ConstBool { val: true, pos })
+        } else if self.eat_sym_str("false")? {
+            Ok(Expr::ConstBool { val: false, pos })
         } else if self.is_sym() {
             let name = self.parse_ident()?;
             Ok(Expr::Var { name, pos })

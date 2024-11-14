@@ -16,12 +16,12 @@
 ;; is like a cheap version of known-bits analysis.)
 (rule (simplify (band wide x @ (uextend _ (value_type narrow)) (iconst_u _ mask)))
       ; Check that `narrow_mask` has a subset of the bits that `mask` does.
-      (if-let $true (let ((narrow_mask u64 (ty_mask narrow))) (u64_eq narrow_mask (u64_and mask narrow_mask))))
+      (if-let true (let ((narrow_mask u64 (ty_mask narrow))) (u64_eq narrow_mask (u64_and mask narrow_mask))))
       x)
 
 ;; Masking out the sign-extended bits of an `sextend` turns it into a `uextend`.
 (rule (simplify (band wide (sextend _ x @ (value_type narrow)) (iconst_u _ mask)))
-      (if-let $true (u64_eq mask (ty_mask narrow)))
+      (if-let true (u64_eq mask (ty_mask narrow)))
       (uextend wide x))
 
 ;; 32-bit integers zero-extended to 64-bit integers are never negative
@@ -53,17 +53,17 @@
 ;; A reduction-of-an-extend that's not just to the original type is either:
 ;; a reduction of the original if the final type is smaller, or
 (rule (simplify (ireduce (ty_int ty_final) (sextend _ inner@(value_type ty_initial))))
-      (if-let $true (u64_lt (ty_bits_u64 ty_final) (ty_bits_u64 ty_initial)))
+      (if-let true (u64_lt (ty_bits_u64 ty_final) (ty_bits_u64 ty_initial)))
       (ireduce ty_final inner))
 (rule (simplify (ireduce (ty_int ty_final) (uextend _ inner@(value_type ty_initial))))
-      (if-let $true (u64_lt (ty_bits_u64 ty_final) (ty_bits_u64 ty_initial)))
+      (if-let true (u64_lt (ty_bits_u64 ty_final) (ty_bits_u64 ty_initial)))
       (ireduce ty_final inner))
 ;; an extension of the original if the final type is larger.
 (rule (simplify (ireduce (ty_int ty_final) (sextend _ inner@(value_type ty_initial))))
-      (if-let $true (u64_lt (ty_bits_u64 ty_initial) (ty_bits_u64 ty_final)))
+      (if-let true (u64_lt (ty_bits_u64 ty_initial) (ty_bits_u64 ty_final)))
       (sextend ty_final inner))
 (rule (simplify (ireduce (ty_int ty_final) (uextend _ inner@(value_type ty_initial))))
-      (if-let $true (u64_lt (ty_bits_u64 ty_initial) (ty_bits_u64 ty_final)))
+      (if-let true (u64_lt (ty_bits_u64 ty_initial) (ty_bits_u64 ty_final)))
       (uextend ty_final inner))
 
 ;; `band`, `bor`, and `bxor` can't affect any bits that aren't set in the one of

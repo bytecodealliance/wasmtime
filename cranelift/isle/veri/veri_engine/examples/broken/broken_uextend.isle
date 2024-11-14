@@ -17,7 +17,7 @@
 ;; Helper for emitting `MInst.Extend` instructions.
 ;; BROKEN: zero_ext and sign_ext swapped
 (spec (extend a b c d)
-  (provide 
+  (provide
     (if b
         (= result (zero_ext (bv2int d) (conv_to (bv2int c) a)))
         (= result (sign_ext (bv2int d) (conv_to (bv2int c) a))))))
@@ -30,4 +30,4 @@
 ;; General rule for extending input to an output which fits in a single
 ;; register.
 (rule (lower (has_type (fits_in_64 out) (uextend x @ (value_type in))))
-      (extend x $false (ty_bits in) (ty_bits out)))
+      (extend x false (ty_bits in) (ty_bits out)))
