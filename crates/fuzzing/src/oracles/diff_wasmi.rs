@@ -35,7 +35,7 @@ impl WasmiEngine {
             .wasm_reference_types(config.reference_types_enabled)
             .wasm_tail_call(config.tail_call_enabled)
             .wasm_multi_memory(config.max_memories > 1)
-            .wasm_extended_const(true);
+            .wasm_extended_const(config.extended_const_enabled);
         Self {
             engine: wasmi::Engine::new(&wasmi_config),
         }
