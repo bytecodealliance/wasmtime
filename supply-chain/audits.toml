@@ -171,7 +171,7 @@ notes = "The Bytecode Alliance is the author of this crate."
 [[wildcard-audits.regalloc2]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
-user-id = 3726
+user-id = 3726 # Chris Fallin (cfallin)
 start = "2021-12-03"
 end = "2025-07-30"
 notes = "We (Bytecode Alliance) are the primary authors of regalloc2 and co-develop it with Cranelift/Wasmtime, with the same code-review, testing/fuzzing, and security standards."
@@ -179,7 +179,7 @@ notes = "We (Bytecode Alliance) are the primary authors of regalloc2 and co-deve
 [[wildcard-audits.regalloc2]]
 who = "Trevor Elliott <telliott@fastly.com>"
 criteria = "safe-to-deploy"
-user-id = 187138 # Trevor Elliott (elliottt)
+user-id = 187138
 start = "2022-11-29"
 end = "2025-07-30"
 notes = """
@@ -933,6 +933,15 @@ delta = "0.8.2 -> 0.8.7"
 notes = """
 Shuffling of features in this update and while there are updates to `unsafe`
 code it's no different than before and the usage remains the same.
+"""
+
+[[audits.allocator-api2]]
+who = "Chris Fallin <chris@cfallin.org>"
+criteria = "safe-to-deploy"
+delta = "0.2.18 -> 0.2.20"
+notes = """
+The changes appear to be reasonable updates from Rust's stdlib imported into
+`allocator-api2`'s copy of this code.
 """
 
 [[audits.ambient-authority]]
