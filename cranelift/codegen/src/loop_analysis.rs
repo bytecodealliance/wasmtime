@@ -191,14 +191,14 @@ impl LoopAnalysis {
     }
 
     // Determines if a block dominates any predecessor
-    // and thus is a loop header
-    fn check_loop_header(
+    // and thus is a loop header.
+    fn is_block_loop_header(
         block: Block,
         cfg: &ControlFlowGraph,
         domtree: &DominatorTree,
         layout: &Layout,
     ) -> bool {
-        // loop header if it dominates any of its predecessors
+        // A block is a loop header if it dominates any of its predecessors.
         cfg.pred_iter(block)
             .any(|pred| domtree.dominates(block, pred.inst, layout))
     }
@@ -213,7 +213,7 @@ impl LoopAnalysis {
     ) {
         for &block in domtree
             .cfg_rpo()
-            .filter(|&&block| Self::check_loop_header(block, cfg, domtree, layout))
+            .filter(|&&block| Self::is_block_loop_header(block, cfg, domtree, layout))
         {
             // This block is a loop header, so we create its associated loop
             let lp = self.loops.push(LoopData::new(block, None));
@@ -234,6 +234,7 @@ impl LoopAnalysis {
         // We handle each loop header in reverse order, corresponding to a pseudo postorder
         // traversal of the graph.
         for lp in self.loops().rev() {
+            // Push all predecessors of this header that it dominates onto the stack.
             stack.extend(
                 cfg.pred_iter(self.loops[lp].header)
                     .filter(|pred| {
