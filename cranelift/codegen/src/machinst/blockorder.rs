@@ -192,7 +192,7 @@ impl BlockLoweringOrder {
 
         let mut lowered_order = Vec::new();
 
-        for &block in domtree.cfg_postorder().iter().rev() {
+        for &block in domtree.cfg_rpo() {
             lowered_order.push(LoweredBlock::Orig { block });
 
             if block_out_count[block] > 1 {
