@@ -164,26 +164,47 @@ WASI_API_EXTERN bool wasi_config_set_stderr_file(wasi_config_t *config,
 WASI_API_EXTERN void wasi_config_inherit_stderr(wasi_config_t *config);
 
 /**
- * \brief This directory can be read, for example its entries can be iterated
- * over and files can be opened.
+ * \brief The permissions granted for a directory when preopening it.
  */
-#define WASMTIME_WASI_DIR_PERMS_READ 1
+enum wasi_dir_perms_flags {
+  /**
+   * \brief This directory can be read, for example its entries can be iterated
+   */
+  WASMTIME_WASI_DIR_PERMS_READ = 1,
+
+  /**
+   * \brief This directory can be written to, for example new files can be
+   * created within it.
+   */
+  WASMTIME_WASI_DIR_PERMS_WRITE = 2,
+};
 
 /**
- * \brief This directory can be mutated, for example by creating new files
- * within it.
+ * \brief The permissions granted for directories when preopening them,
+ * which is a bitmask with flag values from wasi_dir_perms_flags.
  */
-#define WASMTIME_WASI_DIR_PERMS_WRITE 2
+typedef size_t wasi_dir_perms;
 
 /**
- * \brief This file can be read.
+ * \brief The permissions granted for files when preopening a directory.
  */
-#define WASMTIME_WASI_FILE_PERMS_READ 1
+enum wasi_file_perms_flags {
+  /**
+   * \brief Files can be read.
+   */
+  WASMTIME_WASI_FILE_PERMS_READ = 1,
+
+  /**
+   * \brief Files can be written to.
+   */
+  WASMTIME_WASI_FILE_PERMS_WRITE = 2,
+};
 
 /**
- * \brief This file can be written to.
+ * \brief The max permissions granted a file within a preopened directory,
+ * which is a bitmask with flag values from wasi_file_perms_flags.
  */
-#define WASMTIME_WASI_FILE_PERMS_WRITE 2
+typedef size_t wasi_file_perms;
 
 /**
  * \brief Configures a "preopened directory" to be available to WASI APIs.
@@ -211,8 +232,8 @@ WASI_API_EXTERN void wasi_config_inherit_stderr(wasi_config_t *config);
 WASI_API_EXTERN bool wasi_config_preopen_dir(wasi_config_t *config,
                                              const char *host_path,
                                              const char *guest_path,
-                                             size_t dir_perms,
-                                             size_t file_perms);
+                                             wasi_dir_perms dir_perms,
+                                             wasi_file_perms file_perms);
 
 #undef own
 
