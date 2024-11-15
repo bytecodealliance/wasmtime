@@ -10,7 +10,7 @@ use crate::ir::{Block, Function, Layout};
 use crate::packed_option::PackedOption;
 use crate::timing;
 use alloc::vec::Vec;
-use smallvec::{smallvec, SmallVec};
+use smallvec::SmallVec;
 
 /// A opaque reference to a code loop.
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
@@ -294,7 +294,7 @@ impl LoopAnalysis {
     }
 
     fn assign_loop_levels(&mut self) {
-        let mut stack: SmallVec<[Loop; 8]> = smallvec![];
+        let mut stack: SmallVec<[Loop; 8]> = SmallVec::new();
         for lp in self.loops.keys() {
             if self.loops[lp].level == LoopLevel::invalid() {
                 stack.push(lp);
