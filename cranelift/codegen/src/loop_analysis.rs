@@ -190,6 +190,19 @@ impl LoopAnalysis {
         self.valid = false;
     }
 
+    // Determines if a block dominates any predecessor
+    // and thus is a loop header
+    fn check_loop_header(
+        block: Block,
+        cfg: &ControlFlowGraph,
+        domtree: &DominatorTree,
+        layout: &Layout,
+    ) -> bool {
+        // loop header if it dominates any of its predecessors
+        cfg.pred_iter(block)
+            .any(|pred| domtree.dominates(block, pred.inst, layout))
+    }
+
     // Traverses the CFG in reverse postorder and create a loop object for every block having a
     // back edge.
     fn find_loop_headers(
@@ -199,17 +212,8 @@ impl LoopAnalysis {
         layout: &Layout,
     ) {
         for &block in domtree
-            .cfg_postorder()
-            .into_iter()
-            .rev() // We traverse the CFG in reverse postorder
-            .filter(|&&block| {
-                // If the block dominates any one of its predecessors it is a back edge
-                cfg.pred_iter(block).any(
-                    |BlockPredecessor {
-                         inst: pred_inst, ..
-                     }| domtree.dominates(block, pred_inst, layout),
-                )
-            })
+            .cfg_rpo()
+            .filter(|&&block| Self::check_loop_header(block, cfg, domtree, layout))
         {
             // This block is a loop header, so we create its associated loop
             let lp = self.loops.push(LoopData::new(block, None));
@@ -232,15 +236,11 @@ impl LoopAnalysis {
         for lp in self.loops().rev() {
             stack.extend(
                 cfg.pred_iter(self.loops[lp].header)
-                    .filter(
-                        |BlockPredecessor {
-                             inst: pred_inst, ..
-                         }| {
-                            // We follow the back edges
-                            domtree.dominates(self.loops[lp].header, *pred_inst, layout)
-                        },
-                    )
-                    .map(|BlockPredecessor { block, .. }| block),
+                    .filter(|pred| {
+                        // We follow the back edges
+                        domtree.dominates(self.loops[lp].header, pred.inst, layout)
+                    })
+                    .map(|pred| pred.block),
             );
             while let Some(node) = stack.pop() {
                 let continue_dfs: Option<Block>;
