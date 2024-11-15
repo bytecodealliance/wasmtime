@@ -64,7 +64,7 @@
 //!   of arguments must match the destination type, and the lane indexes must be in range.
 
 use crate::dbg::DisplayList;
-use crate::dominator_tree::{DominatorTree, SimpleDominatorTree};
+use crate::dominator_tree::DominatorTree;
 use crate::entity::SparseSet;
 use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
 use crate::ir::entities::AnyEntity;
@@ -76,14 +76,12 @@ use crate::ir::{
     ValueList,
 };
 use crate::isa::TargetIsa;
-use crate::iterators::IteratorExtras;
 use crate::print_errors::pretty_verifier_error;
 use crate::settings::FlagsOrIsa;
 use crate::timing;
 use alloc::collections::BTreeSet;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use core::cmp::Ordering;
 use core::fmt::{self, Display, Formatter};
 
 /// A verifier error.
@@ -300,14 +298,14 @@ pub fn verify_context<'a, FOI: Into<FlagsOrIsa<'a>>>(
 struct Verifier<'a> {
     func: &'a Function,
     expected_cfg: ControlFlowGraph,
-    expected_domtree: SimpleDominatorTree,
+    expected_domtree: DominatorTree,
     isa: Option<&'a dyn TargetIsa>,
 }
 
 impl<'a> Verifier<'a> {
     pub fn new(func: &'a Function, fisa: FlagsOrIsa<'a>) -> Self {
         let expected_cfg = ControlFlowGraph::with_function(func);
-        let expected_domtree = SimpleDominatorTree::with_function(func, &expected_cfg);
+        let expected_domtree = DominatorTree::with_function(func, &expected_cfg);
         Self {
             func,
             expected_cfg,
@@ -1084,18 +1082,6 @@ impl<'a> Verifier<'a> {
                     test_block,
                     format!(
                         "invalid domtree, postorder block number {index} should be {true_block}, got {test_block}"
-                    ),
-                ));
-            }
-        }
-        // We verify rpo_cmp_block on pairs of adjacent blocks in the postorder
-        for (&prev_block, &next_block) in domtree.cfg_postorder().iter().adjacent_pairs() {
-            if self.expected_domtree.rpo_cmp_block(prev_block, next_block) != Ordering::Greater {
-                return errors.fatal((
-                    next_block,
-                    format!(
-                        "invalid domtree, rpo_cmp_block does not say {} is greater than {}; rpo = {:#?}",
-                        prev_block, next_block, domtree.cfg_postorder()
                     ),
                 ));
             }
