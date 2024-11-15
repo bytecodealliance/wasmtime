@@ -5,7 +5,7 @@ use crate::dominator_tree::DominatorTree;
 use crate::entity::entity_impl;
 use crate::entity::SecondaryMap;
 use crate::entity::{Keys, PrimaryMap};
-use crate::flowgraph::{BlockPredecessor, ControlFlowGraph};
+use crate::flowgraph::ControlFlowGraph;
 use crate::ir::{Block, Function, Layout};
 use crate::packed_option::PackedOption;
 use crate::timing;
@@ -287,10 +287,7 @@ impl LoopAnalysis {
                 // Now we have handled the popped node and need to continue the DFS by adding the
                 // predecessors of that node
                 if let Some(continue_dfs) = continue_dfs {
-                    stack.extend(
-                        cfg.pred_iter(continue_dfs)
-                            .map(|BlockPredecessor { block: pred, .. }| pred),
-                    );
+                    stack.extend(cfg.pred_iter(continue_dfs).map(|pred| pred.block));
                 }
             }
         }
