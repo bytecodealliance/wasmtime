@@ -17,19 +17,31 @@ pub use simple::SimpleDominatorTree;
 /// Spanning tree node, used during domtree computation.
 #[derive(Clone, Default)]
 struct SpanningTreeNode {
+    /// This node's block in function CFG.
     block: PackedOption<Block>,
+    /// Node's ancestor in the spanning tree.
+    /// Gets invalidated during semi-dominator computation.
     ancestor: u32,
+    /// The smallest semi value discovered on any semi-dominator path
+    /// that went through the node up till the moment.
+    /// Gets updated in the course of semi-dominator computation.
     label: u32,
+    /// Semidominator value for the node.
     semi: u32,
+    /// Immediate dominator value for the node.
+    /// Initialized to node's ancestor in the spanning tree.
     idom: u32,
 }
 
-/// Spanning tree, in DFS preorder.
+/// DFS preorder number for unvisited nodes and the virtual root in the spanning tree.
+const NOT_VISITED: u32 = 0;
+
+/// Spanning tree, in CFG preorder.
 /// Node 0 is the virtual root and doesn't have a corresponding block.
 /// It's not required because function's CFG in Cranelift always have
 /// a singular root, but helps to avoid additional checks.
 /// Numbering nodes from 0 also follows the convention in
-/// `SimpleDominatorTree` and `DominatorTreePreorder`
+/// `SimpleDominatorTree` and `DominatorTreePreorder`.
 #[derive(Clone, Default)]
 struct SpanningTree {
     nodes: Vec<SpanningTreeNode>,
@@ -37,14 +49,17 @@ struct SpanningTree {
 
 impl SpanningTree {
     fn new() -> Self {
-        Self { nodes: Vec::new() }
+        // Include the virtual root.
+        Self {
+            nodes: vec![Default::default()],
+        }
     }
 
     fn with_capacity(capacity: usize) -> Self {
-        Self {
-            // Include the virtual root
-            nodes: Vec::with_capacity(capacity + 1),
-        }
+        // Include the virtual root.
+        let mut nodes = Vec::with_capacity(capacity + 1);
+        nodes.push(Default::default());
+        Self { nodes }
     }
 
     fn len(&self) -> usize {
@@ -52,20 +67,18 @@ impl SpanningTree {
     }
 
     fn reserve(&mut self, capacity: usize) {
-        // Include the virtual root
-        self.nodes.reserve(capacity + 1);
+        // Virtual root should be already included.
+        self.nodes.reserve(capacity);
     }
 
     fn clear(&mut self) {
-        self.nodes.clear();
+        self.nodes.resize(1, Default::default());
     }
 
-    /// Returns pre_number for the new node
+    /// Returns pre_number for the new node.
     fn push(&mut self, ancestor: u32, block: Block) -> u32 {
-        // Push the virtual root if not present
-        if self.nodes.is_empty() {
-            self.nodes.push(Default::default())
-        }
+        // Virtual root should be already included.
+        debug_assert!(!self.nodes.is_empty());
 
         let pre_number = self.nodes.len() as u32;
 
@@ -96,8 +109,8 @@ impl std::ops::IndexMut<u32> for SpanningTree {
 }
 
 /// Traversal event to compute both preorder spanning tree
-/// and postorder block list. Don't use `Dfs` from traversals.rs
-/// because parent links are needed.
+/// and postorder block list. Can't use `Dfs` from traversals.rs
+/// here because of the need for parent links.
 enum TraversalEvent {
     Enter(u32, Block),
     Exit(Block),
@@ -106,29 +119,36 @@ enum TraversalEvent {
 /// Dominator tree node. We keep one of these per block.
 #[derive(Clone, Default)]
 struct DominatorTreeNode {
+    /// Immediate dominator for the block, `None` for unreachable blocks.
     idom: PackedOption<Block>,
-    /// 0 for unreachable blocks
+    /// Preorder traversal number, zero for unreachable blocks.
     pre_number: u32,
 }
 
 /// The dominator tree for a single function,
-/// computed using Semi-NCA algorithm
+/// computed using Semi-NCA algorithm.
 pub struct DominatorTree {
+    /// DFS spanning tree.
     stree: SpanningTree,
+    /// List of CFG blocks in postorder.
     postorder: Vec<Block>,
+    /// Dominator tree nodes.
     nodes: SecondaryMap<Block, DominatorTreeNode>,
 
+    /// Stack for building the spanning tree.
     dfs_worklist: Vec<TraversalEvent>,
+    /// Stack used for processing semidominator paths
+    /// in link-eval procedure.
     eval_worklist: Vec<u32>,
 
     valid: bool,
 }
 
-/// Query methods
+/// Methods for querying the dominator tree.
 impl DominatorTree {
     /// Is `block` reachable from the entry block?
     pub fn is_reachable(&self, block: Block) -> bool {
-        self.nodes[block].pre_number != 0
+        self.nodes[block].pre_number != NOT_VISITED
     }
 
     /// Get the CFG post-order of blocks that was used to compute the dominator tree.
@@ -304,8 +324,7 @@ impl DominatorTree {
             match self.dfs_worklist.pop() {
                 Some(TraversalEvent::Enter(parent, block)) => {
                     let node = &mut self.nodes[block];
-                    // The node has been visited
-                    if node.pre_number != 0 {
+                    if node.pre_number != NOT_VISITED {
                         continue;
                     }
 
@@ -314,11 +333,21 @@ impl DominatorTree {
                     let pre_number = self.stree.push(parent, block);
                     node.pre_number = pre_number;
 
-                    // Use the same traversal heuristics as in traversals.rs
+                    // Use the same traversal heuristics as in traversals.rs.
                     self.dfs_worklist.extend(
                         func.block_successors(block)
+                            // Heuristic: chase the children in reverse. This puts
+                            // the first successor block first in the postorder, all
+                            // other things being equal, which tends to prioritize
+                            // loop backedges over out-edges, putting the edge-block
+                            // closer to the loop body and minimizing live-ranges in
+                            // linear instruction space. This heuristic doesn't have
+                            // any effect on the computation of dominators, and is
+                            // purely for other consumers of the postorder we cache
+                            // here.
                             .rev()
-                            .filter(|successor| self.nodes[*successor].pre_number == 0)
+                            // A simple optimization: push less items to the stack.
+                            .filter(|successor| self.nodes[*successor].pre_number == NOT_VISITED)
                             .map(|successor| TraversalEvent::Enter(pre_number, successor)),
                     );
                 }
@@ -328,12 +357,16 @@ impl DominatorTree {
         }
     }
 
-    /// Eval-compress
+    /// Eval-link procedure from the paper.
+    /// For a predecessor V of node W returns V if V < W, otherwise the minimum of sdom(U),
+    /// where U > W and U is on a semi-dominator path for W in CFG.
+    /// Use path compression to bring complexity down to O(m*log(n)).
     fn eval(&mut self, v: u32, last_linked: u32) -> u32 {
         if self.stree[v].ancestor < last_linked {
             return self.stree[v].label;
         }
 
+        // Follow semi-dominator path.
         let mut root = v;
         loop {
             self.eval_worklist.push(root);
@@ -347,6 +380,8 @@ impl DominatorTree {
         let mut prev = root;
         let root = self.stree[prev].ancestor;
 
+        // Perform path compression. Point all ancestors to the root
+        // and propagate minimal sdom(U) value from ancestors to children.
         while let Some(curr) = self.eval_worklist.pop() {
             if self.stree[prev].label < self.stree[curr].label {
                 self.stree[curr].label = self.stree[prev].label;
@@ -360,20 +395,20 @@ impl DominatorTree {
     }
 
     fn compute_domtree(&mut self, cfg: &ControlFlowGraph) {
-        // Compute semi-dominators
-        for v in (1..self.stree.len() as u32).rev() {
-            let v_node = &mut self.stree[v];
-            let block = v_node.block.expect("Virtual root must have been excluded");
-            let mut semi = v_node.ancestor;
+        // Compute semi-dominators.
+        for w in (1..self.stree.len() as u32).rev() {
+            let w_node = &mut self.stree[w];
+            let block = w_node.block.expect("Virtual root must have been excluded");
+            let mut semi = w_node.ancestor;
 
-            let last_linked = v + 1;
+            let last_linked = w + 1;
 
             for pred in cfg
                 .pred_iter(block)
                 .map(|pred: BlockPredecessor| pred.block)
             {
-                // Skip unreachable nodes
-                if self.nodes[pred].pre_number == 0 {
+                // Skip unreachable nodes.
+                if self.nodes[pred].pre_number == NOT_VISITED {
                     continue;
                 }
 
@@ -381,12 +416,12 @@ impl DominatorTree {
                 semi = std::cmp::min(semi, semi_candidate);
             }
 
-            let v_node = &mut self.stree[v];
-            v_node.label = semi;
-            v_node.semi = semi;
+            let w_node = &mut self.stree[w];
+            w_node.label = semi;
+            w_node.semi = semi;
         }
 
-        // Compute immediate dominators
+        // Compute immediate dominators.
         for v in 1..self.stree.len() as u32 {
             let semi = self.stree[v].semi;
             let block = self.stree[v]
