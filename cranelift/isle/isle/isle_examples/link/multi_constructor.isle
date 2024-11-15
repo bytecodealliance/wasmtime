@@ -1,5 +1,3 @@
-(type u32 (primitive u32))
-
 (decl multi A (u32) u32)
 (decl multi B (u32) u32)
 (decl multi C (u32) u32)

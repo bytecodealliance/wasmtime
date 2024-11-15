@@ -1,4 +1,3 @@
-(type u32 (primitive u32))
 (type A (enum (A1 (x u32))))
 
 (decl Ext1 (u32) A)

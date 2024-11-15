@@ -1,4 +1,3 @@
-(type u32 (primitive u32))
 (type A (enum (A1 (x u32)) (A2 (x u32))))
 (type B (enum (B1 (x u32)) (B2 (x u32))))
 

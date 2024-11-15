@@ -1,5 +1,3 @@
-(type u32 (primitive u32))
-
 (decl pure ctor (u32) u32)
 (decl impure (u32) u32)
 

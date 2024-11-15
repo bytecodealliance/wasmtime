@@ -1,12 +1,8 @@
-(type i64 (primitive i64))
-
 (decl partial X (i64) i64)
 (rule (X -1) -2)
 (rule (X -2) -3)
 (rule (X 0x7fff_ffff_ffff_ffff) -0x8000_0000_0000_0000)
 (rule (X -16) 1)
-
-(type i128 (primitive i128))
 
 (decl partial Y (i128) i128)
 
@@ -17,7 +13,6 @@
 (rule (Y -0xffff_ffff_ffff_ffff_ffff_ffff_ffff_ffff) -3)
 
 ;; Test some various syntaxes for numbers
-(type i32 (primitive i32))
 (decl partial Z (i32) i32)
 (rule (Z 0) 0x01)
 (rule (Z 0x01) 0x0_2)
