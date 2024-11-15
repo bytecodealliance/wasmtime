@@ -716,7 +716,7 @@ Caused by:
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(e.to_string(), "Module was compiled with a memory guard size of '0' but '2147483648' is expected for the host"),
+            Err(e) => assert_eq!(e.to_string(), "Module was compiled with a memory guard size of '0' but '33554432' is expected for the host"),
         }
 
         Ok(())

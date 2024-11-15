@@ -1575,10 +1575,10 @@ impl Config {
     ///
     /// ## Default
     ///
-    /// The default value for this property is 2GiB on 64-bit platforms. This
+    /// The default value for this property is 32MiB on 64-bit platforms. This
     /// allows eliminating almost all bounds checks on loads/stores with an
-    /// immediate offset of less than 2GiB. On 32-bit platforms this defaults to
-    /// 64KiB.
+    /// immediate offset of less than 32MiB. On 32-bit platforms this defaults
+    /// to 64KiB.
     pub fn memory_guard_size(&mut self, bytes: u64) -> &mut Self {
         self.tunables.memory_guard_size = Some(bytes);
         self
@@ -2755,19 +2755,19 @@ pub enum WasmBacktraceDetails {
 /// Additionally the main cost of the pooling allocator is that it requires a
 /// very large reservation of virtual memory (on the order of most of the
 /// addressable virtual address space). WebAssembly 32-bit linear memories in
-/// Wasmtime are, by default 4G address space reservations with a 2G guard
+/// Wasmtime are, by default 4G address space reservations with a small guard
 /// region both before and after the linear memory. Memories in the pooling
 /// allocator are contiguous which means that we only need a guard after linear
 /// memory because the previous linear memory's slot post-guard is our own
-/// pre-guard. This means that, by default, the pooling allocator uses 6G of
-/// virtual memory per WebAssembly linear memory slot. 6G of virtual memory is
-/// 32.5 bits of a 64-bit address. Many 64-bit systems can only actually use
-/// 48-bit addresses by default (although this can be extended on architectures
-/// nowadays too), and of those 48 bits one of them is reserved to indicate
-/// kernel-vs-userspace. This leaves 47-32.5=14.5 bits left, meaning you can
-/// only have at most 64k slots of linear memories on many systems by default.
-/// This is a relatively small number and shows how the pooling allocator can
-/// quickly exhaust all of virtual memory.
+/// pre-guard. This means that, by default, the pooling allocator uses roughly
+/// 4G of virtual memory per WebAssembly linear memory slot. 4G of virtual
+/// memory is 32 bits of a 64-bit address. Many 64-bit systems can only
+/// actually use 48-bit addresses by default (although this can be extended on
+/// architectures nowadays too), and of those 48 bits one of them is reserved
+/// to indicate kernel-vs-userspace. This leaves 47-32=15 bits left,
+/// meaning you can only have at most 32k slots of linear memories on many
+/// systems by default. This is a relatively small number and shows how the
+/// pooling allocator can quickly exhaust all of virtual memory.
 ///
 /// Another disadvantage of the pooling allocator is that it may keep memory
 /// alive when nothing is using it. A previously used slot for an instance might
