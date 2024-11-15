@@ -198,21 +198,22 @@ impl LoopAnalysis {
         domtree: &DominatorTree,
         layout: &Layout,
     ) {
-        // We traverse the CFG in reverse postorder
-        for &block in domtree.cfg_postorder().iter().rev() {
-            for BlockPredecessor {
-                inst: pred_inst, ..
-            } in cfg.pred_iter(block)
-            {
-                // If the block dominates one of its predecessors it is a back edge
-                if domtree.dominates(block, pred_inst, layout) {
-                    // This block is a loop header, so we create its associated loop
-                    let lp = self.loops.push(LoopData::new(block, None));
-                    self.block_loop_map[block] = lp.into();
-                    break;
-                    // We break because we only need one back edge to identify a loop header.
-                }
-            }
+        for &block in domtree
+            .cfg_postorder()
+            .into_iter()
+            .rev() // We traverse the CFG in reverse postorder
+            .filter(|&&block| {
+                // If the block dominates any one of its predecessors it is a back edge
+                cfg.pred_iter(block).any(
+                    |BlockPredecessor {
+                         inst: pred_inst, ..
+                     }| domtree.dominates(block, pred_inst, layout),
+                )
+            })
+        {
+            // This block is a loop header, so we create its associated loop
+            let lp = self.loops.push(LoopData::new(block, None));
+            self.block_loop_map[block] = lp.into();
         }
     }
 
@@ -229,16 +230,18 @@ impl LoopAnalysis {
         // We handle each loop header in reverse order, corresponding to a pseudo postorder
         // traversal of the graph.
         for lp in self.loops().rev() {
-            for BlockPredecessor {
-                block: pred,
-                inst: pred_inst,
-            } in cfg.pred_iter(self.loops[lp].header)
-            {
-                // We follow the back edges
-                if domtree.dominates(self.loops[lp].header, pred_inst, layout) {
-                    stack.push(pred);
-                }
-            }
+            stack.extend(
+                cfg.pred_iter(self.loops[lp].header)
+                    .filter(
+                        |BlockPredecessor {
+                             inst: pred_inst, ..
+                         }| {
+                            // We follow the back edges
+                            domtree.dominates(self.loops[lp].header, *pred_inst, layout)
+                        },
+                    )
+                    .map(|BlockPredecessor { block, .. }| block),
+            );
             while let Some(node) = stack.pop() {
                 let continue_dfs: Option<Block>;
                 match self.block_loop_map[node].expand() {
@@ -283,9 +286,10 @@ impl LoopAnalysis {
                 // Now we have handled the popped node and need to continue the DFS by adding the
                 // predecessors of that node
                 if let Some(continue_dfs) = continue_dfs {
-                    for BlockPredecessor { block: pred, .. } in cfg.pred_iter(continue_dfs) {
-                        stack.push(pred)
-                    }
+                    stack.extend(
+                        cfg.pred_iter(continue_dfs)
+                            .map(|BlockPredecessor { block: pred, .. }| pred),
+                    );
                 }
             }
         }
