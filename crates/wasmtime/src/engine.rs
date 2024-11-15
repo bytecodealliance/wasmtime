@@ -351,6 +351,7 @@ impl Engine {
             | "enable_pcc"
             | "regalloc_checker"
             | "regalloc_verbose_logs"
+            | "regalloc_algorithm"
             | "is_pic"
             | "bb_padding_log2_minus_one"
             | "machine_code_cfg_info"
