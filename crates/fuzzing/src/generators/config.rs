@@ -246,6 +246,7 @@ impl Config {
             .native_unwind_info(cfg!(target_os = "windows") || self.wasmtime.native_unwind_info)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
+            .cranelift_regalloc_algorithm(self.wasmtime.regalloc_algorithm.to_wasmtime())
             .consume_fuel(self.wasmtime.consume_fuel)
             .epoch_interruption(self.wasmtime.epoch_interruption)
             .memory_guaranteed_dense_image_size(std::cmp::min(
@@ -474,6 +475,7 @@ impl<'a> Arbitrary<'a> for Config {
 #[derive(Arbitrary, Clone, Debug, Eq, Hash, PartialEq)]
 pub struct WasmtimeConfig {
     opt_level: OptLevel,
+    regalloc_algorithm: RegallocAlgorithm,
     debug_info: bool,
     canonicalize_nans: bool,
     interruptable: bool,
@@ -689,6 +691,21 @@ impl OptLevel {
             OptLevel::None => wasmtime::OptLevel::None,
             OptLevel::Speed => wasmtime::OptLevel::Speed,
             OptLevel::SpeedAndSize => wasmtime::OptLevel::SpeedAndSize,
+        }
+    }
+}
+
+#[derive(Arbitrary, Clone, Debug, PartialEq, Eq, Hash)]
+enum RegallocAlgorithm {
+    Backtracking,
+    SinglePass,
+}
+
+impl RegallocAlgorithm {
+    fn to_wasmtime(&self) -> wasmtime::RegallocAlgorithm {
+        match self {
+            RegallocAlgorithm::Backtracking => wasmtime::RegallocAlgorithm::Backtracking,
+            RegallocAlgorithm::SinglePass => wasmtime::RegallocAlgorithm::SinglePass,
         }
     }
 }

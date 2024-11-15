@@ -42,6 +42,9 @@ wasmtime_option_group! {
         /// Optimization level of generated code (0-2, s; default: 2)
         pub opt_level: Option<wasmtime::OptLevel>,
 
+        /// Register allocator algorithm choice.
+        pub regalloc_algorithm: Option<wasmtime::RegallocAlgorithm>,
+
         /// Do not allow Wasm linear memories to move in the host process's
         /// address space.
         pub memory_may_move: Option<bool>,
@@ -578,6 +581,11 @@ impl CommonOptions {
         match_feature! {
             ["cranelift" : self.opts.opt_level]
             level => config.cranelift_opt_level(level),
+            _ => err,
+        }
+        match_feature! {
+            ["cranelift": self.opts.regalloc_algorithm]
+            algo => config.cranelift_regalloc_algorithm(algo),
             _ => err,
         }
         match_feature! {

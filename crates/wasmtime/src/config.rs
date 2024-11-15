@@ -1109,6 +1109,27 @@ impl Config {
         self
     }
 
+    /// Configures the regalloc algorithm used by the Cranelift code generator.
+    ///
+    /// Cranelift can select any of several register allocator algorithms. Each
+    /// of these algorithms generates correct code, but they represent different
+    /// tradeoffs between compile speed (how expensive the compilation process
+    /// is) and run-time speed (how fast the generated code runs).
+    /// For more information see the documentation of [`RegallocAlgorithm`].
+    ///
+    /// The default value for this is `RegallocAlgorithm::Backtracking`.
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    pub fn cranelift_regalloc_algorithm(&mut self, algo: RegallocAlgorithm) -> &mut Self {
+        let val = match algo {
+            RegallocAlgorithm::Backtracking => "backtracking",
+            RegallocAlgorithm::SinglePass => "single_pass",
+        };
+        self.compiler_config
+            .settings
+            .insert("regalloc_algorithm".to_string(), val.to_string());
+        self
+    }
+
     /// Configures whether Cranelift should perform a NaN-canonicalization pass.
     ///
     /// When Cranelift is used as a code generation backend this will configure
@@ -2616,6 +2637,29 @@ pub enum OptLevel {
     /// Similar to `speed`, but also performs transformations aimed at reducing
     /// code size.
     SpeedAndSize,
+}
+
+/// Possible register allocator algorithms for the Cranelift codegen backend.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub enum RegallocAlgorithm {
+    /// Generates the fastest possible code, but may take longer.
+    ///
+    /// This algorithm performs "backtracking", which means that it may
+    /// undo its earlier work and retry as it discovers conflicts. This
+    /// results in better register utilization, producing fewer spills
+    /// and moves, but can cause super-linear compile runtime.
+    Backtracking,
+    /// Generates acceptable code very quickly.
+    ///
+    /// This algorithm performs a single pass through the code,
+    /// guaranteed to work in linear time.  (Note that the rest of
+    /// Cranelift is not necessarily guaranteed to run in linear time,
+    /// however.) It cannot undo earlier decisions, however, and it
+    /// cannot foresee constraints or issues that may occur further
+    /// ahead in the code, so the code may have more spills and moves as
+    /// a result.
+    SinglePass,
 }
 
 /// Select which profiling technique to support.

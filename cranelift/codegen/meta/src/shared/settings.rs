@@ -31,6 +31,20 @@ pub(crate) fn define() -> SettingGroup {
     );
 
     settings.add_enum(
+        "regalloc_algorithm",
+        "Algorithm to use in register allocator.",
+        r#"
+            Supported options:
+
+            - `backtracking`: A backtracking allocator with range splitting; more expensive
+                              but generates better code.
+            - `single_pass`: A single-pass algorithm that yields quick compilation but
+                             results in code with more register spills and moves.
+        "#,
+        vec!["backtracking", "single_pass"],
+    );
+
+    settings.add_enum(
         "opt_level",
         "Optimization level for generated code.",
         r#"
