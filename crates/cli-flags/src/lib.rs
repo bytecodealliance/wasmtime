@@ -364,28 +364,23 @@ wasmtime_option_group! {
         pub cli_exit_with_code: Option<bool>,
         /// Deprecated alias for `cli`
         pub common: Option<bool>,
-        /// Enable support for WASI neural network API (experimental)
+        /// Enable support for WASI neural network imports (experimental)
         pub nn: Option<bool>,
-        /// Enable support for WASI threading API (experimental)
+        /// Enable support for WASI threading imports (experimental). Implies preview2=false.
         pub threads: Option<bool>,
-        /// Enable support for WASI HTTP API (experimental)
+        /// Enable support for WASI HTTP imports
         pub http: Option<bool>,
-        /// Enable support for WASI config API (experimental)
+        /// Enable support for WASI config imports (experimental)
         pub config: Option<bool>,
-        /// Enable support for WASI key-value API (experimental)
+        /// Enable support for WASI key-value imports (experimental)
         pub keyvalue: Option<bool>,
         /// Inherit environment variables and file descriptors following the
         /// systemd listen fd specification (UNIX only)
         pub listenfd: Option<bool>,
         /// Grant access to the given TCP listen socket
         pub tcplisten: Vec<String>,
-        /// Implement WASI CLI APIs with preview2 primitives (experimental).
-        ///
-        /// Indicates that the implementation of WASI preview1 should be backed by
-        /// the preview2 implementation for components.
-        ///
-        /// This will become the default in the future and this option will be
-        /// removed. For now this is primarily here for testing.
+        /// Implement WASI Preview1 using new Preview2 implementation (true, default) or legacy
+        /// implementation (false)
         pub preview2: Option<bool>,
         /// Pre-load machine learning graphs (i.e., models) for use by wasi-nn.
         ///
