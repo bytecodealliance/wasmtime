@@ -124,7 +124,6 @@ impl Config {
     pub fn make_wast_test_compliant(&mut self, test: &WastTest) -> WastConfig {
         // Enable/disable some proposals that aren't configurable in wasm-smith
         // but are configurable in Wasmtime.
-        self.module_config.extended_const_enabled = test.config.extended_const.unwrap_or(false);
         self.module_config.function_references_enabled = test
             .config
             .function_references
@@ -148,6 +147,7 @@ impl Config {
         config.reference_types_enabled = config.gc_enabled
             || self.module_config.function_references_enabled
             || test.config.reference_types.unwrap_or(false);
+        config.extended_const_enabled = test.config.extended_const.unwrap_or(false);
         if test.config.multi_memory.unwrap_or(false) {
             config.max_memories = limits::MEMORIES_PER_MODULE as usize;
         } else {
@@ -241,7 +241,7 @@ impl Config {
             .wasm_gc(self.module_config.config.gc_enabled)
             .wasm_custom_page_sizes(self.module_config.config.custom_page_sizes_enabled)
             .wasm_wide_arithmetic(self.module_config.config.wide_arithmetic_enabled)
-            .wasm_extended_const(self.module_config.extended_const_enabled)
+            .wasm_extended_const(self.module_config.config.extended_const_enabled)
             .wasm_component_model_more_flags(self.module_config.component_model_more_flags)
             .native_unwind_info(cfg!(target_os = "windows") || self.wasmtime.native_unwind_info)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
