@@ -29,7 +29,7 @@ struct Swarm {
 
 /// A call to one of Wasmtime's public APIs.
 #[derive(Arbitrary, Debug)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub enum ApiCall {
     StoreNew(Config),
     ModuleNew { id: usize, wasm: Vec<u8> },

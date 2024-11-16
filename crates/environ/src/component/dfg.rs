@@ -37,8 +37,8 @@ use std::hash::Hash;
 use std::ops::Index;
 use wasmparser::component_types::ComponentCoreModuleTypeId;
 
+/// High-level representation of a component as a "data-flow graph".
 #[derive(Default)]
-#[allow(missing_docs)]
 pub struct ComponentDfg {
     /// Same as `Component::import_types`
     pub import_types: PrimaryMap<ImportIndex, (String, TypeDef)>,
@@ -153,7 +153,7 @@ pub enum SideEffect {
 macro_rules! id {
     ($(pub struct $name:ident(u32);)*) => ($(
         #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
-        #[allow(missing_docs)]
+        #[expect(missing_docs, reason = "tedious to document")]
         pub struct $name(u32);
         cranelift_entity::entity_impl!($name);
     )*)
@@ -169,7 +169,7 @@ id! {
 }
 
 /// Same as `info::InstantiateModule`
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "tedious to document variants")]
 pub enum Instance {
     Static(StaticModuleIndex, Box<[CoreDef]>),
     Import(
@@ -179,7 +179,7 @@ pub enum Instance {
 }
 
 /// Same as `info::Export`
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "tedious to document variants")]
 pub enum Export {
     LiftedFunction {
         ty: TypeFuncIndex,
@@ -203,7 +203,7 @@ pub enum Export {
 
 /// Same as `info::CoreDef`, except has an extra `Adapter` variant.
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "tedious to document variants")]
 pub enum CoreDef {
     Export(CoreExport<EntityIndex>),
     InstanceFlags(RuntimeComponentInstanceIndex),
@@ -230,14 +230,14 @@ where
 
 /// Same as `info::CoreExport`
 #[derive(Debug, Clone, Hash, Eq, PartialEq)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct CoreExport<T> {
     pub instance: InstanceId,
     pub item: ExportItem<T>,
 }
 
 impl<T> CoreExport<T> {
-    #[allow(missing_docs)]
+    #[expect(missing_docs, reason = "self-describing function")]
     pub fn map_index<U>(self, f: impl FnOnce(T) -> U) -> CoreExport<U> {
         CoreExport {
             instance: self.instance,
@@ -251,7 +251,7 @@ impl<T> CoreExport<T> {
 
 /// Same as `info::Trampoline`
 #[derive(Clone, PartialEq, Eq, Hash)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub enum Trampoline {
     LowerImport {
         import: RuntimeImportIndex,
@@ -277,7 +277,7 @@ pub enum Trampoline {
 
 /// Same as `info::CanonicalOptions`
 #[derive(Clone, Hash, Eq, PartialEq)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct CanonicalOptions {
     pub instance: RuntimeComponentInstanceIndex,
     pub string_encoding: StringEncoding,
@@ -287,7 +287,7 @@ pub struct CanonicalOptions {
 }
 
 /// Same as `info::Resource`
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct Resource {
     pub rep: WasmValType,
     pub dtor: Option<CoreDef>,

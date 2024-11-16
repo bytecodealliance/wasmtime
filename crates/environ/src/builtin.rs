@@ -274,7 +274,7 @@ macro_rules! declare_indexes {
          )*
     ) => {
         $( #[$this_attr] )*
-        #[allow(missing_docs)]
+        #[expect(missing_docs, reason = "macro-generated")]
         pub const fn $this_name() -> Self {
             Self($index)
         }

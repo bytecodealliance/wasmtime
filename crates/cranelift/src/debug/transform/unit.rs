@@ -119,7 +119,7 @@ fn replace_pointer_type(
     macro_rules! add_tag {
         ($parent_id:ident, $tag:expr => $die:ident as $die_id:ident { $($a:path = $v:expr),* }) => {
             let $die_id = comp_unit.add($parent_id, $tag);
-            #[allow(unused_variables)]
+            #[allow(unused_variables, reason = "sometimes not used below")]
             let $die = comp_unit.get_mut($die_id);
             $( $die.set($a, $v); )*
         };

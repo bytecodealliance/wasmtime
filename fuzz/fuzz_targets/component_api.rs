@@ -1,4 +1,5 @@
 #![no_main]
+#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
 use libfuzzer_sys::{arbitrary, fuzz_target};
 use wasmtime_fuzzing::oracles;

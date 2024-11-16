@@ -181,6 +181,7 @@
 //! [`ResourceTable`]: wasmtime::component::ResourceTable
 
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
+#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
 use wasmtime::component::Linker;
 

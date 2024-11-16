@@ -93,7 +93,7 @@ impl<T, const L: u32, const H: u32> Deref for VecInRange<T, L, H> {
 }
 
 /// Represents a component model interface type
-#[allow(missing_docs)]
+#[allow(missing_docs, reason = "self-describing")]
 #[derive(Debug, Clone)]
 pub enum Type {
     Bool,

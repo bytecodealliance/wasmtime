@@ -8,12 +8,10 @@
 
 use crate::{SpecExport, SpecInstance, SpecValue};
 
-#[allow(dead_code)]
 pub fn instantiate(_module: &[u8]) -> Result<SpecInstance, String> {
     fail_at_runtime()
 }
 
-#[allow(dead_code)]
 pub fn interpret(
     _instance: &SpecInstance,
     _name: &str,
@@ -22,7 +20,6 @@ pub fn interpret(
     fail_at_runtime()
 }
 
-#[allow(dead_code)]
 pub fn interpret_legacy(
     _module: &[u8],
     _parameters: Option<Vec<SpecValue>>,
@@ -41,5 +38,4 @@ fn fail_at_runtime() -> ! {
     );
 }
 
-#[allow(dead_code)]
 pub fn setup_ocaml_runtime() {}

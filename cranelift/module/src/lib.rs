@@ -2,6 +2,7 @@
 
 #![deny(missing_docs)]
 #![no_std]
+#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
 #[cfg(not(feature = "std"))]
 #[macro_use]

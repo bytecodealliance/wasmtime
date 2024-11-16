@@ -4,6 +4,7 @@
 //! available filetest commands.
 
 #![deny(missing_docs)]
+#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
 pub use crate::function_runner::TestFileCompiler;
 use crate::runner::TestRunner;

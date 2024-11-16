@@ -31,9 +31,9 @@ pub struct SingleInstModule<'a> {
 /// of these types.
 #[derive(Clone)]
 enum NanType {
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "expected to be used in the future")]
     F32,
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "expected to be used in the future")]
     F64,
     F32x4,
     F64x2,

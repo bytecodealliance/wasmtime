@@ -118,7 +118,7 @@ pub struct FunctionBodyData<'a> {
 }
 
 #[derive(Debug, Default)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct DebugInfoData<'a> {
     pub dwarf: Dwarf<'a>,
     pub name_section: NameSection<'a>,
@@ -131,13 +131,13 @@ pub struct DebugInfoData<'a> {
     pub debug_tu_index: gimli::DebugTuIndex<Reader<'a>>,
 }
 
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing")]
 pub type Dwarf<'input> = gimli::Dwarf<Reader<'input>>;
 
 type Reader<'input> = gimli::EndianSlice<'input, gimli::LittleEndian>;
 
 #[derive(Debug, Default)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct NameSection<'a> {
     pub module_name: Option<&'a str>,
     pub func_names: HashMap<FuncIndex, &'a str>,
@@ -145,7 +145,7 @@ pub struct NameSection<'a> {
 }
 
 #[derive(Debug, Default)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct WasmFileInfo {
     pub path: Option<PathBuf>,
     pub code_section_offset: u64,
@@ -154,7 +154,7 @@ pub struct WasmFileInfo {
 }
 
 #[derive(Debug)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct FunctionMetadata {
     pub params: Box<[WasmValType]>,
     pub locals: Box<[(u32, WasmValType)]>,

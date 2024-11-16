@@ -1,4 +1,5 @@
 #![allow(dead_code)]
+#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
 macro_rules! gentest {
     ($id:ident $name:tt $path:tt) => {

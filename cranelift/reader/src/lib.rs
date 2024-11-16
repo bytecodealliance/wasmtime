@@ -4,6 +4,7 @@
 //! testing Cranelift, but is not essential for a JIT compiler.
 
 #![deny(missing_docs)]
+#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
 pub use crate::error::{Location, ParseError, ParseResult};
 pub use crate::isaspec::{parse_option, parse_options, IsaSpec, ParseOptionError};

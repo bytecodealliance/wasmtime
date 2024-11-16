@@ -12,7 +12,7 @@ pub fn prepare_workspace(exe_name: &str) -> Result<TempDir> {
 
 macro_rules! assert_test_exists {
     ($name:ident) => {
-        #[allow(unused_imports)]
+        #[expect(unused_imports, reason = "just here to ensure a name exists")]
         use self::$name as _;
     };
 }

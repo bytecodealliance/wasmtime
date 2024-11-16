@@ -8,7 +8,6 @@ pub enum CodegenSettings {
     /// Use the host's feature set.
     Native,
     /// Generate a modified flag set for the current host.
-    #[allow(dead_code)]
     Target {
         /// The target triple of the host.
         target: String,
@@ -35,7 +34,7 @@ impl CodegenSettings {
 }
 
 impl<'a> Arbitrary<'a> for CodegenSettings {
-    #[allow(unused_macros, unused_variables)]
+    #[expect(unused_variables, reason = "macro-generated code")]
     fn arbitrary(u: &mut Unstructured<'a>) -> arbitrary::Result<Self> {
         // Helper macro to enable clif features based on what the native host
         // supports. If the input says to enable a feature and the host doesn't

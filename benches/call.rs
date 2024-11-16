@@ -1,3 +1,5 @@
+#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
+
 use criterion::measurement::WallTime;
 use criterion::{criterion_group, criterion_main, BenchmarkGroup, Criterion};
 use std::fmt::Debug;

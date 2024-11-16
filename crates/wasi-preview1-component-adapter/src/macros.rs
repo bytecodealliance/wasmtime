@@ -5,14 +5,14 @@
 
 use crate::bindings::wasi::cli::stderr::get_stderr;
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "useful for debugging")]
 #[doc(hidden)]
 pub fn print(message: &[u8]) {
     let _ = get_stderr().blocking_write_and_flush(message);
 }
 
 /// A minimal `eprint` for debugging.
-#[allow(unused_macros)]
+#[allow(unused_macros, reason = "useful for debugging")]
 macro_rules! eprint {
     ($arg:tt) => {{
         // We have to expand string literals into byte arrays to prevent them
@@ -23,7 +23,7 @@ macro_rules! eprint {
 }
 
 /// A minimal `eprintln` for debugging.
-#[allow(unused_macros)]
+#[allow(unused_macros, reason = "useful for debugging")]
 macro_rules! eprintln {
     ($arg:tt) => {{
         // We have to expand string literals into byte arrays to prevent them
@@ -33,7 +33,7 @@ macro_rules! eprintln {
     }};
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "useful for debugging")]
 #[doc(hidden)]
 pub fn eprint_unreachable(line: u32) {
     eprint!("unreachable executed at adapter line ");
@@ -57,7 +57,7 @@ fn eprint_u32(x: u32) {
     }
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "useful for debugging")]
 #[doc(hidden)]
 pub fn unreachable(line: u32) -> ! {
     crate::macros::eprint_unreachable(line);
@@ -88,7 +88,7 @@ macro_rules! unreachable {
     }};
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "useful for debugging")]
 #[doc(hidden)]
 pub fn assert_fail(line: u32) -> ! {
     eprint!("assertion failed at adapter line ");

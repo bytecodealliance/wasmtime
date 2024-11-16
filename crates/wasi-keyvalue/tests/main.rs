@@ -1,3 +1,5 @@
+#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
+
 use anyhow::{anyhow, Result};
 use test_programs_artifacts::{foreach_keyvalue, KEYVALUE_MAIN_COMPONENT};
 use wasmtime::{

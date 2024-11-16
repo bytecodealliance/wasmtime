@@ -1,5 +1,6 @@
 #![doc = include_str!("../README.md")]
 #![deny(missing_docs)]
+#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
 macro_rules! declare_id {
     (

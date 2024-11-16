@@ -1,3 +1,4 @@
+#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 #![cfg_attr(miri, allow(dead_code, unused_imports))]
 
 mod arrays;

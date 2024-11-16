@@ -287,7 +287,7 @@ struct UnwindInfoBuilder<'a> {
 // platforms. Note that all of these specifiers here are relative to a "base
 // address" which we define as the base of where the text section is eventually
 // loaded.
-#[allow(non_camel_case_types)]
+#[expect(non_camel_case_types, reason = "matching Windows style, not Rust")]
 struct RUNTIME_FUNCTION {
     begin: u32,
     end: u32,

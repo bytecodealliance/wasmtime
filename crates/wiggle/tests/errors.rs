@@ -99,7 +99,7 @@ mod convert_multiple_error_types {
 
     /// Test that we can map multiple types of errors.
     #[derive(Debug, thiserror::Error)]
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "testing codegen below")]
     pub enum AnotherRichError {
         #[error("I've had this many cups of coffee and can't even think straight: {0}")]
         TooMuchCoffee(usize),

@@ -50,9 +50,9 @@ unsafe impl Send for BasePtr {}
 unsafe impl Sync for BasePtr {}
 
 enum FiberStackStorage {
-    Mmap(#[allow(dead_code)] MmapFiberStack),
+    Mmap(MmapFiberStack),
     Unmanaged(usize),
-    Custom(#[allow(dead_code)] Box<dyn RuntimeFiberStack>),
+    Custom(Box<dyn RuntimeFiberStack>),
 }
 
 impl FiberStack {
@@ -201,7 +201,7 @@ extern "C" {
     );
     #[wasmtime_versioned_export_macros::versioned_link]
     fn wasmtime_fiber_switch(top_of_stack: *mut u8);
-    #[allow(dead_code)] // only used in inline assembly for some platforms
+    #[allow(dead_code, reason = "only used on some platforms for inline asm")]
     #[wasmtime_versioned_export_macros::versioned_link]
     fn wasmtime_fiber_start();
 }

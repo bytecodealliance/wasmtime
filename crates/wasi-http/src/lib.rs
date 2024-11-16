@@ -216,6 +216,7 @@
 #![deny(missing_docs)]
 #![doc(test(attr(deny(warnings))))]
 #![doc(test(attr(allow(dead_code, unused_variables, unused_mut))))]
+#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
 mod error;
 mod http_impl;

@@ -25,7 +25,7 @@ pub struct CompiledFunctionInfo {
 /// Information about a function, such as trap information, address map,
 /// and stack maps.
 #[derive(Serialize, Deserialize, Default)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct WasmFunctionInfo {
     pub start_srcloc: FilePos,
     pub stack_maps: Box<[StackMapInformation]>,

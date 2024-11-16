@@ -1,5 +1,6 @@
 //! Code generation library for Winch.
 
+#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 // Unless this library is compiled with `all-arch`, the rust compiler
 // is going to emit dead code warnings. This directive is fine as long
 // as we configure to run CI at least once with the `all-arch` feature

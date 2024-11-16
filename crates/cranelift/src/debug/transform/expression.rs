@@ -1,5 +1,3 @@
-#![allow(trivial_numeric_casts)]
-
 use super::address_transform::AddressTransform;
 use crate::debug::ModuleMemoryOffset;
 use crate::translate::get_vmctx_value_label;
@@ -796,6 +794,7 @@ impl std::fmt::Debug for JumpTargetMarker {
 }
 
 #[cfg(test)]
+#[expect(trivial_numeric_casts, reason = "macro-generated code")]
 mod tests {
     use super::{
         compile_expression, AddressTransform, CompiledExpression, CompiledExpressionPart,

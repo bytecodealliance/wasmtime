@@ -2,6 +2,8 @@
 //!
 //! This module is a project for interpreting Cranelift IR.
 
+#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
+
 pub mod address;
 pub mod environment;
 pub mod frame;

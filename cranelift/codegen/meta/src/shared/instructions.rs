@@ -1,4 +1,4 @@
-#![allow(non_snake_case)]
+#![expect(non_snake_case, reason = "DSL style here")]
 
 use crate::cdsl::instructions::{
     AllInstructions, InstructionBuilder as Inst, InstructionGroupBuilder,
