@@ -10,6 +10,21 @@ pub struct Wmemcheck {
     pub flag: bool,
 }
 
+impl Wmemcheck {
+    pub fn malloc_previous_to(&self, addr: usize) -> Option<(usize, usize)> {
+        let mut best: Option<(usize, usize)> = None;
+        for (base, len) in self.mallocs.iter() {
+            if let Some((prev_base, _)) = best {
+                if prev_base < *base && *base <= addr {
+                    best = Some((*base, *len));
+                }
+            } else {
+                best = Some((*base, *len));
+            }
+        }
+        best
+    }
+}
 /// Error types for memory checker.
 #[derive(Debug, PartialEq)]
 pub enum AccessError {
@@ -51,7 +66,10 @@ impl Wmemcheck {
     }
 
     /// Updates memory checker memory state metadata when malloc is called.
-    pub fn malloc(&mut self, addr: usize, len: usize) -> Result<(), AccessError> {
+    pub fn malloc(&mut self, addr: usize, start_len: usize) -> Result<(), AccessError> {
+        // round up to multiple of 4
+        let len = (start_len + 3) & !3;
+
         if !self.is_in_bounds_heap(addr, len) {
             return Err(AccessError::OutOfBounds {
                 addr: addr,
@@ -101,12 +119,12 @@ impl Wmemcheck {
                         len: len,
                     });
                 }
-                MemState::ValidToWrite => {
+                /* MemState::ValidToWrite => {
                     return Err(AccessError::InvalidRead {
                         addr: addr,
                         len: len,
                     });
-                }
+                } */
                 _ => {}
             }
         }
@@ -140,6 +158,9 @@ impl Wmemcheck {
 
     /// Updates memory checker memory state metadata when free is called.
     pub fn free(&mut self, addr: usize) -> Result<(), AccessError> {
+        if addr == 0 {
+            return Ok(());
+        }
         if !self.mallocs.contains_key(&addr) {
             return Err(AccessError::InvalidFree { addr: addr });
         }

@@ -1137,6 +1137,40 @@ unsafe fn check_malloc(
     Ok(0)
 }
 
+// Hook for validating calloc using wmemcheck_state.
+#[cfg(feature = "wmemcheck")]
+unsafe fn check_calloc(store: &mut dyn VMStore, instance: &mut Instance, addr: u32, count: u32, size: u32) -> Result<u32> {
+    check_malloc(store, instance, addr, count * size)
+}
+
+// Hook for validating realloc using wmemcheck_state.
+#[cfg(feature = "wmemcheck")]
+unsafe fn check_realloc(store: &mut dyn VMStore, instance: &mut Instance, end_addr: u32, start_addr: u32, len: u32) -> Result<u32> {
+    check_free(store, instance, start_addr)?;
+    check_malloc(store, instance, end_addr, len)
+}
+
+// Hook for validating malloc_usable_size using wmemcheck_state.
+#[cfg(feature = "wmemcheck")]
+unsafe fn check_malloc_usable_size(store: &mut dyn VMStore, instance: &mut Instance, len: u32, addr: u32) -> Result<u32> {
+    check_free(store, instance, addr)?;
+    check_malloc(store, instance, addr, len)
+}
+
+
+// Hook for validating posix_memalign using wmemcheck_state.
+#[cfg(feature = "wmemcheck")]
+unsafe fn check_posix_memalign(store: &mut dyn VMStore, instance: &mut Instance, outptr: u32, size: u32) -> Result<u32> {
+    for (_, entry) in instance.exports() {
+        if let wasmtime_environ::EntityIndex::Memory(mem_index) = entry {
+            let mem = instance.get_memory(*mem_index);
+            let out = *(mem.base.offset(outptr as isize) as *mut u32);
+            return check_malloc(store, instance, out, size)
+        }
+    }
+    todo!("Why is there no memory?")
+}
+
 // Hook for validating free using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
 unsafe fn check_free(_store: &mut dyn VMStore, instance: &mut Instance, addr: u32) -> Result<u32> {
@@ -1158,6 +1192,30 @@ unsafe fn check_free(_store: &mut dyn VMStore, instance: &mut Instance, addr: u3
     Ok(0)
 }
 
+#[cfg(feature = "wmemcheck")]
+fn log_allocation_previous_to(instance: &mut Instance, addr: usize) {
+    if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
+        if let Some((prev_malloc, prev_len)) = wmemcheck_state.malloc_previous_to(addr) {
+            println!("previous malloc'd range was {:#x}..{:#x}", prev_malloc, prev_malloc + prev_len);
+            for (_, entry) in instance.exports() {
+                if let wasmtime_environ::EntityIndex::Memory(mem_index) = entry {
+                    let mem = instance.get_memory(*mem_index);
+                    for i in 0..prev_len {
+                        if i > 0 && i % 40 == 0 {
+                            println!();
+                        }
+                        unsafe {
+                            print!("{:02x} ", *mem.base.offset((prev_malloc + i) as isize));
+                        }
+                    }
+                    println!();
+                    break
+                }
+            }
+        }
+    }
+}
+
 // Hook for validating load using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
 fn check_load(
@@ -1174,6 +1232,7 @@ fn check_load(
                 return Ok(0);
             }
             Err(InvalidRead { addr, len }) => {
+                log_allocation_previous_to(instance, addr);
                 bail!("Invalid load at addr {:#x} of size {}", addr, len);
             }
             Err(OutOfBounds { addr, len }) => {
@@ -1203,6 +1262,7 @@ fn check_store(
                 return Ok(0);
             }
             Err(InvalidWrite { addr, len }) => {
+                log_allocation_previous_to(instance, addr);
                 bail!("Invalid store at addr {:#x} of size {}", addr, len)
             }
             Err(OutOfBounds { addr, len }) => {
@@ -1216,17 +1276,8 @@ fn check_store(
     Ok(0)
 }
 
-// Hook for turning wmemcheck load/store validation off when entering a malloc function.
 #[cfg(feature = "wmemcheck")]
-fn malloc_start(_store: &mut dyn VMStore, instance: &mut Instance) {
-    if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
-        wmemcheck_state.memcheck_off();
-    }
-}
-
-// Hook for turning wmemcheck load/store validation off when entering a free function.
-#[cfg(feature = "wmemcheck")]
-fn free_start(_store: &mut dyn VMStore, instance: &mut Instance) {
+fn memcheck_off(_store: &mut dyn VMStore, instance: &mut Instance) {
     if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
         wmemcheck_state.memcheck_off();
     }

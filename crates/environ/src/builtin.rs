@@ -44,6 +44,18 @@ macro_rules! foreach_builtin_function {
             // Invoked before malloc returns.
             #[cfg(feature = "wmemcheck")]
             check_malloc(vmctx: vmctx, addr: i32, len: i32) -> i32;
+            // Invoked before calloc returns.
+            #[cfg(feature = "wmemcheck")]
+            check_calloc(vmctx: vmctx, addr: i32, count: i32, size: i32) -> i32;
+            // Invoked before realloc returns.
+            #[cfg(feature = "wmemcheck")]
+            check_realloc(vmctx: vmctx, end_addr: i32, start_addr: i32, len: i32) -> i32;
+            // Invoked before malloc_usable_size returns.
+            #[cfg(feature = "wmemcheck")]
+            check_malloc_usable_size(vmctx: vmctx, len: i32, addr: i32) -> i32;
+            // Invoked before posix_memalign returns.
+            #[cfg(feature = "wmemcheck")]
+            check_posix_memalign(vmctx: vmctx, outptr: i32, size: i32) -> i32;
             // Invoked before the free returns.
             #[cfg(feature = "wmemcheck")]
             check_free(vmctx: vmctx, addr: i32) -> i32;
@@ -53,18 +65,16 @@ macro_rules! foreach_builtin_function {
             // Invoked before a store is executed.
             #[cfg(feature = "wmemcheck")]
             check_store(vmctx: vmctx, num_bytes: i32, addr: i32, offset: i32) -> i32;
-            // Invoked after malloc is called.
-            #[cfg(feature = "wmemcheck")]
-            malloc_start(vmctx: vmctx);
-            // Invoked after free is called.
-            #[cfg(feature = "wmemcheck")]
-            free_start(vmctx: vmctx);
             // Invoked when wasm stack pointer is updated.
             #[cfg(feature = "wmemcheck")]
             update_stack_pointer(vmctx: vmctx, value: i32);
             // Invoked before memory.grow is called.
             #[cfg(feature = "wmemcheck")]
             update_mem_size(vmctx: vmctx, num_bytes: i32);
+
+            // Invoked before stuff is called.
+            #[cfg(feature = "wmemcheck")]
+            memcheck_off(vmctx: vmctx);
 
             // Drop a non-stack GC reference (eg an overwritten table entry)
             // once it will no longer be used again. (Note: `val` is not of type
