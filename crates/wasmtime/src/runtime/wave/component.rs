@@ -396,7 +396,7 @@ impl WasmFunc for component::types::ComponentFunc {
     type Type = component::Type;
 
     fn params(&self) -> Box<dyn Iterator<Item = Self::Type> + '_> {
-        Box::new(self.params())
+        Box::new(self.params().map(|(_n, t)| t))
     }
 
     fn results(&self) -> Box<dyn Iterator<Item = Self::Type> + '_> {
