@@ -988,7 +988,7 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
     while input.arbitrary()? {
         let params = param_tys
             .iter()
-            .map(|ty| component_types::arbitrary_val(ty, input))
+            .map(|(_, ty)| component_types::arbitrary_val(ty, input))
             .collect::<arbitrary::Result<Vec<_>>>()?;
         let results = result_tys
             .iter()
