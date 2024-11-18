@@ -3,6 +3,8 @@ use crate::component::types;
 use crate::component::InstanceExportLookup;
 use crate::prelude::*;
 use crate::runtime::vm::component::ComponentRuntimeInfo;
+#[cfg(feature = "std")]
+use crate::runtime::vm::open_file_for_mmap;
 use crate::runtime::vm::{
     CompiledModuleId, VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMWasmCallFunction,
 };
@@ -228,7 +230,10 @@ impl Component {
     /// [`Module::deserialize_file`]: crate::Module::deserialize_file
     #[cfg(feature = "std")]
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Component> {
-        let code = engine.load_code_file(path.as_ref(), ObjectKind::Component)?;
+        let file = open_file_for_mmap(path.as_ref())?;
+        let code = engine
+            .load_code_file(file, ObjectKind::Component)
+            .with_context(|| format!("failed to load code for: {}", path.as_ref().display()))?;
         Component::from_parts(engine, code, None)
     }
 

@@ -70,6 +70,8 @@ pub use crate::runtime::vm::mmap::Mmap;
 pub use crate::runtime::vm::mmap_vec::MmapVec;
 pub use crate::runtime::vm::mpk::MpkEnabled;
 pub use crate::runtime::vm::store_box::*;
+#[cfg(feature = "std")]
+pub use crate::runtime::vm::sys::mmap::open_file_for_mmap;
 pub use crate::runtime::vm::sys::unwind::UnwindRegistration;
 pub use crate::runtime::vm::table::{Table, TableElement};
 pub use crate::runtime::vm::traphandlers::*;

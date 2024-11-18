@@ -13,6 +13,10 @@ use std::ops::Range;
 use std::path::Path;
 use std::ptr::NonNull;
 
+pub fn open_file_for_mmap(_path: &Path) -> Result<File> {
+    bail!("not supported on miri");
+}
+
 #[derive(Debug)]
 pub struct Mmap {
     memory: SendSyncPtr<[u8]>,
@@ -46,7 +50,7 @@ impl Mmap {
         Ok(Mmap { memory })
     }
 
-    pub fn from_file(_path: &Path) -> Result<(Self, File)> {
+    pub fn from_file(_file: &File) -> Result<Self> {
         bail!("not supported on miri");
     }
 

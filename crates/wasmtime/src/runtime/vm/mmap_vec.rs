@@ -3,7 +3,7 @@ use crate::runtime::vm::Mmap;
 use alloc::sync::Arc;
 use core::ops::{Deref, DerefMut, Range};
 #[cfg(feature = "std")]
-use std::{fs::File, path::Path};
+use std::fs::File;
 
 /// A type akin to `Vec<u8>`, but backed by `mmap` and able to be split.
 ///
@@ -54,17 +54,16 @@ impl MmapVec {
         Ok(result)
     }
 
-    /// Creates a new `MmapVec` which is the `path` specified mmap'd into
-    /// memory.
+    /// Creates a new `MmapVec` which is the given `File` mmap'd into memory.
     ///
-    /// This function will attempt to open the file located at `path` and will
-    /// then use that file to learn about its size and map the full contents
-    /// into memory. This will return an error if the file doesn't exist or if
-    /// it's too large to be fully mapped into memory.
+    /// This function will determine the file's size and map the full contents
+    /// into memory. This will return an error if the file is too large to be
+    /// fully mapped into memory.
     #[cfg(feature = "std")]
-    pub fn from_file(path: &Path) -> Result<MmapVec> {
-        let mmap = Mmap::from_file(path)
-            .with_context(|| format!("failed to create mmap for file: {}", path.display()))?;
+    pub fn from_file(file: File) -> Result<MmapVec> {
+        let file = Arc::new(file);
+        let mmap = Mmap::from_file(Arc::clone(&file))
+            .with_context(move || format!("failed to create mmap for file {file:?}"))?;
         let len = mmap.len();
         Ok(MmapVec::new(mmap, len))
     }

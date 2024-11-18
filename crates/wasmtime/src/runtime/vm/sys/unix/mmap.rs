@@ -6,6 +6,12 @@ use std::ptr::{self, NonNull};
 #[cfg(feature = "std")]
 use std::{fs::File, path::Path};
 
+/// Open a file so that it can be mmap'd for executing.
+#[cfg(feature = "std")]
+pub fn open_file_for_mmap(path: &Path) -> Result<File> {
+    File::open(path).err2anyhow().context("failed to open file")
+}
+
 #[derive(Debug)]
 pub struct Mmap {
     memory: SendSyncPtr<[u8]>,
@@ -78,10 +84,7 @@ impl Mmap {
     }
 
     #[cfg(feature = "std")]
-    pub fn from_file(path: &Path) -> Result<(Self, File)> {
-        let file = File::open(path)
-            .err2anyhow()
-            .context("failed to open file")?;
+    pub fn from_file(file: &File) -> Result<Self> {
         let len = file
             .metadata()
             .err2anyhow()
@@ -103,7 +106,7 @@ impl Mmap {
         let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), len);
         let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
 
-        Ok((Mmap { memory }, file))
+        Ok(Mmap { memory })
     }
 
     pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<()> {

@@ -11,7 +11,7 @@ use core::sync::atomic::{AtomicU64, Ordering};
 use object::write::{Object, StandardSegment};
 use object::SectionKind;
 #[cfg(feature = "std")]
-use std::path::Path;
+use std::{fs::File, path::Path};
 use wasmparser::WasmFeatures;
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
@@ -694,13 +694,12 @@ impl Engine {
     #[cfg(feature = "std")]
     pub(crate) fn load_code_file(
         &self,
-        path: &Path,
+        file: File,
         expected: ObjectKind,
     ) -> Result<Arc<crate::CodeMemory>> {
         self.load_code(
-            crate::runtime::vm::MmapVec::from_file(path).with_context(|| {
-                format!("failed to create file mapping for: {}", path.display())
-            })?,
+            crate::runtime::vm::MmapVec::from_file(file)
+                .with_context(|| "Failed to create file mapping".to_string())?,
             expected,
         )
     }

@@ -1,4 +1,6 @@
 use crate::prelude::*;
+#[cfg(feature = "std")]
+use crate::runtime::vm::open_file_for_mmap;
 use crate::runtime::vm::{CompiledModuleId, MmapVec, ModuleMemoryImages, VMWasmCallFunction};
 use crate::sync::OnceLock;
 use crate::{
@@ -15,7 +17,7 @@ use core::fmt;
 use core::ops::Range;
 use core::ptr::NonNull;
 #[cfg(feature = "std")]
-use std::path::Path;
+use std::{fs::File, path::Path};
 use wasmparser::{Parser, ValidPayload, Validator};
 use wasmtime_environ::{
     CompiledModuleInfo, EntityIndex, HostPtr, ModuleTypes, ObjectKind, TypeTrace, VMOffsets,
@@ -343,7 +345,8 @@ impl Module {
     /// state of the file.
     #[cfg(all(feature = "std", any(feature = "cranelift", feature = "winch")))]
     pub unsafe fn from_trusted_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
-        let mmap = MmapVec::from_file(file.as_ref())?;
+        let open_file = open_file_for_mmap(file.as_ref())?;
+        let mmap = MmapVec::from_file(open_file)?;
         if &mmap[0..4] == b"\x7fELF" {
             let code = engine.load_code(mmap, ObjectKind::Module)?;
             return Module::from_parts(engine, code, None);
@@ -426,7 +429,35 @@ impl Module {
     /// state of the file.
     #[cfg(feature = "std")]
     pub unsafe fn deserialize_file(engine: &Engine, path: impl AsRef<Path>) -> Result<Module> {
-        let code = engine.load_code_file(path.as_ref(), ObjectKind::Module)?;
+        let file = open_file_for_mmap(path.as_ref())?;
+        Self::deserialize_open_file(engine, file)
+            .with_context(|| format!("failed deserialization for: {}", path.as_ref().display()))
+    }
+
+    /// Same as [`deserialize_file`], except that it takes an open `File`
+    /// instead of a path.
+    ///
+    /// This method is provided because it can be used instead of
+    /// [`deserialize_file`] in situations where `wasmtime` is running with
+    /// limited file system permissions. In that case a process
+    /// with file system access can pass already opened files to `wasmtime`.
+    ///
+    /// [`deserialize_file`]: Module::deserialize_file
+    ///
+    /// Note that the corresponding will be mapped as private writeable
+    /// (copy-on-write) and executable. For `windows` this means the file needs
+    /// to be opened with at least `FILE_GENERIC_READ | FILE_GENERIC_EXECUTE`
+    /// [`access_mode`].
+    ///
+    /// [`access_mode`]: https://doc.rust-lang.org/std/os/windows/fs/trait.OpenOptionsExt.html#tymethod.access_mode
+    ///
+    /// # Unsafety
+    ///
+    /// All of the reasons that [`deserialize_file`] is `unsafe` applies to this
+    /// function as well.
+    #[cfg(feature = "std")]
+    pub unsafe fn deserialize_open_file(engine: &Engine, file: File) -> Result<Module> {
+        let code = engine.load_code_file(file, ObjectKind::Module)?;
         Module::from_parts(engine, code, None)
     }
 

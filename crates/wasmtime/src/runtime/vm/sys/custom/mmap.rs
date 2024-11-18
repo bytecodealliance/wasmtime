@@ -7,6 +7,11 @@ use core::ptr::{self, NonNull};
 #[cfg(feature = "std")]
 use std::{fs::File, path::Path};
 
+#[cfg(feature = "std")]
+pub fn open_file_for_mmap(_path: &Path) -> Result<File> {
+    anyhow::bail!("not supported on this platform");
+}
+
 #[derive(Debug)]
 pub struct Mmap {
     memory: SendSyncPtr<[u8]>,
@@ -38,7 +43,7 @@ impl Mmap {
     }
 
     #[cfg(feature = "std")]
-    pub fn from_file(_path: &Path) -> Result<(Self, File)> {
+    pub fn from_file(_file: &File) -> Result<Self> {
         anyhow::bail!("not supported on this platform");
     }
 
