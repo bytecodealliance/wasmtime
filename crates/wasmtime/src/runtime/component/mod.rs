@@ -124,9 +124,13 @@ pub use self::values::Val;
 
 pub(crate) use self::resources::HostResourceData;
 
-// These items are expected to be used by an eventual
-// `#[derive(ComponentType)]`, they are not part of Wasmtime's API stability
-// guarantees
+// Re-export wasm_wave crate so the compatible version of this dep doesn't have to be
+// tracked separately from wasmtime.
+#[cfg(feature = "wave")]
+pub use wasm_wave;
+
+// These items are used by `#[derive(ComponentType, Lift, Lower)]`, but they are not part of
+// Wasmtime's API stability guarantees
 #[doc(hidden)]
 pub mod __internal {
     pub use super::func::{

@@ -595,6 +595,19 @@ impl Val {
             Val::Flags(_) => "flags",
         }
     }
+
+    /// Deserialize a [`Val`] from its [`crate::component::wasm_wave`] encoding. Deserialization
+    /// requrires a target [`crate::component::Type`].
+    #[cfg(feature = "wave")]
+    pub fn from_wave(ty: &crate::component::Type, s: &str) -> Result<Self> {
+        Ok(wasm_wave::from_str(ty, s)?)
+    }
+
+    /// Serialize a [`Val`] to its [`crate::component::wasm_wave`] encoding.
+    #[cfg(feature = "wave")]
+    pub fn to_wave(&self) -> Result<String> {
+        Ok(wasm_wave::to_string(self)?)
+    }
 }
 
 impl PartialEq for Val {

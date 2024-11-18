@@ -34,6 +34,7 @@ pulley-interpreter = { workspace = true, optional = true }
 target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
+wasm-wave = { workspace = true, optional = true }
 anyhow = { workspace = true }
 libc = { workspace = true }
 cfg-if = { workspace = true }
@@ -315,3 +316,7 @@ memory-protection-keys = ["pooling-allocator"]
 # version changes. This is why the re-export is guarded by a feature flag which
 # is off by default.
 reexport-wasmparser = []
+
+# Enables instances of the traits defined in the wasm-wave crate, which
+# provides a human-readable text format for component values.
+wave = ["dep:wasm-wave"]
