@@ -13,6 +13,7 @@ pub fn pattern_contains_termname(
         Pattern::BindPattern(..)
         | Pattern::Var(..)
         | Pattern::ConstInt(..)
+        | Pattern::ConstBool(..)
         | Pattern::ConstPrim(..)
         | Pattern::Wildcard(..) => false,
         Pattern::Term(_, termid, arg_patterns) => {

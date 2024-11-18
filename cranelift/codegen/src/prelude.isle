@@ -14,9 +14,6 @@
 (extern constructor unit unit)
 
 (model bool (type Bool))
-(type bool (primitive bool))
-(extern const $true bool)
-(extern const $false bool)
 
 (model u8 (type (bv 8)))
 (type u8 (primitive u8))
@@ -289,13 +286,13 @@
 (extern extractor infallible i64_is_zero i64_is_zero)
 
 (decl u64_zero () u64)
-(extractor (u64_zero) (u64_is_zero $true))
+(extractor (u64_zero) (u64_is_zero true))
 
 (decl u64_nonzero (u64) u64)
-(extractor (u64_nonzero x) (and (u64_is_zero $false) x))
+(extractor (u64_nonzero x) (and (u64_is_zero false) x))
 
 (decl i64_nonzero (i64) i64)
-(extractor (i64_nonzero x) (and (i64_is_zero $false) x))
+(extractor (i64_nonzero x) (and (i64_is_zero false) x))
 
 ;; x & 1 == 1
 (spec (u64_is_odd arg) (provide (= result (= #b1 (extract 0 0 arg)))))
@@ -442,7 +439,7 @@
 (extern constructor ty_bits ty_bits)
 
 ;; Get the bit width of a given type.
-(spec (ty_bits_u16 x) 
+(spec (ty_bits_u16 x)
       (provide (= result (int2bv 16 x))))
 (decl pure ty_bits_u16 (Type) u16)
 (extern constructor ty_bits_u16 ty_bits_u16)

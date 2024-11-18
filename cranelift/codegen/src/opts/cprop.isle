@@ -179,7 +179,7 @@
 ;; that needs work in lowering first to avoid regressing addressing modes.
 
 (rule (simplify (isub ty x (iconst_s ty k)))
-      (if-let $true (u64_lt (i64_as_u64 (i64_neg k)) (i64_as_u64 k)))
+      (if-let true (u64_lt (i64_as_u64 (i64_neg k)) (i64_as_u64 k)))
       (iadd ty x (iconst ty (imm64_masked ty (i64_as_u64 (i64_neg k))))))
 
 ;; A splat of a constant can become a direct `vconst` with the appropriate bit

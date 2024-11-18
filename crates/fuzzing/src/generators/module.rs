@@ -15,8 +15,6 @@ pub struct ModuleConfig {
     // in our `*.wast` testing so keep knobs here so they can be read during
     // config-to-`wasmtime::Config` translation.
     #[allow(missing_docs)]
-    pub extended_const_enabled: bool,
-    #[allow(missing_docs)]
     pub function_references_enabled: bool,
     #[allow(missing_docs)]
     pub component_model_more_flags: bool,
@@ -44,6 +42,7 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         let _ = config.simd_enabled;
         let _ = config.relaxed_simd_enabled;
         let _ = config.tail_call_enabled;
+        let _ = config.extended_const_enabled;
         config.exceptions_enabled = false;
         config.gc_enabled = false;
         config.custom_page_sizes_enabled = u.arbitrary()?;
@@ -64,7 +63,6 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         config.disallow_traps = u.ratio(9, 10)?;
 
         Ok(ModuleConfig {
-            extended_const_enabled: false,
             component_model_more_flags: false,
             function_references_enabled: config.gc_enabled,
             config,

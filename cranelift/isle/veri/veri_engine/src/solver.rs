@@ -1353,9 +1353,13 @@ impl SolverCtx {
                 }
             }
             isle::sema::Pattern::Wildcard(_) => self.smt.list(vec![self.smt.atom("_")]),
+
             isle::sema::Pattern::ConstPrim(_, sym) => {
                 let name = typeenv.syms[sym.index()].clone();
                 self.smt.list(vec![self.smt.atom(name)])
+            }
+            isle::sema::Pattern::ConstBool(_, val) => {
+                self.smt.list(vec![self.smt.atom(format!("{val}"))])
             }
             isle::sema::Pattern::ConstInt(_, num) => {
                 let _smt_name_prefix = format!("{}__", num);
@@ -1430,6 +1434,9 @@ impl SolverCtx {
             isle::sema::Expr::ConstPrim(_, sym) => {
                 let name = typeenv.syms[sym.index()].clone();
                 self.smt.list(vec![self.smt.atom(name)])
+            }
+            isle::sema::Expr::ConstBool(_, val) => {
+                self.smt.list(vec![self.smt.atom(format!("{val}"))])
             }
             isle::sema::Expr::ConstInt(_, num) => {
                 let _smt_name_prefix = format!("{}__", num);

@@ -374,6 +374,20 @@ impl WasmtimeOptionValue for wasmtime::OptLevel {
     }
 }
 
+impl WasmtimeOptionValue for wasmtime::RegallocAlgorithm {
+    const VAL_HELP: &'static str = "=backtracking|single-pass";
+    fn parse(val: Option<&str>) -> Result<Self> {
+        match String::parse(val)?.as_str() {
+            "backtracking" => Ok(wasmtime::RegallocAlgorithm::Backtracking),
+            "single-pass" => Ok(wasmtime::RegallocAlgorithm::SinglePass),
+            other => bail!(
+                "unknown regalloc algorithm`{}`, only backtracking,single-pass accepted",
+                other
+            ),
+        }
+    }
+}
+
 impl WasmtimeOptionValue for wasmtime::Strategy {
     const VAL_HELP: &'static str = "=winch|cranelift";
     fn parse(val: Option<&str>) -> Result<Self> {

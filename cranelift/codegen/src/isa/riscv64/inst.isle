@@ -1589,10 +1589,10 @@
 ;; rd ← rs1 ∧ ~(rs2)
 (decl rv_andn (XReg XReg) XReg)
 (rule (rv_andn rs1 rs2)
-  (if-let $true (has_zbb))
+  (if-let true (has_zbb))
   (alu_rrr (AluOPRRR.Andn) rs1 rs2))
 (rule (rv_andn rs1 rs2)
-  (if-let $false (has_zbb))
+  (if-let false (has_zbb))
   (rv_and rs1 (rv_not rs2)))
 
 ;; Helper for emitting the `orn` ("Or Negated") instruction.
@@ -1843,7 +1843,7 @@
 
 ;; If Zfa is enabled, we can load certain constants with the `fli` instruction.
 (rule 8 (imm (ty_supported_float (ty_32_or_64 ty)) imm)
-  (if-let $true (has_zfa))
+  (if-let true (has_zfa))
   (if-let const (fli_constant_from_u64 ty imm))
   (rv_fli ty const))
 
@@ -1853,7 +1853,7 @@
 ;; For f64's this saves one instruction, and for f32's it avoids
 ;; having to allocate an integer register, reducing integer register pressure.
 (rule 7 (imm (ty_supported_float (ty_32_or_64 ty)) imm)
-  (if-let $true (has_zfa))
+  (if-let true (has_zfa))
   (if-let const (fli_constant_from_negated_u64 ty imm))
   (rv_fneg ty (rv_fli ty const)))
 
@@ -2163,19 +2163,19 @@
 
 (decl lower_ctz (Type Reg) Reg)
 (rule (lower_ctz ty x)
-  (gen_cltz $false x ty))
+  (gen_cltz false x ty))
 
 (rule 1 (lower_ctz (fits_in_16 ty) x)
-  (if-let $true (has_zbb))
+  (if-let true (has_zbb))
   (let ((tmp Reg (gen_bseti x (ty_bits ty))))
     (rv_ctzw tmp)))
 
 (rule 2 (lower_ctz $I32 x)
-  (if-let $true (has_zbb))
+  (if-let true (has_zbb))
   (rv_ctzw x))
 
 (rule 2 (lower_ctz $I64 x)
-  (if-let $true (has_zbb))
+  (if-let true (has_zbb))
   (rv_ctz x))
 
 ;; Count leading zeros from a i128 bit value.
@@ -2206,22 +2206,22 @@
 
 ;; If we have the `zbkb` extension `packw` can be used to zero extend 16 bit values
 (rule 1 (zext val @ (value_type $I16))
-  (if-let $true (has_zbkb))
+  (if-let true (has_zbkb))
   (rv_packw val (zero_reg)))
 
 ;; If we have the `zbkb` extension `pack` can be used to zero extend 32 bit registers
 (rule 1 (zext val @ (value_type $I32))
-  (if-let $true (has_zbkb))
+  (if-let true (has_zbkb))
   (rv_pack val (zero_reg)))
 
 ;; If we have the `zbb` extension we can use the dedicated `zext.h` instruction.
 (rule 2 (zext val @ (value_type $I16))
-  (if-let $true (has_zbb))
+  (if-let true (has_zbb))
   (rv_zexth val))
 
 ;; With `zba` we have a `zext.w` instruction
 (rule 2 (zext val @ (value_type $I32))
-  (if-let $true (has_zba))
+  (if-let true (has_zba))
   (rv_zextw val))
 
 ;; Ignore sign extensions for values whose representation is already the full
@@ -2240,12 +2240,12 @@
 
 ;; If we have the `zbb` extension we can use the dedicated `sext.b` instruction.
 (rule 1 (sext val @ (value_type $I8))
-  (if-let $true (has_zbb))
+  (if-let true (has_zbb))
   (rv_sextb val))
 
 ;; If we have the `zbb` extension we can use the dedicated `sext.h` instruction.
 (rule 1 (sext val @ (value_type $I16))
-  (if-let $true (has_zbb))
+  (if-let true (has_zbb))
   (rv_sexth val))
 
 ;; When signed extending from 32 to 64 bits we can use a
@@ -2264,28 +2264,28 @@
 ;; and `sext` above to skip the extension instruction entirely in some
 ;; circumstances.
 (decl pure partial val_already_extended (ExtendOp Value) bool)
-(rule 0 (val_already_extended _ v @ (value_type $I64)) $true)
+(rule 0 (val_already_extended _ v @ (value_type $I64)) true)
 
 ;; When extending our backend always extends to the full register width, so
 ;; there's no need to extend-an-extend.
-(rule 1 (val_already_extended (ExtendOp.Zero) (uextend _)) $true)
-(rule 1 (val_already_extended (ExtendOp.Signed) (sextend _)) $true)
+(rule 1 (val_already_extended (ExtendOp.Zero) (uextend _)) true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (sextend _)) true)
 
 ;; The result of `icmp`/`fcmp` is zero or one, meaning that it's already sign
 ;; extended to the full register width.
-(rule 1 (val_already_extended _ (icmp _ _ _)) $true)
-(rule 1 (val_already_extended _ (fcmp _ _ _)) $true)
+(rule 1 (val_already_extended _ (icmp _ _ _)) true)
+(rule 1 (val_already_extended _ (fcmp _ _ _)) true)
 
 ;; The lowering for these operations always sign-extend their results due to the
 ;; use of the `*w` instructions in RV64I. Note that this requires that the
 ;; extension is from 32 to 64, 16/8-bit operations are explicitly excluded here.
 ;; There are no native instructions for the 16/8 bit operations so they must
 ;; fall through to actual sign extension above.
-(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (ishl _ _))) $true)
-(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (ushr _ _))) $true)
-(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (sshr _ _))) $true)
-(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (iadd _ _))) $true)
-(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (isub _ _))) $true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (ishl _ _))) true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (ushr _ _))) true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (sshr _ _))) true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (iadd _ _))) true)
+(rule 1 (val_already_extended (ExtendOp.Signed) (has_type $I32 (isub _ _))) true)
 
 (type ExtendOp
   (enum
@@ -2322,18 +2322,18 @@
 ;; bseti: Set a single bit in a register, indexed by a constant.
 (decl gen_bseti (Reg u64) Reg)
 (rule (gen_bseti val bit)
-  (if-let $false (has_zbs))
-  (if-let $false (u64_le bit 12))
+  (if-let false (has_zbs))
+  (if-let false (u64_le bit 12))
   (let ((const XReg (imm $I64 (u64_shl 1 bit))))
     (rv_or val const)))
 
 (rule (gen_bseti val bit)
-  (if-let $false (has_zbs))
-  (if-let $true (u64_le bit 12))
+  (if-let false (has_zbs))
+  (if-let true (u64_le bit 12))
   (rv_ori val (imm12_const (u64_as_i32 (u64_shl 1 bit)))))
 
 (rule (gen_bseti val bit)
-  (if-let $true (has_zbs))
+  (if-let true (has_zbs))
   (rv_bseti val (imm12_const (u64_as_i32 bit))))
 
 
@@ -2609,7 +2609,7 @@
 
 ;; With Zfa we can use the dedicated `fround` instruction.
 (rule 1 (gen_float_round frm rs ty)
-  (if-let $true (has_zfa))
+  (if-let true (has_zfa))
   (rv_fround ty frm rs))
 
 
@@ -2621,22 +2621,22 @@
 
 (rule 6 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.UnsignedLessThan) (intcc_without_eq cc))
-  (if-let $true (has_zbb))
+  (if-let true (has_zbb))
   (rv_minu x y))
 
 (rule 6 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.SignedLessThan) (intcc_without_eq cc))
-  (if-let $true (has_zbb))
+  (if-let true (has_zbb))
   (rv_min x y))
 
 (rule 6 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.UnsignedGreaterThan) (intcc_without_eq cc))
-  (if-let $true (has_zbb))
+  (if-let true (has_zbb))
   (rv_maxu x y))
 
 (rule 6 (gen_select_xreg (int_compare_decompose cc x y) x y)
   (if-let (IntCC.SignedGreaterThan) (intcc_without_eq cc))
-  (if-let $true (has_zbb))
+  (if-let true (has_zbb))
   (rv_max x y))
 
 ;; Rotate Zero Reg to the right. This allows us to write fewer rules
@@ -2646,29 +2646,29 @@
 ;; matching when one of the inputs is the zero register, but not both.
 
 (rule 5 (gen_select_xreg (int_compare_decompose cc a @ (zero_reg) b @ (non_zero_reg)) x y)
-  (if-let $true (has_zicond))
+  (if-let true (has_zicond))
   (gen_select_xreg (int_compare (intcc_swap_args cc) b a) x y))
 
 (rule 4 (gen_select_xreg c @ (int_compare_decompose cc a b) x @ (zero_reg) y @ (non_zero_reg))
-  (if-let $true (has_zicond))
+  (if-let true (has_zicond))
   (gen_select_xreg (int_compare (intcc_complement cc) a b) y x))
 
 (rule 3 (gen_select_xreg (int_compare_decompose (IntCC.Equal) c (zero_reg)) x (zero_reg))
-  (if-let $true (has_zicond))
+  (if-let true (has_zicond))
   (rv_czero_nez x c))
 
 (rule 3 (gen_select_xreg (int_compare_decompose (IntCC.NotEqual) c (zero_reg)) x (zero_reg))
-  (if-let $true (has_zicond))
+  (if-let true (has_zicond))
   (rv_czero_eqz x c))
 
 (rule 2 (gen_select_xreg (int_compare_decompose (IntCC.Equal) c (zero_reg)) x y)
-  (if-let $true (has_zicond))
+  (if-let true (has_zicond))
   (rv_or
     (rv_czero_nez x c)
     (rv_czero_eqz y c)))
 
 (rule 2 (gen_select_xreg (int_compare_decompose (IntCC.NotEqual) c (zero_reg)) x y)
-  (if-let $true (has_zicond))
+  (if-let true (has_zicond))
   (rv_or
     (rv_czero_eqz x c)
     (rv_czero_nez y c)))
@@ -2676,7 +2676,7 @@
 ;; It is still beneficial to emit the full compare instruction, and then the 3 instruction
 ;; select using zicond, so do that here as a last resort.
 (rule 1 (gen_select_xreg compare x y)
-  (if-let $true (has_zicond))
+  (if-let true (has_zicond))
   (gen_select_xreg (cmp_nez (lower_int_compare compare)) x y))
 
 ;; In the base case we emit a conditional branch and a few moves.
@@ -2948,11 +2948,11 @@
 (decl gen_brev8 (Reg Type) Reg)
 (rule 1
   (gen_brev8 rs _)
-  (if-let $true (has_zbkb))
+  (if-let true (has_zbkb))
   (rv_brev8 rs))
 (rule
   (gen_brev8 rs ty)
-  (if-let $false (has_zbkb))
+  (if-let false (has_zbkb))
   (let
     ((tmp WritableXReg (temp_writable_xreg))
       (tmp2 WritableXReg (temp_writable_xreg))
@@ -3107,7 +3107,7 @@
 ;; the comparison to get an ordered comparison and generate that. Then invert
 ;; the result to produce the final fcmp result.
 (rule 0 (fcmp_to_float_compare cc ty a b)
-  (if-let $true (floatcc_unordered cc))
+  (if-let true (floatcc_unordered cc))
   (float_compare_invert (fcmp_to_float_compare (floatcc_complement cc) ty a b)))
 
 ;; a is not nan && b is not nan

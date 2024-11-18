@@ -87,14 +87,14 @@
        ((ALUOp.Lsr) (switch t
          (8 (= (extract 31 0 a) (zero_ext 32 (extract 7 0 a))))
          (16 (= (extract 31 0 a) (zero_ext 32 (extract 15 0 a))))
-         (32 $true)
-         (64 $true)))
+         (32 true)
+         (64 true)))
       ((ALUOp.Asr) (switch t
         (8 (= (extract 31 0 a) (sign_ext 32 (extract 7 0 a))))
         (16 (= (extract 31 0 a) (sign_ext 32 (extract 15 0 a))))
-        (32 $true)
-        (64 $true)))
-      ((ALUOp.Lsl) $true))))
+        (32 true)
+        (64 true)))
+      ((ALUOp.Lsl) true))))
 (instantiate do_shift
     ((args (bv 8) Int (bv 64) (bv 8)) (ret (bv 64)) (canon (bv 8)))
     ((args (bv 8) Int (bv 64) (bv 16)) (ret (bv 64)) (canon (bv 16)))

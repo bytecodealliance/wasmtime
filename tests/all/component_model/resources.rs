@@ -541,10 +541,14 @@ fn dynamic_type() -> Result<()> {
     let t2 = i.get_resource(&mut store, "t2").unwrap();
 
     let a_params = a.params(&store);
-    assert_eq!(a_params[0], Type::Own(ResourceType::host::<MyType>()));
+    assert_eq!(
+        a_params[0],
+        ("x".to_string(), Type::Own(ResourceType::host::<MyType>()))
+    );
     let b_params = b.params(&store);
     match &b_params[0] {
-        Type::Tuple(t) => {
+        (name, Type::Tuple(t)) => {
+            assert_eq!(name, "x");
             assert_eq!(t.types().len(), 1);
             let t0 = t.types().next().unwrap();
             assert_eq!(t0, Type::Own(t2));

@@ -219,14 +219,14 @@
 (rule (simplify (sshr ty (imul ty (sextend _ x@(value_type half_ty))
                                   (sextend _ y@(value_type half_ty)))
                          (iconst_u _ k)))
-      (if-let $true (ty_equal half_ty (ty_half_width ty)))
-      (if-let $true (u64_eq k (ty_bits_u64 half_ty)))
+      (if-let true (ty_equal half_ty (ty_half_width ty)))
+      (if-let true (u64_eq k (ty_bits_u64 half_ty)))
       (sextend ty (smulhi half_ty x y)))
 (rule (simplify (ushr ty (imul ty (uextend _ x@(value_type half_ty))
                                   (uextend _ y@(value_type half_ty)))
                          (iconst_u _ k)))
-      (if-let $true (ty_equal half_ty (ty_half_width ty)))
-      (if-let $true (u64_eq k (ty_bits_u64 half_ty)))
+      (if-let true (ty_equal half_ty (ty_half_width ty)))
+      (if-let true (u64_eq k (ty_bits_u64 half_ty)))
       (uextend ty (umulhi half_ty x y)))
 
 ;; Cranelift's `fcvt_from_{u,s}int` instructions are polymorphic over the input

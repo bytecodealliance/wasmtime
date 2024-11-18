@@ -36,13 +36,18 @@ use std::ops::Range;
 use std::ptr;
 
 pub struct FiberStack {
-    base: *mut u8,
+    base: BasePtr,
     len: usize,
 
     /// Stored here to ensure that when this `FiberStack` the backing storage,
     /// if any, is additionally dropped.
     storage: FiberStackStorage,
 }
+
+struct BasePtr(*mut u8);
+
+unsafe impl Send for BasePtr {}
+unsafe impl Sync for BasePtr {}
 
 enum FiberStackStorage {
     Mmap(#[allow(dead_code)] MmapFiberStack),
@@ -64,7 +69,7 @@ impl FiberStack {
         // region so the base and length of our stack are both offset by a
         // single page.
         Ok(FiberStack {
-            base: stack.mapping_base.wrapping_byte_add(page_size),
+            base: BasePtr(stack.mapping_base.wrapping_byte_add(page_size)),
             len: stack.mapping_len - page_size,
             storage: FiberStackStorage::Mmap(stack),
         })
@@ -77,7 +82,7 @@ impl FiberStack {
             return Self::from_custom(asan::new_fiber_stack(len)?);
         }
         Ok(FiberStack {
-            base: base.add(guard_size),
+            base: BasePtr(base.add(guard_size)),
             len,
             storage: FiberStackStorage::Unmanaged(guard_size),
         })
@@ -101,28 +106,28 @@ impl FiberStack {
             "expected fiber stack end ({end_ptr:?}) to be page aligned ({page_size:#x})",
         );
         Ok(FiberStack {
-            base: start_ptr,
+            base: BasePtr(start_ptr),
             len: range.len(),
             storage: FiberStackStorage::Custom(custom),
         })
     }
 
     pub fn top(&self) -> Option<*mut u8> {
-        Some(self.base.wrapping_byte_add(self.len))
+        Some(self.base.0.wrapping_byte_add(self.len))
     }
 
     pub fn range(&self) -> Option<Range<usize>> {
-        let base = self.base as usize;
+        let base = self.base.0 as usize;
         Some(base..base + self.len)
     }
 
     pub fn guard_range(&self) -> Option<Range<*mut u8>> {
         match &self.storage {
             FiberStackStorage::Unmanaged(guard_size) => unsafe {
-                let start = self.base.sub(*guard_size);
-                Some(start..self.base)
+                let start = self.base.0.sub(*guard_size);
+                Some(start..self.base.0)
             },
-            FiberStackStorage::Mmap(mmap) => Some(mmap.mapping_base..self.base),
+            FiberStackStorage::Mmap(mmap) => Some(mmap.mapping_base..self.base.0),
             FiberStackStorage::Custom(custom) => Some(custom.guard_range()),
         }
     }

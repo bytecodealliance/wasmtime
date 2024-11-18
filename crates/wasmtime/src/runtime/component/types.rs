@@ -701,13 +701,14 @@ impl ComponentFunc {
         Self(Handle::new(index, ty))
     }
 
-    /// Iterates over types of function parameters
-    pub fn params(&self) -> impl ExactSizeIterator<Item = Type> + '_ {
-        let params = self.0.types[self.0.index].params;
-        self.0.types[params]
+    /// Iterates over types of function parameters and names.
+    pub fn params(&self) -> impl ExactSizeIterator<Item = (&str, Type)> + '_ {
+        let ty = &self.0.types[self.0.index];
+        self.0.types[ty.params]
             .types
             .iter()
-            .map(|ty| Type::from(ty, &self.0.instance()))
+            .zip(&ty.param_names)
+            .map(|(ty, name)| (name.as_str(), Type::from(ty, &self.0.instance())))
     }
 
     /// Iterates over types of function results

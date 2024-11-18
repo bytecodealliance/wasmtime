@@ -424,6 +424,8 @@ pub struct TypeComponentInstance {
 /// A component function type in the component model.
 #[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
 pub struct TypeFunc {
+    /// Names of parameters.
+    pub param_names: Vec<String>,
     /// Parameters to the function represented as a tuple.
     pub params: TypeTupleIndex,
     /// Results of the function represented as a tuple.

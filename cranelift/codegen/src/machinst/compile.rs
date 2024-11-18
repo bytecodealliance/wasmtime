@@ -5,11 +5,12 @@ use crate::ir::pcc;
 use crate::ir::Function;
 use crate::isa::TargetIsa;
 use crate::machinst::*;
+use crate::settings::RegallocAlgorithm;
 use crate::timing;
 use crate::trace;
 use crate::CodegenError;
 
-use regalloc2::RegallocOptions;
+use regalloc2::{Algorithm, RegallocOptions};
 
 /// Compile the given function down to VCode with allocated registers, ready
 /// for binary emission.
@@ -62,6 +63,11 @@ pub fn compile<B: LowerBackend + TargetIsa>(
         if cfg!(debug_assertions) {
             options.validate_ssa = true;
         }
+
+        options.algorithm = match b.flags().regalloc_algorithm() {
+            RegallocAlgorithm::Backtracking => Algorithm::Ion,
+            RegallocAlgorithm::SinglePass => Algorithm::Fastalloc,
+        };
 
         regalloc2::run(&vcode, vcode.machine_env(), &options)
             .map_err(|err| {

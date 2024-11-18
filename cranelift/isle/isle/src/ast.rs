@@ -99,7 +99,7 @@ pub enum SpecExpr {
     },
     /// An operator that matches a constant boolean value.
     ConstBool {
-        val: i8,
+        val: bool,
         pos: Pos,
     },
     /// The Unit constant value.
@@ -318,6 +318,8 @@ pub enum Pattern {
         subpat: Box<Pattern>,
         pos: Pos,
     },
+    /// An operator that matches a constant boolean value.
+    ConstBool { val: bool, pos: Pos },
     /// An operator that matches a constant integer value.
     ConstInt { val: i128, pos: Pos },
     /// An operator that matches an external constant value.
@@ -362,6 +364,7 @@ impl Pattern {
                 subpat.terms(f);
             }
             Pattern::Var { .. }
+            | Pattern::ConstBool { .. }
             | Pattern::ConstInt { .. }
             | Pattern::ConstPrim { .. }
             | Pattern::Wildcard { .. }
@@ -423,9 +426,10 @@ impl Pattern {
                 }
             }
 
-            &Pattern::Wildcard { .. } | &Pattern::ConstInt { .. } | &Pattern::ConstPrim { .. } => {
-                self.clone()
-            }
+            &Pattern::Wildcard { .. }
+            | &Pattern::ConstBool { .. }
+            | &Pattern::ConstInt { .. }
+            | &Pattern::ConstPrim { .. } => self.clone(),
             &Pattern::MacroArg { .. } => unreachable!(),
         }
     }
@@ -467,6 +471,7 @@ impl Pattern {
 
             &Pattern::Var { .. }
             | &Pattern::Wildcard { .. }
+            | &Pattern::ConstBool { .. }
             | &Pattern::ConstInt { .. }
             | &Pattern::ConstPrim { .. } => Some(self.clone()),
             &Pattern::MacroArg { index, .. } => macro_args.get(index).cloned(),
@@ -475,7 +480,8 @@ impl Pattern {
 
     pub fn pos(&self) -> Pos {
         match self {
-            &Pattern::ConstInt { pos, .. }
+            &Pattern::ConstBool { pos, .. }
+            | &Pattern::ConstInt { pos, .. }
             | &Pattern::ConstPrim { pos, .. }
             | &Pattern::And { pos, .. }
             | &Pattern::Term { pos, .. }
@@ -502,6 +508,8 @@ pub enum Expr {
     },
     /// A variable use.
     Var { name: Ident, pos: Pos },
+    /// A constant boolean.
+    ConstBool { val: bool, pos: Pos },
     /// A constant integer.
     ConstInt { val: i128, pos: Pos },
     /// A constant of some other primitive type.
@@ -519,6 +527,7 @@ impl Expr {
         match self {
             &Expr::Term { pos, .. }
             | &Expr::Var { pos, .. }
+            | &Expr::ConstBool { pos, .. }
             | &Expr::ConstInt { pos, .. }
             | &Expr::ConstPrim { pos, .. }
             | &Expr::Let { pos, .. } => pos,
@@ -540,7 +549,10 @@ impl Expr {
                 }
                 body.terms(f);
             }
-            Expr::Var { .. } | Expr::ConstInt { .. } | Expr::ConstPrim { .. } => {}
+            Expr::Var { .. }
+            | Expr::ConstBool { .. }
+            | Expr::ConstInt { .. }
+            | Expr::ConstPrim { .. } => {}
         }
     }
 }

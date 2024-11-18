@@ -1109,6 +1109,27 @@ impl Config {
         self
     }
 
+    /// Configures the regalloc algorithm used by the Cranelift code generator.
+    ///
+    /// Cranelift can select any of several register allocator algorithms. Each
+    /// of these algorithms generates correct code, but they represent different
+    /// tradeoffs between compile speed (how expensive the compilation process
+    /// is) and run-time speed (how fast the generated code runs).
+    /// For more information see the documentation of [`RegallocAlgorithm`].
+    ///
+    /// The default value for this is `RegallocAlgorithm::Backtracking`.
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
+    pub fn cranelift_regalloc_algorithm(&mut self, algo: RegallocAlgorithm) -> &mut Self {
+        let val = match algo {
+            RegallocAlgorithm::Backtracking => "backtracking",
+            RegallocAlgorithm::SinglePass => "single_pass",
+        };
+        self.compiler_config
+            .settings
+            .insert("regalloc_algorithm".to_string(), val.to_string());
+        self
+    }
+
     /// Configures whether Cranelift should perform a NaN-canonicalization pass.
     ///
     /// When Cranelift is used as a code generation backend this will configure
@@ -1554,10 +1575,10 @@ impl Config {
     ///
     /// ## Default
     ///
-    /// The default value for this property is 2GiB on 64-bit platforms. This
+    /// The default value for this property is 32MiB on 64-bit platforms. This
     /// allows eliminating almost all bounds checks on loads/stores with an
-    /// immediate offset of less than 2GiB. On 32-bit platforms this defaults to
-    /// 64KiB.
+    /// immediate offset of less than 32MiB. On 32-bit platforms this defaults
+    /// to 64KiB.
     pub fn memory_guard_size(&mut self, bytes: u64) -> &mut Self {
         self.tunables.memory_guard_size = Some(bytes);
         self
@@ -2618,6 +2639,29 @@ pub enum OptLevel {
     SpeedAndSize,
 }
 
+/// Possible register allocator algorithms for the Cranelift codegen backend.
+#[non_exhaustive]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+pub enum RegallocAlgorithm {
+    /// Generates the fastest possible code, but may take longer.
+    ///
+    /// This algorithm performs "backtracking", which means that it may
+    /// undo its earlier work and retry as it discovers conflicts. This
+    /// results in better register utilization, producing fewer spills
+    /// and moves, but can cause super-linear compile runtime.
+    Backtracking,
+    /// Generates acceptable code very quickly.
+    ///
+    /// This algorithm performs a single pass through the code,
+    /// guaranteed to work in linear time.  (Note that the rest of
+    /// Cranelift is not necessarily guaranteed to run in linear time,
+    /// however.) It cannot undo earlier decisions, however, and it
+    /// cannot foresee constraints or issues that may occur further
+    /// ahead in the code, so the code may have more spills and moves as
+    /// a result.
+    SinglePass,
+}
+
 /// Select which profiling technique to support.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ProfilingStrategy {
@@ -2711,19 +2755,19 @@ pub enum WasmBacktraceDetails {
 /// Additionally the main cost of the pooling allocator is that it requires a
 /// very large reservation of virtual memory (on the order of most of the
 /// addressable virtual address space). WebAssembly 32-bit linear memories in
-/// Wasmtime are, by default 4G address space reservations with a 2G guard
+/// Wasmtime are, by default 4G address space reservations with a small guard
 /// region both before and after the linear memory. Memories in the pooling
 /// allocator are contiguous which means that we only need a guard after linear
 /// memory because the previous linear memory's slot post-guard is our own
-/// pre-guard. This means that, by default, the pooling allocator uses 6G of
-/// virtual memory per WebAssembly linear memory slot. 6G of virtual memory is
-/// 32.5 bits of a 64-bit address. Many 64-bit systems can only actually use
-/// 48-bit addresses by default (although this can be extended on architectures
-/// nowadays too), and of those 48 bits one of them is reserved to indicate
-/// kernel-vs-userspace. This leaves 47-32.5=14.5 bits left, meaning you can
-/// only have at most 64k slots of linear memories on many systems by default.
-/// This is a relatively small number and shows how the pooling allocator can
-/// quickly exhaust all of virtual memory.
+/// pre-guard. This means that, by default, the pooling allocator uses roughly
+/// 4G of virtual memory per WebAssembly linear memory slot. 4G of virtual
+/// memory is 32 bits of a 64-bit address. Many 64-bit systems can only
+/// actually use 48-bit addresses by default (although this can be extended on
+/// architectures nowadays too), and of those 48 bits one of them is reserved
+/// to indicate kernel-vs-userspace. This leaves 47-32=15 bits left,
+/// meaning you can only have at most 32k slots of linear memories on many
+/// systems by default. This is a relatively small number and shows how the
+/// pooling allocator can quickly exhaust all of virtual memory.
 ///
 /// Another disadvantage of the pooling allocator is that it may keep memory
 /// alive when nothing is using it. A previously used slot for an instance might

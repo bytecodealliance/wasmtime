@@ -25,7 +25,7 @@ column is below.
 | [`multi-memory`]         | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`threads`]              | ✅      | ✅    | ✅[^9]   | ❌[^3] | ✅  | ✅    |
 | [`tail-call`]            | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`extended-const`]       | ✅      | ✅    | ✅       | ❌[^4] | ✅  | ✅    |
+| [`extended-const`]       | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 
 [^1]: The `component-model` proposal is not at phase 4 in the standardization
     process but it is still enabled-by-default in Wasmtime.
@@ -33,8 +33,6 @@ column is below.
     lines of `wasm-smith` are not implemented for components.
 [^3]: Fuzzing with threads is an open implementation question that is expected
     to get fleshed out as the [`shared-everything-threads`] proposal advances.
-[^4]: This was a mistake in Wasmtime's stabilization process. Support for
-    [`extended-const`] is not yet implemented in `wasm-smith`.
 [^5]: Support for the C API for components is desired by many embedders but
     does not currently have anyone lined up to implement it.
 [^9]: There are [known
@@ -51,7 +49,7 @@ column is below.
 | [`function-references`]  | ✅      | ✅    | ❌       | ❌     | ✅  | ❌    |
 | [`gc`] [^6]              | ✅      | ✅    | ❌[^7]   | ❌     | ✅  | ❌    |
 | [`wide-arithmetic`]      | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
-| [`custom-page-sizes`]    | ❌      | ✅    | ⚠️[^8]    | ✅     | ✅  | ❌    |
+| [`custom-page-sizes`]    | ❌      | ✅    | ✅       | ✅     | ✅  | ❌    |
 
 [^6]: There is also a [tracking
     issue](https://github.com/bytecodealliance/wasmtime/issues/5032) for the
@@ -59,8 +57,6 @@ column is below.
 [^7]: The implementation of GC has [known performance
     issues](https://github.com/bytecodealliance/wasmtime/issues/9351) which can
     affect non-GC code when the GC proposal is enabled.
-[^8]: Using custom-page-sizes is [known to have issues when combined with shared
-    memories](https://github.com/bytecodealliance/wasmtime/issues/9523).
 
 ## Unimplemented proposals
 

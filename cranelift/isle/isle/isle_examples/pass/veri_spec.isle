@@ -8,7 +8,7 @@
   ((args (bv 64)) (ret (bv 64)) (canon (bv 64)))
 )
 
-(spec (A i j) (provide (= (if $true (= i j) (= i (bvneg j))) (=> $false $true))))
+(spec (A i j) (provide (= (if true (= i j) (= i (bvneg j))) (=> false true))))
 (instantiate A ((args (bv 8)) (ret (bv 8)) (canon (bv 8))))
 (decl A (u8 u8) u8)
 
