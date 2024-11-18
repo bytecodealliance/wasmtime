@@ -3,7 +3,7 @@ use crate::prelude::*;
 use std::borrow::Cow;
 
 use super::{canonicalize_nan32, canonicalize_nan64, unwrap_2val, unwrap_val};
-use wasm_wave::wasm::{
+use component::wasm_wave::wasm::{
     ensure_type_kind, DisplayValue, WasmFunc, WasmType, WasmTypeKind, WasmValue, WasmValueError,
 };
 
