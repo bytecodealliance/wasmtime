@@ -904,7 +904,9 @@ fn introspection() -> Result<()> {
     };
     let mut params = fn_ty.params();
     assert_eq!(params.len(), 1);
-    assert_eq!(params.next().unwrap().unwrap_option().ty(), foo_ty);
+    let (name, param) = params.next().unwrap();
+    assert_eq!(name, "x");
+    assert_eq!(param.unwrap_option().ty(), foo_ty);
 
     let mut results = fn_ty.results();
     assert_eq!(results.len(), 1);

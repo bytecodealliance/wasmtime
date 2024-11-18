@@ -208,15 +208,17 @@ impl Func {
         Ok(())
     }
 
-    /// Get the parameter types for this function.
-    pub fn params(&self, store: impl AsContext) -> Box<[Type]> {
+    /// Get the parameter names and types for this function.
+    pub fn params(&self, store: impl AsContext) -> Box<[(String, Type)]> {
         let store = store.as_context();
         let data = &store[self.0];
         let instance = store[data.instance.0].as_ref().unwrap();
-        data.types[data.types[data.ty].params]
+        let func_ty = &data.types[data.ty];
+        data.types[func_ty.params]
             .types
             .iter()
-            .map(|ty| Type::from(ty, &instance.ty()))
+            .zip(&func_ty.param_names)
+            .map(|(ty, name)| (name.clone(), Type::from(ty, &instance.ty())))
             .collect()
     }
 

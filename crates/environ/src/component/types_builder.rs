@@ -204,6 +204,7 @@ impl ComponentTypesBuilder {
     ) -> Result<TypeFuncIndex> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let ty = &types[id];
+        let param_names = ty.params.iter().map(|(name, _)| name.to_string()).collect();
         let params = ty
             .params
             .iter()
@@ -215,6 +216,7 @@ impl ComponentTypesBuilder {
             .map(|(_name, ty)| self.valtype(types, ty))
             .collect::<Result<_>>()?;
         let ty = TypeFunc {
+            param_names,
             params: self.new_tuple_type(params),
             results: self.new_tuple_type(results),
         };
