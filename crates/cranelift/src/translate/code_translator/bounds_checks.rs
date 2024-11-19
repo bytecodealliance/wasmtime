@@ -144,7 +144,7 @@ where
     // different bounds checks and optimizations of those bounds checks. It is
     // intentionally written in a straightforward case-matching style that will
     // hopefully make it easy to port to ISLE one day.
-    if offset_and_size >= heap.memory.maximum_byte_size().unwrap_or(u64::MAX) {
+    if offset_and_size > heap.memory.maximum_byte_size().unwrap_or(u64::MAX) {
         // Special case: trap immediately if `offset + access_size >
         // max_memory_size`, since we will end up being out-of-bounds regardless
         // of the given `index`.
