@@ -233,7 +233,7 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
     let mut summaries =
         SecondaryMap::<Block, BlockSummary>::with_capacity(domtree.cfg_postorder().len());
 
-    for b in domtree.cfg_postorder().iter().rev().copied() {
+    for b in domtree.cfg_rpo().copied() {
         let formals = func.dfg.block_params(b);
         let mut summary = BlockSummary::new(&bump, formals);
 
@@ -269,7 +269,7 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
     // Set up initial solver state
     let mut state = SolverState::new();
 
-    for b in domtree.cfg_postorder().iter().rev().copied() {
+    for b in domtree.cfg_rpo().copied() {
         // For each block, get the formals
         if b == entry_block {
             continue;
@@ -288,7 +288,7 @@ pub fn do_remove_constant_phis(func: &mut Function, domtree: &mut DominatorTree)
         iter_no += 1;
         let mut changed = false;
 
-        for src in domtree.cfg_postorder().iter().rev().copied() {
+        for src in domtree.cfg_rpo().copied() {
             let src_summary = &summaries[src];
             for edge in &src_summary.dests {
                 assert!(edge.block != entry_block);

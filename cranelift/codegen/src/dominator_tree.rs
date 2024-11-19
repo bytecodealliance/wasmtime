@@ -60,6 +60,15 @@ impl DominatorTree {
         &self.postorder
     }
 
+    /// Get an iterator over CFG reverse post-order of blocks used to compute the dominator tree.
+    ///
+    /// Note that the post-order is not updated automatically when the CFG is modified. It is
+    /// computed from scratch and cached by `compute()`.
+    pub fn cfg_rpo(&self) -> impl Iterator<Item = &Block> {
+        debug_assert!(self.is_valid());
+        self.postorder.iter().rev()
+    }
+
     /// Returns the immediate dominator of `block`.
     ///
     /// `block_a` is said to *dominate* `block_b` if all control flow paths from the function
