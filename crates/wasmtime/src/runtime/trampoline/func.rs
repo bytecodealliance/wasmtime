@@ -1,12 +1,9 @@
 //! Support for a calling of an imported function.
 
 use crate::prelude::*;
-use crate::runtime::vm::{
-    StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMOpaqueContext,
-};
+use crate::runtime::vm::{StoreBox, VMArrayCallHostFuncContext, VMContext, VMOpaqueContext};
 use crate::type_registry::RegisteredType;
 use crate::{FuncType, ValRaw};
-use core::ptr;
 
 struct TrampolineState<F> {
     func: F,
@@ -81,12 +78,8 @@ where
 
     unsafe {
         Ok(VMArrayCallHostFuncContext::new(
-            VMFuncRef {
-                array_call,
-                wasm_call: None,
-                type_index: sig.index(),
-                vmctx: ptr::null_mut(),
-            },
+            array_call,
+            sig.index(),
             Box::new(TrampolineState { func, sig }),
         ))
     }

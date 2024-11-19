@@ -37,8 +37,14 @@ use wasmtime_environ::{
 ///
 /// * The capacity of the `ValRaw` buffer. Must always be at least
 ///   `max(len(wasm_params), len(wasm_results))`.
-pub type VMArrayCallFunction =
+pub type VMArrayCallNative =
     unsafe extern "C" fn(*mut VMOpaqueContext, *mut VMOpaqueContext, *mut ValRaw, usize);
+
+/// An opaque function pointer which might be `VMArrayCallNative` or it might be
+/// pulley bytecode. Requires external knowledge to determine what kind of
+/// function pointer this is.
+#[repr(transparent)]
+pub struct VMArrayCallFunction(VMFunctionBody);
 
 /// A function pointer that exposes the Wasm calling convention.
 ///
@@ -60,7 +66,7 @@ pub struct VMFunctionImport {
 
     /// Function pointer to use when calling this imported function with the
     /// "array" calling convention that `Func::new` et al use.
-    pub array_call: VMArrayCallFunction,
+    pub array_call: NonNull<VMArrayCallFunction>,
 
     /// The VM state associated with this function.
     ///
@@ -652,7 +658,7 @@ mod test_vmshared_type_index {
 pub struct VMFuncRef {
     /// Function pointer for this funcref if being called via the "array"
     /// calling convention that `Func::new` et al use.
-    pub array_call: VMArrayCallFunction,
+    pub array_call: NonNull<VMArrayCallFunction>,
 
     /// Function pointer for this funcref if being called via the calling
     /// convention we use when compiling Wasm.
@@ -709,7 +715,15 @@ impl VMFuncRef {
     /// This method is unsafe because it can be called with any pointers. They
     /// must all be valid for this wasm function call to proceed.
     pub unsafe fn array_call(&self, caller: *mut VMOpaqueContext, args_and_results: *mut [ValRaw]) {
-        (self.array_call)(
+        union GetNativePointer {
+            native: VMArrayCallNative,
+            ptr: NonNull<VMArrayCallFunction>,
+        }
+        let native = GetNativePointer {
+            ptr: self.array_call,
+        }
+        .native;
+        native(
             self.vmctx,
             caller,
             args_and_results.cast(),

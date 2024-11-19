@@ -391,7 +391,7 @@ impl ComponentInstance {
         &mut self,
         idx: TrampolineIndex,
         wasm_call: NonNull<VMWasmCallFunction>,
-        array_call: VMArrayCallFunction,
+        array_call: NonNull<VMArrayCallFunction>,
         type_index: VMSharedTypeIndex,
     ) {
         unsafe {
@@ -731,7 +731,7 @@ impl OwnedComponentInstance {
         &mut self,
         idx: TrampolineIndex,
         wasm_call: NonNull<VMWasmCallFunction>,
-        array_call: VMArrayCallFunction,
+        array_call: NonNull<VMArrayCallFunction>,
         type_index: VMSharedTypeIndex,
     ) {
         unsafe {

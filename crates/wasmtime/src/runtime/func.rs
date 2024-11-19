@@ -16,7 +16,7 @@ use core::future::Future;
 use core::mem::{self, MaybeUninit};
 use core::num::NonZeroUsize;
 use core::pin::Pin;
-use core::ptr::{self, NonNull};
+use core::ptr::NonNull;
 use wasmtime_environ::VMSharedTypeIndex;
 
 /// A reference to the abstract `nofunc` heap value.
@@ -2287,12 +2287,8 @@ impl HostContext {
 
         let ctx = unsafe {
             VMArrayCallHostFuncContext::new(
-                VMFuncRef {
-                    array_call,
-                    wasm_call: None,
-                    type_index,
-                    vmctx: ptr::null_mut(),
-                },
+                array_call,
+                type_index,
                 Box::new(HostFuncState {
                     func,
                     ty: ty.into_registered_type(),
