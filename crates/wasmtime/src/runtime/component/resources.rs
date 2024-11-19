@@ -1034,7 +1034,7 @@ impl ResourceAny {
         // destructors have al been previously type-checked and are guaranteed
         // to take one i32 argument and return no results, so the parameters
         // here should be configured correctly.
-        unsafe { crate::Func::call_unchecked_raw(store, dtor, args.as_mut_ptr(), args.len()) }
+        unsafe { crate::Func::call_unchecked_raw(store, dtor, &mut args) }
     }
 
     fn lower_to_index<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType) -> Result<u32> {

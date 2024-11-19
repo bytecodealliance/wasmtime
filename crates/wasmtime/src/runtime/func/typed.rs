@@ -213,13 +213,13 @@ where
 
         let result = invoke_wasm_and_catch_traps(store, |caller| {
             let (func_ref, storage) = &mut captures;
-            let func_ref = func_ref.as_ref();
-            (func_ref.array_call)(
-                func_ref.vmctx,
-                VMOpaqueContext::from_vmcontext(caller),
-                (storage as *mut Storage<_, _>) as *mut ValRaw,
-                mem::size_of_val::<Storage<_, _>>(storage) / mem::size_of::<ValRaw>(),
-            );
+            let storage_len = mem::size_of_val::<Storage<_, _>>(storage) / mem::size_of::<ValRaw>();
+            let storage: *mut Storage<_, _> = storage;
+            let storage = storage.cast::<ValRaw>();
+            let storage = core::ptr::slice_from_raw_parts_mut(storage, storage_len);
+            func_ref
+                .as_ref()
+                .array_call(VMOpaqueContext::from_vmcontext(caller), storage);
         });
 
         let (_, storage) = captures;
