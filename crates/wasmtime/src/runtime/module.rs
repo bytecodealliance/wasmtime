@@ -25,9 +25,7 @@ use wasmtime_environ::{
 };
 mod registry;
 
-pub use registry::{
-    lookup_code, register_code, unregister_code, ModuleRegistry, RegisteredModuleId,
-};
+pub use registry::*;
 
 /// A compiled WebAssembly module, ready to be instantiated.
 ///

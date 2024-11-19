@@ -3,6 +3,7 @@
 #[macro_use]
 extern crate alloc;
 
+use alloc::string::ToString;
 use anyhow::Result;
 use wasmtime::{Engine, Instance, Linker, Module, Store};
 
@@ -53,14 +54,20 @@ fn run_result(
 
 fn smoke(module: &[u8]) -> Result<()> {
     let engine = Engine::default();
-    let module = unsafe { Module::deserialize(&engine, module)? };
+    let module = match deserialize(&engine, module)? {
+        Some(module) => module,
+        None => return Ok(()),
+    };
     Instance::new(&mut Store::new(&engine, ()), &module, &[])?;
     Ok(())
 }
 
 fn simple_add(module: &[u8]) -> Result<()> {
     let engine = Engine::default();
-    let module = unsafe { Module::deserialize(&engine, module)? };
+    let module = match deserialize(&engine, module)? {
+        Some(module) => module,
+        None => return Ok(()),
+    };
     let mut store = Store::new(&engine, ());
     let instance = Linker::new(&engine).instantiate(&mut store, &module)?;
     let func = instance.get_typed_func::<(u32, u32), u32>(&mut store, "add")?;
@@ -70,7 +77,10 @@ fn simple_add(module: &[u8]) -> Result<()> {
 
 fn simple_host_fn(module: &[u8]) -> Result<()> {
     let engine = Engine::default();
-    let module = unsafe { Module::deserialize(&engine, module)? };
+    let module = match deserialize(&engine, module)? {
+        Some(module) => module,
+        None => return Ok(()),
+    };
     let mut linker = Linker::<()>::new(&engine);
     linker.func_wrap("host", "multiply", |a: u32, b: u32| a.saturating_mul(b))?;
     let mut store = Store::new(&engine, ());
@@ -78,4 +88,25 @@ fn simple_host_fn(module: &[u8]) -> Result<()> {
     let func = instance.get_typed_func::<(u32, u32, u32), u32>(&mut store, "add_and_mul")?;
     assert_eq!(func.call(&mut store, (2, 3, 4))?, 10);
     Ok(())
+}
+
+fn deserialize(engine: &Engine, module: &[u8]) -> Result<Option<Module>> {
+    match unsafe { Module::deserialize(engine, module) } {
+        Ok(module) => Ok(Some(module)),
+        Err(e) => {
+            // Currently if signals-based-traps are disabled then this example
+            // is expected to fail to load since loading native code requires
+            // virtual memory. In the future this will go away as when
+            // signals-based-traps is disabled then that means that the
+            // interpreter should be used which should work here.
+            if !cfg!(feature = "signals-based-traps")
+                && e.to_string()
+                    .contains("requires virtual memory to be enabled")
+            {
+                Ok(None)
+            } else {
+                Err(e)
+            }
+        }
+    }
 }

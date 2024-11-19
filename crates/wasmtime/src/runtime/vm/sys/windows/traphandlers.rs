@@ -1,3 +1,4 @@
+use crate::prelude::*;
 use crate::runtime::vm::traphandlers::{tls, TrapRegisters, TrapTest};
 use crate::runtime::vm::VMContext;
 use std::ffi::c_void;
@@ -22,7 +23,7 @@ extern "C" {
 }
 
 /// Function which may handle custom signals while processing traps.
-pub type SignalHandler<'a> = dyn Fn(*mut EXCEPTION_POINTERS) -> bool + Send + Sync + 'a;
+pub type SignalHandler = Box<dyn Fn(*mut EXCEPTION_POINTERS) -> bool + Send + Sync>;
 
 pub struct TrapHandler {
     handle: *mut c_void,

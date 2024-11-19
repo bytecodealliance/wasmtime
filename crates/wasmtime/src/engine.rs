@@ -97,6 +97,7 @@ impl Engine {
             // configured. This is the per-program initialization required for
             // handling traps, such as configuring signals, vectored exception
             // handlers, etc.
+            #[cfg(all(feature = "signals-based-traps", not(miri)))]
             crate::runtime::vm::init_traps(config.macos_use_mach_ports);
             #[cfg(feature = "debug-builtins")]
             crate::runtime::vm::debug_builtins::ensure_exported();
@@ -762,10 +763,12 @@ impl Engine {
     /// If other crashes are seen from using this method please feel free to
     /// file an issue to update the documentation here with more preconditions
     /// that must be met.
+    #[cfg(feature = "signals-based-traps")]
     pub unsafe fn unload_process_handlers(self) {
         assert_eq!(Arc::weak_count(&self.inner), 0);
         assert_eq!(Arc::strong_count(&self.inner), 1);
 
+        #[cfg(not(miri))]
         crate::runtime::vm::deinit_traps();
     }
 }

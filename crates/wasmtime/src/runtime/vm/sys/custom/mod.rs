@@ -8,14 +8,20 @@
 //! For more information about this see `./examples/min-platform` as well as
 //! `./docs/examples-minimal.md`.
 
+#![warn(dead_code, unused_imports)]
+
+#[cfg(feature = "signals-based-traps")]
 use crate::prelude::*;
 
 pub mod capi;
+#[cfg(feature = "signals-based-traps")]
 pub mod mmap;
 pub mod traphandlers;
 pub mod unwind;
+#[cfg(feature = "signals-based-traps")]
 pub mod vm;
 
+#[cfg(feature = "signals-based-traps")]
 fn cvt(rc: i32) -> Result<()> {
     match rc {
         0 => Ok(()),

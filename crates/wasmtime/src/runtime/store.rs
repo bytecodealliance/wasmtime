@@ -85,7 +85,7 @@ use crate::runtime::vm::mpk::{self, ProtectionKey, ProtectionMask};
 use crate::runtime::vm::{
     Backtrace, ExportGlobal, GcRootsList, GcStore, InstanceAllocationRequest, InstanceAllocator,
     InstanceHandle, ModuleRuntimeInfo, OnDemandInstanceAllocator, SignalHandler, StoreBox,
-    StorePtr, VMContext, VMFuncRef, VMGcRef, VMRuntimeLimits, WasmFault,
+    StorePtr, VMContext, VMFuncRef, VMGcRef, VMRuntimeLimits,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::type_registry::RegisteredType;
@@ -314,7 +314,7 @@ pub struct StoreOpaque {
     instances: Vec<StoreInstance>,
     #[cfg(feature = "component-model")]
     num_component_instances: usize,
-    signal_handler: Option<Box<SignalHandler<'static>>>,
+    signal_handler: Option<SignalHandler>,
     modules: ModuleRegistry,
     func_refs: FuncRefs,
     host_globals: Vec<StoreBox<VMHostGlobalContext>>,
@@ -1524,7 +1524,7 @@ impl StoreOpaque {
     }
 
     #[cfg_attr(not(target_os = "linux"), allow(dead_code))] // not used on all platforms
-    pub fn set_signal_handler(&mut self, handler: Option<Box<SignalHandler<'static>>>) {
+    pub fn set_signal_handler(&mut self, handler: Option<SignalHandler>) {
         self.signal_handler = handler;
     }
 
@@ -1903,9 +1903,9 @@ impl StoreOpaque {
     }
 
     #[inline]
-    pub fn signal_handler(&self) -> Option<*const SignalHandler<'static>> {
+    pub fn signal_handler(&self) -> Option<*const SignalHandler> {
         let handler = self.signal_handler.as_ref()?;
-        Some(&**handler as *const _)
+        Some(handler)
     }
 
     #[inline]
@@ -1972,7 +1972,12 @@ impl StoreOpaque {
     /// with spectre mitigations enabled since the hardware fault address is
     /// always zero in these situations which means that the trapping context
     /// doesn't have enough information to report the fault address.
-    pub(crate) fn wasm_fault(&self, pc: usize, addr: usize) -> Option<WasmFault> {
+    #[cfg(all(feature = "signals-based-traps", not(miri)))]
+    pub(crate) fn wasm_fault(
+        &self,
+        pc: usize,
+        addr: usize,
+    ) -> Option<crate::runtime::vm::WasmFault> {
         // There are a few instances where a "close to zero" pointer is loaded
         // and we expect that to happen:
         //

@@ -156,11 +156,6 @@ impl Mmap {
         self.sys.len()
     }
 
-    /// Return whether any memory has been allocated or reserved.
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
     /// Makes the specified `range` within this `Mmap` to be read/execute.
     ///
     /// # Unsafety

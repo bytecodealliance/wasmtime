@@ -29,7 +29,6 @@ mod gc;
 mod imports;
 mod instance;
 mod memory;
-mod mmap;
 mod mmap_vec;
 mod send_sync_ptr;
 mod send_sync_unsafe_cell;
@@ -39,8 +38,8 @@ mod table;
 mod traphandlers;
 mod vmcontext;
 
-mod threads;
-pub use self::threads::*;
+#[cfg(feature = "threads")]
+mod parking_spot;
 
 #[cfg(feature = "debug-builtins")]
 pub mod debug_builtins;
@@ -65,8 +64,9 @@ pub use crate::runtime::vm::instance::{
     InstanceLimits, PoolConcurrencyLimitError, PoolingInstanceAllocator,
     PoolingInstanceAllocatorConfig,
 };
-pub use crate::runtime::vm::memory::{Memory, RuntimeLinearMemory, RuntimeMemoryCreator};
-pub use crate::runtime::vm::mmap::Mmap;
+pub use crate::runtime::vm::memory::{
+    Memory, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory,
+};
 pub use crate::runtime::vm::mmap_vec::MmapVec;
 pub use crate::runtime::vm::mpk::MpkEnabled;
 pub use crate::runtime::vm::store_box::*;
@@ -86,8 +86,21 @@ pub use send_sync_unsafe_cell::SendSyncUnsafeCell;
 mod module_id;
 pub use module_id::CompiledModuleId;
 
+#[cfg(feature = "signals-based-traps")]
 mod cow;
-pub use crate::runtime::vm::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
+#[cfg(not(feature = "signals-based-traps"))]
+mod cow_disabled;
+#[cfg(feature = "signals-based-traps")]
+mod mmap;
+
+cfg_if::cfg_if! {
+    if #[cfg(feature = "signals-based-traps")] {
+        pub use crate::runtime::vm::mmap::Mmap;
+        pub use self::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
+    } else {
+        pub use self::cow_disabled::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
+    }
+}
 
 /// Dynamic runtime functionality needed by this crate throughout the execution
 /// of a wasm instance.
@@ -337,6 +350,7 @@ impl ModuleRuntimeInfo {
 }
 
 /// Returns the host OS page size, in bytes.
+#[cfg(feature = "signals-based-traps")]
 pub fn host_page_size() -> usize {
     static PAGE_SIZE: AtomicUsize = AtomicUsize::new(0);
 
@@ -352,6 +366,7 @@ pub fn host_page_size() -> usize {
 }
 
 /// Is `bytes` a multiple of the host page size?
+#[cfg(feature = "signals-based-traps")]
 pub fn usize_is_multiple_of_host_page_size(bytes: usize) -> bool {
     bytes % host_page_size() == 0
 }
@@ -359,6 +374,7 @@ pub fn usize_is_multiple_of_host_page_size(bytes: usize) -> bool {
 /// Round the given byte size up to a multiple of the host OS page size.
 ///
 /// Returns an error if rounding up overflows.
+#[cfg(feature = "signals-based-traps")]
 pub fn round_u64_up_to_host_pages(bytes: u64) -> Result<u64> {
     let page_size = u64::try_from(crate::runtime::vm::host_page_size()).err2anyhow()?;
     debug_assert!(page_size.is_power_of_two());
@@ -371,6 +387,7 @@ pub fn round_u64_up_to_host_pages(bytes: u64) -> Result<u64> {
 }
 
 /// Same as `round_u64_up_to_host_pages` but for `usize`s.
+#[cfg(feature = "signals-based-traps")]
 pub fn round_usize_up_to_host_pages(bytes: usize) -> Result<usize> {
     let bytes = u64::try_from(bytes).err2anyhow()?;
     let rounded = round_u64_up_to_host_pages(bytes)?;

@@ -159,7 +159,11 @@ impl FinishedObject for MmapVecWrapper {
 
             fn write_bytes(&mut self, val: &[u8]) {
                 let mmap = self.mmap.as_mut().expect("write before reserve");
-                mmap[self.len..][..val.len()].copy_from_slice(val);
+                // SAFETY: the `mmap` has not be made readonly yet so it should
+                // be safe to mutate it.
+                unsafe {
+                    mmap.as_mut_slice()[self.len..][..val.len()].copy_from_slice(val);
+                }
                 self.len += val.len();
             }
         }

@@ -65,6 +65,17 @@ fn main() -> Result<()> {
     // Note that `Config::target` is used here to enable cross-compilation.
     let mut config = Config::new();
     config.target(&triple)?;
+
+    // If signals-based-traps are disabled then that additionally means that
+    // some configuration knobs need to be turned to match the expectations of
+    // the guest program being loaded.
+    if !cfg!(feature = "signals-based-traps") {
+        config.memory_reservation(0);
+        config.memory_guard_size(0);
+        config.memory_reservation_for_growth(0);
+        config.signals_based_traps(false);
+    }
+
     let engine = Engine::new(&config)?;
     let smoke = engine.precompile_module(b"(module)")?;
     let simple_add = engine.precompile_module(

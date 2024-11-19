@@ -379,6 +379,8 @@ jobs:
               -p wasmtime --no-default-features --features threads
               -p wasmtime --no-default-features --features runtime,threads
               -p wasmtime --no-default-features --features cranelift,threads
+              -p wasmtime --no-default-features --features runtime,signals-based-traps
+              -p wasmtime --no-default-features --features runtime,gc,component-model,signals-based-traps
               -p wasmtime --features incremental-cache
               -p wasmtime --all-features
 
@@ -443,7 +445,9 @@ jobs:
     - uses: ./.github/actions/install-rust
 
     - run: rustup target add x86_64-unknown-none
+    - run: cargo check --target x86_64-unknown-none -p wasmtime --no-default-features --features runtime,component-model
     - run: cargo check --target x86_64-unknown-none -p wasmtime --no-default-features --features runtime,gc,component-model
+    - run: cargo check --target x86_64-unknown-none -p wasmtime --no-default-features --features runtime,gc,component-model,signals-based-traps
     - run: cargo check --target x86_64-unknown-none -p cranelift-control --no-default-features
     - run: cargo check --target x86_64-unknown-none -p pulley-interpreter --features encode,decode,disas,interp
 
@@ -951,6 +955,12 @@ jobs:
     # Afterwards make sure the generated header file is up to date by ensuring
     # that the regeneration process didn't change anything in-tree.
     - run: git diff --exit-code
+
+    # Test some other feature combinations
+    - run: ./build.sh x86_64-unknown-none
+      working-directory: ./examples/min-platform
+      env:
+        WASMTIME_SIGNALS_BASED_TRAPS: 1
 
     # Add the `wasmtime-platform.h` file as a release artifact
     - uses: actions/upload-artifact@v4

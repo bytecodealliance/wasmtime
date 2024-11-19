@@ -56,7 +56,10 @@ pub fn check_memory_accesses(input: MemoryAccesses) {
         Ok(x) => x,
         Err(e) => {
             log::info!("Failed to instantiate: {e:?}");
-            assert!(format!("{e:?}").contains("Cannot allocate memory"));
+            assert!(
+                format!("{e:?}").contains("Cannot allocate memory"),
+                "bad error: {e:?}",
+            );
             return;
         }
     };
