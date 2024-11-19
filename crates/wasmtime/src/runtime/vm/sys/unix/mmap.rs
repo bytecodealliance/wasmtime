@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::runtime::vm::SendSyncPtr;
+use crate::runtime::vm::{HostAlignedByteCount, SendSyncPtr};
 use rustix::mm::{mprotect, MprotectFlags};
 use std::ops::Range;
 use std::ptr::{self, NonNull};
@@ -41,26 +41,26 @@ impl Mmap {
         }
     }
 
-    pub fn new(size: usize) -> Result<Self> {
+    pub fn new(size: HostAlignedByteCount) -> Result<Self> {
         let ptr = unsafe {
             rustix::mm::mmap_anonymous(
                 ptr::null_mut(),
-                size,
+                size.byte_count(),
                 rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
                 rustix::mm::MapFlags::PRIVATE | MMAP_NORESERVE_FLAG,
             )
             .err2anyhow()?
         };
-        let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size);
+        let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size.byte_count());
         let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
         Ok(Mmap { memory })
     }
 
-    pub fn reserve(size: usize) -> Result<Self> {
+    pub fn reserve(size: HostAlignedByteCount) -> Result<Self> {
         let ptr = unsafe {
             rustix::mm::mmap_anonymous(
                 ptr::null_mut(),
-                size,
+                size.byte_count(),
                 rustix::mm::ProtFlags::empty(),
                 // Astute readers might be wondering why a function called "reserve" passes in a
                 // NORESERVE flag. That's because "reserve" in this context means one of two
@@ -78,7 +78,7 @@ impl Mmap {
             .err2anyhow()?
         };
 
-        let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size);
+        let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size.byte_count());
         let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
         Ok(Mmap { memory })
     }
@@ -109,12 +109,16 @@ impl Mmap {
         Ok(Mmap { memory })
     }
 
-    pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<()> {
+    pub fn make_accessible(
+        &mut self,
+        start: HostAlignedByteCount,
+        len: HostAlignedByteCount,
+    ) -> Result<()> {
         let ptr = self.memory.as_ptr();
         unsafe {
             mprotect(
-                ptr.byte_add(start).cast(),
-                len,
+                ptr.byte_add(start.byte_count()).cast(),
+                len.byte_count(),
                 MprotectFlags::READ | MprotectFlags::WRITE,
             )
             .err2anyhow()?;

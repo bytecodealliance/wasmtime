@@ -3,8 +3,7 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::memory::RuntimeLinearMemory;
-use crate::runtime::vm::mmap::{AlignedLength, Mmap};
-use crate::runtime::vm::{round_usize_up_to_host_pages, usize_is_multiple_of_host_page_size};
+use crate::runtime::vm::{mmap::AlignedLength, HostAlignedByteCount, Mmap};
 use wasmtime_environ::Tunables;
 
 /// A linear memory instance.
@@ -35,12 +34,12 @@ pub struct MmapMemory {
 
     // The amount of extra bytes to reserve whenever memory grows. This is
     // specified so that the cost of repeated growth is amortized.
-    extra_to_reserve_on_growth: usize,
+    extra_to_reserve_on_growth: HostAlignedByteCount,
 
     // Size in bytes of extra guard pages before the start and after the end to
     // optimize loads and stores with constant offsets.
-    pre_guard_size: usize,
-    offset_guard_size: usize,
+    pre_guard_size: HostAlignedByteCount,
+    offset_guard_size: HostAlignedByteCount,
 }
 
 impl MmapMemory {
@@ -57,12 +56,14 @@ impl MmapMemory {
         // found (mostly an issue for hypothetical 32-bit hosts).
         //
         // Also be sure to round up to the host page size for this value.
-        let offset_guard_bytes = usize::try_from(tunables.memory_guard_size).unwrap();
-        let offset_guard_bytes = round_usize_up_to_host_pages(offset_guard_bytes)?;
+        let offset_guard_bytes =
+            HostAlignedByteCount::new_rounded_up_u64(tunables.memory_guard_size)
+                .err2anyhow()
+                .context("tunable.memory_guard_size overflows")?;
         let pre_guard_bytes = if tunables.guard_before_linear_memory {
             offset_guard_bytes
         } else {
-            0
+            HostAlignedByteCount::ZERO
         };
 
         // Calculate how much is going to be allocated for this linear memory in
@@ -90,21 +91,24 @@ impl MmapMemory {
 
         // Convert `alloc_bytes` and `extra_to_reserve_on_growth` to
         // page-aligned `usize` values.
-        let alloc_bytes = usize::try_from(alloc_bytes).unwrap();
-        let extra_to_reserve_on_growth = usize::try_from(extra_to_reserve_on_growth).unwrap();
-        let alloc_bytes = round_usize_up_to_host_pages(alloc_bytes)?;
-        let extra_to_reserve_on_growth = round_usize_up_to_host_pages(extra_to_reserve_on_growth)?;
+        let alloc_bytes = HostAlignedByteCount::new_rounded_up_u64(alloc_bytes)
+            .err2anyhow()
+            .context("tunables.memory_reservation overflows")?;
+        let extra_to_reserve_on_growth =
+            HostAlignedByteCount::new_rounded_up_u64(extra_to_reserve_on_growth)
+                .err2anyhow()
+                .context("tunables.memory_reservation_for_growth overflows")?;
 
         let request_bytes = pre_guard_bytes
             .checked_add(alloc_bytes)
             .and_then(|i| i.checked_add(offset_guard_bytes))
-            .ok_or_else(|| format_err!("cannot allocate {} with guard regions", minimum))?;
-        assert!(usize_is_multiple_of_host_page_size(request_bytes));
+            .err2anyhow()
+            .with_context(|| format!("cannot allocate {minimum} with guard regions"))?;
 
-        let mut mmap = Mmap::accessible_reserved(0, request_bytes)?;
+        let mut mmap = Mmap::accessible_reserved(HostAlignedByteCount::ZERO, request_bytes)?;
 
         if minimum > 0 {
-            let accessible = round_usize_up_to_host_pages(minimum)?;
+            let accessible = HostAlignedByteCount::new_rounded_up(minimum).err2anyhow()?;
             mmap.make_accessible(pre_guard_bytes, accessible)?;
         }
 
@@ -121,11 +125,20 @@ impl MmapMemory {
     /// Get the length of the accessible portion of the underlying `mmap`. This
     /// is the same region as `self.len` but rounded up to a multiple of the
     /// host page size.
-    fn accessible(&self) -> usize {
-        let accessible =
-            round_usize_up_to_host_pages(self.len).expect("accessible region always fits in usize");
-        debug_assert!(accessible <= self.mmap.len() - self.offset_guard_size - self.pre_guard_size);
+    fn accessible(&self) -> HostAlignedByteCount {
+        let accessible = HostAlignedByteCount::new_rounded_up(self.len)
+            .expect("accessible region always fits in usize");
+        debug_assert!(accessible <= self.current_capacity());
         accessible
+    }
+
+    /// Get the amount to which this memory can grow.
+    fn current_capacity(&self) -> HostAlignedByteCount {
+        let mmap_len = self.mmap.len_aligned();
+        mmap_len
+            .checked_sub(self.offset_guard_size)
+            .and_then(|i| i.checked_sub(self.pre_guard_size))
+            .expect("guard regions fit in mmap.len")
     }
 }
 
@@ -135,16 +148,13 @@ impl RuntimeLinearMemory for MmapMemory {
     }
 
     fn byte_capacity(&self) -> usize {
-        self.mmap.len() - self.offset_guard_size - self.pre_guard_size
+        self.current_capacity().byte_count()
     }
 
     fn grow_to(&mut self, new_size: usize) -> Result<()> {
-        assert!(usize_is_multiple_of_host_page_size(self.offset_guard_size));
-        assert!(usize_is_multiple_of_host_page_size(self.pre_guard_size));
-        assert!(usize_is_multiple_of_host_page_size(self.mmap.len()));
-
-        let new_accessible = round_usize_up_to_host_pages(new_size)?;
-        if new_accessible > self.mmap.len() - self.offset_guard_size - self.pre_guard_size {
+        let new_accessible = HostAlignedByteCount::new_rounded_up(new_size).err2anyhow()?;
+        let current_capacity = self.current_capacity();
+        if new_accessible > current_capacity {
             // If the new size of this heap exceeds the current size of the
             // allocation we have, then this must be a dynamic heap. Use
             // `new_size` to calculate a new size of an allocation, allocate it,
@@ -154,17 +164,19 @@ impl RuntimeLinearMemory for MmapMemory {
                 .checked_add(new_accessible)
                 .and_then(|s| s.checked_add(self.extra_to_reserve_on_growth))
                 .and_then(|s| s.checked_add(self.offset_guard_size))
-                .ok_or_else(|| format_err!("overflow calculating size of memory allocation"))?;
-            assert!(usize_is_multiple_of_host_page_size(request_bytes));
+                .err2anyhow()
+                .context("overflow calculating size of memory allocation")?;
 
-            let mut new_mmap = Mmap::accessible_reserved(0, request_bytes)?;
+            let mut new_mmap =
+                Mmap::accessible_reserved(HostAlignedByteCount::ZERO, request_bytes)?;
             new_mmap.make_accessible(self.pre_guard_size, new_accessible)?;
 
             // This method has an exclusive reference to `self.mmap` and just
             // created `new_mmap` so it should be safe to acquire references
             // into both of them and copy between them.
             unsafe {
-                let range = self.pre_guard_size..self.pre_guard_size + self.len;
+                let range =
+                    self.pre_guard_size.byte_count()..(self.pre_guard_size.byte_count() + self.len);
                 let src = self.mmap.slice(range.clone());
                 let dst = new_mmap.slice_mut(range);
                 dst.copy_from_slice(src);
@@ -178,23 +190,20 @@ impl RuntimeLinearMemory for MmapMemory {
             // or "dynamic" heaps which have some space reserved after the
             // initial allocation to grow into before the heap is moved in
             // memory.
-            assert!(new_size > self.len);
+            assert!(new_size <= current_capacity.byte_count());
             assert!(self.maximum.map_or(true, |max| new_size <= max));
-            assert!(new_size <= self.mmap.len() - self.offset_guard_size - self.pre_guard_size);
-
-            let new_accessible = round_usize_up_to_host_pages(new_size)?;
-            assert!(
-                new_accessible <= self.mmap.len() - self.offset_guard_size - self.pre_guard_size,
-            );
 
             // If the Wasm memory's page size is smaller than the host's page
             // size, then we might not need to actually change permissions,
             // since we are forced to round our accessible range up to the
             // host's page size.
-            if new_accessible > self.accessible() {
+            if let Ok(difference) = new_accessible.checked_sub(self.accessible()) {
                 self.mmap.make_accessible(
-                    self.pre_guard_size + self.accessible(),
-                    new_accessible - self.accessible(),
+                    self.pre_guard_size
+                        .checked_add(self.accessible())
+                        .err2anyhow()
+                        .context("overflow calculating new accessible region")?,
+                    difference,
                 )?;
             }
         }
@@ -209,6 +218,6 @@ impl RuntimeLinearMemory for MmapMemory {
     }
 
     fn base_ptr(&self) -> *mut u8 {
-        unsafe { self.mmap.as_mut_ptr().add(self.pre_guard_size) }
+        unsafe { self.mmap.as_mut_ptr().add(self.pre_guard_size.byte_count()) }
     }
 }

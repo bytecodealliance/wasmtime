@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::runtime::vm::SendSyncPtr;
+use crate::runtime::vm::{HostAlignedByteCount, SendSyncPtr};
 use std::fs::{File, OpenOptions};
 use std::io;
 use std::ops::Range;
@@ -40,11 +40,11 @@ impl Mmap {
         }
     }
 
-    pub fn new(size: usize) -> Result<Self> {
+    pub fn new(size: HostAlignedByteCount) -> Result<Self> {
         let ptr = unsafe {
             VirtualAlloc(
                 ptr::null_mut(),
-                size,
+                size.byte_count(),
                 MEM_RESERVE | MEM_COMMIT,
                 PAGE_READWRITE,
             )
@@ -53,7 +53,7 @@ impl Mmap {
             bail!(io::Error::last_os_error())
         }
 
-        let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size);
+        let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size.byte_count());
         let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
         Ok(Self {
             memory,
@@ -61,12 +61,19 @@ impl Mmap {
         })
     }
 
-    pub fn reserve(size: usize) -> Result<Self> {
-        let ptr = unsafe { VirtualAlloc(ptr::null_mut(), size, MEM_RESERVE, PAGE_NOACCESS) };
+    pub fn reserve(size: HostAlignedByteCount) -> Result<Self> {
+        let ptr = unsafe {
+            VirtualAlloc(
+                ptr::null_mut(),
+                size.byte_count(),
+                MEM_RESERVE,
+                PAGE_NOACCESS,
+            )
+        };
         if ptr.is_null() {
             bail!(io::Error::last_os_error())
         }
-        let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size);
+        let memory = std::ptr::slice_from_raw_parts_mut(ptr.cast(), size.byte_count());
         let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
         Ok(Self {
             memory,
@@ -139,11 +146,15 @@ impl Mmap {
         }
     }
 
-    pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<()> {
+    pub fn make_accessible(
+        &mut self,
+        start: HostAlignedByteCount,
+        len: HostAlignedByteCount,
+    ) -> Result<()> {
         if unsafe {
             VirtualAlloc(
-                self.as_ptr().add(start) as _,
-                len,
+                self.as_ptr().add(start.byte_count()) as _,
+                len.byte_count(),
                 MEM_COMMIT,
                 PAGE_READWRITE,
             )

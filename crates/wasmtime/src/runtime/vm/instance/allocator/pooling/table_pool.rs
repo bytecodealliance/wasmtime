@@ -2,11 +2,11 @@ use super::{
     index_allocator::{SimpleIndexAllocator, SlotId},
     round_up_to_pow2, TableAllocationIndex,
 };
-use crate::prelude::*;
 use crate::runtime::vm::{
     mmap::AlignedLength, InstanceAllocationRequest, Mmap, PoolingInstanceAllocatorConfig,
     SendSyncPtr, Table,
 };
+use crate::{prelude::*, vm::HostAlignedByteCount};
 use crate::{runtime::vm::sys::vm::commit_pages, vm::round_usize_up_to_host_pages};
 use std::mem;
 use std::ptr::NonNull;
@@ -20,7 +20,7 @@ use wasmtime_environ::{Module, Tunables};
 pub struct TablePool {
     index_allocator: SimpleIndexAllocator,
     mapping: Mmap<AlignedLength>,
-    table_size: usize,
+    table_size: HostAlignedByteCount,
     max_total_tables: usize,
     tables_per_instance: usize,
     page_size: usize,
@@ -33,19 +33,20 @@ impl TablePool {
     pub fn new(config: &PoolingInstanceAllocatorConfig) -> Result<Self> {
         let page_size = crate::runtime::vm::host_page_size();
 
-        let table_size = round_up_to_pow2(
+        let table_size = HostAlignedByteCount::new_rounded_up(
             mem::size_of::<*mut u8>()
                 .checked_mul(config.limits.table_elements)
                 .ok_or_else(|| anyhow!("table size exceeds addressable memory"))?,
-            page_size,
-        );
+        )
+        .err2anyhow()?;
 
         let max_total_tables = usize::try_from(config.limits.total_tables).unwrap();
         let tables_per_instance = usize::try_from(config.limits.max_tables_per_module).unwrap();
 
         let allocation_size = table_size
             .checked_mul(max_total_tables)
-            .ok_or_else(|| anyhow!("total size of tables exceeds addressable memory"))?;
+            .err2anyhow()
+            .context("total size of tables exceeds addressable memory")?;
 
         let mapping = Mmap::accessible_reserved(allocation_size, allocation_size)
             .context("failed to create table pool mapping")?;
@@ -108,7 +109,14 @@ impl TablePool {
         unsafe {
             self.mapping
                 .as_ptr()
-                .add(table_index.index() * self.table_size)
+                .add(
+                    self.table_size
+                        .checked_mul(table_index.index())
+                        .expect(
+                            "checked in constructor that table_size * table_index doesn't overflow",
+                        )
+                        .byte_count(),
+                )
                 .cast_mut()
         }
     }
@@ -234,7 +242,10 @@ mod tests {
         for i in 0..7 {
             let index = TableAllocationIndex(i);
             let ptr = pool.get(index);
-            assert_eq!(ptr as usize - base, i as usize * pool.table_size);
+            assert_eq!(
+                ptr as usize - base,
+                pool.table_size.checked_mul(i as usize).unwrap()
+            );
         }
 
         Ok(())

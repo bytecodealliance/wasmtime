@@ -1,8 +1,9 @@
 //! Low-level abstraction for allocating and managing zero-filled pages
 //! of memory.
 
+use super::HostAlignedByteCount;
+use crate::prelude::*;
 use crate::runtime::vm::sys::mmap;
-use crate::{prelude::*, vm::usize_is_multiple_of_host_page_size};
 use core::ops::Range;
 #[cfg(feature = "std")]
 use std::{fs::File, sync::Arc};
@@ -62,7 +63,7 @@ impl Mmap<AlignedLength> {
     /// Create a new `Mmap` pointing to at least `size` bytes of page-aligned
     /// accessible memory.
     pub fn with_at_least(size: usize) -> Result<Self> {
-        let rounded_size = crate::runtime::vm::round_usize_up_to_host_pages(size)?;
+        let rounded_size = HostAlignedByteCount::new_rounded_up(size).err2anyhow()?;
         Self::accessible_reserved(rounded_size, rounded_size)
     }
 
@@ -73,13 +74,14 @@ impl Mmap<AlignedLength> {
     /// # Panics
     ///
     /// This function will panic if `accessible_size` is greater than
-    /// `mapping_size` or if either of them are not page-aligned.
-    pub fn accessible_reserved(accessible_size: usize, mapping_size: usize) -> Result<Self> {
+    /// `mapping_size`.
+    pub fn accessible_reserved(
+        accessible_size: HostAlignedByteCount,
+        mapping_size: HostAlignedByteCount,
+    ) -> Result<Self> {
         assert!(accessible_size <= mapping_size);
-        assert!(usize_is_multiple_of_host_page_size(mapping_size));
-        assert!(usize_is_multiple_of_host_page_size(accessible_size));
 
-        if mapping_size == 0 {
+        if mapping_size.is_zero() {
             Ok(Mmap {
                 sys: mmap::Mmap::new_empty(),
                 data: AlignedLength {},
@@ -96,10 +98,12 @@ impl Mmap<AlignedLength> {
                     .context(format!("mmap failed to reserve {mapping_size:#x} bytes"))?,
                 data: AlignedLength {},
             };
-            if accessible_size > 0 {
-                result.make_accessible(0, accessible_size).context(format!(
-                    "mmap failed to allocate {accessible_size:#x} bytes"
-                ))?;
+            if !accessible_size.is_zero() {
+                result
+                    .make_accessible(HostAlignedByteCount::ZERO, accessible_size)
+                    .context(format!(
+                        "mmap failed to allocate {accessible_size:#x} bytes"
+                    ))?;
             }
             Ok(result)
         }
@@ -119,20 +123,25 @@ impl Mmap<AlignedLength> {
         }
     }
 
+    /// Returns the length of the memory mapping as an aligned byte count.
+    pub fn len_aligned(&self) -> HostAlignedByteCount {
+        // SAFETY: The type parameter indicates that self.sys.len() is aligned.
+        unsafe { HostAlignedByteCount::new_unchecked(self.sys.len()) }
+    }
+
     /// Make the memory starting at `start` and extending for `len` bytes
     /// accessible. `start` and `len` must be native page-size multiples and
     /// describe a range within `self`'s reserved memory.
-    ///
-    /// # Panics
-    ///
-    /// This function will panic if `start` or `len` is not page aligned or if
-    /// either are outside the bounds of this mapping.
-    pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<()> {
-        let page_size = crate::runtime::vm::host_page_size();
-        assert_eq!(start & (page_size - 1), 0);
-        assert_eq!(len & (page_size - 1), 0);
-        assert!(len <= self.len());
-        assert!(start <= self.len() - len);
+    pub fn make_accessible(
+        &mut self,
+        start: HostAlignedByteCount,
+        len: HostAlignedByteCount,
+    ) -> Result<()> {
+        let difference = self
+            .len_aligned()
+            .checked_sub(len)
+            .expect("len must be <= mmap region");
+        assert!(start <= difference);
 
         self.sys.make_accessible(start, len)
     }
@@ -213,6 +222,9 @@ impl<T> Mmap<T> {
     ///
     /// This is the byte length of this entire mapping which includes both
     /// addressable and non-addressable memory.
+    ///
+    /// If the length is statically known to be page-aligned via the
+    /// [`AlignedLength`] type parameter, use [`Self::len_aligned`].
     #[inline]
     pub fn len(&self) -> usize {
         self.sys.len()
