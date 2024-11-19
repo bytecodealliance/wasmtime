@@ -2016,25 +2016,6 @@ impl Config {
             panic!("should have returned an error by now")
         }
 
-        if features.contains(WasmFeatures::REFERENCE_TYPES)
-            && !features.contains(WasmFeatures::BULK_MEMORY)
-        {
-            bail!("feature 'reference_types' requires 'bulk_memory' to be enabled");
-        }
-        if features.contains(WasmFeatures::THREADS) && !features.contains(WasmFeatures::BULK_MEMORY)
-        {
-            bail!("feature 'threads' requires 'bulk_memory' to be enabled");
-        }
-        if features.contains(WasmFeatures::FUNCTION_REFERENCES)
-            && !features.contains(WasmFeatures::REFERENCE_TYPES)
-        {
-            bail!("feature 'function_references' requires 'reference_types' to be enabled");
-        }
-        if features.contains(WasmFeatures::GC)
-            && !features.contains(WasmFeatures::FUNCTION_REFERENCES)
-        {
-            bail!("feature 'gc' requires 'function_references' to be enabled");
-        }
         #[cfg(feature = "async")]
         if self.async_support && self.max_wasm_stack > self.async_stack_size {
             bail!("max_wasm_stack size cannot exceed the async_stack_size");
