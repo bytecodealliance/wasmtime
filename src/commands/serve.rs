@@ -67,7 +67,7 @@ const DEFAULT_ADDR: std::net::SocketAddr = std::net::SocketAddr::new(
 );
 
 /// Runs a WebAssembly module
-#[derive(Parser, PartialEq)]
+#[derive(Parser)]
 pub struct ServeCommand {
     #[command(flatten)]
     run: RunCommon,

@@ -25,7 +25,7 @@ const AFTER_HELP: &str =
         wasmtime compile --target x86_64-unknown-linux -Ccranelift-skylake foo.wasm\n";
 
 /// Compiles a WebAssembly module.
-#[derive(Parser, PartialEq)]
+#[derive(Parser)]
 #[command(
     version,
     after_help = AFTER_HELP,

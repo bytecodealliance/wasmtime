@@ -8,7 +8,7 @@ use wasmtime_cli_flags::CommonOptions;
 use wasmtime_wast::{SpectestConfig, WastContext};
 
 /// Runs a WebAssembly test script file
-#[derive(Parser, PartialEq)]
+#[derive(Parser)]
 pub struct WastCommand {
     #[command(flatten)]
     common: CommonOptions,
