@@ -87,7 +87,7 @@ impl MmapVec {
         let mmap = Mmap::from_file(Arc::clone(&file))
             .with_context(move || format!("failed to create mmap for file {file:?}"))?;
         let len = mmap.len();
-        Ok(MmapVec::new(mmap, len))
+        Ok(MmapVec::new_mmap(mmap, len))
     }
 
     /// Makes the specified `range` within this `mmap` to be read/execute.
