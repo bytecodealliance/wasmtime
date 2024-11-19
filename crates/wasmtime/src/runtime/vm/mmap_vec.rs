@@ -2,32 +2,34 @@ use crate::prelude::*;
 #[cfg(feature = "signals-based-traps")]
 use crate::runtime::vm::Mmap;
 use alloc::sync::Arc;
-use core::ops::{Deref, DerefMut, Range};
+use core::ops::{Deref, Range};
 #[cfg(feature = "std")]
 use std::fs::File;
 
-/// A type akin to `Vec<u8>`, but backed by `mmap` and able to be split.
+/// A type which prefers to store backing memory in an OS-backed memory mapping
+/// but can fall back to `Vec<u8>` as well.
 ///
-/// This type is a non-growable owned list of bytes. It can be segmented into
-/// disjoint separately owned views akin to the `split_at` method on slices in
-/// Rust. An `MmapVec` is backed by an OS-level memory allocation and is not
-/// suitable for lots of small allocation (since it works at the page
-/// granularity).
+/// This type is used to store code in Wasmtime and manage read-only and
+/// executable permissions of compiled images. This is created from either an
+/// in-memory compilation or by deserializing an artifact from disk. Methods
+/// are provided for managing VM permissions when the `signals-based-traps`
+/// Cargo feature is enabled.
 ///
-/// An `MmapVec` is an owned value which means that owners have the ability to
-/// get exclusive access to the underlying bytes, enabling mutation.
+/// The length of an `MmapVec` is not guaranteed to be page-aligned. That means
+/// that if the contents are not themselves page-aligned, which compiled images
+/// are typically not, then the remaining bytes in the final page for
+/// mmap-backed instances are unused.
 ///
-/// TODO: rename this type and reword docs now that this isn't always an mmap.
-pub struct MmapVec {
-    mmap: Arc<MmapVecStorage>,
-    range: Range<usize>,
-}
-
-enum MmapVecStorage {
+/// Note that when `signals-based-traps` is disabled then this type is backed
+/// by a normal `Vec<u8>`. In such a scenario this type does not support
+/// read-only or executable bits and the methods are not available.
+pub enum MmapVec {
+    #[doc(hidden)]
     #[cfg(not(feature = "signals-based-traps"))]
     Vec(Vec<u8>),
+    #[doc(hidden)]
     #[cfg(feature = "signals-based-traps")]
-    Mmap(Mmap),
+    Mmap { mmap: Mmap, len: usize },
 }
 
 impl MmapVec {
@@ -37,20 +39,14 @@ impl MmapVec {
     /// smaller than the region mapped by the `Mmap`. The returned `MmapVec`
     /// will only have at most `size` bytes accessible.
     #[cfg(feature = "signals-based-traps")]
-    fn new_mmap(mmap: Mmap, size: usize) -> MmapVec {
-        assert!(size <= mmap.len());
-        MmapVec {
-            mmap: Arc::new(MmapVecStorage::Mmap(mmap)),
-            range: 0..size,
-        }
+    fn new_mmap(mmap: Mmap, len: usize) -> MmapVec {
+        assert!(len <= mmap.len());
+        MmapVec::Mmap { mmap, len }
     }
 
     #[cfg(not(feature = "signals-based-traps"))]
     fn new_vec(vec: Vec<u8>) -> MmapVec {
-        MmapVec {
-            range: 0..vec.len(),
-            mmap: Arc::new(MmapVecStorage::Vec(vec)),
-        }
+        MmapVec::Vec(vec)
     }
 
     /// Creates a new zero-initialized `MmapVec` with the given `size`.
@@ -72,7 +68,11 @@ impl MmapVec {
     /// method if possible to avoid the need to copy data around.
     pub fn from_slice(slice: &[u8]) -> Result<MmapVec> {
         let mut result = MmapVec::with_capacity(slice.len())?;
-        result.copy_from_slice(slice);
+        // SAFETY: The mmap hasn't been made readonly yet so this should be
+        // safe to call.
+        unsafe {
+            result.as_mut_slice().copy_from_slice(slice);
+        }
         Ok(result)
     }
 
@@ -81,6 +81,10 @@ impl MmapVec {
     /// This function will determine the file's size and map the full contents
     /// into memory. This will return an error if the file is too large to be
     /// fully mapped into memory.
+    ///
+    /// The file is mapped into memory with a "private mapping" meaning that
+    /// changes are not persisted back to the file itself and are only visible
+    /// within this process.
     #[cfg(feature = "std")]
     pub fn from_file(file: File) -> Result<MmapVec> {
         let file = Arc::new(file);
@@ -97,43 +101,34 @@ impl MmapVec {
         range: Range<usize>,
         enable_branch_protection: bool,
     ) -> Result<()> {
-        assert!(range.start <= range.end);
-        assert!(range.end <= self.range.len());
-        let mmap = match &*self.mmap {
-            MmapVecStorage::Mmap(m) => m,
+        let (mmap, len) = match self {
+            MmapVec::Mmap { mmap, len } => (mmap, *len),
         };
-        mmap.make_executable(
-            range.start + self.range.start..range.end + self.range.start,
-            enable_branch_protection,
-        )
+        assert!(range.start <= range.end);
+        assert!(range.end <= len);
+        mmap.make_executable(range.start..range.end, enable_branch_protection)
     }
 
     /// Makes the specified `range` within this `mmap` to be read-only.
     #[cfg(feature = "signals-based-traps")]
     pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
-        assert!(range.start <= range.end);
-        assert!(range.end <= self.range.len());
-        let mmap = match &*self.mmap {
-            MmapVecStorage::Mmap(m) => m,
+        let (mmap, len) = match self {
+            MmapVec::Mmap { mmap, len } => (mmap, *len),
         };
-        mmap.make_readonly(range.start + self.range.start..range.end + self.range.start)
+        assert!(range.start <= range.end);
+        assert!(range.end <= len);
+        mmap.make_readonly(range.start..range.end)
     }
 
     /// Returns the underlying file that this mmap is mapping, if present.
     #[cfg(feature = "std")]
     pub fn original_file(&self) -> Option<&Arc<File>> {
-        match &*self.mmap {
+        match self {
             #[cfg(not(feature = "signals-based-traps"))]
-            MmapVecStorage::Vec(_) => None,
+            MmapVec::Vec(_) => None,
             #[cfg(feature = "signals-based-traps")]
-            MmapVecStorage::Mmap(m) => m.original_file(),
+            MmapVec::Mmap { mmap, .. } => mmap.original_file(),
         }
-    }
-
-    /// Returns the offset within the original mmap that this `MmapVec` is
-    /// created from.
-    pub fn original_offset(&self) -> usize {
-        self.range.start
     }
 
     /// Returns the bounds, in host memory, of where this mmap
@@ -143,6 +138,21 @@ impl MmapVec {
         let len = self.len();
         base..base.wrapping_add(len)
     }
+
+    /// Views this region of memory as a mutable slice.
+    ///
+    /// # Unsafety
+    ///
+    /// This method is only safe if `make_readonly` hasn't been called yet to
+    /// ensure that the memory is indeed writable
+    pub unsafe fn as_mut_slice(&mut self) -> &mut [u8] {
+        match self {
+            #[cfg(not(feature = "signals-based-traps"))]
+            MmapVec::Vec(v) => v,
+            #[cfg(feature = "signals-based-traps")]
+            MmapVec::Mmap { mmap, len } => mmap.slice_mut(0..*len),
+        }
+    }
 }
 
 impl Deref for MmapVec {
@@ -150,40 +160,15 @@ impl Deref for MmapVec {
 
     #[inline]
     fn deref(&self) -> &[u8] {
-        match &*self.mmap {
+        match self {
             #[cfg(not(feature = "signals-based-traps"))]
-            MmapVecStorage::Vec(v) => v,
+            MmapVec::Vec(v) => v,
             #[cfg(feature = "signals-based-traps")]
-            MmapVecStorage::Mmap(m) => {
-                // SAFETY: this mmap owns its own range of the underlying mmap so it
-                // should be all good-to-read.
-                unsafe { m.slice(self.range.clone()) }
+            MmapVec::Mmap { mmap, len } => {
+                // SAFETY: all bytes for this mmap, which is owned by
+                // `MmapVec`, are always at least readable.
+                unsafe { mmap.slice(0..*len) }
             }
-        }
-    }
-}
-
-impl DerefMut for MmapVec {
-    fn deref_mut(&mut self) -> &mut [u8] {
-        // SAFETY: The underlying mmap is protected behind an `Arc` which means
-        // there there can be many references to it. We are guaranteed, though,
-        // that each reference to the underlying `mmap` has a disjoint `range`
-        // listed that it can access. This means that despite having shared
-        // access to the mmap itself we have exclusive ownership of the bytes
-        // specified in `self.range`. This should allow us to safely hand out
-        // mutable access to these bytes if so desired.
-        unsafe {
-            let slice = match &*self.mmap {
-                #[cfg(not(feature = "signals-based-traps"))]
-                MmapVecStorage::Vec(v) => {
-                    core::slice::from_raw_parts_mut(v.as_ptr().cast_mut(), v.len())
-                }
-                #[cfg(feature = "signals-based-traps")]
-                MmapVecStorage::Mmap(m) => {
-                    core::slice::from_raw_parts_mut(m.as_ptr().cast_mut(), m.len())
-                }
-            };
-            &mut slice[self.range.clone()]
         }
     }
 }
@@ -198,8 +183,10 @@ mod tests {
         assert_eq!(mmap.len(), 10);
         assert_eq!(&mmap[..], &[0; 10]);
 
-        mmap[0] = 1;
-        mmap[2] = 3;
+        unsafe {
+            mmap.as_mut_slice()[0] = 1;
+            mmap.as_mut_slice()[2] = 3;
+        }
         assert!(mmap.get(10).is_none());
         assert_eq!(mmap[0], 1);
         assert_eq!(mmap[2], 3);

@@ -331,6 +331,7 @@ impl CodeMemory {
                 obj::LibCall::X86Pshufb => unreachable!(),
             };
             self.mmap
+                .as_mut_slice()
                 .as_mut_ptr()
                 .add(offset)
                 .cast::<usize>()

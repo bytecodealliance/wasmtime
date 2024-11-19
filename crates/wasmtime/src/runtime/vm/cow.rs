@@ -107,15 +107,13 @@ impl MemoryImage {
             assert_page_aligned(start);
             assert_page_aligned(data_start);
             assert_page_aligned(data_end);
-            assert_page_aligned(mmap.original_offset());
 
             #[cfg(feature = "std")]
             if let Some(file) = mmap.original_file() {
                 if let Some(source) = MemoryImageSource::from_file(file) {
                     return Ok(Some(MemoryImage {
                         source,
-                        source_offset: u64::try_from(mmap.original_offset() + (data_start - start))
-                            .unwrap(),
+                        source_offset: u64::try_from(data_start - start).unwrap(),
                         linear_memory_offset,
                         len,
                     }));
