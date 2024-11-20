@@ -690,6 +690,34 @@ pub struct VMFuncRef {
 unsafe impl Send for VMFuncRef {}
 unsafe impl Sync for VMFuncRef {}
 
+impl VMFuncRef {
+    /// Invokes the `array_call` field of this `VMFuncRef` with the supplied
+    /// arguments.
+    ///
+    /// This will invoke the function pointer in the `array_call` field with:
+    ///
+    /// * the `callee` vmctx as `self.vmctx`
+    /// * the `caller` as `caller` specified here
+    /// * the args pointer as `args_and_results`
+    /// * the args length as `args_and_results`
+    ///
+    /// The `args_and_results` area must be large enough to both load all
+    /// arguments from and store all results to.
+    ///
+    /// # Unsafety
+    ///
+    /// This method is unsafe because it can be called with any pointers. They
+    /// must all be valid for this wasm function call to proceed.
+    pub unsafe fn array_call(&self, caller: *mut VMOpaqueContext, args_and_results: *mut [ValRaw]) {
+        (self.array_call)(
+            self.vmctx,
+            caller,
+            args_and_results.cast(),
+            args_and_results.len(),
+        )
+    }
+}
+
 #[cfg(test)]
 mod test_vm_func_ref {
     use super::VMFuncRef;

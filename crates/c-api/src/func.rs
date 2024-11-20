@@ -391,7 +391,8 @@ pub unsafe extern "C" fn wasmtime_func_call_unchecked(
     args_and_results_len: usize,
     trap_ret: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
-    match func.call_unchecked(store, args_and_results, args_and_results_len) {
+    let slice = std::ptr::slice_from_raw_parts_mut(args_and_results, args_and_results_len);
+    match func.call_unchecked(store, slice) {
         Ok(()) => None,
         Err(trap) => store_err(trap, trap_ret),
     }
