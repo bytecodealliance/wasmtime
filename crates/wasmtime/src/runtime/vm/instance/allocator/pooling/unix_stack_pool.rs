@@ -6,7 +6,9 @@ use super::{
 };
 use crate::prelude::*;
 use crate::runtime::vm::sys::vm::commit_pages;
-use crate::runtime::vm::{round_usize_up_to_host_pages, Mmap, PoolingInstanceAllocatorConfig};
+use crate::runtime::vm::{
+    mmap::AlignedLength, round_usize_up_to_host_pages, Mmap, PoolingInstanceAllocatorConfig,
+};
 
 /// Represents a pool of execution stacks (used for the async fiber implementation).
 ///
@@ -20,7 +22,7 @@ use crate::runtime::vm::{round_usize_up_to_host_pages, Mmap, PoolingInstanceAllo
 /// from the pool.
 #[derive(Debug)]
 pub struct StackPool {
-    mapping: Mmap,
+    mapping: Mmap<AlignedLength>,
     stack_size: usize,
     max_stacks: usize,
     page_size: usize,

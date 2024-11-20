@@ -3,7 +3,7 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::memory::RuntimeLinearMemory;
-use crate::runtime::vm::mmap::Mmap;
+use crate::runtime::vm::mmap::{AlignedLength, Mmap};
 use crate::runtime::vm::{round_usize_up_to_host_pages, usize_is_multiple_of_host_page_size};
 use wasmtime_environ::Tunables;
 
@@ -11,7 +11,7 @@ use wasmtime_environ::Tunables;
 #[derive(Debug)]
 pub struct MmapMemory {
     // The underlying allocation.
-    mmap: Mmap,
+    mmap: Mmap<AlignedLength>,
 
     // The current length of this Wasm memory, in bytes.
     //

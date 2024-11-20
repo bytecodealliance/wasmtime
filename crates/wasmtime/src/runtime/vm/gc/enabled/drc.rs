@@ -46,8 +46,9 @@ use super::{VMArrayRef, VMGcObjectDataMut, VMStructRef};
 use crate::hash_set::HashSet;
 use crate::prelude::*;
 use crate::runtime::vm::{
-    ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
-    GcProgress, GcRootsIter, GcRuntime, Mmap, TypedGcRef, VMExternRef, VMGcHeader, VMGcRef,
+    mmap::AlignedLength, ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap,
+    GcHeapObject, GcProgress, GcRootsIter, GcRuntime, Mmap, TypedGcRef, VMExternRef, VMGcHeader,
+    VMGcRef,
 };
 use core::ops::{Deref, DerefMut, Range};
 use core::{
@@ -90,7 +91,7 @@ struct DrcHeap {
     // NB: this box shouldn't be strictly necessary, but it makes upholding the
     // safety invariants of the `vmctx_gc_heap_data` more obviously correct.
     activations_table: Box<VMGcRefActivationsTable>,
-    heap: Mmap,
+    heap: Mmap<AlignedLength>,
     free_list: FreeList,
 }
 

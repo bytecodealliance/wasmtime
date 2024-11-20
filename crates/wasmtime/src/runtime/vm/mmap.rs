@@ -7,39 +7,63 @@ use core::ops::Range;
 #[cfg(feature = "std")]
 use std::{fs::File, sync::Arc};
 
-/// A simple struct consisting of a page-aligned pointer to page-aligned
-/// and initially-zeroed memory and a length.
-#[derive(Debug)]
-pub struct Mmap {
-    sys: mmap::Mmap,
+/// A marker type for an [`Mmap`] where both the start address and length are a
+/// multiple of the host page size.
+///
+/// For more information, see the documentation on [`Mmap`].
+#[derive(Clone, Debug)]
+pub struct AlignedLength {}
+
+/// A type of [`Mmap`] where the start address is host page-aligned, but the
+/// length is possibly not a multiple of the host page size.
+///
+/// For more information, see the documentation on [`Mmap`].
+#[derive(Clone, Debug)]
+pub struct UnalignedLength {
     #[cfg(feature = "std")]
     file: Option<Arc<File>>,
 }
 
-impl Mmap {
+/// A platform-independent abstraction over memory-mapped data.
+///
+/// The type parameter can be one of:
+///
+/// * [`AlignedLength`]: Both the start address and length are page-aligned
+/// (i.e. a multiple of the host page size). This is always the result of an
+/// mmap backed by anonymous memory.
+///
+/// * [`UnalignedLength`]: The start address is host page-aligned, but the
+/// length is not necessarily page-aligned. This is usually backed by a file,
+/// but can also be backed by anonymous memory.
+///
+/// ## Notes
+///
+/// If the length of a file is not a multiple of the host page size, [POSIX does
+/// not specify any semantics][posix-mmap] for the rest of the last page. Linux
+/// [does say][linux-mmap] that the rest of the page is reserved and zeroed out,
+/// but for portability it's best to not assume anything about the rest of
+/// memory. `UnalignedLength` achieves a type-level distinction between an mmap
+/// that is backed purely by memory, and one that is possibly backed by a file.
+///
+/// Currently, the OS-specific `mmap` implementations in this crate do not make
+/// this this distinction -- alignment is managed at this platform-independent
+/// layer. It might make sense to add this distinction to the OS-specific
+/// implementations in the future.
+///
+/// [posix-mmap]: https://pubs.opengroup.org/onlinepubs/9799919799/functions/mmap.html
+/// [linux-mmap]: https://man7.org/linux/man-pages/man2/mmap.2.html#NOTES
+#[derive(Debug)]
+pub struct Mmap<T> {
+    sys: mmap::Mmap,
+    data: T,
+}
+
+impl Mmap<AlignedLength> {
     /// Create a new `Mmap` pointing to at least `size` bytes of page-aligned
     /// accessible memory.
     pub fn with_at_least(size: usize) -> Result<Self> {
         let rounded_size = crate::runtime::vm::round_usize_up_to_host_pages(size)?;
         Self::accessible_reserved(rounded_size, rounded_size)
-    }
-
-    /// Creates a new `Mmap` by opening the file located at `path` and mapping
-    /// it into memory.
-    ///
-    /// The memory is mapped in read-only mode for the entire file. If portions
-    /// of the file need to be modified then the `region` crate can be use to
-    /// alter permissions of each page.
-    ///
-    /// The memory mapping and the length of the file within the mapping are
-    /// returned.
-    #[cfg(feature = "std")]
-    pub fn from_file(file: Arc<File>) -> Result<Self> {
-        let sys = mmap::Mmap::from_file(&file)?;
-        Ok(Mmap {
-            sys,
-            file: Some(file),
-        })
     }
 
     /// Create a new `Mmap` pointing to `accessible_size` bytes of page-aligned
@@ -58,22 +82,19 @@ impl Mmap {
         if mapping_size == 0 {
             Ok(Mmap {
                 sys: mmap::Mmap::new_empty(),
-                #[cfg(feature = "std")]
-                file: None,
+                data: AlignedLength {},
             })
         } else if accessible_size == mapping_size {
             Ok(Mmap {
                 sys: mmap::Mmap::new(mapping_size)
                     .context(format!("mmap failed to allocate {mapping_size:#x} bytes"))?,
-                #[cfg(feature = "std")]
-                file: None,
+                data: AlignedLength {},
             })
         } else {
             let mut result = Mmap {
                 sys: mmap::Mmap::reserve(mapping_size)
                     .context(format!("mmap failed to reserve {mapping_size:#x} bytes"))?,
-                #[cfg(feature = "std")]
-                file: None,
+                data: AlignedLength {},
             };
             if accessible_size > 0 {
                 result.make_accessible(0, accessible_size).context(format!(
@@ -81,6 +102,20 @@ impl Mmap {
                 ))?;
             }
             Ok(result)
+        }
+    }
+
+    /// Converts this `Mmap` into a `Mmap<UnalignedLength>`.
+    ///
+    /// `UnalignedLength` really means "_possibly_ unaligned length", so it can
+    /// be freely converted over at the cost of losing the alignment guarantee.
+    pub fn into_unaligned(self) -> Mmap<UnalignedLength> {
+        Mmap {
+            sys: self.sys,
+            data: UnalignedLength {
+                #[cfg(feature = "std")]
+                file: None,
+            },
         }
     }
 
@@ -101,7 +136,34 @@ impl Mmap {
 
         self.sys.make_accessible(start, len)
     }
+}
 
+#[cfg(feature = "std")]
+impl Mmap<UnalignedLength> {
+    /// Creates a new `Mmap` by opening the file located at `path` and mapping
+    /// it into memory.
+    ///
+    /// The memory is mapped in read-only mode for the entire file. If portions
+    /// of the file need to be modified then the `region` crate can be use to
+    /// alter permissions of each page.
+    ///
+    /// The memory mapping and the length of the file within the mapping are
+    /// returned.
+    pub fn from_file(file: Arc<File>) -> Result<Self> {
+        let sys = mmap::Mmap::from_file(&file)?;
+        Ok(Mmap {
+            sys,
+            data: UnalignedLength { file: Some(file) },
+        })
+    }
+
+    /// Returns the underlying file that this mmap is mapping, if present.
+    pub fn original_file(&self) -> Option<&Arc<File>> {
+        self.data.file.as_ref()
+    }
+}
+
+impl<T> Mmap<T> {
     /// Return the allocated memory as a slice of u8.
     ///
     /// # Safety
@@ -198,15 +260,16 @@ impl Mmap {
             .make_readonly(range)
             .context("failed to make memory readonly")
     }
-
-    /// Returns the underlying file that this mmap is mapping, if present.
-    #[cfg(feature = "std")]
-    pub fn original_file(&self) -> Option<&Arc<File>> {
-        self.file.as_ref()
-    }
 }
 
 fn _assert() {
     fn _assert_send_sync<T: Send + Sync>() {}
-    _assert_send_sync::<Mmap>();
+    _assert_send_sync::<Mmap<AlignedLength>>();
+    _assert_send_sync::<Mmap<UnalignedLength>>();
+}
+
+impl From<Mmap<AlignedLength>> for Mmap<UnalignedLength> {
+    fn from(mmap: Mmap<AlignedLength>) -> Mmap<UnalignedLength> {
+        mmap.into_unaligned()
+    }
 }

@@ -4,7 +4,8 @@ use super::{
 };
 use crate::prelude::*;
 use crate::runtime::vm::{
-    InstanceAllocationRequest, Mmap, PoolingInstanceAllocatorConfig, SendSyncPtr, Table,
+    mmap::AlignedLength, InstanceAllocationRequest, Mmap, PoolingInstanceAllocatorConfig,
+    SendSyncPtr, Table,
 };
 use crate::{runtime::vm::sys::vm::commit_pages, vm::round_usize_up_to_host_pages};
 use std::mem;
@@ -18,7 +19,7 @@ use wasmtime_environ::{Module, Tunables};
 #[derive(Debug)]
 pub struct TablePool {
     index_allocator: SimpleIndexAllocator,
-    mapping: Mmap,
+    mapping: Mmap<AlignedLength>,
     table_size: usize,
     max_total_tables: usize,
     tables_per_instance: usize,
