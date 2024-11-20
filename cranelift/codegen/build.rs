@@ -63,37 +63,24 @@ fn main() {
 
     println!("cargo:rerun-if-changed=build.rs");
 
-    let explicit_isle_dir = &crate_dir.join("isle_generated_code");
-    #[cfg(feature = "isle-in-source-tree")]
-    let isle_dir = explicit_isle_dir;
-    #[cfg(not(feature = "isle-in-source-tree"))]
-    let isle_dir = &out_dir;
+    let isle_dir = if let Ok(path) = std::env::var("ISLE_SOURCE_DIR") {
+        // This will canonicalize any relative path in terms of the
+        // crate root, and will take any absolute path as overriding the
+        // `crate_dir`.
+        crate_dir.join(&path)
+    } else {
+        out_dir.into()
+    };
 
-    #[cfg(feature = "isle-in-source-tree")]
-    {
-        std::fs::create_dir_all(isle_dir).expect("Could not create ISLE source directory");
-    }
-    #[cfg(not(feature = "isle-in-source-tree"))]
-    {
-        if explicit_isle_dir.is_dir() {
-            eprintln!(concat!(
-                "Error: directory isle_generated_code/ exists but is only used when\n",
-                "`--feature isle-in-source-tree` is specified. To prevent confusion,\n",
-                "this build script requires the directory to be removed when reverting\n",
-                "to the usual generated code in target/. Please delete the directory and\n",
-                "re-run this build.\n",
-            ));
-            std::process::exit(1);
-        }
-    }
+    std::fs::create_dir_all(&isle_dir).expect("Could not create ISLE source directory");
 
-    if let Err(err) = meta::generate(&isas, &out_dir, isle_dir) {
+    if let Err(err) = meta::generate(&isas, &out_dir, &isle_dir) {
         eprintln!("Error: {err}");
         process::exit(1);
     }
 
     if &std::env::var("SKIP_ISLE").unwrap_or("0".to_string()) != "1" {
-        if let Err(err) = build_isle(crate_dir, isle_dir) {
+        if let Err(err) = build_isle(crate_dir, &isle_dir) {
             eprintln!("Error: {err}");
             process::exit(1);
         }
