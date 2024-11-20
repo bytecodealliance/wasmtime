@@ -1163,7 +1163,7 @@ fn _assert_send_sync() {
 fn memory_images(engine: &Engine, module: &CompiledModule) -> Result<Option<ModuleMemoryImages>> {
     // If initialization via copy-on-write is explicitly disabled in
     // configuration then this path is skipped entirely.
-    if !engine.config().memory_init_cow {
+    if !engine.tunables().memory_init_cow {
         return Ok(None);
     }
 
