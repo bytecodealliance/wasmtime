@@ -120,6 +120,12 @@ fn op_is_safe_for_fuzzing(op: &Op) -> bool {
         Op::BrTable32(_) => false,
         Op::StackAlloc32(_) => false,
         Op::StackFree32(_) => false,
+        Op::Zext8(Zext8 { dst, .. })
+        | Op::Zext16(Zext16 { dst, .. })
+        | Op::Zext32(Zext32 { dst, .. })
+        | Op::Sext8(Sext8 { dst, .. })
+        | Op::Sext32(Sext32 { dst, .. })
+        | Op::Sext16(Sext16 { dst, .. }) => !dst.is_special(),
     }
 }
 

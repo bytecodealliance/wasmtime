@@ -195,6 +195,19 @@ macro_rules! for_each_op {
 
             /// `sp = sp + amt`
             stack_free32 = StackFree32 { amt: u32 };
+
+            /// `dst = zext(low8(src))`
+            zext8 = Zext8 { dst: XReg, src: XReg };
+            /// `dst = zext(low16(src))`
+            zext16 = Zext16 { dst: XReg, src: XReg };
+            /// `dst = zext(low32(src))`
+            zext32 = Zext32 { dst: XReg, src: XReg };
+            /// `dst = sext(low8(src))`
+            sext8 = Sext8 { dst: XReg, src: XReg };
+            /// `dst = sext(low16(src))`
+            sext16 = Sext16 { dst: XReg, src: XReg };
+            /// `dst = sext(low32(src))`
+            sext32 = Sext32 { dst: XReg, src: XReg };
         }
     };
 }

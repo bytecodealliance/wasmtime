@@ -126,6 +126,14 @@
     (PopFrame)
     (StackAlloc32 (amt u32))
     (StackFree32 (amt u32))
+
+    ;; Sign extensions.
+    (Zext8 (dst WritableXReg) (src XReg))
+    (Zext16 (dst WritableXReg) (src XReg))
+    (Zext32 (dst WritableXReg) (src XReg))
+    (Sext8 (dst WritableXReg) (src XReg))
+    (Sext16 (dst WritableXReg) (src XReg))
+    (Sext32 (dst WritableXReg) (src XReg))
   )
 )
 
@@ -579,6 +587,42 @@
 (decl gen_br_table (XReg MachLabel BoxVecMachLabel) Unit)
 (rule (gen_br_table idx default labels)
       (emit (MInst.BrTable idx default labels)))
+
+(decl pulley_zext8 (XReg) XReg)
+(rule (pulley_zext8 src)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Zext8 dst src))))
+        dst))
+
+(decl pulley_zext16 (XReg) XReg)
+(rule (pulley_zext16 src)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Zext16 dst src))))
+        dst))
+
+(decl pulley_zext32 (XReg) XReg)
+(rule (pulley_zext32 src)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Zext32 dst src))))
+        dst))
+
+(decl pulley_sext8 (XReg) XReg)
+(rule (pulley_sext8 src)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Sext8 dst src))))
+        dst))
+
+(decl pulley_sext16 (XReg) XReg)
+(rule (pulley_sext16 src)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Sext16 dst src))))
+        dst))
+
+(decl pulley_sext32 (XReg) XReg)
+(rule (pulley_sext32 src)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Sext32 dst src))))
+        dst))
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

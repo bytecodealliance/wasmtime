@@ -1251,6 +1251,42 @@ impl OpVisitor for Interpreter<'_> {
         self.set_sp_unchecked(new_sp);
         ControlFlow::Continue(())
     }
+
+    fn zext8(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let src = self.state[src].get_u64() as u8;
+        self.state[dst].set_u64(src.into());
+        ControlFlow::Continue(())
+    }
+
+    fn zext16(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let src = self.state[src].get_u64() as u16;
+        self.state[dst].set_u64(src.into());
+        ControlFlow::Continue(())
+    }
+
+    fn zext32(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let src = self.state[src].get_u64() as u32;
+        self.state[dst].set_u64(src.into());
+        ControlFlow::Continue(())
+    }
+
+    fn sext8(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let src = self.state[src].get_i64() as i8;
+        self.state[dst].set_i64(src.into());
+        ControlFlow::Continue(())
+    }
+
+    fn sext16(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let src = self.state[src].get_i64() as i16;
+        self.state[dst].set_i64(src.into());
+        ControlFlow::Continue(())
+    }
+
+    fn sext32(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let src = self.state[src].get_i64() as i32;
+        self.state[dst].set_i64(src.into());
+        ControlFlow::Continue(())
+    }
 }
 
 impl ExtendedOpVisitor for Interpreter<'_> {
