@@ -1,5 +1,6 @@
 use std::cmp::*;
 use std::collections::HashMap;
+use std::ops::Range;
 
 /// Memory checker for wasm guest.
 pub struct Wmemcheck {
@@ -8,23 +9,10 @@ pub struct Wmemcheck {
     pub stack_pointer: usize,
     max_stack_size: usize,
     pub flag: bool,
+    /// granularity in bytes of tracked allocations
+    pub granularity: usize,
 }
 
-impl Wmemcheck {
-    pub fn malloc_previous_to(&self, addr: usize) -> Option<(usize, usize)> {
-        let mut best: Option<(usize, usize)> = None;
-        for (base, len) in self.mallocs.iter() {
-            if let Some((prev_base, _)) = best {
-                if prev_base < *base && *base <= addr {
-                    best = Some((*base, *len));
-                }
-            } else {
-                best = Some((*base, *len));
-            }
-        }
-        best
-    }
-}
 /// Error types for memory checker.
 #[derive(Debug, PartialEq)]
 pub enum AccessError {
@@ -36,6 +24,8 @@ pub enum AccessError {
     InvalidWrite { addr: usize, len: usize },
     /// Free of non-malloc'd pointer.
     InvalidFree { addr: usize },
+    /// Reallocation of non-malloc'd pointer
+    InvalidRealloc { addr: usize },
     /// Access out of bounds of heap or stack.
     OutOfBounds { addr: usize, len: usize },
 }
@@ -53,7 +43,8 @@ pub enum MemState {
 
 impl Wmemcheck {
     /// Initializes memory checker instance.
-    pub fn new(mem_size: usize) -> Wmemcheck {
+    pub fn new(mem_size: usize, granularity: usize) -> Wmemcheck {
+        // TODO: metadata could be shrunk when granularity is greater than 1
         let metadata = vec![MemState::Unallocated; mem_size];
         let mallocs = HashMap::new();
         Wmemcheck {
@@ -62,21 +53,19 @@ impl Wmemcheck {
             stack_pointer: 0,
             max_stack_size: 0,
             flag: true,
+            granularity,
         }
     }
 
     /// Updates memory checker memory state metadata when malloc is called.
-    pub fn malloc(&mut self, addr: usize, start_len: usize) -> Result<(), AccessError> {
-        // round up to multiple of 4
-        let len = (start_len + 3) & !3;
-
+    pub fn allocate(&mut self, addr: usize, len: usize, initialized: bool) -> Result<(), AccessError> {
         if !self.is_in_bounds_heap(addr, len) {
             return Err(AccessError::OutOfBounds {
                 addr: addr,
                 len: len,
             });
         }
-        for i in addr..addr + len {
+        for i in self.granular_range(addr..addr + len) {
             match self.metadata[i] {
                 MemState::ValidToWrite => {
                     return Err(AccessError::DoubleMalloc {
@@ -93,10 +82,29 @@ impl Wmemcheck {
                 _ => {}
             }
         }
-        for i in addr..addr + len {
-            self.metadata[i] = MemState::ValidToWrite;
+        for i in self.granular_range(addr..addr + len) {
+            self.metadata[i] = if initialized { MemState::ValidToReadWrite } else { MemState::ValidToWrite };
         }
         self.mallocs.insert(addr, len);
+        Ok(())
+    }
+
+    pub fn realloc(&mut self, end_addr: usize, start_addr: usize, len: usize) -> Result<(), AccessError> {
+        if start_addr == 0 {
+            // If ptr is NULL, realloc() is identical to a call to malloc()
+            return self.allocate(end_addr, len, false);
+        }
+        if !self.mallocs.contains_key(&start_addr) {
+            return Err(AccessError::InvalidRealloc { addr: start_addr });
+        }
+        let start_len = self.mallocs[&start_addr];
+        // Copy initialization information from old allocation to new one
+        let copy_len = start_len.min(len);
+        let mut copied_metadata: Vec<MemState> = vec![];
+        copied_metadata.extend_from_slice(&self.metadata[start_addr..start_addr + copy_len]);
+        self.free(start_addr)?;
+        self.allocate(end_addr, len, false)?;
+        self.metadata[end_addr..end_addr + copy_len].clone_from_slice(&copied_metadata);
         Ok(())
     }
 
@@ -119,12 +127,12 @@ impl Wmemcheck {
                         len: len,
                     });
                 }
-                /* MemState::ValidToWrite => {
+                MemState::ValidToWrite => {
                     return Err(AccessError::InvalidRead {
                         addr: addr,
                         len: len,
                     });
-                } */
+                }
                 _ => {}
             }
         }
@@ -142,7 +150,7 @@ impl Wmemcheck {
                 len: len,
             });
         }
-        for i in addr..addr + len {
+        for i in self.granular_range(addr..addr + len) {
             if let MemState::Unallocated = self.metadata[i] {
                 return Err(AccessError::InvalidWrite {
                     addr: addr,
@@ -150,7 +158,7 @@ impl Wmemcheck {
                 });
             }
         }
-        for i in addr..addr + len {
+        for i in self.granular_range(addr..addr + len) {
             self.metadata[i] = MemState::ValidToReadWrite;
         }
         Ok(())
@@ -165,13 +173,13 @@ impl Wmemcheck {
             return Err(AccessError::InvalidFree { addr: addr });
         }
         let len = self.mallocs[&addr];
-        for i in addr..addr + len {
+        for i in self.granular_range(addr..addr + len) {
             if let MemState::Unallocated = self.metadata[i] {
                 return Err(AccessError::InvalidFree { addr: addr });
             }
         }
         self.mallocs.remove(&addr);
-        for i in addr..addr + len {
+        for i in self.granular_range(addr..addr + len) {
             self.metadata[i] = MemState::Unallocated;
         }
         Ok(())
@@ -193,11 +201,11 @@ impl Wmemcheck {
                 len: new_sp - self.stack_pointer,
             });
         } else if new_sp < self.stack_pointer {
-            for i in new_sp..self.stack_pointer + 1 {
+            for i in self.granular_range(new_sp..self.stack_pointer + 1) {
                 self.metadata[i] = MemState::ValidToReadWrite;
             }
         } else {
-            for i in self.stack_pointer..new_sp {
+            for i in self.granular_range(self.stack_pointer..new_sp) {
                 self.metadata[i] = MemState::Unallocated;
             }
         }
@@ -229,14 +237,22 @@ impl Wmemcheck {
         let to_append = vec![MemState::Unallocated; num_bytes];
         self.metadata.extend(to_append);
     }
+
+    fn granular_range(&self, byte_range: Range<usize>) -> Range<usize> {
+        // Round start of range down to granularity
+        let start = (byte_range.start / self.granularity) * self.granularity;
+        // Round end of range up to granularity
+        let end = ((byte_range.end + self.granularity - 1) / self.granularity) * self.granularity;
+        start..end
+    }
 }
 
 #[test]
 fn basic_wmemcheck() {
-    let mut wmemcheck_state = Wmemcheck::new(640 * 1024);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 1);
 
     wmemcheck_state.set_stack_size(1024);
-    assert!(wmemcheck_state.malloc(0x1000, 32).is_ok());
+    assert!(wmemcheck_state.allocate(0x1000, 32, false).is_ok());
     assert!(wmemcheck_state.write(0x1000, 4).is_ok());
     assert!(wmemcheck_state.read(0x1000, 4).is_ok());
     assert_eq!(wmemcheck_state.mallocs, HashMap::from([(0x1000, 32)]));
@@ -246,9 +262,9 @@ fn basic_wmemcheck() {
 
 #[test]
 fn read_before_initializing() {
-    let mut wmemcheck_state = Wmemcheck::new(640 * 1024);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 1);
 
-    assert!(wmemcheck_state.malloc(0x1000, 32).is_ok());
+    assert!(wmemcheck_state.allocate(0x1000, 32, false).is_ok());
     assert_eq!(
         wmemcheck_state.read(0x1000, 4),
         Err(AccessError::InvalidRead {
@@ -262,9 +278,9 @@ fn read_before_initializing() {
 
 #[test]
 fn use_after_free() {
-    let mut wmemcheck_state = Wmemcheck::new(640 * 1024);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 1);
 
-    assert!(wmemcheck_state.malloc(0x1000, 32).is_ok());
+    assert!(wmemcheck_state.allocate(0x1000, 32, false).is_ok());
     assert!(wmemcheck_state.write(0x1000, 4).is_ok());
     assert!(wmemcheck_state.write(0x1000, 4).is_ok());
     assert!(wmemcheck_state.free(0x1000).is_ok());
@@ -279,9 +295,9 @@ fn use_after_free() {
 
 #[test]
 fn double_free() {
-    let mut wmemcheck_state = Wmemcheck::new(640 * 1024);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 1);
 
-    assert!(wmemcheck_state.malloc(0x1000, 32).is_ok());
+    assert!(wmemcheck_state.allocate(0x1000, 32, false).is_ok());
     assert!(wmemcheck_state.write(0x1000, 4).is_ok());
     assert!(wmemcheck_state.free(0x1000).is_ok());
     assert_eq!(
@@ -292,17 +308,17 @@ fn double_free() {
 
 #[test]
 fn out_of_bounds_malloc() {
-    let mut wmemcheck_state = Wmemcheck::new(640 * 1024);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 1);
 
     assert_eq!(
-        wmemcheck_state.malloc(640 * 1024, 1),
+        wmemcheck_state.allocate(640 * 1024, 1, false),
         Err(AccessError::OutOfBounds {
             addr: 640 * 1024,
             len: 1
         })
     );
     assert_eq!(
-        wmemcheck_state.malloc(640 * 1024 - 10, 15),
+        wmemcheck_state.allocate(640 * 1024 - 10, 15, false),
         Err(AccessError::OutOfBounds {
             addr: 640 * 1024 - 10,
             len: 15
@@ -313,9 +329,9 @@ fn out_of_bounds_malloc() {
 
 #[test]
 fn out_of_bounds_read() {
-    let mut wmemcheck_state = Wmemcheck::new(640 * 1024);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 1);
 
-    assert!(wmemcheck_state.malloc(640 * 1024 - 24, 24).is_ok());
+    assert!(wmemcheck_state.allocate(640 * 1024 - 24, 24, false).is_ok());
     assert_eq!(
         wmemcheck_state.read(640 * 1024 - 24, 25),
         Err(AccessError::OutOfBounds {
@@ -327,18 +343,18 @@ fn out_of_bounds_read() {
 
 #[test]
 fn double_malloc() {
-    let mut wmemcheck_state = Wmemcheck::new(640 * 1024);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 1);
 
-    assert!(wmemcheck_state.malloc(0x1000, 32).is_ok());
+    assert!(wmemcheck_state.allocate(0x1000, 32, false).is_ok());
     assert_eq!(
-        wmemcheck_state.malloc(0x1000, 32),
+        wmemcheck_state.allocate(0x1000, 32, false),
         Err(AccessError::DoubleMalloc {
             addr: 0x1000,
             len: 32
         })
     );
     assert_eq!(
-        wmemcheck_state.malloc(0x1002, 32),
+        wmemcheck_state.allocate(0x1002, 32, false),
         Err(AccessError::DoubleMalloc {
             addr: 0x1002,
             len: 32
@@ -349,18 +365,18 @@ fn double_malloc() {
 
 #[test]
 fn error_type() {
-    let mut wmemcheck_state = Wmemcheck::new(640 * 1024);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 1);
 
-    assert!(wmemcheck_state.malloc(0x1000, 32).is_ok());
+    assert!(wmemcheck_state.allocate(0x1000, 32, false).is_ok());
     assert_eq!(
-        wmemcheck_state.malloc(0x1000, 32),
+        wmemcheck_state.allocate(0x1000, 32, false),
         Err(AccessError::DoubleMalloc {
             addr: 0x1000,
             len: 32
         })
     );
     assert_eq!(
-        wmemcheck_state.malloc(640 * 1024, 32),
+        wmemcheck_state.allocate(640 * 1024, 32, false),
         Err(AccessError::OutOfBounds {
             addr: 640 * 1024,
             len: 32
@@ -371,12 +387,12 @@ fn error_type() {
 
 #[test]
 fn update_sp_no_error() {
-    let mut wmemcheck_state = Wmemcheck::new(640 * 1024);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 1);
 
     wmemcheck_state.set_stack_size(1024);
     assert!(wmemcheck_state.update_stack_pointer(768).is_ok());
     assert_eq!(wmemcheck_state.stack_pointer, 768);
-    assert!(wmemcheck_state.malloc(1024 * 2, 32).is_ok());
+    assert!(wmemcheck_state.allocate(1024 * 2, 32, false).is_ok());
     assert!(wmemcheck_state.free(1024 * 2).is_ok());
     assert!(wmemcheck_state.update_stack_pointer(896).is_ok());
     assert_eq!(wmemcheck_state.stack_pointer, 896);
@@ -385,18 +401,18 @@ fn update_sp_no_error() {
 
 #[test]
 fn bad_stack_malloc() {
-    let mut wmemcheck_state = Wmemcheck::new(640 * 1024);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 1);
 
     wmemcheck_state.set_stack_size(1024);
 
     assert!(wmemcheck_state.update_stack_pointer(0).is_ok());
     assert_eq!(wmemcheck_state.stack_pointer, 0);
     assert_eq!(
-        wmemcheck_state.malloc(512, 32),
+        wmemcheck_state.allocate(512, 32, false),
         Err(AccessError::OutOfBounds { addr: 512, len: 32 })
     );
     assert_eq!(
-        wmemcheck_state.malloc(1022, 32),
+        wmemcheck_state.allocate(1022, 32, false),
         Err(AccessError::OutOfBounds {
             addr: 1022,
             len: 32
@@ -406,7 +422,7 @@ fn bad_stack_malloc() {
 
 #[test]
 fn stack_full_empty() {
-    let mut wmemcheck_state = Wmemcheck::new(640 * 1024);
+    let mut wmemcheck_state = Wmemcheck::new(640 * 1024, 1);
 
     wmemcheck_state.set_stack_size(1024);
 
@@ -418,7 +434,7 @@ fn stack_full_empty() {
 
 #[test]
 fn from_test_program() {
-    let mut wmemcheck_state = Wmemcheck::new(1024 * 1024 * 128);
+    let mut wmemcheck_state = Wmemcheck::new(1024 * 1024 * 128, 1);
     wmemcheck_state.set_stack_size(70864);
     assert!(wmemcheck_state.write(70832, 1).is_ok());
     assert!(wmemcheck_state.read(1138, 1).is_ok());

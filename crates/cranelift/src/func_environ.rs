@@ -909,10 +909,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     #[cfg(feature = "wmemcheck")]
-    fn hook_before_allocator(&mut self, builder: &mut FunctionBuilder) {
-        let memcheck_off = self.builtin_functions.before_allocator(builder.func);
+    fn check_allocator_start(&mut self, builder: &mut FunctionBuilder) {
+        let allocator_start = self.builtin_functions.allocator_start(builder.func);
         let vmctx = self.vmctx_val(&mut builder.cursor());
-        builder.ins().call(memcheck_off, &[vmctx]);
+        builder.ins().call(allocator_start, &[vmctx]);
     }
 
     #[cfg(feature = "wmemcheck")]
@@ -3071,7 +3071,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
                 Some("posix_memalign") |
                 Some("aligned_alloc") |
                 Some("malloc_usable_size") =>
-                    self.hook_before_allocator(builder),
+                    self.check_allocator_start(builder),
                 _ => ()
             }
         }

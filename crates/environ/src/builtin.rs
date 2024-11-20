@@ -43,7 +43,7 @@ macro_rules! foreach_builtin_function {
             new_epoch(vmctx: vmctx) -> i64;
             // Invoked before memory allocation functions are called.
             #[cfg(feature = "wmemcheck")]
-            before_allocator(vmctx: vmctx);
+            allocator_start(vmctx: vmctx);
             // Invoked before malloc returns.
             #[cfg(feature = "wmemcheck")]
             check_malloc(vmctx: vmctx, addr: i32, len: i32) -> i32;
@@ -58,7 +58,7 @@ macro_rules! foreach_builtin_function {
             check_realloc(vmctx: vmctx, end_addr: i32, start_addr: i32, len: i32) -> i32;
             // Invoked before posix_memalign returns.
             #[cfg(feature = "wmemcheck")]
-            check_posix_memalign(vmctx: vmctx, outptr: i32, alignment: i32, size: i32) -> i32;
+            check_posix_memalign(vmctx: vmctx, result: i32, outptr: i32, alignment: i32, size: i32) -> i32;
             // Invoked before aligned_alloc returns.
             #[cfg(feature = "wmemcheck")]
             check_aligned_alloc(vmctx: vmctx, outptr: i32, alignment: i32, size: i32) -> i32;
