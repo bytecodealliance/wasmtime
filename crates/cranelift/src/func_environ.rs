@@ -49,7 +49,7 @@ impl BuiltinFunctions {
         if let Some(f) = cache {
             return *f;
         }
-        let signature = func.import_signature(self.types.signature(index));
+        let signature = func.import_signature(self.types.wasm_signature(index));
         let name =
             ir::ExternalName::User(func.declare_imported_user_function(ir::UserExternalName {
                 namespace: crate::NS_WASMTIME_BUILTIN,

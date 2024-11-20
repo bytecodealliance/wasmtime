@@ -327,14 +327,16 @@ struct BuiltinFunctionSignatures {
     #[cfg(feature = "gc")]
     reference_type: ir::Type,
 
-    call_conv: CallConv,
+    host_call_conv: CallConv,
+    wasm_call_conv: CallConv,
 }
 
 impl BuiltinFunctionSignatures {
     fn new(isa: &dyn TargetIsa) -> Self {
         Self {
             pointer_type: isa.pointer_type(),
-            call_conv: CallConv::triple_default(isa.triple()),
+            host_call_conv: CallConv::triple_default(isa.triple()),
+            wasm_call_conv: CallConv::Tail,
 
             #[cfg(feature = "gc")]
             reference_type: ir::types::I32,
@@ -379,7 +381,7 @@ impl BuiltinFunctionSignatures {
         AbiParam::new(ir::types::I8)
     }
 
-    fn signature(&self, builtin: BuiltinFunctionIndex) -> Signature {
+    fn wasm_signature(&self, builtin: BuiltinFunctionIndex) -> Signature {
         let mut _cur = 0;
         macro_rules! iter {
             (
@@ -394,7 +396,7 @@ impl BuiltinFunctionSignatures {
                         return Signature {
                             params: vec![ $( self.$param() ),* ],
                             returns: vec![ $( self.$result() )? ],
-                            call_conv: self.call_conv,
+                            call_conv: self.wasm_call_conv,
                         };
                     }
                     _cur += 1;
@@ -405,6 +407,12 @@ impl BuiltinFunctionSignatures {
         wasmtime_environ::foreach_builtin_function!(iter);
 
         unreachable!();
+    }
+
+    fn host_signature(&self, builtin: BuiltinFunctionIndex) -> Signature {
+        let mut sig = self.wasm_signature(builtin);
+        sig.call_conv = self.host_call_conv;
+        sig
     }
 }
 
