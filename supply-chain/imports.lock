@@ -137,6 +137,10 @@ audited_as = "26.0.1"
 version = "28.0.0"
 audited_as = "26.0.1"
 
+[[unpublished.wasmtime-wasi-config]]
+version = "28.0.0"
+audited_as = "27.0.0"
+
 [[unpublished.wasmtime-wasi-http]]
 version = "28.0.0"
 audited_as = "26.0.1"
@@ -1060,6 +1064,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-wasi]]
 version = "26.0.1"
 when = "2024-11-05"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wasi-config]]
+version = "27.0.0"
+when = "2024-11-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
