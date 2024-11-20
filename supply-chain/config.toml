@@ -151,6 +151,9 @@ audit-as-crates-io = false
 [policy.wasmtime-wasi]
 audit-as-crates-io = true
 
+[policy.wasmtime-wasi-config]
+audit-as-crates-io = true
+
 [policy.wasmtime-wasi-http]
 audit-as-crates-io = true
 
