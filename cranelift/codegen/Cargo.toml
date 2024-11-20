@@ -128,10 +128,6 @@ souper-harvest = ["souper-ir", "souper-ir/stringify"]
 # Report any ISLE errors in pretty-printed style.
 isle-errors = ["cranelift-isle/fancy-errors"]
 
-# Put ISLE generated files in isle_generated_code/, for easier
-# inspection, rather than inside of target/.
-isle-in-source-tree = []
-
 # Enable tracking how long passes take in Cranelift.
 #
 # Enabled by default.
