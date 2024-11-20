@@ -120,8 +120,6 @@ fn host_always_has_some_stack() -> Result<()> {
     }
 }
 
-// Don't test Cranelift here because it takes too long to compiler in debug
-// mode.
 #[wasmtime_test]
 fn big_stack_works_ok(config: &mut Config) -> Result<()> {
     const N: usize = 10000;
@@ -146,6 +144,8 @@ fn big_stack_works_ok(config: &mut Config) -> Result<()> {
     s.push_str("(func $get (result i64) i64.const 0)\n");
     s.push_str(")\n");
 
+    // Disable cranelift optimizations to ensure that this test doesn't take too
+    // long in debug mode due to the large size of its code.
     config.cranelift_opt_level(OptLevel::None);
     config.cranelift_regalloc_algorithm(RegallocAlgorithm::SinglePass);
     let engine = Engine::new(config)?;
