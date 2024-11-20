@@ -34,6 +34,9 @@ impl MallocMemory {
         if tunables.memory_reservation > 0 {
             bail!("malloc memory is only compatible with no ahead-of-time memory reservation");
         }
+        if tunables.memory_init_cow {
+            bail!("malloc memory cannot be used with CoW images");
+        }
 
         let byte_size = minimum
             .checked_add(

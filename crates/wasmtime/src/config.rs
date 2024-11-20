@@ -144,7 +144,6 @@ pub struct Config {
     pub(crate) async_support: bool,
     pub(crate) module_version: ModuleVersionStrategy,
     pub(crate) parallel_compilation: bool,
-    pub(crate) memory_init_cow: bool,
     pub(crate) memory_guaranteed_dense_image_size: u64,
     pub(crate) force_memory_init_memfd: bool,
     pub(crate) wmemcheck: bool,
@@ -246,9 +245,6 @@ impl Config {
             async_support: false,
             module_version: ModuleVersionStrategy::default(),
             parallel_compilation: !cfg!(miri),
-            // If signals are disabled then virtual memory is probably mostly
-            // disabled so also disable the use of CoW by default.
-            memory_init_cow: cfg!(feature = "signals-based-traps"),
             memory_guaranteed_dense_image_size: 16 << 20,
             force_memory_init_memfd: false,
             wmemcheck: false,
@@ -1791,7 +1787,7 @@ impl Config {
     /// [IPI]: https://en.wikipedia.org/wiki/Inter-processor_interrupt
     #[cfg(feature = "signals-based-traps")]
     pub fn memory_init_cow(&mut self, enable: bool) -> &mut Self {
-        self.memory_init_cow = enable;
+        self.tunables.memory_init_cow = Some(enable);
         self
     }
 
@@ -2051,6 +2047,7 @@ impl Config {
             tunables.memory_reservation = 0;
             tunables.memory_guard_size = 0;
             tunables.memory_reservation_for_growth = 1 << 20; // 1MB
+            tunables.memory_init_cow = false;
         }
 
         self.tunables.configure(&mut tunables);
@@ -2081,7 +2078,7 @@ impl Config {
         // the defaults here.
         if !cfg!(feature = "signals-based-traps") {
             assert!(!tunables.signals_based_traps);
-            assert!(!self.memory_init_cow);
+            assert!(!tunables.memory_init_cow);
         }
 
         Ok((tunables, features))

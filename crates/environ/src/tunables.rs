@@ -117,6 +117,9 @@ define_tunables! {
         /// Whether or not the host will be using native signals (e.g. SIGILL,
         /// SIGSEGV, etc) to implement traps.
         pub signals_based_traps: bool,
+
+        /// Whether CoW images might be used to initialize linear memories.
+        pub memory_init_cow: bool,
     }
 
     pub struct ConfigTunables {
@@ -175,6 +178,7 @@ impl Tunables {
             relaxed_simd_deterministic: false,
             winch_callable: false,
             signals_based_traps: true,
+            memory_init_cow: true,
         }
     }
 

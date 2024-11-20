@@ -796,7 +796,7 @@ impl FunctionIndices {
                 // can either at runtime be implemented as a single memcpy to
                 // initialize memory or otherwise enabling virtual-memory-tricks
                 // such as mmap'ing from a file to get copy-on-write.
-                if engine.config().memory_init_cow {
+                if engine.tunables().memory_init_cow {
                     let align = compiler.page_size_align();
                     let max_always_allowed = engine.config().memory_guaranteed_dense_image_size;
                     translation.try_static_init(align, max_always_allowed);

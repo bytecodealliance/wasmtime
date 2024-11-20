@@ -131,6 +131,7 @@ impl RuntimeMemoryCreator for DefaultMemoryCreator {
         if tunables.signals_based_traps
             || tunables.memory_guard_size > 0
             || tunables.memory_reservation > 0
+            || tunables.memory_init_cow
         {
             return Ok(Box::new(MmapMemory::new(ty, tunables, minimum, maximum)?));
         }
