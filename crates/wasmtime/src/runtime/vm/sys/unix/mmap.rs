@@ -20,7 +20,7 @@ pub struct Mmap {
 cfg_if::cfg_if! {
     if #[cfg(any(target_os = "illumos", target_os = "linux"))] {
         // On illumos, by default, mmap reserves what it calls "swap space" ahead of time, so that
-        // memory accesses are guaranteed not to fail once mmap succeeds. NORESERVE is for cases
+        // memory accesses a`re guaranteed not to fail once mmap succeeds. NORESERVE is for cases
         // where that memory is never meant to be accessed -- e.g. memory that's used as guard
         // pages.
         //
@@ -135,6 +135,9 @@ impl Mmap {
 
     #[inline]
     pub fn len(&self) -> usize {
+        // Note: while the start of memory is host page-aligned, the length might
+        // not be, and in particular is not aligned for file-backed mmaps. Be
+        // careful!
         self.memory.as_ptr().len()
     }
 

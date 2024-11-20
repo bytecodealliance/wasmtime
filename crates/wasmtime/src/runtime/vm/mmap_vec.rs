@@ -1,6 +1,6 @@
 use crate::prelude::*;
 #[cfg(feature = "signals-based-traps")]
-use crate::runtime::vm::Mmap;
+use crate::runtime::vm::{mmap::UnalignedLength, Mmap};
 use alloc::sync::Arc;
 use core::ops::{Deref, Range};
 #[cfg(feature = "std")]
@@ -29,7 +29,10 @@ pub enum MmapVec {
     Vec(Vec<u8>),
     #[doc(hidden)]
     #[cfg(feature = "signals-based-traps")]
-    Mmap { mmap: Mmap, len: usize },
+    Mmap {
+        mmap: Mmap<UnalignedLength>,
+        len: usize,
+    },
 }
 
 impl MmapVec {
@@ -39,7 +42,11 @@ impl MmapVec {
     /// smaller than the region mapped by the `Mmap`. The returned `MmapVec`
     /// will only have at most `size` bytes accessible.
     #[cfg(feature = "signals-based-traps")]
-    fn new_mmap(mmap: Mmap, len: usize) -> MmapVec {
+    fn new_mmap<M>(mmap: M, len: usize) -> MmapVec
+    where
+        M: Into<Mmap<UnalignedLength>>,
+    {
+        let mmap = mmap.into();
         assert!(len <= mmap.len());
         MmapVec::Mmap { mmap, len }
     }

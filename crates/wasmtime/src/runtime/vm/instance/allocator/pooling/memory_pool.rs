@@ -56,8 +56,8 @@ use super::{
 };
 use crate::runtime::vm::mpk::{self, ProtectionKey, ProtectionMask};
 use crate::runtime::vm::{
-    CompiledModuleId, InstanceAllocationRequest, InstanceLimits, Memory, MemoryImageSlot, Mmap,
-    MpkEnabled, PoolingInstanceAllocatorConfig,
+    mmap::AlignedLength, CompiledModuleId, InstanceAllocationRequest, InstanceLimits, Memory,
+    MemoryImageSlot, Mmap, MpkEnabled, PoolingInstanceAllocatorConfig,
 };
 use crate::{prelude::*, vm::round_usize_up_to_host_pages};
 use std::ffi::c_void;
@@ -101,7 +101,7 @@ struct Stripe {
 /// ```
 #[derive(Debug)]
 pub struct MemoryPool {
-    mapping: Mmap,
+    mapping: Mmap<AlignedLength>,
     /// This memory pool is stripe-aware. If using  memory protection keys, this
     /// will contain one stripe per available key; otherwise, a single stripe
     /// with an empty key.

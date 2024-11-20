@@ -8,8 +8,9 @@ use super::*;
 use crate::{
     prelude::*,
     vm::{
-        ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
-        GcProgress, GcRootsIter, Mmap, SendSyncUnsafeCell, TypedGcRef, VMGcHeader, VMGcRef,
+        mmap::AlignedLength, ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection,
+        GcHeap, GcHeapObject, GcProgress, GcRootsIter, Mmap, SendSyncUnsafeCell, TypedGcRef,
+        VMGcHeader, VMGcRef,
     },
     GcHeapOutOfMemory,
 };
@@ -54,7 +55,7 @@ struct NullHeap {
     no_gc_count: usize,
 
     /// The actual GC heap.
-    heap: Mmap,
+    heap: Mmap<AlignedLength>,
 }
 
 /// The common header for all arrays in the null collector.
