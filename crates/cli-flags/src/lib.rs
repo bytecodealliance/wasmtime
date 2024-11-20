@@ -912,31 +912,3 @@ impl CommonOptions {
         Ok(())
     }
 }
-
-impl PartialEq for CommonOptions {
-    fn eq(&self, other: &CommonOptions) -> bool {
-        let mut me = self.clone();
-        me.configure();
-        let mut other = other.clone();
-        other.configure();
-        let CommonOptions {
-            opts_raw: _,
-            codegen_raw: _,
-            debug_raw: _,
-            wasm_raw: _,
-            wasi_raw: _,
-            configured: _,
-
-            opts,
-            codegen,
-            debug,
-            wasm,
-            wasi,
-        } = me;
-        opts == other.opts
-            && codegen == other.codegen
-            && debug == other.debug
-            && wasm == other.wasm
-            && wasi == other.wasi
-    }
-}

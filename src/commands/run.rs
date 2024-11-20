@@ -39,7 +39,7 @@ fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
 }
 
 /// Runs a WebAssembly module
-#[derive(Parser, PartialEq)]
+#[derive(Parser)]
 pub struct RunCommand {
     #[command(flatten)]
     #[allow(missing_docs)]

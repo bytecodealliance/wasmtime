@@ -8,7 +8,7 @@ use wasmtime::Strategy;
 use wasmtime_cli_flags::CommonOptions;
 
 /// Explore the compilation of a WebAssembly module to native code.
-#[derive(Parser, PartialEq)]
+#[derive(Parser)]
 pub struct ExploreCommand {
     #[command(flatten)]
     common: CommonOptions,
