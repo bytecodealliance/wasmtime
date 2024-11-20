@@ -88,6 +88,17 @@ impl<'a> Disassembler<'a> {
             val.disas(self.start + self.start_offset, &mut self.temp);
         }
     }
+
+    fn disas_br_table32(&mut self, reg: XReg, amt: u32) {
+        self.disas_op("br_table32", &[&reg, &amt]);
+        for _ in 0..amt {
+            self.after_visit();
+            self.start = self.bytecode.position();
+            if let Ok(offset) = PcRelOffset::decode(self.bytecode()) {
+                offset.disas(self.start, &mut self.temp);
+            }
+        }
+    }
 }
 
 /// Anything inside an instruction that can be disassembled: registers,
@@ -206,10 +217,35 @@ macro_rules! impl_disas {
         )*
     ) => {
         $(
-            fn $snake_name(&mut self $( $( , $field : $field_ty )* )? ) {
-                self.disas_op(stringify!($snake_name), &[$($(&$field),*)?])
-            }
+            impl_disas!(@one $snake_name = $name $( { $($field: $field_ty),* } )?);
         )*
+    };
+
+    // Diassembling `br_table` is a bit special as it has trailing byte after
+    // the opcode of the branch table itself.
+    (
+        @one br_table32 = BrTable32 $( {
+            $(
+                $field:ident : $field_ty:ty
+            ),*
+        } )?
+    ) => {
+        fn br_table32(&mut self $( $( , $field : $field_ty )* )? ) {
+            self.disas_br_table32($($($field),*)?)
+        }
+    };
+
+    // All other opcodes other than `br_table` are handled in the same manner.
+    (
+        @one $snake_name:ident = $name:ident $( {
+            $(
+                $field:ident : $field_ty:ty
+            ),*
+        } )?
+    ) => {
+        fn $snake_name(&mut self $( $( , $field : $field_ty )* )? ) {
+            self.disas_op(stringify!($snake_name), &[$($(&$field),*)?])
+        }
     };
 }
 

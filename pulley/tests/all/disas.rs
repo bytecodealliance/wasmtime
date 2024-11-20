@@ -156,3 +156,34 @@ ret
         "#,
     );
 }
+
+#[test]
+fn disassemble_br_table() {
+    let mut bytecode = Vec::new();
+    PushFrame {}.encode(&mut bytecode);
+    BrTable32 {
+        idx: XReg::x1,
+        amt: 4,
+    }
+    .encode(&mut bytecode);
+    bytecode.extend_from_slice(&0_i32.to_le_bytes());
+    bytecode.extend_from_slice(&0_i32.to_le_bytes());
+    bytecode.extend_from_slice(&0_i32.to_le_bytes());
+    bytecode.extend_from_slice(&0_i32.to_le_bytes());
+    PopFrame {}.encode(&mut bytecode);
+
+    assert_disas_with_disassembler(
+        disas::Disassembler::new(&bytecode)
+            .hexdump(false)
+            .offsets(false),
+        r#"
+push_frame
+br_table32 x1, 4
+0x0    // target = 0x7
+0x0    // target = 0xb
+0x0    // target = 0xf
+0x0    // target = 0x13
+pop_frame
+        "#,
+    );
+}

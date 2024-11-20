@@ -60,6 +60,14 @@ macro_rules! for_each_op {
             /// Branch if unsigned `a <= b`.
             br_if_xulteq64 = BrIfXulteq64 { a: XReg, b: XReg, offset: PcRelOffset };
 
+            /// Branch to the label indicated by `idx`.
+            ///
+            /// After this instruction are `amt` instances of `PcRelOffset`
+            /// and the `idx` selects which one will be branched to. The value
+            /// of `idx` is clamped to `amt - 1` (e.g. the last offset is the
+            /// "default" one.
+            br_table32 = BrTable32 { idx: XReg, amt: u32 };
+
             /// Move between `x` registers.
             xmov = Xmov { dst: XReg, src: XReg };
             /// Move between `f` registers.
