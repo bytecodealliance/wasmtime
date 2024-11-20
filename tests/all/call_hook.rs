@@ -100,7 +100,7 @@ fn call_wrapped_func() -> Result<(), Error> {
                 Val::F32(3.0f32.to_bits()).to_raw(&mut store)?,
                 Val::F64(4.0f64.to_bits()).to_raw(&mut store)?,
             ];
-            f.call_unchecked(&mut store, args.as_mut_ptr(), args.len())?;
+            f.call_unchecked(&mut store, &mut args)?;
         }
         n += 1;
 
