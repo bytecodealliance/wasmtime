@@ -222,17 +222,17 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
             (quote! {}, quote! {})
         };
         let func_name = &func.sig.ident;
-        let ret = match &func.sig.output {
+        let expect = match &func.sig.output {
             ReturnType::Default => quote! {},
-            ReturnType::Type(_, ty) => quote! { -> #ty },
+            ReturnType::Type(..) => quote! { .expect("test is expected to pass") },
         };
         let test_name = Ident::new(
             &format!("{}_{}", strategy_name.to_lowercase(), func_name),
             func_name.span(),
         );
 
-        let ignore = if strategy.should_fail(&test_config.flags) {
-            quote!(#[ignore])
+        let should_panic = if strategy.should_fail(&test_config.flags) {
+            quote!(#[should_panic])
         } else {
             quote!()
         };
@@ -245,9 +245,9 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
         let tok = quote! {
             #test_attr
             #target
-            #ignore
+            #should_panic
             #(#attrs)*
-            #asyncness fn #test_name() #ret {
+            #asyncness fn #test_name() {
                 let mut config = Config::new();
                 component_test_util::apply_test_config(
                     &mut config,
@@ -261,8 +261,7 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
                         collector: wasmtime_wast_util::Collector::Auto,
                     },
                 );
-                // config.strategy(Strategy::#ident);
-                #func_name(&mut config) #await_
+                #func_name(&mut config) #await_ #expect
             }
         };
 
