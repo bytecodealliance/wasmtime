@@ -189,9 +189,7 @@ fn bench_host_to_wasm<Params, Results>(
             for (i, param) in params.iter().enumerate() {
                 space[i] = param.to_raw(&mut *store).unwrap();
             }
-            untyped
-                .call_unchecked(&mut *store, space.as_mut_ptr(), space.len())
-                .unwrap();
+            untyped.call_unchecked(&mut *store, &mut space[..]).unwrap();
             for (i, expected) in results.iter().enumerate() {
                 let ty = expected.ty(&store).unwrap();
                 let actual = Val::from_raw(&mut *store, space[i], ty);
