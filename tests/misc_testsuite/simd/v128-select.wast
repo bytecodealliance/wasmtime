@@ -1,3 +1,5 @@
+;;! simd = true
+
 (module
   (func (export "select") (param v128 v128 i32) (result v128)
     local.get 0

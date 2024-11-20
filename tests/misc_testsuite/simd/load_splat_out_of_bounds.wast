@@ -1,3 +1,5 @@
+;;! simd = true
+
 ;; aligned and out of bounds
 (module
   (func

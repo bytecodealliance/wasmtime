@@ -1,3 +1,5 @@
+;;! simd = true
+
 (; See issue https://github.com/bytecodealliance/wasmtime/issues/3173. ;)
 
 (module

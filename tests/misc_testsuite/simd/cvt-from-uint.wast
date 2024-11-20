@@ -1,3 +1,4 @@
+;;! simd = true
 
 ;; Tests inspired by https://github.com/bytecodealliance/wasmtime/issues/3161
 ;; which found issue in lowering Opcode::FcvtFromUint where valid instruction

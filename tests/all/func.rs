@@ -233,7 +233,7 @@ fn call_array_to_array() -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test]
+#[wasmtime_test(wasm_features(reference_types))]
 #[cfg_attr(miri, ignore)]
 fn call_indirect_native_from_wasm_import_global(config: &mut Config) -> Result<()> {
     let wasm = wat::parse_str(
@@ -297,7 +297,7 @@ fn call_indirect_native_from_wasm_import_table(config: &mut Config) -> Result<()
     Ok(())
 }
 
-#[wasmtime_test]
+#[wasmtime_test(wasm_features(reference_types))]
 #[cfg_attr(miri, ignore)]
 fn call_indirect_native_from_wasm_import_func_returns_funcref(config: &mut Config) -> Result<()> {
     let wasm = wat::parse_str(
@@ -355,7 +355,7 @@ fn call_indirect_native_from_exported_table(config: &mut Config) -> Result<()> {
 }
 
 // wasm exports global, host puts native-call funcref in global, wasm calls funcref
-#[wasmtime_test]
+#[wasmtime_test(wasm_features(reference_types))]
 #[cfg_attr(miri, ignore)]
 fn call_indirect_native_from_exported_global(config: &mut Config) -> Result<()> {
     let wasm = wat::parse_str(
@@ -1332,7 +1332,7 @@ fn wrap_multiple_results(config: &mut Config) -> anyhow::Result<()> {
     }
 }
 
-#[wasmtime_test(wasm_features(reference_types))]
+#[wasmtime_test(wasm_features(reference_types, gc_types))]
 #[cfg_attr(miri, ignore)]
 fn trampoline_for_declared_elem(config: &mut Config) -> anyhow::Result<()> {
     let engine = Engine::new(&config)?;
@@ -1461,7 +1461,7 @@ fn typed_funcs_count_params_correctly_in_error_messages(config: &mut Config) -> 
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(reference_types))]
+#[wasmtime_test(wasm_features(reference_types, gc_types))]
 #[cfg_attr(miri, ignore)]
 fn calls_with_funcref_and_externref(config: &mut Config) -> anyhow::Result<()> {
     let engine = Engine::new(&config)?;
@@ -1901,7 +1901,7 @@ fn call_wasm_getting_subtype_func_return(config: &mut Config) -> anyhow::Result<
     Ok(())
 }
 
-#[wasmtime_test(wasm_features(simd))]
+#[wasmtime_test(wasm_features(simd), strategies(not(Winch)))]
 #[cfg_attr(miri, ignore)]
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 fn typed_v128(config: &mut Config) -> anyhow::Result<()> {
@@ -1971,7 +1971,7 @@ fn typed_v128(config: &mut Config) -> anyhow::Result<()> {
     Ok(())
 }
 
-#[wasmtime_test]
+#[wasmtime_test(wasm_features(simd))]
 #[cfg_attr(miri, ignore)]
 #[cfg(any(target_arch = "x86_64", target_arch = "aarch64"))]
 fn typed_v128_imports(config: &mut Config) -> anyhow::Result<()> {

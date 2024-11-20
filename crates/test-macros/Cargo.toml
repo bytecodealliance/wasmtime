@@ -21,3 +21,4 @@ quote = "1.0"
 proc-macro2 = "1.0"
 syn = { workspace = true, features = ["full"] }
 anyhow = { workspace = true }
+wasmtime-wast-util = { path = '../wast-util' }

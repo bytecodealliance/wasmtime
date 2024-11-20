@@ -1,4 +1,5 @@
 ;;! memory64 = true
+;;! simd = true
 
 ;; make sure everything codegens correctly and has no cranelift verifier errors
 (module

@@ -122,33 +122,50 @@ impl Config {
     /// This will additionally update limits in the pooling allocator to be able
     /// to execute all tests.
     pub fn make_wast_test_compliant(&mut self, test: &WastTest) -> WastConfig {
+        let wasmtime_wast_util::TestConfig {
+            memory64,
+            custom_page_sizes,
+            multi_memory,
+            threads,
+            gc,
+            function_references,
+            relaxed_simd,
+            reference_types,
+            tail_call,
+            extended_const,
+            wide_arithmetic,
+            component_model_more_flags,
+            simd,
+
+            hogs_memory: _,
+            nan_canonicalization: _,
+            gc_types: _,
+        } = test.config;
+
         // Enable/disable some proposals that aren't configurable in wasm-smith
         // but are configurable in Wasmtime.
-        self.module_config.function_references_enabled = test
-            .config
-            .function_references
-            .or(test.config.gc)
-            .unwrap_or(false);
-        self.module_config.component_model_more_flags =
-            test.config.component_model_more_flags.unwrap_or(false);
+        self.module_config.function_references_enabled =
+            function_references.or(gc).unwrap_or(false);
+        self.module_config.component_model_more_flags = component_model_more_flags.unwrap_or(false);
 
         // Enable/disable proposals that wasm-smith has knobs for which will be
         // read when creating `wasmtime::Config`.
         let config = &mut self.module_config.config;
         config.bulk_memory_enabled = true;
         config.multi_value_enabled = true;
-        config.simd_enabled = true;
-        config.wide_arithmetic_enabled = test.config.wide_arithmetic.unwrap_or(false);
-        config.memory64_enabled = test.config.memory64.unwrap_or(false);
-        config.tail_call_enabled = test.config.tail_call.unwrap_or(false);
-        config.custom_page_sizes_enabled = test.config.custom_page_sizes.unwrap_or(false);
-        config.threads_enabled = test.config.threads.unwrap_or(false);
-        config.gc_enabled = test.config.gc.unwrap_or(false);
+        config.wide_arithmetic_enabled = wide_arithmetic.unwrap_or(false);
+        config.memory64_enabled = memory64.unwrap_or(false);
+        config.relaxed_simd_enabled = relaxed_simd.unwrap_or(false);
+        config.simd_enabled = config.relaxed_simd_enabled || simd.unwrap_or(false);
+        config.tail_call_enabled = tail_call.unwrap_or(false);
+        config.custom_page_sizes_enabled = custom_page_sizes.unwrap_or(false);
+        config.threads_enabled = threads.unwrap_or(false);
+        config.gc_enabled = gc.unwrap_or(false);
         config.reference_types_enabled = config.gc_enabled
             || self.module_config.function_references_enabled
-            || test.config.reference_types.unwrap_or(false);
-        config.extended_const_enabled = test.config.extended_const.unwrap_or(false);
-        if test.config.multi_memory.unwrap_or(false) {
+            || reference_types.unwrap_or(false);
+        config.extended_const_enabled = extended_const.unwrap_or(false);
+        if multi_memory.unwrap_or(false) {
             config.max_memories = limits::MEMORIES_PER_MODULE as usize;
         } else {
             config.max_memories = 1;

@@ -1,3 +1,5 @@
+;;! simd = true
+
 ;; originally from #3216
 (module
   (func (result i64)

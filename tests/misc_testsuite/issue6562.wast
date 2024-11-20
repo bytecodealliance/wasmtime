@@ -1,3 +1,5 @@
+;;! simd = true
+
 (module
   (func (result v128)
     i32.const 0
