@@ -2,6 +2,7 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
+use wasmtime_test_macros::wasmtime_test;
 
 #[test]
 fn host_always_has_some_stack() -> Result<()> {
@@ -119,8 +120,10 @@ fn host_always_has_some_stack() -> Result<()> {
     }
 }
 
-#[test]
-fn big_stack_works_ok() -> Result<()> {
+// Don't test Cranelift here because it takes too long to compiler in debug
+// mode.
+#[wasmtime_test]
+fn big_stack_works_ok(config: &mut Config) -> Result<()> {
     const N: usize = 10000;
 
     // Build a module with a function that uses a very large amount of stack space,
@@ -143,7 +146,11 @@ fn big_stack_works_ok() -> Result<()> {
     s.push_str("(func $get (result i64) i64.const 0)\n");
     s.push_str(")\n");
 
-    let mut store = Store::<()>::default();
+    config.cranelift_opt_level(OptLevel::None);
+    config.cranelift_regalloc_algorithm(RegallocAlgorithm::SinglePass);
+    let engine = Engine::new(config)?;
+
+    let mut store = Store::new(&engine, ());
     let module = Module::new(store.engine(), &s)?;
     let instance = Instance::new(&mut store, &module, &[])?;
     let func = instance.get_typed_func::<(), i64>(&mut store, "")?;
