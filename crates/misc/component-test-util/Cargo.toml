@@ -12,3 +12,4 @@ env_logger = { workspace = true }
 anyhow = { workspace = true }
 arbitrary = { workspace = true, features = ["derive"] }
 wasmtime = { workspace = true, features = ["component-model", "async"] }
+wasmtime-wast-util = { path = '../../wast-util' }

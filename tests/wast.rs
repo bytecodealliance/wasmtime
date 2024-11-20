@@ -105,36 +105,9 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
     // `crates/wast-util/src/lib.rs` file.
     let should_fail = test.should_fail(&config);
 
-    // Note that all of these proposals/features are currently default-off to
-    // ensure that we annotate all tests accurately with what features they
-    // need, even in the future when features are stabilized.
-    let memory64 = test_config.memory64.unwrap_or(false);
-    let custom_page_sizes = test_config.custom_page_sizes.unwrap_or(false);
     let multi_memory = test_config.multi_memory.unwrap_or(false);
-    let threads = test_config.threads.unwrap_or(false);
-    let gc = test_config.gc.unwrap_or(false);
-    let tail_call = test_config.tail_call.unwrap_or(false);
-    let extended_const = test_config.extended_const.unwrap_or(false);
-    let wide_arithmetic = test_config.wide_arithmetic.unwrap_or(false);
     let test_hogs_memory = test_config.hogs_memory.unwrap_or(false);
-    let component_model_more_flags = test_config.component_model_more_flags.unwrap_or(false);
-    let nan_canonicalization = test_config.nan_canonicalization.unwrap_or(false);
     let relaxed_simd = test_config.relaxed_simd.unwrap_or(false);
-
-    // Some proposals in wasm depend on previous proposals. For example the gc
-    // proposal depends on function-references which depends on reference-types.
-    // To avoid needing to enable all of them at once implicitly enable
-    // downstream proposals once the end proposal is enabled (e.g. when enabling
-    // gc that also enables function-references and reference-types).
-    let function_references = test_config
-        .function_references
-        .or(test_config.gc)
-        .unwrap_or(false);
-    let reference_types = test_config
-        .reference_types
-        .or(test_config.function_references)
-        .or(test_config.gc)
-        .unwrap_or(false);
 
     let is_cranelift = match config.compiler {
         Compiler::Cranelift => true,
@@ -142,28 +115,8 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
     };
 
     let mut cfg = Config::new();
-    cfg.wasm_multi_memory(multi_memory)
-        .wasm_threads(threads)
-        .wasm_memory64(memory64)
-        .wasm_function_references(function_references)
-        .wasm_gc(gc)
-        .wasm_reference_types(reference_types)
-        .wasm_relaxed_simd(relaxed_simd)
-        .wasm_tail_call(tail_call)
-        .wasm_custom_page_sizes(custom_page_sizes)
-        .wasm_extended_const(extended_const)
-        .wasm_wide_arithmetic(wide_arithmetic)
-        .wasm_component_model_more_flags(component_model_more_flags)
-        .strategy(match config.compiler {
-            Compiler::Cranelift => wasmtime::Strategy::Cranelift,
-            Compiler::Winch => wasmtime::Strategy::Winch,
-        })
-        .collector(match config.collector {
-            Collector::Auto => wasmtime::Collector::Auto,
-            Collector::Null => wasmtime::Collector::Null,
-            Collector::DeferredReferenceCounting => wasmtime::Collector::DeferredReferenceCounting,
-        })
-        .cranelift_nan_canonicalization(nan_canonicalization);
+    component_test_util::apply_test_config(&mut cfg, &test_config);
+    component_test_util::apply_wast_config(&mut cfg, &config);
 
     if is_cranelift {
         cfg.cranelift_debug_verifier(true);

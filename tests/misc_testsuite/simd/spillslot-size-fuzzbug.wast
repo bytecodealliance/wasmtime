@@ -1,3 +1,5 @@
+;;! simd = true
+
 (module
   (func (export "test") (result f32 f32)
     i32.const 0

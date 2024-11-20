@@ -1,3 +1,5 @@
+;;! simd = true
+
 (module
   (func (param i32) (result v128)
     local.get 0

@@ -76,6 +76,7 @@ fn spec_test_config(test: &Path) -> TestConfig {
         Some("multi-memory") => {
             ret.multi_memory = Some(true);
             ret.reference_types = Some(true);
+            ret.simd = Some(true);
         }
         Some("wide-arithmetic") => {
             ret.wide_arithmetic = Some(true);
@@ -118,9 +119,14 @@ fn spec_test_config(test: &Path) -> TestConfig {
             ret.function_references = Some(true);
             ret.tail_call = Some(true);
         }
-        Some("annotations") => {}
+        Some("annotations") => {
+            ret.simd = Some(true);
+        }
         Some(proposal) => panic!("unsuported proposal {proposal:?}"),
-        None => ret.reference_types = Some(true),
+        None => {
+            ret.reference_types = Some(true);
+            ret.simd = Some(true);
+        }
     }
 
     ret
@@ -162,25 +168,55 @@ impl fmt::Debug for WastTest {
     }
 }
 
-/// Per-test configuration which is written down in the test file itself for
-/// `misc_testsuite/**/*.wast` or in `spec_test_config` above for spec tests.
-#[derive(Debug, PartialEq, Default, Deserialize, Clone)]
-#[serde(deny_unknown_fields)]
-pub struct TestConfig {
-    pub memory64: Option<bool>,
-    pub custom_page_sizes: Option<bool>,
-    pub multi_memory: Option<bool>,
-    pub threads: Option<bool>,
-    pub gc: Option<bool>,
-    pub function_references: Option<bool>,
-    pub relaxed_simd: Option<bool>,
-    pub reference_types: Option<bool>,
-    pub tail_call: Option<bool>,
-    pub extended_const: Option<bool>,
-    pub wide_arithmetic: Option<bool>,
-    pub hogs_memory: Option<bool>,
-    pub nan_canonicalization: Option<bool>,
-    pub component_model_more_flags: Option<bool>,
+macro_rules! foreach_config_option {
+    ($m:ident) => {
+        $m! {
+            memory64
+            custom_page_sizes
+            multi_memory
+            threads
+            gc
+            function_references
+            relaxed_simd
+            reference_types
+            tail_call
+            extended_const
+            wide_arithmetic
+            hogs_memory
+            nan_canonicalization
+            component_model_more_flags
+            simd
+            gc_types
+        }
+    };
+}
+
+macro_rules! define_test_config {
+    ($($option:ident)*) => {
+        /// Per-test configuration which is written down in the test file itself for
+        /// `misc_testsuite/**/*.wast` or in `spec_test_config` above for spec tests.
+        #[derive(Debug, PartialEq, Default, Deserialize, Clone)]
+        #[serde(deny_unknown_fields)]
+        pub struct TestConfig {
+            $(pub $option: Option<bool>,)*
+        }
+    }
+}
+
+foreach_config_option!(define_test_config);
+
+impl TestConfig {
+    /// Returns an iterator over each option.
+    pub fn options_mut(&mut self) -> impl Iterator<Item = (&'static str, &mut Option<bool>)> {
+        macro_rules! mk {
+            ($($option:ident)*) => {
+                [
+                    $((stringify!($option), &mut self.$option),)*
+                ].into_iter()
+            }
+        }
+        foreach_config_option!(mk)
+    }
 }
 
 /// Configuration that spec tests can run under.
@@ -197,6 +233,29 @@ pub struct WastConfig {
 pub enum Compiler {
     Cranelift,
     Winch,
+}
+
+impl Compiler {
+    pub fn should_fail(&self, config: &TestConfig) -> bool {
+        match self {
+            Compiler::Cranelift => {}
+            Compiler::Winch => {
+                // A few proposals that winch has no support for.
+                if config.gc == Some(true)
+                    || config.threads == Some(true)
+                    || config.tail_call == Some(true)
+                    || config.function_references == Some(true)
+                    || config.gc == Some(true)
+                    || config.relaxed_simd == Some(true)
+                    || config.gc_types == Some(true)
+                {
+                    return true;
+                }
+            }
+        }
+
+        false
+    }
 }
 
 #[derive(PartialEq, Debug, Copy, Clone)]
@@ -229,19 +288,12 @@ impl WastTest {
             return true;
         }
 
+        if config.compiler.should_fail(&self.config) {
+            return true;
+        }
+
         // Disable spec tests for proposals that Winch does not implement yet.
         if config.compiler == Compiler::Winch {
-            // A few proposals that winch has no support for.
-            if self.config.gc == Some(true)
-                || self.config.threads == Some(true)
-                || self.config.tail_call == Some(true)
-                || self.config.function_references == Some(true)
-                || self.config.gc == Some(true)
-                || self.config.relaxed_simd == Some(true)
-            {
-                return true;
-            }
-
             let unsupported = [
                 // externref/reference-types related
                 "component-model/modules.wast",

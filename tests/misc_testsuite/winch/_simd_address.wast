@@ -1,3 +1,5 @@
+;;! simd = true
+
 ;; Load/Store v128 data with different valid offset/alignment
 
 (module

@@ -1,3 +1,5 @@
+;;! simd = true
+
  (module
   (func (result i32)
     global.get 0

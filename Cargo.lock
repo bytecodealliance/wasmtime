@@ -646,6 +646,7 @@ dependencies = [
  "arbitrary",
  "env_logger 0.11.5",
  "wasmtime",
+ "wasmtime-wast-util",
 ]
 
 [[package]]
@@ -4312,6 +4313,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.60",
+ "wasmtime-wast-util",
 ]
 
 [[package]]

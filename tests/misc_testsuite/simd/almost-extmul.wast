@@ -1,3 +1,5 @@
+;;! simd = true
+
 ;; regression test from #3337, there's a multiplication that sort of
 ;; looks like an extmul and codegen shouldn't pattern match too much
 (module
