@@ -41,24 +41,30 @@ macro_rules! foreach_builtin_function {
             out_of_gas(vmctx: vmctx);
             // Invoked when we reach a new epoch.
             new_epoch(vmctx: vmctx) -> i64;
+            // Invoked before memory allocation functions are called.
+            #[cfg(feature = "wmemcheck")]
+            before_allocator(vmctx: vmctx);
             // Invoked before malloc returns.
             #[cfg(feature = "wmemcheck")]
             check_malloc(vmctx: vmctx, addr: i32, len: i32) -> i32;
+            // Invoked before the free returns.
+            #[cfg(feature = "wmemcheck")]
+            check_free(vmctx: vmctx, addr: i32) -> i32;
             // Invoked before calloc returns.
             #[cfg(feature = "wmemcheck")]
             check_calloc(vmctx: vmctx, addr: i32, count: i32, size: i32) -> i32;
             // Invoked before realloc returns.
             #[cfg(feature = "wmemcheck")]
             check_realloc(vmctx: vmctx, end_addr: i32, start_addr: i32, len: i32) -> i32;
+            // Invoked before posix_memalign returns.
+            #[cfg(feature = "wmemcheck")]
+            check_posix_memalign(vmctx: vmctx, outptr: i32, alignment: i32, size: i32) -> i32;
+            // Invoked before aligned_alloc returns.
+            #[cfg(feature = "wmemcheck")]
+            check_aligned_alloc(vmctx: vmctx, outptr: i32, alignment: i32, size: i32) -> i32;
             // Invoked before malloc_usable_size returns.
             #[cfg(feature = "wmemcheck")]
             check_malloc_usable_size(vmctx: vmctx, len: i32, addr: i32) -> i32;
-            // Invoked before posix_memalign returns.
-            #[cfg(feature = "wmemcheck")]
-            check_posix_memalign(vmctx: vmctx, outptr: i32, size: i32) -> i32;
-            // Invoked before the free returns.
-            #[cfg(feature = "wmemcheck")]
-            check_free(vmctx: vmctx, addr: i32) -> i32;
             // Invoked before a load is executed.
             #[cfg(feature = "wmemcheck")]
             check_load(vmctx: vmctx, num_bytes: i32, addr: i32, offset: i32) -> i32;
@@ -71,10 +77,6 @@ macro_rules! foreach_builtin_function {
             // Invoked before memory.grow is called.
             #[cfg(feature = "wmemcheck")]
             update_mem_size(vmctx: vmctx, num_bytes: i32);
-
-            // Invoked before stuff is called.
-            #[cfg(feature = "wmemcheck")]
-            memcheck_off(vmctx: vmctx);
 
             // Drop a non-stack GC reference (eg an overwritten table entry)
             // once it will no longer be used again. (Note: `val` is not of type
