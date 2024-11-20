@@ -20,7 +20,7 @@ use crate::machinst::{
     VCodeConstants, VCodeInst, ValueRegs, Writable,
 };
 use crate::settings::Flags;
-use crate::{trace, CodegenResult};
+use crate::{trace, CodegenError, CodegenResult};
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -676,18 +676,21 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             // or any of its outputs is used.
             if has_side_effect || value_needed {
                 trace!("lowering: inst {}: {}", inst, self.f.dfg.display_inst(inst));
-                let temp_regs = backend.lower(self, inst).unwrap_or_else(|| {
-                    let ty = if self.num_outputs(inst) > 0 {
-                        Some(self.output_ty(inst, 0))
-                    } else {
-                        None
-                    };
-                    panic!(
-                        "should be implemented in ISLE: inst = `{}`, type = `{:?}`",
-                        self.f.dfg.display_inst(inst),
-                        ty
-                    )
-                });
+                let temp_regs = match backend.lower(self, inst) {
+                    Some(regs) => regs,
+                    None => {
+                        let ty = if self.num_outputs(inst) > 0 {
+                            Some(self.output_ty(inst, 0))
+                        } else {
+                            None
+                        };
+                        return Err(CodegenError::Unsupported(format!(
+                            "should be implemented in ISLE: inst = `{}`, type = `{:?}`",
+                            self.f.dfg.display_inst(inst),
+                            ty
+                        )));
+                    }
+                };
 
                 // The ISLE generated code emits its own registers to define the
                 // instruction's lowered values in. However, other instructions
