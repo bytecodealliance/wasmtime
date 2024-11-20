@@ -154,7 +154,7 @@ impl Tunables {
     }
 
     /// Returns the default set of tunables for running under MIRI.
-    pub fn default_miri() -> Tunables {
+    pub const fn default_miri() -> Tunables {
         Tunables {
             collector: None,
 
@@ -183,7 +183,7 @@ impl Tunables {
     }
 
     /// Returns the default set of tunables for running under a 32-bit host.
-    pub fn default_u32() -> Tunables {
+    pub const fn default_u32() -> Tunables {
         Tunables {
             // For 32-bit we scale way down to 10MB of reserved memory. This
             // impacts performance severely but allows us to have more than a
@@ -197,7 +197,7 @@ impl Tunables {
     }
 
     /// Returns the default set of tunables for running under a 64-bit host.
-    pub fn default_u64() -> Tunables {
+    pub const fn default_u64() -> Tunables {
         Tunables {
             // 64-bit has tons of address space to static memories can have 4gb
             // address space reservations liberally by default, allowing us to
