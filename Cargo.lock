@@ -4069,6 +4069,7 @@ dependencies = [
  "tracing",
  "walkdir",
  "wasi-common",
+ "wasm-encoder",
  "wasmparser",
  "wasmtime",
  "wasmtime-cache",
