@@ -19,30 +19,17 @@
     )
 )
 ;; wasm[0]::function[0]:
-;;       xconst8 spilltmp0, -16
-;;       xadd32 sp, sp, spilltmp0
-;;       store64_offset8 sp, 8, lr
-;;       store64 sp, fp
-;;       xmov fp, sp
+;;       push_frame
 ;;       br_table32 x2, 3
-;;       0x1d    // target = 0x33
-;;       0x8    // target = 0x22
-;;       0x26    // target = 0x44
-;;   22: xconst8 x0, 1
-;;       load64_offset8 lr, sp, 8
-;;       load64 fp, sp
-;;       xconst8 spilltmp0, 16
-;;       xadd32 sp, sp, spilltmp0
+;;       0x11    // target = 0x18
+;;       0x8    // target = 0x13
+;;       0xe    // target = 0x1d
+;;   13: xconst8 x0, 1
+;;       pop_frame
 ;;       ret
-;;   33: xconst8 x0, 2
-;;   36: load64_offset8 lr, sp, 8
-;;   3a: load64 fp, sp
-;;   3d: xconst8 spilltmp0, 16
-;;   40: xadd32 sp, sp, spilltmp0
-;;   43: ret
-;;   44: xconst8 x0, 0
-;;   47: load64_offset8 lr, sp, 8
-;;   4b: load64 fp, sp
-;;   4e: xconst8 spilltmp0, 16
-;;   51: xadd32 sp, sp, spilltmp0
-;;   54: ret
+;;   18: xconst8 x0, 2
+;;   1b: pop_frame
+;;   1c: ret
+;;   1d: xconst8 x0, 0
+;;   20: pop_frame
+;;   21: ret

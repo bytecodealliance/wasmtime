@@ -120,6 +120,12 @@
     (BitcastIntFromFloat64 (dst WritableXReg) (src FReg))
     (BitcastFloatFromInt32 (dst WritableFReg) (src XReg))
     (BitcastFloatFromInt64 (dst WritableFReg) (src XReg))
+
+    ;; Stack manipulations
+    (PushFrame)
+    (PopFrame)
+    (StackAlloc32 (amt u32))
+    (StackFree32 (amt u32))
   )
 )
 

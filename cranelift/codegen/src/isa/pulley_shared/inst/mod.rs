@@ -252,6 +252,9 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::BrTable { idx, .. } => {
             collector.reg_use(idx);
         }
+
+        Inst::StackAlloc32 { .. } | Inst::StackFree32 { .. } | Inst::PushFrame | Inst::PopFrame => {
+        }
     }
 }
 
@@ -862,6 +865,15 @@ impl Inst {
                 let idx = format_reg(**idx);
                 format!("br_table {idx} {default:?} {targets:?}")
             }
+
+            Inst::StackAlloc32 { amt } => {
+                format!("stack_alloc32 {amt:#x}")
+            }
+            Inst::StackFree32 { amt } => {
+                format!("stack_free32 {amt:#x}")
+            }
+            Inst::PushFrame => format!("push_frame"),
+            Inst::PopFrame => format!("pop_frame"),
         }
     }
 }
