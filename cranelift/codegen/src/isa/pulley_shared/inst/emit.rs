@@ -149,7 +149,7 @@ fn pulley_emit<P>(
             let label = sink.defer_trap(*code);
 
             let cur_off = sink.cur_offset();
-            sink.use_label_at_offset(cur_off, label, LabelUse::Jump(3));
+            sink.use_label_at_offset(cur_off + 3, label, LabelUse::Jump(3));
 
             use ir::condcodes::IntCC::*;
             use OperandSize::*;
