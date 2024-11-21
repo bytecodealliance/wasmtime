@@ -1,4 +1,3 @@
-use crate::cli_tests::run_wasmtime;
 use anyhow::Result;
 use wasmtime::{Config, Engine, Module};
 
@@ -59,7 +58,9 @@ fn pulley_wrong_architecture_is_rejected() -> Result<()> {
 
 // CLI subcommands should support `--target`
 #[test]
+#[cfg(not(miri))]
 fn can_run_on_cli() -> Result<()> {
+    use crate::cli_tests::run_wasmtime;
     run_wasmtime(&[
         "--target",
         pulley_target(),
