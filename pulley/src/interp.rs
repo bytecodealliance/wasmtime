@@ -642,6 +642,18 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn call_indirect(&mut self, dst: XReg) -> ControlFlow<Done> {
+        let return_addr = self.pc.as_ptr();
+        self.state[XReg::lr].set_ptr(return_addr.as_ptr());
+        // SAFETY: part of the unsafe contract of the interpreter is only valid
+        // bytecode is interpreted, so the jump destination is part of the validity
+        // of the bytecode itself.
+        unsafe {
+            self.pc = UnsafeBytecodeStream::new(NonNull::new_unchecked(self.state[dst].get_ptr()));
+        }
+        ControlFlow::Continue(())
+    }
+
     fn jump(&mut self, offset: PcRelOffset) -> ControlFlow<Done> {
         self.pc_rel_jump(offset, 5);
         ControlFlow::Continue(())
