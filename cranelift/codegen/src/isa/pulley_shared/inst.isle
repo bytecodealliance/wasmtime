@@ -49,6 +49,10 @@
     ;; An indirect call to an unknown callee.
     (IndirectCall (info BoxCallIndInfo))
 
+    ;; An indirect call out to a host-defined function. The host function
+    ;; pointer is the first "argument" of this function call.
+    (IndirectCallHost (info BoxCallInfo))
+
     ;; Unconditional jumps.
     (Jump (label MachLabel))
 

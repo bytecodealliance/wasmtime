@@ -542,6 +542,17 @@ where
     }
 
     fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo<()>) -> SmallVec<[Self::I; 2]> {
+        // Backend intrinsics for the pulley backend are use to implement the
+        // `call_indirect_host` opcode in Pulley.
+        if let CallDest::ExtName(name @ ir::ExternalName::BackendIntrinsic(_), RelocDistance::Far) =
+            dest
+        {
+            return smallvec![Inst::IndirectCallHost {
+                info: Box::new(info.map(|()| name.clone()))
+            }
+            .into()];
+        }
+
         if info.callee_conv == isa::CallConv::Tail || info.callee_conv == isa::CallConv::Fast {
             match &dest {
                 &CallDest::ExtName(ref name, RelocDistance::Near) => smallvec![Inst::Call {

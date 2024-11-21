@@ -381,7 +381,9 @@ where
                     InterpreterFunctionRef::Function(function)
                 }
                 ExternalName::LibCall(libcall) => InterpreterFunctionRef::LibCall(libcall),
-                ExternalName::KnownSymbol(_) => unimplemented!(),
+                ExternalName::KnownSymbol(_) | ExternalName::BackendIntrinsic(_) => {
+                    unimplemented!()
+                }
             };
 
             let make_control_flow = match inst.opcode() {

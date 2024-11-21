@@ -138,6 +138,8 @@ pub enum ExternalName {
     LibCall(LibCall),
     /// A well-known symbol.
     KnownSymbol(KnownSymbol),
+    /// A per-backend intrinsic with meaning on a per-backend basis.
+    BackendIntrinsic(u32),
 }
 
 impl Default for ExternalName {
@@ -206,6 +208,7 @@ impl<'a> fmt::Display for DisplayableExternalName<'a> {
             ExternalName::TestCase(testcase) => testcase.fmt(f),
             ExternalName::LibCall(lc) => write!(f, "%{lc}"),
             ExternalName::KnownSymbol(ks) => write!(f, "%{ks}"),
+            ExternalName::BackendIntrinsic(i) => write!(f, "%backend{i}"),
         }
     }
 }
@@ -222,6 +225,13 @@ impl FromStr for ExternalName {
         // Try to parse as a libcall name
         if let Ok(lc) = s.parse() {
             return Ok(Self::LibCall(lc));
+        }
+
+        // Try to parse as a backend intrinsic
+        if let Some(n) = s.strip_prefix("backend") {
+            if let Ok(n) = n.parse() {
+                return Ok(Self::BackendIntrinsic(n));
+            }
         }
 
         // Otherwise its a test case name

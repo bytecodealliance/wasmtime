@@ -54,6 +54,9 @@ impl ModuleReloc {
             FinalizedRelocTarget::ExternalName(ExternalName::KnownSymbol(ks)) => {
                 ModuleRelocTarget::KnownSymbol(ks)
             }
+            FinalizedRelocTarget::ExternalName(ExternalName::BackendIntrinsic(_)) => {
+                panic!("backend created relocation for own intrinsic")
+            }
             FinalizedRelocTarget::Func(offset) => {
                 ModuleRelocTarget::FunctionOffset(func_id, offset)
             }

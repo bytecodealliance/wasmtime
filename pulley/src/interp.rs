@@ -1177,4 +1177,57 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         self.state[dst].set_u64(sp);
         ControlFlow::Continue(())
     }
+
+    fn call_indirect_host(&mut self, sig: u8) -> ControlFlow<Done> {
+        let raw = self.state[XReg::x0].get_ptr::<u8>();
+        let mut n = 0;
+        let mut arg = 1;
+
+        type I8 = i8;
+        type I32 = i32;
+        type I64 = i64;
+
+        macro_rules! call_host {
+			($(fn($($args:ident),*) $(-> $ret:ident)?;)*) => {$(
+				if sig == n {
+					union Convert {
+						raw: *mut u8,
+						f: unsafe extern "C" fn($($args),*) $(-> $ret)?,
+					}
+					let ptr = Convert { raw }.f;
+
+					let ret = ptr(
+						$({
+							let reg = XReg::new_unchecked(arg);
+							arg += 1;
+							let reg = &self.state[reg];
+							call_host!(@get $args reg)
+						},)*
+					);
+					let _ = arg;
+
+					let dst = &mut self.state[XReg::x0];
+					$(call_host!(@set $ret dst ret);)?
+					let _ = (ret, dst);
+				}
+				n += 1;
+			)*};
+
+			(@get I8 $reg:ident) => ($reg.get_i32() as i8);
+			(@get I32 $reg:ident) => ($reg.get_i32());
+			(@get I64 $reg:ident) => ($reg.get_i64());
+
+			(@set I32 $dst:ident $val:ident) => ($dst.set_i32($val););
+			(@set I64 $dst:ident $val:ident) => ($dst.set_i64($val););
+
+		}
+
+        unsafe {
+            for_each_host_signature!(call_host);
+        }
+
+        let _ = n;
+
+        ControlFlow::Continue(())
+    }
 }

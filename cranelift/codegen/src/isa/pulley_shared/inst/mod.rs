@@ -91,7 +91,7 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_def(dst);
         }
 
-        Inst::Call { info } => {
+        Inst::Call { info } | Inst::IndirectCallHost { info } => {
             let CallInfo { uses, defs, .. } = &mut **info;
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);
@@ -580,6 +580,10 @@ impl Inst {
             Inst::IndirectCall { info } => {
                 let callee = format_reg(*info.dest);
                 format!("indirect_call {callee}, {info:?}")
+            }
+
+            Inst::IndirectCallHost { info } => {
+                format!("indirect_call_host {info:?}")
             }
 
             Inst::Jump { label } => format!("jump {}", label.to_string()),

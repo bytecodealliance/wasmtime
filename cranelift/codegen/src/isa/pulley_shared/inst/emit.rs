@@ -217,6 +217,26 @@ fn pulley_emit<P>(
 
         Inst::IndirectCall { .. } => todo!(),
 
+        Inst::IndirectCallHost { info } => {
+            // This call is only usable with `BackendIntrinsic` names where the
+            // intrinsic number is the signature number embedded in the opcode.
+            let signum = match info.dest {
+                ir::ExternalName::BackendIntrinsic(n) => n,
+                _ => unreachable!(),
+            };
+            enc::call_indirect_host(sink, u8::try_from(signum).unwrap());
+
+            if let Some(s) = state.take_stack_map() {
+                let offset = sink.cur_offset();
+                sink.push_user_stack_map(state, offset, s);
+            }
+            sink.add_call_site();
+
+            // If a callee pop is happening here that means that something has
+            // messed up, these are expected to be "very simple" signatures.
+            assert!(info.callee_pop_size == 0);
+        }
+
         Inst::Jump { label } => {
             sink.use_label_at_offset(start_offset + 1, *label, LabelUse::Jump(1));
             sink.add_uncond_branch(start_offset, start_offset + 5, *label);
