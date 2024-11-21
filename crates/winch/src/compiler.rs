@@ -11,7 +11,7 @@ use wasmtime_environ::{
     FunctionLoc, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, RelocationTarget,
     StaticModuleIndex, TrapEncodingBuilder, Tunables, VMOffsets, WasmFunctionInfo,
 };
-use winch_codegen::{BuiltinFunctions, TargetIsa};
+use winch_codegen::{BuiltinFunctions, CallingConvention, TargetIsa};
 
 /// Function compilation context.
 /// This struct holds information that can be shared globally across
@@ -51,7 +51,11 @@ impl Compiler {
             let vmoffsets = VMOffsets::new(pointer_size, &translation.module);
             CompilationContext {
                 allocations: Default::default(),
-                builtins: BuiltinFunctions::new(&vmoffsets, self.isa.wasmtime_call_conv()),
+                builtins: BuiltinFunctions::new(
+                    &vmoffsets,
+                    self.isa.wasmtime_call_conv(),
+                    CallingConvention::Default,
+                ),
             }
         })
     }

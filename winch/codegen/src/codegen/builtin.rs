@@ -65,8 +65,10 @@ macro_rules! declare_function_sig {
         /// Provides the ABI signatures for each builtin function
         /// signature.
         pub struct BuiltinFunctions {
-            /// The target calling convention.
-            call_conv: CallingConvention,
+            /// The target calling convention for host intrinsics.
+            host_call_conv: CallingConvention,
+            /// The target calling convention for wasm builtins.
+            wasm_call_conv: CallingConvention,
             /// The target pointer type, as a WebAssembly type.
             ptr_type: WasmValType,
             /// F32 Ceil.
@@ -94,11 +96,16 @@ macro_rules! declare_function_sig {
         // Until all the builtin functions are used.
         #[allow(dead_code)]
         impl BuiltinFunctions {
-            pub fn new<P: PtrSize>(vmoffsets: &VMOffsets<P>, call_conv: CallingConvention) -> Self {
+            pub fn new<P: PtrSize>(
+                vmoffsets: &VMOffsets<P>,
+                host_call_conv: CallingConvention,
+                wasm_call_conv: CallingConvention,
+            ) -> Self {
                 let size = vmoffsets.ptr.size();
                 #[allow(unused_doc_comments)]
                 Self {
-                    call_conv,
+                    host_call_conv,
+                    wasm_call_conv,
                     ptr_type: ptr_type_from_ptr_size(size),
                     ceil_f32: None,
                     ceil_f64: None,
@@ -148,11 +155,11 @@ macro_rules! declare_function_sig {
             }
 
             fn over_f64<A: ABI>(&self) -> ABISig {
-                A::sig_from(&[self.f64()], &[self.f64()], &self.call_conv)
+                A::sig_from(&[self.f64()], &[self.f64()], &self.host_call_conv)
             }
 
             fn over_f32<A: ABI>(&self) -> ABISig {
-                A::sig_from(&[self.f64()], &[self.f64()], &self.call_conv)
+                A::sig_from(&[self.f64()], &[self.f64()], &self.host_call_conv)
             }
 
             pub(crate) fn ceil_f32<A: ABI>(&mut self) -> BuiltinFunction {
@@ -249,7 +256,7 @@ macro_rules! declare_function_sig {
                     if self.$name.is_none() {
                         let params = vec![ $(self.$param() ),* ];
                         let result = vec![ $(self.$result() )?];
-                        let sig = A::sig_from(&params, &result, &self.call_conv);
+                        let sig = A::sig_from(&params, &result, &self.wasm_call_conv);
                         let index = BuiltinFunctionIndex::$name();
                         let inner = Arc::new(BuiltinFunctionInner { sig, ty: BuiltinType::builtin(index) });
                         self.$name = Some(BuiltinFunction {
