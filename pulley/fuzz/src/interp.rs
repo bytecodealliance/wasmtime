@@ -124,5 +124,6 @@ fn extended_op_is_safe_for_fuzzing(op: &ExtendedOp) -> bool {
         ExtendedOp::Trap(_) => true,
         ExtendedOp::Nop(_) => true,
         ExtendedOp::GetSp(GetSp { dst, .. }) => !dst.is_special(),
+        ExtendedOp::CallIndirectHost(_) => false,
     }
 }
