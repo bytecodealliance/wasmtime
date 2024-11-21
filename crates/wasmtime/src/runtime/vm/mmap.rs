@@ -132,16 +132,30 @@ impl Mmap<AlignedLength> {
     /// Make the memory starting at `start` and extending for `len` bytes
     /// accessible. `start` and `len` must be native page-size multiples and
     /// describe a range within `self`'s reserved memory.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `start + len >= self.len()`.
     pub fn make_accessible(
         &mut self,
         start: HostAlignedByteCount,
         len: HostAlignedByteCount,
     ) -> Result<()> {
-        let difference = self
-            .len_aligned()
-            .checked_sub(len)
-            .expect("len must be <= mmap region");
-        assert!(start <= difference);
+        if len.is_zero() {
+            // A zero-sized mprotect (or equivalent) is allowed on some
+            // platforms but not others (notably Windows). Treat it as a no-op
+            // everywhere.
+            return Ok(());
+        }
+
+        let end = start
+            .checked_add(len)
+            .expect("start + len must not overflow");
+        assert!(
+            end <= self.len_aligned(),
+            "start + len ({end}) must be <= mmap region {}",
+            self.len_aligned()
+        );
 
         self.sys.make_accessible(start, len)
     }
@@ -254,6 +268,14 @@ impl<T> Mmap<T> {
             range.start % crate::runtime::vm::host_page_size() == 0,
             "changing of protections isn't page-aligned",
         );
+
+        if range.start == range.end {
+            // A zero-sized mprotect (or equivalent) is allowed on some
+            // platforms but not others (notably Windows). Treat it as a no-op
+            // everywhere.
+            return Ok(());
+        }
+
         self.sys
             .make_executable(range, enable_branch_protection)
             .context("failed to make memory executable")
@@ -268,6 +290,14 @@ impl<T> Mmap<T> {
             range.start % crate::runtime::vm::host_page_size() == 0,
             "changing of protections isn't page-aligned",
         );
+
+        if range.start == range.end {
+            // A zero-sized mprotect (or equivalent) is allowed on some
+            // platforms but not others (notably Windows). Treat it as a no-op
+            // everywhere.
+            return Ok(());
+        }
+
         self.sys
             .make_readonly(range)
             .context("failed to make memory readonly")
@@ -283,5 +313,35 @@ fn _assert() {
 impl From<Mmap<AlignedLength>> for Mmap<UnalignedLength> {
     fn from(mmap: Mmap<AlignedLength>) -> Mmap<UnalignedLength> {
         mmap.into_unaligned()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Test zero-length calls to mprotect (or the OS equivalent).
+    ///
+    /// These should be treated as no-ops on all platforms. This test ensures
+    /// that such calls at least don't error out.
+    #[test]
+    fn mprotect_zero_length() {
+        let page_size = HostAlignedByteCount::host_page_size();
+        let pagex2 = page_size.checked_mul(2).unwrap();
+        let pagex3 = page_size.checked_mul(3).unwrap();
+        let pagex4 = page_size.checked_mul(4).unwrap();
+
+        let mut mem = Mmap::accessible_reserved(pagex2, pagex4).expect("allocated memory");
+
+        mem.make_accessible(pagex3, HostAlignedByteCount::ZERO)
+            .expect("make_accessible succeeded");
+
+        unsafe {
+            mem.make_executable(pagex3.byte_count()..pagex3.byte_count(), false)
+                .expect("make_executable succeeded");
+
+            mem.make_readonly(pagex3.byte_count()..pagex3.byte_count())
+                .expect("make_readonly succeeded");
+        };
     }
 }
