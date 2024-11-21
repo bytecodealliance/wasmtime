@@ -2,7 +2,7 @@ test compile precise-output
 target pulley64
 
 function %call_indirect_host() {
-  fn0 = %backend0() system_v
+  fn0 = %intrinsic0() system_v
 block0:
   call fn0()
   return

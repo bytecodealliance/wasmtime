@@ -208,7 +208,7 @@ impl<'a> fmt::Display for DisplayableExternalName<'a> {
             ExternalName::TestCase(testcase) => testcase.fmt(f),
             ExternalName::LibCall(lc) => write!(f, "%{lc}"),
             ExternalName::KnownSymbol(ks) => write!(f, "%{ks}"),
-            ExternalName::BackendIntrinsic(i) => write!(f, "%backend{i}"),
+            ExternalName::BackendIntrinsic(i) => write!(f, "%intrinsic{i}"),
         }
     }
 }
@@ -228,7 +228,7 @@ impl FromStr for ExternalName {
         }
 
         // Try to parse as a backend intrinsic
-        if let Some(n) = s.strip_prefix("backend") {
+        if let Some(n) = s.strip_prefix("intrinsic") {
             if let Ok(n) = n.parse() {
                 return Ok(Self::BackendIntrinsic(n));
             }

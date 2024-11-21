@@ -542,7 +542,7 @@ where
     }
 
     fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo<()>) -> SmallVec<[Self::I; 2]> {
-        // Backend intrinsics for the pulley backend are use to implement the
+        // Backend intrinsics for the pulley backend are used to implement the
         // `call_indirect_host` opcode in Pulley.
         if let CallDest::ExtName(name @ ir::ExternalName::BackendIntrinsic(_), RelocDistance::Far) =
             dest
