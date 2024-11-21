@@ -65,6 +65,17 @@ impl<'a> Disassembler<'a> {
     pub fn disas(&self) -> &str {
         &self.disas
     }
+
+    fn disas_op(&mut self, mnemonic: &str, operands: &[&dyn Disas]) {
+        write!(&mut self.temp, "{mnemonic}").unwrap();
+        for (i, val) in operands.iter().enumerate() {
+            if i > 0 {
+                write!(&mut self.temp, ",").unwrap();
+            }
+            write!(&mut self.temp, " ").unwrap();
+            val.disas(self.start, &mut self.temp);
+        }
+    }
 }
 
 /// Anything inside an instruction that can be disassembled: registers,
@@ -182,98 +193,52 @@ macro_rules! impl_disas {
             } )? ;
         )*
     ) => {
-        impl<'a> OpVisitor for Disassembler<'a> {
-            type BytecodeStream = SafeBytecodeStream<'a>;
-
-            fn bytecode(&mut self) -> &mut Self::BytecodeStream {
-                &mut self.bytecode
-            }
-
-            type Return = ();
-
-            fn before_visit(&mut self) {
-                self.start = self.bytecode.position();
-            }
-
-            fn after_visit(&mut self) {
-                if self.offsets {
-                    write!(&mut self.disas, "{:8x}: ", self.start).unwrap();
-                }
-                if self.hexdump {
-                    let size = self.bytecode.position() - self.start;
-                    let mut need_space = false;
-                    for byte in &self.raw_bytecode[self.start..][..size] {
-                        let space = if need_space { " " } else { "" };
-                        write!(&mut self.disas, "{}{byte:02x}", space).unwrap();
-                        need_space = true;
-                    }
-                    for _ in 0..11_usize.saturating_sub(size) {
-                        write!(&mut self.disas, "   ").unwrap();
-                    }
-                }
-                self.disas.push_str(&self.temp);
-                self.temp.clear();
-
-                self.disas.push('\n');
-            }
-
-            $(
-                fn $snake_name(&mut self $( $( , $field : $field_ty )* )? ) {
-                    let mnemonic = stringify!($snake_name);
-                    write!(&mut self.temp, "{mnemonic}").unwrap();
-                    $(
-                        let mut need_comma = false;
-                        $(
-                            let val = $field;
-                            if need_comma {
-                                write!(&mut self.temp, ",").unwrap();
-                            }
-                            write!(&mut self.temp, " ").unwrap();
-                            val.disas(self.start, &mut self.temp);
-                            #[allow(unused_assignments)]
-                            { need_comma = true; }
-                        )*
-                    )?
-                }
-            )*
-        }
-    };
-}
-for_each_op!(impl_disas);
-
-macro_rules! impl_extended_disas {
-    (
         $(
-            $( #[$attr:meta] )*
-                $snake_name:ident = $name:ident $( {
-                $(
-                    $( #[$field_attr:meta] )*
-                    $field:ident : $field_ty:ty
-                ),*
-            } )? ;
+            fn $snake_name(&mut self $( $( , $field : $field_ty )* )? ) {
+                self.disas_op(stringify!($snake_name), &[$($(&$field),*)?])
+            }
         )*
-    ) => {
-        impl ExtendedOpVisitor for Disassembler<'_> {
-            $(
-                fn $snake_name(&mut self $( $( , $field : $field_ty )* )? ) {
-                    let mnemonic = stringify!($snake_name);
-                    write!(&mut self.temp, "{mnemonic}").unwrap();
-                    $(
-                        let mut need_comma = false;
-                        $(
-                            let val = $field;
-                            if need_comma {
-                                write!(&mut self.temp, ",").unwrap();
-                            }
-                            write!(&mut self.temp, " ").unwrap();
-                            val.disas(self.start, &mut self.temp);
-                            #[allow(unused_assignments)]
-                            { need_comma = true; }
-                        )*
-                    )?
-                }
-            )*
-        }
     };
 }
-for_each_extended_op!(impl_extended_disas);
+
+impl<'a> OpVisitor for Disassembler<'a> {
+    type BytecodeStream = SafeBytecodeStream<'a>;
+
+    fn bytecode(&mut self) -> &mut Self::BytecodeStream {
+        &mut self.bytecode
+    }
+
+    type Return = ();
+
+    fn before_visit(&mut self) {
+        self.start = self.bytecode.position();
+    }
+
+    fn after_visit(&mut self) {
+        if self.offsets {
+            write!(&mut self.disas, "{:8x}: ", self.start).unwrap();
+        }
+        if self.hexdump {
+            let size = self.bytecode.position() - self.start;
+            let mut need_space = false;
+            for byte in &self.raw_bytecode[self.start..][..size] {
+                let space = if need_space { " " } else { "" };
+                write!(&mut self.disas, "{}{byte:02x}", space).unwrap();
+                need_space = true;
+            }
+            for _ in 0..11_usize.saturating_sub(size) {
+                write!(&mut self.disas, "   ").unwrap();
+            }
+        }
+        self.disas.push_str(&self.temp);
+        self.temp.clear();
+
+        self.disas.push('\n');
+    }
+
+    for_each_op!(impl_disas);
+}
+
+impl ExtendedOpVisitor for Disassembler<'_> {
+    for_each_extended_op!(impl_disas);
+}
