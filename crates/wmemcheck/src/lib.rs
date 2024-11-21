@@ -45,7 +45,11 @@ pub enum MemState {
 impl Wmemcheck {
     /// Initializes memory checker instance.
     // TODO: how to make this properly configurable?
-    pub fn new(mem_size: usize, granularity: usize, enforce_uninitialized_reads: bool) -> Wmemcheck {
+    pub fn new(
+        mem_size: usize,
+        granularity: usize,
+        enforce_uninitialized_reads: bool,
+    ) -> Wmemcheck {
         // TODO: metadata could be shrunk when granularity is greater than 1
         let metadata = vec![MemState::Unallocated; mem_size];
         let mallocs = HashMap::new();
@@ -61,7 +65,12 @@ impl Wmemcheck {
     }
 
     /// Updates memory checker memory state metadata when malloc is called.
-    pub fn allocate(&mut self, addr: usize, len: usize, initialized: bool) -> Result<(), AccessError> {
+    pub fn allocate(
+        &mut self,
+        addr: usize,
+        len: usize,
+        initialized: bool,
+    ) -> Result<(), AccessError> {
         if !self.is_in_bounds_heap(addr, len) {
             return Err(AccessError::OutOfBounds {
                 addr: addr,
@@ -86,13 +95,22 @@ impl Wmemcheck {
             }
         }
         for i in self.granular_range(addr..addr + len) {
-            self.metadata[i] = if initialized { MemState::ValidToReadWrite } else { MemState::ValidToWrite };
+            self.metadata[i] = if initialized {
+                MemState::ValidToReadWrite
+            } else {
+                MemState::ValidToWrite
+            };
         }
         self.mallocs.insert(addr, len);
         Ok(())
     }
 
-    pub fn realloc(&mut self, end_addr: usize, start_addr: usize, len: usize) -> Result<(), AccessError> {
+    pub fn realloc(
+        &mut self,
+        end_addr: usize,
+        start_addr: usize,
+        len: usize,
+    ) -> Result<(), AccessError> {
         if start_addr == 0 {
             // If ptr is NULL, realloc() is identical to a call to malloc()
             return self.allocate(end_addr, len, false);

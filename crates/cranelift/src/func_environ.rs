@@ -3064,15 +3064,14 @@ impl<'module_environment> crate::translate::FuncEnvironment
         #[cfg(feature = "wmemcheck")]
         if self.wmemcheck {
             match self.current_func_name(builder) {
-                Some("malloc") |
-                Some("free") |
-                Some("calloc") |
-                Some("realloc") |
-                Some("posix_memalign") |
-                Some("aligned_alloc") |
-                Some("malloc_usable_size") =>
-                    self.check_allocator_start(builder),
-                _ => ()
+                Some("malloc")
+                | Some("free")
+                | Some("calloc")
+                | Some("realloc")
+                | Some("posix_memalign")
+                | Some("aligned_alloc")
+                | Some("malloc_usable_size") => self.check_allocator_start(builder),
+                _ => (),
             }
         }
 
@@ -3140,18 +3139,22 @@ impl<'module_environment> crate::translate::FuncEnvironment
                     self.hook_memcheck_exit(builder, check_realloc, 2, retvals)
                 }
                 Some("posix_memalign") => {
-                    let check_posix_memalign = self.builtin_functions.check_posix_memalign(builder.func);
+                    let check_posix_memalign =
+                        self.builtin_functions.check_posix_memalign(builder.func);
                     self.hook_memcheck_exit(builder, check_posix_memalign, 3, retvals)
                 }
                 Some("aligned_alloc") => {
-                    let check_aligned_alloc = self.builtin_functions.check_aligned_alloc(builder.func);
+                    let check_aligned_alloc =
+                        self.builtin_functions.check_aligned_alloc(builder.func);
                     self.hook_memcheck_exit(builder, check_aligned_alloc, 2, retvals)
                 }
                 Some("malloc_usable_size") => {
-                    let check_malloc_usable_size = self.builtin_functions.check_malloc_usable_size(builder.func);
+                    let check_malloc_usable_size = self
+                        .builtin_functions
+                        .check_malloc_usable_size(builder.func);
                     self.hook_memcheck_exit(builder, check_malloc_usable_size, 1, retvals)
                 }
-                _ => ()
+                _ => (),
             }
         }
     }

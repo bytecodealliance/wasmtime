@@ -64,9 +64,10 @@ use wasmtime_environ::Unsigned;
 use wasmtime_environ::{DataIndex, ElemIndex, FuncIndex, MemoryIndex, TableIndex, Trap};
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::{
-    AccessError, AccessError::{
+    AccessError,
+    AccessError::{
         DoubleMalloc, InvalidFree, InvalidRead, InvalidRealloc, InvalidWrite, OutOfBounds,
-    }
+    },
 };
 
 /// Raw functions which are actually called from compiled code.
@@ -1113,9 +1114,7 @@ fn new_epoch(store: &mut dyn VMStore, _instance: &mut Instance) -> Result<u64> {
 #[cfg(feature = "wmemcheck")]
 fn check_memcheck_result(result: Result<(), AccessError>) -> Result<u32> {
     match result {
-        Ok(()) => {
-            Ok(0)
-        }
+        Ok(()) => Ok(0),
         Err(DoubleMalloc { addr, len }) => {
             bail!("Double malloc at addr {:#x} of size {}", addr, len)
         }
@@ -1180,7 +1179,13 @@ unsafe fn check_calloc(
 
 // Hook for validating realloc using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
-unsafe fn check_realloc(_store: &mut dyn VMStore, instance: &mut Instance, end_addr: u32, start_addr: u32, len: u32) -> Result<u32> {
+unsafe fn check_realloc(
+    _store: &mut dyn VMStore,
+    instance: &mut Instance,
+    end_addr: u32,
+    start_addr: u32,
+    len: u32,
+) -> Result<u32> {
     if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
         let result = wmemcheck_state.realloc(end_addr as usize, start_addr as usize, len as usize);
         wmemcheck_state.memcheck_on();
@@ -1189,10 +1194,16 @@ unsafe fn check_realloc(_store: &mut dyn VMStore, instance: &mut Instance, end_a
     Ok(0)
 }
 
-
 // Hook for validating posix_memalign using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
-unsafe fn check_posix_memalign(store: &mut dyn VMStore, instance: &mut Instance, error: u32, outptr: u32, _alignment: u32, size: u32) -> Result<u32> {
+unsafe fn check_posix_memalign(
+    store: &mut dyn VMStore,
+    instance: &mut Instance,
+    error: u32,
+    outptr: u32,
+    _alignment: u32,
+    size: u32,
+) -> Result<u32> {
     if let Some(_) = &mut instance.wmemcheck_state {
         if error != 0 {
             return Ok(0);
@@ -1211,13 +1222,24 @@ unsafe fn check_posix_memalign(store: &mut dyn VMStore, instance: &mut Instance,
 
 // Hook for validating aligned_alloc using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
-unsafe fn check_aligned_alloc(store: &mut dyn VMStore, instance: &mut Instance, addr: u32, _alignment: u32, size: u32) -> Result<u32> {
+unsafe fn check_aligned_alloc(
+    store: &mut dyn VMStore,
+    instance: &mut Instance,
+    addr: u32,
+    _alignment: u32,
+    size: u32,
+) -> Result<u32> {
     check_malloc(store, instance, addr, size)
 }
 
 // Hook for validating malloc_usable_size using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
-unsafe fn check_malloc_usable_size(store: &mut dyn VMStore, instance: &mut Instance, len: u32, addr: u32) -> Result<u32> {
+unsafe fn check_malloc_usable_size(
+    store: &mut dyn VMStore,
+    instance: &mut Instance,
+    len: u32,
+    addr: u32,
+) -> Result<u32> {
     // Since the wasm program has checked that the entire allocation is usable, mark it as allocated, similar to realloc
     check_realloc(store, instance, addr, addr, len)
 }
