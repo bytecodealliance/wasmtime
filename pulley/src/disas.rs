@@ -223,7 +223,7 @@ impl<'a> OpVisitor for Disassembler<'a> {
             let mut need_space = false;
             for byte in &self.raw_bytecode[self.start..][..size] {
                 let space = if need_space { " " } else { "" };
-                write!(&mut self.disas, "{}{byte:02x}", space).unwrap();
+                write!(&mut self.disas, "{space}{byte:02x}").unwrap();
                 need_space = true;
             }
             for _ in 0..11_usize.saturating_sub(size) {
