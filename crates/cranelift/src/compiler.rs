@@ -516,10 +516,12 @@ impl wasmtime_environ::Compiler for Compiler {
         let isa = &*self.isa;
         let ptr_size = isa.pointer_bytes();
         let pointer_type = isa.pointer_type();
-        let sig = BuiltinFunctionSignatures::new(isa).signature(index);
+        let sigs = BuiltinFunctionSignatures::new(isa, &self.tunables);
+        let wasm_sig = sigs.wasm_signature(index);
+        let host_sig = sigs.host_signature(index);
 
         let mut compiler = self.function_compiler();
-        let func = ir::Function::with_name_signature(Default::default(), sig.clone());
+        let func = ir::Function::with_name_signature(Default::default(), wasm_sig.clone());
         let (mut builder, block0) = compiler.builder(func);
         let vmctx = builder.block_params(block0)[0];
 
@@ -554,8 +556,10 @@ impl wasmtime_environ::Compiler for Compiler {
         // Forward all our own arguments to the libcall itself, and then return
         // all the same results as the libcall.
         let block_params = builder.block_params(block0).to_vec();
-        let sig = builder.func.import_signature(sig);
-        let call = builder.ins().call_indirect(sig, func_addr, &block_params);
+        let host_sig = builder.func.import_signature(host_sig);
+        let call = builder
+            .ins()
+            .call_indirect(host_sig, func_addr, &block_params);
         let results = builder.func.dfg.inst_results(call).to_vec();
         builder.ins().return_(&results);
         builder.finalize();
