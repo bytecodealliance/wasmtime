@@ -318,7 +318,7 @@ impl ServeCommand {
         let mut config = self
             .run
             .common
-            .config(None, use_pooling_allocator_by_default().unwrap_or(None))?;
+            .config(use_pooling_allocator_by_default().unwrap_or(None))?;
         config.wasm_component_model(true);
         config.async_support(true);
 

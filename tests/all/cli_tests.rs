@@ -58,7 +58,7 @@ fn get_wasmtime_path() -> Result<PathBuf> {
 
 // Run the wasmtime CLI with the provided args and, if it succeeds, return
 // the standard output in a `String`.
-fn run_wasmtime(args: &[&str]) -> Result<String> {
+pub fn run_wasmtime(args: &[&str]) -> Result<String> {
     let output = run_wasmtime_for_output(args, None)?;
     if !output.status.success() {
         bail!(

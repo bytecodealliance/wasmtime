@@ -33,6 +33,7 @@ mod name;
 mod noextern;
 mod piped_tests;
 mod pooling_allocator;
+mod pulley;
 mod relocs;
 mod stack_creator;
 mod stack_overflow;

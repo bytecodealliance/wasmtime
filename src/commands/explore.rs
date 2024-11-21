@@ -13,10 +13,6 @@ pub struct ExploreCommand {
     #[command(flatten)]
     common: CommonOptions,
 
-    /// The target triple; default is the host triple
-    #[arg(long, value_name = "TARGET")]
-    target: Option<String>,
-
     /// The path of the WebAssembly module to compile
     #[arg(required = true, value_name = "MODULE")]
     module: PathBuf,
@@ -32,7 +28,7 @@ impl ExploreCommand {
     pub fn execute(mut self) -> Result<()> {
         self.common.init_logging()?;
 
-        let mut config = self.common.config(self.target.as_deref(), None)?;
+        let mut config = self.common.config(None)?;
 
         let bytes =
             Cow::Owned(std::fs::read(&self.module).with_context(|| {
@@ -63,7 +59,7 @@ impl ExploreCommand {
 
         wasmtime_explorer::generate(
             &config,
-            self.target.as_deref(),
+            self.common.target.as_deref(),
             clif_dir.as_ref().map(|tmp_dir| tmp_dir.path()),
             &bytes,
             &mut output_file,
