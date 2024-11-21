@@ -35,10 +35,6 @@ pub struct CompileCommand {
     #[allow(missing_docs)]
     pub common: CommonOptions,
 
-    /// The target triple; default is the host triple
-    #[arg(long, value_name = "TARGET")]
-    pub target: Option<String>,
-
     /// The path of the output compiled module; defaults to `<MODULE>.cwasm`
     #[arg(short = 'o', long, value_name = "OUTPUT")]
     pub output: Option<PathBuf>,
@@ -57,7 +53,7 @@ impl CompileCommand {
     pub fn execute(mut self) -> Result<()> {
         self.common.init_logging()?;
 
-        let mut config = self.common.config(self.target.as_deref(), None)?;
+        let mut config = self.common.config(None)?;
 
         if let Some(path) = self.emit_clif {
             if !path.exists() {

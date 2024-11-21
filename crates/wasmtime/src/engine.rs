@@ -257,11 +257,32 @@ impl Engine {
     fn _check_compatible_with_native_host(&self) -> Result<(), String> {
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
+            use target_lexicon::{Architecture, PointerWidth, Triple};
+
             let compiler = self.compiler();
 
-            // Check to see that the config's target matches the host
             let target = compiler.triple();
-            if *target != target_lexicon::Triple::host() {
+            let host = Triple::host();
+            let target_matches_host = || {
+                // If the host target and target triple match, then it's valid
+                // to run results of compilation on this host.
+                if host == *target {
+                    return true;
+                }
+
+                // Otherwise if there's a mismatch the only allowed
+                // configuration at this time is that any target can run Pulley,
+                // Wasmtime's interpreter. This only works though if the
+                // pointer-width of pulley matches the pointer-width of the
+                // host, so check that here.
+                match host.pointer_width() {
+                    Ok(PointerWidth::U32) => target.architecture == Architecture::Pulley32,
+                    Ok(PointerWidth::U64) => target.architecture == Architecture::Pulley64,
+                    _ => false,
+                }
+            };
+
+            if !target_matches_host() {
                 return Err(format!(
                     "target '{target}' specified in the configuration does not match the host"
                 ));
@@ -396,6 +417,22 @@ impl Engine {
             // Fall through below where we test at runtime that features are
             // available.
             FlagValue::Bool(true) => {}
+
+            // Pulley's pointer_width must match the host.
+            FlagValue::Enum("pointer32") => {
+                return if cfg!(target_pointer_width = "32") {
+                    Ok(())
+                } else {
+                    Err("wrong host pointer width".to_string())
+                }
+            }
+            FlagValue::Enum("pointer64") => {
+                return if cfg!(target_pointer_width = "64") {
+                    Ok(())
+                } else {
+                    Err("wrong host pointer width".to_string())
+                }
+            }
 
             // Only `bool` values are supported right now, other settings would
             // need more support here.

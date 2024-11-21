@@ -480,6 +480,10 @@ pub struct CommonOptions {
     pub wasm: WasmOptions,
     #[arg(skip)]
     pub wasi: WasiOptions,
+
+    /// The target triple; default is the host triple
+    #[arg(long, value_name = "TARGET")]
+    pub target: Option<String>,
 }
 
 macro_rules! match_feature {
@@ -541,11 +545,7 @@ impl CommonOptions {
         Ok(())
     }
 
-    pub fn config(
-        &mut self,
-        target: Option<&str>,
-        pooling_allocator_default: Option<bool>,
-    ) -> Result<Config> {
+    pub fn config(&mut self, pooling_allocator_default: Option<bool>) -> Result<Config> {
         self.configure();
         let mut config = Config::new();
 
@@ -560,7 +560,7 @@ impl CommonOptions {
             _ => err,
         }
         match_feature! {
-            ["cranelift" : target]
+            ["cranelift" : &self.target]
             target => config.target(target)?,
             _ => err,
         }
