@@ -1,0 +1,45 @@
+test compile precise-output
+target pulley32
+
+function %ret_stack() -> i32 {
+    ss0 = explicit_slot 4
+block0():
+    v0 = stack_addr.i32 ss0
+    return v0
+}
+
+; VCode:
+;   x30 = xconst8 -16
+;   x27 = xadd32 x27, x30
+;   store64 sp+8, x28 // flags =  notrap aligned
+;   store64 sp+0, x29 // flags =  notrap aligned
+;   x29 = xmov x27
+;   x30 = xconst8 -16
+;   x27 = xadd32 x27, x30
+; block0:
+;   x0 = load_addr Slot(0)
+;   x30 = xconst8 16
+;   x27 = xadd32 x27, x30
+;   x28 = load64_u sp+8 // flags = notrap aligned
+;   x29 = load64_u sp+0 // flags = notrap aligned
+;   x30 = xconst8 16
+;   x27 = xadd32 x27, x30
+;   ret
+;
+; Disassembled:
+;        0: 14 1e f0                        xconst8 spilltmp0, -16
+;        3: 18 7b 7b                        xadd32 sp, sp, spilltmp0
+;        6: 32 1b 08 1c                     store64_offset8 sp, 8, lr
+;        a: 30 1b 1d                        store64 sp, fp
+;        d: 11 1d 1b                        xmov fp, sp
+;       10: 14 1e f0                        xconst8 spilltmp0, -16
+;       13: 18 7b 7b                        xadd32 sp, sp, spilltmp0
+;       16: 11 00 1b                        xmov x0, sp
+;       19: 14 1e 10                        xconst8 spilltmp0, 16
+;       1c: 18 7b 7b                        xadd32 sp, sp, spilltmp0
+;       1f: 2b 1c 1b 08                     load64_offset8 lr, sp, 8
+;       23: 28 1d 1b                        load64 fp, sp
+;       26: 14 1e 10                        xconst8 spilltmp0, 16
+;       29: 18 7b 7b                        xadd32 sp, sp, spilltmp0
+;       2c: 00                              ret
+
