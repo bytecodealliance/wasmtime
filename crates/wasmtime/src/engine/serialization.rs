@@ -24,7 +24,7 @@
 use crate::prelude::*;
 use crate::{Engine, ModuleVersionStrategy, Precompiled};
 use core::str::FromStr;
-use object::endian::NativeEndian;
+use object::endian::Endianness;
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};
 use object::{read::elf::ElfFile64, FileFlags, Object as _, ObjectSection, SectionKind};
@@ -56,7 +56,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
     // structured well enough to make this easy and additionally it's not really
     // a perf issue right now so doing that is left for another day's
     // refactoring.
-    let obj = ElfFile64::<NativeEndian>::parse(mmap)
+    let obj = ElfFile64::<Endianness>::parse(mmap)
         .err2anyhow()
         .context("failed to parse precompiled artifact as an ELF")?;
     let expected_e_flags = match expected {
@@ -145,7 +145,7 @@ pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>, metadata: &Me
 }
 
 fn detect_precompiled<'data, R: object::ReadRef<'data>>(
-    obj: ElfFile64<'data, NativeEndian, R>,
+    obj: ElfFile64<'data, Endianness, R>,
 ) -> Option<Precompiled> {
     match obj.flags() {
         FileFlags::Elf {

@@ -3,7 +3,7 @@
 use crate::prelude::*;
 use crate::runtime::vm::{libcalls, MmapVec, UnwindRegistration};
 use core::ops::Range;
-use object::endian::NativeEndian;
+use object::endian::Endianness;
 use object::read::{elf::ElfFile64, Object, ObjectSection};
 use object::{ObjectSymbol, SectionFlags};
 use wasmtime_environ::{lookup_trap_code, obj, Trap};
@@ -57,7 +57,7 @@ impl CodeMemory {
     /// The returned `CodeMemory` manages the internal `MmapVec` and the
     /// `publish` method is used to actually make the memory executable.
     pub fn new(mmap: MmapVec) -> Result<Self> {
-        let obj = ElfFile64::<NativeEndian>::parse(&mmap[..])
+        let obj = ElfFile64::<Endianness>::parse(&mmap[..])
             .err2anyhow()
             .with_context(|| "failed to parse internal compilation artifact")?;
 
