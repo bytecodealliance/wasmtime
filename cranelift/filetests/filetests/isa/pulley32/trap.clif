@@ -29,7 +29,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ;        0: 14 02 2a                        xconst8 x2, 42
-;        3: 0b 00 00 00 00 00 00            br_if_xeq64 x0, x0, 0x0    // target = 0x3
+;        3: 0b 00 02 08 00 00 00            br_if_xeq64 x0, x2, 0x8    // target = 0xb
 ;        a: 00                              ret
 ;        b: 00                              ret
 
@@ -49,7 +49,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ;        0: 14 02 2a                        xconst8 x2, 42
-;        3: 0b 00 00 00 00 00 00            br_if_xeq64 x0, x0, 0x0    // target = 0x3
+;        3: 0c 00 02 08 00 00 00            br_if_xneq64 x0, x2, 0x8    // target = 0xb
 ;        a: 00                              ret
 ;        b: 00                              ret
 
@@ -69,7 +69,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ;        0: 14 02 2a                        xconst8 x2, 42
-;        3: 0b 00 00 00 00 00 00            br_if_xeq64 x0, x0, 0x0    // target = 0x3
+;        3: 0b 00 02 08 00 00 00            br_if_xeq64 x0, x2, 0x8    // target = 0xb
 ;        a: 00                              ret
 ;        b: 00                              ret
 
@@ -89,7 +89,7 @@ block0(v0: i64):
 ;
 ; Disassembled:
 ;        0: 14 02 2a                        xconst8 x2, 42
-;        3: 0b 00 00 00 00 00 00            br_if_xeq64 x0, x0, 0x0    // target = 0x3
+;        3: 0c 00 02 08 00 00 00            br_if_xneq64 x0, x2, 0x8    // target = 0xb
 ;        a: 00                              ret
 ;        b: 00                              ret
 
@@ -124,7 +124,7 @@ block2:
 ;        6: 00                              ret
 ;        7: 14 05 2a                        xconst8 x5, 42
 ;        a: 14 06 00                        xconst8 x6, 0
-;        d: 0b 00 00 00 00 00 00            br_if_xeq64 x0, x0, 0x0    // target = 0xd
+;        d: 0c 05 06 08 00 00 00            br_if_xneq64 x5, x6, 0x8    // target = 0x15
 ;       14: 00                              ret
 ;       15: 00                              ret
 
@@ -158,7 +158,7 @@ block2:
 ;        0: 03 00 14 00 00 00               br_if x0, 0x14    // target = 0x14
 ;        6: 14 04 00                        xconst8 x4, 0
 ;        9: 14 05 00                        xconst8 x5, 0
-;        c: 0c 00 00 00 00 00 00            br_if_xneq64 x0, x0, 0x0    // target = 0xc
+;        c: 0b 04 05 09 00 00 00            br_if_xeq64 x4, x5, 0x9    // target = 0x15
 ;       13: 00                              ret
 ;       14: 00                              ret
 ;       15: 00                              ret
