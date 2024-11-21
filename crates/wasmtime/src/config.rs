@@ -1927,35 +1927,17 @@ impl Config {
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         match self.compiler_config.strategy {
             None | Some(Strategy::Cranelift) => match self.compiler_target().architecture {
-                // Pulley doesn't support most of wasm at this time and there's
-                // lots of panicking bits and pieces within the backend. This
-                // doesn't fully cover all panicking cases but it's at least a
-                // starting place to have a ratchet. As the pulley backend is
-                // developed this'll get filtered down over time.
+                // Pulley is just starting and most errors are because of
+                // unsupported lowerings which is a first-class error. Some
+                // errors are panics though due to unimplemented bits in ABI
+                // code and those causes are listed here.
                 target_lexicon::Architecture::Pulley32 | target_lexicon::Architecture::Pulley64 => {
-                    WasmFeatures::SATURATING_FLOAT_TO_INT
-                        | WasmFeatures::SIGN_EXTENSION
-                        | WasmFeatures::REFERENCE_TYPES
-                        | WasmFeatures::MULTI_VALUE
-                        | WasmFeatures::BULK_MEMORY
-                        | WasmFeatures::SIMD
+                    WasmFeatures::SIMD
                         | WasmFeatures::RELAXED_SIMD
-                        | WasmFeatures::THREADS
-                        | WasmFeatures::SHARED_EVERYTHING_THREADS
                         | WasmFeatures::TAIL_CALL
                         | WasmFeatures::FLOATS
-                        | WasmFeatures::MULTI_MEMORY
-                        | WasmFeatures::EXCEPTIONS
                         | WasmFeatures::MEMORY64
-                        | WasmFeatures::EXTENDED_CONST
-                        | WasmFeatures::FUNCTION_REFERENCES
-                        | WasmFeatures::MEMORY_CONTROL
-                        | WasmFeatures::GC
-                        | WasmFeatures::CUSTOM_PAGE_SIZES
-                        | WasmFeatures::LEGACY_EXCEPTIONS
                         | WasmFeatures::GC_TYPES
-                        | WasmFeatures::STACK_SWITCHING
-                        | WasmFeatures::WIDE_ARITHMETIC
                 }
 
                 // Other Cranelift backends are either 100% missing or complete

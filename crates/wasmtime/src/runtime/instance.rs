@@ -361,10 +361,12 @@ impl Instance {
         let f = instance.get_exported_func(start);
         let caller_vmctx = instance.vmctx();
         unsafe {
-            super::func::invoke_wasm_and_catch_traps(store, |_default_caller| {
-                f.func_ref
-                    .as_ref()
-                    .array_call(VMOpaqueContext::from_vmcontext(caller_vmctx), &mut [])
+            super::func::invoke_wasm_and_catch_traps(store, |_default_caller, vm| {
+                f.func_ref.as_ref().array_call(
+                    vm,
+                    VMOpaqueContext::from_vmcontext(caller_vmctx),
+                    &mut [],
+                )
             })?;
         }
         Ok(())

@@ -5,7 +5,7 @@
 //!     cargo run --example objdump -F disas -p pulley-interpreter foo.cwasm
 
 use anyhow::{bail, Result};
-use object::{File, Object as _, ObjectSection, ObjectSymbol, SectionKind, SymbolKind};
+use object::{File, Object as _, ObjectSection, ObjectSymbol, SymbolKind};
 use pulley_interpreter::decode::Decoder;
 use pulley_interpreter::disas::Disassembler;
 
@@ -14,7 +14,7 @@ fn main() -> Result<()> {
 
     let image = File::parse(&cwasm[..])?;
 
-    let text = match image.sections().find(|s| s.kind() == SectionKind::Text) {
+    let text = match image.sections().find(|s| s.name().ok() == Some(".text")) {
         Some(section) => section.data()?,
         None => bail!("no text section"),
     };

@@ -22,7 +22,7 @@ fn main() {
     // run this test in.
     for test in tests {
         let test_uses_gc_types = test.test_uses_gc_types();
-        for compiler in [Compiler::Cranelift, Compiler::Winch] {
+        for compiler in [Compiler::Cranelift, Compiler::Winch, Compiler::Pulley] {
             for pooling in [true, false] {
                 let collectors: &[_] = if !pooling && test_uses_gc_types {
                     &[Collector::DeferredReferenceCounting, Collector::Null]

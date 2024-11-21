@@ -229,18 +229,52 @@ pub struct WastConfig {
     pub collector: Collector,
 }
 
+/// Different compilers that can be tested in Wasmtime.
 #[derive(PartialEq, Debug, Copy, Clone)]
 pub enum Compiler {
+    /// Cranelift backend.
+    ///
+    /// This tests the Cranelift code generator for native platforms. This
+    /// notably excludes Pulley since that's listed separately below even though
+    /// Pulley is a backend of Cranelift. This is only used for native code
+    /// generation such as x86_64.
     Cranelift,
+
+    /// Winch backend.
+    ///
+    /// This tests the Winch backend for native platforms. Currently Winch
+    /// primarily supports x86_64.
     Winch,
+
+    /// Pulley interpreter.
+    ///
+    /// This tests the Cranelift pulley backend plus the pulley execution
+    /// environment of the output bytecode. Note that this is separate from
+    /// `Cranelift` above to be able to test both on platforms where Cranelift
+    /// has native codegen support.
+    Pulley,
 }
 
 impl Compiler {
+    /// Returns whether this compiler is known to fail for the provided
+    /// `TestConfig`.
+    ///
+    /// This function will determine if the configuration of the test provided
+    /// is known to guarantee fail. This effectively tracks the proposal support
+    /// for each compiler backend/runtime and tests whether `config` enables or
+    /// disables features that aren't supported.
+    ///
+    /// Note that this is closely aligned with
+    /// `Config::compiler_panicking_wasm_features`.
     pub fn should_fail(&self, config: &TestConfig) -> bool {
         match self {
+            // Currently Cranelift supports all wasm proposals that wasmtime
+            // tests.
             Compiler::Cranelift => {}
+
+            // Winch doesn't have quite the full breadth of support that
+            // Cranelift has quite yet.
             Compiler::Winch => {
-                // A few proposals that winch has no support for.
                 if config.gc == Some(true)
                     || config.threads == Some(true)
                     || config.tail_call == Some(true)
@@ -248,6 +282,47 @@ impl Compiler {
                     || config.gc == Some(true)
                     || config.relaxed_simd == Some(true)
                     || config.gc_types == Some(true)
+                {
+                    return true;
+                }
+            }
+
+            // Pulley is just getting started, it implements almost no proposals
+            // yet.
+            Compiler::Pulley => {
+                let TestConfig {
+                    memory64,
+                    custom_page_sizes,
+                    multi_memory,
+                    threads,
+                    gc,
+                    function_references,
+                    relaxed_simd,
+                    reference_types,
+                    tail_call,
+                    extended_const,
+                    wide_arithmetic,
+                    simd,
+                    gc_types,
+                    hogs_memory: _,
+                    nan_canonicalization: _,
+                    component_model_more_flags: _,
+                } = *config;
+
+                // Unsupported proposals
+                if memory64.unwrap_or(false)
+                    || custom_page_sizes.unwrap_or(false)
+                    || multi_memory.unwrap_or(false)
+                    || threads.unwrap_or(false)
+                    || gc.unwrap_or(false)
+                    || function_references.unwrap_or(false)
+                    || relaxed_simd.unwrap_or(false)
+                    || reference_types.unwrap_or(false)
+                    || tail_call.unwrap_or(false)
+                    || extended_const.unwrap_or(false)
+                    || wide_arithmetic.unwrap_or(false)
+                    || simd.unwrap_or(false)
+                    || gc_types.unwrap_or(false)
                 {
                     return true;
                 }
@@ -285,6 +360,73 @@ impl WastTest {
     pub fn should_fail(&self, config: &WastConfig) -> bool {
         // Winch only supports x86_64 at this time.
         if config.compiler == Compiler::Winch && !cfg!(target_arch = "x86_64") {
+            return true;
+        }
+
+        // Some tests are known to fail with the pooling allocator
+        if config.pooling {
+            let unsupported = [
+                // allocates too much memory for the pooling configuration here
+                "misc_testsuite/memory64/more-than-4gb.wast",
+                // shared memories + pooling allocator aren't supported yet
+                "misc_testsuite/memory-combos.wast",
+                "misc_testsuite/threads/LB.wast",
+                "misc_testsuite/threads/LB_atomic.wast",
+                "misc_testsuite/threads/MP.wast",
+                "misc_testsuite/threads/MP_atomic.wast",
+                "misc_testsuite/threads/MP_wait.wast",
+                "misc_testsuite/threads/SB.wast",
+                "misc_testsuite/threads/SB_atomic.wast",
+                "misc_testsuite/threads/atomics_notify.wast",
+                "misc_testsuite/threads/atomics_wait_address.wast",
+                "misc_testsuite/threads/wait_notify.wast",
+                "spec_testsuite/proposals/threads/atomic.wast",
+                "spec_testsuite/proposals/threads/exports.wast",
+                "spec_testsuite/proposals/threads/memory.wast",
+            ];
+
+            if unsupported.iter().any(|part| self.path.ends_with(part)) {
+                return true;
+            }
+        }
+
+        // Pulley is in a bit of a special state at this time where it supports
+        // only a subset of the initial MVP of WebAssembly. That means that no
+        // test technically passes by default but a few do happen to use just
+        // the right subset of wasm that we can pass it. For now maintain an
+        // allow-list of tests that are known to pass in Pulley. As tests are
+        // fixed they should get added to this list. Over time this list will
+        // instead get inverted to "these tests are known to fail" once Pulley
+        // implements more proposals.
+        if config.compiler == Compiler::Pulley {
+            let supported = [
+                "custom-page-sizes/custom-page-sizes-invalid.wast",
+                "exception-handling/exports.wast",
+                "extended-const/data.wast",
+                "misc_testsuite/component-model/adapter.wast",
+                "misc_testsuite/component-model/aliasing.wast",
+                "misc_testsuite/component-model/import.wast",
+                "misc_testsuite/component-model/instance.wast",
+                "misc_testsuite/component-model/linking.wast",
+                "misc_testsuite/component-model/nested.wast",
+                "misc_testsuite/component-model/types.wast",
+                "misc_testsuite/elem-ref-null.wast",
+                "misc_testsuite/elem_drop.wast",
+                "misc_testsuite/empty.wast",
+                "misc_testsuite/fib.wast",
+                "misc_testsuite/func-400-params.wast",
+                "misc_testsuite/gc/more-rec-groups-than-types.wast",
+                "misc_testsuite/gc/rec-group-funcs.wast",
+                "misc_testsuite/rs2wasm-add-func.wast",
+                "misc_testsuite/stack_overflow.wast",
+                "misc_testsuite/winch/misc.wast",
+                "threads/exports.wast",
+            ];
+
+            if supported.iter().any(|part| self.path.ends_with(part)) {
+                return false;
+            }
+
             return true;
         }
 
@@ -424,33 +566,6 @@ impl WastTest {
                 {
                     return true;
                 }
-            }
-        }
-
-        // Some tests are known to fail with the pooling allocator
-        if config.pooling {
-            let unsupported = [
-                // allocates too much memory for the pooling configuration here
-                "misc_testsuite/memory64/more-than-4gb.wast",
-                // shared memories + pooling allocator aren't supported yet
-                "misc_testsuite/memory-combos.wast",
-                "misc_testsuite/threads/LB.wast",
-                "misc_testsuite/threads/LB_atomic.wast",
-                "misc_testsuite/threads/MP.wast",
-                "misc_testsuite/threads/MP_atomic.wast",
-                "misc_testsuite/threads/MP_wait.wast",
-                "misc_testsuite/threads/SB.wast",
-                "misc_testsuite/threads/SB_atomic.wast",
-                "misc_testsuite/threads/atomics_notify.wast",
-                "misc_testsuite/threads/atomics_wait_address.wast",
-                "misc_testsuite/threads/wait_notify.wast",
-                "spec_testsuite/proposals/threads/atomic.wast",
-                "spec_testsuite/proposals/threads/exports.wast",
-                "spec_testsuite/proposals/threads/memory.wast",
-            ];
-
-            if unsupported.iter().any(|part| self.path.ends_with(part)) {
-                return true;
             }
         }
 

@@ -4,7 +4,6 @@ use crate::decode::*;
 use crate::encode::Encode;
 use crate::imms::*;
 use crate::regs::*;
-use crate::ExtendedOpcode;
 use alloc::string::ToString;
 use alloc::{vec, vec::Vec};
 use core::fmt;
@@ -77,7 +76,21 @@ impl Vm {
         func: NonNull<u8>,
         args: &[Val],
         rets: impl IntoIterator<Item = RegType> + 'a,
-    ) -> Result<impl Iterator<Item = Val> + 'a, NonNull<u8>> {
+    ) -> DoneReason<impl Iterator<Item = Val> + 'a> {
+        self.call_start(args);
+
+        match self.call_run(func) {
+            DoneReason::ReturnToHost(()) => DoneReason::ReturnToHost(self.call_end(rets)),
+            DoneReason::Trap(pc) => DoneReason::Trap(pc),
+            DoneReason::CallIndirectHost { sig, resume } => {
+                DoneReason::CallIndirectHost { sig, resume }
+            }
+        }
+    }
+
+    /// Peforms the initial part of [`Vm::call`] in setting up the `args`
+    /// provided in registers according to Pulley's ABI.
+    pub unsafe fn call_start<'a>(&'a mut self, args: &[Val]) {
         // NB: make sure this method stays in sync with
         // `PulleyMachineDeps::compute_arg_locs`!
 
@@ -101,14 +114,34 @@ impl Vm {
                 },
             }
         }
+    }
 
-        self.run(func)?;
+    /// Peforms the internal part of [`Vm::call`] where bytecode is actually
+    /// executed.
+    pub unsafe fn call_run(&mut self, pc: NonNull<u8>) -> DoneReason<()> {
+        self.state.debug_assert_done_reason_none();
+        let interpreter = Interpreter {
+            state: &mut self.state,
+            pc: UnsafeBytecodeStream::new(pc),
+        };
+        let done = interpreter.run();
+        self.state.done_decode(done)
+    }
+
+    /// Peforms the tail end of [`Vm::call`] by returning the values as
+    /// determined by `rets` according to Pulley's ABI.
+    pub unsafe fn call_end<'a>(
+        &'a mut self,
+        rets: impl IntoIterator<Item = RegType> + 'a,
+    ) -> impl Iterator<Item = Val> + 'a {
+        // NB: make sure this method stays in sync with
+        // `PulleyMachineDeps::compute_arg_locs`!
 
         let mut x_rets = (0..16).map(|x| XReg::new_unchecked(x));
         let mut f_rets = (0..16).map(|f| FReg::new_unchecked(f));
         let mut v_rets = (0..16).map(|v| VReg::new_unchecked(v));
 
-        Ok(rets.into_iter().map(move |ty| match ty {
+        rets.into_iter().map(move |ty| match ty {
             RegType::XReg => match x_rets.next() {
                 Some(reg) => Val::XReg(self.state[reg]),
                 None => todo!("stack slots"),
@@ -121,43 +154,7 @@ impl Vm {
                 Some(reg) => Val::VReg(self.state[reg]),
                 None => todo!("stack slots"),
             },
-        }))
-    }
-
-    unsafe fn run(&mut self, pc: NonNull<u8>) -> Result<(), NonNull<u8>> {
-        let interpreter = Interpreter {
-            state: &mut self.state,
-            pc: UnsafeBytecodeStream::new(pc),
-        };
-        match interpreter.run() {
-            Done::ReturnToHost => self.return_to_host(),
-            Done::Trap(pc) => self.trap(pc),
-            Done::HostCall => self.host_call(),
-        }
-    }
-
-    #[cold]
-    #[inline(never)]
-    fn return_to_host(&self) -> Result<(), NonNull<u8>> {
-        Ok(())
-    }
-
-    #[cold]
-    #[inline(never)]
-    fn trap(&self, pc: NonNull<u8>) -> Result<(), NonNull<u8>> {
-        // We are given the VM's PC upon having executed a trap instruction,
-        // which is actually pointing to the next instruction after the
-        // trap. Back the PC up to point exactly at the trap.
-        let trap_pc = unsafe {
-            NonNull::new_unchecked(pc.as_ptr().byte_sub(ExtendedOpcode::ENCODED_SIZE_OF_TRAP))
-        };
-        Err(trap_pc)
-    }
-
-    #[cold]
-    #[inline(never)]
-    fn host_call(&self) -> Result<(), NonNull<u8>> {
-        todo!()
+        })
     }
 }
 
@@ -485,6 +482,7 @@ pub struct MachineState {
     f_regs: [FRegVal; FReg::RANGE.end as usize],
     v_regs: [VRegVal; VReg::RANGE.end as usize],
     stack: Vec<u8>,
+    done_reason: Option<DoneReason<()>>,
 }
 
 unsafe impl Send for MachineState {}
@@ -497,6 +495,7 @@ impl fmt::Debug for MachineState {
             f_regs,
             v_regs,
             stack: _,
+            done_reason: _,
         } = self;
 
         struct RegMap<'a, R>(&'a [R], fn(u8) -> alloc::string::String);
@@ -530,6 +529,20 @@ impl fmt::Debug for MachineState {
 
 macro_rules! index_reg {
     ($reg_ty:ty,$value_ty:ty,$field:ident) => {
+        impl Index<$reg_ty> for Vm {
+            type Output = $value_ty;
+
+            fn index(&self, reg: $reg_ty) -> &Self::Output {
+                &self.state[reg]
+            }
+        }
+
+        impl IndexMut<$reg_ty> for Vm {
+            fn index_mut(&mut self, reg: $reg_ty) -> &mut Self::Output {
+                &mut self.state[reg]
+            }
+        }
+
         impl Index<$reg_ty> for MachineState {
             type Output = $value_ty;
 
@@ -558,6 +571,7 @@ impl MachineState {
             f_regs: Default::default(),
             v_regs: Default::default(),
             stack,
+            done_reason: None,
         };
 
         // Take care to construct SP such that we preserve pointer provenance
@@ -574,19 +588,71 @@ impl MachineState {
     }
 }
 
-/// The reason the interpreter loop terminated.
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-enum Done {
-    /// A `ret` instruction was executed and the call stack was empty. This is
-    /// how the loop normally ends.
-    ReturnToHost,
+/// Inner private module to prevent creation of the `Done` structure outside of
+/// this module.
+mod done {
+    use super::{Interpreter, MachineState};
+    use core::ptr::NonNull;
 
-    /// A `trap` instruction was executed at the given PC.
-    Trap(NonNull<u8>),
+    /// Zero-sized sentinel indicating that pulley execution has halted.
+    ///
+    /// The reason for halting is stored in `MachineState`.
+    #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+    pub struct Done {
+        _priv: (),
+    }
 
-    #[allow(dead_code)]
-    HostCall,
+    /// Reason that the pulley interpreter has ceased execution.
+    pub enum DoneReason<T> {
+        /// A trap happened at this bytecode instruction.
+        Trap(NonNull<u8>),
+        /// The `call_indirect_host` instruction was executed.
+        CallIndirectHost {
+            /// The payload of `call_indirect_host`.
+            sig: u8,
+            /// Where to resume execution after the host has finished.
+            resume: NonNull<u8>,
+        },
+        /// Pulley has finished and the provided value is being returned.
+        ReturnToHost(T),
+    }
+
+    impl MachineState {
+        pub(super) fn debug_assert_done_reason_none(&mut self) {
+            debug_assert!(self.done_reason.is_none());
+        }
+
+        pub(super) fn done_decode(&mut self, Done { _priv }: Done) -> DoneReason<()> {
+            self.done_reason.take().unwrap()
+        }
+    }
+
+    impl Interpreter<'_> {
+        /// Finishes execution by recording `DoneReason::Trap`.
+        pub fn done_trap(&mut self, pc: NonNull<u8>) -> Done {
+            self.state.done_reason = Some(DoneReason::Trap(pc));
+            Done { _priv: () }
+        }
+
+        /// Finishes execution by recording `DoneReason::CallIndirectHost`.
+        pub fn done_call_indirect_host(&mut self, sig: u8) -> Done {
+            self.state.done_reason = Some(DoneReason::CallIndirectHost {
+                sig,
+                resume: self.pc.as_ptr(),
+            });
+            Done { _priv: () }
+        }
+
+        /// Finishes execution by recording `DoneReason::ReturnToHost`.
+        pub fn done_return_to_host(&mut self) -> Done {
+            self.state.done_reason = Some(DoneReason::ReturnToHost(()));
+            Done { _priv: () }
+        }
+    }
 }
+
+use done::Done;
+pub use done::DoneReason;
 
 struct Interpreter<'a> {
     state: &'a mut MachineState,
@@ -635,7 +701,7 @@ impl Interpreter<'_> {
         let sp_raw = sp as usize;
         let base_raw = self.state.stack.as_ptr() as usize;
         if sp_raw < base_raw {
-            return ControlFlow::Break(Done::Trap(pc));
+            return ControlFlow::Break(self.done_trap(pc));
         }
         self.set_sp_unchecked(sp);
         ControlFlow::Continue(())
@@ -690,7 +756,7 @@ impl OpVisitor for Interpreter<'_> {
     fn ret(&mut self) -> ControlFlow<Done> {
         let lr = self.state[XReg::lr];
         if lr == XRegVal::HOST_RETURN_ADDR {
-            ControlFlow::Break(Done::ReturnToHost)
+            ControlFlow::Break(self.done_return_to_host())
         } else {
             let return_addr = lr.get_ptr();
             self.pc = unsafe { UnsafeBytecodeStream::new(NonNull::new_unchecked(return_addr)) };
@@ -1247,7 +1313,8 @@ impl OpVisitor for Interpreter<'_> {
         // SAFETY: part of the contract of the interpreter is only dealing with
         // valid bytecode, so this offset should be safe.
         self.pc = unsafe { self.pc.offset(idx * 4) };
-        let rel = unwrap_uninhabited(PcRelOffset::decode(&mut self.pc));
+        let mut tmp = self.pc;
+        let rel = unwrap_uninhabited(PcRelOffset::decode(&mut tmp));
         self.pc_rel_jump(rel, 0)
     }
 
@@ -1309,11 +1376,11 @@ impl ExtendedOpVisitor for Interpreter<'_> {
     }
 
     fn trap(&mut self) -> ControlFlow<Done> {
-        ControlFlow::Break(Done::Trap(self.pc.as_ptr()))
+        let trap_pc = self.current_pc::<crate::Trap>();
+        ControlFlow::Break(self.done_trap(trap_pc))
     }
 
     fn call_indirect_host(&mut self, sig: u8) -> ControlFlow<Done> {
-        let _ = sig; // TODO: should stash this somewhere
-        ControlFlow::Break(Done::ReturnToHost)
+        ControlFlow::Break(self.done_call_indirect_host(sig))
     }
 }

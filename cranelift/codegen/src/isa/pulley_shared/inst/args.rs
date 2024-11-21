@@ -180,7 +180,9 @@ impl Amode {
                         + frame_layout.outgoing_args_size;
                     i64::from(sp_offset) - offset
                 }
-                StackAMode::Slot(offset) => *offset,
+                StackAMode::Slot(offset) => {
+                    offset + i64::from(state.frame_layout().outgoing_args_size)
+                }
                 StackAMode::OutgoingArg(offset) => *offset,
             },
         }

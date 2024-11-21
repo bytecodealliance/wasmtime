@@ -22,9 +22,9 @@ use wasmparser::{Operator, WasmFeatures};
 use wasmtime_environ::{
     BuiltinFunctionIndex, DataIndex, ElemIndex, EngineOrModuleTypeIndex, FuncIndex, GlobalIndex,
     IndexType, Memory, MemoryIndex, Module, ModuleInternedTypeIndex, ModuleTranslation,
-    ModuleTypesBuilder, PtrSize, Table, TableIndex, Tunables, TypeConvert, TypeIndex, VMOffsets,
-    WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
-    WasmValType,
+    ModuleTypesBuilder, PtrSize, Table, TableIndex, TripleExt, Tunables, TypeConvert, TypeIndex,
+    VMOffsets, WasmCompositeInnerType, WasmFuncType, WasmHeapTopType, WasmHeapType, WasmRefType,
+    WasmResult, WasmValType,
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
@@ -1186,16 +1186,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             funcref,
             i32::from(self.offsets.ptr.vm_func_ref_type_index()),
         )
-    }
-
-    /// Returns whether the current compilation target is for the Pulley
-    /// interpreter.
-    pub fn is_pulley(&self) -> bool {
-        match self.isa.triple().architecture {
-            target_lexicon::Architecture::Pulley32 => true,
-            target_lexicon::Architecture::Pulley64 => true,
-            _ => false,
-        }
     }
 }
 
@@ -3419,7 +3409,7 @@ impl FuncEnvironment<'_> {
     /// being targetted since the Pulley runtime doesn't catch segfaults for
     /// itself.
     pub fn clif_memory_traps_enabled(&self) -> bool {
-        self.tunables.signals_based_traps && !self.is_pulley()
+        self.tunables.signals_based_traps && !self.isa.triple().is_pulley()
     }
 
     /// Returns whether it's acceptable to have CLIF instructions natively trap,
@@ -3429,7 +3419,7 @@ impl FuncEnvironment<'_> {
     /// unconditionally since Pulley doesn't use hardware-based traps in its
     /// runtime.
     pub fn clif_instruction_traps_enabled(&self) -> bool {
-        self.tunables.signals_based_traps || self.is_pulley()
+        self.tunables.signals_based_traps || self.isa.triple().is_pulley()
     }
 }
 

@@ -18,7 +18,7 @@ pub use self::signals::*;
 use crate::prelude::*;
 use crate::runtime::store::StoreOpaque;
 use crate::runtime::vm::sys::traphandlers;
-use crate::runtime::vm::{Instance, VMContext, VMRuntimeLimits};
+use crate::runtime::vm::{Instance, InterpreterRef, VMContext, VMRuntimeLimits};
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::ops::Range;
@@ -334,17 +334,41 @@ pub unsafe fn catch_traps<T, F>(
     mut closure: F,
 ) -> Result<(), Box<Trap>>
 where
-    F: FnMut(*mut VMContext) -> bool,
+    F: FnMut(*mut VMContext, Option<InterpreterRef<'_>>) -> bool,
 {
     let caller = store.0.default_caller();
+    let result = CallThreadState::new(store.0, caller).with(|cx| match store.0.interpreter() {
+        // In interpreted mode directly invoke the host closure since we won't
+        // be using host-based `setjmp`/`longjmp` as that's not going to save
+        // the context we want.
+        Some(r) => {
+            cx.jmp_buf
+                .set(CallThreadState::JMP_BUF_INTERPRETER_SENTINEL);
+            closure(caller, Some(r))
+        }
 
-    let result = CallThreadState::new(store.0, caller).with(|cx| {
-        traphandlers::wasmtime_setjmp(
+        // In native mode, however, defer to C to do the `setjmp` since Rust
+        // doesn't understand `setjmp`.
+        //
+        // Note that here we pass a function pointer to C to catch longjmp
+        // within, here it's `call_closure`, and that passes `None` for the
+        // interpreter since this branch is only ever taken if the interpreter
+        // isn't present.
+        None => traphandlers::wasmtime_setjmp(
             cx.jmp_buf.as_ptr(),
-            call_closure::<F>,
+            {
+                extern "C" fn call_closure<F>(payload: *mut u8, caller: *mut VMContext) -> bool
+                where
+                    F: FnMut(*mut VMContext, Option<InterpreterRef<'_>>) -> bool,
+                {
+                    unsafe { (*(payload as *mut F))(caller, None) }
+                }
+
+                call_closure::<F>
+            },
             &mut closure as *mut F as *mut u8,
             caller,
-        )
+        ),
     });
 
     return match result {
@@ -357,13 +381,6 @@ where
         #[cfg(all(feature = "std", panic = "unwind"))]
         Err((UnwindReason::Panic(panic), _, _)) => std::panic::resume_unwind(panic),
     };
-
-    extern "C" fn call_closure<F>(payload: *mut u8, caller: *mut VMContext) -> bool
-    where
-        F: FnMut(*mut VMContext) -> bool,
-    {
-        unsafe { (*(payload as *mut F))(caller) }
-    }
 }
 
 // Module to hide visibility of the `CallThreadState::prev` field and force
@@ -416,6 +433,8 @@ mod call_thread_state {
     }
 
     impl CallThreadState {
+        pub const JMP_BUF_INTERPRETER_SENTINEL: *mut u8 = 1 as *mut u8;
+
         #[inline]
         pub(super) fn new(store: &mut StoreOpaque, caller: *mut VMContext) -> CallThreadState {
             let limits = unsafe { *Instance::from_vmctx(caller, |i| i.runtime_limits()) };

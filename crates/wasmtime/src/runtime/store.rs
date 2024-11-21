@@ -84,8 +84,8 @@ use crate::prelude::*;
 use crate::runtime::vm::mpk::{self, ProtectionKey, ProtectionMask};
 use crate::runtime::vm::{
     Backtrace, ExportGlobal, GcRootsList, GcStore, InstanceAllocationRequest, InstanceAllocator,
-    InstanceHandle, ModuleRuntimeInfo, OnDemandInstanceAllocator, SignalHandler, StoreBox,
-    StorePtr, VMContext, VMFuncRef, VMGcRef, VMRuntimeLimits,
+    InstanceHandle, Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator,
+    SignalHandler, StoreBox, StorePtr, VMContext, VMFuncRef, VMGcRef, VMRuntimeLimits,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::type_registry::RegisteredType;
@@ -103,6 +103,7 @@ use core::ops::{Deref, DerefMut, Range};
 use core::pin::Pin;
 use core::ptr;
 use core::task::{Context, Poll};
+use wasmtime_environ::TripleExt;
 
 mod context;
 pub use self::context::*;
@@ -387,6 +388,11 @@ pub struct StoreOpaque {
     component_calls: crate::runtime::vm::component::CallContexts,
     #[cfg(feature = "component-model")]
     host_resource_data: crate::component::HostResourceData,
+
+    /// State related to the Pulley interpreter if that's enabled and configured
+    /// for this store's `Engine`. This is `None` if pulley was disabled at
+    /// compile time or if it's not being used by the `Engine`.
+    interpreter: Option<Interpreter>,
 }
 
 #[cfg(feature = "async")]
@@ -575,6 +581,11 @@ impl<T> Store<T> {
                 component_calls: Default::default(),
                 #[cfg(feature = "component-model")]
                 host_resource_data: Default::default(),
+                interpreter: if cfg!(feature = "pulley") && engine.target().is_pulley() {
+                    Some(Interpreter::new())
+                } else {
+                    None
+                },
             },
             limiter: None,
             call_hook: None,
@@ -2132,6 +2143,11 @@ at https://bytecodealliance.org/security.
                 self.engine.allocator().deallocate_fiber_stack(stack);
             }
         }
+    }
+
+    pub(crate) fn interpreter(&mut self) -> Option<InterpreterRef<'_>> {
+        let i = self.interpreter.as_mut()?;
+        Some(i.as_interpreter_ref())
     }
 }
 

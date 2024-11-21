@@ -109,11 +109,11 @@ pub struct ComponentInstance {
 pub type VMLoweringCallee = extern "C" fn(
     vmctx: *mut VMOpaqueContext,
     data: *mut u8,
-    ty: TypeFuncIndex,
-    flags: InstanceFlags,
+    ty: u32,
+    flags: *mut u8,
     opt_memory: *mut VMMemoryDefinition,
     opt_realloc: *mut VMFuncRef,
-    string_encoding: StringEncoding,
+    string_encoding: u8,
     args_and_results: *mut mem::MaybeUninit<ValRaw>,
     nargs_and_results: usize,
 ) -> bool;
@@ -802,6 +802,16 @@ pub struct InstanceFlags(SendSyncPtr<VMGlobalDefinition>);
 
 #[allow(missing_docs)]
 impl InstanceFlags {
+    /// Wraps the given pointer as an `InstanceFlags`
+    ///
+    /// # Unsafety
+    ///
+    /// This is a raw pointer argument which needs to be valid for the lifetime
+    /// that `InstanceFlags` is used.
+    pub unsafe fn from_raw(ptr: *mut u8) -> InstanceFlags {
+        InstanceFlags(SendSyncPtr::new(NonNull::new(ptr.cast()).unwrap()))
+    }
+
     #[inline]
     pub unsafe fn may_leave(&self) -> bool {
         *(*self.as_raw()).as_i32() & FLAG_MAY_LEAVE != 0

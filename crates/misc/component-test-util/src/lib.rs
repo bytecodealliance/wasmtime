@@ -132,16 +132,23 @@ forward_impls! {
 
 /// Helper method to apply `wast_config` to `config`.
 pub fn apply_wast_config(config: &mut Config, wast_config: &wasmtime_wast_util::WastConfig) {
+    use wasmtime_wast_util::{Collector, Compiler};
+
     config.strategy(match wast_config.compiler {
-        wasmtime_wast_util::Compiler::Cranelift => wasmtime::Strategy::Cranelift,
-        wasmtime_wast_util::Compiler::Winch => wasmtime::Strategy::Winch,
+        Compiler::Cranelift | Compiler::Pulley => wasmtime::Strategy::Cranelift,
+        Compiler::Winch => wasmtime::Strategy::Winch,
     });
-    config.collector(match wast_config.collector {
-        wasmtime_wast_util::Collector::Auto => wasmtime::Collector::Auto,
-        wasmtime_wast_util::Collector::Null => wasmtime::Collector::Null,
-        wasmtime_wast_util::Collector::DeferredReferenceCounting => {
-            wasmtime::Collector::DeferredReferenceCounting
+    if let Compiler::Pulley = wast_config.compiler {
+        if cfg!(target_pointer_width = "32") {
+            config.target("pulley32").unwrap();
+        } else {
+            config.target("pulley64").unwrap();
         }
+    }
+    config.collector(match wast_config.collector {
+        Collector::Auto => wasmtime::Collector::Auto,
+        Collector::Null => wasmtime::Collector::Null,
+        Collector::DeferredReferenceCounting => wasmtime::Collector::DeferredReferenceCounting,
     });
 }
 

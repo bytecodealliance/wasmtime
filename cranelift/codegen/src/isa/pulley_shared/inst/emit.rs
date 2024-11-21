@@ -549,9 +549,15 @@ fn pulley_emit<P>(
             *start_offset = sink.cur_offset();
         }
 
-        Inst::PushFrame => enc::push_frame(sink),
+        Inst::PushFrame => {
+            sink.add_trap(ir::TrapCode::STACK_OVERFLOW);
+            enc::push_frame(sink);
+        }
         Inst::PopFrame => enc::pop_frame(sink),
-        Inst::StackAlloc32 { amt } => enc::stack_alloc32(sink, *amt),
+        Inst::StackAlloc32 { amt } => {
+            sink.add_trap(ir::TrapCode::STACK_OVERFLOW);
+            enc::stack_alloc32(sink, *amt);
+        }
         Inst::StackFree32 { amt } => enc::stack_free32(sink, *amt),
 
         Inst::Zext8 { dst, src } => enc::zext8(sink, dst, src),

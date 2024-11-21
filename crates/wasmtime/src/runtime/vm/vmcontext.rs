@@ -5,7 +5,7 @@ mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
-use crate::runtime::vm::{GcStore, VMGcRef};
+use crate::runtime::vm::{GcStore, InterpreterRef, VMGcRef};
 use crate::store::StoreOpaque;
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
@@ -720,8 +720,35 @@ impl VMFuncRef {
     /// # Unsafety
     ///
     /// This method is unsafe because it can be called with any pointers. They
-    /// must all be valid for this wasm function call to proceed.
+    /// must all be valid for this wasm function call to proceed. Fore xample
+    /// the `caller` must be valid machine code if `pulley` is `None` or it must
+    /// be valid bytecode if `pulley` is `Some`. Additionally `args_and_results`
+    /// must be large enough to handle all the arguments/results for this call.
+    ///
+    /// Note that the unsafety invariants to maintain here are not currently
+    /// exhaustively documented.
     pub unsafe fn array_call(
+        &self,
+        pulley: Option<InterpreterRef<'_>>,
+        caller: *mut VMOpaqueContext,
+        args_and_results: *mut [ValRaw],
+    ) -> bool {
+        match pulley {
+            Some(vm) => self.array_call_interpreted(vm, caller, args_and_results),
+            None => self.array_call_native(caller, args_and_results),
+        }
+    }
+
+    unsafe fn array_call_interpreted(
+        &self,
+        vm: InterpreterRef<'_>,
+        caller: *mut VMOpaqueContext,
+        args_and_results: *mut [ValRaw],
+    ) -> bool {
+        vm.call(self.array_call.cast(), self.vmctx, caller, args_and_results)
+    }
+
+    unsafe fn array_call_native(
         &self,
         caller: *mut VMOpaqueContext,
         args_and_results: *mut [ValRaw],
