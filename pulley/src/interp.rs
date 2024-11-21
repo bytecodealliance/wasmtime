@@ -1248,12 +1248,6 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Break(Done::Trap(self.pc.as_ptr()))
     }
 
-    fn get_sp(&mut self, dst: XReg) -> ControlFlow<Done> {
-        let sp = self.state[XReg::sp].get_u64();
-        self.state[dst].set_u64(sp);
-        ControlFlow::Continue(())
-    }
-
     fn call_indirect_host(&mut self, sig: u8) -> ControlFlow<Done> {
         let _ = sig; // TODO: should stash this somewhere
         ControlFlow::Break(Done::ReturnToHost)

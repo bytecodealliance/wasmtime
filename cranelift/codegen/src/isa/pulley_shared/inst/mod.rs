@@ -79,8 +79,12 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(src2);
         }
 
-        Inst::GetSp { dst } => {
+        Inst::GetSpecial { dst, reg } => {
             collector.reg_def(dst);
+            // Note that this is explicitly ignored as this is only used for
+            // special register that don't participate in register allocation
+            // such as the stack pointer, frame pointer, etc.
+            let _ = reg;
         }
 
         Inst::LoadExtName {
@@ -568,9 +572,10 @@ impl Inst {
 
             Inst::Ret => format!("ret"),
 
-            Inst::GetSp { dst } => {
+            Inst::GetSpecial { dst, reg } => {
                 let dst = format_reg(*dst.to_reg());
-                format!("{dst} = get_sp")
+                let reg = format_reg(**reg);
+                format!("xmov {dst}, {reg}")
             }
 
             Inst::LoadExtName { dst, name, offset } => {

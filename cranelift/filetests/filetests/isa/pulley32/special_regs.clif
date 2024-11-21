@@ -1,0 +1,70 @@
+test compile precise-output
+set preserve_frame_pointers
+target pulley32
+
+function %get_stack_pointer() -> i32 {
+block0:
+  v0 = get_stack_pointer.i32
+  return v0
+}
+
+; VCode:
+;   x30 = xconst8 -16
+;   x27 = xadd32 x27, x30
+;   store64 sp+8, x28 // flags =  notrap aligned
+;   store64 sp+0, x29 // flags =  notrap aligned
+;   x29 = xmov x27
+; block0:
+;   xmov x0, x27
+;   x28 = load64_u sp+8 // flags = notrap aligned
+;   x29 = load64_u sp+0 // flags = notrap aligned
+;   x30 = xconst8 16
+;   x27 = xadd32 x27, x30
+;   ret
+;
+; Disassembled:
+; xconst8 spilltmp0, -16
+; xadd32 sp, sp, spilltmp0
+; store64_offset8 sp, 8, lr
+; store64 sp, fp
+; xmov fp, sp
+; xmov x0, sp
+; load64_offset8 lr, sp, 8
+; load64 fp, sp
+; xconst8 spilltmp0, 16
+; xadd32 sp, sp, spilltmp0
+; ret
+
+function %get_frame_pointer() -> i32 {
+block0:
+  v0 = get_frame_pointer.i32
+  return v0
+}
+
+; VCode:
+;   x30 = xconst8 -16
+;   x27 = xadd32 x27, x30
+;   store64 sp+8, x28 // flags =  notrap aligned
+;   store64 sp+0, x29 // flags =  notrap aligned
+;   x29 = xmov x27
+; block0:
+;   xmov x0, x29
+;   x28 = load64_u sp+8 // flags = notrap aligned
+;   x29 = load64_u sp+0 // flags = notrap aligned
+;   x30 = xconst8 16
+;   x27 = xadd32 x27, x30
+;   ret
+;
+; Disassembled:
+; xconst8 spilltmp0, -16
+; xadd32 sp, sp, spilltmp0
+; store64_offset8 sp, 8, lr
+; store64 sp, fp
+; xmov fp, sp
+; xmov x0, fp
+; load64_offset8 lr, sp, 8
+; load64 fp, sp
+; xconst8 spilltmp0, 16
+; xadd32 sp, sp, spilltmp0
+; ret
+
