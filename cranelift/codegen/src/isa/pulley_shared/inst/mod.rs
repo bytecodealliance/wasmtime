@@ -309,7 +309,7 @@ where
     type LabelUse = LabelUse;
     type ABIMachineSpec = PulleyMachineDeps<P>;
 
-    const TRAP_OPCODE: &'static [u8] = &[0];
+    const TRAP_OPCODE: &'static [u8] = TRAP_OPCODE;
 
     fn gen_dummy_use(_reg: Reg) -> Self {
         todo!()
@@ -466,6 +466,19 @@ where
             preferred: 1,
         }
     }
+}
+
+const TRAP_OPCODE: &'static [u8] = &[
+    pulley_interpreter::opcode::Opcode::ExtendedOp as u8,
+    ((pulley_interpreter::opcode::ExtendedOpcode::Trap as u16) >> 0) as u8,
+    ((pulley_interpreter::opcode::ExtendedOpcode::Trap as u16) >> 8) as u8,
+];
+
+#[test]
+fn test_trap_encoding() {
+    let mut dst = std::vec::Vec::new();
+    pulley_interpreter::encode::trap(&mut dst);
+    assert_eq!(dst, TRAP_OPCODE);
 }
 
 //=============================================================================
