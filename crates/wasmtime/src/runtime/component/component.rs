@@ -15,7 +15,6 @@ use crate::{
 use crate::{FuncType, ValType};
 use alloc::sync::Arc;
 use core::any::Any;
-use core::mem;
 use core::ops::Range;
 use core::ptr::NonNull;
 #[cfg(feature = "std")]
@@ -98,7 +97,7 @@ struct ComponentInner {
 
 pub(crate) struct AllCallFuncPointers {
     pub wasm_call: NonNull<VMWasmCallFunction>,
-    pub array_call: VMArrayCallFunction,
+    pub array_call: NonNull<VMArrayCallFunction>,
 }
 
 impl Component {
@@ -469,11 +468,7 @@ impl Component {
         } = &self.inner.info.trampolines[index];
         AllCallFuncPointers {
             wasm_call: self.func(wasm_call).cast(),
-            array_call: unsafe {
-                mem::transmute::<NonNull<VMFunctionBody>, VMArrayCallFunction>(
-                    self.func(array_call),
-                )
-            },
+            array_call: self.func(array_call).cast(),
         }
     }
 

@@ -2,11 +2,12 @@
 //!
 //! Keep in sync with `wasmtime_environ::VMHostFuncOffsets`.
 
-use super::VMOpaqueContext;
+use super::{VMArrayCallNative, VMOpaqueContext};
 use crate::prelude::*;
 use crate::runtime::vm::{StoreBox, VMFuncRef};
 use core::any::Any;
-use wasmtime_environ::VM_ARRAY_CALL_HOST_FUNC_MAGIC;
+use core::ptr::{self, NonNull};
+use wasmtime_environ::{VMSharedTypeIndex, VM_ARRAY_CALL_HOST_FUNC_MAGIC};
 
 /// The `VM*Context` for array-call host functions.
 ///
@@ -30,13 +31,18 @@ impl VMArrayCallHostFuncContext {
     /// The `host_func` must be a pointer to a host (not Wasm) function and it
     /// must be `Send` and `Sync`.
     pub unsafe fn new(
-        func_ref: VMFuncRef,
+        host_func: VMArrayCallNative,
+        type_index: VMSharedTypeIndex,
         host_state: Box<dyn Any + Send + Sync>,
     ) -> StoreBox<VMArrayCallHostFuncContext> {
-        debug_assert!(func_ref.vmctx.is_null());
         let ctx = StoreBox::new(VMArrayCallHostFuncContext {
             magic: wasmtime_environ::VM_ARRAY_CALL_HOST_FUNC_MAGIC,
-            func_ref,
+            func_ref: VMFuncRef {
+                array_call: NonNull::new(host_func as *mut u8).unwrap().cast(),
+                type_index,
+                wasm_call: None,
+                vmctx: ptr::null_mut(),
+            },
             host_state,
         });
         let vmctx = VMOpaqueContext::from_vm_array_call_host_func_context(ctx.get());

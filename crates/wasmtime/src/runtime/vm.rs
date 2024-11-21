@@ -9,7 +9,6 @@ use crate::prelude::*;
 use crate::store::StoreOpaque;
 use alloc::sync::Arc;
 use core::fmt;
-use core::mem;
 use core::ops::Deref;
 use core::ops::DerefMut;
 use core::ptr::NonNull;
@@ -278,16 +277,16 @@ impl ModuleRuntimeInfo {
     ///
     /// Returns `None` for Wasm functions which do not escape, and therefore are
     /// not callable from outside the Wasm module itself.
-    fn array_to_wasm_trampoline(&self, index: DefinedFuncIndex) -> Option<VMArrayCallFunction> {
+    fn array_to_wasm_trampoline(
+        &self,
+        index: DefinedFuncIndex,
+    ) -> Option<NonNull<VMArrayCallFunction>> {
         let m = match self {
             ModuleRuntimeInfo::Module(m) => m,
             ModuleRuntimeInfo::Bare(_) => unreachable!(),
         };
-        let ptr = m
-            .compiled_module()
-            .array_to_wasm_trampoline(index)?
-            .as_ptr();
-        Some(unsafe { mem::transmute::<*const u8, VMArrayCallFunction>(ptr) })
+        let ptr = NonNull::from(m.compiled_module().array_to_wasm_trampoline(index)?);
+        Some(ptr.cast())
     }
 
     /// Returns the `MemoryImage` structure used for copy-on-write
