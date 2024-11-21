@@ -1,6 +1,8 @@
 use super::*;
+use crate::decode::unwrap_uninhabited;
+use crate::opcode::Opcode;
 
-type Handler = fn(&mut MachineState, &mut UnsafeBytecodeStream) -> Done;
+type Handler = fn(Interpreter<'_>) -> Done;
 
 /// The extra indirection through a macro is necessary to avoid a compiler error
 /// when compiling without `#![feature(explicit_tail_calls)]` enabled (via
@@ -19,37 +21,70 @@ macro_rules! tail_call {
     };
 }
 
-pub fn run(vm: &mut Vm, bytecode: &mut UnsafeBytecodeStream) -> Done {
-    run_one(&mut vm.state, bytecode)
+impl Interpreter<'_> {
+    pub fn run(mut self) -> Done {
+        // Perform a dynamic dispatch through a function pointer indexed by
+        // opcode.
+        let opcode = unwrap_uninhabited(Opcode::decode(self.bytecode()));
+        let handler = OPCODE_HANDLER_TABLE[opcode as usize];
+        tail_call!(handler(self));
+    }
 }
 
-fn run_one(state: &mut MachineState, bytecode: &mut UnsafeBytecodeStream) -> Done {
-    let opcode = Opcode::decode(bytecode).unwrap();
-    let handler = OPCODE_HANDLER_TABLE[opcode as usize];
-    tail_call!(handler(state, bytecode));
+/// Same as `Interpreter::run`, except for extended opcodes.
+fn run_extended(mut i: Interpreter<'_>) -> Done {
+    let opcode = unwrap_uninhabited(ExtendedOpcode::decode(i.bytecode()));
+    let handler = EXTENDED_OPCODE_HANDLER_TABLE[opcode as usize];
+    tail_call!(handler(i));
 }
 
-macro_rules! define_opcode_handler_table {
-    ($(
-        $( #[$attr:meta] )*
-        $snake_name:ident = $name:ident $( {
-            $(
-                $( #[$field_attr:meta] )*
-                $field:ident : $field_ty:ty
-            ),*
-        } )?;
-    )*) => {
-        [
-            $($snake_name,)*
-            extended,
-        ]
-    };
-}
+static OPCODE_HANDLER_TABLE: [Handler; Opcode::MAX as usize + 1] = {
+    macro_rules! define_opcode_handler_table {
+        ($(
+            $( #[$attr:meta] )*
+            $snake_name:ident = $name:ident $( {
+                $(
+                    $( #[$field_attr:meta] )*
+                    $field:ident : $field_ty:ty
+                ),*
+            } )?;
+        )*) => {
+            [
+                $($snake_name,)* // refers to functions defined down below
+                run_extended,
+            ]
+        };
+    }
 
-/// Add one to account for `ExtendedOp`.
-const NUM_OPCODES: usize = Opcode::MAX as usize + 1;
-static OPCODE_HANDLER_TABLE: [Handler; NUM_OPCODES] = for_each_op!(define_opcode_handler_table);
+    for_each_op!(define_opcode_handler_table)
+};
 
+// same as above, but without a +1 for handling of extended ops as this is the
+// extended ops.
+static EXTENDED_OPCODE_HANDLER_TABLE: [Handler; ExtendedOpcode::MAX as usize] = {
+    macro_rules! define_extended_opcode_handler_table {
+        ($(
+            $( #[$attr:meta] )*
+            $snake_name:ident = $name:ident $( {
+                $(
+                    $( #[$field_attr:meta] )*
+                    $field:ident : $field_ty:ty
+                ),*
+            } )?;
+        )*) => {
+            [
+                $($snake_name,)* // refers to functions defined down below
+            ]
+        };
+    }
+
+    for_each_extended_op!(define_extended_opcode_handler_table)
+};
+
+// Define a top-level function for each opcode. Each function here is the
+// destination of the indirect return-call-indirect of above. Each function is
+// also specialized to a single opcode and should be thoroughly inlined to
+// ensure that everything "boils away".
 macro_rules! define_opcode_handler {
     ($(
         $( #[$attr:meta] )*
@@ -60,12 +95,14 @@ macro_rules! define_opcode_handler {
             ),*
         } )?;
     )*) => {$(
-        fn $snake_name(state: &mut MachineState, bytecode: &mut UnsafeBytecodeStream) -> Done {
-            $($(
-                let $field = unwrap_uninhabited(<$field_ty>::decode(bytecode));
-            )*)?
-            match super::$snake_name(state, bytecode, $($($field),*)?) {
-                ControlFlow::Continue(()) => tail_call!(run_one(state, bytecode)),
+        fn $snake_name(mut i: Interpreter<'_>) -> Done {
+            $(
+                let ($($field,)*) = unwrap_uninhabited(
+                    crate::decode::operands::$snake_name(i.bytecode())
+                );
+            )?
+            match OpVisitor::$snake_name(&mut i, $($($field),*)?) {
+                ControlFlow::Continue(()) => tail_call!(i.run()),
                 ControlFlow::Break(done) => done,
             }
         }
@@ -74,10 +111,27 @@ macro_rules! define_opcode_handler {
 
 for_each_op!(define_opcode_handler);
 
-fn extended(state: &mut MachineState, bytecode: &mut UnsafeBytecodeStream) -> Done {
-    let opcode = unwrap_uninhabited(ExtendedOpcode::decode(bytecode));
-    match super::extended(state, bytecode, opcode) {
-        ControlFlow::Continue(()) => tail_call!(run_one(state, bytecode)),
-        ControlFlow::Break(done) => done,
-    }
+macro_rules! define_extended_opcode_handler {
+    ($(
+        $( #[$attr:meta] )*
+        $snake_name:ident = $name:ident $( {
+            $(
+                $( #[$field_attr:meta] )*
+                $field:ident : $field_ty:ty
+            ),*
+        } )?;
+    )*) => {$(
+        fn $snake_name(mut i: Interpreter<'_>) -> Done {
+            $(
+                let ($($field,)*) = unwrap_uninhabited(
+                    crate::decode::operands::$snake_name(i.bytecode())
+                );
+            )?
+            match ExtendedOpVisitor::$snake_name(&mut i, $($($field),*)?) {
+                ControlFlow::Continue(()) => tail_call!(i.run()),
+                ControlFlow::Break(done) => done,
+            }
+        }
+    )*};
 }
+for_each_extended_op!(define_extended_opcode_handler);
