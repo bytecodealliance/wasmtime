@@ -516,7 +516,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let isa = &*self.isa;
         let ptr_size = isa.pointer_bytes();
         let pointer_type = isa.pointer_type();
-        let sigs = BuiltinFunctionSignatures::new(isa);
+        let sigs = BuiltinFunctionSignatures::new(isa, &self.tunables);
         let wasm_sig = sigs.wasm_signature(index);
         let host_sig = sigs.host_signature(index);
 

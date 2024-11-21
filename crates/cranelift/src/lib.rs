@@ -154,12 +154,8 @@ fn array_call_signature(isa: &dyn TargetIsa) -> ir::Signature {
     sig
 }
 
-/// Get the internal Wasm calling convention signature for the given type.
-fn wasm_call_signature(
-    isa: &dyn TargetIsa,
-    wasm_func_ty: &WasmFuncType,
-    tunables: &Tunables,
-) -> ir::Signature {
+/// Get the internal Wasm calling convention for the target/tunables combo
+fn wasm_call_conv(isa: &dyn TargetIsa, tunables: &Tunables) -> CallConv {
     // The default calling convention is `CallConv::Tail` to enable the use of
     // tail calls in modules when needed. Note that this is used even if the
     // tail call proposal is disabled in wasm. This is not interacted with on
@@ -169,7 +165,7 @@ fn wasm_call_signature(
     // which call Winch-generated functions. The winch calling convention is
     // only implemented for x64 and aarch64, so assert that here and panic on
     // other architectures.
-    let call_conv = if tunables.winch_callable {
+    if tunables.winch_callable {
         assert!(
             matches!(
                 isa.triple().architecture,
@@ -180,7 +176,16 @@ fn wasm_call_signature(
         CallConv::Winch
     } else {
         CallConv::Tail
-    };
+    }
+}
+
+/// Get the internal Wasm calling convention signature for the given type.
+fn wasm_call_signature(
+    isa: &dyn TargetIsa,
+    wasm_func_ty: &WasmFuncType,
+    tunables: &Tunables,
+) -> ir::Signature {
+    let call_conv = wasm_call_conv(isa, tunables);
     let mut sig = blank_sig(isa, call_conv);
     let cvt = |ty: &WasmValType| ir::AbiParam::new(value_type(isa, *ty));
     sig.params.extend(wasm_func_ty.params().iter().map(&cvt));
@@ -332,11 +337,11 @@ struct BuiltinFunctionSignatures {
 }
 
 impl BuiltinFunctionSignatures {
-    fn new(isa: &dyn TargetIsa) -> Self {
+    fn new(isa: &dyn TargetIsa, tunables: &Tunables) -> Self {
         Self {
             pointer_type: isa.pointer_type(),
             host_call_conv: CallConv::triple_default(isa.triple()),
-            wasm_call_conv: CallConv::Tail,
+            wasm_call_conv: wasm_call_conv(isa, tunables),
 
             #[cfg(feature = "gc")]
             reference_type: ir::types::I32,

@@ -37,9 +37,9 @@ pub(crate) struct BuiltinFunctions {
 }
 
 impl BuiltinFunctions {
-    fn new(isa: &dyn TargetIsa) -> Self {
+    fn new(isa: &dyn TargetIsa, tunables: &Tunables) -> Self {
         Self {
-            types: BuiltinFunctionSignatures::new(isa),
+            types: BuiltinFunctionSignatures::new(isa, tunables),
             builtins: [None; BuiltinFunctionIndex::builtin_functions_total_number() as usize],
         }
     }
@@ -169,7 +169,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         wmemcheck: bool,
         wasm_func_ty: &'module_environment WasmFuncType,
     ) -> Self {
-        let builtin_functions = BuiltinFunctions::new(isa);
+        let builtin_functions = BuiltinFunctions::new(isa, tunables);
 
         // Avoid unused warning in default build.
         #[cfg(not(feature = "wmemcheck"))]
