@@ -237,9 +237,8 @@ impl<'a> TrampolineCompiler<'a> {
             i32::try_from(self.offsets.lowering_callee(index)).unwrap(),
         );
         let host_sig = self.builder.import_signature(host_sig);
-        self.builder
-            .ins()
-            .call_indirect(host_sig, host_fn, &callee_args);
+        self.compiler
+            .call_indirect_host(&mut self.builder, host_sig, host_fn, &callee_args);
 
         match self.abi {
             Abi::Wasm => {
@@ -275,9 +274,8 @@ impl<'a> TrampolineCompiler<'a> {
             ir::types::I8,
             i64::from(wasmtime_environ::Trap::AlwaysTrapAdapter as u8),
         );
-        self.builder
-            .ins()
-            .call_indirect(host_sig, host_fn, &[vmctx, code]);
+        self.compiler
+            .call_indirect_host(&mut self.builder, host_sig, host_fn, &[vmctx, code]);
         // debug trap in case execution actually falls through, but this
         // shouldn't ever get hit at runtime.
         self.builder.ins().trap(TRAP_INTERNAL_ASSERT);
@@ -309,10 +307,9 @@ impl<'a> TrampolineCompiler<'a> {
         let (host_sig, offset) = host::resource_new32(self.isa, &mut self.builder.func);
 
         let host_fn = self.load_libcall(vmctx, offset);
-        let call = self
-            .builder
-            .ins()
-            .call_indirect(host_sig, host_fn, &host_args);
+        let call =
+            self.compiler
+                .call_indirect_host(&mut self.builder, host_sig, host_fn, &host_args);
         let result = self.builder.func.dfg.inst_results(call)[0];
         self.abi_store_results(&[result]);
     }
@@ -343,10 +340,9 @@ impl<'a> TrampolineCompiler<'a> {
         let (host_sig, offset) = host::resource_rep32(self.isa, &mut self.builder.func);
 
         let host_fn = self.load_libcall(vmctx, offset);
-        let call = self
-            .builder
-            .ins()
-            .call_indirect(host_sig, host_fn, &host_args);
+        let call =
+            self.compiler
+                .call_indirect_host(&mut self.builder, host_sig, host_fn, &host_args);
         let result = self.builder.func.dfg.inst_results(call)[0];
         self.abi_store_results(&[result]);
     }
@@ -373,10 +369,9 @@ impl<'a> TrampolineCompiler<'a> {
 
         let (host_sig, offset) = host::resource_drop(self.isa, &mut self.builder.func);
         let host_fn = self.load_libcall(vmctx, offset);
-        let call = self
-            .builder
-            .ins()
-            .call_indirect(host_sig, host_fn, &host_args);
+        let call =
+            self.compiler
+                .call_indirect_host(&mut self.builder, host_sig, host_fn, &host_args);
         let should_run_destructor = self.builder.func.dfg.inst_results(call)[0];
 
         let resource_ty = self.types[resource].ty;
@@ -556,10 +551,9 @@ impl<'a> TrampolineCompiler<'a> {
         host_args.extend(args[2..].iter().copied());
         let (host_sig, offset) = get_libcall(self.isa, &mut self.builder.func);
         let host_fn = self.load_libcall(vmctx, offset);
-        let call = self
-            .builder
-            .ins()
-            .call_indirect(host_sig, host_fn, &host_args);
+        let call =
+            self.compiler
+                .call_indirect_host(&mut self.builder, host_sig, host_fn, &host_args);
         let results = self.builder.func.dfg.inst_results(call).to_vec();
         self.builder.ins().return_(&results);
     }
@@ -786,7 +780,9 @@ impl TrampolineCompiler<'_> {
                 ));
             args.push(self.builder.ins().stack_addr(pointer_type, slot, 0));
         }
-        let call = self.builder.ins().call_indirect(sig, libcall, &args);
+        let call = self
+            .compiler
+            .call_indirect_host(&mut self.builder, sig, libcall, &args);
         let mut results = self.builder.func.dfg.inst_results(call).to_vec();
         if uses_retptr {
             results.push(self.builder.ins().load(

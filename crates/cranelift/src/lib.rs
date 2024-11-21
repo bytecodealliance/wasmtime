@@ -212,6 +212,9 @@ pub const NS_WASM_FUNC: u32 = 0;
 /// function through an indirect function call loaded by the `VMContext`.
 pub const NS_WASMTIME_BUILTIN: u32 = 1;
 
+/// TODO
+pub const NS_PULLEY_HOSTCALL: u32 = 2;
+
 /// A record of a relocation to perform.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Relocation {
@@ -290,6 +293,7 @@ fn mach_reloc_to_reloc(
                 NS_WASMTIME_BUILTIN => {
                     RelocationTarget::Builtin(BuiltinFunctionIndex::from_u32(name.index))
                 }
+                NS_PULLEY_HOSTCALL => RelocationTarget::PulleyHostcall(name.index),
                 _ => panic!("unknown namespace {}", name.namespace),
             }
         }

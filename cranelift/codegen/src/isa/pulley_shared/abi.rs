@@ -541,36 +541,29 @@ where
         insts
     }
 
-    fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo<()>) -> SmallVec<[Self::I; 2]> {
-        if info.callee_conv == isa::CallConv::Tail || info.callee_conv == isa::CallConv::Fast {
-            match &dest {
-                &CallDest::ExtName(ref name, RelocDistance::Near) => smallvec![Inst::Call {
-                    info: Box::new(info.map(|()| name.clone()))
-                }
-                .into()],
-                &CallDest::ExtName(ref name, RelocDistance::Far) => smallvec![
-                    Inst::LoadExtName {
-                        dst: WritableXReg::try_from(tmp).unwrap(),
-                        name: Box::new(name.clone()),
-                        offset: 0,
-                    }
-                    .into(),
-                    Inst::IndirectCall {
-                        info: Box::new(info.map(|()| XReg::new(tmp.to_reg()).unwrap()))
-                    }
-                    .into(),
-                ],
-                &CallDest::Reg(reg) => smallvec![Inst::IndirectCall {
-                    info: Box::new(info.map(|()| XReg::new(*reg).unwrap()))
-                }
-                .into()],
+    fn gen_call(
+        dest: &CallDest,
+        _tmp: Writable<Reg>,
+        info: CallInfo<()>,
+    ) -> SmallVec<[Self::I; 2]> {
+        match dest {
+            // "near" calls are pulley->pulley calls so they use a normal "call"
+            // opcode
+            CallDest::ExtName(name, RelocDistance::Near) => smallvec![Inst::Call {
+                info: Box::new(info.map(|()| name.clone()))
             }
-        } else {
-            todo!(
-                "host calls? callee_conv = {:?}; caller_conv = {:?}",
-                info.callee_conv,
-                info.caller_conv,
-            )
+            .into()],
+            // "far" calls are pulley->host calls so they use a different opcode
+            // which is lowered with a special relocation in the backend.
+            CallDest::ExtName(name, RelocDistance::Far) => smallvec![Inst::IndirectCallHost {
+                info: Box::new(info.map(|()| name.clone()))
+            }
+            .into()],
+            // Indirect calls are all assumed to be pulley->pulley calls
+            CallDest::Reg(reg) => smallvec![Inst::IndirectCall {
+                info: Box::new(info.map(|()| XReg::new(*reg).unwrap()))
+            }
+            .into()],
         }
     }
 

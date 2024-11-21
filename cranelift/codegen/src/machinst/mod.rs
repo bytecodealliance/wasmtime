@@ -554,6 +554,10 @@ pub trait TextSectionBuilder {
     /// A debug-only option which is used to for
     fn force_veneers(&mut self);
 
+    /// Write the `data` provided at `offset`, for example when resolving a
+    /// relocation.
+    fn write(&mut self, offset: u64, data: &[u8]);
+
     /// Completes this text section, filling out any final details, and returns
     /// the bytes of the text section.
     fn finish(&mut self, ctrl_plane: &mut ControlPlane) -> Vec<u8>;
