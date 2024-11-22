@@ -88,12 +88,28 @@ pub enum XReg {
 }
 
 impl XReg {
+    /// Index of the first "special" register.
+    pub const SPECIAL_START: u8 = XReg::sp as u8;
+
     /// Is this `x` register a special register?
     pub fn is_special(self) -> bool {
         matches!(
             self,
             Self::sp | Self::lr | Self::fp | Self::spilltmp0 | Self::spilltmp1
         )
+    }
+}
+
+#[test]
+fn assert_special_start_is_right() {
+    for i in 0..XReg::SPECIAL_START {
+        assert!(!XReg::new(i).unwrap().is_special());
+    }
+    for i in XReg::SPECIAL_START.. {
+        match XReg::new(i) {
+            Some(r) => assert!(r.is_special()),
+            None => break,
+        }
     }
 }
 
