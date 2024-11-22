@@ -76,6 +76,8 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
+#[cfg(feature = "signals-based-traps")]
+use crate::runtime::vm::HostAlignedByteCount;
 use crate::runtime::vm::{MemoryImage, MemoryImageSlot, VMStore, WaitResult};
 use alloc::sync::Arc;
 use core::ops::Range;
@@ -481,9 +483,11 @@ impl LocalMemory {
         let memory_image = match memory_image {
             #[cfg(feature = "signals-based-traps")]
             Some(image) => {
+                let accessible = HostAlignedByteCount::new(alloc.byte_size())
+                    .expect("memory allocation is page-aligned");
                 let mut slot = MemoryImageSlot::create(
                     alloc.base_ptr().cast(),
-                    alloc.byte_size(),
+                    accessible,
                     alloc.byte_capacity(),
                 );
                 // On drop, we will unmap our mmap'd range that this slot was
