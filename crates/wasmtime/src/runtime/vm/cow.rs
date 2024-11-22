@@ -545,28 +545,7 @@ impl MemoryImageSlot {
     ) {
         match &self.image {
             Some(image) => {
-                let image_end = image
-                    .linear_memory_offset
-                    .checked_add(image.len)
-                    .expect("image is in bounds");
-                let mem_after_image = self
-                    .accessible
-                    .checked_sub(image_end)
-                    .expect("image_end falls before self.accessible");
-
-                let keep_resident_minus_image_start =
-                    if let Ok(excess) = keep_resident.checked_sub(image.linear_memory_offset) {
-                        // The .is_zero() check is carried over from a previous
-                        // iteration of the logic, which had > 0 and <= 0 cases.
-                        //
-                        // XXX: are the two paths identical? If so, the is_zero
-                        // check can go away.
-                        (!excess.is_zero()).then_some(excess)
-                    } else {
-                        None
-                    };
-
-                if let Some(excess) = keep_resident_minus_image_start {
+                if image.linear_memory_offset < keep_resident {
                     // If the image starts below the `keep_resident` then
                     // memory looks something like this:
                     //
@@ -597,6 +576,19 @@ impl MemoryImageSlot {
                     // zero bytes large. Furthermore `madvise (4)` may also be
                     // zero bytes large.
 
+                    let image_end = image
+                        .linear_memory_offset
+                        .checked_add(image.len)
+                        .expect("image is in bounds");
+                    let mem_after_image = self
+                        .accessible
+                        .checked_sub(image_end)
+                        .expect("image_end falls before self.accessible");
+                    let excess = keep_resident
+                        .checked_sub(image.linear_memory_offset)
+                        .expect(
+                            "if statement checks that keep_resident > image.linear_memory_offset",
+                        );
                     let remaining_memset = excess.min(mem_after_image);
 
                     // This is memset (1)
@@ -658,7 +650,7 @@ impl MemoryImageSlot {
                         keep_resident,
                         self.accessible
                             .checked_sub(keep_resident)
-                            .expect("XXX what should happen if this underflows?"),
+                            .expect("keep_resident is a subset of accessible memory"),
                         decommit,
                     );
                 };
