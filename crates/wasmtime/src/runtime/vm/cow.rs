@@ -745,9 +745,9 @@ impl Drop for MemoryImageSlot {
 #[cfg(all(test, target_os = "linux", not(miri)))]
 mod test {
     use super::*;
-    use crate::runtime::vm::host_page_size;
-    use crate::runtime::vm::mmap::Mmap;
+    use crate::runtime::vm::mmap::{AlignedLength, Mmap};
     use crate::runtime::vm::sys::vm::decommit_pages;
+    use crate::{runtime::vm::host_page_size, vm::HostAlignedByteCount};
     use std::sync::Arc;
     use wasmtime_environ::{IndexType, Limits, Memory};
 
@@ -776,6 +776,11 @@ mod test {
         }
     }
 
+    fn mmap_4mib_inaccessible() -> Mmap<AlignedLength> {
+        let four_mib = HostAlignedByteCount::new(4 << 20).expect("4 MiB is page aligned");
+        Mmap::accessible_reserved(HostAlignedByteCount::ZERO, four_mib).unwrap()
+    }
+
     #[test]
     fn instantiate_no_image() {
         let ty = dummy_memory();
@@ -784,7 +789,7 @@ mod test {
             ..Tunables::default_miri()
         };
         // 4 MiB mmap'd area, not accessible
-        let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
+        let mut mmap = mmap_4mib_inaccessible();
         // Create a MemoryImageSlot on top of it
         let mut memfd = MemoryImageSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
         memfd.no_clear_on_drop();
@@ -824,7 +829,7 @@ mod test {
             ..Tunables::default_miri()
         };
         // 4 MiB mmap'd area, not accessible
-        let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
+        let mut mmap = mmap_4mib_inaccessible();
         // Create a MemoryImageSlot on top of it
         let mut memfd = MemoryImageSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
         memfd.no_clear_on_drop();
@@ -896,7 +901,7 @@ mod test {
             memory_reservation: 100 << 16,
             ..Tunables::default_miri()
         };
-        let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
+        let mut mmap = mmap_4mib_inaccessible();
         let mut memfd = MemoryImageSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
         memfd.no_clear_on_drop();
 
@@ -951,7 +956,7 @@ mod test {
             ..Tunables::default_miri()
         };
 
-        let mut mmap = Mmap::accessible_reserved(0, 4 << 20).unwrap();
+        let mut mmap = mmap_4mib_inaccessible();
         let mut memfd = MemoryImageSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
         memfd.no_clear_on_drop();
         let image = Arc::new(create_memfd_with_data(page_size, &[1, 2, 3, 4]).unwrap());

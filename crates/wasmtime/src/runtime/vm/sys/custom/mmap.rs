@@ -1,7 +1,7 @@
 use super::cvt;
 use crate::prelude::*;
 use crate::runtime::vm::sys::capi;
-use crate::runtime::vm::SendSyncPtr;
+use crate::runtime::vm::{HostAlignedByteCount, SendSyncPtr};
 use core::ops::Range;
 use core::ptr::{self, NonNull};
 #[cfg(feature = "std")]
@@ -24,20 +24,24 @@ impl Mmap {
         }
     }
 
-    pub fn new(size: usize) -> Result<Self> {
+    pub fn new(size: HostAlignedByteCount) -> Result<Self> {
         let mut ptr = ptr::null_mut();
         cvt(unsafe {
-            capi::wasmtime_mmap_new(size, capi::PROT_READ | capi::PROT_WRITE, &mut ptr)
+            capi::wasmtime_mmap_new(
+                size.byte_count(),
+                capi::PROT_READ | capi::PROT_WRITE,
+                &mut ptr,
+            )
         })?;
-        let memory = ptr::slice_from_raw_parts_mut(ptr.cast(), size);
+        let memory = ptr::slice_from_raw_parts_mut(ptr.cast(), size.byte_count());
         let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
         Ok(Mmap { memory })
     }
 
-    pub fn reserve(size: usize) -> Result<Self> {
+    pub fn reserve(size: HostAlignedByteCount) -> Result<Self> {
         let mut ptr = ptr::null_mut();
-        cvt(unsafe { capi::wasmtime_mmap_new(size, 0, &mut ptr) })?;
-        let memory = ptr::slice_from_raw_parts_mut(ptr.cast(), size);
+        cvt(unsafe { capi::wasmtime_mmap_new(size.byte_count(), 0, &mut ptr) })?;
+        let memory = ptr::slice_from_raw_parts_mut(ptr.cast(), size.byte_count());
         let memory = SendSyncPtr::new(NonNull::new(memory).unwrap());
         Ok(Mmap { memory })
     }
@@ -47,12 +51,16 @@ impl Mmap {
         anyhow::bail!("not supported on this platform");
     }
 
-    pub fn make_accessible(&mut self, start: usize, len: usize) -> Result<()> {
+    pub fn make_accessible(
+        &mut self,
+        start: HostAlignedByteCount,
+        len: HostAlignedByteCount,
+    ) -> Result<()> {
         let ptr = self.memory.as_ptr();
         unsafe {
             cvt(capi::wasmtime_mprotect(
-                ptr.byte_add(start).cast(),
-                len,
+                ptr.byte_add(start.byte_count()).cast(),
+                len.byte_count(),
                 capi::PROT_READ | capi::PROT_WRITE,
             ))?;
         }
