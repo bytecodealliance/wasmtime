@@ -473,6 +473,7 @@ impl<'a> Module<'a> {
                 ValType::I32,
                 ValType::I32,
                 ValType::I32,
+                ValType::I32,
             ],
             &[],
             Import::AsyncEnterCall,

@@ -697,7 +697,7 @@ pub(crate) mod concurrent {
         },
         wasmtime_environ::component::{
             RuntimeComponentInstanceIndex, StringEncoding, TypeErrorContextTableIndex,
-            TypeFutureTableIndex, TypeStreamTableIndex,
+            TypeFutureTableIndex, TypeStreamTableIndex, TypeTaskReturnIndex,
         },
     };
 
@@ -748,6 +748,7 @@ pub(crate) mod concurrent {
 
     pub(crate) extern "C" fn task_return<T>(
         _cx: *mut VMOpaqueContext,
+        _ty: TypeTaskReturnIndex,
         _storage: *mut MaybeUninit<ValRaw>,
         _storage_len: usize,
     ) {
@@ -791,6 +792,7 @@ pub(crate) mod concurrent {
         _start: *mut VMFuncRef,
         _return_: *mut VMFuncRef,
         _caller_instance: RuntimeComponentInstanceIndex,
+        _task_return_type: TypeTaskReturnIndex,
         _params: u32,
         _results: u32,
     ) {

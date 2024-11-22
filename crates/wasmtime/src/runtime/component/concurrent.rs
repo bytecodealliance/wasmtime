@@ -33,8 +33,8 @@ use {
     },
     table::{Table, TableId},
     wasmtime_environ::component::{
-        InterfaceType, RuntimeComponentInstanceIndex, StringEncoding, MAX_FLAT_PARAMS,
-        MAX_FLAT_RESULTS,
+        InterfaceType, RuntimeComponentInstanceIndex, StringEncoding, TypeTaskReturnIndex,
+        MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
     },
     wasmtime_fiber::{Fiber, Suspend},
 };
@@ -138,7 +138,7 @@ struct Callback {
 
 struct GuestTask {
     lower_params: Option<RawLower>,
-    lift_result: Option<RawLift>,
+    lift_result: Option<(RawLift, TypeTaskReturnIndex)>,
     result: Option<LiftedResult>,
     callback: Option<Callback>,
     events: VecDeque<(u32, AnyTask, u32)>,
@@ -1313,6 +1313,7 @@ pub(crate) extern "C" fn task_backpressure<T>(
 
 pub(crate) extern "C" fn task_return<T>(
     cx: *mut VMOpaqueContext,
+    ty: TypeTaskReturnIndex,
     storage: *mut MaybeUninit<ValRaw>,
     storage_len: usize,
 ) {
@@ -1323,13 +1324,17 @@ pub(crate) extern "C" fn task_return<T>(
             let instance = (*cx).instance();
             let mut cx = StoreContextMut::<T>(&mut *(*instance).store().cast());
             let guest_task = cx.concurrent_state().guest_task.unwrap();
-            let lift = cx
+            let (lift, lift_ty) = cx
                 .concurrent_state()
                 .table
                 .get_mut(guest_task)?
                 .lift_result
                 .take()
                 .ok_or_else(|| anyhow!("`task.return` called more than once"))?;
+
+            if ty != lift_ty {
+                bail!("invalid `task.return` signature for current task");
+            }
 
             assert!(cx
                 .concurrent_state()
@@ -1431,6 +1436,7 @@ pub(crate) extern "C" fn async_enter<T>(
     start: *mut VMFuncRef,
     return_: *mut VMFuncRef,
     caller_instance: RuntimeComponentInstanceIndex,
+    task_return_type: TypeTaskReturnIndex,
     params: u32,
     results: u32,
 ) {
@@ -1467,27 +1473,30 @@ pub(crate) extern "C" fn async_enter<T>(
                     }
                     Ok(())
                 })),
-                lift_result: Some(Box::new(move |cx, src| {
-                    let mut cx = StoreContextMut::<T>(&mut *cx.cast());
-                    let mut my_src = src.to_owned(); // TODO: use stack to avoid allocation?
-                    my_src.push(ValRaw::u32(results));
-                    crate::Func::call_unchecked_raw(
-                        &mut cx,
-                        return_.as_non_null(),
-                        my_src.as_mut_slice(),
-                    )?;
-                    let task = cx.concurrent_state().guest_task.unwrap();
-                    if let Some(rep) = old_task_rep {
-                        maybe_send_event(
-                            cx,
-                            TableId::new(rep),
-                            events::EVENT_CALL_RETURNED,
-                            AnyTask::Guest(task),
-                            0,
+                lift_result: Some((
+                    Box::new(move |cx, src| {
+                        let mut cx = StoreContextMut::<T>(&mut *cx.cast());
+                        let mut my_src = src.to_owned(); // TODO: use stack to avoid allocation?
+                        my_src.push(ValRaw::u32(results));
+                        crate::Func::call_unchecked_raw(
+                            &mut cx,
+                            return_.as_non_null(),
+                            my_src.as_mut_slice(),
                         )?;
-                    }
-                    Ok(None)
-                })),
+                        let task = cx.concurrent_state().guest_task.unwrap();
+                        if let Some(rep) = old_task_rep {
+                            maybe_send_event(
+                                cx,
+                                TableId::new(rep),
+                                events::EVENT_CALL_RETURNED,
+                                AnyTask::Guest(task),
+                                0,
+                            )?;
+                        }
+                        Ok(None)
+                    }),
+                    task_return_type,
+                )),
                 result: None,
                 callback: None,
                 caller: old_task,
@@ -1587,7 +1596,7 @@ pub(crate) extern "C" fn async_exit<T>(
                 let mut fiber = make_fiber(&mut cx, callee_instance, move |cx| {
                     let (storage, mut cx) = call(cx)?;
 
-                    let lift = cx
+                    let (lift, _) = cx
                         .concurrent_state()
                         .table
                         .get_mut(guest_task)?
@@ -1728,6 +1737,7 @@ pub(crate) fn call<'a, T: Send, LowerParams: Copy, R: 'static>(
     lower_context: LiftLowerContext,
     lift_result: LiftFn,
     lift_context: LiftLowerContext,
+    task_return_type: TypeTaskReturnIndex,
     callback: NonNull<VMFuncRef>,
     callee: NonNull<VMFuncRef>,
     callee_instance: RuntimeComponentInstanceIndex,
@@ -1737,9 +1747,12 @@ pub(crate) fn call<'a, T: Send, LowerParams: Copy, R: 'static>(
     task.lower_params = Some(Box::new(for_any_lower(move |store, params| {
         lower_params(lower_context, store, params)
     })) as RawLower);
-    task.lift_result = Some(Box::new(for_any_lift(move |store, result| {
-        lift_result(lift_context, store, result)
-    })) as RawLift);
+    task.lift_result = Some((
+        Box::new(for_any_lift(move |store, result| {
+            lift_result(lift_context, store, result)
+        })) as RawLift,
+        task_return_type,
+    ));
 
     let state = &mut store
         .concurrent_state()

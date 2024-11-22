@@ -419,11 +419,15 @@ impl Func {
         use crate::component::concurrent;
 
         let me = self.0;
+        let func_data = &store.0[self.0];
+        // TODO: Check to see if the callee is using the memory64 ABI, in which case we must use
+        // task_return_type64.  How do we check that?
+        let task_return_type = func_data.types[func_data.ty].task_return_type32;
         let FuncData {
             export,
             component_instance,
             ..
-        } = store.0[self.0];
+        } = *func_data;
         let callback = store.0[me]
             .options
             .callback
@@ -449,6 +453,7 @@ impl Func {
                 pointer: Box::into_raw(Box::new((me, lift))) as _,
                 dropper: drop_context::<(Stored<FuncData>, Lift)>,
             },
+            task_return_type,
             callback,
             export.func_ref,
             component_instance,

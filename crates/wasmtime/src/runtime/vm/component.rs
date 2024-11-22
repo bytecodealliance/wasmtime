@@ -145,6 +145,7 @@ pub type VMTaskBackpressureCallback = extern "C" fn(
 /// Type signature for the host-defined `task.return` built-in function.
 pub type VMTaskReturnCallback = extern "C" fn(
     vmctx: *mut VMOpaqueContext,
+    ty: TypeTaskReturnIndex,
     args_and_results: *mut mem::MaybeUninit<ValRaw>,
     nargs_and_results: usize,
 );
@@ -172,6 +173,7 @@ pub type VMAsyncEnterCallback = extern "C" fn(
     start: *mut VMFuncRef,
     return_: *mut VMFuncRef,
     caller_instance: RuntimeComponentInstanceIndex,
+    task_return_type: TypeTaskReturnIndex,
     params: u32,
     results: u32,
 );

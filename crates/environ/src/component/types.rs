@@ -109,6 +109,9 @@ indices! {
     /// ownership of error contexts within each (sub)component instance.
     pub struct TypeErrorContextTableIndex(u32);
 
+    /// Index pointing to an interned `task.return` type within a component.
+    pub struct TypeTaskReturnIndex(u32);
+
     /// Index pointing to a resource table within a component.
     ///
     /// This is a Wasmtime-specific type index which isn't part of the component
@@ -265,6 +268,7 @@ pub struct ComponentTypes {
     pub(super) streams: PrimaryMap<TypeStreamIndex, TypeStream>,
     pub(super) stream_tables: PrimaryMap<TypeStreamTableIndex, TypeStreamTable>,
     pub(super) error_context_tables: PrimaryMap<TypeErrorContextTableIndex, TypeErrorContextTable>,
+    pub(super) task_returns: PrimaryMap<TypeTaskReturnIndex, TypeTaskReturn>,
 }
 
 impl ComponentTypes {
@@ -464,6 +468,20 @@ pub struct TypeFunc {
     pub params: TypeTupleIndex,
     /// Results of the function represented as a tuple.
     pub results: TypeTupleIndex,
+    /// Expected core func type for memory32 `task.return` calls for this function.
+    pub task_return_type32: TypeTaskReturnIndex,
+    /// Expected core func type for memory64 `task.return` calls for this function.
+    pub task_return_type64: TypeTaskReturnIndex,
+}
+
+/// A core type representing the expected `task.return` signature for a
+/// component function.
+#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
+pub struct TypeTaskReturn {
+    /// Core type parameters for the signature.
+    ///
+    /// Note that `task.return` never returns results.
+    pub params: Vec<FlatType>,
 }
 
 /// All possible interface types that values can have.
@@ -1126,7 +1144,7 @@ impl FlatTypes<'_> {
 // Note that this is intentionally duplicated here to keep the size to 1 byte
 // regardless to changes in the core wasm type system since this will only
 // ever use integers/floats for the foreseeable future.
-#[derive(PartialEq, Eq, Copy, Clone)]
+#[derive(Serialize, Deserialize, Hash, Debug, PartialEq, Eq, Copy, Clone)]
 #[allow(missing_docs)]
 pub enum FlatType {
     I32,

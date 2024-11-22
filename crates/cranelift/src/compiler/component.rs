@@ -287,6 +287,7 @@ impl<'a> TrampolineCompiler<'a> {
                         ir::AbiParam::new(ir::types::I32),
                         ir::AbiParam::new(ir::types::I32),
                         ir::AbiParam::new(ir::types::I32),
+                        ir::AbiParam::new(ir::types::I32),
                     ],
                     Vec::new(),
                 )
@@ -393,6 +394,37 @@ impl<'a> TrampolineCompiler<'a> {
         // vmctx: *mut VMComponentContext
         host_sig.params.push(ir::AbiParam::new(pointer_type));
         callee_args.push(vmctx);
+
+        let params = self.types[self.signature]
+            .unwrap_func()
+            .params()
+            .iter()
+            .map(|&v| {
+                Some(match v {
+                    WasmValType::I32 => FlatType::I32,
+                    WasmValType::I64 => FlatType::I64,
+                    WasmValType::F32 => FlatType::F32,
+                    WasmValType::F64 => FlatType::F64,
+                    _ => return None,
+                })
+            })
+            .collect::<Option<_>>();
+
+        host_sig.params.push(ir::AbiParam::new(ir::types::I32));
+        callee_args.push(
+            self.builder.ins().iconst(
+                ir::types::I32,
+                i64::from(
+                    params
+                        .and_then(|params| {
+                            self.types
+                                .get_task_return_type(&TypeTaskReturn { params })
+                                .map(|v| v.as_u32())
+                        })
+                        .unwrap_or(u32::MAX),
+                ),
+            ),
+        );
 
         // storage: *mut ValRaw
         host_sig.params.push(ir::AbiParam::new(pointer_type));
