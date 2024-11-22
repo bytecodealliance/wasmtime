@@ -27,7 +27,10 @@ fn assert_disas_with_disassembler(dis: &mut disas::Disassembler<'_>, expected: &
 #[track_caller]
 fn assert_disas(ops: &[Op], expected: &str) {
     let bytecode = encoded(ops);
-    assert_disas_with_disassembler(&mut disas::Disassembler::new(&bytecode), expected);
+    assert_disas_with_disassembler(
+        &mut disas::Disassembler::new(&bytecode).hexdump(false),
+        expected,
+    );
 }
 
 #[test]
@@ -49,10 +52,10 @@ fn simple() {
             Op::Ret(Ret {}),
         ],
         r#"
-       0: 35                              push_frame
-       1: 18 00 04                        xadd32 x0, x0, x1
-       4: 36                              pop_frame
-       5: 00                              ret
+       0: push_frame
+       1: xadd32 x0, x0, x1
+       4: pop_frame
+       5: ret
         "#,
     );
 }
@@ -82,12 +85,12 @@ fn push_pop_many() {
             Op::Ret(Ret {}),
         ],
         r#"
-       0: 35                              push_frame
-       1: 38 1f 00 00 00                  xpush32_many x0, x1, x2, x3, x4
-       6: 18 00 04                        xadd32 x0, x0, x1
-       9: 3c 1f 00 00 00                  xpop32_many x0, x1, x2, x3, x4
-       e: 36                              pop_frame
-       f: 00                              ret
+       0: push_frame
+       1: xpush32_many x0, x1, x2, x3, x4
+       6: xadd32 x0, x0, x1
+       9: xpop32_many x0, x1, x2, x3, x4
+       e: pop_frame
+       f: ret
         "#,
     );
 }
@@ -111,41 +114,14 @@ fn no_offsets() {
     ]);
 
     assert_disas_with_disassembler(
-        disas::Disassembler::new(&bytecode).offsets(false),
+        disas::Disassembler::new(&bytecode)
+            .offsets(false)
+            .hexdump(false),
         r#"
-35                              push_frame
-18 00 04                        xadd32 x0, x0, x1
-36                              pop_frame
-00                              ret
-        "#,
-    );
-}
-
-#[test]
-fn no_hexdump() {
-    let bytecode = encoded(&[
-        // Prologue.
-        Op::PushFrame(PushFrame {}),
-        // Function body.
-        Op::Xadd32(Xadd32 {
-            operands: BinaryOperands {
-                dst: XReg::x0,
-                src1: XReg::x0,
-                src2: XReg::x1,
-            },
-        }),
-        // Epilogue.
-        Op::PopFrame(PopFrame {}),
-        Op::Ret(Ret {}),
-    ]);
-
-    assert_disas_with_disassembler(
-        disas::Disassembler::new(&bytecode).hexdump(false),
-        r#"
-       0: push_frame
-       1: xadd32 x0, x0, x1
-       4: pop_frame
-       5: ret
+push_frame
+xadd32 x0, x0, x1
+pop_frame
+ret
         "#,
     );
 }
