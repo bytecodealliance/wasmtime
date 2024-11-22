@@ -230,3 +230,14 @@
                                  src
                                  ty
                                  flags)))
+
+;;;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (stack_addr stack_slot offset))
+      (lower_stack_addr stack_slot offset))
+
+(decl lower_stack_addr (StackSlot Offset32) XReg)
+(rule (lower_stack_addr stack_slot offset)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (abi_stackslot_addr dst stack_slot offset))))
+        dst))
