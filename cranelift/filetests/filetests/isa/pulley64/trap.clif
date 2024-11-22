@@ -31,7 +31,7 @@ block0(v0: i64):
 ;        0: 14 02 2a                        xconst8 x2, 42
 ;        3: 0b 00 02 08 00 00 00            br_if_xeq64 x0, x2, 0x8    // target = 0xb
 ;        a: 00                              ret
-;        b: 00                              ret
+;        b: 43 00 00                        trap
 
 function %trapz(i64) {
 block0(v0: i64):
@@ -51,7 +51,7 @@ block0(v0: i64):
 ;        0: 14 02 2a                        xconst8 x2, 42
 ;        3: 0c 00 02 08 00 00 00            br_if_xneq64 x0, x2, 0x8    // target = 0xb
 ;        a: 00                              ret
-;        b: 00                              ret
+;        b: 43 00 00                        trap
 
 function %trapnz_icmp_fold(i64) {
 block0(v0: i64):
@@ -71,7 +71,7 @@ block0(v0: i64):
 ;        0: 14 02 2a                        xconst8 x2, 42
 ;        3: 0b 00 02 08 00 00 00            br_if_xeq64 x0, x2, 0x8    // target = 0xb
 ;        a: 00                              ret
-;        b: 00                              ret
+;        b: 43 00 00                        trap
 
 function %trapz_icmp_fold(i64) {
 block0(v0: i64):
@@ -91,7 +91,7 @@ block0(v0: i64):
 ;        0: 14 02 2a                        xconst8 x2, 42
 ;        3: 0c 00 02 08 00 00 00            br_if_xneq64 x0, x2, 0x8    // target = 0xb
 ;        a: 00                              ret
-;        b: 00                              ret
+;        b: 43 00 00                        trap
 
 function %trapnz_iconst_fold(i64) {
 block0(v0: i64):
@@ -126,7 +126,7 @@ block2:
 ;        a: 14 06 00                        xconst8 x6, 0
 ;        d: 0c 05 06 08 00 00 00            br_if_xneq64 x5, x6, 0x8    // target = 0x15
 ;       14: 00                              ret
-;       15: 00                              ret
+;       15: 43 00 00                        trap
 
 function %trapz_iconst_fold(i64) {
 block0(v0: i64):
@@ -161,5 +161,5 @@ block2:
 ;        c: 0b 04 05 09 00 00 00            br_if_xeq64 x4, x5, 0x9    // target = 0x15
 ;       13: 00                              ret
 ;       14: 00                              ret
-;       15: 00                              ret
+;       15: 43 00 00                        trap
 

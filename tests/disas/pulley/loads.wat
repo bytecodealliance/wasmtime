@@ -31,7 +31,7 @@
 ;;       xconst8 spilltmp0, 16
 ;;       xadd32 sp, sp, spilltmp0
 ;;       ret
-;;   33: ret
+;;   33: trap
 ;;
 ;; wasm[0]::function[1]::i64:
 ;;       xconst8 spilltmp0, -16
@@ -49,4 +49,4 @@
 ;;       xconst8 spilltmp0, 16
 ;;       xadd32 sp, sp, spilltmp0
 ;;       ret
-;;   33: ret
+;;   33: trap
