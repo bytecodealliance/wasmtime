@@ -563,44 +563,26 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     #[cfg(feature = "wmemcheck")]
-    fn hook_malloc_exit(&mut self, builder: &mut FunctionBuilder, retvals: &[ir::Value]) {
-        let check_malloc = self.builtin_functions.check_malloc(builder.func);
+    fn hook_memcheck_exit(
+        &mut self,
+        builder: &mut FunctionBuilder,
+        builtin_memcheck_check: ir::FuncRef,
+        expected_arg_count: usize,
+        retvals: &[ir::Value],
+    ) {
         let vmctx = self.vmctx_val(&mut builder.cursor());
         let func_args = builder
             .func
             .dfg
             .block_params(builder.func.layout.entry_block().unwrap());
-        let len = if func_args.len() < 3 {
+        if func_args.len() < expected_arg_count + 2 {
+            // Assume the first n arguments are the expected ones
             return;
-        } else {
-            // If a function named `malloc` has at least one argument, we assume the
-            // first argument is the requested allocation size.
-            func_args[2]
-        };
-        let retval = if retvals.len() < 1 {
-            return;
-        } else {
-            retvals[0]
-        };
-        builder.ins().call(check_malloc, &[vmctx, retval, len]);
-    }
-
-    #[cfg(feature = "wmemcheck")]
-    fn hook_free_exit(&mut self, builder: &mut FunctionBuilder) {
-        let check_free = self.builtin_functions.check_free(builder.func);
-        let vmctx = self.vmctx_val(&mut builder.cursor());
-        let func_args = builder
-            .func
-            .dfg
-            .block_params(builder.func.layout.entry_block().unwrap());
-        let ptr = if func_args.len() < 3 {
-            return;
-        } else {
-            // If a function named `free` has at least one argument, we assume the
-            // first argument is a pointer to memory.
-            func_args[2]
-        };
-        builder.ins().call(check_free, &[vmctx, ptr]);
+        }
+        let mut args = vec![vmctx];
+        args.extend_from_slice(&retvals);
+        args.extend_from_slice(&func_args[2..2 + expected_arg_count]);
+        builder.ins().call(builtin_memcheck_check, &args);
     }
 
     fn epoch_ptr(&mut self, builder: &mut FunctionBuilder<'_>) -> ir::Value {
@@ -927,17 +909,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     #[cfg(feature = "wmemcheck")]
-    fn check_malloc_start(&mut self, builder: &mut FunctionBuilder) {
-        let malloc_start = self.builtin_functions.malloc_start(builder.func);
+    fn check_allocator_start(&mut self, builder: &mut FunctionBuilder) {
+        let allocator_start = self.builtin_functions.allocator_start(builder.func);
         let vmctx = self.vmctx_val(&mut builder.cursor());
-        builder.ins().call(malloc_start, &[vmctx]);
-    }
-
-    #[cfg(feature = "wmemcheck")]
-    fn check_free_start(&mut self, builder: &mut FunctionBuilder) {
-        let free_start = self.builtin_functions.free_start(builder.func);
-        let vmctx = self.vmctx_val(&mut builder.cursor());
-        builder.ins().call(free_start, &[vmctx]);
+        builder.ins().call(allocator_start, &[vmctx]);
     }
 
     #[cfg(feature = "wmemcheck")]
@@ -3088,11 +3063,15 @@ impl<'module_environment> crate::translate::FuncEnvironment
 
         #[cfg(feature = "wmemcheck")]
         if self.wmemcheck {
-            let func_name = self.current_func_name(builder);
-            if func_name == Some("malloc") {
-                self.check_malloc_start(builder);
-            } else if func_name == Some("free") {
-                self.check_free_start(builder);
+            match self.current_func_name(builder) {
+                Some("malloc")
+                | Some("free")
+                | Some("calloc")
+                | Some("realloc")
+                | Some("posix_memalign")
+                | Some("aligned_alloc")
+                | Some("malloc_usable_size") => self.check_allocator_start(builder),
+                _ => (),
             }
         }
 
@@ -3141,11 +3120,41 @@ impl<'module_environment> crate::translate::FuncEnvironment
     #[cfg(feature = "wmemcheck")]
     fn handle_before_return(&mut self, retvals: &[ir::Value], builder: &mut FunctionBuilder) {
         if self.wmemcheck {
-            let func_name = self.current_func_name(builder);
-            if func_name == Some("malloc") {
-                self.hook_malloc_exit(builder, retvals);
-            } else if func_name == Some("free") {
-                self.hook_free_exit(builder);
+            let name = self.current_func_name(builder);
+            match name {
+                Some("malloc") => {
+                    let check_malloc = self.builtin_functions.check_malloc(builder.func);
+                    self.hook_memcheck_exit(builder, check_malloc, 1, retvals)
+                }
+                Some("free") => {
+                    let check_free = self.builtin_functions.check_free(builder.func);
+                    self.hook_memcheck_exit(builder, check_free, 1, &[])
+                }
+                Some("calloc") => {
+                    let check_calloc = self.builtin_functions.check_calloc(builder.func);
+                    self.hook_memcheck_exit(builder, check_calloc, 2, retvals)
+                }
+                Some("realloc") => {
+                    let check_realloc = self.builtin_functions.check_realloc(builder.func);
+                    self.hook_memcheck_exit(builder, check_realloc, 2, retvals)
+                }
+                Some("posix_memalign") => {
+                    let check_posix_memalign =
+                        self.builtin_functions.check_posix_memalign(builder.func);
+                    self.hook_memcheck_exit(builder, check_posix_memalign, 3, retvals)
+                }
+                Some("aligned_alloc") => {
+                    let check_aligned_alloc =
+                        self.builtin_functions.check_aligned_alloc(builder.func);
+                    self.hook_memcheck_exit(builder, check_aligned_alloc, 2, retvals)
+                }
+                Some("malloc_usable_size") => {
+                    let check_malloc_usable_size = self
+                        .builtin_functions
+                        .check_malloc_usable_size(builder.func);
+                    self.hook_memcheck_exit(builder, check_malloc_usable_size, 1, retvals)
+                }
+                _ => (),
             }
         }
     }
