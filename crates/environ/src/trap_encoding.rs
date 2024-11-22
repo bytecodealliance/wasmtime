@@ -90,7 +90,7 @@ pub enum Trap {
     CannotEnterComponent,
 
     /// Async-lifted export failed to produce a result by calling `task.return`
-    /// before returning `STATUS_DONE`.
+    /// before returning `STATUS_DONE` and/or after all host tasks completed.
     NoAsyncResult, // if adding a variant here be sure to update the `check!` macro below
 }
 

@@ -129,6 +129,7 @@ impl Parse for Config {
                         opts.async_ = val;
                     }
                     Opt::ConcurrentImports(val) => opts.concurrent_imports = val,
+                    Opt::ConcurrentExports(val) => opts.concurrent_exports = val,
                     Opt::TrappableErrorType(val) => opts.trappable_error_type = val,
                     Opt::TrappableImports(val) => opts.trappable_imports = val,
                     Opt::Ownership(val) => opts.ownership = val,
@@ -297,6 +298,7 @@ mod kw {
     syn::custom_keyword!(wasmtime_crate);
     syn::custom_keyword!(include_generated_code_from_file);
     syn::custom_keyword!(concurrent_imports);
+    syn::custom_keyword!(concurrent_exports);
     syn::custom_keyword!(debug);
 }
 
@@ -319,6 +321,7 @@ enum Opt {
     WasmtimeCrate(syn::Path),
     IncludeGeneratedCodeFromFile(bool),
     ConcurrentImports(bool),
+    ConcurrentExports(bool),
     Debug(bool),
 }
 
@@ -407,6 +410,10 @@ impl Parse for Opt {
             input.parse::<kw::concurrent_imports>()?;
             input.parse::<Token![:]>()?;
             Ok(Opt::ConcurrentImports(input.parse::<syn::LitBool>()?.value))
+        } else if l.peek(kw::concurrent_exports) {
+            input.parse::<kw::concurrent_exports>()?;
+            input.parse::<Token![:]>()?;
+            Ok(Opt::ConcurrentExports(input.parse::<syn::LitBool>()?.value))
         } else if l.peek(kw::ownership) {
             input.parse::<kw::ownership>()?;
             input.parse::<Token![:]>()?;

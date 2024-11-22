@@ -142,6 +142,13 @@ pub struct Opts {
     /// can make progress concurrently.
     pub concurrent_imports: bool,
 
+    /// Whether or not to use `call_concurrent` when generating code for
+    /// async exports.
+    ///
+    /// Unlike `call_async`, `call_concurrent` allows the caller to make
+    /// multiple concurrent calls on the same component instance.
+    pub concurrent_exports: bool,
+
     /// A list of "trappable errors" which are used to replace the `E` in
     /// `result<T, E>` found in WIT.
     pub trappable_error_type: Vec<TrappableError>,
@@ -3146,9 +3153,15 @@ impl<'a> InterfaceGenerator<'a> {
         // Exports must be async if anything could be async, it's just imports
         // that get to be optionally async/sync.
         let style = self.gen.opts.call_style();
-        let (async_, async__, await_) = match &style {
-            CallStyle::Async | CallStyle::Concurrent => ("async", "_async", ".await"),
-            CallStyle::Sync => ("", "", ""),
+        let (async_, async__, await_, concurrent) = match &style {
+            CallStyle::Async | CallStyle::Concurrent => {
+                if self.gen.opts.concurrent_exports {
+                    ("async", "INVALID", "INVALID", true)
+                } else {
+                    ("async", "_async", ".await", false)
+                }
+            }
+            CallStyle::Sync => ("", "", "", false),
         };
 
         self.rustdoc(&func.docs);
@@ -3173,14 +3186,21 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         uwrite!(self.src, ") -> {wt}::Result<");
+        if concurrent {
+            uwrite!(self.src, "{wt}::component::Promise<");
+        }
         self.print_result_ty(&func.results, TypeMode::Owned);
+        if concurrent {
+            uwrite!(self.src, ">");
+        }
 
         uwrite!(
             self.src,
             "> where <S as {wt}::AsContext>::Data: Send + 'static {{\n"
         );
 
-        if self.gen.opts.tracing {
+        // TODO: support tracing concurrent calls
+        if self.gen.opts.tracing && !concurrent {
             if let CallStyle::Async = &style {
                 self.src.push_str("use tracing::Instrument;\n");
             }
@@ -3231,46 +3251,65 @@ impl<'a> InterfaceGenerator<'a> {
             func_field_name(self.resolve, func),
         );
         self.src.push_str("};\n");
-        self.src.push_str("let (");
-        for (i, _) in func.results.iter_types().enumerate() {
-            uwrite!(self.src, "ret{},", i);
-        }
-        uwrite!(
-            self.src,
-            ") = callee.call{async__}(store.as_context_mut(), ("
-        );
-        for (i, _) in func.params.iter().enumerate() {
-            uwrite!(self.src, "arg{}, ", i);
-        }
 
-        let instrument = if matches!(&style, CallStyle::Async) && self.gen.opts.tracing {
-            ".instrument(span.clone())"
-        } else {
-            ""
-        };
-        uwriteln!(self.src, ")){instrument}{await_}?;");
+        if concurrent {
+            uwrite!(
+                self.src,
+                "let promise = callee.call_concurrent(store.as_context_mut(), ("
+            );
+            for (i, _) in func.params.iter().enumerate() {
+                uwrite!(self.src, "arg{i}, ");
+            }
+            self.src.push_str(")).await?;");
 
-        let instrument = if matches!(&style, CallStyle::Async) && self.gen.opts.tracing {
-            ".instrument(span)"
+            if func.results.iter_types().len() == 1 {
+                self.src.push_str("Ok(promise.map(|(v,)| v))\n");
+            } else {
+                self.src.push_str("Ok(promise)");
+            }
         } else {
-            ""
-        };
-        uwriteln!(
-            self.src,
-            "callee.post_return{async__}(store.as_context_mut()){instrument}{await_}?;"
-        );
-
-        self.src.push_str("Ok(");
-        if func.results.iter_types().len() == 1 {
-            self.src.push_str("ret0");
-        } else {
-            self.src.push_str("(");
+            self.src.push_str("let (");
             for (i, _) in func.results.iter_types().enumerate() {
                 uwrite!(self.src, "ret{},", i);
             }
-            self.src.push_str(")");
+            uwrite!(
+                self.src,
+                ") = callee.call{async__}(store.as_context_mut(), ("
+            );
+            for (i, _) in func.params.iter().enumerate() {
+                uwrite!(self.src, "arg{}, ", i);
+            }
+
+            let instrument = if matches!(&style, CallStyle::Async) && self.gen.opts.tracing {
+                ".instrument(span.clone())"
+            } else {
+                ""
+            };
+            uwriteln!(self.src, ")){instrument}{await_}?;");
+
+            let instrument = if matches!(&style, CallStyle::Async) && self.gen.opts.tracing {
+                ".instrument(span)"
+            } else {
+                ""
+            };
+
+            uwriteln!(
+                self.src,
+                "callee.post_return{async__}(store.as_context_mut()){instrument}{await_}?;"
+            );
+
+            self.src.push_str("Ok(");
+            if func.results.iter_types().len() == 1 {
+                self.src.push_str("ret0");
+            } else {
+                self.src.push_str("(");
+                for (i, _) in func.results.iter_types().enumerate() {
+                    uwrite!(self.src, "ret{},", i);
+                }
+                self.src.push_str(")");
+            }
+            self.src.push_str(")\n");
         }
-        self.src.push_str(")\n");
 
         // End function body
         self.src.push_str("}\n");

@@ -1100,27 +1100,6 @@ impl<'a, T> StoreContextMut<'a, T> {
         self.0.data_mut()
     }
 
-    /// Asynchronously for all outstanding tasks involving this `Store` to
-    /// complete.
-    #[cfg(feature = "component-model-async")]
-    pub async fn wait(self) -> Result<()>
-    where
-        T: Send + 'static,
-    {
-        concurrent::poll(self).await.map(drop)
-    }
-
-    /// Asynchronously for either the specified future to complete or all
-    /// outstanding tasks involving this `Store` to complete -- whichever
-    /// happens first.
-    #[cfg(feature = "component-model-async")]
-    pub async fn wait_until<U>(self, future: impl Future<Output = U>) -> Result<U>
-    where
-        T: Send + 'static,
-    {
-        concurrent::poll_until(self, future).await.map(|(_, v)| v)
-    }
-
     #[cfg(feature = "component-model-async")]
     pub(crate) fn concurrent_state(&mut self) -> &mut concurrent::ConcurrentState<T> {
         self.0.concurrent_state()

@@ -15,6 +15,9 @@ use wasmtime_environ::component::{
     TypeFuncIndex, TypeTuple, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
 
+#[cfg(feature = "component-model-async")]
+use crate::component::concurrent::{self, LiftLowerContext, Promise};
+
 mod host;
 mod options;
 mod typed;
@@ -40,9 +43,9 @@ pub struct Func(pub(crate) Stored<FuncData>);
 
 #[doc(hidden)]
 pub struct FuncData {
-    export: ExportFunction,
-    ty: TypeFuncIndex,
-    types: Arc<ComponentTypes>,
+    pub(crate) export: ExportFunction,
+    pub(crate) ty: TypeFuncIndex,
+    pub(crate) types: Arc<ComponentTypes>,
     pub(crate) options: Options,
     pub(crate) instance: Instance,
     pub(crate) component_instance: RuntimeComponentInstanceIndex,
@@ -416,23 +419,7 @@ impl Func {
         LowerParams: Copy,
         LowerReturn: Copy,
     {
-        use crate::component::concurrent;
-
         let me = self.0;
-        let func_data = &store.0[self.0];
-        // TODO: Check to see if the callee is using the memory64 ABI, in which case we must use
-        // task_return_type64.  How do we check that?
-        let task_return_type = func_data.types[func_data.ty].task_return_type32;
-        let FuncData {
-            export,
-            component_instance,
-            ..
-        } = *func_data;
-        let callback = store.0[me]
-            .options
-            .callback
-            .expect("todo: support callback-less async exports");
-
         // Note that we smuggle the params through as raw pointers to avoid
         // requiring `Params: Send + Sync + 'static` bounds on this function,
         // which would prevent passing references as parameters.  Technically,
@@ -443,20 +430,85 @@ impl Func {
         // drop the contexts before returning.
         concurrent::call::<_, LowerParams, _>(
             store,
-            lower_params::<Params, LowerParams, T, Lower>,
+            lower_params_with_context::<Params, LowerParams, T, Lower>,
             concurrent::LiftLowerContext {
                 pointer: Box::into_raw(Box::new((me, params, lower))) as _,
                 dropper: drop_context::<(Stored<FuncData>, Params, Lower)>,
             },
-            lift_results::<Return, LowerReturn, T, Lift>,
+            lift_results_with_context::<Return, LowerReturn, T, Lift>,
             concurrent::LiftLowerContext {
                 pointer: Box::into_raw(Box::new((me, lift))) as _,
                 dropper: drop_context::<(Stored<FuncData>, Lift)>,
             },
-            task_return_type,
-            callback,
-            export.func_ref,
-            component_instance,
+            *self,
+        )
+    }
+
+    #[cfg(feature = "component-model-async")]
+    fn start_call_raw<
+        'a,
+        T: Send,
+        Params: Send + Sync + 'static,
+        Return: Send + Sync + 'static,
+        LowerParams,
+        LowerReturn,
+    >(
+        &self,
+        store: StoreContextMut<'a, T>,
+        params: Params,
+        lower: fn(
+            &mut LowerContext<T>,
+            &Params,
+            InterfaceType,
+            &mut MaybeUninit<LowerParams>,
+        ) -> Result<()>,
+        lift: fn(&mut LiftContext, InterfaceType, &LowerReturn) -> Result<Return>,
+    ) -> Result<(Promise<Return>, StoreContextMut<'a, T>)>
+    where
+        LowerParams: Copy,
+        LowerReturn: Copy,
+    {
+        let me = self.0;
+        concurrent::start_call::<_, LowerParams, _>(
+            store,
+            lower_params_with_context::<
+                Params,
+                LowerParams,
+                T,
+                fn(
+                    &mut LowerContext<T>,
+                    &Params,
+                    InterfaceType,
+                    &mut MaybeUninit<LowerParams>,
+                ) -> Result<()>,
+            >,
+            concurrent::LiftLowerContext {
+                pointer: Box::into_raw(Box::new((me, params, lower))) as _,
+                dropper: drop_context::<(
+                    Stored<FuncData>,
+                    Params,
+                    fn(
+                        &mut LowerContext<T>,
+                        &Params,
+                        InterfaceType,
+                        &mut MaybeUninit<LowerParams>,
+                    ) -> Result<()>,
+                )>,
+            },
+            lift_results_with_context::<
+                Return,
+                LowerReturn,
+                T,
+                fn(&mut LiftContext, InterfaceType, &LowerReturn) -> Result<Return>,
+            >,
+            concurrent::LiftLowerContext {
+                pointer: Box::into_raw(Box::new((me, lift))) as _,
+                dropper: drop_context::<(
+                    Stored<FuncData>,
+                    fn(&mut LiftContext, InterfaceType, &LowerReturn) -> Result<Return>,
+                )>,
+            },
+            *self,
         )
     }
 
@@ -777,6 +829,33 @@ fn drop_context<T>(pointer: *mut u8) {
 }
 
 #[cfg(feature = "component-model-async")]
+fn lower_params_with_context<
+    Params,
+    LowerParams,
+    T,
+    F: FnOnce(
+            &mut LowerContext<T>,
+            &Params,
+            InterfaceType,
+            &mut MaybeUninit<LowerParams>,
+        ) -> Result<()>
+        + Send
+        + Sync,
+>(
+    context: LiftLowerContext,
+    store: *mut dyn crate::vm::VMStore,
+    lowered: &mut [MaybeUninit<ValRaw>],
+) -> Result<()> {
+    let (me, params, lower) = unsafe {
+        *Box::from_raw(
+            std::mem::ManuallyDrop::new(context).pointer as *mut (Stored<FuncData>, Params, F),
+        )
+    };
+
+    lower_params(store, lowered, me, params, lower)
+}
+
+#[cfg(feature = "component-model-async")]
 fn lower_params<
     Params,
     LowerParams,
@@ -790,17 +869,13 @@ fn lower_params<
         + Send
         + Sync,
 >(
-    context: crate::component::concurrent::LiftLowerContext,
     store: *mut dyn crate::vm::VMStore,
     lowered: &mut [MaybeUninit<ValRaw>],
+    me: Stored<FuncData>,
+    params: Params,
+    lower: F,
 ) -> Result<()> {
     use crate::component::storage::slice_to_storage_mut;
-
-    let (me, params, lower) = unsafe {
-        *Box::from_raw(
-            std::mem::ManuallyDrop::new(context).pointer as *mut (Stored<FuncData>, Params, F),
-        )
-    };
 
     let mut store = unsafe { StoreContextMut(&mut *store.cast()) };
     let FuncData {
@@ -820,7 +895,6 @@ fn lower_params<
         if !flags.may_enter() {
             bail!(crate::Trap::CannotEnterComponent);
         }
-        flags.set_may_enter(false);
 
         flags.set_may_leave(false);
         let mut cx = LowerContext::new(store.as_context_mut(), &options, &types, instance_ptr);
@@ -838,21 +912,36 @@ fn lower_params<
 }
 
 #[cfg(feature = "component-model-async")]
+fn lift_results_with_context<
+    Return: Send + Sync + 'static,
+    LowerReturn,
+    T,
+    F: FnOnce(&mut LiftContext, InterfaceType, &LowerReturn) -> Result<Return> + Send + Sync,
+>(
+    context: LiftLowerContext,
+    store: *mut dyn crate::vm::VMStore,
+    lowered: &[ValRaw],
+) -> Result<Option<Box<dyn std::any::Any + Send + Sync>>> {
+    let (me, lift) = unsafe {
+        *Box::from_raw(std::mem::ManuallyDrop::new(context).pointer as *mut (Stored<FuncData>, F))
+    };
+
+    lift_results::<_, _, T, _>(store, lowered, me, lift)
+}
+
+#[cfg(feature = "component-model-async")]
 fn lift_results<
     Return: Send + Sync + 'static,
     LowerReturn,
     T,
     F: FnOnce(&mut LiftContext, InterfaceType, &LowerReturn) -> Result<Return> + Send + Sync,
 >(
-    context: crate::component::concurrent::LiftLowerContext,
     store: *mut dyn crate::vm::VMStore,
     lowered: &[ValRaw],
+    me: Stored<FuncData>,
+    lift: F,
 ) -> Result<Option<Box<dyn std::any::Any + Send + Sync>>> {
     use crate::component::storage::slice_to_storage;
-
-    let (me, lift) = unsafe {
-        *Box::from_raw(std::mem::ManuallyDrop::new(context).pointer as *mut (Stored<FuncData>, F))
-    };
 
     let store = unsafe { StoreContextMut::<T>(&mut *store.cast()) };
     let FuncData {

@@ -240,7 +240,9 @@ impl Table {
         child: TableId<T>,
         parent: TableId<U>,
     ) -> Result<(), TableError> {
-        self.occupied(child.rep())?;
+        let entry = self.occupied_mut(child.rep())?;
+        assert!(entry.parent.is_none());
+        entry.parent = Some(parent.rep());
         self.occupied_mut(parent.rep())?.add_child(child.rep());
         Ok(())
     }
@@ -250,7 +252,9 @@ impl Table {
         child: TableId<T>,
         parent: TableId<U>,
     ) -> Result<(), TableError> {
-        self.occupied(child.rep())?;
+        let entry = self.occupied_mut(child.rep())?;
+        assert_eq!(entry.parent, Some(parent.rep()));
+        entry.parent = None;
         self.occupied_mut(parent.rep())?.remove_child(child.rep());
         Ok(())
     }

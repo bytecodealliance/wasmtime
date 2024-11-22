@@ -1,5 +1,7 @@
 use {
-    super::{events, handle_result, table::TableId, GuestTask, HostTaskFuture, HostTaskResult},
+    super::{
+        events, handle_result, table::TableId, GuestTask, HostTaskFuture, HostTaskResult, Promise,
+    },
     crate::{
         component::{
             func::{self, LiftContext, LowerContext, Options},
@@ -19,10 +21,8 @@ use {
     std::{
         any::Any,
         boxed::Box,
-        future::Future,
         marker::PhantomData,
         mem::{self, MaybeUninit},
-        pin::Pin,
         ptr::NonNull,
         string::ToString,
         sync::Arc,
@@ -118,9 +118,10 @@ fn accept<T: func::Lower + Send + Sync + 'static, U>(
     values: Vec<T>,
     mut offset: usize,
     transmit_id: TableId<TransmitState>,
+    tx: oneshot::Sender<()>,
 ) -> impl FnOnce(Reader) -> Result<usize> + Send + Sync + 'static {
     move |reader| {
-        Ok(match reader {
+        let count = match reader {
             Reader::Guest {
                 lower:
                     RawLowerContext {
@@ -148,7 +149,7 @@ fn accept<T: func::Lower + Send + Sync + 'static, U>(
                     assert!(matches!(&transmit.write, WriteState::Open));
 
                     transmit.write = WriteState::HostReady {
-                        accept: Box::new(accept::<T, U>(values, offset, transmit_id)),
+                        accept: Box::new(accept::<T, U>(values, offset, transmit_id, tx)),
                         close: false,
                     };
                 }
@@ -159,10 +160,13 @@ fn accept<T: func::Lower + Send + Sync + 'static, U>(
                 assert!(offset == 0); // todo: do we need to handle offset != 0?
                 let count = values.len();
                 accept(Box::new(values))?;
+
                 count
             }
             Reader::None => 0,
-        })
+        };
+
+        Ok(count)
     }
 }
 
@@ -170,8 +174,10 @@ fn host_write<T: func::Lower + Send + Sync + 'static, U, S: AsContextMut<Data = 
     mut store: S,
     rep: u32,
     values: Vec<T>,
-) -> Result<()> {
+    mut close: bool,
+) -> Result<oneshot::Receiver<()>> {
     let mut store = store.as_context_mut();
+    let (tx, rx) = oneshot::channel();
     let transmit_id = TableId::<TransmitState>::new(rep);
     let mut offset = 0;
 
@@ -192,9 +198,10 @@ fn host_write<T: func::Lower + Send + Sync + 'static, U, S: AsContextMut<Data = 
                 assert!(matches!(&transmit.write, WriteState::Open));
 
                 transmit.write = WriteState::HostReady {
-                    accept: Box::new(accept::<T, U>(values, offset, transmit_id)),
-                    close: false,
+                    accept: Box::new(accept::<T, U>(values, offset, transmit_id, tx)),
+                    close,
                 };
+                close = false;
             }
 
             ReadState::GuestReady {
@@ -249,7 +256,11 @@ fn host_write<T: func::Lower + Send + Sync + 'static, U, S: AsContextMut<Data = 
             ReadState::Closed => {}
         }
 
-        break Ok(());
+        if close {
+            host_close_writer(store, rep)?;
+        }
+
+        break Ok(rx);
     }
 }
 
@@ -366,7 +377,9 @@ pub fn host_read<T: func::Lift + Sync + Send + 'static, U, S: AsContextMut<Data 
             }
         }
 
-        WriteState::Closed => {}
+        WriteState::Closed => {
+            host_close_reader(store, rep)?;
+        }
     }
 
     Ok(rx)
@@ -414,6 +427,8 @@ fn host_close_writer<U, S: AsContextMut<Data = U>>(mut store: S, rep: u32) -> Re
 
         ReadState::HostReady { accept } => {
             accept(Writer::None)?;
+
+            host_close_reader(store, rep)?;
         }
 
         ReadState::Open => {}
@@ -490,11 +505,13 @@ pub struct FutureWriter<T> {
 
 impl<T> FutureWriter<T> {
     /// Write the specified value to this `future`.
-    pub fn write<U, S: AsContextMut<Data = U>>(self, store: S, value: T) -> Result<()>
+    pub fn write<U, S: AsContextMut<Data = U>>(self, store: S, value: T) -> Result<Promise<()>>
     where
         T: func::Lower + Send + Sync + 'static,
     {
-        host_write(store, self.rep, vec![value])
+        Ok(Promise(Box::pin(
+            host_write(store, self.rep, vec![value], true)?.map(drop),
+        )))
     }
 
     /// Close this object without writing a value.
@@ -513,27 +530,15 @@ pub struct FutureReader<T> {
 }
 
 impl<T> FutureReader<T> {
-    /// Read the value from this `future` by converting it to a `std::future::Future`.
-    pub fn read<U, S: AsContextMut<Data = U>>(
-        self,
-        store: S,
-    ) -> Result<
-        Pin<Box<dyn Future<Output = Result<Option<T>, oneshot::Canceled>> + Send + Sync + 'static>>,
-    >
+    /// Read the value from this `future`.
+    pub fn read<U, S: AsContextMut<Data = U>>(self, store: S) -> Result<Promise<Option<T>>>
     where
         T: func::Lift + Sync + Send + 'static,
     {
-        host_read(store, self.rep).map(|v| {
-            Box::pin(v.map(|v| v.map(|v| v.map(|v| v.into_iter().next().unwrap()))))
-                as Pin<
-                    Box<
-                        dyn Future<Output = Result<Option<T>, oneshot::Canceled>>
-                            + Send
-                            + Sync
-                            + 'static,
-                    >,
-                >
-        })
+        Ok(Promise(Box::pin(host_read(store, self.rep)?.map(|v| {
+            v.ok()
+                .and_then(|v| v.map(|v| v.into_iter().next().unwrap()))
+        }))))
     }
 
     fn lower_to_index<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType) -> Result<u32> {
@@ -663,11 +668,17 @@ pub struct StreamWriter<T> {
 
 impl<T> StreamWriter<T> {
     /// Write the specified values to the `stream`.
-    pub fn write<U, S: AsContextMut<Data = U>>(&mut self, store: S, values: Vec<T>) -> Result<()>
+    pub fn write<U, S: AsContextMut<Data = U>>(
+        self,
+        store: S,
+        values: Vec<T>,
+    ) -> Result<Promise<StreamWriter<T>>>
     where
         T: func::Lower + Send + Sync + 'static,
     {
-        host_write(store, self.rep, values)
+        Ok(Promise(Box::pin(
+            host_write(store, self.rep, values, false)?.map(move |_| self),
+        )))
     }
 
     /// Close this object without writing any more values.
@@ -688,13 +699,15 @@ pub struct StreamReader<T> {
 impl<T> StreamReader<T> {
     /// Read the next values (if any) from this `stream`.
     pub fn read<U, S: AsContextMut<Data = U>>(
-        &mut self,
+        self,
         store: S,
-    ) -> Result<oneshot::Receiver<Option<Vec<T>>>>
+    ) -> Result<Promise<Option<(StreamReader<T>, Vec<T>)>>>
     where
         T: func::Lift + Sync + Send + 'static,
     {
-        host_read(store, self.rep)
+        Ok(Promise(Box::pin(
+            host_read(store, self.rep)?.map(move |v| v.ok().and_then(|v| v.map(|v| (self, v)))),
+        )))
     }
 
     fn lower_to_index<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType) -> Result<u32> {
@@ -739,8 +752,9 @@ impl<T> StreamReader<T> {
 
     /// Close this object without reading any more values.
     ///
-    /// If the object is dropped without calling this method, any write on the
-    /// writable end will remain pending forever.
+    /// If the object is dropped without either calling this method or reading
+    /// until the end of the stream, any write on the writable end will remain
+    /// pending forever.
     pub fn close<U, S: AsContextMut<Data = U>>(self, store: S) -> Result<()> {
         host_close_reader(store, self.rep)
     }

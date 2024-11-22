@@ -17,6 +17,9 @@ use wasmtime_environ::component::{
     MAX_FLAT_RESULTS,
 };
 
+#[cfg(feature = "component-model-async")]
+use crate::component::concurrent::{self, Promise};
+
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
 ///
@@ -193,13 +196,12 @@ where
         );
         #[cfg(feature = "component-model-async")]
         {
+            let instance = store.0[self.func.0].component_instance;
             // TODO: do we need to return the store here due to the possible
             // invalidation of the reference we were passed?
-            crate::component::concurrent::on_fiber(store, self.func, move |store| {
-                self.call_impl(store, params)
-            })
-            .await?
-            .0
+            concurrent::on_fiber(store, instance, move |store| self.call_impl(store, params))
+                .await?
+                .0
         }
         #[cfg(not(feature = "component-model-async"))]
         {
@@ -208,6 +210,126 @@ where
                 .on_fiber(|store| self.call_impl(store, params))
                 .await?
         }
+    }
+
+    /// Start concurrent call to this function.
+    ///
+    /// Unlike [`Self::call`] and [`Self::call_async`] (both of which require
+    /// exclusive access to the store until the completion of the call), calls
+    /// made using this method may run concurrently with other calls to the same
+    /// instance.
+    #[cfg(feature = "component-model-async")]
+    pub async fn call_concurrent<T: Send>(
+        self,
+        mut store: impl AsContextMut<Data = T>,
+        params: Params,
+    ) -> Result<Promise<Return>>
+    where
+        Params: Send + Sync + 'static,
+        Return: Send + Sync + 'static,
+    {
+        let store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `call_concurrent` when async support is not enabled on the config"
+        );
+        let instance = store.0[self.func.0].component_instance;
+        // TODO: do we need to return the store here due to the possible
+        // invalidation of the reference we were passed?
+        concurrent::on_fiber(store, instance, move |store| {
+            self.start_call(store.as_context_mut(), params)
+        })
+        .await?
+        .0
+    }
+
+    #[cfg(feature = "component-model-async")]
+    fn start_call<'a, T: Send>(
+        self,
+        store: StoreContextMut<'a, T>,
+        params: Params,
+    ) -> Result<Promise<Return>>
+    where
+        Params: Send + Sync + 'static,
+        Return: Send + Sync + 'static,
+    {
+        Ok(if store.0[self.func.0].options.async_() {
+            #[cfg(feature = "component-model-async")]
+            {
+                if Params::flatten_count() <= MAX_FLAT_PARAMS {
+                    if Return::flatten_count() <= MAX_FLAT_PARAMS {
+                        self.func.start_call_raw(
+                            store,
+                            params,
+                            Self::lower_stack_args,
+                            Self::lift_stack_result,
+                        )
+                    } else {
+                        self.func.start_call_raw(
+                            store,
+                            params,
+                            Self::lower_stack_args,
+                            Self::lift_heap_result_guest,
+                        )
+                    }
+                } else {
+                    if Return::flatten_count() <= MAX_FLAT_PARAMS {
+                        self.func.start_call_raw(
+                            store,
+                            params,
+                            Self::lower_heap_args_guest,
+                            Self::lift_stack_result,
+                        )
+                    } else {
+                        self.func.start_call_raw(
+                            store,
+                            params,
+                            Self::lower_heap_args_guest,
+                            Self::lift_heap_result_guest,
+                        )
+                    }
+                }
+            }
+            #[cfg(not(feature = "component-model-async"))]
+            {
+                bail!(
+                    "must enable the `component-model-async` feature to call async-lifted exports"
+                );
+            }
+        } else if Params::flatten_count() <= MAX_FLAT_PARAMS {
+            if Return::flatten_count() <= MAX_FLAT_RESULTS {
+                self.func.start_call_raw(
+                    store,
+                    params,
+                    Self::lower_stack_args,
+                    Self::lift_stack_result,
+                )
+            } else {
+                self.func.start_call_raw(
+                    store,
+                    params,
+                    Self::lower_stack_args,
+                    Self::lift_heap_result,
+                )
+            }
+        } else {
+            if Return::flatten_count() <= MAX_FLAT_RESULTS {
+                self.func.start_call_raw(
+                    store,
+                    params,
+                    Self::lower_heap_args,
+                    Self::lift_stack_result,
+                )
+            } else {
+                self.func.start_call_raw(
+                    store,
+                    params,
+                    Self::lower_heap_args,
+                    Self::lift_heap_result,
+                )
+            }
+        }?
+        .0)
     }
 
     fn call_impl<T: Send>(
