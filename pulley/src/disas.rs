@@ -95,7 +95,7 @@ impl<'a> Disassembler<'a> {
             self.after_visit();
             self.start = self.bytecode.position();
             if let Ok(offset) = PcRelOffset::decode(self.bytecode()) {
-                offset.disas(self.start, &mut self.temp);
+                offset.disas(self.start + self.start_offset, &mut self.temp);
             }
         }
     }
