@@ -77,7 +77,7 @@ macro_rules! define_extended_opcode {
 
         impl ExtendedOpcode {
             /// The value of the maximum defined extended opcode.
-            pub const MAX: u16 = define_opcode!( @max $( $name )* );
+            pub const MAX: u16 = define_opcode!( @max $( $name )* ) + 1;
         }
     };
 }
