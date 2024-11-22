@@ -17,6 +17,7 @@ pub struct Disassembler<'a> {
     raw_bytecode: &'a [u8],
     bytecode: SafeBytecodeStream<'a>,
     disas: String,
+    start_offset: usize,
     start: usize,
     temp: String,
     offsets: bool,
@@ -39,6 +40,7 @@ impl<'a> Disassembler<'a> {
             bytecode: SafeBytecodeStream::new(bytecode),
             disas: String::new(),
             start: 0,
+            start_offset: 0,
             temp: String::new(),
             offsets: true,
             hexdump: true,
@@ -61,6 +63,16 @@ impl<'a> Disassembler<'a> {
         self
     }
 
+    /// Configures the offset that this function starts from, if it doesn't
+    /// start from 0.
+    ///
+    /// This can possibly be useful when a single function at a time is being
+    /// disassembled.
+    pub fn start_offset(&mut self, offset: usize) -> &mut Self {
+        self.start_offset = offset;
+        self
+    }
+
     /// Get the disassembly thus far.
     pub fn disas(&self) -> &str {
         &self.disas
@@ -73,7 +85,7 @@ impl<'a> Disassembler<'a> {
                 write!(&mut self.temp, ",").unwrap();
             }
             write!(&mut self.temp, " ").unwrap();
-            val.disas(self.start, &mut self.temp);
+            val.disas(self.start + self.start_offset, &mut self.temp);
         }
     }
 }
@@ -216,7 +228,7 @@ impl<'a> OpVisitor for Disassembler<'a> {
 
     fn after_visit(&mut self) {
         if self.offsets {
-            write!(&mut self.disas, "{:8x}: ", self.start).unwrap();
+            write!(&mut self.disas, "{:8x}: ", self.start + self.start_offset).unwrap();
         }
         if self.hexdump {
             let size = self.bytecode.position() - self.start;
