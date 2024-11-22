@@ -367,14 +367,6 @@ pub fn host_page_size() -> usize {
     };
 }
 
-/// Is `bytes` a multiple of the host page size?
-///
-/// (Deprecated: consider switching to `HostAlignedByteCount`.)
-#[cfg(feature = "signals-based-traps")]
-pub fn usize_is_multiple_of_host_page_size(bytes: usize) -> bool {
-    bytes % host_page_size() == 0
-}
-
 /// Round the given byte size up to a multiple of the host OS page size.
 ///
 /// Returns an error if rounding up overflows.

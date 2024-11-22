@@ -132,7 +132,7 @@ pub struct MemoryPool {
     /// with `madvise` back to the kernel.
     ///
     /// Only applicable on Linux.
-    pub(super) keep_resident: usize,
+    pub(super) keep_resident: HostAlignedByteCount,
 
     /// Keep track of protection keys handed out to initialized stores; this
     /// allows us to round-robin the assignment of stores to stripes.
@@ -240,7 +240,9 @@ impl MemoryPool {
             image_slots,
             layout,
             memories_per_instance: usize::try_from(config.limits.max_memories_per_module).unwrap(),
-            keep_resident: round_usize_up_to_host_pages(config.linear_memory_keep_resident)?,
+            keep_resident: HostAlignedByteCount::new_rounded_up(
+                config.linear_memory_keep_resident,
+            )?,
             next_available_pkey: AtomicUsize::new(0),
         };
 
@@ -474,7 +476,7 @@ impl MemoryPool {
         maybe_slot.unwrap_or_else(|| {
             MemoryImageSlot::create(
                 self.get_base(allocation_index) as *mut c_void,
-                0,
+                HostAlignedByteCount::ZERO,
                 self.layout.max_memory_bytes,
             )
         })

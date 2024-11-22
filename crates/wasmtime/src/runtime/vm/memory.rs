@@ -76,6 +76,8 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
+#[cfg(feature = "signals-based-traps")]
+use crate::runtime::vm::HostAlignedByteCount;
 use crate::runtime::vm::{MemoryImage, MemoryImageSlot, VMStore, WaitResult};
 use alloc::sync::Arc;
 use core::ops::Range;
@@ -190,6 +192,7 @@ impl Memory {
     ) -> Result<Self> {
         let (minimum, maximum) = Self::limit_new(ty, Some(store))?;
         let allocation = creator.new_memory(ty, tunables, minimum, maximum)?;
+
         let memory = LocalMemory::new(ty, tunables, allocation, memory_image)?;
         Ok(if ty.shared {
             Memory::Shared(SharedMemory::wrap(ty, memory)?)
@@ -481,17 +484,24 @@ impl LocalMemory {
         let memory_image = match memory_image {
             #[cfg(feature = "signals-based-traps")]
             Some(image) => {
-                let mut slot = MemoryImageSlot::create(
-                    alloc.base_ptr().cast(),
-                    alloc.byte_size(),
-                    alloc.byte_capacity(),
-                );
-                // On drop, we will unmap our mmap'd range that this slot was
-                // mapped on top of, so there is no need for the slot to wipe
-                // it with an anonymous mapping first.
-                slot.no_clear_on_drop();
-                slot.instantiate(alloc.byte_size(), Some(image), ty, tunables)?;
-                Some(slot)
+                // We currently don't support memory_image if
+                // `RuntimeLinearMemory::byte_size` is not a multiple of the host page
+                // size. See https://github.com/bytecodealliance/wasmtime/issues/9660.
+                if let Ok(byte_size) = HostAlignedByteCount::new(alloc.byte_size()) {
+                    let mut slot = MemoryImageSlot::create(
+                        alloc.base_ptr().cast(),
+                        byte_size,
+                        alloc.byte_capacity(),
+                    );
+                    // On drop, we will unmap our mmap'd range that this slot was
+                    // mapped on top of, so there is no need for the slot to wipe
+                    // it with an anonymous mapping first.
+                    slot.no_clear_on_drop();
+                    slot.instantiate(alloc.byte_size(), Some(image), ty, tunables)?;
+                    Some(slot)
+                } else {
+                    None
+                }
             }
             #[cfg(not(feature = "signals-based-traps"))]
             Some(_) => unreachable!(),

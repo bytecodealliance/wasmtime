@@ -8,10 +8,7 @@
 use super::sys::DecommitBehavior;
 use crate::prelude::*;
 use crate::runtime::vm::sys::vm::{self, MemoryImageSource};
-use crate::runtime::vm::{
-    host_page_size, round_usize_up_to_host_pages, usize_is_multiple_of_host_page_size, MmapVec,
-    SendSyncPtr,
-};
+use crate::runtime::vm::{host_page_size, HostAlignedByteCount, MmapVec, SendSyncPtr};
 use alloc::sync::Arc;
 use core::ffi::c_void;
 use core::ops::Range;
@@ -49,7 +46,7 @@ pub struct MemoryImage {
     /// are truncated (handled by backing fd).
     ///
     /// Must be a multiple of the system page size.
-    len: usize,
+    len: HostAlignedByteCount,
 
     /// Image starts this many bytes into `source`.
     ///
@@ -57,18 +54,23 @@ pub struct MemoryImage {
     /// data section in a `*.cwasm` file for `*.cwasm`-backed images.
     ///
     /// Must be a multiple of the system page size.
+    ///
+    /// ## Notes
+    ///
+    /// This currently isn't a `HostAlignedByteCount` because that's a usize and
+    /// this, being a file offset, is a u64.
     source_offset: u64,
 
     /// Image starts this many bytes into heap space.
     ///
     /// Must be a multiple of the system page size.
-    linear_memory_offset: usize,
+    linear_memory_offset: HostAlignedByteCount,
 }
 
 impl MemoryImage {
     fn new(
         page_size: u32,
-        offset: u64,
+        linear_memory_offset: HostAlignedByteCount,
         data: &[u8],
         mmap: Option<&MmapVec>,
     ) -> Result<Option<MemoryImage>> {
@@ -76,13 +78,7 @@ impl MemoryImage {
             assert_eq!(val % (page_size as usize), 0);
         };
         // Sanity-check that various parameters are page-aligned.
-        let len = data.len();
-        assert_eq!(offset % u64::from(page_size), 0);
-        assert_page_aligned(len);
-        let linear_memory_offset = match usize::try_from(offset) {
-            Ok(offset) => offset,
-            Err(_) => return Ok(None),
-        };
+        let len = HostAlignedByteCount::new(data.len()).expect("memory image data is page-aligned");
 
         // If a backing `mmap` is present then `data` should be a sub-slice of
         // the `mmap`. The sanity-checks here double-check that. Additionally
@@ -138,8 +134,8 @@ impl MemoryImage {
     unsafe fn map_at(&self, base: *mut u8) -> Result<()> {
         self.source
             .map_at(
-                base.add(self.linear_memory_offset),
-                self.len,
+                base.add(self.linear_memory_offset.byte_count()),
+                self.len.byte_count(),
                 self.source_offset,
             )
             .err2anyhow()?;
@@ -148,7 +144,10 @@ impl MemoryImage {
 
     unsafe fn remap_as_zeros_at(&self, base: *mut u8) -> Result<()> {
         self.source
-            .remap_as_zeros_at(base.add(self.linear_memory_offset), self.len)
+            .remap_as_zeros_at(
+                base.add(self.linear_memory_offset.byte_count()),
+                self.len.byte_count(),
+            )
             .err2anyhow()?;
         Ok(())
     }
@@ -210,7 +209,14 @@ impl ModuleMemoryImages {
                 // CoW images in this scenario.
                 return Ok(None);
             }
-            let image = match MemoryImage::new(page_size, init.offset, data, mmap)? {
+
+            let offset_usize = match usize::try_from(init.offset) {
+                Ok(offset) => offset,
+                Err(_) => return Ok(None),
+            };
+            let offset = HostAlignedByteCount::new(offset_usize)
+                .expect("memory init offset is a multiple of the host page size");
+            let image = match MemoryImage::new(page_size, offset, data, mmap)? {
                 Some(image) => image,
                 None => return Ok(None),
             };
@@ -303,7 +309,7 @@ pub struct MemoryImageSlot {
     /// but the faults will always be resolved by the kernel.
     ///
     /// Also note that this is always page-aligned.
-    accessible: usize,
+    accessible: HostAlignedByteCount,
 
     /// Whether this slot may have "dirty" pages (pages written by an
     /// instantiation). Set by `instantiate()` and cleared by
@@ -334,7 +340,11 @@ impl MemoryImageSlot {
     /// the maximum size of this image which `accessible` cannot grow beyond,
     /// and all memory from `accessible` from `static_size` should be mapped as
     /// `PROT_NONE` backed by zero-bytes.
-    pub(crate) fn create(base_addr: *mut c_void, accessible: usize, static_size: usize) -> Self {
+    pub(crate) fn create(
+        base_addr: *mut c_void,
+        accessible: HostAlignedByteCount,
+        static_size: usize,
+    ) -> Self {
         MemoryImageSlot {
             base: NonNull::new(base_addr.cast()).unwrap().into(),
             static_size,
@@ -354,9 +364,9 @@ impl MemoryImageSlot {
     }
 
     pub(crate) fn set_heap_limit(&mut self, size_bytes: usize) -> Result<()> {
-        let size_bytes_page_aligned = round_usize_up_to_host_pages(size_bytes)?;
+        let size_bytes_aligned = HostAlignedByteCount::new_rounded_up(size_bytes).err2anyhow()?;
         assert!(size_bytes <= self.static_size);
-        assert!(size_bytes_page_aligned <= self.static_size);
+        assert!(size_bytes_aligned.byte_count() <= self.static_size);
 
         // If the heap limit already addresses accessible bytes then no syscalls
         // are necessary since the data is already mapped into the process and
@@ -364,14 +374,13 @@ impl MemoryImageSlot {
         //
         // This is used for "dynamic" memories where memory is not always
         // decommitted during recycling (but it's still always reset).
-        if size_bytes_page_aligned <= self.accessible {
+        if size_bytes_aligned <= self.accessible {
             return Ok(());
         }
 
         // Otherwise use `mprotect` to make the new pages read/write.
-        self.set_protection(self.accessible..size_bytes_page_aligned, true)?;
-        self.accessible = size_bytes_page_aligned;
-        debug_assert!(usize_is_multiple_of_host_page_size(self.accessible));
+        self.set_protection(self.accessible..size_bytes_aligned, true)?;
+        self.accessible = size_bytes_aligned;
 
         Ok(())
     }
@@ -404,7 +413,8 @@ impl MemoryImageSlot {
     ) -> Result<()> {
         assert!(!self.dirty);
         assert!(initial_size_bytes <= self.static_size);
-        let initial_size_bytes_page_aligned = round_usize_up_to_host_pages(initial_size_bytes)?;
+        let initial_size_bytes_page_aligned =
+            HostAlignedByteCount::new_rounded_up(initial_size_bytes).err2anyhow()?;
 
         // First order of business is to blow away the previous linear memory
         // image if it doesn't match the image specified here. If one is
@@ -440,20 +450,22 @@ impl MemoryImageSlot {
             self.accessible = initial_size_bytes_page_aligned;
         }
 
-        debug_assert!(usize_is_multiple_of_host_page_size(self.accessible));
-
         // Now that memory is sized appropriately the final operation is to
         // place the new image into linear memory. Note that this operation is
         // skipped if `self.image` matches `maybe_image`.
-        assert!(initial_size_bytes <= self.accessible);
+        assert!(initial_size_bytes <= self.accessible.byte_count());
         assert!(initial_size_bytes_page_aligned <= self.accessible);
         if self.image.as_ref() != maybe_image {
             if let Some(image) = maybe_image.as_ref() {
                 assert!(
-                    image.linear_memory_offset.checked_add(image.len).unwrap()
+                    image
+                        .linear_memory_offset
+                        .checked_add(image.len)
+                        .unwrap()
+                        .byte_count()
                         <= initial_size_bytes
                 );
-                if image.len > 0 {
+                if !image.len.is_zero() {
                     unsafe {
                         image.map_at(self.base.as_ptr())?;
                     }
@@ -489,7 +501,7 @@ impl MemoryImageSlot {
     #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
     pub(crate) fn clear_and_remain_ready(
         &mut self,
-        keep_resident: usize,
+        keep_resident: HostAlignedByteCount,
         decommit: impl FnMut(*mut u8, usize),
     ) -> Result<()> {
         assert!(self.dirty);
@@ -505,7 +517,7 @@ impl MemoryImageSlot {
     #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
     unsafe fn reset_all_memory_contents(
         &mut self,
-        keep_resident: usize,
+        keep_resident: HostAlignedByteCount,
         decommit: impl FnMut(*mut u8, usize),
     ) -> Result<()> {
         match vm::decommit_behavior() {
@@ -528,12 +540,11 @@ impl MemoryImageSlot {
     #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
     unsafe fn reset_with_original_mapping(
         &mut self,
-        keep_resident: usize,
+        keep_resident: HostAlignedByteCount,
         mut decommit: impl FnMut(*mut u8, usize),
     ) {
         match &self.image {
             Some(image) => {
-                assert!(self.accessible >= image.linear_memory_offset + image.len);
                 if image.linear_memory_offset < keep_resident {
                     // If the image starts below the `keep_resident` then
                     // memory looks something like this:
@@ -565,13 +576,27 @@ impl MemoryImageSlot {
                     // zero bytes large. Furthermore `madvise (4)` may also be
                     // zero bytes large.
 
-                    let image_end = image.linear_memory_offset + image.len;
-                    let mem_after_image = self.accessible - image_end;
-                    let remaining_memset =
-                        (keep_resident - image.linear_memory_offset).min(mem_after_image);
+                    let image_end = image
+                        .linear_memory_offset
+                        .checked_add(image.len)
+                        .expect("image is in bounds");
+                    let mem_after_image = self
+                        .accessible
+                        .checked_sub(image_end)
+                        .expect("image_end falls before self.accessible");
+                    let excess = keep_resident
+                        .checked_sub(image.linear_memory_offset)
+                        .expect(
+                            "if statement checks that keep_resident > image.linear_memory_offset",
+                        );
+                    let remaining_memset = excess.min(mem_after_image);
 
                     // This is memset (1)
-                    ptr::write_bytes(self.base.as_ptr(), 0u8, image.linear_memory_offset);
+                    ptr::write_bytes(
+                        self.base.as_ptr(),
+                        0u8,
+                        image.linear_memory_offset.byte_count(),
+                    );
 
                     // This is madvise (2)
                     self.restore_original_mapping(
@@ -581,12 +606,20 @@ impl MemoryImageSlot {
                     );
 
                     // This is memset (3)
-                    ptr::write_bytes(self.base.as_ptr().add(image_end), 0u8, remaining_memset);
+                    ptr::write_bytes(
+                        self.base.as_ptr().add(image_end.byte_count()),
+                        0u8,
+                        remaining_memset.byte_count(),
+                    );
 
                     // This is madvise (4)
                     self.restore_original_mapping(
-                        image_end + remaining_memset,
-                        mem_after_image - remaining_memset,
+                        image_end
+                            .checked_add(remaining_memset)
+                            .expect("image_end + remaining_memset is in bounds"),
+                        mem_after_image
+                            .checked_sub(remaining_memset)
+                            .expect("remaining_memset defined to be <= mem_after_image"),
                         &mut decommit,
                     );
                 } else {
@@ -610,15 +643,17 @@ impl MemoryImageSlot {
                     // Note that the memset may be zero bytes here.
 
                     // This is memset (1)
-                    ptr::write_bytes(self.base.as_ptr(), 0u8, keep_resident);
+                    ptr::write_bytes(self.base.as_ptr(), 0u8, keep_resident.byte_count());
 
                     // This is madvise (2)
                     self.restore_original_mapping(
                         keep_resident,
-                        self.accessible - keep_resident,
+                        self.accessible
+                            .checked_sub(keep_resident)
+                            .expect("keep_resident is a subset of accessible memory"),
                         decommit,
                     );
-                }
+                };
             }
 
             // If there's no memory image for this slot then memset the first
@@ -626,10 +661,12 @@ impl MemoryImageSlot {
             // the rest.
             None => {
                 let size_to_memset = keep_resident.min(self.accessible);
-                ptr::write_bytes(self.base.as_ptr(), 0u8, size_to_memset);
+                ptr::write_bytes(self.base.as_ptr(), 0u8, size_to_memset.byte_count());
                 self.restore_original_mapping(
                     size_to_memset,
-                    self.accessible - size_to_memset,
+                    self.accessible
+                        .checked_sub(size_to_memset)
+                        .expect("size_to_memset is defined to be <= self.accessible"),
                     decommit,
                 );
             }
@@ -639,11 +676,11 @@ impl MemoryImageSlot {
     #[allow(dead_code)] // ignore warnings as this is only used in some cfgs
     unsafe fn restore_original_mapping(
         &self,
-        base: usize,
-        len: usize,
+        base: HostAlignedByteCount,
+        len: HostAlignedByteCount,
         mut decommit: impl FnMut(*mut u8, usize),
     ) {
-        assert!(base + len <= self.accessible);
+        assert!(base.checked_add(len).unwrap() <= self.accessible);
         if len == 0 {
             return;
         }
@@ -652,22 +689,27 @@ impl MemoryImageSlot {
             vm::decommit_behavior(),
             DecommitBehavior::RestoreOriginalMapping
         );
-        decommit(self.base.as_ptr().add(base), len);
+        decommit(self.base.as_ptr().add(base.byte_count()), len.byte_count());
     }
 
-    fn set_protection(&self, range: Range<usize>, readwrite: bool) -> Result<()> {
-        assert!(range.start <= range.end);
-        assert!(range.end <= self.static_size);
-        if range.len() == 0 {
+    fn set_protection(&self, range: Range<HostAlignedByteCount>, readwrite: bool) -> Result<()> {
+        let len = range
+            .end
+            .checked_sub(range.start)
+            .expect("range.start <= range.end");
+        assert!(range.end.byte_count() <= self.static_size);
+        if len.is_zero() {
             return Ok(());
         }
 
+        // TODO: use Mmap to change memory permissions instead of these free
+        // functions.
         unsafe {
-            let start = self.base.as_ptr().add(range.start);
+            let start = self.base.as_ptr().add(range.start.byte_count());
             if readwrite {
-                vm::expose_existing_mapping(start, range.len()).err2anyhow()?;
+                vm::expose_existing_mapping(start, len.byte_count()).err2anyhow()?;
             } else {
-                vm::hide_existing_mapping(start, range.len()).err2anyhow()?;
+                vm::hide_existing_mapping(start, len.byte_count()).err2anyhow()?;
             }
         }
 
@@ -697,7 +739,7 @@ impl MemoryImageSlot {
         }
 
         self.image = None;
-        self.accessible = 0;
+        self.accessible = HostAlignedByteCount::ZERO;
 
         Ok(())
     }
@@ -747,23 +789,22 @@ mod test {
     use super::*;
     use crate::runtime::vm::mmap::{AlignedLength, Mmap};
     use crate::runtime::vm::sys::vm::decommit_pages;
-    use crate::{runtime::vm::host_page_size, vm::HostAlignedByteCount};
+    use crate::runtime::vm::{host_page_size, HostAlignedByteCount};
     use std::sync::Arc;
     use wasmtime_environ::{IndexType, Limits, Memory};
 
     fn create_memfd_with_data(offset: usize, data: &[u8]) -> Result<MemoryImage> {
-        // Offset must be page-aligned.
-        let page_size = host_page_size();
-        assert_eq!(offset & (page_size - 1), 0);
-
+        // offset must be a multiple of the page size.
+        let linear_memory_offset =
+            HostAlignedByteCount::new(offset).expect("offset is page-aligned");
         // The image length is rounded up to the nearest page size
-        let image_len = (data.len() + page_size - 1) & !(page_size - 1);
+        let image_len = HostAlignedByteCount::new_rounded_up(data.len()).unwrap();
 
         Ok(MemoryImage {
             source: MemoryImageSource::from_data(data)?.unwrap(),
             len: image_len,
             source_offset: 0,
-            linear_memory_offset: offset,
+            linear_memory_offset,
         })
     }
 
@@ -791,7 +832,11 @@ mod test {
         // 4 MiB mmap'd area, not accessible
         let mut mmap = mmap_4mib_inaccessible();
         // Create a MemoryImageSlot on top of it
-        let mut memfd = MemoryImageSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
+        let mut memfd = MemoryImageSlot::create(
+            mmap.as_mut_ptr() as *mut _,
+            HostAlignedByteCount::ZERO,
+            4 << 20,
+        );
         memfd.no_clear_on_drop();
         assert!(!memfd.is_dirty());
         // instantiate with 64 KiB initial size
@@ -812,7 +857,9 @@ mod test {
         // instantiate again; we should see zeroes, even as the
         // reuse-anon-mmap-opt kicks in
         memfd
-            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+                decommit_pages(ptr, len).unwrap()
+            })
             .unwrap();
         assert!(!memfd.is_dirty());
         memfd.instantiate(64 << 10, None, &ty, &tunables).unwrap();
@@ -831,7 +878,11 @@ mod test {
         // 4 MiB mmap'd area, not accessible
         let mut mmap = mmap_4mib_inaccessible();
         // Create a MemoryImageSlot on top of it
-        let mut memfd = MemoryImageSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
+        let mut memfd = MemoryImageSlot::create(
+            mmap.as_mut_ptr() as *mut _,
+            HostAlignedByteCount::ZERO,
+            4 << 20,
+        );
         memfd.no_clear_on_drop();
         // Create an image with some data.
         let image = Arc::new(create_memfd_with_data(page_size, &[1, 2, 3, 4]).unwrap());
@@ -845,7 +896,9 @@ mod test {
         slice[page_size] = 5;
         // Clear and re-instantiate same image
         memfd
-            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+                decommit_pages(ptr, len).unwrap()
+            })
             .unwrap();
         memfd
             .instantiate(64 << 10, Some(&image), &ty, &tunables)
@@ -855,7 +908,9 @@ mod test {
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
         // Clear and re-instantiate no image
         memfd
-            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+                decommit_pages(ptr, len).unwrap()
+            })
             .unwrap();
         memfd.instantiate(64 << 10, None, &ty, &tunables).unwrap();
         assert!(!memfd.has_image());
@@ -863,7 +918,9 @@ mod test {
         assert_eq!(&[0, 0, 0, 0], &slice[page_size..][..4]);
         // Clear and re-instantiate image again
         memfd
-            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+                decommit_pages(ptr, len).unwrap()
+            })
             .unwrap();
         memfd
             .instantiate(64 << 10, Some(&image), &ty, &tunables)
@@ -873,7 +930,9 @@ mod test {
         // Create another image with different data.
         let image2 = Arc::new(create_memfd_with_data(page_size, &[10, 11, 12, 13]).unwrap());
         memfd
-            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+                decommit_pages(ptr, len).unwrap()
+            })
             .unwrap();
         memfd
             .instantiate(128 << 10, Some(&image2), &ty, &tunables)
@@ -883,7 +942,9 @@ mod test {
         // Instantiate the original image again; we should notice it's
         // a different image and not reuse the mappings.
         memfd
-            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+                decommit_pages(ptr, len).unwrap()
+            })
             .unwrap();
         memfd
             .instantiate(64 << 10, Some(&image), &ty, &tunables)
@@ -902,13 +963,18 @@ mod test {
             ..Tunables::default_miri()
         };
         let mut mmap = mmap_4mib_inaccessible();
-        let mut memfd = MemoryImageSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
+        let mut memfd = MemoryImageSlot::create(
+            mmap.as_mut_ptr() as *mut _,
+            HostAlignedByteCount::ZERO,
+            4 << 20,
+        );
         memfd.no_clear_on_drop();
 
         // Test basics with the image
         for image_off in [0, page_size, page_size * 2] {
             let image = Arc::new(create_memfd_with_data(image_off, &[1, 2, 3, 4]).unwrap());
             for amt_to_memset in [0, page_size, page_size * 10, 1 << 20, 10 << 20] {
+                let amt_to_memset = HostAlignedByteCount::new(amt_to_memset).unwrap();
                 memfd
                     .instantiate(64 << 10, Some(&image), &ty, &tunables)
                     .unwrap();
@@ -931,6 +997,7 @@ mod test {
 
         // Test without an image
         for amt_to_memset in [0, page_size, page_size * 10, 1 << 20, 10 << 20] {
+            let amt_to_memset = HostAlignedByteCount::new(amt_to_memset).unwrap();
             memfd.instantiate(64 << 10, None, &ty, &tunables).unwrap();
             let mem = unsafe { mmap.slice_mut(0..64 << 10) };
             for chunk in mem.chunks_mut(1024) {
@@ -957,7 +1024,11 @@ mod test {
         };
 
         let mut mmap = mmap_4mib_inaccessible();
-        let mut memfd = MemoryImageSlot::create(mmap.as_mut_ptr() as *mut _, 0, 4 << 20);
+        let mut memfd = MemoryImageSlot::create(
+            mmap.as_mut_ptr() as *mut _,
+            HostAlignedByteCount::ZERO,
+            4 << 20,
+        );
         memfd.no_clear_on_drop();
         let image = Arc::new(create_memfd_with_data(page_size, &[1, 2, 3, 4]).unwrap());
         let initial = 64 << 10;
@@ -973,7 +1044,9 @@ mod test {
         slice[page_size] = 5;
         assert_eq!(&[5, 2, 3, 4], &slice[page_size..][..4]);
         memfd
-            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+                decommit_pages(ptr, len).unwrap()
+            })
             .unwrap();
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
 
@@ -988,7 +1061,9 @@ mod test {
         slice[initial] = 100;
         assert_eq!(&[100, 0], &slice[initial..initial + 2]);
         memfd
-            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+                decommit_pages(ptr, len).unwrap()
+            })
             .unwrap();
 
         // Test that memory is still accessible, but it's been reset
@@ -1005,7 +1080,9 @@ mod test {
         slice[initial] = 100;
         assert_eq!(&[100, 0], &slice[initial..initial + 2]);
         memfd
-            .clear_and_remain_ready(0, |ptr, len| unsafe { decommit_pages(ptr, len).unwrap() })
+            .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
+                decommit_pages(ptr, len).unwrap()
+            })
             .unwrap();
 
         // Reset the image to none and double-check everything is back to zero
