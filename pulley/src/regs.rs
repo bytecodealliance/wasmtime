@@ -102,6 +102,9 @@ impl XReg {
 
 #[test]
 fn assert_special_start_is_right() {
+    for i in 0..XReg::SPECIAL_START {
+        assert!(!XReg::new(i).unwrap().is_special());
+    }
     for i in XReg::SPECIAL_START.. {
         match XReg::new(i) {
             Some(r) => assert!(r.is_special()),
