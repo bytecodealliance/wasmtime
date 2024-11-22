@@ -122,6 +122,12 @@ newtype_of_reg!(XReg, WritableXReg, RegClass::Int);
 newtype_of_reg!(FReg, WritableFReg, RegClass::Float);
 newtype_of_reg!(VReg, WritableVReg, RegClass::Vector);
 
+impl XReg {
+    /// Index of the first "special" register, or the end of which registers
+    /// regalloc is allowed to use.
+    pub const SPECIAL_START: u8 = pulley_interpreter::regs::XReg::SPECIAL_START;
+}
+
 pub use super::super::lower::isle::generated_code::ExtKind;
 
 pub use super::super::lower::isle::generated_code::Amode;
