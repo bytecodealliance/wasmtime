@@ -2461,10 +2461,12 @@ dependencies = [
 name = "pulley-interpreter"
 version = "28.0.0"
 dependencies = [
+ "anyhow",
  "arbitrary",
  "cranelift-bitset",
  "env_logger 0.11.5",
  "log",
+ "object",
  "sptr",
 ]
 

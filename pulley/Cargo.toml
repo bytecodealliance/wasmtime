@@ -20,6 +20,8 @@ sptr = { workspace = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }
+object = { workspace = true, features = ['std'] }
+anyhow = { workspace = true, features = ['std'] }
 
 [features]
 std = []
@@ -31,3 +33,7 @@ interp = ["decode", "encode"]
 
 [package.metadata.docs.rs]
 all-features = true
+
+[[example]]
+name = "objdump"
+required-features = ["disas"]
