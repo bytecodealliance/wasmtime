@@ -27,19 +27,19 @@ block0():
 ;   ret
 ;
 ; Disassembled:
-;        0: 14 1e f0                        xconst8 spilltmp0, -16
-;        3: 18 7b 7b                        xadd32 sp, sp, spilltmp0
-;        6: 32 1b 08 1c                     store64_offset8 sp, 8, lr
-;        a: 30 1b 1d                        store64 sp, fp
-;        d: 11 1d 1b                        xmov fp, sp
-;       10: 14 1e f0                        xconst8 spilltmp0, -16
-;       13: 18 7b 7b                        xadd32 sp, sp, spilltmp0
-;       16: 11 00 1b                        xmov x0, sp
-;       19: 14 1e 10                        xconst8 spilltmp0, 16
-;       1c: 18 7b 7b                        xadd32 sp, sp, spilltmp0
-;       1f: 2b 1c 1b 08                     load64_offset8 lr, sp, 8
-;       23: 28 1d 1b                        load64 fp, sp
-;       26: 14 1e 10                        xconst8 spilltmp0, 16
-;       29: 18 7b 7b                        xadd32 sp, sp, spilltmp0
-;       2c: 00                              ret
+; xconst8 spilltmp0, -16
+; xadd32 sp, sp, spilltmp0
+; store64_offset8 sp, 8, lr
+; store64 sp, fp
+; xmov fp, sp
+; xconst8 spilltmp0, -16
+; xadd32 sp, sp, spilltmp0
+; xmov x0, sp
+; xconst8 spilltmp0, 16
+; xadd32 sp, sp, spilltmp0
+; load64_offset8 lr, sp, 8
+; load64 fp, sp
+; xconst8 spilltmp0, 16
+; xadd32 sp, sp, spilltmp0
+; ret
 

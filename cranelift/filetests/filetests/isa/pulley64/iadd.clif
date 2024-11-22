@@ -13,8 +13,8 @@ block0(v0: i8, v1: i8):
 ;   ret
 ;
 ; Disassembled:
-;        0: 18 00 04                        xadd32 x0, x0, x1
-;        3: 00                              ret
+; xadd32 x0, x0, x1
+; ret
 
 function %i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
@@ -28,8 +28,8 @@ block0(v0: i16, v1: i16):
 ;   ret
 ;
 ; Disassembled:
-;        0: 18 00 04                        xadd32 x0, x0, x1
-;        3: 00                              ret
+; xadd32 x0, x0, x1
+; ret
 
 function %i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
@@ -43,8 +43,8 @@ block0(v0: i32, v1: i32):
 ;   ret
 ;
 ; Disassembled:
-;        0: 18 00 04                        xadd32 x0, x0, x1
-;        3: 00                              ret
+; xadd32 x0, x0, x1
+; ret
 
 function %i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
@@ -58,6 +58,6 @@ block0(v0: i64, v1: i64):
 ;   ret
 ;
 ; Disassembled:
-;        0: 19 00 04                        xadd64 x0, x0, x1
-;        3: 00                              ret
+; xadd64 x0, x0, x1
+; ret
 

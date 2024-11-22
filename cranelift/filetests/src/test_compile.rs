@@ -75,9 +75,14 @@ impl SubTest for TestCompile {
         if self.precise_output {
             let dis = match isa.triple().architecture {
                 target_lexicon::Architecture::Pulley32 | target_lexicon::Architecture::Pulley64 => {
-                    pulley_interpreter::disas::Disassembler::disassemble_all(
-                        compiled_code.buffer.data(),
-                    )?
+                    // Disable hexdumps/offsets to reduce the churn in these
+                    // tests as instructions are encoded differently and/or
+                    // their immediates change.
+                    let mut disas =
+                        pulley_interpreter::disas::Disassembler::new(compiled_code.buffer.data());
+                    disas.hexdump(false).offsets(false);
+                    pulley_interpreter::decode::Decoder::decode_all(&mut disas)?;
+                    disas.disas().to_string()
                 }
                 _ => {
                     let cs = isa

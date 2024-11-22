@@ -30,9 +30,9 @@ block3(v3: i8):
 ;   ret
 ;
 ; Disassembled:
-;        0: 03 00 0e 00 00 00               br_if x0, 0xe    // target = 0xe
-;        6: 14 00 00                        xconst8 x0, 0
-;        9: 02 08 00 00 00                  jump 0x8    // target = 0x11
-;        e: 14 00 01                        xconst8 x0, 1
-;       11: 00                              ret
+; br_if x0, 0xe    // target = 0xe
+; xconst8 x0, 0
+; jump 0x8    // target = 0x11
+; xconst8 x0, 1
+; ret
 
