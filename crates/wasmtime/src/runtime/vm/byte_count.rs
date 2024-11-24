@@ -94,6 +94,9 @@ impl HostAlignedByteCount {
             .ok_or(ByteCountOutOfBounds(ByteCountOutOfBoundsKind::Add))
     }
 
+    // Note: saturating_add should not be added! usize::MAX is not a power of 2
+    // so is not aligned.
+
     /// Compute `self - bytes`.
     ///
     /// Returns an error if the result underflows.
@@ -105,6 +108,13 @@ impl HostAlignedByteCount {
             .ok_or_else(|| ByteCountOutOfBounds(ByteCountOutOfBoundsKind::Sub))
     }
 
+    /// Compute `self - bytes`, returning zero if the result underflows.
+    #[inline]
+    pub fn saturating_sub(self, bytes: HostAlignedByteCount) -> Self {
+        // aligned - aligned = aligned, and 0 is always aligned.
+        Self(self.0.saturating_sub(bytes.0))
+    }
+
     /// Multiply an aligned byte count by a scalar value.
     ///
     /// Returns an error if the result overflows.
@@ -114,6 +124,27 @@ impl HostAlignedByteCount {
             .checked_mul(scalar)
             .map(Self)
             .ok_or_else(|| ByteCountOutOfBounds(ByteCountOutOfBoundsKind::Mul))
+    }
+
+    /// Divide an aligned byte count by another aligned byte count, producing a
+    /// scalar value.
+    ///
+    /// Returns an error in case the divisor is zero.
+    pub fn checked_div(self, divisor: HostAlignedByteCount) -> Result<usize, ByteCountOutOfBounds> {
+        self.0
+            .checked_div(divisor.0)
+            .ok_or_else(|| ByteCountOutOfBounds(ByteCountOutOfBoundsKind::Div))
+    }
+
+    /// Compute the remainder of an aligned byte count divided by another
+    /// aligned byte count.
+    ///
+    /// Returns an error in case the divisor is zero.
+    pub fn checked_rem(self, divisor: HostAlignedByteCount) -> Result<Self, ByteCountOutOfBounds> {
+        self.0
+            .checked_rem(divisor.0)
+            .map(Self)
+            .ok_or_else(|| ByteCountOutOfBounds(ByteCountOutOfBoundsKind::Rem))
     }
 
     /// Unchecked multiplication by a scalar value.
@@ -214,6 +245,8 @@ enum ByteCountOutOfBoundsKind {
     Add,
     Sub,
     Mul,
+    Div,
+    Rem,
 }
 
 impl fmt::Display for ByteCountOutOfBoundsKind {
@@ -228,6 +261,38 @@ impl fmt::Display for ByteCountOutOfBoundsKind {
             ByteCountOutOfBoundsKind::Mul => {
                 f.write_str("byte count overflow during multiplication")
             }
+            ByteCountOutOfBoundsKind::Div => f.write_str("division by zero"),
+            ByteCountOutOfBoundsKind::Rem => f.write_str("remainder by zero"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod proptest_impls {
+    use super::*;
+
+    use proptest::prelude::*;
+
+    impl Arbitrary for HostAlignedByteCount {
+        type Strategy = BoxedStrategy<Self>;
+        type Parameters = ();
+
+        fn arbitrary_with(_: ()) -> Self::Strategy {
+            // Compute the number of pages that fit in a usize, rounded down.
+            // For example, if:
+            //
+            // * usize::MAX is 2**64 - 1
+            // * host_page_size is 2**12 (4KiB)
+            //
+            // Then page_count = floor(usize::MAX / host_page_size) = 2**52 - 1.
+            // The range 0..=page_count, when multiplied by the page size, will
+            // produce values in the range 0..=(2**64 - 2**12), in steps of
+            // 2**12, uniformly at random. This is the desired uniform
+            // distribution of byte counts.
+            let page_count = usize::MAX / host_page_size();
+            (0..=page_count)
+                .prop_map(|n| HostAlignedByteCount::new(n * host_page_size()).unwrap())
+                .boxed()
         }
     }
 }
