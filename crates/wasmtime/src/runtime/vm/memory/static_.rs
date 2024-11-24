@@ -3,15 +3,14 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::memory::RuntimeLinearMemory;
-use crate::runtime::vm::SendSyncPtr;
-use core::ptr::NonNull;
+use crate::runtime::vm::MemoryBase;
 
 /// A "static" memory where the lifetime of the backing memory is managed
 /// elsewhere. Currently used with the pooling allocator.
 pub struct StaticMemory {
     /// The base pointer of this static memory, wrapped up in a send/sync
     /// wrapper.
-    base: SendSyncPtr<u8>,
+    base: MemoryBase,
 
     /// The byte capacity of the `base` pointer.
     capacity: usize,
@@ -22,7 +21,7 @@ pub struct StaticMemory {
 
 impl StaticMemory {
     pub fn new(
-        base_ptr: *mut u8,
+        base: MemoryBase,
         base_capacity: usize,
         initial_size: usize,
         maximum_size: Option<usize>,
@@ -43,7 +42,7 @@ impl StaticMemory {
         };
 
         Ok(Self {
-            base: SendSyncPtr::new(NonNull::new(base_ptr).unwrap()),
+            base,
             capacity: base_capacity,
             size: initial_size,
         })
@@ -73,7 +72,7 @@ impl RuntimeLinearMemory for StaticMemory {
         self.size = len;
     }
 
-    fn base_ptr(&self) -> *mut u8 {
-        self.base.as_ptr()
+    fn base(&self) -> MemoryBase {
+        self.base.clone()
     }
 }

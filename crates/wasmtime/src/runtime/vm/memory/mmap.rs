@@ -7,6 +7,8 @@ use crate::runtime::vm::{mmap::AlignedLength, HostAlignedByteCount, Mmap};
 use alloc::sync::Arc;
 use wasmtime_environ::Tunables;
 
+use super::MemoryBase;
+
 /// A linear memory instance.
 #[derive(Debug)]
 pub struct MmapMemory {
@@ -223,7 +225,11 @@ impl RuntimeLinearMemory for MmapMemory {
         self.len = len;
     }
 
-    fn base_ptr(&self) -> *mut u8 {
-        unsafe { self.mmap.as_mut_ptr().add(self.pre_guard_size.byte_count()) }
+    fn base(&self) -> MemoryBase {
+        MemoryBase::Mmap(
+            self.mmap
+                .offset(self.pre_guard_size)
+                .expect("pre_guard_size is in bounds"),
+        )
     }
 }

@@ -6,6 +6,7 @@
 //! but it's enough to get various tests running relying on memories and such.
 
 use crate::prelude::*;
+use crate::runtime::vm::sys::vm::MemoryImageSource;
 use crate::runtime::vm::{HostAlignedByteCount, SendSyncPtr};
 use std::alloc::{self, Layout};
 use std::fs::File;
@@ -93,6 +94,16 @@ impl Mmap {
 
     pub unsafe fn make_readonly(&self, _range: Range<usize>) -> Result<()> {
         Ok(())
+    }
+
+    pub unsafe fn map_image_at(
+        &self,
+        image_source: &MemoryImageSource,
+        _source_offset: u64,
+        _memory_offset: HostAlignedByteCount,
+        _memory_len: HostAlignedByteCount,
+    ) -> Result<()> {
+        match *image_source {}
     }
 }
 
