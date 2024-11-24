@@ -1,6 +1,6 @@
 use crate::runtime::vm::sys::DecommitBehavior;
 use rustix::fd::AsRawFd;
-use rustix::mm::{mmap, mmap_anonymous, mprotect, MapFlags, MprotectFlags, ProtFlags};
+use rustix::mm::{mmap_anonymous, mprotect, MapFlags, MprotectFlags, ProtFlags};
 use std::fs::File;
 use std::io;
 #[cfg(feature = "std")]
@@ -149,26 +149,13 @@ impl MemoryImageSource {
         Ok(Some(MemoryImageSource::Memfd(memfd)))
     }
 
-    fn as_file(&self) -> &File {
+    pub(super) fn as_file(&self) -> &File {
         match *self {
             #[cfg(feature = "std")]
             MemoryImageSource::Mmap(ref file) => file,
             #[cfg(target_os = "linux")]
             MemoryImageSource::Memfd(ref memfd) => memfd.as_file(),
         }
-    }
-
-    pub unsafe fn map_at(&self, base: *mut u8, len: usize, offset: u64) -> io::Result<()> {
-        let ptr = mmap(
-            base.cast(),
-            len,
-            ProtFlags::READ | ProtFlags::WRITE,
-            MapFlags::PRIVATE | MapFlags::FIXED,
-            self.as_file(),
-            offset,
-        )?;
-        assert_eq!(base, ptr.cast());
-        Ok(())
     }
 
     pub unsafe fn remap_as_zeros_at(&self, base: *mut u8, len: usize) -> io::Result<()> {

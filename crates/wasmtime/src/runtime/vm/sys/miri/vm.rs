@@ -1,3 +1,4 @@
+use crate::runtime::vm::{HostAlignedByteCount, MmapOffset};
 use crate::vm::sys::DecommitBehavior;
 use std::fs::File;
 use std::io;
@@ -47,10 +48,6 @@ impl MemoryImageSource {
 
     pub fn from_data(_data: &[u8]) -> io::Result<Option<MemoryImageSource>> {
         Ok(None)
-    }
-
-    pub unsafe fn map_at(&self, _base: *mut u8, _len: usize, _offset: u64) -> io::Result<()> {
-        match *self {}
     }
 
     pub unsafe fn remap_as_zeros_at(&self, _base: *mut u8, _len: usize) -> io::Result<()> {

@@ -77,11 +77,11 @@
 use crate::prelude::*;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
 #[cfg(feature = "signals-based-traps")]
-use crate::runtime::vm::HostAlignedByteCount;
+use crate::runtime::vm::{HostAlignedByteCount, MmapOffset};
 use crate::runtime::vm::{MemoryImage, MemoryImageSlot, VMStore, WaitResult};
 use alloc::sync::Arc;
-use core::ops::Range;
 use core::time::Duration;
+use core::{marker::PhantomData, ops::Range};
 use wasmtime_environ::{Trap, Tunables};
 
 #[cfg(feature = "signals-based-traps")]
@@ -160,7 +160,10 @@ pub trait RuntimeLinearMemory: Send + Sync {
     fn grow_to(&mut self, size: usize) -> Result<()>;
 
     /// Returns a pointer to the base of this linear memory allocation.
-    fn base_ptr(&self) -> *mut u8;
+    ///
+    /// This is either a raw pointer, or a reference to an mmap along with an
+    /// offset within it.
+    fn base<'a>(&'a self) -> MemoryBase<'a>;
 
     /// Internal method for Wasmtime when used in conjunction with CoW images.
     /// This is used to inform the underlying memory that the size of memory has
@@ -172,6 +175,42 @@ pub trait RuntimeLinearMemory: Send + Sync {
     fn set_byte_size(&mut self, len: usize) {
         let _ = len;
         panic!("CoW images used with this memory and it doesn't support it");
+    }
+}
+
+/// The base pointer of a memory allocation.
+#[derive(Clone, Copy, Debug)]
+pub enum MemoryBase<'a> {
+    /// A raw pointer into memory.
+    Raw {
+        ptr: *mut u8,
+        // If the signals-based-traps feature isn't enabled, we need to ensure
+        // that the lifetime param is referenced. 'a is covariant so &'a () is
+        // appropriate.
+        _phantom: PhantomData<&'a ()>,
+    },
+
+    /// An mmap along with an offset into it.
+    #[cfg(feature = "signals-based-traps")]
+    Mmap(MmapOffset<'a>),
+}
+
+impl<'a> MemoryBase<'a> {
+    /// Creates a new `MemoryBase` from a raw pointer.
+    pub fn new_raw(ptr: *mut u8) -> Self {
+        Self::Raw {
+            ptr,
+            _phantom: PhantomData,
+        }
+    }
+
+    /// Returns the actual memory address in memory that is represented by this base.
+    pub fn as_mut_ptr(&self) -> *mut u8 {
+        match self {
+            Self::Raw { ptr, .. } => *ptr,
+            #[cfg(feature = "signals-based-traps")]
+            Self::Mmap(mmap_offset) => mmap_offset.as_mut_ptr(),
+        }
     }
 }
 
@@ -488,16 +527,36 @@ impl LocalMemory {
                 // `RuntimeLinearMemory::byte_size` is not a multiple of the host page
                 // size. See https://github.com/bytecodealliance/wasmtime/issues/9660.
                 if let Ok(byte_size) = HostAlignedByteCount::new(alloc.byte_size()) {
-                    let mut slot = MemoryImageSlot::create(
-                        alloc.base_ptr().cast(),
-                        byte_size,
-                        alloc.byte_capacity(),
-                    );
-                    // On drop, we will unmap our mmap'd range that this slot was
-                    // mapped on top of, so there is no need for the slot to wipe
-                    // it with an anonymous mapping first.
+                    // memory_image is CoW-based so it is expected to be backed
+                    // by an mmap.
+                    let mmap_offset = match alloc.base() {
+                        MemoryBase::Mmap(offset) => offset,
+                        MemoryBase::Raw { .. } => {
+                            unreachable!("memory_image is Some only for mmap-based memories")
+                        }
+                    };
+
+                    let mut slot =
+                        MemoryImageSlot::create(mmap_offset, byte_size, alloc.byte_capacity());
+                    // On drop, we will unmap our mmap'd range that this slot
+                    // was mapped on top of, so there is no need for the slot to
+                    // wipe it with an anonymous mapping first.
+                    //
+                    // Note that this code would be incorrect if clear-on-drop
+                    // were enabled. That's because in the struct definition,
+                    // `memory_image` above is listed after `alloc`. Rust drops
+                    // fields in the order they're defined, so `memory_image`
+                    // would be dropped after `alloc`. If clear-on-drop were
+                    // enabled, `memory_image` would end up remapping a bunch of
+                    // memory after it was unmapped by the `alloc` drop.
                     slot.no_clear_on_drop();
-                    slot.instantiate(alloc.byte_size(), Some(image), ty, tunables)?;
+                    slot.instantiate(
+                        mmap_offset.mmap(),
+                        alloc.byte_size(),
+                        Some(image),
+                        ty,
+                        tunables,
+                    )?;
                     Some(slot)
                 } else {
                     None
@@ -569,7 +628,7 @@ impl LocalMemory {
 
         // Save the original base pointer to assert the invariant that growth up
         // to the byte capacity never relocates the base pointer.
-        let base_ptr_before = self.alloc.base_ptr();
+        let base_ptr_before = self.alloc.base().as_mut_ptr();
         let required_to_not_move_memory = new_byte_size <= self.alloc.byte_capacity();
 
         let result = (|| -> Result<()> {
@@ -618,7 +677,7 @@ impl LocalMemory {
                 // On successful growth double-check that the base pointer
                 // didn't move if it shouldn't have.
                 if required_to_not_move_memory {
-                    assert_eq!(base_ptr_before, self.alloc.base_ptr());
+                    assert_eq!(base_ptr_before, self.alloc.base().as_mut_ptr());
                 }
 
                 Ok(Some((old_byte_size, new_byte_size)))
@@ -638,7 +697,7 @@ impl LocalMemory {
 
     pub fn vmmemory(&mut self) -> VMMemoryDefinition {
         VMMemoryDefinition {
-            base: self.alloc.base_ptr(),
+            base: self.alloc.base().as_mut_ptr(),
             current_length: self.alloc.byte_size().into(),
         }
     }
@@ -655,7 +714,7 @@ impl LocalMemory {
     }
 
     pub fn wasm_accessible(&self) -> Range<usize> {
-        let base = self.alloc.base_ptr() as usize;
+        let base = self.alloc.base().as_mut_ptr() as usize;
         // From the base add:
         //
         // * max(capacity, reservation) -- all memory is guaranteed to have at

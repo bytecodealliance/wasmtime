@@ -3,7 +3,7 @@ use crate::prelude::*;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
     CompiledModuleId, GcHeapAllocationIndex, Imports, InstanceAllocationRequest, InstanceAllocator,
-    InstanceAllocatorImpl, Memory, MemoryAllocationIndex, ModuleRuntimeInfo,
+    InstanceAllocatorImpl, Memory, MemoryAllocationIndex, MemoryBase, ModuleRuntimeInfo,
     OnDemandInstanceAllocator, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory, StorePtr,
     Table, TableAllocationIndex,
 };
@@ -89,8 +89,8 @@ impl RuntimeLinearMemory for LinearMemoryProxy {
         self.mem.grow_to(new_size)
     }
 
-    fn base_ptr(&self) -> *mut u8 {
-        self.mem.as_ptr()
+    fn base(&self) -> MemoryBase<'_> {
+        MemoryBase::new_raw(self.mem.as_ptr())
     }
 }
 

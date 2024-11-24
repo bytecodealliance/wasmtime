@@ -64,7 +64,7 @@ pub use crate::runtime::vm::instance::{
     PoolingInstanceAllocatorConfig,
 };
 pub use crate::runtime::vm::memory::{
-    Memory, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory,
+    Memory, MemoryBase, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory,
 };
 pub use crate::runtime::vm::mmap_vec::MmapVec;
 pub use crate::runtime::vm::mpk::MpkEnabled;
@@ -97,7 +97,7 @@ mod mmap;
 cfg_if::cfg_if! {
     if #[cfg(feature = "signals-based-traps")] {
         pub use crate::runtime::vm::byte_count::*;
-        pub use crate::runtime::vm::mmap::Mmap;
+        pub use crate::runtime::vm::mmap::{Mmap, MmapOffset, MmapOffsetRaw};
         pub use self::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
     } else {
         pub use self::cow_disabled::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};

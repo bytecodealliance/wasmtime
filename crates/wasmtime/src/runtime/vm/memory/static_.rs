@@ -3,7 +3,7 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::memory::RuntimeLinearMemory;
-use crate::runtime::vm::SendSyncPtr;
+use crate::runtime::vm::{MemoryBase, SendSyncPtr};
 use core::ptr::NonNull;
 
 /// A "static" memory where the lifetime of the backing memory is managed
@@ -73,7 +73,14 @@ impl RuntimeLinearMemory for StaticMemory {
         self.size = len;
     }
 
-    fn base_ptr(&self) -> *mut u8 {
-        self.base.as_ptr()
+    fn base(&self) -> MemoryBase<'_> {
+        // XXX: Returning a raw pointer isn't quite right. A `StaticMemory` is
+        // usually created via a pre-existing `Mmap` instance, but we lose that
+        // info since we store a raw pointer above. However, retaining that info
+        // is tricky because it would introduce a lifetime param into
+        // `StaticMemory`.
+        //
+        // One solution would be to store `Arc<Mmap>`.
+        MemoryBase::new_raw(self.base.as_ptr())
     }
 }

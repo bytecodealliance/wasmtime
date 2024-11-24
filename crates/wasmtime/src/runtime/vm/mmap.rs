@@ -1,9 +1,9 @@
 //! Low-level abstraction for allocating and managing zero-filled pages
 //! of memory.
 
-use super::HostAlignedByteCount;
+use super::{HostAlignedByteCount, SendSyncPtr};
 use crate::prelude::*;
-use crate::runtime::vm::sys::mmap;
+use crate::runtime::vm::sys::{mmap, vm::MemoryImageSource};
 use core::ops::Range;
 #[cfg(feature = "std")]
 use std::{fs::File, sync::Arc};
@@ -129,6 +129,49 @@ impl Mmap<AlignedLength> {
         unsafe { HostAlignedByteCount::new_unchecked(self.sys.len()) }
     }
 
+    /// Return a struct representing a page-aligned offset into the mmap.
+    ///
+    /// Returns an error if `offset >= self.len_aligned()`.
+    pub fn offset(&self, offset: HostAlignedByteCount) -> Result<MmapOffset<'_>> {
+        if offset >= self.len_aligned() {
+            bail!(
+                "offset {} is not in bounds for mmap: {}",
+                offset,
+                self.len_aligned()
+            );
+        }
+
+        Ok(MmapOffset::new(self, offset))
+    }
+
+    /// Return an `MmapOffset` corresponding to zero bytes into the mmap.
+    pub fn zero_offset(&self) -> MmapOffset<'_> {
+        MmapOffset::new(self, HostAlignedByteCount::ZERO)
+    }
+
+    /// Returns a struct representing a page-aligned offset into the mmap, as
+    /// reconstructed from parts of the mmap.
+    ///
+    /// `ptr` must have been returned by a previous call to `as_send_sync_ptr`
+    /// on this mmap.
+    ///
+    /// Some parts of the runtime can't use lifetime parameters, so this
+    /// function does dynamic checks to ensure that the correct mmap is in use.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `ptr` is not a valid pointer into this mmap, or if `offset >=
+    /// self.len_aligned()`.
+    pub fn reconstruct_offset(&self, raw: MmapOffsetRaw) -> MmapOffset<'_> {
+        assert_eq!(
+            self.as_send_sync_ptr(),
+            raw.base,
+            "raw.base is from this mmap"
+        );
+        // MmapOffset::new checks that offset is in bounds.
+        MmapOffset::new(self, raw.offset)
+    }
+
     /// Make the memory starting at `start` and extending for `len` bytes
     /// accessible. `start` and `len` must be native page-size multiples and
     /// describe a range within `self`'s reserved memory.
@@ -232,6 +275,12 @@ impl<T> Mmap<T> {
         self.sys.as_ptr().as_ptr()
     }
 
+    /// Return the allocated memory as a `SendSyncPtr`.
+    #[inline]
+    pub fn as_send_sync_ptr(&self) -> SendSyncPtr<u8> {
+        self.sys.as_ptr().cast()
+    }
+
     /// Return the length of the allocated memory.
     ///
     /// This is the byte length of this entire mapping which includes both
@@ -313,6 +362,110 @@ fn _assert() {
 impl From<Mmap<AlignedLength>> for Mmap<UnalignedLength> {
     fn from(mmap: Mmap<AlignedLength>) -> Mmap<UnalignedLength> {
         mmap.into_unaligned()
+    }
+}
+
+/// A reference to an [`Mmap`], along with a host-page-aligned index within it.
+///
+/// The main invariant this type asserts is that the index is in bounds within
+/// the `Mmap` (i.e. `self.mmap[self.offset]` is valid). In the future, this
+/// type may also assert other invariants.
+#[derive(Clone, Copy, Debug)]
+pub struct MmapOffset<'a> {
+    mmap: &'a Mmap<AlignedLength>,
+    offset: HostAlignedByteCount,
+}
+
+impl<'a> MmapOffset<'a> {
+    #[inline]
+    fn new(mmap: &'a Mmap<AlignedLength>, offset: HostAlignedByteCount) -> Self {
+        // Note < rather than <=. This currently cannot represent the logical
+        // end of the mmap. We may need to change this if that becomes
+        // necessary.
+        assert!(
+            offset < mmap.len_aligned(),
+            "offset {} is in bounds (< {})",
+            offset,
+            mmap.len_aligned(),
+        );
+        Self { mmap, offset }
+    }
+
+    /// Returns the mmap this offset is within.
+    #[inline]
+    pub fn mmap(&self) -> &'a Mmap<AlignedLength> {
+        self.mmap
+    }
+
+    /// Returns the host-page-aligned offset within the mmap.
+    #[inline]
+    pub fn offset(&self) -> HostAlignedByteCount {
+        self.offset
+    }
+
+    /// Returns the raw pointer in memory represented by this offset.
+    #[inline]
+    pub fn as_mut_ptr(&self) -> *mut u8 {
+        // SAFETY: constructor checks that offset is within this allocation.
+        unsafe { self.mmap().as_mut_ptr().byte_add(self.offset.byte_count()) }
+    }
+
+    /// Returns a raw form of this offset.
+    #[inline]
+    pub fn to_raw(self) -> MmapOffsetRaw {
+        MmapOffsetRaw {
+            base: self.mmap.as_send_sync_ptr(),
+            offset: self.offset,
+        }
+    }
+
+    /// Maps an image into the mmap with read/write permissions.
+    ///
+    /// The image is mapped at `self.mmap.as_ptr() + self.offset +
+    /// memory_offset`.
+    ///
+    /// ## Safety
+    ///
+    /// The caller must ensure that noone else has a reference to this memory.
+    pub unsafe fn map_image_at(
+        &self,
+        image_source: &MemoryImageSource,
+        source_offset: u64,
+        memory_offset: HostAlignedByteCount,
+        memory_len: HostAlignedByteCount,
+    ) -> Result<()> {
+        let total_offset = self
+            .offset
+            .checked_add(memory_offset)
+            .expect("self.offset + memory_offset is in bounds");
+        self.mmap
+            .sys
+            .map_image_at(image_source, source_offset, total_offset, memory_len)
+    }
+}
+
+/// Like [`MmapOffset`], but without any lifetime parameters.
+///
+/// Returned by [`MmapOffset::to_raw`e.]
+///
+/// Some parts of the runtime currently run into self-referential issues with
+/// lifetime parameters, and this type ensures that `MmapOffset` can be used in
+/// those contexts.
+///
+/// To turn an `MmapOffsetRaw` back into an [`MmapOffset`], call
+/// [`Mmap::reconstruct_offset`].
+#[derive(Clone, Copy, Debug)]
+pub struct MmapOffsetRaw {
+    base: SendSyncPtr<u8>,
+    offset: HostAlignedByteCount,
+}
+
+impl MmapOffsetRaw {
+    /// Returns the raw pointer in memory represented by this offset.
+    pub fn as_mut_ptr(&self) -> *mut u8 {
+        // SAFETY: offset is within bounds, as ensured by MmapOffset's
+        // constructor. (But note that )
+        unsafe { self.base.as_ptr().byte_add(self.offset.byte_count()) }
     }
 }
 

@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use crate::runtime::vm::sys::vm::MemoryImageSource;
 use crate::runtime::vm::{HostAlignedByteCount, SendSyncPtr};
 use std::fs::{File, OpenOptions};
 use std::io;
@@ -206,6 +207,16 @@ impl Mmap {
             bail!(io::Error::last_os_error());
         }
         Ok(())
+    }
+
+    pub unsafe fn map_image_at(
+        &self,
+        image_source: &MemoryImageSource,
+        _source_offset: u64,
+        _memory_offset: HostAlignedByteCount,
+        _memory_len: HostAlignedByteCount,
+    ) -> Result<()> {
+        match *image_source {}
     }
 }
 

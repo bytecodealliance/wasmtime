@@ -5,7 +5,7 @@
 //! handle memory allocation failures.
 
 use crate::prelude::*;
-use crate::runtime::vm::memory::RuntimeLinearMemory;
+use crate::runtime::vm::memory::{MemoryBase, RuntimeLinearMemory};
 use crate::runtime::vm::SendSyncPtr;
 use core::mem;
 use core::ptr::NonNull;
@@ -86,8 +86,8 @@ impl RuntimeLinearMemory for MallocMemory {
         Ok(())
     }
 
-    fn base_ptr(&self) -> *mut u8 {
-        self.base_ptr.as_ptr()
+    fn base(&self) -> MemoryBase<'_> {
+        MemoryBase::new_raw(self.base_ptr.as_ptr())
     }
 }
 
