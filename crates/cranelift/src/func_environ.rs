@@ -1,3 +1,4 @@
+use crate::compiler::Compiler;
 use crate::translate::{
     FuncTranslationState, GlobalVariable, Heap, HeapData, StructFieldsVec, TableData, TableSize,
     TargetEnvironment,
@@ -37,9 +38,9 @@ pub(crate) struct BuiltinFunctions {
 }
 
 impl BuiltinFunctions {
-    fn new(isa: &dyn TargetIsa, tunables: &Tunables) -> Self {
+    fn new(compiler: &Compiler) -> Self {
         Self {
-            types: BuiltinFunctionSignatures::new(isa, tunables),
+            types: BuiltinFunctionSignatures::new(compiler),
             builtins: [None; BuiltinFunctionIndex::builtin_functions_total_number() as usize],
         }
     }
@@ -84,6 +85,7 @@ wasmtime_environ::foreach_builtin_function!(declare_function_signatures);
 
 /// The `FuncEnvironment` implementation for use by the `ModuleEnvironment`.
 pub struct FuncEnvironment<'module_environment> {
+    compiler: &'module_environment Compiler,
     isa: &'module_environment (dyn TargetIsa + 'module_environment),
     pub(crate) module: &'module_environment Module,
     pub(crate) types: &'module_environment ModuleTypesBuilder,
@@ -147,9 +149,6 @@ pub struct FuncEnvironment<'module_environment> {
 
     fuel_consumed: i64,
 
-    #[cfg(feature = "wmemcheck")]
-    wmemcheck: bool,
-
     /// A `GlobalValue` in CLIF which represents the stack limit.
     ///
     /// Typically this resides in the `stack_limit` value of `ir::Function` but
@@ -162,26 +161,22 @@ pub struct FuncEnvironment<'module_environment> {
 
 impl<'module_environment> FuncEnvironment<'module_environment> {
     pub fn new(
-        isa: &'module_environment (dyn TargetIsa + 'module_environment),
+        compiler: &'module_environment Compiler,
         translation: &'module_environment ModuleTranslation<'module_environment>,
         types: &'module_environment ModuleTypesBuilder,
-        tunables: &'module_environment Tunables,
-        wmemcheck: bool,
         wasm_func_ty: &'module_environment WasmFuncType,
     ) -> Self {
-        let builtin_functions = BuiltinFunctions::new(isa, tunables);
+        let tunables = compiler.tunables();
+        let builtin_functions = BuiltinFunctions::new(compiler);
 
         // This isn't used during translation, so squash the warning about this
         // being unused from the compiler.
         let _ = BuiltinFunctions::raise;
 
-        // Avoid unused warning in default build.
-        #[cfg(not(feature = "wmemcheck"))]
-        let _ = wmemcheck;
-
         Self {
-            isa,
+            isa: compiler.isa(),
             module: &translation.module,
+            compiler,
             types,
             wasm_func_ty,
             sig_ref_to_ty: SecondaryMap::default(),
@@ -194,7 +189,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             vmctx: None,
             pcc_vmctx_memtype: None,
             builtin_functions,
-            offsets: VMOffsets::new(isa.pointer_bytes(), &translation.module),
+            offsets: VMOffsets::new(compiler.isa().pointer_bytes(), &translation.module),
             tunables,
             fuel_var: Variable::new(0),
             epoch_deadline_var: Variable::new(0),
@@ -205,8 +200,6 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             // functions should consume at least some fuel.
             fuel_consumed: 1,
 
-            #[cfg(feature = "wmemcheck")]
-            wmemcheck,
             #[cfg(feature = "wmemcheck")]
             translation,
 
@@ -1720,7 +1713,7 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
     }
 
     fn tunables(&self) -> &Tunables {
-        self.tunables
+        self.compiler.tunables()
     }
 }
 
@@ -1768,11 +1761,12 @@ impl FuncEnvironment<'_> {
 
     pub fn translate_table_grow(
         &mut self,
-        mut pos: FuncCursor<'_>,
+        builder: &mut FunctionBuilder<'_>,
         table_index: TableIndex,
         delta: ir::Value,
         init_value: ir::Value,
     ) -> WasmResult<ir::Value> {
+        let mut pos = builder.cursor();
         let table = self.table(table_index);
         let ty = table.ref_type.heap_type;
         let grow = if ty.is_vmgcref_type() {
@@ -1791,7 +1785,7 @@ impl FuncEnvironment<'_> {
             .ins()
             .call(grow, &[vmctx, table_index_arg, delta, init_value]);
         let result = pos.func.dfg.first_result(call_inst);
-        Ok(self.convert_pointer_to_index_type(pos, result, index_type, false))
+        Ok(self.convert_pointer_to_index_type(builder.cursor(), result, index_type, false))
     }
 
     pub fn translate_table_get(
@@ -1872,12 +1866,13 @@ impl FuncEnvironment<'_> {
 
     pub fn translate_table_fill(
         &mut self,
-        mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
+        builder: &mut FunctionBuilder<'_>,
         table_index: TableIndex,
         dst: ir::Value,
         val: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
+        let mut pos = builder.cursor();
         let table = self.table(table_index);
         let index_type = table.idx_type;
         let dst = self.cast_index_to_i64(&mut pos, dst, index_type);
@@ -2058,7 +2053,8 @@ impl FuncEnvironment<'_> {
             libcall,
             &[vmctx, interned_type_index, data_index, data_offset, len],
         );
-        Ok(builder.func.dfg.first_result(call_inst))
+        let result = builder.func.dfg.first_result(call_inst);
+        Ok(builder.ins().ireduce(ir::types::I32, result))
     }
 
     pub fn translate_array_new_elem(
@@ -2080,7 +2076,8 @@ impl FuncEnvironment<'_> {
             libcall,
             &[vmctx, interned_type_index, elem_index, elem_offset, len],
         );
-        Ok(builder.func.dfg.first_result(call_inst))
+        let result = builder.func.dfg.first_result(call_inst);
+        Ok(builder.ins().ireduce(ir::types::I32, result))
     }
 
     pub fn translate_array_copy(
@@ -2680,11 +2677,12 @@ impl FuncEnvironment<'_> {
 
     pub fn translate_memory_grow(
         &mut self,
-        mut pos: FuncCursor<'_>,
+        builder: &mut FunctionBuilder<'_>,
         index: MemoryIndex,
         _heap: Heap,
         val: ir::Value,
     ) -> WasmResult<ir::Value> {
+        let mut pos = builder.cursor();
         let memory_grow = self.builtin_functions.memory32_grow(&mut pos.func);
         let index_arg = index.index();
 
@@ -2700,7 +2698,12 @@ impl FuncEnvironment<'_> {
             0 => true,
             _ => unreachable!("only page sizes 2**0 and 2**16 are currently valid"),
         };
-        Ok(self.convert_pointer_to_index_type(pos, result, index_type, single_byte_pages))
+        Ok(self.convert_pointer_to_index_type(
+            builder.cursor(),
+            result,
+            index_type,
+            single_byte_pages,
+        ))
     }
 
     pub fn translate_memory_size(
@@ -2790,7 +2793,7 @@ impl FuncEnvironment<'_> {
 
     pub fn translate_memory_copy(
         &mut self,
-        mut pos: FuncCursor,
+        builder: &mut FunctionBuilder<'_>,
         src_index: MemoryIndex,
         _src_heap: Heap,
         dst_index: MemoryIndex,
@@ -2799,6 +2802,7 @@ impl FuncEnvironment<'_> {
         src: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
+        let mut pos = builder.cursor();
         let vmctx = self.vmctx_val(&mut pos);
 
         let memory_copy = self.builtin_functions.memory_copy(&mut pos.func);
@@ -2826,13 +2830,14 @@ impl FuncEnvironment<'_> {
 
     pub fn translate_memory_fill(
         &mut self,
-        mut pos: FuncCursor,
+        builder: &mut FunctionBuilder<'_>,
         memory_index: MemoryIndex,
         _heap: Heap,
         dst: ir::Value,
         val: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
+        let mut pos = builder.cursor();
         let memory_fill = self.builtin_functions.memory_fill(&mut pos.func);
         let dst = self.cast_index_to_i64(&mut pos, dst, self.memory(memory_index).idx_type);
         let len = self.cast_index_to_i64(&mut pos, len, self.memory(memory_index).idx_type);
@@ -2848,7 +2853,7 @@ impl FuncEnvironment<'_> {
 
     pub fn translate_memory_init(
         &mut self,
-        mut pos: FuncCursor,
+        builder: &mut FunctionBuilder<'_>,
         memory_index: MemoryIndex,
         _heap: Heap,
         seg_index: u32,
@@ -2856,6 +2861,7 @@ impl FuncEnvironment<'_> {
         src: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
+        let mut pos = builder.cursor();
         let memory_init = self.builtin_functions.memory_init(&mut pos.func);
 
         let memory_index_arg = pos.ins().iconst(I32, memory_index.index() as i64);
@@ -2894,7 +2900,7 @@ impl FuncEnvironment<'_> {
 
     pub fn translate_table_copy(
         &mut self,
-        mut pos: FuncCursor,
+        builder: &mut FunctionBuilder<'_>,
         dst_table_index: TableIndex,
         src_table_index: TableIndex,
         dst: ir::Value,
@@ -2902,8 +2908,9 @@ impl FuncEnvironment<'_> {
         len: ir::Value,
     ) -> WasmResult<()> {
         let (table_copy, dst_table_index_arg, src_table_index_arg) =
-            self.get_table_copy_func(&mut pos.func, dst_table_index, src_table_index);
+            self.get_table_copy_func(&mut builder.func, dst_table_index, src_table_index);
 
+        let mut pos = builder.cursor();
         let dst = self.cast_index_to_i64(&mut pos, dst, self.table(dst_table_index).idx_type);
         let src = self.cast_index_to_i64(&mut pos, src, self.table(src_table_index).idx_type);
         let len = if index_type_to_ir_type(self.table(dst_table_index).idx_type) == I64
@@ -2933,13 +2940,14 @@ impl FuncEnvironment<'_> {
 
     pub fn translate_table_init(
         &mut self,
-        mut pos: FuncCursor,
+        builder: &mut FunctionBuilder<'_>,
         seg_index: u32,
         table_index: TableIndex,
         dst: ir::Value,
         src: ir::Value,
         len: ir::Value,
     ) -> WasmResult<()> {
+        let mut pos = builder.cursor();
         let table_init = self.builtin_functions.table_init(&mut pos.func);
         let table_index_arg = pos.ins().iconst(I32, i64::from(table_index.as_u32()));
         let seg_index_arg = pos.ins().iconst(I32, i64::from(seg_index));
@@ -2967,7 +2975,7 @@ impl FuncEnvironment<'_> {
 
     pub fn translate_atomic_wait(
         &mut self,
-        mut pos: FuncCursor,
+        builder: &mut FunctionBuilder<'_>,
         memory_index: MemoryIndex,
         _heap: Heap,
         addr: ir::Value,
@@ -2976,6 +2984,7 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<ir::Value> {
         #[cfg(feature = "threads")]
         {
+            let mut pos = builder.cursor();
             let addr = self.cast_index_to_i64(&mut pos, addr, self.memory(memory_index).idx_type);
             let implied_ty = pos.func.dfg.value_type(expected);
             let (wait_func, memory_index) =
@@ -2989,12 +2998,12 @@ impl FuncEnvironment<'_> {
                 wait_func,
                 &[vmctx, memory_index_arg, addr, expected, timeout],
             );
-
-            Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
+            let ret = pos.func.dfg.inst_results(call_inst)[0];
+            Ok(builder.ins().ireduce(ir::types::I32, ret))
         }
         #[cfg(not(feature = "threads"))]
         {
-            let _ = (&mut pos, memory_index, addr, expected, timeout);
+            let _ = (builder, memory_index, addr, expected, timeout);
             Err(wasmtime_environ::WasmError::Unsupported(
                 "threads support disabled at compile time".to_string(),
             ))
@@ -3003,7 +3012,7 @@ impl FuncEnvironment<'_> {
 
     pub fn translate_atomic_notify(
         &mut self,
-        mut pos: FuncCursor,
+        builder: &mut FunctionBuilder<'_>,
         memory_index: MemoryIndex,
         _heap: Heap,
         addr: ir::Value,
@@ -3011,6 +3020,7 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<ir::Value> {
         #[cfg(feature = "threads")]
         {
+            let mut pos = builder.cursor();
             let addr = self.cast_index_to_i64(&mut pos, addr, self.memory(memory_index).idx_type);
             let atomic_notify = self.builtin_functions.memory_atomic_notify(&mut pos.func);
 
@@ -3019,12 +3029,12 @@ impl FuncEnvironment<'_> {
             let call_inst = pos
                 .ins()
                 .call(atomic_notify, &[vmctx, memory_index_arg, addr, count]);
-
-            Ok(*pos.func.dfg.inst_results(call_inst).first().unwrap())
+            let ret = pos.func.dfg.inst_results(call_inst)[0];
+            Ok(builder.ins().ireduce(ir::types::I32, ret))
         }
         #[cfg(not(feature = "threads"))]
         {
-            let _ = (&mut pos, memory_index, addr, count);
+            let _ = (builder, memory_index, addr, count);
             Err(wasmtime_environ::WasmError::Unsupported(
                 "threads support disabled at compile time".to_string(),
             ))
@@ -3111,7 +3121,7 @@ impl FuncEnvironment<'_> {
         }
 
         #[cfg(feature = "wmemcheck")]
-        if self.wmemcheck {
+        if self.compiler.wmemcheck {
             let func_name = self.current_func_name(builder);
             if func_name == Some("malloc") {
                 self.check_malloc_start(builder);
@@ -3164,7 +3174,7 @@ impl FuncEnvironment<'_> {
 
     pub fn handle_before_return(&mut self, retvals: &[ir::Value], builder: &mut FunctionBuilder) {
         #[cfg(feature = "wmemcheck")]
-        if self.wmemcheck {
+        if self.compiler.wmemcheck {
             let func_name = self.current_func_name(builder);
             if func_name == Some("malloc") {
                 self.hook_malloc_exit(builder, retvals);
@@ -3184,7 +3194,7 @@ impl FuncEnvironment<'_> {
         offset: u64,
     ) {
         #[cfg(feature = "wmemcheck")]
-        if self.wmemcheck {
+        if self.compiler.wmemcheck {
             let check_load = self.builtin_functions.check_load(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
             let num_bytes = builder.ins().iconst(I32, val_size as i64);
@@ -3205,7 +3215,7 @@ impl FuncEnvironment<'_> {
         offset: u64,
     ) {
         #[cfg(feature = "wmemcheck")]
-        if self.wmemcheck {
+        if self.compiler.wmemcheck {
             let check_store = self.builtin_functions.check_store(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
             let num_bytes = builder.ins().iconst(I32, val_size as i64);
@@ -3225,7 +3235,7 @@ impl FuncEnvironment<'_> {
         value: ir::Value,
     ) {
         #[cfg(feature = "wmemcheck")]
-        if self.wmemcheck {
+        if self.compiler.wmemcheck {
             if global_index == 0 {
                 // We are making the assumption that global 0 is the auxiliary stack pointer.
                 let update_stack_pointer =
@@ -3245,7 +3255,7 @@ impl FuncEnvironment<'_> {
         mem_index: MemoryIndex,
     ) {
         #[cfg(feature = "wmemcheck")]
-        if self.wmemcheck && mem_index.as_u32() == 0 {
+        if self.compiler.wmemcheck && mem_index.as_u32() == 0 {
             let update_mem_size = self.builtin_functions.update_mem_size(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
             builder.ins().call(update_mem_size, &[vmctx, num_pages]);
@@ -3277,6 +3287,8 @@ impl FuncEnvironment<'_> {
                 let vmctx = self.vmctx_val(&mut builder.cursor());
                 let trap_code = builder.ins().iconst(I8, i64::from(trap as u8));
                 builder.ins().call(libcall, &[vmctx, trap_code]);
+                let raise = self.builtin_functions.raise(&mut builder.func);
+                builder.ins().call(raise, &[vmctx]);
                 builder.ins().trap(TRAP_INTERNAL_ASSERT);
             }
         }

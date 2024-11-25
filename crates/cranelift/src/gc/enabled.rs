@@ -202,6 +202,7 @@ fn write_func_ref_at_addr(
         .ins()
         .call(intern_func_ref_for_gc_heap, &[vmctx, func_ref]);
     let func_ref_id = builder.func.dfg.first_result(call_inst);
+    let func_ref_id = builder.ins().ireduce(ir::types::I32, func_ref_id);
 
     // Store the id in the field.
     builder.ins().store(flags, func_ref_id, field_addr, 0);

@@ -756,7 +756,7 @@ pub fn translate_operator(
             let heap = state.get_heap(builder.func, *mem, environ)?;
             let val = state.pop1();
             environ.before_memory_grow(builder, val, heap_index);
-            state.push1(environ.translate_memory_grow(builder.cursor(), heap_index, heap, val)?)
+            state.push1(environ.translate_memory_grow(builder, heap_index, heap, val)?)
         }
         Operator::MemorySize { mem } => {
             let heap_index = MemoryIndex::from_u32(*mem);
@@ -1262,7 +1262,7 @@ pub fn translate_operator(
             // `fn translate_atomic_wait` can inspect the type of `expected` to figure out what
             // code it needs to generate, if it wants.
             let res = environ.translate_atomic_wait(
-                builder.cursor(),
+                builder,
                 heap_index,
                 heap,
                 effective_addr,
@@ -1284,7 +1284,7 @@ pub fn translate_operator(
                 environ.uadd_overflow_trap(builder, addr, offset, ir::TrapCode::HEAP_OUT_OF_BOUNDS)
             };
             let res = environ.translate_atomic_notify(
-                builder.cursor(),
+                builder,
                 heap_index,
                 heap,
                 effective_addr,
@@ -1502,14 +1502,7 @@ pub fn translate_operator(
             let src_pos = state.pop1();
             let dst_pos = state.pop1();
             environ.translate_memory_copy(
-                builder.cursor(),
-                src_index,
-                src_heap,
-                dst_index,
-                dst_heap,
-                dst_pos,
-                src_pos,
-                len,
+                builder, src_index, src_heap, dst_index, dst_heap, dst_pos, src_pos, len,
             )?;
         }
         Operator::MemoryFill { mem } => {
@@ -1518,7 +1511,7 @@ pub fn translate_operator(
             let len = state.pop1();
             let val = state.pop1();
             let dest = state.pop1();
-            environ.translate_memory_fill(builder.cursor(), heap_index, heap, dest, val, len)?;
+            environ.translate_memory_fill(builder, heap_index, heap, dest, val, len)?;
         }
         Operator::MemoryInit { data_index, mem } => {
             let heap_index = MemoryIndex::from_u32(*mem);
@@ -1527,7 +1520,7 @@ pub fn translate_operator(
             let src = state.pop1();
             let dest = state.pop1();
             environ.translate_memory_init(
-                builder.cursor(),
+                builder,
                 heap_index,
                 heap,
                 *data_index,
@@ -1548,12 +1541,7 @@ pub fn translate_operator(
             let table_index = TableIndex::from_u32(*index);
             let delta = state.pop1();
             let init_value = state.pop1();
-            state.push1(environ.translate_table_grow(
-                builder.cursor(),
-                table_index,
-                delta,
-                init_value,
-            )?);
+            state.push1(environ.translate_table_grow(builder, table_index, delta, init_value)?);
         }
         Operator::TableGet { table: index } => {
             let table_index = TableIndex::from_u32(*index);
@@ -1574,7 +1562,7 @@ pub fn translate_operator(
             let src = state.pop1();
             let dest = state.pop1();
             environ.translate_table_copy(
-                builder.cursor(),
+                builder,
                 TableIndex::from_u32(*dst_table_index),
                 TableIndex::from_u32(*src_table_index),
                 dest,
@@ -1587,7 +1575,7 @@ pub fn translate_operator(
             let len = state.pop1();
             let val = state.pop1();
             let dest = state.pop1();
-            environ.translate_table_fill(builder.cursor(), table_index, dest, val, len)?;
+            environ.translate_table_fill(builder, table_index, dest, val, len)?;
         }
         Operator::TableInit {
             elem_index,
@@ -1597,7 +1585,7 @@ pub fn translate_operator(
             let src = state.pop1();
             let dest = state.pop1();
             environ.translate_table_init(
-                builder.cursor(),
+                builder,
                 *elem_index,
                 TableIndex::from_u32(*table_index),
                 dest,

@@ -150,8 +150,8 @@ macro_rules! declare_function_sig {
                 WasmValType::I64
             }
 
-            fn reference(&self) -> WasmValType {
-                self.pointer()
+            fn bool(&self) -> WasmValType {
+                WasmValType::I32
             }
 
             fn over_f64<A: ABI>(&self) -> ABISig {

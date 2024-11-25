@@ -7,6 +7,7 @@ use crate::{builder::LinkOptions, wasm_call_signature, BuiltinFunctionSignatures
 use anyhow::{Context as _, Result};
 use cranelift_codegen::binemit::CodeOffset;
 use cranelift_codegen::bitset::CompoundBitSet;
+use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags, UserExternalName, UserFuncName, Value};
 use cranelift_codegen::isa::{
     unwind::{UnwindInfo, UnwindInfoKind},
@@ -28,8 +29,8 @@ use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::{
     AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, DefinedFuncIndex, FlagValue,
     FunctionBodyData, FunctionLoc, ModuleTranslation, ModuleTypesBuilder, PtrSize,
-    RelocationTarget, StackMapInformation, StaticModuleIndex, TrapEncodingBuilder, Tunables,
-    VMOffsets, WasmFuncType, WasmFunctionInfo, WasmValType,
+    RelocationTarget, StackMapInformation, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel,
+    Tunables, VMOffsets, WasmFuncType, WasmFunctionInfo, WasmValType,
 };
 
 #[cfg(feature = "component-model")]
@@ -69,7 +70,8 @@ pub struct Compiler {
     linkopts: LinkOptions,
     cache_store: Option<Arc<dyn CacheStore>>,
     clif_dir: Option<path::PathBuf>,
-    wmemcheck: bool,
+    #[cfg(feature = "wmemcheck")]
+    pub(crate) wmemcheck: bool,
 }
 
 impl Drop for Compiler {
@@ -109,6 +111,7 @@ impl Compiler {
         clif_dir: Option<path::PathBuf>,
         wmemcheck: bool,
     ) -> Compiler {
+        let _ = wmemcheck;
         Compiler {
             contexts: Default::default(),
             tunables,
@@ -116,6 +119,7 @@ impl Compiler {
             linkopts,
             cache_store,
             clif_dir,
+            #[cfg(feature = "wmemcheck")]
             wmemcheck,
         }
     }
@@ -227,14 +231,7 @@ impl wasmtime_environ::Compiler for Compiler {
             context.func.collect_debug_info();
         }
 
-        let mut func_env = FuncEnvironment::new(
-            isa,
-            translation,
-            types,
-            &self.tunables,
-            self.wmemcheck,
-            wasm_func_ty,
-        );
+        let mut func_env = FuncEnvironment::new(self, translation, types, wasm_func_ty);
 
         // The `stack_limit` global value below is the implementation of stack
         // overflow checks in Wasmtime.
@@ -604,7 +601,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let isa = &*self.isa;
         let ptr_size = isa.pointer_bytes();
         let pointer_type = isa.pointer_type();
-        let sigs = BuiltinFunctionSignatures::new(isa, &self.tunables);
+        let sigs = BuiltinFunctionSignatures::new(self);
         let wasm_sig = sigs.wasm_signature(index);
         let host_sig = sigs.host_signature(index);
 
@@ -626,11 +623,46 @@ impl wasmtime_environ::Compiler for Compiler {
         save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &ptr_size, limits);
 
         // Now it's time to delegate to the actual builtin. Forward all our own
-        // arguments to the libcall itself, and then return all the same results
-        // as the libcall.
+        // arguments to the libcall itself.
         let args = builder.block_params(block0).to_vec();
         let call = self.call_builtin(&mut builder, vmctx, &args, index, host_sig);
         let results = builder.func.dfg.inst_results(call).to_vec();
+
+        // Libcalls do not explicitly `longjmp` for example but instead return a
+        // code indicating whether they trapped or not. This means that it's the
+        // responsibility of the trampoline to check for an trapping return
+        // value and raise a trap as appropriate. With the `results` above check
+        // what `index` is and for each libcall that has a trapping return value
+        // process it here.
+        match index.trap_sentinel() {
+            Some(TrapSentinel::Falsy) => {
+                self.raise_if_host_trapped(&mut builder, vmctx, results[0]);
+            }
+            Some(TrapSentinel::NegativeTwo) => {
+                let ty = builder.func.dfg.value_type(results[0]);
+                let trapped = builder.ins().iconst(ty, -2);
+                let succeeded = builder.ins().icmp(IntCC::NotEqual, results[0], trapped);
+                self.raise_if_host_trapped(&mut builder, vmctx, succeeded);
+            }
+            Some(TrapSentinel::Negative) => {
+                let ty = builder.func.dfg.value_type(results[0]);
+                let zero = builder.ins().iconst(ty, 0);
+                let succeeded =
+                    builder
+                        .ins()
+                        .icmp(IntCC::SignedGreaterThanOrEqual, results[0], zero);
+                self.raise_if_host_trapped(&mut builder, vmctx, succeeded);
+            }
+            Some(TrapSentinel::NegativeOne) => {
+                let ty = builder.func.dfg.value_type(results[0]);
+                let minus_one = builder.ins().iconst(ty, -1);
+                let succeeded = builder.ins().icmp(IntCC::NotEqual, results[0], minus_one);
+                self.raise_if_host_trapped(&mut builder, vmctx, succeeded);
+            }
+            None => {}
+        }
+
+        // And finally, return all the results of this libcall.
         builder.ins().return_(&results);
         builder.finalize();
 
@@ -863,7 +895,7 @@ impl Compiler {
     /// Additionally in the future for pulley this will emit a special trap
     /// opcode for Pulley itself to cease interpretation and exit the
     /// interpreter.
-    fn raise_if_host_trapped(
+    pub fn raise_if_host_trapped(
         &self,
         builder: &mut FunctionBuilder<'_>,
         vmctx: ir::Value,
@@ -880,7 +912,7 @@ impl Compiler {
         builder.seal_block(continuation_block);
 
         builder.switch_to_block(trapped_block);
-        let sigs = BuiltinFunctionSignatures::new(&*self.isa, &self.tunables);
+        let sigs = BuiltinFunctionSignatures::new(self);
         let sig = sigs.host_signature(BuiltinFunctionIndex::raise());
         self.call_builtin(builder, vmctx, &[vmctx], BuiltinFunctionIndex::raise(), sig);
         builder.ins().trap(TRAP_INTERNAL_ASSERT);
@@ -919,6 +951,14 @@ impl Compiler {
 
         let sig = builder.func.import_signature(sig);
         self.call_indirect_host(builder, sig, func_addr, args)
+    }
+
+    pub fn isa(&self) -> &dyn TargetIsa {
+        &*self.isa
+    }
+
+    pub fn tunables(&self) -> &Tunables {
+        &self.tunables
     }
 }
 

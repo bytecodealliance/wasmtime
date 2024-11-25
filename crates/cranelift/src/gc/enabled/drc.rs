@@ -283,8 +283,8 @@ fn emit_gc_raw_alloc(
         .call(gc_alloc_raw_builtin, &[vmctx, kind, ty, size, align]);
 
     let gc_ref = builder.func.dfg.first_result(call_inst);
+    let gc_ref = builder.ins().ireduce(ir::types::I32, gc_ref);
     builder.declare_value_needs_stack_map(gc_ref);
-
     gc_ref
 }
 

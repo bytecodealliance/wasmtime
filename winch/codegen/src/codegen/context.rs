@@ -624,4 +624,11 @@ impl<'a> CodeGenContext<'a, Emission> {
         self.stack.push(lo.into());
         self.stack.push(hi.into());
     }
+
+    /// Pops a register from the stack and then immediately frees it. Used to
+    /// discard values from the last operation, for example.
+    pub fn pop_and_free<M: MacroAssembler>(&mut self, masm: &mut M) {
+        let reg = self.pop_to_reg(masm, None);
+        self.free_reg(reg.reg);
+    }
 }

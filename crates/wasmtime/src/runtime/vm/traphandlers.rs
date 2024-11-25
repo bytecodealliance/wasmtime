@@ -22,7 +22,7 @@ use crate::runtime::vm::{Instance, VMContext, VMRuntimeLimits};
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::ops::Range;
-use core::ptr;
+use core::ptr::{self, NonNull};
 
 pub use self::backtrace::Backtrace;
 pub use self::coredump::CoreDumpStack;
@@ -32,25 +32,6 @@ pub use traphandlers::SignalHandler;
 
 fn lazy_per_thread_init() {
     traphandlers::lazy_per_thread_init();
-}
-
-/// Raises a trap immediately.
-///
-/// This function performs as-if a wasm trap was just executed. This trap
-/// payload is then returned from `catch_traps` below.
-///
-/// FIXME: this function should get removed in favor of explicitly calling the
-/// `raise` libcall from wasm.
-///
-/// # Safety
-///
-/// Only safe to call when wasm code is on the stack, aka `catch_traps` must
-/// have been previously called. Additionally no Rust destructors can be on the
-/// stack. They will be skipped and not executed.
-#[deprecated(note = "move to `raise_preexisting_trap` or `catch_unwind_and_record_trap` instead")]
-#[allow(deprecated)]
-pub unsafe fn raise_trap(reason: TrapReason) -> ! {
-    tls::with(|info| info.unwrap().unwind_with(UnwindReason::Trap(reason)))
 }
 
 /// Raises a preexisting trap and unwinds.
@@ -77,91 +58,210 @@ pub(super) unsafe fn raise_preexisting_trap() -> ! {
     tls::with(|info| info.unwrap().unwind())
 }
 
-/// Invokes the closure `f` and returns the result.
+/// Invokes the closure `f` and returns a `bool` if it succeeded.
 ///
-/// If `f` panics and this crate is compiled with `panic=unwind` this will
-/// catch the panic and capture it to "throw" with `longjmp` to be caught by
-/// the nearest `setjmp`. The panic will then be resumed from where it is
-/// caught.
+/// This will invoke the closure `f` which returns a value that implements
+/// `HostResult`. This trait abstracts over how host values are translated to
+/// ABI values when going back into wasm. Some examples are:
 ///
-/// FIXME: this function should get removed in favor of
-/// `catch_unwind_and_record_trap` or a variant thereof.
+/// * `T` - bare return types (not results) are simply returned as-is. No
+///   `catch_unwind` happens as if a trap can't happen then the host shouldn't
+///   be panicking or invoking user code.
 ///
-/// # Safety
+/// * `Result<(), E>` - this represents an ABI return value of `bool` which
+///   indicates whether the call succeeded. This return value will catch panics
+///   and record trap information as `E`.
 ///
-/// Only safe to call when wasm code is on the stack, aka `catch_traps` must
-/// have been previously called. Additionally no Rust destructors can be on the
-/// stack. They will be skipped and not executed in the case that `f` panics.
-#[deprecated(note = "move to `catch_unwind_and_record_trap` instead")]
-#[allow(deprecated)]
-pub unsafe fn catch_unwind_and_longjmp<R>(f: impl FnOnce() -> R) -> R {
-    // With `panic=unwind` use `std::panic::catch_unwind` to catch possible
-    // panics to rethrow.
-    #[cfg(all(feature = "std", panic = "unwind"))]
-    {
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
-            Ok(ret) => ret,
-            Err(err) => tls::with(|info| info.unwrap().unwind_with(UnwindReason::Panic(err))),
-        }
+/// * `Result<u32, E>` - the ABI return value here is `u64` where on success
+///   the 32-bit result is zero-extended and `u64::MAX` as a return value
+///   indicates that a trap or panic happened.
+///
+/// This is primarily used in conjunction with the Cranelift-and-host boundary.
+/// This function acts as a bridge between the two to appropriately handle
+/// encoding host values to Cranelift-understood ABIs via the `HostResult`
+/// trait.
+pub fn catch_unwind_and_record_trap<R>(f: impl FnOnce() -> R) -> R::Abi
+where
+    R: HostResult,
+{
+    // Invoke the closure `f`, optionally catching unwinds depending on `R`. The
+    // return value is always provided and if unwind information is provided
+    // (e.g. `ret` is a "false"-y value) then it's recorded in TLS for the
+    // unwind operation that's about to happen from Cranelift-generated code.
+    let (ret, unwind) = R::maybe_catch_unwind(f);
+    if let Some(unwind) = unwind {
+        tls::with(|info| info.unwrap().record_unwind(unwind));
     }
+    ret
+}
 
-    // With `panic=abort` there's no use in using `std::panic::catch_unwind`
-    // since it won't actually catch anything. Note that
-    // `std::panic::catch_unwind` will technically optimize to this but having
-    // this branch avoids using the `std::panic` module entirely.
-    #[cfg(not(all(feature = "std", panic = "unwind")))]
-    {
-        f()
+/// A trait used in conjunction with `catch_unwind_and_record_trap` to convert a
+/// Rust-based type to a specific ABI while handling traps/unwinds.
+///
+/// This type is implemented for return values from host function calls and
+/// libcalls. The `Abi` value of this trait represents either a successful
+/// execution with some payload state or that a failed execution happened. In
+/// the event of a failed execution the state of the failure itself is stored
+/// within `CallThreadState::unwind`. Cranelift-compiled code is expected to
+/// test for this failure sentinel and process it accordingly.
+///
+/// See `catch_unwind_and_record_trap` for some more information as well.
+pub trait HostResult {
+    /// The type of the value that's returned to Cranelift-compiled code. Needs
+    /// to be ABI-safe to pass through an `extern "C"` return value.
+    type Abi: Copy;
+
+    /// Executes `f` and returns the ABI/unwind information as a result.
+    ///
+    /// This may optionally catch unwinds during execution depending on this
+    /// implementation. The ABI return value is unconditionally provided. If an
+    /// unwind was detected (e.g. a host panic or a wasm trap) then that's
+    /// additionally returned as well.
+    ///
+    /// If an unwind is returned then it's expected that when the host returns
+    /// back to wasm (which should be soon after calling this through
+    /// `catch_unwind_and_record_trap`) then wasm will very quickly turn around
+    /// and initiate an unwind (currently through `raise_preexisting_trap`).
+    fn maybe_catch_unwind(f: impl FnOnce() -> Self) -> (Self::Abi, Option<UnwindReason>);
+}
+
+// Base case implementations that do not catch unwinds. These are for libcalls
+// that neither trap nor execute user code. The raw value is the ABI itself.
+//
+// Panics in these libcalls will result in a process abort as unwinding is not
+// allowed via Rust through `extern "C"` function boundaries.
+macro_rules! host_result_no_catch {
+    ($($t:ty,)*) => {
+        $(
+            impl HostResult for $t {
+                type Abi = $t;
+                fn maybe_catch_unwind(f: impl FnOnce() -> $t) -> ($t, Option<UnwindReason>) {
+                    (f(), None)
+                }
+            }
+        )*
     }
 }
 
-/// Invokes the closure `f` and returns a `bool` if it succeeded.
+host_result_no_catch! {
+    (),
+    bool,
+    u32,
+    *mut u8,
+    u64,
+}
+
+impl HostResult for NonNull<u8> {
+    type Abi = *mut u8;
+    fn maybe_catch_unwind(f: impl FnOnce() -> Self) -> (*mut u8, Option<UnwindReason>) {
+        (f().as_ptr(), None)
+    }
+}
+
+/// Implementation of `HostResult` for `Result<T, E>`.
 ///
-/// This will invoke the closure `f` which returns a `Result<()>`. The results
-/// of executing this function are handled as:
+/// This is where things get interesting for `HostResult`. This is generically
+/// defined to allow many shapes of the `Result` type to be returned from host
+/// calls or libcalls. To do this an extra trait requirement is placed on the
+/// successful result `T`: `HostResultHasUnwindSentinel`.
 ///
-/// * Returns `Ok(())` - this means that this function returns `true` with no
-///   other action taken.
-/// * Returns `Err(e)` - this records trap information in the current
-///   `CallThreadState` and returns `false`.
-/// * Panics - this records unwind information in the current `CallThreadState`
-///   and returns `false`.
+/// The general requirement is that `T` says what ABI it has, and the ABI must
+/// have a sentinel value which indicates that an unwind in wasm should happen.
+/// For example if `T = ()` then `true` means that the call succeeded and
+/// `false` means that an unwind happened. Here the sentinel is `false` and the
+/// ABI is `bool`.
 ///
-/// The purpose of this helper is to be used at the wasm->host boundary. This
-/// is used to implement the "array call" ABI of the host where wasm itself
-/// will initiate the unwind when it sees a `false` return value from the host.
-///
-/// The return value of this function is typically directly returned back to
-/// wasm to get handled.
-pub fn catch_unwind_and_record_trap(f: impl FnOnce() -> Result<()>) -> bool {
-    let f = move || match f() {
-        Ok(()) => true,
-        Err(error) => {
-            let reason = UnwindReason::Trap(TrapReason::User(error));
-            tls::with(|info| info.unwrap().record_unwind(reason));
-            false
-        }
-    };
-    // With `panic=unwind` use `std::panic::catch_unwind` to catch possible
-    // panics to rethrow.
-    #[cfg(all(feature = "std", panic = "unwind"))]
-    {
-        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
-            Ok(result) => result,
-            Err(err) => {
-                tls::with(|info| info.unwrap().record_unwind(UnwindReason::Panic(err)));
-                false
+/// This is the only implementation of `HostResult` which actually catches
+/// unwinds as there's a sentinel to encode.
+impl<T, E> HostResult for Result<T, E>
+where
+    T: HostResultHasUnwindSentinel,
+    E: Into<TrapReason>,
+{
+    type Abi = T::Abi;
+
+    fn maybe_catch_unwind(f: impl FnOnce() -> Result<T, E>) -> (T::Abi, Option<UnwindReason>) {
+        // First prepare the closure `f` as something that'll be invoked to
+        // generate the return value of this function. This is the
+        // conditionally, below, passed to `catch_unwind`.
+        let f = move || match f() {
+            Ok(ret) => (ret.into_abi(), None),
+            Err(reason) => (T::SENTINEL, Some(UnwindReason::Trap(reason.into()))),
+        };
+
+        // With `panic=unwind` use `std::panic::catch_unwind` to catch possible
+        // panics to rethrow.
+        #[cfg(all(feature = "std", panic = "unwind"))]
+        {
+            match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+                Ok(result) => result,
+                Err(err) => (T::SENTINEL, Some(UnwindReason::Panic(err))),
             }
         }
-    }
 
-    // With `panic=abort` there's no use in using `std::panic::catch_unwind`
-    // since it won't actually catch anything. Note that
-    // `std::panic::catch_unwind` will technically optimize to this but having
-    // this branch avoids using the `std::panic` module entirely.
-    #[cfg(not(all(feature = "std", panic = "unwind")))]
-    {
-        f()
+        // With `panic=abort` there's no use in using `std::panic::catch_unwind`
+        // since it won't actually catch anything. Note that
+        // `std::panic::catch_unwind` will technically optimize to this but having
+        // this branch avoids using the `std::panic` module entirely.
+        #[cfg(not(all(feature = "std", panic = "unwind")))]
+        {
+            f()
+        }
+    }
+}
+
+/// Trait used in conjunction with `HostResult for Result<T, E>` where this is
+/// the trait bound on `T`.
+///
+/// This is for values in the "ok" position of a `Result` return value. Each
+/// value can have a separate ABI from itself (e.g. `type Abi`) and must be
+/// convertible to the ABI. Additionally all implementations of this trait have
+/// a "sentinel value" which indicates that an unwind happened. This means that
+/// no valid instance of `Self` should generate the `SENTINEL` via the
+/// `into_abi` function.
+pub unsafe trait HostResultHasUnwindSentinel {
+    /// The Cranelift-understood ABI of this value (should not be `Self`).
+    type Abi: Copy;
+
+    /// A value that indicates that an unwind should happen and is tested for in
+    /// Cranelift-generated code.
+    const SENTINEL: Self::Abi;
+
+    /// Converts this value into the ABI representation. Should never returned
+    /// the `SENTINEL` value.
+    fn into_abi(self) -> Self::Abi;
+}
+
+/// No return value from the host is represented as a `bool` in the ABI. Here
+/// `true` means that execution succeeded while `false` is the sentinel used to
+/// indicate an unwind.
+unsafe impl HostResultHasUnwindSentinel for () {
+    type Abi = bool;
+    const SENTINEL: bool = false;
+    fn into_abi(self) -> bool {
+        true
+    }
+}
+
+/// A 32-bit return value can be inflated to a 64-bit return value in the ABI.
+/// In this manner a successful result is a zero-extended 32-bit value and the
+/// failure sentinel is `u64::MAX` or -1 as a signed integer.
+unsafe impl HostResultHasUnwindSentinel for u32 {
+    type Abi = u64;
+    const SENTINEL: u64 = u64::MAX;
+    fn into_abi(self) -> u64 {
+        self.into()
+    }
+}
+
+/// If there is not actual successful result (e.g. an empty enum) then the ABI
+/// can be `()`, or nothing, because there's no successful result and it's
+/// always a failure.
+unsafe impl HostResultHasUnwindSentinel for core::convert::Infallible {
+    type Abi = ();
+    const SENTINEL: () = ();
+    fn into_abi(self) {
+        match self {}
     }
 }
 
@@ -210,16 +310,9 @@ pub enum TrapReason {
     Wasm(wasmtime_environ::Trap),
 }
 
-impl TrapReason {
-    /// Create a new `TrapReason::User` that does not have a backtrace yet.
-    pub fn user(error: Error) -> Self {
-        TrapReason::User(error)
-    }
-}
-
 impl From<Error> for TrapReason {
     fn from(err: Error) -> Self {
-        TrapReason::user(err)
+        TrapReason::User(err)
     }
 }
 
@@ -385,7 +478,7 @@ mod call_thread_state {
 }
 pub use call_thread_state::*;
 
-enum UnwindReason {
+pub enum UnwindReason {
     #[cfg(all(feature = "std", panic = "unwind"))]
     Panic(Box<dyn std::any::Any + Send>),
     Trap(TrapReason),
@@ -465,12 +558,6 @@ impl CallThreadState {
     unsafe fn unwind(&self) -> ! {
         debug_assert!(!self.jmp_buf.get().is_null());
         traphandlers::wasmtime_longjmp(self.jmp_buf.get());
-    }
-
-    #[deprecated(note = "move to `record_unwind` or `unwind` instead")]
-    fn unwind_with(&self, reason: UnwindReason) -> ! {
-        self.record_unwind(reason);
-        unsafe { self.unwind() }
     }
 
     fn capture_backtrace(
