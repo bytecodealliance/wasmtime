@@ -215,7 +215,19 @@ fn pulley_emit<P>(
             state.adjust_virtual_sp_offset(-callee_pop_size);
         }
 
-        Inst::IndirectCall { .. } => todo!(),
+        Inst::IndirectCall { info } => {
+            enc::call_indirect(sink, info.dest);
+
+            if let Some(s) = state.take_stack_map() {
+                let offset = sink.cur_offset();
+                sink.push_user_stack_map(state, offset, s);
+            }
+
+            sink.add_call_site();
+
+            let callee_pop_size = i64::from(info.callee_pop_size);
+            state.adjust_virtual_sp_offset(-callee_pop_size);
+        }
 
         Inst::Jump { label } => {
             sink.use_label_at_offset(start_offset + 1, *label, LabelUse::Jump(1));

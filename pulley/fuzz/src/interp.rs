@@ -97,6 +97,7 @@ fn op_is_safe_for_fuzzing(op: &Op) -> bool {
         Op::BitcastFloatFromInt64(_) => true,
         Op::ExtendedOp(op) => extended_op_is_safe_for_fuzzing(op),
         Op::Call(_) => false,
+        Op::CallIndirect(_) => false,
         Op::Xadd32(Xadd32 { operands, .. })
         | Op::Xadd64(Xadd64 { operands, .. })
         | Op::Xeq64(Xeq64 { operands, .. })

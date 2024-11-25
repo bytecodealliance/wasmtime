@@ -24,6 +24,10 @@ macro_rules! for_each_op {
             /// register to the PC just after this instruction.
             call = Call { offset: PcRelOffset };
 
+            /// Transfer control to the PC in `reg` and set `lr` to the PC just
+            /// after this instruction.
+            call_indirect = CallIndirect { reg: XReg };
+
             /// Unconditionally transfer control to the PC at the given offset.
             jump = Jump { offset: PcRelOffset };
 
