@@ -43,16 +43,16 @@ macro_rules! foreach_builtin_function {
             new_epoch(vmctx: vmctx) -> i64;
             // Invoked before malloc returns.
             #[cfg(feature = "wmemcheck")]
-            check_malloc(vmctx: vmctx, addr: i32, len: i32) -> i32;
+            check_malloc(vmctx: vmctx, addr: i32, len: i32);
             // Invoked before the free returns.
             #[cfg(feature = "wmemcheck")]
-            check_free(vmctx: vmctx, addr: i32) -> i32;
+            check_free(vmctx: vmctx, addr: i32);
             // Invoked before a load is executed.
             #[cfg(feature = "wmemcheck")]
-            check_load(vmctx: vmctx, num_bytes: i32, addr: i32, offset: i32) -> i32;
+            check_load(vmctx: vmctx, num_bytes: i32, addr: i32, offset: i32);
             // Invoked before a store is executed.
             #[cfg(feature = "wmemcheck")]
-            check_store(vmctx: vmctx, num_bytes: i32, addr: i32, offset: i32) -> i32;
+            check_store(vmctx: vmctx, num_bytes: i32, addr: i32, offset: i32);
             // Invoked after malloc is called.
             #[cfg(feature = "wmemcheck")]
             malloc_start(vmctx: vmctx);
