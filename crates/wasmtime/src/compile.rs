@@ -717,7 +717,7 @@ impl FunctionIndices {
                     [&CompileKey::WASM_TO_BUILTIN_TRAMPOLINE_KIND]
                     [&CompileKey::wasm_to_builtin_trampoline(builtin)]
                     .unwrap_function(),
-                RelocationTarget::HostLibcall(_) => {
+                RelocationTarget::HostLibcall(_) | RelocationTarget::PulleyHostcall(_) => {
                     unreachable!("relocation is resolved at runtime, not compile time");
                 }
             },

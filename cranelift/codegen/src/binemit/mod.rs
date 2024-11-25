@@ -119,6 +119,10 @@ pub enum Reloc {
     S390xTlsGd64,
     /// s390x TLS GDCall - marker to enable optimization of TLS calls
     S390xTlsGdCall,
+
+    /// Pulley - call a host function indirectly where the embedder resolving
+    /// this relocation needs to fill in the expected signature.
+    PulleyCallIndirectHost,
 }
 
 impl fmt::Display for Reloc {
@@ -152,6 +156,7 @@ impl fmt::Display for Reloc {
             Self::Aarch64Ld64GotLo12Nc => write!(f, "Aarch64AdrGotLo12Nc"),
             Self::S390xTlsGd64 => write!(f, "TlsGd64"),
             Self::S390xTlsGdCall => write!(f, "TlsGdCall"),
+            Self::PulleyCallIndirectHost => write!(f, "PulleyCallIndirectHost"),
         }
     }
 }

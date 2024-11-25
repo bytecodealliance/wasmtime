@@ -133,6 +133,7 @@ impl<'a> ModuleTextBuilder<'a> {
         }
 
         for r in compiled_func.relocations() {
+            let reloc_offset = off + u64::from(r.offset);
             match r.reloc_target {
                 // Relocations against user-defined functions means that this is
                 // a relocation against a module-local function, typically a
@@ -144,7 +145,7 @@ impl<'a> ModuleTextBuilder<'a> {
                     let target = resolve_reloc_target(r.reloc_target);
                     if self
                         .text
-                        .resolve_reloc(off + u64::from(r.offset), r.reloc, r.addend, target)
+                        .resolve_reloc(reloc_offset, r.reloc, r.addend, target)
                     {
                         continue;
                     }
@@ -198,11 +199,35 @@ impl<'a> ModuleTextBuilder<'a> {
                             object::write::Relocation {
                                 symbol,
                                 flags,
-                                offset: off + u64::from(r.offset),
+                                offset: reloc_offset,
                                 addend: r.addend,
                             },
                         )
                         .unwrap();
+                }
+
+                // This relocation is used to fill in which hostcall signature
+                // is desired within the `call_indirect_host` opcode of Pulley
+                // itself. The relocation target is the start of the instruction
+                // and the goal is to insert the static signature number, `n`,
+                // into the instruction.
+                //
+                // At this time the instruction looks like:
+                //
+                //      +------+------+------+------+
+                //      | OP   | OP_EXTENDED |  N   |
+                //      +------+------+------+------+
+                //
+                // This 4-byte encoding has `OP` indicating this is an "extended
+                // opcode" where `OP_EXTENDED` is a 16-bit extended opcode.
+                // The `N` byte is the index of the signature being called and
+                // is what's b eing filled in.
+                //
+                // See the `test_call_indirect_host_width` in
+                // `pulley/tests/all.rs` for this guarantee as well.
+                RelocationTarget::PulleyHostcall(n) => {
+                    let byte = u8::try_from(n).unwrap();
+                    self.text.write(reloc_offset + 3, &[byte]);
                 }
             };
         }

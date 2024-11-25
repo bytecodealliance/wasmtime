@@ -1,0 +1,37 @@
+test compile precise-output
+target pulley64
+
+function %call_indirect_host() {
+  fn0 = u10:0() system_v
+block0:
+  call fn0()
+  return
+}
+
+; VCode:
+;   x30 = xconst8 -16
+;   x27 = xadd32 x27, x30
+;   store64 sp+8, x28 // flags =  notrap aligned
+;   store64 sp+0, x29 // flags =  notrap aligned
+;   x29 = xmov x27
+; block0:
+;   indirect_call_host CallInfo { dest: User(userextname0), uses: [], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: SystemV, caller_conv: Fast, callee_pop_size: 0 }
+;   x28 = load64_u sp+8 // flags = notrap aligned
+;   x29 = load64_u sp+0 // flags = notrap aligned
+;   x30 = xconst8 16
+;   x27 = xadd32 x27, x30
+;   ret
+;
+; Disassembled:
+; xconst8 spilltmp0, -16
+; xadd32 sp, sp, spilltmp0
+; store64_offset8 sp, 8, lr
+; store64 sp, fp
+; xmov fp, sp
+; call_indirect_host 0
+; load64_offset8 lr, sp, 8
+; load64 fp, sp
+; xconst8 spilltmp0, 16
+; xadd32 sp, sp, spilltmp0
+; ret
+

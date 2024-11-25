@@ -80,6 +80,8 @@ pub enum RelocationTarget {
     Builtin(BuiltinFunctionIndex),
     /// A compiler-generated libcall.
     HostLibcall(obj::LibCall),
+    /// A pulley->host call from the interpreter.
+    PulleyHostcall(u32),
 }
 
 /// Implementation of an incremental compilation's key/value cache store.

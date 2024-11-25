@@ -212,6 +212,13 @@ pub const NS_WASM_FUNC: u32 = 0;
 /// function through an indirect function call loaded by the `VMContext`.
 pub const NS_WASMTIME_BUILTIN: u32 = 1;
 
+/// Namespace used to when a call from Pulley to the host is being made. This is
+/// used with a `colocated: false` name to trigger codegen for a special opcode
+/// for pulley-to-host communication. The index of the functions used in this
+/// namespace correspond to the function signature of `for_each_host_signature!`
+/// in the pulley_interpreter crate.
+pub const NS_PULLEY_HOSTCALL: u32 = 2;
+
 /// A record of a relocation to perform.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Relocation {
@@ -290,6 +297,7 @@ fn mach_reloc_to_reloc(
                 NS_WASMTIME_BUILTIN => {
                     RelocationTarget::Builtin(BuiltinFunctionIndex::from_u32(name.index))
                 }
+                NS_PULLEY_HOSTCALL => RelocationTarget::PulleyHostcall(name.index),
                 _ => panic!("unknown namespace {}", name.namespace),
             }
         }

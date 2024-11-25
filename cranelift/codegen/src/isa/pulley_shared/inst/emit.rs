@@ -229,6 +229,23 @@ fn pulley_emit<P>(
             state.adjust_virtual_sp_offset(-callee_pop_size);
         }
 
+        Inst::IndirectCallHost { info } => {
+            // Emit a relocation to fill in the actual immediate argument here
+            // in `call_indirect_host`.
+            sink.add_reloc(Reloc::PulleyCallIndirectHost, &info.dest, 0);
+            enc::call_indirect_host(sink, 0_u8);
+
+            if let Some(s) = state.take_stack_map() {
+                let offset = sink.cur_offset();
+                sink.push_user_stack_map(state, offset, s);
+            }
+            sink.add_call_site();
+
+            // If a callee pop is happening here that means that something has
+            // messed up, these are expected to be "very simple" signatures.
+            assert!(info.callee_pop_size == 0);
+        }
+
         Inst::Jump { label } => {
             sink.use_label_at_offset(start_offset + 1, *label, LabelUse::Jump(1));
             sink.add_uncond_branch(start_offset, start_offset + 5, *label);
