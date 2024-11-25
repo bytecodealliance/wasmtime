@@ -1,13 +1,13 @@
 use super::{
     index_allocator::{SimpleIndexAllocator, SlotId},
-    round_up_to_pow2, TableAllocationIndex,
+    TableAllocationIndex,
 };
+use crate::runtime::vm::sys::vm::commit_pages;
 use crate::runtime::vm::{
     mmap::AlignedLength, InstanceAllocationRequest, Mmap, PoolingInstanceAllocatorConfig,
     SendSyncPtr, Table,
 };
 use crate::{prelude::*, vm::HostAlignedByteCount};
-use crate::{runtime::vm::sys::vm::commit_pages, vm::round_usize_up_to_host_pages};
 use std::mem;
 use std::ptr::NonNull;
 use wasmtime_environ::{Module, Tunables};
@@ -23,16 +23,13 @@ pub struct TablePool {
     table_size: HostAlignedByteCount,
     max_total_tables: usize,
     tables_per_instance: usize,
-    page_size: usize,
-    keep_resident: usize,
+    keep_resident: HostAlignedByteCount,
     table_elements: usize,
 }
 
 impl TablePool {
     /// Create a new `TablePool`.
     pub fn new(config: &PoolingInstanceAllocatorConfig) -> Result<Self> {
-        let page_size = crate::runtime::vm::host_page_size();
-
         let table_size = HostAlignedByteCount::new_rounded_up(
             mem::size_of::<*mut u8>()
                 .checked_mul(config.limits.table_elements)
@@ -57,8 +54,7 @@ impl TablePool {
             table_size,
             max_total_tables,
             tables_per_instance,
-            page_size,
-            keep_resident: round_usize_up_to_host_pages(config.table_keep_resident)?,
+            keep_resident: HostAlignedByteCount::new_rounded_up(config.table_keep_resident)?,
             table_elements: usize::try_from(config.limits.table_elements).unwrap(),
         })
     }
@@ -200,14 +196,24 @@ impl TablePool {
         assert!(table.is_static());
         let base = self.get(allocation_index);
 
-        let size = round_up_to_pow2(table.size() * mem::size_of::<*mut u8>(), self.page_size);
+        // XXX Should we check that table.size() * mem::size_of::<*mut u8>()
+        // doesn't overflow? The only check that exists is for the boundary
+        // condition that table.size() * mem::size_of::<*mut u8>() is less than
+        // a host page smaller than usize::MAX.
+        let size = HostAlignedByteCount::new_rounded_up(table.size() * mem::size_of::<*mut u8>())
+            .expect("table entry size doesn't overflow");
 
         // `memset` the first `keep_resident` bytes.
         let size_to_memset = size.min(self.keep_resident);
-        std::ptr::write_bytes(base, 0, size_to_memset);
+        std::ptr::write_bytes(base, 0, size_to_memset.byte_count());
 
         // And decommit the rest of it.
-        decommit(base.add(size_to_memset), size - size_to_memset)
+        decommit(
+            base.add(size_to_memset.byte_count()),
+            size.checked_sub(size_to_memset)
+                .expect("size_to_memset <= size")
+                .byte_count(),
+        );
     }
 }
 
@@ -230,11 +236,10 @@ mod tests {
             ..Default::default()
         })?;
 
-        let host_page_size = crate::runtime::vm::host_page_size();
+        let host_page_size = HostAlignedByteCount::host_page_size();
 
         assert_eq!(pool.table_size, host_page_size);
         assert_eq!(pool.max_total_tables, 7);
-        assert_eq!(pool.page_size, host_page_size);
         assert_eq!(pool.table_elements, 100);
 
         let base = pool.mapping.as_ptr() as usize;

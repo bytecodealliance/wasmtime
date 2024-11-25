@@ -54,11 +54,11 @@ use super::{
     index_allocator::{MemoryInModule, ModuleAffinityIndexAllocator, SlotId},
     MemoryAllocationIndex,
 };
+use crate::prelude::*;
 use crate::runtime::vm::{
     mmap::AlignedLength, CompiledModuleId, InstanceAllocationRequest, InstanceLimits, Memory,
     MemoryImageSlot, Mmap, MpkEnabled, PoolingInstanceAllocatorConfig,
 };
-use crate::{prelude::*, vm::round_usize_up_to_host_pages};
 use crate::{
     runtime::vm::mpk::{self, ProtectionKey, ProtectionMask},
     vm::HostAlignedByteCount,
@@ -201,12 +201,20 @@ impl MemoryPool {
             let pkeys = &pkeys[..layout.num_stripes];
             for i in 0..constraints.num_slots {
                 let pkey = &pkeys[i % pkeys.len()];
-                let region = unsafe { mapping.slice_mut(cursor..cursor + layout.slot_bytes) };
+                let region = unsafe {
+                    mapping.slice_mut(
+                        cursor.byte_count()..cursor.byte_count() + layout.slot_bytes.byte_count(),
+                    )
+                };
                 pkey.protect(region)?;
-                cursor += layout.slot_bytes;
+                cursor = cursor
+                    .checked_add(layout.slot_bytes)
+                    .context("cursor + slot_bytes overflows")?;
             }
             debug_assert_eq!(
-                cursor + layout.post_slab_guard_bytes,
+                cursor
+                    .checked_add(layout.post_slab_guard_bytes)
+                    .context("cursor + post_slab_guard_bytes overflows")?,
                 layout.total_slab_bytes()?
             );
         }
@@ -277,7 +285,7 @@ impl MemoryPool {
                     i.as_u32()
                 )
             })?;
-            if min > u64::try_from(self.layout.max_memory_bytes).unwrap() {
+            if min > u64::try_from(self.layout.max_memory_bytes.byte_count()).unwrap() {
                 bail!(
                     "memory index {} has a minimum byte size of {} which exceeds the limit of {} bytes",
                     i.as_u32(),
@@ -346,7 +354,7 @@ impl MemoryPool {
             // but double-check here to be sure.
             assert!(
                 tunables.memory_reservation + tunables.memory_guard_size
-                    <= u64::try_from(self.layout.bytes_to_next_stripe_slot()).unwrap()
+                    <= u64::try_from(self.layout.bytes_to_next_stripe_slot().byte_count()).unwrap()
             );
 
             let base_ptr = self.get_base(allocation_index);
@@ -374,9 +382,14 @@ impl MemoryPool {
             let initial_size = usize::try_from(initial_size).unwrap();
             slot.instantiate(initial_size, image, ty, tunables)?;
 
-            Memory::new_static(ty, tunables, base_ptr, base_capacity, slot, unsafe {
-                &mut *request.store.get().unwrap()
-            })
+            Memory::new_static(
+                ty,
+                tunables,
+                base_ptr,
+                base_capacity.byte_count(),
+                slot,
+                unsafe { &mut *request.store.get().unwrap() },
+            )
         })() {
             Ok(memory) => Ok((allocation_index, memory)),
             Err(e) => {
@@ -460,9 +473,18 @@ impl MemoryPool {
 
     fn get_base(&self, allocation_index: MemoryAllocationIndex) -> *mut u8 {
         assert!(allocation_index.index() < self.layout.num_slots);
-        let offset =
-            self.layout.pre_slab_guard_bytes + allocation_index.index() * self.layout.slot_bytes;
-        unsafe { self.mapping.as_ptr().offset(offset as isize).cast_mut() }
+        let offset = self
+            .layout
+            .slot_bytes
+            .checked_mul(allocation_index.index())
+            .and_then(|c| c.checked_add(self.layout.pre_slab_guard_bytes))
+            .expect("slot_bytes * index + pre_slab_guard_bytes overflows");
+        unsafe {
+            self.mapping
+                .as_ptr()
+                .offset(offset.byte_count() as isize)
+                .cast_mut()
+        }
     }
 
     /// Take ownership of the given image slot. Must be returned via
@@ -477,7 +499,7 @@ impl MemoryPool {
             MemoryImageSlot::create(
                 self.get_base(allocation_index) as *mut c_void,
                 HostAlignedByteCount::ZERO,
-                self.layout.max_memory_bytes,
+                self.layout.max_memory_bytes.byte_count(),
             )
         })
     }
@@ -534,12 +556,13 @@ struct SlabConstraints {
     /// Essentially, the `static_memory_bound`: this is an assumption that the
     /// runtime and JIT compiler make about how much space will be guarded
     /// between slots.
-    expected_slot_bytes: usize,
-    /// The maximum size of any memory in the pool.
-    max_memory_bytes: usize,
+    expected_slot_bytes: HostAlignedByteCount,
+    /// The maximum size of any memory in the pool. Always a non-zero multiple
+    /// of the page size.
+    max_memory_bytes: HostAlignedByteCount,
     num_slots: usize,
     num_pkeys_available: usize,
-    guard_bytes: usize,
+    guard_bytes: HostAlignedByteCount,
     guard_before_slots: bool,
 }
 
@@ -558,17 +581,17 @@ impl SlabConstraints {
         // though not explicitly: if we can achieve the same effect via
         // MPK-protected stripes, the slot size can be lower than the
         // `memory_reservation`.
-        let expected_slot_bytes: usize = tunables
-            .memory_reservation
-            .try_into()
-            .context("memory reservation is too large")?;
-        let expected_slot_bytes = round_usize_up_to_host_pages(expected_slot_bytes)?;
+        let expected_slot_bytes =
+            HostAlignedByteCount::new_rounded_up_u64(tunables.memory_reservation)
+                .context("memory reservation is too large")?;
 
-        let guard_bytes: usize = tunables
-            .memory_guard_size
-            .try_into()
+        // Page-align the maximum size of memory since that's the granularity that
+        // permissions are going to be controlled at.
+        let max_memory_bytes = HostAlignedByteCount::new_rounded_up(limits.max_memory_size)
+            .context("maximum size of memory is too large")?;
+
+        let guard_bytes = HostAlignedByteCount::new_rounded_up_u64(tunables.memory_guard_size)
             .context("guard region is too large")?;
-        let guard_bytes = round_usize_up_to_host_pages(guard_bytes)?;
 
         let num_slots = limits
             .total_memories
@@ -576,7 +599,7 @@ impl SlabConstraints {
             .context("too many memories")?;
 
         let constraints = SlabConstraints {
-            max_memory_bytes: limits.max_memory_size,
+            max_memory_bytes,
             num_slots,
             expected_slot_bytes,
             num_pkeys_available,
@@ -602,15 +625,15 @@ struct SlabLayout {
     ///   placing slots from a different key (i.e., a stripe) in the guard
     ///   region; this means the slot itself can be smaller and we can allocate
     ///   more of them.
-    slot_bytes: usize,
+    slot_bytes: HostAlignedByteCount,
     /// The maximum size that can become accessible, in bytes, for each linear
     /// memory. Guaranteed to be a whole number of Wasm pages.
-    max_memory_bytes: usize,
+    max_memory_bytes: HostAlignedByteCount,
     /// If necessary, the number of bytes to reserve as a guard region at the
     /// beginning of the slab.
-    pre_slab_guard_bytes: usize,
+    pre_slab_guard_bytes: HostAlignedByteCount,
     /// Like `pre_slab_guard_bytes`, but at the end of the slab.
-    post_slab_guard_bytes: usize,
+    post_slab_guard_bytes: HostAlignedByteCount,
     /// The number of stripes needed in the slab layout.
     num_stripes: usize,
 }
@@ -625,18 +648,11 @@ impl SlabLayout {
     /// └────────────────────┴──────┴──────┴───┴──────┴─────────────────────┘
     /// ```
     fn total_slab_bytes(&self) -> Result<HostAlignedByteCount> {
-        let byte_count = self
-            .slot_bytes
+        self.slot_bytes
             .checked_mul(self.num_slots)
             .and_then(|c| c.checked_add(self.pre_slab_guard_bytes))
             .and_then(|c| c.checked_add(self.post_slab_guard_bytes))
-            .ok_or_else(|| {
-                anyhow!("total size of memory reservation exceeds addressable memory")
-            })?;
-
-        // TODO: pre_slab_guard_bytes and post_slab_guard_bytes should be
-        // HostAlignedByteCount instances.
-        HostAlignedByteCount::new(byte_count).err2anyhow()
+            .context("total size of memory reservation exceeds addressable memory")
     }
 
     /// Returns the number of Wasm bytes from the beginning of one slot to the
@@ -653,8 +669,10 @@ impl SlabLayout {
     /// │*slot 1*│slot 2│slot 3│*slot 4*│...|
     /// └────────┴──────┴──────┴────────┴───┘
     /// ```
-    fn bytes_to_next_stripe_slot(&self) -> usize {
-        self.slot_bytes * self.num_stripes
+    fn bytes_to_next_stripe_slot(&self) -> HostAlignedByteCount {
+        self.slot_bytes
+            .checked_mul(self.num_stripes)
+            .expect("constructor checks that self.slot_bytes * self.num_stripes is in bounds")
     }
 }
 
@@ -668,35 +686,35 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
         guard_before_slots,
     } = *constraints;
 
-    // Page-align the maximum size of memory since that's the granularity that
-    // permissions are going to be controlled at.
-    let max_memory_bytes = round_usize_up_to_host_pages(max_memory_bytes)
-        .context("maximum size of memory is too large")?;
-
     // If the user specifies a guard region, we always need to allocate a
     // `PROT_NONE` region for it before any memory slots. Recall that we can
     // avoid bounds checks for loads and stores with immediates up to
     // `guard_bytes`, but we rely on Wasmtime to emit bounds checks for any
     // accesses greater than this.
-    let pre_slab_guard_bytes = if guard_before_slots { guard_bytes } else { 0 };
+    let pre_slab_guard_bytes = if guard_before_slots {
+        guard_bytes
+    } else {
+        HostAlignedByteCount::ZERO
+    };
 
     // To calculate the slot size, we start with the default configured size and
     // attempt to chip away at this via MPK protection. Note here how we begin
     // to define a slot as "all of the memory and guard region."
     let faulting_region_bytes = expected_slot_bytes
         .max(max_memory_bytes)
-        .saturating_add(guard_bytes);
+        .checked_add(guard_bytes)
+        .context("faulting region is too large")?;
 
     let (num_stripes, slot_bytes) = if guard_bytes == 0 || max_memory_bytes == 0 || num_slots == 0 {
         // In the uncommon case where the memory/guard regions are empty or we don't need any slots , we
         // will not need any stripes: we just lay out the slots back-to-back
         // using a single stripe.
-        (1, faulting_region_bytes)
+        (1, faulting_region_bytes.byte_count())
     } else if num_pkeys_available < 2 {
         // If we do not have enough protection keys to stripe the memory, we do
         // the same. We can't elide any of the guard bytes because we aren't
         // overlapping guard regions with other stripes...
-        (1, faulting_region_bytes)
+        (1, faulting_region_bytes.byte_count())
     } else {
         // ...but if we can create at least two stripes, we can use another
         // stripe (i.e., a different pkey) as this slot's guard region--this
@@ -713,8 +731,15 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
         // pool is configured with only three slots (`num_memory_slots =
         // 3`), we will run into failures if we attempt to set up more than
         // three stripes.
-        let needed_num_stripes = faulting_region_bytes / max_memory_bytes
-            + usize::from(faulting_region_bytes % max_memory_bytes != 0);
+        let needed_num_stripes = faulting_region_bytes
+            .checked_div(max_memory_bytes)
+            .expect("if condition above implies max_memory_bytes is non-zero")
+            + usize::from(
+                faulting_region_bytes
+                    .checked_rem(max_memory_bytes)
+                    .expect("if condition above implies max_memory_bytes is non-zero")
+                    != 0,
+            );
         assert!(needed_num_stripes > 0);
         let num_stripes = num_pkeys_available.min(needed_num_stripes).min(num_slots);
 
@@ -724,16 +749,18 @@ fn calculate(constraints: &SlabConstraints) -> Result<SlabLayout> {
         // Recall that codegen expects a guarantee that at least
         // `faulting_region_bytes` will catch OOB accesses via segfaults.
         let needed_slot_bytes = faulting_region_bytes
+            .byte_count()
             .checked_div(num_stripes)
-            .unwrap_or(faulting_region_bytes)
-            .max(max_memory_bytes);
-        assert!(needed_slot_bytes >= max_memory_bytes);
+            .unwrap_or(faulting_region_bytes.byte_count())
+            .max(max_memory_bytes.byte_count());
+        assert!(needed_slot_bytes >= max_memory_bytes.byte_count());
 
         (num_stripes, needed_slot_bytes)
     };
 
     // The page-aligned slot size; equivalent to `memory_and_guard_size`.
-    let slot_bytes = round_usize_up_to_host_pages(slot_bytes).context("slot size is too large")?;
+    let slot_bytes =
+        HostAlignedByteCount::new_rounded_up(slot_bytes).context("slot size is too large")?;
 
     // We may need another guard region (like `pre_slab_guard_bytes`) at the end
     // of our slab to maintain our `faulting_region_bytes` guarantee. We could
@@ -796,7 +823,10 @@ mod tests {
         for i in 0..5 {
             let index = MemoryAllocationIndex(i);
             let ptr = pool.get_base(index);
-            assert_eq!(ptr as usize - base, i as usize * pool.layout.slot_bytes);
+            assert_eq!(
+                ptr as usize - base,
+                i as usize * pool.layout.slot_bytes.byte_count()
+            );
         }
 
         Ok(())
@@ -837,10 +867,17 @@ mod tests {
         for num_pkeys_available in 0..16 {
             for num_memory_slots in [0, 1, 10, 64] {
                 for expected_slot_bytes in [0, 1 << 30 /* 1GB */, 4 << 30 /* 4GB */] {
+                    let expected_slot_bytes =
+                        HostAlignedByteCount::new(expected_slot_bytes).unwrap();
                     for max_memory_bytes in
                         [0, 1 * WASM_PAGE_SIZE as usize, 10 * WASM_PAGE_SIZE as usize]
                     {
+                        // Note new rather than new_rounded_up here -- for now,
+                        // WASM_PAGE_SIZE is 64KiB, which is a multiple of the
+                        // host page size on all platforms.
+                        let max_memory_bytes = HostAlignedByteCount::new(max_memory_bytes).unwrap();
                         for guard_bytes in [0, 2 << 30 /* 2GB */] {
+                            let guard_bytes = HostAlignedByteCount::new(guard_bytes).unwrap();
                             for guard_before_slots in [true, false] {
                                 let constraints = SlabConstraints {
                                     max_memory_bytes,
@@ -872,11 +909,11 @@ mod tests {
 
     fn constraints() -> impl Strategy<Value = SlabConstraints> {
         (
+            any::<HostAlignedByteCount>(),
             any::<usize>(),
+            any::<HostAlignedByteCount>(),
             any::<usize>(),
-            any::<usize>(),
-            any::<usize>(),
-            any::<usize>(),
+            any::<HostAlignedByteCount>(),
             any::<bool>(),
         )
             .prop_map(
@@ -904,7 +941,10 @@ mod tests {
         // Check that all the sizes add up.
         assert_eq!(
             s.total_slab_bytes().unwrap(),
-            s.pre_slab_guard_bytes + s.slot_bytes * c.num_slots + s.post_slab_guard_bytes,
+            s.pre_slab_guard_bytes
+                .checked_add(s.slot_bytes.checked_mul(c.num_slots).unwrap())
+                .and_then(|c| c.checked_add(s.post_slab_guard_bytes))
+                .unwrap(),
             "the slab size does not add up: {c:?} => {s:?}"
         );
         assert!(
@@ -912,23 +952,8 @@ mod tests {
             "slot is not big enough: {c:?} => {s:?}"
         );
 
-        // Check that the various memory values are page-aligned.
-        assert!(
-            is_aligned(s.slot_bytes),
-            "slot is not page-aligned: {c:?} => {s:?}",
-        );
-        assert!(
-            is_aligned(s.max_memory_bytes),
-            "slot guard region is not page-aligned: {c:?} => {s:?}",
-        );
-        assert!(
-            is_aligned(s.pre_slab_guard_bytes),
-            "pre-slab guard region is not page-aligned: {c:?} => {s:?}"
-        );
-        assert!(
-            is_aligned(s.post_slab_guard_bytes),
-            "post-slab guard region is not page-aligned: {c:?} => {s:?}"
-        );
+        // The HostAlignedByteCount newtype wrapper ensures that the various
+        // byte values are page-aligned.
 
         // Check that we use no more or less stripes than needed.
         assert!(s.num_stripes >= 1, "not enough stripes: {c:?} => {s:?}");
@@ -953,9 +978,9 @@ mod tests {
         //   required guard region, we only need two stripes
         // - if the next slot is smaller than the guard region, we only need
         //   enough stripes to add up to at least that guard region size.
-        if c.num_pkeys_available > 1 && c.max_memory_bytes > 0 {
+        if c.num_pkeys_available > 1 && !c.max_memory_bytes.is_zero() {
             assert!(
-                s.num_stripes <= (c.guard_bytes / c.max_memory_bytes) + 2,
+                s.num_stripes <= (c.guard_bytes.checked_div(c.max_memory_bytes).unwrap() + 2),
                 "calculated more stripes than needed: {c:?} => {s:?}"
             );
         }
@@ -968,16 +993,15 @@ mod tests {
         //   `post_slab_guard_bytes` accounts for this
         assert!(
             s.bytes_to_next_stripe_slot()
-                >= c.expected_slot_bytes.max(c.max_memory_bytes) + c.guard_bytes,
+                >= c.expected_slot_bytes
+                    .max(c.max_memory_bytes)
+                    .checked_add(c.guard_bytes)
+                    .unwrap(),
             "faulting region not large enough: {c:?} => {s:?}"
         );
         assert!(
-            s.slot_bytes + s.post_slab_guard_bytes >= c.expected_slot_bytes,
+            s.slot_bytes.checked_add(s.post_slab_guard_bytes).unwrap() >= c.expected_slot_bytes,
             "last slot may allow OOB access: {c:?} => {s:?}"
         );
-    }
-
-    fn is_aligned(bytes: usize) -> bool {
-        bytes % crate::runtime::vm::host_page_size() == 0
     }
 }
