@@ -212,10 +212,16 @@ impl<'a> ModuleTextBuilder<'a> {
                 // and the goal is to insert the static signature number, `n`,
                 // into the instruction.
                 //
-                // At this time the instructions is 4-bytes large (3 bytes for
-                // the opcode, one for the one-byte payload), so we target the
-                // third byte. The value `n` here should always fit within a
-                // byte.
+                // At this time the instruction looks like:
+                //
+                //      +------+------+------+------+
+                //      | OP   | OP_EXTENDED |  N   |
+                //      +------+------+------+------+
+                //
+                // This 4-byte encoding has `OP` indicating this is an "extended
+                // opcode" where `OP_EXTENDED` is a 16-bit extended opcode.
+                // The `N` byte is the index of the signature being called and
+                // is what's b eing filled in.
                 //
                 // See the `test_call_indirect_host_width` in
                 // `pulley/tests/all.rs` for this guarantee as well.

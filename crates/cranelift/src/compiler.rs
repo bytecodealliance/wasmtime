@@ -146,7 +146,7 @@ impl Compiler {
         {
             use cranelift_codegen::ir::types::{I32, I64, I8};
 
-            // If pulley is enabled, even if we're not targetting it, determine
+            // If pulley is enabled, even if we're not targeting it, determine
             // what pulley signature that the input `signature` maps to. This is
             // done to ensure that even on native platforms we've always got a
             // signature listed in pulley for all platform intrinsics. In theory
