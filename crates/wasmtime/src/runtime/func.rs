@@ -1602,14 +1602,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
             exit_wasm(store, exit);
             return Err(trap);
         }
-        let result = crate::runtime::vm::catch_traps(
-            store.0.signal_handler(),
-            store.0.engine().config().wasm_backtrace,
-            store.0.engine().config().coredump_on_trap,
-            store.0.async_guard_range(),
-            store.0.default_caller(),
-            closure,
-        );
+        let result = crate::runtime::vm::catch_traps(store, closure);
         exit_wasm(store, exit);
         store.0.call_hook(CallHook::ReturningFromWasm)?;
         result.map_err(|t| crate::trap::from_runtime_box(store.0, t))

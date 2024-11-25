@@ -16,9 +16,10 @@ mod signals;
 pub use self::signals::*;
 
 use crate::prelude::*;
+use crate::runtime::store::StoreOpaque;
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{Instance, VMContext, VMRuntimeLimits};
-use crate::WasmBacktrace;
+use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::{Cell, UnsafeCell};
 use core::mem::MaybeUninit;
 use core::ops::Range;
@@ -164,27 +165,16 @@ impl From<wasmtime_environ::Trap> for TrapReason {
 /// returning them as a `Result`.
 ///
 /// Highly unsafe since `closure` won't have any dtors run.
-pub unsafe fn catch_traps<F>(
-    signal_handler: Option<*const SignalHandler>,
-    capture_backtrace: bool,
-    capture_coredump: bool,
-    async_guard_range: Range<*mut u8>,
-    caller: *mut VMContext,
+pub unsafe fn catch_traps<T, F>(
+    store: &mut StoreContextMut<'_, T>,
     mut closure: F,
 ) -> Result<(), Box<Trap>>
 where
     F: FnMut(*mut VMContext),
 {
-    let limits = Instance::from_vmctx(caller, |i| i.runtime_limits());
+    let caller = store.0.default_caller();
 
-    let result = CallThreadState::new(
-        signal_handler,
-        capture_backtrace,
-        capture_coredump,
-        *limits,
-        async_guard_range,
-    )
-    .with(|cx| {
+    let result = CallThreadState::new(store.0, caller).with(|cx| {
         traphandlers::wasmtime_setjmp(
             cx.jmp_buf.as_ptr(),
             call_closure::<F>,
@@ -260,26 +250,20 @@ mod call_thread_state {
 
     impl CallThreadState {
         #[inline]
-        pub(super) fn new(
-            signal_handler: Option<*const SignalHandler>,
-            capture_backtrace: bool,
-            capture_coredump: bool,
-            limits: *const VMRuntimeLimits,
-            async_guard_range: Range<*mut u8>,
-        ) -> CallThreadState {
-            let _ = (capture_coredump, signal_handler, &async_guard_range);
+        pub(super) fn new(store: &mut StoreOpaque, caller: *mut VMContext) -> CallThreadState {
+            let limits = unsafe { *Instance::from_vmctx(caller, |i| i.runtime_limits()) };
 
             CallThreadState {
                 unwind: UnsafeCell::new(MaybeUninit::uninit()),
                 jmp_buf: Cell::new(ptr::null()),
                 #[cfg(all(feature = "signals-based-traps", not(miri)))]
-                signal_handler,
-                capture_backtrace,
+                signal_handler: store.signal_handler(),
+                capture_backtrace: store.engine().config().wasm_backtrace,
                 #[cfg(feature = "coredump")]
-                capture_coredump,
+                capture_coredump: store.engine().config().coredump_on_trap,
                 limits,
                 #[cfg(all(feature = "signals-based-traps", unix, not(miri)))]
-                async_guard_range,
+                async_guard_range: store.async_guard_range(),
                 prev: Cell::new(ptr::null()),
                 old_last_wasm_exit_fp: Cell::new(unsafe { *(*limits).last_wasm_exit_fp.get() }),
                 old_last_wasm_exit_pc: Cell::new(unsafe { *(*limits).last_wasm_exit_pc.get() }),
