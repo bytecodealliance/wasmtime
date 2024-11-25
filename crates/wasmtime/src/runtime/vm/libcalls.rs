@@ -58,6 +58,7 @@ use crate::prelude::*;
 use crate::runtime::vm::table::{Table, TableElementType};
 use crate::runtime::vm::vmcontext::VMFuncRef;
 use crate::runtime::vm::{Instance, TrapReason, VMGcRef, VMStore};
+use core::ptr::NonNull;
 #[cfg(feature = "threads")]
 use core::time::Duration;
 use wasmtime_environ::Unsigned;
@@ -87,6 +88,7 @@ pub mod raw {
     #![allow(unused_doc_comments, unused_attributes)]
 
     use crate::runtime::vm::{InstanceAndStore, TrapReason, VMContext};
+    use core::ptr::NonNull;
 
     macro_rules! libcall {
         (
@@ -184,6 +186,13 @@ pub mod raw {
         }
     }
 
+    impl LibcallResult for NonNull<u8> {
+        type Abi = *mut u8;
+        unsafe fn convert(self) -> *mut u8 {
+            self.as_ptr()
+        }
+    }
+
     impl LibcallResult for bool {
         type Abi = u32;
         unsafe fn convert(self) -> u32 {
@@ -217,7 +226,7 @@ unsafe fn table_grow_func_ref(
     let table_index = TableIndex::from_u32(table_index);
 
     let element = match instance.table_element_type(table_index) {
-        TableElementType::Func => (init_value as *mut VMFuncRef).into(),
+        TableElementType::Func => NonNull::new(init_value.cast::<VMFuncRef>()).into(),
         TableElementType::GcRef => unreachable!(),
     };
 
@@ -271,7 +280,7 @@ unsafe fn table_fill_func_ref(
     let table = &mut *instance.get_table(table_index);
     match table.element_type() {
         TableElementType::Func => {
-            let val = val.cast::<VMFuncRef>();
+            let val = NonNull::new(val.cast::<VMFuncRef>());
             table
                 .fill(store.optional_gc_store_mut()?, dst, val.into(), len)
                 .err2anyhow()?;
@@ -401,7 +410,7 @@ fn memory_init(
 }
 
 // Implementation of `ref.func`.
-fn ref_func(_store: &mut dyn VMStore, instance: &mut Instance, func_index: u32) -> *mut u8 {
+fn ref_func(_store: &mut dyn VMStore, instance: &mut Instance, func_index: u32) -> NonNull<u8> {
     instance
         .get_func_ref(FuncIndex::from_u32(func_index))
         .expect("ref_func: funcref should always be available for given func index")
@@ -427,7 +436,10 @@ unsafe fn table_get_lazy_init_func_ref(
         .get(None, index)
         .expect("table access already bounds-checked");
 
-    elem.into_func_ref_asserting_initialized().cast()
+    match elem.into_func_ref_asserting_initialized() {
+        Some(ptr) => ptr.as_ptr().cast(),
+        None => core::ptr::null_mut(),
+    }
 }
 
 /// Drop a GC reference.
@@ -802,9 +814,8 @@ unsafe fn array_new_elem(
                         .ok_or_else(|| Trap::TableOutOfBounds.into_anyhow())?
                         .iter()
                         .map(|f| {
-                            let raw_func_ref =
-                                instance.get_func_ref(*f).unwrap_or(core::ptr::null_mut());
-                            let func = Func::from_vm_func_ref(store, raw_func_ref);
+                            let raw_func_ref = instance.get_func_ref(*f);
+                            let func = raw_func_ref.map(|p| Func::from_vm_func_ref(store, p));
                             Val::FuncRef(func)
                         }),
                 );
@@ -910,8 +921,8 @@ unsafe fn array_init_elem(
             .ok_or_else(|| Trap::TableOutOfBounds.into_anyhow())?
             .iter()
             .map(|f| {
-                let raw_func_ref = instance.get_func_ref(*f).unwrap_or(core::ptr::null_mut());
-                let func = Func::from_vm_func_ref(&mut store, raw_func_ref);
+                let raw_func_ref = instance.get_func_ref(*f);
+                let func = raw_func_ref.map(|p| Func::from_vm_func_ref(&mut store, p));
                 Val::FuncRef(func)
             })
             .collect::<Vec<_>>(),

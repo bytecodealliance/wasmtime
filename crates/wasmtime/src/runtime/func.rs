@@ -573,12 +573,11 @@ impl Func {
 
     pub(crate) unsafe fn from_vm_func_ref(
         store: &mut StoreOpaque,
-        raw: *mut VMFuncRef,
-    ) -> Option<Func> {
-        let func_ref = NonNull::new(raw)?;
+        func_ref: NonNull<VMFuncRef>,
+    ) -> Func {
         debug_assert!(func_ref.as_ref().type_index != VMSharedTypeIndex::default());
         let export = ExportFunction { func_ref };
-        Some(Func::from_wasmtime_function(export, store))
+        Func::from_wasmtime_function(export, store)
     }
 
     /// Creates a new `Func` from the given Rust closure.
@@ -1091,7 +1090,7 @@ impl Func {
     }
 
     pub(crate) unsafe fn _from_raw(store: &mut StoreOpaque, raw: *mut c_void) -> Option<Func> {
-        Func::from_vm_func_ref(store, raw.cast())
+        Some(Func::from_vm_func_ref(store, NonNull::new(raw.cast())?))
     }
 
     /// Extracts the raw value of this `Func`, which is owned by `store`.
