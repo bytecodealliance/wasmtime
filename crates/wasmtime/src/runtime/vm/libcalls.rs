@@ -60,7 +60,6 @@ use crate::runtime::vm::vmcontext::VMFuncRef;
 use crate::runtime::vm::{Instance, TrapReason, VMGcRef, VMStore};
 #[cfg(feature = "threads")]
 use core::time::Duration;
-use wasmtime_environ::Unsigned;
 use wasmtime_environ::{DataIndex, ElemIndex, FuncIndex, MemoryIndex, TableIndex, Trap};
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::AccessError::{
@@ -141,7 +140,6 @@ pub mod raw {
 
         (@ty i32) => (u32);
         (@ty i64) => (u64);
-        (@ty f64) => (f64);
         (@ty u8) => (u8);
         (@ty reference) => (u32);
         (@ty pointer) => (*mut u8);
@@ -1244,70 +1242,6 @@ fn trap(_store: &mut dyn VMStore, _instance: &mut Instance, code: u8) -> Result<
     Err(TrapReason::Wasm(
         wasmtime_environ::Trap::from_u8(code).unwrap(),
     ))
-}
-
-fn f64_to_i64(
-    _store: &mut dyn VMStore,
-    _instance: &mut Instance,
-    val: f64,
-) -> Result<u64, TrapReason> {
-    if val.is_nan() {
-        return Err(TrapReason::Wasm(Trap::BadConversionToInteger));
-    }
-    let val = relocs::truncf64(val);
-    if val <= -9223372036854777856.0 || val >= 9223372036854775808.0 {
-        return Err(TrapReason::Wasm(Trap::IntegerOverflow));
-    }
-    #[allow(clippy::cast_possible_truncation)]
-    return Ok((val as i64).unsigned());
-}
-
-fn f64_to_u64(
-    _store: &mut dyn VMStore,
-    _instance: &mut Instance,
-    val: f64,
-) -> Result<u64, TrapReason> {
-    if val.is_nan() {
-        return Err(TrapReason::Wasm(Trap::BadConversionToInteger));
-    }
-    let val = relocs::truncf64(val);
-    if val <= -1.0 || val >= 18446744073709551616.0 {
-        return Err(TrapReason::Wasm(Trap::IntegerOverflow));
-    }
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    return Ok(val as u64);
-}
-
-fn f64_to_i32(
-    _store: &mut dyn VMStore,
-    _instance: &mut Instance,
-    val: f64,
-) -> Result<u32, TrapReason> {
-    if val.is_nan() {
-        return Err(TrapReason::Wasm(Trap::BadConversionToInteger));
-    }
-    let val = relocs::truncf64(val);
-    if val <= -2147483649.0 || val >= 2147483648.0 {
-        return Err(TrapReason::Wasm(Trap::IntegerOverflow));
-    }
-    #[allow(clippy::cast_possible_truncation)]
-    return Ok((val as i32).unsigned());
-}
-
-fn f64_to_u32(
-    _store: &mut dyn VMStore,
-    _instance: &mut Instance,
-    val: f64,
-) -> Result<u32, TrapReason> {
-    if val.is_nan() {
-        return Err(TrapReason::Wasm(Trap::BadConversionToInteger));
-    }
-    let val = relocs::truncf64(val);
-    if val <= -1.0 || val >= 4294967296.0 {
-        return Err(TrapReason::Wasm(Trap::IntegerOverflow));
-    }
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    return Ok(val as u32);
 }
 
 /// This module contains functions which are used for resolving relocations at

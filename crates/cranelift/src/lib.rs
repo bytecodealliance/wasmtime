@@ -378,10 +378,6 @@ impl BuiltinFunctionSignatures {
         AbiParam::new(ir::types::I64)
     }
 
-    fn f64(&self) -> AbiParam {
-        AbiParam::new(ir::types::F64)
-    }
-
     fn u8(&self) -> AbiParam {
         AbiParam::new(ir::types::I8)
     }
