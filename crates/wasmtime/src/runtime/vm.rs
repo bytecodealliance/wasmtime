@@ -372,7 +372,7 @@ pub fn host_page_size() -> usize {
 /// Returns an error if rounding up overflows.
 ///
 /// (Deprecated: consider switching to `HostAlignedByteCount`.)
-#[cfg(feature = "signals-based-traps")]
+#[cfg(all(feature = "async", unix, not(miri)))]
 pub fn round_u64_up_to_host_pages(bytes: u64) -> Result<u64> {
     let page_size = u64::try_from(crate::runtime::vm::host_page_size()).err2anyhow()?;
     debug_assert!(page_size.is_power_of_two());
@@ -387,7 +387,7 @@ pub fn round_u64_up_to_host_pages(bytes: u64) -> Result<u64> {
 /// Same as `round_u64_up_to_host_pages` but for `usize`s.
 ///
 /// (Deprecated: consider switching to `HostAlignedByteCount`.)
-#[cfg(feature = "signals-based-traps")]
+#[cfg(all(feature = "async", unix, not(miri)))]
 pub fn round_usize_up_to_host_pages(bytes: usize) -> Result<usize> {
     let bytes = u64::try_from(bytes).err2anyhow()?;
     let rounded = round_u64_up_to_host_pages(bytes)?;
