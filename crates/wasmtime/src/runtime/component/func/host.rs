@@ -311,7 +311,7 @@ unsafe fn call_host_and_handle_result<T>(
 
     match res {
         Ok(()) => {}
-        Err(e) => crate::trap::raise(e),
+        Err(e) => crate::runtime::vm::raise_user_trap(e),
     }
 }
 

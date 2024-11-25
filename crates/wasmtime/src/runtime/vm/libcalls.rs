@@ -199,12 +199,7 @@ fn memory32_grow(
     memory_index: u32,
 ) -> Result<*mut u8, TrapReason> {
     let memory_index = MemoryIndex::from_u32(memory_index);
-    let result = match instance
-        .memory_grow(store, memory_index, delta)
-        .map_err(|error| TrapReason::User {
-            error,
-            needs_backtrace: true,
-        })? {
+    let result = match instance.memory_grow(store, memory_index, delta)? {
         Some(size_in_bytes) => size_in_bytes / instance.memory_page_size(memory_index),
         None => usize::max_value(),
     };

@@ -18,6 +18,7 @@ pub use self::signals::*;
 use crate::prelude::*;
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{Instance, VMContext, VMRuntimeLimits};
+use crate::WasmBacktrace;
 use core::cell::{Cell, UnsafeCell};
 use core::mem::MaybeUninit;
 use core::ops::Range;
@@ -58,11 +59,8 @@ pub unsafe fn raise_trap(reason: TrapReason) -> ! {
 /// Only safe to call when wasm code is on the stack, aka `catch_traps` must
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
-pub unsafe fn raise_user_trap(error: Error, needs_backtrace: bool) -> ! {
-    raise_trap(TrapReason::User {
-        error,
-        needs_backtrace,
-    })
+pub unsafe fn raise_user_trap(error: Error) -> ! {
+    raise_trap(TrapReason::User(error))
 }
 
 /// Invokes the closure `f` and returns the result.
@@ -113,12 +111,7 @@ pub struct Trap {
 #[derive(Debug)]
 pub enum TrapReason {
     /// A user-raised trap through `raise_user_trap`.
-    User {
-        /// The actual user trap error.
-        error: Error,
-        /// Whether we need to capture a backtrace for this error or not.
-        needs_backtrace: bool,
-    },
+    User(Error),
 
     /// A trap raised from Cranelift-generated code.
     #[cfg(all(feature = "signals-based-traps", not(miri)))]
@@ -150,17 +143,14 @@ pub enum TrapReason {
 
 impl TrapReason {
     /// Create a new `TrapReason::User` that does not have a backtrace yet.
-    pub fn user_without_backtrace(error: Error) -> Self {
-        TrapReason::User {
-            error,
-            needs_backtrace: true,
-        }
+    pub fn user(error: Error) -> Self {
+        TrapReason::User(error)
     }
 }
 
 impl From<Error> for TrapReason {
     fn from(err: Error) -> Self {
-        TrapReason::user_without_backtrace(err)
+        TrapReason::user(err)
     }
 }
 
@@ -359,7 +349,7 @@ impl CallThreadState {
     }
 
     fn unwind_with(&self, reason: UnwindReason) -> ! {
-        let (backtrace, coredump) = match reason {
+        let (backtrace, coredump) = match &reason {
             // Panics don't need backtraces. There is nowhere to attach the
             // hypothetical backtrace to and it doesn't really make sense to try
             // in the first place since this is a Rust problem rather than a
@@ -369,10 +359,11 @@ impl CallThreadState {
             // And if we are just propagating an existing trap that already has
             // a backtrace attached to it, then there is no need to capture a
             // new backtrace either.
-            UnwindReason::Trap(TrapReason::User {
-                needs_backtrace: false,
-                ..
-            }) => (None, None),
+            UnwindReason::Trap(TrapReason::User(err))
+                if err.downcast_ref::<WasmBacktrace>().is_some() =>
+            {
+                (None, None)
+            }
             UnwindReason::Trap(_) => (
                 self.capture_backtrace(self.limits, None),
                 self.capture_coredump(self.limits, None),
