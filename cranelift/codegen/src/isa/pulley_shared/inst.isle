@@ -22,7 +22,7 @@
     (Unwind (inst UnwindInst))
 
     ;; Implementation of `br_table`, uses `idx` to jump to one of `targets` or
-    ;; jumps to `default` is it's out-of-bounds.
+    ;; jumps to `default` if it's out-of-bounds.
     (BrTable
       (idx XReg)
       (default MachLabel)
