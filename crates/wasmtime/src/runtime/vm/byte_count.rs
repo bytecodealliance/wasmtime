@@ -94,8 +94,8 @@ impl HostAlignedByteCount {
             .ok_or(ByteCountOutOfBounds(ByteCountOutOfBoundsKind::Add))
     }
 
-    // Note: saturating_add should not be added! usize::MAX is not a power of 2
-    // so is not aligned.
+    // Note: saturating_add should not be naively added! usize::MAX is not a
+    // power of 2 so is not aligned.
 
     /// Compute `self - bytes`.
     ///
@@ -139,8 +139,20 @@ impl HostAlignedByteCount {
     /// Compute the remainder of an aligned byte count divided by another
     /// aligned byte count.
     ///
+    /// The remainder is always an aligned byte count itself.
+    ///
     /// Returns an error in case the divisor is zero.
     pub fn checked_rem(self, divisor: HostAlignedByteCount) -> Result<Self, ByteCountOutOfBounds> {
+        // Why is the remainder an aligned byte count? For example, if the page
+        // size is 4KiB, then the remainder of dividing (say) 40KiB by 16KiB is
+        // 8KiB, which is a multiple of 4KiB.
+        //
+        // More generally, for integers n >= 0, m > 0, k > 0:
+        //
+        //     (n * k) % (m * k) = (n % m) * k
+        //
+        // which is a multiple of k. Here, k is the host page size, so the
+        // remainder is a multiple of the host page size.
         self.0
             .checked_rem(divisor.0)
             .map(Self)

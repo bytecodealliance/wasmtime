@@ -354,13 +354,7 @@ impl MemoryPool {
             // but double-check here to be sure.
             assert!(
                 tunables.memory_reservation + tunables.memory_guard_size
-                    <= u64::try_from(
-                        self.layout
-                            .bytes_to_next_stripe_slot()
-                            .unwrap()
-                            .byte_count()
-                    )
-                    .unwrap()
+                    <= u64::try_from(self.layout.bytes_to_next_stripe_slot().byte_count()).unwrap()
             );
 
             let base_ptr = self.get_base(allocation_index);
@@ -675,10 +669,10 @@ impl SlabLayout {
     /// │*slot 1*│slot 2│slot 3│*slot 4*│...|
     /// └────────┴──────┴──────┴────────┴───┘
     /// ```
-    fn bytes_to_next_stripe_slot(&self) -> Result<HostAlignedByteCount> {
+    fn bytes_to_next_stripe_slot(&self) -> HostAlignedByteCount {
         self.slot_bytes
             .checked_mul(self.num_stripes)
-            .context("self.slot_bytes * self.num_stripes overflows")
+            .expect("constructor checks that self.slot_bytes * self.num_stripes is in bounds")
     }
 }
 
@@ -998,7 +992,7 @@ mod tests {
         // - the last slot won't have MPK striping after it; we check that the
         //   `post_slab_guard_bytes` accounts for this
         assert!(
-            s.bytes_to_next_stripe_slot().unwrap()
+            s.bytes_to_next_stripe_slot()
                 >= c.expected_slot_bytes
                     .max(c.max_memory_bytes)
                     .checked_add(c.guard_bytes)
