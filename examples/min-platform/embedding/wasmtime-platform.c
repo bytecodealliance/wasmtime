@@ -57,15 +57,14 @@ uintptr_t wasmtime_page_size(void) { return sysconf(_SC_PAGESIZE); }
 
 #endif // WASMTIME_SIGNALS_BASED_TRAPS
 
-int32_t wasmtime_setjmp(const uint8_t **jmp_buf_out,
-                        void (*callback)(uint8_t *, uint8_t *),
-                        uint8_t *payload, uint8_t *callee) {
+bool wasmtime_setjmp(const uint8_t **jmp_buf_out,
+                     bool (*callback)(uint8_t *, uint8_t *), uint8_t *payload,
+                     uint8_t *callee) {
   jmp_buf buf;
   if (setjmp(buf) != 0)
-    return 0;
+    return false;
   *jmp_buf_out = (uint8_t *)&buf;
-  callback(payload, callee);
-  return 1;
+  return callback(payload, callee);
 }
 
 void wasmtime_longjmp(const uint8_t *jmp_buf_ptr) {

@@ -151,6 +151,8 @@ fn array_call_signature(isa: &dyn TargetIsa) -> ir::Signature {
     // of `ValRaw`.
     sig.params.push(ir::AbiParam::new(isa.pointer_type()));
     sig.params.push(ir::AbiParam::new(isa.pointer_type()));
+    // boolean return value of whether this function trapped
+    sig.returns.push(ir::AbiParam::new(ir::types::I8));
     sig
 }
 

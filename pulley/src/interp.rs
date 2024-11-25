@@ -1304,6 +1304,7 @@ impl ExtendedOpVisitor for Interpreter<'_> {
             (@get I32 $reg:ident) => ($reg.get_i32());
             (@get I64 $reg:ident) => ($reg.get_i64());
 
+            (@set I8 $dst:ident $val:ident) => ($dst.set_i32($val.into()););
             (@set I32 $dst:ident $val:ident) => ($dst.set_i32($val););
             (@set I64 $dst:ident $val:ident) => ($dst.set_i64($val););
 

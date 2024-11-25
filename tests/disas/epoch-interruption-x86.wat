@@ -28,12 +28,12 @@
 ;;       jae     0x64
 ;;       jmp     0x46
 ;;   57: movq    %r13, %rdi
-;;       callq   0xec
+;;       callq   0x117
 ;;       jmp     0x46
 ;;   64: movq    0x10(%r12), %rax
 ;;       cmpq    %rax, %rdi
 ;;       jb      0x46
 ;;   72: movq    %r13, %rdi
-;;       callq   0xec
+;;       callq   0x117
 ;;       jmp     0x46
 ;;   7f: ud2

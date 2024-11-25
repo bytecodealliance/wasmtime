@@ -115,6 +115,7 @@ mod trampolines {
             )*
         ) => (
             $(
+                #[allow(deprecated)] // FIXME: need to update this
                 pub unsafe extern "C" fn $name(
                     $($pname : signature!(@ty $param),)*
                 ) $( -> signature!(@ty $result))? {

@@ -61,16 +61,15 @@ typedef sigjmp_buf platform_jmp_buf;
 #define CONCAT(a, b) CONCAT2(a, b)
 #define VERSIONED_SYMBOL(a) CONCAT(a, VERSIONED_SUFFIX)
 
-int VERSIONED_SYMBOL(wasmtime_setjmp)(void **buf_storage,
-                                      void (*body)(void *, void *),
-                                      void *payload, void *callee) {
+bool VERSIONED_SYMBOL(wasmtime_setjmp)(void **buf_storage,
+                                       bool (*body)(void *, void *),
+                                       void *payload, void *callee) {
   platform_jmp_buf buf;
   if (platform_setjmp(buf) != 0) {
-    return 0;
+    return false;
   }
   *buf_storage = &buf;
-  body(payload, callee);
-  return 1;
+  return body(payload, callee);
 }
 
 void VERSIONED_SYMBOL(wasmtime_longjmp)(void *JmpBuf) {

@@ -120,6 +120,7 @@ impl<'a> TrampolineCompiler<'a> {
         let pointer_type = self.isa.pointer_type();
         let args = self.builder.func.dfg.block_params(self.block0).to_vec();
         let vmctx = args[0];
+        let caller_vmctx = args[1];
         let wasm_func_ty = self.types[self.signature].unwrap_func();
 
         // Start off by spilling all the wasm arguments into a stack slot to be
@@ -228,6 +229,9 @@ impl<'a> TrampolineCompiler<'a> {
         host_sig.params.push(ir::AbiParam::new(pointer_type));
         callee_args.push(values_vec_len);
 
+        // return value is a bool whether a trap was raised or not
+        host_sig.returns.push(ir::AbiParam::new(ir::types::I8));
+
         // Load host function pointer from the vmcontext and then call that
         // indirect function pointer with the list of arguments.
         let host_fn = self.builder.ins().load(
@@ -237,11 +241,15 @@ impl<'a> TrampolineCompiler<'a> {
             i32::try_from(self.offsets.lowering_callee(index)).unwrap(),
         );
         let host_sig = self.builder.import_signature(host_sig);
-        self.compiler
-            .call_indirect_host(&mut self.builder, host_sig, host_fn, &callee_args);
+        let call =
+            self.compiler
+                .call_indirect_host(&mut self.builder, host_sig, host_fn, &callee_args);
+        let succeeded = self.builder.func.dfg.inst_results(call)[0];
 
         match self.abi {
             Abi::Wasm => {
+                self.compiler
+                    .raise_if_host_trapped(&mut self.builder, caller_vmctx, succeeded);
                 // After the host function has returned the results are loaded from
                 // `values_vec_ptr` and then returned.
                 let results = self.compiler.load_values_from_array(
@@ -253,7 +261,7 @@ impl<'a> TrampolineCompiler<'a> {
                 self.builder.ins().return_(&results);
             }
             Abi::Array => {
-                self.builder.ins().return_(&[]);
+                self.builder.ins().return_(&[succeeded]);
             }
         }
     }
@@ -522,8 +530,8 @@ impl<'a> TrampolineCompiler<'a> {
         self.builder.seal_block(run_destructor_block);
 
         self.builder.switch_to_block(return_block);
-        self.builder.ins().return_(&[]);
         self.builder.seal_block(return_block);
+        self.abi_store_results(&[]);
     }
 
     /// Invokes a host libcall and returns the result.
@@ -624,7 +632,8 @@ impl<'a> TrampolineCompiler<'a> {
                     ptr,
                     len,
                 );
-                self.builder.ins().return_(&[]);
+                let true_value = self.builder.ins().iconst(ir::types::I8, 1);
+                self.builder.ins().return_(&[true_value]);
             }
         }
     }

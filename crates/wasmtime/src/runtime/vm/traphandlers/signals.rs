@@ -151,16 +151,14 @@ impl CallThreadState {
     ) {
         let backtrace = self.capture_backtrace(self.limits, Some((pc, fp)));
         let coredump = self.capture_coredump(self.limits, Some((pc, fp)));
-        unsafe {
-            (*self.unwind.get()).as_mut_ptr().write((
-                UnwindReason::Trap(TrapReason::Jit {
-                    pc,
-                    faulting_addr,
-                    trap,
-                }),
-                backtrace,
-                coredump,
-            ));
-        }
+        self.unwind.set(Some((
+            UnwindReason::Trap(TrapReason::Jit {
+                pc,
+                faulting_addr,
+                trap,
+            }),
+            backtrace,
+            coredump,
+        )))
     }
 }

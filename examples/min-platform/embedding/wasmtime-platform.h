@@ -173,13 +173,13 @@ extern uintptr_t wasmtime_page_size(void);
  *   configured.
  * * `payload` and `callee` - the two arguments to pass to `callback`.
  *
- * Returns 0 if `wasmtime_longjmp` was used to return to this function.
- * Returns 1 if `wasmtime_longjmp` was not called and `callback` returned.
+ * Returns false if `wasmtime_longjmp` was used to return to this function.
+ * Returns true if `wasmtime_longjmp` was not called and `callback` returned.
  */
-extern int32_t wasmtime_setjmp(const uint8_t **jmp_buf,
-                               void (*callback)(uint8_t*, uint8_t*),
-                               uint8_t *payload,
-                               uint8_t *callee);
+extern bool wasmtime_setjmp(const uint8_t **jmp_buf,
+                            bool (*callback)(uint8_t*, uint8_t*),
+                            uint8_t *payload,
+                            uint8_t *callee);
 
 /**
  * Paired with `wasmtime_setjmp` this is used to jump back to the `setjmp`

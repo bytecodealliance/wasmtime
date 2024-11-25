@@ -1592,7 +1592,7 @@ impl Func {
 /// can pass to the called wasm function, if desired.
 pub(crate) fn invoke_wasm_and_catch_traps<T>(
     store: &mut StoreContextMut<'_, T>,
-    closure: impl FnMut(*mut VMContext),
+    closure: impl FnMut(*mut VMContext) -> bool,
 ) -> Result<()> {
     unsafe {
         let exit = enter_wasm(store);
@@ -2296,7 +2296,8 @@ impl HostContext {
         caller_vmctx: *mut VMOpaqueContext,
         args: *mut ValRaw,
         args_len: usize,
-    ) where
+    ) -> bool
+    where
         F: Fn(Caller<'_, T>, P) -> R + 'static,
         P: WasmTyList,
         R: WasmRet,
@@ -2356,15 +2357,10 @@ impl HostContext {
 
         // With nothing else on the stack move `run` into this
         // closure and then run it as part of `Caller::with`.
-        let result = crate::runtime::vm::catch_unwind_and_longjmp(move || {
+        crate::runtime::vm::catch_unwind_and_record_trap(move || {
             let caller_vmctx = VMContext::from_opaque(caller_vmctx);
             Caller::with(caller_vmctx, run)
-        });
-
-        match result {
-            Ok(val) => val,
-            Err(err) => crate::runtime::vm::raise_user_trap(err),
-        }
+        })
     }
 }
 
