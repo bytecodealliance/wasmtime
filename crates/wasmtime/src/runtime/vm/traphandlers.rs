@@ -253,6 +253,11 @@ mod call_thread_state {
         pub(super) fn new(store: &mut StoreOpaque, caller: *mut VMContext) -> CallThreadState {
             let limits = unsafe { *Instance::from_vmctx(caller, |i| i.runtime_limits()) };
 
+            // Don't try to plumb #[cfg] everywhere for this field, just pretend
+            // we're using it on miri to silence compiler warnings.
+            #[cfg(miri)]
+            let _: Range<_> = store.async_guard_range();
+
             CallThreadState {
                 unwind: UnsafeCell::new(MaybeUninit::uninit()),
                 jmp_buf: Cell::new(ptr::null()),
