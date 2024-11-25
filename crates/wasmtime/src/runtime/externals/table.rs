@@ -163,7 +163,8 @@ impl Table {
         unsafe {
             match (*table).get(gc_store, index)? {
                 runtime::TableElement::FuncRef(f) => {
-                    f.map(|f| Func::from_vm_func_ref(&mut store, f).into())
+                    let func = f.map(|f| Func::from_vm_func_ref(&mut store, f));
+                    Some(func.into())
                 }
 
                 runtime::TableElement::UninitFunc => {
