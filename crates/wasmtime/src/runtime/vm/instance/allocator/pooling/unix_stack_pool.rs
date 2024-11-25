@@ -4,8 +4,7 @@ use super::index_allocator::{SimpleIndexAllocator, SlotId};
 use crate::prelude::*;
 use crate::runtime::vm::sys::vm::commit_pages;
 use crate::runtime::vm::{
-    mmap::AlignedLength, round_usize_up_to_host_pages, HostAlignedByteCount, Mmap,
-    PoolingInstanceAllocatorConfig,
+    mmap::AlignedLength, HostAlignedByteCount, Mmap, PoolingInstanceAllocatorConfig,
 };
 
 /// Represents a pool of execution stacks (used for the async fiber implementation).
@@ -26,7 +25,7 @@ pub struct StackPool {
     page_size: HostAlignedByteCount,
     index_allocator: SimpleIndexAllocator,
     async_stack_zeroing: bool,
-    async_stack_keep_resident: usize,
+    async_stack_keep_resident: HostAlignedByteCount,
 }
 
 impl StackPool {
@@ -80,7 +79,7 @@ impl StackPool {
             max_stacks,
             page_size,
             async_stack_zeroing: config.async_stack_zeroing,
-            async_stack_keep_resident: round_usize_up_to_host_pages(
+            async_stack_keep_resident: HostAlignedByteCount::new_rounded_up(
                 config.async_stack_keep_resident,
             )?,
             index_allocator: SimpleIndexAllocator::new(config.limits.total_stacks),
@@ -95,7 +94,7 @@ impl StackPool {
 
     /// Allocate a new fiber.
     pub fn allocate(&self) -> Result<wasmtime_fiber::FiberStack> {
-        if self.stack_size == 0 {
+        if self.stack_size.is_zero() {
             bail!("pooling allocator not configured to enable fiber stack allocation");
         }
 
@@ -109,7 +108,10 @@ impl StackPool {
 
         unsafe {
             // Remove the guard page from the size
-            let size_without_guard = self.stack_size.byte_count() - self.page_size.byte_count();
+            let size_without_guard = self.stack_size.checked_sub(self.page_size).expect(
+                "self.stack_size is host-page-aligned and is > 0,\
+                 so it must be >= self.page_size",
+            );
 
             let bottom_of_stack = self
                 .mapping
@@ -117,12 +119,12 @@ impl StackPool {
                 .add(self.stack_size.unchecked_mul(index).byte_count())
                 .cast_mut();
 
-            commit_pages(bottom_of_stack, size_without_guard)?;
+            commit_pages(bottom_of_stack, size_without_guard.byte_count())?;
 
             let stack = wasmtime_fiber::FiberStack::from_raw_parts(
                 bottom_of_stack,
                 self.page_size.byte_count(),
-                size_without_guard,
+                size_without_guard.byte_count(),
             )?;
             Ok(stack)
         }
@@ -134,6 +136,11 @@ impl StackPool {
     /// that should be decommitted. It is the caller's responsibility to ensure
     /// that those decommits happen before this stack is reused.
     ///
+    /// # Panics
+    ///
+    /// `zero_stack` panics if the passed in `stack` was not created by
+    /// [`Self::allocate`].
+    ///
     /// # Safety
     ///
     /// The stack must no longer be in use, and ready for returning to the pool
@@ -144,6 +151,11 @@ impl StackPool {
         mut decommit: impl FnMut(*mut u8, usize),
     ) {
         assert!(stack.is_from_raw_parts());
+        assert!(
+            !self.stack_size.is_zero(),
+            "pooling allocator not configured to enable fiber stack allocation \
+             (Self::allocate should have returned an error)"
+        );
 
         if !self.async_stack_zeroing {
             return;
@@ -160,9 +172,12 @@ impl StackPool {
             "fiber stack top pointer not in range"
         );
 
-        // Remove the guard page from the size
-        let stack_size = self.stack_size.byte_count() - self.page_size.byte_count();
-        let bottom_of_stack = top - stack_size;
+        // Remove the guard page from the size.
+        let stack_size = self.stack_size.checked_sub(self.page_size).expect(
+            "self.stack_size is host-page-aligned and is > 0,\
+             so it must be >= self.page_size",
+        );
+        let bottom_of_stack = top - stack_size.byte_count();
         let start_of_stack = bottom_of_stack - self.page_size.byte_count();
         assert!(start_of_stack >= base && start_of_stack < (base + len));
         assert!((start_of_stack - base) % self.stack_size.byte_count() == 0);
@@ -175,14 +190,17 @@ impl StackPool {
         // * madvise for the whole range incurs expensive future page faults
         // * most threads probably don't use most of the stack anyway
         let size_to_memset = stack_size.min(self.async_stack_keep_resident);
+        let rest = stack_size
+            .checked_sub(size_to_memset)
+            .expect("stack_size >= size_to_memset");
         std::ptr::write_bytes(
-            (bottom_of_stack + stack_size - size_to_memset) as *mut u8,
+            (bottom_of_stack + rest.byte_count()) as *mut u8,
             0,
-            size_to_memset,
+            size_to_memset.byte_count(),
         );
 
         // Use the system to reset remaining stack pages to zero.
-        decommit(bottom_of_stack as _, stack_size - size_to_memset);
+        decommit(bottom_of_stack as _, rest.byte_count());
     }
 
     /// Deallocate a previously-allocated fiber.

@@ -367,33 +367,6 @@ pub fn host_page_size() -> usize {
     };
 }
 
-/// Round the given byte size up to a multiple of the host OS page size.
-///
-/// Returns an error if rounding up overflows.
-///
-/// (Deprecated: consider switching to `HostAlignedByteCount`.)
-#[cfg(all(feature = "async", unix, not(miri)))]
-pub fn round_u64_up_to_host_pages(bytes: u64) -> Result<u64> {
-    let page_size = u64::try_from(crate::runtime::vm::host_page_size()).err2anyhow()?;
-    debug_assert!(page_size.is_power_of_two());
-    bytes
-        .checked_add(page_size - 1)
-        .ok_or_else(|| anyhow!(
-            "{bytes} is too large to be rounded up to a multiple of the host page size of {page_size}"
-        ))
-        .map(|val| val & !(page_size - 1))
-}
-
-/// Same as `round_u64_up_to_host_pages` but for `usize`s.
-///
-/// (Deprecated: consider switching to `HostAlignedByteCount`.)
-#[cfg(all(feature = "async", unix, not(miri)))]
-pub fn round_usize_up_to_host_pages(bytes: usize) -> Result<usize> {
-    let bytes = u64::try_from(bytes).err2anyhow()?;
-    let rounded = round_u64_up_to_host_pages(bytes)?;
-    Ok(usize::try_from(rounded).err2anyhow()?)
-}
-
 /// Result of `Memory::atomic_wait32` and `Memory::atomic_wait64`
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum WaitResult {
