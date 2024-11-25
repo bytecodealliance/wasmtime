@@ -1115,14 +1115,12 @@ unsafe fn check_malloc(
     instance: &mut Instance,
     addr: u32,
     len: u32,
-) -> Result<u32> {
+) -> Result<()> {
     if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
         let result = wmemcheck_state.malloc(addr as usize, len as usize);
         wmemcheck_state.memcheck_on();
         match result {
-            Ok(()) => {
-                return Ok(0);
-            }
+            Ok(()) => {}
             Err(DoubleMalloc { addr, len }) => {
                 bail!("Double malloc at addr {:#x} of size {}", addr, len)
             }
@@ -1134,19 +1132,17 @@ unsafe fn check_malloc(
             }
         }
     }
-    Ok(0)
+    Ok(())
 }
 
 // Hook for validating free using wmemcheck_state.
 #[cfg(feature = "wmemcheck")]
-unsafe fn check_free(_store: &mut dyn VMStore, instance: &mut Instance, addr: u32) -> Result<u32> {
+unsafe fn check_free(_store: &mut dyn VMStore, instance: &mut Instance, addr: u32) -> Result<()> {
     if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
         let result = wmemcheck_state.free(addr as usize);
         wmemcheck_state.memcheck_on();
         match result {
-            Ok(()) => {
-                return Ok(0);
-            }
+            Ok(()) => {}
             Err(InvalidFree { addr }) => {
                 bail!("Invalid free at addr {:#x}", addr)
             }
@@ -1155,7 +1151,7 @@ unsafe fn check_free(_store: &mut dyn VMStore, instance: &mut Instance, addr: u3
             }
         }
     }
-    Ok(0)
+    Ok(())
 }
 
 // Hook for validating load using wmemcheck_state.
@@ -1166,13 +1162,11 @@ fn check_load(
     num_bytes: u32,
     addr: u32,
     offset: u32,
-) -> Result<u32> {
+) -> Result<()> {
     if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
         let result = wmemcheck_state.read(addr as usize + offset as usize, num_bytes as usize);
         match result {
-            Ok(()) => {
-                return Ok(0);
-            }
+            Ok(()) => {}
             Err(InvalidRead { addr, len }) => {
                 bail!("Invalid load at addr {:#x} of size {}", addr, len);
             }
@@ -1184,7 +1178,7 @@ fn check_load(
             }
         }
     }
-    Ok(0)
+    Ok(())
 }
 
 // Hook for validating store using wmemcheck_state.
@@ -1195,13 +1189,11 @@ fn check_store(
     num_bytes: u32,
     addr: u32,
     offset: u32,
-) -> Result<u32> {
+) -> Result<()> {
     if let Some(wmemcheck_state) = &mut instance.wmemcheck_state {
         let result = wmemcheck_state.write(addr as usize + offset as usize, num_bytes as usize);
         match result {
-            Ok(()) => {
-                return Ok(0);
-            }
+            Ok(()) => {}
             Err(InvalidWrite { addr, len }) => {
                 bail!("Invalid store at addr {:#x} of size {}", addr, len)
             }
@@ -1213,7 +1205,7 @@ fn check_store(
             }
         }
     }
-    Ok(0)
+    Ok(())
 }
 
 // Hook for turning wmemcheck load/store validation off when entering a malloc function.
