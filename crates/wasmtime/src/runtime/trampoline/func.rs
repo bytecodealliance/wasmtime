@@ -61,7 +61,7 @@ unsafe extern "C" fn array_call_shim<F>(
         // call-site, which gets unwrapped in `Trap::from_runtime` later on as we
         // convert from the internal `Trap` type to our own `Trap` type in this
         // crate.
-        Err(trap) => crate::trap::raise(trap.into()),
+        Err(err) => crate::runtime::vm::raise_user_trap(err),
     }
 }
 

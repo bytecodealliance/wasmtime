@@ -132,10 +132,7 @@ mod trampolines {
                     match result {
                         Ok(ret) => shims!(@convert_ret ret $($pname: $param)*),
                         Err(err) => crate::runtime::vm::traphandlers::raise_trap(
-                            crate::runtime::vm::traphandlers::TrapReason::User {
-                                error: err,
-                                needs_backtrace: true,
-                            },
+                            crate::runtime::vm::traphandlers::TrapReason::User(err)
                         ),
                     }
                 }

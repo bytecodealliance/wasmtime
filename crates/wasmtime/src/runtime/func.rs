@@ -2371,7 +2371,7 @@ impl HostContext {
 
         match result {
             Ok(val) => val,
-            Err(err) => crate::trap::raise(err),
+            Err(err) => crate::runtime::vm::raise_user_trap(err),
         }
     }
 }
