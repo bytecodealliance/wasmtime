@@ -109,17 +109,40 @@ static bool wasmtime_setjmp_inverted(void **buf_storage,
                                      bool (*body)(void *, void *),
                                      void *payload, void *callee) {
   platform_jmp_buf buf;
+#if defined(GOOD)
   if (platform_setjmp(buf) != 0) {
     return true;
   }
   *buf_storage = &buf;
   return !body(payload, callee);
+#elif defined(BAD)
+  if (platform_setjmp(buf) != 0) {
+    return false;
+  }
+  *buf_storage = &buf;
+  #if defined(BAD_V1)
+    return body(payload, callee);
+  #elif defined(BAD_V2)
+    bool ret = body(payload, callee);
+    return ret;
+  #else
+    #error "Need one or the other"
+  #endif
+#else
+#error "Need one or the other"
+#endif
 }
 
 bool VERSIONED_SYMBOL(wasmtime_setjmp)(void **buf_storage,
                                        bool (*body)(void *, void *),
                                        void *payload, void *callee) {
+#if defined(GOOD)
   return !wasmtime_setjmp_inverted(buf_storage, body, payload, callee);
+#elif defined(BAD)
+  return wasmtime_setjmp_inverted(buf_storage, body, payload, callee);
+#else
+#error "Need one or the other"
+#endif
 }
 
 void VERSIONED_SYMBOL(wasmtime_longjmp)(void *JmpBuf) {
