@@ -20,8 +20,7 @@ use crate::runtime::store::StoreOpaque;
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{Instance, VMContext, VMRuntimeLimits};
 use crate::{StoreContextMut, WasmBacktrace};
-use core::cell::{Cell, UnsafeCell};
-use core::mem::MaybeUninit;
+use core::cell::Cell;
 use core::ops::Range;
 use core::ptr;
 
@@ -40,28 +39,42 @@ fn lazy_per_thread_init() {
 /// This function performs as-if a wasm trap was just executed. This trap
 /// payload is then returned from `catch_traps` below.
 ///
+/// FIXME: this function should get removed in favor of explicitly calling the
+/// `raise` libcall from wasm.
+///
 /// # Safety
 ///
 /// Only safe to call when wasm code is on the stack, aka `catch_traps` must
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
+#[deprecated(note = "move to `raise_preexisting_trap` or `catch_unwind_and_record_trap` instead")]
+#[allow(deprecated)]
 pub unsafe fn raise_trap(reason: TrapReason) -> ! {
     tls::with(|info| info.unwrap().unwind_with(UnwindReason::Trap(reason)))
 }
 
-/// Raises a user-defined trap immediately.
+/// Raises a preexisting trap and unwinds.
 ///
-/// This function performs as-if a wasm trap was just executed, only the trap
-/// has a dynamic payload associated with it which is user-provided. This trap
-/// payload is then returned from `catch_traps` below.
+/// This function will execute the `longjmp` to make its way back to the
+/// original `setjmp` performed when wasm was entered. This is currently
+/// only called from the `raise` builtin of Wasmtime. This builtin is only used
+/// when the host returns back to wasm and indicates that a trap should be
+/// raised. In this situation the host has already stored trap information
+/// within the `CallThreadState` and this is the low-level operation to actually
+/// perform an unwind.
+///
+/// This function won't be use with Pulley, for example, as the interpreter
+/// halts differently than native code. Additionally one day this will ideally
+/// be implemented by Cranelift itself without need of a libcall when Cranelift
+/// implements the exception handling proposal for example.
 ///
 /// # Safety
 ///
 /// Only safe to call when wasm code is on the stack, aka `catch_traps` must
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
-pub unsafe fn raise_user_trap(error: Error) -> ! {
-    raise_trap(TrapReason::User(error))
+pub(super) unsafe fn raise_preexisting_trap() -> ! {
+    tls::with(|info| info.unwrap().unwind())
 }
 
 /// Invokes the closure `f` and returns the result.
@@ -71,11 +84,16 @@ pub unsafe fn raise_user_trap(error: Error) -> ! {
 /// the nearest `setjmp`. The panic will then be resumed from where it is
 /// caught.
 ///
+/// FIXME: this function should get removed in favor of
+/// `catch_unwind_and_record_trap` or a variant thereof.
+///
 /// # Safety
 ///
 /// Only safe to call when wasm code is on the stack, aka `catch_traps` must
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed in the case that `f` panics.
+#[deprecated(note = "move to `catch_unwind_and_record_trap` instead")]
+#[allow(deprecated)]
 pub unsafe fn catch_unwind_and_longjmp<R>(f: impl FnOnce() -> R) -> R {
     // With `panic=unwind` use `std::panic::catch_unwind` to catch possible
     // panics to rethrow.
@@ -84,6 +102,56 @@ pub unsafe fn catch_unwind_and_longjmp<R>(f: impl FnOnce() -> R) -> R {
         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
             Ok(ret) => ret,
             Err(err) => tls::with(|info| info.unwrap().unwind_with(UnwindReason::Panic(err))),
+        }
+    }
+
+    // With `panic=abort` there's no use in using `std::panic::catch_unwind`
+    // since it won't actually catch anything. Note that
+    // `std::panic::catch_unwind` will technically optimize to this but having
+    // this branch avoids using the `std::panic` module entirely.
+    #[cfg(not(all(feature = "std", panic = "unwind")))]
+    {
+        f()
+    }
+}
+
+/// Invokes the closure `f` and returns a `bool` if it succeeded.
+///
+/// This will invoke the closure `f` which returns a `Result<()>`. The results
+/// of executing this function are handled as:
+///
+/// * Returns `Ok(())` - this means that this function returns `true` with no
+///   other action taken.
+/// * Returns `Err(e)` - this records trap information in the current
+///   `CallThreadState` and returns `false`.
+/// * Panics - this records unwind information in the current `CallThreadState`
+///   and returns `false`.
+///
+/// The purpose of this helper is to be used at the wasm->host boundary. This
+/// is used to implement the "array call" ABI of the host where wasm itself
+/// will initiate the unwind when it sees a `false` return value from the host.
+///
+/// The return value of this function is typically directly returned back to
+/// wasm to get handled.
+pub fn catch_unwind_and_record_trap(f: impl FnOnce() -> Result<()>) -> bool {
+    let f = move || match f() {
+        Ok(()) => true,
+        Err(error) => {
+            let reason = UnwindReason::Trap(TrapReason::User(error));
+            tls::with(|info| info.unwrap().record_unwind(reason));
+            false
+        }
+    };
+    // With `panic=unwind` use `std::panic::catch_unwind` to catch possible
+    // panics to rethrow.
+    #[cfg(all(feature = "std", panic = "unwind"))]
+    {
+        match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
+            Ok(result) => result,
+            Err(err) => {
+                tls::with(|info| info.unwrap().record_unwind(UnwindReason::Panic(err)));
+                false
+            }
         }
     }
 
@@ -164,13 +232,16 @@ impl From<wasmtime_environ::Trap> for TrapReason {
 /// Catches any wasm traps that happen within the execution of `closure`,
 /// returning them as a `Result`.
 ///
-/// Highly unsafe since `closure` won't have any dtors run.
+/// # Unsafety
+///
+/// This function is unsafe because during the execution of `closure` it may be
+/// longjmp'd over and none of its destructors on the stack may be run.
 pub unsafe fn catch_traps<T, F>(
     store: &mut StoreContextMut<'_, T>,
     mut closure: F,
 ) -> Result<(), Box<Trap>>
 where
-    F: FnMut(*mut VMContext),
+    F: FnMut(*mut VMContext) -> bool,
 {
     let caller = store.0.default_caller();
 
@@ -194,9 +265,9 @@ where
         Err((UnwindReason::Panic(panic), _, _)) => std::panic::resume_unwind(panic),
     };
 
-    extern "C" fn call_closure<F>(payload: *mut u8, caller: *mut VMContext)
+    extern "C" fn call_closure<F>(payload: *mut u8, caller: *mut VMContext) -> bool
     where
-        F: FnMut(*mut VMContext),
+        F: FnMut(*mut VMContext) -> bool,
     {
         unsafe { (*(payload as *mut F))(caller) }
     }
@@ -210,8 +281,7 @@ mod call_thread_state {
     /// Temporary state stored on the stack which is registered in the `tls` module
     /// below for calls into wasm.
     pub struct CallThreadState {
-        pub(super) unwind:
-            UnsafeCell<MaybeUninit<(UnwindReason, Option<Backtrace>, Option<CoreDumpStack>)>>,
+        pub(super) unwind: Cell<Option<(UnwindReason, Option<Backtrace>, Option<CoreDumpStack>)>>,
         pub(super) jmp_buf: Cell<*const u8>,
         #[cfg(all(feature = "signals-based-traps", not(miri)))]
         pub(super) signal_handler: Option<*const SignalHandler>,
@@ -240,6 +310,10 @@ mod call_thread_state {
 
     impl Drop for CallThreadState {
         fn drop(&mut self) {
+            // Unwind information should not be present as it should have
+            // already been processed.
+            debug_assert!(self.unwind.replace(None).is_none());
+
             unsafe {
                 *(*self.limits).last_wasm_exit_fp.get() = self.old_last_wasm_exit_fp.get();
                 *(*self.limits).last_wasm_exit_pc.get() = self.old_last_wasm_exit_pc.get();
@@ -258,7 +332,7 @@ mod call_thread_state {
             let _: Range<_> = store.async_guard_range();
 
             CallThreadState {
-                unwind: UnsafeCell::new(MaybeUninit::uninit()),
+                unwind: Cell::new(None),
                 jmp_buf: Cell::new(ptr::null()),
                 #[cfg(all(feature = "signals-based-traps", not(miri)))]
                 signal_handler: store.signal_handler(),
@@ -321,22 +395,40 @@ impl CallThreadState {
     #[inline]
     fn with(
         mut self,
-        closure: impl FnOnce(&CallThreadState) -> i32,
+        closure: impl FnOnce(&CallThreadState) -> bool,
     ) -> Result<(), (UnwindReason, Option<Backtrace>, Option<CoreDumpStack>)> {
-        let ret = tls::set(&mut self, |me| closure(me));
-        if ret != 0 {
+        let succeeded = tls::set(&mut self, |me| closure(me));
+        if succeeded {
             Ok(())
         } else {
-            Err(unsafe { self.read_unwind() })
+            Err(self.read_unwind())
         }
     }
 
     #[cold]
-    unsafe fn read_unwind(&self) -> (UnwindReason, Option<Backtrace>, Option<CoreDumpStack>) {
-        (*self.unwind.get()).as_ptr().read()
+    fn read_unwind(&self) -> (UnwindReason, Option<Backtrace>, Option<CoreDumpStack>) {
+        self.unwind.replace(None).unwrap()
     }
 
-    fn unwind_with(&self, reason: UnwindReason) -> ! {
+    /// Records the unwind information provided within this `CallThreadState`,
+    /// optionally capturing a backtrace at this time.
+    ///
+    /// This function is used to stash metadata for why an unwind is about to
+    /// happen. The actual unwind is expected to happen after this function is
+    /// called using, for example, the `unwind` function below.
+    ///
+    /// Note that this is a relatively low-level function and will panic if
+    /// mis-used.
+    ///
+    /// # Panics
+    ///
+    /// Panics if unwind information has already been recorded as that should
+    /// have been processed first.
+    fn record_unwind(&self, reason: UnwindReason) {
+        if cfg!(debug_assertions) {
+            let prev = self.unwind.replace(None);
+            assert!(prev.is_none());
+        }
         let (backtrace, coredump) = match &reason {
             // Panics don't need backtraces. There is nowhere to attach the
             // hypothetical backtrace to and it doesn't really make sense to try
@@ -357,12 +449,28 @@ impl CallThreadState {
                 self.capture_coredump(self.limits, None),
             ),
         };
-        unsafe {
-            (*self.unwind.get())
-                .as_mut_ptr()
-                .write((reason, backtrace, coredump));
-            traphandlers::wasmtime_longjmp(self.jmp_buf.get());
-        }
+        self.unwind.set(Some((reason, backtrace, coredump)));
+    }
+
+    /// Helper function to perform an actual unwinding operation.
+    ///
+    /// This must be preceded by a `record_unwind` operation above to be
+    /// processed correctly on the other side.
+    ///
+    /// # Unsafety
+    ///
+    /// This function is not safe if the corresponding setjmp wasn't already
+    /// called. Additionally this isn't safe as it will skip all Rust
+    /// destructors on the stack, if there are any.
+    unsafe fn unwind(&self) -> ! {
+        debug_assert!(!self.jmp_buf.get().is_null());
+        traphandlers::wasmtime_longjmp(self.jmp_buf.get());
+    }
+
+    #[deprecated(note = "move to `record_unwind` or `unwind` instead")]
+    fn unwind_with(&self, reason: UnwindReason) -> ! {
+        self.record_unwind(reason);
+        unsafe { self.unwind() }
     }
 
     fn capture_backtrace(

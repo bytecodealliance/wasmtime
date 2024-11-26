@@ -97,6 +97,10 @@ pub struct ComponentInstance {
 ///   signature that this callee corresponds to.
 /// * `nargs_and_results` - the size, in units of `ValRaw`, of
 ///   `args_and_results`.
+///
+/// This function returns a `bool` which indicates whether the call succeeded
+/// or not. On failure this function records trap information in TLS which
+/// should be suitable for reading later.
 //
 // FIXME: 9 arguments is probably too many. The `data` through `string-encoding`
 // parameters should probably get packaged up into the `VMComponentContext`.
@@ -112,7 +116,7 @@ pub type VMLoweringCallee = extern "C" fn(
     string_encoding: StringEncoding,
     args_and_results: *mut mem::MaybeUninit<ValRaw>,
     nargs_and_results: usize,
-);
+) -> bool;
 
 /// Structure describing a lowered host function stored within a
 /// `VMComponentContext` per-lowering.

@@ -196,8 +196,12 @@ macro_rules! foreach_builtin_function {
             #[cfg(feature = "gc")]
             table_fill_gc_ref(vmctx: vmctx, table: i32, dst: i64, val: reference, len: i64);
 
-            // Raises an unconditional trap.
+            // Raises an unconditional trap with the specified code.
             trap(vmctx: vmctx, code: u8);
+
+            // Raises an unconditional trap where the trap information must have
+            // been previously filled in.
+            raise(vmctx: vmctx);
         }
     };
 }

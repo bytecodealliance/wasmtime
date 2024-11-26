@@ -13,10 +13,10 @@ extern "C" {
     #[allow(improper_ctypes)]
     pub fn wasmtime_setjmp(
         jmp_buf: *mut *const u8,
-        callback: extern "C" fn(*mut u8, *mut VMContext),
+        callback: extern "C" fn(*mut u8, *mut VMContext) -> bool,
         payload: *mut u8,
         callee: *mut VMContext,
-    ) -> i32;
+    ) -> bool;
 
     #[wasmtime_versioned_export_macros::versioned_link]
     pub fn wasmtime_longjmp(jmp_buf: *const u8) -> !;

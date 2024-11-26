@@ -110,6 +110,7 @@ pub mod raw {
                 ) $( -> libcall!(@ty $result))? {
                     $(#[cfg($attr)])?
                     {
+                        #[allow(deprecated)] // FIXME: need to update this
                         let ret = crate::runtime::vm::traphandlers::catch_unwind_and_longjmp(|| {
                             InstanceAndStore::from_vmctx(vmctx, |pair| {
                                 {
@@ -172,6 +173,7 @@ pub mod raw {
         unsafe fn convert(self) -> T {
             match self {
                 Ok(t) => t,
+                #[allow(deprecated)] // FIXME: need to update this
                 Err(e) => crate::runtime::vm::traphandlers::raise_trap(e.into()),
             }
         }
@@ -1253,6 +1255,13 @@ fn trap(_store: &mut dyn VMStore, _instance: &mut Instance, code: u8) -> Result<
     Err(TrapReason::Wasm(
         wasmtime_environ::Trap::from_u8(code).unwrap(),
     ))
+}
+
+fn raise(_store: &mut dyn VMStore, _instance: &mut Instance) -> Result<(), TrapReason> {
+    // SAFETY: this is only called from compiled wasm so we know that wasm has
+    // already been entered. It's a dynamic safety precondition that the trap
+    // information has already been arranged to be present.
+    unsafe { crate::runtime::vm::traphandlers::raise_preexisting_trap() }
 }
 
 /// This module contains functions which are used for resolving relocations at

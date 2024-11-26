@@ -48,7 +48,8 @@ impl HostFunc {
         string_encoding: StringEncoding,
         storage: *mut MaybeUninit<ValRaw>,
         storage_len: usize,
-    ) where
+    ) -> bool
+    where
         F: Fn(StoreContextMut<T>, P) -> Result<R>,
         P: ComponentNamedList + Lift + 'static,
         R: ComponentNamedList + Lower + 'static,
@@ -295,24 +296,19 @@ unsafe fn call_host_and_handle_result<T>(
         &Arc<ComponentTypes>,
         StoreContextMut<'_, T>,
     ) -> Result<()>,
-) {
+) -> bool {
     let cx = VMComponentContext::from_opaque(cx);
     let instance = (*cx).instance();
     let types = (*instance).component_types();
     let raw_store = (*instance).store();
     let mut store = StoreContextMut(&mut *raw_store.cast());
 
-    let res = crate::runtime::vm::catch_unwind_and_longjmp(|| {
+    crate::runtime::vm::catch_unwind_and_record_trap(|| {
         store.0.call_hook(CallHook::CallingHost)?;
         let res = func(instance, types, store.as_context_mut());
         store.0.call_hook(CallHook::ReturningFromHost)?;
         res
-    });
-
-    match res {
-        Ok(()) => {}
-        Err(e) => crate::runtime::vm::raise_user_trap(e),
-    }
+    })
 }
 
 unsafe fn call_host_dynamic<T, F>(
@@ -435,7 +431,8 @@ extern "C" fn dynamic_entrypoint<T, F>(
     string_encoding: StringEncoding,
     storage: *mut MaybeUninit<ValRaw>,
     storage_len: usize,
-) where
+) -> bool
+where
     F: Fn(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
 {
     let data = data as *const F;

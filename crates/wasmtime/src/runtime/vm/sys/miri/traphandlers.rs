@@ -14,12 +14,11 @@ use crate::runtime::vm::VMContext;
 
 pub fn wasmtime_setjmp(
     _jmp_buf: *mut *const u8,
-    callback: extern "C" fn(*mut u8, *mut VMContext),
+    callback: extern "C" fn(*mut u8, *mut VMContext) -> bool,
     payload: *mut u8,
     callee: *mut VMContext,
-) -> i32 {
-    callback(payload, callee);
-    1
+) -> bool {
+    callback(payload, callee)
 }
 
 pub fn wasmtime_longjmp(_jmp_buf: *const u8) -> ! {

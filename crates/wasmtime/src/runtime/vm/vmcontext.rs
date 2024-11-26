@@ -37,8 +37,13 @@ use wasmtime_environ::{
 ///
 /// * The capacity of the `ValRaw` buffer. Must always be at least
 ///   `max(len(wasm_params), len(wasm_results))`.
+///
+/// Return value:
+///
+/// * `true` if this call succeeded.
+/// * `false` if this call failed and a trap was recorded in TLS.
 pub type VMArrayCallNative =
-    unsafe extern "C" fn(*mut VMOpaqueContext, *mut VMOpaqueContext, *mut ValRaw, usize);
+    unsafe extern "C" fn(*mut VMOpaqueContext, *mut VMOpaqueContext, *mut ValRaw, usize) -> bool;
 
 /// An opaque function pointer which might be `VMArrayCallNative` or it might be
 /// pulley bytecode. Requires external knowledge to determine what kind of
@@ -710,11 +715,17 @@ impl VMFuncRef {
     /// The `args_and_results` area must be large enough to both load all
     /// arguments from and store all results to.
     ///
+    /// Returns whether a trap was recorded in TLS for raising.
+    ///
     /// # Unsafety
     ///
     /// This method is unsafe because it can be called with any pointers. They
     /// must all be valid for this wasm function call to proceed.
-    pub unsafe fn array_call(&self, caller: *mut VMOpaqueContext, args_and_results: *mut [ValRaw]) {
+    pub unsafe fn array_call(
+        &self,
+        caller: *mut VMOpaqueContext,
+        args_and_results: *mut [ValRaw],
+    ) -> bool {
         union GetNativePointer {
             native: VMArrayCallNative,
             ptr: NonNull<VMArrayCallFunction>,

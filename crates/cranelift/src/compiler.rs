@@ -400,7 +400,12 @@ impl wasmtime_environ::Compiler for Compiler {
             values_vec_len,
         );
 
-        builder.ins().return_(&[]);
+        // At this time wasm functions always signal traps with longjmp or some
+        // similar sort of routine, so if we got this far that means that the
+        // function did not trap, so return a "true" value here to indicate that
+        // to satisfy the ABI of the array-call signature.
+        let true_return = builder.ins().iconst(ir::types::I8, 1);
+        builder.ins().return_(&[true_return]);
         builder.finalize();
 
         Ok(Box::new(compiler.finish()?))
@@ -459,13 +464,14 @@ impl wasmtime_environ::Compiler for Compiler {
 
         // Do an indirect call to the callee.
         let callee_signature = builder.func.import_signature(array_call_sig);
-        self.call_indirect_host(
+        let call = self.call_indirect_host(
             &mut builder,
             callee_signature,
             callee,
             &[callee_vmctx, caller_vmctx, args_base, args_len],
         );
-
+        let succeeded = builder.func.dfg.inst_results(call)[0];
+        self.raise_if_host_trapped(&mut builder, caller_vmctx, succeeded);
         let results =
             self.load_values_from_array(wasm_func_ty.returns(), &mut builder, args_base, args_len);
         builder.ins().return_(&results);
@@ -637,27 +643,11 @@ impl wasmtime_environ::Compiler for Compiler {
         );
         save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &ptr_size, limits);
 
-        // Now it's time to delegate to the actual builtin. Builtins are stored
-        // in an array in all `VMContext`s. First load the base pointer of the
-        // array and then load the entry of the array that corresponds to this
-        // builtin.
-        let mem_flags = ir::MemFlags::trusted().with_readonly();
-        let array_addr = builder.ins().load(
-            pointer_type,
-            mem_flags,
-            vmctx,
-            i32::from(ptr_size.vmcontext_builtin_functions()),
-        );
-        let body_offset = i32::try_from(index.index() * pointer_type.bytes()).unwrap();
-        let func_addr = builder
-            .ins()
-            .load(pointer_type, mem_flags, array_addr, body_offset);
-
-        // Forward all our own arguments to the libcall itself, and then return
-        // all the same results as the libcall.
-        let block_params = builder.block_params(block0).to_vec();
-        let host_sig = builder.func.import_signature(host_sig);
-        let call = self.call_indirect_host(&mut builder, host_sig, func_addr, &block_params);
+        // Now it's time to delegate to the actual builtin. Forward all our own
+        // arguments to the libcall itself, and then return all the same results
+        // as the libcall.
+        let args = builder.block_params(block0).to_vec();
+        let call = self.call_builtin(&mut builder, vmctx, &args, index, host_sig);
         let results = builder.func.dfg.inst_results(call).to_vec();
         builder.ins().return_(&results);
         builder.finalize();
@@ -876,6 +866,77 @@ impl Compiler {
                     ..Default::default()
                 }),
         }
+    }
+
+    /// Invokes the `raise` libcall in `vmctx` if the `succeeded` value
+    /// indicates if a trap happened.
+    ///
+    /// This helper is used when the host returns back to WebAssembly. The host
+    /// returns a `bool` indicating whether the call succeeded. If the call
+    /// failed then Cranelift needs to unwind back to the original invocation
+    /// point. The unwind right now is then implemented in Wasmtime with a
+    /// `longjmp`, but one day this might be implemented differently with an
+    /// unwind inside of Cranelift.
+    ///
+    /// Additionally in the future for pulley this will emit a special trap
+    /// opcode for Pulley itself to cease interpretation and exit the
+    /// interpreter.
+    fn raise_if_host_trapped(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        vmctx: ir::Value,
+        succeeded: ir::Value,
+    ) {
+        let trapped_block = builder.create_block();
+        let continuation_block = builder.create_block();
+        builder.set_cold_block(trapped_block);
+        builder
+            .ins()
+            .brif(succeeded, continuation_block, &[], trapped_block, &[]);
+
+        builder.seal_block(trapped_block);
+        builder.seal_block(continuation_block);
+
+        builder.switch_to_block(trapped_block);
+        let sigs = BuiltinFunctionSignatures::new(&*self.isa, &self.tunables);
+        let sig = sigs.host_signature(BuiltinFunctionIndex::raise());
+        self.call_builtin(builder, vmctx, &[vmctx], BuiltinFunctionIndex::raise(), sig);
+        builder.ins().trap(TRAP_INTERNAL_ASSERT);
+
+        builder.switch_to_block(continuation_block);
+    }
+
+    /// Helper to load the core `builtin` from `vmctx` and invoke it with
+    /// `args`.
+    fn call_builtin(
+        &self,
+        builder: &mut FunctionBuilder<'_>,
+        vmctx: ir::Value,
+        args: &[ir::Value],
+        builtin: BuiltinFunctionIndex,
+        sig: ir::Signature,
+    ) -> ir::Inst {
+        let isa = &*self.isa;
+        let ptr_size = isa.pointer_bytes();
+        let pointer_type = isa.pointer_type();
+
+        // Builtins are stored in an array in all `VMContext`s. First load the
+        // base pointer of the array and then load the entry of the array that
+        // corresponds to this builtin.
+        let mem_flags = ir::MemFlags::trusted().with_readonly();
+        let array_addr = builder.ins().load(
+            pointer_type,
+            mem_flags,
+            vmctx,
+            i32::from(ptr_size.vmcontext_builtin_functions()),
+        );
+        let body_offset = i32::try_from(builtin.index() * pointer_type.bytes()).unwrap();
+        let func_addr = builder
+            .ins()
+            .load(pointer_type, mem_flags, array_addr, body_offset);
+
+        let sig = builder.func.import_signature(sig);
+        self.call_indirect_host(builder, sig, func_addr, args)
     }
 }
 

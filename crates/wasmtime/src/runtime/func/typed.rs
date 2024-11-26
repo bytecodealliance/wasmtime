@@ -219,7 +219,7 @@ where
             let storage = core::ptr::slice_from_raw_parts_mut(storage, storage_len);
             func_ref
                 .as_ref()
-                .array_call(VMOpaqueContext::from_vmcontext(caller), storage);
+                .array_call(VMOpaqueContext::from_vmcontext(caller), storage)
         });
 
         let (_, storage) = captures;

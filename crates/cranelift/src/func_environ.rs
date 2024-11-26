@@ -171,6 +171,10 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ) -> Self {
         let builtin_functions = BuiltinFunctions::new(isa, tunables);
 
+        // This isn't used during translation, so squash the warning about this
+        // being unused from the compiler.
+        let _ = BuiltinFunctions::raise;
+
         // Avoid unused warning in default build.
         #[cfg(not(feature = "wmemcheck"))]
         let _ = wmemcheck;

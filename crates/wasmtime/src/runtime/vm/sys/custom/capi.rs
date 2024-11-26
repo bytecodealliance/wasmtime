@@ -114,14 +114,14 @@ extern "C" {
     ///   configured.
     /// * `payload` and `callee` - the two arguments to pass to `callback`.
     ///
-    /// Returns 0 if `wasmtime_longjmp` was used to return to this function.
-    /// Returns 1 if `wasmtime_longjmp` was not called and `callback` returned.
+    /// Returns false if `wasmtime_longjmp` was used to return to this function.
+    /// Returns true if `wasmtime_longjmp` was not called and `callback` returned.
     pub fn wasmtime_setjmp(
         jmp_buf: *mut *const u8,
-        callback: extern "C" fn(*mut u8, *mut u8),
+        callback: extern "C" fn(*mut u8, *mut u8) -> bool,
         payload: *mut u8,
         callee: *mut u8,
-    ) -> i32;
+    ) -> bool;
 
     /// Paired with `wasmtime_setjmp` this is used to jump back to the `setjmp`
     /// point.

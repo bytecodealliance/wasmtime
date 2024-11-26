@@ -9,13 +9,13 @@ pub type SignalHandler = Box<dyn Fn() + Send + Sync>;
 
 pub unsafe fn wasmtime_setjmp(
     jmp_buf: *mut *const u8,
-    callback: extern "C" fn(*mut u8, *mut VMContext),
+    callback: extern "C" fn(*mut u8, *mut VMContext) -> bool,
     payload: *mut u8,
     callee: *mut VMContext,
-) -> i32 {
+) -> bool {
     let callback = mem::transmute::<
-        extern "C" fn(*mut u8, *mut VMContext),
-        extern "C" fn(*mut u8, *mut u8),
+        extern "C" fn(*mut u8, *mut VMContext) -> bool,
+        extern "C" fn(*mut u8, *mut u8) -> bool,
     >(callback);
     capi::wasmtime_setjmp(jmp_buf, callback, payload, callee.cast())
 }
