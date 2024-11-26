@@ -82,7 +82,8 @@ typedef sigjmp_buf platform_jmp_buf;
 // For some reason though this causes issues when unwinding via `longjmp` on
 // Windows. Tests would exit with the error message:
 //
-//    code 0xc0000028: An invalid or unaligned stack was encountered during an unwind operation. (os error 543)
+//    code 0xc0000028: An invalid or unaligned stack was encountered during an
+//    unwind operation. (os error 543)
 //
 // Debugging revealed that if this:
 //
