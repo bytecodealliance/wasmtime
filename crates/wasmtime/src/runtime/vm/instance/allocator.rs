@@ -8,6 +8,7 @@ use crate::runtime::vm::table::Table;
 use crate::runtime::vm::{CompiledModuleId, ModuleRuntimeInfo, VMFuncRef, VMGcRef, VMStore};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::vm::VMGlobalDefinition;
+use core::ptr::NonNull;
 use core::{any::Any, mem, ptr};
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, InitMemory, MemoryInitialization,
@@ -594,7 +595,7 @@ fn initialize_tables(
                     }
 
                     WasmHeapTopType::Func => {
-                        let funcref = raw.get_funcref().cast::<VMFuncRef>();
+                        let funcref = NonNull::new(raw.get_funcref().cast::<VMFuncRef>());
                         let items = (0..table.size()).map(|_| funcref);
                         table.init_func(0, items).err2anyhow()?;
                     }

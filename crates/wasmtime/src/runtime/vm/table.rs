@@ -22,7 +22,7 @@ use wasmtime_environ::{
 /// `ptr::null_mut`.
 pub enum TableElement {
     /// A `funcref`.
-    FuncRef(*mut VMFuncRef),
+    FuncRef(Option<NonNull<VMFuncRef>>),
 
     /// A GC reference.
     GcRef(Option<VMGcRef>),
@@ -67,7 +67,7 @@ impl TableElement {
     /// # Safety
     ///
     /// The same warnings as for `into_table_values()` apply.
-    pub(crate) unsafe fn into_func_ref_asserting_initialized(self) -> *mut VMFuncRef {
+    pub(crate) unsafe fn into_func_ref_asserting_initialized(self) -> Option<NonNull<VMFuncRef>> {
         match self {
             Self::FuncRef(e) => e,
             Self::UninitFunc => panic!("Uninitialized table element value outside of table slot"),
@@ -85,8 +85,8 @@ impl TableElement {
     }
 }
 
-impl From<*mut VMFuncRef> for TableElement {
-    fn from(f: *mut VMFuncRef) -> TableElement {
+impl From<Option<NonNull<VMFuncRef>>> for TableElement {
+    fn from(f: Option<NonNull<VMFuncRef>>) -> TableElement {
         TableElement::FuncRef(f)
     }
 }
@@ -112,7 +112,8 @@ impl TaggedFuncRef {
 
     /// Converts the given `ptr`, a valid funcref pointer, into a tagged pointer
     /// by adding in the `FUNCREF_INIT_BIT`.
-    fn from(ptr: *mut VMFuncRef, lazy_init: bool) -> Self {
+    fn from(ptr: Option<NonNull<VMFuncRef>>, lazy_init: bool) -> Self {
+        let ptr = ptr.map(|p| p.as_ptr()).unwrap_or(ptr::null_mut());
         if lazy_init {
             let masked = Strict::map_addr(ptr, |a| a | FUNCREF_INIT_BIT);
             TaggedFuncRef(masked)
@@ -131,7 +132,7 @@ impl TaggedFuncRef {
             // Masking off the tag bit is harmless whether the table uses lazy
             // init or not.
             let unmasked = Strict::map_addr(ptr, |a| a & FUNCREF_MASK);
-            TableElement::FuncRef(unmasked)
+            TableElement::FuncRef(NonNull::new(unmasked))
         }
     }
 }
@@ -442,7 +443,7 @@ impl Table {
     pub fn init_func(
         &mut self,
         dst: u64,
-        items: impl ExactSizeIterator<Item = *mut VMFuncRef>,
+        items: impl ExactSizeIterator<Item = Option<NonNull<VMFuncRef>>>,
     ) -> Result<(), Trap> {
         let dst = usize::try_from(dst).map_err(|_| Trap::TableOutOfBounds)?;
 

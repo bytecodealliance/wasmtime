@@ -44,7 +44,7 @@ impl<'a> ConstEvalContext<'a> {
 
     fn ref_func(&mut self, index: FuncIndex) -> Result<ValRaw> {
         Ok(ValRaw::funcref(
-            self.instance.get_func_ref(index).unwrap().cast(),
+            self.instance.get_func_ref(index).unwrap().as_ptr().cast(),
         ))
     }
 

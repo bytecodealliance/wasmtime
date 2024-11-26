@@ -974,14 +974,14 @@ impl Ref {
         match (self, ty.heap_type().top()) {
             (Ref::Func(None), HeapType::Func) => {
                 assert!(ty.is_nullable());
-                Ok(TableElement::FuncRef(ptr::null_mut()))
+                Ok(TableElement::FuncRef(None))
             }
             (Ref::Func(Some(f)), HeapType::Func) => {
                 debug_assert!(
                     f.comes_from_same_store(&store),
                     "checked in `ensure_matches_ty`"
                 );
-                Ok(TableElement::FuncRef(f.vm_func_ref(&mut store).as_ptr()))
+                Ok(TableElement::FuncRef(Some(f.vm_func_ref(&mut store))))
             }
 
             (Ref::Extern(e), HeapType::Extern) => match e {

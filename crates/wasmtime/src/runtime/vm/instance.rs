@@ -650,7 +650,6 @@ impl Instance {
 
     fn get_exported_func(&mut self, index: FuncIndex) -> ExportFunction {
         let func_ref = self.get_func_ref(index).unwrap();
-        let func_ref = NonNull::new(func_ref as *const VMFuncRef as *mut _).unwrap();
         ExportFunction { func_ref }
     }
 
@@ -880,7 +879,7 @@ impl Instance {
     ///
     /// The returned reference is a stable reference that won't be moved and can
     /// be passed into JIT code.
-    pub(crate) fn get_func_ref(&mut self, index: FuncIndex) -> Option<*mut VMFuncRef> {
+    pub(crate) fn get_func_ref(&mut self, index: FuncIndex) -> Option<NonNull<VMFuncRef>> {
         if index == FuncIndex::reserved_value() {
             return None;
         }
@@ -918,7 +917,7 @@ impl Instance {
                 .vmctx_plus_offset_mut::<VMFuncRef>(self.offsets().vmctx_func_ref(func.func_ref));
             self.construct_func_ref(index, sig, func_ref);
 
-            Some(func_ref)
+            Some(NonNull::new(func_ref).unwrap())
         }
     }
 
@@ -1010,12 +1009,7 @@ impl Instance {
                     .get(src..)
                     .and_then(|s| s.get(..len))
                     .ok_or(Trap::TableOutOfBounds)?;
-                table.init_func(
-                    dst,
-                    elements
-                        .iter()
-                        .map(|idx| self.get_func_ref(*idx).unwrap_or(ptr::null_mut())),
-                )?;
+                table.init_func(dst, elements.iter().map(|idx| self.get_func_ref(*idx)))?;
             }
             TableSegmentElements::Expressions(exprs) => {
                 let exprs = exprs
@@ -1045,11 +1039,13 @@ impl Instance {
                     WasmHeapTopType::Func => table.init_func(
                         dst,
                         exprs.iter().map(|expr| unsafe {
-                            const_evaluator
-                                .eval(store, &mut context, expr)
-                                .expect("const expr should be valid")
-                                .get_funcref()
-                                .cast()
+                            NonNull::new(
+                                const_evaluator
+                                    .eval(store, &mut context, expr)
+                                    .expect("const expr should be valid")
+                                    .get_funcref()
+                                    .cast(),
+                            )
                         }),
                     )?,
                 }
@@ -1283,9 +1279,7 @@ impl Instance {
                 };
                 // Panicking here helps catch bugs rather than silently truncating by accident.
                 let func_index = precomputed.get(usize::try_from(i).unwrap()).cloned();
-                let func_ref = func_index
-                    .and_then(|func_index| self.get_func_ref(func_index))
-                    .unwrap_or(ptr::null_mut());
+                let func_ref = func_index.and_then(|func_index| self.get_func_ref(func_index));
                 self.tables[idx]
                     .1
                     .set(i, TableElement::FuncRef(func_ref))
