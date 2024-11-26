@@ -66,7 +66,7 @@ impl Mmap {
         // initialized for miri-level checking.
         unsafe {
             std::ptr::write_bytes(
-                self.as_mut_ptr().add(start.byte_count()),
+                self.as_send_sync_ptr().as_ptr().add(start.byte_count()),
                 0u8,
                 len.byte_count(),
             );
@@ -74,12 +74,9 @@ impl Mmap {
         Ok(())
     }
 
-    pub fn as_ptr(&self) -> *const u8 {
-        self.memory.as_ptr() as *const u8
-    }
-
-    pub fn as_mut_ptr(&self) -> *mut u8 {
-        self.memory.as_ptr().cast()
+    #[inline]
+    pub fn as_send_sync_ptr(&self) -> SendSyncPtr<u8> {
+        self.memory.cast()
     }
 
     pub fn len(&self) -> usize {
@@ -106,7 +103,7 @@ impl Drop for Mmap {
         }
         unsafe {
             let layout = make_layout(self.len());
-            alloc::dealloc(self.as_mut_ptr(), layout);
+            alloc::dealloc(self.as_send_sync_ptr().as_ptr(), layout);
         }
     }
 }
