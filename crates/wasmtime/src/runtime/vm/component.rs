@@ -29,8 +29,10 @@ const INVALID_PTR: usize = 0xdead_dead_beef_beef_u64 as usize;
 
 mod libcalls;
 mod resources;
+mod states;
 
 pub use self::resources::{CallContexts, ResourceTable, ResourceTables};
+pub use self::states::StateTable;
 
 /// Runtime representation of a component instance and all state necessary for
 /// the instance itself.
@@ -58,6 +60,9 @@ pub struct ComponentInstance {
     /// is how this field is manipulated.
     component_resource_tables: PrimaryMap<TypeResourceTableIndex, ResourceTable>,
 
+    component_waitable_tables: PrimaryMap<RuntimeComponentInstanceIndex, StateTable<WaitableState>>,
+    component_error_context_tables: PrimaryMap<TypeErrorContextTableIndex, StateTable<usize>>,
+
     /// Storage for the type information about resources within this component
     /// instance.
     ///
@@ -83,6 +88,7 @@ pub struct ComponentInstance {
 ///   which this function pointer was registered.
 /// * `ty` - the type index, relative to the tables in `vmctx`, that is the
 ///   type of the function being called.
+/// * `caller_instance` - The (sub)component instance of the caller.
 /// * `flags` - the component flags for may_enter/leave corresponding to the
 ///   component instance that the lowering happened within.
 /// * `opt_memory` - this nullable pointer represents the memory configuration
@@ -91,6 +97,7 @@ pub struct ComponentInstance {
 ///   option for the canonical ABI options.
 /// * `string_encoding` - this is the configured string encoding for the
 ///   canonical ABI this lowering corresponds to.
+/// * `async_` - whether the caller is using the async ABI.
 /// * `args_and_results` - pointer to stack-allocated space in the caller where
 ///   all the arguments are stored as well as where the results will be written
 ///   to. The size and initialized bytes of this depends on the core wasm type
@@ -98,7 +105,7 @@ pub struct ComponentInstance {
 /// * `nargs_and_results` - the size, in units of `ValRaw`, of
 ///   `args_and_results`.
 //
-// FIXME: 9 arguments is probably too many. The `data` through `string-encoding`
+// FIXME: 11 arguments is probably too many. The `data` through `string-encoding`
 // parameters should probably get packaged up into the `VMComponentContext`.
 // Needs benchmarking one way or another though to figure out what the best
 // balance is here.
@@ -106,10 +113,12 @@ pub type VMLoweringCallee = extern "C" fn(
     vmctx: *mut VMOpaqueContext,
     data: *mut u8,
     ty: TypeFuncIndex,
+    caller_instance: RuntimeComponentInstanceIndex,
     flags: InstanceFlags,
     opt_memory: *mut VMMemoryDefinition,
     opt_realloc: *mut VMFuncRef,
     string_encoding: StringEncoding,
+    async_: bool,
     args_and_results: *mut mem::MaybeUninit<ValRaw>,
     nargs_and_results: usize,
 );
@@ -125,6 +134,170 @@ pub struct VMLowering {
     /// The host data pointer (think void* pointer) to get passed to `callee`.
     pub data: *mut u8,
 }
+
+/// Type signature for the host-defined `task.backpressure` built-in function.
+pub type VMTaskBackpressureCallback = extern "C" fn(
+    vmctx: *mut VMOpaqueContext,
+    caller_instance: RuntimeComponentInstanceIndex,
+    arg: u32,
+);
+
+/// Type signature for the host-defined `task.return` built-in function.
+pub type VMTaskReturnCallback = extern "C" fn(
+    vmctx: *mut VMOpaqueContext,
+    ty: TypeTaskReturnIndex,
+    args_and_results: *mut mem::MaybeUninit<ValRaw>,
+    nargs_and_results: usize,
+);
+
+/// Type signature for the host-defined `task.wait` and `task.poll` built-in functions.
+pub type VMTaskWaitOrPollCallback = extern "C" fn(
+    vmctx: *mut VMOpaqueContext,
+    caller_instance: RuntimeComponentInstanceIndex,
+    async_: bool,
+    memory: *mut VMMemoryDefinition,
+    payload: u32,
+) -> u32;
+
+/// Type signature for the host-defined `task.yield` built-in function.
+pub type VMTaskYieldCallback = extern "C" fn(vmctx: *mut VMOpaqueContext, async_: bool);
+
+/// Type signature for the host-defined `subtask.drop` built-in function.
+pub type VMSubtaskDropCallback =
+    extern "C" fn(vmctx: *mut VMOpaqueContext, instance: RuntimeComponentInstanceIndex, arg: u32);
+
+/// Type signature for the host-defined built-in function to represent starting
+/// a call to an async-lowered import in a FACT-generated module.
+pub type VMAsyncEnterCallback = extern "C" fn(
+    vmctx: *mut VMOpaqueContext,
+    start: *mut VMFuncRef,
+    return_: *mut VMFuncRef,
+    caller_instance: RuntimeComponentInstanceIndex,
+    task_return_type: TypeTaskReturnIndex,
+    params: u32,
+    results: u32,
+);
+
+/// Type signature for the host-defined built-in function to represent
+/// completing a call to an async-lowered import in a FACT-generated module.
+pub type VMAsyncExitCallback = extern "C" fn(
+    vmctx: *mut VMOpaqueContext,
+    callback: *mut VMFuncRef,
+    caller_instance: RuntimeComponentInstanceIndex,
+    callee: *mut VMFuncRef,
+    callee_instance: RuntimeComponentInstanceIndex,
+    param_count: u32,
+    result_count: u32,
+    flags: u32,
+) -> u32;
+
+/// Type signature for the host-defined `future.new` built-in function.
+pub type VMFutureNewCallback =
+    extern "C" fn(vmctx: *mut VMOpaqueContext, ty: TypeFutureTableIndex) -> u32;
+
+/// Type signature for the host-defined `future.read` and `future.write`
+/// built-in functions.
+pub type VMFutureTransmitCallback = extern "C" fn(
+    vmctx: *mut VMOpaqueContext,
+    memory: *mut VMMemoryDefinition,
+    realloc: *mut VMFuncRef,
+    string_encoding: StringEncoding,
+    ty: TypeFutureTableIndex,
+    future: u32,
+    address: u32,
+) -> u32;
+
+/// Type signature for the host-defined `future.cancel-read` and
+/// `future.cancel-write` built-in functions.
+pub type VMFutureCancelCallback = extern "C" fn(
+    vmctx: *mut VMOpaqueContext,
+    ty: TypeFutureTableIndex,
+    async_: bool,
+    handle: u32,
+) -> u32;
+
+/// Type signature for the host-defined `future.close-readable` built-in function.
+pub type VMFutureCloseReadableCallback =
+    extern "C" fn(vmctx: *mut VMOpaqueContext, ty: TypeFutureTableIndex, handle: u32);
+
+/// Type signature for the host-defined `future.close-writable` built-in function.
+pub type VMFutureCloseWritableCallback =
+    extern "C" fn(vmctx: *mut VMOpaqueContext, ty: TypeFutureTableIndex, handle: u32, error: u32);
+
+/// Type signature for the host-defined `stream.new` built-in function.
+pub type VMStreamNewCallback =
+    extern "C" fn(vmctx: *mut VMOpaqueContext, ty: TypeStreamTableIndex) -> u32;
+
+/// Type signature for the host-defined `stream.read` and `stream.write`
+/// built-in functions
+pub type VMStreamTransmitCallback = extern "C" fn(
+    vmctx: *mut VMOpaqueContext,
+    memory: *mut VMMemoryDefinition,
+    realloc: *mut VMFuncRef,
+    string_encoding: StringEncoding,
+    ty: TypeStreamTableIndex,
+    stream: u32,
+    address: u32,
+    count: u32,
+) -> u32;
+
+/// Type signature for the host-defined `stream.read` ans `stream.write`
+/// built-in functions for when the payload is trivially `memcpy`-able.
+pub type VMFlatStreamTransmitCallback = extern "C" fn(
+    vmctx: *mut VMOpaqueContext,
+    memory: *mut VMMemoryDefinition,
+    realloc: *mut VMFuncRef,
+    ty: TypeStreamTableIndex,
+    payload_size: u32,
+    payload_align: u32,
+    stream: u32,
+    address: u32,
+    count: u32,
+) -> u32;
+
+/// Type signature for the host-defined `stream.close-readable` built-in function.
+pub type VMStreamCloseReadableCallback =
+    extern "C" fn(vmctx: *mut VMOpaqueContext, ty: TypeStreamTableIndex, handle: u32);
+
+/// Type signature for the host-defined `stream.close-writable` built-in function.
+pub type VMStreamCloseWritableCallback =
+    extern "C" fn(vmctx: *mut VMOpaqueContext, ty: TypeStreamTableIndex, handle: u32, error: u32);
+
+/// Type signature for the host-defined `stream.cancel-read` and
+/// `stream.cancel-write` built-in functions.
+pub type VMStreamCancelCallback = extern "C" fn(
+    vmctx: *mut VMOpaqueContext,
+    ty: TypeStreamTableIndex,
+    async_: bool,
+    handle: u32,
+) -> u32;
+
+/// Type signature for the host-defined `error-context.new` built-in function.
+pub type VMErrorContextNewCallback = extern "C" fn(
+    vmctx: *mut VMOpaqueContext,
+    memory: *mut VMMemoryDefinition,
+    realloc: *mut VMFuncRef,
+    string_encoding: StringEncoding,
+    ty: TypeErrorContextTableIndex,
+    address: u32,
+    count: u32,
+) -> u32;
+
+/// Type signature for the host-defined `error-context.debug-message` built-in
+/// function.
+pub type VMErrorContextDebugMessageCallback = extern "C" fn(
+    vmctx: *mut VMOpaqueContext,
+    memory: *mut VMMemoryDefinition,
+    realloc: *mut VMFuncRef,
+    string_encoding: StringEncoding,
+    ty: TypeErrorContextTableIndex,
+    handle: u32,
+    address: u32,
+);
+
+/// Type signature for the host-defined `error-context.drop` built-in function.
+pub type VMErrorContextDropCallback =
+    extern "C" fn(vmctx: *mut VMOpaqueContext, ty: TypeErrorContextTableIndex, handle: u32);
 
 /// This is a marker type to represent the underlying allocation of a
 /// `VMComponentContext`.
@@ -142,6 +315,30 @@ pub struct VMLowering {
 pub struct VMComponentContext {
     /// For more information about this see the equivalent field in `VMContext`
     _marker: marker::PhantomPinned,
+}
+
+/// Represents the state of a stream or future handle.
+#[derive(Debug, Eq, PartialEq)]
+pub enum StreamFutureState {
+    /// Both the read and write ends are owned by the same component instance.
+    Local,
+    /// Only the write end is owned by this component instance.
+    Write,
+    /// Only the read end is owned by this component instance.
+    Read,
+    /// A read or write is in progress.
+    Busy,
+}
+
+/// Represents the state of a waitable handle.
+#[derive(Debug)]
+pub enum WaitableState {
+    /// Represents a task handle.
+    Task,
+    /// Represents a stream handle.
+    Stream(TypeStreamTableIndex, StreamFutureState),
+    /// Represents a future handle.
+    Future(TypeFutureTableIndex, StreamFutureState),
 }
 
 impl ComponentInstance {
@@ -193,10 +390,24 @@ impl ComponentInstance {
     ) {
         assert!(alloc_size >= Self::alloc_layout(&offsets).size());
 
-        let num_tables = runtime_info.component().num_resource_tables;
-        let mut component_resource_tables = PrimaryMap::with_capacity(num_tables);
-        for _ in 0..num_tables {
+        let num_resource_tables = runtime_info.component().num_resource_tables;
+        let mut component_resource_tables = PrimaryMap::with_capacity(num_resource_tables);
+        for _ in 0..num_resource_tables {
             component_resource_tables.push(ResourceTable::default());
+        }
+
+        let num_waitable_tables = runtime_info.component().num_runtime_component_instances;
+        let mut component_waitable_tables =
+            PrimaryMap::with_capacity(usize::try_from(num_waitable_tables).unwrap());
+        for _ in 0..num_waitable_tables {
+            component_waitable_tables.push(StateTable::default());
+        }
+
+        let num_error_context_tables = runtime_info.component().num_error_context_tables;
+        let mut component_error_context_tables =
+            PrimaryMap::with_capacity(num_error_context_tables);
+        for _ in 0..num_error_context_tables {
+            component_error_context_tables.push(StateTable::default());
         }
 
         ptr::write(
@@ -212,6 +423,8 @@ impl ComponentInstance {
                     .unwrap(),
                 ),
                 component_resource_tables,
+                component_waitable_tables,
+                component_error_context_tables,
                 runtime_info,
                 resource_types,
                 vmctx: VMComponentContext {
@@ -286,6 +499,18 @@ impl ComponentInstance {
         }
     }
 
+    /// Returns the async callback pointer corresponding to the index provided.
+    ///
+    /// This can only be called after `idx` has been initialized at runtime
+    /// during the instantiation process of a component.
+    pub fn runtime_callback(&self, idx: RuntimeCallbackIndex) -> NonNull<VMFuncRef> {
+        unsafe {
+            let ret = *self.vmctx_plus_offset::<NonNull<_>>(self.offsets.runtime_callback(idx));
+            debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
+            ret
+        }
+    }
+
     /// Returns the post-return pointer corresponding to the index provided.
     ///
     /// This can only be called after `idx` has been initialized at runtime
@@ -354,6 +579,15 @@ impl ComponentInstance {
     pub fn set_runtime_realloc(&mut self, idx: RuntimeReallocIndex, ptr: NonNull<VMFuncRef>) {
         unsafe {
             let storage = self.vmctx_plus_offset_mut(self.offsets.runtime_realloc(idx));
+            debug_assert!(*storage as usize == INVALID_PTR);
+            *storage = ptr.as_ptr();
+        }
+    }
+
+    /// Same as `set_runtime_memory` but for async callback function pointers.
+    pub fn set_runtime_callback(&mut self, idx: RuntimeCallbackIndex, ptr: NonNull<VMFuncRef>) {
+        unsafe {
+            let storage = self.vmctx_plus_offset_mut(self.offsets.runtime_callback(idx));
             debug_assert!(*storage as usize == INVALID_PTR);
             *storage = ptr.as_ptr();
         }
@@ -435,6 +669,75 @@ impl ComponentInstance {
         }
     }
 
+    /// Set the host-provided callbacks for various async-, future-, stream-,
+    /// and error-context-related built-in functions.
+    pub fn set_async_callbacks(
+        &mut self,
+        task_backpressure: VMTaskBackpressureCallback,
+        task_return: VMTaskReturnCallback,
+        task_wait: VMTaskWaitOrPollCallback,
+        task_poll: VMTaskWaitOrPollCallback,
+        task_yield: VMTaskYieldCallback,
+        subtask_drop: VMSubtaskDropCallback,
+        async_enter: VMAsyncEnterCallback,
+        async_exit: VMAsyncExitCallback,
+        future_new: VMFutureNewCallback,
+        future_write: VMFutureTransmitCallback,
+        future_read: VMFutureTransmitCallback,
+        future_cancel_write: VMFutureCancelCallback,
+        future_cancel_read: VMFutureCancelCallback,
+        future_close_writable: VMFutureCloseWritableCallback,
+        future_close_readable: VMFutureCloseReadableCallback,
+        stream_new: VMStreamNewCallback,
+        stream_write: VMStreamTransmitCallback,
+        stream_read: VMStreamTransmitCallback,
+        stream_cancel_write: VMStreamCancelCallback,
+        stream_cancel_read: VMStreamCancelCallback,
+        stream_close_writable: VMStreamCloseWritableCallback,
+        stream_close_readable: VMStreamCloseReadableCallback,
+        flat_stream_write: VMFlatStreamTransmitCallback,
+        flat_stream_read: VMFlatStreamTransmitCallback,
+        error_context_new: VMErrorContextNewCallback,
+        error_context_debug_message: VMErrorContextDebugMessageCallback,
+        error_context_drop: VMErrorContextDropCallback,
+    ) {
+        unsafe {
+            *self.vmctx_plus_offset_mut(self.offsets.task_backpressure()) = task_backpressure;
+            *self.vmctx_plus_offset_mut(self.offsets.task_return()) = task_return;
+            *self.vmctx_plus_offset_mut(self.offsets.task_wait()) = task_wait;
+            *self.vmctx_plus_offset_mut(self.offsets.task_poll()) = task_poll;
+            *self.vmctx_plus_offset_mut(self.offsets.task_yield()) = task_yield;
+            *self.vmctx_plus_offset_mut(self.offsets.subtask_drop()) = subtask_drop;
+            *self.vmctx_plus_offset_mut(self.offsets.async_enter()) = async_enter;
+            *self.vmctx_plus_offset_mut(self.offsets.async_exit()) = async_exit;
+            *self.vmctx_plus_offset_mut(self.offsets.future_new()) = future_new;
+            *self.vmctx_plus_offset_mut(self.offsets.future_write()) = future_write;
+            *self.vmctx_plus_offset_mut(self.offsets.future_read()) = future_read;
+            *self.vmctx_plus_offset_mut(self.offsets.future_cancel_write()) = future_cancel_write;
+            *self.vmctx_plus_offset_mut(self.offsets.future_cancel_read()) = future_cancel_read;
+            *self.vmctx_plus_offset_mut(self.offsets.future_close_writable()) =
+                future_close_writable;
+            *self.vmctx_plus_offset_mut(self.offsets.future_close_readable()) =
+                future_close_readable;
+            *self.vmctx_plus_offset_mut(self.offsets.stream_new()) = stream_new;
+            *self.vmctx_plus_offset_mut(self.offsets.stream_write()) = stream_write;
+            *self.vmctx_plus_offset_mut(self.offsets.stream_read()) = stream_read;
+            *self.vmctx_plus_offset_mut(self.offsets.stream_cancel_write()) = stream_cancel_write;
+            *self.vmctx_plus_offset_mut(self.offsets.stream_cancel_read()) = stream_cancel_read;
+            *self.vmctx_plus_offset_mut(self.offsets.stream_close_writable()) =
+                stream_close_writable;
+            *self.vmctx_plus_offset_mut(self.offsets.stream_close_readable()) =
+                stream_close_readable;
+            *self.vmctx_plus_offset_mut(self.offsets.flat_stream_write()) = flat_stream_write;
+            *self.vmctx_plus_offset_mut(self.offsets.flat_stream_read()) = flat_stream_read;
+            *self.vmctx_plus_offset_mut(self.offsets.error_context_debug_message()) =
+                error_context_new;
+            *self.vmctx_plus_offset_mut(self.offsets.error_context_debug_message()) =
+                error_context_debug_message;
+            *self.vmctx_plus_offset_mut(self.offsets.error_context_drop()) = error_context_drop;
+        }
+    }
+
     unsafe fn initialize_vmctx(&mut self, store: *mut dyn VMStore) {
         *self.vmctx_plus_offset_mut(self.offsets.magic()) = VMCOMPONENT_MAGIC;
         *self.vmctx_plus_offset_mut(self.offsets.libcalls()) = &libcalls::VMComponentLibcalls::INIT;
@@ -449,7 +752,7 @@ impl ComponentInstance {
         }
 
         // In debug mode set non-null bad values to all "pointer looking" bits
-        // and pices related to lowering and such. This'll help detect any
+        // and pieces related to lowering and such. This'll help detect any
         // erroneous usage and enable debug assertions above as well to prevent
         // loading these before they're configured or setting them twice.
         if cfg!(debug_assertions) {
@@ -473,6 +776,11 @@ impl ComponentInstance {
             for i in 0..self.offsets.num_runtime_reallocs {
                 let i = RuntimeReallocIndex::from_u32(i);
                 let offset = self.offsets.runtime_realloc(i);
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
+            }
+            for i in 0..self.offsets.num_runtime_callbacks {
+                let i = RuntimeCallbackIndex::from_u32(i);
+                let offset = self.offsets.runtime_callback(i);
                 *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_runtime_post_returns {
@@ -569,6 +877,22 @@ impl ComponentInstance {
         &mut self.component_resource_tables
     }
 
+    /// Retrieves the tables for tracking waitable handles and their states with respect
+    /// to the components which own them.
+    pub fn component_waitable_tables(
+        &mut self,
+    ) -> &mut PrimaryMap<RuntimeComponentInstanceIndex, StateTable<WaitableState>> {
+        &mut self.component_waitable_tables
+    }
+
+    /// Retrieves the tables for tracking error-context handles and their reference
+    /// counts with respect to the components which own them.
+    pub fn component_error_context_tables(
+        &mut self,
+    ) -> &mut PrimaryMap<TypeErrorContextTableIndex, StateTable<usize>> {
+        &mut self.component_error_context_tables
+    }
+
     /// Returns the destructor and instance flags for the specified resource
     /// table type.
     ///
@@ -629,6 +953,113 @@ impl ComponentInstance {
     pub(crate) fn resource_exit_call(&mut self) -> Result<()> {
         self.resource_tables().exit_call()
     }
+
+    pub(crate) fn future_transfer(
+        &mut self,
+        src_idx: u32,
+        src: TypeFutureTableIndex,
+        dst: TypeFutureTableIndex,
+    ) -> Result<u32> {
+        let src_instance = self.component_types()[src].instance;
+        let dst_instance = self.component_types()[dst].instance;
+        let [src_table, dst_table] = self
+            .component_waitable_tables
+            .get_many_mut([src_instance, dst_instance])
+            .unwrap();
+        let (rep, WaitableState::Future(src_ty, src_state)) =
+            src_table.get_mut_by_index(src_idx)?
+        else {
+            bail!("invalid future handle");
+        };
+        if *src_ty != src {
+            bail!("invalid future handle");
+        }
+        match src_state {
+            StreamFutureState::Local => {
+                *src_state = StreamFutureState::Write;
+                assert!(dst_table.get_mut_by_rep(rep).is_none());
+                dst_table.insert(rep, WaitableState::Future(dst, StreamFutureState::Read))
+            }
+            StreamFutureState::Read => {
+                src_table.remove_by_index(src_idx)?;
+                if let Some((dst_idx, dst_state)) = dst_table.get_mut_by_rep(rep) {
+                    let WaitableState::Future(dst_ty, dst_state) = dst_state else {
+                        unreachable!();
+                    };
+                    assert_eq!(*dst_ty, dst);
+                    assert_eq!(*dst_state, StreamFutureState::Write);
+                    *dst_state = StreamFutureState::Local;
+                    Ok(dst_idx)
+                } else {
+                    dst_table.insert(rep, WaitableState::Future(dst, StreamFutureState::Read))
+                }
+            }
+            StreamFutureState::Write => bail!("cannot transfer write end of future"),
+            StreamFutureState::Busy => bail!("cannot transfer busy future"),
+        }
+    }
+
+    pub(crate) fn stream_transfer(
+        &mut self,
+        src_idx: u32,
+        src: TypeStreamTableIndex,
+        dst: TypeStreamTableIndex,
+    ) -> Result<u32> {
+        let src_instance = self.component_types()[src].instance;
+        let dst_instance = self.component_types()[dst].instance;
+        let [src_table, dst_table] = self
+            .component_waitable_tables
+            .get_many_mut([src_instance, dst_instance])
+            .unwrap();
+        let (rep, WaitableState::Stream(src_ty, src_state)) =
+            src_table.get_mut_by_index(src_idx)?
+        else {
+            bail!("invalid stream handle");
+        };
+        if *src_ty != src {
+            bail!("invalid stream handle");
+        }
+        match src_state {
+            StreamFutureState::Local => {
+                *src_state = StreamFutureState::Write;
+                assert!(dst_table.get_mut_by_rep(rep).is_none());
+                dst_table.insert(rep, WaitableState::Stream(dst, StreamFutureState::Read))
+            }
+            StreamFutureState::Read => {
+                src_table.remove_by_index(src_idx)?;
+                if let Some((dst_idx, dst_state)) = dst_table.get_mut_by_rep(rep) {
+                    let WaitableState::Stream(dst_ty, dst_state) = dst_state else {
+                        unreachable!();
+                    };
+                    assert_eq!(*dst_ty, dst);
+                    assert_eq!(*dst_state, StreamFutureState::Write);
+                    *dst_state = StreamFutureState::Local;
+                    Ok(dst_idx)
+                } else {
+                    dst_table.insert(rep, WaitableState::Stream(dst, StreamFutureState::Read))
+                }
+            }
+            StreamFutureState::Write => bail!("cannot transfer write end of stream"),
+            StreamFutureState::Busy => bail!("cannot transfer busy stream"),
+        }
+    }
+
+    pub(crate) fn error_context_transfer(
+        &mut self,
+        src_idx: u32,
+        src: TypeErrorContextTableIndex,
+        dst: TypeErrorContextTableIndex,
+    ) -> Result<u32> {
+        let (rep, _) = self.component_error_context_tables[src].get_mut_by_index(src_idx)?;
+        let dst = &mut self.component_error_context_tables[dst];
+
+        if let Some((dst_idx, dst_state)) = dst.get_mut_by_rep(rep) {
+            *dst_state += 1;
+            Ok(dst_idx)
+        } else {
+            dst.insert(rep, 1)
+        }
+    }
 }
 
 impl VMComponentContext {
@@ -649,7 +1080,7 @@ impl VMComponentContext {
 /// This type can be dereferenced to `ComponentInstance` to access the
 /// underlying methods.
 pub struct OwnedComponentInstance {
-    ptr: SendSyncPtr<ComponentInstance>,
+    pub(crate) ptr: SendSyncPtr<ComponentInstance>,
 }
 
 impl OwnedComponentInstance {
@@ -712,6 +1143,11 @@ impl OwnedComponentInstance {
         unsafe { self.instance_mut().set_runtime_realloc(idx, ptr) }
     }
 
+    /// See `ComponentInstance::set_runtime_callback`
+    pub fn set_runtime_callback(&mut self, idx: RuntimeCallbackIndex, ptr: NonNull<VMFuncRef>) {
+        unsafe { self.instance_mut().set_runtime_callback(idx, ptr) }
+    }
+
     /// See `ComponentInstance::set_runtime_post_return`
     pub fn set_runtime_post_return(
         &mut self,
@@ -752,6 +1188,70 @@ impl OwnedComponentInstance {
     /// See `ComponentInstance::resource_types`
     pub fn resource_types_mut(&mut self) -> &mut Arc<dyn Any + Send + Sync> {
         unsafe { &mut (*self.ptr.as_ptr()).resource_types }
+    }
+
+    /// See `ComponentInstance::set_async_callbacks`
+    pub fn set_async_callbacks(
+        &mut self,
+        task_backpressure: VMTaskBackpressureCallback,
+        task_return: VMTaskReturnCallback,
+        task_wait: VMTaskWaitOrPollCallback,
+        task_poll: VMTaskWaitOrPollCallback,
+        task_yield: VMTaskYieldCallback,
+        subtask_drop: VMSubtaskDropCallback,
+        async_enter: VMAsyncEnterCallback,
+        async_exit: VMAsyncExitCallback,
+        future_new: VMFutureNewCallback,
+        future_write: VMFutureTransmitCallback,
+        future_read: VMFutureTransmitCallback,
+        future_cancel_write: VMFutureCancelCallback,
+        future_cancel_read: VMFutureCancelCallback,
+        future_close_writable: VMFutureCloseWritableCallback,
+        future_close_readable: VMFutureCloseReadableCallback,
+        stream_new: VMStreamNewCallback,
+        stream_write: VMStreamTransmitCallback,
+        stream_read: VMStreamTransmitCallback,
+        stream_cancel_write: VMStreamCancelCallback,
+        stream_cancel_read: VMStreamCancelCallback,
+        stream_close_writable: VMStreamCloseWritableCallback,
+        stream_close_readable: VMStreamCloseReadableCallback,
+        flat_stream_write: VMFlatStreamTransmitCallback,
+        flat_stream_read: VMFlatStreamTransmitCallback,
+        error_context_new: VMErrorContextNewCallback,
+        error_context_debug_message: VMErrorContextDebugMessageCallback,
+        error_context_drop: VMErrorContextDropCallback,
+    ) {
+        unsafe {
+            self.instance_mut().set_async_callbacks(
+                task_backpressure,
+                task_return,
+                task_wait,
+                task_poll,
+                task_yield,
+                subtask_drop,
+                async_enter,
+                async_exit,
+                future_new,
+                future_write,
+                future_read,
+                future_cancel_write,
+                future_cancel_read,
+                future_close_writable,
+                future_close_readable,
+                stream_new,
+                stream_write,
+                stream_read,
+                stream_cancel_write,
+                stream_cancel_read,
+                stream_close_writable,
+                stream_close_readable,
+                flat_stream_write,
+                flat_stream_read,
+                error_context_new,
+                error_context_debug_message,
+                error_context_drop,
+            )
+        }
     }
 }
 

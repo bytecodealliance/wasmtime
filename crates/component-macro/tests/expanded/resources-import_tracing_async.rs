@@ -1,6 +1,6 @@
 pub enum WorldResource {}
 #[wasmtime::component::__internal::async_trait]
-pub trait HostWorldResource {
+pub trait HostWorldResource: Sized {
     async fn new(&mut self) -> wasmtime::component::Resource<WorldResource>;
     async fn foo(&mut self, self_: wasmtime::component::Resource<WorldResource>) -> ();
     async fn static_foo(&mut self) -> ();
@@ -47,7 +47,7 @@ impl<T> Clone for TheWorldPre<T> {
         }
     }
 }
-impl<_T> TheWorldPre<_T> {
+impl<_T: Send + 'static> TheWorldPre<_T> {
     /// Creates a new copy of `TheWorldPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -75,10 +75,7 @@ impl<_T> TheWorldPre<_T> {
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<TheWorld>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<TheWorld> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
@@ -238,7 +235,7 @@ const _: () = {
             linker: &wasmtime::component::Linker<_T>,
         ) -> wasmtime::Result<TheWorld>
         where
-            _T: Send,
+            _T: Send + 'static,
         {
             let pre = linker.instantiate_pre(component)?;
             TheWorldPre::new(pre)?.instantiate_async(store).await
@@ -404,7 +401,7 @@ const _: () = {
             mut store: S,
         ) -> wasmtime::Result<wasmtime::component::Resource<WorldResource>>
         where
-            <S as wasmtime::AsContext>::Data: Send,
+            <S as wasmtime::AsContext>::Data: Send + 'static,
         {
             use tracing::Instrument;
             let span = tracing::span!(
@@ -439,7 +436,7 @@ pub mod foo {
             use wasmtime::component::__internal::anyhow;
             pub enum Bar {}
             #[wasmtime::component::__internal::async_trait]
-            pub trait HostBar {
+            pub trait HostBar: Sized {
                 async fn new(&mut self) -> wasmtime::component::Resource<Bar>;
                 async fn static_a(&mut self) -> u32;
                 async fn method_a(
@@ -528,7 +525,7 @@ pub mod foo {
                 );
             };
             #[wasmtime::component::__internal::async_trait]
-            pub trait Host: Send + HostBar {
+            pub trait Host: Send + HostBar + Sized {
                 async fn bar_own_arg(
                     &mut self,
                     x: wasmtime::component::Resource<Bar>,
@@ -595,19 +592,23 @@ pub mod foo {
             }
             pub trait GetHost<
                 T,
-            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                D,
+            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
                 type Host: Host + Send;
             }
-            impl<F, T, O> GetHost<T> for F
+            impl<F, T, D, O> GetHost<T, D> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
                 O: Host + Send,
             {
                 type Host = O;
             }
-            pub fn add_to_linker_get_host<T>(
+            pub fn add_to_linker_get_host<
+                T,
+                G: for<'a> GetHost<&'a mut T, T, Host: Host + Send>,
+            >(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl for<'a> GetHost<&'a mut T>,
+                host_getter: G,
             ) -> wasmtime::Result<()>
             where
                 T: Send,
@@ -1351,7 +1352,7 @@ pub mod foo {
             use wasmtime::component::__internal::anyhow;
             pub enum A {}
             #[wasmtime::component::__internal::async_trait]
-            pub trait HostA {
+            pub trait HostA: Sized {
                 async fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<A>,
@@ -1367,22 +1368,26 @@ pub mod foo {
                 }
             }
             #[wasmtime::component::__internal::async_trait]
-            pub trait Host: Send + HostA {}
+            pub trait Host: Send + HostA + Sized {}
             pub trait GetHost<
                 T,
-            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                D,
+            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
                 type Host: Host + Send;
             }
-            impl<F, T, O> GetHost<T> for F
+            impl<F, T, D, O> GetHost<T, D> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
                 O: Host + Send,
             {
                 type Host = O;
             }
-            pub fn add_to_linker_get_host<T>(
+            pub fn add_to_linker_get_host<
+                T,
+                G: for<'a> GetHost<&'a mut T, T, Host: Host + Send>,
+            >(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl for<'a> GetHost<&'a mut T>,
+                host_getter: G,
             ) -> wasmtime::Result<()>
             where
                 T: Send,
@@ -1425,19 +1430,23 @@ pub mod foo {
             pub trait Host: Send {}
             pub trait GetHost<
                 T,
-            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                D,
+            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
                 type Host: Host + Send;
             }
-            impl<F, T, O> GetHost<T> for F
+            impl<F, T, D, O> GetHost<T, D> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
                 O: Host + Send,
             {
                 type Host = O;
             }
-            pub fn add_to_linker_get_host<T>(
+            pub fn add_to_linker_get_host<
+                T,
+                G: for<'a> GetHost<&'a mut T, T, Host: Host + Send>,
+            >(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl for<'a> GetHost<&'a mut T>,
+                host_getter: G,
             ) -> wasmtime::Result<()>
             where
                 T: Send,
@@ -1467,19 +1476,23 @@ pub mod foo {
             pub trait Host: Send {}
             pub trait GetHost<
                 T,
-            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                D,
+            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
                 type Host: Host + Send;
             }
-            impl<F, T, O> GetHost<T> for F
+            impl<F, T, D, O> GetHost<T, D> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
                 O: Host + Send,
             {
                 type Host = O;
             }
-            pub fn add_to_linker_get_host<T>(
+            pub fn add_to_linker_get_host<
+                T,
+                G: for<'a> GetHost<&'a mut T, T, Host: Host + Send>,
+            >(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl for<'a> GetHost<&'a mut T>,
+                host_getter: G,
             ) -> wasmtime::Result<()>
             where
                 T: Send,
@@ -1511,19 +1524,23 @@ pub mod foo {
             }
             pub trait GetHost<
                 T,
-            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                D,
+            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
                 type Host: Host + Send;
             }
-            impl<F, T, O> GetHost<T> for F
+            impl<F, T, D, O> GetHost<T, D> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
                 O: Host + Send,
             {
                 type Host = O;
             }
-            pub fn add_to_linker_get_host<T>(
+            pub fn add_to_linker_get_host<
+                T,
+                G: for<'a> GetHost<&'a mut T, T, Host: Host + Send>,
+            >(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl for<'a> GetHost<&'a mut T>,
+                host_getter: G,
             ) -> wasmtime::Result<()>
             where
                 T: Send,
@@ -1577,7 +1594,7 @@ pub mod foo {
             use wasmtime::component::__internal::anyhow;
             pub enum Foo {}
             #[wasmtime::component::__internal::async_trait]
-            pub trait HostFoo {
+            pub trait HostFoo: Sized {
                 async fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<Foo>,
@@ -1593,22 +1610,26 @@ pub mod foo {
                 }
             }
             #[wasmtime::component::__internal::async_trait]
-            pub trait Host: Send + HostFoo {}
+            pub trait Host: Send + HostFoo + Sized {}
             pub trait GetHost<
                 T,
-            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                D,
+            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
                 type Host: Host + Send;
             }
-            impl<F, T, O> GetHost<T> for F
+            impl<F, T, D, O> GetHost<T, D> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
                 O: Host + Send,
             {
                 type Host = O;
             }
-            pub fn add_to_linker_get_host<T>(
+            pub fn add_to_linker_get_host<
+                T,
+                G: for<'a> GetHost<&'a mut T, T, Host: Host + Send>,
+            >(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl for<'a> GetHost<&'a mut T>,
+                host_getter: G,
             ) -> wasmtime::Result<()>
             where
                 T: Send,
@@ -1744,7 +1765,7 @@ pub mod exports {
                         arg0: wasmtime::component::Resource<Foo>,
                     ) -> wasmtime::Result<()>
                     where
-                        <S as wasmtime::AsContext>::Data: Send,
+                        <S as wasmtime::AsContext>::Data: Send + 'static,
                     {
                         use tracing::Instrument;
                         let span = tracing::span!(
