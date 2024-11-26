@@ -93,17 +93,20 @@ impl Mmap<AlignedLength> {
                 data: AlignedLength {},
             })
         } else {
-            let mut result = Mmap {
+            let result = Mmap {
                 sys: mmap::Mmap::reserve(mapping_size)
                     .context(format!("mmap failed to reserve {mapping_size:#x} bytes"))?,
                 data: AlignedLength {},
             };
             if !accessible_size.is_zero() {
-                result
-                    .make_accessible(HostAlignedByteCount::ZERO, accessible_size)
-                    .context(format!(
-                        "mmap failed to allocate {accessible_size:#x} bytes"
-                    ))?;
+                // SAFETY: result was just created and is not in use.
+                unsafe {
+                    result
+                        .make_accessible(HostAlignedByteCount::ZERO, accessible_size)
+                        .context(format!(
+                            "mmap failed to allocate {accessible_size:#x} bytes"
+                        ))?;
+                }
             }
             Ok(result)
         }
@@ -133,11 +136,16 @@ impl Mmap<AlignedLength> {
     /// accessible. `start` and `len` must be native page-size multiples and
     /// describe a range within `self`'s reserved memory.
     ///
+    /// # Safety
+    ///
+    /// There must not be any other references to the region of memory being
+    /// made accessible.
+    ///
     /// # Panics
     ///
     /// Panics if `start + len >= self.len()`.
-    pub fn make_accessible(
-        &mut self,
+    pub unsafe fn make_accessible(
+        &self,
         start: HostAlignedByteCount,
         len: HostAlignedByteCount,
     ) -> Result<()> {
@@ -331,12 +339,12 @@ mod tests {
         let pagex3 = page_size.checked_mul(3).unwrap();
         let pagex4 = page_size.checked_mul(4).unwrap();
 
-        let mut mem = Mmap::accessible_reserved(pagex2, pagex4).expect("allocated memory");
-
-        mem.make_accessible(pagex3, HostAlignedByteCount::ZERO)
-            .expect("make_accessible succeeded");
+        let mem = Mmap::accessible_reserved(pagex2, pagex4).expect("allocated memory");
 
         unsafe {
+            mem.make_accessible(pagex3, HostAlignedByteCount::ZERO)
+                .expect("make_accessible succeeded");
+
             mem.make_executable(pagex3.byte_count()..pagex3.byte_count(), false)
                 .expect("make_executable succeeded");
 

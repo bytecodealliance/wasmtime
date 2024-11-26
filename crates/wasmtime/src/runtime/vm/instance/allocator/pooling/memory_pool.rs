@@ -65,7 +65,7 @@ use crate::{
 };
 use std::ffi::c_void;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use wasmtime_environ::{DefinedMemoryIndex, Module, Tunables};
 
 /// A set of allocator slots.
@@ -104,7 +104,7 @@ struct Stripe {
 /// ```
 #[derive(Debug)]
 pub struct MemoryPool {
-    mapping: Mmap<AlignedLength>,
+    mapping: Arc<Mmap<AlignedLength>>,
     /// This memory pool is stripe-aware. If using  memory protection keys, this
     /// will contain one stripe per available key; otherwise, a single stripe
     /// with an empty key.
@@ -244,7 +244,7 @@ impl MemoryPool {
 
         let pool = Self {
             stripes,
-            mapping,
+            mapping: Arc::new(mapping),
             image_slots,
             layout,
             memories_per_instance: usize::try_from(config.limits.max_memories_per_module).unwrap(),

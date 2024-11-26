@@ -817,9 +817,33 @@ mod test {
         }
     }
 
-    fn mmap_4mib_inaccessible() -> Mmap<AlignedLength> {
+    fn mmap_4mib_inaccessible() -> Arc<Mmap<AlignedLength>> {
         let four_mib = HostAlignedByteCount::new(4 << 20).expect("4 MiB is page aligned");
-        Mmap::accessible_reserved(HostAlignedByteCount::ZERO, four_mib).unwrap()
+        Arc::new(Mmap::accessible_reserved(HostAlignedByteCount::ZERO, four_mib).unwrap())
+    }
+
+    /// Presents a part of an mmap as a mutable slice within a callback.
+    ///
+    /// The callback ensures that the reference no longer lives after the
+    /// function is done.
+    ///
+    /// # Safety
+    ///
+    /// The caller must ensure that during this function call, the only way this
+    /// region of memory is not accessed by (read from or written to) is via the
+    /// reference. Making the callback `'static` goes some way towards ensuring
+    /// that, but it's still possible to squirrel away a reference into global
+    /// state. So don't do that.
+    unsafe fn with_slice_mut(
+        mmap: &Arc<Mmap<AlignedLength>>,
+        range: Range<usize>,
+        f: impl FnOnce(&mut [u8]) + 'static,
+    ) {
+        let ptr = mmap.as_ptr().cast_mut();
+        let slice = unsafe {
+            core::slice::from_raw_parts_mut(ptr.add(range.start), range.end - range.start)
+        };
+        f(slice);
     }
 
     #[test]
@@ -830,7 +854,7 @@ mod test {
             ..Tunables::default_miri()
         };
         // 4 MiB mmap'd area, not accessible
-        let mut mmap = mmap_4mib_inaccessible();
+        let mmap = mmap_4mib_inaccessible();
         // Create a MemoryImageSlot on top of it
         let mut memfd = MemoryImageSlot::create(
             mmap.as_mut_ptr() as *mut _,
@@ -842,13 +866,18 @@ mod test {
         // instantiate with 64 KiB initial size
         memfd.instantiate(64 << 10, None, &ty, &tunables).unwrap();
         assert!(memfd.is_dirty());
+
         // We should be able to access this 64 KiB (try both ends) and
         // it should consist of zeroes.
-        let slice = unsafe { mmap.slice_mut(0..65536) };
-        assert_eq!(0, slice[0]);
-        assert_eq!(0, slice[65535]);
-        slice[1024] = 42;
-        assert_eq!(42, slice[1024]);
+        unsafe {
+            with_slice_mut(&mmap, 0..65536, |slice| {
+                assert_eq!(0, slice[0]);
+                assert_eq!(0, slice[65535]);
+                slice[1024] = 42;
+                assert_eq!(42, slice[1024]);
+            });
+        }
+
         // grow the heap
         memfd.set_heap_limit(128 << 10).unwrap();
         let slice = unsafe { mmap.slice(0..1 << 20) };
@@ -876,7 +905,7 @@ mod test {
             ..Tunables::default_miri()
         };
         // 4 MiB mmap'd area, not accessible
-        let mut mmap = mmap_4mib_inaccessible();
+        let mmap = mmap_4mib_inaccessible();
         // Create a MemoryImageSlot on top of it
         let mut memfd = MemoryImageSlot::create(
             mmap.as_mut_ptr() as *mut _,
@@ -891,9 +920,14 @@ mod test {
             .instantiate(64 << 10, Some(&image), &ty, &tunables)
             .unwrap();
         assert!(memfd.has_image());
-        let slice = unsafe { mmap.slice_mut(0..65536) };
-        assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
-        slice[page_size] = 5;
+
+        unsafe {
+            with_slice_mut(&mmap, 0..65536, move |slice| {
+                assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
+                slice[page_size] = 5;
+            });
+        }
+
         // Clear and re-instantiate same image
         memfd
             .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
@@ -903,9 +937,9 @@ mod test {
         memfd
             .instantiate(64 << 10, Some(&image), &ty, &tunables)
             .unwrap();
-        let slice = unsafe { mmap.slice_mut(0..65536) };
-        // Should not see mutation from above
+        let slice = unsafe { mmap.slice(0..65536) };
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
+
         // Clear and re-instantiate no image
         memfd
             .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
@@ -914,8 +948,9 @@ mod test {
             .unwrap();
         memfd.instantiate(64 << 10, None, &ty, &tunables).unwrap();
         assert!(!memfd.has_image());
-        let slice = unsafe { mmap.slice_mut(0..65536) };
+        let slice = unsafe { mmap.slice(0..65536) };
         assert_eq!(&[0, 0, 0, 0], &slice[page_size..][..4]);
+
         // Clear and re-instantiate image again
         memfd
             .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
@@ -925,8 +960,9 @@ mod test {
         memfd
             .instantiate(64 << 10, Some(&image), &ty, &tunables)
             .unwrap();
-        let slice = unsafe { mmap.slice_mut(0..65536) };
+        let slice = unsafe { mmap.slice(0..65536) };
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
+
         // Create another image with different data.
         let image2 = Arc::new(create_memfd_with_data(page_size, &[10, 11, 12, 13]).unwrap());
         memfd
@@ -937,8 +973,9 @@ mod test {
         memfd
             .instantiate(128 << 10, Some(&image2), &ty, &tunables)
             .unwrap();
-        let slice = unsafe { mmap.slice_mut(0..65536) };
+        let slice = unsafe { mmap.slice(0..65536) };
         assert_eq!(&[10, 11, 12, 13], &slice[page_size..][..4]);
+
         // Instantiate the original image again; we should notice it's
         // a different image and not reuse the mappings.
         memfd
@@ -949,7 +986,7 @@ mod test {
         memfd
             .instantiate(64 << 10, Some(&image), &ty, &tunables)
             .unwrap();
-        let slice = unsafe { mmap.slice_mut(0..65536) };
+        let slice = unsafe { mmap.slice(0..65536) };
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
     }
 
@@ -962,7 +999,7 @@ mod test {
             memory_reservation: 100 << 16,
             ..Tunables::default_miri()
         };
-        let mut mmap = mmap_4mib_inaccessible();
+        let mmap = mmap_4mib_inaccessible();
         let mut memfd = MemoryImageSlot::create(
             mmap.as_mut_ptr() as *mut _,
             HostAlignedByteCount::ZERO,
@@ -979,14 +1016,19 @@ mod test {
                     .instantiate(64 << 10, Some(&image), &ty, &tunables)
                     .unwrap();
                 assert!(memfd.has_image());
-                let slice = unsafe { mmap.slice_mut(0..64 << 10) };
-                if image_off > 0 {
-                    assert_eq!(slice[image_off - 1], 0);
-                }
-                assert_eq!(slice[image_off + 5], 0);
-                assert_eq!(&[1, 2, 3, 4], &slice[image_off..][..4]);
-                slice[image_off] = 5;
-                assert_eq!(&[5, 2, 3, 4], &slice[image_off..][..4]);
+
+                unsafe {
+                    with_slice_mut(&mmap, 0..64 << 10, move |slice| {
+                        if image_off > 0 {
+                            assert_eq!(slice[image_off - 1], 0);
+                        }
+                        assert_eq!(slice[image_off + 5], 0);
+                        assert_eq!(&[1, 2, 3, 4], &slice[image_off..][..4]);
+                        slice[image_off] = 5;
+                        assert_eq!(&[5, 2, 3, 4], &slice[image_off..][..4]);
+                    })
+                };
+
                 memfd
                     .clear_and_remain_ready(amt_to_memset, |ptr, len| unsafe {
                         decommit_pages(ptr, len).unwrap()
@@ -999,10 +1041,14 @@ mod test {
         for amt_to_memset in [0, page_size, page_size * 10, 1 << 20, 10 << 20] {
             let amt_to_memset = HostAlignedByteCount::new(amt_to_memset).unwrap();
             memfd.instantiate(64 << 10, None, &ty, &tunables).unwrap();
-            let mem = unsafe { mmap.slice_mut(0..64 << 10) };
-            for chunk in mem.chunks_mut(1024) {
-                assert_eq!(chunk[0], 0);
-                chunk[0] = 5;
+
+            unsafe {
+                with_slice_mut(&mmap, 0..64 << 10, |slice| {
+                    for chunk in slice.chunks_mut(1024) {
+                        assert_eq!(chunk[0], 0);
+                        chunk[0] = 5;
+                    }
+                });
             }
             memfd
                 .clear_and_remain_ready(amt_to_memset, |ptr, len| unsafe {
@@ -1023,7 +1069,7 @@ mod test {
             ..Tunables::default_miri()
         };
 
-        let mut mmap = mmap_4mib_inaccessible();
+        let mmap = mmap_4mib_inaccessible();
         let mut memfd = MemoryImageSlot::create(
             mmap.as_mut_ptr() as *mut _,
             HostAlignedByteCount::ZERO,
@@ -1039,15 +1085,21 @@ mod test {
             .instantiate(initial, Some(&image), &ty, &tunables)
             .unwrap();
         assert!(memfd.has_image());
-        let slice = unsafe { mmap.slice_mut(0..(64 << 10) + page_size) };
-        assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
-        slice[page_size] = 5;
-        assert_eq!(&[5, 2, 3, 4], &slice[page_size..][..4]);
+
+        unsafe {
+            with_slice_mut(&mmap, 0..(64 << 10) + page_size, move |slice| {
+                assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
+                slice[page_size] = 5;
+                assert_eq!(&[5, 2, 3, 4], &slice[page_size..][..4]);
+            });
+        }
+
         memfd
             .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
                 decommit_pages(ptr, len).unwrap()
             })
             .unwrap();
+        let slice = unsafe { mmap.slice(0..(64 << 10) + page_size) };
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
 
         // Re-instantiate make sure it preserves memory. Grow a bit and set data
@@ -1056,10 +1108,17 @@ mod test {
             .instantiate(initial, Some(&image), &ty, &tunables)
             .unwrap();
         assert_eq!(&[1, 2, 3, 4], &slice[page_size..][..4]);
+
         memfd.set_heap_limit(initial * 2).unwrap();
-        assert_eq!(&[0, 0], &slice[initial..initial + 2]);
-        slice[initial] = 100;
-        assert_eq!(&[100, 0], &slice[initial..initial + 2]);
+
+        unsafe {
+            with_slice_mut(&mmap, 0..(64 << 10) + page_size, move |slice| {
+                assert_eq!(&[0, 0], &slice[initial..initial + 2]);
+                slice[initial] = 100;
+                assert_eq!(&[100, 0], &slice[initial..initial + 2]);
+            });
+        }
+
         memfd
             .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
                 decommit_pages(ptr, len).unwrap()
@@ -1076,9 +1135,15 @@ mod test {
             .unwrap();
         assert_eq!(&[0, 0], &slice[initial..initial + 2]);
         memfd.set_heap_limit(initial * 2).unwrap();
-        assert_eq!(&[0, 0], &slice[initial..initial + 2]);
-        slice[initial] = 100;
-        assert_eq!(&[100, 0], &slice[initial..initial + 2]);
+
+        unsafe {
+            with_slice_mut(&mmap, 0..(64 << 10) + page_size, move |slice| {
+                assert_eq!(&[0, 0], &slice[initial..initial + 2]);
+                slice[initial] = 100;
+                assert_eq!(&[100, 0], &slice[initial..initial + 2]);
+            });
+        }
+
         memfd
             .clear_and_remain_ready(HostAlignedByteCount::ZERO, |ptr, len| unsafe {
                 decommit_pages(ptr, len).unwrap()

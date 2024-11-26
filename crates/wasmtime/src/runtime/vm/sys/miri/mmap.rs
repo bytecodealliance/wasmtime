@@ -30,8 +30,11 @@ impl Mmap {
     }
 
     pub fn new(size: HostAlignedByteCount) -> Result<Self> {
-        let mut ret = Mmap::reserve(size)?;
-        ret.make_accessible(HostAlignedByteCount::ZERO, size)?;
+        let ret = Mmap::reserve(size)?;
+        // SAFETY: The memory was just created so no one else has access to it.
+        unsafe {
+            ret.make_accessible(HostAlignedByteCount::ZERO, size)?;
+        }
         Ok(ret)
     }
 
@@ -54,8 +57,8 @@ impl Mmap {
         bail!("not supported on miri");
     }
 
-    pub fn make_accessible(
-        &mut self,
+    pub unsafe fn make_accessible(
+        &self,
         start: HostAlignedByteCount,
         len: HostAlignedByteCount,
     ) -> Result<()> {

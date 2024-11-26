@@ -4,13 +4,14 @@
 use crate::prelude::*;
 use crate::runtime::vm::memory::RuntimeLinearMemory;
 use crate::runtime::vm::{mmap::AlignedLength, HostAlignedByteCount, Mmap};
+use alloc::sync::Arc;
 use wasmtime_environ::Tunables;
 
 /// A linear memory instance.
 #[derive(Debug)]
 pub struct MmapMemory {
     // The underlying allocation.
-    mmap: Mmap<AlignedLength>,
+    mmap: Arc<Mmap<AlignedLength>>,
 
     // The current length of this Wasm memory, in bytes.
     //
@@ -105,15 +106,18 @@ impl MmapMemory {
             .err2anyhow()
             .with_context(|| format!("cannot allocate {minimum} with guard regions"))?;
 
-        let mut mmap = Mmap::accessible_reserved(HostAlignedByteCount::ZERO, request_bytes)?;
+        let mmap = Mmap::accessible_reserved(HostAlignedByteCount::ZERO, request_bytes)?;
 
         if minimum > 0 {
             let accessible = HostAlignedByteCount::new_rounded_up(minimum).err2anyhow()?;
-            mmap.make_accessible(pre_guard_bytes, accessible)?;
+            // SAFETY: mmap is not in use right now so it's safe to make it accessible.
+            unsafe {
+                mmap.make_accessible(pre_guard_bytes, accessible)?;
+            }
         }
 
         Ok(Self {
-            mmap,
+            mmap: Arc::new(mmap),
             len: minimum,
             maximum,
             pre_guard_size: pre_guard_bytes,
@@ -169,7 +173,11 @@ impl RuntimeLinearMemory for MmapMemory {
 
             let mut new_mmap =
                 Mmap::accessible_reserved(HostAlignedByteCount::ZERO, request_bytes)?;
-            new_mmap.make_accessible(self.pre_guard_size, new_accessible)?;
+            // SAFETY: new_mmap is not in use right now so it's safe to make it
+            // accessible.
+            unsafe {
+                new_mmap.make_accessible(self.pre_guard_size, new_accessible)?;
+            }
 
             // This method has an exclusive reference to `self.mmap` and just
             // created `new_mmap` so it should be safe to acquire references
@@ -182,7 +190,7 @@ impl RuntimeLinearMemory for MmapMemory {
                 dst.copy_from_slice(src);
             }
 
-            self.mmap = new_mmap;
+            self.mmap = Arc::new(new_mmap);
         } else {
             // If the new size of this heap fits within the existing allocation
             // then all we need to do is to make the new pages accessible. This
@@ -198,13 +206,17 @@ impl RuntimeLinearMemory for MmapMemory {
             // since we are forced to round our accessible range up to the
             // host's page size.
             if let Ok(difference) = new_accessible.checked_sub(self.accessible()) {
-                self.mmap.make_accessible(
-                    self.pre_guard_size
-                        .checked_add(self.accessible())
-                        .err2anyhow()
-                        .context("overflow calculating new accessible region")?,
-                    difference,
-                )?;
+                // SAFETY: the difference was previously inaccessible so we
+                // never handed out any references to within it.
+                unsafe {
+                    self.mmap.make_accessible(
+                        self.pre_guard_size
+                            .checked_add(self.accessible())
+                            .err2anyhow()
+                            .context("overflow calculating new accessible region")?,
+                        difference,
+                    )?;
+                }
             }
         }
 
