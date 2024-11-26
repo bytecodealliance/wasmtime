@@ -254,8 +254,7 @@ mod call_thread_state {
             let limits = unsafe { *Instance::from_vmctx(caller, |i| i.runtime_limits()) };
 
             // Don't try to plumb #[cfg] everywhere for this field, just pretend
-            // we're using it on miri to silence compiler warnings.
-            #[cfg(miri)]
+            // we're using it on miri/windows to silence compiler warnings.
             let _: Range<_> = store.async_guard_range();
 
             CallThreadState {
