@@ -71,12 +71,9 @@ impl Mmap {
         Ok(())
     }
 
-    pub fn as_ptr(&self) -> *const u8 {
-        self.memory.as_ptr() as *const u8
-    }
-
-    pub fn as_mut_ptr(&self) -> *mut u8 {
-        self.memory.as_ptr().cast()
+    #[inline]
+    pub fn as_ptr(&self) -> SendSyncPtr<u8> {
+        self.memory.cast()
     }
 
     pub fn len(&self) -> usize {

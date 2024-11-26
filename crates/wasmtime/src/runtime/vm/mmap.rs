@@ -223,13 +223,13 @@ impl<T> Mmap<T> {
     /// Return the allocated memory as a pointer to u8.
     #[inline]
     pub fn as_ptr(&self) -> *const u8 {
-        self.sys.as_ptr()
+        self.sys.as_ptr().as_ptr() as *const u8
     }
 
     /// Return the allocated memory as a mutable pointer to u8.
     #[inline]
     pub fn as_mut_ptr(&self) -> *mut u8 {
-        self.sys.as_mut_ptr()
+        self.sys.as_ptr().as_ptr()
     }
 
     /// Return the length of the allocated memory.
