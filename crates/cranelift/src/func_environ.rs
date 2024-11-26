@@ -4,7 +4,7 @@ use crate::translate::{
 };
 use crate::{gc, BuiltinFunctionSignatures, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::cursor::FuncCursor;
-use cranelift_codegen::ir::condcodes::IntCC;
+use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::{Imm64, Offset32};
 use cranelift_codegen::ir::pcc::Fact;
 use cranelift_codegen::ir::types::*;
@@ -1103,16 +1103,16 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.conditionally_trap(builder, is_integer_overflow, ir::TrapCode::INTEGER_OVERFLOW);
     }
 
-    /// Helper used when `!self.signals_based_traps()` is enabled to perform
-    /// trapping float-to-int conversions.
-    fn fcvt_to_int(
+    /// Helper used when `!self.signals_based_traps()` is enabled to guard the
+    /// traps from float-to-int conversions.
+    fn guard_fcvt_to_int(
         &mut self,
         builder: &mut FunctionBuilder,
         ty: ir::Type,
         val: ir::Value,
-        i32: fn(&mut Self, &mut Function) -> ir::FuncRef,
-        i64: fn(&mut Self, &mut Function) -> ir::FuncRef,
-    ) -> ir::Value {
+        range32: (f64, f64),
+        range64: (f64, f64),
+    ) {
         assert!(!self.signals_based_traps());
         let val_ty = builder.func.dfg.value_type(val);
         let val = if val_ty == F64 {
@@ -1120,14 +1120,24 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         } else {
             builder.ins().fpromote(F64, val)
         };
-        let libcall = match ty {
-            I32 => i32(self, &mut builder.func),
-            I64 => i64(self, &mut builder.func),
+        let isnan = builder.ins().fcmp(FloatCC::NotEqual, val, val);
+        self.trapnz(builder, isnan, ir::TrapCode::BAD_CONVERSION_TO_INTEGER);
+        let val = builder.ins().trunc(val);
+        let (lower_bound, upper_bound) = match ty {
+            I32 => range32,
+            I64 => range64,
             _ => unreachable!(),
         };
-        let vmctx = self.vmctx_val(&mut builder.cursor());
-        let call = builder.ins().call(libcall, &[vmctx, val]);
-        *builder.func.dfg.inst_results(call).first().unwrap()
+        let lower_bound = builder.ins().f64const(lower_bound);
+        let too_small = builder
+            .ins()
+            .fcmp(FloatCC::LessThanOrEqual, val, lower_bound);
+        self.trapnz(builder, too_small, ir::TrapCode::INTEGER_OVERFLOW);
+        let upper_bound = builder.ins().f64const(upper_bound);
+        let too_large = builder
+            .ins()
+            .fcmp(FloatCC::GreaterThanOrEqual, val, upper_bound);
+        self.trapnz(builder, too_large, ir::TrapCode::INTEGER_OVERFLOW);
     }
 
     /// Get the `ir::Type` for a `VMSharedTypeIndex`.
@@ -3338,17 +3348,16 @@ impl<'module_environment> crate::translate::FuncEnvironment
     ) -> ir::Value {
         // NB: for now avoid translating this entire instruction to CLIF and
         // just do it in a libcall.
-        if self.signals_based_traps() {
-            builder.ins().fcvt_to_sint(ty, val)
-        } else {
-            self.fcvt_to_int(
+        if !self.signals_based_traps() {
+            self.guard_fcvt_to_int(
                 builder,
                 ty,
                 val,
-                |me, func| me.builtin_functions.f64_to_i32(func),
-                |me, func| me.builtin_functions.f64_to_i64(func),
-            )
+                (-2147483649.0, 2147483648.0),
+                (-9223372036854777856.0, 9223372036854775808.0),
+            );
         }
+        builder.ins().fcvt_to_sint(ty, val)
     }
 
     fn translate_fcvt_to_uint(
@@ -3357,19 +3366,16 @@ impl<'module_environment> crate::translate::FuncEnvironment
         ty: ir::Type,
         val: ir::Value,
     ) -> ir::Value {
-        // NB: for now avoid translating this entire instruction to CLIF and
-        // just do it in a libcall.
-        if self.signals_based_traps() {
-            builder.ins().fcvt_to_uint(ty, val)
-        } else {
-            self.fcvt_to_int(
+        if !self.signals_based_traps() {
+            self.guard_fcvt_to_int(
                 builder,
                 ty,
                 val,
-                |me, func| me.builtin_functions.f64_to_u32(func),
-                |me, func| me.builtin_functions.f64_to_u64(func),
-            )
+                (-1.0, 4294967296.0),
+                (-1.0, 18446744073709551616.0),
+            );
         }
+        builder.ins().fcvt_to_uint(ty, val)
     }
 }
 
