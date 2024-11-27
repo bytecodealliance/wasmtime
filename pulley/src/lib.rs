@@ -212,64 +212,6 @@ macro_rules! for_each_extended_op {
     };
 }
 
-/// All known signatures that Wasmtime needs to invoke for host functions.
-///
-/// This is used in conjunction with the `call_indirect_host` opcode to jump
-/// from interpreter bytecode back into the host to peform tasks such as
-/// `memory.grow` or call imported host functions.
-///
-/// Each function signature here correspond to a "builtin" either for core wasm
-/// or for the component model. This also includes the "array call abi" for
-/// calling host functions.
-///
-/// TODO: this probably needs a "pointer type" to avoid doubling the size of
-/// this on 32-bit platforms. That's left for a future refactoring when it's
-/// easier to start compiling everything for 32-bit platforms. That'll require
-/// more of the pulley backend fleshed out and the integration with Wasmtime
-/// more fleshed out as well.
-#[macro_export]
-macro_rules! for_each_host_signature {
-    ($m:ident) => {
-        $m! {
-            fn(I64, I32, I32, I32) -> I32;
-            fn(I64, I32, I32) -> I32;
-            fn(I64, I32, I32) -> I64;
-            fn(I64, I64, I32, I64, I64, I64, I8, I64, I64) -> I8;
-            fn(I64, I64, I64, I64, I64) -> I64;
-            fn(I64, I64, I64, I64) -> I64;
-            fn(I64, I64, I64) -> I64;
-            fn(I64, I64, I64);
-            fn(I64);
-            fn(I64, I32, I32, I32, I32, I32);
-            fn(I64, I32) -> I32;
-            fn(I64, I32, I32, I32, I32, I32, I32);
-            fn(I64, I32, I32, I32, I32) -> I32;
-            fn(I64, I32, I32, I64, I32, I32);
-            fn(I64, I32, I32, I64, I64, I64);
-            fn(I64, I32, I32) -> I32;
-            fn(I64, I32, I32) -> I64;
-            fn(I64, I32, I64, I32, I64);
-            fn(I64, I32, I64, I32) -> I64;
-            fn(I64, I32, I64, I32, I64, I64);
-            fn(I64, I32, I64, I32, I64) -> I32;
-            fn(I64, I32, I64, I32, I64);
-            fn(I64, I32, I64, I32) -> I32;
-            fn(I64, I32, I64, I64, I64) -> I32;
-            fn(I64, I32, I64, I64, I64);
-            fn(I64, I32, I64, I64) -> I64;
-            fn(I64, I32, I64) -> I64;
-            fn(I64, I32) -> I64;
-            fn(I64, I32);
-            fn(I64, I64, I32) -> I64;
-            fn(I64, I64, I64, I64) -> I8;
-            fn(I64, I64) -> I32;
-            fn(I64, I8);
-            fn(I64) -> I64;
-            fn(I64);
-        }
-    };
-}
-
 #[cfg(feature = "decode")]
 pub mod decode;
 #[cfg(feature = "disas")]

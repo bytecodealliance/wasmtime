@@ -142,78 +142,58 @@ impl Compiler {
         // Wasmtime itself.
         assert_eq!(signature.call_conv, self.isa.default_call_conv());
 
-        #[cfg(feature = "pulley")]
-        {
-            use cranelift_codegen::ir::types::{I32, I64, I8};
-
-            // If pulley is enabled, even if we're not targeting it, determine
-            // what pulley signature that the input `signature` maps to. This is
-            // done to ensure that even on native platforms we've always got a
-            // signature listed in pulley for all platform intrinsics. In theory
-            // the set of signatures here doesn't change over time all that
-            // much. If a new signature is added then the `pulley/src/lib.rs`
-            // file and the `for_each_host_signature!` macro need to be updated.
-            // In theory that's all that needs to happen as well...
-            macro_rules! pulley_signum {
-                ($(fn($($args:ident),*) $(-> $ret:ident)?;)*) => {'outer: {
-
-                    let mut ret = 0;
-
-                    $(
-                        let mut params = signature.params.iter().map(|p| p.value_type);
-                        let mut results = signature.returns.iter().map(|p| p.value_type);
-                        if true
-                            $(&& params.next() == Some($args))*
-                            && params.next().is_none()
-                            $(&& results.next() == Some($ret))?
-                            && results.next().is_none()
-                        {
-                            break 'outer ret;
-                        }
-                        ret += 1;
-                    )*
-
-                    let _ = ret;
-                    unimplemented!("no pulley host signature found for {signature:?}");
-                }};
-            }
-
-            let pulley_signum = pulley_interpreter::for_each_host_signature!(pulley_signum);
-
-            let is_pulley = match self.isa.triple().architecture {
-                target_lexicon::Architecture::Pulley32 => true,
-                target_lexicon::Architecture::Pulley64 => true,
-                _ => false,
-            };
-
-            // If this target is actually pulley then a custom `call`
-            // instruction is emitted. This will generate a new function with
-            // the Cranelift-name of a "backend intrinsic" which is how the
-            // Pulley backend models this special opcode that doesn't otherwise
-            // map into the Cranelift set of opcodes.
-            if is_pulley {
-                let mut new_signature = signature.clone();
-                new_signature
-                    .params
-                    .insert(0, ir::AbiParam::new(self.isa.pointer_type()));
-                let new_sig = builder.func.import_signature(new_signature);
-                let name = ir::ExternalName::User(builder.func.declare_imported_user_function(
-                    ir::UserExternalName {
-                        namespace: crate::NS_PULLEY_HOSTCALL,
-                        index: pulley_signum,
+        // If this target is actually pulley then a custom `call`
+        // instruction is emitted. This will generate a new function with
+        // the Cranelift-name of a "backend intrinsic" which is how the
+        // Pulley backend models this special opcode that doesn't otherwise
+        // map into the Cranelift set of opcodes.
+        let is_pulley = match self.isa.triple().architecture {
+            target_lexicon::Architecture::Pulley32 => true,
+            target_lexicon::Architecture::Pulley64 => true,
+            _ => false,
+        };
+        if is_pulley {
+            let mut new_signature = signature.clone();
+            new_signature
+                .params
+                .insert(0, ir::AbiParam::new(self.isa.pointer_type()));
+            let new_sig = builder.func.import_signature(new_signature);
+            let name = ir::ExternalName::User(builder.func.declare_imported_user_function(
+                ir::UserExternalName {
+                    namespace: crate::NS_PULLEY_HOSTCALL,
+                    // FIXME: this'll require some more refactoring to get this
+                    // working entirely. The goal is to enumerate all possible
+                    // reasons to call the host in some sort of enum, probably
+                    // something like:
+                    //
+                    //      enum wasmtime_environ::HostCall {
+                    //          ArrayCall,
+                    //          Builtin(BuiltinFunctionIndex),
+                    //          ComponentCall,
+                    //          ComponentBuiltin(ComponentBuiltinFunctionIndex),
+                    //      }
+                    //
+                    // that doesn't exist yet though but would be pretty
+                    // reasonable to encode within a `u32` here. Doing that work
+                    // is left as a future refactoring for Pulley.
+                    index: {
+                        let pulley_hostcall_index = || {
+                            unimplemented!();
+                        };
+                        pulley_hostcall_index()
                     },
-                ));
-                let func = builder.func.import_function(ir::ExtFuncData {
-                    name,
-                    signature: new_sig,
-                    // This is the signal that a special `call_indirect_host`
-                    // opcode is used to jump from pulley to the host.
-                    colocated: false,
-                });
-                let mut raw_args = vec![addr];
-                raw_args.extend_from_slice(args);
-                return builder.ins().call(func, &raw_args);
-            }
+                },
+            ));
+            let func = builder.func.import_function(ir::ExtFuncData {
+                name,
+                signature: new_sig,
+                // This is the signal that a special `call_indirect_host`
+                // opcode is used to jump from pulley to the host.
+                colocated: false,
+            });
+            let mut raw_args = vec![addr];
+            raw_args.extend_from_slice(args);
+            return builder.ins().call(func, &raw_args);
         }
 
         builder.ins().call_indirect(sig, addr, args)
