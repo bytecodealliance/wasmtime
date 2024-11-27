@@ -13,7 +13,7 @@ cfg_if::cfg_if! {
         #[macro_export]
         macro_rules! asm_func {
             ($name:expr, $body:expr $(, $($args:tt)*)?) => {
-                std::arch::global_asm!(
+                core::arch::global_asm!(
                     concat!(
                         ".p2align 4\n",
                         ".private_extern _", $name, "\n",
@@ -29,7 +29,7 @@ cfg_if::cfg_if! {
         #[macro_export]
         macro_rules! asm_func {
             ($name:expr, $body:expr $(, $($args:tt)*)?) => {
-                std::arch::global_asm!(
+                core::arch::global_asm!(
                     concat!(
                         ".def ", $name, "\n",
                         ".scl 2\n",
@@ -65,7 +65,7 @@ cfg_if::cfg_if! {
         #[macro_export]
         macro_rules! asm_func {
             ($name:expr, $body:expr $(, $($args:tt)*)?) => {
-                std::arch::global_asm!(
+                core::arch::global_asm!(
                     concat!(
                         ".p2align 4\n",
                         ".hidden ", $name, "\n",

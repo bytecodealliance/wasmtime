@@ -356,11 +356,12 @@ jobs:
               -p wasmtime --no-default-features --features profiling
               -p wasmtime --no-default-features --features cache
               -p wasmtime --no-default-features --features async
+              -p wasmtime --no-default-features --features std
               -p wasmtime --no-default-features --features pooling-allocator
               -p wasmtime --no-default-features --features cranelift
               -p wasmtime --no-default-features --features component-model
               -p wasmtime --no-default-features --features runtime,component-model
-              -p wasmtime --no-default-features --features cranelift,wat,async,cache
+              -p wasmtime --no-default-features --features cranelift,wat,async,std,cache
               -p wasmtime --no-default-features --features winch
               -p wasmtime --no-default-features --features wmemcheck
               -p wasmtime --no-default-features --features wmemcheck,cranelift,runtime
@@ -383,6 +384,12 @@ jobs:
               -p wasmtime --no-default-features --features runtime,gc,component-model,signals-based-traps
               -p wasmtime --features incremental-cache
               -p wasmtime --all-features
+
+          - name: wasmtime-fiber
+            checks: |
+              -p wasmtime-fiber --no-default-features
+              -p wasmtime-fiber --no-default-features --features std
+              -p wasmtime-fiber --all-features
 
           - name: wasmtime-cli
             checks: |
@@ -431,6 +438,18 @@ jobs:
       if: failure() && github.event_name != 'pull_request'
       env:
         GH_TOKEN: ${{ github.token }}
+
+  fiber_tests:
+    name: wasmtime-fiber tests
+    runs-on: ubuntu-latest
+    env:
+      CARGO_NDK_VERSION: 2.12.2
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: true
+    - uses: ./.github/actions/install-rust
+    - run: cargo test -p wasmtime-fiber --no-default-features
 
   # Checks for no_std support, ensure that crates can build on a no_std target
   no_std_checks:
@@ -1189,6 +1208,7 @@ jobs:
       - cargo_vet
       - doc
       - micro_checks
+      - fiber_tests
       - no_std_checks
       - clippy
       - monolith_checks

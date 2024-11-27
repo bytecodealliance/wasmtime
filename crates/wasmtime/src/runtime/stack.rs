@@ -1,5 +1,6 @@
 use crate::prelude::*;
-use std::{ops::Range, sync::Arc};
+use alloc::sync::Arc;
+use core::ops::Range;
 use wasmtime_fiber::{RuntimeFiberStack, RuntimeFiberStackCreator};
 
 /// A stack creator. Can be used to provide a stack creator to wasmtime

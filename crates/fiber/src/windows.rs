@@ -1,4 +1,5 @@
 use crate::{RunResult, RuntimeFiberStack};
+use alloc::boxed::Box;
 use std::cell::Cell;
 use std::ffi::c_void;
 use std::io;
@@ -6,6 +7,8 @@ use std::ops::Range;
 use std::ptr;
 use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::System::Threading::*;
+
+pub type Error = io::Error;
 
 #[derive(Debug)]
 pub struct FiberStack(usize);
