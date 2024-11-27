@@ -25,6 +25,12 @@ pub use self::host::*;
 pub use self::options::*;
 pub use self::typed::*;
 
+type LowerFn<T, Params, LowerParams> =
+    fn(&mut LowerContext<T>, &Params, InterfaceType, &mut MaybeUninit<LowerParams>) -> Result<()>;
+
+type LiftFn<Return, LowerReturn> =
+    fn(&mut LiftContext, InterfaceType, &LowerReturn) -> Result<Return>;
+
 #[repr(C)]
 union ParamsAndResults<Params: Copy, Return: Copy> {
     params: Params,
@@ -399,21 +405,12 @@ impl Func {
         Return: Send + Sync + 'static,
         LowerParams,
         LowerReturn,
-        Lower: FnOnce(
-                &mut LowerContext<T>,
-                &Params,
-                InterfaceType,
-                &mut MaybeUninit<LowerParams>,
-            ) -> Result<()>
-            + Send
-            + Sync,
-        Lift: FnOnce(&mut LiftContext, InterfaceType, &LowerReturn) -> Result<Return> + Send + Sync,
     >(
         &self,
         store: StoreContextMut<'a, T>,
         params: Params,
-        lower: Lower,
-        lift: Lift,
+        lower: LowerFn<T, Params, LowerParams>,
+        lift: LiftFn<Return, LowerReturn>,
     ) -> Result<(Return, StoreContextMut<'a, T>)>
     where
         LowerParams: Copy,
@@ -430,22 +427,22 @@ impl Func {
         // drop the contexts before returning.
         concurrent::call::<_, LowerParams, _>(
             store,
-            lower_params_with_context::<Params, LowerParams, T, Lower>,
+            lower_params_with_context::<Params, LowerParams, T, LowerFn<T, Params, LowerParams>>,
             concurrent::LiftLowerContext {
                 pointer: Box::into_raw(Box::new((me, params, lower))) as _,
-                dropper: drop_context::<(Stored<FuncData>, Params, Lower)>,
+                dropper: drop_context::<(Stored<FuncData>, Params, LowerFn<T, Params, LowerParams>)>,
             },
-            lift_results_with_context::<Return, LowerReturn, T, Lift>,
+            lift_results_with_context::<Return, LowerReturn, T, LiftFn<Return, LowerReturn>>,
             concurrent::LiftLowerContext {
                 pointer: Box::into_raw(Box::new((me, lift))) as _,
-                dropper: drop_context::<(Stored<FuncData>, Lift)>,
+                dropper: drop_context::<(Stored<FuncData>, LiftFn<Return, LowerReturn>)>,
             },
             *self,
         )
     }
 
     #[cfg(feature = "component-model-async")]
-    fn start_call_raw<
+    fn start_call_raw_async<
         'a,
         T: Send,
         Params: Send + Sync + 'static,
@@ -456,13 +453,8 @@ impl Func {
         &self,
         store: StoreContextMut<'a, T>,
         params: Params,
-        lower: fn(
-            &mut LowerContext<T>,
-            &Params,
-            InterfaceType,
-            &mut MaybeUninit<LowerParams>,
-        ) -> Result<()>,
-        lift: fn(&mut LiftContext, InterfaceType, &LowerReturn) -> Result<Return>,
+        lower: LowerFn<T, Params, LowerParams>,
+        lift: LiftFn<Return, LowerReturn>,
     ) -> Result<(Promise<Return>, StoreContextMut<'a, T>)>
     where
         LowerParams: Copy,
@@ -471,42 +463,15 @@ impl Func {
         let me = self.0;
         concurrent::start_call::<_, LowerParams, _>(
             store,
-            lower_params_with_context::<
-                Params,
-                LowerParams,
-                T,
-                fn(
-                    &mut LowerContext<T>,
-                    &Params,
-                    InterfaceType,
-                    &mut MaybeUninit<LowerParams>,
-                ) -> Result<()>,
-            >,
+            lower_params_with_context::<Params, LowerParams, T, LowerFn<T, Params, LowerParams>>,
             concurrent::LiftLowerContext {
                 pointer: Box::into_raw(Box::new((me, params, lower))) as _,
-                dropper: drop_context::<(
-                    Stored<FuncData>,
-                    Params,
-                    fn(
-                        &mut LowerContext<T>,
-                        &Params,
-                        InterfaceType,
-                        &mut MaybeUninit<LowerParams>,
-                    ) -> Result<()>,
-                )>,
+                dropper: drop_context::<(Stored<FuncData>, Params, LowerFn<T, Params, LowerParams>)>,
             },
-            lift_results_with_context::<
-                Return,
-                LowerReturn,
-                T,
-                fn(&mut LiftContext, InterfaceType, &LowerReturn) -> Result<Return>,
-            >,
+            lift_results_with_context::<Return, LowerReturn, T, LiftFn<Return, LowerReturn>>,
             concurrent::LiftLowerContext {
                 pointer: Box::into_raw(Box::new((me, lift))) as _,
-                dropper: drop_context::<(
-                    Stored<FuncData>,
-                    fn(&mut LiftContext, InterfaceType, &LowerReturn) -> Result<Return>,
-                )>,
+                dropper: drop_context::<(Stored<FuncData>, LiftFn<Return, LowerReturn>)>,
             },
             *self,
         )

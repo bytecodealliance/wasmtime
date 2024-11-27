@@ -258,14 +258,14 @@ where
             {
                 if Params::flatten_count() <= MAX_FLAT_PARAMS {
                     if Return::flatten_count() <= MAX_FLAT_PARAMS {
-                        self.func.start_call_raw(
+                        self.func.start_call_raw_async(
                             store,
                             params,
                             Self::lower_stack_args,
                             Self::lift_stack_result,
                         )
                     } else {
-                        self.func.start_call_raw(
+                        self.func.start_call_raw_async(
                             store,
                             params,
                             Self::lower_stack_args,
@@ -274,14 +274,14 @@ where
                     }
                 } else {
                     if Return::flatten_count() <= MAX_FLAT_PARAMS {
-                        self.func.start_call_raw(
+                        self.func.start_call_raw_async(
                             store,
                             params,
                             Self::lower_heap_args_guest,
                             Self::lift_stack_result,
                         )
                     } else {
-                        self.func.start_call_raw(
+                        self.func.start_call_raw_async(
                             store,
                             params,
                             Self::lower_heap_args_guest,
@@ -298,14 +298,14 @@ where
             }
         } else if Params::flatten_count() <= MAX_FLAT_PARAMS {
             if Return::flatten_count() <= MAX_FLAT_RESULTS {
-                self.func.start_call_raw(
+                self.func.start_call_raw_async(
                     store,
                     params,
                     Self::lower_stack_args,
                     Self::lift_stack_result,
                 )
             } else {
-                self.func.start_call_raw(
+                self.func.start_call_raw_async(
                     store,
                     params,
                     Self::lower_stack_args,
@@ -314,14 +314,14 @@ where
             }
         } else {
             if Return::flatten_count() <= MAX_FLAT_RESULTS {
-                self.func.start_call_raw(
+                self.func.start_call_raw_async(
                     store,
                     params,
                     Self::lower_heap_args,
                     Self::lift_stack_result,
                 )
             } else {
-                self.func.start_call_raw(
+                self.func.start_call_raw_async(
                     store,
                     params,
                     Self::lower_heap_args,
