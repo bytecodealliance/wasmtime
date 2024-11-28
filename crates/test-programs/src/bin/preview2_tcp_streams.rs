@@ -109,6 +109,29 @@ fn test_tcp_shutdown_should_not_lose_data(net: &Network, family: IpAddressFamily
     });
 }
 
+/// InputStream::subscribe should not wake up if there is no data to read.
+fn test_tcp_input_stream_should_not_wake_on_empty_data(net: &Network, family: IpAddressFamily) {
+    setup(net, family, |server, client| {
+        use test_programs::wasi::clocks::monotonic_clock::subscribe_duration;
+        let timeout_100ms = 100_000_000;
+
+        // Send some data to the server
+        client.output.blocking_write_and_flush(b"Hi!").unwrap();
+
+        server.input.subscribe().block();
+        let res = server.input.read(512).unwrap();
+        assert_eq!(res, b"Hi!", "Expected to receive data");
+
+        // Don't send any data
+
+        let res = server
+            .input
+            .subscribe()
+            .block_until(&subscribe_duration(timeout_100ms));
+        assert!(res.is_err(), "Expected to time out cause no data was sent");
+    });
+}
+
 fn main() {
     let net = Network::default();
 
@@ -123,6 +146,9 @@ fn main() {
 
     test_tcp_shutdown_should_not_lose_data(&net, IpAddressFamily::Ipv4);
     test_tcp_shutdown_should_not_lose_data(&net, IpAddressFamily::Ipv6);
+
+    test_tcp_input_stream_should_not_wake_on_empty_data(&net, IpAddressFamily::Ipv4);
+    test_tcp_input_stream_should_not_wake_on_empty_data(&net, IpAddressFamily::Ipv6);
 }
 
 struct Connection {
