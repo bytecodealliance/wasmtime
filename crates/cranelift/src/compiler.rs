@@ -28,7 +28,7 @@ use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::{
     AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, DefinedFuncIndex, FlagValue,
-    FunctionBodyData, FunctionLoc, ModuleTranslation, ModuleTypesBuilder, PtrSize,
+    FunctionBodyData, FunctionLoc, HostCall, ModuleTranslation, ModuleTypesBuilder, PtrSize,
     RelocationTarget, StackMapInformation, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel,
     Tunables, VMOffsets, WasmFuncType, WasmFunctionInfo, WasmValType,
 };
@@ -135,6 +135,7 @@ impl Compiler {
     fn call_indirect_host(
         &self,
         builder: &mut FunctionBuilder<'_>,
+        hostcall: impl Into<HostCall>,
         sig: ir::SigRef,
         addr: Value,
         args: &[Value],
@@ -165,27 +166,7 @@ impl Compiler {
             let name = ir::ExternalName::User(builder.func.declare_imported_user_function(
                 ir::UserExternalName {
                     namespace: crate::NS_PULLEY_HOSTCALL,
-                    // FIXME: this'll require some more refactoring to get this
-                    // working entirely. The goal is to enumerate all possible
-                    // reasons to call the host in some sort of enum, probably
-                    // something like:
-                    //
-                    //      enum wasmtime_environ::HostCall {
-                    //          ArrayCall,
-                    //          Builtin(BuiltinFunctionIndex),
-                    //          ComponentCall,
-                    //          ComponentBuiltin(ComponentBuiltinFunctionIndex),
-                    //      }
-                    //
-                    // that doesn't exist yet though but would be pretty
-                    // reasonable to encode within a `u32` here. Doing that work
-                    // is left as a future refactoring for Pulley.
-                    index: {
-                        let pulley_hostcall_index = || {
-                            unimplemented!();
-                        };
-                        pulley_hostcall_index()
-                    },
+                    index: hostcall.into().index(),
                 },
             ));
             let func = builder.func.import_function(ir::ExtFuncData {
@@ -445,6 +426,7 @@ impl wasmtime_environ::Compiler for Compiler {
         let callee_signature = builder.func.import_signature(array_call_sig);
         let call = self.call_indirect_host(
             &mut builder,
+            HostCall::ArrayCall,
             callee_signature,
             callee,
             &[callee_vmctx, caller_vmctx, args_base, args_len],
@@ -950,7 +932,7 @@ impl Compiler {
             .load(pointer_type, mem_flags, array_addr, body_offset);
 
         let sig = builder.func.import_signature(sig);
-        self.call_indirect_host(builder, sig, func_addr, args)
+        self.call_indirect_host(builder, builtin, sig, func_addr, args)
     }
 
     pub fn isa(&self) -> &dyn TargetIsa {

@@ -2,7 +2,7 @@
 //
 // struct VMComponentContext {
 //      magic: u32,
-//      libcalls: &'static VMComponentLibcalls,
+//      builtins: &'static VMComponentBuiltins,
 //      store: *mut dyn Store,
 //      limits: *const VMRuntimeLimits,
 //      flags: [VMGlobalDefinition; component.num_runtime_component_instances],
@@ -59,7 +59,7 @@ pub struct VMComponentOffsets<P> {
 
     // precalculated offsets of various member fields
     magic: u32,
-    libcalls: u32,
+    builtins: u32,
     store: u32,
     limits: u32,
     flags: u32,
@@ -95,7 +95,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             num_trampolines: component.trampolines.len().try_into().unwrap(),
             num_resources: component.num_resources,
             magic: 0,
-            libcalls: 0,
+            builtins: 0,
             store: 0,
             limits: 0,
             flags: 0,
@@ -135,7 +135,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         fields! {
             size(magic) = 4u32,
             align(u32::from(ret.ptr.size())),
-            size(libcalls) = ret.ptr.size(),
+            size(builtins) = ret.ptr.size(),
             size(store) = cmul(2, ret.ptr.size()),
             size(limits) = ret.ptr.size(),
             align(16),
@@ -171,10 +171,10 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         self.magic
     }
 
-    /// The offset of the `libcalls` field.
+    /// The offset of the `builtins` field.
     #[inline]
-    pub fn libcalls(&self) -> u32 {
-        self.libcalls
+    pub fn builtins(&self) -> u32 {
+        self.builtins
     }
 
     /// The offset of the `flags` field.

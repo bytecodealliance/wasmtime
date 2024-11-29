@@ -441,7 +441,7 @@ impl ComponentInstance {
 
     unsafe fn initialize_vmctx(&mut self, store: *mut dyn VMStore) {
         *self.vmctx_plus_offset_mut(self.offsets.magic()) = VMCOMPONENT_MAGIC;
-        *self.vmctx_plus_offset_mut(self.offsets.libcalls()) = &libcalls::VMComponentLibcalls::INIT;
+        *self.vmctx_plus_offset_mut(self.offsets.builtins()) = &libcalls::VMComponentBuiltins::INIT;
         *self.vmctx_plus_offset_mut(self.offsets.store()) = store;
         *self.vmctx_plus_offset_mut(self.offsets.limits()) = (*store).vmruntime_limits();
 

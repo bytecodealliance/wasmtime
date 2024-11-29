@@ -15,10 +15,12 @@ extern crate alloc;
 pub mod prelude;
 
 mod address_map;
+#[macro_use]
 mod builtin;
 mod demangling;
 mod error;
 mod gc;
+mod hostcall;
 mod module;
 mod module_artifacts;
 mod module_types;
@@ -36,6 +38,7 @@ pub use crate::builtin::*;
 pub use crate::demangling::*;
 pub use crate::error::*;
 pub use crate::gc::*;
+pub use crate::hostcall::*;
 pub use crate::module::*;
 pub use crate::module_artifacts::*;
 pub use crate::module_types::*;

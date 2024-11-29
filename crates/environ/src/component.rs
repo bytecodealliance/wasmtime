@@ -63,28 +63,6 @@ pub use self::translate::*;
 #[cfg(feature = "compile")]
 pub use self::types_builder::*;
 
-/// Helper macro to iterate over the transcoders that the host will provide
-/// adapter modules through libcalls.
-#[macro_export]
-macro_rules! foreach_transcoder {
-    ($mac:ident) => {
-        $mac! {
-            utf8_to_utf8(src: ptr_u8, len: size, dst: ptr_u8) -> bool;
-            utf16_to_utf16(src: ptr_u16, len: size, dst: ptr_u16) -> bool;
-            latin1_to_latin1(src: ptr_u8, len: size, dst: ptr_u8) -> bool;
-            latin1_to_utf16(src: ptr_u8, len: size, dst: ptr_u16) -> bool;
-            utf8_to_utf16(src: ptr_u8, len: size, dst: ptr_u16) -> size;
-            utf16_to_utf8(src: ptr_u16, src_len: size, dst: ptr_u8, dst_len: size, ret2: ptr_size) -> size;
-            latin1_to_utf8(src: ptr_u8, src_len: size, dst: ptr_u8, dst_len: size, ret2: ptr_size) -> size;
-            utf16_to_compact_probably_utf16(src: ptr_u16, len: size, dst: ptr_u16) -> size;
-            utf8_to_latin1(src: ptr_u8, len: size, dst: ptr_u8, ret2: ptr_size) -> size;
-            utf16_to_latin1(src: ptr_u16, len: size, dst: ptr_u8, ret2: ptr_size) -> size;
-            utf8_to_compact_utf16(src: ptr_u8, src_len: size, dst: ptr_u16, dst_len: size, bytes_so_far: size) -> size;
-            utf16_to_compact_utf16(src: ptr_u16, src_len: size, dst: ptr_u16, dst_len: size, bytes_so_far: size) -> size;
-        }
-    };
-}
-
 /// Helper macro, like `foreach_transcoder`, to iterate over builtins for
 /// components unrelated to transcoding.
 #[macro_export]
@@ -106,6 +84,25 @@ macro_rules! foreach_builtin_component_function {
             resource_exit_call(vmctx: vmctx) -> bool;
 
             trap(vmctx: vmctx, code: u8);
+
+            utf8_to_utf8(src: ptr_u8, len: size, dst: ptr_u8) -> bool;
+            utf16_to_utf16(src: ptr_u16, len: size, dst: ptr_u16) -> bool;
+            latin1_to_latin1(src: ptr_u8, len: size, dst: ptr_u8) -> bool;
+            latin1_to_utf16(src: ptr_u8, len: size, dst: ptr_u16) -> bool;
+            utf8_to_utf16(src: ptr_u8, len: size, dst: ptr_u16) -> size;
+            utf16_to_utf8(src: ptr_u16, src_len: size, dst: ptr_u8, dst_len: size, ret2: ptr_size) -> size;
+            latin1_to_utf8(src: ptr_u8, src_len: size, dst: ptr_u8, dst_len: size, ret2: ptr_size) -> size;
+            utf16_to_compact_probably_utf16(src: ptr_u16, len: size, dst: ptr_u16) -> size;
+            utf8_to_latin1(src: ptr_u8, len: size, dst: ptr_u8, ret2: ptr_size) -> size;
+            utf16_to_latin1(src: ptr_u16, len: size, dst: ptr_u8, ret2: ptr_size) -> size;
+            utf8_to_compact_utf16(src: ptr_u8, src_len: size, dst: ptr_u16, dst_len: size, bytes_so_far: size) -> size;
+            utf16_to_compact_utf16(src: ptr_u16, src_len: size, dst: ptr_u16, dst_len: size, bytes_so_far: size) -> size;
         }
     };
 }
+
+// Define `struct ComponentBuiltinFunctionIndex`
+declare_builtin_index!(
+    ComponentBuiltinFunctionIndex,
+    foreach_builtin_component_function
+);
