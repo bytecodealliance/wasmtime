@@ -28,3 +28,8 @@ component-model = [
     "wasmtime-cranelift/component-model",
 ]
 all-arch = ["winch-codegen/all-arch"]
+gc = ['winch-codegen/gc']
+gc-drc = ['winch-codegen/gc-drc']
+gc-null = ['winch-codegen/gc-null']
+threads = ['winch-codegen/threads']
+wmemcheck = ['winch-codegen/wmemcheck']
