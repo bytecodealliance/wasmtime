@@ -138,7 +138,7 @@ pub const ELF_WASMTIME_DWARF: &str = ".wasmtime.dwarf";
 macro_rules! libcalls {
     ($($rust:ident = $sym:tt)*) => (
         #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
-        #[expect(missing_docs, reason = "self-describing variants")]
+        #[allow(missing_docs, reason = "self-describing variants")]
         pub enum LibCall {
             $($rust,)*
         }
