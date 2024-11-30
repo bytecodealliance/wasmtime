@@ -216,6 +216,7 @@ component-model = [
 wmemcheck = [
   "dep:wasmtime-wmemcheck",
   "wasmtime-cranelift?/wmemcheck",
+  "wasmtime-winch?/wmemcheck",
   "wasmtime-environ/wmemcheck",
   "std",
 ]
@@ -270,18 +271,30 @@ runtime = [
 gc = [
   "wasmtime-environ/gc",
   "wasmtime-cranelift?/gc",
+  "wasmtime-winch?/gc",
   "signals-based-traps",    # not ported to non-mmap schemes yet
 ]
 
 # Enable the deferred reference counting garbage collector.
-gc-drc = ["gc", "wasmtime-environ/gc-drc", "wasmtime-cranelift?/gc-drc"]
+gc-drc = [
+  "gc",
+  "wasmtime-environ/gc-drc",
+  "wasmtime-cranelift?/gc-drc",
+  "wasmtime-winch?/gc-drc",
+]
 
 # Enable the null garbage collector.
-gc-null = ["gc", "wasmtime-environ/gc-null", "wasmtime-cranelift?/gc-null"]
+gc-null = [
+  "gc",
+  "wasmtime-environ/gc-null",
+  "wasmtime-cranelift?/gc-null",
+  "wasmtime-winch?/gc-null",
+]
 
 # Enable runtime support for the WebAssembly threads proposal.
 threads = [
   "wasmtime-cranelift?/threads",
+  "wasmtime-winch?/threads",
   "std",
   "signals-based-traps",
 ]

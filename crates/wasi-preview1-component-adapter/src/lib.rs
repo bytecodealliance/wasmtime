@@ -52,7 +52,6 @@ pub mod bindings {
     wit_bindgen_rust_macro::generate!({
         path: "../wasi/wit",
         world: "wasi:cli/command",
-        std_feature,
         raw_strings,
         runtime_path: "crate::bindings::wit_bindgen_rt_shim",
         // Automatically generated bindings for these functions will allocate
@@ -70,7 +69,6 @@ pub mod bindings {
     wit_bindgen_rust_macro::generate!({
         path: "../wasi/wit",
         world: "wasi:cli/imports",
-        std_feature,
         raw_strings,
         runtime_path: "crate::bindings::wit_bindgen_rt_shim",
         // Automatically generated bindings for these functions will allocate
@@ -100,7 +98,6 @@ pub mod bindings {
             }
         "#,
         world: "wasmtime:adapter/adapter",
-        std_feature,
         raw_strings,
         runtime_path: "crate::bindings::wit_bindgen_rt_shim",
         skip: ["poll"],

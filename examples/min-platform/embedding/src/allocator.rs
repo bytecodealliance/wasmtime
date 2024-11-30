@@ -74,7 +74,7 @@ unsafe impl dlmalloc::Allocator for MyAllocator {
                 (ptr::null_mut(), 0, 0)
             } else {
                 INITIAL_HEAP_ALLOCATED = true;
-                (INITIAL_HEAP.as_mut_ptr(), INITIAL_HEAP_SIZE, 0)
+                (ptr::addr_of_mut!(INITIAL_HEAP).cast(), INITIAL_HEAP_SIZE, 0)
             }
         }
     }
