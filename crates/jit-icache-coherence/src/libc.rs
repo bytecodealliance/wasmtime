@@ -104,7 +104,6 @@ mod details {
 }
 
 #[cfg(all(target_arch = "riscv64", target_os = "linux"))]
-#[expect(non_upper_case_globals, reason = "matching C style")]
 fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
     cfg_if::cfg_if! {
         if #[cfg(feature = "one-core")] {
@@ -117,6 +116,7 @@ fn riscv_flush_icache(start: u64, end: u64) -> Result<()> {
         } else {
             extern crate std;
 
+            #[expect(non_upper_case_globals, reason = "matching C style")]
             match unsafe {
                 libc::syscall(
                     {
