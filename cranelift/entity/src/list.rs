@@ -64,6 +64,7 @@ use serde_derive::{Deserialize, Serialize};
 /// reserved for the empty list which isn't allocated in the vector.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[repr(C)]
 pub struct EntityList<T: EntityRef + ReservedValue> {
     index: u32,
     unused: PhantomData<T>,

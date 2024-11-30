@@ -24,6 +24,7 @@ pub trait ReservedValue {
 /// Packed representation of `Option<T>`.
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
+#[repr(transparent)]
 pub struct PackedOption<T: ReservedValue>(T);
 
 impl<T: ReservedValue> PackedOption<T> {
