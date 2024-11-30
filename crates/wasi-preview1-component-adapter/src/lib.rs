@@ -3,12 +3,13 @@
 // proxy world.
 #![cfg_attr(
     feature = "proxy",
-    allow(
+    expect(
         unused_mut,
         unused_variables,
         dead_code,
         unused_imports,
-        unreachable_code
+        unreachable_code,
+        reason = "stripped down in proxy build",
     )
 )]
 #![expect(clippy::allow_attributes, reason = "crate not migrated yet")]
