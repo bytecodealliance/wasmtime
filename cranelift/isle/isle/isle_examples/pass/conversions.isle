@@ -1,7 +1,6 @@
 (type T (enum (A) (B)))
 (type U (enum (C) (D)))
 (type V (enum (E) (F)))
-(type u32 (primitive u32))
 
 (convert T U t_to_u)
 (convert U T u_to_t)

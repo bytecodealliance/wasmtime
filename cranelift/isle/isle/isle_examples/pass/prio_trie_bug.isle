@@ -5,8 +5,6 @@
 ;; priority 1 below.
 
 (type Unit (primitive Unit))
-(type u8 (primitive u8))
-(type u32 (primitive u32))
 (type Reg (primitive Reg))
 (type MemFlags (primitive MemFlags))
 (type MachLabel (primitive MachLabel))

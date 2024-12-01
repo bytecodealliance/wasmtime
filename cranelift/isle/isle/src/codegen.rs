@@ -1,7 +1,9 @@
 //! Generate Rust code from a series of Sequences.
 
 use crate::files::Files;
-use crate::sema::{ExternalSig, ReturnKind, Term, TermEnv, TermId, Type, TypeEnv, TypeId};
+use crate::sema::{
+    BuiltinType, ExternalSig, ReturnKind, Term, TermEnv, TermId, Type, TypeEnv, TypeId,
+};
 use crate::serialize::{Block, ControlFlow, EvalStep, MatchArm};
 use crate::stablemapset::StableSet;
 use crate::trie_again::{Binding, BindingId, Constraint, RuleSet};
@@ -915,18 +917,11 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
         val: i128,
         ty: TypeId,
     ) -> Result<(), std::fmt::Error> {
-        // For the kinds of situations where we use ISLE, magic numbers are
-        // much more likely to be understandable if they're in hex rather than
-        // decimal.
-        // TODO: use better type info (https://github.com/bytecodealliance/wasmtime/issues/5431)
-        if val < 0
-            && self.typeenv.types[ty.index()]
-                .name(self.typeenv)
-                .starts_with('i')
-        {
-            write!(ctx.out, "-{:#X}", -val)
-        } else {
-            write!(ctx.out, "{val:#X}")
+        let ty_data = &self.typeenv.types[ty.index()];
+        match ty_data {
+            Type::Builtin(BuiltinType::Int(ty)) if ty.is_signed() => write!(ctx.out, "{val}_{ty}"),
+            Type::Builtin(BuiltinType::Int(ty)) => write!(ctx.out, "{val:#x}_{ty}"),
+            _ => write!(ctx.out, "{val:#x}"),
         }
     }
 }

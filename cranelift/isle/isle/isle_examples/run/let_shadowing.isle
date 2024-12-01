@@ -1,6 +1,3 @@
-
-(type u64 (primitive u64))
-
 (decl foo (u64) u64)
 (rule (foo x) x)
 

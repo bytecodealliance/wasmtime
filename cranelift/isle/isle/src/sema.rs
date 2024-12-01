@@ -22,6 +22,7 @@ use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::fmt;
 
 declare_id!(
     /// The id of an interned symbol.
@@ -82,26 +83,155 @@ pub struct TypeEnv {
 
 /// A built-in type.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
+#[repr(u8)]
 pub enum BuiltinType {
     /// The type of booleans, with values `true` and `false`.
     Bool,
+    /// The types of fixed-width integers.
+    Int(IntType),
+}
+
+/// A built-in fixed-width integer type.
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub enum IntType {
+    /// Unsigned, 8 bits.
+    U8,
+    /// Unsigned, 16 bits.
+    U16,
+    /// Unsigned, 32 bits.
+    U32,
+    /// Unsigned, 64 bits.
+    U64,
+    /// Unsigned, 128 bits.
+    U128,
+    /// Unsigned, enough bits to hold a pointer.
+    USize,
+    /// Signed, 8 bits.
+    I8,
+    /// Signed, 16 bits.
+    I16,
+    /// Signed, 32 bits.
+    I32,
+    /// Signed, 64 bits.
+    I64,
+    /// Signed, 128 bits.
+    I128,
+    /// Unsigned, enough bits to hold a pointer.
+    ISize,
+}
+
+impl IntType {
+    /// Get the integer type's name.
+    pub fn name(&self) -> &'static str {
+        match self {
+            IntType::U8 => "u8",
+            IntType::U16 => "u16",
+            IntType::U32 => "u32",
+            IntType::U64 => "u64",
+            IntType::U128 => "u128",
+            IntType::USize => "usize",
+            IntType::I8 => "i8",
+            IntType::I16 => "i16",
+            IntType::I32 => "i32",
+            IntType::I64 => "i64",
+            IntType::I128 => "i128",
+            IntType::ISize => "isize",
+        }
+    }
+
+    /// Is this integer type signed?
+    pub fn is_signed(&self) -> bool {
+        match self {
+            IntType::U8
+            | IntType::U16
+            | IntType::U32
+            | IntType::U64
+            | IntType::U128
+            | IntType::USize => false,
+
+            IntType::I8
+            | IntType::I16
+            | IntType::I32
+            | IntType::I64
+            | IntType::I128
+            | IntType::ISize => true,
+        }
+    }
+}
+
+impl fmt::Display for IntType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.name())
+    }
 }
 
 impl BuiltinType {
     /// All the built-in types.
-    pub const ALL: &'static [Self] = &[Self::Bool];
+    pub const ALL: &'static [Self] = &[
+        Self::Bool,
+        Self::Int(IntType::U8),
+        Self::Int(IntType::U16),
+        Self::Int(IntType::U32),
+        Self::Int(IntType::U64),
+        Self::Int(IntType::U128),
+        Self::Int(IntType::USize),
+        Self::Int(IntType::I8),
+        Self::Int(IntType::I16),
+        Self::Int(IntType::I32),
+        Self::Int(IntType::I64),
+        Self::Int(IntType::I128),
+        Self::Int(IntType::ISize),
+    ];
 
     /// Get the built-in type's name.
     pub fn name(&self) -> &'static str {
         match self {
             BuiltinType::Bool => "bool",
+            BuiltinType::Int(it) => it.name(),
+        }
+    }
+
+    const fn to_usize(&self) -> usize {
+        match self {
+            Self::Bool => 0,
+            Self::Int(ty) => *ty as usize + 1,
         }
     }
 }
 
 impl TypeId {
+    const fn builtin(builtin: BuiltinType) -> Self {
+        Self(builtin.to_usize())
+    }
+
     /// TypeId for `bool`.
-    pub const BOOL: Self = Self(0);
+    pub const BOOL: Self = Self::builtin(BuiltinType::Bool);
+
+    /// TypeId for `u8`.
+    pub const U8: Self = Self::builtin(BuiltinType::Int(IntType::U8));
+    /// TypeId for `u16`.
+    pub const U16: Self = Self::builtin(BuiltinType::Int(IntType::U16));
+    /// TypeId for `u32`.
+    pub const U32: Self = Self::builtin(BuiltinType::Int(IntType::U32));
+    /// TypeId for `u64`.
+    pub const U64: Self = Self::builtin(BuiltinType::Int(IntType::U64));
+    /// TypeId for `u128`.
+    pub const U128: Self = Self::builtin(BuiltinType::Int(IntType::U128));
+    /// TypeId for `usize`.
+    pub const USIZE: Self = Self::builtin(BuiltinType::Int(IntType::USize));
+
+    /// TypeId for `i8`.
+    pub const I8: Self = Self::builtin(BuiltinType::Int(IntType::I8));
+    /// TypeId for `i16`.
+    pub const I16: Self = Self::builtin(BuiltinType::Int(IntType::I16));
+    /// TypeId for `i32`.
+    pub const I32: Self = Self::builtin(BuiltinType::Int(IntType::I32));
+    /// TypeId for `i64`.
+    pub const I64: Self = Self::builtin(BuiltinType::Int(IntType::I64));
+    /// TypeId for `i128`.
+    pub const I128: Self = Self::builtin(BuiltinType::Int(IntType::I128));
+    /// TypeId for `isize`.
+    pub const ISIZE: Self = Self::builtin(BuiltinType::Int(IntType::ISize));
 }
 
 /// A type.
@@ -160,6 +290,11 @@ impl Type {
     /// Is this a primitive type?
     pub fn is_prim(&self) -> bool {
         matches!(self, Type::Primitive(..))
+    }
+
+    /// Is this a built-in integer type?
+    pub fn is_int(&self) -> bool {
+        matches!(self, Self::Builtin(BuiltinType::Int(_)))
     }
 }
 
@@ -1941,11 +2076,11 @@ impl TermEnv {
             // TODO: flag on primitive type decl indicating it's an integer type?
             &ast::Pattern::ConstInt { val, pos } => {
                 let ty = &tyenv.types[expected_ty.index()];
-                if !ty.is_prim() {
+                if !ty.is_int() && !ty.is_prim() {
                     tyenv.report_error(
                         pos,
                         format!(
-                            "expected non-primitive type {}, but found integer literal '{}'",
+                            "expected non-integer type {}, but found integer literal '{}'",
                             ty.name(tyenv),
                             val,
                         ),
@@ -2364,20 +2499,21 @@ impl TermEnv {
                 Some(Expr::ConstBool(TypeId::BOOL, val))
             }
             &ast::Expr::ConstInt { val, pos } => {
-                if ty.is_none() {
+                let Some(ty) = ty else {
                     tyenv.report_error(
                         pos,
                         "integer literal in a context that needs an explicit type".to_string(),
                     );
                     return None;
-                }
-                let ty = ty.unwrap();
+                };
 
-                if !tyenv.types[ty.index()].is_prim() {
+                let typ = &tyenv.types[ty.index()];
+
+                if !typ.is_int() && !typ.is_prim() {
                     tyenv.report_error(
                         pos,
                         format!(
-                            "expected non-primitive type {}, but found integer literal '{}'",
+                            "expected non-integer type {}, but found integer literal '{}'",
                             tyenv.types[ty.index()].name(tyenv),
                             val,
                         ),
@@ -2497,7 +2633,7 @@ mod test {
     #[test]
     fn build_type_env() {
         let text = r"
-            (type u32 (primitive u32))
+            (type UImm8 (primitive UImm8))
             (type A extern (enum (B (f1 u32) (f2 u32)) (C (f1 u32))))
         ";
         let ast = parse(Lexer::new(0, text).unwrap()).expect("should parse");
@@ -2518,8 +2654,8 @@ mod test {
         let sym_a_c = tyenv
             .intern(&Ident("A.C".to_string(), Default::default()))
             .unwrap();
-        let sym_u32 = tyenv
-            .intern(&Ident("u32".to_string(), Default::default()))
+        let sym_uimm8 = tyenv
+            .intern(&Ident("UImm8".to_string(), Default::default()))
             .unwrap();
         let sym_f1 = tyenv
             .intern(&Ident("f1".to_string(), Default::default()))
@@ -2528,13 +2664,13 @@ mod test {
             .intern(&Ident("f2".to_string(), Default::default()))
             .unwrap();
 
-        assert_eq!(tyenv.type_map.get(&sym_u32).unwrap(), &TypeId(1));
-        assert_eq!(tyenv.type_map.get(&sym_a).unwrap(), &TypeId(2));
+        assert_eq!(tyenv.type_map.get(&sym_uimm8).unwrap(), &TypeId(13));
+        assert_eq!(tyenv.type_map.get(&sym_a).unwrap(), &TypeId(14));
 
         let expected_types = vec![
             Type::Primitive(
-                TypeId(1),
-                sym_u32,
+                TypeId(13),
+                sym_uimm8,
                 Pos {
                     file: 0,
                     offset: 19,
@@ -2542,7 +2678,7 @@ mod test {
             ),
             Type::Enum {
                 name: sym_a,
-                id: TypeId(2),
+                id: TypeId(14),
                 is_extern: true,
                 is_nodebug: false,
                 variants: vec![
@@ -2554,12 +2690,12 @@ mod test {
                             Field {
                                 name: sym_f1,
                                 id: FieldId(0),
-                                ty: TypeId(1),
+                                ty: TypeId::U32,
                             },
                             Field {
                                 name: sym_f2,
                                 id: FieldId(1),
-                                ty: TypeId(1),
+                                ty: TypeId::U32,
                             },
                         ],
                     },
@@ -2570,13 +2706,13 @@ mod test {
                         fields: vec![Field {
                             name: sym_f1,
                             id: FieldId(0),
-                            ty: TypeId(1),
+                            ty: TypeId::U32,
                         }],
                     },
                 ],
                 pos: Pos {
                     file: 0,
-                    offset: 58,
+                    offset: 62,
                 },
             },
         ];

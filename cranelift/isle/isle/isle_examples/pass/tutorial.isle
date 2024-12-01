@@ -1,8 +1,5 @@
 ;;;; Type Definitions ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-;; Declare that we are using the `i32` primitive type from Rust.
-(type i32 (primitive i32))
-
 ;; Our high-level, RISC-y input IR.
 (type HighLevelInst
   (enum (Add (a Value) (b Value))

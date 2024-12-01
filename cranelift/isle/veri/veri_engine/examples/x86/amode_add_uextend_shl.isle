@@ -8,8 +8,6 @@
 (type MemFlags (primitive MemFlags))
 (type Gpr (primitive Gpr))
 (type Imm64 (primitive Imm64))
-(type u32 (primitive u32))
-(type u8 (primitive u8))
 
 (type MInst (enum))
 

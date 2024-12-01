@@ -7,7 +7,6 @@
 (type Inst (primitive Inst))
 (type InstInput (primitive InstInput))
 (type Reg (primitive Reg))
-(type u32 (primitive u32))
 
 (decl Op (Opcode) Inst)
 (extern extractor infallible Op get_opcode)
