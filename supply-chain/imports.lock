@@ -568,6 +568,13 @@ user-id = 2915
 user-login = "Amanieu"
 user-name = "Amanieu d'Antras"
 
+[[publisher.hashbrown]]
+version = "0.14.5"
+when = "2024-04-28"
+user-id = 2915
+user-login = "Amanieu"
+user-name = "Amanieu d'Antras"
+
 [[publisher.indexmap]]
 version = "2.2.6"
 when = "2024-03-23"
@@ -673,8 +680,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.regalloc2]]
-version = "0.11.0"
-when = "2024-11-15"
+version = "0.11.1"
+when = "2024-12-02"
 user-id = 3726
 user-login = "cfallin"
 user-name = "Chris Fallin"
