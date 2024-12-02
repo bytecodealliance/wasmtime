@@ -925,7 +925,14 @@ where
     /// performing a zero-comparison with the number of units stored in
     /// `VMRuntimeLimits`.
     pub fn emit_fuel_check(&mut self) {
-        let fuel_var = self.emit_load_fuel_consumed();
+        let out_of_fuel = self.env.builtins.out_of_gas::<M::ABI, M::Ptr>();
+        let fuel_var =
+            self.context
+                .without::<Reg, M, _>(&out_of_fuel.sig().regs, self.masm, |cx, masm| {
+                    cx.any_gpr(masm)
+                });
+
+        self.emit_load_fuel_consumed(fuel_var);
         let continuation = self.masm.get_label();
 
         // Spill locals and registers to avoid conflicts at the out-of-fuel
@@ -941,7 +948,6 @@ where
             OperandSize::S64,
         );
         // Out-of-fuel branch.
-        let out_of_fuel = self.env.builtins.out_of_gas::<M::ABI, M::Ptr>();
         FnCall::emit::<M>(
             &mut self.env,
             self.masm,
@@ -999,10 +1005,9 @@ where
 
     /// Emits a series of instructions that load the `fuel_consumed` field from
     /// `VMRuntimeLimits`.
-    fn emit_load_fuel_consumed(&mut self) -> Reg {
+    fn emit_load_fuel_consumed(&mut self, fuel_var: Reg) {
         let limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
         let fuel_offset = self.env.vmoffsets.ptr.vmruntime_limits_fuel_consumed();
-        let fuel_var = self.context.any_gpr(self.masm);
         self.masm.load_ptr(
             self.masm.address_at_vmctx(u32::from(limits_offset)),
             writable!(fuel_var),
@@ -1014,8 +1019,6 @@ where
             // Fuel is an i64.
             OperandSize::S64,
         );
-
-        fuel_var
     }
 
     /// Hook to handle fuel before visiting an operator.
