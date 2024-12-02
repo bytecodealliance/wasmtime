@@ -105,7 +105,7 @@ impl Display for Invocation {
 }
 
 /// A CLIF comparison operation; e.g. `==`.
-#[allow(missing_docs)]
+#[allow(missing_docs, reason = "self-describing variants")]
 #[derive(Debug, PartialEq)]
 pub enum Comparison {
     Equals,

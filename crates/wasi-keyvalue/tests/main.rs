@@ -1,5 +1,3 @@
-#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
-
 use anyhow::{anyhow, Result};
 use test_programs_artifacts::{foreach_keyvalue, KEYVALUE_MAIN_COMPONENT};
 use wasmtime::{
@@ -48,7 +46,7 @@ async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
 
 macro_rules! assert_test_exists {
     ($name:ident) => {
-        #[allow(unused_imports)]
+        #[expect(unused_imports, reason = "just here to assert it exists")]
         use self::$name as _;
     };
 }

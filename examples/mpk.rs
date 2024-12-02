@@ -31,8 +31,6 @@
 //! $ sysctl vm.max_map_count=$LARGER_LIMIT
 //! ```
 
-#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
-
 use anyhow::anyhow;
 use bytesize::ByteSize;
 use clap::Parser;
@@ -115,7 +113,6 @@ fn probe_engine_size(args: &Args, mpk: MpkEnabled) -> Result<Pool> {
 }
 
 #[derive(Debug)]
-#[allow(dead_code)]
 struct Pool {
     num_memories: u32,
     mapped_bytes: usize,

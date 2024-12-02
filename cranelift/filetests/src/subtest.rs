@@ -29,7 +29,7 @@ pub struct Context<'a> {
     pub isa: Option<&'a dyn TargetIsa>,
 
     /// Full path to the file containing the test.
-    #[allow(dead_code)]
+    #[expect(dead_code, reason = "may get used later")]
     pub file_path: &'a str,
 
     /// Context used to update the original `file_path` in-place with its test

@@ -348,8 +348,8 @@ mod tests {
                 let block = bx.create_block();
                 bx.switch_to_block(block);
                 let val = bx.ins().iconst(types::I8, 0);
-                #[allow(unused_mut)]
                 let mut switch = Switch::new();
+                let _ = &mut switch;
                 $(
                     let block = bx.create_block();
                     switch.set_entry($index, block);

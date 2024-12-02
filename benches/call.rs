@@ -1,5 +1,3 @@
-#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
-
 use criterion::measurement::WallTime;
 use criterion::{criterion_group, criterion_main, BenchmarkGroup, Criterion};
 use std::fmt::Debug;
@@ -445,7 +443,7 @@ trait ToVals {
 
 macro_rules! tuples {
     ($($t:ident)*) => (
-        #[allow(non_snake_case)]
+        #[allow(non_snake_case, reason = "macro-generated code")]
         impl<$($t:Copy + Into<Val>,)*> ToVals for ($($t,)*) {
             fn to_vals(&self) -> Vec<Val> {
                 let mut _dst = Vec::new();
@@ -534,7 +532,7 @@ mod component {
 
     macro_rules! tuples {
         ($($t:ident)*) => (
-            #[allow(non_snake_case)]
+            #[allow(non_snake_case, reason = "macro-generated code")]
             impl<$($t:Copy + ToComponentVal,)*> ToComponentVals for ($($t,)*) {
                 fn to_component_vals(&self) -> Vec<component::Val> {
                     let mut _dst = Vec::new();

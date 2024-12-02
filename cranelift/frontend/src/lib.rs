@@ -157,10 +157,7 @@
 
 #![deny(missing_docs)]
 #![no_std]
-#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
-#[allow(unused_imports)] // #[macro_use] is required for no_std
-#[macro_use]
 extern crate alloc;
 
 #[cfg(feature = "std")]

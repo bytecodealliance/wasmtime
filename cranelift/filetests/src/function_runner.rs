@@ -528,7 +528,10 @@ fn make_trampoline(name: UserFuncName, signature: &ir::Signature, isa: &dyn Targ
 #[cfg(target_arch = "x86_64")]
 use std::arch::x86_64::__m128i;
 #[cfg(target_arch = "x86_64")]
-#[allow(improper_ctypes_definitions)]
+#[expect(
+    improper_ctypes_definitions,
+    reason = "manually verified to work for now"
+)]
 extern "C" fn __cranelift_x86_pshufb(a: __m128i, b: __m128i) -> __m128i {
     union U {
         reg: __m128i,

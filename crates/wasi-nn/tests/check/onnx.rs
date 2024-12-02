@@ -1,8 +1,7 @@
-#![allow(unused)]
+#![expect(dead_code, reason = "may get used later")]
 
 use super::{artifacts_dir, download, DOWNLOAD_LOCK};
 use anyhow::{Context, Result};
-use std::sync::Mutex;
 use std::{env, fs};
 
 /// Return `Ok` if we find the cached MobileNet test artifacts; this will
