@@ -2944,6 +2944,9 @@ pub fn translate_operator<FE: FuncEnvironment + ?Sized>(
             let (res1, res2) = builder.ins().isplit(result);
             state.push2(res1, res2);
         }
+
+        // catch-all as `Operator` is `#[non_exhaustive]`
+        op => return Err(wasm_unsupported!("operator {op:?}")),
     };
     Ok(())
 }

@@ -15,6 +15,7 @@ use cranelift_codegen::{
 use smallvec::SmallVec;
 use wasmparser::{
     BinaryReader, FuncValidator, MemArg, Operator, ValidatorResources, VisitOperator,
+    VisitSimdOperator,
 };
 use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_TABLE_OUT_OF_BOUNDS};
 use wasmtime_environ::{
@@ -245,7 +246,7 @@ where
         while !body.eof() {
             let offset = body.original_position();
             body.visit_operator(&mut ValidateThenVisit(
-                validator.visitor(offset),
+                validator.simd_visitor(offset),
                 self,
                 offset,
             ))??;
@@ -330,13 +331,31 @@ where
 
         impl<'a, T, U> VisitOperator<'a> for ValidateThenVisit<'_, T, U>
         where
-            T: VisitOperator<'a, Output = wasmparser::Result<()>>,
-            U: VisitOperator<'a> + VisitorHooks,
+            T: VisitSimdOperator<'a, Output = wasmparser::Result<()>>,
+            U: VisitSimdOperator<'a> + VisitorHooks,
             U::Output: Default,
         {
             type Output = Result<U::Output>;
 
-            wasmparser::for_each_operator!(validate_then_visit);
+            fn simd_visitor(
+                &mut self,
+            ) -> Option<&mut dyn VisitSimdOperator<'a, Output = Self::Output>>
+            where
+                T:,
+            {
+                Some(self)
+            }
+
+            wasmparser::for_each_visit_operator!(validate_then_visit);
+        }
+
+        impl<'a, T, U> VisitSimdOperator<'a> for ValidateThenVisit<'_, T, U>
+        where
+            T: VisitSimdOperator<'a, Output = wasmparser::Result<()>>,
+            U: VisitSimdOperator<'a> + VisitorHooks,
+            U::Output: Default,
+        {
+            wasmparser::for_each_visit_simd_operator!(validate_then_visit);
         }
     }
 

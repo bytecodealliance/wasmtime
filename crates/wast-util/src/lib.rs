@@ -320,14 +320,11 @@ impl WastTest {
                 "spec_testsuite/ref_is_null.wast",
                 "spec_testsuite/ref_null.wast",
                 "spec_testsuite/select.wast",
-                "spec_testsuite/table-sub.wast",
                 "spec_testsuite/table_fill.wast",
                 "spec_testsuite/table_get.wast",
                 "spec_testsuite/table_grow.wast",
                 "spec_testsuite/table_set.wast",
                 "spec_testsuite/table_size.wast",
-                "spec_testsuite/unreached-invalid.wast",
-                "spec_testsuite/call_indirect.wast",
                 // simd-related failures
                 "annotations/simd_lane.wast",
                 "memory64/simd.wast",
@@ -408,7 +405,7 @@ impl WastTest {
         for part in self.path.iter() {
             // Not implemented in Wasmtime yet
             if part == "exception-handling" {
-                return !self.path.ends_with("binary.wast");
+                return !self.path.ends_with("binary.wast") && !self.path.ends_with("exports.wast");
             }
 
             if part == "memory64" {
@@ -416,7 +413,6 @@ impl WastTest {
                     // wasmtime doesn't implement exceptions yet
                     "imports.wast",
                     "ref_null.wast",
-                    "exports.wast",
                     "throw.wast",
                     "throw_ref.wast",
                     "try_table.wast",

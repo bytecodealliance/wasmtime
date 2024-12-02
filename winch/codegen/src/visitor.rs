@@ -14,7 +14,9 @@ use crate::reg::{writable, Reg};
 use crate::stack::{TypedReg, Val};
 use regalloc2::RegClass;
 use smallvec::SmallVec;
-use wasmparser::{BlockType, BrTable, Ieee32, Ieee64, MemArg, VisitOperator, V128};
+use wasmparser::{
+    BlockType, BrTable, Ieee32, Ieee64, MemArg, VisitOperator, VisitSimdOperator, V128,
+};
 use wasmtime_cranelift::TRAP_INDIRECT_CALL_TO_NULL;
 use wasmtime_environ::{
     FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmHeapType, WasmValType,
@@ -271,10 +273,6 @@ where
 
     fn visit_f64_const(&mut self, val: Ieee64) {
         self.context.stack.push(Val::f64(val));
-    }
-
-    fn visit_v128_const(&mut self, val: V128) {
-        self.context.stack.push(Val::v128(val.i128()))
     }
 
     fn visit_f32_add(&mut self) {
@@ -2057,14 +2055,6 @@ where
         self.emit_wasm_store(&memarg, OperandSize::S64)
     }
 
-    fn visit_v128_load(&mut self, memarg: MemArg) {
-        self.emit_wasm_load(&memarg, WasmValType::V128, OperandSize::S128, None)
-    }
-
-    fn visit_v128_store(&mut self, memarg: MemArg) {
-        self.emit_wasm_store(&memarg, OperandSize::S128)
-    }
-
     fn visit_i32_trunc_sat_f32_s(&mut self) {
         use OperandSize::*;
 
@@ -2219,7 +2209,26 @@ where
         self.masm.mul_wide(&mut self.context, MulWideKind::Unsigned);
     }
 
-    wasmparser::for_each_operator!(def_unsupported);
+    wasmparser::for_each_visit_operator!(def_unsupported);
+}
+
+impl<'a, 'translation, 'data, M> VisitSimdOperator<'a> for CodeGen<'a, 'translation, 'data, M>
+where
+    M: MacroAssembler,
+{
+    fn visit_v128_const(&mut self, val: V128) {
+        self.context.stack.push(Val::v128(val.i128()))
+    }
+
+    fn visit_v128_load(&mut self, memarg: MemArg) {
+        self.emit_wasm_load(&memarg, WasmValType::V128, OperandSize::S128, None)
+    }
+
+    fn visit_v128_store(&mut self, memarg: MemArg) {
+        self.emit_wasm_store(&memarg, OperandSize::S128)
+    }
+
+    wasmparser::for_each_visit_simd_operator!(def_unsupported);
 }
 
 impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M>

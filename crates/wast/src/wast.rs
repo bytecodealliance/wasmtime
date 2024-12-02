@@ -523,7 +523,7 @@ where
                     Err(e) => e,
                 };
                 let error_message = format!("{err:?}");
-                if !is_matching_assert_invalid_error_message(&message, &error_message) {
+                if !is_matching_assert_invalid_error_message(filename, &message, &error_message) {
                     bail!(
                         "assert_invalid: expected \"{}\", got \"{}\"",
                         message,
@@ -612,19 +612,23 @@ where
     }
 }
 
-fn is_matching_assert_invalid_error_message(expected: &str, actual: &str) -> bool {
-    actual.contains(expected)
-        // slight difference in error messages
-        || (expected.contains("unknown elem segment") && actual.contains("unknown element segment"))
-        || (expected.contains("type mismatch") && actual.contains("indirect calls must go through a table with type <= funcref"))
-        // The same test here is asserted to have one error message in
-        // `memory.wast` and a different error message in
-        // `memory64/memory.wast`, so we equate these two error messages to get
-        // the memory64 tests to pass.
-        || (expected.contains("memory size must be at most 65536 pages") && actual.contains("invalid u32 number"))
-        // the spec test suite asserts a different error message than we print
-        // for this scenario
-        || (expected == "unknown global" && actual.contains("global.get of locally defined global"))
-        || (expected == "immutable global" && actual.contains("global is immutable: cannot modify it with `global.set`"))
-        || (expected == "table size must be at most 2^32-1" && actual.contains("invalid u32 number: constant out of range"))
+fn is_matching_assert_invalid_error_message(test: &str, expected: &str, actual: &str) -> bool {
+    if actual.contains(expected) {
+        return true;
+    }
+
+    // Historically wasmtime/wasm-tools tried to match the upstream error
+    // message. This generally led to a large sequence of matches here which is
+    // not easy to maintain and is particularly difficult when test suites and
+    // proposals conflict with each other (e.g. one asserts one error message
+    // and another asserts a different error message). Overall we didn't benefit
+    // a whole lot from trying to match errors so just assume the error is
+    // roughly the same and otherwise don't try to match it.
+    if Path::new(test).starts_with("./tests/spec_testsuite") {
+        return true;
+    }
+
+    // we are in control over all non-spec tests so all the error messages
+    // there should exactly match the `assert_invalid` or such
+    false
 }
