@@ -123,11 +123,12 @@ impl TargetIsa for Aarch64 {
         );
         let regalloc = RegAlloc::from(gpr, fpr);
         let codegen_context = CodeGenContext::new(regalloc, stack, frame, &vmoffsets);
-        let mut codegen = CodeGen::new(tunables, &mut masm, codegen_context, env, abi_sig);
+        let codegen = CodeGen::new(tunables, &mut masm, codegen_context, env, abi_sig);
 
-        codegen.emit(&mut body, validator)?;
-        let names = codegen.env.take_name_map();
-        let base = codegen.source_location.base;
+        let mut body_codegen = codegen.emit_prologue()?;
+        body_codegen.emit(&mut body, validator)?;
+        let names = body_codegen.env.take_name_map();
+        let base = body_codegen.source_location.base;
         Ok(CompiledFunction::new(
             masm.finalize(base),
             names,

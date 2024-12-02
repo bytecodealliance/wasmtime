@@ -4,7 +4,7 @@
 use super::env::HeapData;
 use crate::{
     abi::{scratch, vmctx},
-    codegen::CodeGenContext,
+    codegen::{CodeGenContext, Emission},
     isa::reg::{writable, Reg},
     masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, TrapCode},
     stack::TypedReg,
@@ -82,7 +82,7 @@ impl Index {
 
 /// Loads the bounds of the dynamic heap.
 pub(crate) fn load_dynamic_heap_bounds<M>(
-    context: &mut CodeGenContext,
+    context: &mut CodeGenContext<Emission>,
     masm: &mut M,
     heap: &HeapData,
     ptr_size: OperandSize,
@@ -149,7 +149,7 @@ pub(crate) fn ensure_index_and_offset<M: MacroAssembler>(
 /// criteria is in bounds.
 pub(crate) fn load_heap_addr_checked<M, F>(
     masm: &mut M,
-    context: &mut CodeGenContext,
+    context: &mut CodeGenContext<Emission>,
     ptr_size: OperandSize,
     heap: &HeapData,
     enable_spectre_mitigation: bool,

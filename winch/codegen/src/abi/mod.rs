@@ -212,21 +212,6 @@ impl ABIOperand {
             _ => unreachable!(),
         }
     }
-
-    /// Get the register associated to this [`ABIOperand`].
-    pub fn get_reg(&self) -> Option<Reg> {
-        match *self {
-            ABIOperand::Reg { reg, .. } => Some(reg),
-            _ => None,
-        }
-    }
-
-    /// Get the type associated to this [`ABIOperand`].
-    pub fn ty(&self) -> WasmValType {
-        match *self {
-            ABIOperand::Reg { ty, .. } | ABIOperand::Stack { ty, .. } => ty,
-        }
-    }
 }
 
 /// Information about the [`ABIOperand`] information used in [`ABISig`].

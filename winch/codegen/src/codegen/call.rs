@@ -58,7 +58,7 @@
 
 use crate::{
     abi::{scratch, vmctx, ABIOperand, ABISig, RetArea},
-    codegen::{BuiltinFunction, BuiltinType, Callee, CodeGenContext},
+    codegen::{BuiltinFunction, BuiltinType, Callee, CodeGenContext, Emission},
     masm::{
         CalleeKind, ContextArgs, MacroAssembler, MemMoveDirection, OperandSize, SPOffset,
         VMContextLoc,
@@ -85,7 +85,7 @@ impl FnCall {
     pub fn emit<M: MacroAssembler>(
         env: &mut FuncEnv<M::Ptr>,
         masm: &mut M,
-        context: &mut CodeGenContext,
+        context: &mut CodeGenContext<Emission>,
         callee: Callee,
     ) {
         let (kind, callee_context) = Self::lower(env, context.vmoffsets, &callee, context, masm);
@@ -129,7 +129,7 @@ impl FnCall {
         env: &mut FuncEnv<M::Ptr>,
         vmoffsets: &VMOffsets<u8>,
         callee: &Callee,
-        context: &mut CodeGenContext,
+        context: &mut CodeGenContext<Emission>,
         masm: &mut M,
     ) -> (CalleeKind, ContextArgs) {
         let ptr = vmoffsets.ptr.size();
@@ -177,7 +177,7 @@ impl FnCall {
     fn lower_import<M: MacroAssembler, P: PtrSize>(
         index: FuncIndex,
         sig: &ABISig,
-        context: &mut CodeGenContext,
+        context: &mut CodeGenContext<Emission>,
         masm: &mut M,
         vmoffsets: &VMOffsets<P>,
     ) -> (CalleeKind, ContextArgs) {
@@ -204,7 +204,7 @@ impl FnCall {
     fn lower_funcref<M: MacroAssembler>(
         sig: &ABISig,
         ptr: impl PtrSize,
-        context: &mut CodeGenContext,
+        context: &mut CodeGenContext<Emission>,
         masm: &mut M,
     ) -> (CalleeKind, ContextArgs) {
         // Pop the funcref pointer to a register and allocate a register to hold the
@@ -275,7 +275,7 @@ impl FnCall {
         sig: &ABISig,
         callee_context: &ContextArgs,
         ret_area: Option<&RetArea>,
-        context: &mut CodeGenContext,
+        context: &mut CodeGenContext<Emission>,
         masm: &mut M,
     ) {
         let arg_count = sig.params.len_without_retptr();
@@ -337,7 +337,7 @@ impl FnCall {
         reserved_space: u32,
         ret_area: Option<RetArea>,
         masm: &mut M,
-        context: &mut CodeGenContext,
+        context: &mut CodeGenContext<Emission>,
     ) {
         // Free any registers holding any function references.
         match callee_kind {
