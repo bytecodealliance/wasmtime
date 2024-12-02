@@ -10,8 +10,8 @@ use crate::debug::{Compilation, ModuleMemoryOffset};
 ///
 /// For unwrapping Wasm pointer, the WasmtimeVMContext has the `set()` method
 /// that allows to control current Wasm memory to inspect.
-/// Notice that "set_vmctx_memory" is an external/builtin subprogram that
-/// is not part of Wasm code.
+/// Notice that "wasmtime_set_vmctx_memory" is an external/builtin subprogram
+/// that is not part of Wasm code.
 ///
 /// This CU is currently per-module since VMContext memory structure is per-module;
 /// some of the contained types could be made global (per-Compilation).
@@ -144,13 +144,13 @@ impl ModuleSyntheticUnit {
         });
 
         // Build vmctx_die's DW_TAG_subprogram for `set` method:
-        //  .. DW_AT_linkage_name = "set_vmctx_memory"
+        //  .. DW_AT_linkage_name = "wasmtime_set_vmctx_memory"
         //  .. DW_AT_name = "set"
         //  .. DW_TAG_formal_parameter
         //  ..  .. DW_AT_type = <vmctx_ptr_die>
         //  ..  .. DW_AT_artificial = 1
         add_tag!(unit, vmctx_die_id, gimli::DW_TAG_subprogram => vmctx_set as vmctx_set_id {
-            gimli::DW_AT_linkage_name = AttributeValue::StringRef(out_strings.add(versioned_stringify_ident!(set_vmctx_memory))),
+            gimli::DW_AT_linkage_name = AttributeValue::StringRef(out_strings.add(versioned_stringify_ident!(wasmtime_set_vmctx_memory))),
             gimli::DW_AT_name = AttributeValue::StringRef(out_strings.add("set"))
         });
         add_tag!(unit, vmctx_set_id, gimli::DW_TAG_formal_parameter => vmctx_set_this_param as vmctx_set_this_param_id {

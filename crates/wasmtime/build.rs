@@ -32,6 +32,10 @@ fn build_c_helpers() {
     build.define(&format!("CFG_TARGET_OS_{os}"), None);
     build.define(&format!("CFG_TARGET_ARCH_{arch}"), None);
     build.define("VERSIONED_SUFFIX", Some(versioned_suffix!()));
+    if std::env::var("CARGO_FEATURE_DEBUG_BUILTINS").is_ok() {
+        build.define("FEATURE_DEBUG_BUILTINS", None);
+    }
+
     println!("cargo:rerun-if-changed=src/runtime/vm/helpers.c");
     build.file("src/runtime/vm/helpers.c");
     build.compile("wasmtime-helpers");
