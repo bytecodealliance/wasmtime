@@ -208,7 +208,7 @@ pub use crate::{FuncIndex, GlobalIndex, MemoryIndex, TableIndex};
 /// Equivalent of `EntityIndex` but for the component model instead of core
 /// wasm.
 #[derive(Debug, Clone, Copy)]
-#[expect(missing_docs, reason = "self-describing variants")]
+#[allow(missing_docs, reason = "self-describing variants")]
 pub enum ComponentItem {
     Func(ComponentFuncIndex),
     Module(ModuleIndex),
@@ -439,7 +439,7 @@ pub struct TypeFunc {
 /// forms where for non-primitive types a `ComponentTypes` structure is used to
 /// lookup further information based on the index found here.
 #[derive(Serialize, Deserialize, Copy, Clone, Hash, Eq, PartialEq, Debug)]
-#[expect(missing_docs, reason = "self-describing variants")]
+#[allow(missing_docs, reason = "self-describing variants")]
 pub enum InterfaceType {
     Bool,
     S8,
@@ -1050,7 +1050,7 @@ impl FlatTypes<'_> {
 // regardless to changes in the core wasm type system since this will only
 // ever use integers/floats for the foreseeable future.
 #[derive(PartialEq, Eq, Copy, Clone)]
-#[expect(missing_docs, reason = "self-describing variants")]
+#[allow(missing_docs, reason = "self-describing variants")]
 pub enum FlatType {
     I32,
     I64,
