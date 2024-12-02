@@ -127,6 +127,27 @@ void VERSIONED_SYMBOL(wasmtime_longjmp)(void *JmpBuf) {
   platform_longjmp(*buf, 1);
 }
 
+#ifdef FEATURE_DEBUG_BUILTINS
+#ifdef CFG_TARGET_OS_windows
+#define DEBUG_BUILTIN_EXPORT __declspec(dllexport)
+#else
+#define DEBUG_BUILTIN_EXPORT __attribute__((used, retain))
+#endif
+
+// This set of symbols is defined here in C because Rust's #[export_name]
+// functions are not dllexported on Windows when building an executable. These
+// symbols are directly referenced by name from the native DWARF info.
+void *VERSIONED_SYMBOL(resolve_vmctx_memory_ptr)(void *);
+DEBUG_BUILTIN_EXPORT void *
+VERSIONED_SYMBOL(wasmtime_resolve_vmctx_memory_ptr)(void *p) {
+  return VERSIONED_SYMBOL(resolve_vmctx_memory_ptr)(p);
+}
+void VERSIONED_SYMBOL(set_vmctx_memory)(void *);
+DEBUG_BUILTIN_EXPORT void VERSIONED_SYMBOL(wasmtime_set_vmctx_memory)(void *p) {
+  VERSIONED_SYMBOL(set_vmctx_memory)(p);
+}
+#endif // FEATURE_DEBUG_BUILTINS
+
 #ifdef CFG_TARGET_OS_windows
 // export required for external access.
 __declspec(dllexport)
