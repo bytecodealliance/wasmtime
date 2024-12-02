@@ -1,7 +1,7 @@
 use super::expression::{CompiledExpression, FunctionFrameInfo};
-use super::utils::{add_internal_types, append_vmctx_info};
+use super::utils::append_vmctx_info;
 use super::AddressTransform;
-use crate::debug::{Compilation, ModuleMemoryOffset};
+use crate::debug::Compilation;
 use crate::translate::get_vmctx_value_label;
 use anyhow::{Context, Error};
 use cranelift_codegen::isa::TargetIsa;
@@ -114,7 +114,6 @@ fn autogenerate_dwarf_wasm_path(di: &DebugInfoData) -> PathBuf {
 }
 
 struct WasmTypesDieRefs {
-    vmctx: write::UnitEntryId,
     i32: write::UnitEntryId,
     i64: write::UnitEntryId,
     f32: write::UnitEntryId,
@@ -125,10 +124,7 @@ fn add_wasm_types(
     unit: &mut write::Unit,
     root_id: write::UnitEntryId,
     out_strings: &mut write::StringTable,
-    memory_offset: &ModuleMemoryOffset,
 ) -> WasmTypesDieRefs {
-    let (_wp_die_id, vmctx_die_id) = add_internal_types(unit, root_id, out_strings, memory_offset);
-
     macro_rules! def_type {
         ($id:literal, $size:literal, $enc:path) => {{
             let die_id = unit.add(root_id, gimli::DW_TAG_base_type);
@@ -149,7 +145,6 @@ fn add_wasm_types(
     let f64_die_id = def_type!("f64", 8, gimli::DW_ATE_float);
 
     WasmTypesDieRefs {
-        vmctx: vmctx_die_id,
         i32: i32_die_id,
         i64: i64_die_id,
         f32: f32_die_id,
@@ -196,6 +191,7 @@ fn generate_vars(
     addr_tr: &AddressTransform,
     frame_info: &FunctionFrameInfo,
     scope_ranges: &[(u64, u64)],
+    vmctx_ptr_die_ref: write::Reference,
     wasm_types: &WasmTypesDieRefs,
     func_meta: &FunctionMetadata,
     locals_names: Option<&HashMap<u32, &str>>,
@@ -213,7 +209,7 @@ fn generate_vars(
             append_vmctx_info(
                 unit,
                 die_id,
-                wasm_types.vmctx,
+                vmctx_ptr_die_ref,
                 addr_tr,
                 Some(frame_info),
                 scope_ranges,
@@ -282,11 +278,13 @@ fn check_invalid_chars_in_path(path: PathBuf) -> Option<PathBuf> {
         .and_then(move |s| if s.contains('\x00') { None } else { Some(path) })
 }
 
+/// Generate "simulated" native DWARF for functions lacking WASM-level DWARF.
 pub fn generate_simulated_dwarf(
     compilation: &mut Compilation<'_>,
     addr_tr: &PrimaryMap<StaticModuleIndex, AddressTransform>,
     translated: &HashSet<usize>,
     out_encoding: gimli::Encoding,
+    vmctx_ptr_die_refs: &PrimaryMap<StaticModuleIndex, write::Reference>,
     out_units: &mut write::UnitTable,
     out_strings: &mut write::StringTable,
     isa: &dyn TargetIsa,
@@ -345,13 +343,7 @@ pub fn generate_simulated_dwarf(
         (unit, root_id, file_id)
     };
 
-    let mut module_wasm_types = PrimaryMap::new();
-    for (module, memory_offset) in compilation.module_memory_offsets.iter() {
-        let wasm_types = add_wasm_types(unit, root_id, out_strings, memory_offset);
-        let i = module_wasm_types.push(wasm_types);
-        assert_eq!(i, module);
-    }
-
+    let wasm_types = add_wasm_types(unit, root_id, out_strings);
     for (module, index) in compilation.indexes().collect::<Vec<_>>() {
         let (symbol, _) = compilation.function(module, index);
         if translated.contains(&symbol) {
@@ -411,7 +403,8 @@ pub fn generate_simulated_dwarf(
             addr_tr,
             &frame_info,
             &[(source_range.0, source_range.1)],
-            &module_wasm_types[module],
+            vmctx_ptr_die_refs[module],
+            &wasm_types,
             &di.wasm_file.funcs[index.as_u32() as usize],
             di.name_section.locals_names.get(&func_index),
             out_strings,
