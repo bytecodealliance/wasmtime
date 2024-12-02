@@ -1675,6 +1675,15 @@ criteria = "safe-to-deploy"
 delta = "1.0.26 -> 1.0.28"
 notes = "No new `unsafe` and no large changes in function. This diff is mostly refactoring with a lot of docs, CI, test changes. Adds some defensive clearing out of certain variables as a safeguard."
 
+[[audits.foldhash]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.1.3"
+notes = """
+Only a minor amount of `unsafe` code in this crate related to global per-process
+initialization which looks correct to me.
+"""
+
 [[audits.foreign-types]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -4116,7 +4125,7 @@ end = "2024-07-14"
 criteria = "safe-to-deploy"
 user-id = 2915 # Amanieu d'Antras (Amanieu)
 start = "2019-04-02"
-end = "2024-07-11"
+end = "2025-12-02"
 
 [[trusted.indexmap]]
 criteria = "safe-to-deploy"
