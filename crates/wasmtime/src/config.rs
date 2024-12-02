@@ -110,6 +110,16 @@ impl core::hash::Hash for ModuleVersionStrategy {
 ///
 /// The validation of `Config` is deferred until the engine is being built, thus
 /// a problematic config may cause `Engine::new` to fail.
+///
+/// # Defaults
+///
+/// The `Default` trait implementation and the return value from
+/// [`Config::new()`] are the same and represent the default set of
+/// configuration for an engine. The exact set of defaults will differ based on
+/// properties such as enabled Cargo features at compile time and the configured
+/// target (see [`Config::target`]). Configuration options document their
+/// default values and what the conditional value of the default is where
+/// applicable.
 #[derive(Clone)]
 pub struct Config {
     #[cfg(any(feature = "cranelift", feature = "winch"))]
@@ -266,14 +276,25 @@ impl Config {
         ret
     }
 
-    /// Sets the target triple for the [`Config`].
+    /// Configures the target platform of this [`Config`].
     ///
-    /// By default, the host target triple is used for the [`Config`].
+    /// This method is used to configure the output of compilation in an
+    /// [`Engine`](crate::Engine). This can be used, for example, to
+    /// cross-compile from one platform to another. By default, the host target
+    /// triple is used meaning compiled code is suitable to run on the host.
     ///
-    /// This method can be used to change the target triple.
+    /// Note that the [`Module`](crate::Module) type can only be created if the
+    /// target configured here matches the host. Otherwise if a cross-compile is
+    /// being performed where the host doesn't match the target then
+    /// [`Engine::precompile_module`](crate::Engine::precompile_module) must be
+    /// used instead.
     ///
-    /// Cranelift flags will not be inferred for the given target and any
-    /// existing target-specific Cranelift flags will be cleared.
+    /// Target-specific flags (such as CPU features) will not be inferred by
+    /// default for the target when one is provided here. This means that this
+    /// can also be used, for example, with the host architecture to disable all
+    /// host-inferred feature flags. Configuring target-specific flags can be
+    /// done with [`Config::cranelift_flag_set`] and
+    /// [`Config::cranelift_flag_enable`].
     ///
     /// # Errors
     ///
@@ -762,7 +783,9 @@ impl Config {
     /// Embeddings of Wasmtime are able to build their own custom threading
     /// scheme on top of the core wasm threads proposal, however.
     ///
-    /// This is `true` by default.
+    /// The default value for this option is whether the `threads`
+    /// crate feature of Wasmtimem is enabled or not. By default this crate
+    /// feature is enabled.
     ///
     /// [threads]: https://github.com/webassembly/threads
     /// [wasi-threads]: https://github.com/webassembly/wasi-threads
@@ -993,9 +1016,14 @@ impl Config {
     /// Configures whether the WebAssembly component-model [proposal] will
     /// be enabled for compilation.
     ///
-    /// Note that this feature is a work-in-progress and is incomplete.
+    /// This flag can be used to blanket disable all components within Wasmtime.
+    /// Otherwise usage of components requires statically using
+    /// [`Component`](crate::component::Component) instead of
+    /// [`Module`](crate::Module) for example anyway.
     ///
-    /// This is `false` by default.
+    /// The default value for this option is whether the `componenet-model`
+    /// crate feature of Wasmtimem is enabled or not. By default this crate
+    /// feature is enabled.
     ///
     /// [proposal]: https://github.com/webassembly/component-model
     #[cfg(feature = "component-model")]
