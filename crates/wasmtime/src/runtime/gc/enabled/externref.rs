@@ -209,10 +209,8 @@ impl ExternRef {
         let gc_ref = ctx
             .gc_store_mut()?
             .alloc_externref(value)
-            .err2anyhow()
             .context("unrecoverable error when allocating new `externref`")?
             .map_err(|x| GcHeapOutOfMemory::<T>::new(*x.downcast().unwrap()))
-            .err2anyhow()
             .context("failed to allocate `externref`")?;
 
         let mut ctx = AutoAssertNoGc::new(ctx);
@@ -320,10 +318,8 @@ impl ExternRef {
         let gc_ref = ctx
             .gc_store_mut()?
             .alloc_externref(value)
-            .err2anyhow()
             .context("unrecoverable error when allocating new `externref`")?
             .map_err(|x| GcHeapOutOfMemory::<T>::new(*x.downcast().unwrap()))
-            .err2anyhow()
             .context("failed to allocate `externref`")?;
 
         let mut ctx = AutoAssertNoGc::new(ctx);

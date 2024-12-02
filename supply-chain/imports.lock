@@ -236,8 +236,8 @@ user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.anyhow]]
-version = "1.0.75"
-when = "2023-08-17"
+version = "1.0.93"
+when = "2024-11-06"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"

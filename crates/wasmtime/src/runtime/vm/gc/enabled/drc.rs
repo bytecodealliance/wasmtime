@@ -550,7 +550,7 @@ unsafe impl GcHeap for DrcHeap {
 
         let size = u32::try_from(layout.size()).unwrap();
         if !VMGcKind::value_fits_in_unused_bits(size) {
-            return Err(crate::Trap::AllocationTooLarge.into_anyhow());
+            return Err(crate::Trap::AllocationTooLarge.into());
         }
 
         let gc_ref = match self.free_list.alloc(layout)? {

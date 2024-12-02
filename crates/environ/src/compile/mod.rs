@@ -59,8 +59,7 @@ impl From<WasmError> for CompileError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for CompileError {
+impl core::error::Error for CompileError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             CompileError::Wasm(e) => Some(e),

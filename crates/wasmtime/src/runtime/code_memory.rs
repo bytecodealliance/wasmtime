@@ -58,7 +58,7 @@ impl CodeMemory {
     /// `publish` method is used to actually make the memory executable.
     pub fn new(mmap: MmapVec) -> Result<Self> {
         let obj = ElfFile64::<Endianness>::parse(&mmap[..])
-            .err2anyhow()
+            .map_err(obj::ObjectCrateErrorWrapper)
             .with_context(|| "failed to parse internal compilation artifact")?;
 
         let mut relocations = Vec::new();
@@ -75,8 +75,8 @@ impl CodeMemory {
         let mut info_data = 0..0;
         let mut wasm_dwarf = 0..0;
         for section in obj.sections() {
-            let data = section.data().err2anyhow()?;
-            let name = section.name().err2anyhow()?;
+            let data = section.data().map_err(obj::ObjectCrateErrorWrapper)?;
+            let name = section.name().map_err(obj::ObjectCrateErrorWrapper)?;
             let range = subslice_range(data, &mmap);
 
             // Double-check that sections are all aligned properly.

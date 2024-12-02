@@ -34,15 +34,13 @@ impl TablePool {
             mem::size_of::<*mut u8>()
                 .checked_mul(config.limits.table_elements)
                 .ok_or_else(|| anyhow!("table size exceeds addressable memory"))?,
-        )
-        .err2anyhow()?;
+        )?;
 
         let max_total_tables = usize::try_from(config.limits.total_tables).unwrap();
         let tables_per_instance = usize::try_from(config.limits.max_tables_per_module).unwrap();
 
         let allocation_size = table_size
             .checked_mul(max_total_tables)
-            .err2anyhow()
             .context("total size of tables exceeds addressable memory")?;
 
         let mapping = Mmap::accessible_reserved(allocation_size, allocation_size)

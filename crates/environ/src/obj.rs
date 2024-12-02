@@ -1,6 +1,8 @@
 //! Utilities for working with object files that operate as Wasmtime's
 //! serialization and intermediate format for compiled modules.
 
+use core::fmt;
+
 /// Filler for the `os_abi` field of the ELF header.
 ///
 /// This is just a constant that seems reasonable in the sense it's unlikely to
@@ -177,3 +179,21 @@ libcalls! {
     FmaF64 = "libcall_fmaf64"
     X86Pshufb = "libcall_x86_pshufb"
 }
+
+/// Workaround to implement `core::error::Error` until
+/// gimli-rs/object#747 is settled.
+pub struct ObjectCrateErrorWrapper(pub object::Error);
+
+impl fmt::Debug for ObjectCrateErrorWrapper {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl fmt::Display for ObjectCrateErrorWrapper {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl core::error::Error for ObjectCrateErrorWrapper {}

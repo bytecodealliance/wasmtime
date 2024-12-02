@@ -233,8 +233,7 @@ impl fmt::Display for ByteCountNotAligned {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for ByteCountNotAligned {}
+impl core::error::Error for ByteCountNotAligned {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ByteCountOutOfBounds(ByteCountOutOfBoundsKind);
@@ -245,8 +244,7 @@ impl fmt::Display for ByteCountOutOfBounds {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for ByteCountOutOfBounds {}
+impl core::error::Error for ByteCountOutOfBounds {}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ByteCountOutOfBoundsKind {

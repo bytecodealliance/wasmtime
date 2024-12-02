@@ -476,7 +476,7 @@ impl Module {
         // already.
         let (info, types) = match info_and_types {
             Some((info, types)) => (info, types),
-            None => postcard::from_bytes(code_memory.wasmtime_info()).err2anyhow()?,
+            None => postcard::from_bytes(code_memory.wasmtime_info())?,
         };
 
         // Register function type signatures into the engine for the lifetime
@@ -546,8 +546,8 @@ impl Module {
 
         let mut functions = Vec::new();
         for payload in Parser::new(0).parse_all(binary) {
-            let payload = payload.err2anyhow()?;
-            if let ValidPayload::Func(a, b) = validator.payload(&payload).err2anyhow()? {
+            let payload = payload?;
+            if let ValidPayload::Func(a, b) = validator.payload(&payload)? {
                 functions.push((a, b));
             }
             if let wasmparser::Payload::Version { encoding, .. } = &payload {
@@ -557,15 +557,13 @@ impl Module {
             }
         }
 
-        engine
-            .run_maybe_parallel(functions, |(validator, body)| {
-                // FIXME: it would be best here to use a rayon-specific parallel
-                // iterator that maintains state-per-thread to share the function
-                // validator allocations (`Default::default` here) across multiple
-                // functions.
-                validator.into_validator(Default::default()).validate(&body)
-            })
-            .err2anyhow()?;
+        engine.run_maybe_parallel(functions, |(validator, body)| {
+            // FIXME: it would be best here to use a rayon-specific parallel
+            // iterator that maintains state-per-thread to share the function
+            // validator allocations (`Default::default` here) across multiple
+            // functions.
+            validator.into_validator(Default::default()).validate(&body)
+        })?;
         Ok(())
     }
 

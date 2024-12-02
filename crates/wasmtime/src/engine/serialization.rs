@@ -57,7 +57,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
     // a perf issue right now so doing that is left for another day's
     // refactoring.
     let obj = ElfFile64::<Endianness>::parse(mmap)
-        .err2anyhow()
+        .map_err(obj::ObjectCrateErrorWrapper)
         .context("failed to parse precompiled artifact as an ELF")?;
     let expected_e_flags = match expected {
         ObjectKind::Module => obj::EF_WASMTIME_MODULE,
@@ -76,7 +76,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
         .section_by_name(obj::ELF_WASM_ENGINE)
         .ok_or_else(|| anyhow!("failed to find section `{}`", obj::ELF_WASM_ENGINE))?
         .data()
-        .err2anyhow()?;
+        .map_err(obj::ObjectCrateErrorWrapper)?;
     let (first, data) = data
         .split_first()
         .ok_or_else(|| anyhow!("invalid engine section"))?;
@@ -95,7 +95,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
 
     match &engine.config().module_version {
         ModuleVersionStrategy::WasmtimeVersion => {
-            let version = core::str::from_utf8(version).err2anyhow()?;
+            let version = core::str::from_utf8(version)?;
             if version != env!("CARGO_PKG_VERSION") {
                 bail!(
                     "Module was compiled with incompatible Wasmtime version '{}'",
@@ -104,7 +104,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
             }
         }
         ModuleVersionStrategy::Custom(v) => {
-            let version = core::str::from_utf8(&version).err2anyhow()?;
+            let version = core::str::from_utf8(&version)?;
             if version != v {
                 bail!(
                     "Module was compiled with incompatible version '{}'",
@@ -114,9 +114,7 @@ pub fn check_compatible(engine: &Engine, mmap: &[u8], expected: ObjectKind) -> R
         }
         ModuleVersionStrategy::None => { /* ignore the version info, accept all */ }
     }
-    postcard::from_bytes::<Metadata<'_>>(data)
-        .err2anyhow()?
-        .check_compatible(engine)
+    postcard::from_bytes::<Metadata<'_>>(data)?.check_compatible(engine)
 }
 
 #[cfg(any(feature = "cranelift", feature = "winch"))]

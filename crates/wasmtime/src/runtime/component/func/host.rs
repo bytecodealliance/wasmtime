@@ -275,8 +275,8 @@ where
 
 fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<usize> {
     // FIXME: needs memory64 support
-    let ptr = usize::try_from(ptr.get_u32()).err2anyhow()?;
-    if ptr % usize::try_from(T::ALIGN32).err2anyhow()? != 0 {
+    let ptr = usize::try_from(ptr.get_u32())?;
+    if ptr % usize::try_from(T::ALIGN32)? != 0 {
         bail!("pointer not aligned");
     }
     let end = match ptr.checked_add(T::SIZE32) {
@@ -407,8 +407,8 @@ where
 
 fn validate_inbounds_dynamic(abi: &CanonicalAbiInfo, memory: &[u8], ptr: &ValRaw) -> Result<usize> {
     // FIXME: needs memory64 support
-    let ptr = usize::try_from(ptr.get_u32()).err2anyhow()?;
-    if ptr % usize::try_from(abi.align32).err2anyhow()? != 0 {
+    let ptr = usize::try_from(ptr.get_u32())?;
+    if ptr % usize::try_from(abi.align32)? != 0 {
         bail!("pointer not aligned");
     }
     let end = match ptr.checked_add(usize::try_from(abi.size32).unwrap()) {

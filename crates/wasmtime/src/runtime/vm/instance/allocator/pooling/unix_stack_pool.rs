@@ -40,7 +40,6 @@ impl StackPool {
         } else {
             HostAlignedByteCount::new_rounded_up(config.stack_size)
                 .and_then(|size| size.checked_add(HostAlignedByteCount::host_page_size()))
-                .err2anyhow()
                 .context("stack size exceeds addressable memory")?
         };
 
@@ -48,7 +47,6 @@ impl StackPool {
 
         let allocation_size = stack_size
             .checked_mul(max_stacks)
-            .err2anyhow()
             .context("total size of execution stacks exceeds addressable memory")?;
 
         let mapping = Mmap::accessible_reserved(allocation_size, allocation_size)

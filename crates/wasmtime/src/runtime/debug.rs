@@ -7,6 +7,7 @@ use object::{
     File, NativeEndian as NE, Object, ObjectSection, ObjectSymbol, RelocationEncoding,
     RelocationKind, RelocationTarget, U64Bytes,
 };
+use wasmtime_environ::obj;
 
 pub(crate) fn create_gdbjit_image(
     mut bytes: Vec<u8>,
@@ -32,7 +33,7 @@ pub(crate) fn create_gdbjit_image(
 
 fn relocate_dwarf_sections(bytes: &mut [u8], code_region: (*const u8, usize)) -> Result<(), Error> {
     let mut relocations = Vec::new();
-    let obj = File::parse(&bytes[..]).err2anyhow()?;
+    let obj = File::parse(&bytes[..]).map_err(obj::ObjectCrateErrorWrapper)?;
     for section in obj.sections() {
         let section_start = match section.file_range() {
             Some((start, _)) => start,

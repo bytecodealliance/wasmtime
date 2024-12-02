@@ -119,7 +119,7 @@ impl MemoryImage {
 
         // If `mmap` doesn't come from a file then platform-specific mechanisms
         // may be used to place the data in a form that's amenable to an mmap.
-        if let Some(source) = MemoryImageSource::from_data(data).err2anyhow()? {
+        if let Some(source) = MemoryImageSource::from_data(data)? {
             return Ok(Some(MemoryImage {
                 source,
                 source_offset: 0,
@@ -132,23 +132,19 @@ impl MemoryImage {
     }
 
     unsafe fn map_at(&self, base: *mut u8) -> Result<()> {
-        self.source
-            .map_at(
-                base.add(self.linear_memory_offset.byte_count()),
-                self.len.byte_count(),
-                self.source_offset,
-            )
-            .err2anyhow()?;
+        self.source.map_at(
+            base.add(self.linear_memory_offset.byte_count()),
+            self.len.byte_count(),
+            self.source_offset,
+        )?;
         Ok(())
     }
 
     unsafe fn remap_as_zeros_at(&self, base: *mut u8) -> Result<()> {
-        self.source
-            .remap_as_zeros_at(
-                base.add(self.linear_memory_offset.byte_count()),
-                self.len.byte_count(),
-            )
-            .err2anyhow()?;
+        self.source.remap_as_zeros_at(
+            base.add(self.linear_memory_offset.byte_count()),
+            self.len.byte_count(),
+        )?;
         Ok(())
     }
 }
@@ -364,7 +360,7 @@ impl MemoryImageSlot {
     }
 
     pub(crate) fn set_heap_limit(&mut self, size_bytes: usize) -> Result<()> {
-        let size_bytes_aligned = HostAlignedByteCount::new_rounded_up(size_bytes).err2anyhow()?;
+        let size_bytes_aligned = HostAlignedByteCount::new_rounded_up(size_bytes)?;
         assert!(size_bytes <= self.static_size);
         assert!(size_bytes_aligned.byte_count() <= self.static_size);
 
@@ -414,7 +410,7 @@ impl MemoryImageSlot {
         assert!(!self.dirty);
         assert!(initial_size_bytes <= self.static_size);
         let initial_size_bytes_page_aligned =
-            HostAlignedByteCount::new_rounded_up(initial_size_bytes).err2anyhow()?;
+            HostAlignedByteCount::new_rounded_up(initial_size_bytes)?;
 
         // First order of business is to blow away the previous linear memory
         // image if it doesn't match the image specified here. If one is
@@ -707,9 +703,9 @@ impl MemoryImageSlot {
         unsafe {
             let start = self.base.as_ptr().add(range.start.byte_count());
             if readwrite {
-                vm::expose_existing_mapping(start, len.byte_count()).err2anyhow()?;
+                vm::expose_existing_mapping(start, len.byte_count())?;
             } else {
-                vm::hide_existing_mapping(start, len.byte_count()).err2anyhow()?;
+                vm::hide_existing_mapping(start, len.byte_count())?;
             }
         }
 
@@ -735,7 +731,7 @@ impl MemoryImageSlot {
         }
 
         unsafe {
-            vm::erase_existing_mapping(self.base.as_ptr(), self.static_size).err2anyhow()?;
+            vm::erase_existing_mapping(self.base.as_ptr(), self.static_size)?;
         }
 
         self.image = None;

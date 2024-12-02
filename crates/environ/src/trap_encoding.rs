@@ -159,8 +159,7 @@ impl fmt::Display for Trap {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for Trap {}
+impl core::error::Error for Trap {}
 
 /// Decodes the provided trap information section and attempts to find the trap
 /// code corresponding to the `offset` specified.

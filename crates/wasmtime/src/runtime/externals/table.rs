@@ -111,9 +111,7 @@ impl Table {
         unsafe {
             let table = Table::from_wasmtime_table(wasmtime_export, store);
             let wasmtime_table = table.wasmtime_table(store, iter::empty());
-            (*wasmtime_table)
-                .fill(store.optional_gc_store_mut()?, 0, init, ty.minimum())
-                .err2anyhow()?;
+            (*wasmtime_table).fill(store.optional_gc_store_mut()?, 0, init, ty.minimum())?;
             Ok(table)
         }
     }
@@ -344,8 +342,7 @@ impl Table {
                 dst_index,
                 src_index,
                 len,
-            )
-            .err2anyhow()?;
+            )?;
         }
         Ok(())
     }
@@ -373,9 +370,7 @@ impl Table {
 
         let table = self.wasmtime_table(store, iter::empty());
         unsafe {
-            (*table)
-                .fill(store.optional_gc_store_mut()?, dst, val, len)
-                .err2anyhow()?;
+            (*table).fill(store.optional_gc_store_mut()?, dst, val, len)?;
         }
 
         Ok(())

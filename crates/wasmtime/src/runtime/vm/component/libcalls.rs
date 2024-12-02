@@ -566,5 +566,5 @@ unsafe fn resource_exit_call(vmctx: *mut VMComponentContext) -> Result<()> {
 }
 
 unsafe fn trap(_vmctx: *mut VMComponentContext, code: u8) -> Result<()> {
-    Err(wasmtime_environ::Trap::from_u8(code).unwrap()).err2anyhow()
+    Err(wasmtime_environ::Trap::from_u8(code).unwrap().into())
 }

@@ -99,7 +99,7 @@ pub(crate) fn from_runtime_box(
             faulting_addr,
             trap,
         } => {
-            let mut err: Error = trap.into_anyhow();
+            let mut err: Error = trap.into();
 
             // If a fault address was present, for example with segfaults,
             // then simultaneously assert that it's within a known linear memory
@@ -110,7 +110,7 @@ pub(crate) fn from_runtime_box(
             }
             (err, Some(pc))
         }
-        crate::runtime::vm::TrapReason::Wasm(trap_code) => (trap_code.into_anyhow(), None),
+        crate::runtime::vm::TrapReason::Wasm(trap_code) => (trap_code.into(), None),
     };
 
     if let Some(bt) = backtrace {

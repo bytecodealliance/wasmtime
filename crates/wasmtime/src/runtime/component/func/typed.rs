@@ -315,8 +315,8 @@ where
     ) -> Result<Return> {
         assert!(Return::flatten_count() > MAX_FLAT_RESULTS);
         // FIXME: needs to read an i64 for memory64
-        let ptr = usize::try_from(dst.get_u32()).err2anyhow()?;
-        if ptr % usize::try_from(Return::ALIGN32).err2anyhow()? != 0 {
+        let ptr = usize::try_from(dst.get_u32())?;
+        if ptr % usize::try_from(Return::ALIGN32)? != 0 {
             bail!("return pointer not aligned");
         }
 
@@ -1053,7 +1053,7 @@ unsafe impl Lift for char {
     #[inline]
     fn lift(_cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
         debug_assert!(matches!(ty, InterfaceType::Char));
-        Ok(char::try_from(src.get_u32()).err2anyhow()?)
+        Ok(char::try_from(src.get_u32())?)
     }
 
     #[inline]
@@ -1061,7 +1061,7 @@ unsafe impl Lift for char {
         debug_assert!(matches!(ty, InterfaceType::Char));
         debug_assert!((bytes.as_ptr() as usize) % Self::SIZE32 == 0);
         let bits = u32::from_le_bytes(bytes.try_into().unwrap());
-        Ok(char::try_from(bits).err2anyhow()?)
+        Ok(char::try_from(bits)?)
     }
 }
 
@@ -1337,9 +1337,7 @@ impl WasmStr {
         // Note that bounds-checking already happen in construction of `WasmStr`
         // so this is never expected to panic. This could theoretically be
         // unchecked indexing if we're feeling wild enough.
-        Ok(str::from_utf8(&memory[self.ptr..][..self.len])
-            .err2anyhow()?
-            .into())
+        Ok(str::from_utf8(&memory[self.ptr..][..self.len])?.into())
     }
 
     fn decode_utf16<'a>(&self, memory: &'a [u8], len: usize) -> Result<Cow<'a, str>> {
@@ -1350,8 +1348,7 @@ impl WasmStr {
                 .chunks(2)
                 .map(|chunk| u16::from_le_bytes(chunk.try_into().unwrap())),
         )
-        .collect::<Result<String, _>>()
-        .err2anyhow()?
+        .collect::<Result<String, _>>()?
         .into())
     }
 
@@ -1385,10 +1382,7 @@ unsafe impl Lift for WasmStr {
         // FIXME: needs memory64 treatment
         let ptr = src[0].get_u32();
         let len = src[1].get_u32();
-        let (ptr, len) = (
-            usize::try_from(ptr).err2anyhow()?,
-            usize::try_from(len).err2anyhow()?,
-        );
+        let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
         WasmStr::new(ptr, len, cx)
     }
 
@@ -1399,10 +1393,7 @@ unsafe impl Lift for WasmStr {
         // FIXME: needs memory64 treatment
         let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap());
         let len = u32::from_le_bytes(bytes[4..].try_into().unwrap());
-        let (ptr, len) = (
-            usize::try_from(ptr).err2anyhow()?,
-            usize::try_from(len).err2anyhow()?,
-        );
+        let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
         WasmStr::new(ptr, len, cx)
     }
 }
@@ -1539,7 +1530,7 @@ impl<T: Lift> WasmList<T> {
             Some(n) if n <= cx.memory().len() => {}
             _ => bail!("list pointer/length out of bounds of memory"),
         }
-        if ptr % usize::try_from(T::ALIGN32).err2anyhow()? != 0 {
+        if ptr % usize::try_from(T::ALIGN32)? != 0 {
             bail!("list pointer is not aligned")
         }
         Ok(WasmList {
@@ -1695,10 +1686,7 @@ unsafe impl<T: Lift> Lift for WasmList<T> {
         // FIXME: needs memory64 treatment
         let ptr = src[0].get_u32();
         let len = src[1].get_u32();
-        let (ptr, len) = (
-            usize::try_from(ptr).err2anyhow()?,
-            usize::try_from(len).err2anyhow()?,
-        );
+        let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
         WasmList::new(ptr, len, cx, elem)
     }
 
@@ -1711,10 +1699,7 @@ unsafe impl<T: Lift> Lift for WasmList<T> {
         // FIXME: needs memory64 treatment
         let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap());
         let len = u32::from_le_bytes(bytes[4..].try_into().unwrap());
-        let (ptr, len) = (
-            usize::try_from(ptr).err2anyhow()?,
-            usize::try_from(len).err2anyhow()?,
-        );
+        let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
         WasmList::new(ptr, len, cx, elem)
     }
 }

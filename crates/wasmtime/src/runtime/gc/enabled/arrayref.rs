@@ -321,10 +321,8 @@ impl ArrayRef {
         let arrayref = store
             .gc_store_mut()?
             .alloc_uninit_array(allocator.type_index(), len, allocator.layout())
-            .err2anyhow()
             .context("unrecoverable error when allocating new `arrayref`")?
-            .ok_or_else(|| GcHeapOutOfMemory::new(()))
-            .err2anyhow()?;
+            .ok_or_else(|| GcHeapOutOfMemory::new(()))?;
 
         // From this point on, if we get any errors, then the array is not
         // fully initialized, so we need to eagerly deallocate it before the
