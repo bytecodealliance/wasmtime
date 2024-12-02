@@ -6,6 +6,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   publish:
@@ -33,6 +35,10 @@ jobs:
       uses: actions/upload-pages-artifact@v3
       with:
         path: "./gh-pages/gh-pages"
+
+    - uses: actions/attest-build-provenance@v1
+      with:
+        subject-path: 'dist/*'
 
     - run: npm install --production
       working-directory: .github/actions/github-release
