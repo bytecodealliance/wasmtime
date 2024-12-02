@@ -117,6 +117,7 @@ fn op_is_safe_for_fuzzing(op: &Op) -> bool {
         Op::XPop32(_) | Op::XPop64(_) => false,
         Op::XPush32Many(_) | Op::XPush64Many(_) => false,
         Op::XPop32Many(_) | Op::XPop64Many(_) => false,
+        Op::BrTable32(_) => false,
     }
 }
 

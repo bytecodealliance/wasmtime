@@ -1228,6 +1228,15 @@ impl OpVisitor for Interpreter<'_> {
         self.state[dst].set_f64(f64::from_ne_bytes(val.to_ne_bytes()));
         ControlFlow::Continue(())
     }
+
+    fn br_table32(&mut self, idx: XReg, amt: u32) -> ControlFlow<Done> {
+        let idx = self.state[idx].get_u32().min(amt - 1) as isize;
+        // SAFETY: part of the contract of the interpreter is only dealing with
+        // valid bytecode, so this offset should be safe.
+        self.pc = unsafe { self.pc.offset(idx * 4) };
+        let rel = unwrap_uninhabited(PcRelOffset::decode(&mut self.pc));
+        self.pc_rel_jump(rel, 0)
+    }
 }
 
 impl ExtendedOpVisitor for Interpreter<'_> {

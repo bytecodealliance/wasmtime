@@ -21,6 +21,13 @@
     ;; A pseudo-instruction to update unwind info.
     (Unwind (inst UnwindInst))
 
+    ;; Implementation of `br_table`, uses `idx` to jump to one of `targets` or
+    ;; jumps to `default` if it's out-of-bounds.
+    (BrTable
+      (idx XReg)
+      (default MachLabel)
+      (targets BoxVecMachLabel))
+
     ;;;; Actual Instructions ;;;;
 
     ;; Raise a trap.
@@ -550,6 +557,10 @@
       (let ((dst WritableXReg (temp_writable_xreg))
             (_ Unit (emit (MInst.BitcastIntFromFloat64 dst src))))
         dst))
+
+(decl gen_br_table (XReg MachLabel BoxVecMachLabel) Unit)
+(rule (gen_br_table idx default labels)
+      (emit (MInst.BrTable idx default labels)))
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -244,6 +244,10 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(src);
             collector.reg_def(dst);
         }
+
+        Inst::BrTable { idx, .. } => {
+            collector.reg_use(idx);
+        }
     }
 }
 
@@ -370,6 +374,7 @@ where
             | Inst::BrIfXslteq32 { .. }
             | Inst::BrIfXult32 { .. }
             | Inst::BrIfXulteq32 { .. } => MachTerminator::Cond,
+            Inst::BrTable { .. } => MachTerminator::Indirect,
             _ => MachTerminator::None,
         }
     }
@@ -437,8 +442,8 @@ where
         }
     }
 
-    fn gen_jump(_target: MachLabel) -> Self {
-        todo!()
+    fn gen_jump(target: MachLabel) -> Self {
+        Inst::Jump { label: target }.into()
     }
 
     fn worst_case_size() -> CodeOffset {
@@ -842,6 +847,15 @@ impl Inst {
                 let dst = format_reg(*dst.to_reg());
                 let src = format_reg(**src);
                 format!("{dst} = bitcast_float_from_int64 {src}")
+            }
+
+            Inst::BrTable {
+                idx,
+                default,
+                targets,
+            } => {
+                let idx = format_reg(**idx);
+                format!("br_table {idx} {default:?} {targets:?}")
             }
         }
     }

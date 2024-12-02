@@ -49,10 +49,8 @@
       (lower_brif_of_icmp32 (IntCC.UnsignedLessThanOrEqual) b a then else))
 
 ;; Branch tables.
-(decl lower_br_table (Reg MachLabelSlice) Unit)
-(extern constructor lower_br_table lower_br_table)
-(rule (lower_branch (br_table index _) targets)
-      (lower_br_table index targets))
+(rule (lower_branch (br_table index _) (jump_table_targets default targets))
+      (gen_br_table index default targets))
 
 ;;;; Rules for `trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

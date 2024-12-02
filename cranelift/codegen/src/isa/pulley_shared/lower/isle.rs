@@ -51,10 +51,6 @@ where
     crate::isle_lower_prelude_methods!(InstAndKind<P>);
     crate::isle_prelude_caller_methods!(PulleyABICallSite<P>);
 
-    fn lower_br_table(&mut self, _index: Reg, _targets: &[MachLabel]) -> Unit {
-        todo!()
-    }
-
     fn vreg_new(&mut self, r: Reg) -> VReg {
         VReg::new(r).unwrap()
     }

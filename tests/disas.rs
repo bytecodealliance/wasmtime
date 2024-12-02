@@ -358,7 +358,7 @@ fn assert_output(
                     disas.offsets(false);
                     disas.hexdump(false);
                     let mut decoder = pulley_interpreter::decode::Decoder::new();
-
+                    let mut last_disas_pos = 0;
                     loop {
                         let addr = disas.bytecode().position();
 
@@ -375,22 +375,17 @@ fn assert_output(
                             }
 
                             Ok(()) => {
-                                let disassembly = disas
-                                    .disas()
-                                    .lines()
-                                    .map(|l| l.trim().to_string())
-                                    .filter(|l| !l.is_empty())
-                                    .next_back()
-                                    .unwrap();
+                                let disassembly = disas.disas()[last_disas_pos..].trim();
+                                last_disas_pos = disas.disas().len();
                                 let address = u64::try_from(addr).unwrap();
                                 let is_jump =
-                                    disassembly.contains("jump") || disassembly.contains("br_if");
+                                    disassembly.contains("jump") || disassembly.contains("br_");
                                 let is_return = disassembly == "ret";
                                 result.push(DisasInst {
                                     address,
                                     is_jump,
                                     is_return,
-                                    disassembly,
+                                    disassembly: disassembly.to_string(),
                                 });
                             }
                         }
@@ -459,13 +454,14 @@ where
             disassembly: disas,
         } in disas(bytes, sym.address())?.into_iter()
         {
-            if write_offsets || (prev_jump && !is_jump) {
-                write!(result, "{address:>4x}: ")?;
-            } else {
-                write!(result, "      ")?;
+            for (i, line) in disas.lines().enumerate() {
+                if i == 0 && (write_offsets || (prev_jump && !is_jump)) {
+                    write!(result, "{address:>4x}: ")?;
+                } else {
+                    write!(result, "      ")?;
+                }
+                writeln!(result, "{line}")?;
             }
-
-            writeln!(result, "{disas}")?;
 
             prev_jump = is_jump;
 

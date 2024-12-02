@@ -1,0 +1,69 @@
+test compile precise-output
+target pulley32
+
+function %br_table(i32) -> i32 {
+block0(v0: i32):
+  br_table v0, block4, [block1, block2, block2, block3]
+
+block1:
+  v1 = iconst.i32 1
+  jump block5(v1)
+
+block2:
+  v2 = iconst.i32 2
+  jump block5(v2)
+
+block3:
+  v3 = iconst.i32 3
+  jump block5(v3)
+
+block4:
+  v4 = iconst.i32 4
+  jump block5(v4)
+
+block5(v5: i32):
+  v6 = iadd.i32 v0, v5
+  return v6
+}
+
+; VCode:
+; block0:
+;   br_table x0 MachLabel(6) [MachLabel(5), MachLabel(1), MachLabel(2), MachLabel(3)]
+; block1:
+;   jump label4
+; block2:
+;   jump label4
+; block3:
+;   x5 = xconst8 3
+;   jump label7
+; block4:
+;   x5 = xconst8 2
+;   jump label7
+; block5:
+;   x5 = xconst8 1
+;   jump label7
+; block6:
+;   x5 = xconst8 4
+;   jump label7
+; block7:
+;   x0 = xadd32 x0, x5
+;   ret
+;
+; Disassembled:
+; br_table32 x0, 5
+; 0x29    // target = 0x2f
+; 0x1d    // target = 0x27
+; 0x19    // target = 0x27
+; 0xd    // target = 0x1f
+; 0x21    // target = 0x37
+; jump 0xd    // target = 0x27
+; xconst8 x5, 3
+; jump 0x18    // target = 0x3a
+; xconst8 x5, 2
+; jump 0x10    // target = 0x3a
+; xconst8 x5, 1
+; jump 0x8    // target = 0x3a
+; xconst8 x5, 4
+; xadd32 x0, x0, x5
+; ret
+
