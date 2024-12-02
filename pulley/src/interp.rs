@@ -1254,77 +1254,8 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
-    /// This instructions is sort of like a `call` instruction except that it
-    /// delegates to the host itself. That means that ABI details are baked in
-    /// here such as where various arguments are.
-    ///
-    /// This will load the arguments from the `xN` registers, the first being
-    /// the function pointer on the host to call. Since we don't have a
-    /// libffi-like solution here the way this works is that the
-    /// `for_each_host_signature!` macro statically enumerates all possible
-    /// signatures. The `sig` payload here selects one of the mwhich we dispatch
-    /// to here. Note that we mostly just try to get the width of each argument
-    /// correct, whether or not it's a pointer is not actually tracked here.
-    /// That means that, like the rest of Pulley, this isn't compatible with
-    /// strict provenance pointer rules.
     fn call_indirect_host(&mut self, sig: u8) -> ControlFlow<Done> {
-        let raw = self.state[XReg::x0].get_ptr::<u8>();
-        let mut n = 0;
-        let mut arg = 1;
-
-        type I8 = i8;
-        type I32 = i32;
-        type I64 = i64;
-
-        macro_rules! call_host {
-            ($(fn($($args:ident),*) $(-> $ret:ident)?;)*) => {$(
-                // We're relying on LLVM to boil away most of this boilerplate
-                // as this is a bunch of `if` statements that should be a
-                // `match`.
-                if sig == n {
-                    union Convert {
-                        raw: *mut u8,
-                        f: unsafe extern "C" fn($($args),*) $(-> $ret)?,
-                    }
-                    let ptr = Convert { raw }.f;
-
-                    // Arguments are loaded from subsequent registers after
-                    // `x0` and are tracked by `arg`.
-                    let ret = ptr(
-                        $({
-                            let reg = XReg::new_unchecked(arg);
-                            arg += 1;
-                            let reg = &self.state[reg];
-                            call_host!(@get $args reg)
-                        },)*
-                    );
-                    let _ = arg; // ignore the last increment of `arg`
-
-                    // If this function produce a result the ABI is that we
-                    // place it into `x0`.
-                    let dst = &mut self.state[XReg::x0];
-                    $(call_host!(@set $ret dst ret);)?
-                    let _ = (ret, dst); // ignore if there was no return value
-                }
-                n += 1;
-            )*};
-
-            (@get I8 $reg:ident) => ($reg.get_i32() as i8);
-            (@get I32 $reg:ident) => ($reg.get_i32());
-            (@get I64 $reg:ident) => ($reg.get_i64());
-
-            (@set I8 $dst:ident $val:ident) => ($dst.set_i32($val.into()););
-            (@set I32 $dst:ident $val:ident) => ($dst.set_i32($val););
-            (@set I64 $dst:ident $val:ident) => ($dst.set_i64($val););
-
-        }
-
-        unsafe {
-            for_each_host_signature!(call_host);
-        }
-
-        let _ = n; // ignore the last increment of `n`
-
-        ControlFlow::Continue(())
+        let _ = sig; // TODO: should stash this somewhere
+        ControlFlow::Break(Done::ReturnToHost)
     }
 }
