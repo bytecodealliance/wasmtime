@@ -784,7 +784,7 @@ impl Config {
     /// scheme on top of the core wasm threads proposal, however.
     ///
     /// The default value for this option is whether the `threads`
-    /// crate feature of Wasmtimem is enabled or not. By default this crate
+    /// crate feature of Wasmtime is enabled or not. By default this crate
     /// feature is enabled.
     ///
     /// [threads]: https://github.com/webassembly/threads
@@ -1021,8 +1021,8 @@ impl Config {
     /// [`Component`](crate::component::Component) instead of
     /// [`Module`](crate::Module) for example anyway.
     ///
-    /// The default value for this option is whether the `componenet-model`
-    /// crate feature of Wasmtimem is enabled or not. By default this crate
+    /// The default value for this option is whether the `component-model`
+    /// crate feature of Wasmtime is enabled or not. By default this crate
     /// feature is enabled.
     ///
     /// [proposal]: https://github.com/webassembly/component-model
