@@ -233,7 +233,6 @@ impl GcLayout {
 /// themselves. The array elements must be aligned to the element type's natural
 /// alignment.
 #[derive(Clone, Debug)]
-#[allow(dead_code)] // Not used yet, but added for completeness.
 pub struct GcArrayLayout {
     /// The size of this array object, without any elements.
     ///
@@ -329,7 +328,7 @@ impl GcStructLayout {
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[rustfmt::skip]
-#[allow(missing_docs)]
+#[allow(missing_docs, reason = "self-describing variants")]
 pub enum VMGcKind {
     ExternRef      = 0b01000 << 27,
     AnyRef         = 0b10000 << 27,

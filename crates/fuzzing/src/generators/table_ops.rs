@@ -174,6 +174,7 @@ macro_rules! define_table_ops {
             )*
         }
 
+        #[expect(unused_comparisons, reason = "macro-generated code")]
         fn add_table_op(
             ops: &mut TableOps,
             u: &mut Unstructured,
@@ -184,7 +185,6 @@ macro_rules! define_table_ops {
 
             // Add all the choices of valid `TableOp`s we could generate.
             $(
-                #[allow(unused_comparisons)]
                 if $( $(($limit as fn(&TableOps) -> $ty)(&*ops) > 0 &&)* )? *stack >= $params {
                     choices.push(|_ops, _u, stack| {
                         *stack = *stack - $params + $results;

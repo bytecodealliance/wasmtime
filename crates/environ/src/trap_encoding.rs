@@ -22,7 +22,7 @@ pub struct TrapInformation {
 // These need to be kept in sync.
 #[non_exhaustive]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
-#[allow(missing_docs)]
+#[allow(missing_docs, reason = "self-describing variants")]
 pub enum Trap {
     /// The current stack space was exhausted.
     StackOverflow,

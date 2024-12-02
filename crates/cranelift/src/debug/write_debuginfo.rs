@@ -8,14 +8,12 @@ use cranelift_codegen::isa::{
 use gimli::write::{Address, Dwarf, EndianVec, FrameTable, Result, Sections, Writer};
 use gimli::{RunTimeEndian, SectionId};
 
-#[allow(missing_docs)]
 pub struct DwarfSection {
     pub name: &'static str,
     pub body: Vec<u8>,
     pub relocs: Vec<DwarfSectionReloc>,
 }
 
-#[allow(missing_docs)]
 #[derive(Clone)]
 pub struct DwarfSectionReloc {
     pub target: DwarfSectionRelocTarget,
@@ -24,7 +22,6 @@ pub struct DwarfSectionReloc {
     pub size: u8,
 }
 
-#[allow(missing_docs)]
 #[derive(Clone)]
 pub enum DwarfSectionRelocTarget {
     Func(usize),

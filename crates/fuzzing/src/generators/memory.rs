@@ -132,7 +132,7 @@ pub enum MemoryConfig {
 /// Represents a normal memory configuration for Wasmtime with the given
 /// static and dynamic memory sizes.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct NormalMemoryConfig {
     pub memory_reservation: Option<u64>,
     pub memory_guard_size: Option<u64>,

@@ -5,6 +5,7 @@
 #![cfg_attr(pulley_tail_calls, allow(incomplete_features, unstable_features))]
 #![deny(missing_docs)]
 #![no_std]
+#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
 #[cfg(feature = "std")]
 #[macro_use]

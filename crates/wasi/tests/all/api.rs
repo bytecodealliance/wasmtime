@@ -1,3 +1,5 @@
+#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
+
 use anyhow::Result;
 use std::io::Write;
 use std::sync::Mutex;

@@ -47,7 +47,7 @@ macro_rules! wasmtime_option_group {
         }
 
         #[derive(Clone, Debug,PartialEq)]
-        #[allow(non_camel_case_types)]
+        #[expect(non_camel_case_types, reason = "macro-generated code")]
         enum $option {
             $(
                 $opt($payload),

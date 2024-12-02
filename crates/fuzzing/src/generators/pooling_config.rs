@@ -5,7 +5,7 @@ use wasmtime::MpkEnabled;
 
 /// Configuration for `wasmtime::PoolingAllocationStrategy`.
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing field names")]
 pub struct PoolingAllocationConfig {
     pub total_component_instances: u32,
     pub total_core_instances: u32,

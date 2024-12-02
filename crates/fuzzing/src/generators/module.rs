@@ -7,16 +7,14 @@ use arbitrary::{Arbitrary, Unstructured};
 /// Internally this uses `wasm-smith`'s own `Config` but we further refine
 /// the defaults here as well.
 #[derive(Debug, Clone)]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct ModuleConfig {
-    #[allow(missing_docs)]
     pub config: wasm_smith::Config,
 
     // These knobs aren't exposed in `wasm-smith` at this time but are exposed
     // in our `*.wast` testing so keep knobs here so they can be read during
     // config-to-`wasmtime::Config` translation.
-    #[allow(missing_docs)]
     pub function_references_enabled: bool,
-    #[allow(missing_docs)]
     pub component_model_more_flags: bool,
 }
 

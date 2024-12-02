@@ -987,7 +987,7 @@ impl<'a> CrashCheckContext<'a> {
         }
     }
 
-    #[cfg_attr(test, allow(unreachable_code))]
+    #[cfg_attr(test, expect(unreachable_code, reason = "test-specific code"))]
     fn check_for_crash(&mut self, func: &Function) -> CheckResult {
         self.context.clear();
 

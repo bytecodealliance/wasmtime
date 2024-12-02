@@ -8,7 +8,7 @@ include!(concat!(env!("OUT_DIR"), "/wasttests.rs"));
 /// A wast test from this repository.
 #[derive(Debug)]
 pub struct WastTest {
-    #[allow(missing_docs)]
+    #[expect(missing_docs, reason = "self-describing field")]
     pub test: wasmtime_wast_util::WastTest,
 }
 

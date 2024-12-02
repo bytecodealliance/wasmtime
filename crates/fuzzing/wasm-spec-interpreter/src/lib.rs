@@ -20,7 +20,6 @@ pub enum SpecValue {
 }
 
 /// Represents a WebAssembly export from the OCaml interpreter side.
-#[allow(dead_code)]
 pub enum SpecExport {
     Global(SpecValue),
     Memory(Vec<u8>),

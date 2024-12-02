@@ -288,6 +288,7 @@
 // and will prevent the doc build from failing.
 #![cfg_attr(feature = "default", warn(rustdoc::broken_intra_doc_links))]
 #![no_std]
+#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
 #[cfg(any(feature = "std", unix, windows))]
 #[macro_use]

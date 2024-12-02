@@ -1,3 +1,5 @@
+#![expect(clippy::allow_attributes, reason = "crate not migrated yet")]
+
 use anyhow::Error;
 use std::any::Any;
 use std::cell::Cell;

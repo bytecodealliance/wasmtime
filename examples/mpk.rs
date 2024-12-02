@@ -31,6 +31,8 @@
 //! $ sysctl vm.max_map_count=$LARGER_LIMIT
 //! ```
 
+#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
+
 use anyhow::anyhow;
 use bytesize::ByteSize;
 use clap::Parser;

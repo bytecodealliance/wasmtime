@@ -7,7 +7,7 @@ use wasmtime::HeapType;
 /// A value passed to and from evaluation. Note that reference types are not
 /// (yet) supported.
 #[derive(Clone, Debug)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub enum DiffValue {
     I32(i32),
     I64(i64),
@@ -274,7 +274,7 @@ impl PartialEq for DiffValue {
 
 /// Enumerate the supported value types.
 #[derive(Copy, Clone, Debug, Arbitrary, Hash)]
-#[allow(missing_docs)]
+#[expect(missing_docs, reason = "self-describing variants")]
 pub enum DiffValueType {
     I32,
     I64,
@@ -310,7 +310,6 @@ impl TryFrom<wasmtime::ValType> for DiffValueType {
 
 /// Enumerate the types of v128.
 #[derive(Copy, Clone, Debug, Arbitrary, Hash)]
-#[allow(missing_docs)]
 pub enum DiffSimdTy {
     I8x16,
     I16x8,

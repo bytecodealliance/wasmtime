@@ -169,7 +169,6 @@ struct Translation<'data> {
 // fully determined due to resources until instantiations are known which is
 // tracked during the inlining phase. This means that all type information below
 // is straight from `wasmparser`'s passes.
-#[allow(missing_docs)]
 enum LocalInitializer<'data> {
     // imports
     Import(ComponentImportName<'data>, ComponentEntityType),
