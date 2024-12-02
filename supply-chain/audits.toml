@@ -2354,6 +2354,12 @@ No `unsafe` code in this update. Lots of changes but all
 object-file-format-related, everything looks good.
 """
 
+[[audits.object]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.36.0 -> 0.36.5"
+notes = "No new unsafe code, lots of new relocations/objects support, everything looks nominal"
+
 [[audits.once_cell]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
