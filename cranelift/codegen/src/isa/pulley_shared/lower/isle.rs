@@ -110,6 +110,10 @@ where
     fn fp_reg(&mut self) -> XReg {
         XReg::new(regs::fp_reg()).unwrap()
     }
+
+    fn lr_reg(&mut self) -> XReg {
+        XReg::new(regs::lr_reg()).unwrap()
+    }
 }
 
 /// The main entry point for lowering with ISLE.

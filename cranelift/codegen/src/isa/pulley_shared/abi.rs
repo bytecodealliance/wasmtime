@@ -296,7 +296,7 @@ where
             insts.push(
                 Inst::gen_store(
                     Amode::SpOffset { offset: 8 },
-                    link_reg(),
+                    lr_reg(),
                     I64,
                     MemFlags::trusted(),
                 )
@@ -345,7 +345,7 @@ where
         if frame_layout.setup_area_size > 0 {
             insts.push(
                 Inst::gen_load(
-                    writable_link_reg(),
+                    writable_lr_reg(),
                     Amode::SpOffset { offset: 8 },
                     I64,
                     MemFlags::trusted(),
@@ -405,7 +405,7 @@ where
                 insts.push(
                     Inst::gen_store(
                         Amode::SpOffset { offset: 8 },
-                        link_reg(),
+                        lr_reg(),
                         I64,
                         MemFlags::trusted(),
                     )
