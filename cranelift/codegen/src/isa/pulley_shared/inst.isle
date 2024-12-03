@@ -40,7 +40,7 @@
     (Nop)
 
     ;; Move a special register (e.g. sp, fp, lr, etc) in to a general-purpose
-    ;; register
+    ;; register.
     (GetSpecial
       (dst WritableXReg)
       (reg XReg))

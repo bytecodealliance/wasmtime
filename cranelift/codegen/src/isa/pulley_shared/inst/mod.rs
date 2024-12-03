@@ -82,9 +82,9 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::GetSpecial { dst, reg } => {
             collector.reg_def(dst);
             // Note that this is explicitly ignored as this is only used for
-            // special register that don't participate in register allocation
+            // special registers that don't participate in register allocation
             // such as the stack pointer, frame pointer, etc.
-            let _ = reg;
+            assert!(reg.is_special());
         }
 
         Inst::LoadExtName {
