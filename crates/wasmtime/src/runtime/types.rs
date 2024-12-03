@@ -2629,7 +2629,6 @@ impl MemoryTypeBuilder {
         let min = self
             .ty
             .minimum_byte_size()
-            .err2anyhow()
             .context("memory's minimum byte size must fit in a u64")?;
         if min > absolute_max {
             bail!("minimum size is too large for this memory type's index type");

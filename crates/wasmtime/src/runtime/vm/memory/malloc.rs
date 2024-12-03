@@ -39,17 +39,12 @@ impl MallocMemory {
         }
 
         let initial_allocation_byte_size = minimum
-            .checked_add(
-                tunables
-                    .memory_reservation_for_growth
-                    .try_into()
-                    .err2anyhow()?,
-            )
+            .checked_add(tunables.memory_reservation_for_growth.try_into()?)
             .context("memory allocation size too large")?;
 
         let initial_allocation_len = byte_size_to_element_len(initial_allocation_byte_size);
         let mut storage = Vec::new();
-        storage.try_reserve(initial_allocation_len).err2anyhow()?;
+        storage.try_reserve(initial_allocation_len)?;
 
         let initial_len = byte_size_to_element_len(minimum);
         if initial_len > 0 {
@@ -76,8 +71,7 @@ impl RuntimeLinearMemory for MallocMemory {
         let new_element_len = byte_size_to_element_len(new_size);
         if new_element_len > self.storage.len() {
             self.storage
-                .try_reserve(new_element_len - self.storage.len())
-                .err2anyhow()?;
+                .try_reserve(new_element_len - self.storage.len())?;
             grow_storage_to(&mut self.storage, new_element_len);
             self.base_ptr =
                 SendSyncPtr::new(NonNull::new(self.storage.as_mut_ptr()).unwrap()).cast();

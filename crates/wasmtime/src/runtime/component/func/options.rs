@@ -89,10 +89,10 @@ impl Options {
         let realloc = self.realloc.unwrap();
 
         let params = (
-            u32::try_from(old).err2anyhow()?,
-            u32::try_from(old_size).err2anyhow()?,
+            u32::try_from(old)?,
+            u32::try_from(old_size)?,
             old_align,
-            u32::try_from(new_size).err2anyhow()?,
+            u32::try_from(new_size)?,
         );
 
         type ReallocFunc = crate::TypedFunc<(u32, u32, u32, u32), u32>;
@@ -108,7 +108,7 @@ impl Options {
         if result % old_align != 0 {
             bail!("realloc return: result not aligned");
         }
-        let result = usize::try_from(result).err2anyhow()?;
+        let result = usize::try_from(result)?;
 
         let memory = self.memory_mut(store.0);
 

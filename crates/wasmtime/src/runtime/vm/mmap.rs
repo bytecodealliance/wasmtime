@@ -63,7 +63,7 @@ impl Mmap<AlignedLength> {
     /// Create a new `Mmap` pointing to at least `size` bytes of page-aligned
     /// accessible memory.
     pub fn with_at_least(size: usize) -> Result<Self> {
-        let rounded_size = HostAlignedByteCount::new_rounded_up(size).err2anyhow()?;
+        let rounded_size = HostAlignedByteCount::new_rounded_up(size)?;
         Self::accessible_reserved(rounded_size, rounded_size)
     }
 

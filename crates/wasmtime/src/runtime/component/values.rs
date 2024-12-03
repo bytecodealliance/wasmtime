@@ -439,9 +439,7 @@ impl Val {
         ty: InterfaceType,
         offset: usize,
     ) -> Result<()> {
-        debug_assert!(
-            offset % usize::try_from(cx.types.canonical_abi(&ty).align32).err2anyhow()? == 0
-        );
+        debug_assert!(offset % usize::try_from(cx.types.canonical_abi(&ty).align32)? == 0);
 
         match (ty, self) {
             (InterfaceType::Bool, Val::Bool(value)) => value.store(cx, ty, offset),
@@ -832,7 +830,7 @@ fn load_list(cx: &mut LiftContext<'_>, ty: TypeListIndex, ptr: usize, len: usize
         Some(n) if n <= cx.memory().len() => {}
         _ => bail!("list pointer/length out of bounds of memory"),
     }
-    if ptr % usize::try_from(element_alignment).err2anyhow()? != 0 {
+    if ptr % usize::try_from(element_alignment)? != 0 {
         bail!("list pointer is not aligned")
     }
 
@@ -914,7 +912,7 @@ fn lower_list<T>(
     items: &[Val],
 ) -> Result<(usize, usize)> {
     let abi = cx.types.canonical_abi(&element_type);
-    let elt_size = usize::try_from(abi.size32).err2anyhow()?;
+    let elt_size = usize::try_from(abi.size32)?;
     let elt_align = abi.align32;
     let size = items
         .len()

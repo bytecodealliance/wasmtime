@@ -1199,8 +1199,7 @@ impl<T> Linker<T> {
         let mut imports = module
             .imports()
             .map(|import| self._get_by_import(&import))
-            .collect::<Result<Vec<_>, _>>()
-            .err2anyhow()?;
+            .collect::<Result<Vec<_>, _>>()?;
         if let Some(store) = store {
             for import in imports.iter_mut() {
                 import.update_size(store);
@@ -1494,5 +1493,4 @@ impl fmt::Display for UnknownImportError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for UnknownImportError {}
+impl core::error::Error for UnknownImportError {}

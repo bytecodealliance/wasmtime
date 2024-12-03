@@ -236,8 +236,8 @@ user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.anyhow]]
-version = "1.0.75"
-when = "2023-08-17"
+version = "1.0.93"
+when = "2024-11-06"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -660,8 +660,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.proc-macro2]]
-version = "1.0.81"
-when = "2024-04-17"
+version = "1.0.92"
+when = "2024-11-21"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -750,15 +750,15 @@ user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
 [[publisher.serde]]
-version = "1.0.188"
-when = "2023-08-26"
+version = "1.0.215"
+when = "2024-11-11"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.serde_derive]]
-version = "1.0.188"
-when = "2023-08-26"
+version = "1.0.215"
+when = "2024-11-11"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
@@ -791,8 +791,8 @@ user-login = "dtolnay"
 user-name = "David Tolnay"
 
 [[publisher.syn]]
-version = "2.0.60"
-when = "2024-04-17"
+version = "2.0.90"
+when = "2024-11-29"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"

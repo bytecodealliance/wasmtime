@@ -59,7 +59,6 @@ impl MmapMemory {
         // Also be sure to round up to the host page size for this value.
         let offset_guard_bytes =
             HostAlignedByteCount::new_rounded_up_u64(tunables.memory_guard_size)
-                .err2anyhow()
                 .context("tunable.memory_guard_size overflows")?;
         let pre_guard_bytes = if tunables.guard_before_linear_memory {
             offset_guard_bytes
@@ -93,23 +92,20 @@ impl MmapMemory {
         // Convert `alloc_bytes` and `extra_to_reserve_on_growth` to
         // page-aligned `usize` values.
         let alloc_bytes = HostAlignedByteCount::new_rounded_up_u64(alloc_bytes)
-            .err2anyhow()
             .context("tunables.memory_reservation overflows")?;
         let extra_to_reserve_on_growth =
             HostAlignedByteCount::new_rounded_up_u64(extra_to_reserve_on_growth)
-                .err2anyhow()
                 .context("tunables.memory_reservation_for_growth overflows")?;
 
         let request_bytes = pre_guard_bytes
             .checked_add(alloc_bytes)
             .and_then(|i| i.checked_add(offset_guard_bytes))
-            .err2anyhow()
             .with_context(|| format!("cannot allocate {minimum} with guard regions"))?;
 
         let mmap = Mmap::accessible_reserved(HostAlignedByteCount::ZERO, request_bytes)?;
 
         if minimum > 0 {
-            let accessible = HostAlignedByteCount::new_rounded_up(minimum).err2anyhow()?;
+            let accessible = HostAlignedByteCount::new_rounded_up(minimum)?;
             // SAFETY: mmap is not in use right now so it's safe to make it accessible.
             unsafe {
                 mmap.make_accessible(pre_guard_bytes, accessible)?;
@@ -156,7 +152,7 @@ impl RuntimeLinearMemory for MmapMemory {
     }
 
     fn grow_to(&mut self, new_size: usize) -> Result<()> {
-        let new_accessible = HostAlignedByteCount::new_rounded_up(new_size).err2anyhow()?;
+        let new_accessible = HostAlignedByteCount::new_rounded_up(new_size)?;
         let current_capacity = self.current_capacity();
         if new_accessible > current_capacity {
             // If the new size of this heap exceeds the current size of the
@@ -168,7 +164,6 @@ impl RuntimeLinearMemory for MmapMemory {
                 .checked_add(new_accessible)
                 .and_then(|s| s.checked_add(self.extra_to_reserve_on_growth))
                 .and_then(|s| s.checked_add(self.offset_guard_size))
-                .err2anyhow()
                 .context("overflow calculating size of memory allocation")?;
 
             let mut new_mmap =
@@ -212,7 +207,6 @@ impl RuntimeLinearMemory for MmapMemory {
                     self.mmap.make_accessible(
                         self.pre_guard_size
                             .checked_add(self.accessible())
-                            .err2anyhow()
                             .context("overflow calculating new accessible region")?,
                         difference,
                     )?;

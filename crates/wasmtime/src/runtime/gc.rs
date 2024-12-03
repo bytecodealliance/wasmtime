@@ -80,8 +80,7 @@ impl<T> fmt::Display for GcHeapOutOfMemory<T> {
     }
 }
 
-#[cfg(feature = "std")]
-impl<T> std::error::Error for GcHeapOutOfMemory<T> {}
+impl<T> core::error::Error for GcHeapOutOfMemory<T> {}
 
 impl<T> GcHeapOutOfMemory<T> {
     pub(crate) fn new(inner: T) -> Self {

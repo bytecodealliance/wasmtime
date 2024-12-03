@@ -2626,7 +2626,7 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
 
     fn out_of_gas(&mut self) -> Result<()> {
         if !self.refuel() {
-            return Err(Trap::OutOfFuel).err2anyhow();
+            return Err(Trap::OutOfFuel.into());
         }
         #[cfg(feature = "async")]
         if self.fuel_yield_interval.is_some() {
@@ -2640,7 +2640,7 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
         // multiple times.
         let mut behavior = self.epoch_deadline_behavior.take();
         let delta_result = match &mut behavior {
-            None => Err(Trap::Interrupt).err2anyhow(),
+            None => Err(Trap::Interrupt.into()),
             Some(callback) => callback((&mut *self).as_context_mut()).and_then(|update| {
                 let delta = match update {
                     UpdateDeadline::Continue(delta) => delta,

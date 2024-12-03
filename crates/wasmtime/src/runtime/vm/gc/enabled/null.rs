@@ -111,7 +111,7 @@ impl VMNullExternRef {
 }
 
 fn oom() -> Error {
-    GcHeapOutOfMemory::new(()).into_anyhow()
+    GcHeapOutOfMemory::new(()).into()
 }
 
 impl NullHeap {
@@ -144,7 +144,7 @@ impl NullHeap {
             }
         }) {
             Some(size) => size,
-            None => return Err(crate::Trap::AllocationTooLarge.into_anyhow()),
+            None => return Err(crate::Trap::AllocationTooLarge.into()),
         };
 
         let next = *self.next.get_mut();

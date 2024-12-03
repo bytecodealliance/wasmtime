@@ -2354,6 +2354,12 @@ No `unsafe` code in this update. Lots of changes but all
 object-file-format-related, everything looks good.
 """
 
+[[audits.object]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.36.0 -> 0.36.5"
+notes = "No new unsafe code, lots of new relocations/objects support, everything looks nominal"
+
 [[audits.once_cell]]
 who = "Chris Fallin <chris@cfallin.org>"
 criteria = "safe-to-deploy"
@@ -3939,7 +3945,7 @@ end = "2025-09-20"
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-10-05"
-end = "2024-09-01"
+end = "2025-12-02"
 
 [[trusted.async-trait]]
 criteria = "safe-to-deploy"
@@ -4281,13 +4287,13 @@ end = "2024-07-06"
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-03-01"
-end = "2024-07-06"
+end = "2025-12-02"
 
 [[trusted.serde_derive]]
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-03-01"
-end = "2024-07-06"
+end = "2025-12-02"
 
 [[trusted.serde_json]]
 criteria = "safe-to-deploy"
@@ -4305,7 +4311,7 @@ end = "2025-02-12"
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-03-01"
-end = "2024-07-06"
+end = "2025-12-02"
 
 [[trusted.system-interface]]
 criteria = "safe-to-deploy"

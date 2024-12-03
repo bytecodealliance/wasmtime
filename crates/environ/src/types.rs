@@ -1887,8 +1887,7 @@ impl fmt::Display for SizeOverflow {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for SizeOverflow {}
+impl core::error::Error for SizeOverflow {}
 
 impl From<wasmparser::MemoryType> for Memory {
     fn from(ty: wasmparser::MemoryType) -> Memory {

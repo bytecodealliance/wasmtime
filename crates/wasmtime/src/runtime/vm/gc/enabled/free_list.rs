@@ -60,7 +60,6 @@ impl FreeList {
         );
 
         let alloc_size = u32::try_from(layout.size())
-            .err2anyhow()
             .context("requested allocation's size does not fit in a u32")?;
         alloc_size
             .checked_next_multiple_of(ALIGN_U32)
