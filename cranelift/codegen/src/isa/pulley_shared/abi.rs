@@ -254,6 +254,10 @@ where
     }
 
     fn gen_sp_reg_adjust(amount: i32) -> SmallInstVec<Self::I> {
+        if amount == 0 {
+            return smallvec![];
+        }
+
         let temp = WritableXReg::try_from(writable_spilltmp_reg()).unwrap();
 
         let imm = if let Ok(x) = i8::try_from(amount) {
