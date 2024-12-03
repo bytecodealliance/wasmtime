@@ -51,8 +51,8 @@ impl Mmap {
         anyhow::bail!("not supported on this platform");
     }
 
-    pub fn make_accessible(
-        &mut self,
+    pub unsafe fn make_accessible(
+        &self,
         start: HostAlignedByteCount,
         len: HostAlignedByteCount,
     ) -> Result<()> {
