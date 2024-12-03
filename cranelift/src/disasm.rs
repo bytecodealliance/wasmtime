@@ -39,12 +39,14 @@ pub fn print_traps(traps: &[MachTrap]) -> String {
 cfg_if! {
     if #[cfg(feature = "disas")] {
         pub fn print_disassembly(func: &Function, isa: &dyn TargetIsa, mem: &[u8]) -> Result<()> {
+            #[cfg(feature = "pulley")]
             let is_pulley = match isa.triple().architecture {
                 target_lexicon::Architecture::Pulley32 | target_lexicon::Architecture::Pulley64 => true,
                 _ => false,
             };
             println!("\nDisassembly of {} bytes <{}>:", mem.len(), func.name);
 
+            #[cfg(feature = "pulley")]
             if is_pulley {
                 let mut disas = pulley_interpreter::disas::Disassembler::new(mem);
                 pulley_interpreter::decode::Decoder::decode_all(&mut disas)?;
