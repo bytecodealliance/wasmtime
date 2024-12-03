@@ -203,8 +203,6 @@ macro_rules! for_each_extended_op {
             /// Do nothing.
             nop = Nop;
 
-            /// Copy the special `sp` stack pointer register into an `x` register.
-            get_sp = GetSp { dst: XReg };
             /// A special opcode to use an indirect function call to reenter the
             /// host from the interpreter.
             ///

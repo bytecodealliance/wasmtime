@@ -114,7 +114,12 @@
 ;;;; Rules for `get_stack_pointer` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (get_stack_pointer))
-      (pulley_get_sp))
+      (pulley_get_special (sp_reg)))
+
+;;;; Rules for `get_frame_pointer` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (get_frame_pointer))
+      (pulley_get_special (fp_reg)))
 
 ;;;; Rules for `return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

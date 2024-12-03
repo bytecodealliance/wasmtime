@@ -188,7 +188,7 @@ fn pulley_emit<P>(
 
         Inst::Nop => todo!(),
 
-        Inst::GetSp { dst } => enc::get_sp(sink, dst),
+        Inst::GetSpecial { dst, reg } => enc::xmov(sink, dst, reg),
 
         Inst::Ret => enc::ret(sink),
 
