@@ -11,7 +11,7 @@ use std::{
     sync::Mutex,
 };
 
-#[cfg(any(feature = "onnx", feature = "winml"))]
+#[cfg(feature = "onnx")]
 pub mod onnx;
 #[cfg(feature = "openvino")]
 pub mod openvino;

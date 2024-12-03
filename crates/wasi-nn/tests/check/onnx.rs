@@ -1,5 +1,3 @@
-#![expect(dead_code, reason = "may get used later")]
-
 use super::{artifacts_dir, download, DOWNLOAD_LOCK};
 use anyhow::{Context, Result};
 use std::{env, fs};
