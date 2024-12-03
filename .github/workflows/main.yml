@@ -80,7 +80,7 @@ jobs:
   # Note that `wasmtime-platform.h` is excluded here as it's auto-generated.
   clangformat:
     name: Clang format
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04 # FIXME: fails on `ubuntu-24.04` right now
     steps:
     - uses: actions/checkout@v4
       with:
@@ -857,7 +857,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.run-dwarf
     name: Test DWARF debugging
-    runs-on: 'ubuntu-latest'
+    runs-on: ubuntu-22.04 # FIXME: fails on `ubuntu-24.04` right now
     steps:
     - uses: actions/checkout@v4
       with:
