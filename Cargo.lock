@@ -957,6 +957,7 @@ dependencies = [
  "indicatif",
  "log",
  "pretty_env_logger",
+ "pulley-interpreter",
  "rayon",
  "regalloc2",
  "rustc-hash 2.0.0",
