@@ -1235,11 +1235,16 @@ impl TypeRegistry {
     }
 
     /// Is type `sub` a subtype of `sup`?
+    #[inline]
     pub fn is_subtype(&self, sub: VMSharedTypeIndex, sup: VMSharedTypeIndex) -> bool {
         if sub == sup {
             return true;
         }
 
+        self.is_subtype_slow(sub, sup)
+    }
+
+    fn is_subtype_slow(&self, sub: VMSharedTypeIndex, sup: VMSharedTypeIndex) -> bool {
         // Do the O(1) subtype checking trick:
         //
         // In a type system with single inheritance, the subtyping relationships

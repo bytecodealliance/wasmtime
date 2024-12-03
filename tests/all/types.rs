@@ -7,6 +7,13 @@ fn field(heap_ty: HeapType) -> FieldType {
     )
 }
 
+fn imm_field(heap_ty: HeapType) -> FieldType {
+    FieldType::new(
+        Mutability::Const,
+        StorageType::ValType(RefType::new(true, heap_ty).into()),
+    )
+}
+
 fn valty(heap_ty: HeapType) -> ValType {
     ValType::Ref(RefType::new(true, heap_ty))
 }
@@ -81,25 +88,57 @@ fn basic_struct_types() -> Result<()> {
 fn struct_type_matches() -> Result<()> {
     let engine = Engine::default();
 
-    let super_ty = StructType::new(&engine, [field(HeapType::Func)])?;
+    let super_ty = StructType::with_finality_and_supertype(
+        &engine,
+        Finality::NonFinal,
+        None,
+        [imm_field(HeapType::Func)],
+    )?;
 
     // Depth.
-    let sub_ty = StructType::new(&engine, [field(HeapType::NoFunc)])?;
+    let sub_ty = StructType::with_finality_and_supertype(
+        &engine,
+        Finality::Final,
+        Some(&super_ty),
+        [imm_field(HeapType::NoFunc)],
+    )?;
     assert!(sub_ty.matches(&super_ty));
-
-    // Width.
-    let sub_ty = StructType::new(&engine, [field(HeapType::Func), field(HeapType::Extern)])?;
-    assert!(sub_ty.matches(&super_ty));
-
-    // Depth and width.
-    let sub_ty = StructType::new(&engine, [field(HeapType::NoFunc), field(HeapType::Extern)])?;
-    assert!(sub_ty.matches(&super_ty));
-
-    // Not depth.
-    let not_sub_ty = StructType::new(&engine, [field(HeapType::Extern)])?;
+    let not_sub_ty = StructType::new(&engine, [imm_field(HeapType::NoFunc)])?;
     assert!(!not_sub_ty.matches(&super_ty));
 
-    // Not width.
+    // Width.
+    let sub_ty = StructType::with_finality_and_supertype(
+        &engine,
+        Finality::Final,
+        Some(&super_ty),
+        [imm_field(HeapType::Func), imm_field(HeapType::Extern)],
+    )?;
+    assert!(sub_ty.matches(&super_ty));
+    let not_sub_ty = StructType::new(
+        &engine,
+        [imm_field(HeapType::Func), imm_field(HeapType::Extern)],
+    )?;
+    assert!(!not_sub_ty.matches(&super_ty));
+
+    // Depth and width.
+    let sub_ty = StructType::with_finality_and_supertype(
+        &engine,
+        Finality::Final,
+        Some(&super_ty),
+        [imm_field(HeapType::NoFunc), imm_field(HeapType::Extern)],
+    )?;
+    assert!(sub_ty.matches(&super_ty));
+    let not_sub_ty = StructType::new(
+        &engine,
+        [imm_field(HeapType::NoFunc), imm_field(HeapType::Extern)],
+    )?;
+    assert!(!not_sub_ty.matches(&super_ty));
+
+    // Unrelated structs.
+    let not_sub_ty = StructType::new(&engine, [imm_field(HeapType::Extern)])?;
+    assert!(!not_sub_ty.matches(&super_ty));
+    let not_sub_ty = StructType::new(&engine, [field(HeapType::Extern)])?;
+    assert!(!not_sub_ty.matches(&super_ty));
     let not_sub_ty = StructType::new(&engine, [])?;
     assert!(!not_sub_ty.matches(&super_ty));
 
@@ -109,29 +148,41 @@ fn struct_type_matches() -> Result<()> {
 #[test]
 fn struct_subtyping_fields_must_match() -> Result<()> {
     let engine = Engine::default();
+
     let a = StructType::with_finality_and_supertype(
         &engine,
         Finality::NonFinal,
         None,
-        [field(HeapType::Any)],
+        [imm_field(HeapType::Any)],
     )?;
 
-    for (expected, fields) in [
-        // Missing field.
-        (false, vec![]),
-        // Non-matching field.
-        (false, vec![field(HeapType::Extern)]),
-        // Exact match is okay.
-        (true, vec![field(HeapType::Any)]),
-        // Subtype of the field is okay.
-        (true, vec![field(HeapType::Eq)]),
-        // Extra fields are okay.
-        (true, vec![field(HeapType::Any), field(HeapType::Extern)]),
+    for (msg, expected, fields) in [
+        ("Missing field", false, vec![]),
+        (
+            "Non-matching field",
+            false,
+            vec![imm_field(HeapType::Extern)],
+        ),
+        ("Wrong mutability field", false, vec![field(HeapType::Any)]),
+        ("Exact match is okay", true, vec![imm_field(HeapType::Any)]),
+        (
+            "Subtype of the field is okay",
+            true,
+            vec![imm_field(HeapType::Eq)],
+        ),
+        (
+            "Extra fields are okay",
+            true,
+            vec![imm_field(HeapType::Any), imm_field(HeapType::Extern)],
+        ),
     ] {
         let actual =
             StructType::with_finality_and_supertype(&engine, Finality::NonFinal, Some(&a), fields)
                 .is_ok();
-        assert_eq!(expected, actual);
+        assert_eq!(
+            expected, actual,
+            "expected valid? {expected}; actually valid? {actual}; {msg}"
+        );
     }
 
     Ok(())
@@ -263,16 +314,18 @@ fn array_subtyping_field_must_match() -> Result<()> {
         &engine,
         Finality::NonFinal,
         None,
-        field(HeapType::Any),
+        imm_field(HeapType::Any),
     )?;
 
     for (expected, field) in [
         // Non-matching field.
-        (false, field(HeapType::Extern)),
+        (false, imm_field(HeapType::Extern)),
+        // Wrong mutability field.
+        (false, field(HeapType::Any)),
         // Exact match is okay.
-        (true, field(HeapType::Any)),
+        (true, imm_field(HeapType::Any)),
         // Subtype of the field is okay.
-        (true, field(HeapType::Eq)),
+        (true, imm_field(HeapType::Eq)),
     ] {
         let actual =
             ArrayType::with_finality_and_supertype(&engine, Finality::NonFinal, Some(&a), field)
@@ -322,61 +375,61 @@ fn array_subtyping() -> Result<()> {
         &engine,
         Finality::NonFinal,
         None,
-        field(HeapType::Any),
+        imm_field(HeapType::Any),
     )?;
     let a = ArrayType::with_finality_and_supertype(
         &engine,
         Finality::NonFinal,
         Some(&base),
-        field(HeapType::Any),
+        imm_field(HeapType::Any),
     )?;
     let b = ArrayType::with_finality_and_supertype(
         &engine,
         Finality::NonFinal,
         Some(&base),
-        field(HeapType::Eq),
+        imm_field(HeapType::Eq),
     )?;
     let c = ArrayType::with_finality_and_supertype(
         &engine,
         Finality::NonFinal,
         Some(&a),
-        field(HeapType::Any),
+        imm_field(HeapType::Any),
     )?;
     let d = ArrayType::with_finality_and_supertype(
         &engine,
         Finality::NonFinal,
         Some(&a),
-        field(HeapType::Eq),
+        imm_field(HeapType::Eq),
     )?;
     let e = ArrayType::with_finality_and_supertype(
         &engine,
         Finality::NonFinal,
         Some(&c),
-        field(HeapType::Any),
+        imm_field(HeapType::Any),
     )?;
     let f = ArrayType::with_finality_and_supertype(
         &engine,
         Finality::NonFinal,
         Some(&e),
-        field(HeapType::Any),
+        imm_field(HeapType::Any),
     )?;
     let g = ArrayType::with_finality_and_supertype(
         &engine,
         Finality::NonFinal,
         None,
-        field(HeapType::Eq),
+        imm_field(HeapType::Eq),
     )?;
     let h = ArrayType::with_finality_and_supertype(
         &engine,
         Finality::NonFinal,
         Some(&g),
-        field(HeapType::Eq),
+        imm_field(HeapType::Eq),
     )?;
     let i = ArrayType::with_finality_and_supertype(
         &engine,
         Finality::NonFinal,
         Some(&h),
-        field(HeapType::Eq),
+        imm_field(HeapType::Eq),
     )?;
 
     for (expected, sub_name, sub, sup_name, sup) in [
