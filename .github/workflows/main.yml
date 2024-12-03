@@ -641,12 +641,8 @@ jobs:
     - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF
     - run: cmake --build examples/build --config Debug
     - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target RUN_TESTS
-      env:
-        RUST_BACKTRACE: 1
       if: matrix.os == 'windows-latest'
     - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
-      env:
-        RUST_BACKTRACE: 1
       if: matrix.os != 'windows-latest'
 
   # Perform all tests (debug mode) for `wasmtime`.
@@ -771,8 +767,6 @@ jobs:
 
     # Build and test all features
     - run: ./ci/run-tests.sh --locked ${{ matrix.bucket }}
-      env:
-        RUST_BACKTRACE: 1
 
     # NB: the test job here is explicitly lacking in cancellation of this run if
     # something goes wrong. These take the longest anyway and otherwise if
@@ -817,8 +811,6 @@ jobs:
 
     # Run the tests!
     - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
-      env:
-        RUST_BACKTRACE: 1
 
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
@@ -843,8 +835,6 @@ jobs:
     # Run the tests
     - run: |
         cargo test -p wasmtime-fuzzing -p wasm-spec-interpreter
-      env:
-        RUST_BACKTRACE: 1
 
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
@@ -871,7 +861,6 @@ jobs:
         sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb/* /usr/lib/python3/dist-packages/lldb/
         cargo test --test all -- --ignored --test-threads 1 debug::
       env:
-        RUST_BACKTRACE: 1
         LLDB: lldb-15 # override default version, 14
 
     # common logic to cancel the entire run if this job fails
