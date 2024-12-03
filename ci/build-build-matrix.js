@@ -10,23 +10,23 @@ const array = [
     // Wasmtime's github releases.
     "build": "x86_64-linux",
     // The GitHub Actions platform that this build runs on
-    "os": "ubuntu-latest",
+    "os": "ubuntu-24.04",
     // The Rust target that will be used for the build.
     "target": "x86_64-unknown-linux-gnu",
   },
   {
     "build": "aarch64-linux",
-    "os": "ubuntu-latest",
+    "os": "ubuntu-24.04",
     "target": "aarch64-unknown-linux-gnu",
   },
   {
     "build": "s390x-linux",
-    "os": "ubuntu-latest",
+    "os": "ubuntu-24.04",
     "target": "s390x-unknown-linux-gnu",
   },
   {
     "build": "riscv64gc-linux",
-    "os": "ubuntu-latest",
+    "os": "ubuntu-24.04",
     "target": "riscv64gc-unknown-linux-gnu",
   },
   {
@@ -51,17 +51,17 @@ const array = [
   },
   {
     "build": "aarch64-android",
-    "os": "ubuntu-latest",
+    "os": "ubuntu-24.04",
     "target": "aarch64-linux-android",
   },
   {
     "build": "x86_64-android",
-    "os": "ubuntu-latest",
+    "os": "ubuntu-24.04",
     "target": "x86_64-linux-android",
   },
   {
     "build": "x86_64-musl",
-    "os": "ubuntu-latest",
+    "os": "ubuntu-24.04",
     "target": "x86_64-unknown-linux-musl",
   },
   {

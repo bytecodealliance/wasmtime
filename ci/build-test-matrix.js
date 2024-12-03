@@ -19,7 +19,7 @@ const SINGLE_CRATE_BUCKETS = ["wasmtime", "wasmtime-cli", "wasmtime-wasi"];
 // the merge queue. Same schema as `FULL_MATRIX`.
 const FAST_MATRIX = [
   {
-    "os": "ubuntu-latest",
+    "os": "ubuntu-24.04",
     "name": "Test Linux x86_64",
     "filter": "linux-x64",
     "isa": "x64",
@@ -64,14 +64,14 @@ function supports32Bit(pkg) {
 const FULL_MATRIX = [
   ...FAST_MATRIX,
   {
-    "os": "ubuntu-latest",
+    "os": "ubuntu-24.04",
     "name": "Test MSRV on Linux x86_64",
     "filter": "linux-x64",
     "isa": "x64",
     "rust": "msrv",
   },
   {
-    "os": "ubuntu-latest",
+    "os": "ubuntu-24.04",
     "name": "Test Linux x86_64 with MPK",
     "filter": "linux-x64",
     "isa": "x64"
@@ -99,7 +99,7 @@ const FULL_MATRIX = [
     "filter": "mingw-x64"
   },
   {
-    "os": "ubuntu-latest",
+    "os": "ubuntu-24.04",
     "target": "aarch64-unknown-linux-gnu",
     "gcc_package": "gcc-aarch64-linux-gnu",
     "gcc": "aarch64-linux-gnu-gcc",
@@ -110,7 +110,7 @@ const FULL_MATRIX = [
     "isa": "aarch64",
   },
   {
-    "os": "ubuntu-latest",
+    "os": "ubuntu-24.04",
     "target": "s390x-unknown-linux-gnu",
     "gcc_package": "gcc-s390x-linux-gnu",
     "gcc": "s390x-linux-gnu-gcc",
@@ -121,7 +121,7 @@ const FULL_MATRIX = [
     "isa": "s390x"
   },
   {
-    "os": "ubuntu-latest",
+    "os": "ubuntu-24.04",
     "target": "riscv64gc-unknown-linux-gnu",
     "gcc_package": "gcc-riscv64-linux-gnu",
     "gcc": "riscv64-linux-gnu-gcc",
@@ -134,7 +134,7 @@ const FULL_MATRIX = [
   {
     "name": "Tests on i686-unknown-linux-gnu",
     "32-bit": true,
-    "os": "ubuntu-latest",
+    "os": "ubuntu-24.04",
     "target": "i686-unknown-linux-gnu",
     "gcc_package": "gcc-i686-linux-gnu",
     "gcc": "i686-linux-gnu-gcc",
@@ -142,7 +142,7 @@ const FULL_MATRIX = [
   {
     "name": "Tests on armv7-unknown-linux-gnueabihf",
     "32-bit": true,
-    "os": "ubuntu-latest",
+    "os": "ubuntu-24.04",
     "target": "armv7-unknown-linux-gnueabihf",
     "gcc_package": "gcc-arm-linux-gnueabihf",
     "gcc": "arm-linux-gnueabihf-gcc",
@@ -187,17 +187,17 @@ async function getWorkspaceMembers() {
 /// exist, logically each element of the input `configs` list gets transformed
 /// like this:
 ///
-///     { os: "ubuntu-latest", isa: "x64", ..., crates: "all" }
+///     { os: "ubuntu-24.04", isa: "x64", ..., crates: "all" }
 ///
 ///     ==>
 ///
 ///     [
-///       { os: "ubuntu-latest", isa: "x64", ..., crates: ["wasmtime"] },
-///       { os: "ubuntu-latest", isa: "x64", ..., crates: ["wasmtime-cli"] },
-///       { os: "ubuntu-latest", isa: "x64", ..., crates: ["wasmtime-wasi"] },
-///       { os: "ubuntu-latest", isa: "x64", ..., crates: ["cranelift", "cranelift-codegen", ...] },
-///       { os: "ubuntu-latest", isa: "x64", ..., crates: ["wasmtime-slab", "cranelift-entity", ...] },
-///       { os: "ubuntu-latest", isa: "x64", ..., crates: ["cranelift-environ", "wasmtime-cli-flags", ...] },
+///       { os: "ubuntu-24.04", isa: "x64", ..., crates: ["wasmtime"] },
+///       { os: "ubuntu-24.04", isa: "x64", ..., crates: ["wasmtime-cli"] },
+///       { os: "ubuntu-24.04", isa: "x64", ..., crates: ["wasmtime-wasi"] },
+///       { os: "ubuntu-24.04", isa: "x64", ..., crates: ["cranelift", "cranelift-codegen", ...] },
+///       { os: "ubuntu-24.04", isa: "x64", ..., crates: ["wasmtime-slab", "cranelift-entity", ...] },
+///       { os: "ubuntu-24.04", isa: "x64", ..., crates: ["cranelift-environ", "wasmtime-cli-flags", ...] },
 ///       ...
 ///     ]
 ///

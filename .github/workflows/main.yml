@@ -40,7 +40,7 @@ jobs:
   # Check Code style quickly by running `rustfmt` over all code
   rustfmt:
     name: Rustfmt
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
       with:
@@ -59,7 +59,7 @@ jobs:
   # `wasmtime explore` UI.
   check_js:
     name: Check JS
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
     - run: npm install
@@ -80,7 +80,7 @@ jobs:
   # Note that `wasmtime-platform.h` is excluded here as it's auto-generated.
   clangformat:
     name: Clang format
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
       with:
@@ -103,7 +103,7 @@ jobs:
     name: Cargo deny
     needs: determine
     if: needs.determine.outputs.audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
       with:
@@ -134,7 +134,7 @@ jobs:
     name: Cargo vet
     needs: determine
     if: needs.determine.outputs.audit
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       outcome: ${{ steps.vet.outcome }}
     steps:
@@ -167,7 +167,7 @@ jobs:
       needs.determine.outputs.audit
       && github.event_name == 'pull_request'
       && needs.cargo_vet.outputs.outcome == 'failure'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     # NB: this message ideally would link back to the previous step, but I'm not
     # sure how to easily do that.
@@ -192,7 +192,7 @@ jobs:
   #   the files modified.
   determine:
     name: Determine CI jobs to run
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       run-full: ${{ steps.calculate.outputs.run-full }}
       test-matrix: ${{ steps.calculate.outputs.test-matrix }}
@@ -276,7 +276,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.run-full
     name: Doc build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       CARGO_MDBOOK_VERSION: 0.4.37
       RUSTDOCFLAGS: -Dbroken_intra_doc_links --cfg docsrs
@@ -411,7 +411,7 @@ jobs:
               -p wasmtime-c-api --no-default-features
               -p wasmtime-c-api --no-default-features --features wat
               -p wasmtime-c-api --no-default-features --features wasi
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
       with:
@@ -435,7 +435,7 @@ jobs:
   # Checks for no_std support, ensure that crates can build on a no_std target
   no_std_checks:
     name: no_std checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       CARGO_NDK_VERSION: 2.12.2
     steps:
@@ -460,7 +460,7 @@ jobs:
   # Check that Clippy lints are passing.
   clippy:
     name: Clippy
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       CARGO_NDK_VERSION: 2.12.2
     steps:
@@ -483,7 +483,7 @@ jobs:
   # a parallel jobs yet.
   monolith_checks:
     name: Monolith Checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       CARGO_NDK_VERSION: 2.12.2
     steps:
@@ -531,7 +531,7 @@ jobs:
 
   checks_illumos:
     name: Check illumos
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
       with:
@@ -581,7 +581,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.test-nightly
     name: Nightly tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
       with:
@@ -627,7 +627,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-24.04, macos-latest, windows-latest]
 
     steps:
     - uses: actions/checkout@v4
@@ -742,7 +742,7 @@ jobs:
     # to CPU-specific features.
     - name: CPU information
       run: lscpu
-      if: matrix.os == 'ubuntu-latest'
+      if: matrix.os == 'ubuntu-24.04'
     - name: CPU information
       run: sysctl hw
       if: contains(matrix.os, 'macos')
@@ -785,7 +785,7 @@ jobs:
     strategy:
       matrix:
         feature: ["openvino", "onnx"]
-        os: ["ubuntu-latest", "windows-latest"]
+        os: ["ubuntu-24.04", "windows-latest"]
         include:
           - os: windows-latest
             feature: winml
@@ -833,7 +833,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.run-full
     name: Test wasmtime-fuzzing
-    runs-on: 'ubuntu-latest'
+    runs-on: 'ubuntu-24.04'
     steps:
     - uses: actions/checkout@v4
       with:
@@ -857,7 +857,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.run-dwarf
     name: Test DWARF debugging
-    runs-on: 'ubuntu-latest'
+    runs-on: 'ubuntu-24.04'
     steps:
     - uses: actions/checkout@v4
       with:
@@ -884,7 +884,7 @@ jobs:
     name: Build wasi-preview1-component-adapter
     needs: determine
     if: needs.determine.outputs.preview1-adapter
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       deployments: write
       contents: write
@@ -919,7 +919,7 @@ jobs:
   build-preview1-component-adapter-provider:
     name: Build wasi-preview1-component-adapter-provider
     needs: build-preview1-component-adapter
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
       with:
@@ -941,7 +941,7 @@ jobs:
     name: Test the min-platform example
     needs: determine
     if: needs.determine.outputs.run-full
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
       with:
@@ -979,7 +979,7 @@ jobs:
     name: Build wasmtime-target-wasm32
     if: needs.determine.outputs.run-full
     needs: determine
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
       with:
@@ -1001,7 +1001,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.run-full
     name: Run benchmarks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
       with:
@@ -1021,7 +1021,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.run-full
     name: Meta deterministic check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
       with:
@@ -1039,7 +1039,7 @@ jobs:
   verify-publish:
     needs: determine
     if: github.repository == 'bytecodealliance/wasmtime' && needs.determine.outputs.run-full
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
       with:
@@ -1082,7 +1082,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.test-miri && github.repository == 'bytecodealliance/wasmtime'
     name: Miri
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     env:
       CARGO_NEXTEST_VERSION: 0.9.67
     steps:
@@ -1185,7 +1185,7 @@ jobs:
   # correctly.
   ci-status:
     name: Record the result of testing and building steps
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs:
       - test
       - test_capi
@@ -1242,7 +1242,7 @@ jobs:
   # this workflow as the `publish-artifacts.yml` workflow will download these
   # artifacts and then publish them to the tag.
   push-tag:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: ci-status
     if: |
       always()
