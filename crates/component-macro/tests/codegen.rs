@@ -1,5 +1,4 @@
-#![allow(dead_code)]
-#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
+#![allow(dead_code, reason = "lots of macro-generated code")]
 
 macro_rules! gentest {
     ($id:ident $name:tt $path:tt) => {
@@ -135,7 +134,6 @@ mod trappable_errors_with_versioned_and_unversioned_packages {
         },
     });
 
-    #[allow(dead_code)]
     type MyX = u64;
 }
 
@@ -177,7 +175,6 @@ mod trappable_errors {
         },
     });
 
-    #[allow(dead_code)]
     type MyX = u32;
 }
 

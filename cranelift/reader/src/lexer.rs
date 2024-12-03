@@ -3,8 +3,6 @@
 use crate::error::Location;
 use cranelift_codegen::ir::types;
 use cranelift_codegen::ir::{Block, Value};
-#[allow(unused_imports, deprecated)]
-use std::ascii::AsciiExt;
 use std::str::CharIndices;
 use std::u16;
 

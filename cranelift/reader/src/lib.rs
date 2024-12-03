@@ -4,7 +4,6 @@
 //! testing Cranelift, but is not essential for a JIT compiler.
 
 #![deny(missing_docs)]
-#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
 pub use crate::error::{Location, ParseError, ParseResult};
 pub use crate::isaspec::{parse_option, parse_options, IsaSpec, ParseOptionError};
@@ -30,7 +29,7 @@ use std::str::FromStr;
 use target_lexicon::Triple;
 
 /// Like `FlagsOrIsa`, but holds ownership.
-#[allow(missing_docs)]
+#[allow(missing_docs, reason = "self-describing variants")]
 pub enum OwnedFlagsOrIsa {
     Flags(settings::Flags),
     Isa(OwnedTargetIsa),
