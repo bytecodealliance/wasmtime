@@ -301,6 +301,9 @@ pub(crate) fn create_unwind_info_from_insts(
                     }
                 }
             }
+            &UnwindInst::RegStackOffset { .. } => {
+                unreachable!("only supported with DWARF");
+            }
             &UnwindInst::Aarch64SetPointerAuth { return_addresses } => {
                 assert!(
                     return_addresses,

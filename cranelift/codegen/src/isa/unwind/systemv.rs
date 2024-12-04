@@ -247,6 +247,19 @@ pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<Reg>>(
                 let off = (clobber_offset as i32) - (clobber_offset_to_cfa as i32);
                 instructions.push((instruction_offset, CallFrameInstruction::Offset(reg, off)));
             }
+            &UnwindInst::RegStackOffset {
+                clobber_offset,
+                reg,
+            } => {
+                let reg = mr
+                    .map(reg.into())
+                    .map_err(|e| CodegenError::RegisterMappingError(e))?;
+                let off = (clobber_offset as i32) - (clobber_offset_to_cfa as i32);
+                instructions.push((
+                    instruction_offset,
+                    CallFrameInstruction::ValOffset(reg, off),
+                ));
+            }
             &UnwindInst::Aarch64SetPointerAuth { return_addresses } => {
                 instructions.push((
                     instruction_offset,
