@@ -355,13 +355,8 @@ block0:
 }
 
 ; VCode:
-;   x30 = xconst8 -16
-;   x27 = xadd32 x27, x30
-;   store64 sp+8, x28 // flags =  notrap aligned
-;   store64 sp+0, x29 // flags =  notrap aligned
-;   x29 = xmov x27
-;   x30 = xconst8 -64
-;   x27 = xadd32 x27, x30
+;   push_frame
+;   stack_alloc32 0x40
 ; block0:
 ;   x15 = xconst8 0
 ;   store64 OutgoingArg(0), x15 // flags =  notrap aligned
@@ -388,22 +383,13 @@ block0:
 ;   x13 = xmov x15
 ;   x14 = xmov x15
 ;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }, CallArgPair { vreg: p1i, preg: p1i }, CallArgPair { vreg: p2i, preg: p2i }, CallArgPair { vreg: p3i, preg: p3i }, CallArgPair { vreg: p4i, preg: p4i }, CallArgPair { vreg: p5i, preg: p5i }, CallArgPair { vreg: p6i, preg: p6i }, CallArgPair { vreg: p7i, preg: p7i }, CallArgPair { vreg: p8i, preg: p8i }, CallArgPair { vreg: p9i, preg: p9i }, CallArgPair { vreg: p10i, preg: p10i }, CallArgPair { vreg: p11i, preg: p11i }, CallArgPair { vreg: p12i, preg: p12i }, CallArgPair { vreg: p13i, preg: p13i }, CallArgPair { vreg: p14i, preg: p14i }, CallArgPair { vreg: p15i, preg: p15i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
-;   x30 = xconst8 64
-;   x27 = xadd32 x27, x30
-;   x28 = load64_u sp+8 // flags = notrap aligned
-;   x29 = load64_u sp+0 // flags = notrap aligned
-;   x30 = xconst8 16
-;   x27 = xadd32 x27, x30
+;   stack_free32 0x40
+;   pop_frame
 ;   ret
 ;
 ; Disassembled:
-; xconst8 spilltmp0, -16
-; xadd32 sp, sp, spilltmp0
-; store64_offset8 sp, 8, lr
-; store64 sp, fp
-; xmov fp, sp
-; xconst8 spilltmp0, -64
-; xadd32 sp, sp, spilltmp0
+; push_frame
+; stack_alloc32 64
 ; xconst8 x15, 0
 ; store64 sp, x15
 ; store64_offset8 sp, 8, x15
@@ -428,12 +414,8 @@ block0:
 ; xmov x12, x15
 ; xmov x13, x15
 ; xmov x14, x15
-; call 0x0    // target = 0x65
-; xconst8 spilltmp0, 64
-; xadd32 sp, sp, spilltmp0
-; load64_offset8 lr, sp, 8
-; load64 fp, sp
-; xconst8 spilltmp0, 16
-; xadd32 sp, sp, spilltmp0
+; call 0x0    // target = 0x55
+; stack_free32 64
+; pop_frame
 ; ret
 
