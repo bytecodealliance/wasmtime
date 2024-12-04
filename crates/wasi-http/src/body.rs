@@ -423,7 +423,14 @@ pub struct HostOutgoingBody {
 
 impl HostOutgoingBody {
     /// Create a new `HostOutgoingBody`
-    pub fn new(context: StreamContext, size: Option<u64>) -> (Self, HyperOutgoingBody) {
+    pub fn new(
+        context: StreamContext,
+        size: Option<u64>,
+        buffer_chunks: usize,
+        chunk_size: usize,
+    ) -> (Self, HyperOutgoingBody) {
+        assert!(buffer_chunks >= 1);
+
         let written = size.map(WrittenState::new);
 
         use tokio::sync::oneshot::error::RecvError;
@@ -469,7 +476,8 @@ impl HostOutgoingBody {
             }
         }
 
-        let (body_sender, body_receiver) = mpsc::channel(2);
+        // always add 1 buffer here because one empty slot is required
+        let (body_sender, body_receiver) = mpsc::channel(buffer_chunks + 1);
         let (finish_sender, finish_receiver) = oneshot::channel();
         let body_impl = BodyImpl {
             body_receiver,
@@ -477,9 +485,7 @@ impl HostOutgoingBody {
         }
         .boxed();
 
-        // TODO: this capacity constant is arbitrary, and should be configurable
-        let output_stream =
-            BodyWriteStream::new(context, 1024 * 1024, body_sender, written.clone());
+        let output_stream = BodyWriteStream::new(context, chunk_size, body_sender, written.clone());
 
         (
             Self {

@@ -391,6 +391,8 @@ where
         &mut self,
         request: Resource<HostOutgoingRequest>,
     ) -> wasmtime::Result<Result<Resource<HostOutgoingBody>, ()>> {
+        let buffer_chunks = self.outgoing_body_buffer_chunks();
+        let chunk_size = self.outgoing_body_chunk_size();
         let req = self
             .table()
             .get_mut(&request)
@@ -405,7 +407,8 @@ where
             Err(e) => return Ok(Err(e)),
         };
 
-        let (host_body, hyper_body) = HostOutgoingBody::new(StreamContext::Request, size);
+        let (host_body, hyper_body) =
+            HostOutgoingBody::new(StreamContext::Request, size, buffer_chunks, chunk_size);
 
         req.body = Some(hyper_body);
 
@@ -751,6 +754,8 @@ where
         &mut self,
         id: Resource<HostOutgoingResponse>,
     ) -> wasmtime::Result<Result<Resource<HostOutgoingBody>, ()>> {
+        let buffer_chunks = self.outgoing_body_buffer_chunks();
+        let chunk_size = self.outgoing_body_chunk_size();
         let resp = self.table().get_mut(&id)?;
 
         if resp.body.is_some() {
@@ -762,7 +767,8 @@ where
             Err(e) => return Ok(Err(e)),
         };
 
-        let (host, body) = HostOutgoingBody::new(StreamContext::Response, size);
+        let (host, body) =
+            HostOutgoingBody::new(StreamContext::Response, size, buffer_chunks, chunk_size);
 
         resp.body.replace(body);
 

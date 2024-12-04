@@ -74,6 +74,20 @@ pub fn request(
         .body()
         .map_err(|_| anyhow!("outgoing request write failed"))?;
 
+    let options = http_types::RequestOptions::new();
+    options
+        .set_connect_timeout(connect_timeout)
+        .map_err(|()| anyhow!("failed to set connect_timeout"))?;
+    options
+        .set_first_byte_timeout(first_by_timeout)
+        .map_err(|()| anyhow!("failed to set first_byte_timeout"))?;
+    options
+        .set_between_bytes_timeout(between_bytes_timeout)
+        .map_err(|()| anyhow!("failed to set between_bytes_timeout"))?;
+    let options = Some(options);
+
+    let future_response = outgoing_handler::handle(request, options)?;
+
     if let Some(mut buf) = body {
         let request_body = outgoing_body
             .write()
@@ -110,21 +124,6 @@ pub fn request(
             Err(_) => anyhow::bail!("output stream error"),
         };
     }
-
-    let options = http_types::RequestOptions::new();
-    options
-        .set_connect_timeout(connect_timeout)
-        .map_err(|()| anyhow!("failed to set connect_timeout"))?;
-    options
-        .set_first_byte_timeout(first_by_timeout)
-        .map_err(|()| anyhow!("failed to set first_byte_timeout"))?;
-    options
-        .set_between_bytes_timeout(between_bytes_timeout)
-        .map_err(|()| anyhow!("failed to set between_bytes_timeout"))?;
-    let options = Some(options);
-
-    let future_response = outgoing_handler::handle(request, options)?;
-
     http_types::OutgoingBody::finish(outgoing_body, None)?;
 
     let incoming_response = match future_response.get() {
