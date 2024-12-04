@@ -58,16 +58,20 @@ pub fn bounds_check_and_compute_addr(
         &mut builder.cursor(),
     );
     let offset_and_size = offset_plus_size(offset, access_size);
-    let spectre_mitigations_enabled = env.heap_access_spectre_mitigation();
+    let clif_memory_traps_enabled = env.clif_memory_traps_enabled();
+    let spectre_mitigations_enabled =
+        env.heap_access_spectre_mitigation() && clif_memory_traps_enabled;
     let pcc = env.proof_carrying_code();
 
     let host_page_size_log2 = env.target_config().page_size_align_log2;
     let can_use_virtual_memory = heap
         .memory
-        .can_use_virtual_memory(env.tunables(), host_page_size_log2);
+        .can_use_virtual_memory(env.tunables(), host_page_size_log2)
+        && clif_memory_traps_enabled;
     let can_elide_bounds_check = heap
         .memory
-        .can_elide_bounds_check(env.tunables(), host_page_size_log2);
+        .can_elide_bounds_check(env.tunables(), host_page_size_log2)
+        && clif_memory_traps_enabled;
     let memory_guard_size = env.tunables().memory_guard_size;
     let memory_reservation = env.tunables().memory_reservation;
 
@@ -555,8 +559,9 @@ fn explicit_check_oob_condition_and_compute_addr(
 
     if spectre_mitigations_enabled {
         // These mitigations rely on trapping when loading from NULL so
-        // signals-based traps must be allowed for this to be generated.
-        assert!(env.signals_based_traps());
+        // CLIF memory instruction traps must be allowed for this to be
+        // generated.
+        assert!(env.clif_memory_traps_enabled());
         let null = builder.ins().iconst(addr_ty, 0);
         addr = builder
             .ins()

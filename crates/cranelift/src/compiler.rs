@@ -284,7 +284,7 @@ impl wasmtime_environ::Compiler for Compiler {
                 global_type: isa.pointer_type(),
                 flags: MemFlags::trusted(),
             });
-            if func_env.signals_based_traps() {
+            if self.tunables.signals_based_traps {
                 context.func.stack_limit = Some(stack_limit);
             } else {
                 func_env.stack_limit_at_function_entry = Some(stack_limit);
