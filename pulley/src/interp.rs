@@ -663,14 +663,15 @@ fn simple_push_pop() {
             // this isn't actually read so just manufacture a dummy one
             pc: UnsafeBytecodeStream::new((&mut 0).into()),
         };
-        assert!(i.push(0_i32).is_continue());
+        let pc = NonNull::from(&0);
+        assert!(i.push(0_i32, pc).is_continue());
         assert_eq!(i.pop::<i32>(), 0_i32);
-        assert!(i.push(1_i32).is_continue());
-        assert!(i.push(2_i32).is_continue());
-        assert!(i.push(3_i32).is_continue());
-        assert!(i.push(4_i32).is_continue());
-        assert!(i.push(5_i32).is_break());
-        assert!(i.push(6_i32).is_break());
+        assert!(i.push(1_i32, pc).is_continue());
+        assert!(i.push(2_i32, pc).is_continue());
+        assert!(i.push(3_i32, pc).is_continue());
+        assert!(i.push(4_i32, pc).is_continue());
+        assert!(i.push(5_i32, pc).is_break());
+        assert!(i.push(6_i32, pc).is_break());
         assert_eq!(i.pop::<i32>(), 4_i32);
         assert_eq!(i.pop::<i32>(), 3_i32);
         assert_eq!(i.pop::<i32>(), 2_i32);
