@@ -1237,6 +1237,20 @@ impl OpVisitor for Interpreter<'_> {
         let rel = unwrap_uninhabited(PcRelOffset::decode(&mut self.pc));
         self.pc_rel_jump(rel, 0)
     }
+
+    fn stack_alloc32(&mut self, amt: u32) -> ControlFlow<Done> {
+        let amt = usize::try_from(amt).unwrap();
+        let new_sp = self.state[XReg::sp].get_ptr::<u8>().wrapping_sub(amt);
+        self.set_sp(new_sp)?;
+        ControlFlow::Continue(())
+    }
+
+    fn stack_free32(&mut self, amt: u32) -> ControlFlow<Done> {
+        let amt = usize::try_from(amt).unwrap();
+        let new_sp = self.state[XReg::sp].get_ptr::<u8>().wrapping_add(amt);
+        self.set_sp_unchecked(new_sp);
+        ControlFlow::Continue(())
+    }
 }
 
 impl ExtendedOpVisitor for Interpreter<'_> {

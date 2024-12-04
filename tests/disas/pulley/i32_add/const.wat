@@ -10,14 +10,7 @@
 )
 
 ;; wasm[0]::function[0]:
-;;       xconst8 spilltmp0, -16
-;;       xadd32 sp, sp, spilltmp0
-;;       store64_offset8 sp, 8, lr
-;;       store64 sp, fp
-;;       xmov fp, sp
+;;       push_frame
 ;;       xconst8 x0, 30
-;;       load64_offset8 lr, sp, 8
-;;       load64 fp, sp
-;;       xconst8 spilltmp0, 16
-;;       xadd32 sp, sp, spilltmp0
+;;       pop_frame
 ;;       ret

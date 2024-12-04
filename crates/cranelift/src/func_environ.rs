@@ -1195,6 +1195,14 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             i32::from(self.offsets.ptr.vm_func_ref_type_index()),
         )
     }
+
+    pub fn is_pulley(&self) -> bool {
+        match self.isa.triple().architecture {
+            target_lexicon::Architecture::Pulley32 => true,
+            target_lexicon::Architecture::Pulley64 => true,
+            _ => false,
+        }
+    }
 }
 
 struct Call<'a, 'func, 'module_env> {

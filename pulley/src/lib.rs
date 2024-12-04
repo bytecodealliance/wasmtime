@@ -163,11 +163,11 @@ macro_rules! for_each_op {
             /// `sp = fp; pop fp; pop lr`
             pop_frame = PopFrame ;
 
-            /// `*sp = low32(src); sp += 4`
+            /// `*sp = low32(src); sp = sp.checked_add(4)`
             xpush32 = XPush32 { src: XReg };
             /// `for src in srcs { xpush32 src }`
             xpush32_many = XPush32Many { srcs: RegSet<XReg> };
-            /// `*sp = src; sp += 8`
+            /// `*sp = src; sp = sp.checked_add(8)`
             xpush64 = XPush64 { src: XReg };
             /// `for src in srcs { xpush64 src }`
             xpush64_many = XPush64Many { srcs: RegSet<XReg> };
@@ -189,6 +189,12 @@ macro_rules! for_each_op {
             bitcast_float_from_int_32 = BitcastFloatFromInt32 { dst: FReg, src: XReg };
             /// `dst = bitcast src as f64`
             bitcast_float_from_int_64 = BitcastFloatFromInt64 { dst: FReg, src: XReg };
+
+            /// `sp = sp.checked_sub(amt)`
+            stack_alloc32 = StackAlloc32 { amt: u32 };
+
+            /// `sp = sp + amt`
+            stack_free32 = StackFree32 { amt: u32 };
         }
     };
 }

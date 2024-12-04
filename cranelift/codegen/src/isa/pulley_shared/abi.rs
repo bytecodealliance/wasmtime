@@ -220,18 +220,8 @@ where
         ]
     }
 
-    fn gen_stack_lower_bound_trap(limit_reg: Reg) -> SmallInstVec<Self::I> {
-        smallvec![Inst::TrapIf {
-            cond: ir::condcodes::IntCC::UnsignedLessThan,
-            size: match P::pointer_width() {
-                super::PointerWidth::PointerWidth32 => OperandSize::Size32,
-                super::PointerWidth::PointerWidth64 => OperandSize::Size64,
-            },
-            src1: limit_reg.try_into().unwrap(),
-            src2: pulley_interpreter::regs::XReg::sp.into(),
-            code: ir::TrapCode::STACK_OVERFLOW,
-        }
-        .into()]
+    fn gen_stack_lower_bound_trap(_limit_reg: Reg) -> SmallInstVec<Self::I> {
+        unimplemented!("pulley shouldn't need stack bound checks")
     }
 
     fn gen_get_stack_addr(mem: StackAMode, dst: Writable<Reg>) -> Self::I {
@@ -258,29 +248,21 @@ where
             return smallvec![];
         }
 
-        let temp = WritableXReg::try_from(writable_spilltmp_reg()).unwrap();
-
-        let imm = if let Ok(x) = i8::try_from(amount) {
-            Inst::Xconst8 { dst: temp, imm: x }.into()
-        } else if let Ok(x) = i16::try_from(amount) {
-            Inst::Xconst16 { dst: temp, imm: x }.into()
+        let inst = if amount < 0 {
+            let amount = amount.checked_neg().unwrap();
+            if let Ok(amt) = u32::try_from(amount) {
+                Inst::StackAlloc32 { amt }
+            } else {
+                unreachable!()
+            }
         } else {
-            Inst::Xconst32 {
-                dst: temp,
-                imm: amount,
+            if let Ok(amt) = u32::try_from(amount) {
+                Inst::StackFree32 { amt }
+            } else {
+                unreachable!()
             }
-            .into()
         };
-
-        smallvec![
-            imm,
-            Inst::Xadd32 {
-                dst: WritableXReg::try_from(writable_stack_reg()).unwrap(),
-                src1: XReg::new(stack_reg()).unwrap(),
-                src2: temp.to_reg(),
-            }
-            .into()
-        ]
+        smallvec![inst.into()]
     }
 
     fn gen_prologue_frame_setup(
@@ -292,29 +274,7 @@ where
         let mut insts = SmallVec::new();
 
         if frame_layout.setup_area_size > 0 {
-            // sp = sub sp, 16 ;; alloc stack space for frame pointer and return address.
-            // store sp+8, lr  ;; save return address.
-            // store sp, fp    ;; save old fp.
-            // mov sp, fp      ;; set fp to sp.
-            insts.extend(Self::gen_sp_reg_adjust(-16));
-            insts.push(
-                Inst::gen_store(
-                    Amode::SpOffset { offset: 8 },
-                    lr_reg(),
-                    I64,
-                    MemFlags::trusted(),
-                )
-                .into(),
-            );
-            insts.push(
-                Inst::gen_store(
-                    Amode::SpOffset { offset: 0 },
-                    fp_reg(),
-                    I64,
-                    MemFlags::trusted(),
-                )
-                .into(),
-            );
+            insts.push(Inst::PushFrame.into());
             if flags.unwind_info() {
                 insts.push(
                     Inst::Unwind {
@@ -325,13 +285,6 @@ where
                     .into(),
                 );
             }
-            insts.push(
-                Inst::Xmov {
-                    dst: Writable::from_reg(XReg::new(fp_reg()).unwrap()),
-                    src: XReg::new(stack_reg()).unwrap(),
-                }
-                .into(),
-            );
         }
 
         insts
@@ -347,25 +300,7 @@ where
         let mut insts = SmallVec::new();
 
         if frame_layout.setup_area_size > 0 {
-            insts.push(
-                Inst::gen_load(
-                    writable_lr_reg(),
-                    Amode::SpOffset { offset: 8 },
-                    I64,
-                    MemFlags::trusted(),
-                )
-                .into(),
-            );
-            insts.push(
-                Inst::gen_load(
-                    writable_fp_reg(),
-                    Amode::SpOffset { offset: 0 },
-                    I64,
-                    MemFlags::trusted(),
-                )
-                .into(),
-            );
-            insts.extend(Self::gen_sp_reg_adjust(16));
+            insts.push(Inst::PopFrame.into());
         }
 
         if frame_layout.tail_args_size > 0 {
@@ -386,7 +321,8 @@ where
     }
 
     fn gen_probestack(_insts: &mut SmallInstVec<Self::I>, _frame_size: u32) {
-        todo!()
+        // Pulley doesn't implement stack probes since all stack pointer
+        // decrements are checked already.
     }
 
     fn gen_clobber_save(
@@ -582,11 +518,15 @@ where
     }
 
     fn get_number_of_spillslots_for_value(
-        _rc: RegClass,
+        rc: RegClass,
         _target_vector_bytes: u32,
         _isa_flags: &PulleyFlags,
     ) -> u32 {
-        todo!()
+        match rc {
+            RegClass::Int => 1,
+            RegClass::Float => todo!(),
+            RegClass::Vector => unreachable!(),
+        }
     }
 
     fn get_machine_env(_flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
@@ -651,7 +591,8 @@ where
         _frame_size: u32,
         _guard_size: u32,
     ) {
-        todo!()
+        // Pulley doesn't need inline probestacks because it always checks stack
+        // decrements.
     }
 }
 

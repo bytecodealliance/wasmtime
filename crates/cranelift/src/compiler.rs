@@ -268,25 +268,27 @@ impl wasmtime_environ::Compiler for Compiler {
         // abort for the whole program since the runtime limits configured by
         // the embedder should cause wasm to trap before it reaches that
         // (ensuring the host has enough space as well for its functionality).
-        let vmctx = context
-            .func
-            .create_global_value(ir::GlobalValueData::VMContext);
-        let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
-            base: vmctx,
-            offset: i32::from(func_env.offsets.ptr.vmctx_runtime_limits()).into(),
-            global_type: isa.pointer_type(),
-            flags: MemFlags::trusted().with_readonly(),
-        });
-        let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
-            base: interrupts_ptr,
-            offset: i32::from(func_env.offsets.ptr.vmruntime_limits_stack_limit()).into(),
-            global_type: isa.pointer_type(),
-            flags: MemFlags::trusted(),
-        });
-        if func_env.signals_based_traps() {
-            context.func.stack_limit = Some(stack_limit);
-        } else {
-            func_env.stack_limit_at_function_entry = Some(stack_limit);
+        if !func_env.is_pulley() {
+            let vmctx = context
+                .func
+                .create_global_value(ir::GlobalValueData::VMContext);
+            let interrupts_ptr = context.func.create_global_value(ir::GlobalValueData::Load {
+                base: vmctx,
+                offset: i32::from(func_env.offsets.ptr.vmctx_runtime_limits()).into(),
+                global_type: isa.pointer_type(),
+                flags: MemFlags::trusted().with_readonly(),
+            });
+            let stack_limit = context.func.create_global_value(ir::GlobalValueData::Load {
+                base: interrupts_ptr,
+                offset: i32::from(func_env.offsets.ptr.vmruntime_limits_stack_limit()).into(),
+                global_type: isa.pointer_type(),
+                flags: MemFlags::trusted(),
+            });
+            if func_env.signals_based_traps() {
+                context.func.stack_limit = Some(stack_limit);
+            } else {
+                func_env.stack_limit_at_function_entry = Some(stack_limit);
+            }
         }
         let FunctionBodyData { validator, body } = input;
         let mut validator =
