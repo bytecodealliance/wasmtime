@@ -1,5 +1,6 @@
 //! Pulley bytecode operations with their operands.
 
+use crate::encode::Encode;
 use crate::imms::*;
 use crate::regs::*;
 
@@ -128,6 +129,16 @@ macro_rules! define_op_encode {
                     Self::ExtendedOp(op) => op.encode(into),
                 }
             }
+
+            /// Returns the encoded size of this op.
+            pub fn width(&self) -> u8 {
+                match self {
+                    $(
+                        Self::$name(_) => <$name as Encode>::WIDTH,
+                    )*
+                    Self::ExtendedOp(op) => op.width(),
+                }
+            }
         }
 
         $(
@@ -165,6 +176,15 @@ macro_rules! define_extended_op_encode {
                 match self {
                     $(
                         Self::$name(op) => op.encode(into),
+                    )*
+                }
+            }
+
+            /// Returns the encoded size of this op.
+            pub fn width(&self) -> u8 {
+                match self {
+                    $(
+                        Self::$name(_) => <$name as Encode>::WIDTH,
                     )*
                 }
             }
