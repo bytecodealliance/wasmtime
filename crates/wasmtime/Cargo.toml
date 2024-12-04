@@ -185,7 +185,6 @@ async = [
   "dep:async-trait",
   "wasmtime-component-macro?/async",
   "runtime",
-  "std",
 ]
 
 # Enables support for the pooling instance allocation strategy
@@ -315,6 +314,7 @@ std = [
   'wasmtime-environ/std',
   'object/std',
   'once_cell',
+  'wasmtime-fiber?/std',
   # technically this isn't necessary but once you have the standard library you
   # probably want things to go fast in which case you've probably got signal
   # handlers and such so implicitly enable this. This also helps reduce the
