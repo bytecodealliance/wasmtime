@@ -52,6 +52,7 @@ rustc-hash = { workspace = true }
 # Note that this just enables `trace-log` for `clif-util` and doesn't turn it on
 # for all of Cranelift, which would be bad.
 regalloc2 = { workspace = true, features = ["trace-log"] }
+pulley-interpreter = { workspace = true, optional = true }
 
 [features]
 default = [
@@ -64,3 +65,4 @@ disas = ["capstone"]
 souper-harvest = ["cranelift-codegen/souper-harvest", "rayon"]
 all-arch = ["cranelift-codegen/all-arch"]
 all-native-arch = ["cranelift-codegen/all-native-arch"]
+pulley = ['cranelift-codegen/pulley', 'dep:pulley-interpreter']

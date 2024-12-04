@@ -274,7 +274,7 @@ impl<'a> OpVisitor for Disassembler<'a> {
                 write!(&mut self.disas, "{space}{byte:02x}").unwrap();
                 need_space = true;
             }
-            for _ in 0..11_usize.saturating_sub(size) {
+            for _ in 0..12_usize.saturating_sub(size) {
                 write!(&mut self.disas, "   ").unwrap();
             }
         }
