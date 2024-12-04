@@ -15,7 +15,7 @@ const GENERIC_BUCKETS = 3;
 // compile-and-test crates.
 const SINGLE_CRATE_BUCKETS = ["wasmtime", "wasmtime-cli", "wasmtime-wasi"];
 
-const ubuntu = 'ubuntu-22.04';
+const ubuntu = 'ubuntu-24.04';
 const windows = 'windows-2022';
 const macos = 'macos-14';
 

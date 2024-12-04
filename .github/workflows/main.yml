@@ -690,7 +690,7 @@ jobs:
         set -ex
 
         sudo apt-get update
-        sudo apt-get install -y ${{ matrix.gcc_package }} ninja-build
+        sudo apt-get install -y ${{ matrix.gcc_package }}
 
         # Configure Cargo for cross compilation and tell it how it can run
         # cross executables
@@ -722,6 +722,9 @@ jobs:
         if [ -f ${{ runner.tool_cache }}/qemu/built ]; then
           exit 0
         fi
+
+        # Install build dependencies of QEMU itself.
+        sudo apt-get install -y libglib2.0-dev ninja-build
 
         # Download and build qemu from source since the most recent release is
         # way faster at arm emulation than the current version github actions'
