@@ -850,7 +850,7 @@ jobs:
     needs: determine
     if: needs.determine.outputs.run-dwarf
     name: Test DWARF debugging
-    runs-on: ubuntu-22.04 # FIXME: fails on `ubuntu-24.04` right now
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
       with:
@@ -858,13 +858,10 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: rustup target add wasm32-wasip1 wasm32-unknown-unknown
     - run: |
-        sudo apt-get update && sudo apt-get install -y gdb lldb-15 llvm
-        # workaround for https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1972855
-        sudo mkdir -p /usr/lib/local/lib/python3.10/dist-packages/lldb
-        sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb/* /usr/lib/python3/dist-packages/lldb/
+        sudo apt-get update && sudo apt-get install -y gdb lldb-18 llvm
         cargo test --test all -- --ignored --test-threads 1 debug::
       env:
-        LLDB: lldb-15 # override default version, 14
+        LLDB: lldb-18
 
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
