@@ -22,6 +22,9 @@ pub trait ReservedValue {
 }
 
 /// Packed representation of `Option<T>`.
+///
+/// This is a wrapper around a `T`, using `T::reserved_value` to represent
+/// `None`.
 #[derive(Clone, Copy, PartialEq, PartialOrd, Eq, Ord, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 #[repr(transparent)]
