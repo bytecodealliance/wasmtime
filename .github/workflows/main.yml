@@ -80,7 +80,7 @@ jobs:
   # Note that `wasmtime-platform.h` is excluded here as it's auto-generated.
   clangformat:
     name: Clang format
-    runs-on: ubuntu-22.04 # FIXME: fails on `ubuntu-24.04` right now
+    runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v4
       with:
@@ -89,7 +89,7 @@ jobs:
         git ls-files '*.h' '*.c' '*.cpp' | \
           grep -v wasmtime-platform.h | \
           grep -v wasm.h | \
-          xargs clang-format-15 --dry-run --Werror --verbose
+          xargs clang-format-18 --dry-run --Werror --verbose
 
     # common logic to cancel the entire run if this job fails
     - run: gh run cancel ${{ github.run_id }}
