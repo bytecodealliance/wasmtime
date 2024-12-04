@@ -271,6 +271,12 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
                 pc: cx.uc_mcontext.gregs[libc::REG_RIP as usize] as usize,
                 fp: cx.uc_mcontext.gregs[libc::REG_RBP as usize] as usize,
             }
+        } else if #[cfg(all(target_os = "linux", target_arch = "x86"))] {
+            let cx = &*(cx as *const libc::ucontext_t);
+            TrapRegisters {
+                pc: cx.uc_mcontext.gregs[libc::REG_EIP as usize] as usize,
+                fp: cx.uc_mcontext.gregs[libc::REG_EBP as usize] as usize,
+            }
         } else if #[cfg(all(any(target_os = "linux", target_os = "android"), target_arch = "aarch64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             TrapRegisters {
@@ -332,6 +338,12 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
             TrapRegisters {
                 pc: cx.sc_rip as usize,
                 fp: cx.sc_rbp as usize,
+            }
+        } else if #[cfg(all(target_os = "linux", target_arch = "arm"))] {
+            let cx = &*(cx as *const libc::ucontext_t);
+            TrapRegisters {
+                pc: cx.uc_mcontext.arm_pc as usize,
+                fp: cx.uc_mcontext.arm_fp as usize,
             }
         } else {
             compile_error!("unsupported platform");

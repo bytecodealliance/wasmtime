@@ -1,4 +1,4 @@
-//! x86_64-specific definitions of architecture-specific functions in Wasmtime.
+//! arm-specific definitions of architecture-specific functions in Wasmtime.
 
 #[inline]
 #[allow(missing_docs)]
@@ -6,7 +6,7 @@ pub fn get_stack_pointer() -> usize {
     let stack_pointer: usize;
     unsafe {
         core::arch::asm!(
-            "mov {}, rsp",
+            "mov {}, sp",
             out(reg) stack_pointer,
             options(nostack,nomem),
         );
@@ -24,5 +24,5 @@ pub unsafe fn get_next_older_pc_from_fp(fp: usize) -> usize {
 pub const NEXT_OLDER_FP_FROM_FP_OFFSET: usize = 0;
 
 pub fn assert_fp_is_aligned(fp: usize) {
-    assert_eq!(fp % 16, 0, "stack should always be aligned to 16");
+    assert_eq!(fp % 8, 0, "stack should always be aligned to 8");
 }

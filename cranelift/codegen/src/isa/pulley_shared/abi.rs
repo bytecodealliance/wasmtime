@@ -1,7 +1,7 @@
 //! Implementation of a standard Pulley ABI.
 
 use super::{inst::*, PulleyFlags, PulleyTargetKind};
-use crate::isa::pulley_shared::PulleyBackend;
+use crate::isa::pulley_shared::{PointerWidth, PulleyBackend};
 use crate::{
     ir::{self, types::*, MemFlags, Signature},
     isa::{self, unwind::UnwindInst},
@@ -533,7 +533,15 @@ where
         _isa_flags: &PulleyFlags,
     ) -> u32 {
         match rc {
-            RegClass::Int => 1,
+            // Spilling an integer register requires spilling 8 bytes, and spill
+            // slots are defined in terms of "word bytes" or the size of a
+            // pointer. That means on 32-bit pulley we need to take up two spill
+            // slots for integers where on 64-bit pulley we need to only take up
+            // one spill slot for integers.
+            RegClass::Int => match P::pointer_width() {
+                PointerWidth::PointerWidth32 => 2,
+                PointerWidth::PointerWidth64 => 1,
+            },
             RegClass::Float => todo!(),
             RegClass::Vector => unreachable!(),
         }

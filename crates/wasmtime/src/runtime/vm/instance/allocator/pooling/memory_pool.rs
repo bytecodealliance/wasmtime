@@ -887,8 +887,23 @@ mod tests {
                                     guard_bytes,
                                     guard_before_slots,
                                 };
-                                let layout = calculate(&constraints);
-                                assert_slab_layout_invariants(constraints, layout.unwrap());
+                                match calculate(&constraints) {
+                                    Ok(layout) => {
+                                        assert_slab_layout_invariants(constraints, layout)
+                                    }
+                                    Err(e) => {
+                                        // Only allow failure on 32-bit
+                                        // platforms where the calculation
+                                        // exceeded the size of the addres
+                                        // space
+                                        assert!(
+                                            cfg!(target_pointer_width = "32")
+                                                && e.to_string()
+                                                    .contains("exceeds addressable memory"),
+                                            "bad error: {e:?}"
+                                        );
+                                    }
+                                }
                             }
                         }
                     }

@@ -139,7 +139,11 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
     // Locally testing this out this drops QEMU's memory usage running this
     // tests suite from 10GiB to 600MiB. Previously we saw that crossing the
     // 10GiB threshold caused our processes to get OOM killed on CI.
-    if std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
+    //
+    // Note that this branch is also taken for 32-bit platforms which generally
+    // can't test much of the pooling allocator as the virtual address space is
+    // so limited.
+    if cfg!(target_pointer_width = "32") || std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok() {
         // The pooling allocator hogs ~6TB of virtual address space for each
         // store, so if we don't to hog memory then ignore pooling tests.
         if config.pooling {

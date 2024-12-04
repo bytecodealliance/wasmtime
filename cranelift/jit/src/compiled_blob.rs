@@ -102,7 +102,7 @@ impl CompiledBlob {
                     let at_page = (at as usize) & !0xfff;
                     let pcrel = (what_page as isize).checked_sub(at_page as isize).unwrap();
                     assert!(
-                        (-1 << 32) <= pcrel && pcrel < (1 << 32),
+                        (-1 << 32) <= (pcrel as i64) && (pcrel as i64) < (1 << 32),
                         "can't reach GOT page with ±4GB `adrp` instruction"
                     );
                     let val = pcrel >> 12;

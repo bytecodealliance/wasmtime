@@ -71,7 +71,7 @@ fn custom_limiter_detect_os_oom_failure() -> Result<()> {
         // limit process to 256MiB memory
         let rlimit = libc::rlimit {
             rlim_cur: 0,
-            rlim_max: process_max_memory as u64,
+            rlim_max: process_max_memory as libc::rlim_t,
         };
         let res = libc::setrlimit(libc::RLIMIT_DATA, &rlimit);
         assert_eq!(res, 0, "setrlimit failed: {res}");

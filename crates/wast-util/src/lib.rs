@@ -229,6 +229,7 @@ impl TestConfig {
 }
 
 /// Configuration that spec tests can run under.
+#[derive(Debug)]
 pub struct WastConfig {
     /// Compiler chosen to run this test.
     pub compiler: Compiler,
@@ -432,6 +433,20 @@ impl WastTest {
 
             if supported.iter().any(|part| self.path.ends_with(part)) {
                 return false;
+            }
+
+            // FIXME: once the backend has enough instruction support move these
+            // into the above tests since they should pass on 64-bit platforms
+            // as well.
+            let supported32bit = [
+                "misc_testsuite/winch/table_grow.wast",
+                "misc_testsuite/table_grow_with_funcref.wast",
+                // ...
+            ];
+            if cfg!(target_pointer_width = "32") {
+                if supported32bit.iter().any(|part| self.path.ends_with(part)) {
+                    return false;
+                }
             }
 
             return true;

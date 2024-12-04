@@ -299,6 +299,8 @@ pub fn unregister_code(code: &Arc<CodeMemory>) {
 #[cfg_attr(miri, ignore)]
 fn test_frame_info() -> Result<(), anyhow::Error> {
     use crate::*;
+    use wasmtime_environ::TripleExt;
+
     let mut store = Store::<()>::default();
     let module = Module::new(
         store.engine(),
@@ -313,7 +315,20 @@ fn test_frame_info() -> Result<(), anyhow::Error> {
                 (func (export "rem_u") (param $x i32) (param $y i32) (result i32) (i32.rem_u (local.get $x) (local.get $y)))
             )
          "#,
-    )?;
+    );
+    // Expect this test to fail on pulley at this time. When pulley supports
+    // the instructions above this should switch back to using `?` on the
+    // constructor above for all platforms.
+    let module = match module {
+        Ok(module) => {
+            assert!(!store.engine().target().is_pulley());
+            module
+        }
+        Err(e) => {
+            assert!(store.engine().target().is_pulley(), "bad error {e:?}");
+            return Ok(());
+        }
+    };
     // Create an instance to ensure the frame information is registered.
     Instance::new(&mut store, &module, &[])?;
 

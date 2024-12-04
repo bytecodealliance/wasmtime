@@ -220,7 +220,6 @@ mod tests {
     use super::*;
     use crate::runtime::vm::InstanceLimits;
 
-    #[cfg(target_pointer_width = "64")]
     #[test]
     fn test_table_pool() -> Result<()> {
         let pool = TablePool::new(&PoolingInstanceAllocatorConfig {

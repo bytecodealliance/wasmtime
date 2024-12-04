@@ -641,6 +641,8 @@ mod test {
     }
 
     #[test]
+    #[cfg(target_arch = "x86_64")] // test on a platform that is known to use
+                                   // Cranelift
     fn test_os_mismatch() -> Result<()> {
         let engine = Engine::default();
         let mut metadata = Metadata::new(&engine);
@@ -712,6 +714,7 @@ Caused by:
 
     #[test]
     #[cfg_attr(miri, ignore)]
+    #[cfg(target_pointer_width = "64")] // different defaults on 32-bit platforms
     fn test_tunables_int_mismatch() -> Result<()> {
         let engine = Engine::default();
         let mut metadata = Metadata::new(&engine);
@@ -762,6 +765,8 @@ Caused by:
     }
 
     #[test]
+    #[cfg(target_arch = "x86_64")] // test on a platform that is known to
+                                   // implement threads
     fn test_feature_mismatch() -> Result<()> {
         let mut config = Config::new();
         config.wasm_threads(true);

@@ -8,9 +8,9 @@
 //! crate.
 
 cfg_if::cfg_if! {
-    if #[cfg(target_arch = "x86_64")] {
-        mod x86_64;
-        use x86_64 as imp;
+    if #[cfg(any(target_arch = "x86_64", target_arch = "x86"))] {
+        mod x86;
+        use x86 as imp;
     } else if #[cfg(target_arch = "aarch64")] {
         mod aarch64;
         use aarch64 as imp;
@@ -20,6 +20,9 @@ cfg_if::cfg_if! {
     } else if #[cfg(target_arch = "riscv64")] {
         mod riscv64;
         use riscv64 as imp;
+    } else if #[cfg(target_arch = "arm")] {
+        mod arm;
+        use arm as imp;
     } else {
         mod unsupported;
         use unsupported as imp;

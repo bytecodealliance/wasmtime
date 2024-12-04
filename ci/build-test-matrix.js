@@ -36,7 +36,7 @@ function supports32Bit(pkg) {
   if (pkg.indexOf("pulley") !== -1)
     return true;
 
-  return pkg == 'wasmtime-fiber';
+  return pkg == 'wasmtime-fiber' || pkg == 'wasmtime';
 }
 
 // This is the full, unsharded, and unfiltered matrix of what we test on
@@ -231,7 +231,9 @@ async function shard(configs) {
   for (const config of configs) {
     // Special case 32-bit configs. Only some crates, according to
     // `supports32Bit`, run on this target. At this time the set of supported
-    // crates is small enough that they're not sharded.
+    // crates is small enough that they're not sharded. A second shard, however,
+    // is included which runs `--test wast` to run the full `*.wast` test suite
+    // in CI on 32-bit platforms, at this time effectively testing Pulley.
     if (config["32-bit"] === true) {
       sharded.push(Object.assign(
         {},
@@ -241,6 +243,11 @@ async function shard(configs) {
             .map(c => supports32Bit(c) ? `--package ${c}` : `--exclude ${c}`)
             .join(" "),
         }
+      ));
+      sharded.push(Object.assign(
+        {},
+        config,
+        { bucket: '--test wast' },
       ));
       continue;
     }
