@@ -285,6 +285,9 @@ pub(crate) fn create_unwind_info_from_insts<MR: RegisterMapper<crate::machinst::
                     });
                 }
             },
+            &UnwindInst::RegStackOffset { .. } => {
+                unreachable!("only supported with DWARF");
+            }
             &UnwindInst::Aarch64SetPointerAuth { .. } => {
                 unreachable!("no aarch64 on x64");
             }
