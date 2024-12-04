@@ -5,7 +5,7 @@
 //! machine code emitter.
 
 use crate::abi::RetArea;
-use crate::codegen::{control_index, Callee, CodeGen, ControlStackFrame, FnCall};
+use crate::codegen::{control_index, Callee, CodeGen, ControlStackFrame, Emission, FnCall};
 use crate::masm::{
     DivKind, ExtendKind, FloatCmpKind, IntCmpKind, MacroAssembler, MemMoveDirection, MulWideKind,
     OperandSize, RegImm, RemKind, RoundingMode, SPOffset, ShiftKind, TruncKind,
@@ -253,7 +253,7 @@ macro_rules! def_unsupported {
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
 
-impl<'a, 'translation, 'data, M> VisitOperator<'a> for CodeGen<'a, 'translation, 'data, M>
+impl<'a, 'translation, 'data, M> VisitOperator<'a> for CodeGen<'a, 'translation, 'data, M, Emission>
 where
     M: MacroAssembler,
 {
@@ -2212,7 +2212,8 @@ where
     wasmparser::for_each_visit_operator!(def_unsupported);
 }
 
-impl<'a, 'translation, 'data, M> VisitSimdOperator<'a> for CodeGen<'a, 'translation, 'data, M>
+impl<'a, 'translation, 'data, M> VisitSimdOperator<'a>
+    for CodeGen<'a, 'translation, 'data, M, Emission>
 where
     M: MacroAssembler,
 {
@@ -2231,7 +2232,7 @@ where
     wasmparser::for_each_visit_simd_operator!(def_unsupported);
 }
 
-impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M>
+impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M, Emission>
 where
     M: MacroAssembler,
 {

@@ -134,12 +134,14 @@ impl TargetIsa for X64 {
 
         let regalloc = RegAlloc::from(gpr, fpr);
         let codegen_context = CodeGenContext::new(regalloc, stack, frame, &vmoffsets);
-        let mut codegen = CodeGen::new(tunables, &mut masm, codegen_context, env, abi_sig);
+        let codegen = CodeGen::new(tunables, &mut masm, codegen_context, env, abi_sig);
 
-        codegen.emit(&mut body, validator)?;
-        let base = codegen.source_location.base;
+        let mut body_codegen = codegen.emit_prologue()?;
 
-        let names = codegen.env.take_name_map();
+        body_codegen.emit(&mut body, validator)?;
+        let base = body_codegen.source_location.base;
+
+        let names = body_codegen.env.take_name_map();
         Ok(CompiledFunction::new(
             masm.finalize(base),
             names,

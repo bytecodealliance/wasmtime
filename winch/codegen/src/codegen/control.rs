@@ -9,6 +9,7 @@
 use super::{CodeGenContext, OperandSize, Reg, TypedReg};
 use crate::{
     abi::{ABIOperand, ABIResults, ABISig, RetArea, ABI},
+    codegen::Emission,
     masm::{IntCmpKind, MacroAssembler, MemMoveDirection, RegImm, SPOffset},
     reg::writable,
     stack::Val,
@@ -248,7 +249,7 @@ impl ControlStackFrame {
     pub fn r#if<M: MacroAssembler>(
         sig: BlockSig,
         masm: &mut M,
-        context: &mut CodeGenContext,
+        context: &mut CodeGenContext<Emission>,
     ) -> Self {
         let mut control = Self::If {
             cont: masm.get_label(),
@@ -266,7 +267,7 @@ impl ControlStackFrame {
     pub fn block<M: MacroAssembler>(
         sig: BlockSig,
         masm: &mut M,
-        context: &mut CodeGenContext,
+        context: &mut CodeGenContext<Emission>,
     ) -> Self {
         let mut control = Self::Block {
             sig,
@@ -283,7 +284,7 @@ impl ControlStackFrame {
     pub fn r#loop<M: MacroAssembler>(
         sig: BlockSig,
         masm: &mut M,
-        context: &mut CodeGenContext,
+        context: &mut CodeGenContext<Emission>,
     ) -> Self {
         let mut control = Self::Loop {
             stack_state: Default::default(),
@@ -295,7 +296,7 @@ impl ControlStackFrame {
         control
     }
 
-    fn init<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext) {
+    fn init<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext<Emission>) {
         self.calculate_stack_state(context, masm);
         // If the block has stack results, immediately resolve the return area
         // base.
@@ -336,7 +337,7 @@ impl ControlStackFrame {
     /// Calculates the [StackState] of the block.
     fn calculate_stack_state<M: MacroAssembler>(
         &mut self,
-        context: &mut CodeGenContext,
+        context: &mut CodeGenContext<Emission>,
         masm: &mut M,
     ) {
         use ControlStackFrame::*;
@@ -388,7 +389,7 @@ impl ControlStackFrame {
     pub fn ensure_stack_state<M: MacroAssembler>(
         &mut self,
         masm: &mut M,
-        context: &mut CodeGenContext,
+        context: &mut CodeGenContext<Emission>,
     ) {
         let state = self.stack_state();
         // This assumes that at jump sites, the machine stack pointer will be
@@ -416,7 +417,7 @@ impl ControlStackFrame {
         }
     }
 
-    fn emit<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext) {
+    fn emit<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext<Emission>) {
         use ControlStackFrame::*;
 
         // Do not perform any emissions if we are in an unreachable state.
@@ -455,7 +456,11 @@ impl ControlStackFrame {
 
     /// Handles the else branch if the current control stack frame is
     /// [`ControlStackFrame::If`].
-    pub fn emit_else<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext) {
+    pub fn emit_else<M: MacroAssembler>(
+        &mut self,
+        masm: &mut M,
+        context: &mut CodeGenContext<Emission>,
+    ) {
         debug_assert!(self.is_if());
         let state = self.stack_state();
 
@@ -467,7 +472,11 @@ impl ControlStackFrame {
 
     /// Binds the else branch label and converts `self` to
     /// [`ControlStackFrame::Else`].
-    pub fn bind_else<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext) {
+    pub fn bind_else<M: MacroAssembler>(
+        &mut self,
+        masm: &mut M,
+        context: &mut CodeGenContext<Emission>,
+    ) {
         use ControlStackFrame::*;
         match self {
             If {
@@ -510,7 +519,11 @@ impl ControlStackFrame {
     }
 
     /// Handles the end of a control stack frame.
-    pub fn emit_end<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext) {
+    pub fn emit_end<M: MacroAssembler>(
+        &mut self,
+        masm: &mut M,
+        context: &mut CodeGenContext<Emission>,
+    ) {
         use ControlStackFrame::*;
         match self {
             If { stack_state, .. } | Else { stack_state, .. } | Block { stack_state, .. } => {
@@ -527,7 +540,11 @@ impl ControlStackFrame {
 
     /// Binds the exit label of the current control stack frame and pushes the
     /// ABI results to the value stack.
-    pub fn bind_end<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext) {
+    pub fn bind_end<M: MacroAssembler>(
+        &mut self,
+        masm: &mut M,
+        context: &mut CodeGenContext<Emission>,
+    ) {
         self.push_abi_results(context, masm);
         self.bind_exit_label(masm);
     }
@@ -627,12 +644,12 @@ impl ControlStackFrame {
     /// updated.
     pub fn pop_abi_results<M, F>(
         &mut self,
-        context: &mut CodeGenContext,
+        context: &mut CodeGenContext<Emission>,
         masm: &mut M,
         calculate_ret_area: F,
     ) where
         M: MacroAssembler,
-        F: FnMut(&ABIResults, &mut CodeGenContext, &mut M) -> Option<RetArea>,
+        F: FnMut(&ABIResults, &mut CodeGenContext<Emission>, &mut M) -> Option<RetArea>,
     {
         Self::pop_abi_results_impl(self.results::<M>(), context, masm, calculate_ret_area)
     }
@@ -648,12 +665,12 @@ impl ControlStackFrame {
     /// results should be interpreted.
     pub fn pop_abi_results_impl<M, F>(
         results: &mut ABIResults,
-        context: &mut CodeGenContext,
+        context: &mut CodeGenContext<Emission>,
         masm: &mut M,
         mut calculate_ret_area: F,
     ) where
         M: MacroAssembler,
-        F: FnMut(&ABIResults, &mut CodeGenContext, &mut M) -> Option<RetArea>,
+        F: FnMut(&ABIResults, &mut CodeGenContext<Emission>, &mut M) -> Option<RetArea>,
     {
         let mut iter = results.operands().iter().rev().peekable();
 
@@ -690,7 +707,7 @@ impl ControlStackFrame {
 
     /// Convenience wrapper around [CodeGenContext::push_abi_results] using the
     /// results of the current frame.
-    fn push_abi_results<M>(&mut self, context: &mut CodeGenContext, masm: &mut M)
+    fn push_abi_results<M>(&mut self, context: &mut CodeGenContext<Emission>, masm: &mut M)
     where
         M: MacroAssembler,
     {
@@ -705,12 +722,12 @@ impl ControlStackFrame {
     /// taken.
     pub fn top_abi_results<M, F>(
         &mut self,
-        context: &mut CodeGenContext,
+        context: &mut CodeGenContext<Emission>,
         masm: &mut M,
         calculate_ret_area: F,
     ) where
         M: MacroAssembler,
-        F: FnMut(&ABIResults, &mut CodeGenContext, &mut M) -> Option<RetArea>,
+        F: FnMut(&ABIResults, &mut CodeGenContext<Emission>, &mut M) -> Option<RetArea>,
     {
         Self::top_abi_results_impl::<M, _>(self.results::<M>(), context, masm, calculate_ret_area)
     }
@@ -720,12 +737,12 @@ impl ControlStackFrame {
     /// needed.
     fn top_abi_results_impl<M, F>(
         results: &mut ABIResults,
-        context: &mut CodeGenContext,
+        context: &mut CodeGenContext<Emission>,
         masm: &mut M,
         mut calculate_ret_area: F,
     ) where
         M: MacroAssembler,
-        F: FnMut(&ABIResults, &mut CodeGenContext, &mut M) -> Option<RetArea>,
+        F: FnMut(&ABIResults, &mut CodeGenContext<Emission>, &mut M) -> Option<RetArea>,
     {
         let mut area = None;
         Self::pop_abi_results_impl::<M, _>(results, context, masm, |r, context, masm| {
@@ -764,7 +781,7 @@ impl ControlStackFrame {
     fn adjust_stack_results<M>(
         ret_area: RetArea,
         results: &ABIResults,
-        context: &mut CodeGenContext,
+        context: &mut CodeGenContext<Emission>,
         masm: &mut M,
     ) where
         M: MacroAssembler,
@@ -889,7 +906,7 @@ impl ControlStackFrame {
     /// Ensures that there is enough space for return values on the stack.
     /// This function is called at the end of all blocks and when branching from
     /// within blocks.
-    fn ensure_ret_area<M>(ret_area: &RetArea, context: &mut CodeGenContext, masm: &mut M)
+    fn ensure_ret_area<M>(ret_area: &RetArea, context: &mut CodeGenContext<Emission>, masm: &mut M)
     where
         M: MacroAssembler,
     {
@@ -907,7 +924,7 @@ impl ControlStackFrame {
     fn maybe_load_retptr<M>(
         ret_area: Option<&RetArea>,
         results: &ABIResults,
-        context: &mut CodeGenContext,
+        context: &mut CodeGenContext<Emission>,
         masm: &mut M,
     ) -> Option<Reg>
     where

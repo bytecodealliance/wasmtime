@@ -13,6 +13,7 @@ use cranelift_codegen::{
     ir::{RelSourceLoc, SourceLoc},
 };
 use smallvec::SmallVec;
+use std::marker::PhantomData;
 use wasmparser::{
     BinaryReader, FuncValidator, MemArg, Operator, ValidatorResources, VisitOperator,
     VisitSimdOperator,
@@ -37,6 +38,9 @@ pub(crate) mod bounds;
 
 use bounds::{Bounds, ImmOffset, Index};
 
+mod phase;
+pub(crate) use phase::*;
+
 /// Holds metadata about the source code location and the machine code emission.
 /// The fields of this struct are opaque and are not interpreted in any way.
 /// They serve as a mapping between source code and machine code.
@@ -50,15 +54,16 @@ pub(crate) struct SourceLocation {
 }
 
 /// The code generation abstraction.
-pub(crate) struct CodeGen<'a, 'translation: 'a, 'data: 'translation, M>
+pub(crate) struct CodeGen<'a, 'translation: 'a, 'data: 'translation, M, P>
 where
     M: MacroAssembler,
+    P: CodeGenPhase,
 {
     /// The ABI-specific representation of the function signature, excluding results.
     pub sig: ABISig,
 
     /// The code generation context.
-    pub context: CodeGenContext<'a>,
+    pub context: CodeGenContext<'a, P>,
 
     /// A reference to the function compilation environment.
     pub env: FuncEnv<'a, 'translation, 'data, M::Ptr>,
@@ -83,19 +88,20 @@ where
 
     /// Local counter to track fuel consumption.
     pub fuel_consumed: i64,
+    phase: PhantomData<P>,
 }
 
-impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M>
+impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M, Prologue>
 where
     M: MacroAssembler,
 {
     pub fn new(
         tunables: &'a Tunables,
         masm: &'a mut M,
-        context: CodeGenContext<'a>,
+        context: CodeGenContext<'a, Prologue>,
         env: FuncEnv<'a, 'translation, 'data, M::Ptr>,
         sig: ABISig,
-    ) -> Self {
+    ) -> CodeGen<'a, 'translation, 'data, M, Prologue> {
         Self {
             sig,
             context,
@@ -107,32 +113,11 @@ where
             found_unsupported_instruction: None,
             // Empty functions should consume at least 1 fuel unit.
             fuel_consumed: 1,
+            phase: PhantomData,
         }
     }
 
-    /// Emit the function body to machine code.
-    pub fn emit(
-        &mut self,
-        body: &mut BinaryReader<'a>,
-        validator: &mut FuncValidator<ValidatorResources>,
-    ) -> Result<()> {
-        self.emit_start()
-            .and_then(|_| self.emit_body(body, validator))
-            .and_then(|_| self.emit_end())?;
-
-        Ok(())
-    }
-
-    /// Derives a [RelSourceLoc] from a [SourceLoc].
-    pub fn source_loc_from(&mut self, loc: SourceLoc) -> RelSourceLoc {
-        if self.source_location.base.is_none() && !loc.is_default() {
-            self.source_location.base = Some(loc);
-        }
-
-        RelSourceLoc::from_base_offset(self.source_location.base.unwrap_or_default(), loc)
-    }
-
-    fn emit_start(&mut self) -> Result<()> {
+    pub fn emit_prologue(mut self) -> Result<CodeGen<'a, 'translation, 'data, M, Emission>> {
         let vmctx = self
             .sig
             .params()
@@ -153,32 +138,95 @@ where
         );
 
         self.masm.reserve_stack(self.context.frame.locals_size);
+        self.spill_register_arguments();
+
+        let defined_locals_range = &self.context.frame.defined_locals_range;
+        self.masm.zero_mem_range(defined_locals_range.as_range());
+
+        // Save the results base parameter register into its slot.
+        self.sig.params.has_retptr().then(|| {
+            match self.sig.params.unwrap_results_area_operand() {
+                ABIOperand::Reg { ty, reg, .. } => {
+                    let results_base_slot = self.context.frame.results_base_slot.as_ref().unwrap();
+                    debug_assert!(results_base_slot.addressed_from_sp());
+                    let addr = self.masm.local_address(results_base_slot);
+                    self.masm.store((*reg).into(), addr, (*ty).into());
+                }
+                // The result base parameter is a stack parameter, addressed
+                // from FP.
+                _ => {}
+            }
+        });
 
         self.masm.end_source_loc();
 
-        if self.tunables.consume_fuel {
-            self.emit_fuel_check();
-        }
+        Ok(CodeGen {
+            sig: self.sig,
+            context: self.context.for_emission(),
+            masm: self.masm,
+            env: self.env,
+            tunables: self.tunables,
+            source_location: self.source_location,
+            control_frames: self.control_frames,
+            found_unsupported_instruction: self.found_unsupported_instruction,
+            fuel_consumed: self.fuel_consumed,
+            phase: PhantomData,
+        })
+    }
 
-        // Once we have emitted the epilogue and reserved stack space for the locals, we push the
-        // base control flow block.
-        self.control_frames.push(ControlStackFrame::block(
-            BlockSig::from_sig(self.sig.clone()),
-            self.masm,
-            &mut self.context,
-        ));
-
-        // Set the return area of the results *after* initializing the block. In
-        // the function body block case, we'll treat the results as any other
-        // case, addressed from the stack pointer, and when ending the function
-        // the return area will be set to the return pointer.
-        if self.sig.params.has_retptr() {
-            self.sig
-                .results
-                .set_ret_area(RetArea::slot(self.context.frame.results_base_slot.unwrap()));
+    fn spill_register_arguments(&mut self) {
+        use WasmValType::*;
+        for (operand, slot) in self
+            .sig
+            .params_without_retptr()
+            .iter()
+            .zip(self.context.frame.locals())
+        {
+            match (operand, slot) {
+                (ABIOperand::Reg { ty, reg, .. }, slot) => {
+                    let addr = self.masm.local_address(slot);
+                    match &ty {
+                        I32 | I64 | F32 | F64 | V128 => {
+                            self.masm.store((*reg).into(), addr, (*ty).into())
+                        }
+                        Ref(rt) => match rt.heap_type {
+                            WasmHeapType::Func | WasmHeapType::Extern => {
+                                self.masm.store_ptr((*reg).into(), addr)
+                            }
+                            ht => unimplemented!("Support for WasmHeapType: {ht}"),
+                        },
+                    }
+                }
+                // Skip non-register arguments
+                _ => {}
+            }
         }
+    }
+}
+
+impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M, Emission>
+where
+    M: MacroAssembler,
+{
+    /// Emit the function body to machine code.
+    pub fn emit(
+        &mut self,
+        body: &mut BinaryReader<'a>,
+        validator: &mut FuncValidator<ValidatorResources>,
+    ) -> Result<()> {
+        self.emit_body(body, validator)
+            .and_then(|_| self.emit_end())?;
 
         Ok(())
+    }
+
+    /// Derives a [RelSourceLoc] from a [SourceLoc].
+    pub fn source_loc_from(&mut self, loc: SourceLoc) -> RelSourceLoc {
+        if self.source_location.base.is_none() && !loc.is_default() {
+            self.source_location.base = Some(loc);
+        }
+
+        RelSourceLoc::from_base_offset(self.source_location.base.unwrap_or_default(), loc)
     }
 
     /// The following two helpers, handle else or end instructions when the
@@ -224,24 +272,27 @@ where
         body: &mut BinaryReader<'a>,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<()> {
-        self.spill_register_arguments();
-        let defined_locals_range = &self.context.frame.defined_locals_range;
-        self.masm.zero_mem_range(defined_locals_range.as_range());
+        if self.tunables.consume_fuel {
+            self.emit_fuel_check();
+        }
 
-        // Save the results base parameter register into its slot.
-        self.sig.params.has_retptr().then(|| {
-            match self.sig.params.unwrap_results_area_operand() {
-                ABIOperand::Reg { ty, reg, .. } => {
-                    let results_base_slot = self.context.frame.results_base_slot.as_ref().unwrap();
-                    debug_assert!(results_base_slot.addressed_from_sp());
-                    let addr = self.masm.local_address(results_base_slot);
-                    self.masm.store((*reg).into(), addr, (*ty).into());
-                }
-                // The result base parameter is a stack parameter, addressed
-                // from FP.
-                _ => {}
-            }
-        });
+        // Once we have emitted the epilogue and reserved stack space for the locals, we push the
+        // base control flow block.
+        self.control_frames.push(ControlStackFrame::block(
+            BlockSig::from_sig(self.sig.clone()),
+            self.masm,
+            &mut self.context,
+        ));
+
+        // Set the return area of the results *after* initializing the block. In
+        // the function body block case, we'll treat the results as any other
+        // case, addressed from the stack pointer, and when ending the function
+        // the return area will be set to the return pointer.
+        if self.sig.params.has_retptr() {
+            self.sig
+                .results
+                .set_ret_area(RetArea::slot(self.context.frame.results_base_slot.unwrap()));
+        }
 
         while !body.eof() {
             let offset = body.original_position();
@@ -307,7 +358,7 @@ where
         }
 
         impl<'a, 'translation, 'data, M: MacroAssembler> VisitorHooks
-            for CodeGen<'a, 'translation, 'data, M>
+            for CodeGen<'a, 'translation, 'data, M, Emission>
         {
             fn visit(&self, op: &Operator) -> bool {
                 self.context.reachable || visit_op_when_unreachable(op)
@@ -429,35 +480,6 @@ where
         self.masm.epilogue();
         self.masm.end_source_loc();
         Ok(())
-    }
-
-    fn spill_register_arguments(&mut self) {
-        use WasmValType::*;
-        self.sig
-            // Skip the results base param if any; [Self::emit_body],
-            // will handle spilling the results base param if it's in a register.
-            .params_without_retptr()
-            .iter()
-            .enumerate()
-            .filter(|(_, a)| a.is_reg())
-            .for_each(|(index, arg)| {
-                let ty = arg.ty();
-                let local = self.context.frame.get_frame_local(index);
-                let addr = self.masm.local_address(local);
-                let src = arg
-                    .get_reg()
-                    .expect("arg should be associated to a register");
-
-                match &ty {
-                    I32 | I64 | F32 | F64 | V128 => self.masm.store(src.into(), addr, ty.into()),
-                    Ref(rt) => match rt.heap_type {
-                        WasmHeapType::Func | WasmHeapType::Extern => {
-                            self.masm.store_ptr(src.into(), addr)
-                        }
-                        ht => unimplemented!("Support for WasmHeapType: {ht}"),
-                    },
-                }
-            });
     }
 
     /// Pops the value at the stack top and assigns it to the local at
@@ -633,8 +655,12 @@ where
             // * index + offset + access_size overflows
             //   OR
             // * index + offset + access_size > bound
-            let bounds =
-                bounds::load_dynamic_heap_bounds(&mut self.context, self.masm, &heap, ptr_size);
+            let bounds = bounds::load_dynamic_heap_bounds::<_>(
+                &mut self.context,
+                self.masm,
+                &heap,
+                ptr_size,
+            );
 
             let index_reg = index.as_typed_reg().reg;
             // Allocate a temporary register to hold
@@ -978,6 +1004,24 @@ where
         self.context.free_reg(fuel_var);
     }
 
+    /// Emits a series of instructions that load the `fuel_consumed` field from
+    /// `VMRuntimeLimits`.
+    fn emit_load_fuel_consumed(&mut self, fuel_var: Reg) {
+        let limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
+        let fuel_offset = self.env.vmoffsets.ptr.vmruntime_limits_fuel_consumed();
+        self.masm.load_ptr(
+            self.masm.address_at_vmctx(u32::from(limits_offset)),
+            writable!(fuel_var),
+        );
+
+        self.masm.load(
+            self.masm.address_at_reg(fuel_var, u32::from(fuel_offset)),
+            writable!(fuel_var),
+            // Fuel is an i64.
+            OperandSize::S64,
+        );
+    }
+
     /// Increments the fuel consumed in `VMRuntimeLimits` by flushing
     /// `self.fuel_consumed` to memory.
     fn emit_fuel_increment(&mut self) {
@@ -1020,24 +1064,6 @@ where
         );
 
         self.context.free_reg(limits_var);
-    }
-
-    /// Emits a series of instructions that load the `fuel_consumed` field from
-    /// `VMRuntimeLimits`.
-    fn emit_load_fuel_consumed(&mut self, fuel_var: Reg) {
-        let limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
-        let fuel_offset = self.env.vmoffsets.ptr.vmruntime_limits_fuel_consumed();
-        self.masm.load_ptr(
-            self.masm.address_at_vmctx(u32::from(limits_offset)),
-            writable!(fuel_var),
-        );
-
-        self.masm.load(
-            self.masm.address_at_reg(fuel_var, u32::from(fuel_offset)),
-            writable!(fuel_var),
-            // Fuel is an i64.
-            OperandSize::S64,
-        );
     }
 
     /// Hook to handle fuel before visiting an operator.
