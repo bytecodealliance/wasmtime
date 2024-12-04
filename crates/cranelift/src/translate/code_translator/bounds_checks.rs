@@ -20,7 +20,8 @@
 //! !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 use super::Reachability;
-use crate::translate::{FuncEnvironment, HeapData};
+use crate::func_environ::FuncEnvironment;
+use crate::translate::{HeapData, TargetEnvironment};
 use cranelift_codegen::{
     cursor::{Cursor, FuncCursor},
     ir::{self, condcodes::IntCC, InstBuilder, RelSourceLoc},
@@ -35,9 +36,9 @@ use Reachability::*;
 ///
 /// Returns the `ir::Value` holding the native address of the heap access, or
 /// `None` if the heap access will unconditionally trap.
-pub fn bounds_check_and_compute_addr<Env>(
+pub fn bounds_check_and_compute_addr(
     builder: &mut FunctionBuilder,
-    env: &mut Env,
+    env: &mut FuncEnvironment<'_>,
     heap: &HeapData,
     // Dynamic operand indexing into the heap.
     index: ir::Value,
@@ -45,10 +46,7 @@ pub fn bounds_check_and_compute_addr<Env>(
     offset: u32,
     // Static size of the heap access.
     access_size: u8,
-) -> WasmResult<Reachability<ir::Value>>
-where
-    Env: FuncEnvironment + ?Sized,
-{
+) -> WasmResult<Reachability<ir::Value>> {
     let pointer_bit_width = u16::try_from(env.pointer_type().bits()).unwrap();
     let bound_gv = heap.bound;
     let orig_index = index;
@@ -429,14 +427,11 @@ where
 }
 
 /// Get the bound of a dynamic heap as an `ir::Value`.
-fn get_dynamic_heap_bound<Env>(
+fn get_dynamic_heap_bound(
     builder: &mut FunctionBuilder,
-    env: &mut Env,
+    env: &mut FuncEnvironment<'_>,
     heap: &HeapData,
-) -> ir::Value
-where
-    Env: FuncEnvironment + ?Sized,
-{
+) -> ir::Value {
     let enable_pcc = heap.pcc_memory_type.is_some();
 
     let (value, gv) = match heap.memory.static_heap_size() {
@@ -535,8 +530,8 @@ impl AddrPcc {
 ///
 /// This function deduplicates explicit bounds checks and Spectre mitigations
 /// that inherently also implement bounds checking.
-fn explicit_check_oob_condition_and_compute_addr<FE: FuncEnvironment + ?Sized>(
-    env: &mut FE,
+fn explicit_check_oob_condition_and_compute_addr(
+    env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder,
     heap: &HeapData,
     index: ir::Value,

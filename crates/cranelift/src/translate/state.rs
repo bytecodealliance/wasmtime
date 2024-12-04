@@ -3,7 +3,8 @@
 //! The `FuncTranslationState` struct defined in this module is used to keep track of the WebAssembly
 //! value and control stacks during the translation of a single function.
 
-use crate::translate::environ::{FuncEnvironment, GlobalVariable};
+use crate::func_environ::FuncEnvironment;
+use crate::translate::environ::GlobalVariable;
 use crate::translate::Heap;
 use cranelift_codegen::ir::{self, Block, Inst, Value};
 use std::collections::hash_map::{Entry::Occupied, Entry::Vacant, HashMap};
@@ -465,11 +466,11 @@ impl FuncTranslationState {
     /// Get the `GlobalVariable` reference that should be used to access the global variable
     /// `index`. Create the reference if necessary.
     /// Also return the WebAssembly type of the global.
-    pub(crate) fn get_global<FE: FuncEnvironment + ?Sized>(
+    pub(crate) fn get_global(
         &mut self,
         func: &mut ir::Function,
         index: u32,
-        environ: &mut FE,
+        environ: &mut FuncEnvironment<'_>,
     ) -> WasmResult<GlobalVariable> {
         let index = GlobalIndex::from_u32(index);
         match self.globals.entry(index) {
@@ -480,11 +481,11 @@ impl FuncTranslationState {
 
     /// Get the `Heap` reference that should be used to access linear memory `index`.
     /// Create the reference if necessary.
-    pub(crate) fn get_heap<FE: FuncEnvironment + ?Sized>(
+    pub(crate) fn get_heap(
         &mut self,
         func: &mut ir::Function,
         index: u32,
-        environ: &mut FE,
+        environ: &mut FuncEnvironment<'_>,
     ) -> WasmResult<Heap> {
         let index = MemoryIndex::from_u32(index);
         match self.memory_to_heap.entry(index) {
@@ -497,11 +498,11 @@ impl FuncTranslationState {
     /// `index`. Also return the number of WebAssembly arguments in the signature.
     ///
     /// Create the signature if necessary.
-    pub(crate) fn get_indirect_sig<FE: FuncEnvironment + ?Sized>(
+    pub(crate) fn get_indirect_sig(
         &mut self,
         func: &mut ir::Function,
         index: u32,
-        environ: &mut FE,
+        environ: &mut FuncEnvironment<'_>,
     ) -> WasmResult<(ir::SigRef, usize)> {
         let index = TypeIndex::from_u32(index);
         match self.signatures.entry(index) {
@@ -517,11 +518,11 @@ impl FuncTranslationState {
     /// `index`. Also return the number of WebAssembly arguments in the signature.
     ///
     /// Create the function reference if necessary.
-    pub(crate) fn get_direct_func<FE: FuncEnvironment + ?Sized>(
+    pub(crate) fn get_direct_func(
         &mut self,
         func: &mut ir::Function,
         index: u32,
-        environ: &mut FE,
+        environ: &mut FuncEnvironment<'_>,
     ) -> WasmResult<(ir::FuncRef, usize)> {
         let index = FuncIndex::from_u32(index);
         match self.functions.entry(index) {
@@ -538,10 +539,7 @@ impl FuncTranslationState {
     }
 }
 
-fn num_wasm_parameters<FE: FuncEnvironment + ?Sized>(
-    environ: &FE,
-    signature: &ir::Signature,
-) -> usize {
+fn num_wasm_parameters(environ: &FuncEnvironment<'_>, signature: &ir::Signature) -> usize {
     (0..signature.params.len())
         .filter(|index| environ.is_wasm_parameter(signature, *index))
         .count()

@@ -4,16 +4,17 @@
 //! function to Cranelift IR guided by a `FuncEnvironment` which provides information about the
 //! WebAssembly module and the runtime environment.
 
+use crate::func_environ::FuncEnvironment;
 use crate::translate::code_translator::{bitcast_wasm_returns, translate_operator};
-use crate::translate::environ::FuncEnvironment;
 use crate::translate::state::FuncTranslationState;
 use crate::translate::translation_utils::get_vmctx_value_label;
+use crate::translate::TargetEnvironment;
 use cranelift_codegen::entity::EntityRef;
 use cranelift_codegen::ir::{self, Block, InstBuilder, ValueLabel};
 use cranelift_codegen::timing;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext, Variable};
 use wasmparser::{BinaryReader, FuncValidator, FunctionBody, WasmModuleResources};
-use wasmtime_environ::WasmResult;
+use wasmtime_environ::{TypeConvert, WasmResult};
 
 /// WebAssembly to Cranelift IR function translator.
 ///
@@ -50,12 +51,12 @@ impl FuncTranslator {
     /// and `func.name` fields. The signature may contain special-purpose arguments which are not
     /// regarded as WebAssembly local variables. Any signature arguments marked as
     /// `ArgumentPurpose::Normal` are made accessible as WebAssembly local variables.
-    pub fn translate_body<FE: FuncEnvironment + ?Sized>(
+    pub fn translate_body(
         &mut self,
         validator: &mut FuncValidator<impl WasmModuleResources>,
         body: FunctionBody<'_>,
         func: &mut ir::Function,
-        environ: &mut FE,
+        environ: &mut FuncEnvironment<'_>,
     ) -> WasmResult<()> {
         let _tt = timing::wasm_translate_function();
         let mut reader = body.get_binary_reader();
@@ -99,10 +100,10 @@ impl FuncTranslator {
 /// Declare local variables for the signature parameters that correspond to WebAssembly locals.
 ///
 /// Return the number of local variables declared.
-fn declare_wasm_parameters<FE: FuncEnvironment + ?Sized>(
+fn declare_wasm_parameters(
     builder: &mut FunctionBuilder,
     entry_block: Block,
-    environ: &FE,
+    environ: &FuncEnvironment<'_>,
 ) -> usize {
     let sig_len = builder.func.signature.params.len();
     let mut next_local = 0;
@@ -135,11 +136,11 @@ fn declare_wasm_parameters<FE: FuncEnvironment + ?Sized>(
 /// Parse the local variable declarations that precede the function body.
 ///
 /// Declare local variables, starting from `num_params`.
-fn parse_local_decls<FE: FuncEnvironment + ?Sized>(
+fn parse_local_decls(
     reader: &mut BinaryReader,
     builder: &mut FunctionBuilder,
     num_params: usize,
-    environ: &mut FE,
+    environ: &mut FuncEnvironment<'_>,
     validator: &mut FuncValidator<impl WasmModuleResources>,
 ) -> WasmResult<()> {
     let mut next_local = num_params;
@@ -162,12 +163,12 @@ fn parse_local_decls<FE: FuncEnvironment + ?Sized>(
 /// Declare `count` local variables of the same type, starting from `next_local`.
 ///
 /// Fail if too many locals are declared in the function, or if the type is not valid for a local.
-fn declare_locals<FE: FuncEnvironment + ?Sized>(
+fn declare_locals(
     builder: &mut FunctionBuilder,
     count: u32,
     wasm_type: wasmparser::ValType,
     next_local: &mut usize,
-    environ: &mut FE,
+    environ: &mut FuncEnvironment<'_>,
 ) -> WasmResult<()> {
     // All locals are initialized to 0.
     use wasmparser::ValType::*;
@@ -231,12 +232,12 @@ fn declare_locals<FE: FuncEnvironment + ?Sized>(
 ///
 /// This assumes that the local variable declarations have already been parsed and function
 /// arguments and locals are declared in the builder.
-fn parse_function_body<FE: FuncEnvironment + ?Sized>(
+fn parse_function_body(
     validator: &mut FuncValidator<impl WasmModuleResources>,
     mut reader: BinaryReader,
     builder: &mut FunctionBuilder,
     state: &mut FuncTranslationState,
-    environ: &mut FE,
+    environ: &mut FuncEnvironment<'_>,
 ) -> WasmResult<()> {
     // The control stack is initialized with a single block representing the whole function.
     debug_assert_eq!(state.control_stack.len(), 1, "State not initialized");
@@ -263,7 +264,7 @@ fn parse_function_body<FE: FuncEnvironment + ?Sized>(
     if state.reachable {
         if !builder.is_unreachable() {
             environ.handle_before_return(&state.stack, builder);
-            bitcast_wasm_returns(environ, &mut state.stack, builder);
+            bitcast_wasm_returns(&mut state.stack, builder);
             builder.ins().return_(&state.stack);
         }
     }

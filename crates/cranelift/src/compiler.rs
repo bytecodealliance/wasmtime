@@ -1,6 +1,6 @@
 use crate::debug::DwarfSectionRelocTarget;
 use crate::func_environ::FuncEnvironment;
-use crate::translate::{FuncEnvironment as _, FuncTranslator};
+use crate::translate::FuncTranslator;
 use crate::TRAP_INTERNAL_ASSERT;
 use crate::{array_call_signature, CompiledFunction, ModuleTextBuilder};
 use crate::{builder::LinkOptions, wasm_call_signature, BuiltinFunctionSignatures};
