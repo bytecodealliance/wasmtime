@@ -143,6 +143,9 @@ impl Tunables {
 
     /// Returns the default set of tunables for the given target triple.
     pub fn default_for_target(target: &Triple) -> Result<Self> {
+        if cfg!(miri) {
+            return Ok(Tunables::default_miri());
+        }
         match target
             .pointer_width()
             .map_err(|_| anyhow!("failed to retrieve target pointer width"))?
