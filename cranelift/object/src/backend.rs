@@ -33,6 +33,7 @@ pub struct ObjectBuilder {
     name: Vec<u8>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     per_function_section: bool,
+    per_data_object_section: bool,
 }
 
 impl ObjectBuilder {
@@ -122,12 +123,19 @@ impl ObjectBuilder {
             name: name.into(),
             libcall_names,
             per_function_section: false,
+            per_data_object_section: false,
         })
     }
 
     /// Set if every function should end up in their own section.
     pub fn per_function_section(&mut self, per_function_section: bool) -> &mut Self {
         self.per_function_section = per_function_section;
+        self
+    }
+
+    /// Set if every data object should end up in their own section.
+    pub fn per_data_object_section(&mut self, per_data_object_section: bool) -> &mut Self {
+        self.per_data_object_section = per_data_object_section;
         self
     }
 }
@@ -147,6 +155,7 @@ pub struct ObjectModule {
     known_symbols: HashMap<ir::KnownSymbol, SymbolId>,
     known_labels: HashMap<(FuncId, CodeOffset), SymbolId>,
     per_function_section: bool,
+    per_data_object_section: bool,
 }
 
 impl ObjectModule {
@@ -168,6 +177,7 @@ impl ObjectModule {
             known_symbols: HashMap::new(),
             known_labels: HashMap::new(),
             per_function_section: builder.per_function_section,
+            per_data_object_section: builder.per_data_object_section,
         }
     }
 }
@@ -372,7 +382,8 @@ impl Module for ObjectModule {
             // FIXME pass empty symbol name once add_subsection produces `.text` as section name
             // instead of `.text.` when passed an empty symbol name. Until then pass `subsection` to
             // produce `.text.subsection` as section name to reduce confusion.
-            self.object.add_subsection(StandardSection::Text, b"subsection")
+            self.object
+                .add_subsection(StandardSection::Text, b"subsection")
         } else {
             self.object.section_id(StandardSection::Text)
         };
@@ -447,7 +458,14 @@ impl Module for ObjectModule {
             } else {
                 StandardSection::ReadOnlyDataWithRel
             };
-            self.object.section_id(section_kind)
+            if self.per_data_object_section {
+                // FIXME pass empty symbol name once add_subsection produces `.text` as section name
+                // instead of `.text.` when passed an empty symbol name. Until then pass `subsection` to
+                // produce `.text.subsection` as section name to reduce confusion.
+                self.object.add_subsection(section_kind, b"subsection")
+            } else {
+                self.object.section_id(section_kind)
+            }
         } else {
             if decl.tls {
                 return Err(cranelift_module::ModuleError::Backend(anyhow::anyhow!(
