@@ -20,28 +20,28 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11
-;;       movq    (%r11), %r11
+;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x31
-;;   1b: movq    %rdi, %r14
+;;       ja      0x32
+;;   1c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   31: ud2
+;;   32: ud2
 ;;
 ;; wasm[0]::function[1]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11
-;;       movq    (%r11), %r11
+;;       movq    0x10(%r11), %r11
 ;;       addq    $0x30, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x113
-;;   5b: movq    %rdi, %r14
+;;       ja      0x114
+;;   5c: movq    %rdi, %r14
 ;;       subq    $0x20, %rsp
 ;;       movq    %rdi, 0x18(%rsp)
 ;;       movq    %rsi, 0x10(%rsp)
@@ -49,14 +49,14 @@
 ;;       movl    %ecx, 8(%rsp)
 ;;       movl    0xc(%rsp), %eax
 ;;       testl   %eax, %eax
-;;       je      0x9a
-;;   80: movq    %r14, %rdi
+;;       je      0x9b
+;;   81: movq    %r14, %rdi
 ;;       movq    %r14, %rsi
 ;;       callq   0
 ;;       movq    0x18(%rsp), %r14
 ;;       movl    $3, %eax
-;;       jmp     0xaf
-;;   9a: movq    %r14, %rdi
+;;       jmp     0xb0
+;;   9b: movq    %r14, %rdi
 ;;       movq    %r14, %rsi
 ;;       callq   0
 ;;       movq    0x18(%rsp), %r14
@@ -65,16 +65,16 @@
 ;;       subq    $4, %rsp
 ;;       movl    %eax, (%rsp)
 ;;       testl   %ecx, %ecx
-;;       je      0xe4
-;;   c2: subq    $0xc, %rsp
+;;       je      0xe5
+;;   c3: subq    $0xc, %rsp
 ;;       movq    %r14, %rdi
 ;;       movq    %r14, %rsi
 ;;       callq   0
 ;;       addq    $0xc, %rsp
 ;;       movq    0x1c(%rsp), %r14
 ;;       movl    $4, %eax
-;;       jmp     0x101
-;;   e4: subq    $0xc, %rsp
+;;       jmp     0x102
+;;   e5: subq    $0xc, %rsp
 ;;       movq    %r14, %rdi
 ;;       movq    %r14, %rsi
 ;;       callq   0
@@ -88,4 +88,4 @@
 ;;       addq    $0x20, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;  113: ud2
+;;  114: ud2

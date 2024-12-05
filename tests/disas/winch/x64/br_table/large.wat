@@ -742,11 +742,11 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11
-;;       movq    (%r11), %r11
+;;       movq    0x10(%r11), %r11
 ;;       addq    $0x20, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x18104
-;;   1b: movq    %rdi, %r14
+;;       ja      0x18105
+;;   1c: movq    %rdi, %r14
 ;;       subq    $0x20, %rsp
 ;;       movq    %rdi, 0x18(%rsp)
 ;;       movq    %rsi, 0x10(%rsp)
@@ -759,7 +759,7 @@
 ;;       movslq  (%r11, %rax, 4), %rcx
 ;;       addq    %rcx, %r11
 ;;       jmpq    *%r11
-;;   4f: movabsb 0xa0000180aa000180, %al
+;;   50: movabsb 0xa0000180aa000180, %al
 ;;       addb    $0, (%rcx)
 ;;       stosb   %al, (%rdi)
 ;;       addb    $0, (%rcx)
@@ -25376,9 +25376,9 @@
 ;;       stosb   %al, (%rdi)
 ;;       addb    $0, (%rcx)
 ;;       movl    $0, %eax
-;;       jmp     0x180fe
-;; 180f9: movl    $1, %eax
+;;       jmp     0x180ff
+;; 180fa: movl    $1, %eax
 ;;       addq    $0x20, %rsp
 ;;       popq    %rbp
 ;;       retq
-;; 18104: ud2
+;; 18105: ud2

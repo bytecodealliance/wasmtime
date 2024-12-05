@@ -12,7 +12,7 @@
 ;; function u0:0(i64 vmctx, i64, i32, f64) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
+;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned gv3+104
 ;;     gv5 = load.i64 notrap aligned readonly checked gv3+96

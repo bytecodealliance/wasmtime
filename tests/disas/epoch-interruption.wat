@@ -7,7 +7,7 @@
 ;; function u0:0(i64 vmctx, i64) tail {
 ;;     gv0 = vmctx
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1
+;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
 ;;     sig0 = (i64 vmctx) -> i64 tail
 ;;     fn0 = colocated u1:16 sig0
@@ -17,7 +17,7 @@
 ;; @0016                               v3 = load.i64 notrap aligned v0+8
 ;; @0016                               v5 = load.i64 notrap aligned v0+32
 ;; @0016                               v6 = load.i64 notrap aligned v5
-;; @0016                               v7 = load.i64 notrap aligned v3+16
+;; @0016                               v7 = load.i64 notrap aligned v3+8
 ;; @0016                               v8 = icmp uge v6, v7
 ;; @0016                               brif v8, block3, block2(v7)
 ;;
@@ -34,7 +34,7 @@
 ;; @0017                               brif v14, block7, block6(v13)
 ;;
 ;;                                 block7 cold:
-;; @0017                               v15 = load.i64 notrap aligned v3+16
+;; @0017                               v15 = load.i64 notrap aligned v3+8
 ;; @0017                               v16 = icmp.i64 uge v12, v15
 ;; @0017                               brif v16, block8, block6(v15)
 ;;

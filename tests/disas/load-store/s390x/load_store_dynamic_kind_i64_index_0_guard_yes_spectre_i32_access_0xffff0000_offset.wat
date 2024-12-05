@@ -20,7 +20,7 @@
 
 ;; wasm[0]::function[0]:
 ;;       lg      %r1, 8(%r2)
-;;       lg      %r1, 0(%r1)
+;;       lg      %r1, 0x10(%r1)
 ;;       la      %r1, 0xa0(%r1)
 ;;       clgrtle %r15, %r1
 ;;       stmg    %r14, %r15, 0x70(%r15)
@@ -43,7 +43,7 @@
 ;;
 ;; wasm[0]::function[1]:
 ;;       lg      %r1, 8(%r2)
-;;       lg      %r1, 0(%r1)
+;;       lg      %r1, 0x10(%r1)
 ;;       la      %r1, 0xa0(%r1)
 ;;       clgrtle %r15, %r1
 ;;       stmg    %r14, %r15, 0x70(%r15)
