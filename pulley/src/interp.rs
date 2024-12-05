@@ -1,6 +1,7 @@
 //! Interpretation of pulley bytecode.
 
 use crate::decode::*;
+use crate::encode::Encode;
 use crate::imms::*;
 use crate::regs::*;
 use crate::ExtendedOpcode;
@@ -600,11 +601,17 @@ impl Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    /// Returns the PC of the current instruction where `I` is the static type
+    /// representing the current instruction.
+    fn current_pc<I: Encode>(&self) -> NonNull<u8> {
+        unsafe { self.pc.offset(-isize::from(I::WIDTH)).as_ptr() }
+    }
+
     /// `sp -= size_of::<T>(); *sp = val;`
     #[must_use]
-    fn push<T>(&mut self, val: T) -> ControlFlow<Done> {
+    fn push<T>(&mut self, val: T, pc: NonNull<u8>) -> ControlFlow<Done> {
         let new_sp = self.state[XReg::sp].get_ptr::<T>().wrapping_sub(1);
-        self.set_sp(new_sp)?;
+        self.set_sp(new_sp, pc)?;
         unsafe {
             new_sp.write_unaligned(val);
         }
@@ -624,11 +631,11 @@ impl Interpreter<'_> {
     /// Returns a trap if this would result in stack overflow, or if `sp` is
     /// beneath the base pointer of `self.state.stack`.
     #[must_use]
-    fn set_sp<T>(&mut self, sp: *mut T) -> ControlFlow<Done> {
+    fn set_sp<T>(&mut self, sp: *mut T, pc: NonNull<u8>) -> ControlFlow<Done> {
         let sp_raw = sp as usize;
         let base_raw = self.state.stack.as_ptr() as usize;
         if sp_raw < base_raw {
-            return ControlFlow::Break(Done::Trap(self.pc.as_ptr()));
+            return ControlFlow::Break(Done::Trap(pc));
         }
         self.set_sp_unchecked(sp);
         ControlFlow::Continue(())
@@ -656,14 +663,15 @@ fn simple_push_pop() {
             // this isn't actually read so just manufacture a dummy one
             pc: UnsafeBytecodeStream::new((&mut 0).into()),
         };
-        assert!(i.push(0_i32).is_continue());
+        let pc = NonNull::from(&0);
+        assert!(i.push(0_i32, pc).is_continue());
         assert_eq!(i.pop::<i32>(), 0_i32);
-        assert!(i.push(1_i32).is_continue());
-        assert!(i.push(2_i32).is_continue());
-        assert!(i.push(3_i32).is_continue());
-        assert!(i.push(4_i32).is_continue());
-        assert!(i.push(5_i32).is_break());
-        assert!(i.push(6_i32).is_break());
+        assert!(i.push(1_i32, pc).is_continue());
+        assert!(i.push(2_i32, pc).is_continue());
+        assert!(i.push(3_i32, pc).is_continue());
+        assert!(i.push(4_i32, pc).is_continue());
+        assert!(i.push(5_i32, pc).is_break());
+        assert!(i.push(6_i32, pc).is_break());
         assert_eq!(i.pop::<i32>(), 4_i32);
         assert_eq!(i.pop::<i32>(), 3_i32);
         assert_eq!(i.pop::<i32>(), 2_i32);
@@ -1138,25 +1146,29 @@ impl OpVisitor for Interpreter<'_> {
     }
 
     fn xpush32(&mut self, src: XReg) -> ControlFlow<Done> {
-        self.push(self.state[src].get_u32())?;
+        let me = self.current_pc::<crate::XPush32>();
+        self.push(self.state[src].get_u32(), me)?;
         ControlFlow::Continue(())
     }
 
     fn xpush32_many(&mut self, srcs: RegSet<XReg>) -> ControlFlow<Done> {
+        let me = self.current_pc::<crate::XPush32Many>();
         for src in srcs {
-            self.xpush32(src)?;
+            self.push(self.state[src].get_u32(), me)?;
         }
         ControlFlow::Continue(())
     }
 
     fn xpush64(&mut self, src: XReg) -> ControlFlow<Done> {
-        self.push(self.state[src].get_u64())?;
+        let me = self.current_pc::<crate::XPush64>();
+        self.push(self.state[src].get_u64(), me)?;
         ControlFlow::Continue(())
     }
 
     fn xpush64_many(&mut self, srcs: RegSet<XReg>) -> ControlFlow<Done> {
+        let me = self.current_pc::<crate::XPush64Many>();
         for src in srcs {
-            self.xpush64(src)?;
+            self.push(self.state[src].get_u64(), me)?;
         }
         ControlFlow::Continue(())
     }
@@ -1190,8 +1202,9 @@ impl OpVisitor for Interpreter<'_> {
     }
 
     fn push_frame(&mut self) -> ControlFlow<Done> {
-        self.push(self.state[XReg::lr].get_ptr::<u8>())?;
-        self.push(self.state[XReg::fp].get_ptr::<u8>())?;
+        let me = self.current_pc::<crate::PushFrame>();
+        self.push(self.state[XReg::lr].get_ptr::<u8>(), me)?;
+        self.push(self.state[XReg::fp].get_ptr::<u8>(), me)?;
         self.state[XReg::fp] = self.state[XReg::sp];
         ControlFlow::Continue(())
     }
@@ -1239,9 +1252,10 @@ impl OpVisitor for Interpreter<'_> {
     }
 
     fn stack_alloc32(&mut self, amt: u32) -> ControlFlow<Done> {
+        let me = self.current_pc::<crate::StackAlloc32>();
         let amt = usize::try_from(amt).unwrap();
         let new_sp = self.state[XReg::sp].get_ptr::<u8>().wrapping_sub(amt);
-        self.set_sp(new_sp)?;
+        self.set_sp(new_sp, me)?;
         ControlFlow::Continue(())
     }
 

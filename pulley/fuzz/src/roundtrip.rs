@@ -10,7 +10,10 @@ pub fn roundtrip(ops: Vec<Op>) {
 
     let mut encoded = vec![];
     for op in &ops {
+        let before = encoded.len();
         op.encode(&mut encoded);
+        let size = encoded.len() - before;
+        assert_eq!(size, op.width().into());
     }
     log::trace!("encoded: {encoded:?}");
 
