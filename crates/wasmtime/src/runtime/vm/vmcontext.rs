@@ -827,11 +827,11 @@ const _: () = {
 #[derive(Debug)]
 #[repr(C)]
 pub struct VMRuntimeLimits {
-    /// Current stack limit of the wasm module.
-    ///
-    /// For more information see `crates/cranelift/src/lib.rs`.
-    pub stack_limit: UnsafeCell<usize>,
-
+    // NB: 64-bit integer fields are located first with pointer-sized fields
+    // trailing afterwards. That makes the offsets in this structure easier to
+    // calculate on 32-bit platforms as we don't have to worry about the
+    // alignment of 64-bit integers.
+    //
     /// Indicator of how much fuel has been consumed and is remaining to
     /// WebAssembly.
     ///
@@ -845,6 +845,11 @@ pub struct VMRuntimeLimits {
     /// observed to reach or exceed this value, the guest code will
     /// yield if running asynchronously.
     pub epoch_deadline: UnsafeCell<u64>,
+
+    /// Current stack limit of the wasm module.
+    ///
+    /// For more information see `crates/cranelift/src/lib.rs`.
+    pub stack_limit: UnsafeCell<usize>,
 
     /// The value of the frame pointer register when we last called from Wasm to
     /// the host.
