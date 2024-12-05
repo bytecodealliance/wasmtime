@@ -209,46 +209,55 @@ macro_rules! foreach_builtin_function {
     };
 }
 
-/// An index type for builtin functions.
-#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct BuiltinFunctionIndex(u32);
+/// Helper macro to define a builtin type such as `BuiltinFunctionIndex` and
+/// `ComponentBuiltinFunctionIndex` using the iterator macro, e.g.
+/// `foreach_builtin_function`, as the way to generate accessor methods.
+macro_rules! declare_builtin_index {
+    ($index_name:ident, $iter:ident) => {
+        /// An index type for builtin functions.
+        #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub struct $index_name(u32);
 
-impl BuiltinFunctionIndex {
-    /// Create a new `BuiltinFunctionIndex` from its index
-    pub const fn from_u32(i: u32) -> Self {
-        Self(i)
-    }
+        impl $index_name {
+            /// Create a new builtin from its raw index
+            pub const fn from_u32(i: u32) -> Self {
+                assert!(i < Self::len());
+                Self(i)
+            }
 
-    /// Return the index as an u32 number.
-    pub const fn index(&self) -> u32 {
-        self.0
-    }
+            /// Return the index as an u32 number.
+            pub const fn index(&self) -> u32 {
+                self.0
+            }
+
+            $iter!(declare_builtin_index_constructors);
+        }
+    };
 }
 
-macro_rules! declare_indexes {
+/// Helper macro used by the above macro.
+macro_rules! declare_builtin_index_constructors {
     (
         $(
             $( #[$attr:meta] )*
             $name:ident( $( $pname:ident: $param:ident ),* ) $( -> $result:ident )?;
         )*
     ) => {
-        impl BuiltinFunctionIndex {
-            declare_indexes!(
-                @indices;
-                0;
-                $( $( #[$attr] )* $name; )*
-            );
+        declare_builtin_index_constructors!(
+            @indices;
+            0;
+            $( $( #[$attr] )* $name; )*
+        );
 
-            /// Returns a symbol name for this builtin.
-            pub fn name(&self) -> &'static str {
-                $(
-                    $( #[$attr] )*
-                    if *self == BuiltinFunctionIndex::$name() {
-                        return stringify!($name);
-                    }
-                )*
-                unreachable!()
-            }
+        /// Returns a symbol name for this builtin.
+        pub fn name(&self) -> &'static str {
+            $(
+                $( #[$attr] )*
+                if *self == Self::$name() {
+                    return stringify!($name);
+                }
+            )*
+            unreachable!()
         }
     };
 
@@ -259,7 +268,7 @@ macro_rules! declare_indexes {
         $len:expr;
     ) => {
         /// Returns the total number of builtin functions.
-        pub const fn builtin_functions_total_number() -> u32 {
+        pub const fn len() -> u32 {
             $len
         }
     };
@@ -282,7 +291,7 @@ macro_rules! declare_indexes {
             Self($index)
         }
 
-        declare_indexes!(
+        declare_builtin_index_constructors!(
             @indices;
             ($index + 1);
             $( $( #[$rest_attr] )* $rest_name; )*
@@ -290,7 +299,8 @@ macro_rules! declare_indexes {
     }
 }
 
-foreach_builtin_function!(declare_indexes);
+// Define `struct BuiltinFunctionIndex`
+declare_builtin_index!(BuiltinFunctionIndex, foreach_builtin_function);
 
 /// Return value of [`BuiltinFunctionIndex::trap_sentinel`].
 pub enum TrapSentinel {

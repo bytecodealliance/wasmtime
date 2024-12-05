@@ -10,19 +10,6 @@ use wasmtime_environ::component::TypeResourceTableIndex;
 
 const UTF16_TAG: usize = 1 << 31;
 
-#[repr(C)] // this is read by Cranelift code so it's layout must be as-written
-pub struct VMComponentLibcalls {
-    builtins: VMComponentBuiltins,
-    transcoders: VMBuiltinTranscodeArray,
-}
-
-impl VMComponentLibcalls {
-    pub const INIT: VMComponentLibcalls = VMComponentLibcalls {
-        builtins: VMComponentBuiltins::INIT,
-        transcoders: VMBuiltinTranscodeArray::INIT,
-    };
-}
-
 macro_rules! signature {
     (@ty size) => (usize);
     (@ty ptr_u8) => (*mut u8);
@@ -47,7 +34,7 @@ macro_rules! define_builtins {
         /// An array that stores addresses of builtin functions. We translate code
         /// to use indirect calls. This way, we don't have to patch the code.
         #[repr(C)]
-        struct VMComponentBuiltins {
+        pub struct VMComponentBuiltins {
             $(
                 $name: unsafe extern "C" fn(
                     $(signature!(@ty $param),)*
@@ -56,7 +43,7 @@ macro_rules! define_builtins {
         }
 
         impl VMComponentBuiltins {
-            const INIT: VMComponentBuiltins = VMComponentBuiltins {
+            pub const INIT: VMComponentBuiltins = VMComponentBuiltins {
                 $($name: trampolines::$name,)*
             };
         }
@@ -64,43 +51,6 @@ macro_rules! define_builtins {
 }
 
 wasmtime_environ::foreach_builtin_component_function!(define_builtins);
-
-/// Macro to define the `VMBuiltinTranscodeArray` type which contains all of the
-/// function pointers to the actual transcoder functions. This structure is read
-/// by Cranelift-generated code, hence the `repr(C)`.
-///
-/// Note that this references the `trampolines` module rather than the functions
-/// below as the `trampolines` module has the raw ABI.
-///
-/// This is modeled after the similar macros and usages in `libcalls.rs` and
-/// `vmcontext.rs`
-macro_rules! define_transcoders {
-    (
-        $(
-            $( #[$attr:meta] )*
-            $name:ident( $( $pname:ident: $param:ident ),* ) $( -> $result:ident )?;
-        )*
-    ) => {
-        /// An array that stores addresses of builtin functions. We translate code
-        /// to use indirect calls. This way, we don't have to patch the code.
-        #[repr(C)]
-        struct VMBuiltinTranscodeArray {
-            $(
-                $name: unsafe extern "C" fn(
-                    $(signature!(@ty $param),)*
-                ) $( -> signature!(@ty $result))?,
-            )*
-        }
-
-        impl VMBuiltinTranscodeArray {
-            const INIT: VMBuiltinTranscodeArray = VMBuiltinTranscodeArray {
-                $($name: trampolines::$name,)*
-            };
-        }
-    };
-}
-
-wasmtime_environ::foreach_transcoder!(define_transcoders);
 
 /// Submodule with macro-generated constants which are the actual libcall
 /// transcoders that are invoked by Cranelift. These functions have a specific
@@ -167,7 +117,6 @@ mod trampolines {
     }
 
     wasmtime_environ::foreach_builtin_component_function!(shims);
-    wasmtime_environ::foreach_transcoder!(shims);
 }
 
 /// This property should already be guaranteed by construction in the component

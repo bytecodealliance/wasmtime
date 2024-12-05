@@ -8,7 +8,7 @@ use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_frontend::FunctionBuilder;
 use std::any::Any;
 use wasmtime_environ::component::*;
-use wasmtime_environ::{ModuleInternedTypeIndex, PtrSize, Tunables, WasmValType};
+use wasmtime_environ::{HostCall, ModuleInternedTypeIndex, PtrSize, Tunables, WasmValType};
 
 struct TrampolineCompiler<'a> {
     compiler: &'a Compiler,
@@ -247,9 +247,13 @@ impl<'a> TrampolineCompiler<'a> {
             i32::try_from(self.offsets.lowering_callee(index)).unwrap(),
         );
         let host_sig = self.builder.import_signature(host_sig);
-        let call =
-            self.compiler
-                .call_indirect_host(&mut self.builder, host_sig, host_fn, &callee_args);
+        let call = self.compiler.call_indirect_host(
+            &mut self.builder,
+            HostCall::ComponentLowerImport,
+            host_sig,
+            host_fn,
+            &callee_args,
+        );
         let succeeded = self.builder.func.dfg.inst_results(call)[0];
 
         match self.abi {
@@ -280,15 +284,20 @@ impl<'a> TrampolineCompiler<'a> {
         let args = self.abi_load_params();
         let vmctx = args[0];
 
-        let (host_sig, offset) = host::trap(self.isa, &mut self.builder.func);
-        let host_fn = self.load_libcall(vmctx, offset);
+        let (host_sig, index) = host::trap(self.isa, &mut self.builder.func);
+        let host_fn = self.load_libcall(vmctx, index);
 
         let code = self.builder.ins().iconst(
             ir::types::I8,
             i64::from(wasmtime_environ::Trap::AlwaysTrapAdapter as u8),
         );
-        self.compiler
-            .call_indirect_host(&mut self.builder, host_sig, host_fn, &[vmctx, code]);
+        self.compiler.call_indirect_host(
+            &mut self.builder,
+            index,
+            host_sig,
+            host_fn,
+            &[vmctx, code],
+        );
         let succeeded = self.builder.ins().iconst(ir::types::I8, 0);
         self.raise_if_host_trapped(succeeded);
         // debug trap in case execution actually falls through, but this
@@ -319,12 +328,7 @@ impl<'a> TrampolineCompiler<'a> {
             self.types[self.signature].unwrap_func().params()[0],
             WasmValType::I32
         );
-        let (host_sig, offset) = host::resource_new32(self.isa, &mut self.builder.func);
-
-        let host_fn = self.load_libcall(vmctx, offset);
-        let call =
-            self.compiler
-                .call_indirect_host(&mut self.builder, host_sig, host_fn, &host_args);
+        let call = self.call_libcall(vmctx, host::resource_new32, &host_args);
         let result = self.builder.func.dfg.inst_results(call)[0];
         let result = self.raise_if_resource_trapped(result);
         self.abi_store_results(&[result]);
@@ -353,12 +357,7 @@ impl<'a> TrampolineCompiler<'a> {
             self.types[self.signature].unwrap_func().returns()[0],
             WasmValType::I32
         );
-        let (host_sig, offset) = host::resource_rep32(self.isa, &mut self.builder.func);
-
-        let host_fn = self.load_libcall(vmctx, offset);
-        let call =
-            self.compiler
-                .call_indirect_host(&mut self.builder, host_sig, host_fn, &host_args);
+        let call = self.call_libcall(vmctx, host::resource_rep32, &host_args);
         let result = self.builder.func.dfg.inst_results(call)[0];
         let result = self.raise_if_resource_trapped(result);
         self.abi_store_results(&[result]);
@@ -384,11 +383,7 @@ impl<'a> TrampolineCompiler<'a> {
         );
         host_args.push(args[2]);
 
-        let (host_sig, offset) = host::resource_drop(self.isa, &mut self.builder.func);
-        let host_fn = self.load_libcall(vmctx, offset);
-        let call =
-            self.compiler
-                .call_indirect_host(&mut self.builder, host_sig, host_fn, &host_args);
+        let call = self.call_libcall(vmctx, host::resource_drop, &host_args);
         let should_run_destructor = self.builder.func.dfg.inst_results(call)[0];
 
         // Immediately raise a trap if requested by the host
@@ -557,7 +552,10 @@ impl<'a> TrampolineCompiler<'a> {
     /// from the wasm abi to host.
     fn translate_resource_libcall(
         &mut self,
-        get_libcall: fn(&dyn TargetIsa, &mut ir::Function) -> (ir::SigRef, u32),
+        get_libcall: fn(
+            &dyn TargetIsa,
+            &mut ir::Function,
+        ) -> (ir::SigRef, ComponentBuiltinFunctionIndex),
         handle_results: fn(&mut Self, &mut Vec<ir::Value>),
     ) {
         match self.abi {
@@ -575,11 +573,8 @@ impl<'a> TrampolineCompiler<'a> {
         let vmctx = args[0];
         let mut host_args = vec![vmctx];
         host_args.extend(args[2..].iter().copied());
-        let (host_sig, offset) = get_libcall(self.isa, &mut self.builder.func);
-        let host_fn = self.load_libcall(vmctx, offset);
-        let call =
-            self.compiler
-                .call_indirect_host(&mut self.builder, host_sig, host_fn, &host_args);
+
+        let call = self.call_libcall(vmctx, get_libcall, &host_args);
         let mut results = self.builder.func.dfg.inst_results(call).to_vec();
         handle_results(self, &mut results);
         self.builder.ins().return_(&results);
@@ -589,22 +584,26 @@ impl<'a> TrampolineCompiler<'a> {
     /// provided in the libcalls array.
     ///
     /// The offset is calculated in the `host` module below.
-    fn load_libcall(&mut self, vmctx: ir::Value, offset: u32) -> ir::Value {
+    fn load_libcall(
+        &mut self,
+        vmctx: ir::Value,
+        index: ComponentBuiltinFunctionIndex,
+    ) -> ir::Value {
         let pointer_type = self.isa.pointer_type();
-        // First load the pointer to the libcalls structure which is static
+        // First load the pointer to the builtins structure which is static
         // per-process.
-        let libcalls_array = self.builder.ins().load(
+        let builtins_array = self.builder.ins().load(
             pointer_type,
             MemFlags::trusted().with_readonly(),
             vmctx,
-            i32::try_from(self.offsets.libcalls()).unwrap(),
+            i32::try_from(self.offsets.builtins()).unwrap(),
         );
         // Next load the function pointer at `offset` and return that.
         self.builder.ins().load(
             pointer_type,
             MemFlags::trusted().with_readonly(),
-            libcalls_array,
-            i32::try_from(offset * u32::from(self.offsets.ptr.size())).unwrap(),
+            builtins_array,
+            i32::try_from(index.index() * u32::from(self.offsets.ptr.size())).unwrap(),
         )
     }
 
@@ -678,6 +677,21 @@ impl<'a> TrampolineCompiler<'a> {
         let succeeded = self.builder.ins().icmp(IntCC::NotEqual, ret, minus_one);
         self.raise_if_host_trapped(succeeded);
         self.builder.ins().ireduce(ir::types::I32, ret)
+    }
+
+    fn call_libcall(
+        &mut self,
+        vmctx: ir::Value,
+        get_libcall: fn(
+            &dyn TargetIsa,
+            &mut ir::Function,
+        ) -> (ir::SigRef, ComponentBuiltinFunctionIndex),
+        args: &[ir::Value],
+    ) -> ir::Inst {
+        let (host_sig, index) = get_libcall(self.isa, &mut self.builder.func);
+        let host_fn = self.load_libcall(vmctx, index);
+        self.compiler
+            .call_indirect_host(&mut self.builder, index, host_sig, host_fn, args)
     }
 }
 
@@ -756,25 +770,20 @@ impl TrampolineCompiler<'_> {
         // Determine the static signature of the host libcall for this transcode
         // operation and additionally calculate the static offset within the
         // transode libcalls array.
-        let func = &mut self.builder.func;
-        let (sig, offset) = match op {
-            Transcode::Copy(FixedEncoding::Utf8) => host::utf8_to_utf8(self.isa, func),
-            Transcode::Copy(FixedEncoding::Utf16) => host::utf16_to_utf16(self.isa, func),
-            Transcode::Copy(FixedEncoding::Latin1) => host::latin1_to_latin1(self.isa, func),
-            Transcode::Latin1ToUtf16 => host::latin1_to_utf16(self.isa, func),
-            Transcode::Latin1ToUtf8 => host::latin1_to_utf8(self.isa, func),
-            Transcode::Utf16ToCompactProbablyUtf16 => {
-                host::utf16_to_compact_probably_utf16(self.isa, func)
-            }
-            Transcode::Utf16ToCompactUtf16 => host::utf16_to_compact_utf16(self.isa, func),
-            Transcode::Utf16ToLatin1 => host::utf16_to_latin1(self.isa, func),
-            Transcode::Utf16ToUtf8 => host::utf16_to_utf8(self.isa, func),
-            Transcode::Utf8ToCompactUtf16 => host::utf8_to_compact_utf16(self.isa, func),
-            Transcode::Utf8ToLatin1 => host::utf8_to_latin1(self.isa, func),
-            Transcode::Utf8ToUtf16 => host::utf8_to_utf16(self.isa, func),
+        let get_libcall = match op {
+            Transcode::Copy(FixedEncoding::Utf8) => host::utf8_to_utf8,
+            Transcode::Copy(FixedEncoding::Utf16) => host::utf16_to_utf16,
+            Transcode::Copy(FixedEncoding::Latin1) => host::latin1_to_latin1,
+            Transcode::Latin1ToUtf16 => host::latin1_to_utf16,
+            Transcode::Latin1ToUtf8 => host::latin1_to_utf8,
+            Transcode::Utf16ToCompactProbablyUtf16 => host::utf16_to_compact_probably_utf16,
+            Transcode::Utf16ToCompactUtf16 => host::utf16_to_compact_utf16,
+            Transcode::Utf16ToLatin1 => host::utf16_to_latin1,
+            Transcode::Utf16ToUtf8 => host::utf16_to_utf8,
+            Transcode::Utf8ToCompactUtf16 => host::utf8_to_compact_utf16,
+            Transcode::Utf8ToLatin1 => host::utf8_to_latin1,
+            Transcode::Utf8ToUtf16 => host::utf8_to_utf16,
         };
-
-        let libcall = self.load_libcall(vmctx, offset);
 
         // Load the base pointers for the from/to linear memories.
         let from_base = self.load_runtime_memory_base(vmctx, from);
@@ -831,9 +840,7 @@ impl TrampolineCompiler<'_> {
                 ));
             args.push(self.builder.ins().stack_addr(pointer_type, slot, 0));
         }
-        let call = self
-            .compiler
-            .call_indirect_host(&mut self.builder, sig, libcall, &args);
+        let call = self.call_libcall(vmctx, get_libcall, &args);
         let mut results = self.builder.func.dfg.inst_results(call).to_vec();
         if uses_retptr {
             results.push(self.builder.ins().load(
@@ -945,6 +952,7 @@ impl TrampolineCompiler<'_> {
 mod host {
     use cranelift_codegen::ir::{self, AbiParam};
     use cranelift_codegen::isa::{CallConv, TargetIsa};
+    use wasmtime_environ::component::ComponentBuiltinFunctionIndex;
 
     macro_rules! define {
         (
@@ -954,7 +962,7 @@ mod host {
             )*
         ) => {
             $(
-                pub(super) fn $name(isa: &dyn TargetIsa, func: &mut ir::Function) -> (ir::SigRef, u32) {
+                pub(super) fn $name(isa: &dyn TargetIsa, func: &mut ir::Function) -> (ir::SigRef, ComponentBuiltinFunctionIndex) {
                     let pointer_type = isa.pointer_type();
                     let params = vec![
                         $( AbiParam::new(define!(@ty pointer_type $param)) ),*
@@ -968,7 +976,7 @@ mod host {
                         call_conv: CallConv::triple_default(isa.triple()),
                     });
 
-                    (sig, offsets::$name)
+                    (sig, ComponentBuiltinFunctionIndex::$name())
                 }
             )*
         };
@@ -984,46 +992,5 @@ mod host {
         (@ty $ptr:ident vmctx) => ($ptr);
     }
 
-    wasmtime_environ::foreach_transcoder!(define);
     wasmtime_environ::foreach_builtin_component_function!(define);
-
-    mod offsets {
-        macro_rules! offsets {
-            (
-                $(
-                    $( #[$attr:meta] )*
-                    $name:ident($($t:tt)*) $( -> $result:ident )?;
-                )*
-            ) => {
-                offsets!(@declare (0) $($name)*);
-            };
-
-            (@declare ($n:expr)) => (const LAST_BUILTIN: u32 = $n;);
-            (@declare ($n:expr) $name:ident $($rest:tt)*) => (
-                pub const $name: u32 = $n;
-                offsets!(@declare ($n + 1) $($rest)*);
-            );
-        }
-
-        wasmtime_environ::foreach_builtin_component_function!(offsets);
-
-        macro_rules! transcode_offsets {
-            (
-                $(
-                    $( #[$attr:meta] )*
-                    $name:ident($($t:tt)*) $( -> $result:ident )?;
-                )*
-            ) => {
-                transcode_offsets!(@declare (0) $($name)*);
-            };
-
-            (@declare ($n:expr)) => ();
-            (@declare ($n:expr) $name:ident $($rest:tt)*) => (
-                pub const $name: u32 = LAST_BUILTIN + $n;
-                transcode_offsets!(@declare ($n + 1) $($rest)*);
-            );
-        }
-
-        wasmtime_environ::foreach_transcoder!(transcode_offsets);
-    }
 }

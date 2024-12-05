@@ -33,15 +33,14 @@ use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 pub(crate) struct BuiltinFunctions {
     types: BuiltinFunctionSignatures,
 
-    builtins:
-        [Option<ir::FuncRef>; BuiltinFunctionIndex::builtin_functions_total_number() as usize],
+    builtins: [Option<ir::FuncRef>; BuiltinFunctionIndex::len() as usize],
 }
 
 impl BuiltinFunctions {
     fn new(compiler: &Compiler) -> Self {
         Self {
             types: BuiltinFunctionSignatures::new(compiler),
-            builtins: [None; BuiltinFunctionIndex::builtin_functions_total_number() as usize],
+            builtins: [None; BuiltinFunctionIndex::len() as usize],
         }
     }
 
