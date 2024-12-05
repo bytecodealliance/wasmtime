@@ -121,7 +121,8 @@ pub enum Reloc {
     S390xTlsGdCall,
 
     /// Pulley - call a host function indirectly where the embedder resolving
-    /// this relocation needs to fill in the expected signature.
+    /// this relocation needs to fill the 8-bit immediate that's part of the
+    /// `call_indirect_host` opcode (an opaque identifier used by the host).
     PulleyCallIndirectHost,
 }
 

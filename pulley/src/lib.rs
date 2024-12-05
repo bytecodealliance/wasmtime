@@ -222,18 +222,25 @@ macro_rules! for_each_extended_op {
             /// Do nothing.
             nop = Nop;
 
-            /// A special opcode to use an indirect function call to reenter the
-            /// host from the interpreter.
+            /// A special opcode to halt interpreter execution and yield control
+            /// back to the host.
             ///
-            /// This is used to implement host intrinsics such as `memory.grow`
-            /// for example where that needs to reenter the host from the
-            /// interpreter.
+            /// This opcode results in `DoneReason::CallIndirectHost` where the
+            /// `id` here is shepherded along to the embedder. It's up to the
+            /// embedder to determine what to do with the `id` and the current
+            /// state of registers and the stack.
             ///
-            /// The `sig` immediate here is the Nth signature in the
-            /// `for_each_host_signature!` macro below. The 0th "argument", in
-            /// register x0, is the function pointer that's being called and all
-            /// further arguments follow after that in registers.
-            call_indirect_host = CallIndirectHost { sig: u8 };
+            /// In Wasmtime this is used to implement interpreter-to-host calls.
+            /// This is modeled as a `call` instruction where the first
+            /// parameter is the native function pointer to invoke and all
+            /// remaining parameters for the native function are in following
+            /// parameter positions (e.g. `x1`, `x2`, ...). The results of the
+            /// host call are then store in `x0`.
+            ///
+            /// Handling this in Wasmtime is done through a "relocation" which
+            /// is resolved at link-time when raw bytecode from Cranelift is
+            /// assembled into the final object that Wasmtime will interpret.
+            call_indirect_host = CallIndirectHost { id: u8 };
         }
     };
 }
