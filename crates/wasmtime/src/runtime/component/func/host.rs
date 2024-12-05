@@ -43,7 +43,7 @@ impl HostFunc {
 
     pub(crate) fn from_concurrent<T, F, N, FN, P, R>(func: F) -> Arc<HostFunc>
     where
-        N: FnOnce(StoreContextMut<T>) -> Result<R> + 'static,
+        N: FnOnce(StoreContextMut<T>) -> Result<R> + Send + Sync + 'static,
         FN: Future<Output = N> + Send + Sync + 'static,
         F: Fn(StoreContextMut<T>, P) -> FN + Send + Sync + 'static,
         P: ComponentNamedList + Lift + 'static,
@@ -70,7 +70,7 @@ impl HostFunc {
         storage: *mut MaybeUninit<ValRaw>,
         storage_len: usize,
     ) where
-        N: FnOnce(StoreContextMut<T>) -> Result<R> + 'static,
+        N: FnOnce(StoreContextMut<T>) -> Result<R> + Send + Sync + 'static,
         FN: Future<Output = N> + Send + Sync + 'static,
         F: Fn(StoreContextMut<T>, P) -> FN + Send + Sync + 'static,
         P: ComponentNamedList + Lift + 'static,
@@ -177,7 +177,7 @@ unsafe fn call_host<T, Params, Return, F, N, FN>(
     closure: F,
 ) -> Result<()>
 where
-    N: FnOnce(StoreContextMut<T>) -> Result<Return> + 'static,
+    N: FnOnce(StoreContextMut<T>) -> Result<Return> + Send + Sync + 'static,
     FN: Future<Output = N> + Send + Sync + 'static,
     F: Fn(StoreContextMut<T>, Params) -> FN + 'static,
     Params: Lift,

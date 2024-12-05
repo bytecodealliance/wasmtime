@@ -475,7 +475,7 @@ impl<T> LinkerInstance<'_, T> {
     #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub fn func_wrap_concurrent<Params, Return, F, N, FN>(&mut self, name: &str, f: F) -> Result<()>
     where
-        N: FnOnce(StoreContextMut<T>) -> Result<Return> + 'static,
+        N: FnOnce(StoreContextMut<T>) -> Result<Return> + Send + Sync + 'static,
         FN: Future<Output = N> + Send + Sync + 'static,
         F: Fn(StoreContextMut<T>, Params) -> FN + Send + Sync + 'static,
         Params: ComponentNamedList + Lift + 'static,

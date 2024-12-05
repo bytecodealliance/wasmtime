@@ -158,7 +158,7 @@ type HostTaskFuture = Pin<
         dyn Future<
                 Output = (
                     u32,
-                    Box<dyn FnOnce(*mut dyn VMStore) -> Result<HostTaskResult>>,
+                    Box<dyn FnOnce(*mut dyn VMStore) -> Result<HostTaskResult> + Send + Sync>,
                 ),
             > + Send
             + Sync
@@ -479,7 +479,7 @@ fn for_any_lift<
 pub(crate) fn first_poll<T, R: Send + 'static>(
     instance: *mut ComponentInstance,
     mut store: StoreContextMut<T>,
-    future: impl Future<Output = impl FnOnce(StoreContextMut<T>) -> Result<R> + 'static>
+    future: impl Future<Output = impl FnOnce(StoreContextMut<T>) -> Result<R> + Send + Sync + 'static>
         + Send
         + Sync
         + 'static,
@@ -504,7 +504,8 @@ pub(crate) fn first_poll<T, R: Send + 'static>(
                     param: 0u32,
                     caller,
                 })
-            }) as Box<dyn FnOnce(*mut dyn VMStore) -> Result<HostTaskResult>>,
+            })
+                as Box<dyn FnOnce(*mut dyn VMStore) -> Result<HostTaskResult> + Send + Sync>,
         )
     })) as HostTaskFuture;
 
@@ -532,7 +533,7 @@ pub(crate) fn first_poll<T, R: Send + 'static>(
 
 pub(crate) fn poll_and_block<'a, T, R: Send + Sync + 'static>(
     mut store: StoreContextMut<'a, T>,
-    future: impl Future<Output = impl FnOnce(StoreContextMut<T>) -> Result<R> + 'static>
+    future: impl Future<Output = impl FnOnce(StoreContextMut<T>) -> Result<R> + Send + Sync + 'static>
         + Send
         + Sync
         + 'static,
@@ -564,7 +565,8 @@ pub(crate) fn poll_and_block<'a, T, R: Send + Sync + 'static>(
                     param: 0u32,
                     caller,
                 })
-            }) as Box<dyn FnOnce(*mut dyn VMStore) -> Result<HostTaskResult>>,
+            })
+                as Box<dyn FnOnce(*mut dyn VMStore) -> Result<HostTaskResult> + Send + Sync>,
         )
     })) as HostTaskFuture;
 
@@ -841,7 +843,7 @@ fn handle_ready<'a, T>(
     mut store: StoreContextMut<'a, T>,
     ready: Vec<(
         u32,
-        Box<dyn FnOnce(*mut dyn VMStore) -> Result<HostTaskResult>>,
+        Box<dyn FnOnce(*mut dyn VMStore) -> Result<HostTaskResult> + Send + Sync>,
     )>,
 ) -> Result<StoreContextMut<'a, T>> {
     for (task, fun) in ready {

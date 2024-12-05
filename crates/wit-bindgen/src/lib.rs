@@ -3050,7 +3050,7 @@ impl<'a> InterfaceGenerator<'a> {
                 let result_type = String::from(mem::replace(&mut self.src, old_source));
                 let box_fn = format!(
                     "Box<dyn FnOnce(wasmtime::StoreContextMut<'_, T>) -> \
-                     wasmtime::Result<{result_type}>>"
+                     wasmtime::Result<{result_type}> + Send + Sync>"
                 );
                 uwriteln!(
                     self.src,
@@ -3120,7 +3120,7 @@ impl<'a> InterfaceGenerator<'a> {
         }
 
         if let CallStyle::Concurrent = &style {
-            self.push_str(" + 'static> + Send + Sync + 'static where Self: Sized");
+            self.push_str(" + Send + Sync + 'static> + Send + Sync + 'static where Self: Sized");
         }
     }
 

@@ -17,7 +17,10 @@ use {
         AsContextMut, StoreContextMut,
     },
     anyhow::{anyhow, bail, Context, Result},
-    futures::{channel::oneshot, future::FutureExt},
+    futures::{
+        channel::oneshot,
+        future::{self, FutureExt},
+    },
     std::{
         any::Any,
         boxed::Box,
@@ -58,6 +61,30 @@ fn state_table(instance: &mut ComponentInstance, ty: TableIndex) -> &mut StateTa
         TableIndex::Future(ty) => instance.component_types()[ty].instance,
     };
     &mut instance.component_waitable_tables()[runtime_instance]
+}
+
+fn push_event<T>(
+    mut store: StoreContextMut<T>,
+    rep: u32,
+    event: u32,
+    param: usize,
+    caller: TableId<GuestTask>,
+) {
+    store
+        .concurrent_state()
+        .futures
+        .get_mut()
+        .push(Box::pin(future::ready((
+            rep,
+            Box::new(move |_| {
+                Ok(HostTaskResult {
+                    event,
+                    param: u32::try_from(param).unwrap(),
+                    caller,
+                })
+            })
+                as Box<dyn FnOnce(*mut dyn VMStore) -> Result<HostTaskResult> + Send + Sync>,
+        ))) as HostTaskFuture);
 }
 
 fn get_mut_by_index(
@@ -203,7 +230,6 @@ fn host_write<T: func::Lower + Send + Sync + 'static, U, S: AsContextMut<Data = 
                 address,
                 count,
                 instance,
-                tx,
                 handle,
                 caller,
             } => unsafe {
@@ -232,7 +258,16 @@ fn host_write<T: func::Lower + Send + Sync + 'static, U, S: AsContextMut<Data = 
 
                 *get_mut_by_index(&mut *instance.as_ptr(), ty, handle)?.1 = StreamFutureState::Read;
 
-                _ = tx.send(count);
+                push_event(
+                    store.as_context_mut(),
+                    transmit_id.rep(),
+                    match ty {
+                        TableIndex::Future(_) => events::EVENT_FUTURE_READ,
+                        TableIndex::Stream(_) => events::EVENT_STREAM_READ,
+                    },
+                    count,
+                    caller,
+                );
 
                 if offset < values.len() {
                     continue;
@@ -317,7 +352,6 @@ pub fn host_read<T: func::Lift + Sync + Send + 'static, U, S: AsContextMut<Data 
             address,
             count,
             instance,
-            tx: write_tx,
             handle,
             caller,
             close,
@@ -350,7 +384,16 @@ pub fn host_read<T: func::Lift + Sync + Send + 'static, U, S: AsContextMut<Data 
                     StreamFutureState::Write;
             }
 
-            _ = write_tx.send(count);
+            push_event(
+                store,
+                transmit_id.rep(),
+                match ty {
+                    TableIndex::Future(_) => events::EVENT_FUTURE_WRITE,
+                    TableIndex::Stream(_) => events::EVENT_STREAM_WRITE,
+                },
+                count,
+                caller,
+            );
         },
 
         WriteState::HostReady { accept, close } => {
@@ -465,12 +508,21 @@ fn host_close_writer<U, S: AsContextMut<Data = U>>(mut store: S, rep: u32) -> Re
     match mem::replace(&mut transmit.read, new_state) {
         ReadState::GuestReady {
             ty,
-            tx,
             instance,
             handle,
+            caller,
             ..
         } => unsafe {
-            _ = tx.send(CLOSED);
+            push_event(
+                store,
+                transmit_id.rep(),
+                match ty {
+                    TableIndex::Future(_) => events::EVENT_FUTURE_READ,
+                    TableIndex::Stream(_) => events::EVENT_STREAM_READ,
+                },
+                CLOSED,
+                caller,
+            );
 
             *get_mut_by_index(&mut *instance.as_ptr(), ty, handle)?.1 = StreamFutureState::Read;
         },
@@ -507,13 +559,22 @@ fn host_close_reader<U, S: AsContextMut<Data = U>>(mut store: S, rep: u32) -> Re
     match mem::replace(&mut transmit.write, new_state) {
         WriteState::GuestReady {
             ty,
-            tx,
             instance,
             handle,
             close,
+            caller,
             ..
         } => unsafe {
-            _ = tx.send(CLOSED);
+            push_event(
+                store.as_context_mut(),
+                transmit_id.rep(),
+                match ty {
+                    TableIndex::Future(_) => events::EVENT_FUTURE_WRITE,
+                    TableIndex::Stream(_) => events::EVENT_STREAM_WRITE,
+                },
+                CLOSED,
+                caller,
+            );
 
             if close {
                 store.concurrent_state().table.delete(transmit_id)?;
@@ -977,7 +1038,6 @@ enum WriteState {
         address: usize,
         count: usize,
         instance: SendSyncPtr<ComponentInstance>,
-        tx: oneshot::Sender<usize>,
         handle: u32,
         caller: TableId<GuestTask>,
         close: bool,
@@ -998,7 +1058,6 @@ enum ReadState {
         address: usize,
         count: usize,
         instance: SendSyncPtr<ComponentInstance>,
-        tx: oneshot::Sender<usize>,
         handle: u32,
         caller: TableId<GuestTask>,
     },
@@ -1190,7 +1249,6 @@ fn guest_write<T>(
                     address: read_address,
                     count: read_count,
                     instance: _,
-                    tx: read_tx,
                     handle: read_handle,
                     caller: read_caller,
                 } => {
@@ -1225,7 +1283,16 @@ fn guest_write<T>(
                     *get_mut_by_index(&mut *instance, read_ty, read_handle)?.1 =
                         StreamFutureState::Read;
 
-                    _ = read_tx.send(count);
+                    push_event(
+                        cx,
+                        transmit_id.rep(),
+                        match read_ty {
+                            TableIndex::Future(_) => events::EVENT_FUTURE_READ,
+                            TableIndex::Stream(_) => events::EVENT_STREAM_READ,
+                        },
+                        count,
+                        read_caller,
+                    );
 
                     count
                 }
@@ -1243,35 +1310,17 @@ fn guest_write<T>(
                 ReadState::Open => {
                     assert!(matches!(&transmit.write, WriteState::Open));
 
-                    let (event, name) = match ty {
-                        TableIndex::Future(_) => (events::EVENT_FUTURE_READ, "future"),
-                        TableIndex::Stream(_) => (events::EVENT_STREAM_READ, "stream"),
-                    };
                     let caller = cx.concurrent_state().guest_task.unwrap();
                     log::trace!(
-                        "add write {name} child of {}: {}",
+                        "add write {} child of {}: {}",
+                        match ty {
+                            TableIndex::Future(_) => "future",
+                            TableIndex::Stream(_) => "stream",
+                        },
                         caller.rep(),
                         transmit_id.rep()
                     );
                     cx.concurrent_state().table.add_child(transmit_id, caller)?;
-                    let (tx, rx) = oneshot::channel();
-                    let future = Box::pin(rx.map(move |result| {
-                        (
-                            transmit_id.rep(),
-                            Box::new(move |_| {
-                                Ok(HostTaskResult {
-                                    event,
-                                    param: u32::try_from(
-                                        result.map_err(|_| anyhow!("oneshot channel canceled"))?,
-                                    )
-                                    .unwrap(),
-                                    caller,
-                                })
-                            })
-                                as Box<dyn FnOnce(*mut dyn VMStore) -> Result<HostTaskResult>>,
-                        )
-                    })) as HostTaskFuture;
-                    cx.concurrent_state().futures.get_mut().push(future);
 
                     let transmit = cx.concurrent_state().table.get_mut(transmit_id)?;
                     transmit.write = WriteState::GuestReady {
@@ -1281,7 +1330,6 @@ fn guest_write<T>(
                         address: usize::try_from(address).unwrap(),
                         count: usize::try_from(count).unwrap(),
                         instance: SendSyncPtr::new(NonNull::new(instance).unwrap()),
-                        tx,
                         handle,
                         caller,
                         close: false,
@@ -1348,7 +1396,6 @@ fn guest_read<T>(
                     address: write_address,
                     count: write_count,
                     instance: _,
-                    tx: write_tx,
                     handle: write_handle,
                     caller: write_caller,
                     close,
@@ -1389,7 +1436,16 @@ fn guest_read<T>(
                             StreamFutureState::Write;
                     }
 
-                    _ = write_tx.send(count);
+                    push_event(
+                        cx,
+                        transmit_id.rep(),
+                        match write_ty {
+                            TableIndex::Future(_) => events::EVENT_FUTURE_WRITE,
+                            TableIndex::Stream(_) => events::EVENT_STREAM_WRITE,
+                        },
+                        count,
+                        write_caller,
+                    );
 
                     count
                 }
@@ -1418,35 +1474,17 @@ fn guest_read<T>(
                 WriteState::Open => {
                     assert!(matches!(&transmit.read, ReadState::Open));
 
-                    let (event, name) = match ty {
-                        TableIndex::Future(_) => (events::EVENT_FUTURE_READ, "future"),
-                        TableIndex::Stream(_) => (events::EVENT_STREAM_READ, "stream"),
-                    };
                     let caller = cx.concurrent_state().guest_task.unwrap();
                     log::trace!(
-                        "add read {name} child of {}: {}",
+                        "add read {} child of {}: {}",
+                        match ty {
+                            TableIndex::Future(_) => "future",
+                            TableIndex::Stream(_) => "stream",
+                        },
                         caller.rep(),
                         transmit_id.rep()
                     );
                     cx.concurrent_state().table.add_child(transmit_id, caller)?;
-                    let (tx, rx) = oneshot::channel();
-                    let future = Box::pin(rx.map(move |result| {
-                        (
-                            transmit_id.rep(),
-                            Box::new(move |_| {
-                                Ok(HostTaskResult {
-                                    event,
-                                    param: u32::try_from(
-                                        result.map_err(|_| anyhow!("oneshot channel canceled"))?,
-                                    )
-                                    .unwrap(),
-                                    caller,
-                                })
-                            })
-                                as Box<dyn FnOnce(*mut dyn VMStore) -> Result<HostTaskResult>>,
-                        )
-                    })) as HostTaskFuture;
-                    cx.concurrent_state().futures.get_mut().push(future);
 
                     let transmit = cx.concurrent_state().table.get_mut(transmit_id)?;
                     transmit.read = ReadState::GuestReady {
@@ -1456,7 +1494,6 @@ fn guest_read<T>(
                         address: usize::try_from(address).unwrap(),
                         count: usize::try_from(count).unwrap(),
                         instance: SendSyncPtr::new(NonNull::new(instance).unwrap()),
-                        tx,
                         handle,
                         caller,
                     };
@@ -1649,12 +1686,7 @@ pub(crate) extern "C" fn future_cancel_write<T>(
     async_: bool,
     writer: u32,
 ) -> u32 {
-    unsafe {
-        handle_result(|| {
-            _ = (vmctx, ty, async_, writer);
-            bail!("todo: `future.cancel-write` not yet implemented");
-        })
-    }
+    guest_cancel_write::<T>(vmctx, TableIndex::Future(ty), writer, async_)
 }
 
 pub(crate) extern "C" fn future_cancel_read<T>(
@@ -1663,12 +1695,7 @@ pub(crate) extern "C" fn future_cancel_read<T>(
     async_: bool,
     reader: u32,
 ) -> u32 {
-    unsafe {
-        handle_result(|| {
-            _ = (vmctx, ty, async_, reader);
-            bail!("todo: `future.cancel-read` not yet implemented");
-        })
-    }
+    guest_cancel_read::<T>(vmctx, TableIndex::Future(ty), reader, async_)
 }
 
 pub(crate) extern "C" fn future_close_writable<T>(
