@@ -331,6 +331,27 @@ impl Compiler {
 
         false
     }
+
+    /// Returns whether this complier configuration supports the current host
+    /// architecture.
+    pub fn supports_host(&self) -> bool {
+        match self {
+            Compiler::Cranelift => {
+                cfg!(target_arch = "x86_64")
+                    || cfg!(target_arch = "aarch64")
+                    || cfg!(target_arch = "riscv64")
+                    || cfg!(target_arch = "s390x")
+            }
+            Compiler::Winch => {
+                cfg!(target_arch = "x86_64")
+            }
+            Compiler::Pulley => {
+                // FIXME(#9747) pulley needs more refactoring to support a
+                // big-endian host.
+                cfg!(target_endian = "little")
+            }
+        }
+    }
 }
 
 #[derive(PartialEq, Debug, Copy, Clone)]
@@ -358,8 +379,7 @@ impl WastTest {
     /// Returns whether this test should fail under the specified extra
     /// configuration.
     pub fn should_fail(&self, config: &WastConfig) -> bool {
-        // Winch only supports x86_64 at this time.
-        if config.compiler == Compiler::Winch && !cfg!(target_arch = "x86_64") {
+        if !config.compiler.supports_host() {
             return true;
         }
 

@@ -23,6 +23,11 @@ fn main() {
     for test in tests {
         let test_uses_gc_types = test.test_uses_gc_types();
         for compiler in [Compiler::Cranelift, Compiler::Winch, Compiler::Pulley] {
+            // Skip compilers that have no support for this host.
+            if !compiler.supports_host() {
+                continue;
+            }
+
             for pooling in [true, false] {
                 let collectors: &[_] = if !pooling && test_uses_gc_types {
                     &[Collector::DeferredReferenceCounting, Collector::Null]
