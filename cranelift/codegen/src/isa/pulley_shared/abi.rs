@@ -172,14 +172,24 @@ where
     }
 
     fn gen_extend(
-        _to_reg: Writable<Reg>,
-        _from_reg: Reg,
-        _signed: bool,
+        dst: Writable<Reg>,
+        src: Reg,
+        signed: bool,
         from_bits: u8,
         to_bits: u8,
     ) -> Self::I {
         assert!(from_bits < to_bits);
-        todo!()
+        let src = XReg::new(src).unwrap();
+        let dst = dst.try_into().unwrap();
+        match (signed, from_bits) {
+            (true, 8) => Inst::Sext8 { dst, src }.into(),
+            (true, 16) => Inst::Sext16 { dst, src }.into(),
+            (true, 32) => Inst::Sext32 { dst, src }.into(),
+            (false, 8) => Inst::Zext8 { dst, src }.into(),
+            (false, 16) => Inst::Zext16 { dst, src }.into(),
+            (false, 32) => Inst::Zext32 { dst, src }.into(),
+            _ => unimplemented!("extend {from_bits} to {to_bits} as signed? {signed}"),
+        }
     }
 
     fn get_ext_mode(

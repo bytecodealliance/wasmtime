@@ -1,0 +1,172 @@
+test compile precise-output
+target pulley32
+
+function %uext8(i8) {
+    fn0 = colocated %g(i8 uext)
+block0(v0: i8):
+    call fn0(v0)
+    return
+}
+
+; VCode:
+;   push_frame
+; block0:
+;   zext8 x0, x0
+;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   pop_frame
+;   ret
+;
+; Disassembled:
+; push_frame
+; zext8 x0, x0
+; call 0x0    // target = 0x4
+; pop_frame
+; ret
+
+function %uext16(i16) {
+    fn0 = colocated %g(i16 uext)
+block0(v0: i16):
+    call fn0(v0)
+    return
+}
+
+; VCode:
+;   push_frame
+; block0:
+;   zext16 x0, x0
+;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   pop_frame
+;   ret
+;
+; Disassembled:
+; push_frame
+; zext16 x0, x0
+; call 0x0    // target = 0x4
+; pop_frame
+; ret
+
+function %uext32(i32) {
+    fn0 = colocated %g(i32 uext)
+block0(v0: i32):
+    call fn0(v0)
+    return
+}
+
+; VCode:
+;   push_frame
+; block0:
+;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   pop_frame
+;   ret
+;
+; Disassembled:
+; push_frame
+; call 0x0    // target = 0x1
+; pop_frame
+; ret
+
+function %uext64(i64) {
+    fn0 = colocated %g(i64 uext)
+block0(v0: i64):
+    call fn0(v0)
+    return
+}
+
+; VCode:
+;   push_frame
+; block0:
+;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   pop_frame
+;   ret
+;
+; Disassembled:
+; push_frame
+; call 0x0    // target = 0x1
+; pop_frame
+; ret
+
+function %sext8(i8) {
+    fn0 = colocated %g(i8 sext)
+block0(v0: i8):
+    call fn0(v0)
+    return
+}
+
+; VCode:
+;   push_frame
+; block0:
+;   sext8 x0, x0
+;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   pop_frame
+;   ret
+;
+; Disassembled:
+; push_frame
+; sext8 x0, x0
+; call 0x0    // target = 0x4
+; pop_frame
+; ret
+
+function %sext16(i16) {
+    fn0 = colocated %g(i16 sext)
+block0(v0: i16):
+    call fn0(v0)
+    return
+}
+
+; VCode:
+;   push_frame
+; block0:
+;   sext16 x0, x0
+;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   pop_frame
+;   ret
+;
+; Disassembled:
+; push_frame
+; sext16 x0, x0
+; call 0x0    // target = 0x4
+; pop_frame
+; ret
+
+function %sext32(i32) {
+    fn0 = colocated %g(i32 sext)
+block0(v0: i32):
+    call fn0(v0)
+    return
+}
+
+; VCode:
+;   push_frame
+; block0:
+;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   pop_frame
+;   ret
+;
+; Disassembled:
+; push_frame
+; call 0x0    // target = 0x1
+; pop_frame
+; ret
+
+function %sext64(i64) {
+    fn0 = colocated %g(i64 sext)
+block0(v0: i64):
+    call fn0(v0)
+    return
+}
+
+; VCode:
+;   push_frame
+; block0:
+;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   pop_frame
+;   ret
+;
+; Disassembled:
+; push_frame
+; call 0x0    // target = 0x1
+; pop_frame
+; ret
+
+
