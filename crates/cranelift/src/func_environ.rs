@@ -1043,15 +1043,15 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
 
     /// Helper to emit a conditional trap based on `trap_cond`.
     ///
-    /// This should only be used if `self.signals_based_traps()` is false,
-    /// otherwise native CLIF instructions should be used instead.
+    /// This should only be used if `self.clif_instruction_traps_enabled()` is
+    /// false, otherwise native CLIF instructions should be used instead.
     pub fn conditionally_trap(
         &mut self,
         builder: &mut FunctionBuilder,
         trap_cond: ir::Value,
         trap: ir::TrapCode,
     ) {
-        assert!(!self.signals_based_traps());
+        assert!(!self.clif_instruction_traps_enabled());
 
         let trap_block = builder.create_block();
         builder.set_cold_block(trap_block);
@@ -1069,24 +1069,24 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder.switch_to_block(continuation_block);
     }
 
-    /// Helper used when `!self.signals_based_traps()` is enabled to test
-    /// whether the divisor is zero.
+    /// Helper used when `!self.clif_instruction_traps_enabled()` is enabled to
+    /// test whether the divisor is zero.
     fn guard_zero_divisor(&mut self, builder: &mut FunctionBuilder, rhs: ir::Value) {
-        if self.signals_based_traps() {
+        if self.clif_instruction_traps_enabled() {
             return;
         }
         self.trapz(builder, rhs, ir::TrapCode::INTEGER_DIVISION_BY_ZERO);
     }
 
-    /// Helper used when `!self.signals_based_traps()` is enabled to test
-    /// whether a signed division operation will raise a trap.
+    /// Helper used when `!self.clif_instruction_traps_enabled()` is enabled to
+    /// test whether a signed division operation will raise a trap.
     fn guard_signed_divide(
         &mut self,
         builder: &mut FunctionBuilder,
         lhs: ir::Value,
         rhs: ir::Value,
     ) {
-        if self.signals_based_traps() {
+        if self.clif_instruction_traps_enabled() {
             return;
         }
         self.trapz(builder, rhs, ir::TrapCode::INTEGER_DIVISION_BY_ZERO);
@@ -1107,8 +1107,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         self.conditionally_trap(builder, is_integer_overflow, ir::TrapCode::INTEGER_OVERFLOW);
     }
 
-    /// Helper used when `!self.signals_based_traps()` is enabled to guard the
-    /// traps from float-to-int conversions.
+    /// Helper used when `!self.clif_instruction_traps_enabled()` is enabled to
+    /// guard the traps from float-to-int conversions.
     fn guard_fcvt_to_int(
         &mut self,
         builder: &mut FunctionBuilder,
@@ -1117,7 +1117,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         range32: (f64, f64),
         range64: (f64, f64),
     ) {
-        assert!(!self.signals_based_traps());
+        assert!(!self.clif_instruction_traps_enabled());
         let val_ty = builder.func.dfg.value_type(val);
         let val = if val_ty == F64 {
             val
@@ -1196,6 +1196,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         )
     }
 
+    /// Returns whether the current compilation target is for the Pulley
+    /// interpreter.
     pub fn is_pulley(&self) -> bool {
         match self.isa.triple().architecture {
             target_lexicon::Architecture::Pulley32 => true,
@@ -1438,7 +1440,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                     // if it succeeds then we know it won't match, so trap
                     // anyway.
                     if table.ref_type.nullable {
-                        if self.env.signals_based_traps() {
+                        if self.env.clif_memory_traps_enabled() {
                             let mem_flags = ir::MemFlags::trusted().with_readonly();
                             self.builder.ins().load(
                                 sig_id_type,
@@ -1498,7 +1500,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // Note that the callee may be null in which case this load may
         // trap. If so use the `TRAP_INDIRECT_CALL_TO_NULL` trap code.
         let mut mem_flags = ir::MemFlags::trusted().with_readonly();
-        if self.env.signals_based_traps() {
+        if self.env.clif_memory_traps_enabled() {
             mem_flags = mem_flags.with_trap_code(Some(crate::TRAP_INDIRECT_CALL_TO_NULL));
         } else {
             self.env
@@ -1580,7 +1582,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         // non-null or may trap.
         let mem_flags = ir::MemFlags::trusted().with_readonly();
         let mut callee_flags = mem_flags;
-        if self.env.signals_based_traps() {
+        if self.env.clif_memory_traps_enabled() {
             callee_flags = callee_flags.with_trap_code(callee_load_trap_code);
         } else {
             if let Some(trap) = callee_load_trap_code {
@@ -3260,7 +3262,7 @@ impl FuncEnvironment<'_> {
 
     pub fn trap(&mut self, builder: &mut FunctionBuilder, trap: ir::TrapCode) {
         match (
-            self.signals_based_traps(),
+            self.clif_instruction_traps_enabled(),
             crate::clif_trap_to_env_trap(trap),
         ) {
             // If libcall traps are disabled or there's no wasmtime-defined trap
@@ -3283,7 +3285,7 @@ impl FuncEnvironment<'_> {
     }
 
     pub fn trapz(&mut self, builder: &mut FunctionBuilder, value: ir::Value, trap: ir::TrapCode) {
-        if self.signals_based_traps() {
+        if self.clif_instruction_traps_enabled() {
             builder.ins().trapz(value, trap);
         } else {
             let ty = builder.func.dfg.value_type(value);
@@ -3294,7 +3296,7 @@ impl FuncEnvironment<'_> {
     }
 
     pub fn trapnz(&mut self, builder: &mut FunctionBuilder, value: ir::Value, trap: ir::TrapCode) {
-        if self.signals_based_traps() {
+        if self.clif_instruction_traps_enabled() {
             builder.ins().trapnz(value, trap);
         } else {
             let ty = builder.func.dfg.value_type(value);
@@ -3311,17 +3313,13 @@ impl FuncEnvironment<'_> {
         rhs: ir::Value,
         trap: ir::TrapCode,
     ) -> ir::Value {
-        if self.signals_based_traps() {
+        if self.clif_instruction_traps_enabled() {
             builder.ins().uadd_overflow_trap(lhs, rhs, trap)
         } else {
             let (ret, overflow) = builder.ins().uadd_overflow(lhs, rhs);
             self.conditionally_trap(builder, overflow, trap);
             ret
         }
-    }
-
-    pub fn signals_based_traps(&self) -> bool {
-        self.tunables.signals_based_traps
     }
 
     pub fn translate_sdiv(
@@ -3372,7 +3370,7 @@ impl FuncEnvironment<'_> {
     ) -> ir::Value {
         // NB: for now avoid translating this entire instruction to CLIF and
         // just do it in a libcall.
-        if !self.signals_based_traps() {
+        if !self.clif_instruction_traps_enabled() {
             self.guard_fcvt_to_int(
                 builder,
                 ty,
@@ -3390,7 +3388,7 @@ impl FuncEnvironment<'_> {
         ty: ir::Type,
         val: ir::Value,
     ) -> ir::Value {
-        if !self.signals_based_traps() {
+        if !self.clif_instruction_traps_enabled() {
             self.guard_fcvt_to_int(
                 builder,
                 ty,
@@ -3400,6 +3398,27 @@ impl FuncEnvironment<'_> {
             );
         }
         builder.ins().fcvt_to_uint(ty, val)
+    }
+
+    /// Returns whether it's acceptable to rely on traps in CLIF memory-related
+    /// instructions (e.g. loads and stores).
+    ///
+    /// This is enabled if `signals_based_traps` is `true` since signal handlers
+    /// are available, but this is additionally forcibly disabled if Pulley is
+    /// being targetted since the Pulley runtime doesn't catch segfaults for
+    /// itself.
+    pub fn clif_memory_traps_enabled(&self) -> bool {
+        self.tunables.signals_based_traps && !self.is_pulley()
+    }
+
+    /// Returns whether it's acceptable to have CLIF instructions natively trap,
+    /// such as division-by-zero.
+    ///
+    /// This enabled if `signals_based_traps` is `true` or on Pulley
+    /// unconditionally since Pulley doesn't use hardware-based traps in its
+    /// runtime.
+    pub fn clif_instruction_traps_enabled(&self) -> bool {
+        self.tunables.signals_based_traps || self.is_pulley()
     }
 }
 
