@@ -8,8 +8,6 @@
 
 use crate::sync::RwLock;
 use crate::vm::sys::traphandlers::TrapHandler;
-use crate::vm::traphandlers::{CallThreadState, SignalHandler, TrapReason, UnwindReason};
-use core::ptr;
 
 /// Platform-specific trap-handler state.
 ///
