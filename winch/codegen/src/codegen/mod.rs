@@ -992,6 +992,7 @@ where
             continuation,
             OperandSize::S64,
         );
+        self.context.free_reg(fuel_var);
         // Out-of-fuel branch.
         FnCall::emit::<M>(
             &mut self.env,
@@ -999,9 +1000,10 @@ where
             &mut self.context,
             Callee::Builtin(out_of_fuel.clone()),
         );
+        self.context.pop_and_free(self.masm);
+
         // Under fuel limits branch.
         self.masm.bind(continuation);
-        self.context.free_reg(fuel_var);
     }
 
     /// Emits a series of instructions that load the `fuel_consumed` field from

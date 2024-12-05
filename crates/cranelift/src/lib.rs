@@ -37,6 +37,8 @@ mod func_environ;
 mod gc;
 mod translate;
 
+use self::compiler::Compiler;
+
 const TRAP_INTERNAL_ASSERT: TrapCode = TrapCode::unwrap_user(1);
 const TRAP_OFFSET: u8 = 2;
 pub const TRAP_ALWAYS: TrapCode =
@@ -339,32 +341,21 @@ fn libcall_cranelift_to_wasmtime(call: ir::LibCall) -> wasmtime_environ::obj::Li
 struct BuiltinFunctionSignatures {
     pointer_type: ir::Type,
 
-    #[cfg(feature = "gc")]
-    reference_type: ir::Type,
-
     host_call_conv: CallConv,
     wasm_call_conv: CallConv,
 }
 
 impl BuiltinFunctionSignatures {
-    fn new(isa: &dyn TargetIsa, tunables: &Tunables) -> Self {
+    fn new(compiler: &Compiler) -> Self {
         Self {
-            pointer_type: isa.pointer_type(),
-            host_call_conv: CallConv::triple_default(isa.triple()),
-            wasm_call_conv: wasm_call_conv(isa, tunables),
-
-            #[cfg(feature = "gc")]
-            reference_type: ir::types::I32,
+            pointer_type: compiler.isa().pointer_type(),
+            host_call_conv: CallConv::triple_default(compiler.isa().triple()),
+            wasm_call_conv: wasm_call_conv(compiler.isa(), compiler.tunables()),
         }
     }
 
     fn vmctx(&self) -> AbiParam {
         AbiParam::special(self.pointer_type, ArgumentPurpose::VMContext)
-    }
-
-    #[cfg(feature = "gc")]
-    fn reference(&self) -> AbiParam {
-        AbiParam::new(self.reference_type)
     }
 
     fn pointer(&self) -> AbiParam {
@@ -389,6 +380,10 @@ impl BuiltinFunctionSignatures {
     }
 
     fn u8(&self) -> AbiParam {
+        AbiParam::new(ir::types::I8)
+    }
+
+    fn bool(&self) -> AbiParam {
         AbiParam::new(ir::types::I8)
     }
 

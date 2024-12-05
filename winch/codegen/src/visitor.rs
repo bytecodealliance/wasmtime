@@ -1426,7 +1426,8 @@ where
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin.clone()),
-        )
+        );
+        self.context.pop_and_free(self.masm);
     }
 
     fn visit_table_copy(&mut self, dst: u32, src: u32) {
@@ -1442,7 +1443,8 @@ where
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin),
-        )
+        );
+        self.context.pop_and_free(self.masm);
     }
 
     fn visit_table_get(&mut self, table: u32) {
@@ -1491,7 +1493,7 @@ where
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin.clone()),
-        )
+        );
     }
 
     fn visit_table_size(&mut self, table: u32) {
@@ -1519,7 +1521,8 @@ where
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin.clone()),
-        )
+        );
+        self.context.pop_and_free(self.masm);
     }
 
     fn visit_table_set(&mut self, table: u32) {
@@ -1579,7 +1582,8 @@ where
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin),
-        )
+        );
+        self.context.pop_and_free(self.masm);
     }
 
     fn visit_memory_copy(&mut self, dst_mem: u32, src_mem: u32) {
@@ -1607,7 +1611,8 @@ where
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin),
-        )
+        );
+        self.context.pop_and_free(self.masm);
     }
 
     fn visit_memory_fill(&mut self, mem: u32) {
@@ -1624,7 +1629,8 @@ where
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin),
-        )
+        );
+        self.context.pop_and_free(self.masm);
     }
 
     fn visit_memory_size(&mut self, mem: u32) {

@@ -2,7 +2,9 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
+use crate::runtime::vm::HostResultHasUnwindSentinel;
 use core::cell::Cell;
+use core::convert::Infallible;
 use core::slice;
 use wasmtime_environ::component::TypeResourceTableIndex;
 
@@ -29,6 +31,7 @@ macro_rules! signature {
     (@ty u8) => (u8);
     (@ty u32) => (u32);
     (@ty u64) => (u64);
+    (@ty bool) => (bool);
     (@ty vmctx) => (*mut VMComponentContext);
 }
 
@@ -115,27 +118,15 @@ mod trampolines {
             )*
         ) => (
             $(
-                #[allow(deprecated)] // FIXME: need to update this
                 pub unsafe extern "C" fn $name(
                     $($pname : signature!(@ty $param),)*
                 ) $( -> signature!(@ty $result))? {
                     $(shims!(@validate_param $pname $param);)*
 
-                    // Always catch panics to avoid trying to unwind from Rust
-                    // into Cranelift-generated code which would lead to a Bad
-                    // Time.
-                    //
-                    // Additionally assume that every function below returns a
-                    // `Result` where errors turn into traps.
-                    let result = crate::runtime::vm::traphandlers::catch_unwind_and_longjmp(|| {
+                    let ret = crate::runtime::vm::traphandlers::catch_unwind_and_record_trap(|| {
                         shims!(@invoke $name() $($pname)*)
                     });
-                    match result {
-                        Ok(ret) => shims!(@convert_ret ret $($pname: $param)*),
-                        Err(err) => crate::runtime::vm::traphandlers::raise_trap(
-                            crate::runtime::vm::traphandlers::TrapReason::User(err)
-                        ),
-                    }
+                    shims!(@convert_ret ret $($pname: $param)*)
                 }
             )*
         );
@@ -269,18 +260,28 @@ unsafe fn latin1_to_utf16(src: *mut u8, len: usize, dst: *mut u16) -> Result<()>
     Ok(())
 }
 
+struct CopySizeReturn(usize);
+
+unsafe impl HostResultHasUnwindSentinel for CopySizeReturn {
+    type Abi = usize;
+    const SENTINEL: usize = usize::MAX;
+    fn into_abi(self) -> usize {
+        self.0
+    }
+}
+
 /// Converts utf8 to utf16.
 ///
 /// The length provided is the same unit length of both buffers, and the
 /// returned value from this function is how many u16 units were written.
-unsafe fn utf8_to_utf16(src: *mut u8, len: usize, dst: *mut u16) -> Result<usize> {
+unsafe fn utf8_to_utf16(src: *mut u8, len: usize, dst: *mut u16) -> Result<CopySizeReturn> {
     let src = slice::from_raw_parts(src, len);
     let dst = slice::from_raw_parts_mut(dst, len);
     assert_no_overlap(src, dst);
 
     let result = run_utf8_to_utf16(src, dst)?;
     log::trace!("utf8-to-utf16 {len} => {result}");
-    Ok(result)
+    Ok(CopySizeReturn(result))
 }
 
 fn run_utf8_to_utf16(src: &[u8], dst: &mut [u16]) -> Result<usize> {
@@ -291,6 +292,19 @@ fn run_utf8_to_utf16(src: &[u8], dst: &mut [u16]) -> Result<usize> {
         amt += 1;
     }
     Ok(amt)
+}
+
+struct SizePair {
+    src_read: usize,
+    dst_written: usize,
+}
+
+unsafe impl HostResultHasUnwindSentinel for SizePair {
+    type Abi = (usize, usize);
+    const SENTINEL: (usize, usize) = (usize::MAX, 0);
+    fn into_abi(self) -> (usize, usize) {
+        (self.src_read, self.dst_written)
+    }
 }
 
 /// Converts utf16 to utf8.
@@ -304,7 +318,7 @@ unsafe fn utf16_to_utf8(
     src_len: usize,
     dst: *mut u8,
     dst_len: usize,
-) -> Result<(usize, usize)> {
+) -> Result<SizePair> {
     let src = slice::from_raw_parts(src, src_len);
     let mut dst = slice::from_raw_parts_mut(dst, dst_len);
     assert_no_overlap(src, dst);
@@ -340,7 +354,10 @@ unsafe fn utf16_to_utf8(
     }
 
     log::trace!("utf16-to-utf8 {src_len}/{dst_len} => {src_read}/{dst_written}");
-    Ok((src_read, dst_written))
+    Ok(SizePair {
+        src_read,
+        dst_written,
+    })
 }
 
 /// Converts latin1 to utf8.
@@ -354,13 +371,16 @@ unsafe fn latin1_to_utf8(
     src_len: usize,
     dst: *mut u8,
     dst_len: usize,
-) -> Result<(usize, usize)> {
+) -> Result<SizePair> {
     let src = slice::from_raw_parts(src, src_len);
     let dst = slice::from_raw_parts_mut(dst, dst_len);
     assert_no_overlap(src, dst);
     let (read, written) = encoding_rs::mem::convert_latin1_to_utf8_partial(src, dst);
     log::trace!("latin1-to-utf8 {src_len}/{dst_len} => ({read}, {written})");
-    Ok((read, written))
+    Ok(SizePair {
+        src_read: read,
+        dst_written: written,
+    })
 }
 
 /// Converts utf16 to "latin1+utf16", probably using a utf16 encoding.
@@ -374,7 +394,7 @@ unsafe fn utf16_to_compact_probably_utf16(
     src: *mut u16,
     len: usize,
     dst: *mut u16,
-) -> Result<usize> {
+) -> Result<CopySizeReturn> {
     let src = slice::from_raw_parts(src, len);
     let dst = slice::from_raw_parts_mut(dst, len);
     assert_no_overlap(src, dst);
@@ -387,10 +407,10 @@ unsafe fn utf16_to_compact_probably_utf16(
             dst[i] = dst[2 * i];
         }
         log::trace!("utf16-to-compact-probably-utf16 {len} => latin1 {len}");
-        Ok(len)
+        Ok(CopySizeReturn(len))
     } else {
         log::trace!("utf16-to-compact-probably-utf16 {len} => utf16 {len}");
-        Ok(len | UTF16_TAG)
+        Ok(CopySizeReturn(len | UTF16_TAG))
     }
 }
 
@@ -404,20 +424,23 @@ unsafe fn utf16_to_compact_probably_utf16(
 ///
 /// Note that this may not convert the entire source into the destination if the
 /// original utf8 string has usvs not representable in latin1.
-unsafe fn utf8_to_latin1(src: *mut u8, len: usize, dst: *mut u8) -> Result<(usize, usize)> {
+unsafe fn utf8_to_latin1(src: *mut u8, len: usize, dst: *mut u8) -> Result<SizePair> {
     let src = slice::from_raw_parts(src, len);
     let dst = slice::from_raw_parts_mut(dst, len);
     assert_no_overlap(src, dst);
     let read = encoding_rs::mem::utf8_latin1_up_to(src);
     let written = encoding_rs::mem::convert_utf8_to_latin1_lossy(&src[..read], dst);
     log::trace!("utf8-to-latin1 {len} => ({read}, {written})");
-    Ok((read, written))
+    Ok(SizePair {
+        src_read: read,
+        dst_written: written,
+    })
 }
 
 /// Converts a utf16 string to latin1
 ///
 /// This is the same as `utf8_to_latin1` in terms of parameters/results.
-unsafe fn utf16_to_latin1(src: *mut u16, len: usize, dst: *mut u8) -> Result<(usize, usize)> {
+unsafe fn utf16_to_latin1(src: *mut u16, len: usize, dst: *mut u8) -> Result<SizePair> {
     let src = slice::from_raw_parts(src, len);
     let dst = slice::from_raw_parts_mut(dst, len);
     assert_no_overlap(src, dst);
@@ -432,7 +455,10 @@ unsafe fn utf16_to_latin1(src: *mut u16, len: usize, dst: *mut u8) -> Result<(us
         size += 1;
     }
     log::trace!("utf16-to-latin1 {len} => {size}");
-    Ok((size, size))
+    Ok(SizePair {
+        src_read: size,
+        dst_written: size,
+    })
 }
 
 /// Converts a utf8 string to a utf16 string which has been partially converted
@@ -456,7 +482,7 @@ unsafe fn utf8_to_compact_utf16(
     dst: *mut u16,
     dst_len: usize,
     latin1_bytes_so_far: usize,
-) -> Result<usize> {
+) -> Result<CopySizeReturn> {
     let src = slice::from_raw_parts(src, src_len);
     let dst = slice::from_raw_parts_mut(dst, dst_len);
     assert_no_overlap(src, dst);
@@ -464,7 +490,7 @@ unsafe fn utf8_to_compact_utf16(
     let dst = inflate_latin1_bytes(dst, latin1_bytes_so_far);
     let result = run_utf8_to_utf16(src, dst)?;
     log::trace!("utf8-to-compact-utf16 {src_len}/{dst_len}/{latin1_bytes_so_far} => {result}");
-    Ok(result + latin1_bytes_so_far)
+    Ok(CopySizeReturn(result + latin1_bytes_so_far))
 }
 
 /// Same as `utf8_to_compact_utf16` but for utf16 source strings.
@@ -474,7 +500,7 @@ unsafe fn utf16_to_compact_utf16(
     dst: *mut u16,
     dst_len: usize,
     latin1_bytes_so_far: usize,
-) -> Result<usize> {
+) -> Result<CopySizeReturn> {
     let src = slice::from_raw_parts(src, src_len);
     let dst = slice::from_raw_parts_mut(dst, dst_len);
     assert_no_overlap(src, dst);
@@ -483,7 +509,7 @@ unsafe fn utf16_to_compact_utf16(
     run_utf16_to_utf16(src, dst)?;
     let result = src.len();
     log::trace!("utf16-to-compact-utf16 {src_len}/{dst_len}/{latin1_bytes_so_far} => {result}");
-    Ok(result + latin1_bytes_so_far)
+    Ok(CopySizeReturn(result + latin1_bytes_so_far))
 }
 
 /// Inflates the `latin1_bytes_so_far` number of bytes written to the beginning
@@ -521,14 +547,28 @@ unsafe fn resource_rep32(vmctx: *mut VMComponentContext, resource: u32, idx: u32
     ComponentInstance::from_vmctx(vmctx, |instance| instance.resource_rep32(resource, idx))
 }
 
-unsafe fn resource_drop(vmctx: *mut VMComponentContext, resource: u32, idx: u32) -> Result<u64> {
+unsafe fn resource_drop(
+    vmctx: *mut VMComponentContext,
+    resource: u32,
+    idx: u32,
+) -> Result<ResourceDropRet> {
     let resource = TypeResourceTableIndex::from_u32(resource);
     ComponentInstance::from_vmctx(vmctx, |instance| {
-        Ok(match instance.resource_drop(resource, idx)? {
+        Ok(ResourceDropRet(instance.resource_drop(resource, idx)?))
+    })
+}
+
+struct ResourceDropRet(Option<u32>);
+
+unsafe impl HostResultHasUnwindSentinel for ResourceDropRet {
+    type Abi = u64;
+    const SENTINEL: u64 = u64::MAX;
+    fn into_abi(self) -> u64 {
+        match self.0 {
             Some(rep) => (u64::from(rep) << 1) | 1,
             None => 0,
-        })
-    })
+        }
+    }
 }
 
 unsafe fn resource_transfer_own(
@@ -557,14 +597,14 @@ unsafe fn resource_transfer_borrow(
     })
 }
 
-unsafe fn resource_enter_call(vmctx: *mut VMComponentContext) -> Result<()> {
-    ComponentInstance::from_vmctx(vmctx, |instance| Ok(instance.resource_enter_call()))
+unsafe fn resource_enter_call(vmctx: *mut VMComponentContext) {
+    ComponentInstance::from_vmctx(vmctx, |instance| instance.resource_enter_call())
 }
 
 unsafe fn resource_exit_call(vmctx: *mut VMComponentContext) -> Result<()> {
     ComponentInstance::from_vmctx(vmctx, |instance| instance.resource_exit_call())
 }
 
-unsafe fn trap(_vmctx: *mut VMComponentContext, code: u8) -> Result<()> {
+unsafe fn trap(_vmctx: *mut VMComponentContext, code: u8) -> Result<Infallible> {
     Err(wasmtime_environ::Trap::from_u8(code).unwrap().into())
 }
