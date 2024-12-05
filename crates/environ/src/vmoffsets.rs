@@ -144,27 +144,27 @@ pub trait PtrSize {
 
     // Offsets within `VMRuntimeLimits`
 
-    /// Return the offset of the `stack_limit` field of `VMRuntimeLimits`
-    #[inline]
-    fn vmruntime_limits_stack_limit(&self) -> u8 {
-        0
-    }
-
     /// Return the offset of the `fuel_consumed` field of `VMRuntimeLimits`
     #[inline]
     fn vmruntime_limits_fuel_consumed(&self) -> u8 {
-        self.size()
+        0
     }
 
     /// Return the offset of the `epoch_deadline` field of `VMRuntimeLimits`
     #[inline]
     fn vmruntime_limits_epoch_deadline(&self) -> u8 {
-        self.vmruntime_limits_fuel_consumed() + 8 // `stack_limit` is a pointer; `fuel_consumed` is an `i64`
+        self.vmruntime_limits_fuel_consumed() + 8
+    }
+
+    /// Return the offset of the `stack_limit` field of `VMRuntimeLimits`
+    #[inline]
+    fn vmruntime_limits_stack_limit(&self) -> u8 {
+        self.vmruntime_limits_epoch_deadline() + 8
     }
 
     /// Return the offset of the `last_wasm_exit_fp` field of `VMRuntimeLimits`.
     fn vmruntime_limits_last_wasm_exit_fp(&self) -> u8 {
-        self.vmruntime_limits_epoch_deadline() + 8
+        self.vmruntime_limits_stack_limit() + self.size()
     }
 
     /// Return the offset of the `last_wasm_exit_pc` field of `VMRuntimeLimits`.

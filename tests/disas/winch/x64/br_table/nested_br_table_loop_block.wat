@@ -22,11 +22,11 @@
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
 ;;       movq    8(%rdi), %r11
-;;       movq    (%r11), %r11
+;;       movq    0x10(%r11), %r11
 ;;       addq    $0x20, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x9f
-;;   1b: movq    %rdi, %r14
+;;       ja      0xa0
+;;   1c: movq    %rdi, %r14
 ;;       subq    $0x20, %rsp
 ;;       movq    %rdi, 0x18(%rsp)
 ;;       movq    %rsi, 0x10(%rsp)
@@ -39,4 +39,4 @@
 ;;       movslq  (%r11, %rax, 4), %rcx
 ;;       addq    %rcx, %r11
 ;;       jmpq    *%r11
-;;   4f: loope   0x50
+;;   50: loope   0x51
