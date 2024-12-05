@@ -213,14 +213,6 @@ criteria = "safe-to-deploy"
 version = "1.3.2"
 criteria = "safe-to-deploy"
 
-[[exemptions.bzip2]]
-version = "0.4.4"
-criteria = "safe-to-deploy"
-
-[[exemptions.bzip2-sys]]
-version = "0.1.11+1.0.8"
-criteria = "safe-to-deploy"
-
 [[exemptions.capstone]]
 version = "0.12.0"
 criteria = "safe-to-deploy"
@@ -353,15 +345,6 @@ criteria = "safe-to-deploy"
 [[exemptions.itertools]]
 version = "0.10.3"
 criteria = "safe-to-deploy"
-
-[[exemptions.jobserver]]
-version = "0.1.24"
-criteria = "safe-to-deploy"
-
-[[exemptions.js-sys]]
-version = "0.3.57"
-criteria = "safe-to-deploy"
-notes = "dependency of ring for wasm32 browser platform, which our project does not target"
 
 [[exemptions.libloading]]
 version = "0.7.3"
@@ -598,15 +581,6 @@ criteria = "safe-to-deploy"
 [[exemptions.wait-timeout]]
 version = "0.2.0"
 criteria = "safe-to-deploy"
-
-[[exemptions.wasi]]
-version = "0.11.0+wasi-snapshot-preview1"
-criteria = "safe-to-deploy"
-
-[[exemptions.web-sys]]
-version = "0.3.57"
-criteria = "safe-to-deploy"
-notes = "dependency of ring for wasm32 browser platform, which our project does not target"
 
 [[exemptions.webpki-roots]]
 version = "0.26.1"
