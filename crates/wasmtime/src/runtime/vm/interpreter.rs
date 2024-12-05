@@ -85,6 +85,10 @@ impl InterpreterRef<'_> {
                 // return that (it indicates whether a trap happened or not.
                 DoneReason::ReturnToHost(()) => {
                     match self.0.call_end([RegType::XReg]).next().unwrap() {
+                        #[allow(
+                            clippy::cast_possible_truncation,
+                            reason = "intentionally reading the lower bits only"
+                        )]
                         Val::XReg(xreg) => break (xreg.get_u32() as u8) != 0,
                         _ => unreachable!(),
                     }
@@ -161,6 +165,11 @@ impl InterpreterRef<'_> {
 
     /// Handles the `call_indirect_host` instruction, dispatching the `sig`
     /// number here which corresponds to `wasmtime_environ::HostCall`.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "macro-generated code"
+    )]
     unsafe fn call_indirect_host(&mut self, sig: u8) {
         let sig = u32::from(sig);
         let fnptr = self.0[XReg::x0].get_ptr::<u8>();
