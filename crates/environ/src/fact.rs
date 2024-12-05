@@ -506,7 +506,7 @@ impl<'a> Module<'a> {
         self.import_simple(
             "future",
             "transfer",
-            &[ValType::I32; 4],
+            &[ValType::I32; 3],
             &[ValType::I32],
             Import::FutureTransfer,
             |me| &mut me.imported_future_transfer,
@@ -517,7 +517,7 @@ impl<'a> Module<'a> {
         self.import_simple(
             "stream",
             "transfer",
-            &[ValType::I32; 4],
+            &[ValType::I32; 3],
             &[ValType::I32],
             Import::StreamTransfer,
             |me| &mut me.imported_stream_transfer,

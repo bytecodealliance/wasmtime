@@ -56,10 +56,6 @@ mod futures_and_streams;
 mod ready_chunks;
 mod table;
 
-// TODO: Currently, we're exposing global (to the top-level component instance) task IDs to guests; which is a
-// slight information leak and source of nondeterminsm.  We should instead convert between global IDs and
-// per-instance IDs.
-
 // TODO: The handling of `task.yield` and `task.backpressure` was bolted on late in the implementation and is
 // currently haphazard.  We need a refactor to manage yielding, backpressure, and event polling and delivery in a
 // more unified and structured way.

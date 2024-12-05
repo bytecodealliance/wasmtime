@@ -36,14 +36,6 @@ use {
 
 // TODO: add `validate_inbounds` calls where appropriate
 
-// TODO: Many of the functions in this module are used for both futures and streams, using runtime branches for
-// specialization.  We should consider using generics instead to move those branches to compile time.
-
-// TODO: Improve the host APIs for sending to and receiving from streams.  Currently, they require explicitly
-// interleaving calls to `write` or `read` and `StoreContextMut::wait_until`; see
-// https://github.com/dicej/rfcs/blob/component-async/accepted/component-model-async.md#host-apis-for-creating-using-and-sharing-streams-futures-and-errors
-// for an alternative approach.
-
 const BLOCKED: usize = 0xffff_ffff;
 const CLOSED: usize = 0x8000_0000;
 
@@ -383,6 +375,64 @@ pub fn host_read<T: func::Lift + Sync + Send + 'static, U, S: AsContextMut<Data 
     }
 
     Ok(rx)
+}
+
+fn host_cancel_write<U, S: AsContextMut<Data = U>>(mut store: S, rep: u32) -> Result<u32> {
+    let mut store = store.as_context_mut();
+    let transmit_id = TableId::<TransmitState>::new(rep);
+    let transmit = store.concurrent_state().table.get_mut(transmit_id)?;
+
+    match &transmit.write {
+        WriteState::GuestReady { caller, .. } => {
+            let caller = *caller;
+            transmit.write = WriteState::Open;
+            store
+                .concurrent_state()
+                .table
+                .remove_child(transmit_id, caller)?;
+        }
+
+        WriteState::HostReady { .. } => {
+            transmit.write = WriteState::Open;
+        }
+
+        WriteState::Open | WriteState::Closed => {
+            bail!("stream or future write canceled when no write is pending")
+        }
+    }
+
+    log::trace!("canceled write {rep}");
+
+    Ok(0)
+}
+
+fn host_cancel_read<U, S: AsContextMut<Data = U>>(mut store: S, rep: u32) -> Result<u32> {
+    let mut store = store.as_context_mut();
+    let transmit_id = TableId::<TransmitState>::new(rep);
+    let transmit = store.concurrent_state().table.get_mut(transmit_id)?;
+
+    match &transmit.read {
+        ReadState::GuestReady { caller, .. } => {
+            let caller = *caller;
+            transmit.read = ReadState::Open;
+            store
+                .concurrent_state()
+                .table
+                .remove_child(transmit_id, caller)?;
+        }
+
+        ReadState::HostReady { .. } => {
+            transmit.read = ReadState::Open;
+        }
+
+        ReadState::Open | ReadState::Closed => {
+            bail!("stream or future read canceled when no read is pending")
+        }
+    }
+
+    log::trace!("canceled read {rep}");
+
+    Ok(0)
 }
 
 fn host_close_writer<U, S: AsContextMut<Data = U>>(mut store: S, rep: u32) -> Result<()> {
@@ -1019,6 +1069,7 @@ unsafe fn copy<T>(
     read_options: &Options,
     read_address: usize,
     count: usize,
+    rep: u32,
 ) -> Result<()> {
     match (write_ty, read_ty) {
         (TableIndex::Future(write_ty), TableIndex::Future(read_ty)) => {
@@ -1072,6 +1123,8 @@ unsafe fn copy<T>(
                         )
                     })
                     .collect::<Result<Vec<_>>>()?;
+
+                log::trace!("copy values {values:?} for {rep}");
 
                 let lower =
                     &mut LowerContext::new(cx.as_context_mut(), read_options, types, instance);
@@ -1157,6 +1210,7 @@ fn guest_write<T>(
                         &read_options,
                         read_address,
                         count,
+                        rep,
                     )?;
 
                     log::trace!(
@@ -1208,7 +1262,7 @@ fn guest_write<T>(
                                 Ok(HostTaskResult {
                                     event,
                                     param: u32::try_from(
-                                        result.map_err(|_| anyhow!("oneshot channel cancelled"))?,
+                                        result.map_err(|_| anyhow!("oneshot channel canceled"))?,
                                     )
                                     .unwrap(),
                                     caller,
@@ -1315,6 +1369,7 @@ fn guest_read<T>(
                         &options,
                         address,
                         count,
+                        rep,
                     )?;
 
                     log::trace!(
@@ -1382,7 +1437,7 @@ fn guest_read<T>(
                                 Ok(HostTaskResult {
                                     event,
                                     param: u32::try_from(
-                                        result.map_err(|_| anyhow!("oneshot channel cancelled"))?,
+                                        result.map_err(|_| anyhow!("oneshot channel canceled"))?,
                                     )
                                     .unwrap(),
                                     caller,
@@ -1417,6 +1472,70 @@ fn guest_read<T>(
             }
 
             Ok(result)
+        })
+    }
+}
+
+fn guest_cancel_write<T>(
+    vmctx: *mut VMOpaqueContext,
+    ty: TableIndex,
+    writer: u32,
+    _async_: bool,
+) -> u32 {
+    unsafe {
+        handle_result(|| {
+            let cx = VMComponentContext::from_opaque(vmctx);
+            let instance = (*cx).instance();
+            let cx = StoreContextMut::<T>(&mut *(*instance).store().cast());
+            let (rep, WaitableState::Stream(_, state) | WaitableState::Future(_, state)) =
+                state_table(&mut *instance, ty).get_mut_by_index(writer)?
+            else {
+                bail!("invalid stream or future handle");
+            };
+            match state {
+                StreamFutureState::Local | StreamFutureState::Write => {
+                    bail!("stream or future write canceled when no write is pending")
+                }
+                StreamFutureState::Read => {
+                    bail!("passed read end to `{{stream|future}}.cancel-write`")
+                }
+                StreamFutureState::Busy => {
+                    *state = StreamFutureState::Write;
+                }
+            }
+            host_cancel_write(cx, rep)
+        })
+    }
+}
+
+fn guest_cancel_read<T>(
+    vmctx: *mut VMOpaqueContext,
+    ty: TableIndex,
+    reader: u32,
+    _async_: bool,
+) -> u32 {
+    unsafe {
+        handle_result(|| {
+            let cx = VMComponentContext::from_opaque(vmctx);
+            let instance = (*cx).instance();
+            let cx = StoreContextMut::<T>(&mut *(*instance).store().cast());
+            let (rep, WaitableState::Stream(_, state) | WaitableState::Future(_, state)) =
+                state_table(&mut *instance, ty).get_mut_by_index(reader)?
+            else {
+                bail!("invalid stream or future handle");
+            };
+            match state {
+                StreamFutureState::Local | StreamFutureState::Read => {
+                    bail!("stream or future read canceled when no read is pending")
+                }
+                StreamFutureState::Write => {
+                    bail!("passed write end to `{{stream|future}}.cancel-read`")
+                }
+                StreamFutureState::Busy => {
+                    *state = StreamFutureState::Read;
+                }
+            }
+            host_cancel_read(cx, rep)
         })
     }
 }
@@ -1630,12 +1749,7 @@ pub(crate) extern "C" fn stream_cancel_write<T>(
     async_: bool,
     writer: u32,
 ) -> u32 {
-    unsafe {
-        handle_result(|| {
-            _ = (vmctx, ty, async_, writer);
-            bail!("todo: `stream.cancel-write` not yet implemented");
-        })
-    }
+    guest_cancel_write::<T>(vmctx, TableIndex::Stream(ty), writer, async_)
 }
 
 pub(crate) extern "C" fn stream_cancel_read<T>(
@@ -1644,12 +1758,7 @@ pub(crate) extern "C" fn stream_cancel_read<T>(
     async_: bool,
     reader: u32,
 ) -> u32 {
-    unsafe {
-        handle_result(|| {
-            _ = (vmctx, ty, async_, reader);
-            bail!("todo: `stream.cancel-read` not yet implemented");
-        })
-    }
+    guest_cancel_read::<T>(vmctx, TableIndex::Stream(ty), reader, async_)
 }
 
 pub(crate) extern "C" fn stream_close_writable<T>(

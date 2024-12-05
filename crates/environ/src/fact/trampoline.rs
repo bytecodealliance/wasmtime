@@ -2912,7 +2912,6 @@ impl Compiler<'_, '_> {
             InterfaceType::Future(t) => *t,
             _ => panic!("expected a `Future`"),
         };
-        assert!(src_ty == dst_ty);
         let transfer = self.module.import_future_transfer();
         self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
     }
@@ -2928,7 +2927,6 @@ impl Compiler<'_, '_> {
             InterfaceType::Stream(t) => *t,
             _ => panic!("expected a `Stream`"),
         };
-        assert!(src_ty == dst_ty);
         let transfer = self.module.import_stream_transfer();
         self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
     }
@@ -2944,7 +2942,6 @@ impl Compiler<'_, '_> {
             InterfaceType::ErrorContext(t) => *t,
             _ => panic!("expected an `ErrorContext`"),
         };
-        assert!(src_ty == dst_ty);
         let transfer = self.module.import_error_context_transfer();
         self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
     }
