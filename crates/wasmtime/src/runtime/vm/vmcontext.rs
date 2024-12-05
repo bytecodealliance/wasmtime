@@ -818,7 +818,7 @@ wasmtime_environ::foreach_builtin_function!(define_builtin_array);
 const _: () = {
     assert!(
         mem::size_of::<VMBuiltinFunctionsArray>()
-            == mem::size_of::<usize>() * (BuiltinFunctionIndex::max() as usize)
+            == mem::size_of::<usize>() * (BuiltinFunctionIndex::len() as usize)
     )
 };
 

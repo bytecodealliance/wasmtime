@@ -38,9 +38,9 @@ impl HostCall {
             HostCall::ArrayCall => 0,
             HostCall::Builtin(i) => 1 + i.index(),
             #[cfg(feature = "component-model")]
-            HostCall::ComponentLowerImport => 1 + BuiltinFunctionIndex::max(),
+            HostCall::ComponentLowerImport => 1 + BuiltinFunctionIndex::len(),
             #[cfg(feature = "component-model")]
-            HostCall::ComponentBuiltin(i) => 2 + BuiltinFunctionIndex::max() + i.index(),
+            HostCall::ComponentBuiltin(i) => 2 + BuiltinFunctionIndex::len() + i.index(),
         }
     }
 }

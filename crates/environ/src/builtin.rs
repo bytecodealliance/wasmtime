@@ -221,7 +221,7 @@ macro_rules! declare_builtin_index {
         impl $index_name {
             /// Create a new builtin from its raw index
             pub const fn from_u32(i: u32) -> Self {
-                assert!(i < Self::max());
+                assert!(i < Self::len());
                 Self(i)
             }
 
@@ -268,7 +268,7 @@ macro_rules! declare_builtin_index_constructors {
         $len:expr;
     ) => {
         /// Returns the total number of builtin functions.
-        pub const fn max() -> u32 {
+        pub const fn len() -> u32 {
             $len
         }
     };
