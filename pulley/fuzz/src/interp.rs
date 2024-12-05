@@ -1,5 +1,5 @@
 use pulley_interpreter::{
-    interp::Vm,
+    interp::{DoneReason, Vm},
     op::{self, ExtendedOp, Op},
     *,
 };
@@ -30,8 +30,8 @@ pub fn interp(ops: Vec<Op>) {
         let args = &[];
         let rets = &[];
         match vm.call(NonNull::from(&encoded[0]), args, rets.into_iter().copied()) {
-            Ok(rets) => assert_eq!(rets.count(), 0),
-            Err(pc) => {
+            DoneReason::ReturnToHost(rets) => assert_eq!(rets.count(), 0),
+            DoneReason::Trap(pc) => {
                 let pc = pc.as_ptr() as usize;
 
                 let start = &encoded[0] as *const u8 as usize;
@@ -47,6 +47,7 @@ pub fn interp(ops: Vec<Op>) {
                 assert_eq!(encoded[index + 1], a);
                 assert_eq!(encoded[index + 2], b);
             }
+            DoneReason::CallIndirectHost { .. } => unreachable!(),
         };
     }
 }
