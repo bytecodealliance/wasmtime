@@ -479,6 +479,20 @@ user-id = 6741
 user-login = "Darksonn"
 user-name = "Alice Ryhl"
 
+[[publisher.bzip2]]
+version = "0.4.4"
+when = "2023-01-05"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.bzip2-sys]]
+version = "0.1.11+1.0.8"
+when = "2021-06-09"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.cap-fs-ext]]
 version = "3.2.0"
 when = "2024-07-08"
@@ -805,6 +819,20 @@ user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
 
+[[publisher.jobserver]]
+version = "0.1.25"
+when = "2022-09-23"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
+[[publisher.js-sys]]
+version = "0.3.74"
+when = "2024-11-30"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.libc]]
 version = "0.2.146"
 when = "2023-06-06"
@@ -1083,6 +1111,13 @@ user-id = 189
 user-login = "BurntSushi"
 user-name = "Andrew Gallant"
 
+[[publisher.wasi]]
+version = "0.11.0+wasi-snapshot-preview1"
+when = "2022-01-19"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wasi-common]]
 version = "27.0.0"
 when = "2024-11-20"
@@ -1090,36 +1125,36 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasm-bindgen]]
-version = "0.2.87"
-when = "2023-06-12"
+version = "0.2.97"
+when = "2024-11-30"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasm-bindgen-backend]]
-version = "0.2.87"
-when = "2023-06-12"
+version = "0.2.97"
+when = "2024-11-30"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasm-bindgen-macro]]
-version = "0.2.87"
-when = "2023-06-12"
+version = "0.2.97"
+when = "2024-11-30"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasm-bindgen-macro-support]]
-version = "0.2.87"
-when = "2023-06-12"
+version = "0.2.97"
+when = "2024-11-30"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasm-bindgen-shared]]
-version = "0.2.87"
-when = "2023-06-12"
+version = "0.2.97"
+when = "2024-11-30"
 user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
@@ -1327,6 +1362,13 @@ version = "1.221.2"
 when = "2024-12-02"
 user-id = 73222
 user-login = "wasmtime-publish"
+
+[[publisher.web-sys]]
+version = "0.3.57"
+when = "2022-04-07"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
 
 [[publisher.wiggle]]
 version = "27.0.0"
@@ -2055,7 +2097,19 @@ version = "1.0.7"
 notes = "Simple hasher implementation with no unsafe code."
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
+[[audits.mozilla.audits.futures-core]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "0.3.27 -> 0.3.28"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
 [[audits.mozilla.audits.futures-io]]
+who = "Mike Hommey <mh+mozilla@glandium.org>"
+criteria = "safe-to-deploy"
+delta = "0.3.27 -> 0.3.28"
+aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
+
+[[audits.mozilla.audits.futures-sink]]
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.3.27 -> 0.3.28"
@@ -2107,12 +2161,6 @@ aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-ch
 who = "Mike Hommey <mh+mozilla@glandium.org>"
 criteria = "safe-to-deploy"
 delta = "0.10.3 -> 0.10.5"
-aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
-
-[[audits.mozilla.audits.jobserver]]
-who = "Mike Hommey <mh+mozilla@glandium.org>"
-criteria = "safe-to-deploy"
-delta = "0.1.24 -> 0.1.25"
 aggregated-from = "https://hg.mozilla.org/mozilla-central/raw-file/tip/supply-chain/audits.toml"
 
 [[audits.mozilla.audits.lazy_static]]

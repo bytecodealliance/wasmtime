@@ -1747,6 +1747,11 @@ criteria = "safe-to-deploy"
 version = "0.3.27"
 notes = "Unsafe used to implement a concurrency primitive AtomicWaker. Well-commented and not obviously incorrect. Like my other audits of these concurrency primitives inside the futures family, I couldn't certify that it is correct without formal methods, but that is out of scope for this vetting."
 
+[[audits.futures-core]]
+who = "Pat Hickey <pat@moreproductive.org>"
+criteria = "safe-to-deploy"
+delta = "0.3.28 -> 0.3.31"
+
 [[audits.futures-executor]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -1762,6 +1767,22 @@ version = "0.3.27"
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.3.27"
+
+[[audits.futures-sink]]
+who = "Pat Hickey <pat@moreproductive.org>"
+criteria = "safe-to-deploy"
+delta = "0.3.28 -> 0.3.31"
+
+[[audits.futures-task]]
+who = "Pat Hickey <pat@moreproductive.org>"
+criteria = "safe-to-deploy"
+delta = "0.3.27 -> 0.3.31"
+
+[[audits.futures-util]]
+who = "Pat Hickey <pat@moreproductive.org>"
+criteria = "safe-to-deploy"
+delta = "0.3.27 -> 0.3.31"
+notes = "New waker_ref module contains \"FIXME: panics on Arc::clone / refcount changes could wreak havoc...\" comment, but this corner case feels low risk."
 
 [[audits.fxprof-processed-profile]]
 who = "Jamey Sharp <jsharp@fastly.com>"
@@ -1920,6 +1941,11 @@ notes = """
 I also manually ran windows-bindgen and confirmed that the output matches
 the bindings checked into the repo.
 """
+
+[[audits.iana-time-zone]]
+who = "Pat Hickey <pat@moreproductive.org>"
+criteria = "safe-to-deploy"
+delta = "0.1.59 -> 0.1.61"
 
 [[audits.iana-time-zone-haiku]]
 who = "Dan Gohman <dev@sunfishcode.online>"
@@ -2838,6 +2864,11 @@ be expected. Otherwise this crate does not unduly access ambient capabilities
 and does what it says on the tin, providing spin-based synchronization
 primitives.
 """
+
+[[audits.spin]]
+who = "Pat Hickey <pat@moreproductive.org>"
+criteria = "safe-to-deploy"
+delta = "0.9.4 -> 0.9.8"
 
 [[audits.sptr]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -3983,6 +4014,18 @@ user-id = 6741 # Alice Ryhl (Darksonn)
 start = "2021-01-11"
 end = "2025-02-15"
 
+[[trusted.bzip2]]
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2020-07-06"
+end = "2025-12-05"
+
+[[trusted.bzip2-sys]]
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2020-02-24"
+end = "2025-12-05"
+
 [[trusted.cap-fs-ext]]
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
@@ -4169,6 +4212,18 @@ user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-05-02"
 end = "2024-07-06"
 
+[[trusted.jobserver]]
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2019-03-15"
+end = "2025-12-05"
+
+[[trusted.js-sys]]
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2019-03-04"
+end = "2025-12-05"
+
 [[trusted.libc]]
 criteria = "safe-to-deploy"
 user-id = 2915 # Amanieu d'Antras (Amanieu)
@@ -4307,6 +4362,12 @@ user-id = 6743 # Ed Page (epage)
 start = "2023-01-20"
 end = "2025-02-12"
 
+[[trusted.socket2]]
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2019-05-06"
+end = "2025-12-05"
+
 [[trusted.syn]]
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
@@ -4385,41 +4446,53 @@ user-id = 189 # Andrew Gallant (BurntSushi)
 start = "2019-06-09"
 end = "2024-07-15"
 
+[[trusted.wasi]]
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2020-06-03"
+end = "2025-12-05"
+
 [[trusted.wasm-bindgen]]
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
-end = "2024-07-14"
+end = "2025-12-05"
 
 [[trusted.wasm-bindgen-backend]]
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
-end = "2024-07-14"
+end = "2025-12-05"
 
 [[trusted.wasm-bindgen-macro]]
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
-end = "2024-07-14"
+end = "2025-12-05"
 
 [[trusted.wasm-bindgen-macro-support]]
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
-end = "2024-07-14"
+end = "2025-12-05"
 
 [[trusted.wasm-bindgen-shared]]
 criteria = "safe-to-deploy"
 user-id = 1 # Alex Crichton (alexcrichton)
 start = "2019-03-04"
-end = "2024-07-14"
+end = "2025-12-05"
 
 [[trusted.wasm-wave]]
 criteria = "safe-to-deploy"
 user-id = 73222 # wasmtime-publish
 start = "2024-06-19"
 end = "2025-11-13"
+
+[[trusted.web-sys]]
+criteria = "safe-to-deploy"
+user-id = 1 # Alex Crichton (alexcrichton)
+start = "2019-03-04"
+end = "2025-12-05"
 
 [[trusted.winapi-util]]
 criteria = "safe-to-deploy"
