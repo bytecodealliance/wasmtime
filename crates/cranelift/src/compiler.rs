@@ -147,11 +147,11 @@ impl Compiler {
         // Wasmtime itself.
         assert_eq!(signature.call_conv, self.isa.default_call_conv());
 
-        // If this target is actually pulley then a custom `call`
-        // instruction is emitted. This will generate a new function with
-        // the Cranelift-name of a "backend intrinsic" which is how the
-        // Pulley backend models this special opcode that doesn't otherwise
-        // map into the Cranelift set of opcodes.
+        // If this target is actually pulley then the goal is to emit the custom
+        // `call_indirect_host` pulley opcode. That's encoded in Cranelift as a
+        // `call` instruction where the name is `colocated: false`. This will
+        // force a pulley-specific relocation to get emitted in addition to
+        // using the `call_indirect_host` instruction.
         let is_pulley = match self.isa.triple().architecture {
             target_lexicon::Architecture::Pulley32 => true,
             target_lexicon::Architecture::Pulley64 => true,
