@@ -178,6 +178,7 @@ where
         from_bits: u8,
         to_bits: u8,
     ) -> Self::I {
+        assert!(from_bits < to_bits);
         let src = XReg::new(src).unwrap();
         let dst = dst.try_into().unwrap();
         match (signed, from_bits) {
