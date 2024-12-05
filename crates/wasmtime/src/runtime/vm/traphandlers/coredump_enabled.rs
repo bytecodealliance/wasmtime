@@ -31,7 +31,8 @@ impl CallThreadState {
         if !self.capture_coredump {
             return None;
         }
-        let bt = unsafe { Backtrace::new_with_trap_state(limits, self, trap_pc_and_fp) };
+        let bt =
+            unsafe { Backtrace::new_with_trap_state(limits, self.unwinder, self, trap_pc_and_fp) };
 
         Some(CoreDumpStack {
             bt,

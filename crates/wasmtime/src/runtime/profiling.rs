@@ -137,7 +137,7 @@ impl GuestProfiler {
         let now = Timestamp::from_nanos_since_reference(
             self.start.elapsed().as_nanos().try_into().unwrap(),
         );
-        let backtrace = Backtrace::new(store.as_context().0.vmruntime_limits());
+        let backtrace = Backtrace::new(store.as_context().0);
         let frames = lookup_frames(&self.modules, &backtrace);
         self.profile
             .add_sample(self.thread, now, frames, delta.into(), 1);
@@ -154,7 +154,7 @@ impl GuestProfiler {
         match kind {
             CallHook::CallingWasm | CallHook::ReturningFromWasm => {}
             CallHook::CallingHost => {
-                let backtrace = Backtrace::new(store.as_context().0.vmruntime_limits());
+                let backtrace = Backtrace::new(store.as_context().0);
                 let frames = lookup_frames(&self.modules, &backtrace);
                 self.profile.add_marker_with_stack(
                     self.thread,

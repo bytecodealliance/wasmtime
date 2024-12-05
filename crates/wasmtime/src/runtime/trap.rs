@@ -257,11 +257,7 @@ impl WasmBacktrace {
     /// always captures a backtrace.
     pub fn force_capture(store: impl AsContext) -> WasmBacktrace {
         let store = store.as_context();
-        Self::from_captured(
-            store.0,
-            crate::runtime::vm::Backtrace::new(store.0.runtime_limits()),
-            None,
-        )
+        Self::from_captured(store.0, crate::runtime::vm::Backtrace::new(store.0), None)
     }
 
     fn from_captured(

@@ -85,7 +85,8 @@ use crate::runtime::vm::mpk::{self, ProtectionKey, ProtectionMask};
 use crate::runtime::vm::{
     Backtrace, ExportGlobal, GcRootsList, GcStore, InstanceAllocationRequest, InstanceAllocator,
     InstanceHandle, Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator,
-    SignalHandler, StoreBox, StorePtr, VMContext, VMFuncRef, VMGcRef, VMRuntimeLimits,
+    SignalHandler, StoreBox, StorePtr, Unwind, UnwindHost, UnwindPulley, VMContext, VMFuncRef,
+    VMGcRef, VMRuntimeLimits,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::type_registry::RegisteredType;
@@ -1739,7 +1740,7 @@ impl StoreOpaque {
 
         log::trace!("Begin trace GC roots :: Wasm stack");
 
-        Backtrace::trace(self.vmruntime_limits().cast_const(), |frame| {
+        Backtrace::trace(self, |frame| {
             let pc = frame.pc();
             debug_assert!(pc != 0, "we should always get a valid PC for Wasm frames");
 
@@ -2147,6 +2148,14 @@ at https://bytecodealliance.org/security.
     pub(crate) fn interpreter(&mut self) -> Option<InterpreterRef<'_>> {
         let i = self.interpreter.as_mut()?;
         Some(i.as_interpreter_ref())
+    }
+
+    pub(crate) fn unwinder(&self) -> &'static dyn Unwind {
+        if self.interpreter.is_some() {
+            &UnwindPulley
+        } else {
+            &UnwindHost
+        }
     }
 }
 
