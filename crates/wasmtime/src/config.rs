@@ -2043,21 +2043,34 @@ impl Config {
         features
     }
 
+    /// Returns the configured compiler target for this `Config`.
     fn compiler_target(&self) -> target_lexicon::Triple {
+        // If a target is explicitly configured, always use that.
         #[cfg(any(feature = "cranelift", feature = "winch"))]
-        {
-            let host = target_lexicon::Triple::host();
+        if let Some(target) = self.compiler_config.target.clone() {
+            return target;
+        }
 
-            self.compiler_config
-                .target
-                .as_ref()
-                .unwrap_or(&host)
-                .clone()
+        // Without an explicitly configured target the goal is then to select
+        // some default which can reasonably run code on this host. If pulley is
+        // enabled and the host has no support at all in the cranelift/winch
+        // backends then pulley becomes the default target. This means, for
+        // example, that 32-bit platforms will default to running pulley at this
+        // time.
+        let any_compiler_support = cfg!(target_arch = "x86_64")
+            || cfg!(target_arch = "aarch64")
+            || cfg!(target_arch = "riscv64")
+            || cfg!(target_arch = "s390x");
+        if !any_compiler_support && cfg!(feature = "pulley") {
+            if cfg!(target_pointer_width = "32") {
+                return "pulley32".parse().unwrap();
+            } else if cfg!(target_pointer_width = "64") {
+                return "pulley64".parse().unwrap();
+            }
         }
-        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
-        {
-            target_lexicon::Triple::host()
-        }
+
+        // And at this point the target is for sure the host.
+        target_lexicon::Triple::host()
     }
 
     pub(crate) fn validate(&self) -> Result<(Tunables, WasmFeatures)> {
@@ -2094,13 +2107,7 @@ impl Config {
             bail!("wmemcheck (memory checker) was requested but is not enabled in this build");
         }
 
-        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
-        let mut tunables = Tunables::default_host();
-        #[cfg(any(feature = "cranelift", feature = "winch"))]
-        let mut tunables = match &self.compiler_config.target.as_ref() {
-            Some(target) => Tunables::default_for_target(target)?,
-            None => Tunables::default_host(),
-        };
+        let mut tunables = Tunables::default_for_target(&self.compiler_target())?;
 
         // When signals-based traps are disabled use slightly different defaults
         // for tunables to be more amenable to `MallocMemory`. Note that these
@@ -2235,15 +2242,28 @@ impl Config {
         tunables: &Tunables,
         features: WasmFeatures,
     ) -> Result<(Self, Box<dyn wasmtime_environ::Compiler>)> {
-        let target = self.compiler_config.target.clone();
+        let target = self.compiler_target();
+
+        // The target passed to the builders below is an `Option<Triple>` where
+        // `None` represents the current host with CPU features inferred from
+        // the host's CPU itself. The `target` above is not an `Option`, so
+        // switch it to `None` in the case that a target wasn't explicitly
+        // specified (which indicates no feature inference) and the target
+        // matches the host.
+        let target_for_builder =
+            if self.compiler_config.target.is_none() && target == target_lexicon::Triple::host() {
+                None
+            } else {
+                Some(target.clone())
+            };
 
         let mut compiler = match self.compiler_config.strategy {
             #[cfg(feature = "cranelift")]
-            Some(Strategy::Cranelift) => wasmtime_cranelift::builder(target)?,
+            Some(Strategy::Cranelift) => wasmtime_cranelift::builder(target_for_builder)?,
             #[cfg(not(feature = "cranelift"))]
             Some(Strategy::Cranelift) => bail!("cranelift support not compiled in"),
             #[cfg(feature = "winch")]
-            Some(Strategy::Winch) => wasmtime_winch::builder(target)?,
+            Some(Strategy::Winch) => wasmtime_winch::builder(target_for_builder)?,
             #[cfg(not(feature = "winch"))]
             Some(Strategy::Winch) => bail!("winch support not compiled in"),
 
@@ -2260,8 +2280,6 @@ impl Config {
         self.compiler_config
             .settings
             .insert("probestack_strategy".into(), "inline".into());
-
-        let target = self.compiler_target();
 
         // We enable stack probing by default on all targets.
         // This is required on Windows because of the way Windows
