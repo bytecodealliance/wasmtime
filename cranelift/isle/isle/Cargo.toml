@@ -7,7 +7,7 @@ license = "Apache-2.0 WITH LLVM-exception"
 name = "cranelift-isle"
 readme = "../README.md"
 repository = "https://github.com/bytecodealliance/wasmtime/tree/main/cranelift/isle"
-version = "0.115.0"
+version = "0.116.0"
 
 [lints]
 workspace = true
