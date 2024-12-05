@@ -93,7 +93,6 @@ pub(crate) fn from_runtime_box(
         // otherwise the information about what the wasm was doing when the
         // error was generated would be lost.
         crate::runtime::vm::TrapReason::User(error) => (error, None),
-        #[cfg(all(feature = "signals-based-traps", not(miri)))]
         crate::runtime::vm::TrapReason::Jit {
             pc,
             faulting_addr,

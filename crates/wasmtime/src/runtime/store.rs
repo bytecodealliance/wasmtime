@@ -1983,7 +1983,6 @@ impl StoreOpaque {
     /// with spectre mitigations enabled since the hardware fault address is
     /// always zero in these situations which means that the trapping context
     /// doesn't have enough information to report the fault address.
-    #[cfg(all(feature = "signals-based-traps", not(miri)))]
     pub(crate) fn wasm_fault(
         &self,
         pc: usize,

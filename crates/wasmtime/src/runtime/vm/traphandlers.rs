@@ -16,6 +16,7 @@ mod signals;
 pub use self::signals::*;
 
 use crate::prelude::*;
+use crate::runtime::module::lookup_code;
 use crate::runtime::store::StoreOpaque;
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{Instance, InterpreterRef, VMContext, VMRuntimeLimits};
@@ -29,6 +30,26 @@ pub use self::coredump::CoreDumpStack;
 pub use self::tls::{tls_eager_initialize, AsyncWasmCallState, PreviousAsyncWasmCallState};
 
 pub use traphandlers::SignalHandler;
+
+pub(crate) struct TrapRegisters {
+    pub pc: usize,
+    pub fp: usize,
+}
+
+/// Return value from `test_if_trap`.
+pub(crate) enum TrapTest {
+    /// Not a wasm trap, need to delegate to whatever process handler is next.
+    NotWasm,
+    /// This trap was handled by the embedder via custom embedding APIs.
+    #[cfg_attr(miri, expect(dead_code, reason = "using #[cfg] too unergonomic"))]
+    HandledByEmbedder,
+    /// This is a wasm trap, it needs to be handled.
+    #[cfg_attr(miri, expect(dead_code, reason = "using #[cfg] too unergonomic"))]
+    Trap {
+        /// How to longjmp back to the original wasm frame.
+        jmp_buf: *const u8,
+    },
+}
 
 fn lazy_per_thread_init() {
     traphandlers::lazy_per_thread_init();
@@ -283,7 +304,6 @@ pub enum TrapReason {
     User(Error),
 
     /// A trap raised from Cranelift-generated code.
-    #[cfg(all(feature = "signals-based-traps", not(miri)))]
     Jit {
         /// The program counter where this trap originated.
         ///
@@ -598,6 +618,84 @@ impl CallThreadState {
             state = unsafe { this.prev().as_ref() };
             Some(this)
         })
+    }
+
+    /// Trap handler using our thread-local state.
+    ///
+    /// * `pc` - the program counter the trap happened at
+    /// * `call_handler` - a closure used to invoke the platform-specific
+    ///   signal handler for each instance, if available.
+    ///
+    /// Attempts to handle the trap if it's a wasm trap. Returns a few
+    /// different things:
+    ///
+    /// * null - the trap didn't look like a wasm trap and should continue as a
+    ///   trap
+    /// * 1 as a pointer - the trap was handled by a custom trap handler on an
+    ///   instance, and the trap handler should quickly return.
+    /// * a different pointer - a jmp_buf buffer to longjmp to, meaning that
+    ///   the wasm trap was successfully handled.
+    pub(crate) fn test_if_trap(
+        &self,
+        regs: TrapRegisters,
+        faulting_addr: Option<usize>,
+        call_handler: impl Fn(&SignalHandler) -> bool,
+    ) -> TrapTest {
+        // If we haven't even started to handle traps yet, bail out.
+        if self.jmp_buf.get().is_null() {
+            return TrapTest::NotWasm;
+        }
+
+        // First up see if any instance registered has a custom trap handler,
+        // in which case run them all. If anything handles the trap then we
+        // return that the trap was handled.
+        let _ = &call_handler;
+        #[cfg(all(feature = "signals-based-traps", not(miri)))]
+        if let Some(handler) = self.signal_handler {
+            if unsafe { call_handler(&*handler) } {
+                return TrapTest::HandledByEmbedder;
+            }
+        }
+
+        // If this fault wasn't in wasm code, then it's not our problem
+        let Some((code, text_offset)) = lookup_code(regs.pc) else {
+            return TrapTest::NotWasm;
+        };
+
+        let Some(trap) = code.lookup_trap_code(text_offset) else {
+            return TrapTest::NotWasm;
+        };
+
+        self.set_jit_trap(regs, faulting_addr, trap);
+
+        // If all that passed then this is indeed a wasm trap, so return the
+        // `jmp_buf` passed to `wasmtime_longjmp` to resume.
+        TrapTest::Trap {
+            jmp_buf: self.take_jmp_buf(),
+        }
+    }
+
+    pub(crate) fn take_jmp_buf(&self) -> *const u8 {
+        self.jmp_buf.replace(ptr::null())
+    }
+
+    pub(crate) fn set_jit_trap(
+        &self,
+        TrapRegisters { pc, fp, .. }: TrapRegisters,
+        faulting_addr: Option<usize>,
+        trap: wasmtime_environ::Trap,
+    ) {
+        let backtrace = self.capture_backtrace(self.limits, Some((pc, fp)));
+        let coredump = self.capture_coredump(self.limits, Some((pc, fp)));
+        self.unwind.set(Some((
+            UnwindReason::Trap(TrapReason::Jit {
+                pc,
+                faulting_addr,
+                trap,
+            }),
+            backtrace,
+            coredump,
+        )))
     }
 }
 
