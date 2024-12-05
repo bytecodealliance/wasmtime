@@ -1524,8 +1524,9 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
         self.vcode.constants().insert(constant)
     }
 
-    /// Cause the value in `reg` to be in a virtual reg, by copying it into a new virtual reg
-    /// if `reg` is a real reg.  `ty` describes the type of the value in `reg`.
+    /// Cause the value in `reg` to be in a virtual reg, by copying it into a
+    /// new virtual reg if `reg` is a real reg. `ty` describes the type of the
+    /// value in `reg`.
     pub fn ensure_in_vreg(&mut self, reg: Reg, ty: Type) -> Reg {
         if reg.to_virtual_reg().is_some() {
             reg

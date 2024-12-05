@@ -7,24 +7,20 @@ use generated_code::{Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode, MergeableLoadSize};
-use crate::ir::LibCall;
+use crate::ir::condcodes::{FloatCC, IntCC};
+use crate::ir::immediates::*;
+use crate::ir::types::*;
+use crate::ir::{
+    BlockCall, Inst, InstructionData, LibCall, MemFlags, Opcode, TrapCode, Value, ValueList,
+};
+use crate::isa::x64::abi::X64CallSite;
+use crate::isa::x64::inst::{args::*, regs, ReturnCallInfo};
 use crate::isa::x64::lower::emit_vm_call;
 use crate::isa::x64::X64Backend;
-use crate::{
-    ir::{
-        condcodes::{FloatCC, IntCC},
-        immediates::*,
-        types::*,
-        BlockCall, Inst, InstructionData, MemFlags, Opcode, TrapCode, Value, ValueList,
-    },
-    isa::x64::{
-        abi::X64CallSite,
-        inst::{args::*, regs, ReturnCallInfo},
-    },
-    machinst::{
-        isle::*, ArgPair, CallInfo, InsnInput, InstOutput, IsTailCall, MachInst, VCodeConstant,
-        VCodeConstantData,
-    },
+use crate::machinst::isle::*;
+use crate::machinst::{
+    ArgPair, CallInfo, InsnInput, InstOutput, IsTailCall, MachInst, VCodeConstant,
+    VCodeConstantData,
 };
 use alloc::vec::Vec;
 use regalloc2::PReg;
