@@ -1,6 +1,6 @@
 use crate::translate::{
-    FuncEnvironment as _, FuncTranslationState, GlobalVariable, Heap, HeapData, StructFieldsVec,
-    TableData, TableSize, TargetEnvironment,
+    FuncTranslationState, GlobalVariable, Heap, HeapData, StructFieldsVec, TableData, TableSize,
+    TargetEnvironment,
 };
 use crate::{gc, BuiltinFunctionSignatures, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::cursor::FuncCursor;
@@ -1724,20 +1724,18 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
     }
 }
 
-impl<'module_environment> crate::translate::FuncEnvironment
-    for FuncEnvironment<'module_environment>
-{
-    fn heaps(&self) -> &PrimaryMap<Heap, HeapData> {
+impl FuncEnvironment<'_> {
+    pub fn heaps(&self) -> &PrimaryMap<Heap, HeapData> {
         &self.heaps
     }
 
-    fn is_wasm_parameter(&self, _signature: &ir::Signature, index: usize) -> bool {
+    pub fn is_wasm_parameter(&self, _signature: &ir::Signature, index: usize) -> bool {
         // The first two parameters are the vmctx and caller vmctx. The rest are
         // the wasm parameters.
         index >= 2
     }
 
-    fn param_needs_stack_map(&self, _signature: &ir::Signature, index: usize) -> bool {
+    pub fn param_needs_stack_map(&self, _signature: &ir::Signature, index: usize) -> bool {
         // Skip the caller and callee vmctx.
         if index < 2 {
             return false;
@@ -1746,12 +1744,12 @@ impl<'module_environment> crate::translate::FuncEnvironment
         self.wasm_func_ty.params()[index - 2].is_vmgcref_type_and_not_i31()
     }
 
-    fn sig_ref_result_needs_stack_map(&self, sig_ref: ir::SigRef, index: usize) -> bool {
+    pub fn sig_ref_result_needs_stack_map(&self, sig_ref: ir::SigRef, index: usize) -> bool {
         let wasm_func_ty = self.sig_ref_to_ty[sig_ref].as_ref().unwrap();
         wasm_func_ty.returns()[index].is_vmgcref_type_and_not_i31()
     }
 
-    fn func_ref_result_needs_stack_map(
+    pub fn func_ref_result_needs_stack_map(
         &self,
         func: &ir::Function,
         func_ref: ir::FuncRef,
@@ -1762,13 +1760,13 @@ impl<'module_environment> crate::translate::FuncEnvironment
         wasm_func_ty.returns()[index].is_vmgcref_type_and_not_i31()
     }
 
-    fn after_locals(&mut self, num_locals: usize) {
+    pub fn after_locals(&mut self, num_locals: usize) {
         self.fuel_var = Variable::new(num_locals);
         self.epoch_deadline_var = Variable::new(num_locals + 1);
         self.epoch_ptr_var = Variable::new(num_locals + 2);
     }
 
-    fn translate_table_grow(
+    pub fn translate_table_grow(
         &mut self,
         mut pos: FuncCursor<'_>,
         table_index: TableIndex,
@@ -1796,7 +1794,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(self.convert_pointer_to_index_type(pos, result, index_type, false))
     }
 
-    fn translate_table_get(
+    pub fn translate_table_get(
         &mut self,
         builder: &mut FunctionBuilder,
         table_index: TableIndex,
@@ -1826,7 +1824,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         }
     }
 
-    fn translate_table_set(
+    pub fn translate_table_set(
         &mut self,
         builder: &mut FunctionBuilder,
         table_index: TableIndex,
@@ -1872,7 +1870,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         }
     }
 
-    fn translate_table_fill(
+    pub fn translate_table_fill(
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
         table_index: TableIndex,
@@ -1901,7 +1899,11 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn translate_ref_i31(&mut self, mut pos: FuncCursor, val: ir::Value) -> WasmResult<ir::Value> {
+    pub fn translate_ref_i31(
+        &mut self,
+        mut pos: FuncCursor,
+        val: ir::Value,
+    ) -> WasmResult<ir::Value> {
         debug_assert_eq!(pos.func.dfg.value_type(val), ir::types::I32);
         let shifted = pos.ins().ishl_imm(val, 1);
         let tagged = pos
@@ -1912,7 +1914,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(tagged)
     }
 
-    fn translate_i31_get_s(
+    pub fn translate_i31_get_s(
         &mut self,
         builder: &mut FunctionBuilder,
         i31ref: ir::Value,
@@ -1924,7 +1926,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(builder.ins().sshr_imm(i31ref, 1))
     }
 
-    fn translate_i31_get_u(
+    pub fn translate_i31_get_u(
         &mut self,
         builder: &mut FunctionBuilder,
         i31ref: ir::Value,
@@ -1936,7 +1938,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(builder.ins().ushr_imm(i31ref, 1))
     }
 
-    fn struct_fields_len(&mut self, struct_type_index: TypeIndex) -> WasmResult<usize> {
+    pub fn struct_fields_len(&mut self, struct_type_index: TypeIndex) -> WasmResult<usize> {
         let ty = self.module.types[struct_type_index];
         match &self.types[ty].composite_type.inner {
             WasmCompositeInnerType::Struct(s) => Ok(s.fields.len()),
@@ -1944,7 +1946,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         }
     }
 
-    fn translate_struct_new(
+    pub fn translate_struct_new(
         &mut self,
         builder: &mut FunctionBuilder,
         struct_type_index: TypeIndex,
@@ -1953,7 +1955,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         gc::translate_struct_new(self, builder, struct_type_index, &fields)
     }
 
-    fn translate_struct_new_default(
+    pub fn translate_struct_new_default(
         &mut self,
         builder: &mut FunctionBuilder,
         struct_type_index: TypeIndex,
@@ -1961,7 +1963,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         gc::translate_struct_new_default(self, builder, struct_type_index)
     }
 
-    fn translate_struct_get(
+    pub fn translate_struct_get(
         &mut self,
         builder: &mut FunctionBuilder,
         struct_type_index: TypeIndex,
@@ -1971,7 +1973,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         gc::translate_struct_get(self, builder, struct_type_index, field_index, struct_ref)
     }
 
-    fn translate_struct_get_s(
+    pub fn translate_struct_get_s(
         &mut self,
         builder: &mut FunctionBuilder,
         struct_type_index: TypeIndex,
@@ -1981,7 +1983,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         gc::translate_struct_get_s(self, builder, struct_type_index, field_index, struct_ref)
     }
 
-    fn translate_struct_get_u(
+    pub fn translate_struct_get_u(
         &mut self,
         builder: &mut FunctionBuilder,
         struct_type_index: TypeIndex,
@@ -1991,7 +1993,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         gc::translate_struct_get_u(self, builder, struct_type_index, field_index, struct_ref)
     }
 
-    fn translate_struct_set(
+    pub fn translate_struct_set(
         &mut self,
         builder: &mut FunctionBuilder,
         struct_type_index: TypeIndex,
@@ -2009,7 +2011,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         )
     }
 
-    fn translate_array_new(
+    pub fn translate_array_new(
         &mut self,
         builder: &mut FunctionBuilder,
         array_type_index: TypeIndex,
@@ -2019,7 +2021,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         gc::translate_array_new(self, builder, array_type_index, elem, len)
     }
 
-    fn translate_array_new_default(
+    pub fn translate_array_new_default(
         &mut self,
         builder: &mut FunctionBuilder,
         array_type_index: TypeIndex,
@@ -2028,7 +2030,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         gc::translate_array_new_default(self, builder, array_type_index, len)
     }
 
-    fn translate_array_new_fixed(
+    pub fn translate_array_new_fixed(
         &mut self,
         builder: &mut FunctionBuilder,
         array_type_index: TypeIndex,
@@ -2037,7 +2039,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         gc::translate_array_new_fixed(self, builder, array_type_index, elems)
     }
 
-    fn translate_array_new_data(
+    pub fn translate_array_new_data(
         &mut self,
         builder: &mut FunctionBuilder,
         array_type_index: TypeIndex,
@@ -2059,7 +2061,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(builder.func.dfg.first_result(call_inst))
     }
 
-    fn translate_array_new_elem(
+    pub fn translate_array_new_elem(
         &mut self,
         builder: &mut FunctionBuilder,
         array_type_index: TypeIndex,
@@ -2081,7 +2083,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(builder.func.dfg.first_result(call_inst))
     }
 
-    fn translate_array_copy(
+    pub fn translate_array_copy(
         &mut self,
         builder: &mut FunctionBuilder,
         _dst_array_type_index: TypeIndex,
@@ -2101,7 +2103,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn translate_array_fill(
+    pub fn translate_array_fill(
         &mut self,
         builder: &mut FunctionBuilder,
         array_type_index: TypeIndex,
@@ -2113,7 +2115,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         gc::translate_array_fill(self, builder, array_type_index, array, index, value, len)
     }
 
-    fn translate_array_init_data(
+    pub fn translate_array_init_data(
         &mut self,
         builder: &mut FunctionBuilder,
         array_type_index: TypeIndex,
@@ -2145,7 +2147,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn translate_array_init_elem(
+    pub fn translate_array_init_elem(
         &mut self,
         builder: &mut FunctionBuilder,
         array_type_index: TypeIndex,
@@ -2177,7 +2179,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn translate_array_len(
+    pub fn translate_array_len(
         &mut self,
         builder: &mut FunctionBuilder,
         array: ir::Value,
@@ -2185,7 +2187,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         gc::translate_array_len(self, builder, array)
     }
 
-    fn translate_array_get(
+    pub fn translate_array_get(
         &mut self,
         builder: &mut FunctionBuilder,
         array_type_index: TypeIndex,
@@ -2195,7 +2197,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         gc::translate_array_get(self, builder, array_type_index, array, index)
     }
 
-    fn translate_array_get_s(
+    pub fn translate_array_get_s(
         &mut self,
         builder: &mut FunctionBuilder,
         array_type_index: TypeIndex,
@@ -2205,7 +2207,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         gc::translate_array_get_s(self, builder, array_type_index, array, index)
     }
 
-    fn translate_array_get_u(
+    pub fn translate_array_get_u(
         &mut self,
         builder: &mut FunctionBuilder,
         array_type_index: TypeIndex,
@@ -2215,7 +2217,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         gc::translate_array_get_u(self, builder, array_type_index, array, index)
     }
 
-    fn translate_array_set(
+    pub fn translate_array_set(
         &mut self,
         builder: &mut FunctionBuilder,
         array_type_index: TypeIndex,
@@ -2226,7 +2228,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         gc::translate_array_set(self, builder, array_type_index, array, index, value)
     }
 
-    fn translate_ref_test(
+    pub fn translate_ref_test(
         &mut self,
         builder: &mut FunctionBuilder<'_>,
         ref_ty: WasmRefType,
@@ -2235,7 +2237,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         gc::translate_ref_test(self, builder, ref_ty, gc_ref)
     }
 
-    fn translate_ref_null(
+    pub fn translate_ref_null(
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor,
         ht: WasmHeapType,
@@ -2247,7 +2249,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         })
     }
 
-    fn translate_ref_is_null(
+    pub fn translate_ref_is_null(
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor,
         value: ir::Value,
@@ -2258,7 +2260,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(pos.ins().uextend(ir::types::I32, byte_is_null))
     }
 
-    fn translate_ref_func(
+    pub fn translate_ref_func(
         &mut self,
         mut pos: cranelift_codegen::cursor::FuncCursor<'_>,
         func_index: FuncIndex,
@@ -2271,7 +2273,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(pos.func.dfg.first_result(call_inst))
     }
 
-    fn translate_custom_global_get(
+    pub fn translate_custom_global_get(
         &mut self,
         builder: &mut FunctionBuilder,
         index: GlobalIndex,
@@ -2298,7 +2300,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         )
     }
 
-    fn translate_custom_global_set(
+    pub fn translate_custom_global_set(
         &mut self,
         builder: &mut FunctionBuilder,
         index: GlobalIndex,
@@ -2327,7 +2329,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         )
     }
 
-    fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<Heap> {
+    pub fn make_heap(&mut self, func: &mut ir::Function, index: MemoryIndex) -> WasmResult<Heap> {
         let pointer_type = self.pointer_type();
         let memory = self.module.memories[index];
         let is_shared = memory.shared;
@@ -2518,7 +2520,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         }))
     }
 
-    fn make_global(
+    pub fn make_global(
         &mut self,
         func: &mut ir::Function,
         index: GlobalIndex,
@@ -2543,7 +2545,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         })
     }
 
-    fn make_indirect_sig(
+    pub fn make_indirect_sig(
         &mut self,
         func: &mut ir::Function,
         index: TypeIndex,
@@ -2556,7 +2558,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(sig_ref)
     }
 
-    fn make_direct_func(
+    pub fn make_direct_func(
         &mut self,
         func: &mut ir::Function,
         index: FuncIndex,
@@ -2593,7 +2595,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         }))
     }
 
-    fn translate_call_indirect(
+    pub fn translate_call_indirect(
         &mut self,
         builder: &mut FunctionBuilder,
         features: &WasmFeatures,
@@ -2613,7 +2615,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         )
     }
 
-    fn translate_call(
+    pub fn translate_call(
         &mut self,
         builder: &mut FunctionBuilder,
         callee_index: FuncIndex,
@@ -2623,7 +2625,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Call::new(builder, self).direct_call(callee_index, callee, call_args)
     }
 
-    fn translate_call_ref(
+    pub fn translate_call_ref(
         &mut self,
         builder: &mut FunctionBuilder,
         sig_ref: ir::SigRef,
@@ -2633,7 +2635,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Call::new(builder, self).call_ref(sig_ref, callee, call_args)
     }
 
-    fn translate_return_call(
+    pub fn translate_return_call(
         &mut self,
         builder: &mut FunctionBuilder,
         callee_index: FuncIndex,
@@ -2644,7 +2646,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn translate_return_call_indirect(
+    pub fn translate_return_call_indirect(
         &mut self,
         builder: &mut FunctionBuilder,
         features: &WasmFeatures,
@@ -2665,7 +2667,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn translate_return_call_ref(
+    pub fn translate_return_call_ref(
         &mut self,
         builder: &mut FunctionBuilder,
         sig_ref: ir::SigRef,
@@ -2676,7 +2678,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn translate_memory_grow(
+    pub fn translate_memory_grow(
         &mut self,
         mut pos: FuncCursor<'_>,
         index: MemoryIndex,
@@ -2701,7 +2703,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(self.convert_pointer_to_index_type(pos, result, index_type, single_byte_pages))
     }
 
-    fn translate_memory_size(
+    pub fn translate_memory_size(
         &mut self,
         mut pos: FuncCursor<'_>,
         index: MemoryIndex,
@@ -2786,7 +2788,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         ))
     }
 
-    fn translate_memory_copy(
+    pub fn translate_memory_copy(
         &mut self,
         mut pos: FuncCursor,
         src_index: MemoryIndex,
@@ -2822,7 +2824,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn translate_memory_fill(
+    pub fn translate_memory_fill(
         &mut self,
         mut pos: FuncCursor,
         memory_index: MemoryIndex,
@@ -2844,7 +2846,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn translate_memory_init(
+    pub fn translate_memory_init(
         &mut self,
         mut pos: FuncCursor,
         memory_index: MemoryIndex,
@@ -2871,7 +2873,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn translate_data_drop(&mut self, mut pos: FuncCursor, seg_index: u32) -> WasmResult<()> {
+    pub fn translate_data_drop(&mut self, mut pos: FuncCursor, seg_index: u32) -> WasmResult<()> {
         let data_drop = self.builtin_functions.data_drop(&mut pos.func);
         let seg_index_arg = pos.ins().iconst(I32, seg_index as i64);
         let vmctx = self.vmctx_val(&mut pos);
@@ -2879,7 +2881,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn translate_table_size(
+    pub fn translate_table_size(
         &mut self,
         pos: FuncCursor,
         table_index: TableIndex,
@@ -2890,7 +2892,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(table_data.bound.bound(&*self.isa, pos, index_type))
     }
 
-    fn translate_table_copy(
+    pub fn translate_table_copy(
         &mut self,
         mut pos: FuncCursor,
         dst_table_index: TableIndex,
@@ -2929,7 +2931,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn translate_table_init(
+    pub fn translate_table_init(
         &mut self,
         mut pos: FuncCursor,
         seg_index: u32,
@@ -2955,7 +2957,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn translate_elem_drop(&mut self, mut pos: FuncCursor, elem_index: u32) -> WasmResult<()> {
+    pub fn translate_elem_drop(&mut self, mut pos: FuncCursor, elem_index: u32) -> WasmResult<()> {
         let elem_drop = self.builtin_functions.elem_drop(&mut pos.func);
         let elem_index_arg = pos.ins().iconst(I32, elem_index as i64);
         let vmctx = self.vmctx_val(&mut pos);
@@ -2963,7 +2965,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn translate_atomic_wait(
+    pub fn translate_atomic_wait(
         &mut self,
         mut pos: FuncCursor,
         memory_index: MemoryIndex,
@@ -2999,7 +3001,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         }
     }
 
-    fn translate_atomic_notify(
+    pub fn translate_atomic_notify(
         &mut self,
         mut pos: FuncCursor,
         memory_index: MemoryIndex,
@@ -3029,7 +3031,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         }
     }
 
-    fn translate_loop_header(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
+    pub fn translate_loop_header(&mut self, builder: &mut FunctionBuilder) -> WasmResult<()> {
         // Additionally if enabled check how much fuel we have remaining to see
         // if we've run out by this point.
         if self.tunables.consume_fuel {
@@ -3045,7 +3047,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn before_translate_operator(
+    pub fn before_translate_operator(
         &mut self,
         op: &Operator,
         builder: &mut FunctionBuilder,
@@ -3057,7 +3059,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn after_translate_operator(
+    pub fn after_translate_operator(
         &mut self,
         op: &Operator,
         builder: &mut FunctionBuilder,
@@ -3069,7 +3071,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn before_unconditionally_trapping_memory_access(
+    pub fn before_unconditionally_trapping_memory_access(
         &mut self,
         builder: &mut FunctionBuilder,
     ) -> WasmResult<()> {
@@ -3080,7 +3082,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn before_translate_function(
+    pub fn before_translate_function(
         &mut self,
         builder: &mut FunctionBuilder,
         _state: &FuncTranslationState,
@@ -3121,7 +3123,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn after_translate_function(
+    pub fn after_translate_function(
         &mut self,
         builder: &mut FunctionBuilder,
         state: &FuncTranslationState,
@@ -3132,36 +3134,36 @@ impl<'module_environment> crate::translate::FuncEnvironment
         Ok(())
     }
 
-    fn relaxed_simd_deterministic(&self) -> bool {
+    pub fn relaxed_simd_deterministic(&self) -> bool {
         self.tunables.relaxed_simd_deterministic
     }
 
-    fn has_native_fma(&self) -> bool {
+    pub fn has_native_fma(&self) -> bool {
         self.isa.has_native_fma()
     }
 
-    fn is_x86(&self) -> bool {
+    pub fn is_x86(&self) -> bool {
         self.isa.triple().architecture == target_lexicon::Architecture::X86_64
     }
 
-    fn use_x86_blendv_for_relaxed_laneselect(&self, ty: Type) -> bool {
+    pub fn use_x86_blendv_for_relaxed_laneselect(&self, ty: Type) -> bool {
         self.isa.has_x86_blendv_lowering(ty)
     }
 
-    fn use_x86_pshufb_for_relaxed_swizzle(&self) -> bool {
+    pub fn use_x86_pshufb_for_relaxed_swizzle(&self) -> bool {
         self.isa.has_x86_pshufb_lowering()
     }
 
-    fn use_x86_pmulhrsw_for_relaxed_q15mul(&self) -> bool {
+    pub fn use_x86_pmulhrsw_for_relaxed_q15mul(&self) -> bool {
         self.isa.has_x86_pmulhrsw_lowering()
     }
 
-    fn use_x86_pmaddubsw_for_dot(&self) -> bool {
+    pub fn use_x86_pmaddubsw_for_dot(&self) -> bool {
         self.isa.has_x86_pmaddubsw_lowering()
     }
 
-    #[cfg(feature = "wmemcheck")]
-    fn handle_before_return(&mut self, retvals: &[ir::Value], builder: &mut FunctionBuilder) {
+    pub fn handle_before_return(&mut self, retvals: &[ir::Value], builder: &mut FunctionBuilder) {
+        #[cfg(feature = "wmemcheck")]
         if self.wmemcheck {
             let func_name = self.current_func_name(builder);
             if func_name == Some("malloc") {
@@ -3170,16 +3172,18 @@ impl<'module_environment> crate::translate::FuncEnvironment
                 self.hook_free_exit(builder);
             }
         }
+        #[cfg(not(feature = "wmemcheck"))]
+        let _ = (retvals, builder);
     }
 
-    #[cfg(feature = "wmemcheck")]
-    fn before_load(
+    pub fn before_load(
         &mut self,
         builder: &mut FunctionBuilder,
         val_size: u8,
         addr: ir::Value,
         offset: u64,
     ) {
+        #[cfg(feature = "wmemcheck")]
         if self.wmemcheck {
             let check_load = self.builtin_functions.check_load(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
@@ -3189,16 +3193,18 @@ impl<'module_environment> crate::translate::FuncEnvironment
                 .ins()
                 .call(check_load, &[vmctx, num_bytes, addr, offset_val]);
         }
+        #[cfg(not(feature = "wmemcheck"))]
+        let _ = (builder, val_size, addr, offset);
     }
 
-    #[cfg(feature = "wmemcheck")]
-    fn before_store(
+    pub fn before_store(
         &mut self,
         builder: &mut FunctionBuilder,
         val_size: u8,
         addr: ir::Value,
         offset: u64,
     ) {
+        #[cfg(feature = "wmemcheck")]
         if self.wmemcheck {
             let check_store = self.builtin_functions.check_store(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
@@ -3208,15 +3214,17 @@ impl<'module_environment> crate::translate::FuncEnvironment
                 .ins()
                 .call(check_store, &[vmctx, num_bytes, addr, offset_val]);
         }
+        #[cfg(not(feature = "wmemcheck"))]
+        let _ = (builder, val_size, addr, offset);
     }
 
-    #[cfg(feature = "wmemcheck")]
-    fn update_global(
+    pub fn update_global(
         &mut self,
         builder: &mut FunctionBuilder,
         global_index: u32,
         value: ir::Value,
     ) {
+        #[cfg(feature = "wmemcheck")]
         if self.wmemcheck {
             if global_index == 0 {
                 // We are making the assumption that global 0 is the auxiliary stack pointer.
@@ -3226,27 +3234,31 @@ impl<'module_environment> crate::translate::FuncEnvironment
                 builder.ins().call(update_stack_pointer, &[vmctx, value]);
             }
         }
+        #[cfg(not(feature = "wmemcheck"))]
+        let _ = (builder, global_index, value);
     }
 
-    #[cfg(feature = "wmemcheck")]
-    fn before_memory_grow(
+    pub fn before_memory_grow(
         &mut self,
         builder: &mut FunctionBuilder,
         num_pages: ir::Value,
         mem_index: MemoryIndex,
     ) {
+        #[cfg(feature = "wmemcheck")]
         if self.wmemcheck && mem_index.as_u32() == 0 {
             let update_mem_size = self.builtin_functions.update_mem_size(builder.func);
             let vmctx = self.vmctx_val(&mut builder.cursor());
             builder.ins().call(update_mem_size, &[vmctx, num_pages]);
         }
+        #[cfg(not(feature = "wmemcheck"))]
+        let _ = (builder, num_pages, mem_index);
     }
 
-    fn isa(&self) -> &dyn TargetIsa {
+    pub fn isa(&self) -> &dyn TargetIsa {
         &*self.isa
     }
 
-    fn trap(&mut self, builder: &mut FunctionBuilder, trap: ir::TrapCode) {
+    pub fn trap(&mut self, builder: &mut FunctionBuilder, trap: ir::TrapCode) {
         match (
             self.signals_based_traps(),
             crate::clif_trap_to_env_trap(trap),
@@ -3270,7 +3282,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         }
     }
 
-    fn trapz(&mut self, builder: &mut FunctionBuilder, value: ir::Value, trap: ir::TrapCode) {
+    pub fn trapz(&mut self, builder: &mut FunctionBuilder, value: ir::Value, trap: ir::TrapCode) {
         if self.signals_based_traps() {
             builder.ins().trapz(value, trap);
         } else {
@@ -3281,7 +3293,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         }
     }
 
-    fn trapnz(&mut self, builder: &mut FunctionBuilder, value: ir::Value, trap: ir::TrapCode) {
+    pub fn trapnz(&mut self, builder: &mut FunctionBuilder, value: ir::Value, trap: ir::TrapCode) {
         if self.signals_based_traps() {
             builder.ins().trapnz(value, trap);
         } else {
@@ -3292,7 +3304,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         }
     }
 
-    fn uadd_overflow_trap(
+    pub fn uadd_overflow_trap(
         &mut self,
         builder: &mut FunctionBuilder,
         lhs: ir::Value,
@@ -3308,11 +3320,11 @@ impl<'module_environment> crate::translate::FuncEnvironment
         }
     }
 
-    fn signals_based_traps(&self) -> bool {
+    pub fn signals_based_traps(&self) -> bool {
         self.tunables.signals_based_traps
     }
 
-    fn translate_sdiv(
+    pub fn translate_sdiv(
         &mut self,
         builder: &mut FunctionBuilder,
         lhs: ir::Value,
@@ -3322,7 +3334,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         builder.ins().sdiv(lhs, rhs)
     }
 
-    fn translate_udiv(
+    pub fn translate_udiv(
         &mut self,
         builder: &mut FunctionBuilder,
         lhs: ir::Value,
@@ -3332,7 +3344,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         builder.ins().udiv(lhs, rhs)
     }
 
-    fn translate_srem(
+    pub fn translate_srem(
         &mut self,
         builder: &mut FunctionBuilder,
         lhs: ir::Value,
@@ -3342,7 +3354,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         builder.ins().srem(lhs, rhs)
     }
 
-    fn translate_urem(
+    pub fn translate_urem(
         &mut self,
         builder: &mut FunctionBuilder,
         lhs: ir::Value,
@@ -3352,7 +3364,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         builder.ins().urem(lhs, rhs)
     }
 
-    fn translate_fcvt_to_sint(
+    pub fn translate_fcvt_to_sint(
         &mut self,
         builder: &mut FunctionBuilder,
         ty: ir::Type,
@@ -3372,7 +3384,7 @@ impl<'module_environment> crate::translate::FuncEnvironment
         builder.ins().fcvt_to_sint(ty, val)
     }
 
-    fn translate_fcvt_to_uint(
+    pub fn translate_fcvt_to_uint(
         &mut self,
         builder: &mut FunctionBuilder,
         ty: ir::Type,

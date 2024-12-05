@@ -18,7 +18,7 @@ mod state;
 mod table;
 mod translation_utils;
 
-pub use self::environ::{FuncEnvironment, GlobalVariable, StructFieldsVec, TargetEnvironment};
+pub use self::environ::{GlobalVariable, StructFieldsVec, TargetEnvironment};
 pub use self::func_translator::FuncTranslator;
 pub use self::heap::{Heap, HeapData};
 pub use self::state::FuncTranslationState;

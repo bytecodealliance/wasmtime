@@ -1,7 +1,7 @@
 use super::GcCompiler;
 use crate::func_environ::FuncEnvironment;
 use crate::gc::ArrayInit;
-use crate::translate::{FuncEnvironment as _, StructFieldsVec, TargetEnvironment};
+use crate::translate::{StructFieldsVec, TargetEnvironment};
 use crate::TRAP_INTERNAL_ASSERT;
 use cranelift_codegen::{
     cursor::FuncCursor,
@@ -902,8 +902,6 @@ pub fn translate_ref_test(
     ref_ty: WasmRefType,
     val: ir::Value,
 ) -> WasmResult<ir::Value> {
-    use crate::translate::FuncEnvironment as _;
-
     // First special case: testing for references to bottom types.
     if ref_ty.heap_type.is_bottom() {
         let result = if ref_ty.nullable {

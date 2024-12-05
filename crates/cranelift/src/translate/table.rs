@@ -1,4 +1,4 @@
-use crate::translate::FuncEnvironment;
+use crate::func_environ::FuncEnvironment;
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::{self, condcodes::IntCC, immediates::Imm64, InstBuilder};
 use cranelift_codegen::isa::TargetIsa;
@@ -59,7 +59,7 @@ impl TableData {
     /// given index within this table.
     pub fn prepare_table_addr(
         &self,
-        env: &mut dyn FuncEnvironment,
+        env: &mut FuncEnvironment<'_>,
         pos: &mut FunctionBuilder,
         mut index: ir::Value,
     ) -> (ir::Value, ir::MemFlags) {
