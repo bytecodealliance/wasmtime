@@ -276,9 +276,7 @@ where
             self.emit_fuel_check();
         }
 
-        if self.tunables.epoch_interruption {
-            self.emit_epoch_check();
-        }
+        self.maybe_emit_epoch_check();
 
         // Once we have emitted the epilogue and reserved stack space for the locals, we push the
         // base control flow block.
@@ -1028,9 +1026,15 @@ where
         );
     }
 
-    /// Emit series of instructions that check the current epoch against its
-    /// deadline.
-    pub fn emit_epoch_check(&mut self) {
+    /// Checks if epoch interruption is configured and emits a series of
+    /// instructions that check the current epoch against its deadline.
+    pub fn maybe_emit_epoch_check(&mut self) {
+        if !self.tunables.epoch_interruption {
+            return;
+        }
+
+        // The continuation branch if the current epoch hasn't reached the
+        // configured deadline.
         let cont = self.masm.get_label();
         let new_epoch = self.env.builtins.new_epoch::<M::ABI, M::Ptr>();
 
@@ -1041,21 +1045,21 @@ where
         // we must ensure that any registers used to hold the current epoch
         // value and deadline are not going to be needed later on by the
         // function call.
-        let (epoch_deadline_var, epoch_counter_var) = self.context.without::<(Reg, Reg), M, _>(
+        let (epoch_deadline_reg, epoch_counter_reg) = self.context.without::<(Reg, Reg), M, _>(
             &new_epoch.sig().regs,
             self.masm,
             |cx, masm| (cx.any_gpr(masm), cx.any_gpr(masm)),
         );
 
-        self.emit_load_epoch_deadline_and_counter(epoch_deadline_var, epoch_counter_var);
+        self.emit_load_epoch_deadline_and_counter(epoch_deadline_reg, epoch_counter_reg);
 
         // Spill locals and registers to avoid conflicts at the control flow
         // merge below.
         self.context.spill(self.masm);
         self.masm.branch(
             IntCmpKind::LtU,
-            epoch_counter_var,
-            RegImm::reg(epoch_deadline_var),
+            epoch_counter_reg,
+            RegImm::reg(epoch_deadline_reg),
             cont,
             OperandSize::S64,
         );
@@ -1073,14 +1077,14 @@ where
         // Under epoch deadline branch.
         self.masm.bind(cont);
 
-        self.context.free_reg(epoch_deadline_var);
-        self.context.free_reg(epoch_counter_var);
+        self.context.free_reg(epoch_deadline_reg);
+        self.context.free_reg(epoch_counter_reg);
     }
 
     fn emit_load_epoch_deadline_and_counter(
         &mut self,
-        epoch_deadline_var: Reg,
-        epoch_counter_var: Reg,
+        epoch_deadline_reg: Reg,
+        epoch_counter_reg: Reg,
     ) {
         let epoch_ptr_offset = self.env.vmoffsets.ptr.vmctx_epoch_ptr();
         let runtime_limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
@@ -1089,27 +1093,27 @@ where
         // Load the current epoch value into `epoch_counter_var`.
         self.masm.load_ptr(
             self.masm.address_at_vmctx(u32::from(epoch_ptr_offset)),
-            writable!(epoch_counter_var),
+            writable!(epoch_counter_reg),
         );
 
         // `epoch_deadline_var` contains the address of the value, so we need
         // to extract it.
         self.masm.load(
-            self.masm.address_at_reg(epoch_counter_var, 0),
-            writable!(epoch_counter_var),
+            self.masm.address_at_reg(epoch_counter_reg, 0),
+            writable!(epoch_counter_reg),
             OperandSize::S64,
         );
 
         // Load the `VMRuntimeLimits`.
         self.masm.load_ptr(
             self.masm.address_at_vmctx(u32::from(runtime_limits_offset)),
-            writable!(epoch_deadline_var),
+            writable!(epoch_deadline_reg),
         );
 
         self.masm.load(
             self.masm
-                .address_at_reg(epoch_deadline_var, u32::from(epoch_deadline_offset)),
-            writable!(epoch_deadline_var),
+                .address_at_reg(epoch_deadline_reg, u32::from(epoch_deadline_offset)),
+            writable!(epoch_deadline_reg),
             // The deadline value is a u64.
             OperandSize::S64,
         );

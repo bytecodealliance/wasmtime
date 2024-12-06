@@ -1725,9 +1725,7 @@ where
         }
 
         // Emit epoch check right after binding the loop header.
-        if self.tunables.epoch_interruption {
-            self.emit_epoch_check();
-        }
+        self.maybe_emit_epoch_check();
     }
 
     fn visit_br(&mut self, depth: u32) {
