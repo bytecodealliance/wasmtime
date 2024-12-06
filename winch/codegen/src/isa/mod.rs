@@ -134,6 +134,17 @@ impl CallingConvention {
     }
 }
 
+impl From<CallingConvention> for CallConv {
+    fn from(value: CallingConvention) -> Self {
+        match value {
+            CallingConvention::SystemV => Self::SystemV,
+            CallingConvention::AppleAarch64 => Self::AppleAarch64,
+            CallingConvention::Default => Self::Winch,
+            CallingConvention::WindowsFastcall => Self::WindowsFastcall,
+        }
+    }
+}
+
 /// A trait representing commonalities between the supported
 /// instruction set architectures.
 pub trait TargetIsa: Send + Sync {

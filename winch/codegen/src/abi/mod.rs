@@ -567,7 +567,7 @@ impl ABIParams {
 }
 
 /// An ABI-specific representation of a function signature.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub(crate) struct ABISig {
     /// Function parameters.
     pub params: ABIParams,
@@ -575,11 +575,24 @@ pub(crate) struct ABISig {
     pub results: ABIResults,
     /// A unique set of registers used in the entire [`ABISig`].
     pub regs: HashSet<Reg>,
+    /// Calling convention used.
+    pub call_conv: CallingConvention,
+}
+
+impl Default for ABISig {
+    fn default() -> Self {
+        Self {
+            params: Default::default(),
+            results: Default::default(),
+            regs: Default::default(),
+            call_conv: CallingConvention::Default,
+        }
+    }
 }
 
 impl ABISig {
     /// Create a new ABI signature.
-    pub fn new(params: ABIParams, results: ABIResults) -> Self {
+    pub fn new(cc: CallingConvention, params: ABIParams, results: ABIResults) -> Self {
         let regs = params
             .operands
             .regs
@@ -590,6 +603,7 @@ impl ABISig {
             params,
             results,
             regs,
+            call_conv: cc,
         }
     }
 

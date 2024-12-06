@@ -20,7 +20,10 @@ use crate::{
     masm::{SPOffset, StackSlot},
 };
 use crate::{
-    isa::reg::{writable, Reg, RegClass, WritableReg},
+    isa::{
+        reg::{writable, Reg, RegClass, WritableReg},
+        CallingConvention,
+    },
     masm::CalleeKind,
 };
 use cranelift_codegen::{
@@ -230,7 +233,7 @@ impl Masm for MacroAssembler {
     fn call(
         &mut self,
         stack_args_size: u32,
-        mut load_callee: impl FnMut(&mut Self) -> CalleeKind,
+        mut load_callee: impl FnMut(&mut Self) -> (CalleeKind, CallingConvention),
     ) -> u32 {
         let alignment: u32 = <Self::ABI as abi::ABI>::call_stack_align().into();
         let addend: u32 = <Self::ABI as abi::ABI>::arg_base_offset().into();
@@ -238,11 +241,11 @@ impl Masm for MacroAssembler {
         let aligned_args_size = align_to(stack_args_size, alignment);
         let total_stack = delta + aligned_args_size;
         self.reserve_stack(total_stack);
-        let callee = load_callee(self);
+        let (callee, cc) = load_callee(self);
         match callee {
-            CalleeKind::Indirect(reg) => self.asm.call_with_reg(reg),
-            CalleeKind::Direct(idx) => self.asm.call_with_name(idx),
-            CalleeKind::LibCall(lib) => self.asm.call_with_lib(lib, regs::scratch()),
+            CalleeKind::Indirect(reg) => self.asm.call_with_reg(cc, reg),
+            CalleeKind::Direct(idx) => self.asm.call_with_name(cc, idx),
+            CalleeKind::LibCall(lib) => self.asm.call_with_lib(cc, lib, regs::scratch()),
         };
         total_stack
     }

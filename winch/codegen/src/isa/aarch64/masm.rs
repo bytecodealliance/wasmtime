@@ -2,7 +2,10 @@ use super::{abi::Aarch64ABI, address::Address, asm::Assembler, regs};
 use crate::{
     abi::local::LocalSlot,
     codegen::{ptr_type_from_ptr_size, CodeGenContext, Emission, FuncEnv},
-    isa::reg::{writable, Reg, WritableReg},
+    isa::{
+        reg::{writable, Reg, WritableReg},
+        CallingConvention,
+    },
     masm::{
         CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
         MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, RoundingMode, SPOffset,
@@ -163,7 +166,7 @@ impl Masm for MacroAssembler {
     fn call(
         &mut self,
         _stack_args_size: u32,
-        _load_callee: impl FnMut(&mut Self) -> CalleeKind,
+        _load_callee: impl FnMut(&mut Self) -> (CalleeKind, CallingConvention),
     ) -> u32 {
         todo!()
     }
