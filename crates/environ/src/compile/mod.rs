@@ -330,9 +330,9 @@ pub trait Compiler: Send + Sync {
         match (self.triple().operating_system, self.triple().architecture) {
             (
                 OperatingSystem::MacOSX { .. }
-                | OperatingSystem::Darwin
-                | OperatingSystem::Ios
-                | OperatingSystem::Tvos,
+                | OperatingSystem::Darwin(_)
+                | OperatingSystem::IOS(_)
+                | OperatingSystem::TvOS(_),
                 Architecture::Aarch64(..),
             ) => 0x4000,
             // 64 KB is the maximal page size (i.e. memory translation granule size)

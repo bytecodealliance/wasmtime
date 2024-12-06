@@ -4396,7 +4396,7 @@ end = "2025-07-30"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2019-03-06"
-end = "2024-07-14"
+end = "2025-12-06"
 
 [[trusted.termcolor]]
 criteria = "safe-to-deploy"

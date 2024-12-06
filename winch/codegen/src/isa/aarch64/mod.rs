@@ -160,9 +160,9 @@ impl TargetIsa for Aarch64 {
         use target_lexicon::*;
         match self.triple().operating_system {
             OperatingSystem::MacOSX { .. }
-            | OperatingSystem::Darwin
-            | OperatingSystem::Ios
-            | OperatingSystem::Tvos => {
+            | OperatingSystem::Darwin(_)
+            | OperatingSystem::IOS(_)
+            | OperatingSystem::TvOS(_) => {
                 debug_assert_eq!(1 << 14, 0x4000);
                 14
             }
