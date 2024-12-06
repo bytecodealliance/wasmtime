@@ -46,6 +46,11 @@ unsafe impl Unwind for UnwindPulley {
         *(fp as *mut usize).offset(1)
     }
     fn assert_fp_is_aligned(&self, fp: usize) {
-        assert_eq!(fp % 16, 0, "stack should always be aligned to 16");
+        let expected = if cfg!(target_pointer_width = "32") {
+            8
+        } else {
+            16
+        };
+        assert_eq!(fp % expected, 0, "stack should always be aligned");
     }
 }
