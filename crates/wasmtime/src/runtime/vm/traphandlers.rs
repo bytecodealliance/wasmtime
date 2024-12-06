@@ -407,6 +407,7 @@ where
 // usage of its accessor methods.
 mod call_thread_state {
     use super::*;
+    use crate::runtime::vm::Unwind;
 
     /// Temporary state stored on the stack which is registered in the `tls` module
     /// below for calls into wasm.
@@ -420,6 +421,7 @@ mod call_thread_state {
         pub(super) capture_coredump: bool,
 
         pub(crate) limits: *const VMRuntimeLimits,
+        pub(crate) unwinder: &'static dyn Unwind,
 
         pub(super) prev: Cell<tls::Ptr>,
         #[cfg(all(feature = "signals-based-traps", unix, not(miri)))]
@@ -465,6 +467,7 @@ mod call_thread_state {
 
             CallThreadState {
                 unwind: Cell::new(None),
+                unwinder: store.unwinder(),
                 jmp_buf: Cell::new(ptr::null()),
                 #[cfg(all(feature = "signals-based-traps", not(miri)))]
                 signal_handler: store.signal_handler(),
@@ -608,7 +611,7 @@ impl CallThreadState {
             return None;
         }
 
-        Some(unsafe { Backtrace::new_with_trap_state(limits, self, trap_pc_and_fp) })
+        Some(unsafe { Backtrace::new_with_trap_state(limits, self.unwinder, self, trap_pc_and_fp) })
     }
 
     pub(crate) fn iter<'a>(&'a self) -> impl Iterator<Item = &'a Self> + 'a {

@@ -35,6 +35,7 @@ mod store_box;
 mod sys;
 mod table;
 mod traphandlers;
+mod unwind;
 mod vmcontext;
 
 #[cfg(feature = "threads")]
@@ -82,6 +83,7 @@ pub use crate::runtime::vm::sys::mmap::open_file_for_mmap;
 pub use crate::runtime::vm::sys::unwind::UnwindRegistration;
 pub use crate::runtime::vm::table::{Table, TableElement};
 pub use crate::runtime::vm::traphandlers::*;
+pub use crate::runtime::vm::unwind::*;
 pub use crate::runtime::vm::vmcontext::{
     VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionBody,
     VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport,
