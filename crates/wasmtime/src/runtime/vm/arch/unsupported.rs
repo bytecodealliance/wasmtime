@@ -1,15 +1,7 @@
 compile_error!("Wasmtime's runtime is being compiled for an architecture that it does not support");
 
 cfg_if::cfg_if! {
-    if #[cfg(target_arch = "x86")] {
-    compile_error!("\
-the tracking issue for i686 support is https://github.com/bytecodealliance/wasmtime/issues/1980 \
-");
-    } else if #[cfg(target_arch = "arm")] {
-    compile_error!("\
-the tracking issue for arm support is https://github.com/bytecodealliance/wasmtime/issues/1173 \
-");
-    } else if #[cfg(target_arch = "riscv32")] {
+    if #[cfg(target_arch = "riscv32")] {
     compile_error!("\
 the tracking issue for riscv32 support is https://github.com/bytecodealliance/wasmtime/issues/8768 \
 ");

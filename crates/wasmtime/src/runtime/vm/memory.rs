@@ -257,11 +257,19 @@ impl Memory {
         let absolute_max = 0usize.wrapping_sub(page_size);
 
         // Sanity-check what should already be true from wasm module validation.
+        // Note that for 32-bit targets the absolute maximum is `1<<32` during
+        // compilation, not one-page-less-than-u32::MAX, so need to handle that
+        // specially here.
+        let absolute_max64 = if cfg!(target_pointer_width = "32") {
+            1 << 32
+        } else {
+            u64::try_from(absolute_max).unwrap()
+        };
         if let Ok(size) = ty.minimum_byte_size() {
-            assert!(size <= u64::try_from(absolute_max).unwrap());
+            assert!(size <= absolute_max64);
         }
         if let Ok(max) = ty.maximum_byte_size() {
-            assert!(max <= u64::try_from(absolute_max).unwrap());
+            assert!(max <= absolute_max64);
         }
 
         // If the minimum memory size overflows the size of our own address

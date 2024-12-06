@@ -9,12 +9,29 @@ pub struct UnwindRegistration {
     registrations: Vec<SendSyncPtr<u8>>,
 }
 
-extern "C" {
-    // libunwind import
-    fn __register_frame(fde: *const u8);
-    fn __deregister_frame(fde: *const u8);
-    #[wasmtime_versioned_export_macros::versioned_link]
-    fn wasmtime_using_libunwind() -> bool;
+cfg_if::cfg_if! {
+    // FIXME: at least on the `gcc-arm-linux-gnueabihf` toolchain on Ubuntu
+    // these symbols are not provided by default like they are on other targets.
+    // I'm not ARM expert so I don't know why. For now though consider this an
+    // optional integration feature with the platform and stub out the functions
+    // to do nothing which won't break any tests it just means that
+    // runtime-generated backtraces won't have the same level of fidelity they
+    // do on other targets.
+    if #[cfg(target_arch = "arm")] {
+        unsafe extern "C" fn __register_frame(_: *const u8) {}
+        unsafe extern "C" fn __deregister_frame(_: *const u8) {}
+        unsafe extern "C" fn wasmtime_using_libunwind() -> bool {
+            false
+        }
+    } else {
+        extern "C" {
+            // libunwind import
+            fn __register_frame(fde: *const u8);
+            fn __deregister_frame(fde: *const u8);
+            #[wasmtime_versioned_export_macros::versioned_link]
+            fn wasmtime_using_libunwind() -> bool;
+        }
+    }
 }
 
 /// There are two primary unwinders on Unix platforms: libunwind and libgcc.

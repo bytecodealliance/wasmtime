@@ -699,6 +699,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
 }
 
 #[cfg(test)]
+#[cfg(target_pointer_width = "64")]
 mod test {
     use super::*;
 

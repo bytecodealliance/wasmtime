@@ -441,6 +441,7 @@ impl Table {
 mod tests {
     use super::*;
     use crate::{Instance, Module, Store};
+    use wasmtime_environ::TripleExt;
 
     #[test]
     fn hash_key_is_stable_across_duplicate_store_data_entries() -> Result<()> {
@@ -452,7 +453,20 @@ mod tests {
                     (table (export "t") 1 1 externref)
                 )
             "#,
-        )?;
+        );
+        // Expect this test to fail on pulley at this time. When pulley supports
+        // externref this should switch back to using `?` on the constructor
+        // above for all platforms.
+        let module = match module {
+            Ok(module) => {
+                assert!(!store.engine().target().is_pulley());
+                module
+            }
+            Err(e) => {
+                assert!(store.engine().target().is_pulley(), "bad error {e:?}");
+                return Ok(());
+            }
+        };
         let instance = Instance::new(&mut store, &module, &[])?;
 
         // Each time we `get_table`, we call `Table::from_wasmtime` which adds

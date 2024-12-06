@@ -239,12 +239,11 @@ impl StackPool {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix, feature = "async", not(miri)))]
 mod tests {
     use super::*;
     use crate::runtime::vm::InstanceLimits;
 
-    #[cfg(all(unix, target_pointer_width = "64", feature = "async", not(miri)))]
     #[test]
     fn test_stack_pool() -> Result<()> {
         let config = PoolingInstanceAllocatorConfig {

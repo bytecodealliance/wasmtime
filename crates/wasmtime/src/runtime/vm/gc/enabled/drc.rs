@@ -985,6 +985,7 @@ impl<T> DerefMut for DebugOnly<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wasmtime_environ::HostPtr;
 
     #[test]
     fn vm_drc_header_size_align() {
@@ -1019,7 +1020,7 @@ mod tests {
         let actual_offset = (ref_count_ptr as usize) - (extern_data_ptr as usize);
 
         let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
-            ptr: 8,
+            ptr: HostPtr,
             num_imported_functions: 0,
             num_imported_tables: 0,
             num_imported_memories: 0,
@@ -1047,7 +1048,7 @@ mod tests {
         let actual_offset = (next_ptr as usize) - (table_ptr as usize);
 
         let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
-            ptr: 8,
+            ptr: HostPtr,
             num_imported_functions: 0,
             num_imported_tables: 0,
             num_imported_memories: 0,
@@ -1074,7 +1075,7 @@ mod tests {
         let actual_offset = (end_ptr as usize) - (table_ptr as usize);
 
         let offsets = wasmtime_environ::VMOffsets::from(wasmtime_environ::VMOffsetsFields {
-            ptr: 8,
+            ptr: HostPtr,
             num_imported_functions: 0,
             num_imported_tables: 0,
             num_imported_memories: 0,

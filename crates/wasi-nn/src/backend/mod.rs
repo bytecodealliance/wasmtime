@@ -4,7 +4,7 @@
 
 #[cfg(feature = "onnx")]
 pub mod onnx;
-#[cfg(feature = "openvino")]
+#[cfg(all(feature = "openvino", target_pointer_width = "64"))]
 pub mod openvino;
 #[cfg(feature = "pytorch")]
 pub mod pytorch;
@@ -13,7 +13,7 @@ pub mod winml;
 
 #[cfg(feature = "onnx")]
 use self::onnx::OnnxBackend;
-#[cfg(feature = "openvino")]
+#[cfg(all(feature = "openvino", target_pointer_width = "64"))]
 use self::openvino::OpenvinoBackend;
 #[cfg(feature = "pytorch")]
 use self::pytorch::PytorchBackend;
@@ -31,7 +31,8 @@ use wiggle::GuestError;
 /// Return a list of all available backend frameworks.
 pub fn list() -> Vec<Backend> {
     let mut backends = vec![];
-    #[cfg(feature = "openvino")]
+    let _ = &mut backends; // silence warnings if none are enabled
+    #[cfg(all(feature = "openvino", target_pointer_width = "64"))]
     {
         backends.push(Backend::from(OpenvinoBackend::default()));
     }
@@ -120,6 +121,7 @@ pub enum BackendError {
 }
 
 /// Read a file into a byte vector.
+#[allow(dead_code, reason = "not used on all platforms")]
 fn read(path: &Path) -> anyhow::Result<Vec<u8>> {
     let mut file = File::open(path)?;
     let mut buffer = vec![];
