@@ -21,10 +21,10 @@ block3(v3: i8):
 ; block0:
 ;   br_if x0, label2; jump label1
 ; block1:
-;   x0 = xconst8 0
+;   xconst8 x0, 0
 ;   jump label3
 ; block2:
-;   x0 = xconst8 1
+;   xconst8 x0, 1
 ;   jump label3
 ; block3:
 ;   ret

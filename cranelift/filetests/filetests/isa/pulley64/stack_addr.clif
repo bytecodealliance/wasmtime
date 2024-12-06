@@ -10,10 +10,10 @@ block0():
 
 ; VCode:
 ;   push_frame
-;   stack_alloc32 0x10
+;   stack_alloc32 16
 ; block0:
 ;   x0 = load_addr Slot(0)
-;   stack_free32 0x10
+;   stack_free32 16
 ;   pop_frame
 ;   ret
 ;
