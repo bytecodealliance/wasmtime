@@ -135,10 +135,10 @@ pub fn apply_wast_config(config: &mut Config, wast_config: &wasmtime_wast_util::
     use wasmtime_wast_util::{Collector, Compiler};
 
     config.strategy(match wast_config.compiler {
-        Compiler::Cranelift | Compiler::Pulley => wasmtime::Strategy::Cranelift,
+        Compiler::CraneliftNative | Compiler::CraneliftPulley => wasmtime::Strategy::Cranelift,
         Compiler::Winch => wasmtime::Strategy::Winch,
     });
-    if let Compiler::Pulley = wast_config.compiler {
+    if let Compiler::CraneliftPulley = wast_config.compiler {
         if cfg!(target_pointer_width = "32") {
             config.target("pulley32").unwrap();
         } else {

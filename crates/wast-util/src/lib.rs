@@ -200,6 +200,15 @@ macro_rules! define_test_config {
         pub struct TestConfig {
             $(pub $option: Option<bool>,)*
         }
+
+        impl TestConfig {
+            $(
+                pub fn $option(&self) -> bool {
+                    self.$option.unwrap_or(false)
+                }
+            )*
+        }
+
     }
 }
 
@@ -238,7 +247,7 @@ pub enum Compiler {
     /// notably excludes Pulley since that's listed separately below even though
     /// Pulley is a backend of Cranelift. This is only used for native code
     /// generation such as x86_64.
-    Cranelift,
+    CraneliftNative,
 
     /// Winch backend.
     ///
@@ -252,7 +261,7 @@ pub enum Compiler {
     /// environment of the output bytecode. Note that this is separate from
     /// `Cranelift` above to be able to test both on platforms where Cranelift
     /// has native codegen support.
-    Pulley,
+    CraneliftPulley,
 }
 
 impl Compiler {
@@ -270,18 +279,18 @@ impl Compiler {
         match self {
             // Currently Cranelift supports all wasm proposals that wasmtime
             // tests.
-            Compiler::Cranelift => {}
+            Compiler::CraneliftNative => {}
 
             // Winch doesn't have quite the full breadth of support that
             // Cranelift has quite yet.
             Compiler::Winch => {
-                if config.gc == Some(true)
-                    || config.threads == Some(true)
-                    || config.tail_call == Some(true)
-                    || config.function_references == Some(true)
-                    || config.gc == Some(true)
-                    || config.relaxed_simd == Some(true)
-                    || config.gc_types == Some(true)
+                if config.gc()
+                    || config.threads()
+                    || config.tail_call()
+                    || config.function_references()
+                    || config.gc()
+                    || config.relaxed_simd()
+                    || config.gc_types()
                 {
                     return true;
                 }
@@ -289,40 +298,21 @@ impl Compiler {
 
             // Pulley is just getting started, it implements almost no proposals
             // yet.
-            Compiler::Pulley => {
-                let TestConfig {
-                    memory64,
-                    custom_page_sizes,
-                    multi_memory,
-                    threads,
-                    gc,
-                    function_references,
-                    relaxed_simd,
-                    reference_types,
-                    tail_call,
-                    extended_const,
-                    wide_arithmetic,
-                    simd,
-                    gc_types,
-                    hogs_memory: _,
-                    nan_canonicalization: _,
-                    component_model_more_flags: _,
-                } = *config;
-
+            Compiler::CraneliftPulley => {
                 // Unsupported proposals
-                if memory64.unwrap_or(false)
-                    || custom_page_sizes.unwrap_or(false)
-                    || multi_memory.unwrap_or(false)
-                    || threads.unwrap_or(false)
-                    || gc.unwrap_or(false)
-                    || function_references.unwrap_or(false)
-                    || relaxed_simd.unwrap_or(false)
-                    || reference_types.unwrap_or(false)
-                    || tail_call.unwrap_or(false)
-                    || extended_const.unwrap_or(false)
-                    || wide_arithmetic.unwrap_or(false)
-                    || simd.unwrap_or(false)
-                    || gc_types.unwrap_or(false)
+                if config.memory64()
+                    || config.custom_page_sizes()
+                    || config.multi_memory()
+                    || config.threads()
+                    || config.gc()
+                    || config.function_references()
+                    || config.relaxed_simd()
+                    || config.reference_types()
+                    || config.tail_call()
+                    || config.extended_const()
+                    || config.wide_arithmetic()
+                    || config.simd()
+                    || config.gc_types()
                 {
                     return true;
                 }
@@ -336,7 +326,7 @@ impl Compiler {
     /// architecture.
     pub fn supports_host(&self) -> bool {
         match self {
-            Compiler::Cranelift => {
+            Compiler::CraneliftNative => {
                 cfg!(target_arch = "x86_64")
                     || cfg!(target_arch = "aarch64")
                     || cfg!(target_arch = "riscv64")
@@ -345,7 +335,7 @@ impl Compiler {
             Compiler::Winch => {
                 cfg!(target_arch = "x86_64")
             }
-            Compiler::Pulley => {
+            Compiler::CraneliftPulley => {
                 // FIXME(#9747) pulley needs more refactoring to support a
                 // big-endian host.
                 cfg!(target_endian = "little")
@@ -365,10 +355,7 @@ impl WastTest {
     /// Returns whether this test exercises the GC types and might want to use
     /// multiple different garbage collectors.
     pub fn test_uses_gc_types(&self) -> bool {
-        self.config
-            .gc
-            .or(self.config.function_references)
-            .unwrap_or(false)
+        self.config.gc() || self.config.function_references()
     }
 
     /// Returns the optional spec proposal that this test is associated with.
@@ -418,7 +405,7 @@ impl WastTest {
         // fixed they should get added to this list. Over time this list will
         // instead get inverted to "these tests are known to fail" once Pulley
         // implements more proposals.
-        if config.compiler == Compiler::Pulley {
+        if config.compiler == Compiler::CraneliftPulley {
             let supported = [
                 "custom-page-sizes/custom-page-sizes-invalid.wast",
                 "exception-handling/exports.wast",

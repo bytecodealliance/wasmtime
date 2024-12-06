@@ -96,8 +96,8 @@ impl InterpreterRef<'_> {
                 // If the VM wants to call out to the host then dispatch that
                 // here based on `sig`. Once that returns we can resume
                 // execution at `resume`.
-                DoneReason::CallIndirectHost { sig, resume } => {
-                    self.call_indirect_host(sig);
+                DoneReason::CallIndirectHost { id, resume } => {
+                    self.call_indirect_host(id);
                     bytecode = resume;
                 }
                 // If the VM trapped then process that here and return `false`.
@@ -170,8 +170,8 @@ impl InterpreterRef<'_> {
         clippy::cast_sign_loss,
         reason = "macro-generated code"
     )]
-    unsafe fn call_indirect_host(&mut self, sig: u8) {
-        let sig = u32::from(sig);
+    unsafe fn call_indirect_host(&mut self, id: u8) {
+        let id = u32::from(id);
         let fnptr = self.0[XReg::x0].get_ptr::<u8>();
         let mut arg_reg = 1;
 
@@ -266,13 +266,13 @@ impl InterpreterRef<'_> {
         // The hope is that this is relatively easy for LLVM to optimize since
         // it's a bunch of:
         //
-        //  if sig == 0 { ...;  return; }
-        //  if sig == 1 { ...;  return; }
-        //  if sig == 2 { ...;  return; }
+        //  if id == 0 { ...;  return; }
+        //  if id == 1 { ...;  return; }
+        //  if id == 2 { ...;  return; }
         //  ...
         //
 
-        if sig == const { HostCall::ArrayCall.index() } {
+        if id == const { HostCall::ArrayCall.index() } {
             call!(@host VMArrayCallNative(ptr, ptr, ptr, size) -> bool);
         }
 
@@ -285,7 +285,7 @@ impl InterpreterRef<'_> {
             ) => {
                 $(
                     $( #[cfg($attr)] )?
-                    if sig == const { HostCall::Builtin(BuiltinFunctionIndex::$name()).index() } {
+                    if id == const { HostCall::Builtin(BuiltinFunctionIndex::$name()).index() } {
                         call!(@builtin($($param),*) $(-> $result)?);
                     }
                 )*
@@ -298,7 +298,7 @@ impl InterpreterRef<'_> {
             use crate::runtime::vm::component::VMLoweringCallee;
             use wasmtime_environ::component::ComponentBuiltinFunctionIndex;
 
-            if sig == const { HostCall::ComponentLowerImport.index() } {
+            if id == const { HostCall::ComponentLowerImport.index() } {
                 call!(@host VMLoweringCallee(ptr, ptr, u32, ptr, ptr, ptr, u8, ptr, size) -> bool);
             }
 
@@ -309,7 +309,7 @@ impl InterpreterRef<'_> {
                     )*
                 ) => {
                     $(
-                        if sig == const { HostCall::ComponentBuiltin(ComponentBuiltinFunctionIndex::$name()).index() } {
+                        if id == const { HostCall::ComponentBuiltin(ComponentBuiltinFunctionIndex::$name()).index() } {
                             call!(@builtin($($param),*) $(-> $result)?);
                         }
                     )*

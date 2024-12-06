@@ -622,19 +622,23 @@ impl CallThreadState {
 
     /// Trap handler using our thread-local state.
     ///
-    /// * `pc` - the program counter the trap happened at
+    /// * `regs` - some special program registers at the time that the trap
+    ///   happened, for example `pc`.
+    /// * `faulting_addr` - the system-provided address that the a fault, if
+    ///   any, happened at. This is used when debug-asserting that all segfaults
+    ///   are known to live within a `Store<T>` in a valid range.
     /// * `call_handler` - a closure used to invoke the platform-specific
     ///   signal handler for each instance, if available.
     ///
-    /// Attempts to handle the trap if it's a wasm trap. Returns a few
-    /// different things:
+    /// Attempts to handle the trap if it's a wasm trap. Returns a `TrapTest`
+    /// which indicates what this could be, such as:
     ///
-    /// * null - the trap didn't look like a wasm trap and should continue as a
-    ///   trap
-    /// * 1 as a pointer - the trap was handled by a custom trap handler on an
-    ///   instance, and the trap handler should quickly return.
-    /// * a different pointer - a jmp_buf buffer to longjmp to, meaning that
-    ///   the wasm trap was successfully handled.
+    /// * `TrapTest::NotWasm` - not a wasm fault, this should get forwarded to
+    ///   the next platform-specific fault handler.
+    /// * `TrapTest::HandledByEmbedder` - the embedder `call_handler` handled
+    ///   this signal, nothing else to do.
+    /// * `TrapTest::Trap` - this is a wasm trap an the stack needs to be
+    ///   unwound now.
     pub(crate) fn test_if_trap(
         &self,
         regs: TrapRegisters,
@@ -662,14 +666,17 @@ impl CallThreadState {
             return TrapTest::NotWasm;
         };
 
+        // If the fault was at a location that was not marked as potentially
+        // trapping, then that's a bug in Cranelift/Winch/etc. Don't try to
+        // catch the trap and pretend this isn't wasm so the program likely
+        // aborts.
         let Some(trap) = code.lookup_trap_code(text_offset) else {
             return TrapTest::NotWasm;
         };
 
-        self.set_jit_trap(regs, faulting_addr, trap);
-
         // If all that passed then this is indeed a wasm trap, so return the
         // `jmp_buf` passed to `wasmtime_longjmp` to resume.
+        self.set_jit_trap(regs, faulting_addr, trap);
         TrapTest::Trap {
             jmp_buf: self.take_jmp_buf(),
         }

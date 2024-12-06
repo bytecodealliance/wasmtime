@@ -82,14 +82,21 @@ impl Vm {
         match self.call_run(func) {
             DoneReason::ReturnToHost(()) => DoneReason::ReturnToHost(self.call_end(rets)),
             DoneReason::Trap(pc) => DoneReason::Trap(pc),
-            DoneReason::CallIndirectHost { sig, resume } => {
-                DoneReason::CallIndirectHost { sig, resume }
+            DoneReason::CallIndirectHost { id, resume } => {
+                DoneReason::CallIndirectHost { id, resume }
             }
         }
     }
 
     /// Peforms the initial part of [`Vm::call`] in setting up the `args`
     /// provided in registers according to Pulley's ABI.
+    ///
+    /// # Unsafety
+    ///
+    /// All the same unsafety as `call` and additiionally, you must
+    /// invoke `call_run` and then `call_end` after calling `call_start`.
+    /// If you don't want to wrangle these invocations, use `call` instead
+    /// of `call_{start,run,end}`.
     pub unsafe fn call_start<'a>(&'a mut self, args: &[Val]) {
         // NB: make sure this method stays in sync with
         // `PulleyMachineDeps::compute_arg_locs`!
@@ -118,6 +125,12 @@ impl Vm {
 
     /// Peforms the internal part of [`Vm::call`] where bytecode is actually
     /// executed.
+    ///
+    /// # Unsafety
+    ///
+    /// In addition to all the invariants documented for `call`, you
+    /// may only invoke `call_run` after invoking `call_start` to
+    /// initialize this call's arguments.
     pub unsafe fn call_run(&mut self, pc: NonNull<u8>) -> DoneReason<()> {
         self.state.debug_assert_done_reason_none();
         let interpreter = Interpreter {
@@ -130,6 +143,11 @@ impl Vm {
 
     /// Peforms the tail end of [`Vm::call`] by returning the values as
     /// determined by `rets` according to Pulley's ABI.
+    ///
+    /// # Unsafety
+    ///
+    /// In addition to the invariants documented for `call`, this may
+    /// only be called after `call_run`.
     pub unsafe fn call_end<'a>(
         &'a mut self,
         rets: impl IntoIterator<Item = RegType> + 'a,
@@ -609,7 +627,7 @@ mod done {
         /// The `call_indirect_host` instruction was executed.
         CallIndirectHost {
             /// The payload of `call_indirect_host`.
-            sig: u8,
+            id: u8,
             /// Where to resume execution after the host has finished.
             resume: NonNull<u8>,
         },
@@ -635,9 +653,9 @@ mod done {
         }
 
         /// Finishes execution by recording `DoneReason::CallIndirectHost`.
-        pub fn done_call_indirect_host(&mut self, sig: u8) -> Done {
+        pub fn done_call_indirect_host(&mut self, id: u8) -> Done {
             self.state.done_reason = Some(DoneReason::CallIndirectHost {
-                sig,
+                id,
                 resume: self.pc.as_ptr(),
             });
             Done { _priv: () }
@@ -1380,7 +1398,7 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Break(self.done_trap(trap_pc))
     }
 
-    fn call_indirect_host(&mut self, sig: u8) -> ControlFlow<Done> {
-        ControlFlow::Break(self.done_call_indirect_host(sig))
+    fn call_indirect_host(&mut self, id: u8) -> ControlFlow<Done> {
+        ControlFlow::Break(self.done_call_indirect_host(id))
     }
 }

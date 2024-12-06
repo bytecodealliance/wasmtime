@@ -720,7 +720,7 @@ impl VMFuncRef {
     /// # Unsafety
     ///
     /// This method is unsafe because it can be called with any pointers. They
-    /// must all be valid for this wasm function call to proceed. Fore xample
+    /// must all be valid for this wasm function call to proceed. For example
     /// the `caller` must be valid machine code if `pulley` is `None` or it must
     /// be valid bytecode if `pulley` is `Some`. Additionally `args_and_results`
     /// must be large enough to handle all the arguments/results for this call.

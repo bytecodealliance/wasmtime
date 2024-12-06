@@ -5,19 +5,18 @@
 //! having these structures plumbed around.
 
 use crate::runtime::vm::VMOpaqueContext;
+use crate::runtime::Uninhabited;
 use crate::ValRaw;
 use core::marker;
 use core::mem;
 use core::ptr::NonNull;
 
 pub struct Interpreter {
-    empty: Void,
+    empty: Uninhabited,
 }
 
 const _: () = assert!(mem::size_of::<Interpreter>() == 0);
 const _: () = assert!(mem::size_of::<Option<Interpreter>>() == 0);
-
-enum Void {}
 
 impl Interpreter {
     pub fn new() -> Interpreter {
@@ -30,7 +29,7 @@ impl Interpreter {
 }
 
 pub struct InterpreterRef<'a> {
-    empty: Void,
+    empty: Uninhabited,
     _marker: marker::PhantomData<&'a mut Interpreter>,
 }
 

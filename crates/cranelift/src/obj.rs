@@ -83,7 +83,7 @@ impl<'a> ModuleTextBuilder<'a> {
             SectionKind::Text,
         );
 
-        // If this target is Pulley then flag th text section as not needing the
+        // If this target is Pulley then flag the text section as not needing the
         // executable bit in virtual memory which means that the runtime won't
         // try to call `Mmap::make_exectuable`, which makes Pulley more
         // portable.
