@@ -96,7 +96,7 @@ impl FnCall {
         let arg_stack_space = sig.params_stack_size();
         let reserved_stack = masm.call(arg_stack_space, |masm| {
             Self::assign(sig, &callee_context, ret_area.as_ref(), context, masm);
-            kind
+            (kind, sig.call_conv)
         });
 
         Self::cleanup(

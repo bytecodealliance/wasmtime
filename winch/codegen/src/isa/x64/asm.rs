@@ -1,7 +1,7 @@
 //! Assembler library implementation for x64.
 
 use crate::{
-    isa::reg::Reg,
+    isa::{reg::Reg, CallingConvention},
     masm::{
         DivKind, ExtendKind, IntCmpKind, MulWideKind, OperandSize, RemKind, RoundingMode, ShiftKind,
     },
@@ -23,7 +23,6 @@ use cranelift_codegen::{
             encoding::rex::{encode_modrm, RexFlags},
             settings as x64_settings, EmitInfo, EmitState, Inst,
         },
-        CallConv,
     },
     settings, CallInfo, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState,
     MachLabel, PatchRegion, RelocDistance, VCodeConstantData, VCodeConstants, Writable,
@@ -1270,24 +1269,21 @@ impl Assembler {
     }
 
     /// Emit a call to an unknown location through a register.
-    pub fn call_with_reg(&mut self, callee: Reg) {
+    pub fn call_with_reg(&mut self, cc: CallingConvention, callee: Reg) {
         self.emit(Inst::CallUnknown {
-            info: Box::new(CallInfo::empty(
-                RegMem::reg(callee.into()),
-                CallConv::SystemV,
-            )),
+            info: Box::new(CallInfo::empty(RegMem::reg(callee.into()), cc.into())),
         });
     }
 
     /// Emit a call to a locally defined function through an index.
-    pub fn call_with_name(&mut self, name: UserExternalNameRef) {
+    pub fn call_with_name(&mut self, cc: CallingConvention, name: UserExternalNameRef) {
         self.emit(Inst::CallKnown {
-            info: Box::new(CallInfo::empty(ExternalName::user(name), CallConv::SystemV)),
+            info: Box::new(CallInfo::empty(ExternalName::user(name), cc.into())),
         });
     }
 
     /// Emit a call to a well-known libcall.
-    pub fn call_with_lib(&mut self, lib: LibCall, dst: Reg) {
+    pub fn call_with_lib(&mut self, cc: CallingConvention, lib: LibCall, dst: Reg) {
         let dest = ExternalName::LibCall(lib);
 
         // `use_colocated_libcalls` is never `true` from within Wasmtime,
@@ -1303,7 +1299,7 @@ impl Assembler {
             offset: 0,
             distance: RelocDistance::Far,
         });
-        self.call_with_reg(dst);
+        self.call_with_reg(cc, dst);
     }
 
     /// Emits a conditional jump to the given label.

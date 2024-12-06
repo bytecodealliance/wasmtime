@@ -1,6 +1,9 @@
 use crate::abi::{self, align_to, scratch, LocalSlot};
 use crate::codegen::{CodeGenContext, Emission, FuncEnv};
-use crate::isa::reg::{writable, Reg, WritableReg};
+use crate::isa::{
+    reg::{writable, Reg, WritableReg},
+    CallingConvention,
+};
 use cranelift_codegen::{
     binemit::CodeOffset,
     ir::{Endianness, LibCall, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
@@ -584,7 +587,11 @@ pub(crate) trait MacroAssembler {
     fn address_at_reg(&self, reg: Reg, offset: u32) -> Self::Address;
 
     /// Emit a function call to either a local or external function.
-    fn call(&mut self, stack_args_size: u32, f: impl FnMut(&mut Self) -> CalleeKind) -> u32;
+    fn call(
+        &mut self,
+        stack_args_size: u32,
+        f: impl FnMut(&mut Self) -> (CalleeKind, CallingConvention),
+    ) -> u32;
 
     /// Get stack pointer offset.
     fn sp_offset(&self) -> SPOffset;

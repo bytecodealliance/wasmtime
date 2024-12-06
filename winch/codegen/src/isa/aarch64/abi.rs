@@ -48,7 +48,7 @@ impl ABI for Aarch64ABI {
                 )
             });
 
-        ABISig::new(params, results)
+        ABISig::new(*call_conv, params, results)
     }
 
     fn abi_results(returns: &[WasmValType], call_conv: &CallingConvention) -> ABIResults {
