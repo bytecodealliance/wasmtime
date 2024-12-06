@@ -470,9 +470,7 @@ impl<T> LinkerInstance<'_, T> {
     /// doing any concurrent operations (i.e. before awaiting) and once
     /// afterward. This allows multiple calls to proceed concurrently without
     /// any one of them monopolizing the store.
-    #[cfg(feature = "async")]
     #[cfg(feature = "component-model-async")]
-    #[cfg_attr(docsrs, doc(cfg(feature = "async")))]
     pub fn func_wrap_concurrent<Params, Return, F, N, FN>(&mut self, name: &str, f: F) -> Result<()>
     where
         N: FnOnce(StoreContextMut<T>) -> Result<Return> + Send + Sync + 'static,
@@ -604,7 +602,6 @@ impl<T> LinkerInstance<'_, T> {
     #[cfg(feature = "async")]
     pub fn func_new_async<F>(&mut self, name: &str, f: F) -> Result<()>
     where
-        T: 'static,
         F: for<'a> Fn(
                 StoreContextMut<'a, T>,
                 &'a [Val],
@@ -619,11 +616,58 @@ impl<T> LinkerInstance<'_, T> {
             "cannot use `func_new_async` without enabling async support in the config"
         );
         let ff = move |mut store: StoreContextMut<'_, T>, params: &[Val], results: &mut [Val]| {
-            let async_cx = store.as_context_mut().0.async_cx().expect("async cx");
-            let mut future = Pin::from(f(store.as_context_mut(), params, results));
-            unsafe { async_cx.block_on(future.as_mut()) }?
+            #[cfg(feature = "component-model-async")]
+            {
+                let async_cx = crate::component::concurrent::AsyncCx::new(&mut store);
+                let mut future = Pin::from(f(store.as_context_mut(), params, results));
+                unsafe { async_cx.block_on::<T, _>(future.as_mut(), None) }?.0
+            }
+            #[cfg(not(feature = "component-model-async"))]
+            {
+                let async_cx = store.as_context_mut().0.async_cx().expect("async cx");
+                let mut future = Pin::from(f(store.as_context_mut(), params, results));
+                unsafe { async_cx.block_on(future.as_mut()) }?
+            }
         };
         self.func_new(name, ff)
+    }
+
+    /// Defines a new host-provided async function into this [`Linker`].
+    ///
+    /// This allows the caller to register host functions with the
+    /// LinkerInstance such that multiple calls to such functions can run
+    /// concurrently. This isn't possible with the existing func_wrap_async
+    /// method because it takes a function which returns a future that owns a
+    /// unique reference to the Store, meaning the Store can't be used for
+    /// anything else until the future resolves.
+    ///
+    /// Ideally, we'd have a way to thread a `StoreContextMut<T>` through an
+    /// arbitrary `Future` such that it has access to the `Store` only while
+    /// being polled (i.e. between, but not across, await points). However,
+    /// there's currently no way to express that in async Rust, so we make do
+    /// with a more awkward scheme: each function registered using
+    /// `func_wrap_concurrent` gets access to the `Store` twice: once before
+    /// doing any concurrent operations (i.e. before awaiting) and once
+    /// afterward. This allows multiple calls to proceed concurrently without
+    /// any one of them monopolizing the store.
+    #[cfg(feature = "component-model-async")]
+    pub fn func_new_concurrent<F, N, FN>(&mut self, name: &str, f: F) -> Result<()>
+    where
+        N: FnOnce(StoreContextMut<T>) -> Result<Vec<Val>> + Send + Sync + 'static,
+        FN: Future<Output = N> + Send + Sync + 'static,
+        F: Fn(StoreContextMut<T>, Vec<Val>) -> FN + Send + Sync + 'static,
+    {
+        assert!(
+            self.engine.config().async_support,
+            "cannot use `func_wrap_concurrent` without enabling async support in the config"
+        );
+        self.insert(
+            name,
+            Definition::Func(HostFunc::new_dynamic_concurrent(move |store, params, _| {
+                f(store, params)
+            })),
+        )?;
+        Ok(())
     }
 
     /// Defines a [`Module`] within this instance.

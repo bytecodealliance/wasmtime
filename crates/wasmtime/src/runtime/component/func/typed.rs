@@ -262,7 +262,7 @@ where
                             store,
                             params,
                             Self::lower_stack_args,
-                            Self::lift_stack_result,
+                            Self::lift_stack_result_raw,
                         )
                     } else {
                         self.func.start_call_raw_async(
@@ -278,7 +278,7 @@ where
                             store,
                             params,
                             Self::lower_heap_args_guest,
-                            Self::lift_stack_result,
+                            Self::lift_stack_result_raw,
                         )
                     } else {
                         self.func.start_call_raw_async(
@@ -292,8 +292,9 @@ where
             }
             #[cfg(not(feature = "component-model-async"))]
             {
-                bail!(
-                    "must enable the `component-model-async` feature to call async-lifted exports"
+                unreachable!(
+                    "async-lifted exports should have failed validation \
+                     when `component-model-async` feature disabled"
                 );
             }
         } else if Params::flatten_count() <= MAX_FLAT_PARAMS {
@@ -302,14 +303,14 @@ where
                     store,
                     params,
                     Self::lower_stack_args,
-                    Self::lift_stack_result,
+                    Self::lift_stack_result_raw,
                 )
             } else {
                 self.func.start_call_raw_async(
                     store,
                     params,
                     Self::lower_stack_args,
-                    Self::lift_heap_result,
+                    Self::lift_heap_result_raw,
                 )
             }
         } else {
@@ -318,14 +319,14 @@ where
                     store,
                     params,
                     Self::lower_heap_args,
-                    Self::lift_stack_result,
+                    Self::lift_stack_result_raw,
                 )
             } else {
                 self.func.start_call_raw_async(
                     store,
                     params,
                     Self::lower_heap_args,
-                    Self::lift_heap_result,
+                    Self::lift_heap_result_raw,
                 )
             }
         }?
@@ -351,7 +352,7 @@ where
                             store,
                             params,
                             Self::lower_stack_args,
-                            Self::lift_stack_result,
+                            Self::lift_stack_result_raw,
                         )
                     } else {
                         self.func.call_raw_async(
@@ -367,7 +368,7 @@ where
                             store,
                             params,
                             Self::lower_heap_args_guest,
-                            Self::lift_stack_result,
+                            Self::lift_stack_result_raw,
                         )
                     } else {
                         self.func.call_raw_async(
@@ -499,6 +500,16 @@ where
         Return::lift(cx, ty, dst)
     }
 
+    fn lift_stack_result_raw(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        dst: &[ValRaw],
+    ) -> Result<Return> {
+        Self::lift_stack_result(cx, ty, unsafe {
+            crate::component::storage::slice_to_storage(dst)
+        })
+    }
+
     /// Lift the result of a function where the result is stored indirectly on
     /// the heap.
     fn lift_heap_result(
@@ -521,6 +532,14 @@ where
         Return::load(cx, ty, bytes)
     }
 
+    fn lift_heap_result_raw(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        dst: &[ValRaw],
+    ) -> Result<Return> {
+        Self::lift_heap_result(cx, ty, &dst[0])
+    }
+
     #[cfg(feature = "component-model-async")]
     fn lower_heap_args_guest<T>(
         cx: &mut LowerContext<'_, T>,
@@ -528,18 +547,15 @@ where
         ty: InterfaceType,
         dst: &mut MaybeUninit<ValRaw>,
     ) -> Result<()> {
-        let ptr =
-            crate::component::func::validate_inbounds::<Params>(cx.as_slice_mut(), &unsafe {
-                dst.assume_init()
-            })?;
-        params.store(cx, ty, ptr)
+        _ = (cx, params, ty, dst);
+        todo!()
     }
 
     #[cfg(feature = "component-model-async")]
     fn lift_heap_result_guest(
         cx: &mut LiftContext<'_>,
         ty: InterfaceType,
-        dst: &ValRaw,
+        dst: &[ValRaw],
     ) -> Result<Return> {
         _ = (cx, ty, dst);
         todo!()

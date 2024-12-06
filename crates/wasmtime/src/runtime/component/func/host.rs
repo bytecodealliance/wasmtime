@@ -12,6 +12,7 @@ use crate::{AsContextMut, CallHook, StoreContextMut, ValRaw};
 use alloc::sync::Arc;
 use core::any::Any;
 use core::future::Future;
+use core::iter;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
@@ -21,6 +22,14 @@ use wasmtime_environ::component::{
 
 #[cfg(feature = "component-model-async")]
 use crate::runtime::vm::SendSyncPtr;
+
+const STATUS_PARAMS_READ: u32 = 1;
+const STATUS_DONE: u32 = 3;
+
+struct Ptr<F>(*const F);
+
+unsafe impl<F> Sync for Ptr<F> {}
+unsafe impl<F> Send for Ptr<F> {}
 
 pub struct HostFunc {
     entrypoint: VMLoweringCallee,
@@ -76,11 +85,6 @@ impl HostFunc {
         P: ComponentNamedList + Lift + 'static,
         R: ComponentNamedList + Lower + Send + Sync + 'static,
     {
-        struct Ptr<F>(*const F);
-
-        unsafe impl<F> Sync for Ptr<F> {}
-        unsafe impl<F> Send for Ptr<F> {}
-
         let data = Ptr(data as *const F);
         unsafe {
             call_host_and_handle_result::<T>(cx, |instance, types, store| {
@@ -106,13 +110,29 @@ impl HostFunc {
     where
         F: Fn(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
     {
+        Self::new_dynamic_concurrent(move |store, params: Vec<Val>, result_count| {
+            let mut results = iter::repeat(Val::Bool(false))
+                .take(result_count)
+                .collect::<Vec<_>>();
+            let result = func(store, &params, &mut results);
+            let result = result.map(move |()| results);
+            async move { concurrent::for_any(move |_| result) }
+        })
+    }
+
+    pub(crate) fn new_dynamic_concurrent<T, F, N, FN>(f: F) -> Arc<HostFunc>
+    where
+        N: FnOnce(StoreContextMut<T>) -> Result<Vec<Val>> + Send + Sync + 'static,
+        FN: Future<Output = N> + Send + Sync + 'static,
+        F: Fn(StoreContextMut<T>, Vec<Val>, usize) -> FN + Send + Sync + 'static,
+    {
         Arc::new(HostFunc {
-            entrypoint: dynamic_entrypoint::<T, F>,
+            entrypoint: dynamic_entrypoint::<T, F, N, FN>,
             // This function performs dynamic type checks and subsequently does
             // not need to perform up-front type checks. Instead everything is
             // dynamically managed at runtime.
             typecheck: Box::new(move |_expected_index, _expected_types| Ok(())),
-            func: Box::new(func),
+            func: Box::new(f),
         })
     }
 
@@ -224,9 +244,6 @@ where
     if async_ {
         #[cfg(feature = "component-model-async")]
         {
-            const STATUS_PARAMS_READ: u32 = 1;
-            const STATUS_DONE: u32 = 3;
-
             let paramptr = storage[0].assume_init();
             let retptr = storage[1].assume_init();
 
@@ -400,12 +417,12 @@ unsafe fn call_host_and_handle_result<T>(
     }
 }
 
-unsafe fn call_host_dynamic<T, F>(
+unsafe fn call_host_dynamic<T, F, N, FN>(
     instance: *mut ComponentInstance,
     types: &Arc<ComponentTypes>,
     mut store: StoreContextMut<'_, T>,
     ty: TypeFuncIndex,
-    _caller_instance: RuntimeComponentInstanceIndex,
+    caller_instance: RuntimeComponentInstanceIndex,
     mut flags: InstanceFlags,
     memory: *mut VMMemoryDefinition,
     realloc: *mut VMFuncRef,
@@ -415,12 +432,10 @@ unsafe fn call_host_dynamic<T, F>(
     closure: F,
 ) -> Result<()>
 where
-    F: FnOnce(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()>,
+    N: FnOnce(StoreContextMut<T>) -> Result<Vec<Val>> + Send + Sync + 'static,
+    FN: Future<Output = N> + Send + Sync + 'static,
+    F: Fn(StoreContextMut<T>, Vec<Val>, usize) -> FN + 'static,
 {
-    if async_ {
-        todo!("support async-lowered imports in `dynamic_entrypoint`");
-    }
-
     let options = Options::new(
         store.0.id(),
         NonNull::new(memory),
@@ -443,61 +458,136 @@ where
     let func_ty = &types[ty];
     let param_tys = &types[func_ty.params];
     let result_tys = &types[func_ty.results];
-    let mut cx = LiftContext::new(store.0, &options, types, instance);
-    cx.enter_call();
-    if let Some(param_count) = param_tys.abi.flat_count(MAX_FLAT_PARAMS) {
-        // NB: can use `MaybeUninit::slice_assume_init_ref` when that's stable
-        let mut iter =
-            mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(&storage[..param_count]).iter();
-        args = param_tys
-            .types
-            .iter()
-            .map(|ty| Val::lift(&mut cx, *ty, &mut iter))
-            .collect::<Result<Box<[_]>>>()?;
-        ret_index = param_count;
-        assert!(iter.next().is_none());
-    } else {
-        let mut offset =
-            validate_inbounds_dynamic(&param_tys.abi, cx.memory(), storage[0].assume_init_ref())?;
-        args = param_tys
-            .types
-            .iter()
-            .map(|ty| {
-                let abi = types.canonical_abi(ty);
-                let size = usize::try_from(abi.size32).unwrap();
-                let memory = &cx.memory()[abi.next_field32_size(&mut offset)..][..size];
-                Val::load(&mut cx, *ty, memory)
-            })
-            .collect::<Result<Box<[_]>>>()?;
-        ret_index = 1;
-    };
 
-    let mut result_vals = Vec::with_capacity(result_tys.types.len());
-    for _ in result_tys.types.iter() {
-        result_vals.push(Val::Bool(false));
-    }
-    closure(store.as_context_mut(), &args, &mut result_vals)?;
-    flags.set_may_leave(false);
+    if async_ {
+        #[cfg(feature = "component-model-async")]
+        {
+            let paramptr = storage[0].assume_init();
+            let retptr = storage[1].assume_init();
 
-    let mut cx = LowerContext::new(store, &options, types, instance);
-    if let Some(cnt) = result_tys.abi.flat_count(MAX_FLAT_RESULTS) {
-        let mut dst = storage[..cnt].iter_mut();
-        for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
-            val.lower(&mut cx, *ty, &mut dst)?;
+            let params = {
+                let mut lift = &mut LiftContext::new(store.0, &options, types, instance);
+                lift.enter_call();
+                let mut offset =
+                    validate_inbounds_dynamic(&param_tys.abi, lift.memory(), &paramptr)?;
+                param_tys
+                    .types
+                    .iter()
+                    .map(|ty| {
+                        let abi = types.canonical_abi(ty);
+                        let size = usize::try_from(abi.size32).unwrap();
+                        let memory = &lift.memory()[abi.next_field32_size(&mut offset)..][..size];
+                        Val::load(&mut lift, *ty, memory)
+                    })
+                    .collect::<Result<Vec<_>>>()?
+            };
+
+            let future = closure(store.as_context_mut(), params, result_tys.types.len());
+
+            let task = concurrent::first_poll(
+                instance,
+                store.as_context_mut(),
+                future,
+                caller_instance,
+                {
+                    let types = types.clone();
+                    let instance = SendSyncPtr::new(NonNull::new(instance).unwrap());
+                    let result_tys = func_ty.results;
+                    move |store, result_vals: Vec<Val>| {
+                        let result_tys = &types[result_tys];
+                        if result_vals.len() != result_tys.types.len() {
+                            bail!("result length mismatch");
+                        }
+
+                        let mut lower =
+                            LowerContext::new(store, &options, &types, instance.as_ptr());
+                        let mut ptr = validate_inbounds_dynamic(
+                            &result_tys.abi,
+                            lower.as_slice_mut(),
+                            &retptr,
+                        )?;
+                        for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
+                            let offset = types.canonical_abi(ty).next_field32_size(&mut ptr);
+                            val.store(&mut lower, *ty, offset)?;
+                        }
+                        Ok(())
+                    }
+                },
+            )?;
+
+            let status = if let Some(task) = task {
+                (STATUS_PARAMS_READ << 30) | task
+            } else {
+                STATUS_DONE << 30
+            };
+
+            storage[0] = MaybeUninit::new(ValRaw::i32(status as i32));
         }
-        assert!(dst.next().is_none());
-    } else {
-        let ret_ptr = storage[ret_index].assume_init_ref();
-        let mut ptr = validate_inbounds_dynamic(&result_tys.abi, cx.as_slice_mut(), ret_ptr)?;
-        for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
-            let offset = types.canonical_abi(ty).next_field32_size(&mut ptr);
-            val.store(&mut cx, *ty, offset)?;
+        #[cfg(not(feature = "component-model-async"))]
+        {
+            unreachable!(
+                "async-lowered imports should have failed validation \
+                 when `component-model-async` feature disabled"
+            );
         }
+    } else {
+        let mut cx = LiftContext::new(store.0, &options, types, instance);
+        cx.enter_call();
+        if let Some(param_count) = param_tys.abi.flat_count(MAX_FLAT_PARAMS) {
+            // NB: can use `MaybeUninit::slice_assume_init_ref` when that's stable
+            let mut iter =
+                mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(&storage[..param_count]).iter();
+            args = param_tys
+                .types
+                .iter()
+                .map(|ty| Val::lift(&mut cx, *ty, &mut iter))
+                .collect::<Result<Vec<_>>>()?;
+            ret_index = param_count;
+            assert!(iter.next().is_none());
+        } else {
+            let mut offset = validate_inbounds_dynamic(
+                &param_tys.abi,
+                cx.memory(),
+                storage[0].assume_init_ref(),
+            )?;
+            args = param_tys
+                .types
+                .iter()
+                .map(|ty| {
+                    let abi = types.canonical_abi(ty);
+                    let size = usize::try_from(abi.size32).unwrap();
+                    let memory = &cx.memory()[abi.next_field32_size(&mut offset)..][..size];
+                    Val::load(&mut cx, *ty, memory)
+                })
+                .collect::<Result<Vec<_>>>()?;
+            ret_index = 1;
+        };
+
+        let future = closure(store.as_context_mut(), args, result_tys.types.len());
+        let (result_vals, store) = concurrent::poll_and_block(store, future, caller_instance)?;
+
+        flags.set_may_leave(false);
+
+        let mut cx = LowerContext::new(store, &options, types, instance);
+        if let Some(cnt) = result_tys.abi.flat_count(MAX_FLAT_RESULTS) {
+            let mut dst = storage[..cnt].iter_mut();
+            for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
+                val.lower(&mut cx, *ty, &mut dst)?;
+            }
+            assert!(dst.next().is_none());
+        } else {
+            let ret_ptr = storage[ret_index].assume_init_ref();
+            let mut ptr = validate_inbounds_dynamic(&result_tys.abi, cx.as_slice_mut(), ret_ptr)?;
+            for (val, ty) in result_vals.iter().zip(result_tys.types.iter()) {
+                let offset = types.canonical_abi(ty).next_field32_size(&mut ptr);
+                val.store(&mut cx, *ty, offset)?;
+            }
+        }
+
+        flags.set_may_leave(true);
+
+        cx.exit_call()?;
     }
-
-    flags.set_may_leave(true);
-
-    cx.exit_call()?;
 
     return Ok(());
 }
@@ -518,7 +608,7 @@ fn validate_inbounds_dynamic(abi: &CanonicalAbiInfo, memory: &[u8], ptr: &ValRaw
     Ok(ptr)
 }
 
-extern "C" fn dynamic_entrypoint<T, F>(
+extern "C" fn dynamic_entrypoint<T, F, N, FN>(
     cx: *mut VMOpaqueContext,
     data: *mut u8,
     ty: TypeFuncIndex,
@@ -531,12 +621,14 @@ extern "C" fn dynamic_entrypoint<T, F>(
     storage: *mut MaybeUninit<ValRaw>,
     storage_len: usize,
 ) where
-    F: Fn(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
+    N: FnOnce(StoreContextMut<T>) -> Result<Vec<Val>> + Send + Sync + 'static,
+    FN: Future<Output = N> + Send + Sync + 'static,
+    F: Fn(StoreContextMut<T>, Vec<Val>, usize) -> FN + Send + Sync + 'static,
 {
-    let data = data as *const F;
+    let data = Ptr(data as *const F);
     unsafe {
         call_host_and_handle_result(cx, |instance, types, store| {
-            call_host_dynamic::<T, _>(
+            call_host_dynamic(
                 instance,
                 types,
                 store,
@@ -548,7 +640,7 @@ extern "C" fn dynamic_entrypoint<T, F>(
                 string_encoding,
                 async_,
                 core::slice::from_raw_parts_mut(storage, storage_len),
-                |store, params, results| (*data)(store, params, results),
+                move |store, params, results| (*data.0)(store, params, results),
             )
         })
     }
