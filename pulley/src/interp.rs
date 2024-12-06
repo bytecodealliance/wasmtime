@@ -302,7 +302,7 @@ impl fmt::LowerHex for XRegVal {
 /// 2. Sign or zero-extend. This restores platform-independent behavior but
 ///    requires an extra store on 32-bit platforms because they can probably
 ///    only store 32-bits at a time.
-/// 3. Always stores the values in this union as little-endian. This means that
+/// 3. Always store the values in this union as little-endian. This means that
 ///    big-endian platforms have to do a byte-swap but otherwise it has
 ///    platform-independent behavior.
 ///
@@ -318,7 +318,7 @@ impl fmt::LowerHex for XRegVal {
 /// to big-endian platforms though and it's not certain how crucial performance
 /// will be there.
 ///
-/// One final note is that this is notably in contrast to native CPUs where
+/// One final note is that this notably contrasts with native CPUs where
 /// native ISAs like RISC-V specifically define the entire register on every
 /// instruction, even if only the low half contains a significant result. Pulley
 /// is unlikely to become out-of-order within the CPU itself as it's interpreted
