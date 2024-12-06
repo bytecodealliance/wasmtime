@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use crate::runtime::vm::sys::vm::MemoryImageSource;
 use crate::runtime::vm::{HostAlignedByteCount, SendSyncPtr};
 use rustix::mm::{mprotect, MprotectFlags};
 use std::ops::Range;
@@ -123,13 +124,8 @@ impl Mmap {
     }
 
     #[inline]
-    pub fn as_ptr(&self) -> *const u8 {
-        self.memory.as_ptr() as *const u8
-    }
-
-    #[inline]
-    pub fn as_mut_ptr(&self) -> *mut u8 {
-        self.memory.as_ptr().cast()
+    pub fn as_send_sync_ptr(&self) -> SendSyncPtr<u8> {
+        self.memory.cast()
     }
 
     #[inline]
@@ -174,6 +170,28 @@ impl Mmap {
 
         mprotect(base, len, MprotectFlags::READ)?;
 
+        Ok(())
+    }
+
+    pub unsafe fn map_image_at(
+        &self,
+        image_source: &MemoryImageSource,
+        source_offset: u64,
+        memory_offset: HostAlignedByteCount,
+        memory_len: HostAlignedByteCount,
+    ) -> Result<()> {
+        unsafe {
+            let map_base = self.memory.as_ptr().byte_add(memory_offset.byte_count());
+            let ptr = rustix::mm::mmap(
+                map_base.cast(),
+                memory_len.byte_count(),
+                rustix::mm::ProtFlags::READ | rustix::mm::ProtFlags::WRITE,
+                rustix::mm::MapFlags::PRIVATE | rustix::mm::MapFlags::FIXED,
+                image_source.as_file(),
+                source_offset,
+            )?;
+            assert_eq!(map_base.cast(), ptr);
+        };
         Ok(())
     }
 }

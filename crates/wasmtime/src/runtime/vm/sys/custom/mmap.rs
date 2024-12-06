@@ -1,6 +1,6 @@
 use super::cvt;
 use crate::prelude::*;
-use crate::runtime::vm::sys::capi;
+use crate::runtime::vm::sys::{capi, vm::MemoryImageSource};
 use crate::runtime::vm::{HostAlignedByteCount, SendSyncPtr};
 use core::ops::Range;
 use core::ptr::{self, NonNull};
@@ -69,13 +69,8 @@ impl Mmap {
     }
 
     #[inline]
-    pub fn as_ptr(&self) -> *const u8 {
-        self.memory.as_ptr() as *const u8
-    }
-
-    #[inline]
-    pub fn as_mut_ptr(&self) -> *mut u8 {
-        self.memory.as_ptr().cast()
+    pub fn as_send_sync_ptr(&self) -> SendSyncPtr<u8> {
+        self.memory.cast()
     }
 
     #[inline]
@@ -108,6 +103,26 @@ impl Mmap {
 
         cvt(capi::wasmtime_mprotect(base, len, capi::PROT_READ))?;
         Ok(())
+    }
+
+    pub unsafe fn map_image_at(
+        &self,
+        image_source: &MemoryImageSource,
+        source_offset: u64,
+        memory_offset: HostAlignedByteCount,
+        memory_len: HostAlignedByteCount,
+    ) -> Result<()> {
+        assert_eq!(source_offset, 0);
+        let base = self
+            .memory
+            .as_ptr()
+            .byte_add(memory_offset.byte_count())
+            .cast();
+        cvt(capi::wasmtime_memory_image_map_at(
+            image_source.image_ptr().as_ptr(),
+            base,
+            memory_len.byte_count(),
+        ))
     }
 }
 

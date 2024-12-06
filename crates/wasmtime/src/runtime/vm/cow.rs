@@ -8,11 +8,10 @@
 use super::sys::DecommitBehavior;
 use crate::prelude::*;
 use crate::runtime::vm::sys::vm::{self, MemoryImageSource};
-use crate::runtime::vm::{host_page_size, HostAlignedByteCount, MmapVec, SendSyncPtr};
+use crate::runtime::vm::{host_page_size, HostAlignedByteCount, MmapOffset, MmapVec};
 use alloc::sync::Arc;
-use core::ffi::c_void;
 use core::ops::Range;
-use core::ptr::{self, NonNull};
+use core::ptr;
 use wasmtime_environ::{DefinedMemoryIndex, MemoryInitialization, Module, PrimaryMap, Tunables};
 
 /// Backing images for memories in a module.
@@ -131,13 +130,13 @@ impl MemoryImage {
         Ok(None)
     }
 
-    unsafe fn map_at(&self, base: *mut u8) -> Result<()> {
-        self.source.map_at(
-            base.add(self.linear_memory_offset.byte_count()),
-            self.len.byte_count(),
+    unsafe fn map_at(&self, mmap_base: &MmapOffset) -> Result<()> {
+        mmap_base.map_image_at(
+            &self.source,
             self.source_offset,
-        )?;
-        Ok(())
+            self.linear_memory_offset,
+            self.len,
+        )
     }
 
     unsafe fn remap_as_zeros_at(&self, base: *mut u8) -> Result<()> {
@@ -283,10 +282,9 @@ impl ModuleMemoryImages {
 /// with a fresh zero'd mmap, meaning that reuse is effectively not supported.
 #[derive(Debug)]
 pub struct MemoryImageSlot {
-    /// The base address in virtual memory of the actual heap memory.
-    ///
-    /// Bytes at this address are what is seen by the Wasm guest code.
-    base: SendSyncPtr<u8>,
+    /// The mmap and offset within it that contains the linear memory for this
+    /// slot.
+    base: MmapOffset,
 
     /// The maximum static memory size which `self.accessible` can grow to.
     static_size: usize,
@@ -337,12 +335,12 @@ impl MemoryImageSlot {
     /// and all memory from `accessible` from `static_size` should be mapped as
     /// `PROT_NONE` backed by zero-bytes.
     pub(crate) fn create(
-        base_addr: *mut c_void,
+        base: MmapOffset,
         accessible: HostAlignedByteCount,
         static_size: usize,
     ) -> Self {
         MemoryImageSlot {
-            base: NonNull::new(base_addr.cast()).unwrap().into(),
+            base,
             static_size,
             accessible,
             image: None,
@@ -463,7 +461,7 @@ impl MemoryImageSlot {
                 );
                 if !image.len.is_zero() {
                     unsafe {
-                        image.map_at(self.base.as_ptr())?;
+                        image.map_at(&self.base)?;
                     }
                 }
             }
@@ -480,7 +478,7 @@ impl MemoryImageSlot {
     pub(crate) fn remove_image(&mut self) -> Result<()> {
         if let Some(image) = &self.image {
             unsafe {
-                image.remap_as_zeros_at(self.base.as_ptr())?;
+                image.remap_as_zeros_at(self.base.as_mut_ptr())?;
             }
             self.image = None;
         }
@@ -589,7 +587,7 @@ impl MemoryImageSlot {
 
                     // This is memset (1)
                     ptr::write_bytes(
-                        self.base.as_ptr(),
+                        self.base.as_mut_ptr(),
                         0u8,
                         image.linear_memory_offset.byte_count(),
                     );
@@ -603,7 +601,7 @@ impl MemoryImageSlot {
 
                     // This is memset (3)
                     ptr::write_bytes(
-                        self.base.as_ptr().add(image_end.byte_count()),
+                        self.base.as_mut_ptr().add(image_end.byte_count()),
                         0u8,
                         remaining_memset.byte_count(),
                     );
@@ -639,7 +637,7 @@ impl MemoryImageSlot {
                     // Note that the memset may be zero bytes here.
 
                     // This is memset (1)
-                    ptr::write_bytes(self.base.as_ptr(), 0u8, keep_resident.byte_count());
+                    ptr::write_bytes(self.base.as_mut_ptr(), 0u8, keep_resident.byte_count());
 
                     // This is madvise (2)
                     self.restore_original_mapping(
@@ -657,7 +655,7 @@ impl MemoryImageSlot {
             // the rest.
             None => {
                 let size_to_memset = keep_resident.min(self.accessible);
-                ptr::write_bytes(self.base.as_ptr(), 0u8, size_to_memset.byte_count());
+                ptr::write_bytes(self.base.as_mut_ptr(), 0u8, size_to_memset.byte_count());
                 self.restore_original_mapping(
                     size_to_memset,
                     self.accessible
@@ -685,7 +683,10 @@ impl MemoryImageSlot {
             vm::decommit_behavior(),
             DecommitBehavior::RestoreOriginalMapping
         );
-        decommit(self.base.as_ptr().add(base.byte_count()), len.byte_count());
+        decommit(
+            self.base.as_mut_ptr().add(base.byte_count()),
+            len.byte_count(),
+        );
     }
 
     fn set_protection(&self, range: Range<HostAlignedByteCount>, readwrite: bool) -> Result<()> {
@@ -701,7 +702,7 @@ impl MemoryImageSlot {
         // TODO: use Mmap to change memory permissions instead of these free
         // functions.
         unsafe {
-            let start = self.base.as_ptr().add(range.start.byte_count());
+            let start = self.base.as_mut_ptr().add(range.start.byte_count());
             if readwrite {
                 vm::expose_existing_mapping(start, len.byte_count())?;
             } else {
@@ -731,7 +732,7 @@ impl MemoryImageSlot {
         }
 
         unsafe {
-            vm::erase_existing_mapping(self.base.as_ptr(), self.static_size)?;
+            vm::erase_existing_mapping(self.base.as_mut_ptr(), self.static_size)?;
         }
 
         self.image = None;
@@ -852,11 +853,8 @@ mod test {
         // 4 MiB mmap'd area, not accessible
         let mmap = mmap_4mib_inaccessible();
         // Create a MemoryImageSlot on top of it
-        let mut memfd = MemoryImageSlot::create(
-            mmap.as_mut_ptr() as *mut _,
-            HostAlignedByteCount::ZERO,
-            4 << 20,
-        );
+        let mut memfd =
+            MemoryImageSlot::create(mmap.zero_offset(), HostAlignedByteCount::ZERO, 4 << 20);
         memfd.no_clear_on_drop();
         assert!(!memfd.is_dirty());
         // instantiate with 64 KiB initial size
@@ -903,11 +901,8 @@ mod test {
         // 4 MiB mmap'd area, not accessible
         let mmap = mmap_4mib_inaccessible();
         // Create a MemoryImageSlot on top of it
-        let mut memfd = MemoryImageSlot::create(
-            mmap.as_mut_ptr() as *mut _,
-            HostAlignedByteCount::ZERO,
-            4 << 20,
-        );
+        let mut memfd =
+            MemoryImageSlot::create(mmap.zero_offset(), HostAlignedByteCount::ZERO, 4 << 20);
         memfd.no_clear_on_drop();
         // Create an image with some data.
         let image = Arc::new(create_memfd_with_data(page_size, &[1, 2, 3, 4]).unwrap());
@@ -996,11 +991,8 @@ mod test {
             ..Tunables::default_miri()
         };
         let mmap = mmap_4mib_inaccessible();
-        let mut memfd = MemoryImageSlot::create(
-            mmap.as_mut_ptr() as *mut _,
-            HostAlignedByteCount::ZERO,
-            4 << 20,
-        );
+        let mut memfd =
+            MemoryImageSlot::create(mmap.zero_offset(), HostAlignedByteCount::ZERO, 4 << 20);
         memfd.no_clear_on_drop();
 
         // Test basics with the image
@@ -1066,11 +1058,8 @@ mod test {
         };
 
         let mmap = mmap_4mib_inaccessible();
-        let mut memfd = MemoryImageSlot::create(
-            mmap.as_mut_ptr() as *mut _,
-            HostAlignedByteCount::ZERO,
-            4 << 20,
-        );
+        let mut memfd =
+            MemoryImageSlot::create(mmap.zero_offset(), HostAlignedByteCount::ZERO, 4 << 20);
         memfd.no_clear_on_drop();
         let image = Arc::new(create_memfd_with_data(page_size, &[1, 2, 3, 4]).unwrap());
         let initial = 64 << 10;

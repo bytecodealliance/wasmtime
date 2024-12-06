@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use crate::runtime::vm::sys::vm::MemoryImageSource;
 use crate::runtime::vm::{HostAlignedByteCount, SendSyncPtr};
 use std::fs::{File, OpenOptions};
 use std::io;
@@ -133,7 +134,13 @@ impl Mmap {
             // Protect the entire file as PAGE_WRITECOPY to start (i.e.
             // remove the execute bit)
             let mut old = 0;
-            if VirtualProtect(ret.as_mut_ptr().cast(), ret.len(), PAGE_WRITECOPY, &mut old) == 0 {
+            if VirtualProtect(
+                ret.as_send_sync_ptr().as_ptr().cast(),
+                ret.len(),
+                PAGE_WRITECOPY,
+                &mut old,
+            ) == 0
+            {
                 return Err(io::Error::last_os_error())
                     .context("failed change pages to `PAGE_READONLY`");
             }
@@ -149,7 +156,10 @@ impl Mmap {
     ) -> Result<()> {
         if unsafe {
             VirtualAlloc(
-                self.as_ptr().add(start.byte_count()) as _,
+                self.as_send_sync_ptr()
+                    .as_ptr()
+                    .add(start.byte_count())
+                    .cast(),
                 len.byte_count(),
                 MEM_COMMIT,
                 PAGE_READWRITE,
@@ -164,13 +174,8 @@ impl Mmap {
     }
 
     #[inline]
-    pub fn as_ptr(&self) -> *const u8 {
-        self.memory.as_ptr() as *const u8
-    }
-
-    #[inline]
-    pub fn as_mut_ptr(&self) -> *mut u8 {
-        self.memory.as_ptr().cast()
+    pub fn as_send_sync_ptr(&self) -> SendSyncPtr<u8> {
+        self.memory.cast()
     }
 
     #[inline]
@@ -191,8 +196,8 @@ impl Mmap {
             PAGE_EXECUTE_READ
         };
         let mut old = 0;
-        let base = self.as_ptr().add(range.start);
-        let result = VirtualProtect(base as _, range.end - range.start, flags, &mut old);
+        let base = self.as_send_sync_ptr().as_ptr().add(range.start).cast();
+        let result = VirtualProtect(base, range.end - range.start, flags, &mut old);
         if result == 0 {
             bail!(io::Error::last_os_error());
         }
@@ -201,12 +206,22 @@ impl Mmap {
 
     pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
         let mut old = 0;
-        let base = self.as_ptr().add(range.start);
-        let result = VirtualProtect(base as _, range.end - range.start, PAGE_READONLY, &mut old);
+        let base = self.as_send_sync_ptr().as_ptr().add(range.start).cast();
+        let result = VirtualProtect(base, range.end - range.start, PAGE_READONLY, &mut old);
         if result == 0 {
             bail!(io::Error::last_os_error());
         }
         Ok(())
+    }
+
+    pub unsafe fn map_image_at(
+        &self,
+        image_source: &MemoryImageSource,
+        _source_offset: u64,
+        _memory_offset: HostAlignedByteCount,
+        _memory_len: HostAlignedByteCount,
+    ) -> Result<()> {
+        match *image_source {}
     }
 }
 
@@ -219,12 +234,12 @@ impl Drop for Mmap {
         if self.is_file {
             let r = unsafe {
                 UnmapViewOfFile(MEMORY_MAPPED_VIEW_ADDRESS {
-                    Value: self.as_mut_ptr().cast(),
+                    Value: self.memory.as_ptr().cast(),
                 })
             };
             assert_ne!(r, 0);
         } else {
-            let r = unsafe { VirtualFree(self.as_mut_ptr().cast(), 0, MEM_RELEASE) };
+            let r = unsafe { VirtualFree(self.memory.as_ptr().cast(), 0, MEM_RELEASE) };
             assert_ne!(r, 0);
         }
     }
