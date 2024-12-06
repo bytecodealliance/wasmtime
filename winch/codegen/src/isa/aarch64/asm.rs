@@ -723,7 +723,7 @@ impl Assembler {
         });
     }
 
-    /// Trap if rn is 0
+    /// Trap if `rn` is zero.
     pub fn trapz(&mut self, rn: Reg, code: TrapCode) {
         self.emit(Inst::TrapIf {
             kind: CondBrKind::Zero(rn.into()),
@@ -909,6 +909,8 @@ impl Assembler {
         &self.buffer
     }
 
+    /// Emits a direct call to a function defined locally and
+    /// referenced to by `name`.
     pub fn call_with_name(&mut self, name: UserExternalNameRef) {
         self.emit(Inst::Call {
             info: Box::new(cranelift_codegen::CallInfo::empty(
@@ -918,6 +920,8 @@ impl Assembler {
         })
     }
 
+    /// Emits an indirect call to a function whose address is 
+    /// stored the `callee` register.
     pub fn call_with_reg(&mut self, callee: Reg) {
         self.emit(Inst::CallInd {
             info: Box::new(cranelift_codegen::CallInfo::empty(
@@ -927,6 +931,8 @@ impl Assembler {
         })
     }
 
+    /// Emit a call to a well-known libcall.
+    /// `dst` is used as a scratch register to hold the address of the libcall function
     pub fn call_with_lib(&mut self, lib: LibCall, dst: Reg) {
         let name = ExternalName::LibCall(lib);
         self.emit(Inst::LoadExtName {
