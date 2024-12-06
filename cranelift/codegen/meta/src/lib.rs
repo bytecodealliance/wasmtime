@@ -75,14 +75,13 @@ fn generate_rust_for_shared_defs(
 }
 
 /// Generates all the ISLE source files used in Cranelift from the meta-language.
-pub fn generate_isle(isas: &[isa::Isa], isle_dir: &std::path::Path) -> Result<(), error::Error> {
+pub fn generate_isle(isle_dir: &std::path::Path) -> Result<(), error::Error> {
     let shared_defs = shared::define();
-    generate_isle_for_shared_defs(&shared_defs, isas, isle_dir)
+    generate_isle_for_shared_defs(&shared_defs, isle_dir)
 }
 
 fn generate_isle_for_shared_defs(
     shared_defs: &Definitions,
-    isas: &[isa::Isa],
     isle_dir: &std::path::Path,
 ) -> Result<(), error::Error> {
     gen_isle::generate(
@@ -94,11 +93,7 @@ fn generate_isle_for_shared_defs(
     )?;
 
     #[cfg(feature = "pulley")]
-    if isas.contains(&isa::Isa::Pulley32) || isas.contains(&isa::Isa::Pulley64) {
-        pulley::generate_isle("pulley_gen.isle", isle_dir)?;
-    }
-
-    let _ = isas;
+    pulley::generate_isle("pulley_gen.isle", isle_dir)?;
 
     Ok(())
 }
@@ -111,6 +106,6 @@ pub fn generate(
 ) -> Result<(), error::Error> {
     let shared_defs = shared::define();
     generate_rust_for_shared_defs(&shared_defs, isas, out_dir)?;
-    generate_isle_for_shared_defs(&shared_defs, isas, isle_dir)?;
+    generate_isle_for_shared_defs(&shared_defs, isle_dir)?;
     Ok(())
 }
