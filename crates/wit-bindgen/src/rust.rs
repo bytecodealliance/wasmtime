@@ -167,12 +167,12 @@ pub trait RustGenerator<'a> {
             }
             TypeDefKind::Future(ty) => {
                 self.push_str("wasmtime::component::FutureReader<");
-                self.print_optional_ty(ty.as_ref(), mode);
+                self.print_optional_ty(ty.as_ref(), TypeMode::Owned);
                 self.push_str(">");
             }
             TypeDefKind::Stream(ty) => {
                 self.push_str("wasmtime::component::StreamReader<");
-                self.print_ty(ty, mode);
+                self.print_ty(ty, TypeMode::Owned);
                 self.push_str(">");
             }
             TypeDefKind::ErrorContext => {

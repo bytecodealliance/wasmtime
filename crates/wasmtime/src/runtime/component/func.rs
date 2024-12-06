@@ -25,9 +25,11 @@ pub use self::host::*;
 pub use self::options::*;
 pub use self::typed::*;
 
+#[cfg(feature = "component-model-async")]
 type LowerFn<T, Params, LowerParams> =
     fn(&mut LowerContext<T>, &Params, InterfaceType, &mut MaybeUninit<LowerParams>) -> Result<()>;
 
+#[cfg(feature = "component-model-async")]
 type LiftFn<Return> = fn(&mut LiftContext, InterfaceType, &[ValRaw]) -> Result<Return>;
 
 #[repr(C)]
@@ -372,6 +374,7 @@ impl Func {
         .0
     }
 
+    #[cfg(feature = "component-model-async")]
     fn start_call<'a, T: Send>(
         self,
         mut store: StoreContextMut<'a, T>,
@@ -389,20 +392,10 @@ impl Func {
         }
 
         let (lower, lift) = if store.0[self.0].options.async_() {
-            #[cfg(feature = "component-model-async")]
-            {
-                (
-                    Self::lower_args_async as LowerFn<_, _, _>,
-                    Self::lift_results_async as LiftFn<_>,
-                )
-            }
-            #[cfg(not(feature = "component-model-async"))]
-            {
-                unreachable!(
-                    "async-lifted exports should have failed validation \
-                     when `component-model-async` feature disabled"
-                );
-            }
+            (
+                Self::lower_args_async as LowerFn<_, _, _>,
+                Self::lift_results_async as LiftFn<_>,
+            )
         } else {
             (
                 Self::lower_args_sync as LowerFn<_, _, _>,
@@ -824,6 +817,7 @@ impl Func {
         Self::lower_args(cx, params, params_ty, dst, false)
     }
 
+    #[cfg(feature = "component-model-async")]
     fn lower_args_async<T>(
         cx: &mut LowerContext<'_, T>,
         params: &Vec<Val>,
@@ -890,6 +884,7 @@ impl Func {
         Self::lift_results(cx, results_ty, src, false)
     }
 
+    #[cfg(feature = "component-model-async")]
     fn lift_results_async(
         cx: &mut LiftContext<'_>,
         results_ty: InterfaceType,

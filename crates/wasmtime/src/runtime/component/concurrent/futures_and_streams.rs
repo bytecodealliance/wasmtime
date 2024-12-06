@@ -6,6 +6,7 @@ use {
         component::{
             func::{self, LiftContext, LowerContext, Options},
             matching::InstanceType,
+            values::{ErrorContextAny, FutureAny, StreamAny},
             Val, WasmList,
         },
         vm::{
@@ -641,6 +642,13 @@ pub struct FutureReader<T> {
 }
 
 impl<T> FutureReader<T> {
+    pub(crate) fn new(rep: u32) -> Self {
+        Self {
+            rep,
+            _phantom: PhantomData,
+        }
+    }
+
     /// Read the value from this `future`.
     pub fn read<U, S: AsContextMut<Data = U>>(self, store: S) -> Result<Promise<Option<T>>>
     where
@@ -650,6 +658,24 @@ impl<T> FutureReader<T> {
             v.ok()
                 .and_then(|v| v.map(|v| v.into_iter().next().unwrap()))
         }))))
+    }
+
+    /// Convert this `FutureReader` into a [`Val`].
+    pub fn into_val(self) -> Val {
+        Val::Future(FutureAny(self.rep))
+    }
+
+    /// Attempt to convert the specified [`Val`] to a `FutureReader`.
+    pub fn from_val<U, S: AsContextMut<Data = U>>(mut store: S, value: &Val) -> Result<Self> {
+        let Val::Future(FutureAny(rep)) = value else {
+            bail!("expected `future`; got `{}`", value.desc());
+        };
+        store
+            .as_context_mut()
+            .concurrent_state()
+            .table
+            .get(TableId::<TransmitState>::new(*rep))?;
+        Ok(Self::new(*rep))
     }
 
     fn lower_to_index<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType) -> Result<u32> {
@@ -808,6 +834,13 @@ pub struct StreamReader<T> {
 }
 
 impl<T> StreamReader<T> {
+    pub(crate) fn new(rep: u32) -> Self {
+        Self {
+            rep,
+            _phantom: PhantomData,
+        }
+    }
+
     /// Read the next values (if any) from this `stream`.
     pub fn read<U, S: AsContextMut<Data = U>>(
         self,
@@ -819,6 +852,24 @@ impl<T> StreamReader<T> {
         Ok(Promise(Box::pin(
             host_read(store, self.rep)?.map(move |v| v.ok().and_then(|v| v.map(|v| (self, v)))),
         )))
+    }
+
+    /// Convert this `StreamReader` into a [`Val`].
+    pub fn into_val(self) -> Val {
+        Val::Stream(StreamAny(self.rep))
+    }
+
+    /// Attempt to convert the specified [`Val`] to a `StreamReader`.
+    pub fn from_val<U, S: AsContextMut<Data = U>>(mut store: S, value: &Val) -> Result<Self> {
+        let Val::Stream(StreamAny(rep)) = value else {
+            bail!("expected `stream`; got `{}`", value.desc());
+        };
+        store
+            .as_context_mut()
+            .concurrent_state()
+            .table
+            .get(TableId::<TransmitState>::new(*rep))?;
+        Ok(Self::new(*rep))
     }
 
     fn lower_to_index<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType) -> Result<u32> {
@@ -947,6 +998,23 @@ pub struct ErrorContext {
 }
 
 impl ErrorContext {
+    pub(crate) fn new(rep: u32) -> Self {
+        Self { rep }
+    }
+
+    /// Convert this `ErrorContext` into a [`Val`].
+    pub fn into_val(self) -> Val {
+        Val::ErrorContext(ErrorContextAny(self.rep))
+    }
+
+    /// Attempt to convert the specified [`Val`] to a `ErrorContext`.
+    pub fn from_val<U, S: AsContextMut<Data = U>>(_: S, value: &Val) -> Result<Self> {
+        let Val::ErrorContext(ErrorContextAny(rep)) = value else {
+            bail!("expected `error-context`; got `{}`", value.desc());
+        };
+        Ok(Self::new(*rep))
+    }
+
     fn lower_to_index<U>(&self, cx: &mut LowerContext<'_, U>, ty: InterfaceType) -> Result<u32> {
         match ty {
             InterfaceType::ErrorContext(dst) => {

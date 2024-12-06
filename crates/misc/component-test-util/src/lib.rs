@@ -32,18 +32,18 @@ where
 }
 
 pub trait FuncExt {
-    fn call_and_post_return(
+    fn call_and_post_return<T: Send>(
         &self,
-        store: impl AsContextMut,
+        store: impl AsContextMut<Data = T>,
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()>;
 }
 
 impl FuncExt for Func {
-    fn call_and_post_return(
+    fn call_and_post_return<T: Send>(
         &self,
-        mut store: impl AsContextMut,
+        mut store: impl AsContextMut<Data = T>,
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()> {

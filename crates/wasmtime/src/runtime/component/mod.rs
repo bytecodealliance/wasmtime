@@ -687,6 +687,10 @@ pub mod bindgen_examples {}
 pub(crate) mod concurrent {
     use {
         crate::{
+            component::{
+                func::{ComponentType, LiftContext, LowerContext},
+                Val,
+            },
             vm::{VMFuncRef, VMMemoryDefinition, VMOpaqueContext},
             AsContextMut, StoreContextMut, ValRaw,
         },
@@ -694,13 +698,15 @@ pub(crate) mod concurrent {
         anyhow::Result,
         core::{
             future::Future,
+            marker::PhantomData,
             mem::MaybeUninit,
             pin::pin,
             task::{Context, Poll, Waker},
         },
         wasmtime_environ::component::{
-            RuntimeComponentInstanceIndex, StringEncoding, TypeErrorContextTableIndex,
-            TypeFutureTableIndex, TypeStreamTableIndex, TypeTaskReturnIndex,
+            InterfaceType, RuntimeComponentInstanceIndex, StringEncoding,
+            TypeErrorContextTableIndex, TypeFutureTableIndex, TypeStreamTableIndex,
+            TypeTaskReturnIndex,
         },
     };
 
@@ -1007,5 +1013,147 @@ pub(crate) mod concurrent {
         _error: u32,
     ) {
         unreachable!()
+    }
+
+    pub struct ErrorContext;
+
+    impl ErrorContext {
+        pub(crate) fn new(_rep: u32) -> Self {
+            unreachable!()
+        }
+
+        pub(crate) fn into_val(self) -> Val {
+            unreachable!()
+        }
+
+        pub(crate) fn lower<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _dst: &mut MaybeUninit<<u32 as ComponentType>::Lower>,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn store<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _offset: usize,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn lift(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _src: &<u32 as ComponentType>::Lower,
+        ) -> Result<Self> {
+            unreachable!()
+        }
+
+        pub(crate) fn load(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _bytes: &[u8],
+        ) -> Result<Self> {
+            unreachable!()
+        }
+    }
+
+    pub struct StreamReader<P> {
+        _phantom: PhantomData<P>,
+    }
+
+    impl<P> StreamReader<P> {
+        pub(crate) fn new(_rep: u32) -> Self {
+            unreachable!()
+        }
+
+        pub(crate) fn into_val(self) -> Val {
+            unreachable!()
+        }
+
+        pub(crate) fn lower<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _dst: &mut MaybeUninit<<u32 as ComponentType>::Lower>,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn store<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _offset: usize,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn lift(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _src: &<u32 as ComponentType>::Lower,
+        ) -> Result<Self> {
+            unreachable!()
+        }
+
+        pub(crate) fn load(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _bytes: &[u8],
+        ) -> Result<Self> {
+            unreachable!()
+        }
+    }
+
+    pub struct FutureReader<P> {
+        _phantom: PhantomData<P>,
+    }
+
+    impl<P> FutureReader<P> {
+        pub(crate) fn new(_rep: u32) -> Self {
+            unreachable!()
+        }
+
+        pub(crate) fn into_val(self) -> Val {
+            unreachable!()
+        }
+
+        pub(crate) fn lower<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _dst: &mut MaybeUninit<<u32 as ComponentType>::Lower>,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn store<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _offset: usize,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn lift(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _src: &<u32 as ComponentType>::Lower,
+        ) -> Result<Self> {
+            unreachable!()
+        }
+
+        pub(crate) fn load(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _bytes: &[u8],
+        ) -> Result<Self> {
+            unreachable!()
+        }
     }
 }

@@ -385,7 +385,7 @@ impl<T> LinkerInstance<'_, T> {
         }
     }
 
-    /// Defines a new host-provided function into this [`Linker`].
+    /// Defines a new host-provided function into this [`LinkerInstance`].
     ///
     /// This method is used to give host functions to wasm components. The
     /// `func` provided will be callable from linked components with the type
@@ -413,7 +413,7 @@ impl<T> LinkerInstance<'_, T> {
         Ok(())
     }
 
-    /// Defines a new host-provided async function into this [`Linker`].
+    /// Defines a new host-provided async function into this [`LinkerInstance`].
     ///
     /// This is exactly like [`Self::func_wrap`] except it takes an async
     /// host function.
@@ -452,7 +452,7 @@ impl<T> LinkerInstance<'_, T> {
         self.func_wrap(name, ff)
     }
 
-    /// Defines a new host-provided async function into this [`Linker`].
+    /// Defines a new host-provided async function into this [`LinkerInstance`].
     ///
     /// This allows the caller to register host functions with the
     /// LinkerInstance such that multiple calls to such functions can run
@@ -632,10 +632,10 @@ impl<T> LinkerInstance<'_, T> {
         self.func_new(name, ff)
     }
 
-    /// Defines a new host-provided async function into this [`Linker`].
+    /// Define a new host-provided async function using dynamic types.
     ///
     /// This allows the caller to register host functions with the
-    /// LinkerInstance such that multiple calls to such functions can run
+    /// `LinkerInstance` such that multiple calls to such functions can run
     /// concurrently. This isn't possible with the existing func_wrap_async
     /// method because it takes a function which returns a future that owns a
     /// unique reference to the Store, meaning the Store can't be used for

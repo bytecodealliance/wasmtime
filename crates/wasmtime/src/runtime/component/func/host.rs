@@ -23,7 +23,9 @@ use wasmtime_environ::component::{
 #[cfg(feature = "component-model-async")]
 use crate::runtime::vm::SendSyncPtr;
 
+#[cfg(feature = "component-model-async")]
 const STATUS_PARAMS_READ: u32 = 1;
+#[cfg(feature = "component-model-async")]
 const STATUS_DONE: u32 = 3;
 
 struct Ptr<F>(*const F);

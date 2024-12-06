@@ -500,6 +500,7 @@ where
         Return::lift(cx, ty, dst)
     }
 
+    #[cfg(feature = "component-model-async")]
     fn lift_stack_result_raw(
         cx: &mut LiftContext<'_>,
         ty: InterfaceType,
@@ -532,6 +533,7 @@ where
         Return::load(cx, ty, bytes)
     }
 
+    #[cfg(feature = "component-model-async")]
     fn lift_heap_result_raw(
         cx: &mut LiftContext<'_>,
         ty: InterfaceType,
