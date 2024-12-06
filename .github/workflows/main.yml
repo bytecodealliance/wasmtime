@@ -638,9 +638,9 @@ jobs:
     - run: cmake -Sexamples -Bexamples/build -DBUILD_SHARED_LIBS=OFF
     - run: cmake --build examples/build --config Debug
     - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target RUN_TESTS
-      if: matrix.os == 'windows-latest'
+      if: runner.os == 'Windows'
     - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
-      if: matrix.os != 'windows-latest'
+      if: runner.os != 'Windows'
 
     # common logic to cancel the entire run if this job fails
     - uses: ./.github/actions/cancel-on-failure
@@ -742,14 +742,14 @@ jobs:
     # to CPU-specific features.
     - name: CPU information
       run: lscpu
-      if: matrix.os == 'ubuntu-latest'
+      if: runner.os == 'Linux'
     - name: CPU information
       run: sysctl hw
-      if: contains(matrix.os, 'macos')
+      if: runner.os == 'macOS'
     - name: CPU information
       run: wmic cpu list /format:list
       shell: pwsh
-      if: matrix.os == 'windows-latest'
+      if: runner.os == 'Windows'
 
     # Since MPK (PKU) is not present on some GitHub runners, we check if it is
     # available before force-enabling it. This occasional testing is better than
@@ -805,9 +805,9 @@ jobs:
     # GitHub Actions Window Server image doesn't have desktop experience
     # enabled, so we download the standalone library from ONNX Runtime project.
     - uses: nuget/setup-nuget@v2
-      if: (matrix.os == 'windows-latest') && (matrix.feature == 'winml')
+      if: (runner.os == 'Windows') && (matrix.feature == 'winml')
     - run: nuget install Microsoft.AI.MachineLearning
-      if: (matrix.os == 'windows-latest') && (matrix.feature == 'winml')
+      if: (runner.os == 'Windows') && (matrix.feature == 'winml')
 
     # Install Rust targets.
     - run: rustup target add wasm32-wasip1
