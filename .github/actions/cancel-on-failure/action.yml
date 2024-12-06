@@ -10,6 +10,7 @@ runs:
     # seem to be an issue for other platforms though. If a failure happens on
     # Windows let the failure naturally propagate.
     - run: gh run cancel ${{ github.run_id }}
+      shell: bash
       if: github.event_name != 'pull_request' && runner.os != 'Windows'
       env:
         GH_TOKEN: ${{ github.token }}
