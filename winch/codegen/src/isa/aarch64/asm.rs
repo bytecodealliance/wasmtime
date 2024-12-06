@@ -2,6 +2,7 @@
 
 use super::{address::Address, regs};
 use crate::masm::{ExtendKind, FloatCmpKind, IntCmpKind, RoundingMode, ShiftKind};
+use crate::CallingConvention;
 use crate::{
     masm::OperandSize,
     reg::{writable, Reg, WritableReg},
@@ -17,7 +18,6 @@ use cranelift_codegen::{
         FPUOpRIMod, FPURightShiftImm, FpuRoundMode, Imm12, ImmLogic, ImmShift, Inst, PairAMode,
         ScalarSize, VecLanesOp, VecMisc2, VectorSize,
     },
-    isa::CallConv,
     settings, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
     MachLabel, Writable,
 };
@@ -911,35 +911,35 @@ impl Assembler {
 
     /// Emits a direct call to a function defined locally and
     /// referenced to by `name`.
-    pub fn call_with_name(&mut self, name: UserExternalNameRef) {
+    pub fn call_with_name(&mut self, name: UserExternalNameRef, call_conv: CallingConvention) {
         self.emit(Inst::Call {
             info: Box::new(cranelift_codegen::CallInfo::empty(
                 ExternalName::user(name),
-                CallConv::SystemV,
+                call_conv.into(),
             )),
         })
     }
 
-    /// Emits an indirect call to a function whose address is 
+    /// Emits an indirect call to a function whose address is
     /// stored the `callee` register.
-    pub fn call_with_reg(&mut self, callee: Reg) {
+    pub fn call_with_reg(&mut self, callee: Reg, call_conv: CallingConvention) {
         self.emit(Inst::CallInd {
             info: Box::new(cranelift_codegen::CallInfo::empty(
                 callee.into(),
-                CallConv::SystemV,
+                call_conv.into(),
             )),
         })
     }
 
     /// Emit a call to a well-known libcall.
     /// `dst` is used as a scratch register to hold the address of the libcall function
-    pub fn call_with_lib(&mut self, lib: LibCall, dst: Reg) {
+    pub fn call_with_lib(&mut self, lib: LibCall, dst: Reg, call_conv: CallingConvention) {
         let name = ExternalName::LibCall(lib);
         self.emit(Inst::LoadExtName {
             rd: writable!(dst.into()),
             name: name.into(),
             offset: 0,
         });
-        self.call_with_reg(dst)
+        self.call_with_reg(dst, call_conv)
     }
 }

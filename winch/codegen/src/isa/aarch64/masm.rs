@@ -179,11 +179,11 @@ impl Masm for MacroAssembler {
         let aligned_args_size = align_to(stack_args_size, alignment);
         let total_stack = delta + aligned_args_size;
         self.reserve_stack(total_stack);
-        let callee = load_callee(self);
+        let (callee, call_conv) = load_callee(self);
         match callee {
-            CalleeKind::Indirect(reg) => self.asm.call_with_reg(reg),
-            CalleeKind::Direct(idx) => self.asm.call_with_name(idx),
-            CalleeKind::LibCall(lib) => self.asm.call_with_lib(lib, scratch()),
+            CalleeKind::Indirect(reg) => self.asm.call_with_reg(reg, call_conv),
+            CalleeKind::Direct(idx) => self.asm.call_with_name(idx, call_conv),
+            CalleeKind::LibCall(lib) => self.asm.call_with_lib(lib, scratch(), call_conv),
         }
 
         total_stack
