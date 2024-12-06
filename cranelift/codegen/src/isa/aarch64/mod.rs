@@ -150,10 +150,10 @@ impl TargetIsa for AArch64Backend {
     #[cfg(feature = "unwind")]
     fn create_systemv_cie(&self) -> Option<gimli::write::CommonInformationEntry> {
         let is_apple_os = match self.triple.operating_system {
-            OperatingSystem::Darwin
-            | OperatingSystem::Ios
+            OperatingSystem::Darwin(_)
+            | OperatingSystem::IOS(_)
             | OperatingSystem::MacOSX { .. }
-            | OperatingSystem::Tvos => true,
+            | OperatingSystem::TvOS(_) => true,
             _ => false,
         };
 
@@ -184,9 +184,9 @@ impl TargetIsa for AArch64Backend {
         use target_lexicon::*;
         match self.triple().operating_system {
             OperatingSystem::MacOSX { .. }
-            | OperatingSystem::Darwin
-            | OperatingSystem::Ios
-            | OperatingSystem::Tvos => {
+            | OperatingSystem::Darwin(_)
+            | OperatingSystem::IOS(_)
+            | OperatingSystem::TvOS(_) => {
                 debug_assert_eq!(1 << 14, 0x4000);
                 14
             }
