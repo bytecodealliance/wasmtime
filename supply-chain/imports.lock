@@ -1028,11 +1028,11 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.target-lexicon]]
-version = "0.12.16"
-when = "2024-07-30"
-user-id = 696
-user-login = "fitzgen"
-user-name = "Nick Fitzgerald"
+version = "0.13.0"
+when = "2024-12-05"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
 
 [[publisher.termcolor]]
 version = "1.4.1"
