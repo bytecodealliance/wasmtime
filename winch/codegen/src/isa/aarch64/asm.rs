@@ -909,7 +909,7 @@ impl Assembler {
         &self.buffer
     }
 
-    /// Emits a direct call to a function defined locally and
+    /// Emit a direct call to a function defined locally and
     /// referenced to by `name`.
     pub fn call_with_name(&mut self, name: UserExternalNameRef, call_conv: CallingConvention) {
         self.emit(Inst::Call {
@@ -920,7 +920,7 @@ impl Assembler {
         })
     }
 
-    /// Emits an indirect call to a function whose address is
+    /// Emit an indirect call to a function whose address is
     /// stored the `callee` register.
     pub fn call_with_reg(&mut self, callee: Reg, call_conv: CallingConvention) {
         self.emit(Inst::CallInd {
@@ -932,7 +932,7 @@ impl Assembler {
     }
 
     /// Emit a call to a well-known libcall.
-    /// `dst` is used as a scratch register to hold the address of the libcall function
+    /// `dst` is used as a scratch register to hold the address of the libcall function.
     pub fn call_with_lib(&mut self, lib: LibCall, dst: Reg, call_conv: CallingConvention) {
         let name = ExternalName::LibCall(lib);
         self.emit(Inst::LoadExtName {
