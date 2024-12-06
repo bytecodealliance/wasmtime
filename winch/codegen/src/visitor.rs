@@ -1723,6 +1723,9 @@ where
         if self.tunables.consume_fuel {
             self.emit_fuel_check();
         }
+
+        // Emit epoch check right after binding the loop header.
+        self.maybe_emit_epoch_check();
     }
 
     fn visit_br(&mut self, depth: u32) {

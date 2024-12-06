@@ -276,6 +276,8 @@ where
             self.emit_fuel_check();
         }
 
+        self.maybe_emit_epoch_check();
+
         // Once we have emitted the epilogue and reserved stack space for the locals, we push the
         // base control flow block.
         self.control_frames.push(ControlStackFrame::block(
@@ -1020,6 +1022,99 @@ where
             self.masm.address_at_reg(fuel_var, u32::from(fuel_offset)),
             writable!(fuel_var),
             // Fuel is an i64.
+            OperandSize::S64,
+        );
+    }
+
+    /// Checks if epoch interruption is configured and emits a series of
+    /// instructions that check the current epoch against its deadline.
+    pub fn maybe_emit_epoch_check(&mut self) {
+        if !self.tunables.epoch_interruption {
+            return;
+        }
+
+        // The continuation branch if the current epoch hasn't reached the
+        // configured deadline.
+        let cont = self.masm.get_label();
+        let new_epoch = self.env.builtins.new_epoch::<M::ABI, M::Ptr>();
+
+        // Checks for runtime limits (e.g., fuel, epoch) are special since they
+        // require inserting abritrary function calls and control flow.
+        // Special care must be taken to ensure that all invariants are met. In
+        // this case, since `new_epoch` takes an argument and returns a value,
+        // we must ensure that any registers used to hold the current epoch
+        // value and deadline are not going to be needed later on by the
+        // function call.
+        let (epoch_deadline_reg, epoch_counter_reg) = self.context.without::<(Reg, Reg), M, _>(
+            &new_epoch.sig().regs,
+            self.masm,
+            |cx, masm| (cx.any_gpr(masm), cx.any_gpr(masm)),
+        );
+
+        self.emit_load_epoch_deadline_and_counter(epoch_deadline_reg, epoch_counter_reg);
+
+        // Spill locals and registers to avoid conflicts at the control flow
+        // merge below.
+        self.context.spill(self.masm);
+        self.masm.branch(
+            IntCmpKind::LtU,
+            epoch_counter_reg,
+            RegImm::reg(epoch_deadline_reg),
+            cont,
+            OperandSize::S64,
+        );
+        // Epoch deadline reached branch.
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(new_epoch.clone()),
+        );
+        // `new_epoch` returns the new deadline. However we don't
+        // perform any caching, so we simply drop this value.
+        self.visit_drop();
+
+        // Under epoch deadline branch.
+        self.masm.bind(cont);
+
+        self.context.free_reg(epoch_deadline_reg);
+        self.context.free_reg(epoch_counter_reg);
+    }
+
+    fn emit_load_epoch_deadline_and_counter(
+        &mut self,
+        epoch_deadline_reg: Reg,
+        epoch_counter_reg: Reg,
+    ) {
+        let epoch_ptr_offset = self.env.vmoffsets.ptr.vmctx_epoch_ptr();
+        let runtime_limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
+        let epoch_deadline_offset = self.env.vmoffsets.ptr.vmruntime_limits_epoch_deadline();
+
+        // Load the current epoch value into `epoch_counter_var`.
+        self.masm.load_ptr(
+            self.masm.address_at_vmctx(u32::from(epoch_ptr_offset)),
+            writable!(epoch_counter_reg),
+        );
+
+        // `epoch_deadline_var` contains the address of the value, so we need
+        // to extract it.
+        self.masm.load(
+            self.masm.address_at_reg(epoch_counter_reg, 0),
+            writable!(epoch_counter_reg),
+            OperandSize::S64,
+        );
+
+        // Load the `VMRuntimeLimits`.
+        self.masm.load_ptr(
+            self.masm.address_at_vmctx(u32::from(runtime_limits_offset)),
+            writable!(epoch_deadline_reg),
+        );
+
+        self.masm.load(
+            self.masm
+                .address_at_reg(epoch_deadline_reg, u32::from(epoch_deadline_offset)),
+            writable!(epoch_deadline_reg),
+            // The deadline value is a u64.
             OperandSize::S64,
         );
     }
