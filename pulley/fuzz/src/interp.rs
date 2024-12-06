@@ -127,6 +127,7 @@ fn op_is_safe_for_fuzzing(op: &Op) -> bool {
         | Op::Sext8(Sext8 { dst, .. })
         | Op::Sext32(Sext32 { dst, .. })
         | Op::Sext16(Sext16 { dst, .. }) => !dst.is_special(),
+        Op::Bswap32(Bswap32 { dst, .. }) | Op::Bswap64(Bswap64 { dst, .. }) => !dst.is_special(),
     }
 }
 
