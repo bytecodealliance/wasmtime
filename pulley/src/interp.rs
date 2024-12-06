@@ -1123,31 +1123,33 @@ impl OpVisitor for Interpreter<'_> {
 
     fn load32_u(&mut self, dst: XReg, ptr: XReg) -> ControlFlow<Done> {
         let ptr = self.state[ptr].get_ptr::<u32>();
-        let val = unsafe { ptr::read_unaligned(ptr) };
+        let val = unsafe { u32::from_le(ptr::read_unaligned(ptr)) };
         self.state[dst].set_u64(u64::from(val));
         ControlFlow::Continue(())
     }
 
     fn load32_s(&mut self, dst: XReg, ptr: XReg) -> ControlFlow<Done> {
         let ptr = self.state[ptr].get_ptr::<i32>();
-        let val = unsafe { ptr::read_unaligned(ptr) };
+        let val = unsafe { i32::from_le(ptr::read_unaligned(ptr)) };
         self.state[dst].set_i64(i64::from(val));
         ControlFlow::Continue(())
     }
 
     fn load64(&mut self, dst: XReg, ptr: XReg) -> ControlFlow<Done> {
         let ptr = self.state[ptr].get_ptr::<u64>();
-        let val = unsafe { ptr::read_unaligned(ptr) };
+        let val = unsafe { u64::from_le(ptr::read_unaligned(ptr)) };
         self.state[dst].set_u64(val);
         ControlFlow::Continue(())
     }
 
     fn load32_u_offset8(&mut self, dst: XReg, ptr: XReg, offset: i8) -> ControlFlow<Done> {
         let val = unsafe {
-            self.state[ptr]
-                .get_ptr::<u32>()
-                .byte_offset(offset.into())
-                .read_unaligned()
+            u32::from_le(
+                self.state[ptr]
+                    .get_ptr::<u32>()
+                    .byte_offset(offset.into())
+                    .read_unaligned(),
+            )
         };
         self.state[dst].set_u64(u64::from(val));
         ControlFlow::Continue(())
@@ -1155,10 +1157,12 @@ impl OpVisitor for Interpreter<'_> {
 
     fn load32_s_offset8(&mut self, dst: XReg, ptr: XReg, offset: i8) -> ControlFlow<Done> {
         let val = unsafe {
-            self.state[ptr]
-                .get_ptr::<i32>()
-                .byte_offset(offset.into())
-                .read_unaligned()
+            i32::from_le(
+                self.state[ptr]
+                    .get_ptr::<i32>()
+                    .byte_offset(offset.into())
+                    .read_unaligned(),
+            )
         };
         self.state[dst].set_i64(i64::from(val));
         ControlFlow::Continue(())
@@ -1166,10 +1170,12 @@ impl OpVisitor for Interpreter<'_> {
 
     fn load32_u_offset64(&mut self, dst: XReg, ptr: XReg, offset: i64) -> ControlFlow<Done> {
         let val = unsafe {
-            self.state[ptr]
-                .get_ptr::<u32>()
-                .byte_offset(offset as isize)
-                .read_unaligned()
+            u32::from_le(
+                self.state[ptr]
+                    .get_ptr::<u32>()
+                    .byte_offset(offset as isize)
+                    .read_unaligned(),
+            )
         };
         self.state[dst].set_u64(u64::from(val));
         ControlFlow::Continue(())
@@ -1177,10 +1183,12 @@ impl OpVisitor for Interpreter<'_> {
 
     fn load32_s_offset64(&mut self, dst: XReg, ptr: XReg, offset: i64) -> ControlFlow<Done> {
         let val = unsafe {
-            self.state[ptr]
-                .get_ptr::<i32>()
-                .byte_offset(offset as isize)
-                .read_unaligned()
+            i32::from_le(
+                self.state[ptr]
+                    .get_ptr::<i32>()
+                    .byte_offset(offset as isize)
+                    .read_unaligned(),
+            )
         };
         self.state[dst].set_i64(i64::from(val));
         ControlFlow::Continue(())
@@ -1188,10 +1196,12 @@ impl OpVisitor for Interpreter<'_> {
 
     fn load64_offset8(&mut self, dst: XReg, ptr: XReg, offset: i8) -> ControlFlow<Done> {
         let val = unsafe {
-            self.state[ptr]
-                .get_ptr::<u64>()
-                .byte_offset(offset.into())
-                .read_unaligned()
+            u64::from_le(
+                self.state[ptr]
+                    .get_ptr::<u64>()
+                    .byte_offset(offset.into())
+                    .read_unaligned(),
+            )
         };
         self.state[dst].set_u64(val);
         ControlFlow::Continue(())
@@ -1199,10 +1209,12 @@ impl OpVisitor for Interpreter<'_> {
 
     fn load64_offset64(&mut self, dst: XReg, ptr: XReg, offset: i64) -> ControlFlow<Done> {
         let val = unsafe {
-            self.state[ptr]
-                .get_ptr::<u64>()
-                .byte_offset(offset as isize)
-                .read_unaligned()
+            u64::from_le(
+                self.state[ptr]
+                    .get_ptr::<u64>()
+                    .byte_offset(offset as isize)
+                    .read_unaligned(),
+            )
         };
         self.state[dst].set_u64(val);
         ControlFlow::Continue(())
@@ -1212,7 +1224,7 @@ impl OpVisitor for Interpreter<'_> {
         let ptr = self.state[ptr].get_ptr::<u32>();
         let val = self.state[src].get_u32();
         unsafe {
-            ptr::write_unaligned(ptr, val);
+            ptr::write_unaligned(ptr, val.to_le());
         }
         ControlFlow::Continue(())
     }
@@ -1221,7 +1233,7 @@ impl OpVisitor for Interpreter<'_> {
         let ptr = self.state[ptr].get_ptr::<u64>();
         let val = self.state[src].get_u64();
         unsafe {
-            ptr::write_unaligned(ptr, val);
+            ptr::write_unaligned(ptr, val.to_le());
         }
         ControlFlow::Continue(())
     }
@@ -1232,7 +1244,7 @@ impl OpVisitor for Interpreter<'_> {
             self.state[ptr]
                 .get_ptr::<u32>()
                 .byte_offset(offset.into())
-                .write_unaligned(val);
+                .write_unaligned(val.to_le());
         }
         ControlFlow::Continue(())
     }
@@ -1243,7 +1255,7 @@ impl OpVisitor for Interpreter<'_> {
             self.state[ptr]
                 .get_ptr::<u64>()
                 .byte_offset(offset.into())
-                .write_unaligned(val);
+                .write_unaligned(val.to_le());
         }
         ControlFlow::Continue(())
     }
@@ -1254,7 +1266,7 @@ impl OpVisitor for Interpreter<'_> {
             self.state[ptr]
                 .get_ptr::<u32>()
                 .byte_offset(offset as isize)
-                .write_unaligned(val);
+                .write_unaligned(val.to_le());
         }
         ControlFlow::Continue(())
     }
@@ -1265,7 +1277,7 @@ impl OpVisitor for Interpreter<'_> {
             self.state[ptr]
                 .get_ptr::<u64>()
                 .byte_offset(offset as isize)
-                .write_unaligned(val);
+                .write_unaligned(val.to_le());
         }
         ControlFlow::Continue(())
     }
@@ -1425,6 +1437,18 @@ impl OpVisitor for Interpreter<'_> {
     fn sext32(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
         let src = self.state[src].get_i64() as i32;
         self.state[dst].set_i64(src.into());
+        ControlFlow::Continue(())
+    }
+
+    fn bswap32(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let src = self.state[src].get_u32();
+        self.state[dst].set_u32(src.swap_bytes());
+        ControlFlow::Continue(())
+    }
+
+    fn bswap64(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let src = self.state[src].get_u64();
+        self.state[dst].set_u64(src.swap_bytes());
         ControlFlow::Continue(())
     }
 }

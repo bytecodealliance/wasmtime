@@ -114,6 +114,24 @@ where
     fn lr_reg(&mut self) -> XReg {
         XReg::new(regs::lr_reg()).unwrap()
     }
+
+    fn littleendian(&mut self, flags: MemFlags) -> Option<()> {
+        let endianness = flags.endianness(self.backend.target_endianness());
+        if endianness == Endianness::Little {
+            Some(())
+        } else {
+            None
+        }
+    }
+
+    fn bigendian(&mut self, flags: MemFlags) -> Option<()> {
+        let endianness = flags.endianness(self.backend.target_endianness());
+        if endianness == Endianness::Big {
+            Some(())
+        } else {
+            None
+        }
+    }
 }
 
 /// The main entry point for lowering with ISLE.

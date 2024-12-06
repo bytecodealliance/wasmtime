@@ -122,40 +122,40 @@ macro_rules! for_each_op {
             /// 32-bit unsigned less-than-equal.
             xulteq32 = Xulteq32 { operands: BinaryOperands<XReg> };
 
-            /// `dst = zero_extend(load32(ptr))`
+            /// `dst = zero_extend(load32_le(ptr))`
             load32_u = Load32U { dst: XReg, ptr: XReg };
-            /// `dst = sign_extend(load32(ptr))`
+            /// `dst = sign_extend(load32_le(ptr))`
             load32_s = Load32S { dst: XReg, ptr: XReg };
-            /// `dst = load64(ptr)`
+            /// `dst = load64_le(ptr)`
             load64 = Load64 { dst: XReg, ptr: XReg };
 
-            /// `dst = zero_extend(load32(ptr + offset8))`
+            /// `dst = zero_extend(load32_le(ptr + offset8))`
             load32_u_offset8 = Load32UOffset8 { dst: XReg, ptr: XReg, offset: i8 };
-            /// `dst = sign_extend(load32(ptr + offset8))`
+            /// `dst = sign_extend(load32_le(ptr + offset8))`
             load32_s_offset8 = Load32SOffset8 { dst: XReg, ptr: XReg, offset: i8 };
-            /// `dst = load64(ptr + offset8)`
+            /// `dst = load64_le(ptr + offset8)`
             load64_offset8 = Load64Offset8 { dst: XReg, ptr: XReg, offset: i8 };
 
-            /// `dst = zero_extend(load32(ptr + offset64))`
+            /// `dst = zero_extend(load32_le(ptr + offset64))`
             load32_u_offset64 = Load32UOffset64 { dst: XReg, ptr: XReg, offset: i64 };
-            /// `dst = sign_extend(load32(ptr + offset64))`
+            /// `dst = sign_extend(load32_le(ptr + offset64))`
             load32_s_offset64 = Load32SOffset64 { dst: XReg, ptr: XReg, offset: i64 };
-            /// `dst = load64(ptr + offset64)`
+            /// `dst = load64_le(ptr + offset64)`
             load64_offset64 = Load64Offset64 { dst: XReg, ptr: XReg, offset: i64 };
 
-            /// `*ptr = low32(src)`
+            /// `*ptr = low32(src.to_le())`
             store32 = Store32 { ptr: XReg, src: XReg };
-            /// `*ptr = src`
+            /// `*ptr = src.to_le()`
             store64 = Store64 { ptr: XReg, src: XReg };
 
-            /// `*(ptr + sign_extend(offset8)) = low32(src)`
+            /// `*(ptr + sign_extend(offset8)) = low32(src).to_le()`
             store32_offset8 = Store32SOffset8 { ptr: XReg, offset: i8, src: XReg };
-            /// `*(ptr + sign_extend(offset8)) = src`
+            /// `*(ptr + sign_extend(offset8)) = src.to_le()`
             store64_offset8 = Store64Offset8 { ptr: XReg, offset: i8, src: XReg };
 
-            /// `*(ptr + sign_extend(offset64)) = low32(src)`
+            /// `*(ptr + sign_extend(offset64)) = low32(src).to_le()`
             store32_offset64 = Store32SOffset64 { ptr: XReg, offset: i64, src: XReg };
-            /// `*(ptr + sign_extend(offset64)) = src`
+            /// `*(ptr + sign_extend(offset64)) = src.to_le()`
             store64_offset64 = Store64Offset64 { ptr: XReg, offset: i64, src: XReg };
 
             /// `push lr; push fp; fp = sp`
@@ -208,6 +208,11 @@ macro_rules! for_each_op {
             sext16 = Sext16 { dst: XReg, src: XReg };
             /// `dst = sext(low32(src))`
             sext32 = Sext32 { dst: XReg, src: XReg };
+
+            /// `dst = byteswap(low32(src))`
+            bswap32 = Bswap32 { dst: XReg, src: XReg };
+            /// `dst = byteswap(src)`
+            bswap64 = Bswap64 { dst: XReg, src: XReg };
         }
     };
 }

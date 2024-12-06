@@ -112,8 +112,12 @@ pub fn lookup(triple: Triple) -> Result<Builder, LookupError> {
         Architecture::Aarch64 { .. } => isa_builder!(aarch64, (feature = "arm64"), triple),
         Architecture::S390x { .. } => isa_builder!(s390x, (feature = "s390x"), triple),
         Architecture::Riscv64 { .. } => isa_builder!(riscv64, (feature = "riscv64"), triple),
-        Architecture::Pulley32 => isa_builder!(pulley32, (feature = "pulley"), triple),
-        Architecture::Pulley64 => isa_builder!(pulley64, (feature = "pulley"), triple),
+        Architecture::Pulley32 | Architecture::Pulley32be => {
+            isa_builder!(pulley32, (feature = "pulley"), triple)
+        }
+        Architecture::Pulley64 | Architecture::Pulley64be => {
+            isa_builder!(pulley64, (feature = "pulley"), triple)
+        }
         _ => Err(LookupError::Unsupported),
     }
 }

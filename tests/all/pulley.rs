@@ -1,38 +1,21 @@
 use anyhow::Result;
 use wasmtime::{Config, Engine, Module};
+use wasmtime_environ::TripleExt;
 
-fn pulley_target() -> &'static str {
-    if cfg!(target_pointer_width = "64") {
-        "pulley64"
-    } else {
-        "pulley32"
-    }
+fn pulley_target() -> String {
+    target_lexicon::Triple::pulley_host().to_string()
 }
 
 fn pulley_config() -> Config {
     let mut config = Config::new();
-    config.target(pulley_target()).unwrap();
+    config.target(&pulley_target()).unwrap();
     config
-}
-
-// Pulley is known to not support big-endian platforms at this time, so assert
-// that big-endian platforms do indeed fail and success is only on little-endian
-// platforms. When pulley has support for big-endian this will get deleted.
-fn assert_result_expected<T>(r: Result<T>) {
-    match r {
-        Ok(_) => {
-            assert!(!cfg!(target_endian = "big"));
-        }
-        Err(e) => {
-            assert!(cfg!(target_endian = "big"), "bad error: {e:?}");
-        }
-    }
 }
 
 #[test]
 fn can_compile_pulley_module() -> Result<()> {
     let engine = Engine::new(&pulley_config())?;
-    assert_result_expected(Module::new(&engine, "(module)"));
+    Module::new(&engine, "(module)")?;
 
     Ok(())
 }
@@ -76,16 +59,16 @@ fn pulley_wrong_architecture_is_rejected() -> Result<()> {
 #[cfg(not(miri))]
 fn can_run_on_cli() -> Result<()> {
     use crate::cli_tests::run_wasmtime;
-    assert_result_expected(run_wasmtime(&[
+    run_wasmtime(&[
         "--target",
-        pulley_target(),
+        &pulley_target(),
         "tests/all/cli_tests/empty-module.wat",
-    ]));
-    assert_result_expected(run_wasmtime(&[
+    ])?;
+    run_wasmtime(&[
         "run",
         "--target",
-        pulley_target(),
+        &pulley_target(),
         "tests/all/cli_tests/empty-module.wat",
-    ]));
+    ])?;
     Ok(())
 }

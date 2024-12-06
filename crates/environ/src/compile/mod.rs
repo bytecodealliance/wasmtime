@@ -5,7 +5,7 @@ use crate::prelude::*;
 use crate::{obj, Tunables};
 use crate::{
     BuiltinFunctionIndex, DefinedFuncIndex, FlagValue, FuncIndex, FunctionLoc, ObjectKind,
-    PrimaryMap, StaticModuleIndex, WasmError, WasmFuncType, WasmFunctionInfo,
+    PrimaryMap, StaticModuleIndex, TripleExt, WasmError, WasmFuncType, WasmFunctionInfo,
 };
 use anyhow::Result;
 use object::write::{Object, SymbolId};
@@ -297,7 +297,7 @@ pub trait Compiler: Send + Sync {
                 // XXX: the `object` crate won't successfully build an object
                 // with relocations and such if it doesn't know the
                 // architecture, so just pretend we are riscv64. Yolo!
-                Pulley32 | Pulley64 => Architecture::Riscv64,
+                Pulley32 | Pulley64 | Pulley32be | Pulley64be => Architecture::Riscv64,
                 architecture => {
                     anyhow::bail!("target architecture {:?} is unsupported", architecture,);
                 }
@@ -326,6 +326,12 @@ pub trait Compiler: Send + Sync {
     /// alignment is larger than necessary for some platforms since it may
     /// depend on the platform's runtime configuration.
     fn page_size_align(&self) -> u64 {
+        // Conservatively assume the max-of-all-supported-hosts for pulley
+        // and round up to 64k.
+        if self.triple().is_pulley() {
+            return 0x10000;
+        }
+
         use target_lexicon::*;
         match (self.triple().operating_system, self.triple().architecture) {
             (
@@ -338,9 +344,6 @@ pub trait Compiler: Send + Sync {
             // 64 KB is the maximal page size (i.e. memory translation granule size)
             // supported by the architecture and is used on some platforms.
             (_, Architecture::Aarch64(..)) => 0x10000,
-            // Conservatively assume the max-of-all-supported-hosts for pulley
-            // and round up to 64k.
-            (_, Architecture::Pulley32 | Architecture::Pulley64) => 0x10000,
             _ => 0x1000,
         }
     }

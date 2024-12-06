@@ -132,6 +132,7 @@ forward_impls! {
 
 /// Helper method to apply `wast_config` to `config`.
 pub fn apply_wast_config(config: &mut Config, wast_config: &wasmtime_wast_util::WastConfig) {
+    use wasmtime_environ::TripleExt;
     use wasmtime_wast_util::{Collector, Compiler};
 
     config.strategy(match wast_config.compiler {
@@ -139,11 +140,9 @@ pub fn apply_wast_config(config: &mut Config, wast_config: &wasmtime_wast_util::
         Compiler::Winch => wasmtime::Strategy::Winch,
     });
     if let Compiler::CraneliftPulley = wast_config.compiler {
-        if cfg!(target_pointer_width = "32") {
-            config.target("pulley32").unwrap();
-        } else {
-            config.target("pulley64").unwrap();
-        }
+        config
+            .target(&target_lexicon::Triple::pulley_host().to_string())
+            .unwrap();
     }
     config.collector(match wast_config.collector {
         Collector::Auto => wasmtime::Collector::Auto,

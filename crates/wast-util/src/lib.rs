@@ -335,11 +335,7 @@ impl Compiler {
             Compiler::Winch => {
                 cfg!(target_arch = "x86_64")
             }
-            Compiler::CraneliftPulley => {
-                // FIXME(#9747) pulley needs more refactoring to support a
-                // big-endian host.
-                cfg!(target_endian = "little")
-            }
+            Compiler::CraneliftPulley => true,
         }
     }
 }
