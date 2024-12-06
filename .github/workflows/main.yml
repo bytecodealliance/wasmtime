@@ -639,7 +639,7 @@ jobs:
   # Perform all tests of the c-api
   test_capi:
     needs: determine
-    name: Test C-API ${{ runner.os }}
+    name: Test C-API ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     if: needs.determine.outputs.test-capi
 
@@ -805,7 +805,7 @@ jobs:
         include:
           - os: windows-latest
             feature: winml
-    name: Test wasi-nn (${{ matrix.feature }}, ${{ runner.os }})
+    name: Test wasi-nn (${{ matrix.feature }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     needs: determine
     if: needs.determine.outputs.run-full
