@@ -662,8 +662,8 @@ impl Masm for MacroAssembler {
         self.asm.udf(code);
     }
 
-    fn trapz(&mut self, _src: Reg, _code: TrapCode) {
-        todo!()
+    fn trapz(&mut self, src: Reg, code: TrapCode) {
+        self.asm.trapz(src, code);
     }
 
     fn trapif(&mut self, cc: IntCmpKind, code: TrapCode) {

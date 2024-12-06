@@ -724,6 +724,14 @@ impl Assembler {
         });
     }
 
+    /// Trap if rn is 0
+    pub fn trapz(&mut self, rn: Reg, code: TrapCode) {
+        self.emit(Inst::TrapIf {
+            kind: CondBrKind::Zero(rn.into()),
+            trap_code: code,
+        });
+    }
+
     // Helpers for ALU operations.
 
     fn emit_alu_rri(&mut self, op: ALUOp, imm: Imm12, rn: Reg, rd: WritableReg, size: OperandSize) {
