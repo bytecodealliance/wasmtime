@@ -19,7 +19,7 @@
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
 ;;       ldur    x16, [x2, #8]
-;;       ldur    x16, [x16]
+;;       ldur    x16, [x16, #0x10]
 ;;       add     x16, x16, #0x10
 ;;       cmp     sp, x16
 ;;       b.lo    #0x38
