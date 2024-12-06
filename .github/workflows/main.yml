@@ -50,10 +50,8 @@ jobs:
     - run: cargo fmt --all -- --check
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Quick JS formatting/linting checks for the little bits of JS we have for the
   # `wasmtime explore` UI.
@@ -70,10 +68,8 @@ jobs:
       working-directory: ./crates/explorer
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Check Code style quickly by running `clang-format` over all the C/C++ code
   #
@@ -92,10 +88,8 @@ jobs:
           xargs clang-format-18 --dry-run --Werror --verbose
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Lint dependency graph for security advisories, duplicate versions, and
   # incompatible licences
@@ -117,10 +111,8 @@ jobs:
     - run: cargo deny check bans licenses
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Ensure dependencies are vetted. See https://mozilla.github.io/cargo-vet/
   #
@@ -153,10 +145,8 @@ jobs:
       name: Ensure `cargo vet` works if versions are bumped
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   cargo_vet_failure_for_prs:
     name: Cargo vet failed on a Pull Request
@@ -335,10 +325,8 @@ jobs:
         path: gh-pages.tar.gz
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Checks of various feature combinations and whether things compile. The goal
   # here isn't to run tests, mostly just serve as a double-check that Rust code
@@ -433,11 +421,9 @@ jobs:
         )
         echo "$checks" | xargs -I CHECK sh -c 'echo "=== cargo check CHECK ==="; cargo check CHECK'
 
-    # Common logic to cancel the entire run if this job fails.
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    # common logic to cancel the entire run if this job fails
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   fiber_tests:
     name: wasmtime-fiber tests
@@ -450,6 +436,10 @@ jobs:
         submodules: true
     - uses: ./.github/actions/install-rust
     - run: cargo test -p wasmtime-fiber --no-default-features
+
+    # common logic to cancel the entire run if this job fails
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Checks for no_std support, ensure that crates can build on a no_std target
   no_std_checks:
@@ -471,10 +461,8 @@ jobs:
     - run: cargo check --target x86_64-unknown-none -p pulley-interpreter --features encode,decode,disas,interp
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Check that Clippy lints are passing.
   clippy:
@@ -492,10 +480,8 @@ jobs:
     - run: cargo clippy --workspace --all-targets
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Similar to `micro_checks` but where we need to install some more state
   # (e.g. Android NDK) and we haven't factored support for those things out into
@@ -543,10 +529,8 @@ jobs:
     - run: git diff --exit-code
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   checks_illumos:
     name: Check illumos
@@ -568,10 +552,8 @@ jobs:
         cross build --target x86_64-unknown-illumos
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Check whether `wasmtime` cross-compiles to aarch64-pc-windows-msvc
   # We don't build nor test it because it lacks trap handling.
@@ -590,10 +572,8 @@ jobs:
     - run: cargo check -p wasmtime --target aarch64-pc-windows-msvc
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Run tests that require a nightly compiler, such as building fuzz targets.
   test_nightly:
@@ -631,10 +611,8 @@ jobs:
     - run: cargo fuzz build --dev --fuzz-dir ./crates/environ/fuzz --features component-model
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Perform all tests of the c-api
   test_capi:
@@ -663,6 +641,10 @@ jobs:
       if: matrix.os == 'windows-latest'
     - run: cmake -E env CTEST_OUTPUT_ON_FAILURE=1 cmake --build examples/build --config Debug --target test
       if: matrix.os != 'windows-latest'
+
+    # common logic to cancel the entire run if this job fails
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Perform all tests (debug mode) for `wasmtime`.
   #
@@ -790,10 +772,9 @@ jobs:
     # Build and test all features
     - run: ./ci/run-tests.sh --locked ${{ matrix.bucket }}
 
-    # NB: the test job here is explicitly lacking in cancellation of this run if
-    # something goes wrong. These take the longest anyway and otherwise if
-    # Windows fails GitHub Actions will confusingly mark the failed Windows job
-    # as cancelled instead of failed.
+    # common logic to cancel the entire run if this job fails
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Test `wasmtime-wasi-nn` in its own job, as not all of its backends are
   # compatible with all targets, and each must be tested separately anyways.
@@ -835,10 +816,8 @@ jobs:
     - run: cargo test -p wasmtime-wasi-nn --features ${{ matrix.feature }}
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Test the `wasmtime-fuzzing` crate. Split out from the main tests because
   # `--all-features` brings in OCaml, which is a pain to get setup for all
@@ -859,10 +838,8 @@ jobs:
         cargo test -p wasmtime-fuzzing -p wasm-spec-interpreter
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Test debug (DWARF) related functionality.
   test_debug_dwarf:
@@ -886,10 +863,8 @@ jobs:
         LLDB: lldb-15 # override default version, 14
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   build-preview1-component-adapter:
     name: Build wasi-preview1-component-adapter
@@ -922,10 +897,8 @@ jobs:
 
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   build-preview1-component-adapter-provider:
     name: Build wasi-preview1-component-adapter-provider
@@ -940,12 +913,9 @@ jobs:
       with:
         run-id: ${{ github.run_id }}
 
-
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Verify the "min platform" example still works.
   test-min-platform-example:
@@ -980,10 +950,8 @@ jobs:
         path: examples/min-platform/embedding/wasmtime-platform.h
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
 
   build-wasmtime-target-wasm32:
@@ -1002,10 +970,8 @@ jobs:
         VERSION: ${{ github.sha }}
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
 
   bench:
@@ -1022,10 +988,8 @@ jobs:
     - run: cargo test --benches --release
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Verify that cranelift's code generation is deterministic
   meta_deterministic_check:
@@ -1042,10 +1006,8 @@ jobs:
     - run: ci/ensure_deterministic_build.sh
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   verify-publish:
     needs: determine
@@ -1068,10 +1030,8 @@ jobs:
     - run: ./publish bump
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Run a subset of tests under MIRI on CI to help check the `unsafe` code in
   # Wasmtime to make sure it's at least not obviously incorrect for basic usage.
@@ -1116,10 +1076,8 @@ jobs:
         MIRIFLAGS: -Zmiri-strict-provenance
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # Perform release builds of `wasmtime` and `libwasmtime.so`. Builds a variety
   # of platforms and architectures and then uploads the release artifacts to
@@ -1172,10 +1130,8 @@ jobs:
         path: dist
 
     # common logic to cancel the entire run if this job fails
-    - run: gh run cancel ${{ github.run_id }}
-      if: failure() && github.event_name != 'pull_request'
-      env:
-        GH_TOKEN: ${{ github.token }}
+    - uses: ./.github/actions/cancel-on-failure
+      if: failure()
 
   # This is a "join node" which depends on all prior workflows. The merge queue,
   # for example, gates on this to ensure that everything has executed
