@@ -22,7 +22,16 @@ fn main() {
     // run this test in.
     for test in tests {
         let test_uses_gc_types = test.test_uses_gc_types();
-        for compiler in [Compiler::Cranelift, Compiler::Winch] {
+        for compiler in [
+            Compiler::CraneliftNative,
+            Compiler::Winch,
+            Compiler::CraneliftPulley,
+        ] {
+            // Skip compilers that have no support for this host.
+            if !compiler.supports_host() {
+                continue;
+            }
+
             for pooling in [true, false] {
                 let collectors: &[_] = if !pooling && test_uses_gc_types {
                     &[Collector::DeferredReferenceCounting, Collector::Null]
@@ -104,12 +113,12 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
     // `crates/wast-util/src/lib.rs` file.
     let should_fail = test.should_fail(&config);
 
-    let multi_memory = test_config.multi_memory.unwrap_or(false);
-    let test_hogs_memory = test_config.hogs_memory.unwrap_or(false);
-    let relaxed_simd = test_config.relaxed_simd.unwrap_or(false);
+    let multi_memory = test_config.multi_memory();
+    let test_hogs_memory = test_config.hogs_memory();
+    let relaxed_simd = test_config.relaxed_simd();
 
     let is_cranelift = match config.compiler {
-        Compiler::Cranelift => true,
+        Compiler::CraneliftNative | Compiler::CraneliftPulley => true,
         _ => false,
     };
 

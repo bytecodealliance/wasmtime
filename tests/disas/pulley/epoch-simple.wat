@@ -15,5 +15,5 @@
 ;;       br_if x7, 0x8    // target = 0x1b
 ;;   19: pop_frame
 ;;       ret
-;;   1b: call 0xa    // target = 0x25
+;;   1b: call 0x83    // target = 0x9e
 ;;   20: jump 0xfffffffffffffff9    // target = 0x19

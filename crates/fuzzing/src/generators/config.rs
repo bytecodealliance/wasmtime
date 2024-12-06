@@ -233,7 +233,7 @@ impl Config {
                 InstanceAllocationStrategy::Pooling(_)
             ),
             compiler: match self.wasmtime.compiler_strategy {
-                CompilerStrategy::Cranelift => wasmtime_wast_util::Compiler::Cranelift,
+                CompilerStrategy::Cranelift => wasmtime_wast_util::Compiler::CraneliftNative,
                 CompilerStrategy::Winch => wasmtime_wast_util::Compiler::Winch,
             },
         }

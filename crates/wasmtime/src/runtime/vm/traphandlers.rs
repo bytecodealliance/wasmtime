@@ -16,9 +16,10 @@ mod signals;
 pub use self::signals::*;
 
 use crate::prelude::*;
+use crate::runtime::module::lookup_code;
 use crate::runtime::store::StoreOpaque;
 use crate::runtime::vm::sys::traphandlers;
-use crate::runtime::vm::{Instance, VMContext, VMRuntimeLimits};
+use crate::runtime::vm::{Instance, InterpreterRef, VMContext, VMRuntimeLimits};
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::ops::Range;
@@ -29,6 +30,26 @@ pub use self::coredump::CoreDumpStack;
 pub use self::tls::{tls_eager_initialize, AsyncWasmCallState, PreviousAsyncWasmCallState};
 
 pub use traphandlers::SignalHandler;
+
+pub(crate) struct TrapRegisters {
+    pub pc: usize,
+    pub fp: usize,
+}
+
+/// Return value from `test_if_trap`.
+pub(crate) enum TrapTest {
+    /// Not a wasm trap, need to delegate to whatever process handler is next.
+    NotWasm,
+    /// This trap was handled by the embedder via custom embedding APIs.
+    #[cfg_attr(miri, expect(dead_code, reason = "using #[cfg] too unergonomic"))]
+    HandledByEmbedder,
+    /// This is a wasm trap, it needs to be handled.
+    #[cfg_attr(miri, expect(dead_code, reason = "using #[cfg] too unergonomic"))]
+    Trap {
+        /// How to longjmp back to the original wasm frame.
+        jmp_buf: *const u8,
+    },
+}
 
 fn lazy_per_thread_init() {
     traphandlers::lazy_per_thread_init();
@@ -283,7 +304,6 @@ pub enum TrapReason {
     User(Error),
 
     /// A trap raised from Cranelift-generated code.
-    #[cfg(all(feature = "signals-based-traps", not(miri)))]
     Jit {
         /// The program counter where this trap originated.
         ///
@@ -334,17 +354,41 @@ pub unsafe fn catch_traps<T, F>(
     mut closure: F,
 ) -> Result<(), Box<Trap>>
 where
-    F: FnMut(*mut VMContext) -> bool,
+    F: FnMut(*mut VMContext, Option<InterpreterRef<'_>>) -> bool,
 {
     let caller = store.0.default_caller();
+    let result = CallThreadState::new(store.0, caller).with(|cx| match store.0.interpreter() {
+        // In interpreted mode directly invoke the host closure since we won't
+        // be using host-based `setjmp`/`longjmp` as that's not going to save
+        // the context we want.
+        Some(r) => {
+            cx.jmp_buf
+                .set(CallThreadState::JMP_BUF_INTERPRETER_SENTINEL);
+            closure(caller, Some(r))
+        }
 
-    let result = CallThreadState::new(store.0, caller).with(|cx| {
-        traphandlers::wasmtime_setjmp(
+        // In native mode, however, defer to C to do the `setjmp` since Rust
+        // doesn't understand `setjmp`.
+        //
+        // Note that here we pass a function pointer to C to catch longjmp
+        // within, here it's `call_closure`, and that passes `None` for the
+        // interpreter since this branch is only ever taken if the interpreter
+        // isn't present.
+        None => traphandlers::wasmtime_setjmp(
             cx.jmp_buf.as_ptr(),
-            call_closure::<F>,
+            {
+                extern "C" fn call_closure<F>(payload: *mut u8, caller: *mut VMContext) -> bool
+                where
+                    F: FnMut(*mut VMContext, Option<InterpreterRef<'_>>) -> bool,
+                {
+                    unsafe { (*(payload as *mut F))(caller, None) }
+                }
+
+                call_closure::<F>
+            },
             &mut closure as *mut F as *mut u8,
             caller,
-        )
+        ),
     });
 
     return match result {
@@ -357,13 +401,6 @@ where
         #[cfg(all(feature = "std", panic = "unwind"))]
         Err((UnwindReason::Panic(panic), _, _)) => std::panic::resume_unwind(panic),
     };
-
-    extern "C" fn call_closure<F>(payload: *mut u8, caller: *mut VMContext) -> bool
-    where
-        F: FnMut(*mut VMContext) -> bool,
-    {
-        unsafe { (*(payload as *mut F))(caller) }
-    }
 }
 
 // Module to hide visibility of the `CallThreadState::prev` field and force
@@ -416,6 +453,8 @@ mod call_thread_state {
     }
 
     impl CallThreadState {
+        pub const JMP_BUF_INTERPRETER_SENTINEL: *mut u8 = 1 as *mut u8;
+
         #[inline]
         pub(super) fn new(store: &mut StoreOpaque, caller: *mut VMContext) -> CallThreadState {
             let limits = unsafe { *Instance::from_vmctx(caller, |i| i.runtime_limits()) };
@@ -579,6 +618,91 @@ impl CallThreadState {
             state = unsafe { this.prev().as_ref() };
             Some(this)
         })
+    }
+
+    /// Trap handler using our thread-local state.
+    ///
+    /// * `regs` - some special program registers at the time that the trap
+    ///   happened, for example `pc`.
+    /// * `faulting_addr` - the system-provided address that the a fault, if
+    ///   any, happened at. This is used when debug-asserting that all segfaults
+    ///   are known to live within a `Store<T>` in a valid range.
+    /// * `call_handler` - a closure used to invoke the platform-specific
+    ///   signal handler for each instance, if available.
+    ///
+    /// Attempts to handle the trap if it's a wasm trap. Returns a `TrapTest`
+    /// which indicates what this could be, such as:
+    ///
+    /// * `TrapTest::NotWasm` - not a wasm fault, this should get forwarded to
+    ///   the next platform-specific fault handler.
+    /// * `TrapTest::HandledByEmbedder` - the embedder `call_handler` handled
+    ///   this signal, nothing else to do.
+    /// * `TrapTest::Trap` - this is a wasm trap an the stack needs to be
+    ///   unwound now.
+    pub(crate) fn test_if_trap(
+        &self,
+        regs: TrapRegisters,
+        faulting_addr: Option<usize>,
+        call_handler: impl Fn(&SignalHandler) -> bool,
+    ) -> TrapTest {
+        // If we haven't even started to handle traps yet, bail out.
+        if self.jmp_buf.get().is_null() {
+            return TrapTest::NotWasm;
+        }
+
+        // First up see if any instance registered has a custom trap handler,
+        // in which case run them all. If anything handles the trap then we
+        // return that the trap was handled.
+        let _ = &call_handler;
+        #[cfg(all(feature = "signals-based-traps", not(miri)))]
+        if let Some(handler) = self.signal_handler {
+            if unsafe { call_handler(&*handler) } {
+                return TrapTest::HandledByEmbedder;
+            }
+        }
+
+        // If this fault wasn't in wasm code, then it's not our problem
+        let Some((code, text_offset)) = lookup_code(regs.pc) else {
+            return TrapTest::NotWasm;
+        };
+
+        // If the fault was at a location that was not marked as potentially
+        // trapping, then that's a bug in Cranelift/Winch/etc. Don't try to
+        // catch the trap and pretend this isn't wasm so the program likely
+        // aborts.
+        let Some(trap) = code.lookup_trap_code(text_offset) else {
+            return TrapTest::NotWasm;
+        };
+
+        // If all that passed then this is indeed a wasm trap, so return the
+        // `jmp_buf` passed to `wasmtime_longjmp` to resume.
+        self.set_jit_trap(regs, faulting_addr, trap);
+        TrapTest::Trap {
+            jmp_buf: self.take_jmp_buf(),
+        }
+    }
+
+    pub(crate) fn take_jmp_buf(&self) -> *const u8 {
+        self.jmp_buf.replace(ptr::null())
+    }
+
+    pub(crate) fn set_jit_trap(
+        &self,
+        TrapRegisters { pc, fp, .. }: TrapRegisters,
+        faulting_addr: Option<usize>,
+        trap: wasmtime_environ::Trap,
+    ) {
+        let backtrace = self.capture_backtrace(self.limits, Some((pc, fp)));
+        let coredump = self.capture_coredump(self.limits, Some((pc, fp)));
+        self.unwind.set(Some((
+            UnwindReason::Trap(TrapReason::Jit {
+                pc,
+                faulting_addr,
+                trap,
+            }),
+            backtrace,
+            coredump,
+        )))
     }
 }
 

@@ -28,9 +28,6 @@ pub struct ObjectBuilder<'a> {
     /// will go.
     data: SectionId,
 
-    /// The target triple for this compilation.
-    triple: target_lexicon::Triple,
-
     /// The section identifier for function name information, or otherwise where
     /// the `name` custom section of wasm is copied into.
     ///
@@ -46,11 +43,7 @@ pub struct ObjectBuilder<'a> {
 
 impl<'a> ObjectBuilder<'a> {
     /// Creates a new builder for the `obj` specified.
-    pub fn new(
-        mut obj: Object<'a>,
-        tunables: &'a Tunables,
-        triple: target_lexicon::Triple,
-    ) -> ObjectBuilder<'a> {
+    pub fn new(mut obj: Object<'a>, tunables: &'a Tunables) -> ObjectBuilder<'a> {
         let data = obj.add_section(
             obj.segment_name(StandardSegment::Data).to_vec(),
             obj::ELF_WASM_DATA.as_bytes().to_vec(),
@@ -60,7 +53,6 @@ impl<'a> ObjectBuilder<'a> {
             obj,
             tunables,
             data,
-            triple,
             names: None,
             dwarf: None,
         }
@@ -225,12 +217,6 @@ impl<'a> ObjectBuilder<'a> {
             self.push_debuginfo(&mut dwarf, &debuginfo);
         }
 
-        let is_pulley = matches!(
-            self.triple.architecture,
-            target_lexicon::Architecture::Pulley32 | target_lexicon::Architecture::Pulley64
-        );
-        assert!(!is_pulley || wasm_to_array_trampolines.is_empty());
-
         Ok(CompiledModuleInfo {
             module,
             funcs,
@@ -240,7 +226,6 @@ impl<'a> ObjectBuilder<'a> {
                 has_unparsed_debuginfo,
                 code_section_offset: debuginfo.wasm_file.code_section_offset,
                 has_wasm_debuginfo: self.tunables.parse_wasm_debuginfo,
-                is_pulley,
                 dwarf,
             },
         })

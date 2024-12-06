@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use crate::runtime::vm::{
-    ExportFunction, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext, VMFuncRef,
-    VMFunctionImport, VMOpaqueContext,
+    ExportFunction, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext,
+    VMFuncRef, VMFunctionImport, VMOpaqueContext,
 };
 use crate::runtime::Uninhabited;
 use crate::store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored};
@@ -1068,10 +1068,12 @@ impl Func {
         func_ref: NonNull<VMFuncRef>,
         params_and_returns: *mut [ValRaw],
     ) -> Result<()> {
-        invoke_wasm_and_catch_traps(store, |caller| {
-            func_ref
-                .as_ref()
-                .array_call(caller.cast::<VMOpaqueContext>(), params_and_returns)
+        invoke_wasm_and_catch_traps(store, |caller, vm| {
+            func_ref.as_ref().array_call(
+                vm,
+                VMOpaqueContext::from_vmcontext(caller),
+                params_and_returns,
+            )
         })
     }
 
@@ -1592,7 +1594,7 @@ impl Func {
 /// can pass to the called wasm function, if desired.
 pub(crate) fn invoke_wasm_and_catch_traps<T>(
     store: &mut StoreContextMut<'_, T>,
-    closure: impl FnMut(*mut VMContext) -> bool,
+    closure: impl FnMut(*mut VMContext, Option<InterpreterRef<'_>>) -> bool,
 ) -> Result<()> {
     unsafe {
         let exit = enter_wasm(store);

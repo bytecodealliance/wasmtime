@@ -55,7 +55,7 @@ impl TestConfig {
                         self.strategies.retain(|s| *s != Compiler::Winch);
                         Ok(())
                     } else if meta.path.is_ident("Cranelift") {
-                        self.strategies.retain(|s| *s != Compiler::Cranelift);
+                        self.strategies.retain(|s| *s != Compiler::CraneliftNative);
                         Ok(())
                     } else {
                         Err(meta.error("Unknown strategy"))
@@ -97,7 +97,7 @@ impl TestConfig {
 impl Default for TestConfig {
     fn default() -> Self {
         Self {
-            strategies: vec![Compiler::Cranelift, Compiler::Winch],
+            strategies: vec![Compiler::CraneliftNative, Compiler::Winch],
             flags: Default::default(),
             test_attribute: None,
         }

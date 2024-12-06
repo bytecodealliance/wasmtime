@@ -19,6 +19,7 @@ mod address_map;
 mod builtin;
 mod demangling;
 mod error;
+mod ext;
 mod gc;
 mod hostcall;
 mod module;
@@ -33,6 +34,7 @@ mod tunables;
 mod types;
 mod vmoffsets;
 
+pub use self::ext::*;
 pub use crate::address_map::*;
 pub use crate::builtin::*;
 pub use crate::demangling::*;

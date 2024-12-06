@@ -1046,9 +1046,9 @@ jobs:
     strategy:
       matrix:
         crate:
-          - "wasmtime"
+          - "wasmtime --features pulley"
           - "wasmtime-cli"
-          - "wasmtime-environ"
+          - "wasmtime-environ --all-features"
           - "pulley-interpreter --all-features"
     needs: determine
     if: needs.determine.outputs.test-miri && github.repository == 'bytecodealliance/wasmtime'

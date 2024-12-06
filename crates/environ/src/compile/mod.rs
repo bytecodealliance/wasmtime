@@ -338,6 +338,9 @@ pub trait Compiler: Send + Sync {
             // 64 KB is the maximal page size (i.e. memory translation granule size)
             // supported by the architecture and is used on some platforms.
             (_, Architecture::Aarch64(..)) => 0x10000,
+            // Conservatively assume the max-of-all-supported-hosts for pulley
+            // and round up to 64k.
+            (_, Architecture::Pulley32 | Architecture::Pulley64) => 0x10000,
             _ => 0x1000,
         }
     }

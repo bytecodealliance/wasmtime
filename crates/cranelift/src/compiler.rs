@@ -30,7 +30,7 @@ use wasmtime_environ::{
     AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, DefinedFuncIndex, FlagValue,
     FunctionBodyData, FunctionLoc, HostCall, ModuleTranslation, ModuleTypesBuilder, PtrSize,
     RelocationTarget, StackMapInformation, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel,
-    Tunables, VMOffsets, WasmFuncType, WasmFunctionInfo, WasmValType,
+    TripleExt, Tunables, VMOffsets, WasmFuncType, WasmFunctionInfo, WasmValType,
 };
 
 #[cfg(feature = "component-model")]
@@ -152,12 +152,7 @@ impl Compiler {
         // `call` instruction where the name is `colocated: false`. This will
         // force a pulley-specific relocation to get emitted in addition to
         // using the `call_indirect_host` instruction.
-        let is_pulley = match self.isa.triple().architecture {
-            target_lexicon::Architecture::Pulley32 => true,
-            target_lexicon::Architecture::Pulley64 => true,
-            _ => false,
-        };
-        if is_pulley {
+        if self.isa.triple().is_pulley() {
             let mut new_signature = signature.clone();
             new_signature
                 .params
@@ -246,7 +241,7 @@ impl wasmtime_environ::Compiler for Compiler {
         // abort for the whole program since the runtime limits configured by
         // the embedder should cause wasm to trap before it reaches that
         // (ensuring the host has enough space as well for its functionality).
-        if !func_env.is_pulley() {
+        if !isa.triple().is_pulley() {
             let vmctx = context
                 .func
                 .create_global_value(ir::GlobalValueData::VMContext);

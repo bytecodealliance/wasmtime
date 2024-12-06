@@ -45,6 +45,13 @@ pub mod debug_builtins;
 pub mod libcalls;
 pub mod mpk;
 
+#[cfg(feature = "pulley")]
+pub(crate) mod interpreter;
+#[cfg(not(feature = "pulley"))]
+pub(crate) mod interpreter_disabled;
+#[cfg(not(feature = "pulley"))]
+pub(crate) use interpreter_disabled as interpreter;
+
 #[cfg(feature = "debug-builtins")]
 pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
@@ -63,6 +70,7 @@ pub use crate::runtime::vm::instance::{
     InstanceLimits, PoolConcurrencyLimitError, PoolingInstanceAllocator,
     PoolingInstanceAllocatorConfig,
 };
+pub use crate::runtime::vm::interpreter::*;
 pub use crate::runtime::vm::memory::{
     Memory, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory,
 };

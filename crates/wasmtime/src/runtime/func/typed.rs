@@ -211,7 +211,7 @@ where
         // the memory go away, so the size matters here for performance.
         let mut captures = (func, storage);
 
-        let result = invoke_wasm_and_catch_traps(store, |caller| {
+        let result = invoke_wasm_and_catch_traps(store, |caller, vm| {
             let (func_ref, storage) = &mut captures;
             let storage_len = mem::size_of_val::<Storage<_, _>>(storage) / mem::size_of::<ValRaw>();
             let storage: *mut Storage<_, _> = storage;
@@ -219,7 +219,7 @@ where
             let storage = core::ptr::slice_from_raw_parts_mut(storage, storage_len);
             func_ref
                 .as_ref()
-                .array_call(VMOpaqueContext::from_vmcontext(caller), storage)
+                .array_call(vm, VMOpaqueContext::from_vmcontext(caller), storage)
         });
 
         let (_, storage) = captures;

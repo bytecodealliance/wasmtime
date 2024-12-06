@@ -256,7 +256,6 @@ type GlobalRegistry = BTreeMap<usize, (usize, Arc<CodeMemory>)>;
 
 /// Find which registered region of code contains the given program counter, and
 /// what offset that PC is within that module's code.
-#[cfg(all(feature = "signals-based-traps", not(miri)))]
 pub fn lookup_code(pc: usize) -> Option<(Arc<CodeMemory>, usize)> {
     let all_modules = global_code().read();
     let (_end, (start, module)) = all_modules.range(pc..).next()?;

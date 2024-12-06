@@ -1,7 +1,10 @@
 //! Interpreter tests.
 
 use interp::Val;
-use pulley_interpreter::{interp::Vm, *};
+use pulley_interpreter::{
+    interp::{DoneReason, Vm},
+    *,
+};
 use std::{cell::UnsafeCell, fmt::Debug, ptr::NonNull};
 
 fn encoded(ops: &[Op]) -> Vec<u8> {
@@ -16,8 +19,11 @@ fn encoded(ops: &[Op]) -> Vec<u8> {
 unsafe fn run(vm: &mut Vm, ops: &[Op]) -> Result<(), NonNull<u8>> {
     let _ = env_logger::try_init();
     let ops = encoded(ops);
-    let _ = vm.call(NonNull::from(&ops[..]).cast(), &[], [])?;
-    Ok(())
+    match vm.call(NonNull::from(&ops[..]).cast(), &[], []) {
+        DoneReason::ReturnToHost(_) => Ok(()),
+        DoneReason::Trap(pc) => Err(pc),
+        DoneReason::CallIndirectHost { .. } => unimplemented!(),
+    }
 }
 
 unsafe fn assert_one<R0, R1, V>(

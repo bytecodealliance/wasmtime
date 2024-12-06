@@ -6,30 +6,8 @@
 //! thise module serves as a shared entrypoint for initialization entrypoints
 //! (`init_traps`) and testing if a trapping opcode is wasm (`test_if_trap`).
 
-use crate::runtime::module::lookup_code;
 use crate::sync::RwLock;
 use crate::vm::sys::traphandlers::TrapHandler;
-use crate::vm::traphandlers::{CallThreadState, SignalHandler, TrapReason, UnwindReason};
-use core::ptr;
-
-pub(crate) struct TrapRegisters {
-    pub pc: usize,
-    pub fp: usize,
-}
-
-/// Return value from `test_if_trap`.
-pub(crate) enum TrapTest {
-    /// Not a wasm trap, need to delegate to whatever process handler is next.
-    NotWasm,
-    /// This trap was handled by the embedder via custom embedding APIs.
-    HandledByEmbedder,
-    /// This is a wasm trap, it needs to be handled.
-    #[cfg_attr(miri, allow(dead_code))]
-    Trap {
-        /// How to longjmp back to the original wasm frame.
-        jmp_buf: *const u8,
-    },
-}
 
 /// Platform-specific trap-handler state.
 ///
@@ -83,82 +61,4 @@ pub fn init_traps(macos_use_mach_ports: bool) {
 pub unsafe fn deinit_traps() {
     let mut lock = TRAP_HANDLER.write();
     let _ = lock.take();
-}
-
-impl CallThreadState {
-    /// Trap handler using our thread-local state.
-    ///
-    /// * `pc` - the program counter the trap happened at
-    /// * `call_handler` - a closure used to invoke the platform-specific
-    ///   signal handler for each instance, if available.
-    ///
-    /// Attempts to handle the trap if it's a wasm trap. Returns a few
-    /// different things:
-    ///
-    /// * null - the trap didn't look like a wasm trap and should continue as a
-    ///   trap
-    /// * 1 as a pointer - the trap was handled by a custom trap handler on an
-    ///   instance, and the trap handler should quickly return.
-    /// * a different pointer - a jmp_buf buffer to longjmp to, meaning that
-    ///   the wasm trap was successfully handled.
-    pub(crate) fn test_if_trap(
-        &self,
-        regs: TrapRegisters,
-        faulting_addr: Option<usize>,
-        call_handler: impl Fn(&SignalHandler) -> bool,
-    ) -> TrapTest {
-        // If we haven't even started to handle traps yet, bail out.
-        if self.jmp_buf.get().is_null() {
-            return TrapTest::NotWasm;
-        }
-
-        // First up see if any instance registered has a custom trap handler,
-        // in which case run them all. If anything handles the trap then we
-        // return that the trap was handled.
-        if let Some(handler) = self.signal_handler {
-            if unsafe { call_handler(&*handler) } {
-                return TrapTest::HandledByEmbedder;
-            }
-        }
-
-        // If this fault wasn't in wasm code, then it's not our problem
-        let Some((code, text_offset)) = lookup_code(regs.pc) else {
-            return TrapTest::NotWasm;
-        };
-
-        let Some(trap) = code.lookup_trap_code(text_offset) else {
-            return TrapTest::NotWasm;
-        };
-
-        self.set_jit_trap(regs, faulting_addr, trap);
-
-        // If all that passed then this is indeed a wasm trap, so return the
-        // `jmp_buf` passed to `wasmtime_longjmp` to resume.
-        TrapTest::Trap {
-            jmp_buf: self.take_jmp_buf(),
-        }
-    }
-
-    pub(crate) fn take_jmp_buf(&self) -> *const u8 {
-        self.jmp_buf.replace(ptr::null())
-    }
-
-    pub(crate) fn set_jit_trap(
-        &self,
-        TrapRegisters { pc, fp, .. }: TrapRegisters,
-        faulting_addr: Option<usize>,
-        trap: wasmtime_environ::Trap,
-    ) {
-        let backtrace = self.capture_backtrace(self.limits, Some((pc, fp)));
-        let coredump = self.capture_coredump(self.limits, Some((pc, fp)));
-        self.unwind.set(Some((
-            UnwindReason::Trap(TrapReason::Jit {
-                pc,
-                faulting_addr,
-                trap,
-            }),
-            backtrace,
-            coredump,
-        )))
-    }
 }
