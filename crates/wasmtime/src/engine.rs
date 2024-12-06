@@ -486,6 +486,12 @@ impl Engine {
             "has_avx512vbmi" => "avx512vbmi",
             "has_lzcnt" => "lzcnt",
 
+            // pulley features
+            "big_endian" if cfg!(target_endian = "big") => return Ok(()),
+            "big_endian" if cfg!(target_endian = "little") => {
+                return Err("wrong host endianness".to_string())
+            }
+
             _ => {
                 // FIXME: should enumerate risc-v features and plumb them
                 // through to the `detect_host_feature` function.

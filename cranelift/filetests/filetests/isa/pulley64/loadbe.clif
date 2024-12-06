@@ -1,0 +1,71 @@
+test compile precise-output
+target pulley64 big_endian
+
+function %load_i32(i64) -> i32 {
+block0(v0: i64):
+    v1 = load.i32 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   x2 = load32_u x0+0 // flags =
+;   bswap32 x0, x2
+;   ret
+;
+; Disassembled:
+; load32_u x2, x0
+; bswap32 x0, x2
+; ret
+
+function %load_i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = load.i64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   x2 = load64_u x0+0 // flags =
+;   bswap64 x0, x2
+;   ret
+;
+; Disassembled:
+; load64 x2, x0
+; bswap64 x0, x2
+; ret
+
+function %load_i32_with_offset(i64) -> i32 {
+block0(v0: i64):
+    v1 = load.i32 v0+4
+    return v1
+}
+
+; VCode:
+; block0:
+;   x2 = load32_u x0+4 // flags =
+;   bswap32 x0, x2
+;   ret
+;
+; Disassembled:
+; load32_u_offset8 x2, x0, 4
+; bswap32 x0, x2
+; ret
+
+function %load_i64_with_offset(i64) -> i64 {
+block0(v0: i64):
+    v1 = load.i64 v0+8
+    return v1
+}
+
+; VCode:
+; block0:
+;   x2 = load64_u x0+8 // flags =
+;   bswap64 x0, x2
+;   ret
+;
+; Disassembled:
+; load64_offset8 x2, x0, 8
+; bswap64 x0, x2
+; ret
+

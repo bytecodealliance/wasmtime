@@ -135,5 +135,8 @@ fn extended_op_is_safe_for_fuzzing(op: &ExtendedOp) -> bool {
         ExtendedOp::Trap(_) => true,
         ExtendedOp::Nop(_) => true,
         ExtendedOp::CallIndirectHost(_) => false,
+        ExtendedOp::Bswap32(Bswap32 { dst, .. }) | ExtendedOp::Bswap64(Bswap64 { dst, .. }) => {
+            !dst.is_special()
+        }
     }
 }

@@ -226,18 +226,35 @@
 ;;;; Rules for `load` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type ty (load flags addr (offset32 offset))))
-      (pulley_load (Amode.RegOffset addr (i32_as_i64 offset))
-                   ty
-                   flags
-                   (ExtKind.Zero)))
+    (let ((le Reg (pulley_load (Amode.RegOffset addr (i32_as_i64 offset))
+                               ty
+                               flags
+                               (ExtKind.Zero))))
+      (xswap_if_be le ty flags)))
+
 
 ;;;; Rules for `store` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(type Endianness extern (enum Big Little))
+(decl pure endianness (MemFlags) Endianness)
+(extern constructor endianness endianness)
+
 (rule (lower (store flags src @ (value_type ty) addr (offset32 offset)))
       (side_effect (pulley_store (Amode.RegOffset addr (i32_as_i64 offset))
-                                 src
+                                 (xswap_if_be src ty flags)
                                  ty
                                  flags)))
+
+(decl xswap_if_be (XReg Type MemFlags) XReg)
+(rule (xswap_if_be val _ty flags)
+  (if-let (Endianness.Little) (endianness flags))
+  val)
+(rule (xswap_if_be val $I32 flags)
+  (if-let (Endianness.Big) (endianness flags))
+  (pulley_bswap32 val))
+(rule (xswap_if_be val $I64 flags)
+  (if-let (Endianness.Big) (endianness flags))
+  (pulley_bswap64 val))
 
 ;;;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

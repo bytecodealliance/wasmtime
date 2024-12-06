@@ -566,6 +566,8 @@ fn pulley_emit<P>(
         Inst::Sext8 { dst, src } => enc::sext8(sink, dst, src),
         Inst::Sext16 { dst, src } => enc::sext16(sink, dst, src),
         Inst::Sext32 { dst, src } => enc::sext32(sink, dst, src),
+        Inst::Bswap32 { dst, src } => enc::bswap32(sink, dst, src),
+        Inst::Bswap64 { dst, src } => enc::bswap64(sink, dst, src),
     }
 }
 

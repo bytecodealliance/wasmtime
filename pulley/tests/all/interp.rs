@@ -526,10 +526,10 @@ fn xulteq32() {
 
 #[test]
 fn load32_u() {
-    let a = UnsafeCell::new(11u32);
-    let b = UnsafeCell::new(22u32);
-    let c = UnsafeCell::new(33u32);
-    let d = UnsafeCell::new(i32::MIN as u32);
+    let a = UnsafeCell::new(11u32.to_le());
+    let b = UnsafeCell::new(22u32.to_le());
+    let c = UnsafeCell::new(33u32.to_le());
+    let d = UnsafeCell::new((i32::MIN as u32).to_le());
 
     for (expected, addr) in [
         (11, a.get()),
@@ -556,10 +556,10 @@ fn load32_u() {
 
 #[test]
 fn load32_s() {
-    let a = UnsafeCell::new(11u32);
-    let b = UnsafeCell::new(22u32);
-    let c = UnsafeCell::new(33u32);
-    let d = UnsafeCell::new(-1i32 as u32);
+    let a = UnsafeCell::new(11u32.to_le());
+    let b = UnsafeCell::new(22u32.to_le());
+    let c = UnsafeCell::new(33u32.to_le());
+    let d = UnsafeCell::new((-1i32 as u32).to_le());
 
     for (expected, addr) in [
         (11, a.get()),
@@ -586,10 +586,10 @@ fn load32_s() {
 
 #[test]
 fn load64() {
-    let a = UnsafeCell::new(11u64);
-    let b = UnsafeCell::new(22u64);
-    let c = UnsafeCell::new(33u64);
-    let d = UnsafeCell::new(-1i64 as u64);
+    let a = UnsafeCell::new(11u64.to_le());
+    let b = UnsafeCell::new(22u64.to_le());
+    let c = UnsafeCell::new(33u64.to_le());
+    let d = UnsafeCell::new((-1i64 as u64).to_le());
 
     for (expected, addr) in [
         (11, a.get()),
@@ -616,10 +616,10 @@ fn load64() {
 
 #[test]
 fn load32_u_offset8() {
-    let a = UnsafeCell::new([11u32, 22]);
-    let b = UnsafeCell::new([33u32, 44]);
-    let c = UnsafeCell::new([55u32, 66]);
-    let d = UnsafeCell::new([i32::MIN as u32, i32::MAX as u32]);
+    let a = UnsafeCell::new([11u32.to_le(), 22u32.to_le()]);
+    let b = UnsafeCell::new([33u32.to_le(), 44u32.to_le()]);
+    let c = UnsafeCell::new([55u32.to_le(), 66u32.to_le()]);
+    let d = UnsafeCell::new([(i32::MIN as u32).to_le(), (i32::MAX as u32).to_le()]);
 
     for (expected, addr, offset) in [
         (11, a.get(), 0),
@@ -651,10 +651,10 @@ fn load32_u_offset8() {
 
 #[test]
 fn load32_s_offset8() {
-    let a = UnsafeCell::new([11u32, 22]);
-    let b = UnsafeCell::new([33u32, 44]);
-    let c = UnsafeCell::new([55u32, 66]);
-    let d = UnsafeCell::new([-1i32 as u32, i32::MAX as u32]);
+    let a = UnsafeCell::new([11u32.to_le(), 22u32.to_le()]);
+    let b = UnsafeCell::new([33u32.to_le(), 44u32.to_le()]);
+    let c = UnsafeCell::new([55u32.to_le(), 66u32.to_le()]);
+    let d = UnsafeCell::new([(-1i32 as u32).to_le(), (i32::MAX as u32).to_le()]);
 
     for (expected, addr, offset) in [
         (11, a.get(), 0),
@@ -687,10 +687,10 @@ fn load32_s_offset8() {
 
 #[test]
 fn load64_offset8() {
-    let a = UnsafeCell::new([11u64, 22]);
-    let b = UnsafeCell::new([33u64, 44]);
-    let c = UnsafeCell::new([55u64, 66]);
-    let d = UnsafeCell::new([-1i64 as u64, i64::MAX as u64]);
+    let a = UnsafeCell::new([11u64.to_le(), 22u64.to_le()]);
+    let b = UnsafeCell::new([33u64.to_le(), 44u64.to_le()]);
+    let c = UnsafeCell::new([55u64.to_le(), 66u64.to_le()]);
+    let d = UnsafeCell::new([(-1i64 as u64).to_le(), (i64::MAX as u64).to_le()]);
 
     for (expected, addr, offset) in [
         (11, a.get(), 0),
@@ -722,10 +722,10 @@ fn load64_offset8() {
 
 #[test]
 fn load32_u_offset64() {
-    let a = UnsafeCell::new([11u32, 22]);
-    let b = UnsafeCell::new([33u32, 44]);
-    let c = UnsafeCell::new([55u32, 66]);
-    let d = UnsafeCell::new([i32::MIN as u32, i32::MAX as u32]);
+    let a = UnsafeCell::new([11u32.to_le(), 22u32.to_le()]);
+    let b = UnsafeCell::new([33u32.to_le(), 44u32.to_le()]);
+    let c = UnsafeCell::new([55u32.to_le(), 66u32.to_le()]);
+    let d = UnsafeCell::new([(i32::MIN as u32).to_le(), (i32::MAX as u32).to_le()]);
 
     for (expected, addr, offset) in [
         (11, a.get(), 0),
@@ -757,10 +757,10 @@ fn load32_u_offset64() {
 
 #[test]
 fn load32_s_offset64() {
-    let a = UnsafeCell::new([11u32, 22]);
-    let b = UnsafeCell::new([33u32, 44]);
-    let c = UnsafeCell::new([55u32, 66]);
-    let d = UnsafeCell::new([-1i32 as u32, i32::MAX as u32]);
+    let a = UnsafeCell::new([11u32.to_le(), 22u32.to_le()]);
+    let b = UnsafeCell::new([33u32.to_le(), 44u32.to_le()]);
+    let c = UnsafeCell::new([55u32.to_le(), 66u32.to_le()]);
+    let d = UnsafeCell::new([(-1i32 as u32).to_le(), (i32::MAX as u32).to_le()]);
 
     for (expected, addr, offset) in [
         (11, a.get(), 0),
@@ -793,10 +793,10 @@ fn load32_s_offset64() {
 
 #[test]
 fn load64_offset64() {
-    let a = UnsafeCell::new([11u64, 22]);
-    let b = UnsafeCell::new([33u64, 44]);
-    let c = UnsafeCell::new([55u64, 66]);
-    let d = UnsafeCell::new([-1i64 as u64, i64::MAX as u64]);
+    let a = UnsafeCell::new([11u64.to_le(), 22u64.to_le()]);
+    let b = UnsafeCell::new([33u64.to_le(), 44u64.to_le()]);
+    let c = UnsafeCell::new([55u64.to_le(), 66u64.to_le()]);
+    let d = UnsafeCell::new([(-1i64 as u64).to_le(), (i64::MAX as u64).to_le()]);
 
     for (expected, addr, offset) in [
         (11, a.get(), 0),

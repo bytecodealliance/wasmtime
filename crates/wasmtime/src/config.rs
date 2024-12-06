@@ -11,7 +11,7 @@ use std::path::Path;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
-use wasmtime_environ::{ConfigTunables, Tunables};
+use wasmtime_environ::{ConfigTunables, TripleExt, Tunables};
 
 #[cfg(feature = "runtime")]
 use crate::memory::MemoryCreator;
@@ -1926,24 +1926,24 @@ impl Config {
     fn compiler_panicking_wasm_features(&self) -> WasmFeatures {
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         match self.compiler_config.strategy {
-            None | Some(Strategy::Cranelift) => match self.compiler_target().architecture {
+            None | Some(Strategy::Cranelift) => {
                 // Pulley is just starting and most errors are because of
                 // unsupported lowerings which is a first-class error. Some
                 // errors are panics though due to unimplemented bits in ABI
                 // code and those causes are listed here.
-                target_lexicon::Architecture::Pulley32 | target_lexicon::Architecture::Pulley64 => {
-                    WasmFeatures::SIMD
+                if self.compiler_target().is_pulley() {
+                    return WasmFeatures::SIMD
                         | WasmFeatures::RELAXED_SIMD
                         | WasmFeatures::TAIL_CALL
                         | WasmFeatures::FLOATS
                         | WasmFeatures::MEMORY64
-                        | WasmFeatures::GC_TYPES
+                        | WasmFeatures::GC_TYPES;
                 }
 
                 // Other Cranelift backends are either 100% missing or complete
                 // at this time, so no need to further filter.
-                _ => WasmFeatures::empty(),
-            },
+                WasmFeatures::empty()
+            }
             Some(Strategy::Winch) => {
                 let mut unsupported = WasmFeatures::GC
                     | WasmFeatures::FUNCTION_REFERENCES
@@ -2044,11 +2044,7 @@ impl Config {
             || cfg!(target_arch = "riscv64")
             || cfg!(target_arch = "s390x");
         if !any_compiler_support && cfg!(feature = "pulley") {
-            if cfg!(target_pointer_width = "32") {
-                return "pulley32".parse().unwrap();
-            } else if cfg!(target_pointer_width = "64") {
-                return "pulley64".parse().unwrap();
-            }
+            return target_lexicon::Triple::pulley_host();
         }
 
         // And at this point the target is for sure the host.

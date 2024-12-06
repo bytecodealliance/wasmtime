@@ -7,6 +7,7 @@ mod settings;
 
 use self::inst::EmitInfo;
 use super::{Builder as IsaBuilder, FunctionAlignment};
+use crate::ir::Endianness;
 use crate::{
     dominator_tree::DominatorTree,
     ir,
@@ -124,6 +125,14 @@ where
         let abi = abi::PulleyCallee::new(func, self, &self.isa_flags, &sigs)?;
         machinst::compile::<Self>(func, domtree, self, abi, emit_info, sigs, ctrl_plane)
     }
+
+    pub fn target_endianness(&self) -> Endianness {
+        if self.isa_flags.big_endian() {
+            Endianness::Big
+        } else {
+            Endianness::Little
+        }
+    }
 }
 
 impl<P> TargetIsa for PulleyBackend<P>
@@ -234,14 +243,10 @@ where
 
 /// Create a new Pulley ISA builder.
 pub fn isa_builder(triple: Triple) -> IsaBuilder {
-    assert!(matches!(
-        triple.architecture,
-        Architecture::Pulley32 | Architecture::Pulley64
-    ));
     let constructor = match triple.architecture {
-        Architecture::Pulley32 => isa_constructor_32,
-        Architecture::Pulley64 => isa_constructor_64,
-        _ => unreachable!(),
+        Architecture::Pulley32 | Architecture::Pulley32be => isa_constructor_32,
+        Architecture::Pulley64 | Architecture::Pulley64be => isa_constructor_64,
+        other => panic!("unexpected architecture {other:?}"),
     };
     IsaBuilder {
         triple,
@@ -258,6 +263,9 @@ fn isa_constructor_32(
     use crate::settings::Configurable;
     let mut builder = builder.clone();
     builder.set("pointer_width", "pointer32").unwrap();
+    if triple.endianness().unwrap() == target_lexicon::Endianness::Big {
+        builder.enable("big_endian").unwrap();
+    }
     let isa_flags = PulleyFlags::new(&shared_flags, &builder);
 
     let backend =
@@ -273,6 +281,9 @@ fn isa_constructor_64(
     use crate::settings::Configurable;
     let mut builder = builder.clone();
     builder.set("pointer_width", "pointer64").unwrap();
+    if triple.endianness().unwrap() == target_lexicon::Endianness::Big {
+        builder.enable("big_endian").unwrap();
+    }
     let isa_flags = PulleyFlags::new(&shared_flags, &builder);
 
     let backend =

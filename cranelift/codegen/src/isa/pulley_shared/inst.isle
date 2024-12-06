@@ -134,6 +134,10 @@
     (Sext8 (dst WritableXReg) (src XReg))
     (Sext16 (dst WritableXReg) (src XReg))
     (Sext32 (dst WritableXReg) (src XReg))
+
+    ;; Byte swaps.
+    (Bswap32 (dst WritableXReg) (src XReg))
+    (Bswap64 (dst WritableXReg) (src XReg))
   )
 )
 
@@ -622,6 +626,18 @@
 (rule (pulley_sext32 src)
       (let ((dst WritableXReg (temp_writable_xreg))
             (_ Unit (emit (MInst.Sext32 dst src))))
+        dst))
+
+(decl pulley_bswap32 (XReg) XReg)
+(rule (pulley_bswap32 src)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Bswap32 dst src))))
+        dst))
+
+(decl pulley_bswap64 (XReg) XReg)
+(rule (pulley_bswap64 src)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.Bswap64 dst src))))
         dst))
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

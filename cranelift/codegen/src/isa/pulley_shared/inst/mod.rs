@@ -261,7 +261,9 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         | Inst::Zext32 { dst, src }
         | Inst::Sext8 { dst, src }
         | Inst::Sext16 { dst, src }
-        | Inst::Sext32 { dst, src } => {
+        | Inst::Sext32 { dst, src }
+        | Inst::Bswap32 { dst, src }
+        | Inst::Bswap64 { dst, src } => {
             collector.reg_use(src);
             collector.reg_def(dst);
         }
@@ -914,6 +916,16 @@ impl Inst {
                 let dst = format_reg(*dst.to_reg());
                 let src = format_reg(**src);
                 format!("sext32 {dst}, {src}")
+            }
+            Inst::Bswap32 { dst, src } => {
+                let dst = format_reg(*dst.to_reg());
+                let src = format_reg(**src);
+                format!("bswap32 {dst}, {src}")
+            }
+            Inst::Bswap64 { dst, src } => {
+                let dst = format_reg(*dst.to_reg());
+                let src = format_reg(**src);
+                format!("bswap64 {dst}, {src}")
             }
         }
     }

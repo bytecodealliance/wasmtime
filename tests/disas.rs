@@ -54,6 +54,7 @@ use std::sync::Arc;
 use tempfile::TempDir;
 use wasmtime::{Engine, OptLevel, Strategy};
 use wasmtime_cli_flags::CommonOptions;
+use wasmtime_environ::TripleExt;
 
 fn main() -> Result<()> {
     if cfg!(miri) {
@@ -347,10 +348,7 @@ fn assert_output(
                     .collect::<Vec<_>>())
             })?,
             Err(_) => {
-                assert!(matches!(
-                    isa.triple().architecture,
-                    target_lexicon::Architecture::Pulley32 | target_lexicon::Architecture::Pulley64
-                ));
+                assert!(isa.triple().is_pulley());
                 disas_insts(&mut actual, &bytes, |bytes, _addr| {
                     let mut result = vec![];
 
