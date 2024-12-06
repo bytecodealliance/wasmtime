@@ -918,4 +918,13 @@ impl Assembler {
             )),
         })
     }
+
+    pub fn call_with_reg(&mut self, callee: Reg) {
+        self.emit(Inst::CallInd {
+            info: Box::new(cranelift_codegen::CallInfo::empty(
+                callee.into(),
+                CallConv::SystemV,
+            )),
+        })
+    }
 }
