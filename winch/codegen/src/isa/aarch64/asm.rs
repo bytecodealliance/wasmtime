@@ -6,19 +6,18 @@ use crate::{
     masm::OperandSize,
     reg::{writable, Reg, WritableReg},
 };
-use cranelift_codegen::ir::TrapCode;
-use cranelift_codegen::isa::aarch64::inst::{
-    BitOp, BranchTarget, Cond, CondBrKind, FPULeftShiftImm, FPUOp1, FPUOp2,
-    FPUOpRI::{self, UShr32, UShr64},
-    FPUOpRIMod, FPURightShiftImm, FpuRoundMode, ImmLogic, ImmShift, ScalarSize,
-};
 use cranelift_codegen::{
-    ir::{MemFlags, SourceLoc},
+    ir::{ExternalName, LibCall, MemFlags, SourceLoc, TrapCode, UserExternalNameRef},
     isa::aarch64::inst::{
         self,
         emit::{EmitInfo, EmitState},
-        ALUOp, ALUOp3, AMode, ExtendOp, Imm12, Inst, PairAMode, VecLanesOp, VecMisc2, VectorSize,
+        ALUOp, ALUOp3, AMode, BitOp, BranchTarget, Cond, CondBrKind, ExtendOp, FPULeftShiftImm,
+        FPUOp1, FPUOp2,
+        FPUOpRI::{self, UShr32, UShr64},
+        FPUOpRIMod, FPURightShiftImm, FpuRoundMode, Imm12, ImmLogic, ImmShift, Inst, PairAMode,
+        ScalarSize, VecLanesOp, VecMisc2, VectorSize,
     },
+    isa::CallConv,
     settings, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
     MachLabel, Writable,
 };
