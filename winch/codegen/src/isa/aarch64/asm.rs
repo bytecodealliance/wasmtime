@@ -927,4 +927,14 @@ impl Assembler {
             )),
         })
     }
+
+    pub fn call_with_lib(&mut self, lib: LibCall, dst: Reg) {
+        let name = ExternalName::LibCall(lib);
+        self.emit(Inst::LoadExtName {
+            rd: writable!(dst.into()),
+            name: name.into(),
+            offset: 0,
+        });
+        self.call_with_reg(dst)
+    }
 }
