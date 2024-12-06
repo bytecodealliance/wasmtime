@@ -115,22 +115,8 @@ where
         XReg::new(regs::lr_reg()).unwrap()
     }
 
-    fn littleendian(&mut self, flags: MemFlags) -> Option<()> {
-        let endianness = flags.endianness(self.backend.target_endianness());
-        if endianness == Endianness::Little {
-            Some(())
-        } else {
-            None
-        }
-    }
-
-    fn bigendian(&mut self, flags: MemFlags) -> Option<()> {
-        let endianness = flags.endianness(self.backend.target_endianness());
-        if endianness == Endianness::Big {
-            Some(())
-        } else {
-            None
-        }
+    fn endianness(&mut self, flags: MemFlags) -> Endianness {
+        flags.endianness(self.backend.target_endianness())
     }
 }
 

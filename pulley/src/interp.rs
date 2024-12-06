@@ -1439,18 +1439,6 @@ impl OpVisitor for Interpreter<'_> {
         self.state[dst].set_i64(src.into());
         ControlFlow::Continue(())
     }
-
-    fn bswap32(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
-        let src = self.state[src].get_u32();
-        self.state[dst].set_u32(src.swap_bytes());
-        ControlFlow::Continue(())
-    }
-
-    fn bswap64(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
-        let src = self.state[src].get_u64();
-        self.state[dst].set_u64(src.swap_bytes());
-        ControlFlow::Continue(())
-    }
 }
 
 impl ExtendedOpVisitor for Interpreter<'_> {
@@ -1465,5 +1453,17 @@ impl ExtendedOpVisitor for Interpreter<'_> {
 
     fn call_indirect_host(&mut self, id: u8) -> ControlFlow<Done> {
         ControlFlow::Break(self.done_call_indirect_host(id))
+    }
+
+    fn bswap32(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let src = self.state[src].get_u32();
+        self.state[dst].set_u32(src.swap_bytes());
+        ControlFlow::Continue(())
+    }
+
+    fn bswap64(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let src = self.state[src].get_u64();
+        self.state[dst].set_u64(src.swap_bytes());
+        ControlFlow::Continue(())
     }
 }

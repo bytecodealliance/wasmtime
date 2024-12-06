@@ -208,11 +208,6 @@ macro_rules! for_each_op {
             sext16 = Sext16 { dst: XReg, src: XReg };
             /// `dst = sext(low32(src))`
             sext32 = Sext32 { dst: XReg, src: XReg };
-
-            /// `dst = byteswap(low32(src))`
-            bswap32 = Bswap32 { dst: XReg, src: XReg };
-            /// `dst = byteswap(src)`
-            bswap64 = Bswap64 { dst: XReg, src: XReg };
         }
     };
 }
@@ -246,6 +241,11 @@ macro_rules! for_each_extended_op {
             /// is resolved at link-time when raw bytecode from Cranelift is
             /// assembled into the final object that Wasmtime will interpret.
             call_indirect_host = CallIndirectHost { id: u8 };
+
+            /// `dst = byteswap(low32(src))`
+            bswap32 = Bswap32 { dst: XReg, src: XReg };
+            /// `dst = byteswap(src)`
+            bswap64 = Bswap64 { dst: XReg, src: XReg };
         }
     };
 }

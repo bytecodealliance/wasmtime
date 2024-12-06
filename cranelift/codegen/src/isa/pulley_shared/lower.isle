@@ -235,11 +235,9 @@
 
 ;;;; Rules for `store` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl littleendian () MemFlags)
-(extern extractor littleendian littleendian)
-
-(decl bigendian () MemFlags)
-(extern extractor bigendian bigendian)
+(type Endianness extern (enum Big Little))
+(decl pure endianness (MemFlags) Endianness)
+(extern constructor endianness endianness)
 
 (rule (lower (store flags src @ (value_type ty) addr (offset32 offset)))
       (side_effect (pulley_store (Amode.RegOffset addr (i32_as_i64 offset))
@@ -248,9 +246,15 @@
                                  flags)))
 
 (decl xswap_if_be (XReg Type MemFlags) XReg)
-(rule 0 (xswap_if_be val _ty (littleendian)) val)
-(rule 1 (xswap_if_be val $I32 (bigendian)) (pulley_bswap32 val))
-(rule 1 (xswap_if_be val $I64 (bigendian)) (pulley_bswap64 val))
+(rule (xswap_if_be val _ty flags)
+  (if-let (Endianness.Little) (endianness flags))
+  val)
+(rule (xswap_if_be val $I32 flags)
+  (if-let (Endianness.Big) (endianness flags))
+  (pulley_bswap32 val))
+(rule (xswap_if_be val $I64 flags)
+  (if-let (Endianness.Big) (endianness flags))
+  (pulley_bswap64 val))
 
 ;;;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
