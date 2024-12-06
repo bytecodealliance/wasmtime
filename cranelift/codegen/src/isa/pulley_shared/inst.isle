@@ -83,7 +83,10 @@
     ;; Stores.
     (Store (mem Amode) (src Reg) (ty Type) (flags MemFlags))
 
-    ;; TODO
+    ;; A raw pulley instruction generated at compile-time via Pulley's
+    ;; `for_each_op!` macro. This variant has `pulley_*` constructors to
+    ;; emit this instruction and auto-generated methods for other various
+    ;; bits and pieces of boilerplate in the backend.
     (Raw (raw RawInst))
   )
 )
