@@ -909,4 +909,13 @@ impl Assembler {
     pub fn buffer(&self) -> &MachBuffer<Inst> {
         &self.buffer
     }
+
+    pub fn call_with_name(&mut self, name: UserExternalNameRef) {
+        self.emit(Inst::Call {
+            info: Box::new(cranelift_codegen::CallInfo::empty(
+                ExternalName::user(name),
+                CallConv::SystemV,
+            )),
+        })
+    }
 }
