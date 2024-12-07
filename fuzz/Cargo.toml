@@ -130,3 +130,10 @@ path = "fuzz_targets/pulley.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "dominator_tree"
+path = "fuzz_targets/dominator_tree.rs"
+test = false
+doc = false
+bench = false
