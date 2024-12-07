@@ -1,7 +1,8 @@
 //! Assembler library implementation for Aarch64.
 
 use super::{address::Address, regs};
-use crate::masm::{ExtendKind, FloatCmpKind, IntCmpKind, RoundingMode, ShiftKind};
+use crate::aarch64::regs::zero;
+use crate::masm::{DivKind, ExtendKind, FloatCmpKind, IntCmpKind, RoundingMode, ShiftKind};
 use crate::{
     masm::OperandSize,
     reg::{writable, Reg, WritableReg},
@@ -12,6 +13,7 @@ use cranelift_codegen::isa::aarch64::inst::{
     FPUOpRI::{self, UShr32, UShr64},
     FPUOpRIMod, FPURightShiftImm, FpuRoundMode, ImmLogic, ImmShift, ScalarSize,
 };
+use cranelift_codegen::isa::aarch64::inst::{UImm5, NZCV};
 use cranelift_codegen::{
     ir::{MemFlags, SourceLoc},
     isa::aarch64::inst::{
@@ -395,6 +397,80 @@ impl Assembler {
         let scratch = regs::scratch();
         self.load_constant(imm, writable!(scratch));
         self.emit_alu_rrrr(ALUOp3::MAdd, scratch, rn, rd, regs::zero(), size);
+    }
+
+    /// Signed/unsigned division with three registers.
+    pub fn div_rrr(
+        &mut self,
+        divisor: Reg,
+        dividend: Reg,
+        dest: Writable<Reg>,
+        kind: DivKind,
+        size: OperandSize,
+    ) {
+        // Check for division by 0
+        self.emit(Inst::TrapIf {
+            kind: CondBrKind::Zero(divisor.into()),
+            trap_code: TrapCode::INTEGER_DIVISION_BY_ZERO,
+        });
+
+        // check for overflow
+        if kind == DivKind::Signed {
+            // we first check whether the divisor is -1
+            self.emit(Inst::AluRRImm12 {
+                alu_op: ALUOp::AddS,
+                size: size.into(),
+                rd: writable!(zero().into()),
+                rn: divisor.into(),
+                imm12: Imm12::maybe_from_u64(1).expect("1 fits in 12 bits"),
+            });
+            // if it is -1, then we check if the dividend is MIN
+            self.emit(Inst::CCmpImm {
+                size: size.into(),
+                rn: dividend.into(),
+                imm: UImm5::maybe_from_u8(1).expect("1 fits in 5 bits"),
+                nzcv: NZCV::new(false, false, false, false),
+                cond: Cond::Eq,
+            });
+
+            // Finally, trap if the previous operation overflowed
+            self.emit(Inst::TrapIf {
+                kind: CondBrKind::Cond(Cond::Vs),
+                trap_code: TrapCode::INTEGER_OVERFLOW,
+            })
+        }
+
+        // cranelif-codegen doesn't support emitting u/sdiv for anything but I64,
+        // we therefore sign-extend the operand.
+        if size == OperandSize::S32 {
+            self.emit(Inst::Extend {
+                rd: writable!(divisor.into()),
+                rn: divisor.into(),
+                signed: true,
+                from_bits: 32,
+                to_bits: 64,
+            });
+            self.emit(Inst::Extend {
+                rd: writable!(dividend.into()),
+                rn: dividend.into(),
+                signed: true,
+                from_bits: 32,
+                to_bits: 64,
+            });
+        }
+
+        let alu_op = match kind {
+            DivKind::Signed => ALUOp::SDiv,
+            DivKind::Unsigned => ALUOp::UDiv,
+        };
+
+        self.emit(Inst::AluRRR {
+            alu_op,
+            size: OperandSize::S64.into(),
+            rd: dest.map(Into::into),
+            rn: dividend.into(),
+            rm: divisor.into(),
+        })
     }
 
     /// And with three registers.

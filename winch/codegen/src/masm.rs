@@ -14,7 +14,7 @@ use wasmtime_environ::PtrSize;
 
 pub(crate) use cranelift_codegen::ir::TrapCode;
 
-#[derive(Eq, PartialEq)]
+#[derive(Eq, PartialEq, Clone, Copy)]
 pub(crate) enum DivKind {
     /// Signed division.
     Signed,
