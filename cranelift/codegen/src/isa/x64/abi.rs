@@ -628,9 +628,10 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         const PROBE_MAX_UNROLL: u32 = 4;
 
         // Number of probes that we need to perform
-        let probe_count = align_to(frame_size, guard_size) / guard_size;
-
-        if probe_count <= PROBE_MAX_UNROLL {
+        let probe_count = frame_size / guard_size;
+        if probe_count == 0 {
+            // No probe necessary
+        } else if probe_count <= PROBE_MAX_UNROLL {
             Self::gen_probestack_unroll(insts, guard_size, probe_count)
         } else {
             Self::gen_probestack_loop(insts, call_conv, frame_size, guard_size)
