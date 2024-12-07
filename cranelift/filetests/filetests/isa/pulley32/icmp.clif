@@ -9,7 +9,7 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   x0 = xeq32 x0, x1
+;   xeq32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -24,7 +24,7 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   x0 = xeq32 x0, x1
+;   xeq32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -39,7 +39,7 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   x0 = xeq32 x0, x1
+;   xeq32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -54,7 +54,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xeq64 x0, x1
+;   xeq64 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -69,7 +69,7 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   x0 = xneq32 x0, x1
+;   xneq32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -84,7 +84,7 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   x0 = xneq32 x0, x1
+;   xneq32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -99,7 +99,7 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   x0 = xneq32 x0, x1
+;   xneq32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -114,7 +114,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xneq64 x0, x1
+;   xneq64 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -129,7 +129,7 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   x0 = xult32 x0, x1
+;   xult32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -144,7 +144,7 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   x0 = xult32 x0, x1
+;   xult32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -159,7 +159,7 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   x0 = xult32 x0, x1
+;   xult32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -174,7 +174,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xult64 x0, x1
+;   xult64 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -189,7 +189,7 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   x0 = xulteq32 x0, x1
+;   xulteq32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -204,7 +204,7 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   x0 = xulteq32 x0, x1
+;   xulteq32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -219,7 +219,7 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   x0 = xulteq32 x0, x1
+;   xulteq32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -234,7 +234,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xulteq64 x0, x1
+;   xulteq64 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -249,7 +249,7 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   x0 = xslt32 x0, x1
+;   xslt32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -264,7 +264,7 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   x0 = xslt32 x0, x1
+;   xslt32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -279,7 +279,7 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   x0 = xslt32 x0, x1
+;   xslt32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -294,7 +294,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xslt64 x0, x1
+;   xslt64 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -309,7 +309,7 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   x0 = xslteq32 x0, x1
+;   xslteq32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -324,7 +324,7 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   x0 = xslteq32 x0, x1
+;   xslteq32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -339,7 +339,7 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   x0 = xslteq32 x0, x1
+;   xslteq32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -354,7 +354,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xslteq64 x0, x1
+;   xslteq64 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -369,7 +369,7 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   x0 = xult32 x1, x0
+;   xult32 x0, x1, x0
 ;   ret
 ;
 ; Disassembled:
@@ -384,7 +384,7 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   x0 = xult32 x1, x0
+;   xult32 x0, x1, x0
 ;   ret
 ;
 ; Disassembled:
@@ -399,7 +399,7 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   x0 = xult32 x1, x0
+;   xult32 x0, x1, x0
 ;   ret
 ;
 ; Disassembled:
@@ -414,7 +414,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xult64 x1, x0
+;   xult64 x0, x1, x0
 ;   ret
 ;
 ; Disassembled:
@@ -429,7 +429,7 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   x0 = xslt32 x1, x0
+;   xslt32 x0, x1, x0
 ;   ret
 ;
 ; Disassembled:
@@ -444,7 +444,7 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   x0 = xslt32 x1, x0
+;   xslt32 x0, x1, x0
 ;   ret
 ;
 ; Disassembled:
@@ -459,7 +459,7 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   x0 = xslt32 x1, x0
+;   xslt32 x0, x1, x0
 ;   ret
 ;
 ; Disassembled:
@@ -474,7 +474,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xslt64 x1, x0
+;   xslt64 x0, x1, x0
 ;   ret
 ;
 ; Disassembled:
@@ -489,7 +489,7 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   x0 = xulteq32 x1, x0
+;   xulteq32 x0, x1, x0
 ;   ret
 ;
 ; Disassembled:
@@ -504,7 +504,7 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   x0 = xulteq32 x1, x0
+;   xulteq32 x0, x1, x0
 ;   ret
 ;
 ; Disassembled:
@@ -519,7 +519,7 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   x0 = xulteq32 x1, x0
+;   xulteq32 x0, x1, x0
 ;   ret
 ;
 ; Disassembled:
@@ -534,7 +534,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xulteq64 x1, x0
+;   xulteq64 x0, x1, x0
 ;   ret
 ;
 ; Disassembled:
@@ -549,7 +549,7 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   x0 = xslteq32 x1, x0
+;   xslteq32 x0, x1, x0
 ;   ret
 ;
 ; Disassembled:
@@ -564,7 +564,7 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   x0 = xslteq32 x1, x0
+;   xslteq32 x0, x1, x0
 ;   ret
 ;
 ; Disassembled:
@@ -579,7 +579,7 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   x0 = xslteq32 x1, x0
+;   xslteq32 x0, x1, x0
 ;   ret
 ;
 ; Disassembled:
@@ -594,7 +594,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xslteq64 x1, x0
+;   xslteq64 x0, x1, x0
 ;   ret
 ;
 ; Disassembled:

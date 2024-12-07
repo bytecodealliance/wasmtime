@@ -24,8 +24,22 @@ pub use self::emit::*;
 // Instructions (top level): definition
 
 pub use crate::isa::pulley_shared::lower::isle::generated_code::MInst as Inst;
+pub use crate::isa::pulley_shared::lower::isle::generated_code::RawInst;
+
+impl From<RawInst> for Inst {
+    fn from(raw: RawInst) -> Inst {
+        Inst::Raw { raw }
+    }
+}
 
 use super::PulleyTargetKind;
+
+mod generated {
+    use super::*;
+    use crate::isa::pulley_shared::lower::isle::generated_code::RawInst;
+
+    include!(concat!(env!("OUT_DIR"), "/pulley_inst_gen.rs"));
+}
 
 impl Inst {
     /// Generic constructor for a load (zero-extending where appropriate).
@@ -61,9 +75,6 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             for RetPair { vreg, preg } in rets {
                 collector.reg_fixed_use(vreg, *preg);
             }
-        }
-        Inst::Ret => {
-            unreachable!("`ret` is only added after regalloc")
         }
 
         Inst::Unwind { .. } | Inst::Trap { .. } | Inst::Nop => {}
@@ -167,45 +178,6 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(src2);
         }
 
-        Inst::Xmov { dst, src } => {
-            collector.reg_use(src);
-            collector.reg_def(dst);
-        }
-        Inst::Fmov { dst, src } => {
-            collector.reg_use(src);
-            collector.reg_def(dst);
-        }
-        Inst::Vmov { dst, src } => {
-            collector.reg_use(src);
-            collector.reg_def(dst);
-        }
-
-        Inst::Xconst8 { dst, imm: _ }
-        | Inst::Xconst16 { dst, imm: _ }
-        | Inst::Xconst32 { dst, imm: _ }
-        | Inst::Xconst64 { dst, imm: _ } => {
-            collector.reg_def(dst);
-        }
-
-        Inst::Xadd32 { dst, src1, src2 }
-        | Inst::Xadd64 { dst, src1, src2 }
-        | Inst::Xeq64 { dst, src1, src2 }
-        | Inst::Xneq64 { dst, src1, src2 }
-        | Inst::Xslt64 { dst, src1, src2 }
-        | Inst::Xslteq64 { dst, src1, src2 }
-        | Inst::Xult64 { dst, src1, src2 }
-        | Inst::Xulteq64 { dst, src1, src2 }
-        | Inst::Xeq32 { dst, src1, src2 }
-        | Inst::Xneq32 { dst, src1, src2 }
-        | Inst::Xslt32 { dst, src1, src2 }
-        | Inst::Xslteq32 { dst, src1, src2 }
-        | Inst::Xult32 { dst, src1, src2 }
-        | Inst::Xulteq32 { dst, src1, src2 } => {
-            collector.reg_use(src1);
-            collector.reg_use(src2);
-            collector.reg_def(dst);
-        }
-
         Inst::LoadAddr { dst, mem } => {
             collector.reg_def(dst);
             mem.get_operands(collector);
@@ -232,41 +204,11 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(src);
         }
 
-        Inst::BitcastIntFromFloat32 { dst, src } => {
-            collector.reg_use(src);
-            collector.reg_def(dst);
-        }
-        Inst::BitcastIntFromFloat64 { dst, src } => {
-            collector.reg_use(src);
-            collector.reg_def(dst);
-        }
-        Inst::BitcastFloatFromInt32 { dst, src } => {
-            collector.reg_use(src);
-            collector.reg_def(dst);
-        }
-        Inst::BitcastFloatFromInt64 { dst, src } => {
-            collector.reg_use(src);
-            collector.reg_def(dst);
-        }
-
         Inst::BrTable { idx, .. } => {
             collector.reg_use(idx);
         }
 
-        Inst::StackAlloc32 { .. } | Inst::StackFree32 { .. } | Inst::PushFrame | Inst::PopFrame => {
-        }
-
-        Inst::Zext8 { dst, src }
-        | Inst::Zext16 { dst, src }
-        | Inst::Zext32 { dst, src }
-        | Inst::Sext8 { dst, src }
-        | Inst::Sext16 { dst, src }
-        | Inst::Sext32 { dst, src }
-        | Inst::Bswap32 { dst, src }
-        | Inst::Bswap64 { dst, src } => {
-            collector.reg_use(src);
-            collector.reg_def(dst);
-        }
+        Inst::Raw { raw } => generated::get_operands(raw, collector),
     }
 }
 
@@ -291,6 +233,18 @@ where
     fn from(inst: Inst) -> Self {
         Self {
             inst,
+            kind: PhantomData,
+        }
+    }
+}
+
+impl<P> From<RawInst> for InstAndKind<P>
+where
+    P: PulleyTargetKind,
+{
+    fn from(inst: RawInst) -> Self {
+        Self {
+            inst: inst.into(),
             kind: PhantomData,
         }
     }
@@ -359,7 +313,9 @@ where
 
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
         match self.inst {
-            Inst::Xmov { dst, src } => Some((Writable::from_reg(*dst.to_reg()), *src)),
+            Inst::Raw {
+                raw: RawInst::Xmov { dst, src },
+            } => Some((Writable::from_reg(*dst.to_reg()), *src)),
             _ => None,
         }
     }
@@ -384,7 +340,10 @@ where
 
     fn is_term(&self) -> MachTerminator {
         match self.inst {
-            Inst::Ret { .. } | Inst::Rets { .. } => MachTerminator::Ret,
+            Inst::Raw {
+                raw: RawInst::Ret { .. },
+            }
+            | Inst::Rets { .. } => MachTerminator::Ret,
             Inst::Jump { .. } => MachTerminator::Uncond,
             Inst::BrIf { .. }
             | Inst::BrIfXeq32 { .. }
@@ -404,17 +363,17 @@ where
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self {
         match ty {
-            ir::types::I8 | ir::types::I16 | ir::types::I32 | ir::types::I64 => Inst::Xmov {
+            ir::types::I8 | ir::types::I16 | ir::types::I32 | ir::types::I64 => RawInst::Xmov {
                 dst: WritableXReg::try_from(to_reg).unwrap(),
                 src: XReg::new(from_reg).unwrap(),
             }
             .into(),
-            ir::types::F32 | ir::types::F64 => Inst::Fmov {
+            ir::types::F32 | ir::types::F64 => RawInst::Fmov {
                 dst: WritableFReg::try_from(to_reg).unwrap(),
                 src: FReg::new(from_reg).unwrap(),
             }
             .into(),
-            _ if ty.is_vector() => Inst::Vmov {
+            _ if ty.is_vector() => RawInst::Vmov {
                 dst: WritableVReg::try_from(to_reg).unwrap(),
                 src: VReg::new(from_reg).unwrap(),
             }
@@ -585,8 +544,6 @@ impl Inst {
 
             Inst::Nop => format!("nop"),
 
-            Inst::Ret => format!("ret"),
-
             Inst::GetSpecial { dst, reg } => {
                 let dst = format_reg(*dst.to_reg());
                 let reg = format_reg(**reg);
@@ -697,125 +654,6 @@ impl Inst {
                 format!("br_if_xulteq32 {src1}, {src2}, {taken}; jump {not_taken}")
             }
 
-            Inst::Xmov { dst, src } => {
-                let dst = format_reg(*dst.to_reg());
-                let src = format_reg(**src);
-                format!("{dst} = xmov {src}")
-            }
-            Inst::Fmov { dst, src } => {
-                let dst = format_reg(*dst.to_reg());
-                let src = format_reg(**src);
-                format!("{dst} = fmov {src}")
-            }
-            Inst::Vmov { dst, src } => {
-                let dst = format_reg(*dst.to_reg());
-                let src = format_reg(**src);
-                format!("{dst} = vmov {src}")
-            }
-
-            Inst::Xconst8 { dst, imm } => {
-                let dst = format_reg(*dst.to_reg());
-                format!("{dst} = xconst8 {imm}")
-            }
-            Inst::Xconst16 { dst, imm } => {
-                let dst = format_reg(*dst.to_reg());
-                format!("{dst} = xconst16 {imm}")
-            }
-            Inst::Xconst32 { dst, imm } => {
-                let dst = format_reg(*dst.to_reg());
-                format!("{dst} = xconst32 {imm}")
-            }
-            Inst::Xconst64 { dst, imm } => {
-                let dst = format_reg(*dst.to_reg());
-                format!("{dst} = xconst64 {imm}")
-            }
-
-            Inst::Xadd32 { dst, src1, src2 } => format!(
-                "{} = xadd32 {}, {}",
-                format_reg(*dst.to_reg()),
-                format_reg(**src1),
-                format_reg(**src2)
-            ),
-            Inst::Xadd64 { dst, src1, src2 } => format!(
-                "{} = xadd64 {}, {}",
-                format_reg(*dst.to_reg()),
-                format_reg(**src1),
-                format_reg(**src2)
-            ),
-
-            Inst::Xeq64 { dst, src1, src2 } => format!(
-                "{} = xeq64 {}, {}",
-                format_reg(*dst.to_reg()),
-                format_reg(**src1),
-                format_reg(**src2)
-            ),
-            Inst::Xneq64 { dst, src1, src2 } => format!(
-                "{} = xneq64 {}, {}",
-                format_reg(*dst.to_reg()),
-                format_reg(**src1),
-                format_reg(**src2)
-            ),
-            Inst::Xslt64 { dst, src1, src2 } => format!(
-                "{} = xslt64 {}, {}",
-                format_reg(*dst.to_reg()),
-                format_reg(**src1),
-                format_reg(**src2)
-            ),
-            Inst::Xslteq64 { dst, src1, src2 } => format!(
-                "{} = xslteq64 {}, {}",
-                format_reg(*dst.to_reg()),
-                format_reg(**src1),
-                format_reg(**src2)
-            ),
-            Inst::Xult64 { dst, src1, src2 } => format!(
-                "{} = xult64 {}, {}",
-                format_reg(*dst.to_reg()),
-                format_reg(**src1),
-                format_reg(**src2)
-            ),
-            Inst::Xulteq64 { dst, src1, src2 } => format!(
-                "{} = xulteq64 {}, {}",
-                format_reg(*dst.to_reg()),
-                format_reg(**src1),
-                format_reg(**src2)
-            ),
-            Inst::Xeq32 { dst, src1, src2 } => format!(
-                "{} = xeq32 {}, {}",
-                format_reg(*dst.to_reg()),
-                format_reg(**src1),
-                format_reg(**src2)
-            ),
-            Inst::Xneq32 { dst, src1, src2 } => format!(
-                "{} = xneq32 {}, {}",
-                format_reg(*dst.to_reg()),
-                format_reg(**src1),
-                format_reg(**src2)
-            ),
-            Inst::Xslt32 { dst, src1, src2 } => format!(
-                "{} = xslt32 {}, {}",
-                format_reg(*dst.to_reg()),
-                format_reg(**src1),
-                format_reg(**src2)
-            ),
-            Inst::Xslteq32 { dst, src1, src2 } => format!(
-                "{} = xslteq32 {}, {}",
-                format_reg(*dst.to_reg()),
-                format_reg(**src1),
-                format_reg(**src2)
-            ),
-            Inst::Xult32 { dst, src1, src2 } => format!(
-                "{} = xult32 {}, {}",
-                format_reg(*dst.to_reg()),
-                format_reg(**src1),
-                format_reg(**src2)
-            ),
-            Inst::Xulteq32 { dst, src1, src2 } => format!(
-                "{} = xulteq32 {}, {}",
-                format_reg(*dst.to_reg()),
-                format_reg(**src1),
-                format_reg(**src2)
-            ),
-
             Inst::LoadAddr { dst, mem } => {
                 let dst = format_reg(*dst.to_reg());
                 let mem = mem.to_string();
@@ -848,27 +686,6 @@ impl Inst {
                 format!("store{ty} {mem}, {src} // flags = {flags}")
             }
 
-            Inst::BitcastIntFromFloat32 { dst, src } => {
-                let dst = format_reg(*dst.to_reg());
-                let src = format_reg(**src);
-                format!("{dst} = bitcast_int_from_float32 {src}")
-            }
-            Inst::BitcastIntFromFloat64 { dst, src } => {
-                let dst = format_reg(*dst.to_reg());
-                let src = format_reg(**src);
-                format!("{dst} = bitcast_int_from_float64 {src}")
-            }
-            Inst::BitcastFloatFromInt32 { dst, src } => {
-                let dst = format_reg(*dst.to_reg());
-                let src = format_reg(**src);
-                format!("{dst} = bitcast_float_from_int32 {src}")
-            }
-            Inst::BitcastFloatFromInt64 { dst, src } => {
-                let dst = format_reg(*dst.to_reg());
-                let src = format_reg(**src);
-                format!("{dst} = bitcast_float_from_int64 {src}")
-            }
-
             Inst::BrTable {
                 idx,
                 default,
@@ -877,56 +694,7 @@ impl Inst {
                 let idx = format_reg(**idx);
                 format!("br_table {idx} {default:?} {targets:?}")
             }
-
-            Inst::StackAlloc32 { amt } => {
-                format!("stack_alloc32 {amt:#x}")
-            }
-            Inst::StackFree32 { amt } => {
-                format!("stack_free32 {amt:#x}")
-            }
-            Inst::PushFrame => format!("push_frame"),
-            Inst::PopFrame => format!("pop_frame"),
-
-            Inst::Zext8 { dst, src } => {
-                let dst = format_reg(*dst.to_reg());
-                let src = format_reg(**src);
-                format!("zext8 {dst}, {src}")
-            }
-            Inst::Zext16 { dst, src } => {
-                let dst = format_reg(*dst.to_reg());
-                let src = format_reg(**src);
-                format!("zext16 {dst}, {src}")
-            }
-            Inst::Zext32 { dst, src } => {
-                let dst = format_reg(*dst.to_reg());
-                let src = format_reg(**src);
-                format!("zext32 {dst}, {src}")
-            }
-            Inst::Sext8 { dst, src } => {
-                let dst = format_reg(*dst.to_reg());
-                let src = format_reg(**src);
-                format!("sext8 {dst}, {src}")
-            }
-            Inst::Sext16 { dst, src } => {
-                let dst = format_reg(*dst.to_reg());
-                let src = format_reg(**src);
-                format!("sext16 {dst}, {src}")
-            }
-            Inst::Sext32 { dst, src } => {
-                let dst = format_reg(*dst.to_reg());
-                let src = format_reg(**src);
-                format!("sext32 {dst}, {src}")
-            }
-            Inst::Bswap32 { dst, src } => {
-                let dst = format_reg(*dst.to_reg());
-                let src = format_reg(**src);
-                format!("bswap32 {dst}, {src}")
-            }
-            Inst::Bswap64 { dst, src } => {
-                let dst = format_reg(*dst.to_reg());
-                let src = format_reg(**src);
-                format!("bswap64 {dst}, {src}")
-            }
+            Inst::Raw { raw } => generated::print(raw),
         }
     }
 }

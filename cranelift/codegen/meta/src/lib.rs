@@ -20,6 +20,9 @@ mod constant_hash;
 mod shared;
 mod unique_table;
 
+#[cfg(feature = "pulley")]
+mod pulley;
+
 /// Generate an ISA from an architecture string (e.g. "x86_64").
 pub fn isa_from_arch(arch: &str) -> Result<isa::Isa, String> {
     isa::Isa::from_arch(arch).ok_or_else(|| format!("no supported isa found for arch `{arch}`"))
@@ -63,6 +66,11 @@ fn generate_rust_for_shared_defs(
         )?;
     }
 
+    #[cfg(feature = "pulley")]
+    if isas.contains(&isa::Isa::Pulley32) || isas.contains(&isa::Isa::Pulley64) {
+        pulley::generate_rust("pulley_inst_gen.rs", out_dir)?;
+    }
+
     Ok(())
 }
 
@@ -82,7 +90,12 @@ fn generate_isle_for_shared_defs(
         "clif_opt.isle",
         "clif_lower.isle",
         isle_dir,
-    )
+    )?;
+
+    #[cfg(feature = "pulley")]
+    pulley::generate_isle("pulley_gen.isle", isle_dir)?;
+
+    Ok(())
 }
 
 /// Generates all the source files used in Cranelift from the meta-language.
