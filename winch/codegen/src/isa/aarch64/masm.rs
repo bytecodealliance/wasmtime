@@ -10,7 +10,7 @@ use crate::{
         CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
         MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, RoundingMode, SPOffset,
         ShiftKind, StackSlot, TrapCode, TruncKind,
-    },
+    }, stack::TypedReg,
 };
 use cranelift_codegen::{
     binemit::CodeOffset,
@@ -19,7 +19,7 @@ use cranelift_codegen::{
     settings, Final, MachBufferFinalized, MachLabel,
 };
 use regalloc2::RegClass;
-use wasmtime_environ::PtrSize;
+use wasmtime_environ::{PtrSize, WasmValType};
 
 /// Aarch64 MacroAssembler.
 pub(crate) struct MacroAssembler {
@@ -452,8 +452,15 @@ impl Masm for MacroAssembler {
         context.stack.push(dst.into());
     }
 
-    fn div(&mut self, _context: &mut CodeGenContext<Emission>, _kind: DivKind, _size: OperandSize) {
-        todo!()
+    fn div(&mut self, context: &mut CodeGenContext<Emission>, kind: DivKind, size: OperandSize) {
+        context.binop(self, size, |this, dividend, divisor, size| {
+            this.asm.div_rrr(divisor, dividend, writable!(dividend), kind, size);
+            match size {
+                OperandSize::S32 => TypedReg::new(WasmValType::I32, dividend),
+                OperandSize::S64 => TypedReg::new(WasmValType::I64, dividend),
+                s => unreachable!("invalid size for division: {s:?}"),
+            }
+        })
     }
 
     fn rem(&mut self, _context: &mut CodeGenContext<Emission>, _kind: RemKind, _size: OperandSize) {
