@@ -10,7 +10,8 @@ use crate::{
         CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
         MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, RoundingMode, SPOffset,
         ShiftKind, StackSlot, TrapCode, TruncKind,
-    }, stack::TypedReg,
+    },
+    stack::TypedReg,
 };
 use cranelift_codegen::{
     binemit::CodeOffset,
@@ -454,7 +455,8 @@ impl Masm for MacroAssembler {
 
     fn div(&mut self, context: &mut CodeGenContext<Emission>, kind: DivKind, size: OperandSize) {
         context.binop(self, size, |this, dividend, divisor, size| {
-            this.asm.div_rrr(divisor, dividend, writable!(dividend), kind, size);
+            this.asm
+                .div_rrr(divisor, dividend, writable!(dividend), kind, size);
             match size {
                 OperandSize::S32 => TypedReg::new(WasmValType::I32, dividend),
                 OperandSize::S64 => TypedReg::new(WasmValType::I64, dividend),
