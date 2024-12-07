@@ -15,7 +15,8 @@ fn main() {
     root.pop(); // chop off 'fuzzing'
     root.pop(); // chop off 'crates'
 
-    let tests = wasmtime_wast_util::find_tests(&root).unwrap();
+    let mut tests = wasmtime_wast_util::find_tests(&root).unwrap();
+    tests.sort_by_key(|test| test.path.clone());
 
     let mut code = format!("static FILES: &[fn() -> wasmtime_wast_util::WastTest] = &[\n");
 
