@@ -1572,6 +1572,90 @@ impl OpVisitor for Interpreter<'_> {
         }
     }
 
+    fn xdiv64_s(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i64();
+        let b = self.state[operands.src2].get_i64();
+        match a.checked_div(b) {
+            Some(result) => {
+                self.state[operands.dst].set_i64(result);
+                ControlFlow::Continue(())
+            }
+            None => self.done_trap::<crate::XDiv64S>(),
+        }
+    }
+
+    fn xdiv32_u(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        match a.checked_div(b) {
+            Some(result) => {
+                self.state[operands.dst].set_u32(result);
+                ControlFlow::Continue(())
+            }
+            None => self.done_trap::<crate::XDiv32U>(),
+        }
+    }
+
+    fn xdiv64_u(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u64();
+        match a.checked_div(b) {
+            Some(result) => {
+                self.state[operands.dst].set_u64(result);
+                ControlFlow::Continue(())
+            }
+            None => self.done_trap::<crate::XDiv64U>(),
+        }
+    }
+
+    fn xrem32_s(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i32();
+        let b = self.state[operands.src2].get_i32();
+        match a.checked_rem(b) {
+            Some(result) => {
+                self.state[operands.dst].set_i32(result);
+                ControlFlow::Continue(())
+            }
+            None => self.done_trap::<crate::XRem32S>(),
+        }
+    }
+
+    fn xrem64_s(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i64();
+        let b = self.state[operands.src2].get_i64();
+        match a.checked_rem(b) {
+            Some(result) => {
+                self.state[operands.dst].set_i64(result);
+                ControlFlow::Continue(())
+            }
+            None => self.done_trap::<crate::XRem64S>(),
+        }
+    }
+
+    fn xrem32_u(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        match a.checked_rem(b) {
+            Some(result) => {
+                self.state[operands.dst].set_u32(result);
+                ControlFlow::Continue(())
+            }
+            None => self.done_trap::<crate::XRem32U>(),
+        }
+    }
+
+    fn xrem64_u(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u64();
+        match a.checked_rem(b) {
+            Some(result) => {
+                self.state[operands.dst].set_u64(result);
+                ControlFlow::Continue(())
+            }
+            None => self.done_trap::<crate::XRem64U>(),
+        }
+    }
+
     fn xand32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u32();
         let b = self.state[operands.src2].get_u32();

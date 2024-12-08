@@ -332,8 +332,29 @@ macro_rules! for_each_op {
             /// `dst = sext(low32(src))`
             sext32 = Sext32 { dst: XReg, src: XReg };
 
-            /// `dst = src1 / src2` (signed)
+            /// `low32(dst) = low32(src1) / low32(src2)` (signed)
             xdiv32_s = XDiv32S { operands: BinaryOperands<XReg> };
+
+            /// `dst = src1 / src2` (signed)
+            xdiv64_s = XDiv64S { operands: BinaryOperands<XReg> };
+
+            /// `low32(dst) = low32(src1) / low32(src2)` (unsigned)
+            xdiv32_u = XDiv32U { operands: BinaryOperands<XReg> };
+
+            /// `dst = src1 / src2` (unsigned)
+            xdiv64_u = XDiv64U { operands: BinaryOperands<XReg> };
+
+            /// `low32(dst) = low32(src1) % low32(src2)` (signed)
+            xrem32_s = XRem32S { operands: BinaryOperands<XReg> };
+
+            /// `dst = src1 / src2` (signed)
+            xrem64_s = XRem64S { operands: BinaryOperands<XReg> };
+
+            /// `low32(dst) = low32(src1) % low32(src2)` (unsigned)
+            xrem32_u = XRem32U { operands: BinaryOperands<XReg> };
+
+            /// `dst = src1 / src2` (unsigned)
+            xrem64_u = XRem64U { operands: BinaryOperands<XReg> };
 
             /// `low32(dst) = low32(src1) & low32(src2)`
             xand32 = XAnd32 { operands: BinaryOperands<XReg> };
