@@ -9,7 +9,7 @@ block0:
 
 ; VCode:
 ; block0:
-;   x0 = xconst16 255
+;   xconst16 x0, 255
 ;   ret
 ;
 ; Disassembled:
@@ -24,7 +24,7 @@ block0:
 
 ; VCode:
 ; block0:
-;   x0 = xconst32 65535
+;   xconst32 x0, 65535
 ;   ret
 ;
 ; Disassembled:
@@ -39,7 +39,7 @@ block0:
 
 ; VCode:
 ; block0:
-;   x0 = xconst32 -1
+;   xconst32 x0, -1
 ;   ret
 ;
 ; Disassembled:
@@ -54,7 +54,7 @@ block0:
 
 ; VCode:
 ; block0:
-;   x0 = xconst64 -1
+;   xconst64 x0, -1
 ;   ret
 ;
 ; Disassembled:

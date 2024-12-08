@@ -86,7 +86,12 @@ x86 = []
 arm64 = []
 s390x = []
 riscv64 = []
-pulley = ["dep:pulley-interpreter", "pulley-interpreter/encode", "pulley-interpreter/disas"]
+pulley = [
+  "dep:pulley-interpreter",
+  "pulley-interpreter/encode",
+  "pulley-interpreter/disas",
+  "cranelift-codegen-meta/pulley",
+]
 # Enable the ISA target for the host machine
 host-arch = []
 

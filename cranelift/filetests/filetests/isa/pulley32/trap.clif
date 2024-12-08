@@ -23,7 +23,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x2 = xconst8 42
+;   xconst8 x2, 42
 ;   trap_if eq, Size64, x0, x2 // code = TrapCode(1)
 ;   ret
 ;
@@ -43,7 +43,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x2 = xconst8 42
+;   xconst8 x2, 42
 ;   trap_if ne, Size64, x0, x2 // code = TrapCode(1)
 ;   ret
 ;
@@ -63,7 +63,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x2 = xconst8 42
+;   xconst8 x2, 42
 ;   trap_if eq, Size64, x0, x2 // code = TrapCode(1)
 ;   ret
 ;
@@ -83,7 +83,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x2 = xconst8 42
+;   xconst8 x2, 42
 ;   trap_if ne, Size64, x0, x2 // code = TrapCode(1)
 ;   ret
 ;
@@ -114,8 +114,8 @@ block2:
 ; block1:
 ;   ret
 ; block2:
-;   x5 = xconst8 42
-;   x6 = xconst8 0
+;   xconst8 x5, 42
+;   xconst8 x6, 0
 ;   trap_if ne, Size64, x5, x6 // code = TrapCode(1)
 ;   ret
 ;
@@ -147,8 +147,8 @@ block2:
 ; block0:
 ;   br_if x0, label2; jump label1
 ; block1:
-;   x4 = xconst8 0
-;   x5 = xconst8 0
+;   xconst8 x4, 0
+;   xconst8 x5, 0
 ;   trap_if eq, Size64, x4, x5 // code = TrapCode(1)
 ;   ret
 ; block2:
