@@ -1439,6 +1439,26 @@ impl OpVisitor for Interpreter<'_> {
         self.state[dst].set_i64(src.into());
         ControlFlow::Continue(())
     }
+
+    fn xdiv32_s(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let me = self.current_pc::<crate::XDiv32S>();
+        let a = self.state[operands.src1].get_i32();
+        let b = self.state[operands.src2].get_i32();
+        match a.checked_div(b) {
+            Some(result) => {
+                self.state[operands.dst].set_i32(result);
+                ControlFlow::Continue(())
+            }
+            None => ControlFlow::Break(self.done_trap(me)),
+        }
+    }
+
+    fn xand32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u32(a & b);
+        ControlFlow::Continue(())
+    }
 }
 
 impl ExtendedOpVisitor for Interpreter<'_> {

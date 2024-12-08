@@ -425,6 +425,7 @@ impl WastTest {
                 "misc_testsuite/stack_overflow.wast",
                 "misc_testsuite/winch/misc.wast",
                 "threads/exports.wast",
+                "misc_testsuite/control-flow.wast",
             ];
 
             if supported.iter().any(|part| self.path.ends_with(part)) {
