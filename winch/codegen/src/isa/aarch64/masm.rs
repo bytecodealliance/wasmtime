@@ -537,12 +537,12 @@ impl Masm for MacroAssembler {
         todo!()
     }
 
-    fn reinterpret_float_as_int(&mut self, _dst: WritableReg, _src: Reg, _size: OperandSize) {
-        todo!()
+    fn reinterpret_float_as_int(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
+        self.asm.fpu_to_int(src, dst, size);
     }
 
-    fn reinterpret_int_as_float(&mut self, _dst: WritableReg, _src: Reg, _size: OperandSize) {
-        todo!()
+    fn reinterpret_int_as_float(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
+        self.asm.int_to_fpu(src, dst, size);
     }
 
     fn demote(&mut self, dst: WritableReg, src: Reg) {

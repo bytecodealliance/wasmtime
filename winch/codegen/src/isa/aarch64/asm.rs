@@ -15,8 +15,8 @@ use cranelift_codegen::{
         ALUOp, ALUOp3, AMode, BitOp, BranchTarget, Cond, CondBrKind, ExtendOp, FPULeftShiftImm,
         FPUOp1, FPUOp2,
         FPUOpRI::{self, UShr32, UShr64},
-        FPUOpRIMod, FPURightShiftImm, FpuRoundMode, Imm12, ImmLogic, ImmShift, Inst, PairAMode,
-        ScalarSize, VecLanesOp, VecMisc2, VectorSize,
+        FPUOpRIMod, FPURightShiftImm, FpuRoundMode, FpuToIntOp, Imm12, ImmLogic, ImmShift, Inst,
+        IntToFpuOp, PairAMode, ScalarSize, VecLanesOp, VecMisc2, VectorSize,
     },
     settings, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
     MachLabel, Writable,
@@ -597,6 +597,36 @@ impl Assembler {
             rn: rn.into(),
             rm: rm.into(),
         })
+    }
+
+    /// Reinterpret a float as an integer.
+    pub fn fpu_to_int(&mut self, rn: Reg, rd: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => FpuToIntOp::F32ToI32,
+            OperandSize::S64 => FpuToIntOp::F64ToI64,
+            OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::FpuToInt {
+            op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+        });
+    }
+
+    /// Reinterpret an integer as a float.
+    pub fn int_to_fpu(&mut self, rn: Reg, rd: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => IntToFpuOp::I32ToF32,
+            OperandSize::S64 => IntToFpuOp::I64ToF64,
+            OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::IntToFpu {
+            op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+        });
     }
 
     /// Change precision of float.
