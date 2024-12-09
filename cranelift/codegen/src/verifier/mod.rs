@@ -76,14 +76,12 @@ use crate::ir::{
     ValueList,
 };
 use crate::isa::TargetIsa;
-use crate::iterators::IteratorExtras;
 use crate::print_errors::pretty_verifier_error;
 use crate::settings::FlagsOrIsa;
 use crate::timing;
 use alloc::collections::BTreeSet;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use core::cmp::Ordering;
 use core::fmt::{self, Display, Formatter};
 
 /// A verifier error.
@@ -1084,18 +1082,6 @@ impl<'a> Verifier<'a> {
                     test_block,
                     format!(
                         "invalid domtree, postorder block number {index} should be {true_block}, got {test_block}"
-                    ),
-                ));
-            }
-        }
-        // We verify rpo_cmp_block on pairs of adjacent blocks in the postorder
-        for (&prev_block, &next_block) in domtree.cfg_postorder().iter().adjacent_pairs() {
-            if self.expected_domtree.rpo_cmp_block(prev_block, next_block) != Ordering::Greater {
-                return errors.fatal((
-                    next_block,
-                    format!(
-                        "invalid domtree, rpo_cmp_block does not say {} is greater than {}; rpo = {:#?}",
-                        prev_block, next_block, domtree.cfg_postorder()
                     ),
                 ));
             }
