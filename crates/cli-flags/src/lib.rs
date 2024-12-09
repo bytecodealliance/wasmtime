@@ -351,6 +351,8 @@ wasmtime_option_group! {
         pub custom_page_sizes: Option<bool>,
         /// Configure support for the wide-arithmetic proposal.
         pub wide_arithmetic: Option<bool>,
+        /// Configure support for the extended-const proposal.
+        pub extended_const: Option<bool>,
     }
 
     enum Wasm {
@@ -885,6 +887,9 @@ impl CommonOptions {
         }
         if let Some(enable) = self.wasm.wide_arithmetic.or(all) {
             config.wasm_wide_arithmetic(enable);
+        }
+        if let Some(enable) = self.wasm.extended_const.or(all) {
+            config.wasm_extended_const(enable);
         }
 
         macro_rules! handle_conditionally_compiled {
