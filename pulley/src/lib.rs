@@ -15,6 +15,7 @@ extern crate std;
 extern crate alloc;
 
 /// Calls the given macro with each opcode.
+#[macro_export]
 macro_rules! for_each_op {
     ( $macro:ident ) => {
         $macro! {
@@ -208,11 +209,18 @@ macro_rules! for_each_op {
             sext16 = Sext16 { dst: XReg, src: XReg };
             /// `dst = sext(low32(src))`
             sext32 = Sext32 { dst: XReg, src: XReg };
+
+            /// `dst = src1 / src2` (signed)
+            xdiv32_s = XDiv32S { operands: BinaryOperands<XReg> };
+
+            /// `dst = src1 & src2`
+            xand32 = XAnd32 { operands: BinaryOperands<XReg> };
         }
     };
 }
 
 /// Calls the given macro with each extended opcode.
+#[macro_export]
 macro_rules! for_each_extended_op {
     ( $macro:ident ) => {
         $macro! {

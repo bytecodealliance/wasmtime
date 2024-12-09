@@ -182,12 +182,12 @@ where
         let src = XReg::new(src).unwrap();
         let dst = dst.try_into().unwrap();
         match (signed, from_bits) {
-            (true, 8) => Inst::Sext8 { dst, src }.into(),
-            (true, 16) => Inst::Sext16 { dst, src }.into(),
-            (true, 32) => Inst::Sext32 { dst, src }.into(),
-            (false, 8) => Inst::Zext8 { dst, src }.into(),
-            (false, 16) => Inst::Zext16 { dst, src }.into(),
-            (false, 32) => Inst::Zext32 { dst, src }.into(),
+            (true, 8) => RawInst::Sext8 { dst, src }.into(),
+            (true, 16) => RawInst::Sext16 { dst, src }.into(),
+            (true, 32) => RawInst::Sext32 { dst, src }.into(),
+            (false, 8) => RawInst::Zext8 { dst, src }.into(),
+            (false, 16) => RawInst::Zext16 { dst, src }.into(),
+            (false, 32) => RawInst::Zext32 { dst, src }.into(),
             _ => unimplemented!("extend {from_bits} to {to_bits} as signed? {signed}"),
         }
     }
@@ -220,8 +220,8 @@ where
         let dst = into_reg.try_into().unwrap();
         let imm = imm as i32;
         smallvec![
-            Inst::Xconst32 { dst, imm }.into(),
-            Inst::Xadd32 {
+            RawInst::Xconst32 { dst, imm }.into(),
+            RawInst::Xadd32 {
                 dst,
                 src1: from_reg.try_into().unwrap(),
                 src2: dst.to_reg(),
@@ -261,13 +261,13 @@ where
         let inst = if amount < 0 {
             let amount = amount.checked_neg().unwrap();
             if let Ok(amt) = u32::try_from(amount) {
-                Inst::StackAlloc32 { amt }
+                RawInst::StackAlloc32 { amt }
             } else {
                 unreachable!()
             }
         } else {
             if let Ok(amt) = u32::try_from(amount) {
-                Inst::StackFree32 { amt }
+                RawInst::StackFree32 { amt }
             } else {
                 unreachable!()
             }
@@ -284,7 +284,7 @@ where
         let mut insts = SmallVec::new();
 
         if frame_layout.setup_area_size > 0 {
-            insts.push(Inst::PushFrame.into());
+            insts.push(RawInst::PushFrame.into());
             if flags.unwind_info() {
                 insts.push(
                     Inst::Unwind {
@@ -310,7 +310,7 @@ where
         let mut insts = SmallVec::new();
 
         if frame_layout.setup_area_size > 0 {
-            insts.push(Inst::PopFrame.into());
+            insts.push(RawInst::PopFrame.into());
         }
 
         if frame_layout.tail_args_size > 0 {
@@ -327,7 +327,7 @@ where
         _isa_flags: &PulleyFlags,
         _frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
-        smallvec![Inst::Ret {}.into()]
+        smallvec![RawInst::Ret {}.into()]
     }
 
     fn gen_probestack(_insts: &mut SmallInstVec<Self::I>, _frame_size: u32) {

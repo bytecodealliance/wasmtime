@@ -9,7 +9,7 @@ block0(v0: i8, v1: i8):
 
 ; VCode:
 ; block0:
-;   x0 = xadd32 x0, x1
+;   xadd32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -24,7 +24,7 @@ block0(v0: i16, v1: i16):
 
 ; VCode:
 ; block0:
-;   x0 = xadd32 x0, x1
+;   xadd32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -39,7 +39,7 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   x0 = xadd32 x0, x1
+;   xadd32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -54,7 +54,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xadd64 x0, x1
+;   xadd64 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
