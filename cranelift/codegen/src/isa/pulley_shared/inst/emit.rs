@@ -502,6 +502,20 @@ fn pulley_emit<P>(
             }
         }
 
+        Inst::VLoad {
+            dst,
+            mem,
+            ty,
+            flags,
+        } => {
+            let r = mem.get_base_register().unwrap();
+            let x = mem.get_offset_with_state(state);
+            let endian = emit_info.endianness(*flags);
+            assert_eq!(endian, Endianness::Little);
+            assert_eq!(ty.bytes(), 16);
+            enc::vload128le_offset32(sink, dst, r, x);
+        }
+
         Inst::XStore {
             mem,
             src,
@@ -551,6 +565,20 @@ fn pulley_emit<P>(
                 },
                 _ => unimplemented!("fstore ty={ty:?}"),
             }
+        }
+
+        Inst::VStore {
+            mem,
+            src,
+            ty,
+            flags,
+        } => {
+            let r = mem.get_base_register().unwrap();
+            let x = mem.get_offset_with_state(state);
+            let endian = emit_info.endianness(*flags);
+            assert_eq!(endian, Endianness::Little);
+            assert_eq!(ty.bytes(), 16);
+            enc::vstore128le_offset32(sink, r, x, src);
         }
 
         Inst::BrTable {

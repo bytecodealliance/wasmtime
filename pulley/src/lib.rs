@@ -253,6 +253,11 @@ macro_rules! for_each_op {
             /// `*(ptr + offset) = src`
             fstore64le_offset32 = Fstore64LeOffset32 { ptr: XReg, offset: i32, src: FReg };
 
+            /// `dst = *(ptr + offset)`
+            vload128le_offset32 = VLoad128Offset32 { dst: VReg, ptr: XReg, offset: i32 };
+            /// `*(ptr + offset) = src`
+            vstore128le_offset32 = Vstore128LeOffset32 { ptr: XReg, offset: i32, src: VReg };
+
             /// `push lr; push fp; fp = sp`
             push_frame = PushFrame ;
             /// `sp = fp; pop fp; pop lr`
