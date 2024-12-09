@@ -599,6 +599,7 @@ impl CallThreadState {
     /// destructors on the stack, if there are any.
     unsafe fn unwind(&self) -> ! {
         debug_assert!(!self.jmp_buf.get().is_null());
+        debug_assert!(self.jmp_buf.get() != CallThreadState::JMP_BUF_INTERPRETER_SENTINEL);
         traphandlers::wasmtime_longjmp(self.jmp_buf.get());
     }
 

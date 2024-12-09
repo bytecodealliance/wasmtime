@@ -44,22 +44,40 @@ mod generated {
 impl Inst {
     /// Generic constructor for a load (zero-extending where appropriate).
     pub fn gen_load(dst: Writable<Reg>, mem: Amode, ty: Type, flags: MemFlags) -> Inst {
-        Inst::Load {
-            dst,
-            mem,
-            ty,
-            flags,
-            ext: ExtKind::Zero,
+        if ty.is_int() {
+            Inst::XLoad {
+                dst: dst.map(|r| XReg::new(r).unwrap()),
+                mem,
+                ty,
+                flags,
+                ext: ExtKind::None,
+            }
+        } else {
+            Inst::FLoad {
+                dst: dst.map(|r| FReg::new(r).unwrap()),
+                mem,
+                ty,
+                flags,
+            }
         }
     }
 
     /// Generic constructor for a store.
     pub fn gen_store(mem: Amode, from_reg: Reg, ty: Type, flags: MemFlags) -> Inst {
-        Inst::Store {
-            mem,
-            src: from_reg,
-            ty,
-            flags,
+        if ty.is_int() {
+            Inst::XStore {
+                mem,
+                src: XReg::new(from_reg).unwrap(),
+                ty,
+                flags,
+            }
+        } else {
+            Inst::FStore {
+                mem,
+                src: FReg::new(from_reg).unwrap(),
+                ty,
+                flags,
+            }
         }
     }
 }
@@ -77,7 +95,7 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
         }
 
-        Inst::Unwind { .. } | Inst::Trap { .. } | Inst::Nop => {}
+        Inst::Unwind { .. } | Inst::Nop => {}
 
         Inst::TrapIf {
             cond: _,
@@ -183,7 +201,7 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             mem.get_operands(collector);
         }
 
-        Inst::Load {
+        Inst::XLoad {
             dst,
             mem,
             ty: _,
@@ -194,7 +212,27 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             mem.get_operands(collector);
         }
 
-        Inst::Store {
+        Inst::XStore {
+            mem,
+            src,
+            ty: _,
+            flags: _,
+        } => {
+            mem.get_operands(collector);
+            collector.reg_use(src);
+        }
+
+        Inst::FLoad {
+            dst,
+            mem,
+            ty: _,
+            flags: _,
+        } => {
+            collector.reg_def(dst);
+            mem.get_operands(collector);
+        }
+
+        Inst::FStore {
             mem,
             src,
             ty: _,
@@ -302,7 +340,9 @@ where
 
     fn is_safepoint(&self) -> bool {
         match self.inst {
-            Inst::Trap { .. } => true,
+            Inst::Raw {
+                raw: RawInst::Trap { .. },
+            } => true,
             _ => false,
         }
     }
@@ -326,7 +366,9 @@ where
 
     fn is_trap(&self) -> bool {
         match self.inst {
-            Inst::Trap { .. } => true,
+            Inst::Raw {
+                raw: RawInst::Trap { .. },
+            } => true,
             _ => false,
         }
     }
@@ -501,8 +543,10 @@ impl Inst {
         let format_ext = |ext: ExtKind| -> &'static str {
             match ext {
                 ExtKind::None => "",
-                ExtKind::Sign => "_s",
-                ExtKind::Zero => "_u",
+                ExtKind::Sign32 => "_s32",
+                ExtKind::Sign64 => "_s64",
+                ExtKind::Zero32 => "_u32",
+                ExtKind::Zero64 => "_u64",
             }
         };
 
@@ -527,8 +571,6 @@ impl Inst {
             }
 
             Inst::Unwind { inst } => format!("unwind {inst:?}"),
-
-            Inst::Trap { code } => format!("trap // code = {code:?}"),
 
             Inst::TrapIf {
                 cond,
@@ -660,21 +702,21 @@ impl Inst {
                 format!("{dst} = load_addr {mem}")
             }
 
-            Inst::Load {
+            Inst::XLoad {
                 dst,
                 mem,
                 ty,
                 flags,
                 ext,
             } => {
-                let dst = format_reg(dst.to_reg());
+                let dst = format_reg(*dst.to_reg());
                 let ty = ty.bits();
                 let ext = format_ext(*ext);
                 let mem = mem.to_string();
-                format!("{dst} = load{ty}{ext} {mem} // flags ={flags}")
+                format!("{dst} = xload{ty}{ext} {mem} // flags ={flags}")
             }
 
-            Inst::Store {
+            Inst::XStore {
                 mem,
                 src,
                 ty,
@@ -682,8 +724,32 @@ impl Inst {
             } => {
                 let ty = ty.bits();
                 let mem = mem.to_string();
-                let src = format_reg(*src);
-                format!("store{ty} {mem}, {src} // flags = {flags}")
+                let src = format_reg(**src);
+                format!("xstore{ty} {mem}, {src} // flags = {flags}")
+            }
+
+            Inst::FLoad {
+                dst,
+                mem,
+                ty,
+                flags,
+            } => {
+                let dst = format_reg(*dst.to_reg());
+                let ty = ty.bits();
+                let mem = mem.to_string();
+                format!("{dst} = fload{ty} {mem} // flags ={flags}")
+            }
+
+            Inst::FStore {
+                mem,
+                src,
+                ty,
+                flags,
+            } => {
+                let ty = ty.bits();
+                let mem = mem.to_string();
+                let src = format_reg(**src);
+                format!("fstore{ty} {mem}, {src} // flags = {flags}")
             }
 
             Inst::BrTable {

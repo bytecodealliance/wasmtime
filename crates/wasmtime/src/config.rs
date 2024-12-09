@@ -1935,7 +1935,6 @@ impl Config {
                     return WasmFeatures::SIMD
                         | WasmFeatures::RELAXED_SIMD
                         | WasmFeatures::TAIL_CALL
-                        | WasmFeatures::FLOATS
                         | WasmFeatures::MEMORY64
                         | WasmFeatures::GC_TYPES;
                 }

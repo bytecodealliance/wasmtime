@@ -96,9 +96,17 @@ impl InterpreterRef<'_> {
                 // If the VM wants to call out to the host then dispatch that
                 // here based on `sig`. Once that returns we can resume
                 // execution at `resume`.
+                //
+                // Note that the `raise` libcall is handled specially here since
+                // longjmp/setjmp is handled differently than on the host.
                 DoneReason::CallIndirectHost { id, resume } => {
-                    self.call_indirect_host(id);
-                    bytecode = resume;
+                    if u32::from(id) == HostCall::Builtin(BuiltinFunctionIndex::raise()).index() {
+                        self.longjmp(setjmp);
+                        break false;
+                    } else {
+                        self.call_indirect_host(id);
+                        bytecode = resume;
+                    }
                 }
                 // If the VM trapped then process that here and return `false`.
                 DoneReason::Trap(pc) => {
@@ -141,22 +149,25 @@ impl InterpreterRef<'_> {
             // Trap was handled, yay! We don't use `jmp_buf`.
             TrapTest::Trap { jmp_buf: _ } => {}
         }
+        self.longjmp(setjmp);
+    }
 
-        // Perform a "longjmp" by restoring the "setjmp" context saved when this
-        // started.
-        //
-        // FIXME: this is not restoring callee-save state. For example if
-        // there's more than one Pulley activation on the stack that means that
-        // the previous one is expecting the callee (the host) to preserve all
-        // callee-save registers. That's not restored here which means with
-        // multiple activations we're effectively corrupting callee-save
-        // registers.
-        //
-        // One fix for this is to possibly update the `SystemV` ABI on pulley to
-        // have no callee-saved registers and make everything caller-saved. That
-        // would force all trampolines to save all state which is basically
-        // what we want as they'll naturally restore state if we later return to
-        // them.
+    /// Perform a "longjmp" by restoring the "setjmp" context saved when this
+    /// started.
+    ///
+    /// FIXME: this is not restoring callee-save state. For example if
+    /// there's more than one Pulley activation on the stack that means that
+    /// the previous one is expecting the callee (the host) to preserve all
+    /// callee-save registers. That's not restored here which means with
+    /// multiple activations we're effectively corrupting callee-save
+    /// registers.
+    ///
+    /// One fix for this is to possibly update the `SystemV` ABI on pulley to
+    /// have no callee-saved registers and make everything caller-saved. That
+    /// would force all trampolines to save all state which is basically
+    /// what we want as they'll naturally restore state if we later return to
+    /// them.
+    fn longjmp(&mut self, setjmp: Setjmp) {
         let Setjmp { sp, fp, lr } = setjmp;
         self.0[XReg::sp].set_ptr(sp);
         self.0[XReg::fp].set_ptr(fp);

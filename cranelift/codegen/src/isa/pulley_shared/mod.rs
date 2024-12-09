@@ -7,7 +7,6 @@ mod settings;
 
 use self::inst::EmitInfo;
 use super::{Builder as IsaBuilder, FunctionAlignment};
-use crate::ir::Endianness;
 use crate::{
     dominator_tree::DominatorTree,
     ir,
@@ -124,14 +123,6 @@ where
         let sigs = SigSet::new::<abi::PulleyMachineDeps<P>>(func, &self.flags)?;
         let abi = abi::PulleyCallee::new(func, self, &self.isa_flags, &sigs)?;
         machinst::compile::<Self>(func, domtree, self, abi, emit_info, sigs, ctrl_plane)
-    }
-
-    pub fn target_endianness(&self) -> Endianness {
-        if self.isa_flags.big_endian() {
-            Endianness::Big
-        } else {
-            Endianness::Little
-        }
     }
 }
 

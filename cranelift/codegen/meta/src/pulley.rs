@@ -29,20 +29,31 @@ const EXTENDED_OPS: &[Inst<'_>] = pulley_interpreter::for_each_extended_op!(defi
 enum Operand<'a> {
     Normal { name: &'a str, ty: &'a str },
     Writable { name: &'a str, ty: &'a str },
+    TrapCode { name: &'a str, ty: &'a str },
     Binop { reg: &'a str },
 }
 
 impl Inst<'_> {
     fn operands(&self) -> impl Iterator<Item = Operand<'_>> {
-        self.fields.iter().map(|(name, ty)| match (*name, *ty) {
-            ("operands", "BinaryOperands < XReg >") => Operand::Binop { reg: "XReg" },
-            (name, "RegSet < XReg >") => Operand::Normal {
-                name,
-                ty: "VecXReg",
-            },
-            ("dst", ty) => Operand::Writable { name, ty },
-            (name, ty) => Operand::Normal { name, ty },
-        })
+        self.fields
+            .iter()
+            .map(|(name, ty)| match (*name, *ty) {
+                ("operands", "BinaryOperands < XReg >") => Operand::Binop { reg: "XReg" },
+                (name, "RegSet < XReg >") => Operand::Normal {
+                    name,
+                    ty: "VecXReg",
+                },
+                ("dst", ty) => Operand::Writable { name, ty },
+                (name, ty) => Operand::Normal { name, ty },
+            })
+            .chain(if self.name.contains("Trap") {
+                Some(Operand::TrapCode {
+                    name: "code",
+                    ty: "TrapCode",
+                })
+            } else {
+                None
+            })
     }
 
     fn skip(&self) -> bool {
@@ -53,9 +64,6 @@ impl Inst<'_> {
 
             // Skip special instructions not used in Cranelift.
             "XPush32Many" | "XPush64Many" | "XPop32Many" | "XPop64Many" => true,
-
-            // The pulley backend has its own trap-with-trap-code.
-            "Trap" => true,
 
             // Skip more branching-related instructions.
             n => n.starts_with("Br"),
@@ -98,6 +106,11 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
                             locals.push_str(&format!("let {name} = reg_name(**{name});\n"));
                         }
                     }
+                }
+                Operand::TrapCode { name, ty: _ } => {
+                    pat.push_str(name);
+                    pat.push_str(",");
+                    format_string.push_str(&format!(" // trap={{{name}:?}}"));
                 }
                 Operand::Binop { reg: _ } => {
                     pat.push_str("dst, src1, src2,");
@@ -150,6 +163,7 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
                         pat.push_str(",");
                     }
                 }
+                Operand::TrapCode { .. } => {}
                 Operand::Binop { reg: _ } => {
                     pat.push_str("dst, src1, src2,");
                     uses.push("src1");
@@ -195,6 +209,7 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
 
         let mut pat = String::new();
         let mut args = String::new();
+        let mut trap = String::new();
         for op in inst.operands() {
             match op {
                 Operand::Normal { name, ty: _ } | Operand::Writable { name, ty: _ } => {
@@ -203,6 +218,11 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
 
                     args.push_str(name);
                     args.push_str(",");
+                }
+                Operand::TrapCode { name, ty: _ } => {
+                    pat.push_str(name);
+                    pat.push_str(",");
+                    trap.push_str(&format!("sink.add_trap({name});\n"));
                 }
                 Operand::Binop { reg: _ } => {
                     pat.push_str("dst, src1, src2,");
@@ -216,6 +236,7 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
         rust.push_str(&format!(
             "
         RawInst::{name} {{ {pat} }} => {{
+            {trap}
             pulley_interpreter::encode::{snake_name}(sink, {args})
         }}
         "
@@ -241,7 +262,7 @@ pub fn generate_isle(filename: &str, out_dir: &Path) -> Result<(), Error> {
         isle.push_str(inst.name);
         for op in inst.operands() {
             match op {
-                Operand::Normal { name, ty } => {
+                Operand::Normal { name, ty } | Operand::TrapCode { name, ty } => {
                     isle.push_str(&format!("\n    ({name} {ty})"));
                 }
                 Operand::Writable { name, ty } => {
@@ -276,7 +297,7 @@ pub fn generate_isle(filename: &str, out_dir: &Path) -> Result<(), Error> {
         let mut ops = Vec::new();
         for op in inst.operands() {
             match op {
-                Operand::Normal { name, ty } => {
+                Operand::Normal { name, ty } | Operand::TrapCode { name, ty } => {
                     isle.push_str(ty);
                     rule.push_str(name);
                     ops.push(name);

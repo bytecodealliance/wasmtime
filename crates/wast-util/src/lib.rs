@@ -426,6 +426,11 @@ impl WastTest {
                 "misc_testsuite/winch/misc.wast",
                 "threads/exports.wast",
                 "misc_testsuite/control-flow.wast",
+                "misc_testsuite/export-large-signature.wast",
+                "misc_testsuite/issue4857.wast",
+                "misc_testsuite/winch/oob.wast",
+                "misc_testsuite/partial-init-memory-segment.wast",
+                "spec_testsuite/proposals/exception-handling/binary.wast",
             ];
 
             if supported.iter().any(|part| self.path.ends_with(part)) {
