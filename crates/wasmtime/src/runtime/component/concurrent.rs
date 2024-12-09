@@ -172,8 +172,8 @@ struct HostTask {
 
 enum Deferred {
     None,
-    Sync(StoreFiber<'static>),
-    Async {
+    Stackful(StoreFiber<'static>),
+    Stackless {
         call: Box<dyn FnOnce(*mut dyn VMStore) -> Result<u32> + Send + Sync + 'static>,
         instance: RuntimeComponentInstanceIndex,
         callback: SendSyncPtr<VMFuncRef>,
@@ -182,8 +182,8 @@ enum Deferred {
 
 impl Deferred {
     fn take_fiber(&mut self) -> Option<StoreFiber<'static>> {
-        if let Self::Sync(_) = self {
-            let Self::Sync(fiber) = mem::replace(self, Self::None) else {
+        if let Self::Stackful(_) = self {
+            let Self::Stackful(fiber) = mem::replace(self, Self::None) else {
                 unreachable!()
             };
             Some(fiber)
@@ -403,6 +403,7 @@ impl AsyncCx {
 #[derive(Default)]
 struct InstanceState {
     backpressure: bool,
+    in_sync_call: bool,
     task_queue: VecDeque<TableId<GuestTask>>,
 }
 
@@ -720,7 +721,7 @@ fn maybe_send_event<'a, T>(
                     call.rep()
                 );
                 let old_task = store.concurrent_state().guest_task.replace(guest_task);
-                store = resume_sync(store, guest_task, fiber)?;
+                store = resume_stackful(store, guest_task, fiber)?;
                 store.concurrent_state().guest_task = old_task;
                 true
             } else {
@@ -742,7 +743,7 @@ fn maybe_send_event<'a, T>(
     }
 }
 
-fn resume_sync<'a, T>(
+fn resume_stackful<'a, T>(
     mut store: StoreContextMut<'a, T>,
     guest_task: TableId<GuestTask>,
     mut fiber: StoreFiber<'static>,
@@ -750,7 +751,7 @@ fn resume_sync<'a, T>(
     match resume_fiber(&mut fiber, Some(store), Ok(()))? {
         Ok((mut store, result)) => {
             result?;
-            store = maybe_resume_next_task(store, guest_task, fiber.instance)?;
+            store = maybe_resume_next_task(store, fiber.instance)?;
             for (event, call, _) in mem::take(
                 &mut store
                     .concurrent_state()
@@ -760,13 +761,13 @@ fn resume_sync<'a, T>(
                     .events,
             ) {
                 if event == events::EVENT_CALL_DONE {
-                    log::trace!("resume_sync will delete call {}", call.rep());
+                    log::trace!("resume_stackful will delete call {}", call.rep());
                     call.delete_all_from(store.as_context_mut())?;
                 }
             }
             match &store.concurrent_state().table.get(guest_task)?.caller {
                 Caller::Host(_) => {
-                    log::trace!("resume_sync will delete task {}", guest_task.rep());
+                    log::trace!("resume_stackful will delete task {}", guest_task.rep());
                     AnyTask::Guest(guest_task).delete_all_from(store.as_context_mut())?;
                     Ok(store)
                 }
@@ -784,13 +785,14 @@ fn resume_sync<'a, T>(
         }
         Err(new_store) => {
             store = new_store.unwrap();
-            store.concurrent_state().table.get_mut(guest_task)?.deferred = Deferred::Sync(fiber);
+            store.concurrent_state().table.get_mut(guest_task)?.deferred =
+                Deferred::Stackful(fiber);
             Ok(store)
         }
     }
 }
 
-fn resume_async<'a, T>(
+fn resume_stackless<'a, T>(
     store: StoreContextMut<'a, T>,
     guest_task: TableId<GuestTask>,
     call: Box<dyn FnOnce(*mut dyn VMStore) -> Result<u32>>,
@@ -820,7 +822,7 @@ fn resume_async<'a, T>(
             store = maybe_send_event(store, guest_task, event, call, result)?;
         }
     }
-    store = maybe_resume_next_task(store, guest_task, instance)?;
+    store = maybe_resume_next_task(store, instance)?;
     if let Caller::Guest { task, .. } = &store.concurrent_state().table.get(guest_task)?.caller {
         let task = *task;
         maybe_send_event(store, task, event, AnyTask::Guest(guest_task), 0)
@@ -894,7 +896,7 @@ fn unyield<'a, T>(mut store: StoreContextMut<'a, T>) -> Result<(StoreContextMut<
         {
             resumed = true;
             let old_task = store.concurrent_state().guest_task.replace(guest_task);
-            store = resume_sync(store, guest_task, fiber)?;
+            store = resume_stackful(store, guest_task, fiber)?;
             store.concurrent_state().guest_task = old_task;
         }
     }
@@ -906,8 +908,8 @@ fn unyield<'a, T>(mut store: StoreContextMut<'a, T>) -> Result<(StoreContextMut<
             .entry(instance)
             .or_default();
 
-        if !entry.backpressure {
-            if let Some(task) = entry.task_queue.iter().copied().next() {
+        if !(entry.backpressure || entry.in_sync_call) {
+            if let Some(task) = entry.task_queue.pop_front() {
                 resumed = true;
                 store = resume(store, task)?;
             }
@@ -960,7 +962,7 @@ fn resume<'a, T>(
 ) -> Result<StoreContextMut<'a, T>> {
     log::trace!("resume {}", task.rep());
 
-    // TODO: Avoid tail calling `resume_sync` or `resume_async` here, because it may call us, leading to
+    // TODO: Avoid calling `resume_stackful` or `resume_stackless` here, because it may call us, leading to
     // recursion limited only by the number of waiters.  Flatten this into an iteration instead.
     let old_task = store.concurrent_state().guest_task.replace(task);
     store = match mem::replace(
@@ -968,12 +970,12 @@ fn resume<'a, T>(
         Deferred::None,
     ) {
         Deferred::None => unreachable!(),
-        Deferred::Sync(fiber) => resume_sync(store, task, fiber),
-        Deferred::Async {
+        Deferred::Stackful(fiber) => resume_stackful(store, task, fiber),
+        Deferred::Stackless {
             call,
             instance,
             callback,
-        } => resume_async(store, task, call, instance, callback),
+        } => resume_stackless(store, task, call, instance, callback),
     }?;
     store.concurrent_state().guest_task = old_task;
     Ok(store)
@@ -981,7 +983,6 @@ fn resume<'a, T>(
 
 fn maybe_resume_next_task<'a, T>(
     mut store: StoreContextMut<'a, T>,
-    current_task: TableId<GuestTask>,
     instance: RuntimeComponentInstanceIndex,
 ) -> Result<StoreContextMut<'a, T>> {
     let state = store
@@ -990,15 +991,10 @@ fn maybe_resume_next_task<'a, T>(
         .get_mut(&instance)
         .unwrap();
 
-    if state.backpressure {
+    if state.backpressure || state.in_sync_call {
         Ok(store)
     } else {
-        assert_eq!(
-            current_task.rep(),
-            state.task_queue.pop_front().unwrap().rep()
-        );
-
-        if let Some(next) = state.task_queue.iter().copied().next() {
+        if let Some(next) = state.task_queue.pop_front() {
             resume(store, next)
         } else {
             Ok(store)
@@ -1357,10 +1353,8 @@ pub(crate) extern "C" fn task_backpressure<T>(
             let new = enabled != 0;
             entry.backpressure = new;
 
-            if old && !new {
-                if let Some(_) = entry.task_queue.iter().next() {
-                    cx.concurrent_state().unblocked.insert(caller_instance);
-                }
+            if old && !new && !entry.task_queue.is_empty() {
+                cx.concurrent_state().unblocked.insert(caller_instance);
             }
 
             Ok(())
@@ -1644,11 +1638,13 @@ fn do_start_call<'a, T>(
         .instance_states
         .entry(callee_instance)
         .or_default();
-    let ready = state.task_queue.is_empty() && !state.backpressure;
+    let ready = state.task_queue.is_empty() && !(state.backpressure || state.in_sync_call);
 
     let mut guest_context = 0;
 
-    let mut cx = if async_ {
+    let mut cx = if let Some(callback) = callback {
+        assert!(async_);
+
         if ready {
             let (storage, cx) = call(cx)?;
             guest_context = unsafe { storage[0].assume_init() }.get_i32() as u32;
@@ -1661,7 +1657,7 @@ fn do_start_call<'a, T>(
                 .task_queue
                 .push_back(guest_task);
 
-            cx.concurrent_state().table.get_mut(guest_task)?.deferred = Deferred::Async {
+            cx.concurrent_state().table.get_mut(guest_task)?.deferred = Deferred::Stackless {
                 call: Box::new(move |cx| {
                     let mut cx = unsafe { StoreContextMut(&mut *cx.cast()) };
                     let old_task = cx.concurrent_state().guest_task.replace(guest_task);
@@ -1670,43 +1666,59 @@ fn do_start_call<'a, T>(
                     Ok(unsafe { storage[0].assume_init() }.get_i32() as u32)
                 }),
                 instance: callee_instance,
-                callback: callback.expect("todo: support callback-less async exports"),
+                callback,
             };
             cx
         }
     } else {
-        state.task_queue.push_back(guest_task);
+        let mut fiber = make_fiber(&mut cx, callee_instance, move |mut cx| {
+            if !async_ {
+                cx.concurrent_state()
+                    .instance_states
+                    .get_mut(&callee_instance)
+                    .unwrap()
+                    .in_sync_call = true;
+            }
 
-        let mut fiber = make_fiber(&mut cx, callee_instance, move |cx| {
             let (storage, mut cx) = call(cx)?;
 
-            let (lift, _) = cx
-                .concurrent_state()
-                .table
-                .get_mut(guest_task)?
-                .lift_result
-                .take()
-                .unwrap();
+            if !async_ {
+                cx.concurrent_state()
+                    .instance_states
+                    .get_mut(&callee_instance)
+                    .unwrap()
+                    .in_sync_call = false;
 
-            assert!(cx
-                .concurrent_state()
-                .table
-                .get(guest_task)?
-                .result
-                .is_none());
+                let (lift, _) = cx
+                    .concurrent_state()
+                    .table
+                    .get_mut(guest_task)?
+                    .lift_result
+                    .take()
+                    .unwrap();
 
-            let cx = cx.0.traitobj();
-            let result = lift(cx, unsafe {
-                mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(&storage[..result_count])
-            })?;
-            let mut cx = unsafe { StoreContextMut::<T>(&mut *cx.cast()) };
+                assert!(cx
+                    .concurrent_state()
+                    .table
+                    .get(guest_task)?
+                    .result
+                    .is_none());
 
-            // TODO: call post_return if necessary
+                let cx = cx.0.traitobj();
+                let result = lift(cx, unsafe {
+                    mem::transmute::<&[MaybeUninit<ValRaw>], &[ValRaw]>(&storage[..result_count])
+                })?;
+                let mut cx = unsafe { StoreContextMut::<T>(&mut *cx.cast()) };
 
-            if let Caller::Host(tx) = &mut cx.concurrent_state().table.get_mut(guest_task)?.caller {
-                _ = tx.take().unwrap().send(result.unwrap());
-            } else {
-                cx.concurrent_state().table.get_mut(guest_task)?.result = result;
+                // TODO: call post_return if necessary
+
+                if let Caller::Host(tx) =
+                    &mut cx.concurrent_state().table.get_mut(guest_task)?.caller
+                {
+                    _ = tx.take().unwrap().send(result.unwrap());
+                } else {
+                    cx.concurrent_state().table.get_mut(guest_task)?.result = result;
+                }
             }
 
             Ok(())
@@ -1723,12 +1735,12 @@ fn do_start_call<'a, T>(
                 match resume_fiber(&mut fiber, cx.take(), Ok(()))? {
                     Ok((cx, result)) => {
                         result?;
-                        break maybe_resume_next_task(cx, guest_task, callee_instance)?;
+                        break maybe_resume_next_task(cx, callee_instance)?;
                     }
                     Err(cx) => {
                         if let Some(mut cx) = cx {
                             cx.concurrent_state().table.get_mut(guest_task)?.deferred =
-                                Deferred::Sync(fiber);
+                                Deferred::Stackful(fiber);
                             break cx;
                         } else {
                             unsafe { suspend_fiber::<T>(fiber.suspend, fiber.stack_limit, None)? };
@@ -1737,7 +1749,14 @@ fn do_start_call<'a, T>(
                 }
             }
         } else {
-            cx.concurrent_state().table.get_mut(guest_task)?.deferred = Deferred::Sync(fiber);
+            cx.concurrent_state()
+                .instance_states
+                .get_mut(&callee_instance)
+                .unwrap()
+                .task_queue
+                .push_back(guest_task);
+
+            cx.concurrent_state().table.get_mut(guest_task)?.deferred = Deferred::Stackful(fiber);
             cx
         }
     };
@@ -1812,7 +1831,7 @@ pub(crate) extern "C" fn async_exit<T>(
                 STATUS_STARTING
             } else if task.lift_result.is_some() {
                 STATUS_STARTED
-            } else if guest_context != 0 {
+            } else if guest_context != 0 || callback.is_null() {
                 STATUS_RETURNED
             } else {
                 STATUS_DONE

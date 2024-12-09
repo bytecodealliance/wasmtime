@@ -59,7 +59,11 @@ impl ComponentTypesBuilder {
         if options.options.async_ {
             return Signature {
                 params,
-                results: vec![ptr_ty],
+                results: if options.options.callback.is_some() {
+                    vec![ptr_ty]
+                } else {
+                    Vec::new()
+                },
                 params_indirect,
                 results_indirect: false,
             };

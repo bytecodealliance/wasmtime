@@ -389,7 +389,7 @@ impl Compiler<'_, '_> {
         let enter = self.module.import_async_enter_call();
         let exit = self
             .module
-            .import_async_exit_call(Some(adapter.lift.options.callback.unwrap()));
+            .import_async_exit_call(adapter.lift.options.callback);
 
         self.flush_code();
         self.module.funcs[self.result]
@@ -417,8 +417,8 @@ impl Compiler<'_, '_> {
         self.instruction(Call(enter.as_u32()));
 
         // TODO: As an optimization, consider checking the backpressure flag on the callee instance and, if it's
-        // unset, translate the params and call the callee function directly here (and make sure `exit` knows _not_
-        // to call it in that case).
+        // unset _and_ the callee uses a callback, translate the params and call the callee function directly here
+        // (and make sure `exit` knows _not_ to call it in that case).
 
         self.module.exports.push((
             adapter.callee.as_u32(),
@@ -452,7 +452,7 @@ impl Compiler<'_, '_> {
         let enter = self.module.import_async_enter_call();
         let exit = self
             .module
-            .import_async_exit_call(Some(adapter.lift.options.callback.unwrap()));
+            .import_async_exit_call(adapter.lift.options.callback);
 
         self.flush_code();
         self.module.funcs[self.result]
@@ -500,8 +500,8 @@ impl Compiler<'_, '_> {
         self.instruction(Call(enter.as_u32()));
 
         // TODO: As an optimization, consider checking the backpressure flag on the callee instance and, if it's
-        // unset, translate the params and call the callee function directly here (and make sure `exit` knows _not_
-        // to call it in that case).
+        // unset _and_ the callee uses a callback, translate the params and call the callee function directly here
+        // (and make sure `exit` knows _not_ to call it in that case).
 
         self.module.exports.push((
             adapter.callee.as_u32(),
