@@ -2,22 +2,21 @@
 
 use super::{address::Address, regs};
 use crate::masm::{ExtendKind, FloatCmpKind, IntCmpKind, RoundingMode, ShiftKind};
+use crate::CallingConvention;
 use crate::{
     masm::OperandSize,
     reg::{writable, Reg, WritableReg},
 };
-use cranelift_codegen::ir::TrapCode;
-use cranelift_codegen::isa::aarch64::inst::{
-    BitOp, BranchTarget, Cond, CondBrKind, FPULeftShiftImm, FPUOp1, FPUOp2,
-    FPUOpRI::{self, UShr32, UShr64},
-    FPUOpRIMod, FPURightShiftImm, FpuRoundMode, ImmLogic, ImmShift, ScalarSize,
-};
 use cranelift_codegen::{
-    ir::{MemFlags, SourceLoc},
+    ir::{ExternalName, LibCall, MemFlags, SourceLoc, TrapCode, UserExternalNameRef},
     isa::aarch64::inst::{
         self,
         emit::{EmitInfo, EmitState},
-        ALUOp, ALUOp3, AMode, ExtendOp, Imm12, Inst, PairAMode, VecLanesOp, VecMisc2, VectorSize,
+        ALUOp, ALUOp3, AMode, BitOp, BranchTarget, Cond, CondBrKind, ExtendOp, FPULeftShiftImm,
+        FPUOp1, FPUOp2,
+        FPUOpRI::{self, UShr32, UShr64},
+        FPUOpRIMod, FPURightShiftImm, FpuRoundMode, Imm12, ImmLogic, ImmShift, Inst, PairAMode,
+        ScalarSize, VecLanesOp, VecMisc2, VectorSize,
     },
     settings, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
     MachLabel, Writable,
@@ -724,6 +723,14 @@ impl Assembler {
         });
     }
 
+    /// Trap if `rn` is zero.
+    pub fn trapz(&mut self, rn: Reg, code: TrapCode) {
+        self.emit(Inst::TrapIf {
+            kind: CondBrKind::Zero(rn.into()),
+            trap_code: code,
+        });
+    }
+
     // Helpers for ALU operations.
 
     fn emit_alu_rri(&mut self, op: ALUOp, imm: Imm12, rn: Reg, rd: WritableReg, size: OperandSize) {
@@ -900,5 +907,39 @@ impl Assembler {
     /// Get a reference to the underlying machine buffer.
     pub fn buffer(&self) -> &MachBuffer<Inst> {
         &self.buffer
+    }
+
+    /// Emit a direct call to a function defined locally and
+    /// referenced to by `name`.
+    pub fn call_with_name(&mut self, name: UserExternalNameRef, call_conv: CallingConvention) {
+        self.emit(Inst::Call {
+            info: Box::new(cranelift_codegen::CallInfo::empty(
+                ExternalName::user(name),
+                call_conv.into(),
+            )),
+        })
+    }
+
+    /// Emit an indirect call to a function whose address is
+    /// stored the `callee` register.
+    pub fn call_with_reg(&mut self, callee: Reg, call_conv: CallingConvention) {
+        self.emit(Inst::CallInd {
+            info: Box::new(cranelift_codegen::CallInfo::empty(
+                callee.into(),
+                call_conv.into(),
+            )),
+        })
+    }
+
+    /// Emit a call to a well-known libcall.
+    /// `dst` is used as a scratch register to hold the address of the libcall function.
+    pub fn call_with_lib(&mut self, lib: LibCall, dst: Reg, call_conv: CallingConvention) {
+        let name = ExternalName::LibCall(lib);
+        self.emit(Inst::LoadExtName {
+            rd: writable!(dst.into()),
+            name: name.into(),
+            offset: 0,
+        });
+        self.call_with_reg(dst, call_conv)
     }
 }
