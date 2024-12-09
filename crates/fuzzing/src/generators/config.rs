@@ -685,10 +685,26 @@ impl WasmtimeConfig {
     /// the current state of the engine's development.
     fn make_internally_consistent(&mut self) {
         if !self.signals_based_traps {
-            // Spectre-based heap mitigations require signal handlers so this
-            // must always be disabled if signals-based traps are disabled.
             if let MemoryConfig::Normal(cfg) = &mut self.memory_config {
+                // Spectre-based heap mitigations require signal handlers so
+                // this must always be disabled if signals-based traps are
+                // disabled.
                 cfg.cranelift_enable_heap_access_spectre_mitigations = None;
+
+                // With configuration settings that match the use of malloc for
+                // linear memories cap the `memory_reservation_for_growth` value
+                // to something reasonable to avoid OOM in fuzzing.
+                if !cfg.memory_init_cow
+                    && cfg.memory_guard_size == Some(0)
+                    && cfg.memory_reservation == Some(0)
+                {
+                    let min = 10 << 20; // 10 MiB
+                    if let Some(val) = &mut cfg.memory_reservation_for_growth {
+                        *val = (*val).min(min);
+                    } else {
+                        cfg.memory_reservation_for_growth = Some(min);
+                    }
+                }
             }
         }
     }
