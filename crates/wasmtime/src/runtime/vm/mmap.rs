@@ -135,7 +135,7 @@ impl Mmap<AlignedLength> {
 
     /// Return a struct representing a page-aligned offset into the mmap.
     ///
-    /// Returns an error if `offset >= self.len_aligned()`.
+    /// Returns an error if `offset > self.len_aligned()`.
     pub fn offset(self: &Arc<Self>, offset: HostAlignedByteCount) -> Result<MmapOffset> {
         if offset > self.len_aligned() {
             bail!(
@@ -359,9 +359,6 @@ pub struct MmapOffset {
 impl MmapOffset {
     #[inline]
     fn new(mmap: Arc<Mmap<AlignedLength>>, offset: HostAlignedByteCount) -> Self {
-        // Note < rather than <=. This currently cannot represent the logical
-        // end of the mmap. We may need to change this if that becomes
-        // necessary.
         assert!(
             offset <= mmap.len_aligned(),
             "offset {} is in bounds (< {})",
