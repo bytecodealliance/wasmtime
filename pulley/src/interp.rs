@@ -719,10 +719,17 @@ struct Interpreter<'a> {
 }
 
 impl Interpreter<'_> {
+    /// Performs a relative jump of `offset` bytes from the current instruction.
+    ///
+    /// This will jump from the start of the current instruction, identified by
+    /// `I`, `offset` bytes away. Note that the `self.pc` at the start of this
+    /// function actually points to the instruction after this one so `I` is
+    /// necessary to go back to ourselves after which we then go `offset` away.
     #[inline]
-    fn pc_rel_jump(&mut self, offset: PcRelOffset, inst_size: isize) -> ControlFlow<Done> {
+    fn pc_rel_jump<I: Encode>(&mut self, offset: PcRelOffset) -> ControlFlow<Done> {
         let offset = isize::try_from(i32::from(offset)).unwrap();
-        self.pc = unsafe { self.pc.offset(offset - inst_size) };
+        let my_pc = self.current_pc::<I>();
+        self.pc = unsafe { UnsafeBytecodeStream::new(my_pc.offset(offset)) };
         ControlFlow::Continue(())
     }
 
@@ -826,7 +833,7 @@ impl OpVisitor for Interpreter<'_> {
     fn call(&mut self, offset: PcRelOffset) -> ControlFlow<Done> {
         let return_addr = self.pc.as_ptr();
         self.state[XReg::lr].set_ptr(return_addr.as_ptr());
-        self.pc_rel_jump(offset, 5);
+        self.pc_rel_jump::<crate::Call>(offset);
         ControlFlow::Continue(())
     }
 
@@ -843,14 +850,14 @@ impl OpVisitor for Interpreter<'_> {
     }
 
     fn jump(&mut self, offset: PcRelOffset) -> ControlFlow<Done> {
-        self.pc_rel_jump(offset, 5);
+        self.pc_rel_jump::<crate::Jump>(offset);
         ControlFlow::Continue(())
     }
 
     fn br_if(&mut self, cond: XReg, offset: PcRelOffset) -> ControlFlow<Done> {
         let cond = self.state[cond].get_u64();
         if cond != 0 {
-            self.pc_rel_jump(offset, 6)
+            self.pc_rel_jump::<crate::BrIf>(offset)
         } else {
             ControlFlow::Continue(())
         }
@@ -859,7 +866,7 @@ impl OpVisitor for Interpreter<'_> {
     fn br_if_not(&mut self, cond: XReg, offset: PcRelOffset) -> ControlFlow<Done> {
         let cond = self.state[cond].get_u64();
         if cond == 0 {
-            self.pc_rel_jump(offset, 6)
+            self.pc_rel_jump::<crate::BrIfNot>(offset)
         } else {
             ControlFlow::Continue(())
         }
@@ -869,7 +876,7 @@ impl OpVisitor for Interpreter<'_> {
         let a = self.state[a].get_u32();
         let b = self.state[b].get_u32();
         if a == b {
-            self.pc_rel_jump(offset, 7)
+            self.pc_rel_jump::<crate::BrIfXeq32>(offset)
         } else {
             ControlFlow::Continue(())
         }
@@ -879,7 +886,7 @@ impl OpVisitor for Interpreter<'_> {
         let a = self.state[a].get_u32();
         let b = self.state[b].get_u32();
         if a != b {
-            self.pc_rel_jump(offset, 7)
+            self.pc_rel_jump::<crate::BrIfXneq32>(offset)
         } else {
             ControlFlow::Continue(())
         }
@@ -889,7 +896,7 @@ impl OpVisitor for Interpreter<'_> {
         let a = self.state[a].get_i32();
         let b = self.state[b].get_i32();
         if a < b {
-            self.pc_rel_jump(offset, 7)
+            self.pc_rel_jump::<crate::BrIfXslt32>(offset)
         } else {
             ControlFlow::Continue(())
         }
@@ -899,7 +906,7 @@ impl OpVisitor for Interpreter<'_> {
         let a = self.state[a].get_i32();
         let b = self.state[b].get_i32();
         if a <= b {
-            self.pc_rel_jump(offset, 7)
+            self.pc_rel_jump::<crate::BrIfXslteq32>(offset)
         } else {
             ControlFlow::Continue(())
         }
@@ -909,7 +916,7 @@ impl OpVisitor for Interpreter<'_> {
         let a = self.state[a].get_u32();
         let b = self.state[b].get_u32();
         if a < b {
-            self.pc_rel_jump(offset, 7)
+            self.pc_rel_jump::<crate::BrIfXult32>(offset)
         } else {
             ControlFlow::Continue(())
         }
@@ -919,7 +926,7 @@ impl OpVisitor for Interpreter<'_> {
         let a = self.state[a].get_u32();
         let b = self.state[b].get_u32();
         if a <= b {
-            self.pc_rel_jump(offset, 7)
+            self.pc_rel_jump::<crate::BrIfXulteq32>(offset)
         } else {
             ControlFlow::Continue(())
         }
@@ -929,7 +936,7 @@ impl OpVisitor for Interpreter<'_> {
         let a = self.state[a].get_u64();
         let b = self.state[b].get_u64();
         if a == b {
-            self.pc_rel_jump(offset, 7)
+            self.pc_rel_jump::<crate::BrIfXeq64>(offset)
         } else {
             ControlFlow::Continue(())
         }
@@ -939,7 +946,7 @@ impl OpVisitor for Interpreter<'_> {
         let a = self.state[a].get_u64();
         let b = self.state[b].get_u64();
         if a != b {
-            self.pc_rel_jump(offset, 7)
+            self.pc_rel_jump::<crate::BrIfXneq64>(offset)
         } else {
             ControlFlow::Continue(())
         }
@@ -949,7 +956,7 @@ impl OpVisitor for Interpreter<'_> {
         let a = self.state[a].get_i64();
         let b = self.state[b].get_i64();
         if a < b {
-            self.pc_rel_jump(offset, 7)
+            self.pc_rel_jump::<crate::BrIfXslt64>(offset)
         } else {
             ControlFlow::Continue(())
         }
@@ -959,7 +966,7 @@ impl OpVisitor for Interpreter<'_> {
         let a = self.state[a].get_i64();
         let b = self.state[b].get_i64();
         if a <= b {
-            self.pc_rel_jump(offset, 7)
+            self.pc_rel_jump::<crate::BrIfXslteq64>(offset)
         } else {
             ControlFlow::Continue(())
         }
@@ -969,7 +976,7 @@ impl OpVisitor for Interpreter<'_> {
         let a = self.state[a].get_u64();
         let b = self.state[b].get_u64();
         if a < b {
-            self.pc_rel_jump(offset, 7)
+            self.pc_rel_jump::<crate::BrIfXult64>(offset)
         } else {
             ControlFlow::Continue(())
         }
@@ -979,7 +986,7 @@ impl OpVisitor for Interpreter<'_> {
         let a = self.state[a].get_u64();
         let b = self.state[b].get_u64();
         if a <= b {
-            self.pc_rel_jump(offset, 7)
+            self.pc_rel_jump::<crate::BrIfXulteq64>(offset)
         } else {
             ControlFlow::Continue(())
         }
@@ -1384,9 +1391,14 @@ impl OpVisitor for Interpreter<'_> {
         // SAFETY: part of the contract of the interpreter is only dealing with
         // valid bytecode, so this offset should be safe.
         self.pc = unsafe { self.pc.offset(idx * 4) };
+
+        // Decode the `PcRelOffset` without tampering with `self.pc` as the
+        // jump is relative to `self.pc`.
         let mut tmp = self.pc;
         let rel = unwrap_uninhabited(PcRelOffset::decode(&mut tmp));
-        self.pc_rel_jump(rel, 0)
+        let offset = isize::try_from(i32::from(rel)).unwrap();
+        self.pc = unsafe { self.pc.offset(offset) };
+        ControlFlow::Continue(())
     }
 
     fn stack_alloc32(&mut self, amt: u32) -> ControlFlow<Done> {
