@@ -798,10 +798,11 @@ impl Interpreter<'_> {
 fn simple_push_pop() {
     let mut state = MachineState::with_stack(vec![0; 16]);
     unsafe {
+        let mut bytecode = [0; 10];
         let mut i = Interpreter {
             state: &mut state,
             // this isn't actually read so just manufacture a dummy one
-            pc: UnsafeBytecodeStream::new((&mut 0).into()),
+            pc: UnsafeBytecodeStream::new(NonNull::new(bytecode.as_mut_ptr().offset(4)).unwrap()),
         };
         assert!(i.push::<crate::Ret, _>(0_i32).is_continue());
         assert_eq!(i.pop::<i32>(), 0_i32);
