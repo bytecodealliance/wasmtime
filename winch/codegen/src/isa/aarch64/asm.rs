@@ -464,7 +464,13 @@ impl Assembler {
             DivKind::Unsigned => ALUOp::UDiv,
         };
 
-        self.emit_alu_rrr(op, divisor, dividend, dest.map(Into::into), OperandSize::S64);
+        self.emit_alu_rrr(
+            op,
+            divisor,
+            dividend,
+            dest.map(Into::into),
+            OperandSize::S64,
+        );
     }
 
     /// And with three registers.
