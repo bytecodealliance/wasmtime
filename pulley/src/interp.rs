@@ -1131,6 +1131,48 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xshl32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u32(a.wrapping_shl(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xshr32_u(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u32(a.wrapping_shr(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xshr32_s(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_i32(a.wrapping_shr(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xshl64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u64(a.wrapping_shl(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xshr64_u(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u64(a.wrapping_shr(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xshr64_s(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i64();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_i64(a.wrapping_shr(b));
+        ControlFlow::Continue(())
+    }
+
     fn xeq64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u64();
         let b = self.state[operands.src2].get_u64();

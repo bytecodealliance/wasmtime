@@ -491,11 +491,25 @@ fn cast_index_to_pointer_ty(
     if index_ty == pointer_ty {
         return index;
     }
-    // Note that using 64-bit heaps on a 32-bit host is not currently supported,
-    // would require at least a bounds check here to ensure that the truncation
-    // from 64-to-32 bits doesn't lose any upper bits. For now though we're
-    // mostly interested in the 32-bit-heaps-on-64-bit-hosts cast.
-    assert!(index_ty.bits() < pointer_ty.bits());
+
+    // If the index size is larger than the pointer, that means that this is a
+    // 32-bit host platform with a 64-bit wasm linear memory. If the index is
+    // larger than 2**32 then that's guranteed to be out-of-bounds, otherwise we
+    // `ireduce` the index.
+    //
+    // Also note that at this time this branch doesn't support pcc nor the
+    // value-label-ranges of the below path.
+    if index_ty.bits() > pointer_ty.bits() {
+        assert_eq!(index_ty, ir::types::I64);
+        assert_eq!(pointer_ty, ir::types::I32);
+        let low_bits = pos.ins().ireduce(pointer_ty, index);
+        let c32 = pos.ins().iconst(pointer_ty, 32);
+        let high_bits = pos.ins().ushr(index, c32);
+        let high_bits = pos.ins().ireduce(pointer_ty, high_bits);
+        pos.ins()
+            .trapnz(high_bits, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+        return low_bits;
+    }
 
     // Convert `index` to `addr_ty`.
     let extended_index = pos.ins().uextend(pointer_ty, index);
