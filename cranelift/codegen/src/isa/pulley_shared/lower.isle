@@ -167,6 +167,16 @@
 (rule (lower (has_type $I64 (iadd a b)))
       (pulley_xadd64 a b))
 
+;;;; Rules for `idiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (sdiv a b)))
+      (pulley_xdiv32_s a b))
+
+;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (band a b)))
+      (pulley_xand32 a b))
+
 ;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 1 (lower (icmp cc a b @ (value_type $I64)))

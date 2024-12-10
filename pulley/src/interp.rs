@@ -650,7 +650,8 @@ impl MachineState {
 /// Inner private module to prevent creation of the `Done` structure outside of
 /// this module.
 mod done {
-    use super::{Interpreter, MachineState};
+    use super::{Encode, Interpreter, MachineState};
+    use core::ops::ControlFlow;
     use core::ptr::NonNull;
 
     /// Zero-sized sentinel indicating that pulley execution has halted.
@@ -688,24 +689,31 @@ mod done {
 
     impl Interpreter<'_> {
         /// Finishes execution by recording `DoneReason::Trap`.
-        pub fn done_trap(&mut self, pc: NonNull<u8>) -> Done {
+        ///
+        /// This method takes an `I` generic parameter indicating which
+        /// instruction is executing this function and generating a trap. That's
+        /// used to go backwards from the current `pc` which is just beyond the
+        /// instruction to point to the instruction itself in the trap metadata
+        /// returned from the interpreter.
+        pub fn done_trap<I: Encode>(&mut self) -> ControlFlow<Done> {
+            let pc = self.current_pc::<I>();
             self.state.done_reason = Some(DoneReason::Trap(pc));
-            Done { _priv: () }
+            ControlFlow::Break(Done { _priv: () })
         }
 
         /// Finishes execution by recording `DoneReason::CallIndirectHost`.
-        pub fn done_call_indirect_host(&mut self, id: u8) -> Done {
+        pub fn done_call_indirect_host(&mut self, id: u8) -> ControlFlow<Done> {
             self.state.done_reason = Some(DoneReason::CallIndirectHost {
                 id,
                 resume: self.pc.as_ptr(),
             });
-            Done { _priv: () }
+            ControlFlow::Break(Done { _priv: () })
         }
 
         /// Finishes execution by recording `DoneReason::ReturnToHost`.
-        pub fn done_return_to_host(&mut self) -> Done {
+        pub fn done_return_to_host(&mut self) -> ControlFlow<Done> {
             self.state.done_reason = Some(DoneReason::ReturnToHost(()));
-            Done { _priv: () }
+            ControlFlow::Break(Done { _priv: () })
         }
     }
 }
@@ -740,10 +748,13 @@ impl Interpreter<'_> {
     }
 
     /// `sp -= size_of::<T>(); *sp = val;`
+    ///
+    /// Note that `I` is the instruction which is pushing data to use if a trap
+    /// is generated.
     #[must_use]
-    fn push<T>(&mut self, val: T, pc: NonNull<u8>) -> ControlFlow<Done> {
+    fn push<I: Encode, T>(&mut self, val: T) -> ControlFlow<Done> {
         let new_sp = self.state[XReg::sp].get_ptr::<T>().wrapping_sub(1);
-        self.set_sp(new_sp, pc)?;
+        self.set_sp::<I>(new_sp.cast())?;
         unsafe {
             new_sp.write_unaligned(val);
         }
@@ -762,12 +773,16 @@ impl Interpreter<'_> {
     ///
     /// Returns a trap if this would result in stack overflow, or if `sp` is
     /// beneath the base pointer of `self.state.stack`.
+    ///
+    /// The `I` parameter here is the instruction that is setting the stack
+    /// pointer and is used to calculate this instruction's own `pc` if this
+    /// instruction traps.
     #[must_use]
-    fn set_sp<T>(&mut self, sp: *mut T, pc: NonNull<u8>) -> ControlFlow<Done> {
+    fn set_sp<I: Encode>(&mut self, sp: *mut u8) -> ControlFlow<Done> {
         let sp_raw = sp as usize;
         let base_raw = self.state.stack.as_ptr() as usize;
         if sp_raw < base_raw {
-            return ControlFlow::Break(self.done_trap(pc));
+            return self.done_trap::<I>();
         }
         self.set_sp_unchecked(sp);
         ControlFlow::Continue(())
@@ -790,20 +805,20 @@ impl Interpreter<'_> {
 fn simple_push_pop() {
     let mut state = MachineState::with_stack(vec![0; 16]);
     unsafe {
+        let mut bytecode = [0; 10];
         let mut i = Interpreter {
             state: &mut state,
             // this isn't actually read so just manufacture a dummy one
-            pc: UnsafeBytecodeStream::new((&mut 0).into()),
+            pc: UnsafeBytecodeStream::new(NonNull::new(bytecode.as_mut_ptr().offset(4)).unwrap()),
         };
-        let pc = NonNull::from(&0);
-        assert!(i.push(0_i32, pc).is_continue());
+        assert!(i.push::<crate::Ret, _>(0_i32).is_continue());
         assert_eq!(i.pop::<i32>(), 0_i32);
-        assert!(i.push(1_i32, pc).is_continue());
-        assert!(i.push(2_i32, pc).is_continue());
-        assert!(i.push(3_i32, pc).is_continue());
-        assert!(i.push(4_i32, pc).is_continue());
-        assert!(i.push(5_i32, pc).is_break());
-        assert!(i.push(6_i32, pc).is_break());
+        assert!(i.push::<crate::Ret, _>(1_i32).is_continue());
+        assert!(i.push::<crate::Ret, _>(2_i32).is_continue());
+        assert!(i.push::<crate::Ret, _>(3_i32).is_continue());
+        assert!(i.push::<crate::Ret, _>(4_i32).is_continue());
+        assert!(i.push::<crate::Ret, _>(5_i32).is_break());
+        assert!(i.push::<crate::Ret, _>(6_i32).is_break());
         assert_eq!(i.pop::<i32>(), 4_i32);
         assert_eq!(i.pop::<i32>(), 3_i32);
         assert_eq!(i.pop::<i32>(), 2_i32);
@@ -822,7 +837,7 @@ impl OpVisitor for Interpreter<'_> {
     fn ret(&mut self) -> ControlFlow<Done> {
         let lr = self.state[XReg::lr];
         if lr == XRegVal::HOST_RETURN_ADDR {
-            ControlFlow::Break(self.done_return_to_host())
+            self.done_return_to_host()
         } else {
             let return_addr = lr.get_ptr();
             self.pc = unsafe { UnsafeBytecodeStream::new(NonNull::new_unchecked(return_addr)) };
@@ -1290,29 +1305,25 @@ impl OpVisitor for Interpreter<'_> {
     }
 
     fn xpush32(&mut self, src: XReg) -> ControlFlow<Done> {
-        let me = self.current_pc::<crate::XPush32>();
-        self.push(self.state[src].get_u32(), me)?;
+        self.push::<crate::XPush32, _>(self.state[src].get_u32())?;
         ControlFlow::Continue(())
     }
 
     fn xpush32_many(&mut self, srcs: RegSet<XReg>) -> ControlFlow<Done> {
-        let me = self.current_pc::<crate::XPush32Many>();
         for src in srcs {
-            self.push(self.state[src].get_u32(), me)?;
+            self.push::<crate::XPush32Many, _>(self.state[src].get_u32())?;
         }
         ControlFlow::Continue(())
     }
 
     fn xpush64(&mut self, src: XReg) -> ControlFlow<Done> {
-        let me = self.current_pc::<crate::XPush64>();
-        self.push(self.state[src].get_u64(), me)?;
+        self.push::<crate::XPush64, _>(self.state[src].get_u64())?;
         ControlFlow::Continue(())
     }
 
     fn xpush64_many(&mut self, srcs: RegSet<XReg>) -> ControlFlow<Done> {
-        let me = self.current_pc::<crate::XPush64Many>();
         for src in srcs {
-            self.push(self.state[src].get_u64(), me)?;
+            self.push::<crate::XPush64Many, _>(self.state[src].get_u64())?;
         }
         ControlFlow::Continue(())
     }
@@ -1346,9 +1357,8 @@ impl OpVisitor for Interpreter<'_> {
     }
 
     fn push_frame(&mut self) -> ControlFlow<Done> {
-        let me = self.current_pc::<crate::PushFrame>();
-        self.push(self.state[XReg::lr].get_ptr::<u8>(), me)?;
-        self.push(self.state[XReg::fp].get_ptr::<u8>(), me)?;
+        self.push::<crate::PushFrame, _>(self.state[XReg::lr].get_ptr::<u8>())?;
+        self.push::<crate::PushFrame, _>(self.state[XReg::fp].get_ptr::<u8>())?;
         self.state[XReg::fp] = self.state[XReg::sp];
         ControlFlow::Continue(())
     }
@@ -1402,10 +1412,9 @@ impl OpVisitor for Interpreter<'_> {
     }
 
     fn stack_alloc32(&mut self, amt: u32) -> ControlFlow<Done> {
-        let me = self.current_pc::<crate::StackAlloc32>();
         let amt = usize::try_from(amt).unwrap();
         let new_sp = self.state[XReg::sp].get_ptr::<u8>().wrapping_sub(amt);
-        self.set_sp(new_sp, me)?;
+        self.set_sp::<crate::StackAlloc32>(new_sp)?;
         ControlFlow::Continue(())
     }
 
@@ -1451,6 +1460,25 @@ impl OpVisitor for Interpreter<'_> {
         self.state[dst].set_i64(src.into());
         ControlFlow::Continue(())
     }
+
+    fn xdiv32_s(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i32();
+        let b = self.state[operands.src2].get_i32();
+        match a.checked_div(b) {
+            Some(result) => {
+                self.state[operands.dst].set_i32(result);
+                ControlFlow::Continue(())
+            }
+            None => self.done_trap::<crate::XDiv32S>(),
+        }
+    }
+
+    fn xand32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u32(a & b);
+        ControlFlow::Continue(())
+    }
 }
 
 impl ExtendedOpVisitor for Interpreter<'_> {
@@ -1459,12 +1487,11 @@ impl ExtendedOpVisitor for Interpreter<'_> {
     }
 
     fn trap(&mut self) -> ControlFlow<Done> {
-        let trap_pc = self.current_pc::<crate::Trap>();
-        ControlFlow::Break(self.done_trap(trap_pc))
+        self.done_trap::<crate::Trap>()
     }
 
     fn call_indirect_host(&mut self, id: u8) -> ControlFlow<Done> {
-        ControlFlow::Break(self.done_call_indirect_host(id))
+        self.done_call_indirect_host(id)
     }
 
     fn bswap32(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
