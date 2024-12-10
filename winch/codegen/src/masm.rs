@@ -23,6 +23,7 @@ pub(crate) enum DivKind {
 }
 
 /// Remainder kind.
+#[derive(Copy, Clone)]
 pub(crate) enum RemKind {
     /// Signed remainder.
     Signed,
