@@ -525,97 +525,7 @@ fn xulteq32() {
 }
 
 #[test]
-fn load32_u() {
-    let a = UnsafeCell::new(11u32.to_le());
-    let b = UnsafeCell::new(22u32.to_le());
-    let c = UnsafeCell::new(33u32.to_le());
-    let d = UnsafeCell::new((i32::MIN as u32).to_le());
-
-    for (expected, addr) in [
-        (11, a.get()),
-        (22, b.get()),
-        (33, c.get()),
-        (i32::MIN as u32 as u64, d.get()),
-    ] {
-        unsafe {
-            assert_one(
-                [
-                    (x(0), Val::from(0x1234567812345678u64)),
-                    (x(1), Val::from(addr.cast::<u8>())),
-                ],
-                Load32U {
-                    dst: x(0),
-                    ptr: x(1),
-                },
-                x(0),
-                expected,
-            );
-        }
-    }
-}
-
-#[test]
-fn load32_s() {
-    let a = UnsafeCell::new(11u32.to_le());
-    let b = UnsafeCell::new(22u32.to_le());
-    let c = UnsafeCell::new(33u32.to_le());
-    let d = UnsafeCell::new((-1i32 as u32).to_le());
-
-    for (expected, addr) in [
-        (11, a.get()),
-        (22, b.get()),
-        (33, c.get()),
-        (-1i64 as u64, d.get()),
-    ] {
-        unsafe {
-            assert_one(
-                [
-                    (x(0), Val::from(0x1234567812345678u64)),
-                    (x(1), Val::from(addr.cast::<u8>())),
-                ],
-                Load32S {
-                    dst: x(0),
-                    ptr: x(1),
-                },
-                x(0),
-                expected,
-            );
-        }
-    }
-}
-
-#[test]
-fn load64() {
-    let a = UnsafeCell::new(11u64.to_le());
-    let b = UnsafeCell::new(22u64.to_le());
-    let c = UnsafeCell::new(33u64.to_le());
-    let d = UnsafeCell::new((-1i64 as u64).to_le());
-
-    for (expected, addr) in [
-        (11, a.get()),
-        (22, b.get()),
-        (33, c.get()),
-        (-1i64 as u64, d.get()),
-    ] {
-        unsafe {
-            assert_one(
-                [
-                    (x(0), Val::from(0x1234567812345678u64)),
-                    (x(1), Val::from(addr)),
-                ],
-                Load64 {
-                    dst: x(0),
-                    ptr: x(1),
-                },
-                x(0),
-                expected,
-            );
-        }
-    }
-}
-
-#[test]
-fn load32_u_offset8() {
+fn xload32le_u64_offset32() {
     let a = UnsafeCell::new([11u32.to_le(), 22u32.to_le()]);
     let b = UnsafeCell::new([33u32.to_le(), 44u32.to_le()]);
     let c = UnsafeCell::new([55u32.to_le(), 66u32.to_le()]);
@@ -637,7 +547,7 @@ fn load32_u_offset8() {
                     (x(0), Val::from(0x1234567812345678u64)),
                     (x(1), Val::from(addr.cast::<u8>())),
                 ],
-                Load32UOffset8 {
+                XLoad32LeU64Offset32 {
                     dst: x(0),
                     ptr: x(1),
                     offset,
@@ -650,7 +560,7 @@ fn load32_u_offset8() {
 }
 
 #[test]
-fn load32_s_offset8() {
+fn xload32le_s64_offset32() {
     let a = UnsafeCell::new([11u32.to_le(), 22u32.to_le()]);
     let b = UnsafeCell::new([33u32.to_le(), 44u32.to_le()]);
     let c = UnsafeCell::new([55u32.to_le(), 66u32.to_le()]);
@@ -673,7 +583,7 @@ fn load32_s_offset8() {
                     (x(0), Val::from(0x1234567812345678u64)),
                     (x(1), Val::from(addr.cast::<u8>())),
                 ],
-                Load32SOffset8 {
+                XLoad32LeS64Offset32 {
                     dst: x(0),
                     ptr: x(1),
                     offset,
@@ -686,7 +596,7 @@ fn load32_s_offset8() {
 }
 
 #[test]
-fn load64_offset8() {
+fn xload64le_offset32() {
     let a = UnsafeCell::new([11u64.to_le(), 22u64.to_le()]);
     let b = UnsafeCell::new([33u64.to_le(), 44u64.to_le()]);
     let c = UnsafeCell::new([55u64.to_le(), 66u64.to_le()]);
@@ -708,7 +618,7 @@ fn load64_offset8() {
                     (x(0), Val::from(0x1234567812345678u64)),
                     (x(1), Val::from(addr)),
                 ],
-                Load64Offset8 {
+                XLoad64LeOffset32 {
                     dst: x(0),
                     ptr: x(1),
                     offset,
@@ -721,200 +631,7 @@ fn load64_offset8() {
 }
 
 #[test]
-fn load32_u_offset64() {
-    let a = UnsafeCell::new([11u32.to_le(), 22u32.to_le()]);
-    let b = UnsafeCell::new([33u32.to_le(), 44u32.to_le()]);
-    let c = UnsafeCell::new([55u32.to_le(), 66u32.to_le()]);
-    let d = UnsafeCell::new([(i32::MIN as u32).to_le(), (i32::MAX as u32).to_le()]);
-
-    for (expected, addr, offset) in [
-        (11, a.get(), 0),
-        (22, a.get(), 4),
-        (33, b.get(), 0),
-        (44, b.get(), 4),
-        (55, c.get(), 0),
-        (66, c.get(), 4),
-        (i32::MIN as u32 as u64, d.get(), 0),
-        (i32::MAX as u32 as u64, d.get(), 4),
-    ] {
-        unsafe {
-            assert_one(
-                [
-                    (x(0), Val::from(0x1234567812345678u64)),
-                    (x(1), Val::from(addr.cast::<u8>())),
-                ],
-                Load32UOffset64 {
-                    dst: x(0),
-                    ptr: x(1),
-                    offset,
-                },
-                x(0),
-                expected,
-            );
-        }
-    }
-}
-
-#[test]
-fn load32_s_offset64() {
-    let a = UnsafeCell::new([11u32.to_le(), 22u32.to_le()]);
-    let b = UnsafeCell::new([33u32.to_le(), 44u32.to_le()]);
-    let c = UnsafeCell::new([55u32.to_le(), 66u32.to_le()]);
-    let d = UnsafeCell::new([(-1i32 as u32).to_le(), (i32::MAX as u32).to_le()]);
-
-    for (expected, addr, offset) in [
-        (11, a.get(), 0),
-        (22, a.get(), 4),
-        (33, b.get(), 0),
-        (44, b.get(), 4),
-        (55, c.get(), 0),
-        (55, unsafe { c.get().byte_add(4) }, -4),
-        (66, c.get(), 4),
-        (-1i64 as u64, d.get(), 0),
-        (i32::MAX as u32 as u64, d.get(), 4),
-    ] {
-        unsafe {
-            assert_one(
-                [
-                    (x(0), Val::from(0x1234567812345678u64)),
-                    (x(1), Val::from(addr.cast::<u8>())),
-                ],
-                Load32SOffset64 {
-                    dst: x(0),
-                    ptr: x(1),
-                    offset,
-                },
-                x(0),
-                expected,
-            );
-        }
-    }
-}
-
-#[test]
-fn load64_offset64() {
-    let a = UnsafeCell::new([11u64.to_le(), 22u64.to_le()]);
-    let b = UnsafeCell::new([33u64.to_le(), 44u64.to_le()]);
-    let c = UnsafeCell::new([55u64.to_le(), 66u64.to_le()]);
-    let d = UnsafeCell::new([(-1i64 as u64).to_le(), (i64::MAX as u64).to_le()]);
-
-    for (expected, addr, offset) in [
-        (11, a.get(), 0),
-        (22, a.get(), 8),
-        (33, b.get(), 0),
-        (44, b.get(), 8),
-        (55, c.get(), 0),
-        (66, c.get(), 8),
-        (-1i64 as u64, d.get(), 0),
-        (i64::MAX as u64, d.get(), 8),
-    ] {
-        unsafe {
-            assert_one(
-                [
-                    (x(0), Val::from(0x1234567812345678u64)),
-                    (x(1), Val::from(addr)),
-                ],
-                Load64Offset64 {
-                    dst: x(0),
-                    ptr: x(1),
-                    offset,
-                },
-                x(0),
-                expected,
-            );
-        }
-    }
-}
-
-#[test]
-fn store32() {
-    let a = UnsafeCell::new([0x12u8, 0x34, 0x56, 0x78, 0x12, 0x34, 0x56, 0x78]);
-    let b = UnsafeCell::new([0x12u8, 0x34, 0x56, 0x78, 0x12, 0x34, 0x56, 0x78]);
-    let c = UnsafeCell::new([0x12u8, 0x34, 0x56, 0x78, 0x12, 0x34, 0x56, 0x78]);
-
-    unsafe {
-        for (val, addr) in [
-            (0x11111111u32, a.get()),
-            (0x22222222, b.get().byte_add(4)),
-            (0x33333333, c.get().byte_add(2)),
-        ] {
-            let val = val as u64;
-            assert_one(
-                [(x(0), Val::from(addr)), (x(1), Val::from(val))],
-                Store32 {
-                    ptr: x(0),
-                    src: x(1),
-                },
-                x(1),
-                val,
-            );
-        }
-    }
-
-    let a = u64::from_be_bytes(a.into_inner());
-    let expected = 0x1111111112345678u64;
-    eprintln!("expected(a) = {expected:#018x}");
-    eprintln!("actual(a)   = {a:#018x}");
-    assert_eq!(a, expected);
-
-    let b = u64::from_be_bytes(b.into_inner());
-    let expected = 0x1234567822222222u64;
-    eprintln!("expected(b) = {expected:#018x}");
-    eprintln!("actual(b)   = {b:#018x}");
-    assert_eq!(b, expected);
-
-    let c = u64::from_be_bytes(c.into_inner());
-    let expected = 0x1234333333335678u64;
-    eprintln!("expected(c) = {expected:#018x}");
-    eprintln!("actual(c)   = {c:#018x}");
-    assert_eq!(c, expected);
-}
-
-#[test]
-fn store64() {
-    let a = UnsafeCell::new(0x1234567812345678);
-    let b = UnsafeCell::new(0x1234567812345678);
-    let c = UnsafeCell::new(0x1234567812345678);
-
-    unsafe {
-        for (val, addr) in [
-            (0x1111111111111111u64, a.get()),
-            (0x2222222222222222, b.get()),
-            (0x3333333333333333, c.get()),
-        ] {
-            assert_one(
-                [(x(0), Val::from(addr)), (x(1), Val::from(val))],
-                Store64 {
-                    ptr: x(0),
-                    src: x(1),
-                },
-                x(1),
-                val,
-            );
-        }
-    }
-
-    let a = a.into_inner();
-    let expected = 0x1111111111111111u64;
-    eprintln!("expected(a) = {expected:#018x}");
-    eprintln!("actual(a)   = {a:#018x}");
-    assert_eq!(a, expected);
-
-    let b = b.into_inner();
-    let expected = 0x2222222222222222u64;
-    eprintln!("expected(b) = {expected:#018x}");
-    eprintln!("actual(b)   = {b:#018x}");
-    assert_eq!(b, expected);
-
-    let c = c.into_inner();
-    let expected = 0x3333333333333333u64;
-    eprintln!("expected(c) = {expected:#018x}");
-    eprintln!("actual(c)   = {c:#018x}");
-    assert_eq!(c, expected);
-}
-
-#[test]
-fn store32_offset8() {
+fn xstore32_le_offset32() {
     let a = UnsafeCell::new([0x12u8, 0x34, 0x56, 0x78, 0x12, 0x34, 0x56, 0x78]);
     let b = UnsafeCell::new([0x12u8, 0x34, 0x56, 0x78, 0x12, 0x34, 0x56, 0x78]);
     let c = UnsafeCell::new([0x12u8, 0x34, 0x56, 0x78, 0x12, 0x34, 0x56, 0x78]);
@@ -928,7 +645,7 @@ fn store32_offset8() {
             let val = val as u64;
             assert_one(
                 [(x(0), Val::from(addr)), (x(1), Val::from(val))],
-                Store32SOffset8 {
+                XStore32LeOffset32 {
                     ptr: x(0),
                     src: x(1),
                     offset,
@@ -959,7 +676,7 @@ fn store32_offset8() {
 }
 
 #[test]
-fn store64_offset8() {
+fn xstore64_le_offset32() {
     let a = UnsafeCell::new([0x1234567812345678, 0x1234567812345678, 0x1234567812345678]);
 
     unsafe {
@@ -970,93 +687,7 @@ fn store64_offset8() {
         ] {
             assert_one(
                 [(x(0), Val::from(addr)), (x(1), Val::from(val))],
-                Store64Offset8 {
-                    ptr: x(0),
-                    src: x(1),
-                    offset,
-                },
-                x(1),
-                val,
-            );
-        }
-    }
-
-    let [a, b, c] = a.into_inner();
-
-    let expected = 0x1111111111111111u64;
-    eprintln!("expected(a) = {expected:#018x}");
-    eprintln!("actual(a)   = {a:#018x}");
-    assert_eq!(a, expected);
-
-    let expected = 0x2222222222222222u64;
-    eprintln!("expected(b) = {expected:#018x}");
-    eprintln!("actual(b)   = {b:#018x}");
-    assert_eq!(b, expected);
-
-    let expected = 0x3333333333333333u64;
-    eprintln!("expected(c) = {expected:#018x}");
-    eprintln!("actual(c)   = {c:#018x}");
-    assert_eq!(c, expected);
-}
-
-#[test]
-fn store32_offset64() {
-    let a = UnsafeCell::new([0x12u8, 0x34, 0x56, 0x78, 0x12, 0x34, 0x56, 0x78]);
-    let b = UnsafeCell::new([0x12u8, 0x34, 0x56, 0x78, 0x12, 0x34, 0x56, 0x78]);
-    let c = UnsafeCell::new([0x12u8, 0x34, 0x56, 0x78, 0x12, 0x34, 0x56, 0x78]);
-
-    unsafe {
-        for (val, addr, offset) in [
-            (0x11111111u32, a.get(), 0),
-            (0x22222222, b.get(), 4),
-            (0x33333333, c.get(), 2),
-        ] {
-            let val = val as u64;
-            assert_one(
-                [(x(0), Val::from(addr)), (x(1), Val::from(val))],
-                Store32SOffset64 {
-                    ptr: x(0),
-                    src: x(1),
-                    offset,
-                },
-                x(1),
-                val,
-            );
-        }
-    }
-
-    let a = u64::from_be_bytes(a.into_inner());
-    let expected = 0x1111111112345678u64;
-    eprintln!("expected(a) = {expected:#018x}");
-    eprintln!("actual(a)   = {a:#018x}");
-    assert_eq!(a, expected);
-
-    let b = u64::from_be_bytes(b.into_inner());
-    let expected = 0x1234567822222222u64;
-    eprintln!("expected(b) = {expected:#018x}");
-    eprintln!("actual(b)   = {b:#018x}");
-    assert_eq!(b, expected);
-
-    let c = u64::from_be_bytes(c.into_inner());
-    let expected = 0x1234333333335678u64;
-    eprintln!("expected(c) = {expected:#018x}");
-    eprintln!("actual(c)   = {c:#018x}");
-    assert_eq!(c, expected);
-}
-
-#[test]
-fn store64_offset64() {
-    let a = UnsafeCell::new([0x1234567812345678, 0x1234567812345678, 0x1234567812345678]);
-
-    unsafe {
-        for (val, addr, offset) in [
-            (0x1111111111111111u64, a.get(), 0),
-            (0x2222222222222222, a.get(), 8),
-            (0x3333333333333333, a.get(), 16),
-        ] {
-            assert_one(
-                [(x(0), Val::from(addr)), (x(1), Val::from(val))],
-                Store64Offset64 {
+                XStore64LeOffset32 {
                     ptr: x(0),
                     src: x(1),
                     offset,
