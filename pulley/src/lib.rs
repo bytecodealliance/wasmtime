@@ -333,6 +333,11 @@ macro_rules! for_each_op {
             xor32 = XOr32 { operands: BinaryOperands<XReg> };
             /// `dst = src1 | src2`
             xor64 = XOr64 { operands: BinaryOperands<XReg> };
+
+            /// `low32(dst) = bits`
+            fconst32 = FConst32 { dst: FReg, bits: u32 };
+            /// `dst = bits`
+            fconst64 = FConst64 { dst: FReg, bits: u64 };
         }
     };
 }

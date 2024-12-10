@@ -1599,6 +1599,16 @@ impl OpVisitor for Interpreter<'_> {
         self.state[operands.dst].set_u64(a | b);
         ControlFlow::Continue(())
     }
+
+    fn fconst32(&mut self, dst: FReg, bits: u32) -> ControlFlow<Done> {
+        self.state[dst].set_f32(f32::from_bits(bits));
+        ControlFlow::Continue(())
+    }
+
+    fn fconst64(&mut self, dst: FReg, bits: u64) -> ControlFlow<Done> {
+        self.state[dst].set_f64(f64::from_bits(bits));
+        ControlFlow::Continue(())
+    }
 }
 
 impl ExtendedOpVisitor for Interpreter<'_> {
