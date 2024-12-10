@@ -94,7 +94,6 @@ impl Formatter {
         directory: &std::path::Path,
     ) -> Result<(), error::Error> {
         let path = directory.join(&filename);
-        eprintln!("Writing generated file: {}", path.display());
         let mut f = fs::File::create(path)?;
 
         for l in self.lines.iter().map(|l| l.as_bytes()) {
