@@ -483,8 +483,16 @@ impl Masm for MacroAssembler {
         })
     }
 
-    fn rem(&mut self, _context: &mut CodeGenContext<Emission>, _kind: RemKind, _size: OperandSize) {
-        todo!()
+    fn rem(&mut self, context: &mut CodeGenContext<Emission>, kind: RemKind, size: OperandSize) {
+        context.binop(self, size, |this, dividend, divisor, size| {
+            this.asm
+                .rem_rrr(divisor, dividend, writable!(dividend), kind, size);
+            match size {
+                OperandSize::S32 => TypedReg::new(WasmValType::I32, dividend),
+                OperandSize::S64 => TypedReg::new(WasmValType::I64, dividend),
+                s => unreachable!("invalid size for remainder: {s:?}"),
+            }
+        })
     }
 
     fn zero(&mut self, reg: WritableReg) {
