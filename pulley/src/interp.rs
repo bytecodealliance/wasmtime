@@ -1083,10 +1083,7 @@ impl OpVisitor for Interpreter<'_> {
                 self.state[operands.dst].set_u32(c);
                 ControlFlow::Continue(())
             }
-            None => {
-                let me = self.current_pc::<crate::Xadd32UoverflowTrap>();
-                ControlFlow::Break(self.done_trap(me))
-            }
+            None => self.done_trap::<crate::Xadd32UoverflowTrap>(),
         }
     }
 
@@ -1098,10 +1095,7 @@ impl OpVisitor for Interpreter<'_> {
                 self.state[operands.dst].set_u64(c);
                 ControlFlow::Continue(())
             }
-            None => {
-                let me = self.current_pc::<crate::Xadd64UoverflowTrap>();
-                ControlFlow::Break(self.done_trap(me))
-            }
+            None => self.done_trap::<crate::Xadd64UoverflowTrap>(),
         }
     }
 
