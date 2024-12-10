@@ -734,3 +734,19 @@ fn get_memory_type_with_custom_page_size_from_wasm(config: &mut Config) -> Resul
 
     Ok(())
 }
+
+#[wasmtime_test]
+fn configure_zero(config: &mut Config) -> Result<()> {
+    config.guard_before_linear_memory(false);
+    config.memory_guard_size(0);
+    config.memory_reservation(0);
+    config.memory_reservation_for_growth(0);
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    let ty = MemoryType::new(0, None);
+    let memory = Memory::new(&mut store, ty)?;
+    assert_eq!(memory.data_size(&store), 0);
+
+    Ok(())
+}
