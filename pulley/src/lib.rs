@@ -27,11 +27,14 @@ extern crate alloc;
 /// * Instructions must be portable to many architectures.
 /// * The Pulley ISA is mostly target-independent as the compilation target is
 ///   currently only parameterized on pointer width and endianness.
-/// * Pulley instructions must be fast to decode at runtime (e.g. it's theorized
-///   we can't get super fancy with bit-packing)
-/// * Many "macro ops" are present to reduce the number of opcodes so there is a
-///   wide set of duplicate functionality between opcodes (and this is
-///   expected).
+/// * Pulley instructions should be balance of time-to-decode and code size. For
+///   example super fancy bit-packing tricks might be tough to decode in
+///   software but might be worthwhile if it's quite common and greatly reduces
+///   the size of bytecode. There's not a hard-and-fast answer here, but a
+///   balance to be made.
+/// * Many "macro ops" are present to reduce the size of compiled bytecode so
+///   there is a wide set of duplicate functionality between opcodes (and this
+///   is expected).
 ///
 /// Given all this it's also useful to have a set of guidelines used to name and
 /// develop Pulley instructions. As of the time of this writing it's still
@@ -46,6 +49,9 @@ extern crate alloc;
 ///
 /// * Most instructions are suffixed or otherwise contain the bit width they're
 ///   operating on. For example `xadd32` is a 32-bit addition.
+///
+/// * If an instruction operates on signed or unsigned data (such as division
+///   and remainder), then the instruction is suffixed with `_s` or `_u`.
 ///
 /// * Instructions operate on either 32 or 64-bit parts of a register.
 ///   Instructions modifying only 32-bits of a register always modify the "low"
