@@ -15,6 +15,7 @@ extern crate std;
 extern crate alloc;
 
 /// Calls the given macro with each opcode.
+#[macro_export]
 macro_rules! for_each_op {
     ( $macro:ident ) => {
         $macro! {
@@ -213,6 +214,7 @@ macro_rules! for_each_op {
 }
 
 /// Calls the given macro with each extended opcode.
+#[macro_export]
 macro_rules! for_each_extended_op {
     ( $macro:ident ) => {
         $macro! {

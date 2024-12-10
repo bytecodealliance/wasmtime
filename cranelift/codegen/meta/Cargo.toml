@@ -17,3 +17,7 @@ rustdoc-args = [ "--document-private-items" ]
 
 [dependencies]
 cranelift-codegen-shared = { path = "../shared", version = "0.116.0" }
+pulley-interpreter = { workspace = true, optional = true }
+
+[features]
+pulley = ['dep:pulley-interpreter']

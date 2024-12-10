@@ -180,8 +180,6 @@ fn pulley_emit<P>(
 
         Inst::GetSpecial { dst, reg } => enc::xmov(sink, dst, reg),
 
-        Inst::Ret => enc::ret(sink),
-
         Inst::LoadExtName { .. } => todo!(),
 
         Inst::Call { info } => {
@@ -384,39 +382,6 @@ fn pulley_emit<P>(
             );
         }
 
-        Inst::Xmov { dst, src } => enc::xmov(sink, dst, src),
-        Inst::Fmov { dst, src } => enc::fmov(sink, dst, src),
-        Inst::Vmov { dst, src } => enc::vmov(sink, dst, src),
-
-        Inst::Xconst8 { dst, imm } => enc::xconst8(sink, dst, *imm),
-        Inst::Xconst16 { dst, imm } => enc::xconst16(sink, dst, *imm),
-        Inst::Xconst32 { dst, imm } => enc::xconst32(sink, dst, *imm),
-        Inst::Xconst64 { dst, imm } => enc::xconst64(sink, dst, *imm),
-
-        Inst::Xadd32 { dst, src1, src2 } => enc::xadd32(sink, BinaryOperands::new(dst, src1, src2)),
-        Inst::Xadd64 { dst, src1, src2 } => enc::xadd64(sink, BinaryOperands::new(dst, src1, src2)),
-        Inst::Xeq64 { dst, src1, src2 } => enc::xeq64(sink, BinaryOperands::new(dst, src1, src2)),
-        Inst::Xneq64 { dst, src1, src2 } => enc::xneq64(sink, BinaryOperands::new(dst, src1, src2)),
-        Inst::Xslt64 { dst, src1, src2 } => enc::xslt64(sink, BinaryOperands::new(dst, src1, src2)),
-        Inst::Xslteq64 { dst, src1, src2 } => {
-            enc::xslteq64(sink, BinaryOperands::new(dst, src1, src2))
-        }
-        Inst::Xult64 { dst, src1, src2 } => enc::xult64(sink, BinaryOperands::new(dst, src1, src2)),
-        Inst::Xulteq64 { dst, src1, src2 } => {
-            enc::xulteq64(sink, BinaryOperands::new(dst, src1, src2))
-        }
-
-        Inst::Xeq32 { dst, src1, src2 } => enc::xeq32(sink, BinaryOperands::new(dst, src1, src2)),
-        Inst::Xneq32 { dst, src1, src2 } => enc::xneq32(sink, BinaryOperands::new(dst, src1, src2)),
-        Inst::Xslt32 { dst, src1, src2 } => enc::xslt32(sink, BinaryOperands::new(dst, src1, src2)),
-        Inst::Xslteq32 { dst, src1, src2 } => {
-            enc::xslteq32(sink, BinaryOperands::new(dst, src1, src2))
-        }
-        Inst::Xult32 { dst, src1, src2 } => enc::xult32(sink, BinaryOperands::new(dst, src1, src2)),
-        Inst::Xulteq32 { dst, src1, src2 } => {
-            enc::xulteq32(sink, BinaryOperands::new(dst, src1, src2))
-        }
-
         Inst::LoadAddr { dst, mem } => {
             let base = mem.get_base_register();
             let offset = mem.get_offset_with_state(state);
@@ -503,11 +468,6 @@ fn pulley_emit<P>(
             }
         }
 
-        Inst::BitcastIntFromFloat32 { dst, src } => enc::bitcast_int_from_float_32(sink, dst, src),
-        Inst::BitcastIntFromFloat64 { dst, src } => enc::bitcast_int_from_float_64(sink, dst, src),
-        Inst::BitcastFloatFromInt32 { dst, src } => enc::bitcast_float_from_int_32(sink, dst, src),
-        Inst::BitcastFloatFromInt64 { dst, src } => enc::bitcast_float_from_int_64(sink, dst, src),
-
         Inst::BrTable {
             idx,
             default,
@@ -549,25 +509,15 @@ fn pulley_emit<P>(
             *start_offset = sink.cur_offset();
         }
 
-        Inst::PushFrame => {
-            sink.add_trap(ir::TrapCode::STACK_OVERFLOW);
-            enc::push_frame(sink);
+        Inst::Raw { raw } => {
+            match raw {
+                RawInst::PushFrame | RawInst::StackAlloc32 { .. } => {
+                    sink.add_trap(ir::TrapCode::STACK_OVERFLOW);
+                }
+                _ => {}
+            }
+            super::generated::emit(raw, sink)
         }
-        Inst::PopFrame => enc::pop_frame(sink),
-        Inst::StackAlloc32 { amt } => {
-            sink.add_trap(ir::TrapCode::STACK_OVERFLOW);
-            enc::stack_alloc32(sink, *amt);
-        }
-        Inst::StackFree32 { amt } => enc::stack_free32(sink, *amt),
-
-        Inst::Zext8 { dst, src } => enc::zext8(sink, dst, src),
-        Inst::Zext16 { dst, src } => enc::zext16(sink, dst, src),
-        Inst::Zext32 { dst, src } => enc::zext32(sink, dst, src),
-        Inst::Sext8 { dst, src } => enc::sext8(sink, dst, src),
-        Inst::Sext16 { dst, src } => enc::sext16(sink, dst, src),
-        Inst::Sext32 { dst, src } => enc::sext32(sink, dst, src),
-        Inst::Bswap32 { dst, src } => enc::bswap32(sink, dst, src),
-        Inst::Bswap64 { dst, src } => enc::bswap64(sink, dst, src),
     }
 }
 

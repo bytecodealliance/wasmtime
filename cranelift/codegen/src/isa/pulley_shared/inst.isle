@@ -45,9 +45,6 @@
       (dst WritableXReg)
       (reg XReg))
 
-    ;; Return.
-    (Ret)
-
     ;; Load an external symbol's address into a register.
     (LoadExtName (dst WritableXReg)
                  (name BoxExternalName)
@@ -77,35 +74,6 @@
     (BrIfXult32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
     (BrIfXulteq32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
 
-    ;; Register-to-register moves.
-    (Xmov (dst WritableXReg) (src XReg))
-    (Fmov (dst WritableFReg) (src FReg))
-    (Vmov (dst WritableVReg) (src VReg))
-
-    ;; Integer constants, zero-extended to 64 bits.
-    (Xconst8 (dst WritableXReg) (imm i8))
-    (Xconst16 (dst WritableXReg) (imm i16))
-    (Xconst32 (dst WritableXReg) (imm i32))
-    (Xconst64 (dst WritableXReg) (imm i64))
-
-    ;; Integer arithmetic.
-    (Xadd32 (dst WritableXReg) (src1 XReg) (src2 XReg))
-    (Xadd64 (dst WritableXReg) (src1 XReg) (src2 XReg))
-
-    ;; Comparisons.
-    (Xeq64 (dst WritableXReg) (src1 XReg) (src2 XReg))
-    (Xneq64 (dst WritableXReg) (src1 XReg) (src2 XReg))
-    (Xslt64 (dst WritableXReg) (src1 XReg) (src2 XReg))
-    (Xslteq64 (dst WritableXReg) (src1 XReg) (src2 XReg))
-    (Xult64 (dst WritableXReg) (src1 XReg) (src2 XReg))
-    (Xulteq64 (dst WritableXReg) (src1 XReg) (src2 XReg))
-    (Xeq32 (dst WritableXReg) (src1 XReg) (src2 XReg))
-    (Xneq32 (dst WritableXReg) (src1 XReg) (src2 XReg))
-    (Xslt32 (dst WritableXReg) (src1 XReg) (src2 XReg))
-    (Xslteq32 (dst WritableXReg) (src1 XReg) (src2 XReg))
-    (Xult32 (dst WritableXReg) (src1 XReg) (src2 XReg))
-    (Xulteq32 (dst WritableXReg) (src1 XReg) (src2 XReg))
-
     ;; Load the memory address referenced by `mem` into `dst`.
     (LoadAddr (dst WritableXReg) (mem Amode))
 
@@ -115,31 +83,17 @@
     ;; Stores.
     (Store (mem Amode) (src Reg) (ty Type) (flags MemFlags))
 
-    ;; Bitcasts.
-    (BitcastIntFromFloat32 (dst WritableXReg) (src FReg))
-    (BitcastIntFromFloat64 (dst WritableXReg) (src FReg))
-    (BitcastFloatFromInt32 (dst WritableFReg) (src XReg))
-    (BitcastFloatFromInt64 (dst WritableFReg) (src XReg))
-
-    ;; Stack manipulations
-    (PushFrame)
-    (PopFrame)
-    (StackAlloc32 (amt u32))
-    (StackFree32 (amt u32))
-
-    ;; Sign extensions.
-    (Zext8 (dst WritableXReg) (src XReg))
-    (Zext16 (dst WritableXReg) (src XReg))
-    (Zext32 (dst WritableXReg) (src XReg))
-    (Sext8 (dst WritableXReg) (src XReg))
-    (Sext16 (dst WritableXReg) (src XReg))
-    (Sext32 (dst WritableXReg) (src XReg))
-
-    ;; Byte swaps.
-    (Bswap32 (dst WritableXReg) (src XReg))
-    (Bswap64 (dst WritableXReg) (src XReg))
+    ;; A raw pulley instruction generated at compile-time via Pulley's
+    ;; `for_each_op!` macro. This variant has `pulley_*` constructors to
+    ;; emit this instruction and auto-generated methods for other various
+    ;; bits and pieces of boilerplate in the backend.
+    (Raw (raw RawInst))
   )
 )
+
+(decl raw_inst_to_inst (RawInst) MInst)
+(rule (raw_inst_to_inst inst) (MInst.Raw inst))
+(convert RawInst MInst raw_inst_to_inst)
 
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
@@ -414,30 +368,6 @@
             (_ Unit (emit (MInst.GetSpecial dst reg))))
         dst))
 
-(decl pulley_xconst8 (i8) XReg)
-(rule (pulley_xconst8 x)
-      (let ((reg WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xconst8 reg x))))
-        reg))
-
-(decl pulley_xconst16 (i16) XReg)
-(rule (pulley_xconst16 x)
-      (let ((reg WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xconst16 reg x))))
-        reg))
-
-(decl pulley_xconst32 (i32) XReg)
-(rule (pulley_xconst32 x)
-      (let ((reg WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xconst32 reg x))))
-        reg))
-
-(decl pulley_xconst64 (i64) XReg)
-(rule (pulley_xconst64 x)
-      (let ((reg WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xconst64 reg x))))
-        reg))
-
 (decl pulley_jump (MachLabel) SideEffectNoResult)
 (rule (pulley_jump label)
       (SideEffectNoResult.Inst (MInst.Jump label)))
@@ -470,90 +400,6 @@
 (rule (pulley_br_if_xulteq32 a b taken not_taken)
       (SideEffectNoResult.Inst (MInst.BrIfXulteq32 a b taken not_taken)))
 
-(decl pulley_xadd32 (XReg XReg) XReg)
-(rule (pulley_xadd32 a b)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xadd32 dst a b))))
-        dst))
-
-(decl pulley_xadd64 (XReg XReg) XReg)
-(rule (pulley_xadd64 a b)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xadd64 dst a b))))
-        dst))
-
-(decl pulley_xeq64 (XReg XReg) XReg)
-(rule (pulley_xeq64 a b)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xeq64 dst a b))))
-        dst))
-
-(decl pulley_xneq64 (XReg XReg) XReg)
-(rule (pulley_xneq64 a b)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xneq64 dst a b))))
-        dst))
-
-(decl pulley_xslt64 (XReg XReg) XReg)
-(rule (pulley_xslt64 a b)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xslt64 dst a b))))
-        dst))
-
-(decl pulley_xslteq64 (XReg XReg) XReg)
-(rule (pulley_xslteq64 a b)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xslteq64 dst a b))))
-        dst))
-
-(decl pulley_xult64 (XReg XReg) XReg)
-(rule (pulley_xult64 a b)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xult64 dst a b))))
-        dst))
-
-(decl pulley_xulteq64 (XReg XReg) XReg)
-(rule (pulley_xulteq64 a b)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xulteq64 dst a b))))
-        dst))
-
-(decl pulley_xeq32 (XReg XReg) XReg)
-(rule (pulley_xeq32 a b)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xeq32 dst a b))))
-        dst))
-
-(decl pulley_xneq32 (XReg XReg) XReg)
-(rule (pulley_xneq32 a b)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xneq32 dst a b))))
-        dst))
-
-(decl pulley_xslt32 (XReg XReg) XReg)
-(rule (pulley_xslt32 a b)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xslt32 dst a b))))
-        dst))
-
-(decl pulley_xslteq32 (XReg XReg) XReg)
-(rule (pulley_xslteq32 a b)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xslteq32 dst a b))))
-        dst))
-
-(decl pulley_xult32 (XReg XReg) XReg)
-(rule (pulley_xult32 a b)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xult32 dst a b))))
-        dst))
-
-(decl pulley_xulteq32 (XReg XReg) XReg)
-(rule (pulley_xulteq32 a b)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Xulteq32 dst a b))))
-        dst))
-
 (decl pulley_load (Amode Type MemFlags ExtKind) Reg)
 (rule (pulley_load amode ty flags ext)
       (let ((dst WritableReg (temp_writable_reg ty))
@@ -564,81 +410,9 @@
 (rule (pulley_store amode src ty flags)
       (SideEffectNoResult.Inst (MInst.Store amode src ty flags)))
 
-(decl pulley_bitcast_float_from_int_32 (XReg) FReg)
-(rule (pulley_bitcast_float_from_int_32 src)
-      (let ((dst WritableFReg (temp_writable_freg))
-            (_ Unit (emit (MInst.BitcastFloatFromInt32 dst src))))
-        dst))
-
-(decl pulley_bitcast_float_from_int_64 (XReg) FReg)
-(rule (pulley_bitcast_float_from_int_64 src)
-      (let ((dst WritableFReg (temp_writable_freg))
-            (_ Unit (emit (MInst.BitcastFloatFromInt64 dst src))))
-        dst))
-
-(decl pulley_bitcast_int_from_float_32 (FReg) XReg)
-(rule (pulley_bitcast_int_from_float_32 src)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.BitcastIntFromFloat32 dst src))))
-        dst))
-
-(decl pulley_bitcast_int_from_float_64 (FReg) XReg)
-(rule (pulley_bitcast_int_from_float_64 src)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.BitcastIntFromFloat64 dst src))))
-        dst))
-
 (decl gen_br_table (XReg MachLabel BoxVecMachLabel) Unit)
 (rule (gen_br_table idx default labels)
       (emit (MInst.BrTable idx default labels)))
-
-(decl pulley_zext8 (XReg) XReg)
-(rule (pulley_zext8 src)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Zext8 dst src))))
-        dst))
-
-(decl pulley_zext16 (XReg) XReg)
-(rule (pulley_zext16 src)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Zext16 dst src))))
-        dst))
-
-(decl pulley_zext32 (XReg) XReg)
-(rule (pulley_zext32 src)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Zext32 dst src))))
-        dst))
-
-(decl pulley_sext8 (XReg) XReg)
-(rule (pulley_sext8 src)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Sext8 dst src))))
-        dst))
-
-(decl pulley_sext16 (XReg) XReg)
-(rule (pulley_sext16 src)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Sext16 dst src))))
-        dst))
-
-(decl pulley_sext32 (XReg) XReg)
-(rule (pulley_sext32 src)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Sext32 dst src))))
-        dst))
-
-(decl pulley_bswap32 (XReg) XReg)
-(rule (pulley_bswap32 src)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Bswap32 dst src))))
-        dst))
-
-(decl pulley_bswap64 (XReg) XReg)
-(rule (pulley_bswap64 src)
-      (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.Bswap64 dst src))))
-        dst))
 
 ;;;; Helpers for Emitting Calls ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

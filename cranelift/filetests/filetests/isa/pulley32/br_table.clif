@@ -34,19 +34,19 @@ block5(v5: i32):
 ; block2:
 ;   jump label4
 ; block3:
-;   x5 = xconst8 3
+;   xconst8 x5, 3
 ;   jump label7
 ; block4:
-;   x5 = xconst8 2
+;   xconst8 x5, 2
 ;   jump label7
 ; block5:
-;   x5 = xconst8 1
+;   xconst8 x5, 1
 ;   jump label7
 ; block6:
-;   x5 = xconst8 4
+;   xconst8 x5, 4
 ;   jump label7
 ; block7:
-;   x0 = xadd32 x0, x5
+;   xadd32 x0, x0, x5
 ;   ret
 ;
 ; Disassembled:

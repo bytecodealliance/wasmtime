@@ -64,6 +64,8 @@ pub fn get_isle_compilations(
     let prelude_isle = codegen_crate_dir.join("src").join("prelude.isle");
     let prelude_opt_isle = codegen_crate_dir.join("src").join("prelude_opt.isle");
     let prelude_lower_isle = codegen_crate_dir.join("src").join("prelude_lower.isle");
+    #[cfg(feature = "pulley")]
+    let pulley_gen = gen_dir.join("pulley_gen.isle");
 
     // Directory for mid-end optimizations.
     let src_opts = codegen_crate_dir.join("src").join("opts");
@@ -73,6 +75,7 @@ pub fn get_isle_compilations(
     let src_isa_aarch64 = codegen_crate_dir.join("src").join("isa").join("aarch64");
     let src_isa_s390x = codegen_crate_dir.join("src").join("isa").join("s390x");
     let src_isa_risc_v = codegen_crate_dir.join("src").join("isa").join("riscv64");
+    #[cfg(feature = "pulley")]
     let src_isa_pulley_shared = codegen_crate_dir
         .join("src")
         .join("isa")
@@ -166,6 +169,7 @@ pub fn get_isle_compilations(
                 untracked_inputs: vec![clif_lower_isle.clone()],
             },
             // The Pulley instruction selector.
+            #[cfg(feature = "pulley")]
             IsleCompilation {
                 name: "pulley".to_string(),
                 output: gen_dir.join("isle_pulley_shared.rs"),
@@ -175,7 +179,7 @@ pub fn get_isle_compilations(
                     src_isa_pulley_shared.join("inst.isle"),
                     src_isa_pulley_shared.join("lower.isle"),
                 ],
-                untracked_inputs: vec![clif_lower_isle.clone()],
+                untracked_inputs: vec![pulley_gen.clone(), clif_lower_isle.clone()],
             },
         ],
     }

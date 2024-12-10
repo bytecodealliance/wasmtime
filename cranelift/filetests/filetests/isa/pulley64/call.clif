@@ -15,9 +15,9 @@ block0:
 ; VCode:
 ;   push_frame
 ; block0:
-;   x0 = xconst8 0
+;   xconst8 x0, 0
 ;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }], clobbers: PRegSet { bits: [65534, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
-;   x0 = xconst8 1
+;   xconst8 x0, 1
 ;   pop_frame
 ;   ret
 ;
@@ -42,9 +42,9 @@ block0:
 ; VCode:
 ;   push_frame
 ; block0:
-;   x0 = xconst8 0
+;   xconst8 x0, 0
 ;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }], clobbers: PRegSet { bits: [65534, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
-;   x0 = xconst8 1
+;   xconst8 x0, 1
 ;   pop_frame
 ;   ret
 ;
@@ -71,10 +71,10 @@ block0:
 ; VCode:
 ;   push_frame
 ; block0:
-;   x0 = xconst8 0
-;   x1 = xconst8 1
-;   x2 = xconst8 2
-;   x3 = xconst8 3
+;   xconst8 x0, 0
+;   xconst8 x1, 1
+;   xconst8 x2, 2
+;   xconst8 x3, 3
 ;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }, CallArgPair { vreg: p1i, preg: p1i }, CallArgPair { vreg: p2i, preg: p2i }, CallArgPair { vreg: p3i, preg: p3i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
 ;   pop_frame
 ;   ret
@@ -104,9 +104,9 @@ block0:
 ;   push_frame
 ; block0:
 ;   call CallInfo { dest: TestCase(%g), uses: [], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }, CallRetPair { vreg: Writable { reg: p1i }, preg: p1i }, CallRetPair { vreg: Writable { reg: p2i }, preg: p2i }, CallRetPair { vreg: Writable { reg: p3i }, preg: p3i }], clobbers: PRegSet { bits: [65520, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
-;   x4 = xadd64 x0, x2
-;   x3 = xadd64 x1, x3
-;   x0 = xadd64 x4, x3
+;   xadd64 x4, x0, x2
+;   xadd64 x3, x1, x3
+;   xadd64 x0, x4, x3
 ;   pop_frame
 ;   ret
 ;
@@ -130,32 +130,32 @@ block0:
 
 ; VCode:
 ;   push_frame
-;   stack_alloc32 0x30
+;   stack_alloc32 48
 ; block0:
-;   x15 = xconst8 0
+;   xconst8 x15, 0
 ;   store64 OutgoingArg(0), x15 // flags =  notrap aligned
 ;   store64 OutgoingArg(8), x15 // flags =  notrap aligned
 ;   store64 OutgoingArg(16), x15 // flags =  notrap aligned
 ;   store64 OutgoingArg(24), x15 // flags =  notrap aligned
 ;   store64 OutgoingArg(32), x15 // flags =  notrap aligned
 ;   store64 OutgoingArg(40), x15 // flags =  notrap aligned
-;   x0 = xmov x15
-;   x1 = xmov x15
-;   x2 = xmov x15
-;   x3 = xmov x15
-;   x4 = xmov x15
-;   x5 = xmov x15
-;   x6 = xmov x15
-;   x7 = xmov x15
-;   x8 = xmov x15
-;   x9 = xmov x15
-;   x10 = xmov x15
-;   x11 = xmov x15
-;   x12 = xmov x15
-;   x13 = xmov x15
-;   x14 = xmov x15
+;   xmov x0, x15
+;   xmov x1, x15
+;   xmov x2, x15
+;   xmov x3, x15
+;   xmov x4, x15
+;   xmov x5, x15
+;   xmov x6, x15
+;   xmov x7, x15
+;   xmov x8, x15
+;   xmov x9, x15
+;   xmov x10, x15
+;   xmov x11, x15
+;   xmov x12, x15
+;   xmov x13, x15
+;   xmov x14, x15
 ;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }, CallArgPair { vreg: p1i, preg: p1i }, CallArgPair { vreg: p2i, preg: p2i }, CallArgPair { vreg: p3i, preg: p3i }, CallArgPair { vreg: p4i, preg: p4i }, CallArgPair { vreg: p5i, preg: p5i }, CallArgPair { vreg: p6i, preg: p6i }, CallArgPair { vreg: p7i, preg: p7i }, CallArgPair { vreg: p8i, preg: p8i }, CallArgPair { vreg: p9i, preg: p9i }, CallArgPair { vreg: p10i, preg: p10i }, CallArgPair { vreg: p11i, preg: p11i }, CallArgPair { vreg: p12i, preg: p12i }, CallArgPair { vreg: p13i, preg: p13i }, CallArgPair { vreg: p14i, preg: p14i }, CallArgPair { vreg: p15i, preg: p15i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
-;   stack_free32 0x30
+;   stack_free32 48
 ;   pop_frame
 ;   ret
 ;
@@ -227,47 +227,47 @@ block0:
 
 ; VCode:
 ;   push_frame
-;   stack_alloc32 0x40
+;   stack_alloc32 64
 ;   store64 sp+56, x18 // flags =  notrap aligned
 ;   store64 sp+48, x20 // flags =  notrap aligned
 ; block0:
 ;   x0 = load_addr OutgoingArg(0)
 ;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }, CallRetPair { vreg: Writable { reg: p1i }, preg: p1i }, CallRetPair { vreg: Writable { reg: p2i }, preg: p2i }, CallRetPair { vreg: Writable { reg: p3i }, preg: p3i }, CallRetPair { vreg: Writable { reg: p4i }, preg: p4i }, CallRetPair { vreg: Writable { reg: p5i }, preg: p5i }, CallRetPair { vreg: Writable { reg: p6i }, preg: p6i }, CallRetPair { vreg: Writable { reg: p7i }, preg: p7i }, CallRetPair { vreg: Writable { reg: p8i }, preg: p8i }, CallRetPair { vreg: Writable { reg: p9i }, preg: p9i }, CallRetPair { vreg: Writable { reg: p10i }, preg: p10i }, CallRetPair { vreg: Writable { reg: p11i }, preg: p11i }, CallRetPair { vreg: Writable { reg: p12i }, preg: p12i }, CallRetPair { vreg: Writable { reg: p13i }, preg: p13i }, CallRetPair { vreg: Writable { reg: p14i }, preg: p14i }, CallRetPair { vreg: Writable { reg: p15i }, preg: p15i }], clobbers: PRegSet { bits: [0, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
-;   x18 = xmov x13
-;   x20 = xmov x11
+;   xmov x18, x13
+;   xmov x20, x11
 ;   x24 = load64_u OutgoingArg(0) // flags = notrap aligned
 ;   x11 = load64_u OutgoingArg(8) // flags = notrap aligned
 ;   x13 = load64_u OutgoingArg(16) // flags = notrap aligned
 ;   x19 = load64_u OutgoingArg(24) // flags = notrap aligned
 ;   x21 = load64_u OutgoingArg(32) // flags = notrap aligned
-;   x25 = xadd64 x0, x1
-;   x23 = xadd64 x2, x3
-;   x5 = xadd64 x4, x5
-;   x6 = xadd64 x6, x7
-;   x7 = xadd64 x8, x9
-;   x0 = xmov x20
-;   x4 = xadd64 x10, x0
-;   x10 = xmov x18
-;   x8 = xadd64 x12, x10
-;   x14 = xadd64 x14, x15
-;   x15 = xadd64 x24, x11
-;   x13 = xadd64 x11, x13
-;   x0 = xadd64 x19, x21
-;   x1 = xadd64 x25, x23
-;   x2 = xadd64 x5, x6
-;   x3 = xadd64 x7, x4
-;   x14 = xadd64 x8, x14
-;   x13 = xadd64 x15, x13
-;   x15 = xadd64 x0, x0
-;   x0 = xadd64 x1, x2
-;   x14 = xadd64 x3, x14
-;   x13 = xadd64 x13, x15
-;   x14 = xadd64 x0, x14
-;   x13 = xadd64 x13, x13
-;   x0 = xadd64 x14, x13
+;   xadd64 x25, x0, x1
+;   xadd64 x23, x2, x3
+;   xadd64 x5, x4, x5
+;   xadd64 x6, x6, x7
+;   xadd64 x7, x8, x9
+;   xmov x0, x20
+;   xadd64 x4, x10, x0
+;   xmov x10, x18
+;   xadd64 x8, x12, x10
+;   xadd64 x14, x14, x15
+;   xadd64 x15, x24, x11
+;   xadd64 x13, x11, x13
+;   xadd64 x0, x19, x21
+;   xadd64 x1, x25, x23
+;   xadd64 x2, x5, x6
+;   xadd64 x3, x7, x4
+;   xadd64 x14, x8, x14
+;   xadd64 x13, x15, x13
+;   xadd64 x15, x0, x0
+;   xadd64 x0, x1, x2
+;   xadd64 x14, x3, x14
+;   xadd64 x13, x13, x15
+;   xadd64 x14, x0, x14
+;   xadd64 x13, x13, x13
+;   xadd64 x0, x14, x13
 ;   x18 = load64_u sp+56 // flags = notrap aligned
 ;   x20 = load64_u sp+48 // flags = notrap aligned
-;   stack_free32 0x40
+;   stack_free32 64
 ;   pop_frame
 ;   ret
 ;
@@ -356,9 +356,9 @@ block0:
 
 ; VCode:
 ;   push_frame
-;   stack_alloc32 0x40
+;   stack_alloc32 64
 ; block0:
-;   x15 = xconst8 0
+;   xconst8 x15, 0
 ;   store64 OutgoingArg(0), x15 // flags =  notrap aligned
 ;   store64 OutgoingArg(8), x15 // flags =  notrap aligned
 ;   store64 OutgoingArg(16), x15 // flags =  notrap aligned
@@ -367,23 +367,23 @@ block0:
 ;   store64 OutgoingArg(40), x15 // flags =  notrap aligned
 ;   store64 OutgoingArg(48), x15 // flags =  notrap aligned
 ;   store64 OutgoingArg(56), x15 // flags =  notrap aligned
-;   x0 = xmov x15
-;   x1 = xmov x15
-;   x2 = xmov x15
-;   x3 = xmov x15
-;   x4 = xmov x15
-;   x5 = xmov x15
-;   x6 = xmov x15
-;   x7 = xmov x15
-;   x8 = xmov x15
-;   x9 = xmov x15
-;   x10 = xmov x15
-;   x11 = xmov x15
-;   x12 = xmov x15
-;   x13 = xmov x15
-;   x14 = xmov x15
+;   xmov x0, x15
+;   xmov x1, x15
+;   xmov x2, x15
+;   xmov x3, x15
+;   xmov x4, x15
+;   xmov x5, x15
+;   xmov x6, x15
+;   xmov x7, x15
+;   xmov x8, x15
+;   xmov x9, x15
+;   xmov x10, x15
+;   xmov x11, x15
+;   xmov x12, x15
+;   xmov x13, x15
+;   xmov x14, x15
 ;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }, CallArgPair { vreg: p1i, preg: p1i }, CallArgPair { vreg: p2i, preg: p2i }, CallArgPair { vreg: p3i, preg: p3i }, CallArgPair { vreg: p4i, preg: p4i }, CallArgPair { vreg: p5i, preg: p5i }, CallArgPair { vreg: p6i, preg: p6i }, CallArgPair { vreg: p7i, preg: p7i }, CallArgPair { vreg: p8i, preg: p8i }, CallArgPair { vreg: p9i, preg: p9i }, CallArgPair { vreg: p10i, preg: p10i }, CallArgPair { vreg: p11i, preg: p11i }, CallArgPair { vreg: p12i, preg: p12i }, CallArgPair { vreg: p13i, preg: p13i }, CallArgPair { vreg: p14i, preg: p14i }, CallArgPair { vreg: p15i, preg: p15i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
-;   stack_free32 0x40
+;   stack_free32 64
 ;   pop_frame
 ;   ret
 ;
