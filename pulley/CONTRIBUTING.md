@@ -270,4 +270,9 @@ Alas, maybe next time!
 All that's left now is to clean things up, document anything necessary, and make
 a pull request.
 
+To view the complete pull request that implemented `xdiv32_s` and `xand32`
+Pulley instructions and got `./tests/misc_testsuite/control-flow.wast` passing
+(and also introduced this documentation) check out
+[#9765](https://github.com/bytecodealliance/wasmtime/pull/9765).
+
 Thanks for helping out!
