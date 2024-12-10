@@ -624,7 +624,7 @@ fn is_matching_assert_invalid_error_message(test: &str, expected: &str, actual: 
     // and another asserts a different error message). Overall we didn't benefit
     // a whole lot from trying to match errors so just assume the error is
     // roughly the same and otherwise don't try to match it.
-    if Path::new(test).starts_with("./tests/spec_testsuite") {
+    if test.contains("spec_testsuite") {
         return true;
     }
 
