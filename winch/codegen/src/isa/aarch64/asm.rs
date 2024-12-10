@@ -2,7 +2,9 @@
 
 use super::{address::Address, regs};
 use crate::aarch64::regs::zero;
-use crate::masm::{DivKind, ExtendKind, FloatCmpKind, IntCmpKind, RemKind, RoundingMode, ShiftKind};
+use crate::masm::{
+    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, RemKind, RoundingMode, ShiftKind,
+};
 use crate::CallingConvention;
 use crate::{
     masm::OperandSize,
@@ -463,7 +465,14 @@ impl Assembler {
     }
 
     /// Signed/unsigned remainder operation with three registers.
-    pub fn rem_rrr(&mut self, divisor: Reg, dividend: Reg, dest: Writable<Reg>, kind: RemKind, size: OperandSize) {
+    pub fn rem_rrr(
+        &mut self,
+        divisor: Reg,
+        dividend: Reg,
+        dest: Writable<Reg>,
+        kind: RemKind,
+        size: OperandSize,
+    ) {
         // Check for division by 0
         self.emit(Inst::TrapIf {
             kind: CondBrKind::Zero(divisor.into()),
@@ -506,7 +515,14 @@ impl Assembler {
             OperandSize::S64,
         );
 
-        self.emit_alu_rrrr(ALUOp3::MSub, scratch, divisor, dest.map(Into::into), dividend, OperandSize::S64);
+        self.emit_alu_rrrr(
+            ALUOp3::MSub,
+            scratch,
+            divisor,
+            dest.map(Into::into),
+            dividend,
+            OperandSize::S64,
+        );
     }
 
     /// And with three registers.
