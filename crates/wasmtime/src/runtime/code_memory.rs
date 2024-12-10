@@ -200,7 +200,7 @@ impl CodeMemory {
             needs_executable,
             #[cfg(feature = "debug-builtins")]
             has_native_debug_info,
-            custom_code_memory: engine.custom_code_memory(),
+            custom_code_memory: engine.custom_code_memory().cloned(),
             text,
             unwind,
             trap_data,

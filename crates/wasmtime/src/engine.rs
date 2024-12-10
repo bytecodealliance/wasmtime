@@ -63,8 +63,6 @@ struct EngineInner {
     signatures: TypeRegistry,
     #[cfg(feature = "runtime")]
     epoch: AtomicU64,
-    #[cfg(feature = "runtime")]
-    custom_code_memory: Option<Arc<dyn CustomCodeMemory>>,
 
     /// One-time check of whether the compiler's settings, if present, are
     /// compatible with the native host.
@@ -122,8 +120,6 @@ impl Engine {
                 signatures: TypeRegistry::new(),
                 #[cfg(feature = "runtime")]
                 epoch: AtomicU64::new(0),
-                #[cfg(feature = "runtime")]
-                custom_code_memory: config.custom_code_memory.clone(),
                 #[cfg(any(feature = "cranelift", feature = "winch"))]
                 compatible_with_native_host: OnceLock::new(),
                 config,
@@ -662,8 +658,8 @@ impl Engine {
     }
 
     #[cfg(feature = "runtime")]
-    pub(crate) fn custom_code_memory(&self) -> Option<Arc<dyn CustomCodeMemory>> {
-        self.inner.custom_code_memory.clone()
+    pub(crate) fn custom_code_memory(&self) -> Option<&Arc<dyn CustomCodeMemory>> {
+        self.config().custom_code_memory.as_ref()
     }
 
     pub(crate) fn epoch_counter(&self) -> &AtomicU64 {

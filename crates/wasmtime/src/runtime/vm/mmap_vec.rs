@@ -1,10 +1,14 @@
 use crate::prelude::*;
+#[cfg(not(feature = "signals-based-traps"))]
+use crate::runtime::vm::send_sync_ptr::SendSyncPtr;
 #[cfg(feature = "signals-based-traps")]
 use crate::runtime::vm::{mmap::UnalignedLength, Mmap};
 #[cfg(not(feature = "signals-based-traps"))]
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
 use core::ops::{Deref, Range};
+#[cfg(not(feature = "signals-based-traps"))]
+use core::ptr::NonNull;
 #[cfg(feature = "std")]
 use std::fs::File;
 
@@ -32,8 +36,7 @@ pub enum MmapVec {
     #[doc(hidden)]
     #[cfg(not(feature = "signals-based-traps"))]
     Alloc {
-        base: base_ptr::BasePtr,
-        len: usize,
+        base: SendSyncPtr<u8>,
         layout: Layout,
     },
     #[doc(hidden)]
@@ -42,38 +45,6 @@ pub enum MmapVec {
         mmap: Mmap<UnalignedLength>,
         len: usize,
     },
-}
-
-#[cfg(not(feature = "signals-based-traps"))]
-mod base_ptr {
-    use core::ptr::NonNull;
-
-    /// A base pointer to an allocation, guaranteed not to be null,
-    /// and `Send`/`Sync`.
-    #[derive(Clone, Copy)]
-    pub struct BasePtr(NonNull<u8>);
-
-    // SAFETY: ownership of the `MmapVec` implies ownership of the
-    // memory, and this is enforced by deref impls and proper
-    // lifetimes below. The backing memory is ordinary allocated
-    // memory and safe to pass between thread.
-    unsafe impl Send for BasePtr {}
-    unsafe impl Sync for BasePtr {}
-
-    impl BasePtr {
-        /// Create a new base pointer wrapper.
-        pub fn new(ptr: *mut u8) -> Option<BasePtr> {
-            Some(BasePtr(NonNull::new(ptr)?))
-        }
-        /// Get the underlying pointer.
-        pub(crate) fn as_ptr(&self) -> *const u8 {
-            self.0.as_ptr()
-        }
-        /// Get the underlying pointer.
-        pub(crate) fn as_mut_ptr(&mut self) -> *mut u8 {
-            self.0.as_ptr()
-        }
-    }
 }
 
 impl MmapVec {
@@ -96,9 +67,11 @@ impl MmapVec {
     fn new_alloc(len: usize, alignment: usize) -> MmapVec {
         let layout = Layout::from_size_align(len, alignment)
             .expect("Invalid size or alignment for MmapVec allocation");
-        let base = base_ptr::BasePtr::new(unsafe { alloc::alloc::alloc_zeroed(layout.clone()) })
-            .expect("Allocation of MmapVec storage failed");
-        MmapVec::Alloc { base, len, layout }
+        let base = SendSyncPtr::new(
+            NonNull::new(unsafe { alloc::alloc::alloc_zeroed(layout.clone()) })
+                .expect("Allocation of MmapVec storage failed"),
+        );
+        MmapVec::Alloc { base, layout }
     }
 
     /// Creates a new zero-initialized `MmapVec` with the given `size`
@@ -220,9 +193,9 @@ impl MmapVec {
     pub unsafe fn as_mut_slice(&mut self) -> &mut [u8] {
         match self {
             #[cfg(not(feature = "signals-based-traps"))]
-            MmapVec::Alloc { base, len, .. } => unsafe {
-                core::slice::from_raw_parts_mut(base.as_mut_ptr(), *len)
-            },
+            MmapVec::Alloc { base, layout } => {
+                core::slice::from_raw_parts_mut(base.as_mut(), layout.size())
+            }
             #[cfg(feature = "signals-based-traps")]
             MmapVec::Mmap { mmap, len } => mmap.slice_mut(0..*len),
         }
@@ -236,8 +209,8 @@ impl Deref for MmapVec {
     fn deref(&self) -> &[u8] {
         match self {
             #[cfg(not(feature = "signals-based-traps"))]
-            MmapVec::Alloc { base, len, .. } => unsafe {
-                core::slice::from_raw_parts(base.as_ptr(), *len)
+            MmapVec::Alloc { base, layout } => unsafe {
+                core::slice::from_raw_parts(base.as_ptr(), layout.size())
             },
             #[cfg(feature = "signals-based-traps")]
             MmapVec::Mmap { mmap, len } => {
@@ -254,7 +227,7 @@ impl Drop for MmapVec {
         match self {
             #[cfg(not(feature = "signals-based-traps"))]
             MmapVec::Alloc { base, layout, .. } => unsafe {
-                alloc::alloc::dealloc(base.as_mut_ptr(), layout.clone());
+                alloc::alloc::dealloc(base.as_mut(), layout.clone());
             },
             #[cfg(feature = "signals-based-traps")]
             MmapVec::Mmap { .. } => {
