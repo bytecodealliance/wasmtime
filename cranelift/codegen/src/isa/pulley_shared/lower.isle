@@ -16,7 +16,7 @@
 
 ;; Generic case for conditional branches.
 (rule -1 (lower_branch (brif (maybe_uextend c) _ _) (two_targets then else))
-      (emit_side_effect (pulley_br_if c then else)))
+      (emit_side_effect (pulley_br_if (zext c) then else)))
 
 ;; Conditional branches on `icmp`s.
 (rule (lower_branch (brif (maybe_uextend (icmp cc a b @ (value_type $I32))) _ _)
@@ -296,7 +296,7 @@
 
 ;;;; Rules for `store` and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (store flags src @ (value_type ty) addr offset))
+(rule (lower (store flags src @ (value_type (ty_int ty)) addr offset))
   (side_effect (pulley_xstore (amode addr offset) src ty flags)))
 
 (rule 1 (lower (store flags src @ (value_type (ty_scalar_float ty)) addr offset))
@@ -324,14 +324,8 @@
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (fits_in_64 _) (uextend val @ (value_type $I8))))
-  (pulley_zext8 val))
-
-(rule (lower (has_type (fits_in_64 _) (uextend val @ (value_type $I16))))
-  (pulley_zext16 val))
-
-(rule (lower (has_type (fits_in_64 _) (uextend val @ (value_type $I32))))
-  (pulley_zext32 val))
+(rule (lower (has_type (fits_in_64 _) (uextend val)))
+  (zext val))
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -534,6 +534,24 @@ impl Default for VRegVal {
     }
 }
 
+#[allow(missing_docs)]
+impl VRegVal {
+    pub fn new_u128(i: u128) -> Self {
+        let mut val = Self::default();
+        val.set_u128(i);
+        val
+    }
+
+    pub fn get_u128(&self) -> u128 {
+        let val = unsafe { self.0.u128 };
+        u128::from_le(val)
+    }
+
+    pub fn set_u128(&mut self, val: u128) {
+        self.0.u128 = val.to_le();
+    }
+}
+
 /// The machine state for a Pulley virtual machine: the various registers and
 /// stack.
 pub struct MachineState {
@@ -1325,6 +1343,20 @@ impl OpVisitor for Interpreter<'_> {
         let val = self.state[src].get_f64();
         unsafe {
             self.store(ptr, offset, val.to_bits().to_le());
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn vload128le_offset32(&mut self, dst: VReg, ptr: XReg, offset: i32) -> ControlFlow<Done> {
+        let val = unsafe { self.load::<u128>(ptr, offset) };
+        self.state[dst].set_u128(u128::from_le(val));
+        ControlFlow::Continue(())
+    }
+
+    fn vstore128le_offset32(&mut self, ptr: XReg, offset: i32, src: VReg) -> ControlFlow<Done> {
+        let val = self.state[src].get_u128();
+        unsafe {
+            self.store(ptr, offset, val.to_le());
         }
         ControlFlow::Continue(())
     }
