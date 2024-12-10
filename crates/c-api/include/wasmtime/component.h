@@ -53,6 +53,8 @@ typedef uint8_t wasmtime_component_kind_t;
 
 typedef struct wasmtime_component_val_t wasmtime_component_val_t;
 typedef struct wasmtime_component_val_record_field_t wasmtime_component_val_record_field_t;
+typedef struct wasmtime_component_type_t wasmtime_component_type_t;
+typedef struct wasmtime_component_type_field_t wasmtime_component_type_field_t;
 
 #define WASMTIME_COMPONENT_DECLARE_VEC(name, element)                          \
   typedef struct wasmtime_component_##name##_t {                               \
@@ -84,6 +86,16 @@ WASMTIME_COMPONENT_DECLARE_VEC(val_record, wasmtime_component_val_record_field_t
 /// \brief A variable sized bitset.
 WASMTIME_COMPONENT_DECLARE_VEC(val_flags, uint32_t);
 WASMTIME_COMPONENT_DECLARE_VEC_NEW(val_flags, uint32_t);
+
+/// \brief A vector of types
+WASMTIME_COMPONENT_DECLARE_VEC(type_vec, wasmtime_component_type_t);
+
+/// \brief A vector of field types
+WASMTIME_COMPONENT_DECLARE_VEC(type_field_vec, wasmtime_component_type_field_t);
+
+/// \brief A vector of strings
+WASMTIME_COMPONENT_DECLARE_VEC(string_vec, wasm_name_t);
+WASMTIME_COMPONENT_DECLARE_VEC_NEW(string_vec, wasm_name_t);
 
 #undef WASMTIME_COMPONENT_DECLARE_VEC
 
@@ -157,6 +169,43 @@ wasmtime_component_val_t* wasmtime_component_val_new();
 
 void wasmtime_component_val_delete(wasmtime_component_val_t* val);
 
+typedef struct wasmtime_component_type_field_t {
+  wasm_name_t name;
+  wasmtime_component_type_t* ty;
+} wasmtime_component_type_field_t;
+
+WASMTIME_COMPONENT_DECLARE_VEC_NEW(type_field_vec, wasmtime_component_type_field_t);
+
+typedef struct wasmtime_component_type_result_t {
+  wasmtime_component_type_t* ok_ty;
+  wasmtime_component_type_t* err_ty;
+} wasmtime_component_type_result_t;
+
+typedef union wasmtime_component_type_payload_t
+{
+  wasmtime_component_type_t* list;
+  wasmtime_component_type_field_vec_t record;
+  wasmtime_component_type_vec_t tuple;
+  wasmtime_component_type_field_vec_t variant;
+  wasmtime_component_string_vec_t enumeration;
+  wasmtime_component_type_t* option;
+  wasmtime_component_type_result_t result;
+  wasmtime_component_string_vec_t flags;
+} wasmtime_component_type_payload_t;
+
+typedef struct wasmtime_component_type_t {
+  wasmtime_component_kind_t kind;
+  wasmtime_component_type_payload_t payload;
+} wasmtime_component_type_t;
+
+WASMTIME_COMPONENT_DECLARE_VEC_NEW(type_vec, wasmtime_component_type_t);
+
+#undef WASMTIME_COMPONENT_DECLARE_VEC_NEW
+
+wasmtime_component_type_t* wasmtime_component_type_new();
+
+void wasmtime_component_type_delete(wasmtime_component_type_t* ty);
+
 typedef struct wasmtime_component_t wasmtime_component_t;
 
 wasmtime_error_t *
@@ -175,6 +224,19 @@ typedef struct wasmtime_component_instance_t wasmtime_component_instance_t;
 
 // declaration from store.h
 typedef struct wasmtime_context wasmtime_context_t;
+
+typedef wasm_trap_t *(*wasmtime_component_func_callback_t)(
+    void *env, wasmtime_context_t *context, const wasmtime_component_val_t *args,
+    size_t nargs, wasmtime_component_val_t *results, size_t nresults);
+
+wasmtime_error_t *wasmtime_component_linker_define_func(
+    wasmtime_component_linker_t *linker, const char *path, size_t path_len,
+    const char *name, size_t name_len,
+    wasmtime_component_type_t* params_types_buf, size_t params_types_len,
+    wasmtime_component_type_t* outputs_types_buf, size_t outputs_types_len,
+    wasmtime_component_func_callback_t cb, void *data, void (*finalizer)(void *));
+
+wasmtime_error_t *wasmtime_component_linker_build(wasmtime_component_linker_t *linker);
 
 wasmtime_error_t *wasmtime_component_linker_instantiate(
     const wasmtime_component_linker_t *linker, wasmtime_context_t *context,
