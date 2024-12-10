@@ -133,12 +133,12 @@ block0:
 ;   stack_alloc32 48
 ; block0:
 ;   xconst8 x15, 0
-;   store64 OutgoingArg(0), x15 // flags =  notrap aligned
-;   store64 OutgoingArg(8), x15 // flags =  notrap aligned
-;   store64 OutgoingArg(16), x15 // flags =  notrap aligned
-;   store64 OutgoingArg(24), x15 // flags =  notrap aligned
-;   store64 OutgoingArg(32), x15 // flags =  notrap aligned
-;   store64 OutgoingArg(40), x15 // flags =  notrap aligned
+;   xstore64 OutgoingArg(0), x15 // flags =  notrap aligned
+;   xstore64 OutgoingArg(8), x15 // flags =  notrap aligned
+;   xstore64 OutgoingArg(16), x15 // flags =  notrap aligned
+;   xstore64 OutgoingArg(24), x15 // flags =  notrap aligned
+;   xstore64 OutgoingArg(32), x15 // flags =  notrap aligned
+;   xstore64 OutgoingArg(40), x15 // flags =  notrap aligned
 ;   xmov x0, x15
 ;   xmov x1, x15
 ;   xmov x2, x15
@@ -163,12 +163,12 @@ block0:
 ; push_frame
 ; stack_alloc32 48
 ; xconst8 x15, 0
-; store64 sp, x15
-; store64_offset8 sp, 8, x15
-; store64_offset8 sp, 16, x15
-; store64_offset8 sp, 24, x15
-; store64_offset8 sp, 32, x15
-; store64_offset8 sp, 40, x15
+; xstore64le_offset32 sp, 0, x15
+; xstore64le_offset32 sp, 8, x15
+; xstore64le_offset32 sp, 16, x15
+; xstore64le_offset32 sp, 24, x15
+; xstore64le_offset32 sp, 32, x15
+; xstore64le_offset32 sp, 40, x15
 ; xmov x0, x15
 ; xmov x1, x15
 ; xmov x2, x15
@@ -184,7 +184,7 @@ block0:
 ; xmov x12, x15
 ; xmov x13, x15
 ; xmov x14, x15
-; call 0x0    // target = 0x4d
+; call 0x0    // target = 0x60
 ; stack_free32 48
 ; pop_frame
 ; ret
@@ -228,18 +228,18 @@ block0:
 ; VCode:
 ;   push_frame
 ;   stack_alloc32 64
-;   store64 sp+56, x18 // flags =  notrap aligned
-;   store64 sp+48, x20 // flags =  notrap aligned
+;   xstore64 sp+56, x18 // flags =  notrap aligned
+;   xstore64 sp+48, x20 // flags =  notrap aligned
 ; block0:
 ;   x0 = load_addr OutgoingArg(0)
 ;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }, CallRetPair { vreg: Writable { reg: p1i }, preg: p1i }, CallRetPair { vreg: Writable { reg: p2i }, preg: p2i }, CallRetPair { vreg: Writable { reg: p3i }, preg: p3i }, CallRetPair { vreg: Writable { reg: p4i }, preg: p4i }, CallRetPair { vreg: Writable { reg: p5i }, preg: p5i }, CallRetPair { vreg: Writable { reg: p6i }, preg: p6i }, CallRetPair { vreg: Writable { reg: p7i }, preg: p7i }, CallRetPair { vreg: Writable { reg: p8i }, preg: p8i }, CallRetPair { vreg: Writable { reg: p9i }, preg: p9i }, CallRetPair { vreg: Writable { reg: p10i }, preg: p10i }, CallRetPair { vreg: Writable { reg: p11i }, preg: p11i }, CallRetPair { vreg: Writable { reg: p12i }, preg: p12i }, CallRetPair { vreg: Writable { reg: p13i }, preg: p13i }, CallRetPair { vreg: Writable { reg: p14i }, preg: p14i }, CallRetPair { vreg: Writable { reg: p15i }, preg: p15i }], clobbers: PRegSet { bits: [0, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
 ;   xmov x18, x13
 ;   xmov x20, x11
-;   x24 = load64_u OutgoingArg(0) // flags = notrap aligned
-;   x11 = load64_u OutgoingArg(8) // flags = notrap aligned
-;   x13 = load64_u OutgoingArg(16) // flags = notrap aligned
-;   x19 = load64_u OutgoingArg(24) // flags = notrap aligned
-;   x21 = load64_u OutgoingArg(32) // flags = notrap aligned
+;   x24 = xload64 OutgoingArg(0) // flags = notrap aligned
+;   x11 = xload64 OutgoingArg(8) // flags = notrap aligned
+;   x13 = xload64 OutgoingArg(16) // flags = notrap aligned
+;   x19 = xload64 OutgoingArg(24) // flags = notrap aligned
+;   x21 = xload64 OutgoingArg(32) // flags = notrap aligned
 ;   xadd64 x25, x0, x1
 ;   xadd64 x23, x2, x3
 ;   xadd64 x5, x4, x5
@@ -265,8 +265,8 @@ block0:
 ;   xadd64 x14, x0, x14
 ;   xadd64 x13, x13, x13
 ;   xadd64 x0, x14, x13
-;   x18 = load64_u sp+56 // flags = notrap aligned
-;   x20 = load64_u sp+48 // flags = notrap aligned
+;   x18 = xload64 sp+56 // flags = notrap aligned
+;   x20 = xload64 sp+48 // flags = notrap aligned
 ;   stack_free32 64
 ;   pop_frame
 ;   ret
@@ -274,17 +274,17 @@ block0:
 ; Disassembled:
 ; push_frame
 ; stack_alloc32 64
-; store64_offset8 sp, 56, x18
-; store64_offset8 sp, 48, x20
+; xstore64le_offset32 sp, 56, x18
+; xstore64le_offset32 sp, 48, x20
 ; xmov x0, sp
-; call 0x0    // target = 0x11
+; call 0x0    // target = 0x17
 ; xmov x18, x13
 ; xmov x20, x11
-; load64 x24, sp
-; load64_offset8 x11, sp, 8
-; load64_offset8 x13, sp, 16
-; load64_offset8 x19, sp, 24
-; load64_offset8 x21, sp, 32
+; xload64le_offset32 x24, sp, 0
+; xload64le_offset32 x11, sp, 8
+; xload64le_offset32 x13, sp, 16
+; xload64le_offset32 x19, sp, 24
+; xload64le_offset32 x21, sp, 32
 ; xadd64 x25, x0, x1
 ; xadd64 x23, x2, x3
 ; xadd64 x5, x4, x5
@@ -310,8 +310,8 @@ block0:
 ; xadd64 x14, x0, x14
 ; xadd64 x13, x13, x13
 ; xadd64 x0, x14, x13
-; load64_offset8 x18, sp, 56
-; load64_offset8 x20, sp, 48
+; xload64le_offset32 x18, sp, 56
+; xload64le_offset32 x20, sp, 48
 ; stack_free32 64
 ; pop_frame
 ; ret
@@ -359,14 +359,14 @@ block0:
 ;   stack_alloc32 64
 ; block0:
 ;   xconst8 x15, 0
-;   store64 OutgoingArg(0), x15 // flags =  notrap aligned
-;   store64 OutgoingArg(8), x15 // flags =  notrap aligned
-;   store64 OutgoingArg(16), x15 // flags =  notrap aligned
-;   store64 OutgoingArg(24), x15 // flags =  notrap aligned
-;   store64 OutgoingArg(32), x15 // flags =  notrap aligned
-;   store64 OutgoingArg(40), x15 // flags =  notrap aligned
-;   store64 OutgoingArg(48), x15 // flags =  notrap aligned
-;   store64 OutgoingArg(56), x15 // flags =  notrap aligned
+;   xstore64 OutgoingArg(0), x15 // flags =  notrap aligned
+;   xstore64 OutgoingArg(8), x15 // flags =  notrap aligned
+;   xstore64 OutgoingArg(16), x15 // flags =  notrap aligned
+;   xstore64 OutgoingArg(24), x15 // flags =  notrap aligned
+;   xstore64 OutgoingArg(32), x15 // flags =  notrap aligned
+;   xstore64 OutgoingArg(40), x15 // flags =  notrap aligned
+;   xstore64 OutgoingArg(48), x15 // flags =  notrap aligned
+;   xstore64 OutgoingArg(56), x15 // flags =  notrap aligned
 ;   xmov x0, x15
 ;   xmov x1, x15
 ;   xmov x2, x15
@@ -391,14 +391,14 @@ block0:
 ; push_frame
 ; stack_alloc32 64
 ; xconst8 x15, 0
-; store64 sp, x15
-; store64_offset8 sp, 8, x15
-; store64_offset8 sp, 16, x15
-; store64_offset8 sp, 24, x15
-; store64_offset8 sp, 32, x15
-; store64_offset8 sp, 40, x15
-; store64_offset8 sp, 48, x15
-; store64_offset8 sp, 56, x15
+; xstore64le_offset32 sp, 0, x15
+; xstore64le_offset32 sp, 8, x15
+; xstore64le_offset32 sp, 16, x15
+; xstore64le_offset32 sp, 24, x15
+; xstore64le_offset32 sp, 32, x15
+; xstore64le_offset32 sp, 40, x15
+; xstore64le_offset32 sp, 48, x15
+; xstore64le_offset32 sp, 56, x15
 ; xmov x0, x15
 ; xmov x1, x15
 ; xmov x2, x15
@@ -414,7 +414,7 @@ block0:
 ; xmov x12, x15
 ; xmov x13, x15
 ; xmov x14, x15
-; call 0x0    // target = 0x55
+; call 0x0    // target = 0x6e
 ; stack_free32 64
 ; pop_frame
 ; ret
