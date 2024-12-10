@@ -37,7 +37,7 @@ impl<'a> CodeBuilder<'a> {
                         |(engine, wasm, dwarf_package, build_artifacts)| -> Result<_> {
                             let (mmap, info) =
                                 (build_artifacts.0)(engine.0, wasm, dwarf_package.as_deref())?;
-                            let code = publish_mmap(mmap.0)?;
+                            let code = publish_mmap(engine.0, mmap.0)?;
                             Ok((code, info))
                         },
                         // Implementation of how to serialize artifacts
@@ -62,7 +62,7 @@ impl<'a> CodeBuilder<'a> {
         {
             let (mmap, info_and_types) =
                 build_artifacts(self.engine, &wasm, dwarf_package.as_deref())?;
-            let code = publish_mmap(mmap.0)?;
+            let code = publish_mmap(self.engine, mmap.0)?;
             return Ok((code, info_and_types));
         }
 
@@ -92,8 +92,8 @@ impl<'a> CodeBuilder<'a> {
     }
 }
 
-fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
-    let mut code = CodeMemory::new(mmap)?;
+fn publish_mmap(engine: &Engine, mmap: MmapVec) -> Result<Arc<CodeMemory>> {
+    let mut code = CodeMemory::new(engine, mmap)?;
     code.publish()?;
     Ok(Arc::new(code))
 }
@@ -137,7 +137,7 @@ impl FinishedObject for MmapVecWrapper {
 
             fn reserve(&mut self, additional: usize) -> Result<(), ()> {
                 assert!(self.mmap.is_none(), "cannot reserve twice");
-                self.mmap = match MmapVec::with_capacity(additional) {
+                self.mmap = match MmapVec::with_capacity_and_alignment(additional, 1) {
                     Ok(mmap) => Some(mmap),
                     Err(e) => {
                         self.err = Some(e);

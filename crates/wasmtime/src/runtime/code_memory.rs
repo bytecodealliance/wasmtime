@@ -2,6 +2,8 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::{libcalls, MmapVec, UnwindRegistration};
+use crate::Engine;
+use alloc::sync::Arc;
 use core::ops::Range;
 use object::endian::Endianness;
 use object::read::{elf::ElfFile64, Object, ObjectSection};
@@ -22,6 +24,7 @@ pub struct CodeMemory {
     needs_executable: bool,
     #[cfg(feature = "debug-builtins")]
     has_native_debug_info: bool,
+    custom_code_memory: Option<Arc<dyn CustomCodeMemory>>,
 
     relocations: Vec<(usize, obj::LibCall)>,
 
@@ -38,6 +41,14 @@ pub struct CodeMemory {
 
 impl Drop for CodeMemory {
     fn drop(&mut self) {
+        // If there is a custom code memory handler, restore the
+        // original (non-executable) state of the memory.
+        if let Some(mem) = self.custom_code_memory.as_ref() {
+            let text = self.text();
+            mem.unpublish_executable(text.as_ptr(), text.len())
+                .expect("Executable memory unpublish failed");
+        }
+
         // Drop the registrations before `self.mmap` since they (implicitly) refer to it.
         let _ = self.unwind_registration.take();
         #[cfg(feature = "debug-builtins")]
@@ -50,13 +61,50 @@ fn _assert() {
     _assert_send_sync::<CodeMemory>();
 }
 
+/// Interface implemented by an embedder to provide custom
+/// implementations of code-memory protection and execute permissions.
+pub trait CustomCodeMemory: Send + Sync {
+    /// The minimal alignment granularity for an address region that
+    /// can be made executable.
+    ///
+    /// Wasmtime does not assume the system page size for this because
+    /// custom code-memory protection can be used when all other uses
+    /// of virtual memory are disabled.
+    fn required_alignment(&self) -> usize;
+
+    /// Publish a region of memory as executable.
+    ///
+    /// This should update permissions from the default RW
+    /// (readable/writable but not executable) to RX
+    /// (readable/executable but not writable), enforcing W^X
+    /// discipline.
+    ///
+    /// If the platform requires any data/instruction coherence
+    /// action, that should be performed as part of this hook as well.
+    ///
+    /// `ptr` and `ptr.offset(len)` are guaranteed to be aligned as
+    /// per `required_alignment()`.
+    fn publish_executable(&self, ptr: *const u8, len: usize) -> anyhow::Result<()>;
+
+    /// Unpublish a region of memory.
+    ///
+    /// This should perform the opposite effect of `make_executable`,
+    /// switching a range of memory back from RX (readable/executable)
+    /// to RW (readable/writable). It is guaranteed that no code is
+    /// running anymore from this region.
+    ///
+    /// `ptr` and `ptr.offset(len)` are guaranteed to be aligned as
+    /// per `required_alignment()`.
+    fn unpublish_executable(&self, ptr: *const u8, len: usize) -> anyhow::Result<()>;
+}
+
 impl CodeMemory {
     /// Creates a new `CodeMemory` by taking ownership of the provided
     /// `MmapVec`.
     ///
     /// The returned `CodeMemory` manages the internal `MmapVec` and the
     /// `publish` method is used to actually make the memory executable.
-    pub fn new(mmap: MmapVec) -> Result<Self> {
+    pub fn new(engine: &Engine, mmap: MmapVec) -> Result<Self> {
         let obj = ElfFile64::<Endianness>::parse(&mmap[..])
             .map_err(obj::ObjectCrateErrorWrapper)
             .with_context(|| "failed to parse internal compilation artifact")?;
@@ -140,6 +188,7 @@ impl CodeMemory {
                 _ => log::debug!("ignoring section {name}"),
             }
         }
+
         Ok(Self {
             mmap,
             unwind_registration: None,
@@ -151,6 +200,7 @@ impl CodeMemory {
             needs_executable,
             #[cfg(feature = "debug-builtins")]
             has_native_debug_info,
+            custom_code_memory: engine.custom_code_memory(),
             text,
             unwind,
             trap_data,
@@ -270,28 +320,30 @@ impl CodeMemory {
 
             // Switch the executable portion from readonly to read/execute.
             if self.needs_executable {
-                #[cfg(feature = "signals-based-traps")]
-                {
-                    let text = self.text();
+                if !self.custom_publish()? {
+                    #[cfg(feature = "signals-based-traps")]
+                    {
+                        let text = self.text();
 
-                    use wasmtime_jit_icache_coherence as icache_coherence;
+                        use wasmtime_jit_icache_coherence as icache_coherence;
 
-                    // Clear the newly allocated code from cache if the processor requires it
-                    //
-                    // Do this before marking the memory as R+X, technically we should be able to do it after
-                    // but there are some CPU's that have had errata about doing this with read only memory.
-                    icache_coherence::clear_cache(text.as_ptr().cast(), text.len())
-                        .expect("Failed cache clear");
+                        // Clear the newly allocated code from cache if the processor requires it
+                        //
+                        // Do this before marking the memory as R+X, technically we should be able to do it after
+                        // but there are some CPU's that have had errata about doing this with read only memory.
+                        icache_coherence::clear_cache(text.as_ptr().cast(), text.len())
+                            .expect("Failed cache clear");
 
-                    self.mmap
-                        .make_executable(self.text.clone(), self.enable_branch_protection)
-                        .context("unable to make memory executable")?;
+                        self.mmap
+                            .make_executable(self.text.clone(), self.enable_branch_protection)
+                            .context("unable to make memory executable")?;
 
-                    // Flush any in-flight instructions from the pipeline
-                    icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
+                        // Flush any in-flight instructions from the pipeline
+                        icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
+                    }
+                    #[cfg(not(feature = "signals-based-traps"))]
+                    bail!("this target requires virtual memory to be enabled");
                 }
-                #[cfg(not(feature = "signals-based-traps"))]
-                bail!("this target requires virtual memory to be enabled");
             }
 
             // With all our memory set up use the platform-specific
@@ -305,6 +357,29 @@ impl CodeMemory {
         }
 
         Ok(())
+    }
+
+    fn custom_publish(&mut self) -> Result<bool> {
+        if let Some(mem) = self.custom_code_memory.as_ref() {
+            let text = self.text();
+            // The text section should be aligned to
+            // `custom_code_memory.required_alignment()` due to a
+            // combination of two invariants:
+            //
+            // - MmapVec aligns its start address, even in owned-Vec mode; and
+            // - The text segment inside the ELF image will be aligned according
+            //   to the platform's requirements.
+            let text_addr = text.as_ptr() as usize;
+            assert_eq!(text_addr & (mem.required_alignment() - 1), 0);
+
+            // The custom code memory handler will ensure the
+            // memory is executable and also handle icache
+            // coherence.
+            mem.publish_executable(text.as_ptr(), text.len())?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
     unsafe fn apply_relocations(&mut self) -> Result<()> {
