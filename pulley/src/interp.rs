@@ -651,8 +651,8 @@ impl MachineState {
 /// this module.
 mod done {
     use super::{Encode, Interpreter, MachineState};
+    use core::ops::ControlFlow;
     use core::ptr::NonNull;
-    use std::ops::ControlFlow;
 
     /// Zero-sized sentinel indicating that pulley execution has halted.
     ///
