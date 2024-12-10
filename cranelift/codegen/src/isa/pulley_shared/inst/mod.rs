@@ -378,7 +378,10 @@ where
         match self.inst {
             Inst::Raw {
                 raw: RawInst::Trap { .. },
-            } => true,
+            }
+            | Inst::Call { .. }
+            | Inst::IndirectCall { .. }
+            | Inst::IndirectCallHost { .. } => true,
             _ => false,
         }
     }
