@@ -58,6 +58,7 @@ create_target(multimemory multimemory.c)
 create_target(serialize serialize.c)
 create_target(threads threads.c)
 create_target(wasi wasi/main.c)
+create_target(component component/main.c)
 
 # Add rust tests
 create_rust_test(anyref)

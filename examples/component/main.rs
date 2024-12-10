@@ -16,6 +16,12 @@ impl host::Host for HostComponent {
     fn multiply(&mut self, a: f32, b: f32) -> f32 {
         a * b
     }
+    fn apply(&mut self, a: f32, b: f32, op: host::BinaryOperation) -> f32 {
+        match op {
+            host::BinaryOperation::Add => a + b,
+            host::BinaryOperation::Multiply => a * b,
+        }
+    }
 }
 
 struct MyState {
@@ -30,10 +36,16 @@ struct MyState {
 ///
 /// In this example we convert the code here to simplify the testing process and build system.
 fn convert_to_component(path: impl AsRef<Path>) -> Result<Vec<u8>> {
-    let bytes = &fs::read(&path).context("failed to read input file")?;
-    wit_component::ComponentEncoder::default()
-        .module(&bytes)?
-        .encode()
+    let bytes = fs::read(&path).context("failed to read input file")?;
+    // allow direct use of a component : look at the layer field of the preamble, see
+    // https://github.com/WebAssembly/component-model/blob/main/design/mvp/Binary.md#component-definitions
+    if bytes.len() > 6 && bytes[6] == 1 {
+        Ok(bytes)
+    } else {
+        wit_component::ComponentEncoder::default()
+            .module(&bytes)?
+            .encode()
+    }
 }
 
 fn main() -> Result<()> {
@@ -45,18 +57,21 @@ fn main() -> Result<()> {
     // model.
     let component = convert_to_component("target/wasm32-unknown-unknown/debug/guest.wasm")?;
 
-    // Create our component and call our generated host function.
+    // Create our component and call our generated host functions.
     let component = Component::from_binary(&engine, &component)?;
+    let mut linker = Linker::new(&engine);
+    host::add_to_linker(&mut linker, |state: &mut MyState| &mut state.host)?;
+
     let mut store = Store::new(
         &engine,
         MyState {
             host: HostComponent {},
         },
     );
-    let mut linker = Linker::new(&engine);
-    host::add_to_linker(&mut linker, |state: &mut MyState| &mut state.host)?;
     let convert = Convert::instantiate(&mut store, &component, &linker)?;
     let result = convert.call_convert_celsius_to_fahrenheit(&mut store, 23.4)?;
+    println!("Converted to: {result:?}");
+    let result = convert.call_convert(&mut store, Temperature::Fahrenheit(66.2))?;
     println!("Converted to: {result:?}");
     Ok(())
 }
