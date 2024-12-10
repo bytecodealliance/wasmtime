@@ -308,9 +308,9 @@ impl<'a> CodeGenContext<'a, Emission> {
     /// Prepares arguments for emitting a binary operation.
     ///
     /// The `emit` function returns the `TypedReg` to put on the value stack.
-    pub fn binop<F, M>(&mut self, masm: &mut M, size: OperandSize, mut emit: F)
+    pub fn binop<F, M>(&mut self, masm: &mut M, size: OperandSize, emit: F)
     where
-        F: FnMut(&mut M, Reg, Reg, OperandSize) -> TypedReg,
+        F: FnOnce(&mut M, Reg, Reg, OperandSize) -> TypedReg,
         M: MacroAssembler,
     {
         let src = self.pop_to_reg(masm, None);
@@ -321,9 +321,9 @@ impl<'a> CodeGenContext<'a, Emission> {
     }
 
     /// Prepares arguments for emitting an f32 or f64 comparison operation.
-    pub fn float_cmp_op<F, M>(&mut self, masm: &mut M, size: OperandSize, mut emit: F)
+    pub fn float_cmp_op<F, M>(&mut self, masm: &mut M, size: OperandSize, emit: F)
     where
-        F: FnMut(&mut M, Reg, Reg, Reg, OperandSize),
+        F: FnOnce(&mut M, Reg, Reg, Reg, OperandSize),
         M: MacroAssembler,
     {
         let src2 = self.pop_to_reg(masm, None);
@@ -371,9 +371,9 @@ impl<'a> CodeGenContext<'a, Emission> {
     /// Prepares arguments for emitting an i64 binary operation.
     ///
     /// The `emit` function returns the `TypedReg` to put on the value stack.
-    pub fn i64_binop<F, M>(&mut self, masm: &mut M, mut emit: F)
+    pub fn i64_binop<F, M>(&mut self, masm: &mut M, emit: F)
     where
-        F: FnMut(&mut M, Reg, RegImm, OperandSize) -> TypedReg,
+        F: FnOnce(&mut M, Reg, RegImm, OperandSize) -> TypedReg,
         M: MacroAssembler,
     {
         let top = self.stack.peek().expect("value at stack top");
@@ -393,9 +393,9 @@ impl<'a> CodeGenContext<'a, Emission> {
     }
 
     /// Prepares arguments for emitting a convert operation.
-    pub fn convert_op<F, M>(&mut self, masm: &mut M, dst_ty: WasmValType, mut emit: F)
+    pub fn convert_op<F, M>(&mut self, masm: &mut M, dst_ty: WasmValType, emit: F)
     where
-        F: FnMut(&mut M, Reg, Reg, OperandSize),
+        F: FnOnce(&mut M, Reg, Reg, OperandSize),
         M: MacroAssembler,
     {
         let src = self.pop_to_reg(masm, None);
@@ -422,9 +422,9 @@ impl<'a> CodeGenContext<'a, Emission> {
         masm: &mut M,
         dst_ty: WasmValType,
         tmp_reg_class: RegClass,
-        mut emit: F,
+        emit: F,
     ) where
-        F: FnMut(&mut M, Reg, Reg, Reg, OperandSize),
+        F: FnOnce(&mut M, Reg, Reg, Reg, OperandSize),
         M: MacroAssembler,
     {
         let tmp_gpr = self.reg_for_class(tmp_reg_class, masm);
