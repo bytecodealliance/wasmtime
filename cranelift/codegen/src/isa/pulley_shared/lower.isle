@@ -236,6 +236,16 @@
 (rule 1 (lower (has_type $I64 (bor a b)))
   (pulley_xor64 a b))
 
+;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (ctz a))) (pulley_xctz32 a))
+(rule (lower (has_type $I64 (ctz a))) (pulley_xctz64 a))
+
+;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (clz a))) (pulley_xclz32 a))
+(rule (lower (has_type $I64 (clz a))) (pulley_xclz64 a))
+
 ;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 1 (lower (icmp cc a b @ (value_type $I64)))
@@ -291,6 +301,32 @@
       (lower_icmp ty (IntCC.UnsignedLessThan) b a))
 (rule (lower_icmp ty (IntCC.UnsignedGreaterThanOrEqual) a b)
       (lower_icmp ty (IntCC.UnsignedLessThanOrEqual) b a))
+
+;;;; Rules for `fcmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (fcmp cc a b @ (value_type (ty_scalar_float ty))))
+  (lower_fcmp ty cc a b))
+
+(decl lower_fcmp (Type FloatCC Value Value) XReg)
+
+(rule (lower_fcmp $F32 (FloatCC.Equal) a b) (pulley_feq32 a b))
+(rule (lower_fcmp $F64 (FloatCC.Equal) a b) (pulley_feq64 a b))
+(rule (lower_fcmp $F32 (FloatCC.NotEqual) a b) (pulley_fneq32 a b))
+(rule (lower_fcmp $F64 (FloatCC.NotEqual) a b) (pulley_fneq64 a b))
+(rule (lower_fcmp $F32 (FloatCC.LessThan) a b) (pulley_flt32 a b))
+(rule (lower_fcmp $F64 (FloatCC.LessThan) a b) (pulley_flt64 a b))
+(rule (lower_fcmp $F32 (FloatCC.LessThanOrEqual) a b) (pulley_flt32 a b))
+(rule (lower_fcmp $F64 (FloatCC.LessThanOrEqual) a b) (pulley_flt64 a b))
+
+;; NB: Pulley doesn't have lowerings for `Ordered` or `Unordered` `FloatCC`
+;; conditions as that's not needed by wasm at this time.
+
+;; Pulley doesn't have instructions for `>` and `>=`, so we have to reverse the
+;; operation.
+(rule (lower_fcmp ty (FloatCC.GreaterThan) a b)
+  (lower_fcmp ty (FloatCC.LessThan) b a))
+(rule (lower_fcmp ty (FloatCC.GreaterThanOrEqual) a b)
+  (lower_fcmp ty (FloatCC.LessThanOrEqual) b a))
 
 ;;;; Rules for `load` and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
