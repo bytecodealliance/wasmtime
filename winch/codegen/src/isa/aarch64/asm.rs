@@ -3,23 +3,22 @@
 use super::{address::Address, regs};
 use crate::aarch64::regs::zero;
 use crate::masm::{DivKind, ExtendKind, FloatCmpKind, IntCmpKind, RoundingMode, ShiftKind};
+use crate::CallingConvention;
 use crate::{
     masm::OperandSize,
     reg::{writable, Reg, WritableReg},
 };
-use cranelift_codegen::ir::TrapCode;
-use cranelift_codegen::isa::aarch64::inst::{
-    BitOp, BranchTarget, Cond, CondBrKind, FPULeftShiftImm, FPUOp1, FPUOp2,
-    FPUOpRI::{self, UShr32, UShr64},
-    FPUOpRIMod, FPURightShiftImm, FpuRoundMode, ImmLogic, ImmShift, ScalarSize,
-};
 use cranelift_codegen::isa::aarch64::inst::{UImm5, NZCV};
 use cranelift_codegen::{
-    ir::{MemFlags, SourceLoc},
+    ir::{ExternalName, LibCall, MemFlags, SourceLoc, TrapCode, UserExternalNameRef},
     isa::aarch64::inst::{
         self,
         emit::{EmitInfo, EmitState},
-        ALUOp, ALUOp3, AMode, ExtendOp, Imm12, Inst, PairAMode, VecLanesOp, VecMisc2, VectorSize,
+        ALUOp, ALUOp3, AMode, BitOp, BranchTarget, Cond, CondBrKind, ExtendOp, FPULeftShiftImm,
+        FPUOp1, FPUOp2,
+        FPUOpRI::{self, UShr32, UShr64},
+        FPUOpRIMod, FPURightShiftImm, FpuRoundMode, FpuToIntOp, Imm12, ImmLogic, ImmShift, Inst,
+        IntToFpuOp, PairAMode, ScalarSize, VecLanesOp, VecMisc2, VectorSize,
     },
     settings, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
     MachLabel, Writable,
@@ -671,6 +670,36 @@ impl Assembler {
         })
     }
 
+    /// Reinterpret a float as an integer.
+    pub fn fpu_to_int(&mut self, rn: Reg, rd: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => FpuToIntOp::F32ToI32,
+            OperandSize::S64 => FpuToIntOp::F64ToI64,
+            OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::FpuToInt {
+            op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+        });
+    }
+
+    /// Reinterpret an integer as a float.
+    pub fn int_to_fpu(&mut self, rn: Reg, rd: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => IntToFpuOp::I32ToF32,
+            OperandSize::S64 => IntToFpuOp::I64ToF64,
+            OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
+        };
+
+        self.emit(Inst::IntToFpu {
+            op,
+            rd: rd.map(Into::into),
+            rn: rn.into(),
+        });
+    }
+
     /// Change precision of float.
     pub fn cvt_float_to_float(
         &mut self,
@@ -791,6 +820,14 @@ impl Assembler {
     pub fn trapif(&mut self, cc: Cond, code: TrapCode) {
         self.emit(Inst::TrapIf {
             kind: CondBrKind::Cond(cc),
+            trap_code: code,
+        });
+    }
+
+    /// Trap if `rn` is zero.
+    pub fn trapz(&mut self, rn: Reg, code: TrapCode) {
+        self.emit(Inst::TrapIf {
+            kind: CondBrKind::Zero(rn.into()),
             trap_code: code,
         });
     }
@@ -971,5 +1008,39 @@ impl Assembler {
     /// Get a reference to the underlying machine buffer.
     pub fn buffer(&self) -> &MachBuffer<Inst> {
         &self.buffer
+    }
+
+    /// Emit a direct call to a function defined locally and
+    /// referenced to by `name`.
+    pub fn call_with_name(&mut self, name: UserExternalNameRef, call_conv: CallingConvention) {
+        self.emit(Inst::Call {
+            info: Box::new(cranelift_codegen::CallInfo::empty(
+                ExternalName::user(name),
+                call_conv.into(),
+            )),
+        })
+    }
+
+    /// Emit an indirect call to a function whose address is
+    /// stored the `callee` register.
+    pub fn call_with_reg(&mut self, callee: Reg, call_conv: CallingConvention) {
+        self.emit(Inst::CallInd {
+            info: Box::new(cranelift_codegen::CallInfo::empty(
+                callee.into(),
+                call_conv.into(),
+            )),
+        })
+    }
+
+    /// Emit a call to a well-known libcall.
+    /// `dst` is used as a scratch register to hold the address of the libcall function.
+    pub fn call_with_lib(&mut self, lib: LibCall, dst: Reg, call_conv: CallingConvention) {
+        let name = ExternalName::LibCall(lib);
+        self.emit(Inst::LoadExtName {
+            rd: writable!(dst.into()),
+            name: name.into(),
+            offset: 0,
+        });
+        self.call_with_reg(dst, call_conv)
     }
 }

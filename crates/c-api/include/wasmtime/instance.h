@@ -150,7 +150,7 @@ wasmtime_instance_pre_delete(wasmtime_instance_pre_t *instance_pre);
  * values are owned by the caller.
  */
 WASM_API_EXTERN wasmtime_error_t *wasmtime_instance_pre_instantiate(
-    const wasmtime_instance_pre_t *instance_pre, wasmtime_store_t *store,
+    const wasmtime_instance_pre_t *instance_pre, wasmtime_context_t *store,
     wasmtime_instance_t *instance, wasm_trap_t **trap_ptr);
 
 /**
