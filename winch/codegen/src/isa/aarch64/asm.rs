@@ -1,12 +1,14 @@
 //! Assembler library implementation for Aarch64.
 
 use super::{address::Address, regs};
-use crate::masm::{ExtendKind, FloatCmpKind, IntCmpKind, RoundingMode, ShiftKind};
+use crate::aarch64::regs::zero;
+use crate::masm::{DivKind, ExtendKind, FloatCmpKind, IntCmpKind, RoundingMode, ShiftKind};
 use crate::CallingConvention;
 use crate::{
     masm::OperandSize,
     reg::{writable, Reg, WritableReg},
 };
+use cranelift_codegen::isa::aarch64::inst::{UImm5, NZCV};
 use cranelift_codegen::{
     ir::{ExternalName, LibCall, MemFlags, SourceLoc, TrapCode, UserExternalNameRef},
     isa::aarch64::inst::{
@@ -394,6 +396,81 @@ impl Assembler {
         let scratch = regs::scratch();
         self.load_constant(imm, writable!(scratch));
         self.emit_alu_rrrr(ALUOp3::MAdd, scratch, rn, rd, regs::zero(), size);
+    }
+
+    /// Signed/unsigned division with three registers.
+    pub fn div_rrr(
+        &mut self,
+        divisor: Reg,
+        dividend: Reg,
+        dest: Writable<Reg>,
+        kind: DivKind,
+        size: OperandSize,
+    ) {
+        // Check for division by 0
+        self.emit(Inst::TrapIf {
+            kind: CondBrKind::Zero(divisor.into()),
+            trap_code: TrapCode::INTEGER_DIVISION_BY_ZERO,
+        });
+
+        // check for overflow
+        if kind == DivKind::Signed {
+            // we first check whether the divisor is -1
+            self.emit(Inst::AluRRImm12 {
+                alu_op: ALUOp::AddS,
+                size: size.into(),
+                rd: writable!(zero().into()),
+                rn: divisor.into(),
+                imm12: Imm12::maybe_from_u64(1).expect("1 fits in 12 bits"),
+            });
+            // if it is -1, then we check if the dividend is MIN
+            self.emit(Inst::CCmpImm {
+                size: size.into(),
+                rn: dividend.into(),
+                imm: UImm5::maybe_from_u8(1).expect("1 fits in 5 bits"),
+                nzcv: NZCV::new(false, false, false, false),
+                cond: Cond::Eq,
+            });
+
+            // Finally, trap if the previous operation overflowed
+            self.emit(Inst::TrapIf {
+                kind: CondBrKind::Cond(Cond::Vs),
+                trap_code: TrapCode::INTEGER_OVERFLOW,
+            })
+        }
+
+        // `cranelift-codegen` doesn't support emitting u/sdiv for anything but I64,
+        // we therefore sign-extend the operand.
+        // see: https://github.com/bytecodealliance/wasmtime/issues/9766
+        if size == OperandSize::S32 {
+            self.emit(Inst::Extend {
+                rd: writable!(divisor.into()),
+                rn: divisor.into(),
+                signed: true,
+                from_bits: 32,
+                to_bits: 64,
+            });
+            self.emit(Inst::Extend {
+                rd: writable!(dividend.into()),
+                rn: dividend.into(),
+                signed: true,
+                from_bits: 32,
+                to_bits: 64,
+            });
+        }
+
+        let op = match kind {
+            DivKind::Signed => ALUOp::SDiv,
+            DivKind::Unsigned => ALUOp::UDiv,
+        };
+
+        self.emit_alu_rrr(
+            op,
+            divisor,
+            dividend,
+            dest.map(Into::into),
+            OperandSize::S64,
+        );
     }
 
     /// And with three registers.
