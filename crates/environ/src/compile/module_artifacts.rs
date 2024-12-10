@@ -274,12 +274,16 @@ impl<'a> ObjectBuilder<'a> {
 
 /// A type which can be the result of serializing an object.
 pub trait FinishedObject: Sized {
+    /// State required for `finish_object`, if any.
+    type State;
+
     /// Emit the object as `Self`.
-    fn finish_object(obj: ObjectBuilder<'_>) -> Result<Self>;
+    fn finish_object(obj: ObjectBuilder<'_>, state: &Self::State) -> Result<Self>;
 }
 
 impl FinishedObject for Vec<u8> {
-    fn finish_object(obj: ObjectBuilder<'_>) -> Result<Self> {
+    type State = ();
+    fn finish_object(obj: ObjectBuilder<'_>, _state: &Self::State) -> Result<Self> {
         let mut result = ObjectVec::default();
         obj.finish(&mut result)?;
         return Ok(result.0);

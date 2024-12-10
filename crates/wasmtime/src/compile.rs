@@ -64,6 +64,7 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     engine: &Engine,
     wasm: &[u8],
     dwarf_package: Option<&[u8]>,
+    obj_state: &T::State,
 ) -> Result<(T, Option<(CompiledModuleInfo, ModuleTypes)>)> {
     let tunables = engine.tunables();
 
@@ -111,7 +112,7 @@ pub(crate) fn build_artifacts<T: FinishedObject>(
     let info = compilation_artifacts.unwrap_as_module_info();
     let types = types.finish();
     object.serialize_info(&(&info, &types));
-    let result = T::finish_object(object)?;
+    let result = T::finish_object(object, obj_state)?;
 
     Ok((result, Some((info, types))))
 }
@@ -128,6 +129,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     engine: &Engine,
     binary: &[u8],
     _dwarf_package: Option<&[u8]>,
+    obj_state: &T::State,
 ) -> Result<(T, Option<wasmtime_environ::component::ComponentArtifacts>)> {
     use wasmtime_environ::component::{
         CompiledComponentInfo, ComponentArtifacts, ComponentTypesBuilder,
@@ -186,7 +188,7 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     };
     object.serialize_info(&artifacts);
 
-    let result = T::finish_object(object)?;
+    let result = T::finish_object(object, obj_state)?;
     Ok((result, Some(artifacts)))
 }
 
