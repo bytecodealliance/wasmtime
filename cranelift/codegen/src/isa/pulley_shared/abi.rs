@@ -243,7 +243,6 @@ where
     }
 
     fn gen_load_base_offset(into_reg: Writable<Reg>, base: Reg, offset: i32, ty: Type) -> Self::I {
-        let offset = i64::from(offset);
         let base = XReg::try_from(base).unwrap();
         let mem = Amode::RegOffset { base, offset };
         Inst::gen_load(into_reg, mem, ty, MemFlags::trusted()).into()
@@ -365,7 +364,7 @@ where
                     Inst::gen_load(
                         writable_fp_reg(),
                         Amode::SpOffset {
-                            offset: i64::from(incoming_args_diff),
+                            offset: i32::try_from(incoming_args_diff).unwrap(),
                         },
                         I64,
                         MemFlags::trusted(),
@@ -423,7 +422,7 @@ where
                 insts.push(
                     Inst::gen_store(
                         Amode::SpOffset {
-                            offset: i64::from(stack_size - cur_offset),
+                            offset: i32::try_from(stack_size - cur_offset).unwrap(),
                         },
                         Reg::from(reg.to_reg()),
                         ty,
@@ -474,7 +473,7 @@ where
                 Inst::gen_load(
                     reg.map(Reg::from),
                     Amode::SpOffset {
-                        offset: i64::from(stack_size - cur_offset),
+                        offset: i32::try_from(stack_size - cur_offset).unwrap(),
                     },
                     ty,
                     MemFlags::trusted(),

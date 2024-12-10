@@ -30,9 +30,6 @@
 
     ;;;; Actual Instructions ;;;;
 
-    ;; Raise a trap.
-    (Trap (code TrapCode))
-
     ;; Trap if `src1 cond src2`.
     (TrapIf (cond IntCC) (size OperandSize) (src1 XReg) (src2 XReg) (code TrapCode))
 
@@ -77,11 +74,16 @@
     ;; Load the memory address referenced by `mem` into `dst`.
     (LoadAddr (dst WritableXReg) (mem Amode))
 
-    ;; Loads.
-    (Load (dst WritableReg) (mem Amode) (ty Type) (flags MemFlags) (ext ExtKind))
+    ;; Load `ty` bytes from memory pointed to by `mem` and store in `dst`.
+    ;;
+    ;; How much is written to the register is defined by `ExtKind`. The `flags`
+    ;; control behavior such as endianness.
+    (XLoad (dst WritableXReg) (mem Amode) (ty Type) (flags MemFlags) (ext ExtKind))
+    (FLoad (dst WritableFReg) (mem Amode) (ty Type) (flags MemFlags))
 
     ;; Stores.
-    (Store (mem Amode) (src Reg) (ty Type) (flags MemFlags))
+    (XStore (mem Amode) (src XReg) (ty Type) (flags MemFlags))
+    (FStore (mem Amode) (src FReg) (ty Type) (flags MemFlags))
 
     ;; A raw pulley instruction generated at compile-time via Pulley's
     ;; `for_each_op!` macro. This variant has `pulley_*` constructors to
@@ -104,13 +106,13 @@
 
 (type Amode
   (enum
-    (SpOffset (offset i64))
-    (RegOffset (base XReg) (offset i64))
+    (SpOffset (offset i32))
+    (RegOffset (base XReg) (offset i32))
     (Stack (amode StackAMode))
   )
 )
 
-(type ExtKind (enum None Sign Zero))
+(type ExtKind (enum None Sign32 Sign64 Zero32 Zero64))
 
 ;;;; Newtypes for Different Register Classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -345,10 +347,6 @@
 
 ;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl pulley_trap (TrapCode) SideEffectNoResult)
-(rule (pulley_trap code)
-      (SideEffectNoResult.Inst (MInst.Trap code)))
-
 (decl pulley_trap_if (IntCC OperandSize XReg XReg TrapCode) SideEffectNoResult)
 (rule (pulley_trap_if cond size src1 src2 code)
       (SideEffectNoResult.Inst (MInst.TrapIf cond size src1 src2 code)))
@@ -400,15 +398,25 @@
 (rule (pulley_br_if_xulteq32 a b taken not_taken)
       (SideEffectNoResult.Inst (MInst.BrIfXulteq32 a b taken not_taken)))
 
-(decl pulley_load (Amode Type MemFlags ExtKind) Reg)
-(rule (pulley_load amode ty flags ext)
-      (let ((dst WritableReg (temp_writable_reg ty))
-            (_ Unit (emit (MInst.Load dst amode ty flags ext))))
+(decl pulley_xload (Amode Type MemFlags ExtKind) XReg)
+(rule (pulley_xload amode ty flags ext)
+      (let ((dst WritableXReg (temp_writable_xreg))
+            (_ Unit (emit (MInst.XLoad dst amode ty flags ext))))
         dst))
 
-(decl pulley_store (Amode Reg Type MemFlags) SideEffectNoResult)
-(rule (pulley_store amode src ty flags)
-      (SideEffectNoResult.Inst (MInst.Store amode src ty flags)))
+(decl pulley_xstore (Amode XReg Type MemFlags) SideEffectNoResult)
+(rule (pulley_xstore amode src ty flags)
+      (SideEffectNoResult.Inst (MInst.XStore amode src ty flags)))
+
+(decl pulley_fload (Amode Type MemFlags) FReg)
+(rule (pulley_fload amode ty flags)
+      (let ((dst WritableFReg (temp_writable_freg))
+            (_ Unit (emit (MInst.FLoad dst amode ty flags))))
+        dst))
+
+(decl pulley_fstore (Amode FReg Type MemFlags) SideEffectNoResult)
+(rule (pulley_fstore amode src ty flags)
+      (SideEffectNoResult.Inst (MInst.FStore amode src ty flags)))
 
 (decl gen_br_table (XReg MachLabel BoxVecMachLabel) Unit)
 (rule (gen_br_table idx default labels)

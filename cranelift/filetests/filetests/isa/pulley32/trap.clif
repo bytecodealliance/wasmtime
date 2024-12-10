@@ -8,7 +8,7 @@ block0:
 
 ; VCode:
 ; block0:
-;   trap // code = TrapCode(1)
+;   trap // trap=TrapCode(1)
 ;
 ; Disassembled:
 ; trap

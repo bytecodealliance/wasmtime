@@ -7,13 +7,13 @@
 )
 ;; wasm[0]::function[0]:
 ;;       push_frame
-;;       load64_offset8 x7, x0, 8
-;;       load64_offset8 x8, x0, 32
-;;       load64 x8, x8
-;;       load64_offset8 x7, x7, 8
+;;       xload64le_offset32 x7, x0, 8
+;;       xload64le_offset32 x8, x0, 32
+;;       xload64le_offset32 x8, x8, 0
+;;       xload64le_offset32 x7, x7, 8
 ;;       xulteq64 x7, x7, x8
-;;       br_if x7, 0x8    // target = 0x1b
-;;   19: pop_frame
+;;       br_if x7, 0x8    // target = 0x28
+;;   26: pop_frame
 ;;       ret
-;;   1b: call 0x83    // target = 0x9e
-;;   20: jump 0xfffffffffffffff9    // target = 0x19
+;;   28: call 0x9c    // target = 0xc4
+;;   2d: jump 0xfffffffffffffff9    // target = 0x26

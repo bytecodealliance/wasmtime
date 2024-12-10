@@ -155,6 +155,16 @@ pub fn bounds_check_and_compute_addr(
         return Ok(Unreachable);
     }
 
+    // Special case: if this is a 32-bit platform and the `offset_and_size`
+    // overflows the 32-bit address space then there's no hope of this ever
+    // being in-bounds. We can't represent `offset_and_size` in CLIF as the
+    // native pointer type anyway, so this is an unconditional trap.
+    if pointer_bit_width < 64 && offset_and_size >= (1 << pointer_bit_width) {
+        env.before_unconditionally_trapping_memory_access(builder)?;
+        env.trap(builder, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+        return Ok(Unreachable);
+    }
+
     // Special case for when we can completely omit explicit
     // bounds checks for 32-bit memories.
     //

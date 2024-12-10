@@ -15,6 +15,74 @@ extern crate std;
 extern crate alloc;
 
 /// Calls the given macro with each opcode.
+///
+/// # Instruction Guidelines
+///
+/// We're inventing an instruction set here which naturally brings a whole set
+/// of design questions. Note that this is explicitly intended to be only ever
+/// used for Pulley where there are a different set of design constraints than
+/// other instruction sets (e.g. general-purpose CPU ISAs). Some examples of
+/// constraints for Pulley are:
+///
+/// * Instructions must be portable to many architectures.
+/// * The Pulley ISA is mostly target-independent as the compilation target is
+///   currently only parameterized on pointer width and endianness.
+/// * Pulley instructions should be balance of time-to-decode and code size. For
+///   example super fancy bit-packing tricks might be tough to decode in
+///   software but might be worthwhile if it's quite common and greatly reduces
+///   the size of bytecode. There's not a hard-and-fast answer here, but a
+///   balance to be made.
+/// * Many "macro ops" are present to reduce the size of compiled bytecode so
+///   there is a wide set of duplicate functionality between opcodes (and this
+///   is expected).
+///
+/// Given all this it's also useful to have a set of guidelines used to name and
+/// develop Pulley instructions. As of the time of this writing it's still
+/// pretty early days for Pulley so some of these guidelines may change over
+/// time. Additionally instructions don't necessarily all follow these
+/// conventions and that may also change over time. With that in mind, here's a
+/// rough set of guidelines:
+///
+/// * Most instructions are prefixed with `x`, `f`, or `v`, indicating which
+///   type of register they're operating on. (e.g. `xadd32` operates on the `x`
+///   integer registers and `fadd32` operates on the `f` float registers).
+///
+/// * Most instructions are suffixed or otherwise contain the bit width they're
+///   operating on. For example `xadd32` is a 32-bit addition.
+///
+/// * If an instruction operates on signed or unsigned data (such as division
+///   and remainder), then the instruction is suffixed with `_s` or `_u`.
+///
+/// * Instructions operate on either 32 or 64-bit parts of a register.
+///   Instructions modifying only 32-bits of a register always modify the "low"
+///   part of a register and leave the upper part unmodified. This is intended
+///   to help 32-bit platforms where if most operations are 32-bit there's no
+///   need for extra instructions to sign or zero extend and modify the upper
+///   half of the register.
+///
+/// * Binops use `BinaryOperands<T>` for the destination and argument registers.
+///
+/// * Instructions operating on memory contain a few pieces of information:
+///
+///   ```text
+///   xload16le_u32_offset32
+///   │└─┬┘└┤└┤ └┬┘ └──┬───┘
+///   │  │  │ │  │     ▼
+///   │  │  │ │  │     addressing mode
+///   │  │  │ │  ▼
+///   │  │  │ │  width of register modified + sign-extension (optional)
+///   │  │  │ ▼
+///   │  │  │ endianness of the operation (le/be)
+///   │  │  ▼
+///   │  │  bit-width of the operation
+///   │  ▼
+///   │  what's happening (load/store)
+///   ▼
+///   register being operated on (x/f/z)
+///   ```
+///
+/// More guidelines might get added here over time, and if you have any
+/// questions feel free to raise them and we can try to add them here as well!
 #[macro_export]
 macro_rules! for_each_op {
     ( $macro:ident ) => {
@@ -98,6 +166,24 @@ macro_rules! for_each_op {
             /// 64-bit wrapping addition: `dst = src1 + src2`.
             xadd64 = Xadd64 { operands: BinaryOperands<XReg> };
 
+            /// 32-bit checked unsigned addition: `low32(dst) = low32(src1) +
+            /// low32(src2)`.
+            ///
+            /// The upper 32-bits of `dst` are unmodified. Traps if the addition
+            /// overflows.
+            xadd32_uoverflow_trap = Xadd32UoverflowTrap { operands: BinaryOperands<XReg> };
+
+            /// 64-bit checked unsigned addition: `dst = src1 + src2`.
+            xadd64_uoverflow_trap = Xadd64UoverflowTrap { operands: BinaryOperands<XReg> };
+
+            /// 32-bit wrapping subtraction: `low32(dst) = low32(src1) - low32(src2)`.
+            ///
+            /// The upper 32-bits of `dst` are unmodified.
+            xsub32 = Xsub32 { operands: BinaryOperands<XReg> };
+
+            /// 64-bit wrapping subtraction: `dst = src1 - src2`.
+            xsub64 = Xsub64 { operands: BinaryOperands<XReg> };
+
             /// 64-bit equality.
             xeq64 = Xeq64 { operands: BinaryOperands<XReg> };
             /// 64-bit inequality.
@@ -123,41 +209,49 @@ macro_rules! for_each_op {
             /// 32-bit unsigned less-than-equal.
             xulteq32 = Xulteq32 { operands: BinaryOperands<XReg> };
 
-            /// `dst = zero_extend(load32_le(ptr))`
-            load32_u = Load32U { dst: XReg, ptr: XReg };
-            /// `dst = sign_extend(load32_le(ptr))`
-            load32_s = Load32S { dst: XReg, ptr: XReg };
-            /// `dst = load64_le(ptr)`
-            load64 = Load64 { dst: XReg, ptr: XReg };
+            /// `low32(dst) = zext(*(ptr + offset))`
+            xload8_u32_offset32 = XLoad8U32Offset32 { dst: XReg, ptr: XReg, offset: i32 };
+            /// `low32(dst) = sext(*(ptr + offset))`
+            xload8_s32_offset32 = XLoad8S32Offset32 { dst: XReg, ptr: XReg, offset: i32 };
+            /// `low32(dst) = zext(*(ptr + offset))`
+            xload16le_u32_offset32 = XLoad16LeU32Offset32 { dst: XReg, ptr: XReg, offset: i32 };
+            /// `low32(dst) = sext(*(ptr + offset))`
+            xload16le_s32_offset32 = XLoad16LeS32Offset32 { dst: XReg, ptr: XReg, offset: i32 };
+            /// `low32(dst) = *(ptr + offset)`
+            xload32le_offset32 = XLoad32LeOffset32 { dst: XReg, ptr: XReg, offset: i32 };
 
-            /// `dst = zero_extend(load32_le(ptr + offset8))`
-            load32_u_offset8 = Load32UOffset8 { dst: XReg, ptr: XReg, offset: i8 };
-            /// `dst = sign_extend(load32_le(ptr + offset8))`
-            load32_s_offset8 = Load32SOffset8 { dst: XReg, ptr: XReg, offset: i8 };
-            /// `dst = load64_le(ptr + offset8)`
-            load64_offset8 = Load64Offset8 { dst: XReg, ptr: XReg, offset: i8 };
+            /// `dst = zext(*(ptr + offset))`
+            xload8_u64_offset32 = XLoad8U64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
+            /// `dst = sext(*(ptr + offset))`
+            xload8_s64_offset32 = XLoad8S64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
+            /// `dst = zext(*(ptr + offset))`
+            xload16le_u64_offset32 = XLoad16LeU64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
+            /// `dst = sext(*(ptr + offset))`
+            xload16le_s64_offset32 = XLoad16LeS64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
+            /// `dst = zext(*(ptr + offset))`
+            xload32le_u64_offset32 = XLoad32LeU64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
+            /// `dst = sext(*(ptr + offset))`
+            xload32le_s64_offset32 = XLoad32LeS64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
+            /// `dst = *(ptr + offset)`
+            xload64le_offset32 = XLoad64LeOffset32 { dst: XReg, ptr: XReg, offset: i32 };
 
-            /// `dst = zero_extend(load32_le(ptr + offset64))`
-            load32_u_offset64 = Load32UOffset64 { dst: XReg, ptr: XReg, offset: i64 };
-            /// `dst = sign_extend(load32_le(ptr + offset64))`
-            load32_s_offset64 = Load32SOffset64 { dst: XReg, ptr: XReg, offset: i64 };
-            /// `dst = load64_le(ptr + offset64)`
-            load64_offset64 = Load64Offset64 { dst: XReg, ptr: XReg, offset: i64 };
+            /// `*(ptr + offset) = low8(src)`
+            xstore8_offset32 = XStore8Offset32 { ptr: XReg, offset: i32, src: XReg };
+            /// `*(ptr + offset) = low16(src)`
+            xstore16le_offset32 = XStore16LeOffset32 { ptr: XReg, offset: i32, src: XReg };
+            /// `*(ptr + offset) = low32(src)`
+            xstore32le_offset32 = XStore32LeOffset32 { ptr: XReg, offset: i32, src: XReg };
+            /// `*(ptr + offset) = low64(src)`
+            xstore64le_offset32 = XStore64LeOffset32 { ptr: XReg, offset: i32, src: XReg };
 
-            /// `*ptr = low32(src.to_le())`
-            store32 = Store32 { ptr: XReg, src: XReg };
-            /// `*ptr = src.to_le()`
-            store64 = Store64 { ptr: XReg, src: XReg };
-
-            /// `*(ptr + sign_extend(offset8)) = low32(src).to_le()`
-            store32_offset8 = Store32SOffset8 { ptr: XReg, offset: i8, src: XReg };
-            /// `*(ptr + sign_extend(offset8)) = src.to_le()`
-            store64_offset8 = Store64Offset8 { ptr: XReg, offset: i8, src: XReg };
-
-            /// `*(ptr + sign_extend(offset64)) = low32(src).to_le()`
-            store32_offset64 = Store32SOffset64 { ptr: XReg, offset: i64, src: XReg };
-            /// `*(ptr + sign_extend(offset64)) = src.to_le()`
-            store64_offset64 = Store64Offset64 { ptr: XReg, offset: i64, src: XReg };
+            /// `low32(dst) = zext(*(ptr + offset))`
+            fload32le_offset32 = Fload32LeOffset32 { dst: FReg, ptr: XReg, offset: i32 };
+            /// `dst = *(ptr + offset)`
+            fload64le_offset32 = Fload64LeOffset32 { dst: FReg, ptr: XReg, offset: i32 };
+            /// `*(ptr + offset) = low32(src)`
+            fstore32le_offset32 = Fstore32LeOffset32 { ptr: XReg, offset: i32, src: FReg };
+            /// `*(ptr + offset) = src`
+            fstore64le_offset32 = Fstore64LeOffset32 { ptr: XReg, offset: i32, src: FReg };
 
             /// `push lr; push fp; fp = sp`
             push_frame = PushFrame ;
@@ -254,6 +348,34 @@ macro_rules! for_each_extended_op {
             bswap32 = Bswap32 { dst: XReg, src: XReg };
             /// `dst = byteswap(src)`
             bswap64 = Bswap64 { dst: XReg, src: XReg };
+
+
+            /// `dst = zext(*(ptr + offset))`
+            xload16be_u64_offset32 = XLoad16BeU64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
+            /// `dst = sext(*(ptr + offset))`
+            xload16be_s64_offset32 = XLoad16BeS64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
+            /// `dst = zext(*(ptr + offset))`
+            xload32be_u64_offset32 = XLoad32BeU64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
+            /// `dst = sext(*(ptr + offset))`
+            xload32be_s64_offset32 = XLoad32BeS64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
+            /// `dst = *(ptr + offset)`
+            xload64be_offset32 = XLoad64BeOffset32 { dst: XReg, ptr: XReg, offset: i32 };
+
+            /// `*(ptr + offset) = low16(src)`
+            xstore16be_offset32 = XStore16BeOffset32 { ptr: XReg, offset: i32, src: XReg };
+            /// `*(ptr + offset) = low32(src)`
+            xstore32be_offset32 = XStore32BeOffset32 { ptr: XReg, offset: i32, src: XReg };
+            /// `*(ptr + offset) = low64(src)`
+            xstore64be_offset32 = XStore64BeOffset32 { ptr: XReg, offset: i32, src: XReg };
+
+            /// `low32(dst) = zext(*(ptr + offset))`
+            fload32be_offset32 = Fload32BeOffset32 { dst: FReg, ptr: XReg, offset: i32 };
+            /// `dst = *(ptr + offset)`
+            fload64be_offset32 = Fload64BeOffset32 { dst: FReg, ptr: XReg, offset: i32 };
+            /// `*(ptr + offset) = low32(src)`
+            fstore32be_offset32 = Fstore32BeOffset32 { ptr: XReg, offset: i32, src: FReg };
+            /// `*(ptr + offset) = src`
+            fstore64be_offset32 = Fstore64BeOffset32 { ptr: XReg, offset: i32, src: FReg };
         }
     };
 }
