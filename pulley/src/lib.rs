@@ -184,6 +184,19 @@ macro_rules! for_each_op {
             /// 64-bit wrapping subtraction: `dst = src1 - src2`.
             xsub64 = Xsub64 { operands: BinaryOperands<XReg> };
 
+            /// `low32(dst) = low32(src1) << low5(src2)`
+            xshl32 = Xshl32 { operands: BinaryOperands<XReg> };
+            /// `low32(dst) = low32(src1) >> low5(src2)`
+            xshr32_s = Xshr32S { operands: BinaryOperands<XReg> };
+            /// `low32(dst) = low32(src1) >> low5(src2)`
+            xshr32_u = Xshr32U { operands: BinaryOperands<XReg> };
+            /// `dst = src1 << low5(src2)`
+            xshl64 = Xshl64 { operands: BinaryOperands<XReg> };
+            /// `dst = src1 >> low6(src2)`
+            xshr64_s = Xshr64S { operands: BinaryOperands<XReg> };
+            /// `dst = src1 >> low6(src2)`
+            xshr64_u = Xshr64U { operands: BinaryOperands<XReg> };
+
             /// 64-bit equality.
             xeq64 = Xeq64 { operands: BinaryOperands<XReg> };
             /// 64-bit inequality.
@@ -252,6 +265,11 @@ macro_rules! for_each_op {
             fstore32le_offset32 = Fstore32LeOffset32 { ptr: XReg, offset: i32, src: FReg };
             /// `*(ptr + offset) = src`
             fstore64le_offset32 = Fstore64LeOffset32 { ptr: XReg, offset: i32, src: FReg };
+
+            /// `dst = *(ptr + offset)`
+            vload128le_offset32 = VLoad128Offset32 { dst: VReg, ptr: XReg, offset: i32 };
+            /// `*(ptr + offset) = src`
+            vstore128le_offset32 = Vstore128LeOffset32 { ptr: XReg, offset: i32, src: VReg };
 
             /// `push lr; push fp; fp = sp`
             push_frame = PushFrame ;

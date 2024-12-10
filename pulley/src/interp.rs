@@ -534,6 +534,24 @@ impl Default for VRegVal {
     }
 }
 
+#[allow(missing_docs)]
+impl VRegVal {
+    pub fn new_u128(i: u128) -> Self {
+        let mut val = Self::default();
+        val.set_u128(i);
+        val
+    }
+
+    pub fn get_u128(&self) -> u128 {
+        let val = unsafe { self.0.u128 };
+        u128::from_le(val)
+    }
+
+    pub fn set_u128(&mut self, val: u128) {
+        self.0.u128 = val.to_le();
+    }
+}
+
 /// The machine state for a Pulley virtual machine: the various registers and
 /// stack.
 pub struct MachineState {
@@ -1113,6 +1131,48 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xshl32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u32(a.wrapping_shl(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xshr32_u(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u32(a.wrapping_shr(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xshr32_s(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_i32(a.wrapping_shr(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xshl64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u64(a.wrapping_shl(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xshr64_u(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u64(a.wrapping_shr(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xshr64_s(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i64();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_i64(a.wrapping_shr(b));
+        ControlFlow::Continue(())
+    }
+
     fn xeq64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u64();
         let b = self.state[operands.src2].get_u64();
@@ -1325,6 +1385,20 @@ impl OpVisitor for Interpreter<'_> {
         let val = self.state[src].get_f64();
         unsafe {
             self.store(ptr, offset, val.to_bits().to_le());
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn vload128le_offset32(&mut self, dst: VReg, ptr: XReg, offset: i32) -> ControlFlow<Done> {
+        let val = unsafe { self.load::<u128>(ptr, offset) };
+        self.state[dst].set_u128(u128::from_le(val));
+        ControlFlow::Continue(())
+    }
+
+    fn vstore128le_offset32(&mut self, ptr: XReg, offset: i32, src: VReg) -> ControlFlow<Done> {
+        let val = self.state[src].get_u128();
+        unsafe {
+            self.store(ptr, offset, val.to_le());
         }
         ControlFlow::Continue(())
     }

@@ -80,10 +80,12 @@
     ;; control behavior such as endianness.
     (XLoad (dst WritableXReg) (mem Amode) (ty Type) (flags MemFlags) (ext ExtKind))
     (FLoad (dst WritableFReg) (mem Amode) (ty Type) (flags MemFlags))
+    (VLoad (dst WritableVReg) (mem Amode) (ty Type) (flags MemFlags))
 
     ;; Stores.
     (XStore (mem Amode) (src XReg) (ty Type) (flags MemFlags))
     (FStore (mem Amode) (src FReg) (ty Type) (flags MemFlags))
+    (VStore (mem Amode) (src VReg) (ty Type) (flags MemFlags))
 
     ;; A raw pulley instruction generated at compile-time via Pulley's
     ;; `for_each_op!` macro. This variant has `pulley_*` constructors to
@@ -429,3 +431,11 @@
 
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
+
+;;;; Helpers for Sign/Zero extension ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(decl zext (Value) XReg)
+(rule (zext val @ (value_type $I64)) val)
+(rule (zext val @ (value_type $I32)) (pulley_zext32 val))
+(rule (zext val @ (value_type $I16)) (pulley_zext16 val))
+(rule (zext val @ (value_type $I8)) (pulley_zext8 val))

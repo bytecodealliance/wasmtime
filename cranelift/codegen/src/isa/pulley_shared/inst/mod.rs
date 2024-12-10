@@ -44,7 +44,15 @@ mod generated {
 impl Inst {
     /// Generic constructor for a load (zero-extending where appropriate).
     pub fn gen_load(dst: Writable<Reg>, mem: Amode, ty: Type, flags: MemFlags) -> Inst {
-        if ty.is_int() {
+        if ty.is_vector() {
+            assert_eq!(ty.bytes(), 16);
+            Inst::VLoad {
+                dst: dst.map(|r| VReg::new(r).unwrap()),
+                mem,
+                ty,
+                flags,
+            }
+        } else if ty.is_int() {
             Inst::XLoad {
                 dst: dst.map(|r| XReg::new(r).unwrap()),
                 mem,
@@ -64,7 +72,15 @@ impl Inst {
 
     /// Generic constructor for a store.
     pub fn gen_store(mem: Amode, from_reg: Reg, ty: Type, flags: MemFlags) -> Inst {
-        if ty.is_int() {
+        if ty.is_vector() {
+            assert_eq!(ty.bytes(), 16);
+            Inst::VStore {
+                mem,
+                src: VReg::new(from_reg).unwrap(),
+                ty,
+                flags,
+            }
+        } else if ty.is_int() {
             Inst::XStore {
                 mem,
                 src: XReg::new(from_reg).unwrap(),
@@ -242,6 +258,26 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_use(src);
         }
 
+        Inst::VLoad {
+            dst,
+            mem,
+            ty: _,
+            flags: _,
+        } => {
+            collector.reg_def(dst);
+            mem.get_operands(collector);
+        }
+
+        Inst::VStore {
+            mem,
+            src,
+            ty: _,
+            flags: _,
+        } => {
+            mem.get_operands(collector);
+            collector.reg_use(src);
+        }
+
         Inst::BrTable { idx, .. } => {
             collector.reg_use(idx);
         }
@@ -361,7 +397,7 @@ where
     }
 
     fn is_included_in_clobbers(&self) -> bool {
-        self.is_args()
+        !self.is_args()
     }
 
     fn is_trap(&self) -> bool {
@@ -750,6 +786,30 @@ impl Inst {
                 let mem = mem.to_string();
                 let src = format_reg(**src);
                 format!("fstore{ty} {mem}, {src} // flags = {flags}")
+            }
+
+            Inst::VLoad {
+                dst,
+                mem,
+                ty,
+                flags,
+            } => {
+                let dst = format_reg(*dst.to_reg());
+                let ty = ty.bits();
+                let mem = mem.to_string();
+                format!("{dst} = vload{ty} {mem} // flags ={flags}")
+            }
+
+            Inst::VStore {
+                mem,
+                src,
+                ty,
+                flags,
+            } => {
+                let ty = ty.bits();
+                let mem = mem.to_string();
+                let src = format_reg(**src);
+                format!("vstore{ty} {mem}, {src} // flags = {flags}")
             }
 
             Inst::BrTable {

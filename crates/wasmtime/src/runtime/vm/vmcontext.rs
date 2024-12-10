@@ -745,6 +745,12 @@ impl VMFuncRef {
         caller: *mut VMOpaqueContext,
         args_and_results: *mut [ValRaw],
     ) -> bool {
+        // If `caller` is actually a `VMArrayCallHostFuncContext` then skip the
+        // interpreter, even though it's available, as `array_call` will be
+        // native code.
+        if (*self.vmctx).magic == wasmtime_environ::VM_ARRAY_CALL_HOST_FUNC_MAGIC {
+            return self.array_call_native(caller, args_and_results);
+        }
         vm.call(self.array_call.cast(), self.vmctx, caller, args_and_results)
     }
 
