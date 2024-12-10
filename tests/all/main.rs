@@ -8,6 +8,7 @@ mod cli_tests;
 mod code_too_large;
 mod component_model;
 mod coredump;
+mod custom_code_memory;
 mod debug;
 mod defaults;
 mod epoch_interruption;
