@@ -1,13 +1,19 @@
 use crate::prelude::*;
+#[cfg(not(feature = "signals-based-traps"))]
+use crate::runtime::vm::send_sync_ptr::SendSyncPtr;
 #[cfg(feature = "signals-based-traps")]
 use crate::runtime::vm::{mmap::UnalignedLength, Mmap};
+#[cfg(not(feature = "signals-based-traps"))]
+use alloc::alloc::Layout;
 use alloc::sync::Arc;
 use core::ops::{Deref, Range};
+#[cfg(not(feature = "signals-based-traps"))]
+use core::ptr::NonNull;
 #[cfg(feature = "std")]
 use std::fs::File;
 
 /// A type which prefers to store backing memory in an OS-backed memory mapping
-/// but can fall back to `Vec<u8>` as well.
+/// but can fall back to the regular memory allocator as well.
 ///
 /// This type is used to store code in Wasmtime and manage read-only and
 /// executable permissions of compiled images. This is created from either an
@@ -20,13 +26,19 @@ use std::fs::File;
 /// are typically not, then the remaining bytes in the final page for
 /// mmap-backed instances are unused.
 ///
-/// Note that when `signals-based-traps` is disabled then this type is backed
-/// by a normal `Vec<u8>`. In such a scenario this type does not support
-/// read-only or executable bits and the methods are not available.
+/// Note that when `signals-based-traps` is disabled then this type is
+/// backed by the regular memory allocator via `alloc` APIs. In such a
+/// scenario this type does not support read-only or executable bits
+/// and the methods are not available. However, the `CustomCodeMemory`
+/// mechanism may be used by the embedder to set up and tear down
+/// executable permissions on parts of this storage.
 pub enum MmapVec {
     #[doc(hidden)]
     #[cfg(not(feature = "signals-based-traps"))]
-    Vec(Vec<u8>),
+    Alloc {
+        base: SendSyncPtr<u8>,
+        layout: Layout,
+    },
     #[doc(hidden)]
     #[cfg(feature = "signals-based-traps")]
     Mmap {
@@ -52,20 +64,32 @@ impl MmapVec {
     }
 
     #[cfg(not(feature = "signals-based-traps"))]
-    fn new_vec(vec: Vec<u8>) -> MmapVec {
-        MmapVec::Vec(vec)
+    fn new_alloc(len: usize, alignment: usize) -> MmapVec {
+        let layout = Layout::from_size_align(len, alignment)
+            .expect("Invalid size or alignment for MmapVec allocation");
+        let base = SendSyncPtr::new(
+            NonNull::new(unsafe { alloc::alloc::alloc_zeroed(layout.clone()) })
+                .expect("Allocation of MmapVec storage failed"),
+        );
+        MmapVec::Alloc { base, layout }
     }
 
-    /// Creates a new zero-initialized `MmapVec` with the given `size`.
+    /// Creates a new zero-initialized `MmapVec` with the given `size`
+    /// and `alignment`.
     ///
     /// This commit will return a new `MmapVec` suitably sized to hold `size`
     /// bytes. All bytes will be initialized to zero since this is a fresh OS
     /// page allocation.
-    pub fn with_capacity(size: usize) -> Result<MmapVec> {
+    pub fn with_capacity_and_alignment(size: usize, alignment: usize) -> Result<MmapVec> {
         #[cfg(feature = "signals-based-traps")]
-        return Ok(MmapVec::new_mmap(Mmap::with_at_least(size)?, size));
+        {
+            assert!(alignment <= crate::runtime::vm::host_page_size());
+            return Ok(MmapVec::new_mmap(Mmap::with_at_least(size)?, size));
+        }
         #[cfg(not(feature = "signals-based-traps"))]
-        return Ok(MmapVec::new_vec(vec![0; size]));
+        {
+            return Ok(MmapVec::new_alloc(size, alignment));
+        }
     }
 
     /// Creates a new `MmapVec` from the contents of an existing `slice`.
@@ -74,7 +98,21 @@ impl MmapVec {
     /// `slice` is copied into the new mmap. It's recommended to avoid this
     /// method if possible to avoid the need to copy data around.
     pub fn from_slice(slice: &[u8]) -> Result<MmapVec> {
-        let mut result = MmapVec::with_capacity(slice.len())?;
+        MmapVec::from_slice_with_alignment(slice, 1)
+    }
+
+    /// Creates a new `MmapVec` from the contents of an existing
+    /// `slice`, with a minimum alignment.
+    ///
+    /// `align` must be a power of two. This is useful when page
+    /// alignment is required when the system otherwise does not use
+    /// virtual memory but has a custom code publish handler.
+    ///
+    /// A new `MmapVec` is allocated to hold the contents of `slice` and then
+    /// `slice` is copied into the new mmap. It's recommended to avoid this
+    /// method if possible to avoid the need to copy data around.  pub
+    pub fn from_slice_with_alignment(slice: &[u8], align: usize) -> Result<MmapVec> {
+        let mut result = MmapVec::with_capacity_and_alignment(slice.len(), align)?;
         // SAFETY: The mmap hasn't been made readonly yet so this should be
         // safe to call.
         unsafe {
@@ -132,7 +170,7 @@ impl MmapVec {
     pub fn original_file(&self) -> Option<&Arc<File>> {
         match self {
             #[cfg(not(feature = "signals-based-traps"))]
-            MmapVec::Vec(_) => None,
+            MmapVec::Alloc { .. } => None,
             #[cfg(feature = "signals-based-traps")]
             MmapVec::Mmap { mmap, .. } => mmap.original_file(),
         }
@@ -155,7 +193,9 @@ impl MmapVec {
     pub unsafe fn as_mut_slice(&mut self) -> &mut [u8] {
         match self {
             #[cfg(not(feature = "signals-based-traps"))]
-            MmapVec::Vec(v) => v,
+            MmapVec::Alloc { base, layout } => {
+                core::slice::from_raw_parts_mut(base.as_mut(), layout.size())
+            }
             #[cfg(feature = "signals-based-traps")]
             MmapVec::Mmap { mmap, len } => mmap.slice_mut(0..*len),
         }
@@ -169,12 +209,29 @@ impl Deref for MmapVec {
     fn deref(&self) -> &[u8] {
         match self {
             #[cfg(not(feature = "signals-based-traps"))]
-            MmapVec::Vec(v) => v,
+            MmapVec::Alloc { base, layout } => unsafe {
+                core::slice::from_raw_parts(base.as_ptr(), layout.size())
+            },
             #[cfg(feature = "signals-based-traps")]
             MmapVec::Mmap { mmap, len } => {
                 // SAFETY: all bytes for this mmap, which is owned by
                 // `MmapVec`, are always at least readable.
                 unsafe { mmap.slice(0..*len) }
+            }
+        }
+    }
+}
+
+impl Drop for MmapVec {
+    fn drop(&mut self) {
+        match self {
+            #[cfg(not(feature = "signals-based-traps"))]
+            MmapVec::Alloc { base, layout, .. } => unsafe {
+                alloc::alloc::dealloc(base.as_mut(), layout.clone());
+            },
+            #[cfg(feature = "signals-based-traps")]
+            MmapVec::Mmap { .. } => {
+                // Drop impl on the `mmap` takes care of this case.
             }
         }
     }
@@ -186,7 +243,7 @@ mod tests {
 
     #[test]
     fn smoke() {
-        let mut mmap = MmapVec::with_capacity(10).unwrap();
+        let mut mmap = MmapVec::with_capacity_and_alignment(10, 1).unwrap();
         assert_eq!(mmap.len(), 10);
         assert_eq!(&mmap[..], &[0; 10]);
 
@@ -197,5 +254,12 @@ mod tests {
         assert!(mmap.get(10).is_none());
         assert_eq!(mmap[0], 1);
         assert_eq!(mmap[2], 3);
+    }
+
+    #[test]
+    fn alignment() {
+        let mmap = MmapVec::with_capacity_and_alignment(10, 4096).unwrap();
+        let raw_ptr = &mmap[0] as *const _ as usize;
+        assert_eq!(raw_ptr & (4096 - 1), 0);
     }
 }

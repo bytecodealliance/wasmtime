@@ -1,5 +1,7 @@
 use crate::prelude::*;
 #[cfg(feature = "runtime")]
+pub use crate::runtime::code_memory::CustomCodeMemory;
+#[cfg(feature = "runtime")]
 use crate::runtime::type_registry::TypeRegistry;
 #[cfg(feature = "runtime")]
 use crate::runtime::vm::GcRuntime;
@@ -655,6 +657,11 @@ impl Engine {
         &self.inner.signatures
     }
 
+    #[cfg(feature = "runtime")]
+    pub(crate) fn custom_code_memory(&self) -> Option<&Arc<dyn CustomCodeMemory>> {
+        self.config().custom_code_memory.as_ref()
+    }
+
     pub(crate) fn epoch_counter(&self) -> &AtomicU64 {
         &self.inner.epoch
     }
@@ -722,6 +729,15 @@ impl Engine {
         (f1(), f2())
     }
 
+    /// Returns the required alignment for a code image, if we
+    /// allocate in a way that is not a system `mmap()` that naturally
+    /// aligns it.
+    fn required_code_alignment(&self) -> usize {
+        self.custom_code_memory()
+            .map(|c| c.required_alignment())
+            .unwrap_or(1)
+    }
+
     /// Loads a `CodeMemory` from the specified in-memory slice, copying it to a
     /// uniquely owned mmap.
     ///
@@ -732,7 +748,13 @@ impl Engine {
         bytes: &[u8],
         expected: ObjectKind,
     ) -> Result<Arc<crate::CodeMemory>> {
-        self.load_code(crate::runtime::vm::MmapVec::from_slice(bytes)?, expected)
+        self.load_code(
+            crate::runtime::vm::MmapVec::from_slice_with_alignment(
+                bytes,
+                self.required_code_alignment(),
+            )?,
+            expected,
+        )
     }
 
     /// Like `load_code_bytes`, but creates a mmap from a file on disk.
@@ -755,7 +777,7 @@ impl Engine {
         expected: ObjectKind,
     ) -> Result<Arc<crate::CodeMemory>> {
         serialization::check_compatible(self, &mmap, expected)?;
-        let mut code = crate::CodeMemory::new(mmap)?;
+        let mut code = crate::CodeMemory::new(self, mmap)?;
         code.publish()?;
         Ok(Arc::new(code))
     }

@@ -29,6 +29,8 @@ use crate::stack::{StackCreator, StackCreatorProxy};
 #[cfg(feature = "async")]
 use wasmtime_fiber::RuntimeFiberStackCreator;
 
+#[cfg(feature = "runtime")]
+pub use crate::runtime::code_memory::CustomCodeMemory;
 #[cfg(feature = "pooling-allocator")]
 pub use crate::runtime::vm::MpkEnabled;
 #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
@@ -133,6 +135,8 @@ pub struct Config {
     pub(crate) cache_config: CacheConfig,
     #[cfg(feature = "runtime")]
     pub(crate) mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
+    #[cfg(feature = "runtime")]
+    pub(crate) custom_code_memory: Option<Arc<dyn CustomCodeMemory>>,
     pub(crate) allocation_strategy: InstanceAllocationStrategy,
     pub(crate) max_wasm_stack: usize,
     /// Explicitly enabled features via `Config::wasm_*` methods. This is a
@@ -233,6 +237,8 @@ impl Config {
             profiling_strategy: ProfilingStrategy::None,
             #[cfg(feature = "runtime")]
             mem_creator: None,
+            #[cfg(feature = "runtime")]
+            custom_code_memory: None,
             allocation_strategy: InstanceAllocationStrategy::OnDemand,
             // 512k of stack -- note that this is chosen currently to not be too
             // big, not be too small, and be a good default for most platforms.
@@ -1333,6 +1339,33 @@ impl Config {
     #[cfg(feature = "async")]
     pub fn with_host_stack(&mut self, stack_creator: Arc<dyn StackCreator>) -> &mut Self {
         self.stack_creator = Some(Arc::new(StackCreatorProxy(stack_creator)));
+        self
+    }
+
+    /// Sets a custom executable-memory publisher.
+    ///
+    /// Custom executable-memory publishers are hooks that allow
+    /// Wasmtime to make certain regions of memory executable when
+    /// loading precompiled modules or compiling new modules
+    /// in-process. In most modern operating systems, memory allocated
+    /// for heap usage is readable and writable by default but not
+    /// executable. To jump to machine code stored in that memory, we
+    /// need to make it executable. For security reasons, we usually
+    /// also make it read-only at the same time, so the executing code
+    /// can't be modified later.
+    ///
+    /// By default, Wasmtime will use the appropriate system calls on
+    /// the host platform for this work. However, it also allows
+    /// plugging in a custom implementation via this configuration
+    /// option. This may be useful on custom or `no_std` platforms,
+    /// for example, especially where virtual memory is not otherwise
+    /// used by Wasmtime (no `signals-and-traps` feature).
+    #[cfg(feature = "runtime")]
+    pub fn with_custom_code_memory(
+        &mut self,
+        custom_code_memory: Option<Arc<dyn CustomCodeMemory>>,
+    ) -> &mut Self {
+        self.custom_code_memory = custom_code_memory;
         self
     }
 

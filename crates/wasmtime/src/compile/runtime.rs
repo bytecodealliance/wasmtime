@@ -9,9 +9,15 @@ use std::sync::Arc;
 use wasmtime_environ::{FinishedObject, ObjectBuilder, ObjectKind};
 
 impl<'a> CodeBuilder<'a> {
-    fn compile_cached<T>(
+    fn compile_cached<T, S>(
         &self,
-        build_artifacts: fn(&Engine, &[u8], Option<&[u8]>) -> Result<(MmapVecWrapper, Option<T>)>,
+        build_artifacts: fn(
+            &Engine,
+            &[u8],
+            Option<&[u8]>,
+            &S,
+        ) -> Result<(MmapVecWrapper, Option<T>)>,
+        state: &S,
     ) -> Result<(Arc<CodeMemory>, Option<T>)> {
         let wasm = self.get_wasm()?;
         let dwarf_package = self.get_dwarf_package();
@@ -28,24 +34,32 @@ impl<'a> CodeBuilder<'a> {
                 &dwarf_package,
                 // Don't hash this as it's just its own "pure" function pointer.
                 NotHashed(build_artifacts),
+                // Don't hash the FinishedObject state: this contains
+                // things like required runtime alignment, and does
+                // not impact the compilation result itself.
+                NotHashed(state),
             );
             let (code, info_and_types) =
                 wasmtime_cache::ModuleCacheEntry::new("wasmtime", self.engine.cache_config())
                     .get_data_raw(
                         &state,
                         // Cache miss, compute the actual artifacts
-                        |(engine, wasm, dwarf_package, build_artifacts)| -> Result<_> {
-                            let (mmap, info) =
-                                (build_artifacts.0)(engine.0, wasm, dwarf_package.as_deref())?;
-                            let code = publish_mmap(mmap.0)?;
+                        |(engine, wasm, dwarf_package, build_artifacts, state)| -> Result<_> {
+                            let (mmap, info) = (build_artifacts.0)(
+                                engine.0,
+                                wasm,
+                                dwarf_package.as_deref(),
+                                state.0,
+                            )?;
+                            let code = publish_mmap(engine.0, mmap.0)?;
                             Ok((code, info))
                         },
                         // Implementation of how to serialize artifacts
-                        |(_engine, _wasm, _, _), (code, _info_and_types)| {
+                        |(_engine, _wasm, _, _, _), (code, _info_and_types)| {
                             Some(code.mmap().to_vec())
                         },
                         // Cache hit, deserialize the provided artifacts
-                        |(engine, wasm, _, _), serialized_bytes| {
+                        |(engine, wasm, _, _, _), serialized_bytes| {
                             let kind = if wasmparser::Parser::is_component(&wasm) {
                                 ObjectKind::Component
                             } else {
@@ -61,8 +75,8 @@ impl<'a> CodeBuilder<'a> {
         #[cfg(not(feature = "cache"))]
         {
             let (mmap, info_and_types) =
-                build_artifacts(self.engine, &wasm, dwarf_package.as_deref())?;
-            let code = publish_mmap(mmap.0)?;
+                build_artifacts(self.engine, &wasm, dwarf_package.as_deref(), state)?;
+            let code = publish_mmap(self.engine, mmap.0)?;
             return Ok((code, info_and_types));
         }
 
@@ -79,7 +93,9 @@ impl<'a> CodeBuilder<'a> {
     /// Note that this method will cache compilations if the `cache` feature is
     /// enabled and turned on in [`Config`](crate::Config).
     pub fn compile_module(&self) -> Result<Module> {
-        let (code, info_and_types) = self.compile_cached(super::build_artifacts)?;
+        let custom_alignment = self.custom_alignment();
+        let (code, info_and_types) =
+            self.compile_cached(super::build_artifacts, &custom_alignment)?;
         Module::from_parts(self.engine, code, info_and_types)
     }
 
@@ -87,22 +103,42 @@ impl<'a> CodeBuilder<'a> {
     /// [`Component`] instead of a module.
     #[cfg(feature = "component-model")]
     pub fn compile_component(&self) -> Result<Component> {
-        let (code, artifacts) = self.compile_cached(super::build_component_artifacts)?;
+        let custom_alignment = self.custom_alignment();
+        let (code, artifacts) =
+            self.compile_cached(super::build_component_artifacts, &custom_alignment)?;
         Component::from_parts(self.engine, code, artifacts)
+    }
+
+    fn custom_alignment(&self) -> CustomAlignment {
+        CustomAlignment {
+            alignment: self
+                .engine
+                .custom_code_memory()
+                .map(|c| c.required_alignment())
+                .unwrap_or(1),
+        }
     }
 }
 
-fn publish_mmap(mmap: MmapVec) -> Result<Arc<CodeMemory>> {
-    let mut code = CodeMemory::new(mmap)?;
+fn publish_mmap(engine: &Engine, mmap: MmapVec) -> Result<Arc<CodeMemory>> {
+    let mut code = CodeMemory::new(engine, mmap)?;
     code.publish()?;
     Ok(Arc::new(code))
 }
 
 pub(crate) struct MmapVecWrapper(pub MmapVec);
 
+/// Custom alignment requirements from the Engine for
+/// produced-at-runtime-in-memory code artifacts.
+pub(crate) struct CustomAlignment {
+    alignment: usize,
+}
+
 impl FinishedObject for MmapVecWrapper {
-    fn finish_object(obj: ObjectBuilder<'_>) -> Result<Self> {
+    type State = CustomAlignment;
+    fn finish_object(obj: ObjectBuilder<'_>, align: &CustomAlignment) -> Result<Self> {
         let mut result = ObjectMmap::default();
+        result.alignment = align.alignment;
         return match obj.finish(&mut result) {
             Ok(()) => {
                 assert!(result.mmap.is_some(), "no reserve");
@@ -127,6 +163,7 @@ impl FinishedObject for MmapVecWrapper {
         struct ObjectMmap {
             mmap: Option<MmapVec>,
             len: usize,
+            alignment: usize,
             err: Option<Error>,
         }
 
@@ -137,7 +174,7 @@ impl FinishedObject for MmapVecWrapper {
 
             fn reserve(&mut self, additional: usize) -> Result<(), ()> {
                 assert!(self.mmap.is_none(), "cannot reserve twice");
-                self.mmap = match MmapVec::with_capacity(additional) {
+                self.mmap = match MmapVec::with_capacity_and_alignment(additional, self.alignment) {
                     Ok(mmap) => Some(mmap),
                     Err(e) => {
                         self.err = Some(e);

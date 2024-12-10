@@ -274,7 +274,7 @@ impl<'a> CodeBuilder<'a> {
     pub fn compile_module_serialized(&self) -> Result<Vec<u8>> {
         let wasm = self.get_wasm()?;
         let dwarf_package = self.get_dwarf_package();
-        let (v, _) = super::build_artifacts(self.engine, &wasm, dwarf_package.as_deref())?;
+        let (v, _) = super::build_artifacts(self.engine, &wasm, dwarf_package.as_deref(), &())?;
         Ok(v)
     }
 
@@ -284,7 +284,7 @@ impl<'a> CodeBuilder<'a> {
     #[cfg(feature = "component-model")]
     pub fn compile_component_serialized(&self) -> Result<Vec<u8>> {
         let bytes = self.get_wasm()?;
-        let (v, _) = super::build_component_artifacts(self.engine, &bytes, None)?;
+        let (v, _) = super::build_component_artifacts(self.engine, &bytes, None, &())?;
         Ok(v)
     }
 }
