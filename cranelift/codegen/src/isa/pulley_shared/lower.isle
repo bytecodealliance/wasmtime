@@ -6,6 +6,20 @@
 
 ;;;; Rules for Control Flow ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+;; Helper to place a conditional `Value` provided into a register. Pulley
+;; conditional values occupy the full low 32-bits of a register and so this
+;; needs to handle situations such as when the `Value` is 64-bits an explicit
+;; comparison must be made. Additionally if `Value` is smaller than 32-bits
+;; then it must be sign-extended up to at least 32 bits.
+(decl lower_cond (Value) XReg)
+(rule (lower_cond val @ (value_type $I64)) (pulley_xneq64 val (pulley_xconst8 0)))
+(rule (lower_cond val @ (value_type $I32)) val)
+(rule (lower_cond val @ (value_type $I16)) (pulley_zext16 val))
+(rule (lower_cond val @ (value_type $I8)) (pulley_zext8 val))
+
+;; Peel away explicit `uextend` values to take a look at the inner value.
+(rule 1 (lower_cond (uextend val)) (lower_cond val))
+
 ;; The main control-flow-lowering term: takes a control-flow instruction and
 ;; target(s) and emits the necessary instructions.
 (decl partial lower_branch (Inst MachLabelSlice) Unit)
@@ -15,8 +29,8 @@
       (emit_side_effect (pulley_jump label)))
 
 ;; Generic case for conditional branches.
-(rule -1 (lower_branch (brif (maybe_uextend c) _ _) (two_targets then else))
-      (emit_side_effect (pulley_br_if (zext c) then else)))
+(rule -1 (lower_branch (brif c _ _) (two_targets then else))
+      (emit_side_effect (pulley_br_if32 (lower_cond c) then else)))
 
 ;; Conditional branches on `icmp`s.
 (rule (lower_branch (brif (maybe_uextend (icmp cc a b @ (value_type $I32))) _ _)
@@ -420,8 +434,14 @@
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (fits_in_64 _) (uextend val)))
-  (zext val))
+(rule (lower (has_type (fits_in_64 _) (uextend val @ (value_type $I32))))
+  (pulley_zext32 val))
+
+(rule (lower (has_type (fits_in_64 _) (uextend val @ (value_type $I16))))
+  (pulley_zext16 val))
+
+(rule (lower (has_type (fits_in_64 _) (uextend val @ (value_type $I8))))
+  (pulley_zext8 val))
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -446,3 +466,17 @@
 
 (rule (lower (has_type $I64 (uadd_overflow_trap a b tc)))
   (pulley_xadd64_uoverflow_trap a b tc))
+
+;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (ty_int (fits_in_32 _)) (select c a b)))
+  (pulley_xselect32 (lower_cond c) a b))
+
+(rule 1 (lower (has_type $I64 (select c a b)))
+  (pulley_xselect64 (lower_cond c) a b))
+
+(rule 1 (lower (has_type $F32 (select c a b)))
+  (pulley_fselect32 (lower_cond c) a b))
+
+(rule 1 (lower (has_type $F64 (select c a b)))
+  (pulley_fselect64 (lower_cond c) a b))

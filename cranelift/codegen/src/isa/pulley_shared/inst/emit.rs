@@ -247,7 +247,7 @@ fn pulley_emit<P>(
             enc::jump(sink, 0x00000000);
         }
 
-        Inst::BrIf {
+        Inst::BrIf32 {
             c,
             taken,
             not_taken,
@@ -258,14 +258,14 @@ fn pulley_emit<P>(
 
             sink.use_label_at_offset(taken_start, *taken, LabelUse::Jump(2));
             let mut inverted = SmallVec::<[u8; 16]>::new();
-            enc::br_if_not(&mut inverted, c, 0x00000000);
+            enc::br_if_not32(&mut inverted, c, 0x00000000);
             debug_assert_eq!(
                 inverted.len(),
                 usize::try_from(taken_end - *start_offset).unwrap()
             );
 
             sink.add_cond_branch(*start_offset, taken_end, *taken, &inverted);
-            enc::br_if(sink, c, 0x00000000);
+            enc::br_if32(sink, c, 0x00000000);
             debug_assert_eq!(sink.cur_offset(), taken_end);
 
             // If not taken.
