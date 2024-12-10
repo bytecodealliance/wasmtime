@@ -440,8 +440,9 @@ impl Assembler {
             })
         }
 
-        // cranelif-codegen doesn't support emitting u/sdiv for anything but I64,
+        // `cranelift-codegen` doesn't support emitting u/sdiv for anything but I64,
         // we therefore sign-extend the operand.
+        // see: https://github.com/bytecodealliance/wasmtime/issues/9766
         if size == OperandSize::S32 {
             self.emit(Inst::Extend {
                 rd: writable!(divisor.into()),
@@ -459,18 +460,12 @@ impl Assembler {
             });
         }
 
-        let alu_op = match kind {
+        let op = match kind {
             DivKind::Signed => ALUOp::SDiv,
             DivKind::Unsigned => ALUOp::UDiv,
         };
 
-        self.emit(Inst::AluRRR {
-            alu_op,
-            size: OperandSize::S64.into(),
-            rd: dest.map(Into::into),
-            rn: dividend.into(),
-            rm: divisor.into(),
-        })
+        self.emit_alu_rrr(op, divisor, dividend, dest.map(Into::into), OperandSize::S64);
     }
 
     /// And with three registers.
