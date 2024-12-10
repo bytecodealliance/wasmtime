@@ -11,14 +11,44 @@
 ;; needs to handle situations such as when the `Value` is 64-bits an explicit
 ;; comparison must be made. Additionally if `Value` is smaller than 32-bits
 ;; then it must be sign-extended up to at least 32 bits.
-(decl lower_cond (Value) XReg)
-(rule (lower_cond val @ (value_type $I64)) (pulley_xneq64 val (pulley_xconst8 0)))
-(rule (lower_cond val @ (value_type $I32)) val)
-(rule (lower_cond val @ (value_type $I16)) (pulley_zext16 val))
-(rule (lower_cond val @ (value_type $I8)) (pulley_zext8 val))
+(decl lower_cond (Value) Cond)
+(rule (lower_cond val @ (value_type $I64))
+  (Cond.IfXneq64 val (pulley_xconst8 0)))
+(rule (lower_cond val @ (value_type $I32)) (Cond.If32 val))
+(rule (lower_cond val @ (value_type $I16)) (Cond.If32 (pulley_zext16 val)))
+(rule (lower_cond val @ (value_type $I8)) (Cond.If32 (pulley_zext8 val)))
 
 ;; Peel away explicit `uextend` values to take a look at the inner value.
 (rule 1 (lower_cond (uextend val)) (lower_cond val))
+;; Conditional branches on `icmp`s.
+(rule 1 (lower_cond (icmp cc a b @ (value_type $I32))) (lower_cond_icmp32 cc a b))
+(rule 1 (lower_cond (icmp cc a b @ (value_type $I64))) (lower_cond_icmp64 cc a b))
+
+(decl lower_cond_icmp32 (IntCC Value Value) Cond)
+(rule (lower_cond_icmp32 (IntCC.Equal) a b) (Cond.IfXeq32 a b))
+(rule (lower_cond_icmp32 (IntCC.NotEqual) a b) (Cond.IfXneq32 a b))
+(rule (lower_cond_icmp32 (IntCC.SignedLessThan) a b) (Cond.IfXslt32 a b))
+(rule (lower_cond_icmp32 (IntCC.SignedLessThanOrEqual) a b) (Cond.IfXslteq32 a b))
+(rule (lower_cond_icmp32 (IntCC.UnsignedLessThan) a b) (Cond.IfXult32 a b))
+(rule (lower_cond_icmp32 (IntCC.UnsignedLessThanOrEqual) a b) (Cond.IfXulteq32 a b))
+;; Swap args for conditions pulley doesn't have
+(rule (lower_cond_icmp32 (IntCC.SignedGreaterThan) a b) (Cond.IfXslt32 b a))
+(rule (lower_cond_icmp32 (IntCC.SignedGreaterThanOrEqual) a b) (Cond.IfXslteq32 b a))
+(rule (lower_cond_icmp32 (IntCC.UnsignedGreaterThan) a b) (Cond.IfXult32 b a))
+(rule (lower_cond_icmp32 (IntCC.UnsignedGreaterThanOrEqual) a b) (Cond.IfXulteq32 b a))
+
+(decl lower_cond_icmp64 (IntCC Value Value) Cond)
+(rule (lower_cond_icmp64 (IntCC.Equal) a b) (Cond.IfXeq64 a b))
+(rule (lower_cond_icmp64 (IntCC.NotEqual) a b) (Cond.IfXneq64 a b))
+(rule (lower_cond_icmp64 (IntCC.SignedLessThan) a b) (Cond.IfXslt64 a b))
+(rule (lower_cond_icmp64 (IntCC.SignedLessThanOrEqual) a b) (Cond.IfXslteq64 a b))
+(rule (lower_cond_icmp64 (IntCC.UnsignedLessThan) a b) (Cond.IfXult64 a b))
+(rule (lower_cond_icmp64 (IntCC.UnsignedLessThanOrEqual) a b) (Cond.IfXulteq64 a b))
+;; Swap args for conditions pulley doesn't have
+(rule (lower_cond_icmp64 (IntCC.SignedGreaterThan) a b) (Cond.IfXslt64 b a))
+(rule (lower_cond_icmp64 (IntCC.SignedGreaterThanOrEqual) a b) (Cond.IfXslteq64 b a))
+(rule (lower_cond_icmp64 (IntCC.UnsignedGreaterThan) a b) (Cond.IfXult64 b a))
+(rule (lower_cond_icmp64 (IntCC.UnsignedGreaterThanOrEqual) a b) (Cond.IfXulteq64 b a))
 
 ;; The main control-flow-lowering term: takes a control-flow instruction and
 ;; target(s) and emits the necessary instructions.
@@ -30,37 +60,7 @@
 
 ;; Generic case for conditional branches.
 (rule -1 (lower_branch (brif c _ _) (two_targets then else))
-      (emit_side_effect (pulley_br_if32 (lower_cond c) then else)))
-
-;; Conditional branches on `icmp`s.
-(rule (lower_branch (brif (maybe_uextend (icmp cc a b @ (value_type $I32))) _ _)
-                    (two_targets then else))
-      (emit_side_effect (lower_brif_of_icmp32 cc a b then else)))
-
-(decl lower_brif_of_icmp32 (IntCC Value Value MachLabel MachLabel) SideEffectNoResult)
-(rule (lower_brif_of_icmp32 (IntCC.Equal) a b then else)
-      (pulley_br_if_xeq32 a b then else))
-(rule (lower_brif_of_icmp32 (IntCC.NotEqual) a b then else)
-      (pulley_br_if_xneq32 a b then else))
-(rule (lower_brif_of_icmp32 (IntCC.SignedLessThan) a b then else)
-      (pulley_br_if_xslt32 a b then else))
-(rule (lower_brif_of_icmp32 (IntCC.SignedLessThanOrEqual) a b then else)
-      (pulley_br_if_xslteq32 a b then else))
-(rule (lower_brif_of_icmp32 (IntCC.UnsignedLessThan) a b then else)
-      (pulley_br_if_xult32 a b then else))
-(rule (lower_brif_of_icmp32 (IntCC.UnsignedLessThanOrEqual) a b then else)
-      (pulley_br_if_xulteq32 a b then else))
-
-;; Pulley doesn't have instructions for `>` and `>=`, so we have to reverse the
-;; operation.
-(rule (lower_brif_of_icmp32 (IntCC.SignedGreaterThan) a b then else)
-      (lower_brif_of_icmp32 (IntCC.SignedLessThan) b a then else))
-(rule (lower_brif_of_icmp32 (IntCC.SignedGreaterThanOrEqual) a b then else)
-      (lower_brif_of_icmp32 (IntCC.SignedLessThanOrEqual) b a then else))
-(rule (lower_brif_of_icmp32 (IntCC.UnsignedGreaterThan) a b then else)
-      (lower_brif_of_icmp32 (IntCC.UnsignedLessThan) b a then else))
-(rule (lower_brif_of_icmp32 (IntCC.UnsignedGreaterThanOrEqual) a b then else)
-      (lower_brif_of_icmp32 (IntCC.UnsignedLessThanOrEqual) b a then else))
+      (emit_side_effect (pulley_br_if (lower_cond c) then else)))
 
 ;; Branch tables.
 (rule (lower_branch (br_table index _) (jump_table_targets default targets))
@@ -73,57 +73,11 @@
 
 ;;;; Rules for `trapz` and `trapnz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (trapz a @ (value_type (ty_32_or_64 ty)) code))
-      (let ((zero Reg (pulley_xconst8 0)))
-        (side_effect (pulley_trap_if (IntCC.Equal)
-                                     (ty_to_operand_size ty)
-                                     a
-                                     zero
-                                     code))))
+(rule (lower (trapz cond code))
+  (side_effect (pulley_trap_if (cond_invert (lower_cond cond)) code)))
 
-(rule (lower (trapnz a @ (value_type (ty_32_or_64 ty)) code))
-      (let ((zero Reg (pulley_xconst8 0)))
-        (side_effect (pulley_trap_if (IntCC.NotEqual)
-                                     (ty_to_operand_size ty)
-                                     a
-                                     zero
-                                     code))))
-
-;; Fold `(trap[n]z (icmp ...))` together.
-
-(rule 1 (lower (trapz (icmp cc a b @ (value_type (ty_32_or_64 ty))) code))
-      (side_effect (pulley_trap_if (intcc_complement cc)
-                                   (ty_to_operand_size ty)
-                                   a
-                                   b
-                                   code)))
-
-(rule 1 (lower (trapnz (icmp cc a b @ (value_type (ty_32_or_64 ty))) code))
-      (side_effect (pulley_trap_if cc
-                                   (ty_to_operand_size ty)
-                                   a
-                                   b
-                                   code)))
-
-;; Fold `(trap[n]z (iconst ...))` together.
-
-(rule 2 (lower (trapz (iconst (u64_from_imm64 (u64_nonzero _))) code))
-      (output_none))
-
-(rule 2 (lower (trapnz (iconst (u64_from_imm64 0)) code))
-      (output_none))
-
-;; TODO: These rules are disabled because they insert a block terminator into
-;; the middle of the current block, which leads to regalloc errors. We should
-;; ideally be able to lower conditional traps that will always trap into
-;; unconditional traps though. This isn't very high priority though because
-;; traps, pretty much by definition, are not hot paths.
-;;
-;; (rule 3 (lower (trapnz (iconst (u64_from_imm64 (u64_nonzero _))) code))
-;;       (side_effect (pulley_trap code)))
-;;
-;; (rule 3 (lower (trapz (iconst (u64_from_imm64 0)) code))
-;;       (side_effect (pulley_trap code)))
+(rule (lower (trapnz cond code))
+  (side_effect (pulley_trap_if (lower_cond cond) code)))
 
 ;;;; Rules for `get_stack_pointer` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -470,13 +424,30 @@
 ;;;; Rules for `select` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (has_type (ty_int (fits_in_32 _)) (select c a b)))
-  (pulley_xselect32 (lower_cond c) a b))
+  (pulley_xselect32 (emit_cond (lower_cond c)) a b))
 
 (rule 1 (lower (has_type $I64 (select c a b)))
-  (pulley_xselect64 (lower_cond c) a b))
+  (pulley_xselect64 (emit_cond (lower_cond c)) a b))
 
 (rule 1 (lower (has_type $F32 (select c a b)))
-  (pulley_fselect32 (lower_cond c) a b))
+  (pulley_fselect32 (emit_cond (lower_cond c)) a b))
 
 (rule 1 (lower (has_type $F64 (select c a b)))
-  (pulley_fselect64 (lower_cond c) a b))
+  (pulley_fselect64 (emit_cond (lower_cond c)) a b))
+
+;; Helper to emit a conditional into a register itself.
+(decl emit_cond (Cond) XReg)
+(rule (emit_cond (Cond.If32 reg)) reg)
+(rule (emit_cond (Cond.IfNot32 reg)) (pulley_xeq32 reg (pulley_xconst8 0)))
+(rule (emit_cond (Cond.IfXeq32 src1 src2)) (pulley_xeq32 src1 src2))
+(rule (emit_cond (Cond.IfXneq32 src1 src2)) (pulley_xneq32 src1 src2))
+(rule (emit_cond (Cond.IfXslt32 src1 src2)) (pulley_xslt32 src1 src2))
+(rule (emit_cond (Cond.IfXslteq32 src1 src2)) (pulley_xslteq32 src1 src2))
+(rule (emit_cond (Cond.IfXult32 src1 src2)) (pulley_xult32 src1 src2))
+(rule (emit_cond (Cond.IfXulteq32 src1 src2)) (pulley_xulteq32 src1 src2))
+(rule (emit_cond (Cond.IfXeq64 src1 src2)) (pulley_xeq64 src1 src2))
+(rule (emit_cond (Cond.IfXneq64 src1 src2)) (pulley_xneq64 src1 src2))
+(rule (emit_cond (Cond.IfXslt64 src1 src2)) (pulley_xslt64 src1 src2))
+(rule (emit_cond (Cond.IfXslteq64 src1 src2)) (pulley_xslteq64 src1 src2))
+(rule (emit_cond (Cond.IfXult64 src1 src2)) (pulley_xult64 src1 src2))
+(rule (emit_cond (Cond.IfXulteq64 src1 src2)) (pulley_xulteq64 src1 src2))

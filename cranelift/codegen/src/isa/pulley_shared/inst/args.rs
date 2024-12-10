@@ -2,7 +2,9 @@
 
 use super::*;
 use crate::machinst::abi::StackAMode;
+use pulley_interpreter::encode;
 use pulley_interpreter::regs::Reg as _;
+use std::fmt;
 
 /// A macro for defining a newtype of `Reg` that enforces some invariant about
 /// the wrapped `Reg` (such as that it is of a particular register class).
@@ -228,4 +230,146 @@ pub enum OperandSize {
     Size32,
     /// 64 bits.
     Size64,
+}
+
+pub use crate::isa::pulley_shared::lower::isle::generated_code::Cond;
+
+impl Cond {
+    /// Collect register operands within `collector` for register allocation.
+    pub fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
+        match self {
+            Cond::If32 { reg } | Cond::IfNot32 { reg } => collector.reg_use(reg),
+
+            Cond::IfXeq32 { src1, src2 }
+            | Cond::IfXneq32 { src1, src2 }
+            | Cond::IfXslt32 { src1, src2 }
+            | Cond::IfXslteq32 { src1, src2 }
+            | Cond::IfXult32 { src1, src2 }
+            | Cond::IfXulteq32 { src1, src2 }
+            | Cond::IfXeq64 { src1, src2 }
+            | Cond::IfXneq64 { src1, src2 }
+            | Cond::IfXslt64 { src1, src2 }
+            | Cond::IfXslteq64 { src1, src2 }
+            | Cond::IfXult64 { src1, src2 }
+            | Cond::IfXulteq64 { src1, src2 } => {
+                collector.reg_use(src1);
+                collector.reg_use(src2);
+            }
+        }
+    }
+
+    /// Encode this condition as a branch into `sink`.
+    ///
+    /// Note that the offset encoded to jump by is filled in as 0 and it's
+    /// assumed `MachBuffer` will come back and clean it up.
+    pub fn encode(&self, sink: &mut impl Extend<u8>) {
+        match self {
+            Cond::If32 { reg } => encode::br_if32(sink, reg, 0),
+            Cond::IfNot32 { reg } => encode::br_if_not32(sink, reg, 0),
+            Cond::IfXeq32 { src1, src2 } => encode::br_if_xeq32(sink, src1, src2, 0),
+            Cond::IfXneq32 { src1, src2 } => encode::br_if_xneq32(sink, src1, src2, 0),
+            Cond::IfXslt32 { src1, src2 } => encode::br_if_xslt32(sink, src1, src2, 0),
+            Cond::IfXslteq32 { src1, src2 } => encode::br_if_xslteq32(sink, src1, src2, 0),
+            Cond::IfXult32 { src1, src2 } => encode::br_if_xult32(sink, src1, src2, 0),
+            Cond::IfXulteq32 { src1, src2 } => encode::br_if_xulteq32(sink, src1, src2, 0),
+            Cond::IfXeq64 { src1, src2 } => encode::br_if_xeq64(sink, src1, src2, 0),
+            Cond::IfXneq64 { src1, src2 } => encode::br_if_xneq64(sink, src1, src2, 0),
+            Cond::IfXslt64 { src1, src2 } => encode::br_if_xslt64(sink, src1, src2, 0),
+            Cond::IfXslteq64 { src1, src2 } => encode::br_if_xslteq64(sink, src1, src2, 0),
+            Cond::IfXult64 { src1, src2 } => encode::br_if_xult64(sink, src1, src2, 0),
+            Cond::IfXulteq64 { src1, src2 } => encode::br_if_xulteq64(sink, src1, src2, 0),
+        }
+    }
+
+    /// Inverts this conditional.
+    pub fn invert(&self) -> Cond {
+        match *self {
+            Cond::If32 { reg } => Cond::IfNot32 { reg },
+            Cond::IfNot32 { reg } => Cond::If32 { reg },
+            Cond::IfXeq32 { src1, src2 } => Cond::IfXneq32 { src1, src2 },
+            Cond::IfXneq32 { src1, src2 } => Cond::IfXeq32 { src1, src2 },
+            Cond::IfXeq64 { src1, src2 } => Cond::IfXneq64 { src1, src2 },
+            Cond::IfXneq64 { src1, src2 } => Cond::IfXeq64 { src1, src2 },
+
+            // Note that for below the condition changes but the operands are
+            // also swapped.
+            Cond::IfXslt32 { src1, src2 } => Cond::IfXslteq32 {
+                src1: src2,
+                src2: src1,
+            },
+            Cond::IfXslteq32 { src1, src2 } => Cond::IfXslt32 {
+                src1: src2,
+                src2: src1,
+            },
+            Cond::IfXult32 { src1, src2 } => Cond::IfXulteq32 {
+                src1: src2,
+                src2: src1,
+            },
+            Cond::IfXulteq32 { src1, src2 } => Cond::IfXult32 {
+                src1: src2,
+                src2: src1,
+            },
+            Cond::IfXslt64 { src1, src2 } => Cond::IfXslteq64 {
+                src1: src2,
+                src2: src1,
+            },
+            Cond::IfXslteq64 { src1, src2 } => Cond::IfXslt64 {
+                src1: src2,
+                src2: src1,
+            },
+            Cond::IfXult64 { src1, src2 } => Cond::IfXulteq64 {
+                src1: src2,
+                src2: src1,
+            },
+            Cond::IfXulteq64 { src1, src2 } => Cond::IfXult64 {
+                src1: src2,
+                src2: src1,
+            },
+        }
+    }
+}
+
+impl fmt::Display for Cond {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Cond::If32 { reg } => write!(f, "if32 {}", reg_name(**reg)),
+            Cond::IfNot32 { reg } => write!(f, "if_not32 {}", reg_name(**reg)),
+            Cond::IfXeq32 { src1, src2 } => {
+                write!(f, "if_xeq32 {}, {}", reg_name(**src1), reg_name(**src2))
+            }
+            Cond::IfXneq32 { src1, src2 } => {
+                write!(f, "if_xneq32 {}, {}", reg_name(**src1), reg_name(**src2))
+            }
+            Cond::IfXslt32 { src1, src2 } => {
+                write!(f, "if_xslt32 {}, {}", reg_name(**src1), reg_name(**src2))
+            }
+            Cond::IfXslteq32 { src1, src2 } => {
+                write!(f, "if_xslteq32 {}, {}", reg_name(**src1), reg_name(**src2))
+            }
+            Cond::IfXult32 { src1, src2 } => {
+                write!(f, "if_xult32 {}, {}", reg_name(**src1), reg_name(**src2))
+            }
+            Cond::IfXulteq32 { src1, src2 } => {
+                write!(f, "if_xulteq32 {}, {}", reg_name(**src1), reg_name(**src2))
+            }
+            Cond::IfXeq64 { src1, src2 } => {
+                write!(f, "if_xeq64 {}, {}", reg_name(**src1), reg_name(**src2))
+            }
+            Cond::IfXneq64 { src1, src2 } => {
+                write!(f, "if_xneq64 {}, {}", reg_name(**src1), reg_name(**src2))
+            }
+            Cond::IfXslt64 { src1, src2 } => {
+                write!(f, "if_xslt64 {}, {}", reg_name(**src1), reg_name(**src2))
+            }
+            Cond::IfXslteq64 { src1, src2 } => {
+                write!(f, "if_xslteq64 {}, {}", reg_name(**src1), reg_name(**src2))
+            }
+            Cond::IfXult64 { src1, src2 } => {
+                write!(f, "if_xult64 {}, {}", reg_name(**src1), reg_name(**src2))
+            }
+            Cond::IfXulteq64 { src1, src2 } => {
+                write!(f, "if_xulteq64 {}, {}", reg_name(**src1), reg_name(**src2))
+            }
+        }
+    }
 }

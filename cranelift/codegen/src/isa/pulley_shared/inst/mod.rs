@@ -113,15 +113,8 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
 
         Inst::Unwind { .. } | Inst::Nop => {}
 
-        Inst::TrapIf {
-            cond: _,
-            size: _,
-            src1,
-            src2,
-            code: _,
-        } => {
-            collector.reg_use(src1);
-            collector.reg_use(src2);
+        Inst::TrapIf { cond, code: _ } => {
+            cond.get_operands(collector);
         }
 
         Inst::GetSpecial { dst, reg } => {
@@ -164,52 +157,12 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
 
         Inst::Jump { .. } => {}
 
-        Inst::BrIf32 {
-            c,
+        Inst::BrIf {
+            cond,
             taken: _,
             not_taken: _,
         } => {
-            collector.reg_use(c);
-        }
-
-        Inst::BrIfXeq32 {
-            src1,
-            src2,
-            taken: _,
-            not_taken: _,
-        }
-        | Inst::BrIfXneq32 {
-            src1,
-            src2,
-            taken: _,
-            not_taken: _,
-        }
-        | Inst::BrIfXslt32 {
-            src1,
-            src2,
-            taken: _,
-            not_taken: _,
-        }
-        | Inst::BrIfXslteq32 {
-            src1,
-            src2,
-            taken: _,
-            not_taken: _,
-        }
-        | Inst::BrIfXult32 {
-            src1,
-            src2,
-            taken: _,
-            not_taken: _,
-        }
-        | Inst::BrIfXulteq32 {
-            src1,
-            src2,
-            taken: _,
-            not_taken: _,
-        } => {
-            collector.reg_use(src1);
-            collector.reg_use(src2);
+            cond.get_operands(collector);
         }
 
         Inst::LoadAddr { dst, mem } => {
@@ -426,13 +379,7 @@ where
             }
             | Inst::Rets { .. } => MachTerminator::Ret,
             Inst::Jump { .. } => MachTerminator::Uncond,
-            Inst::BrIf32 { .. }
-            | Inst::BrIfXeq32 { .. }
-            | Inst::BrIfXneq32 { .. }
-            | Inst::BrIfXslt32 { .. }
-            | Inst::BrIfXslteq32 { .. }
-            | Inst::BrIfXult32 { .. }
-            | Inst::BrIfXulteq32 { .. } => MachTerminator::Cond,
+            Inst::BrIf { .. } => MachTerminator::Cond,
             Inst::BrTable { .. } => MachTerminator::Indirect,
             _ => MachTerminator::None,
         }
@@ -611,16 +558,8 @@ impl Inst {
 
             Inst::Unwind { inst } => format!("unwind {inst:?}"),
 
-            Inst::TrapIf {
-                cond,
-                size,
-                src1,
-                src2,
-                code,
-            } => {
-                let src1 = format_reg(**src1);
-                let src2 = format_reg(**src2);
-                format!("trap_if {cond}, {size:?}, {src1}, {src2} // code = {code:?}")
+            Inst::TrapIf { cond, code } => {
+                format!("trap_{cond} // code = {code:?}")
             }
 
             Inst::Nop => format!("nop"),
@@ -651,88 +590,14 @@ impl Inst {
 
             Inst::Jump { label } => format!("jump {}", label.to_string()),
 
-            Inst::BrIf32 {
-                c,
+            Inst::BrIf {
+                cond,
                 taken,
                 not_taken,
             } => {
-                let c = format_reg(**c);
                 let taken = taken.to_string();
                 let not_taken = not_taken.to_string();
-                format!("br_if32 {c}, {taken}; jump {not_taken}")
-            }
-
-            Inst::BrIfXeq32 {
-                src1,
-                src2,
-                taken,
-                not_taken,
-            } => {
-                let src1 = format_reg(**src1);
-                let src2 = format_reg(**src2);
-                let taken = taken.to_string();
-                let not_taken = not_taken.to_string();
-                format!("br_if_xeq32 {src1}, {src2}, {taken}; jump {not_taken}")
-            }
-            Inst::BrIfXneq32 {
-                src1,
-                src2,
-                taken,
-                not_taken,
-            } => {
-                let src1 = format_reg(**src1);
-                let src2 = format_reg(**src2);
-                let taken = taken.to_string();
-                let not_taken = not_taken.to_string();
-                format!("br_if_xneq32 {src1}, {src2}, {taken}; jump {not_taken}")
-            }
-            Inst::BrIfXslt32 {
-                src1,
-                src2,
-                taken,
-                not_taken,
-            } => {
-                let src1 = format_reg(**src1);
-                let src2 = format_reg(**src2);
-                let taken = taken.to_string();
-                let not_taken = not_taken.to_string();
-                format!("br_if_xslt32 {src1}, {src2}, {taken}; jump {not_taken}")
-            }
-            Inst::BrIfXslteq32 {
-                src1,
-                src2,
-                taken,
-                not_taken,
-            } => {
-                let src1 = format_reg(**src1);
-                let src2 = format_reg(**src2);
-                let taken = taken.to_string();
-                let not_taken = not_taken.to_string();
-                format!("br_if_xslteq32 {src1}, {src2}, {taken}; jump {not_taken}")
-            }
-            Inst::BrIfXult32 {
-                src1,
-                src2,
-                taken,
-                not_taken,
-            } => {
-                let src1 = format_reg(**src1);
-                let src2 = format_reg(**src2);
-                let taken = taken.to_string();
-                let not_taken = not_taken.to_string();
-                format!("br_if_xult32 {src1}, {src2}, {taken}; jump {not_taken}")
-            }
-            Inst::BrIfXulteq32 {
-                src1,
-                src2,
-                taken,
-                not_taken,
-            } => {
-                let src1 = format_reg(**src1);
-                let src2 = format_reg(**src2);
-                let taken = taken.to_string();
-                let not_taken = not_taken.to_string();
-                format!("br_if_xulteq32 {src1}, {src2}, {taken}; jump {not_taken}")
+                format!("br_{cond}, {taken}; jump {not_taken}")
             }
 
             Inst::LoadAddr { dst, mem } => {
