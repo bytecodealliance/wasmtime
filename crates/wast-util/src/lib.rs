@@ -401,7 +401,6 @@ impl WastTest {
                 "misc_testsuite/embenchen_primes.wast",
                 "misc_testsuite/float-round-doesnt-load-too-much.wast",
                 "misc_testsuite/int-to-float-splat.wast",
-                "misc_testsuite/issue4840.wast",
                 "misc_testsuite/issue4890.wast",
                 "misc_testsuite/issue6562.wast",
                 "misc_testsuite/memory-combos.wast",
@@ -433,7 +432,6 @@ impl WastTest {
                 "misc_testsuite/winch/_simd_store.wast",
                 "spec_testsuite/call.wast",
                 "spec_testsuite/call_indirect.wast",
-                "spec_testsuite/conversions.wast",
                 "spec_testsuite/f32.wast",
                 "spec_testsuite/f32_bitwise.wast",
                 "spec_testsuite/f32_cmp.wast",
@@ -518,7 +516,6 @@ impl WastTest {
                 "spec_testsuite/simd_store64_lane.wast",
                 "spec_testsuite/simd_store8_lane.wast",
                 "spec_testsuite/switch.wast",
-                "spec_testsuite/traps.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {

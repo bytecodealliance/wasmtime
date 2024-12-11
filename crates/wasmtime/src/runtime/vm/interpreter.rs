@@ -137,6 +137,7 @@ impl InterpreterRef<'_> {
                     let trap = match kind {
                         TrapKind::IntegerOverflow => Trap::IntegerOverflow,
                         TrapKind::DivideByZero => Trap::IntegerDivisionByZero,
+                        TrapKind::BadConversionToInteger => Trap::BadConversionToInteger,
                     };
                     s.set_jit_trap(regs, None, trap);
                 }

@@ -706,6 +706,7 @@ mod done {
     pub enum TrapKind {
         DivideByZero,
         IntegerOverflow,
+        BadConversionToInteger,
     }
 
     impl MachineState {
@@ -850,6 +851,17 @@ impl Interpreter<'_> {
             .get_ptr::<T>()
             .byte_offset(offset as isize)
             .write_unaligned(val)
+    }
+
+    fn check_xnn_from_fnn<I: Encode>(&mut self, val: f64, lo: f64, hi: f64) -> ControlFlow<Done> {
+        if val != val {
+            return self.done_trap_kind::<I>(Some(TrapKind::BadConversionToInteger));
+        }
+        let val = val.trunc();
+        if val <= lo || val >= hi {
+            return self.done_trap_kind::<I>(Some(TrapKind::IntegerOverflow));
+        }
+        ControlFlow::Continue(())
     }
 }
 
@@ -1945,6 +1957,178 @@ impl OpVisitor for Interpreter<'_> {
             self.state[if_zero].get_f64()
         };
         self.state[dst].set_f64(result);
+        ControlFlow::Continue(())
+    }
+
+    fn f32_from_x32_s(&mut self, dst: FReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i32();
+        self.state[dst].set_f32(a as f32);
+        ControlFlow::Continue(())
+    }
+
+    fn f32_from_x32_u(&mut self, dst: FReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u32();
+        self.state[dst].set_f32(a as f32);
+        ControlFlow::Continue(())
+    }
+
+    fn f32_from_x64_s(&mut self, dst: FReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i64();
+        self.state[dst].set_f32(a as f32);
+        ControlFlow::Continue(())
+    }
+
+    fn f32_from_x64_u(&mut self, dst: FReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u64();
+        self.state[dst].set_f32(a as f32);
+        ControlFlow::Continue(())
+    }
+
+    fn f64_from_x32_s(&mut self, dst: FReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i32();
+        self.state[dst].set_f64(a as f64);
+        ControlFlow::Continue(())
+    }
+
+    fn f64_from_x32_u(&mut self, dst: FReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u32();
+        self.state[dst].set_f64(a as f64);
+        ControlFlow::Continue(())
+    }
+
+    fn f64_from_x64_s(&mut self, dst: FReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i64();
+        self.state[dst].set_f64(a as f64);
+        ControlFlow::Continue(())
+    }
+
+    fn f64_from_x64_u(&mut self, dst: FReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u64();
+        self.state[dst].set_f64(a as f64);
+        ControlFlow::Continue(())
+    }
+
+    fn x32_from_f32_s(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32();
+        self.check_xnn_from_fnn::<crate::X32FromF32S>(a.into(), -2147483649.0, 2147483648.0)?;
+        self.state[dst].set_i32(a as i32);
+        ControlFlow::Continue(())
+    }
+
+    fn x32_from_f32_u(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32();
+        self.check_xnn_from_fnn::<crate::X32FromF32U>(a.into(), -1.0, 4294967296.0)?;
+        self.state[dst].set_u32(a as u32);
+        ControlFlow::Continue(())
+    }
+
+    fn x64_from_f32_s(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32();
+        self.check_xnn_from_fnn::<crate::X64FromF32S>(
+            a.into(),
+            -9223372036854777856.0,
+            9223372036854775808.0,
+        )?;
+        self.state[dst].set_i64(a as i64);
+        ControlFlow::Continue(())
+    }
+
+    fn x64_from_f32_u(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32();
+        self.check_xnn_from_fnn::<crate::X64FromF32U>(a.into(), -1.0, 18446744073709551616.0)?;
+        self.state[dst].set_u64(a as u64);
+        ControlFlow::Continue(())
+    }
+
+    fn x32_from_f64_s(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64();
+        self.check_xnn_from_fnn::<crate::X32FromF64S>(a, -2147483649.0, 2147483648.0)?;
+        self.state[dst].set_i32(a as i32);
+        ControlFlow::Continue(())
+    }
+
+    fn x32_from_f64_u(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64();
+        self.check_xnn_from_fnn::<crate::X32FromF64U>(a, -1.0, 4294967296.0)?;
+        self.state[dst].set_u32(a as u32);
+        ControlFlow::Continue(())
+    }
+
+    fn x64_from_f64_s(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64();
+        self.check_xnn_from_fnn::<crate::X64FromF64S>(
+            a,
+            -9223372036854777856.0,
+            9223372036854775808.0,
+        )?;
+        self.state[dst].set_i64(a as i64);
+        ControlFlow::Continue(())
+    }
+
+    fn x64_from_f64_u(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64();
+        self.check_xnn_from_fnn::<crate::X64FromF64U>(a, -1.0, 18446744073709551616.0)?;
+        self.state[dst].set_u64(a as u64);
+        ControlFlow::Continue(())
+    }
+
+    fn x32_from_f32_s_sat(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32();
+        self.state[dst].set_i32(a as i32);
+        ControlFlow::Continue(())
+    }
+
+    fn x32_from_f32_u_sat(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32();
+        self.state[dst].set_u32(a as u32);
+        ControlFlow::Continue(())
+    }
+
+    fn x64_from_f32_s_sat(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32();
+        self.state[dst].set_i64(a as i64);
+        ControlFlow::Continue(())
+    }
+
+    fn x64_from_f32_u_sat(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32();
+        self.state[dst].set_u64(a as u64);
+        ControlFlow::Continue(())
+    }
+
+    fn x32_from_f64_s_sat(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64();
+        self.state[dst].set_i32(a as i32);
+        ControlFlow::Continue(())
+    }
+
+    fn x32_from_f64_u_sat(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64();
+        self.state[dst].set_u32(a as u32);
+        ControlFlow::Continue(())
+    }
+
+    fn x64_from_f64_s_sat(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64();
+        self.state[dst].set_i64(a as i64);
+        ControlFlow::Continue(())
+    }
+
+    fn x64_from_f64_u_sat(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64();
+        self.state[dst].set_u64(a as u64);
+        ControlFlow::Continue(())
+    }
+
+    fn f32_from_f64(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64();
+        self.state[dst].set_f32(a as f32);
+        ControlFlow::Continue(())
+    }
+
+    fn f64_from_f32(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32();
+        self.state[dst].set_f64(a.into());
         ControlFlow::Continue(())
     }
 }
