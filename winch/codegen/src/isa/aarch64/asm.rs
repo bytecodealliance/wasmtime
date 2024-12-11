@@ -676,7 +676,7 @@ impl Assembler {
         })
     }
 
-    /// Reinterpret a float as an integer.
+    /// Convert a float as an integer.
     pub fn fpu_to_int(&mut self, rn: Reg, rd: WritableReg, size: OperandSize) {
         let op = match size {
             OperandSize::S32 => FpuToIntOp::F32ToI32,
@@ -691,7 +691,7 @@ impl Assembler {
         });
     }
 
-    /// Reinterpret an integer as a float.
+    /// Convert an integer as a float.
     pub fn int_to_fpu(&mut self, rn: Reg, rd: WritableReg, size: OperandSize) {
         let op = match size {
             OperandSize::S32 => IntToFpuOp::I32ToF32,

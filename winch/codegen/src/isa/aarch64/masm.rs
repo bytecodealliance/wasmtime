@@ -547,11 +547,11 @@ impl Masm for MacroAssembler {
     }
 
     fn reinterpret_float_as_int(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
-        self.asm.fpu_to_int(src, dst, size);
+        self.asm.mov_from_vec(src, dst, 0, size);
     }
 
     fn reinterpret_int_as_float(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
-        self.asm.int_to_fpu(src, dst, size);
+        self.asm.mov_to_fpu(src, dst, size);
     }
 
     fn demote(&mut self, dst: WritableReg, src: Reg) {
