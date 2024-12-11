@@ -1578,6 +1578,27 @@ impl OpVisitor for Interpreter<'_> {
         self.state[operands.dst].set_u32(a & b);
         ControlFlow::Continue(())
     }
+
+    fn xand64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u64();
+        self.state[operands.dst].set_u64(a & b);
+        ControlFlow::Continue(())
+    }
+
+    fn xor32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u32(a | b);
+        ControlFlow::Continue(())
+    }
+
+    fn xor64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u64();
+        self.state[operands.dst].set_u64(a | b);
+        ControlFlow::Continue(())
+    }
 }
 
 impl ExtendedOpVisitor for Interpreter<'_> {

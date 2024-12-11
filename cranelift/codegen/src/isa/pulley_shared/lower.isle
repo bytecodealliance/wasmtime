@@ -212,8 +212,19 @@
 
 ;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I32 (band a b)))
-      (pulley_xand32 a b))
+(rule 0 (lower (has_type (fits_in_32 _) (band a b)))
+  (pulley_xand32 a b))
+
+(rule 1 (lower (has_type $I64 (band a b)))
+  (pulley_xand64 a b))
+
+;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (fits_in_32 _) (bor a b)))
+  (pulley_xor32 a b))
+
+(rule 1 (lower (has_type $I64 (bor a b)))
+  (pulley_xor64 a b))
 
 ;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

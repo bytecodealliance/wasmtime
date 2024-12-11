@@ -301,6 +301,7 @@ impl GcCompiler for DrcCompiler {
         init: super::ArrayInit<'_>,
     ) -> WasmResult<ir::Value> {
         let interned_type_index = func_env.module.types[array_type_index];
+        let ptr_ty = func_env.pointer_type();
 
         let len_offset = gc_compiler(func_env)?.layouts().array_length_field_offset();
         let array_layout = func_env.array_layout(interned_type_index).clone();
@@ -338,9 +339,7 @@ impl GcCompiler for DrcCompiler {
             .store(ir::MemFlags::trusted(), len, len_addr, 0);
 
         // Finally, initialize the elements.
-        let len_to_elems_delta = builder
-            .ins()
-            .iconst(ir::types::I64, i64::from(len_to_elems_delta));
+        let len_to_elems_delta = builder.ins().iconst(ptr_ty, i64::from(len_to_elems_delta));
         let elems_addr = builder.ins().iadd(len_addr, len_to_elems_delta);
         init.initialize(
             func_env,
