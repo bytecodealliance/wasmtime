@@ -880,7 +880,7 @@ fn component_instance_size_limit() -> Result<()> {
         Ok(_) => panic!("should have hit limit"),
         Err(e) => assert_eq!(
             e.to_string(),
-            "instance allocation for this component requires 64 bytes of `VMComponentContext` space \
+            "instance allocation for this component requires 272 bytes of `VMComponentContext` space \
              which exceeds the configured maximum of 1 bytes"
         ),
     }

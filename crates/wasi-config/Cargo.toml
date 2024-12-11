@@ -13,7 +13,7 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true }
-wasmtime = { workspace = true, features = ["runtime", "component-model"] }
+wasmtime = { workspace = true, features = ["runtime", "component-model", "async"] }
 
 [dev-dependencies]
 test-programs-artifacts = { workspace = true }
