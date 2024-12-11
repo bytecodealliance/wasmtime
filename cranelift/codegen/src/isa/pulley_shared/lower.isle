@@ -591,3 +591,58 @@
 
 (rule (lower (has_type $F64 (fcopysign a b)))
   (pulley_fcopysign64 a b))
+
+;;;; Rules for `fadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fadd a b))) (pulley_fadd32 a b))
+(rule (lower (has_type $F64 (fadd a b))) (pulley_fadd64 a b))
+
+;;;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fsub a b))) (pulley_fsub32 a b))
+(rule (lower (has_type $F64 (fsub a b))) (pulley_fsub64 a b))
+
+;;;; Rules for `fmul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fmul a b))) (pulley_fmul32 a b))
+(rule (lower (has_type $F64 (fmul a b))) (pulley_fmul64 a b))
+
+;;;; Rules for `fdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fdiv a b))) (pulley_fdiv32 a b))
+(rule (lower (has_type $F64 (fdiv a b))) (pulley_fdiv64 a b))
+
+;;;; Rules for `fmax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fmax a b))) (pulley_fmaximum32 a b))
+(rule (lower (has_type $F64 (fmax a b))) (pulley_fmaximum64 a b))
+
+;;;; Rules for `fmin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fmin a b))) (pulley_fminimum32 a b))
+(rule (lower (has_type $F64 (fmin a b))) (pulley_fminimum64 a b))
+
+;;;; Rules for `trunc` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (trunc a))) (pulley_ftrunc32 a))
+(rule (lower (has_type $F64 (trunc a))) (pulley_ftrunc64 a))
+
+;;;; Rules for `floor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (floor a))) (pulley_ffloor32 a))
+(rule (lower (has_type $F64 (floor a))) (pulley_ffloor64 a))
+
+;;;; Rules for `ceil` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (ceil a))) (pulley_fceil32 a))
+(rule (lower (has_type $F64 (ceil a))) (pulley_fceil64 a))
+
+;;;; Rules for `nearest` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (nearest a))) (pulley_fnearest32 a))
+(rule (lower (has_type $F64 (nearest a))) (pulley_fnearest64 a))
+
+;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (sqrt a))) (pulley_fsqrt32 a))
+(rule (lower (has_type $F64 (sqrt a))) (pulley_fsqrt64 a))

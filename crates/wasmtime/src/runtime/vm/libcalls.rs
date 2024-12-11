@@ -1313,68 +1313,45 @@ pub mod relocs {
         func(f)
     }
 
-    const TOINT_32: f32 = 1.0 / f32::EPSILON;
-    const TOINT_64: f64 = 1.0 / f64::EPSILON;
-
-    // NB: replace with `round_ties_even` from libstd when it's stable as
-    // tracked by rust-lang/rust#96710
     pub extern "C" fn nearestf32(x: f32) -> f32 {
-        // Rust doesn't have a nearest function; there's nearbyint, but it's not
-        // stabilized, so do it manually.
-        // Nearest is either ceil or floor depending on which is nearest or even.
-        // This approach exploited round half to even default mode.
-        let i = x.to_bits();
-        let e = i >> 23 & 0xff;
-        if e >= 0x7f_u32 + 23 {
-            // Check for NaNs.
-            if e == 0xff {
-                // Read the 23-bits significand.
-                if i & 0x7fffff != 0 {
-                    // Ensure it's arithmetic by setting the significand's most
-                    // significant bit to 1; it also works for canonical NaNs.
-                    return f32::from_bits(i | (1 << 22));
-                }
-            }
-            x
-        } else {
-            let abs = float_function! {
-                std: f32::abs,
-                core: libm::fabsf,
-            };
-            let copysign = float_function! {
-                std: f32::copysign,
-                core: libm::copysignf,
-            };
+        let func = float_function! {
+            std: f32::round_ties_even,
+            core: core_round_ties_even,
+        };
+        return func(x);
 
-            copysign(abs(x) + TOINT_32 - TOINT_32, x)
+        #[cfg(not(feature = "std"))]
+        fn core_round_ties_even(x: f32) -> f32 {
+            let round = libm::roundf(x);
+            if libm::fabsf(x - round) != 0.5 {
+                return round;
+            }
+            match round % 2.0 {
+                1.0 => libm::floorf(x),
+                -1.0 => libm::ceilf(x),
+                _ => round,
+            }
         }
     }
 
     pub extern "C" fn nearestf64(x: f64) -> f64 {
-        let i = x.to_bits();
-        let e = i >> 52 & 0x7ff;
-        if e >= 0x3ff_u64 + 52 {
-            // Check for NaNs.
-            if e == 0x7ff {
-                // Read the 52-bits significand.
-                if i & 0xfffffffffffff != 0 {
-                    // Ensure it's arithmetic by setting the significand's most
-                    // significant bit to 1; it also works for canonical NaNs.
-                    return f64::from_bits(i | (1 << 51));
-                }
-            }
-            x
-        } else {
-            let abs = float_function! {
-                std: f64::abs,
-                core: libm::fabs,
-            };
-            let copysign = float_function! {
-                std: f64::copysign,
-                core: libm::copysign,
-            };
+        let func = float_function! {
+            std: f64::round_ties_even,
+            core: core_round_ties_even,
+        };
+        return func(x);
 
-            copysign(abs(x) + TOINT_64 - TOINT_64, x)
+        #[cfg(not(feature = "std"))]
+        fn core_round_ties_even(x: f64) -> f64 {
+            let round = libm::round(x);
+            if libm::fabs(x - round) != 0.5 {
+                return round;
+            }
+            match round % 2.0 {
+                1.0 => libm::floor(x),
+                -1.0 => libm::ceil(x),
+                _ => round,
+            }
         }
     }
 

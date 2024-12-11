@@ -2150,6 +2150,210 @@ impl OpVisitor for Interpreter<'_> {
         self.state[operands.dst].set_f64(a.copysign(b));
         ControlFlow::Continue(())
     }
+
+    fn fadd32(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32();
+        let b = self.state[operands.src2].get_f32();
+        self.state[operands.dst].set_f32(a + b);
+        ControlFlow::Continue(())
+    }
+
+    fn fsub32(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32();
+        let b = self.state[operands.src2].get_f32();
+        self.state[operands.dst].set_f32(a - b);
+        ControlFlow::Continue(())
+    }
+
+    fn fmul32(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32();
+        let b = self.state[operands.src2].get_f32();
+        self.state[operands.dst].set_f32(a * b);
+        ControlFlow::Continue(())
+    }
+
+    fn fdiv32(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32();
+        let b = self.state[operands.src2].get_f32();
+        self.state[operands.dst].set_f32(a / b);
+        ControlFlow::Continue(())
+    }
+
+    fn fmaximum32(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32();
+        let b = self.state[operands.src2].get_f32();
+        // FIXME: replace this with `a.maximum(b)` when rust-lang/rust#91079 is
+        // stabilized
+        let result = if a > b {
+            a
+        } else if b > a {
+            b
+        } else if a == b {
+            if a.is_sign_positive() && b.is_sign_negative() {
+                a
+            } else {
+                b
+            }
+        } else {
+            a + b
+        };
+        self.state[operands.dst].set_f32(result);
+        ControlFlow::Continue(())
+    }
+
+    fn fminimum32(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32();
+        let b = self.state[operands.src2].get_f32();
+        // FIXME: replace this with `a.minimum(b)` when rust-lang/rust#91079 is
+        // stabilized
+        let result = if a < b {
+            a
+        } else if b < a {
+            b
+        } else if a == b {
+            if a.is_sign_negative() && b.is_sign_positive() {
+                a
+            } else {
+                b
+            }
+        } else {
+            a + b
+        };
+        self.state[operands.dst].set_f32(result);
+        ControlFlow::Continue(())
+    }
+
+    fn ftrunc32(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32();
+        self.state[dst].set_f32(a.trunc());
+        ControlFlow::Continue(())
+    }
+
+    fn ffloor32(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32();
+        self.state[dst].set_f32(a.floor());
+        ControlFlow::Continue(())
+    }
+
+    fn fceil32(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32();
+        self.state[dst].set_f32(a.ceil());
+        ControlFlow::Continue(())
+    }
+
+    fn fnearest32(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32();
+        self.state[dst].set_f32(a.round_ties_even());
+        ControlFlow::Continue(())
+    }
+
+    fn fsqrt32(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32();
+        self.state[dst].set_f32(a.sqrt());
+        ControlFlow::Continue(())
+    }
+
+    fn fadd64(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64();
+        let b = self.state[operands.src2].get_f64();
+        self.state[operands.dst].set_f64(a + b);
+        ControlFlow::Continue(())
+    }
+
+    fn fsub64(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64();
+        let b = self.state[operands.src2].get_f64();
+        self.state[operands.dst].set_f64(a - b);
+        ControlFlow::Continue(())
+    }
+
+    fn fmul64(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64();
+        let b = self.state[operands.src2].get_f64();
+        self.state[operands.dst].set_f64(a * b);
+        ControlFlow::Continue(())
+    }
+
+    fn fdiv64(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64();
+        let b = self.state[operands.src2].get_f64();
+        self.state[operands.dst].set_f64(a / b);
+        ControlFlow::Continue(())
+    }
+
+    fn fmaximum64(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64();
+        let b = self.state[operands.src2].get_f64();
+        // FIXME: replace this with `a.maximum(b)` when rust-lang/rust#91079 is
+        // stabilized
+        let result = if a > b {
+            a
+        } else if b > a {
+            b
+        } else if a == b {
+            if a.is_sign_positive() && b.is_sign_negative() {
+                a
+            } else {
+                b
+            }
+        } else {
+            a + b
+        };
+        self.state[operands.dst].set_f64(result);
+        ControlFlow::Continue(())
+    }
+
+    fn fminimum64(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64();
+        let b = self.state[operands.src2].get_f64();
+        // FIXME: replace this with `a.minimum(b)` when rust-lang/rust#91079 is
+        // stabilized
+        let result = if a < b {
+            a
+        } else if b < a {
+            b
+        } else if a == b {
+            if a.is_sign_negative() && b.is_sign_positive() {
+                a
+            } else {
+                b
+            }
+        } else {
+            a + b
+        };
+        self.state[operands.dst].set_f64(result);
+        ControlFlow::Continue(())
+    }
+
+    fn ftrunc64(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64();
+        self.state[dst].set_f64(a.trunc());
+        ControlFlow::Continue(())
+    }
+
+    fn ffloor64(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64();
+        self.state[dst].set_f64(a.floor());
+        ControlFlow::Continue(())
+    }
+
+    fn fceil64(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64();
+        self.state[dst].set_f64(a.ceil());
+        ControlFlow::Continue(())
+    }
+
+    fn fnearest64(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64();
+        self.state[dst].set_f64(a.round_ties_even());
+        ControlFlow::Continue(())
+    }
+
+    fn fsqrt64(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64();
+        self.state[dst].set_f64(a.sqrt());
+        ControlFlow::Continue(())
+    }
 }
 
 impl ExtendedOpVisitor for Interpreter<'_> {

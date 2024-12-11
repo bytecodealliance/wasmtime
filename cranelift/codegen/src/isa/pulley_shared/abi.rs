@@ -585,7 +585,7 @@ where
             || clobber_size > 0
             || fixed_frame_storage_size > 0
         {
-            16 // FP, LR
+            P::pointer_width().bytes() * 2 // FP, LR
         } else {
             0
         };
@@ -593,7 +593,7 @@ where
         FrameLayout {
             incoming_args_size,
             tail_args_size,
-            setup_area_size,
+            setup_area_size: setup_area_size.into(),
             clobber_size,
             fixed_frame_storage_size,
             outgoing_args_size,
