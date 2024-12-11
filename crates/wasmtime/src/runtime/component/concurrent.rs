@@ -540,7 +540,17 @@ pub(crate) fn poll_and_block<'a, T, R: Send + Sync + 'static>(
         + 'static,
     caller_instance: RuntimeComponentInstanceIndex,
 ) -> Result<(R, StoreContextMut<'a, T>)> {
-    let caller = store.concurrent_state().guest_task.unwrap();
+    let Some(caller) = store.concurrent_state().guest_task else {
+        return match pin!(future).poll(&mut Context::from_waker(&dummy_waker())) {
+            Poll::Ready(fun) => {
+                let result = fun(store.as_context_mut())?;
+                Ok((result, store))
+            }
+            Poll::Pending => {
+                unreachable!()
+            }
+        };
+    };
     let old_result = store
         .concurrent_state()
         .table
