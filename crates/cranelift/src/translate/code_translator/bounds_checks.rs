@@ -499,6 +499,10 @@ fn cast_index_to_pointer_ty(
     //
     // Also note that at this time this branch doesn't support pcc nor the
     // value-label-ranges of the below path.
+    //
+    // Finally, note that the returned `low_bits` here are still subject to an
+    // explicit bounds check in wasm so in terms of Spectre speculation on
+    // either side of the `trapnz` should be ok.
     if index_ty.bits() > pointer_ty.bits() {
         assert_eq!(index_ty, ir::types::I64);
         assert_eq!(pointer_ty, ir::types::I32);
