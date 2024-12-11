@@ -206,7 +206,7 @@
 (rule (lower (has_type $I32 (udiv a b))) (pulley_xdiv32_u a b))
 (rule (lower (has_type $I64 (udiv a b))) (pulley_xdiv64_u a b))
 
-;;;; Rules for `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `urem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I32 (urem a b))) (pulley_xrem32_u a b))
 (rule (lower (has_type $I64 (urem a b))) (pulley_xrem64_u a b))
