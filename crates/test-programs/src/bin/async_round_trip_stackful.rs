@@ -119,7 +119,10 @@ unsafe extern "C" fn export_foo(ptr: *mut u8, len: usize) {
 #[cfg(target_arch = "wasm32")]
 #[link_section = "component-type:wit-bindgen:0.35.0:local:local:round-trip:encoded world"]
 #[doc(hidden)]
-#[allow(clippy::octal_escapes)]
+#[allow(
+    clippy::octal_escapes,
+    reason = "this is a machine-generated binary blob"
+)]
 pub static __WIT_BINDGEN_COMPONENT_TYPE: [u8; 239] = *b"\
 \0asm\x0d\0\x01\0\0\x19\x16wit-component-encoding\x04\0\x07o\x01A\x02\x01A\x04\x01\
 B\x02\x01@\x01\x01ss\0s\x04\0\x03foo\x01\0\x03\0\x0flocal:local/baz\x05\0\x01B\x02\
