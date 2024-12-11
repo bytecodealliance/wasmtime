@@ -594,9 +594,12 @@ jobs:
     # Check that `pulley-interpreter` compiles with tail calls enabled.  Don't
     # actually run the tests with tail calls enabled, because they are not yet
     # implemented in rustc and cause an ICE.
-    - run: cargo check -p pulley-interpreter
+    - run: cargo check -p pulley-interpreter --all-features
       env:
         RUSTFLAGS: "--cfg pulley_tail_calls"
+    - run: cargo test -p pulley-interpreter --all-features --release
+      env:
+        RUSTFLAGS: "--cfg pulley_assume_llvm_makes_tail_calls"
 
     # Ensure that fuzzers still build.
     #

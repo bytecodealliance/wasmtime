@@ -177,8 +177,13 @@ unused_import_braces = 'warn'
 unused-lifetimes = 'warn'
 unused-macro-rules = 'warn'
 
-# Don't warn about unknown cfg condition in `#[cfg(pulley_tail_calls)]`
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(pulley_tail_calls)'] }
+# Don't warn about unknown cfgs for pulley
+[workspace.lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = [
+  'cfg(pulley_tail_calls)',
+  'cfg(pulley_assume_llvm_makes_tail_calls)',
+]
 
 [workspace.lints.clippy]
 # The default set of lints in Clippy is viewed as "too noisy" right now so
