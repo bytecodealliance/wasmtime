@@ -5,32 +5,40 @@ repository to run the example locally.
 
 [code]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/wasi/main.rs
 
-This example shows how to use the [`wasi-common`] crate to define WASI
+This example shows how to use the [`wasmtime-wasi`] crate to define WASI
 functions within a [`Linker`] which can then be used to instantiate a
 WebAssembly module.
 
-[`wasi-common`]: https://crates.io/crates/wasi-common
+[`wasmtime-wasi`]: https://crates.io/crates/wasmtime-wasi
 [`Linker`]: https://docs.rs/wasmtime/*/wasmtime/struct.Linker.html
 
 ### WebAssembly module source code
 
-For this WASI example, this Hello World program is compiled to a WebAssembly module using the WASI Preview 1 API.
+For this WASI example, this Hello World program is compiled to a WebAssembly module using the WASI Preview 2 API.
 
 `wasi.rs`
 ```rust
 {{#include ../examples/wasi/wasm/wasi.rs}}
 ```
 
-Building this program generates `target/wasm32-wasip1/debug/wasi.wasm`, used below.
+> Building instructions:
+> 1. Update your Rust toolchain if it is not >= 1.83.0, as Rust 1.83.0 brings Tier 2 support for WASI Preview 2.
+>   `rustup update stable`
+> 2. Add WASIp2 target if you haven't already: `rustup target add wasm32-wasip2`
+> 3. `cargo build --target wasm32-wasip2`
 
-### Invoke the WASM module
+Building this program generates `target/wasm32-wasip2/debug/wasi.wasm`, used below.
 
-This example shows adding and configuring the WASI imports to invoke the above WASM module.
+### Invoke the WASM component
+
+This example shows adding and configuring the WASI imports to invoke the above WASM component.
 
 `main.rs`
 ```rust,ignore
 {{#include ../examples/wasi/main.rs}}
 ```
+
+TODO: Update the following section after `../examples/wasi/main.rs` is fixed
 
 ## WASI state with other custom host state
 
