@@ -613,6 +613,7 @@ impl WastTest {
                 "misc_testsuite/no-panic.wast",
                 "misc_testsuite/simple_ref_is_null.wast",
                 "misc_testsuite/table_grow_with_funcref.wast",
+                "spec_testsuite/br_table.wast",
                 "spec_testsuite/data-invalid.wast",
                 "spec_testsuite/elem.wast",
                 "spec_testsuite/global.wast",
