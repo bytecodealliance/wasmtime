@@ -505,6 +505,10 @@ macro_rules! for_each_op {
             fnearest32 = Fnearest32 { dst: FReg, src: FReg };
             /// `low32(dst) = ieee_sqrt(low32(src))`
             fsqrt32 = Fsqrt32 { dst: FReg, src: FReg };
+            /// `low32(dst) = -low32(src)`
+            fneg32 = Fneg32 { dst: FReg, src: FReg };
+            /// `low32(dst) = |low32(src)|`
+            fabs32 = Fabs32 { dst: FReg, src: FReg };
 
             /// `dst = src1 + src2`
             fadd64 = Fadd64 { operands: BinaryOperands<FReg> };
@@ -528,6 +532,10 @@ macro_rules! for_each_op {
             fnearest64 = Fnearest64 { dst: FReg, src: FReg };
             /// `dst = ieee_sqrt(src)`
             fsqrt64 = Fsqrt64 { dst: FReg, src: FReg };
+            /// `dst = -src`
+            fneg64 = Fneg64 { dst: FReg, src: FReg };
+            /// `dst = |src|`
+            fabs64 = Fabs64 { dst: FReg, src: FReg };
         }
     };
 }

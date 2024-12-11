@@ -2242,6 +2242,18 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn fneg32(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32();
+        self.state[dst].set_f32(-a);
+        ControlFlow::Continue(())
+    }
+
+    fn fabs32(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32();
+        self.state[dst].set_f32(a.wasm_abs());
+        ControlFlow::Continue(())
+    }
+
     fn fadd64(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_f64();
         let b = self.state[operands.src2].get_f64();
@@ -2311,6 +2323,18 @@ impl OpVisitor for Interpreter<'_> {
     fn fsqrt64(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f64();
         self.state[dst].set_f64(a.wasm_sqrt());
+        ControlFlow::Continue(())
+    }
+
+    fn fneg64(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64();
+        self.state[dst].set_f64(-a);
+        ControlFlow::Continue(())
+    }
+
+    fn fabs64(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64();
+        self.state[dst].set_f64(a.wasm_abs());
         ControlFlow::Continue(())
     }
 }

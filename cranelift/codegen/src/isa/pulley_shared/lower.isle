@@ -644,3 +644,13 @@
 
 (rule (lower (has_type $F32 (sqrt a))) (pulley_fsqrt32 a))
 (rule (lower (has_type $F64 (sqrt a))) (pulley_fsqrt64 a))
+
+;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fneg a))) (pulley_fneg32 a))
+(rule (lower (has_type $F64 (fneg a))) (pulley_fneg64 a))
+
+;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fabs a))) (pulley_fabs32 a))
+(rule (lower (has_type $F64 (fabs a))) (pulley_fabs64 a))
