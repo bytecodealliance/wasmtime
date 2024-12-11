@@ -407,23 +407,21 @@ impl Assembler {
         kind: DivKind,
         size: OperandSize,
     ) {
-        // Check for division by 0
-        self.emit(Inst::TrapIf {
-            kind: CondBrKind::Zero(divisor.into()),
-            trap_code: TrapCode::INTEGER_DIVISION_BY_ZERO,
-        });
+        // Check for division by 0.
+        self.trapz(divisor, TrapCode::INTEGER_DIVISION_BY_ZERO);
 
         // check for overflow
         if kind == DivKind::Signed {
-            // we first check whether the divisor is -1
-            self.emit(Inst::AluRRImm12 {
-                alu_op: ALUOp::AddS,
-                size: size.into(),
-                rd: writable!(zero().into()),
-                rn: divisor.into(),
-                imm12: Imm12::maybe_from_u64(1).expect("1 fits in 12 bits"),
-            });
-            // if it is -1, then we check if the dividend is MIN
+            // Check for divisor overflow.
+            self.emit_alu_rri(
+                ALUOp::AddS,
+                Imm12::maybe_from_u64(1).expect("1 to fit in 12 bits"),
+                divisor,
+                writable!(zero()),
+                size,
+            );
+
+            // Check if the dividend is 1.
             self.emit(Inst::CCmpImm {
                 size: size.into(),
                 rn: dividend.into(),
@@ -432,31 +430,22 @@ impl Assembler {
                 cond: Cond::Eq,
             });
 
-            // Finally, trap if the previous operation overflowed
-            self.emit(Inst::TrapIf {
-                kind: CondBrKind::Cond(Cond::Vs),
-                trap_code: TrapCode::INTEGER_OVERFLOW,
-            })
+            // Finally, trap if the previous operation overflowed.
+            self.trapif(Cond::Vs, TrapCode::INTEGER_OVERFLOW);
         }
 
         // `cranelift-codegen` doesn't support emitting u/sdiv for anything but I64,
         // we therefore sign-extend the operand.
         // see: https://github.com/bytecodealliance/wasmtime/issues/9766
         if size == OperandSize::S32 {
-            self.emit(Inst::Extend {
-                rd: writable!(divisor.into()),
-                rn: divisor.into(),
-                signed: true,
-                from_bits: 32,
-                to_bits: 64,
-            });
-            self.emit(Inst::Extend {
-                rd: writable!(dividend.into()),
-                rn: dividend.into(),
-                signed: true,
-                from_bits: 32,
-                to_bits: 64,
-            });
+            let extend_kind = if kind == DivKind::Signed {
+                ExtendKind::I64Extend32S
+            } else {
+                ExtendKind::I64ExtendI32U
+            };
+
+            self.extend(divisor, writable!(divisor), extend_kind);
+            self.extend(dividend, writable!(dividend), extend_kind);
         }
 
         let op = match kind {
