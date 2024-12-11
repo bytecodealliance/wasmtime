@@ -59,8 +59,23 @@ fn is_isa_compatible(
     let requested_arch = requested.triple().architecture;
 
     match (host_arch, requested_arch) {
+        // If the host matches the requested target, then that's all good.
         (host, requested) if host == requested => {}
+
+        // Allow minor differences in risc-v targets.
         (Architecture::Riscv64(_), Architecture::Riscv64(_)) => {}
+
+        // Any host can run pulley so long as the pointer width and endianness
+        // match.
+        (
+            _,
+            Architecture::Pulley32
+            | Architecture::Pulley64
+            | Architecture::Pulley32be
+            | Architecture::Pulley64be,
+        ) if host.triple().pointer_width() == requested.triple().pointer_width()
+            && host.triple().endianness() == requested.triple().endianness() => {}
+
         _ => {
             return Err(format!(
                 "skipped {file_path}: host can't run {requested_arch:?} programs"
@@ -72,6 +87,10 @@ fn is_isa_compatible(
     // we can't natively support on the host.
     let requested_flags = requested.isa_flags();
     for req_value in requested_flags {
+        // pointer_width for pulley already validated above
+        if req_value.name == "pointer_width" {
+            continue;
+        }
         let requested = match req_value.as_bool() {
             Some(requested) => requested,
             None => unimplemented!("ISA flag {} of kind {:?}", req_value.name, req_value.kind()),
@@ -116,11 +135,26 @@ fn compile_testfile(
     flags: &Flags,
     isa: &dyn TargetIsa,
 ) -> anyhow::Result<CompiledTestFile> {
-    // We can't use the requested ISA directly since it does not contain info
-    // about the operating system / calling convention / etc..
-    //
-    // Copy the requested ISA flags into the host ISA and use that.
-    let isa = build_host_isa(false, flags.clone(), isa.isa_flags());
+    let isa = match isa.triple().architecture {
+        // Convert `&dyn TargetIsa` to `OwnedTargetIsa` by re-making the ISA and
+        // applying pulley flags/etc.
+        Architecture::Pulley32
+        | Architecture::Pulley64
+        | Architecture::Pulley32be
+        | Architecture::Pulley64be => {
+            let mut builder = cranelift_codegen::isa::lookup(isa.triple().clone())?;
+            for value in isa.isa_flags() {
+                builder.set(value.name, &value.value_string()).unwrap();
+            }
+            builder.finish(flags.clone())?
+        }
+
+        // We can't use the requested ISA directly since it does not contain info
+        // about the operating system / calling convention / etc..
+        //
+        // Copy the requested ISA flags into the host ISA and use that.
+        _ => build_host_isa(false, flags.clone(), isa.isa_flags()),
+    };
 
     let mut tfc = TestFileCompiler::new(isa);
     tfc.add_testfile(testfile)?;

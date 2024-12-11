@@ -37,4 +37,4 @@ serde = { workspace = true }
 serde_derive = { workspace = true }
 cranelift.workspace = true
 smallvec = { workspace = true }
-pulley-interpreter = { workspace = true, features = ["disas", "std"] }
+pulley-interpreter = { workspace = true, features = ["disas", "std", "interp"] }
