@@ -1,0 +1,17 @@
+// This interface defines a handler of HTTP Requests.  It may be imported by
+/// components which wish to send HTTP Requests and also exported by components
+/// which can respond to HTTP Requests.  In addition, it may be used to pass
+/// a request from one component to another without any use of a network.
+interface handler {
+  use types.{request, response, error-code};
+
+  /// When exported, this function may be called with either an incoming
+  /// request read from the network or a request synthesized or forwarded by
+  /// another component.
+  ///
+  /// When imported, this function may be used to either send an outgoing
+  /// request over the network or pass it to another component.
+  handle: func(
+    request: request,
+  ) -> result<response, error-code>;
+}
