@@ -184,6 +184,12 @@ macro_rules! for_each_op {
             /// 64-bit wrapping subtraction: `dst = src1 - src2`.
             xsub64 = Xsub64 { operands: BinaryOperands<XReg> };
 
+            /// `low32(dst) = low32(src1) * low32(src2)`
+            xmul32 = XMul32 { operands: BinaryOperands<XReg> };
+
+            /// `dst = src1 * src2`
+            xmul64 = XMul64 { operands: BinaryOperands<XReg> };
+
             /// `low32(dst) = trailing_zeros(low32(src))`
             xctz32 = Xctz32 { dst: XReg, src: XReg };
             /// `dst = trailing_zeros(src)`
