@@ -395,10 +395,6 @@ impl WastTest {
         // features in Pulley are implemented.
         if config.compiler == Compiler::CraneliftPulley {
             let unsupported = [
-                "misc_testsuite/embenchen_fannkuch.wast",
-                "misc_testsuite/embenchen_fasta.wast",
-                "misc_testsuite/embenchen_ifs.wast",
-                "misc_testsuite/embenchen_primes.wast",
                 "misc_testsuite/int-to-float-splat.wast",
                 "misc_testsuite/issue6562.wast",
                 "misc_testsuite/memory-combos.wast",

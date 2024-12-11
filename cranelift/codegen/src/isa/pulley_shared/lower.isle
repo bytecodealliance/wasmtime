@@ -232,6 +232,14 @@
 (rule 1 (lower (has_type $I64 (bxor a b)))
   (pulley_xbxor64 a b))
 
+;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (fits_in_32 _) (bnot a)))
+  (pulley_xbnot32 a))
+
+(rule 1 (lower (has_type $I64 (bnot a)))
+  (pulley_xbnot64 a))
+
 ;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I32 (ctz a))) (pulley_xctz32 a))
