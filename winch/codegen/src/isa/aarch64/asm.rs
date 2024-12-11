@@ -204,7 +204,7 @@ impl Assembler {
         self.ldr(addr, rd, size, false);
     }
 
-    /// Load a register.
+    /// Load address into a register.
     fn ldr(&mut self, addr: Address, rd: WritableReg, size: OperandSize, signed: bool) {
         use OperandSize::*;
         let writable_reg = rd.map(Into::into);

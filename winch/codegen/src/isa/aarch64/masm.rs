@@ -214,8 +214,8 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn load_addr(&mut self, _src: Self::Address, _dst: WritableReg, _size: OperandSize) {
-        todo!()
+    fn load_addr(&mut self, src: Self::Address, dst: WritableReg, size: OperandSize) {
+        self.asm.uload(src, dst, size);
     }
 
     fn pop(&mut self, dst: WritableReg, size: OperandSize) {
