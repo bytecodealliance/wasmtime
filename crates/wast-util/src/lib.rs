@@ -415,6 +415,7 @@ impl WastTest {
                 "misc_testsuite/component-model/nested.wast",
                 "misc_testsuite/component-model/types.wast",
                 "misc_testsuite/control-flow.wast",
+                "misc_testsuite/custom-page-sizes/custom-page-sizes.wast",
                 "misc_testsuite/elem-ref-null.wast",
                 "misc_testsuite/elem_drop.wast",
                 "misc_testsuite/empty.wast",
@@ -426,12 +427,23 @@ impl WastTest {
                 "misc_testsuite/imported-memory-copy.wast",
                 "misc_testsuite/issue4857.wast",
                 "misc_testsuite/memory-copy.wast",
+                "misc_testsuite/memory64/bounds.wast",
+                "misc_testsuite/memory64/linking-errors.wast",
+                "misc_testsuite/memory64/linking.wast",
+                "misc_testsuite/memory64/multi-memory.wast",
+                "misc_testsuite/memory64/offsets.wast",
+                "misc_testsuite/multi-memory/simple.wast",
                 "misc_testsuite/partial-init-memory-segment.wast",
                 "misc_testsuite/rs2wasm-add-func.wast",
                 "misc_testsuite/stack_overflow.wast",
+                "misc_testsuite/table_grow_with_funcref.wast",
+                "misc_testsuite/threads/atomics_notify.wast",
+                "misc_testsuite/threads/atomics_wait_address.wast",
+                "misc_testsuite/threads/wait_notify.wast",
                 "misc_testsuite/winch/_simd_linking.wast",
                 "misc_testsuite/winch/misc.wast",
                 "misc_testsuite/winch/oob.wast",
+                "misc_testsuite/winch/table_grow.wast",
                 "spec_testsuite/address.wast",
                 "spec_testsuite/binary-leb128.wast",
                 "spec_testsuite/binary.wast",
@@ -445,11 +457,14 @@ impl WastTest {
                 "spec_testsuite/memory_copy.wast",
                 "spec_testsuite/memory_fill.wast",
                 "spec_testsuite/memory_init.wast",
+                "spec_testsuite/memory_size.wast",
+                "spec_testsuite/memory_trap.wast",
                 "spec_testsuite/names.wast",
                 "spec_testsuite/obsolete-keywords.wast",
                 "spec_testsuite/proposals/annotations/annotations.wast",
                 "spec_testsuite/proposals/annotations/id.wast",
                 "spec_testsuite/proposals/annotations/token.wast",
+                "spec_testsuite/proposals/custom-page-sizes/custom-page-sizes.wast",
                 "spec_testsuite/proposals/exception-handling/binary.wast",
                 "spec_testsuite/proposals/multi-memory/address0.wast",
                 "spec_testsuite/proposals/multi-memory/address1.wast",
@@ -462,7 +477,9 @@ impl WastTest {
                 "spec_testsuite/proposals/multi-memory/exports0.wast",
                 "spec_testsuite/proposals/multi-memory/imports1.wast",
                 "spec_testsuite/proposals/multi-memory/imports2.wast",
+                "spec_testsuite/proposals/multi-memory/imports4.wast",
                 "spec_testsuite/proposals/multi-memory/linking1.wast",
+                "spec_testsuite/proposals/multi-memory/linking2.wast",
                 "spec_testsuite/proposals/multi-memory/load0.wast",
                 "spec_testsuite/proposals/multi-memory/load1.wast",
                 "spec_testsuite/proposals/multi-memory/memory-multi.wast",
@@ -470,13 +487,23 @@ impl WastTest {
                 "spec_testsuite/proposals/multi-memory/memory_copy1.wast",
                 "spec_testsuite/proposals/multi-memory/memory_fill0.wast",
                 "spec_testsuite/proposals/multi-memory/memory_init0.wast",
+                "spec_testsuite/proposals/multi-memory/memory_size.wast",
+                "spec_testsuite/proposals/multi-memory/memory_size0.wast",
+                "spec_testsuite/proposals/multi-memory/memory_size1.wast",
+                "spec_testsuite/proposals/multi-memory/memory_size2.wast",
                 "spec_testsuite/proposals/multi-memory/memory_size3.wast",
+                "spec_testsuite/proposals/multi-memory/memory_trap0.wast",
                 "spec_testsuite/proposals/multi-memory/memory_trap1.wast",
                 "spec_testsuite/proposals/multi-memory/start0.wast",
                 "spec_testsuite/proposals/multi-memory/store.wast",
                 "spec_testsuite/proposals/multi-memory/store0.wast",
                 "spec_testsuite/proposals/multi-memory/store1.wast",
+                "spec_testsuite/proposals/multi-memory/trap0.wast",
                 "spec_testsuite/proposals/multi-memory/traps0.wast",
+                "spec_testsuite/proposals/threads/atomics_notify.wast",
+                "spec_testsuite/proposals/threads/atomics_wait_address.wast",
+                "spec_testsuite/proposals/threads/exports.wast",
+                "spec_testsuite/proposals/threads/wait_notify.wast",
                 "spec_testsuite/simd_linking.wast",
                 "spec_testsuite/skip-stack-guard-page.wast",
                 "spec_testsuite/start.wast",
@@ -493,28 +520,11 @@ impl WastTest {
                 "spec_testsuite/utf8-import-field.wast",
                 "spec_testsuite/utf8-import-module.wast",
                 "spec_testsuite/utf8-invalid-encoding.wast",
-                "threads/exports.wast",
+                "misc_testsuite/memory64/more-than-4gb.wast",
             ];
 
             if supported.iter().any(|part| self.path.ends_with(part)) {
                 return false;
-            }
-
-            // FIXME: once the backend has enough instruction support move these
-            // into the above tests since they should pass on 64-bit platforms
-            // as well.
-            let supported32bit = [
-                "misc_testsuite/winch/table_grow.wast",
-                "misc_testsuite/table_grow_with_funcref.wast",
-                "spec_testsuite/proposals/multi-memory/trap0.wast",
-                "spec_testsuite/proposals/multi-memory/memory_trap0.wast",
-                "spec_testsuite/proposals/multi-memory/linking2.wast",
-                "spec_testsuite/memory_trap.wast",
-            ];
-            if cfg!(target_pointer_width = "32") {
-                if supported32bit.iter().any(|part| self.path.ends_with(part)) {
-                    return false;
-                }
             }
 
             return true;

@@ -186,6 +186,30 @@
 (rule (lower (has_type $I32 (sdiv a b)))
       (pulley_xdiv32_s a b))
 
+;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (ishl a b)))
+  (pulley_xshl32 a b))
+
+(rule (lower (has_type $I64 (ishl a b)))
+  (pulley_xshl64 a b))
+
+;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (ushr a b)))
+  (pulley_xshr32_u a b))
+
+(rule (lower (has_type $I64 (ushr a b)))
+  (pulley_xshr64_u a b))
+
+;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (sshr a b)))
+  (pulley_xshr32_s a b))
+
+(rule (lower (has_type $I64 (sshr a b)))
+  (pulley_xshr64_s a b))
+
 ;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I32 (band a b)))
@@ -337,6 +361,11 @@
 
 (rule (lower (has_type (fits_in_64 _) (sextend val @ (value_type $I32))))
   (pulley_sext32 val))
+
+;;;; Rules for `ireduce` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (fits_in_64 _ty) (ireduce src)))
+  src)
 
 ;;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
