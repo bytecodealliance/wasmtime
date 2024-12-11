@@ -240,6 +240,26 @@
 (rule 1 (lower (has_type $I64 (bnot a)))
   (pulley_xbnot64 a))
 
+;;;; Rules for `umin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (umin a b))) (pulley_xmin32_u a b))
+(rule (lower (has_type $I64 (umin a b))) (pulley_xmin64_u a b))
+
+;;;; Rules for `smin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (smin a b))) (pulley_xmin32_s a b))
+(rule (lower (has_type $I64 (smin a b))) (pulley_xmin64_s a b))
+
+;;;; Rules for `umax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (umax a b))) (pulley_xmax32_u a b))
+(rule (lower (has_type $I64 (umax a b))) (pulley_xmax64_u a b))
+
+;;;; Rules for `smax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (smax a b))) (pulley_xmax32_s a b))
+(rule (lower (has_type $I64 (smax a b))) (pulley_xmax64_s a b))
+
 ;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I32 (ctz a))) (pulley_xctz32 a))

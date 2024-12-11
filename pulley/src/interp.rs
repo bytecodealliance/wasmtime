@@ -1814,6 +1814,62 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xmin32_u(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u32(a.min(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xmin32_s(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i32();
+        let b = self.state[operands.src2].get_i32();
+        self.state[operands.dst].set_i32(a.min(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xmax32_u(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u32(a.max(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xmax32_s(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i32();
+        let b = self.state[operands.src2].get_i32();
+        self.state[operands.dst].set_i32(a.max(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xmin64_u(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u64();
+        self.state[operands.dst].set_u64(a.min(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xmin64_s(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i64();
+        let b = self.state[operands.src2].get_i64();
+        self.state[operands.dst].set_i64(a.min(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xmax64_u(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u64();
+        self.state[operands.dst].set_u64(a.max(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xmax64_s(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i64();
+        let b = self.state[operands.src2].get_i64();
+        self.state[operands.dst].set_i64(a.max(b));
+        ControlFlow::Continue(())
+    }
+
     fn fconst32(&mut self, dst: FReg, bits: u32) -> ControlFlow<Done> {
         self.state[dst].set_f32(f32::from_bits(bits));
         ControlFlow::Continue(())
