@@ -395,7 +395,6 @@ impl WastTest {
         // features in Pulley are implemented.
         if config.compiler == Compiler::CraneliftPulley {
             let unsupported = [
-                "misc_testsuite/br-table-fuzzbug.wast",
                 "misc_testsuite/call_indirect.wast",
                 "misc_testsuite/component-model/fused.wast",
                 "misc_testsuite/component-model/strings.wast",
@@ -413,7 +412,6 @@ impl WastTest {
                 "misc_testsuite/gc/anyref_that_is_i31_barriers.wast",
                 "misc_testsuite/gc/i31ref-of-global-initializers.wast",
                 "misc_testsuite/gc/i31ref-tables.wast",
-                "misc_testsuite/gc/ref-test.wast",
                 "misc_testsuite/int-to-float-splat.wast",
                 "misc_testsuite/issue1809.wast",
                 "misc_testsuite/issue4840.wast",
@@ -440,7 +438,6 @@ impl WastTest {
                 "misc_testsuite/simd/spillslot-size-fuzzbug.wast",
                 "misc_testsuite/simd/unaligned-load.wast",
                 "misc_testsuite/simd/v128-select.wast",
-                "misc_testsuite/sink-float-but-dont-trap.wast",
                 "misc_testsuite/table_copy.wast",
                 "misc_testsuite/table_copy_on_imported_tables.wast",
                 "misc_testsuite/threads/LB_atomic.wast",
@@ -458,7 +455,6 @@ impl WastTest {
                 "misc_testsuite/winch/table_fill.wast",
                 "misc_testsuite/winch/table_get.wast",
                 "misc_testsuite/winch/table_set.wast",
-                "spec_testsuite/br_if.wast",
                 "spec_testsuite/bulk.wast",
                 "spec_testsuite/call.wast",
                 "spec_testsuite/call_indirect.wast",

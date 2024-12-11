@@ -101,13 +101,13 @@ macro_rules! for_each_op {
             /// Unconditionally transfer control to the PC at the given offset.
             jump = Jump { offset: PcRelOffset };
 
-            /// Conditionally transfer control to the given PC offset if `cond`
-            /// contains a non-zero value.
-            br_if = BrIf { cond: XReg, offset: PcRelOffset };
+            /// Conditionally transfer control to the given PC offset if
+            /// `low32(cond)` contains a non-zero value.
+            br_if32 = BrIf { cond: XReg, offset: PcRelOffset };
 
-            /// Conditionally transfer control to the given PC offset if `cond`
-            /// contains a zero value.
-            br_if_not = BrIfNot { cond: XReg, offset: PcRelOffset };
+            /// Conditionally transfer control to the given PC offset if
+            /// `low32(cond)` contains a zero value.
+            br_if_not32 = BrIfNot { cond: XReg, offset: PcRelOffset };
 
             /// Branch if `a == b`.
             br_if_xeq32 = BrIfXeq32 { a: XReg, b: XReg, offset: PcRelOffset };
@@ -134,7 +134,7 @@ macro_rules! for_each_op {
             /// Branch if unsigned `a <= b`.
             br_if_xulteq64 = BrIfXulteq64 { a: XReg, b: XReg, offset: PcRelOffset };
 
-            /// Branch to the label indicated by `idx`.
+            /// Branch to the label indicated by `low32(idx)`.
             ///
             /// After this instruction are `amt` instances of `PcRelOffset`
             /// and the `idx` selects which one will be branched to. The value
@@ -207,29 +207,29 @@ macro_rules! for_each_op {
             /// `dst = src1 >> low6(src2)`
             xshr64_u = Xshr64U { operands: BinaryOperands<XReg> };
 
-            /// 64-bit equality.
+            /// `low32(dst) = src1 == src2`
             xeq64 = Xeq64 { operands: BinaryOperands<XReg> };
-            /// 64-bit inequality.
+            /// `low32(dst) = src1 != src2`
             xneq64 = Xneq64 { operands: BinaryOperands<XReg> };
-            /// 64-bit signed less-than.
+            /// `low32(dst) = src1 < src2` (signed)
             xslt64 = Xslt64 { operands: BinaryOperands<XReg> };
-            /// 64-bit signed less-than-equal.
+            /// `low32(dst) = src1 <= src2` (signed)
             xslteq64 = Xslteq64 { operands: BinaryOperands<XReg> };
-            /// 64-bit unsigned less-than.
+            /// `low32(dst) = src1 < src2` (unsigned)
             xult64 = Xult64 { operands: BinaryOperands<XReg> };
-            /// 64-bit unsigned less-than-equal.
+            /// `low32(dst) = src1 <= src2` (unsigned)
             xulteq64 = Xulteq64 { operands: BinaryOperands<XReg> };
-            /// 32-bit equality.
+            /// `low32(dst) = low32(src1) == low32(src2)`
             xeq32 = Xeq32 { operands: BinaryOperands<XReg> };
-            /// 32-bit inequality.
+            /// `low32(dst) = low32(src1) != low32(src2)`
             xneq32 = Xneq32 { operands: BinaryOperands<XReg> };
-            /// 32-bit signed less-than.
+            /// `low32(dst) = low32(src1) < low32(src2)` (signed)
             xslt32 = Xslt32 { operands: BinaryOperands<XReg> };
-            /// 32-bit signed less-than-equal.
+            /// `low32(dst) = low32(src1) <= low32(src2)` (signed)
             xslteq32 = Xslteq32 { operands: BinaryOperands<XReg> };
-            /// 32-bit unsigned less-than.
+            /// `low32(dst) = low32(src1) < low32(src2)` (unsigned)
             xult32 = Xult32 { operands: BinaryOperands<XReg> };
-            /// 32-bit unsigned less-than-equal.
+            /// `low32(dst) = low32(src1) <= low32(src2)` (unsigned)
             xulteq32 = Xulteq32 { operands: BinaryOperands<XReg> };
 
             /// `low32(dst) = zext(*(ptr + offset))`
@@ -386,6 +386,15 @@ macro_rules! for_each_op {
             flt64 = Flt64 { dst: XReg, src1: FReg, src2: FReg };
             /// `low32(dst) = zext(src1 <= src2)`
             flteq64 = Flteq64 { dst: XReg, src1: FReg, src2: FReg };
+
+            /// `low32(dst) = low32(cond) ? low32(if_nonzero) : low32(if_zero)`
+            xselect32 = XSelect32 { dst: XReg, cond: XReg, if_nonzero: XReg, if_zero: XReg };
+            /// `dst = low32(cond) ? if_nonzero : if_zero`
+            xselect64 = XSelect64 { dst: XReg, cond: XReg, if_nonzero: XReg, if_zero: XReg };
+            /// `low32(dst) = low32(cond) ? low32(if_nonzero) : low32(if_zero)`
+            fselect32 = FSelect32 { dst: FReg, cond: XReg, if_nonzero: FReg, if_zero: FReg };
+            /// `dst = low32(cond) ? if_nonzero : if_zero`
+            fselect64 = FSelect64 { dst: FReg, cond: XReg, if_nonzero: FReg, if_zero: FReg };
         }
     };
 }

@@ -164,7 +164,7 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
 
         Inst::Jump { .. } => {}
 
-        Inst::BrIf {
+        Inst::BrIf32 {
             c,
             taken: _,
             not_taken: _,
@@ -426,7 +426,7 @@ where
             }
             | Inst::Rets { .. } => MachTerminator::Ret,
             Inst::Jump { .. } => MachTerminator::Uncond,
-            Inst::BrIf { .. }
+            Inst::BrIf32 { .. }
             | Inst::BrIfXeq32 { .. }
             | Inst::BrIfXneq32 { .. }
             | Inst::BrIfXslt32 { .. }
@@ -651,7 +651,7 @@ impl Inst {
 
             Inst::Jump { label } => format!("jump {}", label.to_string()),
 
-            Inst::BrIf {
+            Inst::BrIf32 {
                 c,
                 taken,
                 not_taken,
@@ -659,7 +659,7 @@ impl Inst {
                 let c = format_reg(**c);
                 let taken = taken.to_string();
                 let not_taken = not_taken.to_string();
-                format!("br_if {c}, {taken}; jump {not_taken}")
+                format!("br_if32 {c}, {taken}; jump {not_taken}")
             }
 
             Inst::BrIfXeq32 {

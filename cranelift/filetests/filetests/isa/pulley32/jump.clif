@@ -20,7 +20,7 @@ block3(v3: i8):
 ; VCode:
 ; block0:
 ;   zext8 x5, x0
-;   br_if x5, label2; jump label1
+;   br_if32 x5, label2; jump label1
 ; block1:
 ;   xconst8 x0, 0
 ;   jump label3
@@ -32,7 +32,7 @@ block3(v3: i8):
 ;
 ; Disassembled:
 ; zext8 x5, x0
-; br_if x5, 0xe    // target = 0x11
+; br_if32 x5, 0xe    // target = 0x11
 ; xconst8 x0, 0
 ; jump 0x8    // target = 0x14
 ; xconst8 x0, 1

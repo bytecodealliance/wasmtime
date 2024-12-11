@@ -61,7 +61,7 @@
     (Jump (label MachLabel))
 
     ;; Jump to `then` if `c` is nonzero, otherwise to `else`.
-    (BrIf (c XReg) (taken MachLabel) (not_taken MachLabel))
+    (BrIf32 (c XReg) (taken MachLabel) (not_taken MachLabel))
 
     ;; Compare-and-branch macro ops.
     (BrIfXeq32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
@@ -372,9 +372,9 @@
 (rule (pulley_jump label)
       (SideEffectNoResult.Inst (MInst.Jump label)))
 
-(decl pulley_br_if (XReg MachLabel MachLabel) SideEffectNoResult)
-(rule (pulley_br_if c taken not_taken)
-      (SideEffectNoResult.Inst (MInst.BrIf c taken not_taken)))
+(decl pulley_br_if32 (XReg MachLabel MachLabel) SideEffectNoResult)
+(rule (pulley_br_if32 c taken not_taken)
+      (SideEffectNoResult.Inst (MInst.BrIf32 c taken not_taken)))
 
 (decl pulley_br_if_xeq32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
 (rule (pulley_br_if_xeq32 a b taken not_taken)
@@ -431,11 +431,3 @@
 
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
-
-;;;; Helpers for Sign/Zero extension ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-(decl zext (Value) XReg)
-(rule (zext val @ (value_type $I64)) val)
-(rule (zext val @ (value_type $I32)) (pulley_zext32 val))
-(rule (zext val @ (value_type $I16)) (pulley_zext16 val))
-(rule (zext val @ (value_type $I8)) (pulley_zext8 val))
