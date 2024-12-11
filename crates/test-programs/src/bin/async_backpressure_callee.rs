@@ -1,5 +1,3 @@
-#![deny(warnings)]
-
 mod bindings {
     wit_bindgen::generate!({
         path: "../misc/component-async-tests/wit",

@@ -1,5 +1,3 @@
-#![deny(warnings)]
-
 // This tests callback-less (AKA stackful) async exports.
 //
 // Testing this case using Rust's LLVM-based toolchain is tricky because, as of
@@ -22,7 +20,7 @@ extern "C" {
     fn task_return_foo(ptr: *mut u8, len: usize);
 }
 #[cfg(not(target_arch = "wasm32"))]
-extern "C" fn task_return_foo(ptr: *mut u8, len: usize) {
+extern "C" fn task_return_foo(_ptr: *mut u8, _len: usize) {
     unreachable!()
 }
 
@@ -33,7 +31,7 @@ extern "C" {
     fn import_foo(params: *mut u8, results: *mut u8) -> u32;
 }
 #[cfg(not(target_arch = "wasm32"))]
-extern "C" fn import_foo(params: *mut u8, results: *mut u8) -> u32 {
+extern "C" fn import_foo(_params: *mut u8, _results: *mut u8) -> u32 {
     unreachable!()
 }
 
@@ -44,7 +42,9 @@ extern "C" {
     fn task_wait(results: *mut i32) -> i32;
 }
 #[cfg(not(target_arch = "wasm32"))]
-extern "C" fn task_wait(results: *mut i32) -> i32;
+extern "C" fn task_wait(_results: *mut i32) -> i32 {
+    unreachable!()
+}
 
 #[cfg(target_arch = "wasm32")]
 #[link(wasm_import_module = "$root")]
@@ -53,7 +53,7 @@ extern "C" {
     fn subtask_drop(task: u32);
 }
 #[cfg(not(target_arch = "wasm32"))]
-extern "C" fn subtask_drop(task: u32) {
+extern "C" fn subtask_drop(_task: u32) {
     unreachable!()
 }
 

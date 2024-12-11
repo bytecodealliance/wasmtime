@@ -1,5 +1,3 @@
-#![deny(warnings)]
-
 mod bindings {
     wit_bindgen::generate!({
         path: "../misc/component-async-tests/wit",
@@ -10,10 +8,7 @@ mod bindings {
     export!(Component);
 }
 
-use {
-    bindings::{exports::local::local::run::Guest, local::local::ready},
-    std::ptr,
-};
+use bindings::{exports::local::local::run::Guest, local::local::ready};
 
 fn task_poll() -> Option<(i32, i32, i32)> {
     #[cfg(not(target_arch = "wasm32"))]
@@ -50,7 +45,7 @@ fn async_when_ready() -> i32 {
             #[link_name = "[async]when-ready"]
             fn call_when_ready(_: *mut u8, _: *mut u8) -> i32;
         }
-        unsafe { call_when_ready(ptr::null_mut(), ptr::null_mut()) }
+        unsafe { call_when_ready(std::ptr::null_mut(), std::ptr::null_mut()) }
     }
 }
 

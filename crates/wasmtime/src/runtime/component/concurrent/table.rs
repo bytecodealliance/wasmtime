@@ -180,7 +180,7 @@ impl Table {
     fn push_(&mut self, e: TableEntry) -> Result<u32, TableError> {
         if let Some(free) = self.pop_free_list() {
             self.entries[free] = Entry::Occupied { entry: e };
-            Ok(free as u32)
+            Ok(u32::try_from(free).unwrap())
         } else {
             let ix = self
                 .entries

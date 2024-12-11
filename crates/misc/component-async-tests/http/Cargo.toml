@@ -6,4 +6,4 @@ edition = "2021"
 [dependencies]
 anyhow = { workspace = true }
 futures = { workspace = true }
-wasmtime = { workspace = true }
+wasmtime = { workspace = true, features = ["component-model-async"] }

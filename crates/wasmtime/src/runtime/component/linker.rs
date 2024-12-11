@@ -735,11 +735,21 @@ impl<T> LinkerInstance<'_, T> {
         let dtor = Arc::new(crate::func::HostFunc::wrap_inner(
             &self.engine,
             move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| {
-                let async_cx = cx.as_context_mut().0.async_cx().expect("async cx");
-                let mut future = Pin::from(dtor(cx.as_context_mut(), param));
-                match unsafe { async_cx.block_on(future.as_mut()) } {
-                    Ok(Ok(())) => Ok(()),
-                    Ok(Err(trap)) | Err(trap) => Err(trap),
+                #[cfg(feature = "component-model-async")]
+                {
+                    let async_cx =
+                        crate::component::concurrent::AsyncCx::new(&mut cx.as_context_mut());
+                    let mut future = Pin::from(dtor(cx.as_context_mut(), param));
+                    unsafe { async_cx.block_on(future.as_mut(), None::<StoreContextMut<'_, T>>) }?.0
+                }
+                #[cfg(not(feature = "component-model-async"))]
+                {
+                    let async_cx = cx.as_context_mut().0.async_cx().expect("async cx");
+                    let mut future = Pin::from(dtor(cx.as_context_mut(), param));
+                    match unsafe { async_cx.block_on(future.as_mut()) } {
+                        Ok(Ok(())) => Ok(()),
+                        Ok(Err(trap)) | Err(trap) => Err(trap),
+                    }
                 }
             },
         ));
