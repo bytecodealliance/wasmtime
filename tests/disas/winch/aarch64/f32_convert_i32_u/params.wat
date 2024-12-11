@@ -2,11 +2,9 @@
 ;;! test = "winch"
 
 (module
-    (func (result f32)
-        (local i32)  
-
+    (func (param i32) (result f32)
         (local.get 0)
-        (f32.reinterpret_i32)
+        (f32.convert_i32_u)
     )
 )
 ;; wasm[0]::function[0]:
@@ -18,10 +16,9 @@
 ;;       mov     x28, sp
 ;;       stur    x0, [x28, #0x10]
 ;;       stur    x1, [x28, #8]
-;;       mov     x16, #0
-;;       stur    x16, [x28]
-;;       ldur    w0, [x28, #4]
-;;       fmov    s0, w0
+;;       stur    w2, [x28, #4]
+;;       ldur    w1, [x28, #4]
+;;       ucvtf   s0, w1
 ;;       add     sp, sp, #0x18
 ;;       mov     x28, sp
 ;;       ldp     x29, x30, [sp], #0x10

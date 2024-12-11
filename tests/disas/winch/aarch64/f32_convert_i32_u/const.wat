@@ -3,10 +3,8 @@
 
 (module
     (func (result f32)
-        (local i32)  
-
-        (local.get 0)
-        (f32.reinterpret_i32)
+        (i32.const 1)
+        (f32.convert_i32_u)
     )
 )
 ;; wasm[0]::function[0]:
@@ -14,15 +12,14 @@
 ;;       mov     x29, sp
 ;;       mov     x28, sp
 ;;       mov     x9, x0
-;;       sub     sp, sp, #0x18
+;;       sub     sp, sp, #0x10
 ;;       mov     x28, sp
-;;       stur    x0, [x28, #0x10]
-;;       stur    x1, [x28, #8]
-;;       mov     x16, #0
-;;       stur    x16, [x28]
-;;       ldur    w0, [x28, #4]
-;;       fmov    s0, w0
-;;       add     sp, sp, #0x18
+;;       stur    x0, [x28, #8]
+;;       stur    x1, [x28]
+;;       mov     x16, #1
+;;       mov     w1, w16
+;;       ucvtf   s0, w1
+;;       add     sp, sp, #0x10
 ;;       mov     x28, sp
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

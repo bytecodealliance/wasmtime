@@ -535,31 +535,31 @@ impl Masm for MacroAssembler {
 
     fn signed_convert(
         &mut self,
-        _dst: WritableReg,
-        _src: Reg,
-        _src_size: OperandSize,
-        _dst_size: OperandSize,
+        dst: WritableReg,
+        src: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
     ) {
-        todo!()
+        self.asm.cvt_sint_to_float(src, dst, src_size, dst_size);
     }
 
     fn unsigned_convert(
         &mut self,
-        _dst: WritableReg,
-        _src: Reg,
+        dst: WritableReg,
+        src: Reg,
         _tmp_gpr: Reg,
-        _src_size: OperandSize,
-        _dst_size: OperandSize,
+        src_size: OperandSize,
+        dst_size: OperandSize,
     ) {
-        todo!()
+        self.asm.cvt_uint_to_float(src, dst, src_size, dst_size);
     }
 
     fn reinterpret_float_as_int(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
-        self.asm.fpu_to_int(src, dst, size);
+        self.asm.mov_from_vec(src, dst, 0, size);
     }
 
     fn reinterpret_int_as_float(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
-        self.asm.int_to_fpu(src, dst, size);
+        self.asm.mov_to_fpu(src, dst, size);
     }
 
     fn demote(&mut self, dst: WritableReg, src: Reg) {

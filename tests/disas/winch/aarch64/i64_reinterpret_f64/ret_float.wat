@@ -20,7 +20,7 @@
 ;;       stur    x1, [x28]
 ;;       mov     x16, #0x3ff0000000000000
 ;;       fmov    d0, x16
-;;       fcvtzs  x0, d0
+;;       mov     x0, v0.d[0]
 ;;       mov     x16, #0x3ff0000000000000
 ;;       fmov    d0, x16
 ;;       add     sp, sp, #0x10
