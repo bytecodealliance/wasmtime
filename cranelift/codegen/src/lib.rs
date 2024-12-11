@@ -75,7 +75,6 @@ mod ctxhash;
 mod egraph;
 mod inst_predicates;
 mod isle_prelude;
-mod iterators;
 mod legalizer;
 mod nan_canonicalization;
 mod opts;
