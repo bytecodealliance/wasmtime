@@ -399,7 +399,6 @@ impl WastTest {
                 "misc_testsuite/call_indirect.wast",
                 "misc_testsuite/component-model/fused.wast",
                 "misc_testsuite/component-model/strings.wast",
-                "misc_testsuite/div-rem.wast",
                 "misc_testsuite/embenchen_fannkuch.wast",
                 "misc_testsuite/embenchen_fasta.wast",
                 "misc_testsuite/embenchen_ifs.wast",

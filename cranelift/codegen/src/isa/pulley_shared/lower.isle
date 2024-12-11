@@ -191,10 +191,25 @@
 (rule (lower (has_type $I64 (isub a b)))
       (pulley_xsub64 a b))
 
-;;;; Rules for `idiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I32 (sdiv a b)))
-      (pulley_xdiv32_s a b))
+(rule (lower (has_type $I32 (sdiv a b))) (pulley_xdiv32_s a b))
+(rule (lower (has_type $I64 (sdiv a b))) (pulley_xdiv64_s a b))
+
+;;;; Rules for `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (srem a b))) (pulley_xrem32_s a b))
+(rule (lower (has_type $I64 (srem a b))) (pulley_xrem64_s a b))
+
+;;;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (udiv a b))) (pulley_xdiv32_u a b))
+(rule (lower (has_type $I64 (udiv a b))) (pulley_xdiv64_u a b))
+
+;;;; Rules for `urem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (urem a b))) (pulley_xrem32_u a b))
+(rule (lower (has_type $I64 (urem a b))) (pulley_xrem64_u a b))
 
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
