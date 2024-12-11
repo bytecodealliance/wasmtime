@@ -474,31 +474,20 @@ impl Assembler {
         size: OperandSize,
     ) {
         // Check for division by 0
-        self.emit(Inst::TrapIf {
-            kind: CondBrKind::Zero(divisor.into()),
-            trap_code: TrapCode::INTEGER_DIVISION_BY_ZERO,
-        });
+        self.trapz(divisor, TrapCode::INTEGER_DIVISION_BY_ZERO);
 
         // `cranelift-codegen` doesn't support emitting u/sdiv for anything but I64,
         // we therefore sign-extend the operand.
         // see: https://github.com/bytecodealliance/wasmtime/issues/9766
-        //
-        // FIXME: maybe this is only necessary for signed remainder?
         if size == OperandSize::S32 {
-            self.emit(Inst::Extend {
-                rd: writable!(divisor.into()),
-                rn: divisor.into(),
-                signed: true,
-                from_bits: 32,
-                to_bits: 64,
-            });
-            self.emit(Inst::Extend {
-                rd: writable!(dividend.into()),
-                rn: dividend.into(),
-                signed: true,
-                from_bits: 32,
-                to_bits: 64,
-            });
+            let extend_kind = if kind.is_signed() {
+                ExtendKind::I64Extend32S
+            } else {
+                ExtendKind::I64ExtendI32U
+            };
+
+            self.extend(divisor, writable!(divisor), extend_kind);
+            self.extend(dividend, writable!(dividend), extend_kind);
         }
 
         let op = match kind {

@@ -31,6 +31,12 @@ pub(crate) enum RemKind {
     Unsigned,
 }
 
+impl RemKind {
+    pub fn is_signed(&self) -> bool {
+        matches!(self, Self::Signed)
+    }
+}
+
 #[derive(Eq, PartialEq)]
 pub(crate) enum MulWideKind {
     Signed,

@@ -23,8 +23,8 @@
 ;;       orr     x16, xzr, #0xffffffff
 ;;       mov     w1, w16
 ;;       cbz     x0, #0x58
-;;   34: sxtw    x0, w0
-;;       sxtw    x1, w1
+;;   34: mov     w0, w0
+;;       mov     w1, w1
 ;;       udiv    x16, x1, x0
 ;;       msub    x1, x0, x16, x1
 ;;       mov     w0, w1
