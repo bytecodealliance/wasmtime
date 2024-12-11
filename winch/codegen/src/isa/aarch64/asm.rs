@@ -2,7 +2,9 @@
 
 use super::{address::Address, regs};
 use crate::aarch64::regs::zero;
-use crate::masm::{DivKind, ExtendKind, FloatCmpKind, IntCmpKind, RoundingMode, ShiftKind};
+use crate::masm::{
+    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, RemKind, RoundingMode, ShiftKind,
+};
 use crate::CallingConvention;
 use crate::{
     masm::OperandSize,
@@ -458,6 +460,56 @@ impl Assembler {
             divisor,
             dividend,
             dest.map(Into::into),
+            OperandSize::S64,
+        );
+    }
+
+    /// Signed/unsigned remainder operation with three registers.
+    pub fn rem_rrr(
+        &mut self,
+        divisor: Reg,
+        dividend: Reg,
+        dest: Writable<Reg>,
+        kind: RemKind,
+        size: OperandSize,
+    ) {
+        // Check for division by 0
+        self.trapz(divisor, TrapCode::INTEGER_DIVISION_BY_ZERO);
+
+        // `cranelift-codegen` doesn't support emitting u/sdiv for anything but I64,
+        // we therefore sign-extend the operand.
+        // see: https://github.com/bytecodealliance/wasmtime/issues/9766
+        if size == OperandSize::S32 {
+            let extend_kind = if kind.is_signed() {
+                ExtendKind::I64Extend32S
+            } else {
+                ExtendKind::I64ExtendI32U
+            };
+
+            self.extend(divisor, writable!(divisor), extend_kind);
+            self.extend(dividend, writable!(dividend), extend_kind);
+        }
+
+        let op = match kind {
+            RemKind::Signed => ALUOp::SDiv,
+            RemKind::Unsigned => ALUOp::UDiv,
+        };
+
+        let scratch = regs::scratch();
+        self.emit_alu_rrr(
+            op,
+            divisor,
+            dividend,
+            writable!(scratch.into()),
+            OperandSize::S64,
+        );
+
+        self.emit_alu_rrrr(
+            ALUOp3::MSub,
+            scratch,
+            divisor,
+            dest.map(Into::into),
+            dividend,
             OperandSize::S64,
         );
     }

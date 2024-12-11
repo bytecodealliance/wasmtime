@@ -23,11 +23,18 @@ pub(crate) enum DivKind {
 }
 
 /// Remainder kind.
+#[derive(Copy, Clone)]
 pub(crate) enum RemKind {
     /// Signed remainder.
     Signed,
     /// Unsigned remainder.
     Unsigned,
+}
+
+impl RemKind {
+    pub fn is_signed(&self) -> bool {
+        matches!(self, Self::Signed)
+    }
 }
 
 #[derive(Eq, PartialEq)]
