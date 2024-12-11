@@ -13,9 +13,10 @@ use core::ops::{Index, IndexMut};
 use core::ptr::NonNull;
 use sptr::Strict;
 
-#[cfg(not(pulley_tail_calls))]
+mod debug;
+#[cfg(all(not(pulley_tail_calls), not(pulley_assume_llvm_makes_tail_calls)))]
 mod match_loop;
-#[cfg(pulley_tail_calls)]
+#[cfg(any(pulley_tail_calls, pulley_assume_llvm_makes_tail_calls))]
 mod tail_loop;
 
 const DEFAULT_STACK_SIZE: usize = 1 << 20; // 1 MiB
