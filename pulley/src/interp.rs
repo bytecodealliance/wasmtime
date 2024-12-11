@@ -1609,6 +1609,86 @@ impl OpVisitor for Interpreter<'_> {
         self.state[dst].set_f64(f64::from_bits(bits));
         ControlFlow::Continue(())
     }
+
+    fn feq32(&mut self, dst: XReg, src1: FReg, src2: FReg) -> ControlFlow<Done> {
+        let a = self.state[src1].get_f32();
+        let b = self.state[src2].get_f32();
+        self.state[dst].set_u32(u32::from(a == b));
+        ControlFlow::Continue(())
+    }
+
+    fn fneq32(&mut self, dst: XReg, src1: FReg, src2: FReg) -> ControlFlow<Done> {
+        let a = self.state[src1].get_f32();
+        let b = self.state[src2].get_f32();
+        self.state[dst].set_u32(u32::from(a != b));
+        ControlFlow::Continue(())
+    }
+
+    fn flt32(&mut self, dst: XReg, src1: FReg, src2: FReg) -> ControlFlow<Done> {
+        let a = self.state[src1].get_f32();
+        let b = self.state[src2].get_f32();
+        self.state[dst].set_u32(u32::from(a < b));
+        ControlFlow::Continue(())
+    }
+
+    fn flteq32(&mut self, dst: XReg, src1: FReg, src2: FReg) -> ControlFlow<Done> {
+        let a = self.state[src1].get_f32();
+        let b = self.state[src2].get_f32();
+        self.state[dst].set_u32(u32::from(a <= b));
+        ControlFlow::Continue(())
+    }
+
+    fn feq64(&mut self, dst: XReg, src1: FReg, src2: FReg) -> ControlFlow<Done> {
+        let a = self.state[src1].get_f64();
+        let b = self.state[src2].get_f64();
+        self.state[dst].set_u32(u32::from(a == b));
+        ControlFlow::Continue(())
+    }
+
+    fn fneq64(&mut self, dst: XReg, src1: FReg, src2: FReg) -> ControlFlow<Done> {
+        let a = self.state[src1].get_f64();
+        let b = self.state[src2].get_f64();
+        self.state[dst].set_u32(u32::from(a != b));
+        ControlFlow::Continue(())
+    }
+
+    fn flt64(&mut self, dst: XReg, src1: FReg, src2: FReg) -> ControlFlow<Done> {
+        let a = self.state[src1].get_f64();
+        let b = self.state[src2].get_f64();
+        self.state[dst].set_u32(u32::from(a < b));
+        ControlFlow::Continue(())
+    }
+
+    fn flteq64(&mut self, dst: XReg, src1: FReg, src2: FReg) -> ControlFlow<Done> {
+        let a = self.state[src1].get_f64();
+        let b = self.state[src2].get_f64();
+        self.state[dst].set_u32(u32::from(a <= b));
+        ControlFlow::Continue(())
+    }
+
+    fn xctz32(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u32();
+        self.state[dst].set_u32(a.trailing_zeros());
+        ControlFlow::Continue(())
+    }
+
+    fn xctz64(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u64();
+        self.state[dst].set_u64(a.trailing_zeros().into());
+        ControlFlow::Continue(())
+    }
+
+    fn xclz32(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u32();
+        self.state[dst].set_u32(a.leading_zeros());
+        ControlFlow::Continue(())
+    }
+
+    fn xclz64(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u64();
+        self.state[dst].set_u64(a.leading_zeros().into());
+        ControlFlow::Continue(())
+    }
 }
 
 impl ExtendedOpVisitor for Interpreter<'_> {

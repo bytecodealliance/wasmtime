@@ -184,6 +184,16 @@ macro_rules! for_each_op {
             /// 64-bit wrapping subtraction: `dst = src1 - src2`.
             xsub64 = Xsub64 { operands: BinaryOperands<XReg> };
 
+            /// `low32(dst) = trailing_zeros(low32(src))`
+            xctz32 = Xctz32 { dst: XReg, src: XReg };
+            /// `dst = trailing_zeros(src)`
+            xctz64 = Xctz64 { dst: XReg, src: XReg };
+
+            /// `low32(dst) = leading_zeros(low32(src))`
+            xclz32 = Xclz32 { dst: XReg, src: XReg };
+            /// `dst = leading_zeros(src)`
+            xclz64 = Xclz64 { dst: XReg, src: XReg };
+
             /// `low32(dst) = low32(src1) << low5(src2)`
             xshl32 = Xshl32 { operands: BinaryOperands<XReg> };
             /// `low32(dst) = low32(src1) >> low5(src2)`
@@ -338,6 +348,23 @@ macro_rules! for_each_op {
             fconst32 = FConst32 { dst: FReg, bits: u32 };
             /// `dst = bits`
             fconst64 = FConst64 { dst: FReg, bits: u64 };
+
+            /// `low32(dst) = zext(src1 == src2)`
+            feq32 = Feq32 { dst: XReg, src1: FReg, src2: FReg };
+            /// `low32(dst) = zext(src1 != src2)`
+            fneq32 = Fneq32 { dst: XReg, src1: FReg, src2: FReg };
+            /// `low32(dst) = zext(src1 < src2)`
+            flt32 = Flt32 { dst: XReg, src1: FReg, src2: FReg };
+            /// `low32(dst) = zext(src1 <= src2)`
+            flteq32 = Flteq32 { dst: XReg, src1: FReg, src2: FReg };
+            /// `low32(dst) = zext(src1 == src2)`
+            feq64 = Feq64 { dst: XReg, src1: FReg, src2: FReg };
+            /// `low32(dst) = zext(src1 != src2)`
+            fneq64 = Fneq64 { dst: XReg, src1: FReg, src2: FReg };
+            /// `low32(dst) = zext(src1 < src2)`
+            flt64 = Flt64 { dst: XReg, src1: FReg, src2: FReg };
+            /// `low32(dst) = zext(src1 <= src2)`
+            flteq64 = Flteq64 { dst: XReg, src1: FReg, src2: FReg };
         }
     };
 }
