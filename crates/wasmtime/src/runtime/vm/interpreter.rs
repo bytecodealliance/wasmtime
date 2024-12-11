@@ -3,9 +3,9 @@ use crate::runtime::vm::vmcontext::VMArrayCallNative;
 use crate::runtime::vm::{tls, TrapRegisters, TrapTest, VMContext, VMOpaqueContext};
 use crate::ValRaw;
 use core::ptr::NonNull;
-use pulley_interpreter::interp::{DoneReason, RegType, Val, Vm, XRegVal};
+use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
 use pulley_interpreter::{Reg, XReg};
-use wasmtime_environ::{BuiltinFunctionIndex, HostCall};
+use wasmtime_environ::{BuiltinFunctionIndex, HostCall, Trap};
 
 /// Interpreter state stored within a `Store<T>`.
 #[repr(transparent)]
@@ -109,8 +109,8 @@ impl InterpreterRef<'_> {
                     }
                 }
                 // If the VM trapped then process that here and return `false`.
-                DoneReason::Trap(pc) => {
-                    self.trap(pc, setjmp);
+                DoneReason::Trap { pc, kind } => {
+                    self.trap(pc, kind, setjmp);
                     break false;
                 }
             }
@@ -125,30 +125,47 @@ impl InterpreterRef<'_> {
     /// Handles an interpreter trap. This will initialize the trap state stored
     /// in TLS via the `test_if_trap` helper below by reading the pc/fp of the
     /// interpreter and seeing if that's a valid opcode to trap at.
-    fn trap(&mut self, pc: NonNull<u8>, setjmp: Setjmp) {
-        let result = tls::with(|s| {
+    fn trap(&mut self, pc: NonNull<u8>, kind: Option<TrapKind>, setjmp: Setjmp) {
+        let regs = TrapRegisters {
+            pc: pc.as_ptr() as usize,
+            fp: self.0[XReg::fp].get_ptr::<u8>() as usize,
+        };
+        tls::with(|s| {
             let s = s.unwrap();
-            s.test_if_trap(
-                TrapRegisters {
-                    pc: pc.as_ptr() as usize,
-                    fp: self.0[XReg::fp].get_ptr::<u8>() as usize,
-                },
-                None,
-                |_| false,
-            )
+            match kind {
+                Some(kind) => {
+                    let trap = match kind {
+                        TrapKind::IntegerOverflow => Trap::IntegerOverflow,
+                        TrapKind::DivideByZero => Trap::IntegerDivisionByZero,
+                    };
+                    s.set_jit_trap(regs, None, trap);
+                }
+                None => {
+                    let result = s.test_if_trap(
+                        TrapRegisters {
+                            pc: pc.as_ptr() as usize,
+                            fp: self.0[XReg::fp].get_ptr::<u8>() as usize,
+                        },
+                        None,
+                        |_| false,
+                    );
+                    match result {
+                        // This shouldn't be possible, so this is a fatal error
+                        // if it happens.
+                        TrapTest::NotWasm => {
+                            panic!("pulley trap at {pc:?} without trap code registered")
+                        }
+
+                        // Not possible with our closure above returning `false`.
+                        TrapTest::HandledByEmbedder => unreachable!(),
+
+                        // Trap was handled, yay! We don't use `jmp_buf`.
+                        TrapTest::Trap { jmp_buf: _ } => {}
+                    }
+                }
+            }
         });
 
-        match result {
-            // This shouldn't be possible, so this is a fatal error if it
-            // happens.
-            TrapTest::NotWasm => panic!("pulley trap at {pc:?} without trap code registered"),
-
-            // Not possible with our closure above returning `false`.
-            TrapTest::HandledByEmbedder => unreachable!(),
-
-            // Trap was handled, yay! We don't use `jmp_buf`.
-            TrapTest::Trap { jmp_buf: _ } => {}
-        }
         self.longjmp(setjmp);
     }
 

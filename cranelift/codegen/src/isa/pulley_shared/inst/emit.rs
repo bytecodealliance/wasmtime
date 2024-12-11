@@ -490,18 +490,6 @@ fn pulley_emit<P>(
                 RawInst::PushFrame | RawInst::StackAlloc32 { .. } => {
                     sink.add_trap(ir::TrapCode::STACK_OVERFLOW);
                 }
-                RawInst::XDiv32U { .. }
-                | RawInst::XDiv64U { .. }
-                | RawInst::XRem32U { .. }
-                | RawInst::XRem64U { .. } => {
-                    sink.add_trap(ir::TrapCode::INTEGER_DIVISION_BY_ZERO);
-                }
-                RawInst::XDiv32S { .. }
-                | RawInst::XDiv64S { .. }
-                | RawInst::XRem32S { .. }
-                | RawInst::XRem64S { .. } => {
-                    sink.add_trap(ir::TrapCode::INTEGER_OVERFLOW);
-                }
                 _ => {}
             }
             super::generated::emit(raw, sink)

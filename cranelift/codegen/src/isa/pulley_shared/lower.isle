@@ -244,6 +244,21 @@
 (rule (lower (has_type $I32 (clz a))) (pulley_xclz32 a))
 (rule (lower (has_type $I64 (clz a))) (pulley_xclz64 a))
 
+;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (popcnt a))) (pulley_xpopcnt32 a))
+(rule (lower (has_type $I64 (popcnt a))) (pulley_xpopcnt64 a))
+
+;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (rotl a b))) (pulley_xrotl32 a b))
+(rule (lower (has_type $I64 (rotl a b))) (pulley_xrotl64 a b))
+
+;;;; Rules for `rotr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (rotr a b))) (pulley_xrotr32 a b))
+(rule (lower (has_type $I64 (rotr a b))) (pulley_xrotr64 a b))
+
 ;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 1 (lower (icmp cc a b @ (value_type $I64)))

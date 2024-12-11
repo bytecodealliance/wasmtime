@@ -200,6 +200,21 @@ macro_rules! for_each_op {
             /// `dst = leading_zeros(src)`
             xclz64 = Xclz64 { dst: XReg, src: XReg };
 
+            /// `low32(dst) = count_ones(low32(src))`
+            xpopcnt32 = Xpopcnt32 { dst: XReg, src: XReg };
+            /// `dst = count_ones(src)`
+            xpopcnt64 = Xpopcnt64 { dst: XReg, src: XReg };
+
+            /// `low32(dst) = rotate_left(low32(src1), low32(src2))`
+            xrotl32 = Xrotl32 { operands: BinaryOperands<XReg> };
+            /// `dst = rotate_left(src1, src2)`
+            xrotl64 = Xrotl64 { operands: BinaryOperands<XReg> };
+
+            /// `low32(dst) = rotate_right(low32(src1), low32(src2))`
+            xrotr32 = Xrotr32 { operands: BinaryOperands<XReg> };
+            /// `dst = rotate_right(src1, src2)`
+            xrotr64 = Xrotr64 { operands: BinaryOperands<XReg> };
+
             /// `low32(dst) = low32(src1) << low5(src2)`
             xshl32 = Xshl32 { operands: BinaryOperands<XReg> };
             /// `low32(dst) = low32(src1) >> low5(src2)`
