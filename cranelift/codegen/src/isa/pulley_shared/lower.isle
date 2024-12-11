@@ -650,6 +650,11 @@
 (rule (lower (has_type $F32 (fneg a))) (pulley_fneg32 a))
 (rule (lower (has_type $F64 (fneg a))) (pulley_fneg64 a))
 
+;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (ineg a))) (pulley_xneg32 a))
+(rule (lower (has_type $I64 (ineg a))) (pulley_xneg64 a))
+
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (fabs a))) (pulley_fabs32 a))
