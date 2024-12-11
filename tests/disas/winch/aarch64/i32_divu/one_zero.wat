@@ -23,8 +23,8 @@
 ;;       mov     x16, #1
 ;;       mov     w1, w16
 ;;       cbz     x0, #0x54
-;;   34: sxtw    x0, w0
-;;       sxtw    x1, w1
+;;   34: mov     w0, w0
+;;       mov     w1, w1
 ;;       udiv    x1, x1, x0
 ;;       mov     w0, w1
 ;;       add     sp, sp, #0x10
