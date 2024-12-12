@@ -770,9 +770,7 @@ impl MachInstEmit for Inst {
                 // indication that something is wrong.
                 debug_assert_ne!(stack_reg(), rn);
                 debug_assert_ne!(stack_reg(), rm);
-                let inst = enc_arith_rrr(top11, bit15_10, rd, rn, rm);
-                println!("inst {alu_op:?}: {inst:b}");
-                sink.put4(inst);
+                sink.put4(enc_arith_rrr(top11, bit15_10, rd, rn, rm));
             }
             &Inst::AluRRRR {
                 alu_op,
