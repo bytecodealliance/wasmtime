@@ -435,3 +435,33 @@
 
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
+
+;;;; Helpers for Sign extension ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Sign extend a `Value` to at least 32-bit
+(decl zext32 (Value) XReg)
+(rule (zext32 val @ (value_type $I8)) (pulley_zext8 val))
+(rule (zext32 val @ (value_type $I16)) (pulley_zext16 val))
+(rule (zext32 val @ (value_type $I32)) val)
+(rule (zext32 val @ (value_type $I64)) val)
+
+;; Same as `zext32` but for sign-extension
+(decl sext32 (Value) XReg)
+(rule (sext32 val @ (value_type $I8)) (pulley_sext8 val))
+(rule (sext32 val @ (value_type $I16)) (pulley_sext16 val))
+(rule (sext32 val @ (value_type $I32)) val)
+(rule (sext32 val @ (value_type $I64)) val)
+
+;; Sign extend a `Value` to at least 64-bit
+(decl zext64 (Value) XReg)
+(rule (zext64 val @ (value_type $I8)) (pulley_zext8 val))
+(rule (zext64 val @ (value_type $I16)) (pulley_zext16 val))
+(rule (zext64 val @ (value_type $I32)) (pulley_zext32 val))
+(rule (zext64 val @ (value_type $I64)) val)
+
+;; Same as `zext64` but for sign-extension
+(decl sext64 (Value) XReg)
+(rule (sext64 val @ (value_type $I8)) (pulley_sext8 val))
+(rule (sext64 val @ (value_type $I16)) (pulley_sext16 val))
+(rule (sext64 val @ (value_type $I32)) (pulley_sext32 val))
+(rule (sext64 val @ (value_type $I64)) val)

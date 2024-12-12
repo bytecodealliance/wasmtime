@@ -5,6 +5,8 @@ target s390x
 target aarch64
 target riscv64
 target riscv64 has_c has_zcb
+target pulley64
+target pulley64be
 
 function %stack_addr_iadd(i64) -> i8 {
     ss0 = explicit_slot 16

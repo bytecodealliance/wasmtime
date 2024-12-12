@@ -1,4 +1,6 @@
 test interpret
+target pulley32
+target pulley32be
 
 function %stack_addr_iadd(i64) -> i8 {
     ss0 = explicit_slot 16

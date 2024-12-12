@@ -2815,4 +2815,16 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         self.state[dst].set_ptr(lr);
         ControlFlow::Continue(())
     }
+
+    fn xabs32(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i32();
+        self.state[dst].set_i32(a.wrapping_abs());
+        ControlFlow::Continue(())
+    }
+
+    fn xabs64(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i64();
+        self.state[dst].set_i64(a.wrapping_abs());
+        ControlFlow::Continue(())
+    }
 }
