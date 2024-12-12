@@ -1474,25 +1474,25 @@ impl OpVisitor for Interpreter<'_> {
 
     fn bitcast_int_from_float_32(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
         let val = self.state[src].get_f32();
-        self.state[dst].set_u64(u32::from_ne_bytes(val.to_ne_bytes()).into());
+        self.state[dst].set_u32(val.to_bits());
         ControlFlow::Continue(())
     }
 
     fn bitcast_int_from_float_64(&mut self, dst: XReg, src: FReg) -> ControlFlow<Done> {
         let val = self.state[src].get_f64();
-        self.state[dst].set_u64(u64::from_ne_bytes(val.to_ne_bytes()));
+        self.state[dst].set_u64(val.to_bits());
         ControlFlow::Continue(())
     }
 
     fn bitcast_float_from_int_32(&mut self, dst: FReg, src: XReg) -> ControlFlow<Done> {
         let val = self.state[src].get_u32();
-        self.state[dst].set_f32(f32::from_ne_bytes(val.to_ne_bytes()));
+        self.state[dst].set_f32(f32::from_bits(val));
         ControlFlow::Continue(())
     }
 
     fn bitcast_float_from_int_64(&mut self, dst: FReg, src: XReg) -> ControlFlow<Done> {
         let val = self.state[src].get_u64();
-        self.state[dst].set_f64(f64::from_ne_bytes(val.to_ne_bytes()));
+        self.state[dst].set_f64(f64::from_bits(val));
         ControlFlow::Continue(())
     }
 
@@ -1657,31 +1657,45 @@ impl OpVisitor for Interpreter<'_> {
         }
     }
 
-    fn xand32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+    fn xband32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u32();
         let b = self.state[operands.src2].get_u32();
         self.state[operands.dst].set_u32(a & b);
         ControlFlow::Continue(())
     }
 
-    fn xand64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+    fn xband64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u64();
         let b = self.state[operands.src2].get_u64();
         self.state[operands.dst].set_u64(a & b);
         ControlFlow::Continue(())
     }
 
-    fn xor32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+    fn xbor32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u32();
         let b = self.state[operands.src2].get_u32();
         self.state[operands.dst].set_u32(a | b);
         ControlFlow::Continue(())
     }
 
-    fn xor64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+    fn xbor64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u64();
         let b = self.state[operands.src2].get_u64();
         self.state[operands.dst].set_u64(a | b);
+        ControlFlow::Continue(())
+    }
+
+    fn xbxor32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u32(a ^ b);
+        ControlFlow::Continue(())
+    }
+
+    fn xbxor64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u64();
+        self.state[operands.dst].set_u64(a ^ b);
         ControlFlow::Continue(())
     }
 

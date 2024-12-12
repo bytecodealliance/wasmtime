@@ -357,13 +357,18 @@ macro_rules! for_each_op {
             xrem64_u = XRem64U { operands: BinaryOperands<XReg> };
 
             /// `low32(dst) = low32(src1) & low32(src2)`
-            xand32 = XAnd32 { operands: BinaryOperands<XReg> };
+            xband32 = XBand32 { operands: BinaryOperands<XReg> };
             /// `dst = src1 & src2`
-            xand64 = XAnd64 { operands: BinaryOperands<XReg> };
+            xband64 = XBand64 { operands: BinaryOperands<XReg> };
             /// `low32(dst) = low32(src1) | low32(src2)`
-            xor32 = XOr32 { operands: BinaryOperands<XReg> };
+            xbor32 = XBor32 { operands: BinaryOperands<XReg> };
             /// `dst = src1 | src2`
-            xor64 = XOr64 { operands: BinaryOperands<XReg> };
+            xbor64 = XBor64 { operands: BinaryOperands<XReg> };
+
+            /// `low32(dst) = low32(src1) ^ low32(src2)`
+            xbxor32 = XBxor32 { operands: BinaryOperands<XReg> };
+            /// `dst = src1 ^ src2`
+            xbxor64 = XBxor64 { operands: BinaryOperands<XReg> };
 
             /// `low32(dst) = bits`
             fconst32 = FConst32 { dst: FReg, bits: u32 };
