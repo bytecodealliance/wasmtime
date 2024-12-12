@@ -1,7 +1,7 @@
 @since(version = 0.2.0)
 interface network {
     @unstable(feature = network-error-code)
-    use wasi:io/error@0.2.2.{error};
+    use wasi:io/error@0.2.3.{error};
 
     /// An opaque resource that represents access to (a subset of) the network.
     /// This enables context-based security for networking.
