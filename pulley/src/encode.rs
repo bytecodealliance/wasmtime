@@ -59,6 +59,17 @@ impl Encode for u64 {
     }
 }
 
+impl Encode for u128 {
+    const WIDTH: u8 = 16;
+
+    fn encode<E>(&self, sink: &mut E)
+    where
+        E: Extend<u8>,
+    {
+        sink.extend(self.to_le_bytes());
+    }
+}
+
 impl Encode for i8 {
     const WIDTH: u8 = 1;
 
@@ -94,6 +105,17 @@ impl Encode for i32 {
 
 impl Encode for i64 {
     const WIDTH: u8 = 8;
+
+    fn encode<E>(&self, sink: &mut E)
+    where
+        E: Extend<u8>,
+    {
+        sink.extend(self.to_le_bytes());
+    }
+}
+
+impl Encode for i128 {
+    const WIDTH: u8 = 16;
 
     fn encode<E>(&self, sink: &mut E)
     where
@@ -147,7 +169,7 @@ impl Encode for PcRelOffset {
     }
 }
 
-impl<R: Reg> Encode for BinaryOperands<R> {
+impl<D: Reg, S1: Reg, S2: Reg> Encode for BinaryOperands<D, S1, S2> {
     const WIDTH: u8 = 2;
 
     fn encode<E>(&self, sink: &mut E)

@@ -414,6 +414,16 @@
 (rule (pulley_fstore amode src ty flags)
       (SideEffectNoResult.Inst (MInst.FStore amode src ty flags)))
 
+(decl pulley_vload (Amode Type MemFlags) VReg)
+(rule (pulley_vload amode ty flags)
+      (let ((dst WritableVReg (temp_writable_vreg))
+            (_ Unit (emit (MInst.VLoad dst amode ty flags))))
+        dst))
+
+(decl pulley_vstore (Amode VReg Type MemFlags) SideEffectNoResult)
+(rule (pulley_vstore amode src ty flags)
+      (SideEffectNoResult.Inst (MInst.VStore amode src ty flags)))
+
 (decl gen_br_table (XReg MachLabel BoxVecMachLabel) Unit)
 (rule (gen_br_table idx default labels)
       (emit (MInst.BrTable idx default labels)))

@@ -563,6 +563,47 @@ macro_rules! for_each_op {
             fneg64 = Fneg64 { dst: FReg, src: FReg };
             /// `dst = |src|`
             fabs64 = Fabs64 { dst: FReg, src: FReg };
+
+            /// `dst = imm`
+            vconst128 = Vconst128 { dst: VReg, imm: u128 };
+
+            /// `dst = src1 + src2`
+            vaddi8x16 = VAddI8x16 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 + src2`
+            vaddi16x8 = VAddI16x8 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 + src2`
+            vaddi32x4 = VAddI32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 + src2`
+            vaddi64x2 = VAddI64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 + src2`
+            vaddf32x4 = VAddF32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 + src2`
+            vaddf64x2 = VAddF64x2 { operands: BinaryOperands<VReg> };
+
+            /// `dst = src1 << src2`
+            vshli8x16 = VShlI8x16 { operands: BinaryOperands<VReg, VReg, XReg> };
+            /// `dst = src1 << src2`
+            vshli16x8 = VShlI16x8 { operands: BinaryOperands<VReg, VReg, XReg> };
+            /// `dst = src1 << src2`
+            vshli32x4 = VShlI32x4 { operands: BinaryOperands<VReg, VReg, XReg> };
+            /// `dst = src1 << src2`
+            vshli64x2 = VShlI64x2 { operands: BinaryOperands<VReg, VReg, XReg> };
+            /// `dst = src1 >> src2` (signed)
+            vshri8x16_s = VShrI8x16S { operands: BinaryOperands<VReg, VReg, XReg> };
+            /// `dst = src1 >> src2` (signed)
+            vshri16x8_s = VShrI16x8S { operands: BinaryOperands<VReg, VReg, XReg> };
+            /// `dst = src1 >> src2` (signed)
+            vshri32x4_s = VShrI32x4S { operands: BinaryOperands<VReg, VReg, XReg> };
+            /// `dst = src1 >> src2` (signed)
+            vshri64x2_s = VShrI64x2S { operands: BinaryOperands<VReg, VReg, XReg> };
+            /// `dst = src1 >> src2` (unsigned)
+            vshri8x16_u = VShrI8x16U { operands: BinaryOperands<VReg, VReg, XReg> };
+            /// `dst = src1 >> src2` (unsigned)
+            vshri16x8_u = VShrI16x8U { operands: BinaryOperands<VReg, VReg, XReg> };
+            /// `dst = src1 >> src2` (unsigned)
+            vshri32x4_u = VShrI32x4U { operands: BinaryOperands<VReg, VReg, XReg> };
+            /// `dst = src1 >> src2` (unsigned)
+            vshri64x2_u = VShrI64x2U { operands: BinaryOperands<VReg, VReg, XReg> };
         }
     };
 }

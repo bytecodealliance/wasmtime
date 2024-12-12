@@ -164,18 +164,18 @@ impl fmt::Debug for AnyReg {
 /// Operands to a binary operation, packed into a 16-bit word (5 bits per register).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-pub struct BinaryOperands<R> {
+pub struct BinaryOperands<D, S1 = D, S2 = D> {
     /// The destination register, packed in bits 0..5.
-    pub dst: R,
+    pub dst: D,
     /// The first source register, packed in bits 5..10.
-    pub src1: R,
+    pub src1: S1,
     /// The second source register, packed in bits 10..15.
-    pub src2: R,
+    pub src2: S2,
 }
 
-impl<R: Reg> BinaryOperands<R> {
+impl<D: Reg, S1: Reg, S2: Reg> BinaryOperands<D, S1, S2> {
     /// Convenience constructor for applying `Into`
-    pub fn new(dst: impl Into<R>, src1: impl Into<R>, src2: impl Into<R>) -> Self {
+    pub fn new(dst: impl Into<D>, src1: impl Into<S1>, src2: impl Into<S2>) -> Self {
         Self {
             dst: dst.into(),
             src1: src1.into(),
@@ -194,9 +194,9 @@ impl<R: Reg> BinaryOperands<R> {
     /// Convert from dense 16 bit encoding. The topmost bit is ignored.
     pub fn from_bits(bits: u16) -> Self {
         Self {
-            dst: R::new((bits & 0b11111) as u8).unwrap(),
-            src1: R::new(((bits >> 5) & 0b11111) as u8).unwrap(),
-            src2: R::new(((bits >> 10) & 0b11111) as u8).unwrap(),
+            dst: D::new((bits & 0b11111) as u8).unwrap(),
+            src1: S1::new(((bits >> 5) & 0b11111) as u8).unwrap(),
+            src2: S2::new(((bits >> 10) & 0b11111) as u8).unwrap(),
         }
     }
 }

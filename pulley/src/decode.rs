@@ -303,6 +303,15 @@ impl Decode for u64 {
     }
 }
 
+impl Decode for u128 {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        Ok(u128::from_le_bytes(bytecode.read()?))
+    }
+}
+
 impl Decode for i8 {
     fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
     where
@@ -336,6 +345,15 @@ impl Decode for i64 {
         T: BytecodeStream,
     {
         Ok(i64::from_le_bytes(bytecode.read()?))
+    }
+}
+
+impl Decode for i128 {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        Ok(i128::from_le_bytes(bytecode.read()?))
     }
 }
 
@@ -404,7 +422,7 @@ impl Decode for ExtendedOpcode {
     }
 }
 
-impl<R: Reg> Decode for BinaryOperands<R> {
+impl<D: Reg, S1: Reg, S2: Reg> Decode for BinaryOperands<D, S1, S2> {
     fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
     where
         T: BytecodeStream,
