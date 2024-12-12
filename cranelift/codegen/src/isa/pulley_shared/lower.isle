@@ -504,7 +504,25 @@
   (pulley_xload (amode addr offset) $I32 flags (ExtKind.Sign64)))
 
 (rule 2 (lower (has_type (ty_vec128 ty) (load flags addr offset)))
-  (pulley_vload (amode addr offset) ty flags))
+  (pulley_vload (amode addr offset) ty flags (VExtKind.None)))
+
+(rule (lower (has_type ty (sload8x8 flags addr offset)))
+  (pulley_vload (amode addr offset) ty flags (VExtKind.S8x8)))
+
+(rule (lower (has_type ty (uload8x8 flags addr offset)))
+  (pulley_vload (amode addr offset) ty flags (VExtKind.U8x8)))
+
+(rule (lower (has_type ty (sload16x4 flags addr offset)))
+  (pulley_vload (amode addr offset) ty flags (VExtKind.S16x4)))
+
+(rule (lower (has_type ty (uload16x4 flags addr offset)))
+  (pulley_vload (amode addr offset) ty flags (VExtKind.U16x4)))
+
+(rule (lower (has_type ty (sload32x2 flags addr offset)))
+  (pulley_vload (amode addr offset) ty flags (VExtKind.S32x2)))
+
+(rule (lower (has_type ty (uload32x2 flags addr offset)))
+  (pulley_vload (amode addr offset) ty flags (VExtKind.U32x2)))
 
 ;;;; Rules for `store` and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -2754,6 +2754,42 @@ impl OpVisitor for Interpreter<'_> {
         self.state[dst].set_f64x2([val; 2]);
         ControlFlow::Continue(())
     }
+
+    fn vload8x8_s_offset32(&mut self, dst: VReg, ptr: XReg, offset: i32) -> ControlFlow<Done> {
+        let val = unsafe { self.load::<[i8; 8]>(ptr, offset) };
+        self.state[dst].set_i16x8(val.map(|i| i.into()));
+        ControlFlow::Continue(())
+    }
+
+    fn vload8x8_u_offset32(&mut self, dst: VReg, ptr: XReg, offset: i32) -> ControlFlow<Done> {
+        let val = unsafe { self.load::<[u8; 8]>(ptr, offset) };
+        self.state[dst].set_u16x8(val.map(|i| i.into()));
+        ControlFlow::Continue(())
+    }
+
+    fn vload16x4le_s_offset32(&mut self, dst: VReg, ptr: XReg, offset: i32) -> ControlFlow<Done> {
+        let val = unsafe { self.load::<[i16; 4]>(ptr, offset) };
+        self.state[dst].set_i32x4(val.map(|i| i16::from_le(i).into()));
+        ControlFlow::Continue(())
+    }
+
+    fn vload16x4le_u_offset32(&mut self, dst: VReg, ptr: XReg, offset: i32) -> ControlFlow<Done> {
+        let val = unsafe { self.load::<[u16; 4]>(ptr, offset) };
+        self.state[dst].set_u32x4(val.map(|i| u16::from_le(i).into()));
+        ControlFlow::Continue(())
+    }
+
+    fn vload32x2le_s_offset32(&mut self, dst: VReg, ptr: XReg, offset: i32) -> ControlFlow<Done> {
+        let val = unsafe { self.load::<[i32; 2]>(ptr, offset) };
+        self.state[dst].set_i64x2(val.map(|i| i32::from_le(i).into()));
+        ControlFlow::Continue(())
+    }
+
+    fn vload32x2le_u_offset32(&mut self, dst: VReg, ptr: XReg, offset: i32) -> ControlFlow<Done> {
+        let val = unsafe { self.load::<[u32; 2]>(ptr, offset) };
+        self.state[dst].set_u64x2(val.map(|i| u32::from_le(i).into()));
+        ControlFlow::Continue(())
+    }
 }
 
 impl ExtendedOpVisitor for Interpreter<'_> {

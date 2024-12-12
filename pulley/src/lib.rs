@@ -631,6 +631,19 @@ macro_rules! for_each_op {
             vsplatf32 = VSplatF32 { dst: VReg, src: FReg };
             /// `dst = splat(src)`
             vsplatf64 = VSplatF64 { dst: VReg, src: FReg };
+
+            /// Load the 64-bit source as i8x8 and sign-extend to i16x8.
+            vload8x8_s_offset32 = VLoad8x8SOffset32 { dst: VReg, ptr: XReg, offset: i32 };
+            /// Load the 64-bit source as u8x8 and zero-extend to i16x8.
+            vload8x8_u_offset32 = VLoad8x8UOffset32 { dst: VReg, ptr: XReg, offset: i32 };
+            /// Load the 64-bit source as i16x4 and sign-extend to i32x4.
+            vload16x4le_s_offset32 = VLoad16x4LeSOffset32 { dst: VReg, ptr: XReg, offset: i32 };
+            /// Load the 64-bit source as u16x4 and zero-extend to i32x4.
+            vload16x4le_u_offset32 = VLoad16x4LeUOffset32 { dst: VReg, ptr: XReg, offset: i32 };
+            /// Load the 64-bit source as i32x2 and sign-extend to i64x2.
+            vload32x2le_s_offset32 = VLoad32x2LeSOffset32 { dst: VReg, ptr: XReg, offset: i32 };
+            /// Load the 64-bit source as u32x2 and zero-extend to i64x2.
+            vload32x2le_u_offset32 = VLoad32x2LeUOffset32 { dst: VReg, ptr: XReg, offset: i32 };
         }
     };
 }

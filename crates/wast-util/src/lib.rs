@@ -431,7 +431,6 @@ impl WastTest {
                 "spec_testsuite/proposals/memory64/i16x8_relaxed_q15mulr_s.wast",
                 "spec_testsuite/proposals/memory64/i32x4_relaxed_trunc.wast",
                 "spec_testsuite/proposals/memory64/i8x16_relaxed_swizzle.wast",
-                "spec_testsuite/simd_align.wast",
                 "spec_testsuite/simd_bitwise.wast",
                 "spec_testsuite/simd_boolean.wast",
                 "spec_testsuite/simd_conversions.wast",

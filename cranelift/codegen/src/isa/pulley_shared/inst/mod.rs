@@ -25,6 +25,7 @@ pub use self::emit::*;
 
 pub use crate::isa::pulley_shared::lower::isle::generated_code::MInst as Inst;
 pub use crate::isa::pulley_shared::lower::isle::generated_code::RawInst;
+pub use crate::isa::pulley_shared::lower::isle::generated_code::VExtKind;
 
 impl From<RawInst> for Inst {
     fn from(raw: RawInst) -> Inst {
@@ -65,6 +66,7 @@ impl Inst {
                 mem,
                 ty,
                 flags,
+                ext: VExtKind::None,
             }
         } else if ty.is_int() {
             Inst::XLoad {
@@ -242,6 +244,7 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             mem,
             ty: _,
             flags: _,
+            ext: _,
         } => {
             collector.reg_def(dst);
             mem.get_operands(collector);
@@ -687,11 +690,12 @@ impl Inst {
                 mem,
                 ty,
                 flags,
+                ext,
             } => {
                 let dst = format_reg(*dst.to_reg());
                 let ty = ty.bits();
                 let mem = mem.to_string();
-                format!("{dst} = vload{ty} {mem} // flags ={flags}")
+                format!("{dst} = vload{ty}_{ext:?} {mem} // flags ={flags}")
             }
 
             Inst::VStore {
