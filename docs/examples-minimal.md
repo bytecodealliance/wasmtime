@@ -191,7 +191,7 @@ $ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 $ export CARGO_PROFILE_RELEASE_STRIP=debuginfo
 $ export RUSTFLAGS="-Zlocation-detail=none"
 $ cargo +nightly build -p wasmtime-c-api --release --no-default-features --features disable-logging \
-    -Z build-std=std,panic_abort --target aarch64-apple-darwin
+    -Z build-std=std,panic_abort --target x86_64-unknown-linux-gnu
 $ ls -lh target/x86_64-unknown-linux-gnu/release/libwasmtime.so
 -rwxrwxr-x 2 alex alex 941K Dec 12 07:52 target/x86_64-unknown-linux-gnu/release/libwasmtime.so
 ```
@@ -210,7 +210,7 @@ $ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 $ export CARGO_PROFILE_RELEASE_STRIP=debuginfo
 $ export RUSTFLAGS="-Zlocation-detail=none"
 $ cargo +nightly build -p wasmtime-c-api --release --no-default-features --features disable-logging \
-    -Z build-std=std,panic_abort --target aarch64-apple-darwin \
+    -Z build-std=std,panic_abort --target x86_64-unknown-linux-gnu \
     -Z build-std-features=
 $ ls -lh target/x86_64-unknown-linux-gnu/release/libwasmtime.so
 -rwxrwxr-x 2 alex alex 784K Dec 12 07:53 target/x86_64-unknown-linux-gnu/release/libwasmtime.so
@@ -228,7 +228,7 @@ $ export CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 $ export CARGO_PROFILE_RELEASE_STRIP=debuginfo
 $ export RUSTFLAGS="-Zlocation-detail=none"
 $ cargo +nightly build -p wasmtime-c-api --release --no-default-features --features disable-logging \
-    -Z build-std=std,panic_abort --target aarch64-apple-darwin \
+    -Z build-std=std,panic_abort --target x86_64-unknown-linux-gnu \
     -Z build-std-features=panic_immediate_abort
 $ ls -lh target/x86_64-unknown-linux-gnu/release/libwasmtime.so
 -rwxrwxr-x 2 alex alex 698K Dec 12 07:54 target/x86_64-unknown-linux-gnu/release/libwasmtime.so
