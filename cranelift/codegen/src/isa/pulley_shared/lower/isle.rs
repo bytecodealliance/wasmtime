@@ -10,7 +10,7 @@ use crate::ir::{condcodes::*, immediates::*, types::*, *};
 use crate::isa::pulley_shared::{
     abi::*,
     inst::{FReg, OperandSize, VReg, WritableFReg, WritableVReg, WritableXReg, XReg},
-    lower::regs,
+    lower::{regs, Cond},
     *,
 };
 use crate::machinst::{
@@ -113,6 +113,10 @@ where
 
     fn lr_reg(&mut self) -> XReg {
         XReg::new(regs::lr_reg()).unwrap()
+    }
+
+    fn cond_invert(&mut self, cond: &Cond) -> Cond {
+        cond.invert()
     }
 }
 

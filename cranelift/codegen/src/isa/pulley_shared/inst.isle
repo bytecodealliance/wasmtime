@@ -30,8 +30,8 @@
 
     ;;;; Actual Instructions ;;;;
 
-    ;; Trap if `src1 cond src2`.
-    (TrapIf (cond IntCC) (size OperandSize) (src1 XReg) (src2 XReg) (code TrapCode))
+    ;; Trap if `cond` is true.
+    (TrapIf (cond Cond) (code TrapCode))
 
     ;; Nothing.
     (Nop)
@@ -60,16 +60,8 @@
     ;; Unconditional jumps.
     (Jump (label MachLabel))
 
-    ;; Jump to `then` if `c` is nonzero, otherwise to `else`.
-    (BrIf32 (c XReg) (taken MachLabel) (not_taken MachLabel))
-
-    ;; Compare-and-branch macro ops.
-    (BrIfXeq32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
-    (BrIfXneq32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
-    (BrIfXslt32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
-    (BrIfXslteq32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
-    (BrIfXult32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
-    (BrIfXulteq32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
+    ;; Jump to `then` if `c` is true, otherwise to `else`.
+    (BrIf (cond Cond) (taken MachLabel) (not_taken MachLabel))
 
     ;; Load the memory address referenced by `mem` into `dst`.
     (LoadAddr (dst WritableXReg) (mem Amode))
@@ -94,6 +86,38 @@
     (Raw (raw RawInst))
   )
 )
+
+;; Helper type on conditional branches and traps to represent what the
+;; condition that is being performed is.
+;;
+;; Used in `BrIf` and `TrapIf` above for example.
+(type Cond
+  (enum
+    ;; True if `reg` contains a nonzero value in the low 32-bits.
+    (If32 (reg XReg))
+    ;; True if `reg` contains a zero in the low 32-bits.
+    (IfNot32 (reg XReg))
+
+    ;; Conditionals for comparing the low 32-bits of two registers.
+    (IfXeq32 (src1 XReg) (src2 XReg))
+    (IfXneq32 (src1 XReg) (src2 XReg))
+    (IfXslt32 (src1 XReg) (src2 XReg))
+    (IfXslteq32 (src1 XReg) (src2 XReg))
+    (IfXult32 (src1 XReg) (src2 XReg))
+    (IfXulteq32 (src1 XReg) (src2 XReg))
+
+    ;; Conditionals for comparing two 64-bit registers.
+    (IfXeq64 (src1 XReg) (src2 XReg))
+    (IfXneq64 (src1 XReg) (src2 XReg))
+    (IfXslt64 (src1 XReg) (src2 XReg))
+    (IfXslteq64 (src1 XReg) (src2 XReg))
+    (IfXult64 (src1 XReg) (src2 XReg))
+    (IfXulteq64 (src1 XReg) (src2 XReg))
+  )
+)
+
+(decl cond_invert (Cond) Cond)
+(extern constructor cond_invert cond_invert)
 
 (decl raw_inst_to_inst (RawInst) MInst)
 (rule (raw_inst_to_inst inst) (MInst.Raw inst))
@@ -349,9 +373,9 @@
 
 ;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl pulley_trap_if (IntCC OperandSize XReg XReg TrapCode) SideEffectNoResult)
-(rule (pulley_trap_if cond size src1 src2 code)
-      (SideEffectNoResult.Inst (MInst.TrapIf cond size src1 src2 code)))
+(decl pulley_trap_if (Cond TrapCode) SideEffectNoResult)
+(rule (pulley_trap_if cond code)
+      (SideEffectNoResult.Inst (MInst.TrapIf cond code)))
 
 (decl sp_reg () XReg)
 (extern constructor sp_reg sp_reg)
@@ -372,33 +396,9 @@
 (rule (pulley_jump label)
       (SideEffectNoResult.Inst (MInst.Jump label)))
 
-(decl pulley_br_if32 (XReg MachLabel MachLabel) SideEffectNoResult)
-(rule (pulley_br_if32 c taken not_taken)
-      (SideEffectNoResult.Inst (MInst.BrIf32 c taken not_taken)))
-
-(decl pulley_br_if_xeq32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
-(rule (pulley_br_if_xeq32 a b taken not_taken)
-      (SideEffectNoResult.Inst (MInst.BrIfXeq32 a b taken not_taken)))
-
-(decl pulley_br_if_xneq32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
-(rule (pulley_br_if_xneq32 a b taken not_taken)
-      (SideEffectNoResult.Inst (MInst.BrIfXneq32 a b taken not_taken)))
-
-(decl pulley_br_if_xslt32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
-(rule (pulley_br_if_xslt32 a b taken not_taken)
-      (SideEffectNoResult.Inst (MInst.BrIfXslt32 a b taken not_taken)))
-
-(decl pulley_br_if_xslteq32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
-(rule (pulley_br_if_xslteq32 a b taken not_taken)
-      (SideEffectNoResult.Inst (MInst.BrIfXslteq32 a b taken not_taken)))
-
-(decl pulley_br_if_xult32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
-(rule (pulley_br_if_xult32 a b taken not_taken)
-      (SideEffectNoResult.Inst (MInst.BrIfXult32 a b taken not_taken)))
-
-(decl pulley_br_if_xulteq32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
-(rule (pulley_br_if_xulteq32 a b taken not_taken)
-      (SideEffectNoResult.Inst (MInst.BrIfXulteq32 a b taken not_taken)))
+(decl pulley_br_if (Cond MachLabel MachLabel) SideEffectNoResult)
+(rule (pulley_br_if cond taken not_taken)
+      (SideEffectNoResult.Inst (MInst.BrIf cond taken not_taken)))
 
 (decl pulley_xload (Amode Type MemFlags ExtKind) XReg)
 (rule (pulley_xload amode ty flags ext)

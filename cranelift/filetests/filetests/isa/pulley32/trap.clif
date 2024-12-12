@@ -24,7 +24,7 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   xconst8 x2, 42
-;   trap_if eq, Size64, x0, x2 // code = TrapCode(1)
+;   trap_if_xeq64 x0, x2 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
@@ -44,7 +44,7 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   xconst8 x2, 42
-;   trap_if ne, Size64, x0, x2 // code = TrapCode(1)
+;   trap_if_xneq64 x0, x2 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
@@ -64,7 +64,7 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   xconst8 x2, 42
-;   trap_if eq, Size64, x0, x2 // code = TrapCode(1)
+;   trap_if_xeq64 x0, x2 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
@@ -84,7 +84,7 @@ block0(v0: i64):
 ; VCode:
 ; block0:
 ;   xconst8 x2, 42
-;   trap_if ne, Size64, x0, x2 // code = TrapCode(1)
+;   trap_if_xneq64 x0, x2 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
@@ -110,26 +110,31 @@ block2:
 
 ; VCode:
 ; block0:
-;   xconst8 x4, 0
-;   xneq64 x6, x0, x4
-;   br_if32 x6, label2; jump label1
+;   xconst8 x6, 0
+;   br_if_xneq64 x0, x6, label2; jump label1
 ; block1:
+;   xconst8 x7, 0
+;   xconst8 x8, 0
+;   trap_if_xneq64 x7, x8 // code = TrapCode(1)
 ;   ret
 ; block2:
-;   xconst8 x7, 42
-;   xconst8 x8, 0
-;   trap_if ne, Size64, x7, x8 // code = TrapCode(1)
+;   xconst8 x9, 42
+;   xconst8 x10, 0
+;   trap_if_xneq64 x9, x10 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
-; xconst8 x4, 0
-; xneq64 x6, x0, x4
-; br_if32 x6, 0x7    // target = 0xd
-; ret
-; xconst8 x7, 42
+; xconst8 x6, 0
+; br_if_xneq64 x0, x6, 0x15    // target = 0x18
+; xconst8 x7, 0
 ; xconst8 x8, 0
-; br_if_xneq64 x7, x8, 0x8    // target = 0x1b
+; br_if_xneq64 x7, x8, 0x16    // target = 0x26
 ; ret
+; xconst8 x9, 42
+; xconst8 x10, 0
+; br_if_xneq64 x9, x10, 0xb    // target = 0x29
+; ret
+; trap
 ; trap
 
 function %trapz_iconst_fold(i64) {
@@ -149,25 +154,30 @@ block2:
 
 ; VCode:
 ; block0:
-;   xconst8 x4, 0
-;   xneq64 x6, x0, x4
-;   br_if32 x6, label2; jump label1
-; block1:
 ;   xconst8 x6, 0
+;   br_if_xneq64 x0, x6, label2; jump label1
+; block1:
 ;   xconst8 x7, 0
-;   trap_if eq, Size64, x6, x7 // code = TrapCode(1)
+;   xconst8 x8, 0
+;   trap_if_xeq64 x7, x8 // code = TrapCode(1)
 ;   ret
 ; block2:
+;   xconst8 x9, 42
+;   xconst8 x10, 0
+;   trap_if_xeq64 x9, x10 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
-; xconst8 x4, 0
-; xneq64 x6, x0, x4
-; br_if32 x6, 0x14    // target = 0x1a
 ; xconst8 x6, 0
+; br_if_xneq64 x0, x6, 0x15    // target = 0x18
 ; xconst8 x7, 0
-; br_if_xeq64 x6, x7, 0x9    // target = 0x1b
+; xconst8 x8, 0
+; br_if_xeq64 x7, x8, 0x16    // target = 0x26
 ; ret
+; xconst8 x9, 42
+; xconst8 x10, 0
+; br_if_xeq64 x9, x10, 0xb    // target = 0x29
 ; ret
+; trap
 ; trap
 

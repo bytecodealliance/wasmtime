@@ -132,51 +132,17 @@ fn pulley_emit<P>(
         // Pseduo-instructions that don't actually encode to anything.
         Inst::Args { .. } | Inst::Rets { .. } | Inst::Unwind { .. } => {}
 
-        Inst::TrapIf {
-            cond,
-            size,
-            src1,
-            src2,
-            code,
-        } => {
-            let label = sink.defer_trap(*code);
+        Inst::TrapIf { cond, code } => {
+            let trap = sink.defer_trap(*code);
+            let not_trap = sink.get_label();
 
-            let cur_off = sink.cur_offset();
-            sink.use_label_at_offset(cur_off + 3, label, LabelUse::Jump(3));
-
-            use ir::condcodes::IntCC::*;
-            use OperandSize::*;
-            match (cond, size) {
-                (Equal, Size32) => enc::br_if_xeq32(sink, src1, src2, 0),
-                (Equal, Size64) => enc::br_if_xeq64(sink, src1, src2, 0),
-
-                (NotEqual, Size32) => enc::br_if_xneq32(sink, src1, src2, 0),
-                (NotEqual, Size64) => enc::br_if_xneq64(sink, src1, src2, 0),
-
-                (SignedLessThan, Size32) => enc::br_if_xslt32(sink, src1, src2, 0),
-                (SignedLessThan, Size64) => enc::br_if_xslt64(sink, src1, src2, 0),
-
-                (SignedLessThanOrEqual, Size32) => enc::br_if_xslteq32(sink, src1, src2, 0),
-                (SignedLessThanOrEqual, Size64) => enc::br_if_xslteq64(sink, src1, src2, 0),
-
-                (UnsignedLessThan, Size32) => enc::br_if_xult32(sink, src1, src2, 0),
-                (UnsignedLessThan, Size64) => enc::br_if_xult64(sink, src1, src2, 0),
-
-                (UnsignedLessThanOrEqual, Size32) => enc::br_if_xulteq32(sink, src1, src2, 0),
-                (UnsignedLessThanOrEqual, Size64) => enc::br_if_xulteq64(sink, src1, src2, 0),
-
-                (SignedGreaterThan, Size32) => enc::br_if_xslt32(sink, src2, src1, 0),
-                (SignedGreaterThan, Size64) => enc::br_if_xslt64(sink, src2, src1, 0),
-
-                (SignedGreaterThanOrEqual, Size32) => enc::br_if_xslteq32(sink, src2, src1, 0),
-                (SignedGreaterThanOrEqual, Size64) => enc::br_if_xslteq64(sink, src2, src1, 0),
-
-                (UnsignedGreaterThan, Size32) => enc::br_if_xult32(sink, src2, src1, 0),
-                (UnsignedGreaterThan, Size64) => enc::br_if_xult64(sink, src2, src1, 0),
-
-                (UnsignedGreaterThanOrEqual, Size32) => enc::br_if_xulteq32(sink, src2, src1, 0),
-                (UnsignedGreaterThanOrEqual, Size64) => enc::br_if_xulteq64(sink, src2, src1, 0),
-            }
+            <InstAndKind<P>>::from(Inst::BrIf {
+                cond: cond.clone(),
+                taken: trap,
+                not_taken: not_trap,
+            })
+            .emit(sink, emit_info, state);
+            sink.bind_label(not_trap, &mut state.ctrl_plane);
         }
 
         Inst::Nop => todo!(),
@@ -247,142 +213,39 @@ fn pulley_emit<P>(
             enc::jump(sink, 0x00000000);
         }
 
-        Inst::BrIf32 {
-            c,
+        Inst::BrIf {
+            cond,
             taken,
             not_taken,
         } => {
-            // If taken.
-            let taken_start = *start_offset + 2;
-            let taken_end = taken_start + 4;
-
-            sink.use_label_at_offset(taken_start, *taken, LabelUse::Jump(2));
+            // Encode the inverted form of the branch. Branches always have
+            // their trailing 4 bytes as the relative offset which is what we're
+            // going to target here within the `MachBuffer`.
             let mut inverted = SmallVec::<[u8; 16]>::new();
-            enc::br_if_not32(&mut inverted, c, 0x00000000);
-            debug_assert_eq!(
-                inverted.len(),
-                usize::try_from(taken_end - *start_offset).unwrap()
-            );
+            cond.invert().encode(&mut inverted);
+            let len = inverted.len() as u32;
+            debug_assert!(len > 4);
 
+            // Use the `taken` label 4 bytes before the end of the instruction
+            // we're about to emit as that's the base of `PcRelOffset`. Note
+            // that the `Jump` here factors in the offset from the start of the
+            // instruction to the start of the relative offset, hence `len - 4`
+            // as the factor to adjust by.
+            let taken_end = *start_offset + len;
+            sink.use_label_at_offset(taken_end - 4, *taken, LabelUse::Jump(len - 4));
             sink.add_cond_branch(*start_offset, taken_end, *taken, &inverted);
-            enc::br_if32(sink, c, 0x00000000);
+            cond.encode(sink);
             debug_assert_eq!(sink.cur_offset(), taken_end);
 
-            // If not taken.
+            // For the not-taken branch use an unconditional jump to the
+            // relevant label, and we know that the jump instruction is 5 bytes
+            // long where the final 4 bytes are the offset to jump by.
             let not_taken_start = taken_end + 1;
             let not_taken_end = not_taken_start + 4;
-
             sink.use_label_at_offset(not_taken_start, *not_taken, LabelUse::Jump(1));
             sink.add_uncond_branch(taken_end, not_taken_end, *not_taken);
             enc::jump(sink, 0x00000000);
-        }
-
-        Inst::BrIfXeq32 {
-            src1,
-            src2,
-            taken,
-            not_taken,
-        } => {
-            br_if_cond_helper(
-                sink,
-                *start_offset,
-                *src1,
-                *src2,
-                taken,
-                not_taken,
-                enc::br_if_xeq32,
-                enc::br_if_xneq32,
-            );
-        }
-
-        Inst::BrIfXneq32 {
-            src1,
-            src2,
-            taken,
-            not_taken,
-        } => {
-            br_if_cond_helper(
-                sink,
-                *start_offset,
-                *src1,
-                *src2,
-                taken,
-                not_taken,
-                enc::br_if_xneq32,
-                enc::br_if_xeq32,
-            );
-        }
-
-        Inst::BrIfXslt32 {
-            src1,
-            src2,
-            taken,
-            not_taken,
-        } => {
-            br_if_cond_helper(
-                sink,
-                *start_offset,
-                *src1,
-                *src2,
-                taken,
-                not_taken,
-                enc::br_if_xslt32,
-                |s, src1, src2, x| enc::br_if_xslteq32(s, src2, src1, x),
-            );
-        }
-
-        Inst::BrIfXslteq32 {
-            src1,
-            src2,
-            taken,
-            not_taken,
-        } => {
-            br_if_cond_helper(
-                sink,
-                *start_offset,
-                *src1,
-                *src2,
-                taken,
-                not_taken,
-                enc::br_if_xslteq32,
-                |s, src1, src2, x| enc::br_if_xslt32(s, src2, src1, x),
-            );
-        }
-
-        Inst::BrIfXult32 {
-            src1,
-            src2,
-            taken,
-            not_taken,
-        } => {
-            br_if_cond_helper(
-                sink,
-                *start_offset,
-                *src1,
-                *src2,
-                taken,
-                not_taken,
-                enc::br_if_xult32,
-                |s, src1, src2, x| enc::br_if_xulteq32(s, src2, src1, x),
-            );
-        }
-
-        Inst::BrIfXulteq32 {
-            src1,
-            src2,
-            taken,
-            not_taken,
-        } => {
-            br_if_cond_helper(
-                sink,
-                *start_offset,
-                *src1,
-                *src2,
-                taken,
-                not_taken,
-                enc::br_if_xulteq32,
-                |s, src1, src2, x| enc::br_if_xult32(s, src2, src1, x),
-            );
+            assert_eq!(sink.cur_offset(), not_taken_end);
         }
 
         Inst::LoadAddr { dst, mem } => {
@@ -644,41 +507,4 @@ fn pulley_emit<P>(
             super::generated::emit(raw, sink)
         }
     }
-}
-
-fn br_if_cond_helper<P>(
-    sink: &mut MachBuffer<InstAndKind<P>>,
-    start_offset: u32,
-    src1: XReg,
-    src2: XReg,
-    taken: &MachLabel,
-    not_taken: &MachLabel,
-    mut enc: impl FnMut(&mut MachBuffer<InstAndKind<P>>, XReg, XReg, i32),
-    mut enc_inverted: impl FnMut(&mut SmallVec<[u8; 16]>, XReg, XReg, i32),
-) where
-    P: PulleyTargetKind,
-{
-    // If taken.
-    let taken_start = start_offset + 3;
-    let taken_end = taken_start + 4;
-
-    sink.use_label_at_offset(taken_start, *taken, LabelUse::Jump(3));
-    let mut inverted = SmallVec::<[u8; 16]>::new();
-    enc_inverted(&mut inverted, src1, src2, 0x00000000);
-    debug_assert_eq!(
-        inverted.len(),
-        usize::try_from(taken_end - start_offset).unwrap()
-    );
-
-    sink.add_cond_branch(start_offset, taken_end, *taken, &inverted);
-    enc(sink, src1, src2, 0x00000000);
-    debug_assert_eq!(sink.cur_offset(), taken_end);
-
-    // If not taken.
-    let not_taken_start = taken_end + 1;
-    let not_taken_end = not_taken_start + 4;
-
-    sink.use_label_at_offset(not_taken_start, *not_taken, LabelUse::Jump(1));
-    sink.add_uncond_branch(taken_end, not_taken_end, *not_taken);
-    enc::jump(sink, 0x00000000);
 }
