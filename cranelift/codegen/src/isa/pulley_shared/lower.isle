@@ -159,6 +159,13 @@
 (rule (lower (has_type $I64 (isub a b)))
       (pulley_xsub64 a b))
 
+;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I8 (imul a b))) (pulley_xmul32 a b))
+(rule (lower (has_type $I16 (imul a b))) (pulley_xmul32 a b))
+(rule (lower (has_type $I32 (imul a b))) (pulley_xmul32 a b))
+(rule (lower (has_type $I64 (imul a b))) (pulley_xmul64 a b))
+
 ;;;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I32 (sdiv a b))) (pulley_xdiv32_s a b))

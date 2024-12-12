@@ -26,7 +26,7 @@ macro_rules! define_opcode {
 
         impl Opcode {
             /// The value of the maximum defined opcode.
-            pub const MAX: u8 = define_opcode!( @max $( $name )* ) + 1;
+            pub const MAX: u8 = Opcode::ExtendedOp as u8;
         }
     };
 
