@@ -141,15 +141,7 @@ impl InterpreterRef<'_> {
                     s.set_jit_trap(regs, None, trap);
                 }
                 None => {
-                    let result = s.test_if_trap(
-                        TrapRegisters {
-                            pc: pc.as_ptr() as usize,
-                            fp: self.0[XReg::fp].get_ptr::<u8>() as usize,
-                        },
-                        None,
-                        |_| false,
-                    );
-                    match result {
+                    match s.test_if_trap(regs, None, |_| false) {
                         // This shouldn't be possible, so this is a fatal error
                         // if it happens.
                         TrapTest::NotWasm => {
