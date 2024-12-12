@@ -728,7 +728,7 @@ impl MachInstEmit for Inst {
                 rm,
             } => {
                 debug_assert!(match alu_op {
-                    ALUOp::SDiv | ALUOp::UDiv | ALUOp::SMulH | ALUOp::UMulH =>
+                    ALUOp::SMulH | ALUOp::UMulH =>
                         size == OperandSize::Size64,
                     _ => true,
                 });
@@ -749,12 +749,14 @@ impl MachInstEmit for Inst {
                     ALUOp::AddS => 0b00101011_000,
                     ALUOp::SubS => 0b01101011_000,
                     ALUOp::SDiv => 0b10011010_110,
-                    ALUOp::UDiv => 0b10011010_110,
+                    ALUOp::UDiv => 0b00011010_110,
                     ALUOp::RotR | ALUOp::Lsr | ALUOp::Asr | ALUOp::Lsl => 0b00011010_110,
                     ALUOp::SMulH => 0b10011011_010,
                     ALUOp::UMulH => 0b10011011_110,
                 };
-                let top11 = top11 | size.sf_bit() << 10;
+
+                dbg!(alu_op);
+                let top11 = top11 | dbg!(size.sf_bit()) << 10;
                 let bit15_10 = match alu_op {
                     ALUOp::SDiv => 0b000011,
                     ALUOp::UDiv => 0b000010,
@@ -770,7 +772,9 @@ impl MachInstEmit for Inst {
                 // indication that something is wrong.
                 debug_assert_ne!(stack_reg(), rn);
                 debug_assert_ne!(stack_reg(), rm);
-                sink.put4(enc_arith_rrr(top11, bit15_10, rd, rn, rm));
+                let inst =enc_arith_rrr(top11, bit15_10, rd, rn, rm);
+                println!("inst {alu_op:?}: {inst:b}");
+                sink.put4(inst);
             }
             &Inst::AluRRRR {
                 alu_op,

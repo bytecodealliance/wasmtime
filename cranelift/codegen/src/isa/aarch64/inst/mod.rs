@@ -1234,6 +1234,7 @@ impl Inst {
                 rn,
                 rm,
             } => {
+                dbg!(alu_op, size);
                 let op = op_name(alu_op);
                 let rd = pretty_print_ireg(rd.to_reg(), size);
                 let rn = pretty_print_ireg(rn, size);
