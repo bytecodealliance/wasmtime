@@ -401,7 +401,6 @@ impl WastTest {
                 "misc_testsuite/embenchen_primes.wast",
                 "misc_testsuite/float-round-doesnt-load-too-much.wast",
                 "misc_testsuite/int-to-float-splat.wast",
-                "misc_testsuite/issue4890.wast",
                 "misc_testsuite/issue6562.wast",
                 "misc_testsuite/memory-combos.wast",
                 "misc_testsuite/memory64/simd.wast",

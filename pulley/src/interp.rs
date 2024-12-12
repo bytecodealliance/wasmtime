@@ -2137,17 +2137,17 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
-    fn fcopysign32(&mut self, dst: FReg, src1: FReg, src2: FReg) -> ControlFlow<Done> {
-        let a = self.state[src1].get_f32();
-        let b = self.state[src2].get_f32();
-        self.state[dst].set_f32(a.copysign(b));
+    fn fcopysign32(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32();
+        let b = self.state[operands.src2].get_f32();
+        self.state[operands.dst].set_f32(a.copysign(b));
         ControlFlow::Continue(())
     }
 
-    fn fcopysign64(&mut self, dst: FReg, src1: FReg, src2: FReg) -> ControlFlow<Done> {
-        let a = self.state[src1].get_f64();
-        let b = self.state[src2].get_f64();
-        self.state[dst].set_f64(a.copysign(b));
+    fn fcopysign64(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64();
+        let b = self.state[operands.src2].get_f64();
+        self.state[operands.dst].set_f64(a.copysign(b));
         ControlFlow::Continue(())
     }
 }

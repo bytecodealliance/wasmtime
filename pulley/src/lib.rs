@@ -478,10 +478,10 @@ macro_rules! for_each_op {
             /// `(st) = promote(low32(src))`
             f64_from_f32 = F64FromF32 { dst: FReg, src: FReg };
 
-            /// `low32(dst) = abs(low32(src1)) * sign(low32(src2))`
-            fcopysign32 = FCopySign32 { dst: FReg, src1: FReg, src2: FReg };
-            /// `dst = abs(src1) * sign(src2)`
-            fcopysign64 = FCopySign64 { dst: FReg, src1: FReg, src2: FReg };
+            /// `low32(dst) = copysign(low32(src1), low32(src2))`
+            fcopysign32 = FCopySign32 { operands: BinaryOperands<FReg> };
+            /// `dst = copysign(src1, src2)`
+            fcopysign64 = FCopySign64 { operands: BinaryOperands<FReg> };
         }
     };
 }
