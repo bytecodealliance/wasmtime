@@ -1031,7 +1031,7 @@
 ;; Note that aarch64's `udiv` doesn't trap so to respect the semantics of
 ;; CLIF's `udiv` the check for zero needs to be manually performed.
 (rule udiv 1 (lower (has_type $I64 (udiv x y)))
-        (a64_udiv $I64 (put_in_reg x) (trap_if_zero_divisor (put_in_reg y))))
+      (a64_udiv $I64 (put_in_reg x) (trap_if_zero_divisor (put_in_reg y))))
 
 (rule udiv (lower (has_type (fits_in_32 ty) (udiv x y)))
       (a64_udiv $I32 (put_in_reg x) (put_nonzero_in_reg y)))
