@@ -702,7 +702,7 @@ mod done {
     }
 
     /// Stored within `DoneReason::Trap`.
-    #[expect(missing_docs, reason = "self-describing variants")]
+    #[allow(missing_docs, reason = "self-describing variants")]
     pub enum TrapKind {
         DivideByZero,
         IntegerOverflow,
