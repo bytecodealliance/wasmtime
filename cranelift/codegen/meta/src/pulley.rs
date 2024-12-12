@@ -39,10 +39,7 @@ impl Inst<'_> {
             .iter()
             .map(|(name, ty)| match (*name, *ty) {
                 ("operands", "BinaryOperands < XReg >") => Operand::Binop { reg: "XReg" },
-                (name, "RegSet < XReg >") => Operand::Normal {
-                    name,
-                    ty: "VecXReg",
-                },
+                ("operands", "BinaryOperands < FReg >") => Operand::Binop { reg: "FReg" },
                 ("dst", ty) => Operand::Writable { name, ty },
                 (name, ty) => Operand::Normal { name, ty },
             })
