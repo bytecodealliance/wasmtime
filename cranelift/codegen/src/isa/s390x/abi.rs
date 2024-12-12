@@ -662,14 +662,16 @@ impl ABIMachineSpec for S390xMachineDeps {
         frame_size: u32,
         guard_size: u32,
     ) {
-        // Number of probes that we need to perform
-        let probe_count = align_to(frame_size, guard_size) / guard_size;
-
         // The stack probe loop currently takes 4 instructions and each unrolled
         // probe takes 2.  Set this to 2 to keep the max size to 4 instructions.
         const PROBE_MAX_UNROLL: u32 = 2;
 
-        if probe_count <= PROBE_MAX_UNROLL {
+        // Calculate how many probes we need to perform. Round down, as we only
+        // need to probe whole guard_size regions we'd otherwise skip over.
+        let probe_count = frame_size / guard_size;
+        if probe_count == 0 {
+            // No probe necessary
+        } else if probe_count <= PROBE_MAX_UNROLL {
             // Unrolled probe loop.
             for _ in 0..probe_count {
                 insts.extend(Self::gen_sp_reg_adjust(-(guard_size as i32)));
