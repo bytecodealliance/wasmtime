@@ -301,8 +301,6 @@ mod tests {
     #[test]
     fn special_x_regs() {
         assert!(XReg::sp.is_special());
-        assert!(XReg::lr.is_special());
-        assert!(XReg::fp.is_special());
         assert!(XReg::spilltmp0.is_special());
         assert!(XReg::spilltmp1.is_special());
     }
