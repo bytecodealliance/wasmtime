@@ -655,6 +655,34 @@ macro_rules! for_each_op {
             vbnot128 = VBnot128 { dst: VReg, src: VReg };
             /// `dst = (c & x) | (!c & y)`
             vbitselect128 = VBitselect128 { dst: VReg, c: VReg, x: VReg, y: VReg };
+            /// Collect high bits of each lane into the low 32-bits of the
+            /// destination.
+            vbitmask8x16 = Vbitmask8x16 { dst: XReg, src: VReg };
+            /// Collect high bits of each lane into the low 32-bits of the
+            /// destination.
+            vbitmask16x8 = Vbitmask16x8 { dst: XReg, src: VReg };
+            /// Collect high bits of each lane into the low 32-bits of the
+            /// destination.
+            vbitmask32x4 = Vbitmask32x4 { dst: XReg, src: VReg };
+            /// Collect high bits of each lane into the low 32-bits of the
+            /// destination.
+            vbitmask64x2 = Vbitmask64x2 { dst: XReg, src: VReg };
+            /// Store whether all lanes are nonzero in `dst`.
+            valltrue8x16 = Valltrue8x16 { dst: XReg, src: VReg };
+            /// Store whether all lanes are nonzero in `dst`.
+            valltrue16x8 = Valltrue16x8 { dst: XReg, src: VReg };
+            /// Store whether all lanes are nonzero in `dst`.
+            valltrue32x4 = Valltrue32x4 { dst: XReg, src: VReg };
+            /// Store whether any lanes are nonzero in `dst`.
+            valltrue64x2 = Valltrue64x2 { dst: XReg, src: VReg };
+            /// Store whether any lanes are nonzero in `dst`.
+            vanytrue8x16 = Vanytrue8x16 { dst: XReg, src: VReg };
+            /// Store whether any lanes are nonzero in `dst`.
+            vanytrue16x8 = Vanytrue16x8 { dst: XReg, src: VReg };
+            /// Store whether any lanes are nonzero in `dst`.
+            vanytrue32x4 = Vanytrue32x4 { dst: XReg, src: VReg };
+            /// Store whether any lanes are nonzero in `dst`.
+            vanytrue64x2 = Vanytrue64x2 { dst: XReg, src: VReg };
         }
     };
 }
