@@ -436,19 +436,17 @@ impl Assembler {
             self.trapif(Cond::Vs, TrapCode::INTEGER_OVERFLOW);
         }
 
-        // `cranelift-codegen` doesn't support emitting u/sdiv for anything but I64,
+        // `cranelift-codegen` doesn't support emitting sdiv for anything but I64,
         // we therefore sign-extend the operand.
         // see: https://github.com/bytecodealliance/wasmtime/issues/9766
-        if size == OperandSize::S32 {
-            let extend_kind = if kind == DivKind::Signed {
-                ExtendKind::I64Extend32S
-            } else {
-                ExtendKind::I64ExtendI32U
-            };
+        let size = if size == OperandSize::S32 && kind == DivKind::Signed {
+            self.extend(divisor, writable!(divisor), ExtendKind::I64Extend32S);
+            self.extend(dividend, writable!(dividend), ExtendKind::I64Extend32S);
+            OperandSize::S64
+        } else {
+            size
+        };
 
-            self.extend(divisor, writable!(divisor), extend_kind);
-            self.extend(dividend, writable!(dividend), extend_kind);
-        }
 
         let op = match kind {
             DivKind::Signed => ALUOp::SDiv,
@@ -460,7 +458,7 @@ impl Assembler {
             divisor,
             dividend,
             dest.map(Into::into),
-            OperandSize::S64,
+            size,
         );
     }
 
@@ -476,19 +474,16 @@ impl Assembler {
         // Check for division by 0
         self.trapz(divisor, TrapCode::INTEGER_DIVISION_BY_ZERO);
 
-        // `cranelift-codegen` doesn't support emitting u/sdiv for anything but I64,
+        // `cranelift-codegen` doesn't support emitting sdiv for anything but I64,
         // we therefore sign-extend the operand.
         // see: https://github.com/bytecodealliance/wasmtime/issues/9766
-        if size == OperandSize::S32 {
-            let extend_kind = if kind.is_signed() {
-                ExtendKind::I64Extend32S
-            } else {
-                ExtendKind::I64ExtendI32U
-            };
-
-            self.extend(divisor, writable!(divisor), extend_kind);
-            self.extend(dividend, writable!(dividend), extend_kind);
-        }
+        let size = if size == OperandSize::S32 && kind.is_signed() {
+            self.extend(divisor, writable!(divisor), ExtendKind::I64Extend32S);
+            self.extend(dividend, writable!(dividend), ExtendKind::I64Extend32S);
+            OperandSize::S64
+        } else {
+            size
+        };
 
         let op = match kind {
             RemKind::Signed => ALUOp::SDiv,
@@ -501,7 +496,7 @@ impl Assembler {
             divisor,
             dividend,
             writable!(scratch.into()),
-            OperandSize::S64,
+            size,
         );
 
         self.emit_alu_rrrr(
@@ -510,7 +505,7 @@ impl Assembler {
             divisor,
             dest.map(Into::into),
             dividend,
-            OperandSize::S64,
+            size,
         );
     }
 
