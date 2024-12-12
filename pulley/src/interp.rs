@@ -82,7 +82,7 @@ impl Vm {
 
         match self.call_run(func) {
             DoneReason::ReturnToHost(()) => DoneReason::ReturnToHost(self.call_end(rets)),
-            DoneReason::Trap(pc) => DoneReason::Trap(pc),
+            DoneReason::Trap { pc, kind } => DoneReason::Trap { pc, kind },
             DoneReason::CallIndirectHost { id, resume } => {
                 DoneReason::CallIndirectHost { id, resume }
             }
@@ -684,7 +684,12 @@ mod done {
     /// Reason that the pulley interpreter has ceased execution.
     pub enum DoneReason<T> {
         /// A trap happened at this bytecode instruction.
-        Trap(NonNull<u8>),
+        Trap {
+            /// Which instruction is raising this trap.
+            pc: NonNull<u8>,
+            /// The kind of trap being raised, if known.
+            kind: Option<TrapKind>,
+        },
         /// The `call_indirect_host` instruction was executed.
         CallIndirectHost {
             /// The payload of `call_indirect_host`.
@@ -694,6 +699,13 @@ mod done {
         },
         /// Pulley has finished and the provided value is being returned.
         ReturnToHost(T),
+    }
+
+    /// Stored within `DoneReason::Trap`.
+    #[allow(missing_docs, reason = "self-describing variants")]
+    pub enum TrapKind {
+        DivideByZero,
+        IntegerOverflow,
     }
 
     impl MachineState {
@@ -715,8 +727,13 @@ mod done {
         /// instruction to point to the instruction itself in the trap metadata
         /// returned from the interpreter.
         pub fn done_trap<I: Encode>(&mut self) -> ControlFlow<Done> {
+            self.done_trap_kind::<I>(None)
+        }
+
+        /// Same as `done_trap` but with an explicit `TrapKind`.
+        pub fn done_trap_kind<I: Encode>(&mut self, kind: Option<TrapKind>) -> ControlFlow<Done> {
             let pc = self.current_pc::<I>();
-            self.state.done_reason = Some(DoneReason::Trap(pc));
+            self.state.done_reason = Some(DoneReason::Trap { pc, kind });
             ControlFlow::Break(Done { _priv: () })
         }
 
@@ -738,7 +755,7 @@ mod done {
 }
 
 use done::Done;
-pub use done::DoneReason;
+pub use done::{DoneReason, TrapKind};
 
 struct Interpreter<'a> {
     state: &'a mut MachineState,
@@ -1583,7 +1600,14 @@ impl OpVisitor for Interpreter<'_> {
                 self.state[operands.dst].set_i32(result);
                 ControlFlow::Continue(())
             }
-            None => self.done_trap::<crate::XDiv32S>(),
+            None => {
+                let kind = if b == 0 {
+                    TrapKind::DivideByZero
+                } else {
+                    TrapKind::IntegerOverflow
+                };
+                self.done_trap_kind::<crate::XDiv32S>(Some(kind))
+            }
         }
     }
 
@@ -1595,7 +1619,14 @@ impl OpVisitor for Interpreter<'_> {
                 self.state[operands.dst].set_i64(result);
                 ControlFlow::Continue(())
             }
-            None => self.done_trap::<crate::XDiv64S>(),
+            None => {
+                let kind = if b == 0 {
+                    TrapKind::DivideByZero
+                } else {
+                    TrapKind::IntegerOverflow
+                };
+                self.done_trap_kind::<crate::XDiv64S>(Some(kind))
+            }
         }
     }
 
@@ -1607,7 +1638,7 @@ impl OpVisitor for Interpreter<'_> {
                 self.state[operands.dst].set_u32(result);
                 ControlFlow::Continue(())
             }
-            None => self.done_trap::<crate::XDiv32U>(),
+            None => self.done_trap_kind::<crate::XDiv64U>(Some(TrapKind::DivideByZero)),
         }
     }
 
@@ -1619,31 +1650,41 @@ impl OpVisitor for Interpreter<'_> {
                 self.state[operands.dst].set_u64(result);
                 ControlFlow::Continue(())
             }
-            None => self.done_trap::<crate::XDiv64U>(),
+            None => self.done_trap_kind::<crate::XDiv64U>(Some(TrapKind::DivideByZero)),
         }
     }
 
     fn xrem32_s(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_i32();
         let b = self.state[operands.src2].get_i32();
-        match a.checked_rem(b) {
+        let result = if a == i32::MIN && b == -1 {
+            Some(0)
+        } else {
+            a.checked_rem(b)
+        };
+        match result {
             Some(result) => {
                 self.state[operands.dst].set_i32(result);
                 ControlFlow::Continue(())
             }
-            None => self.done_trap::<crate::XRem32S>(),
+            None => self.done_trap_kind::<crate::XRem32S>(Some(TrapKind::DivideByZero)),
         }
     }
 
     fn xrem64_s(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_i64();
         let b = self.state[operands.src2].get_i64();
-        match a.checked_rem(b) {
+        let result = if a == i64::MIN && b == -1 {
+            Some(0)
+        } else {
+            a.checked_rem(b)
+        };
+        match result {
             Some(result) => {
                 self.state[operands.dst].set_i64(result);
                 ControlFlow::Continue(())
             }
-            None => self.done_trap::<crate::XRem64S>(),
+            None => self.done_trap_kind::<crate::XRem64S>(Some(TrapKind::DivideByZero)),
         }
     }
 
@@ -1655,7 +1696,7 @@ impl OpVisitor for Interpreter<'_> {
                 self.state[operands.dst].set_u32(result);
                 ControlFlow::Continue(())
             }
-            None => self.done_trap::<crate::XRem32U>(),
+            None => self.done_trap_kind::<crate::XRem32U>(Some(TrapKind::DivideByZero)),
         }
     }
 
@@ -1667,7 +1708,7 @@ impl OpVisitor for Interpreter<'_> {
                 self.state[operands.dst].set_u64(result);
                 ControlFlow::Continue(())
             }
-            None => self.done_trap::<crate::XRem64U>(),
+            None => self.done_trap_kind::<crate::XRem64U>(Some(TrapKind::DivideByZero)),
         }
     }
 
@@ -1800,6 +1841,46 @@ impl OpVisitor for Interpreter<'_> {
     fn xclz64(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
         let a = self.state[src].get_u64();
         self.state[dst].set_u64(a.leading_zeros().into());
+        ControlFlow::Continue(())
+    }
+
+    fn xpopcnt32(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u32();
+        self.state[dst].set_u32(a.count_ones());
+        ControlFlow::Continue(())
+    }
+
+    fn xpopcnt64(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u64();
+        self.state[dst].set_u64(a.count_ones().into());
+        ControlFlow::Continue(())
+    }
+
+    fn xrotl32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u32(a.rotate_left(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xrotl64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u64(a.rotate_left(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xrotr32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u32(a.rotate_right(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xrotr64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_u64(a.rotate_right(b));
         ControlFlow::Continue(())
     }
 

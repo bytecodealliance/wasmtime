@@ -21,7 +21,7 @@ unsafe fn run(vm: &mut Vm, ops: &[Op]) -> Result<(), NonNull<u8>> {
     let ops = encoded(ops);
     match vm.call(NonNull::from(&ops[..]).cast(), &[], []) {
         DoneReason::ReturnToHost(_) => Ok(()),
-        DoneReason::Trap(pc) => Err(pc),
+        DoneReason::Trap { pc, .. } => Err(pc),
         DoneReason::CallIndirectHost { .. } => unimplemented!(),
     }
 }
