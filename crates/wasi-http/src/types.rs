@@ -130,15 +130,20 @@ pub trait WasiHttpView: Send {
     /// that the implementation will buffer.
     /// Default: 1.
     fn outgoing_body_buffer_chunks(&mut self) -> usize {
-        1
+        DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS
     }
 
     /// Maximum size allowed in a write call to the outgoing body's output-stream.
     /// Default: 1024 * 1024.
     fn outgoing_body_chunk_size(&mut self) -> usize {
-        1024 * 1024
+        DEFAULT_OUTGOING_BODY_CHUNK_SIZE
     }
 }
+
+/// The default value configured for [`WasiHttpView::outgoing_body_buffer_chunks`] in [`WasiHttpView`].
+pub const DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS: usize = 1;
+/// The default value configured for [`WasiHttpView::outgoing_body_chunk_size`] in [`WasiHttpView`].
+pub const DEFAULT_OUTGOING_BODY_CHUNK_SIZE: usize = 1024 * 1024;
 
 impl<T: ?Sized + WasiHttpView> WasiHttpView for &mut T {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
