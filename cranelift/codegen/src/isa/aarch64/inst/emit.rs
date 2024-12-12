@@ -755,8 +755,7 @@ impl MachInstEmit for Inst {
                     ALUOp::UMulH => 0b10011011_110,
                 };
 
-                dbg!(alu_op);
-                let top11 = top11 | dbg!(size.sf_bit()) << 10;
+                let top11 = top11 | size.sf_bit() << 10;
                 let bit15_10 = match alu_op {
                     ALUOp::SDiv => 0b000011,
                     ALUOp::UDiv => 0b000010,
