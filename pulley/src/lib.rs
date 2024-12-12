@@ -761,6 +761,88 @@ macro_rules! for_each_extended_op {
             xabs32 = XAbs32 { dst: XReg, src: XReg };
             /// `dst = |src|`
             xabs64 = XAbs64 { dst: XReg, src: XReg };
+
+            /// TODO
+            vf32x4_from_i32x4_s = VF32x4FromI32x4S { dst: VReg, src: VReg };
+            /// TODO
+            vf32x4_from_i32x4_u = VF32x4FromI32x4U { dst: VReg, src: VReg };
+            /// TODO
+            vf64x2_from_i64x2_s = VF64x2FromI64x2S { dst: VReg, src: VReg };
+            /// TODO
+            vf64x2_from_i64x2_u = VF64x2FromI64x2U { dst: VReg, src: VReg };
+
+            /// Widens the low lanes of the input vector, as signed, to twice
+            /// the width.
+            vwidenlow8x16_s = VWidenLow8x16S { dst: VReg, src: VReg };
+            /// Widens the low lanes of the input vector, as unsigned, to twice
+            /// the width.
+            vwidenlow8x16_u = VWidenLow8x16U { dst: VReg, src: VReg };
+            /// Widens the low lanes of the input vector, as signed, to twice
+            /// the width.
+            vwidenlow16x8_s = VWidenLow16x8S { dst: VReg, src: VReg };
+            /// Widens the low lanes of the input vector, as unsigned, to twice
+            /// the width.
+            vwidenlow16x8_u = VWidenLow16x8U { dst: VReg, src: VReg };
+            /// Widens the low lanes of the input vector, as signed, to twice
+            /// the width.
+            vwidenlow32x4_s = VWidenLow32x4S { dst: VReg, src: VReg };
+            /// Widens the low lanes of the input vector, as unsigned, to twice
+            /// the width.
+            vwidenlow32x4_u = VWidenLow32x4U { dst: VReg, src: VReg };
+            /// Widens the high lanes of the input vector, as signed, to twice
+            /// the width.
+            vwidenhigh8x16_s = VWidenHigh8x16S { dst: VReg, src: VReg };
+            /// Widens the high lanes of the input vector, as unsigned, to twice
+            /// the width.
+            vwidenhigh8x16_u = VWidenHigh8x16U { dst: VReg, src: VReg };
+            /// Widens the high lanes of the input vector, as signed, to twice
+            /// the width.
+            vwidenhigh16x8_s = VWidenHigh16x8S { dst: VReg, src: VReg };
+            /// Widens the high lanes of the input vector, as unsigned, to twice
+            /// the width.
+            vwidenhigh16x8_u = VWidenHigh16x8U { dst: VReg, src: VReg };
+            /// Widens the high lanes of the input vector, as signed, to twice
+            /// the width.
+            vwidenhigh32x4_s = VWidenHigh32x4S { dst: VReg, src: VReg };
+            /// Widens the high lanes of the input vector, as unsigned, to twice
+            /// the width.
+            vwidenhigh32x4_u = VWidenHigh32x4U { dst: VReg, src: VReg };
+
+            /// Narrows the two 16x8 vectors, assuming all input lanes are
+            /// signed, to half the width. Narrowing is signed and saturating.
+            vnarrow16x8_s = Vnarrow16x8S { operands: BinaryOperands<VReg> };
+            /// Narrows the two 16x8 vectors, assuming all input lanes are
+            /// signed, to half the width. Narrowing is unsigned and saturating.
+            vnarrow16x8_u = Vnarrow16x8U { operands: BinaryOperands<VReg> };
+            /// Narrows the two 32x4 vectors, assuming all input lanes are
+            /// signed, to half the width. Narrowing is signed and saturating.
+            vnarrow32x4_s = Vnarrow32x4S { operands: BinaryOperands<VReg> };
+            /// Narrows the two 32x4 vectors, assuming all input lanes are
+            /// signed, to half the width. Narrowing is unsigned and saturating.
+            vnarrow32x4_u = Vnarrow32x4U { operands: BinaryOperands<VReg> };
+            /// Promotes the low two lanes of the f32x4 input to f64x2.
+            vfpromotelow = VFpromoteLow { dst: VReg, src: VReg };
+            /// Demotes the two f64x2 lanes to f32x2 and then extends with two
+            /// more zero lanes.
+            vfdemote = VFdemote { dst: VReg, src: VReg };
+
+            /// `dst = src1 - src2`
+            vsubi8x16 = VSubI8x16 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 - src2`
+            vsubi16x8 = VSubI16x8 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 - src2`
+            vsubi32x4 = VSubI32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 - src2`
+            vsubi64x2 = VSubI64x2 { operands: BinaryOperands<VReg> };
+
+            /// `dst = src1 * src2`
+            vmuli8x16 = VMulI8x16 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 * src2`
+            vmuli16x8 = VMulI16x8 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 * src2`
+            vmuli32x4 = VMulI32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 * src2`
+            vmuli64x2 = VMulI64x2 { operands: BinaryOperands<VReg> };
         }
     };
 }
