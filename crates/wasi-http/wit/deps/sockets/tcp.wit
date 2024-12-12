@@ -1,11 +1,11 @@
 @since(version = 0.2.0)
 interface tcp {
     @since(version = 0.2.0)
-    use wasi:io/streams@0.2.2.{input-stream, output-stream};
+    use wasi:io/streams@0.2.3.{input-stream, output-stream};
     @since(version = 0.2.0)
-    use wasi:io/poll@0.2.2.{pollable};
+    use wasi:io/poll@0.2.3.{pollable};
     @since(version = 0.2.0)
-    use wasi:clocks/monotonic-clock@0.2.2.{duration};
+    use wasi:clocks/monotonic-clock@0.2.3.{duration};
     @since(version = 0.2.0)
     use network.{network, error-code, ip-socket-address, ip-address-family};
 

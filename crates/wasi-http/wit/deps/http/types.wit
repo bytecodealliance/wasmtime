@@ -4,13 +4,13 @@
 @since(version = 0.2.0)
 interface types {
   @since(version = 0.2.0)
-  use wasi:clocks/monotonic-clock@0.2.2.{duration};
+  use wasi:clocks/monotonic-clock@0.2.3.{duration};
   @since(version = 0.2.0)
-  use wasi:io/streams@0.2.2.{input-stream, output-stream};
+  use wasi:io/streams@0.2.3.{input-stream, output-stream};
   @since(version = 0.2.0)
-  use wasi:io/error@0.2.2.{error as io-error};
+  use wasi:io/error@0.2.3.{error as io-error};
   @since(version = 0.2.0)
-  use wasi:io/poll@0.2.2.{pollable};
+  use wasi:io/poll@0.2.3.{pollable};
 
   /// This type corresponds to HTTP standard Methods.
   @since(version = 0.2.0)
@@ -36,7 +36,7 @@ interface types {
   }
 
   /// These cases are inspired by the IANA HTTP Proxy Error Types:
-  ///   https://www.iana.org/assignments/http-proxy-status/http-proxy-status.xhtml#table-http-proxy-error-types
+  ///   <https://www.iana.org/assignments/http-proxy-status/http-proxy-status.xhtml#table-http-proxy-error-types>
   @since(version = 0.2.0)
   variant error-code {
     DNS-timeout,
