@@ -477,6 +477,11 @@ macro_rules! for_each_op {
             f32_from_f64 = F32FromF64 { dst: FReg, src: FReg };
             /// `(st) = promote(low32(src))`
             f64_from_f32 = F64FromF32 { dst: FReg, src: FReg };
+
+            /// `low32(dst) = abs(low32(src1)) * sign(low32(src2))`
+            fcopysign32 = FCopySign32 { dst: FReg, src1: FReg, src2: FReg };
+            /// `dst = abs(src1) * sign(src2)`
+            fcopysign64 = FCopySign64 { dst: FReg, src1: FReg, src2: FReg };
         }
     };
 }

@@ -583,3 +583,11 @@
 
 (rule (lower (has_type $F64 (fpromote val @ (value_type $F32))))
   (pulley_f64_from_f32 val))
+
+;;;; Rules for `fcopysign` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fcopysign a b)))
+  (pulley_fcopysign32 a b))
+
+(rule (lower (has_type $F64 (fcopysign a b)))
+  (pulley_fcopysign64 a b))
