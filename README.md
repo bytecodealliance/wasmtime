@@ -13,6 +13,7 @@
     <a href="https://bytecodealliance.zulipchat.com/#narrow/stream/217126-wasmtime"><img src="https://img.shields.io/badge/zulip-join_chat-brightgreen.svg" alt="zulip chat" /></a>
     <img src="https://img.shields.io/badge/rustc-stable+-green.svg" alt="supported rustc stable" />
     <a href="https://docs.rs/wasmtime"><img src="https://docs.rs/wasmtime/badge.svg" alt="Documentation Status" /></a>
+    <a href="https://gurubase.io/g/wasmtime"><img src="https://img.shields.io/badge/Gurubase-Ask%20Wasmtime%20Guru-006BFF" alt="Gurubase" /></a>
   </p>
 
   <h3>
@@ -69,7 +70,7 @@ command may not install the target for the correct copy of Rust.)
 ## Features
 
 * **Fast**. Wasmtime is built on the optimizing [Cranelift] code generator to
-  quickly generate high-quality machine code either at runtime or
+ahead-of-time. Wasmtime is optimized for efficient instantiation, low-overhead
   ahead-of-time. Wasmtime is optimized for efficient instantiation, low-overhead
   calls between the embedder and wasm, and scalability of concurrent instances.
 
