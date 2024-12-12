@@ -22,7 +22,7 @@
 ;;       stur    w3, [x28]
 ;;       ldur    w0, [x28]
 ;;       ldur    w1, [x28, #4]
-;;       cbz     x0, #0x60
+;;       cbz     w0, #0x60
 ;;   34: cmn     w0, #1
 ;;       ccmp    w1, #1, #0, eq
 ;;       b.vs    #0x64

@@ -1030,33 +1030,35 @@
 
 ;; Note that aarch64's `udiv` doesn't trap so to respect the semantics of
 ;; CLIF's `udiv` the check for zero needs to be manually performed.
+
 (rule udiv 1 (lower (has_type $I64 (udiv x y)))
-      (a64_udiv $I64 (put_in_reg x) (trap_if_zero_divisor (put_in_reg y))))
+      (a64_udiv $I64 (put_in_reg x) (put_nonzero_in_reg y)))
 
 (rule udiv (lower (has_type (fits_in_32 ty) (udiv x y)))
-      (a64_udiv $I32 (put_in_reg x) (put_nonzero_in_reg y)))
+      (a64_udiv $I32 (put_in_reg_zext32 x) (put_nonzero_in_reg y)))
 
+;; helpers for udiv:
 ;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero.
-(spec (put_nonzero_in_reg x)
-      (provide (= result (zero_ext 64 x)))
-      (require (not (= result #x0000000000000000))))
 (decl put_nonzero_in_reg (Value) Reg)
-(rule -1 (put_nonzero_in_reg val)
-      (trap_if_zero_divisor (put_in_reg val)))
 
 ;; Special case where if a `Value` is known to be nonzero we can trivially
 ;; move it into a register.
-(rule (put_nonzero_in_reg (and (value_type ty)
-                                      (iconst (nonzero_u64_from_imm64 n))))
+(rule (put_nonzero_in_reg (and (value_type ty) (iconst (nonzero_u64_from_imm64 n))))
       (imm ty (ImmExtend.Zero) n))
 
-;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero.
+(rule -1 (put_nonzero_in_reg (and (value_type $I64) val))
+      (trap_if_zero_divisor (put_in_reg val) (operand_size $I64)))
+
+(rule -2 (put_nonzero_in_reg (and (value_type (fits_in_32 _)) val))
+      (trap_if_zero_divisor (put_in_reg_zext32 val) (operand_size $I32)))
+
+;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero and extending it to 64 bits.
 (spec (put_nonzero_in_reg_zext64 x)
       (provide (= result (zero_ext 64 x)))
       (require (not (= result #x0000000000000000))))
 (decl put_nonzero_in_reg_zext64 (Value) Reg)
-(rule -1 (put_nonzero_in_reg_zext64 val)
-      (trap_if_zero_divisor (put_in_reg_zext64 val)))
+(rule -1 (put_nonzero_in_reg_zext64 (and (value_type ty) val))
+      (trap_if_zero_divisor (put_in_reg_zext64 val) (operand_size ty)))
 
 ;; Special case where if a `Value` is known to be nonzero we can trivially
 ;; move it into a register.
@@ -1106,7 +1108,7 @@
        (require (not (= #x0000000000000000 result))))
 (decl put_nonzero_in_reg_sext64 (Value) Reg)
 (rule -1 (put_nonzero_in_reg_sext64 val)
-      (trap_if_zero_divisor (put_in_reg_sext64 val)))
+      (trap_if_zero_divisor (put_in_reg_sext64 val) (operand_size $I64)))
 
 ;; Note that this has a special case where if the `Value` is a constant that's
 ;; not zero we can skip the zero check.

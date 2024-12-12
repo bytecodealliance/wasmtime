@@ -2154,6 +2154,7 @@ mod test {
         let mut buf2 = MachBuffer::new();
         let mut state = Default::default();
         let inst = Inst::TrapIf {
+            size: crate::isa::aarch64::inst::OperandSize::Size64,
             kind: CondBrKind::NotZero(xreg(0)),
             trap_code: TrapCode::STACK_OVERFLOW,
         };

@@ -488,6 +488,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
             // Here `Lo` == "less than" when interpreting the two
             // operands as unsigned integers.
             kind: CondBrKind::Cond(Cond::Lo),
+            size: OperandSize::Size64,
         });
         insts
     }

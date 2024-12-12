@@ -2669,15 +2669,16 @@ impl Inst {
             &Inst::Brk => "brk #0".to_string(),
             &Inst::Udf { .. } => "udf #0xc11f".to_string(),
             &Inst::TrapIf {
+                size,
                 ref kind,
                 trap_code,
             } => match kind {
                 &CondBrKind::Zero(reg) => {
-                    let reg = pretty_print_reg(reg);
+                    let reg = pretty_print_reg_sized(reg, size);
                     format!("cbz {reg}, #trap={trap_code}")
                 }
                 &CondBrKind::NotZero(reg) => {
-                    let reg = pretty_print_reg(reg);
+                    let reg = pretty_print_reg_sized(reg, size);
                     format!("cbnz {reg}, #trap={trap_code}")
                 }
                 &CondBrKind::Cond(c) => {

@@ -164,10 +164,21 @@ fn enc_cbr(op_31_24: u32, off_18_0: u32, op_4: u32, cond: u32) -> u32 {
     (op_31_24 << 24) | (off_18_0 << 5) | (op_4 << 4) | cond
 }
 
-fn enc_conditional_br(taken: BranchTarget, kind: CondBrKind) -> u32 {
+/// Set the size bit of an instruction.
+fn enc_op_size(op: u32, size: OperandSize) -> u32 {
+    (op & !(1 << 31)) | (size.sf_bit() << 31)
+}
+
+fn enc_conditional_br(taken: BranchTarget, kind: CondBrKind, size: OperandSize) -> u32 {
     match kind {
-        CondBrKind::Zero(reg) => enc_cmpbr(0b1_011010_0, taken.as_offset19_or_zero(), reg),
-        CondBrKind::NotZero(reg) => enc_cmpbr(0b1_011010_1, taken.as_offset19_or_zero(), reg),
+        CondBrKind::Zero(reg) => enc_op_size(
+            enc_cmpbr(0b0_011010_0, taken.as_offset19_or_zero(), reg),
+            size,
+        ),
+        CondBrKind::NotZero(reg) => enc_op_size(
+            enc_cmpbr(0b0_011010_1, taken.as_offset19_or_zero(), reg),
+            size,
+        ),
         CondBrKind::Cond(c) => enc_cbr(0b01010100, taken.as_offset19_or_zero(), 0b0, c.bits()),
     }
 }
@@ -1613,6 +1624,7 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(again_label),
                     CondBrKind::NotZero(x24),
+                    OperandSize::Size64,
                 ));
                 sink.use_label_at_offset(br_offset, again_label, LabelUse::Branch19);
             }
@@ -1690,6 +1702,7 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(out_label),
                     CondBrKind::Cond(Cond::Ne),
+                    OperandSize::Size64,
                 ));
                 sink.use_label_at_offset(br_out_offset, out_label, LabelUse::Branch19);
 
@@ -1706,6 +1719,7 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(again_label),
                     CondBrKind::NotZero(x24),
+                    OperandSize::Size64,
                 ));
                 sink.use_label_at_offset(br_again_offset, again_label, LabelUse::Branch19);
 
@@ -2814,6 +2828,7 @@ impl MachInstEmit for Inst {
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(else_label),
                     CondBrKind::Cond(cond),
+                    OperandSize::Size64,
                 ));
                 sink.use_label_at_offset(br_else_offset, else_label, LabelUse::Branch19);
 
@@ -2999,10 +3014,11 @@ impl MachInstEmit for Inst {
                 let cond_off = sink.cur_offset();
                 if let Some(l) = taken.as_label() {
                     sink.use_label_at_offset(cond_off, l, LabelUse::Branch19);
-                    let inverted = enc_conditional_br(taken, kind.invert()).to_le_bytes();
+                    let inverted =
+                        enc_conditional_br(taken, kind.invert(), OperandSize::Size64).to_le_bytes();
                     sink.add_cond_branch(cond_off, cond_off + 4, l, &inverted[..]);
                 }
-                sink.put4(enc_conditional_br(taken, kind));
+                sink.put4(enc_conditional_br(taken, kind, OperandSize::Size64));
 
                 // Unconditional part next.
                 let uncond_off = sink.cur_offset();
@@ -3037,11 +3053,15 @@ impl MachInstEmit for Inst {
                 }
                 sink.put4(enc_jump26(0b000101, not_taken.as_offset26_or_zero()));
             }
-            &Inst::TrapIf { kind, trap_code } => {
+            &Inst::TrapIf {
+                kind,
+                trap_code,
+                size,
+            } => {
                 let label = sink.defer_trap(trap_code);
                 // condbr KIND, LABEL
                 let off = sink.cur_offset();
-                sink.put4(enc_conditional_br(BranchTarget::Label(label), kind));
+                sink.put4(enc_conditional_br(BranchTarget::Label(label), kind, size));
                 sink.use_label_at_offset(off, label, LabelUse::Branch19);
             }
             &Inst::IndirectBr { rn, .. } => {
@@ -3087,8 +3107,11 @@ impl MachInstEmit for Inst {
                 // the middle; we depend on hardcoded PC-rel addressing below.
 
                 // Branch to default when condition code from prior comparison indicates.
-                let br =
-                    enc_conditional_br(BranchTarget::Label(default), CondBrKind::Cond(Cond::Hs));
+                let br = enc_conditional_br(
+                    BranchTarget::Label(default),
+                    CondBrKind::Cond(Cond::Hs),
+                    OperandSize::Size64,
+                );
 
                 // No need to inform the sink's branch folding logic about this branch, because it
                 // will not be merged with any other branch, flipped, or elided (it is not preceded

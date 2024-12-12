@@ -410,7 +410,7 @@ impl Assembler {
         size: OperandSize,
     ) {
         // Check for division by 0.
-        self.trapz(divisor, TrapCode::INTEGER_DIVISION_BY_ZERO);
+        self.trapz(divisor, TrapCode::INTEGER_DIVISION_BY_ZERO, size);
 
         // check for overflow
         if kind == DivKind::Signed {
@@ -465,7 +465,7 @@ impl Assembler {
         size: OperandSize,
     ) {
         // Check for division by 0
-        self.trapz(divisor, TrapCode::INTEGER_DIVISION_BY_ZERO);
+        self.trapz(divisor, TrapCode::INTEGER_DIVISION_BY_ZERO, size);
 
         // `cranelift-codegen` doesn't support emitting sdiv for anything but I64,
         // we therefore sign-extend the operand.
@@ -864,14 +864,16 @@ impl Assembler {
     /// Conditional trap.
     pub fn trapif(&mut self, cc: Cond, code: TrapCode) {
         self.emit(Inst::TrapIf {
+            size: OperandSize::S64.into(),
             kind: CondBrKind::Cond(cc),
             trap_code: code,
         });
     }
 
     /// Trap if `rn` is zero.
-    pub fn trapz(&mut self, rn: Reg, code: TrapCode) {
+    pub fn trapz(&mut self, rn: Reg, code: TrapCode, size: OperandSize) {
         self.emit(Inst::TrapIf {
+            size: size.into(),
             kind: CondBrKind::Zero(rn.into()),
             trap_code: code,
         });

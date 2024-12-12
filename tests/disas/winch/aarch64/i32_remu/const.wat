@@ -22,7 +22,7 @@
 ;;       mov     w0, w16
 ;;       mov     x16, #7
 ;;       mov     w1, w16
-;;       cbz     x0, #0x50
+;;       cbz     w0, #0x50
 ;;   34: udiv    w16, w1, w0
 ;;       msub    w1, w0, w16, w1
 ;;       mov     w0, w1
