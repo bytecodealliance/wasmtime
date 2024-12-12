@@ -705,8 +705,12 @@ impl ABIMachineSpec for AArch64MachineDeps {
         // Set this to 3 to keep the max size of the probe to 6 instructions.
         const PROBE_MAX_UNROLL: u32 = 3;
 
-        let probe_count = align_to(frame_size, guard_size) / guard_size;
-        if probe_count <= PROBE_MAX_UNROLL {
+        // Calculate how many probes we need to perform. Round down, as we only
+        // need to probe whole guard_size regions we'd otherwise skip over.
+        let probe_count = frame_size / guard_size;
+        if probe_count == 0 {
+            // No probe necessary
+        } else if probe_count <= PROBE_MAX_UNROLL {
             Self::gen_probestack_unroll(insts, guard_size, probe_count)
         } else {
             Self::gen_probestack_loop(insts, frame_size, guard_size)
