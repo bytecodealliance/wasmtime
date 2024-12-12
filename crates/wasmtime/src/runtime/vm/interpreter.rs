@@ -73,8 +73,8 @@ impl InterpreterRef<'_> {
         // correct as it's not saving all callee-save state.
         let setjmp = Setjmp {
             sp: self.0[XReg::sp].get_ptr(),
-            fp: self.0[XReg::fp].get_ptr(),
-            lr: self.0[XReg::lr].get_ptr(),
+            fp: self.0.fp(),
+            lr: self.0.lr(),
         };
 
         // Run the interpreter as much as possible until it finishes, and then
@@ -117,8 +117,8 @@ impl InterpreterRef<'_> {
         };
 
         debug_assert!(self.0[XReg::sp].get_ptr() == setjmp.sp);
-        debug_assert!(self.0[XReg::fp].get_ptr() == setjmp.fp);
-        debug_assert!(self.0[XReg::lr].get_ptr() == setjmp.lr);
+        debug_assert!(self.0.fp() == setjmp.fp);
+        debug_assert!(self.0.lr() == setjmp.lr);
         ret
     }
 
@@ -128,7 +128,7 @@ impl InterpreterRef<'_> {
     fn trap(&mut self, pc: NonNull<u8>, kind: Option<TrapKind>, setjmp: Setjmp) {
         let regs = TrapRegisters {
             pc: pc.as_ptr() as usize,
-            fp: self.0[XReg::fp].get_ptr::<u8>() as usize,
+            fp: self.0.fp() as usize,
         };
         tls::with(|s| {
             let s = s.unwrap();
@@ -179,9 +179,11 @@ impl InterpreterRef<'_> {
     /// them.
     fn longjmp(&mut self, setjmp: Setjmp) {
         let Setjmp { sp, fp, lr } = setjmp;
-        self.0[XReg::sp].set_ptr(sp);
-        self.0[XReg::fp].set_ptr(fp);
-        self.0[XReg::lr].set_ptr(lr);
+        unsafe {
+            self.0[XReg::sp].set_ptr(sp);
+            self.0.set_fp(fp);
+            self.0.set_lr(lr);
+        }
     }
 
     /// Handles the `call_indirect_host` instruction, dispatching the `sig`

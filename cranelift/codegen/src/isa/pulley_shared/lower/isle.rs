@@ -107,14 +107,6 @@ where
         XReg::new(regs::stack_reg()).unwrap()
     }
 
-    fn fp_reg(&mut self) -> XReg {
-        XReg::new(regs::fp_reg()).unwrap()
-    }
-
-    fn lr_reg(&mut self) -> XReg {
-        XReg::new(regs::lr_reg()).unwrap()
-    }
-
     fn cond_invert(&mut self, cond: &Cond) -> Cond {
         cond.invert()
     }

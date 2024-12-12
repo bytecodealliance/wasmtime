@@ -180,6 +180,26 @@ impl Vm {
             },
         })
     }
+
+    /// Returns the current `fp` register value.
+    pub fn fp(&self) -> *mut u8 {
+        self.state.fp
+    }
+
+    /// Returns the current `lr` register value.
+    pub fn lr(&self) -> *mut u8 {
+        self.state.lr
+    }
+
+    /// Sets the current `fp` register value.
+    pub unsafe fn set_fp(&mut self, fp: *mut u8) {
+        self.state.fp = fp;
+    }
+
+    /// Sets the current `lr` register value.
+    pub unsafe fn set_lr(&mut self, lr: *mut u8) {
+        self.state.lr = lr;
+    }
 }
 
 /// The type of a register in the Pulley machine state.
@@ -364,9 +384,6 @@ impl Default for XRegVal {
 
 #[allow(missing_docs)]
 impl XRegVal {
-    /// Sentinel return address that signals the end of the call stack.
-    pub const HOST_RETURN_ADDR: Self = Self(XRegUnion { i64: -1 });
-
     pub fn new_i32(x: i32) -> Self {
         let mut val = XRegVal::default();
         val.set_i32(x);
@@ -564,6 +581,8 @@ pub struct MachineState {
     x_regs: [XRegVal; XReg::RANGE.end as usize],
     f_regs: [FRegVal; FReg::RANGE.end as usize],
     v_regs: [VRegVal; VReg::RANGE.end as usize],
+    fp: *mut u8,
+    lr: *mut u8,
     stack: Vec<u8>,
     done_reason: Option<DoneReason<()>>,
 }
@@ -579,6 +598,8 @@ impl fmt::Debug for MachineState {
             v_regs,
             stack: _,
             done_reason: _,
+            fp: _,
+            lr: _,
         } = self;
 
         struct RegMap<'a, R>(&'a [R], fn(u8) -> alloc::string::String);
@@ -646,6 +667,9 @@ index_reg!(XReg, XRegVal, x_regs);
 index_reg!(FReg, FRegVal, f_regs);
 index_reg!(VReg, VRegVal, v_regs);
 
+/// Sentinel return address that signals the end of the call stack.
+const HOST_RETURN_ADDR: *mut u8 = usize::MAX as *mut u8;
+
 impl MachineState {
     fn with_stack(stack: Vec<u8>) -> Self {
         assert!(stack.len() > 0);
@@ -655,6 +679,8 @@ impl MachineState {
             v_regs: Default::default(),
             stack,
             done_reason: None,
+            fp: HOST_RETURN_ADDR,
+            lr: HOST_RETURN_ADDR,
         };
 
         // Take care to construct SP such that we preserve pointer provenance
@@ -664,8 +690,6 @@ impl MachineState {
         let sp = sp.as_mut_ptr();
         let sp = unsafe { sp.add(len) };
         state[XReg::sp] = XRegVal::new_ptr(sp);
-        state[XReg::fp] = XRegVal::HOST_RETURN_ADDR;
-        state[XReg::lr] = XRegVal::HOST_RETURN_ADDR;
 
         state
     }
@@ -904,26 +928,25 @@ impl OpVisitor for Interpreter<'_> {
     }
 
     fn ret(&mut self) -> ControlFlow<Done> {
-        let lr = self.state[XReg::lr];
-        if lr == XRegVal::HOST_RETURN_ADDR {
+        let lr = self.state.lr;
+        if lr == HOST_RETURN_ADDR {
             self.done_return_to_host()
         } else {
-            let return_addr = lr.get_ptr();
-            self.pc = unsafe { UnsafeBytecodeStream::new(NonNull::new_unchecked(return_addr)) };
+            self.pc = unsafe { UnsafeBytecodeStream::new(NonNull::new_unchecked(lr)) };
             ControlFlow::Continue(())
         }
     }
 
     fn call(&mut self, offset: PcRelOffset) -> ControlFlow<Done> {
         let return_addr = self.pc.as_ptr();
-        self.state[XReg::lr].set_ptr(return_addr.as_ptr());
+        self.state.lr = return_addr.as_ptr();
         self.pc_rel_jump::<crate::Call>(offset);
         ControlFlow::Continue(())
     }
 
     fn call_indirect(&mut self, dst: XReg) -> ControlFlow<Done> {
         let return_addr = self.pc.as_ptr();
-        self.state[XReg::lr].set_ptr(return_addr.as_ptr());
+        self.state.lr = return_addr.as_ptr();
         // SAFETY: part of the unsafe contract of the interpreter is only valid
         // bytecode is interpreted, so the jump destination is part of the validity
         // of the bytecode itself.
@@ -1505,18 +1528,18 @@ impl OpVisitor for Interpreter<'_> {
     }
 
     fn push_frame(&mut self) -> ControlFlow<Done> {
-        self.push::<crate::PushFrame, _>(self.state[XReg::lr].get_ptr::<u8>())?;
-        self.push::<crate::PushFrame, _>(self.state[XReg::fp].get_ptr::<u8>())?;
-        self.state[XReg::fp] = self.state[XReg::sp];
+        self.push::<crate::PushFrame, _>(self.state.lr)?;
+        self.push::<crate::PushFrame, _>(self.state.fp)?;
+        self.state.fp = self.state[XReg::sp].get_ptr();
         ControlFlow::Continue(())
     }
 
     fn pop_frame(&mut self) -> ControlFlow<Done> {
-        self.set_sp_unchecked(self.state[XReg::fp].get_ptr::<u8>());
+        self.set_sp_unchecked(self.state.fp);
         let fp = self.pop();
         let lr = self.pop();
-        self.state[XReg::fp].set_ptr::<u8>(fp);
-        self.state[XReg::lr].set_ptr::<u8>(lr);
+        self.state.fp = fp;
+        self.state.lr = lr;
         ControlFlow::Continue(())
     }
 
@@ -2242,6 +2265,18 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         unsafe {
             self.store(ptr, offset, val.to_bits().to_be());
         }
+        ControlFlow::Continue(())
+    }
+
+    fn xmov_fp(&mut self, dst: XReg) -> ControlFlow<Done> {
+        let fp = self.state.fp;
+        self.state[dst].set_ptr(fp);
+        ControlFlow::Continue(())
+    }
+
+    fn xmov_lr(&mut self, dst: XReg) -> ControlFlow<Done> {
+        let lr = self.state.lr;
+        self.state[dst].set_ptr(lr);
         ControlFlow::Continue(())
     }
 }

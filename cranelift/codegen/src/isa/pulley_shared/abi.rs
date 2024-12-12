@@ -344,45 +344,24 @@ where
 
         let incoming_args_diff = frame_layout.tail_args_size - frame_layout.incoming_args_size;
         if incoming_args_diff > 0 {
+            // Pulley does not generate/probestack/stack checks/etc and doesn't
+            // expose the direct ability to modify fp/lr, so simulate a pop,
+            // perform the sp adjustment, then perform the same push that was
+            // done previously in the prologue.
+            //
+            // Note that for now this'll generate `push_frame pop_frame` pairs
+            // in the prologue which isn't great, and updating that is left for
+            // a future refactoring to only do a `push_frame` once (e.g. skip
+            // the one above if this block is going to be executed)
+            if setup_frame {
+                insts.push(RawInst::PopFrame.into());
+            }
             // Decrement SP by the amount of additional incoming argument space
             // we need
             insts.extend(Self::gen_sp_reg_adjust(-(incoming_args_diff as i32)));
 
             if setup_frame {
-                // Write the lr position on the stack again, as it hasn't
-                // changed since it was pushed in `gen_prologue_frame_setup`
-                insts.push(
-                    Inst::gen_store(
-                        Amode::SpOffset { offset: 8 },
-                        lr_reg(),
-                        I64,
-                        MemFlags::trusted(),
-                    )
-                    .into(),
-                );
-                insts.push(
-                    Inst::gen_load(
-                        writable_fp_reg(),
-                        Amode::SpOffset {
-                            offset: i32::try_from(incoming_args_diff).unwrap(),
-                        },
-                        I64,
-                        MemFlags::trusted(),
-                    )
-                    .into(),
-                );
-                insts.push(
-                    Inst::gen_store(
-                        Amode::SpOffset { offset: 0 },
-                        fp_reg(),
-                        I64,
-                        MemFlags::trusted(),
-                    )
-                    .into(),
-                );
-
-                // Finally, sync the frame pointer with SP.
-                insts.push(Self::I::gen_move(writable_fp_reg(), stack_reg(), I64));
+                insts.push(RawInst::PushFrame.into());
             }
         }
 
