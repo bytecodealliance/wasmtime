@@ -728,8 +728,7 @@ impl MachInstEmit for Inst {
                 rm,
             } => {
                 debug_assert!(match alu_op {
-                    ALUOp::SMulH | ALUOp::UMulH =>
-                        size == OperandSize::Size64,
+                    ALUOp::SMulH | ALUOp::UMulH => size == OperandSize::Size64,
                     _ => true,
                 });
                 let top11 = match alu_op {
@@ -771,7 +770,7 @@ impl MachInstEmit for Inst {
                 // indication that something is wrong.
                 debug_assert_ne!(stack_reg(), rn);
                 debug_assert_ne!(stack_reg(), rm);
-                let inst =enc_arith_rrr(top11, bit15_10, rd, rn, rm);
+                let inst = enc_arith_rrr(top11, bit15_10, rd, rn, rm);
                 println!("inst {alu_op:?}: {inst:b}");
                 sink.put4(inst);
             }

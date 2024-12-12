@@ -447,19 +447,12 @@ impl Assembler {
             size
         };
 
-
         let op = match kind {
             DivKind::Signed => ALUOp::SDiv,
             DivKind::Unsigned => ALUOp::UDiv,
         };
 
-        self.emit_alu_rrr(
-            op,
-            divisor,
-            dividend,
-            dest.map(Into::into),
-            size,
-        );
+        self.emit_alu_rrr(op, divisor, dividend, dest.map(Into::into), size);
     }
 
     /// Signed/unsigned remainder operation with three registers.
@@ -491,13 +484,7 @@ impl Assembler {
         };
 
         let scratch = regs::scratch();
-        self.emit_alu_rrr(
-            op,
-            divisor,
-            dividend,
-            writable!(scratch.into()),
-            size,
-        );
+        self.emit_alu_rrr(op, divisor, dividend, writable!(scratch.into()), size);
 
         self.emit_alu_rrrr(
             ALUOp3::MSub,
