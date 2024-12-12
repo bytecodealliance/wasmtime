@@ -495,3 +495,91 @@
 
 (rule (lower (has_type $I64 (bitcast _flags val @ (value_type $F64))))
   (pulley_bitcast_int_from_float_64 val))
+
+;;;; Rules for `fcvt_to_{u,s}int` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (fcvt_to_uint val @ (value_type $F32))))
+  (pulley_x32_from_f32_u val))
+
+(rule (lower (has_type $I32 (fcvt_to_uint val @ (value_type $F64))))
+  (pulley_x32_from_f64_u val))
+
+(rule (lower (has_type $I64 (fcvt_to_uint val @ (value_type $F32))))
+  (pulley_x64_from_f32_u val))
+
+(rule (lower (has_type $I64 (fcvt_to_uint val @ (value_type $F64))))
+  (pulley_x64_from_f64_u val))
+
+(rule (lower (has_type $I32 (fcvt_to_sint val @ (value_type $F32))))
+  (pulley_x32_from_f32_s val))
+
+(rule (lower (has_type $I32 (fcvt_to_sint val @ (value_type $F64))))
+  (pulley_x32_from_f64_s val))
+
+(rule (lower (has_type $I64 (fcvt_to_sint val @ (value_type $F32))))
+  (pulley_x64_from_f32_s val))
+
+(rule (lower (has_type $I64 (fcvt_to_sint val @ (value_type $F64))))
+  (pulley_x64_from_f64_s val))
+
+;;;; Rules for `fcvt_from_{u,s}int` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fcvt_from_uint val @ (value_type $I32))))
+  (pulley_f32_from_x32_u val))
+
+(rule (lower (has_type $F32 (fcvt_from_uint val @ (value_type $I64))))
+  (pulley_f32_from_x64_u val))
+
+(rule (lower (has_type $F64 (fcvt_from_uint val @ (value_type $I32))))
+  (pulley_f64_from_x32_u val))
+
+(rule (lower (has_type $F64 (fcvt_from_uint val @ (value_type $I64))))
+  (pulley_f64_from_x64_u val))
+
+(rule (lower (has_type $F32 (fcvt_from_sint val @ (value_type $I32))))
+  (pulley_f32_from_x32_s val))
+
+(rule (lower (has_type $F32 (fcvt_from_sint val @ (value_type $I64))))
+  (pulley_f32_from_x64_s val))
+
+(rule (lower (has_type $F64 (fcvt_from_sint val @ (value_type $I32))))
+  (pulley_f64_from_x32_s val))
+
+(rule (lower (has_type $F64 (fcvt_from_sint val @ (value_type $I64))))
+  (pulley_f64_from_x64_s val))
+
+;;;; Rules for `fcvt_to_{u,s}int_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (fcvt_to_uint_sat val @ (value_type $F32))))
+  (pulley_x32_from_f32_u_sat val))
+
+(rule (lower (has_type $I32 (fcvt_to_uint_sat val @ (value_type $F64))))
+  (pulley_x32_from_f64_u_sat val))
+
+(rule (lower (has_type $I64 (fcvt_to_uint_sat val @ (value_type $F32))))
+  (pulley_x64_from_f32_u_sat val))
+
+(rule (lower (has_type $I64 (fcvt_to_uint_sat val @ (value_type $F64))))
+  (pulley_x64_from_f64_u_sat val))
+
+(rule (lower (has_type $I32 (fcvt_to_sint_sat val @ (value_type $F32))))
+  (pulley_x32_from_f32_s_sat val))
+
+(rule (lower (has_type $I32 (fcvt_to_sint_sat val @ (value_type $F64))))
+  (pulley_x32_from_f64_s_sat val))
+
+(rule (lower (has_type $I64 (fcvt_to_sint_sat val @ (value_type $F32))))
+  (pulley_x64_from_f32_s_sat val))
+
+(rule (lower (has_type $I64 (fcvt_to_sint_sat val @ (value_type $F64))))
+  (pulley_x64_from_f64_s_sat val))
+
+;;;; Rules for `fdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32 (fdemote val @ (value_type $F64))))
+  (pulley_f32_from_f64 val))
+
+;;;; Rules for `fpromote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F64 (fpromote val @ (value_type $F32))))
+  (pulley_f64_from_f32 val))

@@ -421,6 +421,62 @@ macro_rules! for_each_op {
             fselect32 = FSelect32 { dst: FReg, cond: XReg, if_nonzero: FReg, if_zero: FReg };
             /// `dst = low32(cond) ? if_nonzero : if_zero`
             fselect64 = FSelect64 { dst: FReg, cond: XReg, if_nonzero: FReg, if_zero: FReg };
+
+            /// `low32(dst) = checked_f32_from_signed(low32(src))`
+            f32_from_x32_s = F32FromX32S { dst: FReg, src: XReg };
+            /// `low32(dst) = checked_f32_from_unsigned(low32(src))`
+            f32_from_x32_u = F32FromX32U { dst: FReg, src: XReg };
+            /// `low32(dst) = checked_f32_from_signed(src)`
+            f32_from_x64_s = F32FromX64S { dst: FReg, src: XReg };
+            /// `low32(dst) = checked_f32_from_unsigned(src)`
+            f32_from_x64_u = F32FromX64U { dst: FReg, src: XReg };
+            /// `dst = checked_f64_from_signed(low32(src))`
+            f64_from_x32_s = F64FromX32S { dst: FReg, src: XReg };
+            /// `dst = checked_f64_from_unsigned(low32(src))`
+            f64_from_x32_u = F64FromX32U { dst: FReg, src: XReg };
+            /// `dst = checked_f64_from_signed(src)`
+            f64_from_x64_s = F64FromX64S { dst: FReg, src: XReg };
+            /// `dst = checked_f64_from_unsigned(src)`
+            f64_from_x64_u = F64FromX64U { dst: FReg, src: XReg };
+
+            /// `low32(dst) = checked_signed_from_f32(low32(src))`
+            x32_from_f32_s = X32FromF32S { dst: XReg, src: FReg };
+            /// `low32(dst) = checked_unsigned_from_f32(low32(src))`
+            x32_from_f32_u = X32FromF32U { dst: XReg, src: FReg };
+            /// `low32(dst) = checked_signed_from_f64(src)`
+            x32_from_f64_s = X32FromF64S { dst: XReg, src: FReg };
+            /// `low32(dst) = checked_unsigned_from_f64(src)`
+            x32_from_f64_u = X32FromF64U { dst: XReg, src: FReg };
+            /// `dst = checked_signed_from_f32(low32(src))`
+            x64_from_f32_s = X64FromF32S { dst: XReg, src: FReg };
+            /// `dst = checked_unsigned_from_f32(low32(src))`
+            x64_from_f32_u = X64FromF32U { dst: XReg, src: FReg };
+            /// `dst = checked_signed_from_f64(src)`
+            x64_from_f64_s = X64FromF64S { dst: XReg, src: FReg };
+            /// `dst = checked_unsigned_from_f64(src)`
+            x64_from_f64_u = X64FromF64U { dst: XReg, src: FReg };
+
+            /// `low32(dst) = saturating_signed_from_f32(low32(src))`
+            x32_from_f32_s_sat = X32FromF32SSat { dst: XReg, src: FReg };
+            /// `low32(dst) = saturating_unsigned_from_f32(low32(src))`
+            x32_from_f32_u_sat = X32FromF32USat { dst: XReg, src: FReg };
+            /// `low32(dst) = saturating_signed_from_f64(src)`
+            x32_from_f64_s_sat = X32FromF64SSat { dst: XReg, src: FReg };
+            /// `low32(dst) = saturating_unsigned_from_f64(src)`
+            x32_from_f64_u_sat = X32FromF64USat { dst: XReg, src: FReg };
+            /// `dst = saturating_signed_from_f32(low32(src))`
+            x64_from_f32_s_sat = X64FromF32SSat { dst: XReg, src: FReg };
+            /// `dst = saturating_unsigned_from_f32(low32(src))`
+            x64_from_f32_u_sat = X64FromF32USat { dst: XReg, src: FReg };
+            /// `dst = saturating_signed_from_f64(src)`
+            x64_from_f64_s_sat = X64FromF64SSat { dst: XReg, src: FReg };
+            /// `dst = saturating_unsigned_from_f64(src)`
+            x64_from_f64_u_sat = X64FromF64USat { dst: XReg, src: FReg };
+
+            /// `low32(dst) = demote(src)`
+            f32_from_f64 = F32FromF64 { dst: FReg, src: FReg };
+            /// `(st) = promote(low32(src))`
+            f64_from_f32 = F64FromF32 { dst: FReg, src: FReg };
         }
     };
 }
