@@ -697,7 +697,9 @@ impl ABIMachineSpec for Riscv64MachineDeps {
     ) {
         // Unroll at most n consecutive probes, before falling back to using a loop
         const PROBE_MAX_UNROLL: u32 = 3;
-        // Number of probes that we need to perform
+
+        // Calculate how many probes we need to perform. Round down, as we only
+        // need to probe whole guard_size regions we'd otherwise skip over.
         let probe_count = frame_size / guard_size;
         if probe_count == 0 {
             // No probe necessary

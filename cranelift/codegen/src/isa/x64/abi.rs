@@ -627,7 +627,8 @@ impl ABIMachineSpec for X64ABIMachineSpec {
         // 4 inline probes in that space, so unroll if its beneficial in terms of code size.
         const PROBE_MAX_UNROLL: u32 = 4;
 
-        // Number of probes that we need to perform
+        // Calculate how many probes we need to perform. Round down, as we only
+        // need to probe whole guard_size regions we'd otherwise skip over.
         let probe_count = frame_size / guard_size;
         if probe_count == 0 {
             // No probe necessary
