@@ -72,9 +72,9 @@ block0:
 }
 
 ; VCode:
-;   lhi %r1, 25
+;   lhi %r1, 24
 ;   0: aghi %r15, -4096 ; mvi 0(%r15), 0 ; brct %r1, 0b
-;   agfi %r15, 102400
+;   agfi %r15, 98304
 ;   agfi %r15, -100000
 ; block0:
 ;   la %r2, 0(%r15)
@@ -83,11 +83,11 @@ block0:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   lhi %r1, 0x19
+;   lhi %r1, 0x18
 ;   aghi %r15, -0x1000
 ;   mvi 0(%r15), 0
 ;   brct %r1, 4
-;   agfi %r15, 0x19000
+;   agfi %r15, 0x18000
 ;   agfi %r15, -0x186a0
 ; block1: ; offset 0x1c
 ;   la %r2, 0(%r15)
