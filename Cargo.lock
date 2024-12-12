@@ -2485,6 +2485,7 @@ dependencies = [
  "arbitrary",
  "cranelift-bitset",
  "env_logger 0.11.5",
+ "libm",
  "log",
  "object",
  "sptr",

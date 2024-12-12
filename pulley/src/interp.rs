@@ -19,6 +19,11 @@ mod match_loop;
 #[cfg(any(pulley_tail_calls, pulley_assume_llvm_makes_tail_calls))]
 mod tail_loop;
 
+#[cfg(not(feature = "std"))]
+mod float_ext;
+#[cfg(not(feature = "std"))]
+use self::float_ext::FloatExt;
+
 const DEFAULT_STACK_SIZE: usize = 1 << 20; // 1 MiB
 
 /// A virtual machine for interpreting Pulley bytecode.

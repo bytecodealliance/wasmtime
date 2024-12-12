@@ -17,6 +17,7 @@ arbitrary = { workspace = true, optional = true }
 cranelift-bitset = { workspace = true }
 log = { workspace = true }
 sptr = { workspace = true }
+libm = { workspace = true, optional = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }
@@ -29,7 +30,7 @@ arbitrary = ["dep:arbitrary", "arbitrary/derive", "std", "cranelift-bitset/arbit
 encode = []
 decode = []
 disas = ["decode"]
-interp = ["decode", "encode"]
+interp = ["decode", "encode", "dep:libm"]
 
 [package.metadata.docs.rs]
 all-features = true
