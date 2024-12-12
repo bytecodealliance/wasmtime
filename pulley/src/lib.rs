@@ -609,6 +609,19 @@ macro_rules! for_each_op {
             vshri32x4_u = VShrI32x4U { operands: BinaryOperands<VReg, VReg, XReg> };
             /// `dst = src1 >> src2` (unsigned)
             vshri64x2_u = VShrI64x2U { operands: BinaryOperands<VReg, VReg, XReg> };
+
+            /// `dst = splat(low8(src))`
+            vsplatx8 = VSplatX8 { dst: VReg, src: XReg };
+            /// `dst = splat(low16(src))`
+            vsplatx16 = VSplatX16 { dst: VReg, src: XReg };
+            /// `dst = splat(low32(src))`
+            vsplatx32 = VSplatX32 { dst: VReg, src: XReg };
+            /// `dst = splat(src)`
+            vsplatx64 = VSplatX64 { dst: VReg, src: XReg };
+            /// `dst = splat(low32(src))`
+            vsplatf32 = VSplatF32 { dst: VReg, src: FReg };
+            /// `dst = splat(src)`
+            vsplatf64 = VSplatF64 { dst: VReg, src: FReg };
         }
     };
 }

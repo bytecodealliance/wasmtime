@@ -2551,7 +2551,7 @@ impl OpVisitor for Interpreter<'_> {
         let mut a = self.state[operands.src1].get_i8x16();
         let b = self.state[operands.src2].get_i8x16();
         for (a, b) in a.iter_mut().zip(b) {
-            *a += b;
+            *a = a.wrapping_add(b);
         }
         self.state[operands.dst].set_i8x16(a);
         ControlFlow::Continue(())
@@ -2561,7 +2561,7 @@ impl OpVisitor for Interpreter<'_> {
         let mut a = self.state[operands.src1].get_i16x8();
         let b = self.state[operands.src2].get_i16x8();
         for (a, b) in a.iter_mut().zip(b) {
-            *a += b;
+            *a = a.wrapping_add(b);
         }
         self.state[operands.dst].set_i16x8(a);
         ControlFlow::Continue(())
@@ -2571,7 +2571,7 @@ impl OpVisitor for Interpreter<'_> {
         let mut a = self.state[operands.src1].get_i32x4();
         let b = self.state[operands.src2].get_i32x4();
         for (a, b) in a.iter_mut().zip(b) {
-            *a += b;
+            *a = a.wrapping_add(b);
         }
         self.state[operands.dst].set_i32x4(a);
         ControlFlow::Continue(())
@@ -2581,7 +2581,7 @@ impl OpVisitor for Interpreter<'_> {
         let mut a = self.state[operands.src1].get_i64x2();
         let b = self.state[operands.src2].get_i64x2();
         for (a, b) in a.iter_mut().zip(b) {
-            *a += b;
+            *a = a.wrapping_add(b);
         }
         self.state[operands.dst].set_i64x2(a);
         ControlFlow::Continue(())
@@ -2693,6 +2693,42 @@ impl OpVisitor for Interpreter<'_> {
 
     fn vconst128(&mut self, dst: VReg, val: u128) -> ControlFlow<Done> {
         self.state[dst].set_u128(val);
+        ControlFlow::Continue(())
+    }
+
+    fn vsplatx8(&mut self, dst: VReg, src: XReg) -> ControlFlow<Done> {
+        let val = self.state[src].get_u32() as u8;
+        self.state[dst].set_u8x16([val; 16]);
+        ControlFlow::Continue(())
+    }
+
+    fn vsplatx16(&mut self, dst: VReg, src: XReg) -> ControlFlow<Done> {
+        let val = self.state[src].get_u32() as u16;
+        self.state[dst].set_u16x8([val; 8]);
+        ControlFlow::Continue(())
+    }
+
+    fn vsplatx32(&mut self, dst: VReg, src: XReg) -> ControlFlow<Done> {
+        let val = self.state[src].get_u32();
+        self.state[dst].set_u32x4([val; 4]);
+        ControlFlow::Continue(())
+    }
+
+    fn vsplatx64(&mut self, dst: VReg, src: XReg) -> ControlFlow<Done> {
+        let val = self.state[src].get_u64();
+        self.state[dst].set_u64x2([val; 2]);
+        ControlFlow::Continue(())
+    }
+
+    fn vsplatf32(&mut self, dst: VReg, src: FReg) -> ControlFlow<Done> {
+        let val = self.state[src].get_f32();
+        self.state[dst].set_f32x4([val; 4]);
+        ControlFlow::Continue(())
+    }
+
+    fn vsplatf64(&mut self, dst: VReg, src: FReg) -> ControlFlow<Done> {
+        let val = self.state[src].get_f64();
+        self.state[dst].set_f64x2([val; 2]);
         ControlFlow::Continue(())
     }
 }
