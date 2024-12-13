@@ -326,8 +326,8 @@
 (rule (lower_fcmp $F64 (FloatCC.NotEqual) a b) (pulley_fneq64 a b))
 (rule (lower_fcmp $F32 (FloatCC.LessThan) a b) (pulley_flt32 a b))
 (rule (lower_fcmp $F64 (FloatCC.LessThan) a b) (pulley_flt64 a b))
-(rule (lower_fcmp $F32 (FloatCC.LessThanOrEqual) a b) (pulley_flt32 a b))
-(rule (lower_fcmp $F64 (FloatCC.LessThanOrEqual) a b) (pulley_flt64 a b))
+(rule (lower_fcmp $F32 (FloatCC.LessThanOrEqual) a b) (pulley_flteq32 a b))
+(rule (lower_fcmp $F64 (FloatCC.LessThanOrEqual) a b) (pulley_flteq64 a b))
 
 ;; NB: Pulley doesn't have lowerings for `Ordered` or `Unordered` `FloatCC`
 ;; conditions as that's not needed by wasm at this time.
