@@ -1960,12 +1960,15 @@ impl Config {
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         match self.compiler_config.strategy {
             None | Some(Strategy::Cranelift) => {
-                // Pulley is just starting and most errors are because of
-                // unsupported lowerings which is a first-class error. Some
-                // errors are panics though due to unimplemented bits in ABI
-                // code and those causes are listed here.
+                // Pulley at this time fundamentally doesn't support the
+                // `threads` proposal, notably shared memory, because Rust can't
+                // safely implement loads/stores in the face of shared memory.
+                //
+                // Additionally pulley currently panics on tail-call generation
+                // in Cranelift ABI call which will get implemented in the
+                // future but is listed here for now as unsupported.
                 if self.compiler_target().is_pulley() {
-                    return WasmFeatures::TAIL_CALL;
+                    return WasmFeatures::TAIL_CALL | WasmFeatures::THREADS;
                 }
 
                 // Other Cranelift backends are either 100% missing or complete
