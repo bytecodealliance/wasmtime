@@ -37,7 +37,7 @@ This example shows adding and configuring the WASI imports to invoke the above W
 {{#include ../examples/wasi/main.rs}}
 ```
 
-TODO: Update the following section after `../examples/wasi/main.rs` is fixed
+TODO: Make the example a bit more generalizable, not only wasi:cli components
 
 ## WASI state with other custom host state
 

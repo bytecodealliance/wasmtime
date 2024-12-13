@@ -9,6 +9,7 @@ You can execute this example with:
 use wasmtime::*;
 use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
 use wasmtime::component::{Component, Linker, ResourceTable};
+use wasmtime_wasi::bindings::sync::Command;
 
 pub struct ComponentRunStates {
     // These two are required basically as a standard way to enable the impl of WasiView
@@ -47,11 +48,10 @@ fn main() -> Result<()> {
 
     // Instantiate our component with the imports we've created, and run it.
     let component = Component::from_file(&engine, "target/wasm32-wasip2/debug/wasi.wasm")?;
-    let instance = linker.instantiate(&mut store, &component)?;
-    let exp_idx= instance.get_export(&mut store, None, "wasi:cli/run@0.2.0").unwrap();
-    // FIXME: Why can't I get an exported function here? The exp_idx is valid
-    let func = instance.get_func(&mut store, exp_idx).unwrap();
-    let typed = func.typed::<(), ()>(&store)?;
-    typed.call(&mut store, ())?;
-    Ok(())
+    let command = Command::instantiate(&mut store, &component, &linker)?;
+    let program_result = command.wasi_cli_run().call_run(&mut store)?;
+    match program_result {
+        Ok(()) => Ok(()),
+        Err(()) => std::process::exit(1),
+    }
 }
