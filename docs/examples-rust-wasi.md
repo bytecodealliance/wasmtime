@@ -22,8 +22,7 @@ For this WASI example, this Hello World program is compiled to a WebAssembly mod
 ```
 
 > Building instructions:
-> 1. Update your Rust toolchain if it is not >= 1.83.0, as Rust 1.83.0 brings Tier 2 support for WASI Preview 2.
->   `rustup update stable`
+> 1. Have Rust installed
 > 2. Add WASIp2 target if you haven't already: `rustup target add wasm32-wasip2`
 > 3. `cargo build --target wasm32-wasip2`
 
