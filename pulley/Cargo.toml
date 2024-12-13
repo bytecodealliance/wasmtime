@@ -17,7 +17,7 @@ arbitrary = { workspace = true, optional = true }
 cranelift-bitset = { workspace = true }
 log = { workspace = true }
 sptr = { workspace = true }
-libm = { workspace = true, optional = true }
+wasmtime-math = { workspace = true, optional = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }
@@ -25,12 +25,12 @@ object = { workspace = true, features = ['std'] }
 anyhow = { workspace = true, features = ['std'] }
 
 [features]
-std = []
+std = ['wasmtime-math?/std']
 arbitrary = ["dep:arbitrary", "arbitrary/derive", "std", "cranelift-bitset/arbitrary"]
 encode = []
 decode = []
 disas = ["decode"]
-interp = ["decode", "encode", "dep:libm"]
+interp = ["decode", "encode", "dep:wasmtime-math"]
 
 [package.metadata.docs.rs]
 all-features = true

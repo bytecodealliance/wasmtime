@@ -19,6 +19,7 @@ use std::time::Duration;
 const CRATES_TO_PUBLISH: &[&str] = &[
     // pulley
     "cranelift-bitset",
+    "wasmtime-math",
     "pulley-interpreter",
     // cranelift
     "cranelift-isle",

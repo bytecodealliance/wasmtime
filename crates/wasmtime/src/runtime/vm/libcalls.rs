@@ -1256,119 +1256,44 @@ fn raise(_store: &mut dyn VMStore, _instance: &mut Instance) {
 /// standard library generally for implementing these.
 #[allow(missing_docs)]
 pub mod relocs {
-    macro_rules! float_function {
-        (std: $std:path, core: $core:path,) => {{
-            #[cfg(feature = "std")]
-            let func = $std;
-            #[cfg(not(feature = "std"))]
-            let func = $core;
-            func
-        }};
-    }
     pub extern "C" fn floorf32(f: f32) -> f32 {
-        let func = float_function! {
-            std: f32::floor,
-            core: libm::floorf,
-        };
-        func(f)
+        wasmtime_math::WasmFloat::wasm_floor(f)
     }
 
     pub extern "C" fn floorf64(f: f64) -> f64 {
-        let func = float_function! {
-            std: f64::floor,
-            core: libm::floor,
-        };
-        func(f)
+        wasmtime_math::WasmFloat::wasm_floor(f)
     }
 
     pub extern "C" fn ceilf32(f: f32) -> f32 {
-        let func = float_function! {
-            std: f32::ceil,
-            core: libm::ceilf,
-        };
-        func(f)
+        wasmtime_math::WasmFloat::wasm_ceil(f)
     }
 
     pub extern "C" fn ceilf64(f: f64) -> f64 {
-        let func = float_function! {
-            std: f64::ceil,
-            core: libm::ceil,
-        };
-        func(f)
+        wasmtime_math::WasmFloat::wasm_ceil(f)
     }
 
     pub extern "C" fn truncf32(f: f32) -> f32 {
-        let func = float_function! {
-            std: f32::trunc,
-            core: libm::truncf,
-        };
-        func(f)
+        wasmtime_math::WasmFloat::wasm_trunc(f)
     }
 
     pub extern "C" fn truncf64(f: f64) -> f64 {
-        let func = float_function! {
-            std: f64::trunc,
-            core: libm::trunc,
-        };
-        func(f)
+        wasmtime_math::WasmFloat::wasm_trunc(f)
     }
 
     pub extern "C" fn nearestf32(x: f32) -> f32 {
-        let func = float_function! {
-            std: f32::round_ties_even,
-            core: core_round_ties_even,
-        };
-        return func(x);
-
-        #[cfg(not(feature = "std"))]
-        fn core_round_ties_even(x: f32) -> f32 {
-            let round = libm::roundf(x);
-            if libm::fabsf(x - round) != 0.5 {
-                return round;
-            }
-            match round % 2.0 {
-                1.0 => libm::floorf(x),
-                -1.0 => libm::ceilf(x),
-                _ => round,
-            }
-        }
+        wasmtime_math::WasmFloat::wasm_nearest(x)
     }
 
     pub extern "C" fn nearestf64(x: f64) -> f64 {
-        let func = float_function! {
-            std: f64::round_ties_even,
-            core: core_round_ties_even,
-        };
-        return func(x);
-
-        #[cfg(not(feature = "std"))]
-        fn core_round_ties_even(x: f64) -> f64 {
-            let round = libm::round(x);
-            if libm::fabs(x - round) != 0.5 {
-                return round;
-            }
-            match round % 2.0 {
-                1.0 => libm::floor(x),
-                -1.0 => libm::ceil(x),
-                _ => round,
-            }
-        }
+        wasmtime_math::WasmFloat::wasm_nearest(x)
     }
 
     pub extern "C" fn fmaf32(a: f32, b: f32, c: f32) -> f32 {
-        let func = float_function! {
-            std: f32::mul_add,
-            core: libm::fmaf,
-        };
-        func(a, b, c)
+        wasmtime_math::WasmFloat::mul_add(a, b, c)
     }
 
     pub extern "C" fn fmaf64(a: f64, b: f64, c: f64) -> f64 {
-        let func = float_function! {
-            std: f64::mul_add,
-            core: libm::fma,
-        };
-        func(a, b, c)
+        wasmtime_math::WasmFloat::mul_add(a, b, c)
     }
 
     // This intrinsic is only used on x86_64 platforms as an implementation of

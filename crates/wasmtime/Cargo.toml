@@ -30,6 +30,7 @@ wasmtime-component-util = { workspace = true, optional = true }
 wasmtime-slab = { workspace = true, optional = true }
 wasmtime-versioned-export-macros = { workspace = true }
 wasmtime-wmemcheck = { workspace = true, optional = true }
+wasmtime-math = { workspace = true }
 pulley-interpreter = { workspace = true, optional = true }
 target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
@@ -59,7 +60,6 @@ addr2line = { workspace = true, optional = true }
 semver = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true }
 hashbrown = { workspace = true, features = ["ahash"] }
-libm = { workspace = true }
 bitflags = { workspace = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
@@ -316,6 +316,7 @@ std = [
   'once_cell',
   'wasmtime-fiber?/std',
   'pulley-interpreter?/std',
+  'wasmtime-math/std',
   # technically this isn't necessary but once you have the standard library you
   # probably want things to go fast in which case you've probably got signal
   # handlers and such so implicitly enable this. This also helps reduce the
