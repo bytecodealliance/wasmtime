@@ -239,7 +239,6 @@ jobs:
           fi
           if grep -q pulley names.log; then
             echo test-nightly=true >> $GITHUB_OUTPUT
-            echo test-miri=true >> $GITHUB_OUTPUT
           fi
         fi
         matrix="$(node ./ci/build-test-matrix.js ./commits.log ./names.log $run_full)"
