@@ -1038,8 +1038,7 @@ mod tests {
 
             assert_eq!(
                 parsed_opt_level, expected,
-                "Mismatch for input '{}'. Parsed: {:?}, Expected: {:?}",
-                opt_value, parsed_opt_level, expected
+                "Mismatch for input '{opt_value}'. Parsed: {parsed_opt_level:?}, Expected: {expected:?}"
             );
         }
 
@@ -1062,8 +1061,7 @@ mod tests {
                 .and_then(|common_options| common_options.opts.regalloc_algorithm);
             assert_eq!(
                 parsed_regalloc_algorithm, expected,
-                "Mismatch for input '{}'. Parsed: {:?}, Expected: {:?}",
-                regalloc_value, parsed_regalloc_algorithm, expected
+                "Mismatch for input '{regalloc_value}'. Parsed: {parsed_regalloc_algorithm:?}, Expected: {expected:?}"
             );
         }
 
@@ -1086,8 +1084,7 @@ mod tests {
                 .and_then(|common_options| common_options.codegen.compiler);
             assert_eq!(
                 parsed_strategy, expected,
-                "Mismatch for input '{}'. Parsed: {:?}, Expected: {:?}",
-                strategy_value, parsed_strategy, expected
+                "Mismatch for input '{strategy_value}'. Parsed: {parsed_strategy:?}, Expected: {expected:?}",
             );
         }
 
@@ -1113,8 +1110,7 @@ mod tests {
                 .and_then(|common_options| common_options.codegen.collector);
             assert_eq!(
                 parsed_collector, expected,
-                "Mismatch for input '{}'. Parsed: {:?}, Expected: {:?}",
-                collector_value, parsed_collector, expected
+                "Mismatch for input '{collector_value}'. Parsed: {parsed_collector:?}, Expected: {expected:?}",
             );
         }
     }
