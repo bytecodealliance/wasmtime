@@ -15,7 +15,6 @@
 #![expect(non_camel_case_types, reason = "matching C style, not Rust")]
 
 pub use wasmtime;
-use wasmtime::Trap;
 
 mod config;
 mod engine;
@@ -127,10 +126,12 @@ unsafe fn slice_from_raw_parts_mut<'a, T>(ptr: *mut T, len: usize) -> &'a mut [T
     }
 }
 
+#[cfg(any(feature = "async", feature = "component-model"))]
 pub(crate) fn handle_call_error(
     err: wasmtime::Error,
     trap_ret: &mut *mut wasm_trap_t,
 ) -> Option<Box<wasmtime_error_t>> {
+    use wasmtime::Trap;
     if err.is::<Trap>() {
         *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(err)));
         None

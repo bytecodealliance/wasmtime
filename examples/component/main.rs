@@ -49,13 +49,23 @@ fn convert_to_component(path: impl AsRef<Path>) -> Result<Vec<u8>> {
 }
 
 fn main() -> Result<()> {
-    // Create an engine with the component model enabled (disabled by default).
-    let engine = Engine::new(Config::new().wasm_component_model(true))?;
-
     // NOTE: The wasm32-unknown-unknown target is used here for simplicity, real world use cases
     // should probably use the wasm32-wasip1 target, and enable wasi preview2 within the component
     // model.
-    let component = convert_to_component("target/wasm32-unknown-unknown/debug/guest.wasm")?;
+    let module_path = "target/wasm32-unknown-unknown/debug/guest.wasm";
+    let component = convert_to_component(module_path)?;
+
+    if std::env::args().len() > 1 {
+        // if called with an argument, just write the component binary
+        // this is useful for the c-api test, which doesn't expose wit_component::ComponentEncoder
+        let component_path = module_path.replace("guest.wasm", "guest-component.wasm");
+        println!("{} bytes written to {}", component.len(), component_path);
+        fs::write(&component_path, &component)?;
+        return Ok(());
+    }
+
+    // Create an engine with the component model enabled (disabled by default).
+    let engine = Engine::new(Config::new().wasm_component_model(true))?;
 
     // Create our component and call our generated host functions.
     let component = Component::from_binary(&engine, &component)?;
