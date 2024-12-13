@@ -1153,7 +1153,7 @@ fn save_last_wasm_exit_fp_and_pc(
     );
     builder
         .ins()
-        .trapnz(is_overflow, ir::TrapCode::StackOverflow);
+        .trapnz(is_overflow, ir::TrapCode::STACK_OVERFLOW);
 
     // Save the exit Wasm FP to the limits. We dereference the current FP to get
     // the previous FP because the current FP is the trampoline's FP, and we
