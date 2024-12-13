@@ -396,6 +396,11 @@ macro_rules! for_each_op {
             /// `dst = src1 ^ src2`
             xbxor64 = XBxor64 { operands: BinaryOperands<XReg> };
 
+            /// `low32(dst) = !low32(src1)`
+            xbnot32 = XBnot32 { dst: XReg, src: XReg };
+            /// `dst = !src1`
+            xbnot64 = XBnot64 { dst: XReg, src: XReg };
+
             /// `low32(dst) = bits`
             fconst32 = FConst32 { dst: FReg, bits: u32 };
             /// `dst = bits`

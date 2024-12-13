@@ -1802,6 +1802,18 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xbnot32(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u32();
+        self.state[dst].set_u32(!a);
+        ControlFlow::Continue(())
+    }
+
+    fn xbnot64(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u64();
+        self.state[dst].set_u64(!a);
+        ControlFlow::Continue(())
+    }
+
     fn fconst32(&mut self, dst: FReg, bits: u32) -> ControlFlow<Done> {
         self.state[dst].set_f32(f32::from_bits(bits));
         ControlFlow::Continue(())
