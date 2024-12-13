@@ -53,6 +53,7 @@ impl Inst {
                 flags,
             }
         } else if ty.is_int() {
+            assert!(ty.bytes() <= 8);
             Inst::XLoad {
                 dst: dst.map(|r| XReg::new(r).unwrap()),
                 mem,
@@ -81,6 +82,7 @@ impl Inst {
                 flags,
             }
         } else if ty.is_int() {
+            assert!(ty.bytes() <= 8);
             Inst::XStore {
                 mem,
                 src: XReg::new(from_reg).unwrap(),
