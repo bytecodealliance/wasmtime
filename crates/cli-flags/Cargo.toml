@@ -20,6 +20,9 @@ tracing-subscriber = { workspace = true, optional = true }
 rayon = { version = "1.5.0", optional = true }
 wasmtime = { workspace = true }
 humantime = { workspace = true }
+serde = { workspace = true }
+serde_derive = { workspace = true }
+toml = { workspace = true }
 
 [features]
 async = ["wasmtime/async"]

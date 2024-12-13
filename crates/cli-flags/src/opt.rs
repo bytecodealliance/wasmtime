@@ -9,9 +9,9 @@ use crate::{KeyValuePair, WasiNnGraph};
 use anyhow::{bail, Result};
 use clap::builder::{StringValueParser, TypedValueParser, ValueParserFactory};
 use clap::error::{Error, ErrorKind};
-use std::fmt;
-use std::marker;
+use serde::de::{self, Visitor};
 use std::time::Duration;
+use std::{fmt, marker};
 
 /// Characters which can be safely ignored while parsing numeric options to wasmtime
 const IGNORED_NUMBER_CHARS: [char; 1] = ['_'];
@@ -23,11 +23,13 @@ macro_rules! wasmtime_option_group {
         pub struct $opts:ident {
             $(
                 $(#[doc = $doc:tt])*
+                $(#[serde($serde_attr:meta)])*
                 pub $opt:ident: $container:ident<$payload:ty>,
             )+
 
             $(
                 #[prefixed = $prefix:tt]
+                $(#[serde($serde_attr2:meta)])*
                 $(#[doc = $prefixed_doc:tt])*
                 pub $prefixed:ident: Vec<(String, Option<String>)>,
             )?
@@ -40,9 +42,11 @@ macro_rules! wasmtime_option_group {
         $(#[$attr])*
         pub struct $opts {
             $(
+                $(#[serde($serde_attr)])*
                 pub $opt: $container<$payload>,
             )+
             $(
+                $(#[serde($serde_attr2)])*
                 pub $prefixed: Vec<(String, Option<String>)>,
             )?
         }
@@ -600,6 +604,55 @@ impl<T> OptionContainer<T> for Vec<T> {
     {
         self.iter()
     }
+}
+
+// Used to parse toml values into string so that we can reuse the `WasmtimeOptionValue::parse`
+// for parsing toml values the same way we parse command line values.
+//
+// Used for wasmtime::Strategy, wasmtime::Collector, wasmtime::OptLevel, wasmtime::RegallocAlgorithm
+struct ToStringVisitor {}
+
+impl<'de> Visitor<'de> for ToStringVisitor {
+    type Value = String;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        write!(formatter, "&str, u64, or i64")
+    }
+
+    fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(s.to_owned())
+    }
+
+    fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(v.to_string())
+    }
+
+    fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        Ok(v.to_string())
+    }
+}
+
+// Deserializer that uses the `WasmtimeOptionValue::parse` to parse toml values
+pub(crate) fn cli_parse_wrapper<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: WasmtimeOptionValue,
+    D: serde::Deserializer<'de>,
+{
+    let to_string_visitor = ToStringVisitor {};
+    let str = deserializer.deserialize_any(to_string_visitor)?;
+
+    T::parse(Some(&str))
+        .map(Some)
+        .map_err(serde::de::Error::custom)
 }
 
 #[cfg(test)]
