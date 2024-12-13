@@ -494,7 +494,6 @@ impl WastTest {
                 "spec_testsuite/simd_store32_lane.wast",
                 "spec_testsuite/simd_store64_lane.wast",
                 "spec_testsuite/simd_store8_lane.wast",
-                "spec_testsuite/switch.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {

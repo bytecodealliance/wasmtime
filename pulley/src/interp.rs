@@ -1241,6 +1241,18 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xneg32(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i32();
+        self.state[dst].set_i32(a.wrapping_neg());
+        ControlFlow::Continue(())
+    }
+
+    fn xneg64(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i64();
+        self.state[dst].set_i64(a.wrapping_neg());
+        ControlFlow::Continue(())
+    }
+
     fn xeq64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u64();
         let b = self.state[operands.src2].get_u64();

@@ -228,6 +228,11 @@ macro_rules! for_each_op {
             /// `dst = src1 >> low6(src2)`
             xshr64_u = Xshr64U { operands: BinaryOperands<XReg> };
 
+            /// `low32(dst) = -low32(src)`
+            xneg32 = Xneg32 { dst: XReg, src: XReg };
+            /// `dst = -src`
+            xneg64 = Xneg64 { dst: XReg, src: XReg };
+
             /// `low32(dst) = src1 == src2`
             xeq64 = Xeq64 { operands: BinaryOperands<XReg> };
             /// `low32(dst) = src1 != src2`
