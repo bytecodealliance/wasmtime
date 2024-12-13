@@ -70,7 +70,7 @@ command may not install the target for the correct copy of Rust.)
 ## Features
 
 * **Fast**. Wasmtime is built on the optimizing [Cranelift] code generator to
-ahead-of-time. Wasmtime is optimized for efficient instantiation, low-overhead
+  quickly generate high-quality machine code either at runtime or
   ahead-of-time. Wasmtime is optimized for efficient instantiation, low-overhead
   calls between the embedder and wasm, and scalability of concurrent instances.
 
