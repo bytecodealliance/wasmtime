@@ -11,7 +11,7 @@ block0:
 ; VCode:
 ;   push_frame
 ; block0:
-;   xmov x0, x29
+;   xmov x0, x30
 ;   pop_frame
 ;   ret
 ;

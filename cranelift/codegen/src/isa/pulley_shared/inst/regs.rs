@@ -91,10 +91,10 @@ define_registers! {
     x_reg(26) => x26, writable_x26;
     x_reg(27) => x27, writable_x27;
     x_reg(28) => x28, writable_x28;
+    x_reg(29) => x29, writable_x29;
 
-    x_reg(29) => stack_reg, writable_stack_reg;
-    x_reg(30) => spilltmp_reg, writable_spilltmp_reg;
-    x_reg(31) => spilltmp2_reg, writable_spilltmp2_reg;
+    x_reg(30) => stack_reg, writable_stack_reg;
+    x_reg(31) => spilltmp_reg, writable_spilltmp_reg;
 
     f_reg(0) => f0, writable_f0;
     f_reg(1) => f1, writable_f1;
