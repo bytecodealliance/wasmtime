@@ -194,6 +194,11 @@ impl Vm {
         self.state.fp
     }
 
+    /// Returns the current `sp` register value.
+    pub fn sp(&self) -> *mut u8 {
+        self.state.sp
+    }
+
     /// Returns the current `lr` register value.
     pub fn lr(&self) -> *mut u8 {
         self.state.lr
@@ -735,6 +740,7 @@ pub struct MachineState {
     f_regs: [FRegVal; FReg::RANGE.end as usize],
     v_regs: [VRegVal; VReg::RANGE.end as usize],
     fp: *mut u8,
+    sp: *mut u8,
     lr: *mut u8,
     stack: Stack,
     done_reason: Option<DoneReason<()>>,
@@ -808,6 +814,7 @@ impl fmt::Debug for MachineState {
             stack: _,
             done_reason: _,
             fp: _,
+            sp: _,
             lr: _,
         } = self;
 
@@ -888,6 +895,7 @@ impl MachineState {
             stack: Stack::new(stack_size),
             done_reason: None,
             fp: HOST_RETURN_ADDR,
+            sp: HOST_RETURN_ADDR,
             lr: HOST_RETURN_ADDR,
         };
 
