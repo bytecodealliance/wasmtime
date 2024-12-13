@@ -1,9 +1,13 @@
 //! Contains the common Wasmtime command line interface (CLI) flags.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 use serde::Deserialize;
-use std::{fs, path::Path, time::Duration};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 use wasmtime::Config;
 
 pub mod opt;
@@ -43,12 +47,12 @@ wasmtime_option_group! {
     pub struct OptimizeOptions {
         /// Optimization level of generated code (0-2, s; default: 2)
         #[serde(default)]
-        #[serde(deserialize_with = "crate::opt::deserialize_func")]
+        #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
         pub opt_level: Option<wasmtime::OptLevel>,
 
         /// Register allocator algorithm choice.
         #[serde(default)]
-        #[serde(deserialize_with = "crate::opt::deserialize_func")]
+        #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
         pub regalloc_algorithm: Option<wasmtime::RegallocAlgorithm>,
 
         /// Do not allow Wasm linear memories to move in the host process's
@@ -203,7 +207,7 @@ wasmtime_option_group! {
         /// Currently only `cranelift` and `winch` are supported, but not all
         /// builds of Wasmtime have both built in.
         #[serde(default)]
-        #[serde(deserialize_with = "crate::opt::deserialize_func")]
+        #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
         pub compiler: Option<wasmtime::Strategy>,
         /// Which garbage collector to use: `drc` or `null`.
         ///
@@ -215,7 +219,7 @@ wasmtime_option_group! {
         /// Note that not all builds of Wasmtime will have support for garbage
         /// collection included.
         #[serde(default)]
-        #[serde(deserialize_with = "crate::opt::deserialize_func")]
+        #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
         pub collector: Option<wasmtime::Collector>,
         /// Enable Cranelift's internal debug verifier (expensive)
         pub cranelift_debug_verifier: Option<bool>,
@@ -530,6 +534,16 @@ pub struct CommonOptions {
     #[arg(long, value_name = "TARGET")]
     #[serde(skip)]
     pub target: Option<String>,
+
+    /// Use the specified TOML configuration file.
+    /// This TOML configuration file can provide same configuration options as the
+    /// `--optimize`, `--codgen`, `--debug`, `--wasm`, `--wasi` CLI options, with a couple exceptions.
+    ///
+    /// Additional options specified on the command line will take precedent over options loaded from
+    /// this TOML file.
+    #[arg(long = "config", value_name = "FILE")]
+    #[serde(skip)]
+    pub config: Option<PathBuf>,
 }
 
 macro_rules! match_feature {
@@ -554,20 +568,29 @@ macro_rules! match_feature {
 }
 
 impl CommonOptions {
-    fn configure(&mut self) {
+    fn configure(&mut self) -> Result<()> {
         if self.configured {
-            return;
+            return Ok(());
         }
         self.configured = true;
+        if let Some(toml_config_path) = &self.config {
+            let toml_options = CommonOptions::from_file(toml_config_path)?;
+            self.opts = toml_options.opts;
+            self.codegen = toml_options.codegen;
+            self.debug = toml_options.debug;
+            self.wasm = toml_options.wasm;
+            self.wasi = toml_options.wasi;
+        }
         self.opts.configure_with(&self.opts_raw);
         self.codegen.configure_with(&self.codegen_raw);
         self.debug.configure_with(&self.debug_raw);
         self.wasm.configure_with(&self.wasm_raw);
         self.wasi.configure_with(&self.wasi_raw);
+        Ok(())
     }
 
     pub fn init_logging(&mut self) -> Result<()> {
-        self.configure();
+        self.configure()?;
         if self.debug.logging == Some(false) {
             return Ok(());
         }
@@ -592,7 +615,7 @@ impl CommonOptions {
     }
 
     pub fn config(&mut self, pooling_allocator_default: Option<bool>) -> Result<Config> {
-        self.configure();
+        self.configure()?;
         let mut config = Config::new();
 
         match_feature! {
@@ -960,19 +983,13 @@ impl CommonOptions {
         }
         Ok(())
     }
-}
 
-pub trait FromFile {
-    fn from_file<P: AsRef<Path>>(path: P) -> Result<Self>
-    where
-        Self: Sized;
-}
-
-impl FromFile for Config {
-    fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
-        let file_contents = fs::read_to_string(path.as_ref())?;
-        let mut common_options: CommonOptions = toml::from_str(&file_contents)?;
-        common_options.config(None)
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let path_ref = path.as_ref();
+        let file_contents = fs::read_to_string(path_ref)
+            .with_context(|| format!("failed to read config file: {path_ref:?}"))?;
+        toml::from_str::<CommonOptions>(&file_contents)
+            .with_context(|| format!("failed to parse TOML config file {path_ref:?}"))
     }
 }
 

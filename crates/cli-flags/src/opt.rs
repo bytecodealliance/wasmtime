@@ -480,7 +480,8 @@ impl<'de> Visitor<'de> for ToStringVisitor {
     }
 }
 
-pub(crate) fn deserialize_func<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+// Deserializer that uses the `WasmtimeOptionValue::parse` to parse toml values
+pub(crate) fn cli_parse_wrapper<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
 where
     T: WasmtimeOptionValue,
     D: serde::Deserializer<'de>,
