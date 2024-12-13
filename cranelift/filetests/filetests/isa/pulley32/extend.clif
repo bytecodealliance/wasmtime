@@ -12,7 +12,7 @@ block0(v0: i8):
 ;   push_frame
 ; block0:
 ;   zext8 x0, x0
-;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
 ;   pop_frame
 ;   ret
 ;
@@ -34,7 +34,7 @@ block0(v0: i16):
 ;   push_frame
 ; block0:
 ;   zext16 x0, x0
-;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
 ;   pop_frame
 ;   ret
 ;
@@ -55,7 +55,7 @@ block0(v0: i32):
 ; VCode:
 ;   push_frame
 ; block0:
-;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
 ;   pop_frame
 ;   ret
 ;
@@ -75,7 +75,7 @@ block0(v0: i64):
 ; VCode:
 ;   push_frame
 ; block0:
-;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
 ;   pop_frame
 ;   ret
 ;
@@ -96,7 +96,7 @@ block0(v0: i8):
 ;   push_frame
 ; block0:
 ;   sext8 x0, x0
-;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
 ;   pop_frame
 ;   ret
 ;
@@ -118,7 +118,7 @@ block0(v0: i16):
 ;   push_frame
 ; block0:
 ;   sext16 x0, x0
-;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
 ;   pop_frame
 ;   ret
 ;
@@ -139,7 +139,7 @@ block0(v0: i32):
 ; VCode:
 ;   push_frame
 ; block0:
-;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
 ;   pop_frame
 ;   ret
 ;
@@ -159,7 +159,7 @@ block0(v0: i64):
 ; VCode:
 ;   push_frame
 ; block0:
-;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [], clobbers: PRegSet { bits: [65535, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
 ;   pop_frame
 ;   ret
 ;
@@ -168,5 +168,4 @@ block0(v0: i64):
 ; call 0x0    // target = 0x1
 ; pop_frame
 ; ret
-
 
