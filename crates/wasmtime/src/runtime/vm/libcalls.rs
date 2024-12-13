@@ -1256,142 +1256,44 @@ fn raise(_store: &mut dyn VMStore, _instance: &mut Instance) {
 /// standard library generally for implementing these.
 #[allow(missing_docs)]
 pub mod relocs {
-    macro_rules! float_function {
-        (std: $std:path, core: $core:path,) => {{
-            #[cfg(feature = "std")]
-            let func = $std;
-            #[cfg(not(feature = "std"))]
-            let func = $core;
-            func
-        }};
-    }
     pub extern "C" fn floorf32(f: f32) -> f32 {
-        let func = float_function! {
-            std: f32::floor,
-            core: libm::floorf,
-        };
-        func(f)
+        wasmtime_math::WasmFloat::wasm_floor(f)
     }
 
     pub extern "C" fn floorf64(f: f64) -> f64 {
-        let func = float_function! {
-            std: f64::floor,
-            core: libm::floor,
-        };
-        func(f)
+        wasmtime_math::WasmFloat::wasm_floor(f)
     }
 
     pub extern "C" fn ceilf32(f: f32) -> f32 {
-        let func = float_function! {
-            std: f32::ceil,
-            core: libm::ceilf,
-        };
-        func(f)
+        wasmtime_math::WasmFloat::wasm_ceil(f)
     }
 
     pub extern "C" fn ceilf64(f: f64) -> f64 {
-        let func = float_function! {
-            std: f64::ceil,
-            core: libm::ceil,
-        };
-        func(f)
+        wasmtime_math::WasmFloat::wasm_ceil(f)
     }
 
     pub extern "C" fn truncf32(f: f32) -> f32 {
-        let func = float_function! {
-            std: f32::trunc,
-            core: libm::truncf,
-        };
-        func(f)
+        wasmtime_math::WasmFloat::wasm_trunc(f)
     }
 
     pub extern "C" fn truncf64(f: f64) -> f64 {
-        let func = float_function! {
-            std: f64::trunc,
-            core: libm::trunc,
-        };
-        func(f)
+        wasmtime_math::WasmFloat::wasm_trunc(f)
     }
 
-    const TOINT_32: f32 = 1.0 / f32::EPSILON;
-    const TOINT_64: f64 = 1.0 / f64::EPSILON;
-
-    // NB: replace with `round_ties_even` from libstd when it's stable as
-    // tracked by rust-lang/rust#96710
     pub extern "C" fn nearestf32(x: f32) -> f32 {
-        // Rust doesn't have a nearest function; there's nearbyint, but it's not
-        // stabilized, so do it manually.
-        // Nearest is either ceil or floor depending on which is nearest or even.
-        // This approach exploited round half to even default mode.
-        let i = x.to_bits();
-        let e = i >> 23 & 0xff;
-        if e >= 0x7f_u32 + 23 {
-            // Check for NaNs.
-            if e == 0xff {
-                // Read the 23-bits significand.
-                if i & 0x7fffff != 0 {
-                    // Ensure it's arithmetic by setting the significand's most
-                    // significant bit to 1; it also works for canonical NaNs.
-                    return f32::from_bits(i | (1 << 22));
-                }
-            }
-            x
-        } else {
-            let abs = float_function! {
-                std: f32::abs,
-                core: libm::fabsf,
-            };
-            let copysign = float_function! {
-                std: f32::copysign,
-                core: libm::copysignf,
-            };
-
-            copysign(abs(x) + TOINT_32 - TOINT_32, x)
-        }
+        wasmtime_math::WasmFloat::wasm_nearest(x)
     }
 
     pub extern "C" fn nearestf64(x: f64) -> f64 {
-        let i = x.to_bits();
-        let e = i >> 52 & 0x7ff;
-        if e >= 0x3ff_u64 + 52 {
-            // Check for NaNs.
-            if e == 0x7ff {
-                // Read the 52-bits significand.
-                if i & 0xfffffffffffff != 0 {
-                    // Ensure it's arithmetic by setting the significand's most
-                    // significant bit to 1; it also works for canonical NaNs.
-                    return f64::from_bits(i | (1 << 51));
-                }
-            }
-            x
-        } else {
-            let abs = float_function! {
-                std: f64::abs,
-                core: libm::fabs,
-            };
-            let copysign = float_function! {
-                std: f64::copysign,
-                core: libm::copysign,
-            };
-
-            copysign(abs(x) + TOINT_64 - TOINT_64, x)
-        }
+        wasmtime_math::WasmFloat::wasm_nearest(x)
     }
 
     pub extern "C" fn fmaf32(a: f32, b: f32, c: f32) -> f32 {
-        let func = float_function! {
-            std: f32::mul_add,
-            core: libm::fmaf,
-        };
-        func(a, b, c)
+        wasmtime_math::WasmFloat::mul_add(a, b, c)
     }
 
     pub extern "C" fn fmaf64(a: f64, b: f64, c: f64) -> f64 {
-        let func = float_function! {
-            std: f64::mul_add,
-            core: libm::fma,
-        };
-        func(a, b, c)
+        wasmtime_math::WasmFloat::mul_add(a, b, c)
     }
 
     // This intrinsic is only used on x86_64 platforms as an implementation of

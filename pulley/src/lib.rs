@@ -482,6 +482,52 @@ macro_rules! for_each_op {
             fcopysign32 = FCopySign32 { operands: BinaryOperands<FReg> };
             /// `dst = copysign(src1, src2)`
             fcopysign64 = FCopySign64 { operands: BinaryOperands<FReg> };
+
+            /// `low32(dst) = low32(src1) + low32(src2)`
+            fadd32 = Fadd32 { operands: BinaryOperands<FReg> };
+            /// `low32(dst) = low32(src1) - low32(src2)`
+            fsub32 = Fsub32 { operands: BinaryOperands<FReg> };
+            /// `low32(dst) = low32(src1) * low32(src2)`
+            fmul32 = Fmul32 { operands: BinaryOperands<FReg> };
+            /// `low32(dst) = low32(src1) / low32(src2)`
+            fdiv32 = Fdiv32 { operands: BinaryOperands<FReg> };
+            /// `low32(dst) = ieee_maximum(low32(src1), low32(src2))`
+            fmaximum32 = Fmaximum32 { operands: BinaryOperands<FReg> };
+            /// `low32(dst) = ieee_minimum(low32(src1), low32(src2))`
+            fminimum32 = Fminimum32 { operands: BinaryOperands<FReg> };
+            /// `low32(dst) = ieee_trunc(low32(src))`
+            ftrunc32 = Ftrunc32 { dst: FReg, src: FReg };
+            /// `low32(dst) = ieee_floor(low32(src))`
+            ffloor32 = Ffloor32 { dst: FReg, src: FReg };
+            /// `low32(dst) = ieee_ceil(low32(src))`
+            fceil32 = Fceil32 { dst: FReg, src: FReg };
+            /// `low32(dst) = ieee_nearest(low32(src))`
+            fnearest32 = Fnearest32 { dst: FReg, src: FReg };
+            /// `low32(dst) = ieee_sqrt(low32(src))`
+            fsqrt32 = Fsqrt32 { dst: FReg, src: FReg };
+
+            /// `dst = src1 + src2`
+            fadd64 = Fadd64 { operands: BinaryOperands<FReg> };
+            /// `dst = src1 - src2`
+            fsub64 = Fsub64 { operands: BinaryOperands<FReg> };
+            /// `dst = src1 * src2`
+            fmul64 = Fmul64 { operands: BinaryOperands<FReg> };
+            /// `dst = src1 / src2`
+            fdiv64 = Fdiv64 { operands: BinaryOperands<FReg> };
+            /// `dst = ieee_maximum(src1, src2)`
+            fmaximum64 = Fmaximum64 { operands: BinaryOperands<FReg> };
+            /// `dst = ieee_minimum(src1, src2)`
+            fminimum64 = Fminimum64 { operands: BinaryOperands<FReg> };
+            /// `dst = ieee_trunc(src)`
+            ftrunc64 = Ftrunc64 { dst: FReg, src: FReg };
+            /// `dst = ieee_floor(src)`
+            ffloor64 = Ffloor64 { dst: FReg, src: FReg };
+            /// `dst = ieee_ceil(src)`
+            fceil64 = Fceil64 { dst: FReg, src: FReg };
+            /// `dst = ieee_nearest(src)`
+            fnearest64 = Fnearest64 { dst: FReg, src: FReg };
+            /// `dst = ieee_sqrt(src)`
+            fsqrt64 = Fsqrt64 { dst: FReg, src: FReg };
         }
     };
 }
