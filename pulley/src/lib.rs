@@ -517,6 +517,12 @@ macro_rules! for_each_extended_op {
             /// assembled into the final object that Wasmtime will interpret.
             call_indirect_host = CallIndirectHost { id: u8 };
 
+            /// Gets the special "fp" register and moves it into `dst`.
+            xmov_fp = XmovFp { dst: XReg };
+
+            /// Gets the special "lr" register and moves it into `dst`.
+            xmov_lr = XmovLr { dst: XReg };
+
             /// `dst = byteswap(low32(src))`
             bswap32 = Bswap32 { dst: XReg, src: XReg };
             /// `dst = byteswap(src)`

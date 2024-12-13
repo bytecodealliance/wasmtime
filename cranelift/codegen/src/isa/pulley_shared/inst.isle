@@ -380,12 +380,6 @@
 (decl sp_reg () XReg)
 (extern constructor sp_reg sp_reg)
 
-(decl fp_reg () XReg)
-(extern constructor fp_reg fp_reg)
-
-(decl lr_reg () XReg)
-(extern constructor lr_reg lr_reg)
-
 (decl pulley_get_special (XReg) XReg)
 (rule (pulley_get_special reg)
       (let ((dst WritableXReg (temp_writable_xreg))

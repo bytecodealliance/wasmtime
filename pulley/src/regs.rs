@@ -69,22 +69,14 @@ macro_rules! impl_reg {
 pub enum XReg {
     x0,  x1,  x2,  x3,  x4,  x5,  x6,  x7,  x8,  x9,
     x10, x11, x12, x13, x14, x15, x16, x17, x18, x19,
-    x20, x21, x22, x23, x24, x25, x26,
+    x20, x21, x22, x23, x24, x25, x26, x27, x28, x29,
 
     /// The special `sp` stack pointer register.
     sp,
 
-    /// The special `lr` link register.
-    lr,
-
-    /// The special `fp` frame pointer register.
-    fp,
-
     /// The special `spilltmp0` scratch register.
     spilltmp0,
 
-    /// The special `spilltmp1` scratch register.
-    spilltmp1,
 }
 
 impl XReg {
@@ -93,10 +85,7 @@ impl XReg {
 
     /// Is this `x` register a special register?
     pub fn is_special(self) -> bool {
-        matches!(
-            self,
-            Self::sp | Self::lr | Self::fp | Self::spilltmp0 | Self::spilltmp1
-        )
+        matches!(self, Self::sp | Self::spilltmp0)
     }
 }
 
@@ -310,10 +299,7 @@ mod tests {
     #[test]
     fn special_x_regs() {
         assert!(XReg::sp.is_special());
-        assert!(XReg::lr.is_special());
-        assert!(XReg::fp.is_special());
         assert!(XReg::spilltmp0.is_special());
-        assert!(XReg::spilltmp1.is_special());
     }
 
     #[test]

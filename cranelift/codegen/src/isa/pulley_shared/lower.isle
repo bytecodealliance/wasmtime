@@ -86,13 +86,11 @@
 
 ;;;; Rules for `get_frame_pointer` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (get_frame_pointer))
-      (pulley_get_special (fp_reg)))
+(rule (lower (get_frame_pointer)) (pulley_xmov_fp))
 
 ;;;; Rules for `get_return_address` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (get_return_address))
-      (pulley_get_special (lr_reg)))
+(rule (lower (get_return_address)) (pulley_xmov_lr))
 
 ;;;; Rules for `return` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
