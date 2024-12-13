@@ -1308,6 +1308,22 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xmulhi64_s(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i64();
+        let b = self.state[operands.src2].get_i64();
+        let result = ((i128::from(a) * i128::from(b)) >> 64) as i64;
+        self.state[operands.dst].set_i64(result);
+        ControlFlow::Continue(())
+    }
+
+    fn xmulhi64_u(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64();
+        let b = self.state[operands.src2].get_u64();
+        let result = ((u128::from(a) * u128::from(b)) >> 64) as u64;
+        self.state[operands.dst].set_u64(result);
+        ControlFlow::Continue(())
+    }
+
     fn xshl32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u32();
         let b = self.state[operands.src2].get_u32();
