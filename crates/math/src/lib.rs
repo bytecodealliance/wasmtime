@@ -7,7 +7,9 @@
 //! * Functions like `f32::trunc` are not available in `#![no_std]` targets.
 //! * The `f32::trunc` function is likely faster than the `libm` fallback.
 //! * Behavior of `f32::trunc` differs across platforms, for example it's
-//!   different on Windows and glibc on Linux.
+//!   different on Windows and glibc on Linux. Additionally riscv64's
+//!   implementation of `libm` seems to have different NaN behavior than other
+//!   platforms.
 //! * Some wasm functions are in the Rust standard library, but not stable yet.
 //!
 //! There are a few locations throughout the codebase that these functions are
@@ -36,7 +38,7 @@ impl WasmFloat for f32 {
     #[inline]
     fn wasm_trunc(self) -> f32 {
         #[cfg(feature = "std")]
-        if !cfg!(windows) {
+        if !cfg!(windows) && !cfg!(target_arch = "riscv64") {
             return self.trunc();
         }
         if self.is_nan() {
@@ -55,7 +57,7 @@ impl WasmFloat for f32 {
     #[inline]
     fn wasm_floor(self) -> f32 {
         #[cfg(feature = "std")]
-        if true {
+        if !cfg!(target_arch = "riscv64") {
             return self.floor();
         }
         if self.is_nan() {
@@ -66,7 +68,7 @@ impl WasmFloat for f32 {
     #[inline]
     fn wasm_ceil(self) -> f32 {
         #[cfg(feature = "std")]
-        if true {
+        if !cfg!(target_arch = "riscv64") {
             return self.ceil();
         }
         if self.is_nan() {
@@ -93,7 +95,7 @@ impl WasmFloat for f32 {
     #[inline]
     fn wasm_nearest(self) -> f32 {
         #[cfg(feature = "std")]
-        if !cfg!(windows) {
+        if !cfg!(windows) && !cfg!(target_arch = "riscv64") {
             return self.round_ties_even();
         }
         if self.is_nan() {
@@ -159,7 +161,7 @@ impl WasmFloat for f64 {
     #[inline]
     fn wasm_trunc(self) -> f64 {
         #[cfg(feature = "std")]
-        if !cfg!(windows) {
+        if !cfg!(windows) && !cfg!(target_arch = "riscv64") {
             return self.trunc();
         }
         if self.is_nan() {
@@ -178,7 +180,7 @@ impl WasmFloat for f64 {
     #[inline]
     fn wasm_floor(self) -> f64 {
         #[cfg(feature = "std")]
-        if true {
+        if !cfg!(target_arch = "riscv64") {
             return self.floor();
         }
         if self.is_nan() {
@@ -189,7 +191,7 @@ impl WasmFloat for f64 {
     #[inline]
     fn wasm_ceil(self) -> f64 {
         #[cfg(feature = "std")]
-        if true {
+        if !cfg!(target_arch = "riscv64") {
             return self.ceil();
         }
         if self.is_nan() {
@@ -216,7 +218,7 @@ impl WasmFloat for f64 {
     #[inline]
     fn wasm_nearest(self) -> f64 {
         #[cfg(feature = "std")]
-        if !cfg!(windows) {
+        if !cfg!(windows) && !cfg!(target_arch = "riscv64") {
             return self.round_ties_even();
         }
         if self.is_nan() {
