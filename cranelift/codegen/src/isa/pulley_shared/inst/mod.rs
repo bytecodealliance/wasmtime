@@ -453,18 +453,8 @@ where
     }
 
     fn worst_case_size() -> CodeOffset {
-        // `BrIfXeq32 { a, b, taken, not_taken }` expands to `br_if_xeq32 a, b, taken; jump not_taken`.
-        //
-        // The first instruction is seven bytes long:
-        //   * 1 byte opcode
-        //   * 1 byte `a` register encoding
-        //   * 1 byte `b` register encoding
-        //   * 4 byte `taken` displacement
-        //
-        // And the second instruction is five bytes long:
-        //   * 1 byte opcode
-        //   * 4 byte `not_taken` displacement
-        12
+        // `Vconst128 { dst, imm }` is 18 bytes (opcode + dst + 16-byte imm)
+        18
     }
 
     fn ref_type_regclass(_settings: &settings::Flags) -> RegClass {

@@ -160,11 +160,23 @@ where
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I {
-        Inst::gen_load(into_reg, mem.into(), ty, MemFlags::trusted()).into()
+        let mut flags = MemFlags::trusted();
+        // Stack loads/stores of vectors always use little-endianess to avoid
+        // implementing a byte-swap of vectors on big-endian platforms.
+        if ty.is_vector() {
+            flags.set_endianness(ir::Endianness::Little);
+        }
+        Inst::gen_load(into_reg, mem.into(), ty, flags).into()
     }
 
     fn gen_store_stack(mem: StackAMode, from_reg: Reg, ty: Type) -> Self::I {
-        Inst::gen_store(mem.into(), from_reg, ty, MemFlags::trusted()).into()
+        let mut flags = MemFlags::trusted();
+        // Stack loads/stores of vectors always use little-endianess to avoid
+        // implementing a byte-swap of vectors on big-endian platforms.
+        if ty.is_vector() {
+            flags.set_endianness(ir::Endianness::Little);
+        }
+        Inst::gen_store(mem.into(), from_reg, ty, flags).into()
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self::I {
@@ -510,17 +522,18 @@ where
         _target_vector_bytes: u32,
         _isa_flags: &PulleyFlags,
     ) -> u32 {
+        // Spill slots are the size of a "word" or a pointer, but Pulley
+        // registers are 8-byte for integers/floats regardless of pointer size.
+        // Calculate the number of slots necessary to store 8 bytes.
+        let slots_for_8bytes = match P::pointer_width() {
+            PointerWidth::PointerWidth32 => 2,
+            PointerWidth::PointerWidth64 => 1,
+        };
         match rc {
-            // Spilling an integer or float register requires spilling 8 bytes,
-            // and spill slots are defined in terms of "word bytes" or the size
-            // of a pointer. That means on 32-bit pulley we need to take up two
-            // spill slots where on 64-bit pulley we need to only take up one
-            // spill slot for integers.
-            RegClass::Int | RegClass::Float => match P::pointer_width() {
-                PointerWidth::PointerWidth32 => 2,
-                PointerWidth::PointerWidth64 => 1,
-            },
-            RegClass::Vector => unreachable!(),
+            // Int/float registers are 8-bytes
+            RegClass::Int | RegClass::Float => slots_for_8bytes,
+            // Vector registers are 16 bytes
+            RegClass::Vector => 2 * slots_for_8bytes,
         }
     }
 

@@ -149,6 +149,12 @@ impl Disas for i64 {
     }
 }
 
+impl Disas for i128 {
+    fn disas(&self, _position: usize, disas: &mut String) {
+        write!(disas, "{self}").unwrap();
+    }
+}
+
 impl Disas for u8 {
     fn disas(&self, _position: usize, disas: &mut String) {
         write!(disas, "{self}").unwrap();
@@ -173,6 +179,12 @@ impl Disas for u64 {
     }
 }
 
+impl Disas for u128 {
+    fn disas(&self, _position: usize, disas: &mut String) {
+        write!(disas, "{self}").unwrap();
+    }
+}
+
 impl Disas for PcRelOffset {
     fn disas(&self, position: usize, disas: &mut String) {
         let offset = isize::try_from(i32::from(*self)).unwrap();
@@ -192,9 +204,18 @@ fn disas_list<T: Disas>(position: usize, disas: &mut String, iter: impl IntoIter
     }
 }
 
-impl<R: Reg + Disas> Disas for BinaryOperands<R> {
+impl<D, S1, S2> Disas for BinaryOperands<D, S1, S2>
+where
+    D: Reg + Disas,
+    S1: Reg + Disas,
+    S2: Reg + Disas,
+{
     fn disas(&self, position: usize, disas: &mut String) {
-        disas_list(position, disas, [self.dst, self.src1, self.src2])
+        self.dst.disas(position, disas);
+        write!(disas, ", ").unwrap();
+        self.src1.disas(position, disas);
+        write!(disas, ", ").unwrap();
+        self.src2.disas(position, disas);
     }
 }
 

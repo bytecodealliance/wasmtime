@@ -143,6 +143,11 @@
 (rule (lower (has_type $I64 (iadd a b)))
       (pulley_xadd64 a b))
 
+(rule (lower (has_type $I8X16 (iadd a b))) (pulley_vaddi8x16 a b))
+(rule (lower (has_type $I16X8 (iadd a b))) (pulley_vaddi16x8 a b))
+(rule (lower (has_type $I32X4 (iadd a b))) (pulley_vaddi32x4 a b))
+(rule (lower (has_type $I64X2 (iadd a b))) (pulley_vaddi64x2 a b))
+
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I8 (isub a b)))
@@ -192,6 +197,11 @@
 (rule (lower (has_type $I64 (ishl a b)))
   (pulley_xshl64 a b))
 
+(rule (lower (has_type $I8X16 (ishl a b))) (pulley_vshli8x16 a b))
+(rule (lower (has_type $I16X8 (ishl a b))) (pulley_vshli16x8 a b))
+(rule (lower (has_type $I32X4 (ishl a b))) (pulley_vshli32x4 a b))
+(rule (lower (has_type $I64X2 (ishl a b))) (pulley_vshli64x2 a b))
+
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I32 (ushr a b)))
@@ -200,6 +210,11 @@
 (rule (lower (has_type $I64 (ushr a b)))
   (pulley_xshr64_u a b))
 
+(rule (lower (has_type $I8X16 (ushr a b))) (pulley_vshri8x16_u a b))
+(rule (lower (has_type $I16X8 (ushr a b))) (pulley_vshri16x8_u a b))
+(rule (lower (has_type $I32X4 (ushr a b))) (pulley_vshri32x4_u a b))
+(rule (lower (has_type $I64X2 (ushr a b))) (pulley_vshri64x2_u a b))
+
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I32 (sshr a b)))
@@ -207,6 +222,11 @@
 
 (rule (lower (has_type $I64 (sshr a b)))
   (pulley_xshr64_s a b))
+
+(rule (lower (has_type $I8X16 (sshr a b))) (pulley_vshri8x16_s a b))
+(rule (lower (has_type $I16X8 (sshr a b))) (pulley_vshri16x8_s a b))
+(rule (lower (has_type $I32X4 (sshr a b))) (pulley_vshri32x4_s a b))
+(rule (lower (has_type $I64X2 (sshr a b))) (pulley_vshri64x2_s a b))
 
 ;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -414,6 +434,9 @@
 (rule 1 (lower (has_type $I64 (sload32 flags addr offset)))
   (pulley_xload (amode addr offset) $I32 flags (ExtKind.Sign64)))
 
+(rule 2 (lower (has_type (ty_vec128 ty) (load flags addr offset)))
+  (pulley_vload (amode addr offset) ty flags))
+
 ;;;; Rules for `store` and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (store flags src @ (value_type (ty_int ty)) addr offset))
@@ -430,6 +453,9 @@
 
 (rule (lower (istore32 flags src addr offset))
   (side_effect (pulley_xstore (amode addr offset) src $I32 flags)))
+
+(rule 2 (lower (store flags src @ (value_type (ty_vec128 ty)) addr offset))
+  (side_effect (pulley_vstore (amode addr offset) src ty flags)))
 
 ;;;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -521,6 +547,9 @@
 
 (rule (lower (has_type $I64 (bitcast _flags val @ (value_type $F64))))
   (pulley_bitcast_int_from_float_64 val))
+
+(rule 1 (lower (has_type (ty_vec128 _) (bitcast _flags val @ (value_type (ty_vec128 _)))))
+  val)
 
 ;;;; Rules for `fcvt_to_{u,s}int` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -622,6 +651,8 @@
 
 (rule (lower (has_type $F32 (fadd a b))) (pulley_fadd32 a b))
 (rule (lower (has_type $F64 (fadd a b))) (pulley_fadd64 a b))
+(rule (lower (has_type $F32X4 (fadd a b))) (pulley_vaddf32x4 a b))
+(rule (lower (has_type $F64X2 (fadd a b))) (pulley_vaddf64x2 a b))
 
 ;;;; Rules for `fsub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -687,3 +718,7 @@
 
 (rule (lower (has_type $F32 (fabs a))) (pulley_fabs32 a))
 (rule (lower (has_type $F64 (fabs a))) (pulley_fabs64 a))
+
+;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_vec128 _) (vconst (u128_from_constant a)))) (pulley_vconst128 a))
