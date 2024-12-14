@@ -548,6 +548,9 @@
 (rule (lower (has_type $I64 (bitcast _flags val @ (value_type $F64))))
   (pulley_bitcast_int_from_float_64 val))
 
+(rule 1 (lower (has_type (ty_vec128 _) (bitcast _flags val @ (value_type (ty_vec128 _)))))
+  val)
+
 ;;;; Rules for `fcvt_to_{u,s}int` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I32 (fcvt_to_uint val @ (value_type $F32))))

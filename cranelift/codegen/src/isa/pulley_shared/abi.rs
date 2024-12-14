@@ -160,11 +160,23 @@ where
     }
 
     fn gen_load_stack(mem: StackAMode, into_reg: Writable<Reg>, ty: Type) -> Self::I {
-        Inst::gen_load(into_reg, mem.into(), ty, MemFlags::trusted()).into()
+        let mut flags = MemFlags::trusted();
+        // Stack loads/stores of vectors always use little-endianess to avoid
+        // implementing a byte-swap of vectors on big-endian platforms.
+        if ty.is_vector() {
+            flags.set_endianness(ir::Endianness::Little);
+        }
+        Inst::gen_load(into_reg, mem.into(), ty, flags).into()
     }
 
     fn gen_store_stack(mem: StackAMode, from_reg: Reg, ty: Type) -> Self::I {
-        Inst::gen_store(mem.into(), from_reg, ty, MemFlags::trusted()).into()
+        let mut flags = MemFlags::trusted();
+        // Stack loads/stores of vectors always use little-endianess to avoid
+        // implementing a byte-swap of vectors on big-endian platforms.
+        if ty.is_vector() {
+            flags.set_endianness(ir::Endianness::Little);
+        }
+        Inst::gen_store(mem.into(), from_reg, ty, flags).into()
     }
 
     fn gen_move(to_reg: Writable<Reg>, from_reg: Reg, ty: Type) -> Self::I {
