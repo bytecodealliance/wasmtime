@@ -88,8 +88,17 @@ pub struct ServeCommand {
     run: RunCommon,
 
     /// Socket address for the web server to bind to.
-    #[arg(long = "addr", value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR )]
+    #[arg(long = "addr", value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR)]
     addr: SocketAddr,
+
+    /// The custom prefix of stdout logs from wasi-http handlers.
+    /// if unspecified, default log of 'stdout [{req_id}] :: ' will be used.
+    #[arg(long = "logging-prefix-stdout", value_name = "PREFIX")]
+    logging_prefix_stdout: Option<String>,
+    /// The custom prefix of stderr logs from wasi-http handlers.
+    /// if unspecified, default log of 'stderr [{req_id}] :: ' will be used.
+    #[arg(long = "logging-prefix-stderr", value_name = "PREFIX")]
+    logging_prefix_stderr: Option<String>,
 
     /// The WebAssembly component to run.
     #[arg(value_name = "WASM", required = true)]
@@ -153,15 +162,17 @@ impl ServeCommand {
 
         builder.env("REQUEST_ID", req_id.to_string());
 
-        builder.stdout(LogStream::new(
-            format!("stdout [{req_id}] :: "),
-            Output::Stdout,
-        ));
+        let stdout_prefix = self
+            .logging_prefix_stdout
+            .clone()
+            .unwrap_or_else(|| format!("stdout [{req_id}] :: "));
+        builder.stdout(LogStream::new(stdout_prefix, Output::Stdout));
 
-        builder.stderr(LogStream::new(
-            format!("stderr [{req_id}] :: "),
-            Output::Stderr,
-        ));
+        let stderr_prefix = self
+            .logging_prefix_stderr
+            .clone()
+            .unwrap_or_else(|| format!("stderr [{req_id}] :: "));
+        builder.stderr(LogStream::new(stderr_prefix, Output::Stderr));
 
         let mut host = Host {
             table: wasmtime::component::ResourceTable::new(),

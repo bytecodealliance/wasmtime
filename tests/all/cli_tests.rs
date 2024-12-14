@@ -1910,6 +1910,53 @@ stderr [1] :: after empty
     }
 
     #[tokio::test]
+    async fn cli_serve_with_print_no_prefix() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_WITH_PRINT_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+            cmd.arg("--logging-prefix-stdout=");
+            cmd.arg("--logging-prefix-stderr=");
+        })?;
+
+        for _ in 0..2 {
+            let resp = server
+                .send_request(
+                    hyper::Request::builder()
+                        .uri("http://localhost/")
+                        .body(String::new())
+                        .context("failed to make request")?,
+                )
+                .await?;
+            assert!(resp.status().is_success());
+        }
+
+        let (out, err) = server.finish()?;
+        assert_eq!(
+            out,
+            "\
+this is half a print to stdout
+\n\
+after empty
+this is half a print to stdout
+\n\
+after empty
+"
+        );
+        assert_eq!(
+            err,
+            "\
+this is half a print to stderr
+\n\
+after empty
+this is half a print to stderr
+\n\
+after empty
+"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn cli_serve_authority_and_scheme() -> Result<()> {
         let server = WasmtimeServe::new(CLI_SERVE_AUTHORITY_AND_SCHEME_COMPONENT, |cmd| {
             cmd.arg("-Scli");
