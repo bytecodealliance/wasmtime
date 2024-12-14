@@ -48,8 +48,31 @@ fn main() -> Result<()> {
     let component = Component::from_file(&engine, "target/wasm32-wasip2/debug/wasi.wasm")?;
     let command = Command::instantiate(&mut store, &component, &linker)?;
     let program_result = command.wasi_cli_run().call_run(&mut store)?;
-    match program_result {
-        Ok(()) => Ok(()),
-        Err(()) => std::process::exit(1),
+    if program_result.is_err() {
+        std::process::exit(1)
     }
+
+    // Alternatively, instead of using `Command`, just instantiate it as a normal component
+    // New states
+    let wasi = WasiCtxBuilder::new().inherit_stdio().inherit_args().build();
+    let state = ComponentRunStates {
+        wasi_ctx: wasi,
+        resource_table: ResourceTable::new(),
+    };
+    let mut store = Store::new(&engine, state);
+    // Instantiate it as a normal component
+    let instance = linker.instantiate(&mut store, &component)?;
+    // Get the index for the exported interface
+    let interface_idx = instance.get_export(&mut store, None, "wasi:cli/run@0.2.0").unwrap();
+    // Get the index for the exported function in the exported interface
+    let parent_export_idx = Some(&interface_idx);
+    let func_idx = instance.get_export(&mut store, parent_export_idx, "run").unwrap();
+    let func = instance.get_func(&mut store, func_idx).unwrap();
+    // As the `run` function in `wasi:cli/run@0.2.0` takes no argument and return a WASI result that correspond to a `Result<(), ()>`
+    // Reference:
+    // * https://github.com/WebAssembly/wasi-cli/blob/main/wit/run.wit
+    // * Documentation for [Func::typed](https://docs.rs/wasmtime/latest/wasmtime/component/struct.Func.html#method.typed) and [ComponentNamedList](https://docs.rs/wasmtime/latest/wasmtime/component/trait.ComponentNamedList.html)
+    let typed = func.typed::<(), (Result<(), ()>,)>(&store)?;
+    let (result,) = typed.call(&mut store, ())?;
+    result.map_err(|_| anyhow::anyhow!("error"))
 }
