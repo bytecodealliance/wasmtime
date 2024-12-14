@@ -298,6 +298,12 @@ impl Compiler {
             }
 
             Compiler::CraneliftPulley => {
+                // Pulley at this time fundamentally does not support threads
+                // due to being unable to implement non-atomic loads/stores
+                // safely.
+                if config.threads() {
+                    return true;
+                }
                 // Unsupported proposals. Note that other proposals have partial
                 // support at this time (pulley is a work-in-progress) and so
                 // individual tests are listed below as "should fail" even if
@@ -397,9 +403,7 @@ impl WastTest {
             let unsupported = [
                 "misc_testsuite/int-to-float-splat.wast",
                 "misc_testsuite/issue6562.wast",
-                "misc_testsuite/memory-combos.wast",
                 "misc_testsuite/memory64/simd.wast",
-                "misc_testsuite/memory64/threads.wast",
                 "misc_testsuite/simd/almost-extmul.wast",
                 "misc_testsuite/simd/canonicalize-nan.wast",
                 "misc_testsuite/simd/cvt-from-uint.wast",
@@ -413,11 +417,6 @@ impl WastTest {
                 "misc_testsuite/simd/spillslot-size-fuzzbug.wast",
                 "misc_testsuite/simd/unaligned-load.wast",
                 "misc_testsuite/simd/v128-select.wast",
-                "misc_testsuite/threads/LB_atomic.wast",
-                "misc_testsuite/threads/MP_atomic.wast",
-                "misc_testsuite/threads/MP_wait.wast",
-                "misc_testsuite/threads/SB_atomic.wast",
-                "misc_testsuite/threads/load-store-alignment.wast",
                 "misc_testsuite/winch/_simd_address.wast",
                 "misc_testsuite/winch/_simd_const.wast",
                 "misc_testsuite/winch/_simd_load.wast",
@@ -432,7 +431,6 @@ impl WastTest {
                 "spec_testsuite/proposals/relaxed-simd/relaxed_laneselect.wast",
                 "spec_testsuite/proposals/relaxed-simd/relaxed_madd_nmadd.wast",
                 "spec_testsuite/proposals/relaxed-simd/relaxed_min_max.wast",
-                "spec_testsuite/proposals/threads/atomic.wast",
                 "spec_testsuite/simd_address.wast",
                 "spec_testsuite/simd_align.wast",
                 "spec_testsuite/simd_bit_shift.wast",
