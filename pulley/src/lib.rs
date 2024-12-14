@@ -401,6 +401,23 @@ macro_rules! for_each_op {
             /// `dst = !src1`
             xbnot64 = XBnot64 { dst: XReg, src: XReg };
 
+            /// `low32(dst) = min(low32(src1), low32(src2))` (unsigned)
+            xmin32_u = Xmin32U { operands: BinaryOperands<XReg> };
+            /// `low32(dst) = min(low32(src1), low32(src2))` (signed)
+            xmin32_s = Xmin32S { operands: BinaryOperands<XReg> };
+            /// `low32(dst) = max(low32(src1), low32(src2))` (unsigned)
+            xmax32_u = Xmax32U { operands: BinaryOperands<XReg> };
+            /// `low32(dst) = max(low32(src1), low32(src2))` (signed)
+            xmax32_s = Xmax32S { operands: BinaryOperands<XReg> };
+            /// `dst = min(src1, src2)` (unsigned)
+            xmin64_u = Xmin64U { operands: BinaryOperands<XReg> };
+            /// `dst = min(src1, src2)` (signed)
+            xmin64_s = Xmin64S { operands: BinaryOperands<XReg> };
+            /// `dst = max(src1, src2)` (unsigned)
+            xmax64_u = Xmax64U { operands: BinaryOperands<XReg> };
+            /// `dst = max(src1, src2)` (signed)
+            xmax64_s = Xmax64S { operands: BinaryOperands<XReg> };
+
             /// `low32(dst) = bits`
             fconst32 = FConst32 { dst: FReg, bits: u32 };
             /// `dst = bits`

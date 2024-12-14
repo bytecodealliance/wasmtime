@@ -400,7 +400,6 @@ impl WastTest {
                 "misc_testsuite/memory-combos.wast",
                 "misc_testsuite/memory64/simd.wast",
                 "misc_testsuite/memory64/threads.wast",
-                "misc_testsuite/rust_fannkuch.wast",
                 "misc_testsuite/simd/almost-extmul.wast",
                 "misc_testsuite/simd/canonicalize-nan.wast",
                 "misc_testsuite/simd/cvt-from-uint.wast",
