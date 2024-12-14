@@ -6,16 +6,17 @@ You can execute this example with:
     cargo run --example wasi
 */
 
-use wasmtime::*;
-use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
 use wasmtime::component::{Component, Linker, ResourceTable};
+use wasmtime::*;
 use wasmtime_wasi::bindings::sync::Command;
+use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
 
 pub struct ComponentRunStates {
     // These two are required basically as a standard way to enable the impl of WasiView
     // impl of WasiView is required by [`wasmtime_wasi::add_to_linker_sync`]
     pub wasi_ctx: WasiCtx,
     pub resource_table: ResourceTable,
+    // You can add other custom host states if needed
 }
 
 impl WasiView for ComponentRunStates {
@@ -36,10 +37,7 @@ fn main() -> Result<()> {
     // Create a WASI context and put it in a Store; all instances in the store
     // share this context. `WasiCtxBuilder` provides a number of ways to
     // configure what the target program will have access to.
-    let wasi = WasiCtxBuilder::new()
-        .inherit_stdio()
-        .inherit_args()
-        .build();
+    let wasi = WasiCtxBuilder::new().inherit_stdio().inherit_args().build();
     let state = ComponentRunStates {
         wasi_ctx: wasi,
         resource_table: ResourceTable::new(),
