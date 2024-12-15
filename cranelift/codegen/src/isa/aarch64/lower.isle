@@ -3095,14 +3095,14 @@
             (rt Reg (orr $I64 c_lo c_hi)))
        (emit_side_effect
         (with_flags_side_effect flags
-         (cond_br taken not_taken (cond_br_not_zero rt))))))
+         (cond_br taken not_taken (cond_br_not_zero rt (operand_size $I64)))))))
 (rule -2 (lower_branch (brif c @ (value_type ty) _ _) (two_targets taken not_taken))
       (if (ty_int_ref_scalar_64 ty))
       (let ((flags ProducesFlags (flags_to_producesflags c))
             (rt Reg (put_in_reg_zext64 c)))
        (emit_side_effect
         (with_flags_side_effect flags
-         (cond_br taken not_taken (cond_br_not_zero rt))))))
+         (cond_br taken not_taken (cond_br_not_zero rt (operand_size $I64)))))))
 
 ;; Special lowerings for `tbnz` - "Test bit and Branch if Nonzero"
 (rule 1 (lower_branch (brif (band x @ (value_type ty) (u64_from_iconst n)) _ _)

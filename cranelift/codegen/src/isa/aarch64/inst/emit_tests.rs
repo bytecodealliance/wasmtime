@@ -5901,25 +5901,22 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
-            kind: CondBrKind::NotZero(xreg(8)),
+            kind: CondBrKind::NotZero(xreg(8), OperandSize::Size64),
         },
         "280000B51FC10000",
         "cbnz x8, #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
-            kind: CondBrKind::Zero(xreg(8)),
+            kind: CondBrKind::Zero(xreg(8), OperandSize::Size64),
         },
         "280000B41FC10000",
         "cbz x8, #trap=stk_ovf",
     ));
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Ne),
         },
@@ -5928,7 +5925,6 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Eq),
         },
@@ -5937,7 +5933,6 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Lo),
         },
@@ -5946,7 +5941,6 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Hs),
         },
@@ -5955,7 +5949,6 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Pl),
         },
@@ -5964,7 +5957,6 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Mi),
         },
@@ -5973,7 +5965,6 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Vc),
         },
@@ -5982,7 +5973,6 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Vs),
         },
@@ -5991,7 +5981,6 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Ls),
         },
@@ -6000,7 +5989,6 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Hi),
         },
@@ -6009,7 +5997,6 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Lt),
         },
@@ -6018,7 +6005,6 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Ge),
         },
@@ -6027,7 +6013,6 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Le),
         },
@@ -6036,7 +6021,6 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Gt),
         },
@@ -6045,7 +6029,6 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Nv),
         },
@@ -6054,7 +6037,6 @@ fn test_aarch64_binemit() {
     ));
     insns.push((
         Inst::TrapIf {
-            size: OperandSize::Size64,
             trap_code: TrapCode::STACK_OVERFLOW,
             kind: CondBrKind::Cond(Cond::Al),
         },

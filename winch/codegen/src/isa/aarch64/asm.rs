@@ -10,6 +10,7 @@ use crate::{
     masm::OperandSize,
     reg::{writable, Reg, WritableReg},
 };
+
 use cranelift_codegen::isa::aarch64::inst::{UImm5, NZCV};
 use cranelift_codegen::{
     ir::{ExternalName, LibCall, MemFlags, SourceLoc, TrapCode, UserExternalNameRef},
@@ -864,7 +865,6 @@ impl Assembler {
     /// Conditional trap.
     pub fn trapif(&mut self, cc: Cond, code: TrapCode) {
         self.emit(Inst::TrapIf {
-            size: OperandSize::S64.into(),
             kind: CondBrKind::Cond(cc),
             trap_code: code,
         });
@@ -873,8 +873,7 @@ impl Assembler {
     /// Trap if `rn` is zero.
     pub fn trapz(&mut self, rn: Reg, code: TrapCode, size: OperandSize) {
         self.emit(Inst::TrapIf {
-            size: size.into(),
-            kind: CondBrKind::Zero(rn.into()),
+            kind: CondBrKind::Zero(rn.into(), size.into()),
             trap_code: code,
         });
     }

@@ -354,12 +354,12 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         self.lower_ctx.emit(inst.clone());
     }
 
-    fn cond_br_zero(&mut self, reg: Reg) -> CondBrKind {
-        CondBrKind::Zero(reg)
+    fn cond_br_zero(&mut self, reg: Reg, size: &OperandSize) -> CondBrKind {
+        CondBrKind::Zero(reg, *size)
     }
 
-    fn cond_br_not_zero(&mut self, reg: Reg) -> CondBrKind {
-        CondBrKind::NotZero(reg)
+    fn cond_br_not_zero(&mut self, reg: Reg, size: &OperandSize) -> CondBrKind {
+        CondBrKind::NotZero(reg, *size)
     }
 
     fn cond_br_cond(&mut self, cond: &Cond) -> CondBrKind {

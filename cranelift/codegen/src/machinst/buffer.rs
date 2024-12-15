@@ -2061,7 +2061,7 @@ mod test {
 
     use super::*;
     use crate::ir::UserExternalNameRef;
-    use crate::isa::aarch64::inst::xreg;
+    use crate::isa::aarch64::inst::{xreg, OperandSize};
     use crate::isa::aarch64::inst::{BranchTarget, CondBrKind, EmitInfo, Inst};
     use crate::machinst::{MachInstEmit, MachInstEmitState};
     use crate::settings;
@@ -2100,7 +2100,7 @@ mod test {
 
         buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::CondBr {
-            kind: CondBrKind::NotZero(xreg(0)),
+            kind: CondBrKind::NotZero(xreg(0), OperandSize::Size64),
             taken: target(1),
             not_taken: target(2),
         };
@@ -2131,7 +2131,7 @@ mod test {
 
         buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::CondBr {
-            kind: CondBrKind::Zero(xreg(0)),
+            kind: CondBrKind::Zero(xreg(0), OperandSize::Size64),
             taken: target(1),
             not_taken: target(2),
         };
@@ -2154,8 +2154,7 @@ mod test {
         let mut buf2 = MachBuffer::new();
         let mut state = Default::default();
         let inst = Inst::TrapIf {
-            size: crate::isa::aarch64::inst::OperandSize::Size64,
-            kind: CondBrKind::NotZero(xreg(0)),
+            kind: CondBrKind::NotZero(xreg(0), OperandSize::Size64),
             trap_code: TrapCode::STACK_OVERFLOW,
         };
         inst.emit(&mut buf2, &info, &mut state);
@@ -2178,7 +2177,7 @@ mod test {
 
         buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::CondBr {
-            kind: CondBrKind::NotZero(xreg(0)),
+            kind: CondBrKind::NotZero(xreg(0), OperandSize::Size64),
             taken: target(2),
             not_taken: target(3),
         };
@@ -2208,7 +2207,7 @@ mod test {
         let mut buf2 = MachBuffer::new();
         let mut state = Default::default();
         let inst = Inst::CondBr {
-            kind: CondBrKind::NotZero(xreg(0)),
+            kind: CondBrKind::NotZero(xreg(0), OperandSize::Size64),
 
             // This conditionally taken branch has a 19-bit constant, shifted
             // to the left by two, giving us a 21-bit range in total. Half of
@@ -2261,7 +2260,7 @@ mod test {
 
         buf.bind_label(label(3), state.ctrl_plane_mut());
         let inst = Inst::CondBr {
-            kind: CondBrKind::NotZero(xreg(0)),
+            kind: CondBrKind::NotZero(xreg(0), OperandSize::Size64),
             taken: target(0),
             not_taken: target(1),
         };
@@ -2274,7 +2273,7 @@ mod test {
         let mut buf2 = MachBuffer::new();
         let mut state = Default::default();
         let inst = Inst::CondBr {
-            kind: CondBrKind::NotZero(xreg(0)),
+            kind: CondBrKind::NotZero(xreg(0), OperandSize::Size64),
             taken: BranchTarget::ResolvedOffset(8),
             not_taken: BranchTarget::ResolvedOffset(4 - (2000000 + 4)),
         };
@@ -2333,7 +2332,7 @@ mod test {
 
         buf.bind_label(label(0), state.ctrl_plane_mut());
         let inst = Inst::CondBr {
-            kind: CondBrKind::Zero(xreg(0)),
+            kind: CondBrKind::Zero(xreg(0), OperandSize::Size64),
             taken: target(1),
             not_taken: target(2),
         };

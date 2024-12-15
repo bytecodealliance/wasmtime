@@ -870,7 +870,6 @@
        ;; *execute* the embedded `Inst`. (In the emitted code, we use the inverse
        ;; of this condition in a branch that skips the trap instruction.)
        (TrapIf
-        (size OperandSize)
         (kind CondBrKind)
         (trap_code TrapCode))
 
@@ -1993,10 +1992,10 @@
 (decl nzcv (bool bool bool bool) NZCV)
 (extern constructor nzcv nzcv)
 
-(decl cond_br_zero (Reg) CondBrKind)
+(decl cond_br_zero (Reg OperandSize) CondBrKind)
 (extern constructor cond_br_zero cond_br_zero)
 
-(decl cond_br_not_zero (Reg) CondBrKind)
+(decl cond_br_not_zero (Reg OperandSize) CondBrKind)
 (extern constructor cond_br_not_zero cond_br_not_zero)
 
 (decl cond_br_cond (Cond) CondBrKind)
@@ -3507,7 +3506,7 @@
       (side_effect
        (with_flags_side_effect flags
         (ConsumesFlags.ConsumesFlagsSideEffect
-         (MInst.TrapIf (operand_size $I64) (cond_br_cond cond) trap_code)))))
+         (MInst.TrapIf (cond_br_cond cond) trap_code)))))
 
 ;; Helpers for lowering `trapz` and `trapnz`.
 (type ZeroCond
@@ -3515,19 +3514,19 @@
        Zero
        NonZero))
 
-(decl zero_cond_to_cond_br (ZeroCond Reg) CondBrKind)
-(rule (zero_cond_to_cond_br (ZeroCond.Zero) reg)
-      (cond_br_zero reg))
+(decl zero_cond_to_cond_br (ZeroCond Reg OperandSize) CondBrKind)
+(rule (zero_cond_to_cond_br (ZeroCond.Zero) reg size)
+      (cond_br_zero reg size))
 
-(rule (zero_cond_to_cond_br (ZeroCond.NonZero) reg)
-      (cond_br_not_zero reg))
+(rule (zero_cond_to_cond_br (ZeroCond.NonZero) reg size)
+      (cond_br_not_zero reg size))
 
 (decl trap_if_val (ZeroCond Value TrapCode) InstOutput)
 (rule (trap_if_val zero_cond val @ (value_type (fits_in_64 _)) trap_code)
       (let ((reg Reg (put_in_reg_zext64 val)))
       (side_effect
        (SideEffectNoResult.Inst
-        (MInst.TrapIf (operand_size $I64) (zero_cond_to_cond_br zero_cond reg) trap_code)))))
+        (MInst.TrapIf (zero_cond_to_cond_br zero_cond reg (operand_size $I64)) trap_code)))))
 
 (rule -1 (trap_if_val zero_cond val @ (value_type $I128) trap_code)
   (let ((c ValueRegs (put_in_regs val))
@@ -3536,7 +3535,7 @@
         (c_test Reg (orr $I64 c_lo c_hi)))
       (side_effect
        (SideEffectNoResult.Inst
-        (MInst.TrapIf (operand_size $I64) (zero_cond_to_cond_br zero_cond c_test) trap_code)))))
+        (MInst.TrapIf (zero_cond_to_cond_br zero_cond c_test (operand_size $I64)) trap_code)))))
 
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3662,7 +3661,7 @@
 
 (decl trap_if_zero_divisor (Reg OperandSize) Reg)
 (rule (trap_if_zero_divisor reg size)
-      (let ((_ Unit (emit (MInst.TrapIf size (cond_br_zero reg) (trap_code_division_by_zero)))))
+      (let ((_ Unit (emit (MInst.TrapIf (cond_br_zero reg size ) (trap_code_division_by_zero)))))
         reg))
 
 (decl size_from_ty (Type) OperandSize)
@@ -3686,7 +3685,7 @@
                                        (u8_into_uimm5 1)
                                        (nzcv false false false false)
                                        (Cond.Eq))))
-          (_ Unit (emit (MInst.TrapIf (operand_size $I64) (cond_br_cond (Cond.Vs))
+          (_ Unit (emit (MInst.TrapIf (cond_br_cond (Cond.Vs))
                                       (trap_code_integer_overflow))))
         )
         x))
@@ -3710,7 +3709,7 @@
       (with_flags_reg
         producer
         (ConsumesFlags.ConsumesFlagsSideEffect
-          (MInst.TrapIf (operand_size $I64) (cond_br_cond (Cond.Hs)) tc))))
+          (MInst.TrapIf (cond_br_cond (Cond.Hs)) tc))))
 
 (decl sink_atomic_load (Inst) Reg)
 (rule (sink_atomic_load x @ (atomic_load _ addr))
@@ -4273,7 +4272,7 @@
       (let ((r ValueRegs
                   (with_flags (fpu_cmp size src src)
                    (ConsumesFlags.ConsumesFlagsReturnsReg
-                    (MInst.TrapIf (operand_size $I64) (cond_br_cond (Cond.Vs))
+                    (MInst.TrapIf (cond_br_cond (Cond.Vs))
                         (trap_code_bad_conversion_to_integer))
                     src))))
        (value_regs_get r 0)))
@@ -4286,7 +4285,7 @@
       (let ((r ValueRegs
                   (with_flags (fpu_cmp (ScalarSize.Size32) src min)
                    (ConsumesFlags.ConsumesFlagsReturnsReg
-                    (MInst.TrapIf (operand_size $I64) (cond_br_cond (Cond.Le))
+                    (MInst.TrapIf (cond_br_cond (Cond.Le))
                         (trap_code_integer_overflow))
                     src))))
        (value_regs_get r 0)))
@@ -4294,7 +4293,7 @@
       (let ((r ValueRegs
                   (with_flags (fpu_cmp (ScalarSize.Size64) src min)
                    (ConsumesFlags.ConsumesFlagsReturnsReg
-                    (MInst.TrapIf (operand_size $I64) (cond_br_cond (Cond.Le))
+                    (MInst.TrapIf (cond_br_cond (Cond.Le))
                         (trap_code_integer_overflow))
                     src))))
        (value_regs_get r 0)))
@@ -4302,7 +4301,7 @@
       (let ((r ValueRegs
                   (with_flags (fpu_cmp (scalar_size in_ty) src min)
                    (ConsumesFlags.ConsumesFlagsReturnsReg
-                    (MInst.TrapIf (operand_size $I64) (cond_br_cond (Cond.Lt))
+                    (MInst.TrapIf (cond_br_cond (Cond.Lt))
                         (trap_code_integer_overflow))
                     src))))
        (value_regs_get r 0)))
@@ -4310,7 +4309,7 @@
       (let ((r ValueRegs
                   (with_flags (fpu_cmp (scalar_size in_ty) src min)
                    (ConsumesFlags.ConsumesFlagsReturnsReg
-                    (MInst.TrapIf (operand_size $I64) (cond_br_cond (Cond.Le))
+                    (MInst.TrapIf (cond_br_cond (Cond.Le))
                         (trap_code_integer_overflow))
                     src))))
        (value_regs_get r 0)))
@@ -4320,7 +4319,7 @@
       (let ((r ValueRegs
                   (with_flags (fpu_cmp size src max)
                    (ConsumesFlags.ConsumesFlagsReturnsReg
-                    (MInst.TrapIf (operand_size $I64) (cond_br_cond (Cond.Ge))
+                    (MInst.TrapIf (cond_br_cond (Cond.Ge))
                         (trap_code_integer_overflow))
                     src))))
        (value_regs_get r 0)))

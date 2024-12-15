@@ -233,9 +233,9 @@ impl Cond {
 #[derive(Clone, Copy, Debug)]
 pub enum CondBrKind {
     /// Condition: given register is zero.
-    Zero(Reg),
+    Zero(Reg, OperandSize),
     /// Condition: given register is nonzero.
-    NotZero(Reg),
+    NotZero(Reg, OperandSize),
     /// Condition: the given condition-code test is true.
     Cond(Cond),
 }
@@ -244,8 +244,8 @@ impl CondBrKind {
     /// Return the inverted branch condition.
     pub fn invert(self) -> CondBrKind {
         match self {
-            CondBrKind::Zero(reg) => CondBrKind::NotZero(reg),
-            CondBrKind::NotZero(reg) => CondBrKind::Zero(reg),
+            CondBrKind::Zero(reg, size) => CondBrKind::NotZero(reg, size),
+            CondBrKind::NotZero(reg, size) => CondBrKind::Zero(reg, size),
             CondBrKind::Cond(c) => CondBrKind::Cond(c.invert()),
         }
     }
