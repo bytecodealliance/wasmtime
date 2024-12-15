@@ -1,0 +1,33 @@
+test compile precise-output
+target pulley32
+
+function %i32(i32) -> i32 {
+block0(v0: i32):
+    v1 = bmask.i32 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   xbmask32 x0, x0
+;   ret
+;
+; Disassembled:
+; xbmask32 x0, x0
+; ret
+
+function %i64(i64) -> i64 {
+block0(v0: i64):
+    v1 = bmask.i64 v0
+    return v1
+}
+
+; VCode:
+; block0:
+;   xbmask64 x0, x0
+;   ret
+;
+; Disassembled:
+; xbmask64 x0, x0
+; ret
+
