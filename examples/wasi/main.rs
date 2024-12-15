@@ -78,5 +78,7 @@ fn main() -> Result<()> {
     // * Documentation for [Func::typed](https://docs.rs/wasmtime/latest/wasmtime/component/struct.Func.html#method.typed) and [ComponentNamedList](https://docs.rs/wasmtime/latest/wasmtime/component/trait.ComponentNamedList.html)
     let typed = func.typed::<(), (Result<(), ()>,)>(&store)?;
     let (result,) = typed.call(&mut store, ())?;
+    // Required, see documentation of TypedFunc::call
+    typed.post_return(&mut store)?;
     result.map_err(|_| anyhow::anyhow!("error"))
 }
