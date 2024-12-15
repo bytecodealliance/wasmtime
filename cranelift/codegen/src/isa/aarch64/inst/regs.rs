@@ -182,7 +182,7 @@ pub fn pretty_print_reg(reg: Reg) -> String {
 fn show_reg_sized(reg: Reg, size: OperandSize) -> String {
     match reg.class() {
         RegClass::Int => show_ireg_sized(reg, size),
-        RegClass::Float => todo!(),
+        RegClass::Float => show_reg(reg),
         RegClass::Vector => unreachable!(),
     }
 }
