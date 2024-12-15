@@ -1979,6 +1979,26 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xbmask32(&mut self, dst: XReg, src: XReg) -> Self::Return {
+        let a = self.state[src].get_u32();
+        if a == 0 {
+            self.state[dst].set_u32(0);
+        } else {
+            self.state[dst].set_i32(-1);
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn xbmask64(&mut self, dst: XReg, src: XReg) -> Self::Return {
+        let a = self.state[src].get_u64();
+        if a == 0 {
+            self.state[dst].set_u64(0);
+        } else {
+            self.state[dst].set_i64(-1);
+        }
+        ControlFlow::Continue(())
+    }
+
     fn fconst32(&mut self, dst: FReg, bits: u32) -> ControlFlow<Done> {
         self.state[dst].set_f32(f32::from_bits(bits));
         ControlFlow::Continue(())

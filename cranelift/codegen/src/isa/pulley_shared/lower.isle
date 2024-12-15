@@ -280,17 +280,22 @@
 (rule (lower (has_type $I32 (smax a b))) (pulley_xmax32_s a b))
 (rule (lower (has_type $I64 (smax a b))) (pulley_xmax64_s a b))
 
-;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I32 (bmask x))) (pulley_xbmask32 x))
+(rule (lower (has_type $I64 (bmask x))) (pulley_xbmask64 x))
+
+;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I32 (ctz a))) (pulley_xctz32 a))
 (rule (lower (has_type $I64 (ctz a))) (pulley_xctz64 a))
 
-;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I32 (clz a))) (pulley_xclz32 a))
 (rule (lower (has_type $I64 (clz a))) (pulley_xclz64 a))
 
-;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I32 (popcnt a))) (pulley_xpopcnt32 a))
 (rule (lower (has_type $I64 (popcnt a))) (pulley_xpopcnt64 a))

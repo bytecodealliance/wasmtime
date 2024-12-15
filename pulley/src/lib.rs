@@ -418,6 +418,11 @@ macro_rules! for_each_op {
             /// `dst = max(src1, src2)` (signed)
             xmax64_s = Xmax64S { operands: BinaryOperands<XReg> };
 
+            /// low32(dst) = if low32(src) == 0 { 0 } else { -1 }
+            xbmask32 = Xbmask32 { dst: XReg, src: XReg };
+            /// dst = if src == 0 { 0 } else { -1 }
+            xbmask64 = Xbmask64 { dst: XReg, src: XReg };
+
             /// `low32(dst) = bits`
             fconst32 = FConst32 { dst: FReg, bits: u32 };
             /// `dst = bits`
