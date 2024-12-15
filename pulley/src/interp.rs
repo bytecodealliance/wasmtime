@@ -2371,6 +2371,26 @@ impl OpVisitor for Interpreter<'_> {
         self.state[dst].set_i64(a.wrapping_abs());
         ControlFlow::Continue(())
     }
+
+    fn xbc32_bound64_trap(&mut self, addr: XReg, bound: XReg, off: u8) -> ControlFlow<Done> {
+        let bound = self.state[bound].get_u64();
+        let addr = u64::from(self.state[addr].get_u32());
+        if addr > bound.wrapping_sub(u64::from(off)) {
+            self.done_trap::<crate::XBc32Bound64Trap>()
+        } else {
+            ControlFlow::Continue(())
+        }
+    }
+
+    fn xbc32_bound32_trap(&mut self, addr: XReg, bound: XReg, off: u8) -> ControlFlow<Done> {
+        let bound = self.state[bound].get_u32();
+        let addr = self.state[addr].get_u32();
+        if addr > bound.wrapping_sub(u32::from(off)) {
+            self.done_trap::<crate::XBc32Bound32Trap>()
+        } else {
+            ControlFlow::Continue(())
+        }
+    }
 }
 
 impl ExtendedOpVisitor for Interpreter<'_> {

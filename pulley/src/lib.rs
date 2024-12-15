@@ -580,6 +580,12 @@ macro_rules! for_each_op {
             xselect32 = XSelect32 { dst: XReg, cond: XReg, if_nonzero: XReg, if_zero: XReg };
             /// `dst = low32(cond) ? if_nonzero : if_zero`
             xselect64 = XSelect64 { dst: XReg, cond: XReg, if_nonzero: XReg, if_zero: XReg };
+
+            /// `trapif(zext(low32(addr)) > bound - off)` (unsigned)
+            xbc32_bound64_trap = XBc32Bound64Trap { addr: XReg, bound: XReg, off: u8 };
+
+            /// `trapif(zext(low32(addr)) > low32(bound) - off)` (unsigned)
+            xbc32_bound32_trap = XBc32Bound32Trap { addr: XReg, bound: XReg, off: u8 };
         }
     };
 }
