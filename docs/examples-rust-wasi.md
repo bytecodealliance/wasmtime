@@ -7,14 +7,14 @@ repository to run the example locally.
 
 This example shows how to use the [`wasmtime-wasi`] crate to define WASI
 functions within a [`Linker`] which can then be used to instantiate a
-WebAssembly module.
+WebAssembly component.
 
 [`wasmtime-wasi`]: https://crates.io/crates/wasmtime-wasi
 [`Linker`]: https://docs.rs/wasmtime/*/wasmtime/struct.Linker.html
 
 ## WebAssembly Component Source Code
 
-For this WASI example, this Hello World program is compiled to a WebAssembly module using the WASIp2 API.
+For this WASI example, this Hello World program is compiled to a WebAssembly component using the WASIp2 API.
 
 `wasi.rs`
 ```rust
@@ -39,7 +39,7 @@ This example shows adding and configuring the WASI imports to invoke the above W
 
 ### Async example
 
-This [async example code][code2] shows how to use the [wasmtime-wasi][`wasmtime-wasi`] module to
+This [async example code][code2] shows how to use the [wasmtime-wasi][`wasmtime-wasi`] component to
 execute the same WASIp2 component from the example above. This example requires the `wasmtime` crate `async` feature to be enabled.
 
 This does not require any change to the WASIp2 component, it's just the WASIp2 API host functions which are implemented to be async. See [wasmtime async support](https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.async_support).
