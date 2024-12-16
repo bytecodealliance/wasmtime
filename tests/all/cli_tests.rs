@@ -1913,8 +1913,7 @@ stderr [1] :: after empty
     async fn cli_serve_with_print_no_prefix() -> Result<()> {
         let server = WasmtimeServe::new(CLI_SERVE_WITH_PRINT_COMPONENT, |cmd| {
             cmd.arg("-Scli");
-            cmd.arg("--logging-prefix-stdout=");
-            cmd.arg("--logging-prefix-stderr=");
+            cmd.arg("--no-logging-prefix");
         })?;
 
         for _ in 0..2 {

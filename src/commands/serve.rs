@@ -91,14 +91,10 @@ pub struct ServeCommand {
     #[arg(long = "addr", value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR)]
     addr: SocketAddr,
 
-    /// The custom prefix of stdout logs from wasi-http handlers.
-    /// if unspecified, default log of 'stdout [{req_id}] :: ' will be used.
-    #[arg(long = "logging-prefix-stdout", value_name = "PREFIX")]
-    logging_prefix_stdout: Option<String>,
-    /// The custom prefix of stderr logs from wasi-http handlers.
-    /// if unspecified, default log of 'stderr [{req_id}] :: ' will be used.
-    #[arg(long = "logging-prefix-stderr", value_name = "PREFIX")]
-    logging_prefix_stderr: Option<String>,
+    /// Disable log prefixes of wasi-http handlers.
+    /// if unspecified, logs will be prefixed with 'stdout|stderr [{req_id}] :: '
+    #[arg(long = "no-logging-prefix")]
+    no_logging_prefix: bool,
 
     /// The WebAssembly component to run.
     #[arg(value_name = "WASM", required = true)]
@@ -162,16 +158,16 @@ impl ServeCommand {
 
         builder.env("REQUEST_ID", req_id.to_string());
 
-        let stdout_prefix = self
-            .logging_prefix_stdout
-            .clone()
-            .unwrap_or_else(|| format!("stdout [{req_id}] :: "));
+        let stdout_prefix: String;
+        let stderr_prefix: String;
+        if self.no_logging_prefix {
+            stdout_prefix = "".to_string();
+            stderr_prefix = "".to_string();
+        } else {
+            stdout_prefix = format!("stdout [{req_id}] :: ");
+            stderr_prefix = format!("stderr [{req_id}] :: ");
+        }
         builder.stdout(LogStream::new(stdout_prefix, Output::Stdout));
-
-        let stderr_prefix = self
-            .logging_prefix_stderr
-            .clone()
-            .unwrap_or_else(|| format!("stderr [{req_id}] :: "));
         builder.stderr(LogStream::new(stderr_prefix, Output::Stderr));
 
         let mut host = Host {
