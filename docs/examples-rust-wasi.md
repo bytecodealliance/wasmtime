@@ -1,4 +1,4 @@
-# WASI (Preview 2)
+# WASIp2
 
 You can also [browse this source code online][code] and clone the wasmtime
 repository to run the example locally.
@@ -14,7 +14,7 @@ WebAssembly module.
 
 ## WebAssembly Component Source Code
 
-For this WASI example, this Hello World program is compiled to a WebAssembly module using the WASI Preview 2 (WASIp2) API.
+For this WASI example, this Hello World program is compiled to a WebAssembly module using the WASIp2 API.
 
 `wasi.rs`
 ```rust
@@ -40,9 +40,9 @@ This example shows adding and configuring the WASI imports to invoke the above W
 ### Async example
 
 This [async example code][code2] shows how to use the [wasmtime-wasi][`wasmtime-wasi`] module to
-execute the same WASI Preview 2 WebAssembly component from the example above. This example requires the `wasmtime` crate `async` feature to be enabled.
+execute the same WASIp2 component from the example above. This example requires the `wasmtime` crate `async` feature to be enabled.
 
-This does not require any change to the WebAssembly module, it's just the WASI API host functions which are implemented to be async. See [wasmtime async support](https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.async_support).
+This does not require any change to the WASIp2 component, it's just the WASIp2 API host functions which are implemented to be async. See [wasmtime async support](https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.async_support).
 
 [code2]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/wasi-async/main.rs
 [`wasmtime-wasi`]: https://docs.rs/wasmtime-wasi/*/wasmtime_wasi/preview2/index.html
