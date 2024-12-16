@@ -190,6 +190,11 @@ macro_rules! for_each_op {
             /// `dst = src1 * src2`
             xmul64 = XMul64 { operands: BinaryOperands<XReg> };
 
+            /// `dst = high64(src1 * src2)` (signed)
+            xmulhi64_s = XMulHi64S { operands: BinaryOperands<XReg> };
+            /// `dst = high64(src1 * src2)` (unsigned)
+            xmulhi64_u = XMulHi64U { operands: BinaryOperands<XReg> };
+
             /// `low32(dst) = trailing_zeros(low32(src))`
             xctz32 = Xctz32 { dst: XReg, src: XReg };
             /// `dst = trailing_zeros(src)`

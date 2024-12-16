@@ -8,6 +8,10 @@ target x86_64 has_sse3 has_ssse3 has_sse41
 target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
 target riscv64
 target riscv64 has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 
 function %smulhi_i8(i8, i8) -> i8 {

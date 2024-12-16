@@ -167,6 +167,34 @@
 (rule (lower (has_type $I32 (imul a b))) (pulley_xmul32 a b))
 (rule (lower (has_type $I64 (imul a b))) (pulley_xmul64 a b))
 
+;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I8 (umulhi a b)))
+  (pulley_xshr32_u (pulley_xmul32 (zext32 a) (zext32 b)) (pulley_xconst8 8)))
+
+(rule (lower (has_type $I16 (umulhi a b)))
+  (pulley_xshr32_u (pulley_xmul32 (zext32 a) (zext32 b)) (pulley_xconst8 16)))
+
+(rule (lower (has_type $I32 (umulhi a b)))
+  (pulley_xshr64_u (pulley_xmul64 (zext64 a) (zext64 b)) (pulley_xconst8 32)))
+
+(rule (lower (has_type $I64 (umulhi a b)))
+  (pulley_xmulhi64_u a b))
+
+;;;; Rules for `smulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I8 (smulhi a b)))
+  (pulley_xshr32_s (pulley_xmul32 (sext32 a) (sext32 b)) (pulley_xconst8 8)))
+
+(rule (lower (has_type $I16 (smulhi a b)))
+  (pulley_xshr32_s (pulley_xmul32 (sext32 a) (sext32 b)) (pulley_xconst8 16)))
+
+(rule (lower (has_type $I32 (smulhi a b)))
+  (pulley_xshr64_s (pulley_xmul64 (sext64 a) (sext64 b)) (pulley_xconst8 32)))
+
+(rule (lower (has_type $I64 (smulhi a b)))
+  (pulley_xmulhi64_s a b))
+
 ;;;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (has_type (fits_in_32 _) (sdiv a b)))
