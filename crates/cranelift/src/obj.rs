@@ -237,17 +237,15 @@ impl<'a> ModuleTextBuilder<'a> {
                 //
                 // See the `test_call_indirect_host_width` in
                 // `pulley/tests/all.rs` for this guarantee as well.
-                #[cfg(feature = "pulley")]
                 RelocationTarget::PulleyHostcall(n) => {
-                    use pulley_interpreter::encode::Encode;
-
-                    assert_eq!(pulley_interpreter::CallIndirectHost::WIDTH, 4);
+                    #[cfg(feature = "pulley")]
+                    {
+                        use pulley_interpreter::encode::Encode;
+                        assert_eq!(pulley_interpreter::CallIndirectHost::WIDTH, 4);
+                    }
                     let byte = u8::try_from(n).unwrap();
                     self.text.write(reloc_offset + 3, &[byte]);
                 }
-
-                #[cfg(not(feature = "pulley"))]
-                RelocationTarget::PulleyHostcall(_) => unreachable!(),
             };
         }
         (symbol_id, off..off + body_len)
