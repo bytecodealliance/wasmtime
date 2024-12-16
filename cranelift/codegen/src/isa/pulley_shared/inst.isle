@@ -53,6 +53,12 @@
     ;; An indirect call to an unknown callee.
     (IndirectCall (info BoxCallIndInfo))
 
+    ;; A direct return-call macro instruction.
+    (ReturnCall (info BoxReturnCallInfo))
+
+    ;; An indirect return-call macro instruction.
+    (ReturnIndirectCall (info BoxReturnCallIndInfo))
+
     ;; An indirect call out to a host-defined function. The host function
     ;; pointer is the first "argument" of this function call.
     (IndirectCallHost (info BoxCallInfo))
@@ -125,6 +131,8 @@
 
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
+(type BoxReturnCallInfo (primitive BoxReturnCallInfo))
+(type BoxReturnCallIndInfo (primitive BoxReturnCallIndInfo))
 
 ;;;; Address Modes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

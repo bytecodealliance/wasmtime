@@ -611,12 +611,45 @@ where
     P: PulleyTargetKind,
 {
     pub fn emit_return_call(
-        self,
-        _ctx: &mut Lower<InstAndKind<P>>,
-        _args: isle::ValueSlice,
+        mut self,
+        ctx: &mut Lower<InstAndKind<P>>,
+        args: isle::ValueSlice,
         _backend: &PulleyBackend<P>,
     ) {
-        todo!()
+        let new_stack_arg_size =
+            u32::try_from(self.sig(ctx.sigs()).sized_stack_arg_space()).unwrap();
+
+        ctx.abi_mut().accumulate_tail_args_size(new_stack_arg_size);
+
+        // Put all arguments in registers and stack slots (within that newly
+        // allocated stack space).
+        self.emit_args(ctx, args);
+        self.emit_stack_ret_arg_for_tail_call(ctx);
+
+        let dest = self.dest().clone();
+        let uses = self.take_uses();
+
+        match dest {
+            CallDest::ExtName(name, RelocDistance::Near) => {
+                let info = Box::new(ReturnCallInfo {
+                    dest: name,
+                    uses,
+                    new_stack_arg_size,
+                });
+                ctx.emit(Inst::ReturnCall { info }.into());
+            }
+            CallDest::ExtName(_name, RelocDistance::Far) => {
+                unimplemented!("return-call of a host function")
+            }
+            CallDest::Reg(callee) => {
+                let info = Box::new(ReturnCallInfo {
+                    dest: XReg::new(callee).unwrap(),
+                    uses,
+                    new_stack_arg_size,
+                });
+                ctx.emit(Inst::ReturnIndirectCall { info }.into());
+            }
+        }
     }
 }
 

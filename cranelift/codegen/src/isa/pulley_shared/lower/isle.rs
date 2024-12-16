@@ -9,7 +9,9 @@ use inst::InstAndKind;
 use crate::ir::{condcodes::*, immediates::*, types::*, *};
 use crate::isa::pulley_shared::{
     abi::*,
-    inst::{FReg, OperandSize, VReg, WritableFReg, WritableVReg, WritableXReg, XReg},
+    inst::{
+        FReg, OperandSize, ReturnCallInfo, VReg, WritableFReg, WritableVReg, WritableXReg, XReg,
+    },
     lower::{regs, Cond},
     *,
 };
@@ -25,6 +27,8 @@ type VecArgPair = Vec<ArgPair>;
 type VecRetPair = Vec<RetPair>;
 type BoxCallInfo = Box<CallInfo<ExternalName>>;
 type BoxCallIndInfo = Box<CallInfo<XReg>>;
+type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
+type BoxReturnCallIndInfo = Box<ReturnCallInfo<XReg>>;
 type BoxExternalName = Box<ExternalName>;
 
 pub(crate) struct PulleyIsleContext<'a, 'b, I, B>

@@ -41,6 +41,20 @@ mod generated {
     include!(concat!(env!("OUT_DIR"), "/pulley_inst_gen.rs"));
 }
 
+/// Out-of-line data for return-calls, to keep the size of `Inst` down.
+#[derive(Clone, Debug)]
+pub struct ReturnCallInfo<T> {
+    /// Where this call is going.
+    pub dest: T,
+
+    /// The size of the argument area for this return-call, potentially smaller
+    /// than that of the caller, but never larger.
+    pub new_stack_arg_size: u32,
+
+    /// The in-register arguments and their constraints.
+    pub uses: CallArgList,
+}
+
 impl Inst {
     /// Generic constructor for a load (zero-extending where appropriate).
     pub fn gen_load(dst: Writable<Reg>, mem: Amode, ty: Type, flags: MemFlags) -> Inst {
@@ -153,6 +167,18 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
                 collector.reg_fixed_def(vreg, *preg);
             }
             collector.reg_clobbers(info.clobbers);
+        }
+        Inst::ReturnCall { info } => {
+            for CallArgPair { vreg, preg } in &mut info.uses {
+                collector.reg_fixed_use(vreg, *preg);
+            }
+        }
+        Inst::ReturnIndirectCall { info } => {
+            collector.reg_use(&mut info.dest);
+
+            for CallArgPair { vreg, preg } in &mut info.uses {
+                collector.reg_fixed_use(vreg, *preg);
+            }
         }
 
         Inst::Jump { .. } => {}
@@ -381,6 +407,7 @@ where
             Inst::Jump { .. } => MachTerminator::Uncond,
             Inst::BrIf { .. } => MachTerminator::Cond,
             Inst::BrTable { .. } => MachTerminator::Indirect,
+            Inst::ReturnCall { .. } | Inst::ReturnIndirectCall { .. } => MachTerminator::Indirect,
             _ => MachTerminator::None,
         }
     }
@@ -572,6 +599,15 @@ impl Inst {
             Inst::IndirectCall { info } => {
                 let callee = format_reg(*info.dest);
                 format!("indirect_call {callee}, {info:?}")
+            }
+
+            Inst::ReturnCall { info } => {
+                format!("return_call {info:?}")
+            }
+
+            Inst::ReturnIndirectCall { info } => {
+                let callee = format_reg(*info.dest);
+                format!("return_indirect_call {callee}, {info:?}")
             }
 
             Inst::IndirectCallHost { info } => {

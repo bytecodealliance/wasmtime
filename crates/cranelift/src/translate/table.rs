@@ -82,8 +82,10 @@ impl TableData {
         }
 
         // Convert `index` to `addr_ty`.
-        if index_ty != addr_ty {
+        if addr_ty.bytes() > index_ty.bytes() {
             index = pos.ins().uextend(addr_ty, index);
+        } else if addr_ty.bytes() < index_ty.bytes() {
+            index = pos.ins().ireduce(addr_ty, index);
         }
 
         // Add the table base address base
