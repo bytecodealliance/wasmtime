@@ -308,7 +308,7 @@ impl Compiler {
                 // support at this time (pulley is a work-in-progress) and so
                 // individual tests are listed below as "should fail" even if
                 // they're not covered in this list.
-                if config.tail_call() || config.wide_arithmetic() {
+                if config.wide_arithmetic() {
                     return true;
                 }
             }
@@ -424,6 +424,15 @@ impl WastTest {
                 "spec_testsuite/proposals/relaxed-simd/relaxed_laneselect.wast",
                 "spec_testsuite/proposals/relaxed-simd/relaxed_madd_nmadd.wast",
                 "spec_testsuite/proposals/relaxed-simd/relaxed_min_max.wast",
+                "spec_testsuite/proposals/memory64/simd_lane.wast",
+                "spec_testsuite/proposals/memory64/simd_memory-multi.wast",
+                "spec_testsuite/proposals/memory64/relaxed_min_max.wast",
+                "spec_testsuite/proposals/memory64/relaxed_madd_nmadd.wast",
+                "spec_testsuite/proposals/memory64/relaxed_laneselect.wast",
+                "spec_testsuite/proposals/memory64/relaxed_dot_product.wast",
+                "spec_testsuite/proposals/memory64/i16x8_relaxed_q15mulr_s.wast",
+                "spec_testsuite/proposals/memory64/i32x4_relaxed_trunc.wast",
+                "spec_testsuite/proposals/memory64/i8x16_relaxed_swizzle.wast",
                 "spec_testsuite/simd_align.wast",
                 "spec_testsuite/simd_bitwise.wast",
                 "spec_testsuite/simd_boolean.wast",

@@ -190,6 +190,29 @@ fn pulley_emit<P>(
             }
         }
 
+        Inst::ReturnCall { info } => {
+            emit_return_call_common_sequence(sink, emit_info, state, &info);
+
+            // Emit an unconditional jump which is quite similar to `Inst::Call`
+            // except that a `jump` opcode is used instead of a `call` opcode.
+            sink.put1(pulley_interpreter::Opcode::Jump as u8);
+            sink.add_reloc(Reloc::X86CallPCRel4, &info.dest, -1);
+            sink.put4(0);
+
+            // Islands were manually handled in
+            // `emit_return_call_common_sequence`.
+            *start_offset = sink.cur_offset();
+        }
+
+        Inst::ReturnIndirectCall { info } => {
+            emit_return_call_common_sequence(sink, emit_info, state, &info);
+            enc::xjump(sink, info.dest);
+
+            // Islands were manually handled in
+            // `emit_return_call_common_sequence`.
+            *start_offset = sink.cur_offset();
+        }
+
         Inst::IndirectCallHost { info } => {
             // Emit a relocation to fill in the actual immediate argument here
             // in `call_indirect_host`.
@@ -493,6 +516,110 @@ fn pulley_emit<P>(
                 _ => {}
             }
             super::generated::emit(raw, sink)
+        }
+    }
+}
+
+fn emit_return_call_common_sequence<T, P>(
+    sink: &mut MachBuffer<InstAndKind<P>>,
+    emit_info: &EmitInfo,
+    state: &mut EmitState<P>,
+    info: &ReturnCallInfo<T>,
+) where
+    P: PulleyTargetKind,
+{
+    // The return call sequence can potentially emit a lot of instructions, so
+    // lets emit an island here if we need it.
+    //
+    // It is difficult to calculate exactly how many instructions are going to
+    // be emitted, so we calculate it by emitting it into a disposable buffer,
+    // and then checking how many instructions were actually emitted.
+    let mut buffer = MachBuffer::new();
+    let mut fake_emit_state = state.clone();
+
+    return_call_emit_impl(&mut buffer, emit_info, &mut fake_emit_state, info);
+
+    // Finalize the buffer and get the number of bytes emitted.
+    let buffer = buffer.finish(&Default::default(), &mut Default::default());
+    let length = buffer.data().len() as u32;
+
+    // And now emit the island inline with this instruction.
+    if sink.island_needed(length) {
+        let jump_around_label = sink.get_label();
+        <InstAndKind<P>>::gen_jump(jump_around_label).emit(sink, emit_info, state);
+        sink.emit_island(length + 4, &mut state.ctrl_plane);
+        sink.bind_label(jump_around_label, &mut state.ctrl_plane);
+    }
+
+    // Now that we're done, emit the *actual* return sequence.
+    return_call_emit_impl(sink, emit_info, state, info);
+}
+
+/// This should not be called directly, Instead prefer to call [emit_return_call_common_sequence].
+fn return_call_emit_impl<T, P>(
+    sink: &mut MachBuffer<InstAndKind<P>>,
+    emit_info: &EmitInfo,
+    state: &mut EmitState<P>,
+    info: &ReturnCallInfo<T>,
+) where
+    P: PulleyTargetKind,
+{
+    let sp_to_fp_offset = {
+        let frame_layout = state.frame_layout();
+        i64::from(
+            frame_layout.clobber_size
+                + frame_layout.fixed_frame_storage_size
+                + frame_layout.outgoing_args_size,
+        )
+    };
+
+    // Restore all clobbered registers before leaving the function.
+    let mut clobber_offset = sp_to_fp_offset - 8;
+    for reg in state.frame_layout().clobbered_callee_saves.clone() {
+        let rreg = reg.to_reg();
+        let ty = match rreg.class() {
+            RegClass::Int => I64,
+            RegClass::Float => F64,
+            RegClass::Vector => unimplemented!("Vector Clobber Restores"),
+        };
+
+        <InstAndKind<P>>::from(Inst::gen_load(
+            reg.map(Reg::from),
+            Amode::SpOffset {
+                offset: clobber_offset.try_into().unwrap(),
+            },
+            ty,
+            MemFlags::trusted(),
+        ))
+        .emit(sink, emit_info, state);
+
+        clobber_offset -= 8
+    }
+
+    // Restore the link register and frame pointer using a `pop_frame`
+    // instruction. This will move `sp` to the current frame pointer and then
+    // restore the old lr/fp, so this restores all of sp/fp/lr in one
+    // instruction.
+    let setup_area_size = i64::from(state.frame_layout().setup_area_size);
+    assert!(setup_area_size > 0, "must have frame pointers enabled");
+    <InstAndKind<P>>::from(RawInst::PopFrame).emit(sink, emit_info, state);
+
+    // Now that `sp` is restored to what it was on function entry it may need to
+    // be adjusted if the stack arguments of our own function differ from the
+    // stack arguments of the callee. Perform any necessary adjustment here.
+    //
+    // Note that this means that there's a brief window where stack arguments
+    // might be below `sp` in the case that the callee has more stack arguments
+    // than ourselves. That's in theory ok though as we're inventing the pulley
+    // ABI and nothing like async signals are happening that we have to worry
+    // about.
+    let incoming_args_diff =
+        i64::from(state.frame_layout().tail_args_size - info.new_stack_arg_size);
+
+    if incoming_args_diff != 0 {
+        let amt = i32::try_from(incoming_args_diff).unwrap();
+        for inst in PulleyMachineDeps::<P>::gen_sp_reg_adjust(amt) {
+            <InstAndKind<P>>::from(inst).emit(sink, emit_info, state);
         }
     }
 }

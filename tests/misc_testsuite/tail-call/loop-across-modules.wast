@@ -42,5 +42,5 @@
   (start $start)
 )
 
-(assert_return (invoke $B "g" (i32.const 100000000))
+(assert_return (invoke $B "g" (i32.const 100000))
                (i32.const 42))

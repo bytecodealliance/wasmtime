@@ -101,6 +101,10 @@ macro_rules! for_each_op {
             /// Unconditionally transfer control to the PC at the given offset.
             jump = Jump { offset: PcRelOffset };
 
+            /// Unconditionally transfer control to the PC at specified
+            /// register.
+            xjump = XJump { reg: XReg };
+
             /// Conditionally transfer control to the given PC offset if
             /// `low32(cond)` contains a non-zero value.
             br_if32 = BrIf { cond: XReg, offset: PcRelOffset };

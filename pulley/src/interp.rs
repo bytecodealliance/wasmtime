@@ -1066,6 +1066,13 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xjump(&mut self, reg: XReg) -> ControlFlow<Done> {
+        unsafe {
+            self.pc = UnsafeBytecodeStream::new(NonNull::new_unchecked(self.state[reg].get_ptr()));
+        }
+        ControlFlow::Continue(())
+    }
+
     fn br_if32(&mut self, cond: XReg, offset: PcRelOffset) -> ControlFlow<Done> {
         let cond = self.state[cond].get_u32();
         if cond != 0 {

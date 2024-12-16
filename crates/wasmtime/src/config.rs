@@ -1963,12 +1963,8 @@ impl Config {
                 // Pulley at this time fundamentally doesn't support the
                 // `threads` proposal, notably shared memory, because Rust can't
                 // safely implement loads/stores in the face of shared memory.
-                //
-                // Additionally pulley currently panics on tail-call generation
-                // in Cranelift ABI call which will get implemented in the
-                // future but is listed here for now as unsupported.
                 if self.compiler_target().is_pulley() {
-                    return WasmFeatures::TAIL_CALL | WasmFeatures::THREADS;
+                    return WasmFeatures::THREADS;
                 }
 
                 // Other Cranelift backends are either 100% missing or complete
