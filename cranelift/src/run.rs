@@ -126,6 +126,7 @@ fn create_target_isa(isa_spec: &IsaSpec) -> Result<OwnedTargetIsa> {
 }
 
 #[cfg(test)]
+#[cfg(target_pointer_width = "64")] // 32-bit platforms not supported yet
 mod test {
     use super::*;
 

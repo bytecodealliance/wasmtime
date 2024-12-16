@@ -583,7 +583,7 @@ impl<T> Store<T> {
                 #[cfg(feature = "component-model")]
                 host_resource_data: Default::default(),
                 interpreter: if cfg!(feature = "pulley") && engine.target().is_pulley() {
-                    Some(Interpreter::new())
+                    Some(Interpreter::new(engine))
                 } else {
                     None
                 },

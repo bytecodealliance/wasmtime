@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use crate::runtime::vm::vmcontext::VMArrayCallNative;
 use crate::runtime::vm::{tls, TrapRegisters, TrapTest, VMContext, VMOpaqueContext};
-use crate::ValRaw;
+use crate::{Engine, ValRaw};
 use core::ptr::NonNull;
 use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
 use pulley_interpreter::{Reg, XReg};
@@ -18,9 +18,9 @@ pub struct Interpreter {
 
 impl Interpreter {
     /// Creates a new interpreter ready to interpret code.
-    pub fn new() -> Interpreter {
+    pub fn new(engine: &Engine) -> Interpreter {
         Interpreter {
-            pulley: Box::new(Vm::new()),
+            pulley: Box::new(Vm::with_stack(vec![0; engine.config().max_wasm_stack])),
         }
     }
 
@@ -63,7 +63,6 @@ impl InterpreterRef<'_> {
             XRegVal::new_ptr(args_and_results.cast::<u8>()).into(),
             XRegVal::new_u64(args_and_results.len() as u64).into(),
         ];
-        self.0.call_start(&args);
 
         // Fake a "poor man's setjmp" for now by saving some critical context to
         // get restored when a trap happens. This pseudo-implements the stack
@@ -77,6 +76,8 @@ impl InterpreterRef<'_> {
             lr: self.0.lr(),
         };
 
+        let old_lr = self.0.call_start(&args);
+
         // Run the interpreter as much as possible until it finishes, and then
         // handle each finish condition differently.
         let ret = loop {
@@ -84,7 +85,7 @@ impl InterpreterRef<'_> {
                 // If the VM returned entirely then read the return value and
                 // return that (it indicates whether a trap happened or not.
                 DoneReason::ReturnToHost(()) => {
-                    match self.0.call_end([RegType::XReg]).next().unwrap() {
+                    match self.0.call_end(old_lr, [RegType::XReg]).next().unwrap() {
                         #[allow(
                             clippy::cast_possible_truncation,
                             reason = "intentionally reading the lower bits only"

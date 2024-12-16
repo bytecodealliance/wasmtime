@@ -34,28 +34,33 @@ fn build_host_isa(
     infer_native_flags: bool,
     flags: settings::Flags,
     isa_flags: Vec<settings::Value>,
-) -> OwnedTargetIsa {
+) -> anyhow::Result<OwnedTargetIsa> {
     let mut builder = cranelift_native::builder_with_options(infer_native_flags)
-        .expect("Unable to build a TargetIsa for the current host");
+        .map_err(|e| anyhow::Error::msg(e))?;
 
     // Copy ISA Flags
     for value in isa_flags {
-        builder.set(value.name, &value.value_string()).unwrap();
+        builder.set(value.name, &value.value_string())?;
     }
 
-    builder.finish(flags).unwrap()
+    let isa = builder.finish(flags)?;
+    Ok(isa)
 }
 
 /// Checks if the host's ISA is compatible with the one requested by the test.
 fn is_isa_compatible(
     file_path: &str,
-    host: &dyn TargetIsa,
+    host: &anyhow::Result<OwnedTargetIsa>,
     requested: &dyn TargetIsa,
 ) -> Result<(), String> {
+    let host_triple = match host {
+        Ok(host) => host.triple().clone(),
+        Err(_) => target_lexicon::Triple::host(),
+    };
     // If this test requests to run on a completely different
     // architecture than the host platform then we skip it entirely,
     // since we won't be able to natively execute machine code.
-    let host_arch = host.triple().architecture;
+    let host_arch = host_triple.architecture;
     let requested_arch = requested.triple().architecture;
 
     match (host_arch, requested_arch) {
@@ -73,8 +78,8 @@ fn is_isa_compatible(
             | Architecture::Pulley64
             | Architecture::Pulley32be
             | Architecture::Pulley64be,
-        ) if host.triple().pointer_width() == requested.triple().pointer_width()
-            && host.triple().endianness() == requested.triple().endianness() => {}
+        ) if host_triple.pointer_width() == requested.triple().pointer_width()
+            && host_triple.endianness() == requested.triple().endianness() => {}
 
         _ => {
             return Err(format!(
@@ -95,8 +100,11 @@ fn is_isa_compatible(
             Some(requested) => requested,
             None => unimplemented!("ISA flag {} of kind {:?}", req_value.name, req_value.kind()),
         };
-        let available_in_host = host
-            .isa_flags()
+        let host_isa_flags = match host {
+            Ok(host) => host.isa_flags(),
+            Err(e) => return Err(format!("{e:?}")),
+        };
+        let available_in_host = host_isa_flags
             .iter()
             .find(|val| val.name == req_value.name)
             .and_then(|val| val.as_bool())
@@ -153,7 +161,7 @@ fn compile_testfile(
         // about the operating system / calling convention / etc..
         //
         // Copy the requested ISA flags into the host ISA and use that.
-        _ => build_host_isa(false, flags.clone(), isa.isa_flags()),
+        _ => build_host_isa(false, flags.clone(), isa.isa_flags()).unwrap(),
     };
 
     let mut tfc = TestFileCompiler::new(isa);
@@ -222,7 +230,7 @@ impl SubTest for TestRun {
 
         // Check that the host machine can run this test case (i.e. has all extensions)
         let host_isa = build_host_isa(true, flags.clone(), vec![]);
-        if let Err(e) = is_isa_compatible(file_path, host_isa.as_ref(), isa.unwrap()) {
+        if let Err(e) = is_isa_compatible(file_path, &host_isa, isa.unwrap()) {
             log::info!("{}", e);
             return Ok(());
         }

@@ -79,10 +79,10 @@ impl Vm {
         args: &[Val],
         rets: impl IntoIterator<Item = RegType> + 'a,
     ) -> DoneReason<impl Iterator<Item = Val> + 'a> {
-        self.call_start(args);
+        let lr = self.call_start(args);
 
         match self.call_run(func) {
-            DoneReason::ReturnToHost(()) => DoneReason::ReturnToHost(self.call_end(rets)),
+            DoneReason::ReturnToHost(()) => DoneReason::ReturnToHost(self.call_end(lr, rets)),
             DoneReason::Trap { pc, kind } => DoneReason::Trap { pc, kind },
             DoneReason::CallIndirectHost { id, resume } => {
                 DoneReason::CallIndirectHost { id, resume }
@@ -93,13 +93,18 @@ impl Vm {
     /// Peforms the initial part of [`Vm::call`] in setting up the `args`
     /// provided in registers according to Pulley's ABI.
     ///
+    /// # Return
+    ///
+    /// Returns the old `lr` register value. The current `lr` value is replaced
+    /// with a sentinel that triggers a return to the host when returned-to.
+    ///
     /// # Unsafety
     ///
     /// All the same unsafety as `call` and additiionally, you must
     /// invoke `call_run` and then `call_end` after calling `call_start`.
     /// If you don't want to wrangle these invocations, use `call` instead
     /// of `call_{start,run,end}`.
-    pub unsafe fn call_start<'a>(&'a mut self, args: &[Val]) {
+    pub unsafe fn call_start<'a>(&'a mut self, args: &[Val]) -> *mut u8 {
         // NB: make sure this method stays in sync with
         // `PulleyMachineDeps::compute_arg_locs`!
 
@@ -123,6 +128,8 @@ impl Vm {
                 },
             }
         }
+
+        mem::replace(&mut self.state.lr, HOST_RETURN_ADDR)
     }
 
     /// Peforms the internal part of [`Vm::call`] where bytecode is actually
@@ -146,14 +153,19 @@ impl Vm {
     /// Peforms the tail end of [`Vm::call`] by returning the values as
     /// determined by `rets` according to Pulley's ABI.
     ///
+    /// The `old_ret` value should have been provided from `call_start`
+    /// previously.
+    ///
     /// # Unsafety
     ///
     /// In addition to the invariants documented for `call`, this may
     /// only be called after `call_run`.
     pub unsafe fn call_end<'a>(
         &'a mut self,
+        old_ret: *mut u8,
         rets: impl IntoIterator<Item = RegType> + 'a,
     ) -> impl Iterator<Item = Val> + 'a {
+        self.state.lr = old_ret;
         // NB: make sure this method stays in sync with
         // `PulleyMachineDeps::compute_arg_locs`!
 
