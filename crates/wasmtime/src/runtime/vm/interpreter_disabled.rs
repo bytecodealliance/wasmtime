@@ -6,7 +6,7 @@
 
 use crate::runtime::vm::VMOpaqueContext;
 use crate::runtime::Uninhabited;
-use crate::ValRaw;
+use crate::{Engine, ValRaw};
 use core::marker;
 use core::mem;
 use core::ptr::NonNull;
@@ -19,7 +19,7 @@ const _: () = assert!(mem::size_of::<Interpreter>() == 0);
 const _: () = assert!(mem::size_of::<Option<Interpreter>>() == 0);
 
 impl Interpreter {
-    pub fn new() -> Interpreter {
+    pub fn new(_engine: &Engine) -> Interpreter {
         unreachable!()
     }
 

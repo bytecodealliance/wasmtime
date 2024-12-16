@@ -187,8 +187,8 @@ impl Disas for u128 {
 
 impl Disas for PcRelOffset {
     fn disas(&self, position: usize, disas: &mut String) {
-        let offset = isize::try_from(i32::from(*self)).unwrap();
-        let target = position.wrapping_add(offset as usize);
+        let offset = i64::from(i32::from(*self));
+        let target = (position as u64).wrapping_add(offset as u64);
         write!(disas, "{offset:#x}    // target = {target:#x}").unwrap()
     }
 }

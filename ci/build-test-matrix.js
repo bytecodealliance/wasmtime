@@ -30,15 +30,6 @@ const FAST_MATRIX = [
   },
 ];
 
-// Returns whether the given package supports a 32-bit architecture, used when
-// testing on i686 and armv7 below.
-function supports32Bit(pkg) {
-  if (pkg.indexOf("pulley") !== -1)
-    return true;
-
-  return pkg == 'wasmtime-fiber' || pkg == 'wasmtime';
-}
-
 // This is the full, unsharded, and unfiltered matrix of what we test on
 // CI. This includes a number of platforms and a number of cross-compiled
 // targets that are emulated with QEMU. This must be kept tightly in sync with
@@ -138,7 +129,6 @@ const FULL_MATRIX = [
   },
   {
     "name": "Tests on i686-unknown-linux-gnu",
-    "32-bit": true,
     "os": ubuntu,
     "target": "i686-unknown-linux-gnu",
     "gcc_package": "gcc-i686-linux-gnu",
@@ -146,7 +136,6 @@ const FULL_MATRIX = [
   },
   {
     "name": "Tests on armv7-unknown-linux-gnueabihf",
-    "32-bit": true,
     "os": ubuntu,
     "target": "armv7-unknown-linux-gnueabihf",
     "gcc_package": "gcc-arm-linux-gnueabihf",
@@ -230,29 +219,6 @@ async function shard(configs) {
   // created above.
   const sharded = [];
   for (const config of configs) {
-    // Special case 32-bit configs. Only some crates, according to
-    // `supports32Bit`, run on this target. At this time the set of supported
-    // crates is small enough that they're not sharded. A second shard, however,
-    // is included which runs `--test wast` to run the full `*.wast` test suite
-    // in CI on 32-bit platforms, at this time effectively testing Pulley.
-    if (config["32-bit"] === true) {
-      sharded.push(Object.assign(
-        {},
-        config,
-        {
-          bucket: members
-            .map(c => supports32Bit(c) ? `--package ${c}` : `--exclude ${c}`)
-            .join(" "),
-        }
-      ));
-      sharded.push(Object.assign(
-        {},
-        config,
-        { bucket: '--test wast' },
-      ));
-      continue;
-    }
-
     for (const bucket of buckets) {
       sharded.push(Object.assign(
         {},
@@ -308,16 +274,6 @@ async function main() {
     // target any backend.
     if (names.includes(`cranelift/filetests/filetests/runtests`)) {
       if (config.isa !== undefined)
-        return true;
-    }
-
-    // For matrix entries that represent 32-bit only some crates support that,
-    // so whenever the crates are changed be sure to run 32-bit tests on PRs
-    // too.
-    if (config["32-bit"] === true) {
-      if (names.includes("pulley"))
-        return true;
-      if (names.includes("fiber"))
         return true;
     }
 

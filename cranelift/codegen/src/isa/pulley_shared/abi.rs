@@ -481,15 +481,19 @@ where
             }
             // "far" calls are pulley->host calls so they use a different opcode
             // which is lowered with a special relocation in the backend.
-            CallDest::ExtName(name, RelocDistance::Far) => smallvec![Inst::IndirectCallHost {
-                info: Box::new(info.map(|()| name.clone()))
+            CallDest::ExtName(name, RelocDistance::Far) => {
+                smallvec![Inst::IndirectCallHost {
+                    info: Box::new(info.map(|()| name.clone()))
+                }
+                .into()]
             }
-            .into()],
             // Indirect calls are all assumed to be pulley->pulley calls
-            CallDest::Reg(reg) => smallvec![Inst::IndirectCall {
-                info: Box::new(info.map(|()| XReg::new(*reg).unwrap()))
+            CallDest::Reg(reg) => {
+                smallvec![Inst::IndirectCall {
+                    info: Box::new(info.map(|()| XReg::new(*reg).unwrap()))
+                }
+                .into()]
             }
-            .into()],
         }
     }
 

@@ -615,8 +615,12 @@ where
         // In the defined case, mask the funcref address in place, by peeking into the
         // last element of the value stack, which was pushed by the `indirect` function
         // call above.
+        //
+        // Note that `FUNCREF_MASK` as type `usize` but here we want a 64-bit
+        // value so assert its actual value and then use a `-2` literal.
         self.masm.bind(defined)?;
-        let imm = RegImm::i64(FUNCREF_MASK as i64);
+        assert_eq!(FUNCREF_MASK as isize, -2);
+        let imm = RegImm::i64(-2);
         let dst = top.into();
         self.masm
             .and(writable!(dst), dst, imm, top.ty.try_into()?)?;

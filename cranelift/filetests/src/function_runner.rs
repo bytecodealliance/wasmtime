@@ -611,6 +611,7 @@ extern "C" fn __cranelift_x86_pshufb(a: __m128i, b: __m128i) -> __m128i {
 }
 
 #[cfg(test)]
+#[cfg(target_pointer_width = "64")] // 32-bit platforms not supported at this time
 mod test {
     use super::*;
     use cranelift_reader::{parse_functions, parse_test, ParseOptions};

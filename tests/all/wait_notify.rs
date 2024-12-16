@@ -1,5 +1,6 @@
 #![cfg(not(miri))]
 
+use crate::threads::engine;
 use std::time::Instant;
 use wasmtime::*;
 
@@ -17,9 +18,9 @@ fn atomic_wait_timeout_length() -> Result<()> {
         (data (i32.const 0) "\00\00\00\00")
     )"#
     );
-    let mut config = Config::new();
-    config.wasm_threads(true);
-    let engine = Engine::new(&config)?;
+    let Some(engine) = engine() else {
+        return Ok(());
+    };
     let module = Module::new(&engine, wat)?;
     let mut store = Store::new(&engine, ());
     let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 1))?;
@@ -61,9 +62,9 @@ fn atomic_wait_notify_basic() -> Result<()> {
         (data (i32.const 0) "\00\00\00\00")
         (data (i32.const 4) "\00\00\00\00")
     )"#;
-    let mut config = Config::new();
-    config.wasm_threads(true);
-    let engine = Engine::new(&config)?;
+    let Some(engine) = engine() else {
+        return Ok(());
+    };
     let module = Module::new(&engine, wat)?;
     let mut store = Store::new(&engine, ());
     let shared_memory = SharedMemory::new(&engine, MemoryType::shared(1, 1))?;

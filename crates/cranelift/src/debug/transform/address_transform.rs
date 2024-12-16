@@ -491,6 +491,7 @@ impl AddressTransform {
     }
 
     #[cfg(test)]
+    #[cfg(target_pointer_width = "64")]
     pub fn mock(
         module_map: &wasmtime_environ::PrimaryMap<
             wasmtime_environ::DefinedFuncIndex,
@@ -660,6 +661,8 @@ impl AddressTransform {
 }
 
 #[cfg(test)]
+#[cfg(target_pointer_width = "64")] // cranelift doesn't support native 32-bit
+                                    // platforms
 mod tests {
     use super::{build_function_lookup, get_wasm_code_offset, AddressTransform};
     use crate::{CompiledFunctionMetadata, FunctionAddressMap};

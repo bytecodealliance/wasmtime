@@ -868,6 +868,7 @@ fn total_component_instances_limit() -> Result<()> {
 
 #[test]
 #[cfg(feature = "component-model")]
+#[cfg(target_pointer_width = "64")] // error message tailored for 64-bit
 fn component_instance_size_limit() -> Result<()> {
     let mut pool = crate::small_pool_config();
     pool.max_component_instance_size(1);
@@ -1260,6 +1261,10 @@ fn tricky_empty_table_with_empty_virtual_memory_alloc() -> Result<()> {
 #[test]
 #[cfg_attr(miri, ignore)]
 fn shared_memory_unsupported() -> Result<()> {
+    // Skip this test on platforms that don't support threads.
+    if crate::threads::engine().is_none() {
+        return Ok(());
+    }
     let mut config = Config::new();
     let mut cfg = PoolingAllocationConfig::default();
     // shrink the size of this allocator
@@ -1292,7 +1297,7 @@ fn shared_memory_unsupported() -> Result<()> {
 fn custom_page_sizes_reusing_same_slot() -> Result<()> {
     let mut config = Config::new();
     config.wasm_custom_page_sizes(true);
-    let mut cfg = PoolingAllocationConfig::default();
+    let mut cfg = crate::small_pool_config();
     // force the memories below to collide in the same memory slot
     cfg.total_memories(1);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(cfg));
@@ -1338,7 +1343,7 @@ fn custom_page_sizes_reusing_same_slot() -> Result<()> {
 fn instantiate_non_page_aligned_sizes() -> Result<()> {
     let mut config = Config::new();
     config.wasm_custom_page_sizes(true);
-    let mut cfg = PoolingAllocationConfig::default();
+    let mut cfg = crate::small_pool_config();
     cfg.total_memories(1);
     cfg.max_memory_size(761927);
     config.allocation_strategy(InstanceAllocationStrategy::Pooling(cfg));

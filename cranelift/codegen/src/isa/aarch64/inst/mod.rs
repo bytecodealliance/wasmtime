@@ -3051,6 +3051,11 @@ mod tests {
     fn inst_size_test() {
         // This test will help with unintentionally growing the size
         // of the Inst enum.
-        assert_eq!(32, std::mem::size_of::<Inst>());
+        let expected = if cfg!(target_pointer_width = "32") {
+            28
+        } else {
+            32
+        };
+        assert_eq!(expected, std::mem::size_of::<Inst>());
     }
 }

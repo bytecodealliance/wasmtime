@@ -856,6 +856,8 @@ impl std::fmt::Debug for JumpTargetMarker {
 
 #[cfg(test)]
 #[expect(trivial_numeric_casts, reason = "macro-generated code")]
+#[cfg(target_pointer_width = "64")] // cranelift doesn't support native 32-bit
+                                    // platforms
 mod tests {
     use super::{
         compile_expression, AddressTransform, CompiledExpression, CompiledExpressionPart,

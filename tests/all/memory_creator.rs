@@ -1,7 +1,6 @@
 #[cfg(all(not(target_os = "windows"), not(miri)))]
 mod not_for_windows {
     use wasmtime::*;
-    use wasmtime_environ::WASM32_MAX_SIZE;
 
     use rustix::mm::{mmap_anonymous, mprotect, munmap, MapFlags, MprotectFlags, ProtFlags};
 
@@ -106,9 +105,11 @@ mod not_for_windows {
             assert_eq!(reserved_size, Some(0));
             assert!(!ty.is_64());
             unsafe {
+                // Cap the maximum at 10MiB to reduce the virtual memory
+                // allocated by this test to execute on 32-bit platforms.
                 let mem = Box::new(CustomMemory::new(
                     minimum,
-                    maximum.unwrap_or(usize::try_from(WASM32_MAX_SIZE).unwrap()),
+                    maximum.unwrap_or(10 << 20),
                     self.num_total_bytes.clone(),
                 ));
                 *self.num_created_memories.lock().unwrap() += 1;
