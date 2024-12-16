@@ -260,8 +260,10 @@ where
         Inst::gen_load(into_reg, mem, ty, MemFlags::trusted()).into()
     }
 
-    fn gen_store_base_offset(_base: Reg, _offset: i32, _from_reg: Reg, _ty: Type) -> Self::I {
-        todo!()
+    fn gen_store_base_offset(base: Reg, offset: i32, from_reg: Reg, ty: Type) -> Self::I {
+        let base = XReg::try_from(base).unwrap();
+        let mem = Amode::RegOffset { base, offset };
+        Inst::gen_store(mem, from_reg, ty, MemFlags::trusted()).into()
     }
 
     fn gen_sp_reg_adjust(amount: i32) -> SmallInstVec<Self::I> {

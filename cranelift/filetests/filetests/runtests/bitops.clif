@@ -6,6 +6,10 @@ target riscv64
 target riscv64 has_c has_zcb
 target s390x has_mie2
 target x86_64
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 set opt_level=speed
 target aarch64
@@ -14,6 +18,10 @@ target riscv64
 target riscv64 has_c has_zcb
 target s390x has_mie2
 target x86_64
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 function %bnot_band() -> i8 {
 block0:

@@ -12,17 +12,15 @@
 ;; comparison must be made. Additionally if `Value` is smaller than 32-bits
 ;; then it must be sign-extended up to at least 32 bits.
 (decl lower_cond (Value) Cond)
-(rule (lower_cond val @ (value_type $I64))
+(rule 0 (lower_cond val @ (value_type (fits_in_32 _))) (Cond.If32 (zext32 val)))
+(rule 1 (lower_cond val @ (value_type $I64))
   (Cond.IfXneq64 val (pulley_xconst8 0)))
-(rule (lower_cond val @ (value_type $I32)) (Cond.If32 val))
-(rule (lower_cond val @ (value_type $I16)) (Cond.If32 (pulley_zext16 val)))
-(rule (lower_cond val @ (value_type $I8)) (Cond.If32 (pulley_zext8 val)))
 
 ;; Peel away explicit `uextend` values to take a look at the inner value.
-(rule 1 (lower_cond (uextend val)) (lower_cond val))
+(rule 2 (lower_cond (uextend val)) (lower_cond val))
 ;; Conditional branches on `icmp`s.
-(rule 1 (lower_cond (icmp cc a b @ (value_type $I32))) (lower_cond_icmp32 cc a b))
-(rule 1 (lower_cond (icmp cc a b @ (value_type $I64))) (lower_cond_icmp64 cc a b))
+(rule 2 (lower_cond (icmp cc a b @ (value_type $I32))) (lower_cond_icmp32 cc a b))
+(rule 2 (lower_cond (icmp cc a b @ (value_type $I64))) (lower_cond_icmp64 cc a b))
 
 (decl lower_cond_icmp32 (IntCC Value Value) Cond)
 (rule (lower_cond_icmp32 (IntCC.Equal) a b) (Cond.IfXeq32 a b))
@@ -171,25 +169,35 @@
 
 ;;;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I32 (sdiv a b))) (pulley_xdiv32_s a b))
-(rule (lower (has_type $I64 (sdiv a b))) (pulley_xdiv64_s a b))
+(rule 0 (lower (has_type (fits_in_32 _) (sdiv a b)))
+  (pulley_xdiv32_s (sext32 a) (sext32 b)))
+(rule 1 (lower (has_type $I64 (sdiv a b))) (pulley_xdiv64_s a b))
 
 ;;;; Rules for `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I32 (srem a b))) (pulley_xrem32_s a b))
-(rule (lower (has_type $I64 (srem a b))) (pulley_xrem64_s a b))
+(rule 0 (lower (has_type (fits_in_32 _) (srem a b)))
+  (pulley_xrem32_s (sext32 a) (sext32 b)))
+(rule 1 (lower (has_type $I64 (srem a b))) (pulley_xrem64_s a b))
 
 ;;;; Rules for `udiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I32 (udiv a b))) (pulley_xdiv32_u a b))
-(rule (lower (has_type $I64 (udiv a b))) (pulley_xdiv64_u a b))
+(rule 0 (lower (has_type (ty_int (fits_in_32 _)) (udiv a b)))
+  (pulley_xdiv32_u (zext32 a) (zext32 b)))
+(rule 1 (lower (has_type $I64 (udiv a b))) (pulley_xdiv64_u a b))
 
 ;;;; Rules for `urem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I32 (urem a b))) (pulley_xrem32_u a b))
-(rule (lower (has_type $I64 (urem a b))) (pulley_xrem64_u a b))
+(rule 0 (lower (has_type (ty_int (fits_in_32 _)) (urem a b)))
+  (pulley_xrem32_u (zext32 a) (zext32 b)))
+(rule 1 (lower (has_type $I64 (urem a b))) (pulley_xrem64_u a b))
 
 ;;;; Rules for `ishl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I8 (ishl a b)))
+  (pulley_xshl32 a (pulley_xband32 b (pulley_xconst8 7))))
+
+(rule (lower (has_type $I16 (ishl a b)))
+  (pulley_xshl32 a (pulley_xband32 b (pulley_xconst8 15))))
 
 (rule (lower (has_type $I32 (ishl a b)))
   (pulley_xshl32 a b))
@@ -204,6 +212,12 @@
 
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(rule (lower (has_type $I8 (ushr a b)))
+  (pulley_xshr32_u (zext32 a) (pulley_xband32 b (pulley_xconst8 7))))
+
+(rule (lower (has_type $I16 (ushr a b)))
+  (pulley_xshr32_u (zext32 a) (pulley_xband32 b (pulley_xconst8 15))))
+
 (rule (lower (has_type $I32 (ushr a b)))
   (pulley_xshr32_u a b))
 
@@ -216,6 +230,12 @@
 (rule (lower (has_type $I64X2 (ushr a b))) (pulley_vshri64x2_u a b))
 
 ;;;; Rules for `sshr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I8 (sshr a b)))
+  (pulley_xshr32_u (sext32 a) (pulley_xband32 b (pulley_xconst8 7))))
+
+(rule (lower (has_type $I16 (sshr a b)))
+  (pulley_xshr32_u (sext32 a) (pulley_xband32 b (pulley_xconst8 15))))
 
 (rule (lower (has_type $I32 (sshr a b)))
   (pulley_xshr32_s a b))
@@ -262,43 +282,59 @@
 
 ;;;; Rules for `umin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I32 (umin a b))) (pulley_xmin32_u a b))
-(rule (lower (has_type $I64 (umin a b))) (pulley_xmin64_u a b))
+(rule 0 (lower (has_type (fits_in_32 _) (umin a b)))
+  (pulley_xmin32_u (zext32 a) (zext32 b)))
+(rule 1 (lower (has_type $I64 (umin a b))) (pulley_xmin64_u a b))
 
 ;;;; Rules for `smin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I32 (smin a b))) (pulley_xmin32_s a b))
-(rule (lower (has_type $I64 (smin a b))) (pulley_xmin64_s a b))
+(rule 0 (lower (has_type (fits_in_32 _) (smin a b)))
+  (pulley_xmin32_s (sext32 a) (sext32 b)))
+(rule 1 (lower (has_type $I64 (smin a b))) (pulley_xmin64_s a b))
 
 ;;;; Rules for `umax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I32 (umax a b))) (pulley_xmax32_u a b))
-(rule (lower (has_type $I64 (umax a b))) (pulley_xmax64_u a b))
+(rule 0 (lower (has_type (fits_in_32 _) (umax a b)))
+  (pulley_xmax32_u (zext32 a) (zext32 b)))
+(rule 1 (lower (has_type $I64 (umax a b))) (pulley_xmax64_u a b))
 
 ;;;; Rules for `smax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I32 (smax a b))) (pulley_xmax32_s a b))
-(rule (lower (has_type $I64 (smax a b))) (pulley_xmax64_s a b))
+(rule 0 (lower (has_type (fits_in_32 _) (smax a b)))
+  (pulley_xmax32_s (sext32 a) (sext32 b)))
+(rule 1 (lower (has_type $I64 (smax a b))) (pulley_xmax64_s a b))
 
 ;;;; Rules for `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I32 (bmask x))) (pulley_xbmask32 x))
-(rule (lower (has_type $I64 (bmask x))) (pulley_xbmask64 x))
+(rule 0 (lower (has_type (ty_int (fits_in_32 _)) (bmask a @ (value_type (fits_in_32 _)))))
+  (pulley_xbmask32 (zext32 a)))
+(rule 1 (lower (has_type $I64 (bmask a)))
+  (pulley_xbmask64 (zext64 a)))
+(rule 2 (lower (bmask a @ (value_type $I64)))
+  (pulley_xbmask64 a))
 
 ;;;; Rules for `ctz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(rule (lower (has_type $I8 (ctz a)))
+  (pulley_xctz32 (pulley_xbor32 a (pulley_xconst16 0x100))))
+(rule (lower (has_type $I16 (ctz a)))
+  (pulley_xctz32 (pulley_xbor32 a (pulley_xconst32 0x10000))))
 (rule (lower (has_type $I32 (ctz a))) (pulley_xctz32 a))
 (rule (lower (has_type $I64 (ctz a))) (pulley_xctz64 a))
 
 ;;;; Rules for `clz` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(rule (lower (has_type $I8 (clz a)))
+  (pulley_xsub32 (pulley_xclz32 (zext32 a)) (pulley_xconst8 24)))
+(rule (lower (has_type $I16 (clz a)))
+  (pulley_xsub32 (pulley_xclz32 (zext32 a)) (pulley_xconst8 16)))
 (rule (lower (has_type $I32 (clz a))) (pulley_xclz32 a))
 (rule (lower (has_type $I64 (clz a))) (pulley_xclz64 a))
 
 ;;;; Rules for `popcnt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I32 (popcnt a))) (pulley_xpopcnt32 a))
-(rule (lower (has_type $I64 (popcnt a))) (pulley_xpopcnt64 a))
+(rule 0 (lower (has_type (fits_in_32 _) (popcnt a))) (pulley_xpopcnt32 (zext32 a)))
+(rule 1 (lower (has_type $I64 (popcnt a))) (pulley_xpopcnt64 a))
 
 ;;;; Rules for `rotl` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -314,8 +350,8 @@
 
 (rule 1 (lower (icmp cc a b @ (value_type $I64)))
       (lower_icmp $I64 cc a b))
-(rule (lower (icmp cc a b @ (value_type (fits_in_32 _))))
-      (lower_icmp $I32 cc a b))
+(rule (lower (icmp cc a b @ (value_type (ty_int (fits_in_32 ty)))))
+      (lower_icmp ty cc a b))
 
 (decl lower_icmp (Type IntCC Value Value) XReg)
 
@@ -337,23 +373,23 @@
 (rule (lower_icmp $I64 (IntCC.UnsignedLessThanOrEqual) a b)
       (pulley_xulteq64 a b))
 
-(rule (lower_icmp $I32 (IntCC.Equal) a b)
-      (pulley_xeq32 a b))
+(rule 1 (lower_icmp (fits_in_32 _) (IntCC.Equal) a b)
+      (pulley_xeq32 (zext32 a) (zext32 b)))
 
-(rule (lower_icmp $I32 (IntCC.NotEqual) a b)
-      (pulley_xneq32 a b))
+(rule 1 (lower_icmp (fits_in_32 _) (IntCC.NotEqual) a b)
+      (pulley_xneq32 (zext32 a) (zext32 b)))
 
-(rule (lower_icmp $I32 (IntCC.SignedLessThan) a b)
-      (pulley_xslt32 a b))
+(rule 1 (lower_icmp (fits_in_32 _) (IntCC.SignedLessThan) a b)
+      (pulley_xslt32 (sext32 a) (sext32 b)))
 
-(rule (lower_icmp $I32 (IntCC.SignedLessThanOrEqual) a b)
-      (pulley_xslteq32 a b))
+(rule 1 (lower_icmp (fits_in_32 _) (IntCC.SignedLessThanOrEqual) a b)
+      (pulley_xslteq32 (sext32 a) (sext32 b)))
 
-(rule (lower_icmp $I32 (IntCC.UnsignedLessThan) a b)
-      (pulley_xult32 a b))
+(rule 1 (lower_icmp (fits_in_32 _) (IntCC.UnsignedLessThan) a b)
+      (pulley_xult32 (zext32 a) (zext32 b)))
 
-(rule (lower_icmp $I32 (IntCC.UnsignedLessThanOrEqual) a b)
-      (pulley_xulteq32 a b))
+(rule 1 (lower_icmp (fits_in_32 _) (IntCC.UnsignedLessThanOrEqual) a b)
+      (pulley_xulteq32 (zext32 a) (zext32 b)))
 
 ;; Pulley doesn't have instructions for `>` and `>=`, so we have to reverse the
 ;; operation.
@@ -475,25 +511,19 @@
 
 ;;;; Rules for `uextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (fits_in_64 _) (uextend val @ (value_type $I32))))
-  (pulley_zext32 val))
+(rule 0 (lower (has_type (fits_in_32 _) (uextend val)))
+  (zext32 val))
 
-(rule (lower (has_type (fits_in_64 _) (uextend val @ (value_type $I16))))
-  (pulley_zext16 val))
-
-(rule (lower (has_type (fits_in_64 _) (uextend val @ (value_type $I8))))
-  (pulley_zext8 val))
+(rule 1 (lower (has_type $I64 (uextend val)))
+  (zext64 val))
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type (fits_in_64 _) (sextend val @ (value_type $I8))))
-  (pulley_sext8 val))
+(rule 0 (lower (has_type (fits_in_32 _) (sextend val)))
+  (sext32 val))
 
-(rule (lower (has_type (fits_in_64 _) (sextend val @ (value_type $I16))))
-  (pulley_sext16 val))
-
-(rule (lower (has_type (fits_in_64 _) (sextend val @ (value_type $I32))))
-  (pulley_sext32 val))
+(rule 1 (lower (has_type $I64 (sextend val)))
+  (sext64 val))
 
 ;;;; Rules for `ireduce` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -555,6 +585,8 @@
 
 (rule 1 (lower (has_type (ty_vec128 _) (bitcast _flags val @ (value_type (ty_vec128 _)))))
   val)
+
+(rule 2 (lower (has_type ty (bitcast _flags a @ (value_type ty)))) a)
 
 ;;;; Rules for `fcvt_to_{u,s}int` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -716,8 +748,8 @@
 
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I32 (ineg a))) (pulley_xneg32 a))
-(rule (lower (has_type $I64 (ineg a))) (pulley_xneg64 a))
+(rule 0 (lower (has_type (fits_in_32 _) (ineg a))) (pulley_xneg32 (sext32 a)))
+(rule 1 (lower (has_type $I64 (ineg a))) (pulley_xneg64 a))
 
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -727,3 +759,15 @@
 ;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (ty_vec128 _) (vconst (u128_from_constant a)))) (pulley_vconst128 a))
+
+;;;; Rules for `bswap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I16 (bswap a)))
+  (pulley_xshr32_u (pulley_bswap32 a) (pulley_xconst8 16)))
+(rule (lower (has_type $I32 (bswap a))) (pulley_bswap32 a))
+(rule (lower (has_type $I64 (bswap a))) (pulley_bswap64 a))
+
+;;;; Rules for `iabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 0 (lower (has_type (fits_in_32 _) (iabs a))) (pulley_xabs32 (sext32 a)))
+(rule 1 (lower (has_type $I64 (iabs a))) (pulley_xabs64 a))

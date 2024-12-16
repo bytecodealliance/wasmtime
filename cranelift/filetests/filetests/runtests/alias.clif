@@ -4,6 +4,10 @@ target aarch64
 target s390x
 target x86_64
 target riscv64
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 function %alias(i8) -> i8 {
 block0(v0: i8):

@@ -5,6 +5,10 @@ target aarch64
 target s390x
 target riscv64
 target riscv64 has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 function %bmask_i64_i64(i64) -> i64 {
 block0(v0: i64):
@@ -13,6 +17,7 @@ block0(v0: i64):
 }
 ; run: %bmask_i64_i64(1) == -1
 ; run: %bmask_i64_i64(0) == 0
+; run: %bmask_i64_i64(0x10000000_00000000) == -1
 
 function %bmask_i64_i32(i64) -> i32 {
 block0(v0: i64):
@@ -21,6 +26,7 @@ block0(v0: i64):
 }
 ; run: %bmask_i64_i32(1) == -1
 ; run: %bmask_i64_i32(0) == 0
+; run: %bmask_i64_i32(0x10000000_00000000) == -1
 
 function %bmask_i64_i16(i64) -> i16 {
 block0(v0: i64):
@@ -29,6 +35,7 @@ block0(v0: i64):
 }
 ; run: %bmask_i64_i16(1) == -1
 ; run: %bmask_i64_i16(0) == 0
+; run: %bmask_i64_i16(0x10000000_00000000) == -1
 
 function %bmask_i64_i8(i64) -> i8 {
 block0(v0: i64):
@@ -37,6 +44,7 @@ block0(v0: i64):
 }
 ; run: %bmask_i64_i8(1) == -1
 ; run: %bmask_i64_i8(0) == 0
+; run: %bmask_i64_i8(0x10000000_00000000) == -1
 
 function %bmask_i32_i64(i32) -> i64 {
 block0(v0: i32):

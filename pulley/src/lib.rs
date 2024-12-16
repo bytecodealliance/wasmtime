@@ -682,6 +682,11 @@ macro_rules! for_each_extended_op {
             fstore32be_offset32 = Fstore32BeOffset32 { ptr: XReg, offset: i32, src: FReg };
             /// `*(ptr + offset) = src`
             fstore64be_offset32 = Fstore64BeOffset32 { ptr: XReg, offset: i32, src: FReg };
+
+            /// `low32(dst) = |low32(src)|`
+            xabs32 = XAbs32 { dst: XReg, src: XReg };
+            /// `dst = |src|`
+            xabs64 = XAbs64 { dst: XReg, src: XReg };
         }
     };
 }
