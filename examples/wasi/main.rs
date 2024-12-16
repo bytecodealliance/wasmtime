@@ -65,13 +65,15 @@ fn main() -> Result<()> {
     // Get the index for the exported interface
     let interface_idx = instance
         .get_export(&mut store, None, "wasi:cli/run@0.2.0")
-        .unwrap();
+        .expect("Cannot get `wasi:cli/run@0.2.0` interface");
     // Get the index for the exported function in the exported interface
     let parent_export_idx = Some(&interface_idx);
     let func_idx = instance
         .get_export(&mut store, parent_export_idx, "run")
-        .unwrap();
-    let func = instance.get_func(&mut store, func_idx).unwrap();
+        .expect("Cannot get `run` function in `wasi:cli/run@0.2.0` interface");
+    let func = instance
+        .get_func(&mut store, func_idx)
+        .expect("Unreachable since we've got func_idx");
     // As the `run` function in `wasi:cli/run@0.2.0` takes no argument and return a WASI result that correspond to a `Result<(), ()>`
     // Reference:
     // * https://github.com/WebAssembly/wasi-cli/blob/main/wit/run.wit
