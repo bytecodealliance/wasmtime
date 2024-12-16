@@ -3051,7 +3051,7 @@ mod tests {
     fn inst_size_test() {
         // This test will help with unintentionally growing the size
         // of the Inst enum.
-        let expected = if cfg!(target_pointer_width = "32") {
+        let expected = if cfg!(target_pointer_width = "32") && !cfg!(target_arch = "arm") {
             28
         } else {
             32
