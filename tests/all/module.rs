@@ -30,10 +30,7 @@ fn checks_incompatible_target() -> Result<()> {
     return Ok(());
 
     fn assert_invalid_target(target: &str) -> Result<()> {
-        match Module::new(
-            &Engine::new(Config::new().target(&target.to_string())?)?,
-            "(module)",
-        ) {
+        match Module::new(&Engine::new(Config::new().target(target)?)?, "(module)") {
             Ok(_) => unreachable!(),
             Err(e) => assert!(
                 format!("{e:?}").contains("configuration does not match the host"),
