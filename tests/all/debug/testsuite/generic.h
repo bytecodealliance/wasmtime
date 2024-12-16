@@ -5,3 +5,5 @@ public:
   static int MainDefinedFunction();
   static int SatelliteFunction(int x);
 };
+
+inline void debug_break() {}
