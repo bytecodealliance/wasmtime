@@ -3417,4 +3417,268 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         self.state[operands.dst].set_f64x2(a);
         ControlFlow::Continue(())
     }
+
+    fn veq8x16(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u8x16();
+        let b = self.state[operands.src2].get_u8x16();
+        let mut c = [0; 16];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a == b { u8::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u8x16(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vneq8x16(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u8x16();
+        let b = self.state[operands.src2].get_u8x16();
+        let mut c = [0; 16];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a != b { u8::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u8x16(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vslt8x16(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i8x16();
+        let b = self.state[operands.src2].get_i8x16();
+        let mut c = [0; 16];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a < b { u8::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u8x16(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vslteq8x16(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i8x16();
+        let b = self.state[operands.src2].get_i8x16();
+        let mut c = [0; 16];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a <= b { u8::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u8x16(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vult8x16(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u8x16();
+        let b = self.state[operands.src2].get_u8x16();
+        let mut c = [0; 16];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a < b { u8::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u8x16(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vulteq8x16(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u8x16();
+        let b = self.state[operands.src2].get_u8x16();
+        let mut c = [0; 16];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a <= b { u8::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u8x16(c);
+        ControlFlow::Continue(())
+    }
+
+    fn veq16x8(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u16x8();
+        let b = self.state[operands.src2].get_u16x8();
+        let mut c = [0; 8];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a == b { u16::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u16x8(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vneq16x8(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u16x8();
+        let b = self.state[operands.src2].get_u16x8();
+        let mut c = [0; 8];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a != b { u16::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u16x8(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vslt16x8(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        let mut c = [0; 8];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a < b { u16::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u16x8(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vslteq16x8(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        let mut c = [0; 8];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a <= b { u16::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u16x8(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vult16x8(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u16x8();
+        let b = self.state[operands.src2].get_u16x8();
+        let mut c = [0; 8];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a < b { u16::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u16x8(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vulteq16x8(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u16x8();
+        let b = self.state[operands.src2].get_u16x8();
+        let mut c = [0; 8];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a <= b { u16::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u16x8(c);
+        ControlFlow::Continue(())
+    }
+
+    fn veq32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32x4();
+        let b = self.state[operands.src2].get_u32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a == b { u32::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vneq32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32x4();
+        let b = self.state[operands.src2].get_u32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a != b { u32::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vslt32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i32x4();
+        let b = self.state[operands.src2].get_i32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a < b { u32::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vslteq32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i32x4();
+        let b = self.state[operands.src2].get_i32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a <= b { u32::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vult32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32x4();
+        let b = self.state[operands.src2].get_u32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a < b { u32::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vulteq32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32x4();
+        let b = self.state[operands.src2].get_u32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a <= b { u32::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn veq64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64x2();
+        let b = self.state[operands.src2].get_u64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a == b { u64::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vneq64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64x2();
+        let b = self.state[operands.src2].get_u64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a != b { u64::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vslt64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i64x2();
+        let b = self.state[operands.src2].get_i64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a < b { u64::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vslteq64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i64x2();
+        let b = self.state[operands.src2].get_i64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a <= b { u64::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vult64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64x2();
+        let b = self.state[operands.src2].get_u64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a < b { u64::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vulteq64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64x2();
+        let b = self.state[operands.src2].get_u64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a <= b { u64::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
 }

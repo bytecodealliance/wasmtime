@@ -869,6 +869,55 @@ macro_rules! for_each_extended_op {
             vinsertf32 = VInsertF32 { operands: BinaryOperands<VReg, VReg, FReg>, lane: u8 };
             /// `dst = src1; dst[lane] = src2`
             vinsertf64 = VInsertF64 { operands: BinaryOperands<VReg, VReg, FReg>, lane: u8 };
+
+            /// `dst = src == dst`
+            veq8x16 = Veq8x16 { operands: BinaryOperands<VReg> };
+            /// `dst = src != dst`
+            vneq8x16 = Vneq8x16 { operands: BinaryOperands<VReg> };
+            /// `dst = src < dst` (signed)
+            vslt8x16 = Vslt8x16 { operands: BinaryOperands<VReg> };
+            /// `dst = src <= dst` (signed)
+            vslteq8x16 = Vslteq8x16 { operands: BinaryOperands<VReg> };
+            /// `dst = src < dst` (unsigned)
+            vult8x16 = Vult8x16 { operands: BinaryOperands<VReg> };
+            /// `dst = src <= dst` (unsigned)
+            vulteq8x16 = Vulteq8x16 { operands: BinaryOperands<VReg> };
+            /// `dst = src == dst`
+            veq16x8 = Veq16x8 { operands: BinaryOperands<VReg> };
+            /// `dst = src != dst`
+            vneq16x8 = Vneq16x8 { operands: BinaryOperands<VReg> };
+            /// `dst = src < dst` (signed)
+            vslt16x8 = Vslt16x8 { operands: BinaryOperands<VReg> };
+            /// `dst = src <= dst` (signed)
+            vslteq16x8 = Vslteq16x8 { operands: BinaryOperands<VReg> };
+            /// `dst = src < dst` (unsigned)
+            vult16x8 = Vult16x8 { operands: BinaryOperands<VReg> };
+            /// `dst = src <= dst` (unsigned)
+            vulteq16x8 = Vulteq16x8 { operands: BinaryOperands<VReg> };
+            /// `dst = src == dst`
+            veq32x4 = Veq32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src != dst`
+            vneq32x4 = Vneq32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src < dst` (signed)
+            vslt32x4 = Vslt32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src <= dst` (signed)
+            vslteq32x4 = Vslteq32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src < dst` (unsigned)
+            vult32x4 = Vult32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src <= dst` (unsigned)
+            vulteq32x4 = Vulteq32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src == dst`
+            veq64x2 = Veq64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src != dst`
+            vneq64x2 = Vneq64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src < dst` (signed)
+            vslt64x2 = Vslt64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src <= dst` (signed)
+            vslteq64x2 = Vslteq64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src < dst` (unsigned)
+            vult64x2 = Vult64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src <= dst` (unsigned)
+            vulteq64x2 = Vulteq64x2 { operands: BinaryOperands<VReg> };
         }
     };
 }

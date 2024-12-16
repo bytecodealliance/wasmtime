@@ -510,6 +510,47 @@
 (rule (lower_icmp128_hi (IntCC.SignedLessThan) a b) (pulley_xslt64 a b))
 (rule (lower_icmp128_hi (IntCC.UnsignedLessThan) a b) (pulley_xult64 a b))
 
+;; vector comparisons
+
+(rule 1 (lower (icmp cc a @ (value_type (ty_vec128 ty)) b))
+  (lower_vcmp ty cc a b))
+
+(decl lower_vcmp (Type IntCC Value Value) VReg)
+(rule (lower_vcmp $I8X16 (IntCC.Equal) a b) (pulley_veq8x16 a b))
+(rule (lower_vcmp $I8X16 (IntCC.NotEqual) a b) (pulley_vneq8x16 a b))
+(rule (lower_vcmp $I8X16 (IntCC.SignedLessThan) a b) (pulley_vslt8x16 a b))
+(rule (lower_vcmp $I8X16 (IntCC.SignedLessThanOrEqual) a b) (pulley_vslteq8x16 a b))
+(rule (lower_vcmp $I8X16 (IntCC.UnsignedLessThan) a b) (pulley_vult8x16 a b))
+(rule (lower_vcmp $I8X16 (IntCC.UnsignedLessThanOrEqual) a b) (pulley_vulteq8x16 a b))
+(rule (lower_vcmp $I16X8 (IntCC.Equal) a b) (pulley_veq16x8 a b))
+(rule (lower_vcmp $I16X8 (IntCC.NotEqual) a b) (pulley_vneq16x8 a b))
+(rule (lower_vcmp $I16X8 (IntCC.SignedLessThan) a b) (pulley_vslt16x8 a b))
+(rule (lower_vcmp $I16X8 (IntCC.SignedLessThanOrEqual) a b) (pulley_vslteq16x8 a b))
+(rule (lower_vcmp $I16X8 (IntCC.UnsignedLessThan) a b) (pulley_vult16x8 a b))
+(rule (lower_vcmp $I16X8 (IntCC.UnsignedLessThanOrEqual) a b) (pulley_vulteq16x8 a b))
+(rule (lower_vcmp $I32X4 (IntCC.Equal) a b) (pulley_veq32x4 a b))
+(rule (lower_vcmp $I32X4 (IntCC.NotEqual) a b) (pulley_vneq32x4 a b))
+(rule (lower_vcmp $I32X4 (IntCC.SignedLessThan) a b) (pulley_vslt32x4 a b))
+(rule (lower_vcmp $I32X4 (IntCC.SignedLessThanOrEqual) a b) (pulley_vslteq32x4 a b))
+(rule (lower_vcmp $I32X4 (IntCC.UnsignedLessThan) a b) (pulley_vult32x4 a b))
+(rule (lower_vcmp $I32X4 (IntCC.UnsignedLessThanOrEqual) a b) (pulley_vulteq32x4 a b))
+(rule (lower_vcmp $I64X2 (IntCC.Equal) a b) (pulley_veq64x2 a b))
+(rule (lower_vcmp $I64X2 (IntCC.NotEqual) a b) (pulley_vneq64x2 a b))
+(rule (lower_vcmp $I64X2 (IntCC.SignedLessThan) a b) (pulley_vslt64x2 a b))
+(rule (lower_vcmp $I64X2 (IntCC.SignedLessThanOrEqual) a b) (pulley_vslteq64x2 a b))
+(rule (lower_vcmp $I64X2 (IntCC.UnsignedLessThan) a b) (pulley_vult64x2 a b))
+(rule (lower_vcmp $I64X2 (IntCC.UnsignedLessThanOrEqual) a b) (pulley_vulteq64x2 a b))
+
+;; Sweap operand order of ops pulley doesn't support
+(rule (lower_vcmp ty cc @ (IntCC.SignedGreaterThan) a b)
+  (lower_vcmp ty (intcc_swap_args cc) b a))
+(rule (lower_vcmp ty cc @ (IntCC.SignedGreaterThanOrEqual) a b)
+  (lower_vcmp ty (intcc_swap_args cc) b a))
+(rule (lower_vcmp ty cc @ (IntCC.UnsignedGreaterThan) a b)
+  (lower_vcmp ty (intcc_swap_args cc) b a))
+(rule (lower_vcmp ty cc @ (IntCC.UnsignedGreaterThanOrEqual) a b)
+  (lower_vcmp ty (intcc_swap_args cc) b a))
+
 ;;;; Rules for `fcmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (fcmp cc a b @ (value_type (ty_scalar_float ty))))
