@@ -3333,4 +3333,88 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         self.state[dst].set_f64(a);
         ControlFlow::Continue(())
     }
+
+    fn vinsertx8(
+        &mut self,
+        operands: BinaryOperands<VReg, VReg, XReg>,
+        lane: u8,
+    ) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u8x16();
+        let b = self.state[operands.src2].get_u32() as u8;
+        unsafe {
+            *a.get_unchecked_mut(usize::from(lane)) = b;
+        }
+        self.state[operands.dst].set_u8x16(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vinsertx16(
+        &mut self,
+        operands: BinaryOperands<VReg, VReg, XReg>,
+        lane: u8,
+    ) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u16x8();
+        let b = self.state[operands.src2].get_u32() as u16;
+        unsafe {
+            *a.get_unchecked_mut(usize::from(lane)) = b;
+        }
+        self.state[operands.dst].set_u16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vinsertx32(
+        &mut self,
+        operands: BinaryOperands<VReg, VReg, XReg>,
+        lane: u8,
+    ) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u32x4();
+        let b = self.state[operands.src2].get_u32();
+        unsafe {
+            *a.get_unchecked_mut(usize::from(lane)) = b;
+        }
+        self.state[operands.dst].set_u32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vinsertx64(
+        &mut self,
+        operands: BinaryOperands<VReg, VReg, XReg>,
+        lane: u8,
+    ) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u64x2();
+        let b = self.state[operands.src2].get_u64();
+        unsafe {
+            *a.get_unchecked_mut(usize::from(lane)) = b;
+        }
+        self.state[operands.dst].set_u64x2(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vinsertf32(
+        &mut self,
+        operands: BinaryOperands<VReg, VReg, FReg>,
+        lane: u8,
+    ) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32();
+        unsafe {
+            *a.get_unchecked_mut(usize::from(lane)) = b;
+        }
+        self.state[operands.dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vinsertf64(
+        &mut self,
+        operands: BinaryOperands<VReg, VReg, FReg>,
+        lane: u8,
+    ) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64();
+        unsafe {
+            *a.get_unchecked_mut(usize::from(lane)) = b;
+        }
+        self.state[operands.dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
 }
