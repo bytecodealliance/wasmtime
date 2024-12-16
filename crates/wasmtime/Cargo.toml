@@ -98,6 +98,14 @@ rustix = { workspace = true, optional = true }
 [target.'cfg(target_arch = "s390x")'.dependencies]
 psm = { workspace = true, optional = true }
 
+# On 32-bit platforms where Cranelift currently doesn't have any supported host
+# unconditionally pull in the `pulley-interpreter` crate. Runtime support is
+# enabled via `build.rs` which prints `feature="pulley"` by default here and
+# compilation support, if enabled via the `cranelift` feature, is handled in the
+# `wasmtime-cranelift` crate enabling Pulley on 32-bit platforms.
+[target.'cfg(target_pointer_width = "32")'.dependencies]
+pulley-interpreter = { workspace = true }
+
 [dev-dependencies]
 env_logger = { workspace = true }
 proptest = { workspace = true }

@@ -26,6 +26,16 @@ fn main() {
 
     #[cfg(feature = "runtime")]
     build_c_helpers();
+
+    // Flag pulley as enabled unconditionally on 32-bit targets to ensure that
+    // wasm is runnable by default like it is on other 64-bit native platforms.
+    // Note that this doesn't actually enable the Cargo feature, it just changes
+    // the cfg's passed to the crate, so for example care is still taken in
+    // `Cargo.toml` to handle pulley-specific dependencies on 32-bit platforms.
+    let target_pointer_width = std::env::var("CARGO_CFG_TARGET_POINTER_WIDTH").unwrap();
+    if target_pointer_width == "32" {
+        println!("cargo:rustc-cfg=feature=\"pulley\"");
+    }
 }
 
 fn cfg(key: &str) -> bool {
