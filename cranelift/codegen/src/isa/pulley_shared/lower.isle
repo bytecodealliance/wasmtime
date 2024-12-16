@@ -966,3 +966,22 @@
   (pulley_vinsertf32 a b lane))
 (rule (lower (insertlane a @ (value_type $F64X2) b (u8_from_uimm8 lane)))
   (pulley_vinsertf64 a b lane))
+
+;;;; Rules for `scalar_to_vector` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+;; Note that this doesn't use special pulley instructions at this time and
+;; generates a bytecode-wise relatively inefficient lowering. Should be
+;; relatively easy to optimize if necessary in the future.
+
+(rule (lower (scalar_to_vector a @ (value_type $I8)))
+  (pulley_vinsertx8 (pulley_vconst128 0) a 0))
+(rule (lower (scalar_to_vector a @ (value_type $I16)))
+  (pulley_vinsertx16 (pulley_vconst128 0) a 0))
+(rule (lower (scalar_to_vector a @ (value_type $I32)))
+  (pulley_vinsertx32 (pulley_vconst128 0) a 0))
+(rule (lower (scalar_to_vector a @ (value_type $I64)))
+  (pulley_vinsertx64 (pulley_vconst128 0) a 0))
+(rule (lower (scalar_to_vector a @ (value_type $F32)))
+  (pulley_vinsertf32 (pulley_vconst128 0) a 0))
+(rule (lower (scalar_to_vector a @ (value_type $F64)))
+  (pulley_vinsertf64 (pulley_vconst128 0) a 0))
