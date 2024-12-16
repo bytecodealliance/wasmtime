@@ -843,6 +843,19 @@ macro_rules! for_each_extended_op {
             vmuli32x4 = VMulI32x4 { operands: BinaryOperands<VReg> };
             /// `dst = src1 * src2`
             vmuli64x2 = VMulI64x2 { operands: BinaryOperands<VReg> };
+
+            /// `low32(dst) = zext(src[lane])`
+            xextractv8x16 = XExtractV8x16 { dst: XReg, src: VReg, lane: u8 };
+            /// `low32(dst) = zext(src[lane])`
+            xextractv16x8 = XExtractV16x8 { dst: XReg, src: VReg, lane: u8 };
+            /// `low32(dst) = src[lane]`
+            xextractv32x4 = XExtractV32x4 { dst: XReg, src: VReg, lane: u8 };
+            /// `dst = src[lane]`
+            xextractv64x2 = XExtractV64x2 { dst: XReg, src: VReg, lane: u8 };
+            /// `low32(dst) = src[lane]`
+            fextractv32x4 = FExtractV32x4 { dst: FReg, src: VReg, lane: u8 };
+            /// `dst = src[lane]`
+            fextractv64x2 = FExtractV64x2 { dst: FReg, src: VReg, lane: u8 };
         }
     };
 }
