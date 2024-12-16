@@ -491,21 +491,30 @@ where
         match dest {
             // "near" calls are pulley->pulley calls so they use a normal "call"
             // opcode
-            CallDest::ExtName(name, RelocDistance::Near) => smallvec![Inst::Call {
-                info: Box::new(info.map(|()| name.clone()))
+            CallDest::ExtName(name, RelocDistance::Near) => {
+                assert_eq!(info.callee_conv, isa::CallConv::Tail);
+                smallvec![Inst::Call {
+                    info: Box::new(info.map(|()| name.clone()))
+                }
+                .into()]
             }
-            .into()],
             // "far" calls are pulley->host calls so they use a different opcode
             // which is lowered with a special relocation in the backend.
-            CallDest::ExtName(name, RelocDistance::Far) => smallvec![Inst::IndirectCallHost {
-                info: Box::new(info.map(|()| name.clone()))
+            CallDest::ExtName(name, RelocDistance::Far) => {
+                assert_eq!(info.callee_conv, isa::CallConv::SystemV);
+                smallvec![Inst::IndirectCallHost {
+                    info: Box::new(info.map(|()| name.clone()))
+                }
+                .into()]
             }
-            .into()],
             // Indirect calls are all assumed to be pulley->pulley calls
-            CallDest::Reg(reg) => smallvec![Inst::IndirectCall {
-                info: Box::new(info.map(|()| XReg::new(*reg).unwrap()))
+            CallDest::Reg(reg) => {
+                assert_eq!(info.callee_conv, isa::CallConv::Tail);
+                smallvec![Inst::IndirectCall {
+                    info: Box::new(info.map(|()| XReg::new(*reg).unwrap()))
+                }
+                .into()]
             }
-            .into()],
         }
     }
 
