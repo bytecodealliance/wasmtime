@@ -373,13 +373,6 @@ pub(crate) use self::store::ComponentStoreData;
 ///         serde::Serialize,
 ///     ],
 ///
-///     // A list of WIT "features" to enable when parsing the WIT document that
-///     // this bindgen macro matches. WIT features are all disabled by default
-///     // and must be opted-in-to if source level features are used.
-///     //
-///     // This option defaults to an empty array.
-///     features: ["foo", "bar", "baz"],
-///
 ///     // An niche configuration option to require that the `T` in `Store<T>`
 ///     // is always `Send` in the generated bindings. Typically not needed
 ///     // but if synchronous bindings depend on asynchronous bindings using
