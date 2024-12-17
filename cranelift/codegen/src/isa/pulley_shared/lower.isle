@@ -160,12 +160,22 @@
 (rule (lower (has_type $I64 (isub a b)))
       (pulley_xsub64 a b))
 
+(rule (lower (has_type $I8X16 (isub a b))) (pulley_vsubi8x16 a b))
+(rule (lower (has_type $I16X8 (isub a b))) (pulley_vsubi16x8 a b))
+(rule (lower (has_type $I32X4 (isub a b))) (pulley_vsubi32x4 a b))
+(rule (lower (has_type $I64X2 (isub a b))) (pulley_vsubi64x2 a b))
+
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I8 (imul a b))) (pulley_xmul32 a b))
 (rule (lower (has_type $I16 (imul a b))) (pulley_xmul32 a b))
 (rule (lower (has_type $I32 (imul a b))) (pulley_xmul32 a b))
 (rule (lower (has_type $I64 (imul a b))) (pulley_xmul64 a b))
+
+(rule (lower (has_type $I8X16 (imul a b))) (pulley_vmuli8x16 a b))
+(rule (lower (has_type $I16X8 (imul a b))) (pulley_vmuli16x8 a b))
+(rule (lower (has_type $I32X4 (imul a b))) (pulley_vmuli32x4 a b))
+(rule (lower (has_type $I64X2 (imul a b))) (pulley_vmuli64x2 a b))
 
 ;;;; Rules for `umulhi` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -703,6 +713,18 @@
 (rule (lower (has_type $F64 (fcvt_from_sint val @ (value_type $I64))))
   (pulley_f64_from_x64_s val))
 
+(rule (lower (has_type $F32X4 (fcvt_from_sint val @ (value_type $I32X4))))
+  (pulley_vf32x4_from_i32x4_s val))
+
+(rule (lower (has_type $F32X4 (fcvt_from_uint val @ (value_type $I32X4))))
+  (pulley_vf32x4_from_i32x4_u val))
+
+(rule (lower (has_type $F64X2 (fcvt_from_sint val @ (value_type $I64X2))))
+  (pulley_vf64x2_from_i64x2_s val))
+
+(rule (lower (has_type $F64X2 (fcvt_from_uint val @ (value_type $I64X2))))
+  (pulley_vf64x2_from_i64x2_u val))
+
 ;;;; Rules for `fcvt_to_{u,s}int_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I32 (fcvt_to_uint_sat val @ (value_type $F32))))
@@ -872,3 +894,45 @@
 (rule (lower (vany_true a @ (value_type $I64X2))) (pulley_vanytrue64x2 a))
 (rule (lower (vany_true a @ (value_type $F32X4))) (pulley_vanytrue32x4 a))
 (rule (lower (vany_true a @ (value_type $F64X2))) (pulley_vanytrue64x2 a))
+
+;;;; Rules for `swiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (swiden_low a @ (value_type $I8X16))) (pulley_vwidenlow8x16_s a))
+(rule (lower (swiden_low a @ (value_type $I16X8))) (pulley_vwidenlow16x8_s a))
+(rule (lower (swiden_low a @ (value_type $I32X4))) (pulley_vwidenlow32x4_s a))
+
+;;;; Rules for `swiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (swiden_high a @ (value_type $I8X16))) (pulley_vwidenhigh8x16_s a))
+(rule (lower (swiden_high a @ (value_type $I16X8))) (pulley_vwidenhigh16x8_s a))
+(rule (lower (swiden_high a @ (value_type $I32X4))) (pulley_vwidenhigh32x4_s a))
+
+;;;; Rules for `uwiden_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (uwiden_low a @ (value_type $I8X16))) (pulley_vwidenlow8x16_u a))
+(rule (lower (uwiden_low a @ (value_type $I16X8))) (pulley_vwidenlow16x8_u a))
+(rule (lower (uwiden_low a @ (value_type $I32X4))) (pulley_vwidenlow32x4_u a))
+
+;;;; Rules for `uwiden_high` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (uwiden_high a @ (value_type $I8X16))) (pulley_vwidenhigh8x16_u a))
+(rule (lower (uwiden_high a @ (value_type $I16X8))) (pulley_vwidenhigh16x8_u a))
+(rule (lower (uwiden_high a @ (value_type $I32X4))) (pulley_vwidenhigh32x4_u a))
+
+;;;; Rules for `snarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (snarrow a @ (value_type $I16X8) b)) (pulley_vnarrow16x8_s a b))
+(rule (lower (snarrow a @ (value_type $I32X4) b)) (pulley_vnarrow32x4_s a b))
+
+;;;; Rules for `unarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (unarrow a @ (value_type $I16X8) b)) (pulley_vnarrow16x8_u a b))
+(rule (lower (unarrow a @ (value_type $I32X4) b)) (pulley_vnarrow32x4_u a b))
+
+;;;; Rules for `fvpromote_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (fvpromote_low a @ (value_type $F32X4))) (pulley_vfpromotelow a))
+
+;;;; Rules for `fvdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (fvdemote a @ (value_type $F64X2))) (pulley_vfdemote a))

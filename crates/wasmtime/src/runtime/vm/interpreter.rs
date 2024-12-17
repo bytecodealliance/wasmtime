@@ -193,6 +193,10 @@ impl InterpreterRef<'_> {
         clippy::cast_sign_loss,
         reason = "macro-generated code"
     )]
+    #[cfg_attr(
+        not(feature = "component-model"),
+        expect(unused_macro_rules, reason = "macro-code")
+    )]
     unsafe fn call_indirect_host(&mut self, id: u8) {
         let id = u32::from(id);
         let fnptr = self.0[XReg::x0].get_ptr::<u8>();

@@ -3057,4 +3057,244 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         self.state[dst].set_i64(a.wrapping_abs());
         ControlFlow::Continue(())
     }
+
+    fn vf32x4_from_i32x4_s(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i32x4();
+        self.state[dst].set_f32x4(a.map(|i| i as f32));
+        ControlFlow::Continue(())
+    }
+
+    fn vf32x4_from_i32x4_u(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u32x4();
+        self.state[dst].set_f32x4(a.map(|i| i as f32));
+        ControlFlow::Continue(())
+    }
+
+    fn vf64x2_from_i64x2_s(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i64x2();
+        self.state[dst].set_f64x2(a.map(|i| i as f64));
+        ControlFlow::Continue(())
+    }
+
+    fn vf64x2_from_i64x2_u(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u64x2();
+        self.state[dst].set_f64x2(a.map(|i| i as f64));
+        ControlFlow::Continue(())
+    }
+
+    fn vwidenlow8x16_s(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = *self.state[src].get_i8x16().first_chunk().unwrap();
+        self.state[dst].set_i16x8(a.map(|i| i.into()));
+        ControlFlow::Continue(())
+    }
+
+    fn vwidenlow8x16_u(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = *self.state[src].get_u8x16().first_chunk().unwrap();
+        self.state[dst].set_u16x8(a.map(|i| i.into()));
+        ControlFlow::Continue(())
+    }
+
+    fn vwidenlow16x8_s(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = *self.state[src].get_i16x8().first_chunk().unwrap();
+        self.state[dst].set_i32x4(a.map(|i| i.into()));
+        ControlFlow::Continue(())
+    }
+
+    fn vwidenlow16x8_u(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = *self.state[src].get_u16x8().first_chunk().unwrap();
+        self.state[dst].set_u32x4(a.map(|i| i.into()));
+        ControlFlow::Continue(())
+    }
+
+    fn vwidenlow32x4_s(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = *self.state[src].get_i32x4().first_chunk().unwrap();
+        self.state[dst].set_i64x2(a.map(|i| i.into()));
+        ControlFlow::Continue(())
+    }
+
+    fn vwidenlow32x4_u(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = *self.state[src].get_u32x4().first_chunk().unwrap();
+        self.state[dst].set_u64x2(a.map(|i| i.into()));
+        ControlFlow::Continue(())
+    }
+
+    fn vwidenhigh8x16_s(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = *self.state[src].get_i8x16().last_chunk().unwrap();
+        self.state[dst].set_i16x8(a.map(|i| i.into()));
+        ControlFlow::Continue(())
+    }
+
+    fn vwidenhigh8x16_u(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = *self.state[src].get_u8x16().last_chunk().unwrap();
+        self.state[dst].set_u16x8(a.map(|i| i.into()));
+        ControlFlow::Continue(())
+    }
+
+    fn vwidenhigh16x8_s(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = *self.state[src].get_i16x8().last_chunk().unwrap();
+        self.state[dst].set_i32x4(a.map(|i| i.into()));
+        ControlFlow::Continue(())
+    }
+
+    fn vwidenhigh16x8_u(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = *self.state[src].get_u16x8().last_chunk().unwrap();
+        self.state[dst].set_u32x4(a.map(|i| i.into()));
+        ControlFlow::Continue(())
+    }
+
+    fn vwidenhigh32x4_s(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = *self.state[src].get_i32x4().last_chunk().unwrap();
+        self.state[dst].set_i64x2(a.map(|i| i.into()));
+        ControlFlow::Continue(())
+    }
+
+    fn vwidenhigh32x4_u(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = *self.state[src].get_u32x4().last_chunk().unwrap();
+        self.state[dst].set_u64x2(a.map(|i| i.into()));
+        ControlFlow::Continue(())
+    }
+
+    fn vnarrow16x8_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        let mut result = [0; 16];
+        for (i, d) in a.iter().chain(&b).zip(&mut result) {
+            *d = (*i)
+                .try_into()
+                .unwrap_or(if *i < 0 { i8::MIN } else { i8::MAX });
+        }
+        self.state[operands.dst].set_i8x16(result);
+        ControlFlow::Continue(())
+    }
+
+    fn vnarrow16x8_u(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        let mut result = [0; 16];
+        for (i, d) in a.iter().chain(&b).zip(&mut result) {
+            *d = (*i)
+                .try_into()
+                .unwrap_or(if *i < 0 { u8::MIN } else { u8::MAX });
+        }
+        self.state[operands.dst].set_u8x16(result);
+        ControlFlow::Continue(())
+    }
+
+    fn vnarrow32x4_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i32x4();
+        let b = self.state[operands.src2].get_i32x4();
+        let mut result = [0; 8];
+        for (i, d) in a.iter().chain(&b).zip(&mut result) {
+            *d = (*i)
+                .try_into()
+                .unwrap_or(if *i < 0 { i16::MIN } else { i16::MAX });
+        }
+        self.state[operands.dst].set_i16x8(result);
+        ControlFlow::Continue(())
+    }
+
+    fn vnarrow32x4_u(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i32x4();
+        let b = self.state[operands.src2].get_i32x4();
+        let mut result = [0; 8];
+        for (i, d) in a.iter().chain(&b).zip(&mut result) {
+            *d = (*i)
+                .try_into()
+                .unwrap_or(if *i < 0 { u16::MIN } else { u16::MAX });
+        }
+        self.state[operands.dst].set_u16x8(result);
+        ControlFlow::Continue(())
+    }
+
+    fn vfpromotelow(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32x4();
+        self.state[dst].set_f64x2([a[0].into(), a[1].into()]);
+        ControlFlow::Continue(())
+    }
+
+    fn vfdemote(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64x2();
+        self.state[dst].set_f32x4([a[0] as f32, a[1] as f32, 0.0, 0.0]);
+        ControlFlow::Continue(())
+    }
+
+    fn vsubi8x16(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i8x16();
+        let b = self.state[operands.src2].get_i8x16();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = a.wrapping_sub(b);
+        }
+        self.state[operands.dst].set_i8x16(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vsubi16x8(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = a.wrapping_sub(b);
+        }
+        self.state[operands.dst].set_i16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vsubi32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i32x4();
+        let b = self.state[operands.src2].get_i32x4();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = a.wrapping_sub(b);
+        }
+        self.state[operands.dst].set_i32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vsubi64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i64x2();
+        let b = self.state[operands.src2].get_i64x2();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = a.wrapping_sub(b);
+        }
+        self.state[operands.dst].set_i64x2(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmuli8x16(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i8x16();
+        let b = self.state[operands.src2].get_i8x16();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = a.wrapping_mul(b);
+        }
+        self.state[operands.dst].set_i8x16(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmuli16x8(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = a.wrapping_mul(b);
+        }
+        self.state[operands.dst].set_i16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmuli32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i32x4();
+        let b = self.state[operands.src2].get_i32x4();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = a.wrapping_mul(b);
+        }
+        self.state[operands.dst].set_i32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmuli64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i64x2();
+        let b = self.state[operands.src2].get_i64x2();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = a.wrapping_mul(b);
+        }
+        self.state[operands.dst].set_i64x2(a);
+        ControlFlow::Continue(())
+    }
 }
