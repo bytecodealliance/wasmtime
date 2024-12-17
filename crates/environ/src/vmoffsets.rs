@@ -15,13 +15,13 @@
 //      gc_heap_data: *mut T, // Collector-specific pointer
 //      store: *mut dyn Store,
 //      type_ids: *const VMSharedTypeIndex,
-//      imported_functions: [VMFunctionImport; module.num_imported_functions],
-//      imported_tables: [VMTableImport; module.num_imported_tables],
 //      imported_memories: [VMMemoryImport; module.num_imported_memories],
-//      imported_globals: [VMGlobalImport; module.num_imported_globals],
-//      tables: [VMTableDefinition; module.num_defined_tables],
 //      memories: [*mut VMMemoryDefinition; module.num_defined_memories],
 //      owned_memories: [VMMemoryDefinition; module.num_owned_memories],
+//      imported_functions: [VMFunctionImport; module.num_imported_functions],
+//      imported_tables: [VMTableImport; module.num_imported_tables],
+//      imported_globals: [VMGlobalImport; module.num_imported_globals],
+//      tables: [VMTableDefinition; module.num_defined_tables],
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
 //      func_refs: [VMFuncRef; module.num_escaped_funcs],
 // }
@@ -415,13 +415,13 @@ impl<P: PtrSize> VMOffsets<P> {
         calculate_sizes! {
             defined_func_refs: "module functions",
             defined_globals: "defined globals",
-            owned_memories: "owned memories",
-            defined_memories: "defined memories",
             defined_tables: "defined tables",
             imported_globals: "imported globals",
-            imported_memories: "imported memories",
             imported_tables: "imported tables",
             imported_functions: "imported functions",
+            owned_memories: "owned memories",
+            defined_memories: "defined memories",
+            imported_memories: "imported memories",
         }
     }
 }
@@ -481,20 +481,20 @@ impl<P: PtrSize> From<VMOffsetsFields<P>> for VMOffsets<P> {
         }
 
         fields! {
-            size(imported_functions)
-                = cmul(ret.num_imported_functions, ret.size_of_vmfunction_import()),
-            size(imported_tables)
-                = cmul(ret.num_imported_tables, ret.size_of_vmtable_import()),
             size(imported_memories)
                 = cmul(ret.num_imported_memories, ret.size_of_vmmemory_import()),
-            size(imported_globals)
-                = cmul(ret.num_imported_globals, ret.size_of_vmglobal_import()),
-            size(defined_tables)
-                = cmul(ret.num_defined_tables, ret.size_of_vmtable_definition()),
             size(defined_memories)
                 = cmul(ret.num_defined_memories, ret.ptr.size_of_vmmemory_pointer()),
             size(owned_memories)
                 = cmul(ret.num_owned_memories, ret.ptr.size_of_vmmemory_definition()),
+            size(imported_functions)
+                = cmul(ret.num_imported_functions, ret.size_of_vmfunction_import()),
+            size(imported_tables)
+                = cmul(ret.num_imported_tables, ret.size_of_vmtable_import()),
+            size(imported_globals)
+                = cmul(ret.num_imported_globals, ret.size_of_vmglobal_import()),
+            size(defined_tables)
+                = cmul(ret.num_defined_tables, ret.size_of_vmtable_definition()),
             align(16),
             size(defined_globals)
                 = cmul(ret.num_defined_globals, ret.ptr.size_of_vmglobal_definition()),
