@@ -393,13 +393,22 @@ fn pulley_emit<P>(
             mem,
             ty,
             flags,
+            ext,
         } => {
             let r = mem.get_base_register().unwrap();
             let x = mem.get_offset_with_state(state);
             let endian = emit_info.endianness(*flags);
             assert_eq!(endian, Endianness::Little);
             assert_eq!(ty.bytes(), 16);
-            enc::vload128le_offset32(sink, dst, r, x);
+            match ext {
+                VExtKind::None => enc::vload128le_offset32(sink, dst, r, x),
+                VExtKind::S8x8 => enc::vload8x8_s_offset32(sink, dst, r, x),
+                VExtKind::U8x8 => enc::vload8x8_u_offset32(sink, dst, r, x),
+                VExtKind::S16x4 => enc::vload16x4le_s_offset32(sink, dst, r, x),
+                VExtKind::U16x4 => enc::vload16x4le_u_offset32(sink, dst, r, x),
+                VExtKind::S32x2 => enc::vload32x2le_s_offset32(sink, dst, r, x),
+                VExtKind::U32x2 => enc::vload32x2le_u_offset32(sink, dst, r, x),
+            }
         }
 
         Inst::XStore {

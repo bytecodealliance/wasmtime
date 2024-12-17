@@ -78,7 +78,7 @@
     ;; control behavior such as endianness.
     (XLoad (dst WritableXReg) (mem Amode) (ty Type) (flags MemFlags) (ext ExtKind))
     (FLoad (dst WritableFReg) (mem Amode) (ty Type) (flags MemFlags))
-    (VLoad (dst WritableVReg) (mem Amode) (ty Type) (flags MemFlags))
+    (VLoad (dst WritableVReg) (mem Amode) (ty Type) (flags MemFlags) (ext VExtKind))
 
     ;; Stores.
     (XStore (mem Amode) (src XReg) (ty Type) (flags MemFlags))
@@ -147,6 +147,8 @@
 )
 
 (type ExtKind (enum None Sign32 Sign64 Zero32 Zero64))
+
+(type VExtKind (enum None S8x8 U8x8 S16x4 U16x4 S32x2 U32x2))
 
 ;;;; Newtypes for Different Register Classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -422,10 +424,10 @@
 (rule (pulley_fstore amode src ty flags)
       (SideEffectNoResult.Inst (MInst.FStore amode src ty flags)))
 
-(decl pulley_vload (Amode Type MemFlags) VReg)
-(rule (pulley_vload amode ty flags)
+(decl pulley_vload (Amode Type MemFlags VExtKind) VReg)
+(rule (pulley_vload amode ty flags ext)
       (let ((dst WritableVReg (temp_writable_vreg))
-            (_ Unit (emit (MInst.VLoad dst amode ty flags))))
+            (_ Unit (emit (MInst.VLoad dst amode ty flags ext))))
         dst))
 
 (decl pulley_vstore (Amode VReg Type MemFlags) SideEffectNoResult)
