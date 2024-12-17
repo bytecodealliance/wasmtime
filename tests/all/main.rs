@@ -83,7 +83,7 @@ pub(crate) fn skip_pooling_allocator_tests() -> bool {
     // There are a couple of issues when running the pooling allocator tests under QEMU:
     // - high memory usage that may exceed the limits imposed by the environment (e.g. CI)
     // - https://github.com/bytecodealliance/wasmtime/pull/2518#issuecomment-747280133
-    cfg!(target_pointer_width = "32") || std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok()
+    std::env::var("WASMTIME_TEST_NO_HOG_MEMORY").is_ok()
 }
 
 /// Get the default pooling allocator configuration for tests, which is a

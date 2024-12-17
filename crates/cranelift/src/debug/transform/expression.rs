@@ -795,8 +795,6 @@ impl std::fmt::Debug for JumpTargetMarker {
 
 #[cfg(test)]
 #[expect(trivial_numeric_casts, reason = "macro-generated code")]
-#[cfg(target_pointer_width = "64")] // cranelift doesn't support native 32-bit
-                                    // platforms
 mod tests {
     use super::{
         compile_expression, AddressTransform, CompiledExpression, CompiledExpressionPart,
@@ -1223,6 +1221,11 @@ mod tests {
     fn test_debug_value_range_builder() {
         use super::ValueLabelRangesBuilder;
         use crate::debug::ModuleMemoryOffset;
+
+        // Ignore this test if cranelift doesn't support the native platform.
+        if cranelift_native::builder().is_err() {
+            return;
+        }
 
         let addr_tr = create_mock_address_transform();
         let (value_ranges, value_labels) = create_mock_value_ranges();

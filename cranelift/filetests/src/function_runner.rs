@@ -611,7 +611,6 @@ extern "C" fn __cranelift_x86_pshufb(a: __m128i, b: __m128i) -> __m128i {
 }
 
 #[cfg(test)]
-#[cfg(target_pointer_width = "64")] // 32-bit platforms not supported at this time
 mod test {
     use super::*;
     use cranelift_reader::{parse_functions, parse_test, ParseOptions};
@@ -622,6 +621,10 @@ mod test {
 
     #[test]
     fn nop() {
+        // Skip this test when cranelift doesn't support the native platform.
+        if cranelift_native::builder().is_err() {
+            return;
+        }
         let code = String::from(
             "
             test run
@@ -656,6 +659,10 @@ mod test {
 
     #[test]
     fn trampolines() {
+        // Skip this test when cranelift doesn't support the native platform.
+        if cranelift_native::builder().is_err() {
+            return;
+        }
         let function = parse(
             "
             function %test(f32, i8, i64x2, i8) -> f32x4, i64 {

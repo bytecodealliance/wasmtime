@@ -1,5 +1,4 @@
 use super::ref_types_module;
-use super::skip_pooling_allocator_tests;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
 use wasmtime::*;
@@ -280,11 +279,9 @@ fn global_drops_externref() -> Result<()> {
     let _ = env_logger::try_init();
     test_engine(&Engine::default())?;
 
-    if !skip_pooling_allocator_tests() {
-        test_engine(&Engine::new(
-            Config::new().allocation_strategy(InstanceAllocationStrategy::pooling()),
-        )?)?;
-    }
+    let mut config = Config::new();
+    config.allocation_strategy(crate::small_pool_config());
+    test_engine(&Engine::new(&config)?)?;
 
     return Ok(());
 
@@ -331,11 +328,9 @@ fn table_drops_externref() -> Result<()> {
     let _ = env_logger::try_init();
     test_engine(&Engine::default())?;
 
-    if !skip_pooling_allocator_tests() {
-        test_engine(&Engine::new(
-            Config::new().allocation_strategy(InstanceAllocationStrategy::pooling()),
-        )?)?;
-    }
+    let mut config = Config::new();
+    config.allocation_strategy(crate::small_pool_config());
+    test_engine(&Engine::new(&config)?)?;
 
     return Ok(());
 
