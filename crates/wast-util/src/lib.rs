@@ -401,8 +401,6 @@ impl WastTest {
         // features in Pulley are implemented.
         if config.compiler == Compiler::CraneliftPulley {
             let unsupported = [
-                "misc_testsuite/int-to-float-splat.wast",
-                "misc_testsuite/issue6562.wast",
                 "misc_testsuite/memory64/simd.wast",
                 "misc_testsuite/simd/almost-extmul.wast",
                 "misc_testsuite/simd/canonicalize-nan.wast",

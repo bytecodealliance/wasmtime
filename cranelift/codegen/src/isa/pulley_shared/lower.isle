@@ -799,3 +799,12 @@
 
 (rule 0 (lower (has_type (fits_in_32 _) (iabs a))) (pulley_xabs32 (sext32 a)))
 (rule 1 (lower (has_type $I64 (iabs a))) (pulley_xabs64 a))
+
+;;;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I8X16 (splat a))) (pulley_vsplatx8 a))
+(rule (lower (has_type $I16X8 (splat a))) (pulley_vsplatx16 a))
+(rule (lower (has_type $I32X4 (splat a))) (pulley_vsplatx32 a))
+(rule (lower (has_type $I64X2 (splat a))) (pulley_vsplatx64 a))
+(rule (lower (has_type $F32X4 (splat a))) (pulley_vsplatf32 a))
+(rule (lower (has_type $F64X2 (splat a))) (pulley_vsplatf64 a))
