@@ -50,12 +50,12 @@ fn build_host_isa(
 /// Checks if the host's ISA is compatible with the one requested by the test.
 fn is_isa_compatible(
     file_path: &str,
-    host: &anyhow::Result<OwnedTargetIsa>,
+    host: Option<&dyn TargetIsa>,
     requested: &dyn TargetIsa,
 ) -> Result<(), String> {
     let host_triple = match host {
-        Ok(host) => host.triple().clone(),
-        Err(_) => target_lexicon::Triple::host(),
+        Some(host) => host.triple().clone(),
+        None => target_lexicon::Triple::host(),
     };
     // If this test requests to run on a completely different
     // architecture than the host platform then we skip it entirely,
@@ -101,8 +101,12 @@ fn is_isa_compatible(
             None => unimplemented!("ISA flag {} of kind {:?}", req_value.name, req_value.kind()),
         };
         let host_isa_flags = match host {
-            Ok(host) => host.isa_flags(),
-            Err(e) => return Err(format!("{e:?}")),
+            Some(host) => host.isa_flags(),
+            None => {
+                return Err(format!(
+                    "host not available on this platform for isa-specific flag"
+                ))
+            }
         };
         let available_in_host = host_isa_flags
             .iter()
@@ -229,8 +233,8 @@ impl SubTest for TestRun {
         }
 
         // Check that the host machine can run this test case (i.e. has all extensions)
-        let host_isa = build_host_isa(true, flags.clone(), vec![]);
-        if let Err(e) = is_isa_compatible(file_path, &host_isa, isa.unwrap()) {
+        let host_isa = build_host_isa(true, flags.clone(), vec![]).ok();
+        if let Err(e) = is_isa_compatible(file_path, host_isa.as_deref(), isa.unwrap()) {
             log::info!("{}", e);
             return Ok(());
         }
