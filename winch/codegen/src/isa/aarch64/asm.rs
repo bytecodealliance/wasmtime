@@ -10,6 +10,7 @@ use crate::{
     masm::OperandSize,
     reg::{writable, Reg, WritableReg},
 };
+
 use cranelift_codegen::isa::aarch64::inst::{UImm5, NZCV};
 use cranelift_codegen::{
     ir::{ExternalName, LibCall, MemFlags, SourceLoc, TrapCode, UserExternalNameRef},
@@ -410,7 +411,7 @@ impl Assembler {
         size: OperandSize,
     ) {
         // Check for division by 0.
-        self.trapz(divisor, TrapCode::INTEGER_DIVISION_BY_ZERO);
+        self.trapz(divisor, TrapCode::INTEGER_DIVISION_BY_ZERO, size);
 
         // check for overflow
         if kind == DivKind::Signed {
@@ -436,32 +437,23 @@ impl Assembler {
             self.trapif(Cond::Vs, TrapCode::INTEGER_OVERFLOW);
         }
 
-        // `cranelift-codegen` doesn't support emitting u/sdiv for anything but I64,
+        // `cranelift-codegen` doesn't support emitting sdiv for anything but I64,
         // we therefore sign-extend the operand.
         // see: https://github.com/bytecodealliance/wasmtime/issues/9766
-        if size == OperandSize::S32 {
-            let extend_kind = if kind == DivKind::Signed {
-                ExtendKind::I64Extend32S
-            } else {
-                ExtendKind::I64ExtendI32U
-            };
-
-            self.extend(divisor, writable!(divisor), extend_kind);
-            self.extend(dividend, writable!(dividend), extend_kind);
-        }
+        let size = if size == OperandSize::S32 && kind == DivKind::Signed {
+            self.extend(divisor, writable!(divisor), ExtendKind::I64Extend32S);
+            self.extend(dividend, writable!(dividend), ExtendKind::I64Extend32S);
+            OperandSize::S64
+        } else {
+            size
+        };
 
         let op = match kind {
             DivKind::Signed => ALUOp::SDiv,
             DivKind::Unsigned => ALUOp::UDiv,
         };
 
-        self.emit_alu_rrr(
-            op,
-            divisor,
-            dividend,
-            dest.map(Into::into),
-            OperandSize::S64,
-        );
+        self.emit_alu_rrr(op, divisor, dividend, dest.map(Into::into), size);
     }
 
     /// Signed/unsigned remainder operation with three registers.
@@ -474,21 +466,18 @@ impl Assembler {
         size: OperandSize,
     ) {
         // Check for division by 0
-        self.trapz(divisor, TrapCode::INTEGER_DIVISION_BY_ZERO);
+        self.trapz(divisor, TrapCode::INTEGER_DIVISION_BY_ZERO, size);
 
-        // `cranelift-codegen` doesn't support emitting u/sdiv for anything but I64,
+        // `cranelift-codegen` doesn't support emitting sdiv for anything but I64,
         // we therefore sign-extend the operand.
         // see: https://github.com/bytecodealliance/wasmtime/issues/9766
-        if size == OperandSize::S32 {
-            let extend_kind = if kind.is_signed() {
-                ExtendKind::I64Extend32S
-            } else {
-                ExtendKind::I64ExtendI32U
-            };
-
-            self.extend(divisor, writable!(divisor), extend_kind);
-            self.extend(dividend, writable!(dividend), extend_kind);
-        }
+        let size = if size == OperandSize::S32 && kind.is_signed() {
+            self.extend(divisor, writable!(divisor), ExtendKind::I64Extend32S);
+            self.extend(dividend, writable!(dividend), ExtendKind::I64Extend32S);
+            OperandSize::S64
+        } else {
+            size
+        };
 
         let op = match kind {
             RemKind::Signed => ALUOp::SDiv,
@@ -496,13 +485,7 @@ impl Assembler {
         };
 
         let scratch = regs::scratch();
-        self.emit_alu_rrr(
-            op,
-            divisor,
-            dividend,
-            writable!(scratch.into()),
-            OperandSize::S64,
-        );
+        self.emit_alu_rrr(op, divisor, dividend, writable!(scratch.into()), size);
 
         self.emit_alu_rrrr(
             ALUOp3::MSub,
@@ -510,7 +493,7 @@ impl Assembler {
             divisor,
             dest.map(Into::into),
             dividend,
-            OperandSize::S64,
+            size,
         );
     }
 
@@ -888,9 +871,9 @@ impl Assembler {
     }
 
     /// Trap if `rn` is zero.
-    pub fn trapz(&mut self, rn: Reg, code: TrapCode) {
+    pub fn trapz(&mut self, rn: Reg, code: TrapCode, size: OperandSize) {
         self.emit(Inst::TrapIf {
-            kind: CondBrKind::Zero(rn.into()),
+            kind: CondBrKind::Zero(rn.into(), size.into()),
             trap_code: code,
         });
     }

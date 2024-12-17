@@ -164,10 +164,21 @@ fn enc_cbr(op_31_24: u32, off_18_0: u32, op_4: u32, cond: u32) -> u32 {
     (op_31_24 << 24) | (off_18_0 << 5) | (op_4 << 4) | cond
 }
 
+/// Set the size bit of an instruction.
+fn enc_op_size(op: u32, size: OperandSize) -> u32 {
+    (op & !(1 << 31)) | (size.sf_bit() << 31)
+}
+
 fn enc_conditional_br(taken: BranchTarget, kind: CondBrKind) -> u32 {
     match kind {
-        CondBrKind::Zero(reg) => enc_cmpbr(0b1_011010_0, taken.as_offset19_or_zero(), reg),
-        CondBrKind::NotZero(reg) => enc_cmpbr(0b1_011010_1, taken.as_offset19_or_zero(), reg),
+        CondBrKind::Zero(reg, size) => enc_op_size(
+            enc_cmpbr(0b0_011010_0, taken.as_offset19_or_zero(), reg),
+            size,
+        ),
+        CondBrKind::NotZero(reg, size) => enc_op_size(
+            enc_cmpbr(0b0_011010_1, taken.as_offset19_or_zero(), reg),
+            size,
+        ),
         CondBrKind::Cond(c) => enc_cbr(0b01010100, taken.as_offset19_or_zero(), 0b0, c.bits()),
     }
 }
@@ -728,8 +739,7 @@ impl MachInstEmit for Inst {
                 rm,
             } => {
                 debug_assert!(match alu_op {
-                    ALUOp::SDiv | ALUOp::UDiv | ALUOp::SMulH | ALUOp::UMulH =>
-                        size == OperandSize::Size64,
+                    ALUOp::SMulH | ALUOp::UMulH => size == OperandSize::Size64,
                     _ => true,
                 });
                 let top11 = match alu_op {
@@ -749,11 +759,12 @@ impl MachInstEmit for Inst {
                     ALUOp::AddS => 0b00101011_000,
                     ALUOp::SubS => 0b01101011_000,
                     ALUOp::SDiv => 0b10011010_110,
-                    ALUOp::UDiv => 0b10011010_110,
+                    ALUOp::UDiv => 0b00011010_110,
                     ALUOp::RotR | ALUOp::Lsr | ALUOp::Asr | ALUOp::Lsl => 0b00011010_110,
                     ALUOp::SMulH => 0b10011011_010,
                     ALUOp::UMulH => 0b10011011_110,
                 };
+
                 let top11 = top11 | size.sf_bit() << 10;
                 let bit15_10 = match alu_op {
                     ALUOp::SDiv => 0b000011,
@@ -1612,7 +1623,7 @@ impl MachInstEmit for Inst {
                 let br_offset = sink.cur_offset();
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(again_label),
-                    CondBrKind::NotZero(x24),
+                    CondBrKind::NotZero(x24, OperandSize::Size64),
                 ));
                 sink.use_label_at_offset(br_offset, again_label, LabelUse::Branch19);
             }
@@ -1705,7 +1716,7 @@ impl MachInstEmit for Inst {
                 let br_again_offset = sink.cur_offset();
                 sink.put4(enc_conditional_br(
                     BranchTarget::Label(again_label),
-                    CondBrKind::NotZero(x24),
+                    CondBrKind::NotZero(x24, OperandSize::Size64),
                 ));
                 sink.use_label_at_offset(br_again_offset, again_label, LabelUse::Branch19);
 

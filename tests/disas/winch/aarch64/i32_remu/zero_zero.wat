@@ -22,14 +22,12 @@
 ;;       mov     w0, w16
 ;;       mov     x16, #0
 ;;       mov     w1, w16
-;;       cbz     x0, #0x58
-;;   34: mov     w0, w0
-;;       mov     w1, w1
-;;       udiv    x16, x1, x0
-;;       msub    x1, x0, x16, x1
+;;       cbz     w0, #0x50
+;;   34: udiv    w16, w1, w0
+;;       msub    w1, w0, w16, w1
 ;;       mov     w0, w1
 ;;       add     sp, sp, #0x10
 ;;       mov     x28, sp
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   58: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   50: .byte   0x1f, 0xc1, 0x00, 0x00

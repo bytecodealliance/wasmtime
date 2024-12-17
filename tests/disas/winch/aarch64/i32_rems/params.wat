@@ -22,7 +22,7 @@
 ;;       stur    w3, [x28]
 ;;       ldur    w0, [x28]
 ;;       ldur    w1, [x28, #4]
-;;       cbz     x0, #0x58
+;;       cbz     w0, #0x58
 ;;   34: sxtw    x0, w0
 ;;       sxtw    x1, w1
 ;;       sdiv    x16, x1, x0
