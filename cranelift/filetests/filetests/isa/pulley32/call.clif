@@ -163,12 +163,12 @@ block0:
 ; push_frame
 ; stack_alloc32 48
 ; xconst8 x15, 0
-; xstore64le_offset32 sp, 0, x15
-; xstore64le_offset32 sp, 8, x15
-; xstore64le_offset32 sp, 16, x15
-; xstore64le_offset32 sp, 24, x15
-; xstore64le_offset32 sp, 32, x15
-; xstore64le_offset32 sp, 40, x15
+; xstore64le_offset8 sp, 0, x15
+; xstore64le_offset8 sp, 8, x15
+; xstore64le_offset8 sp, 16, x15
+; xstore64le_offset8 sp, 24, x15
+; xstore64le_offset8 sp, 32, x15
+; xstore64le_offset8 sp, 40, x15
 ; xmov x0, x15
 ; xmov x1, x15
 ; xmov x2, x15
@@ -184,7 +184,7 @@ block0:
 ; xmov x12, x15
 ; xmov x13, x15
 ; xmov x14, x15
-; call 0x0    // target = 0x60
+; call 0x0    // target = 0x4e
 ; stack_free32 48
 ; pop_frame
 ; ret
@@ -284,22 +284,22 @@ block0:
 ; Disassembled:
 ; push_frame
 ; stack_alloc32 112
-; xstore64le_offset32 sp, 104, x17
-; xstore64le_offset32 sp, 96, x18
-; xstore64le_offset32 sp, 88, x20
-; xstore64le_offset32 sp, 80, x21
-; xstore64le_offset32 sp, 72, x22
-; xstore64le_offset32 sp, 64, x23
-; xstore64le_offset32 sp, 56, x29
+; xstore64le_offset8 sp, 104, x17
+; xstore64le_offset8 sp, 96, x18
+; xstore64le_offset8 sp, 88, x20
+; xstore64le_offset8 sp, 80, x21
+; xstore64le_offset8 sp, 72, x22
+; xstore64le_offset8 sp, 64, x23
+; xstore64le_offset8 sp, 56, x29
 ; xmov x0, sp
-; call 0x0    // target = 0x3a
+; call 0x0    // target = 0x25
 ; xmov x20, x13
 ; xmov x22, x11
-; xload64le_offset32 x29, sp, 0
-; xload64le_offset32 x11, sp, 8
-; xload64le_offset32 x13, sp, 16
-; xload64le_offset32 x21, sp, 24
-; xload64le_offset32 x23, sp, 32
+; xload64le_offset8 x29, sp, 0
+; xload64le_offset8 x11, sp, 8
+; xload64le_offset8 x13, sp, 16
+; xload64le_offset8 x21, sp, 24
+; xload64le_offset8 x23, sp, 32
 ; xadd64 x18, x0, x1
 ; xadd64 x17, x2, x3
 ; xadd64 x5, x4, x5
@@ -325,13 +325,13 @@ block0:
 ; xadd64 x14, x0, x14
 ; xadd64 x13, x13, x13
 ; xadd64 x0, x14, x13
-; xload64le_offset32 x17, sp, 104
-; xload64le_offset32 x18, sp, 96
-; xload64le_offset32 x20, sp, 88
-; xload64le_offset32 x21, sp, 80
-; xload64le_offset32 x22, sp, 72
-; xload64le_offset32 x23, sp, 64
-; xload64le_offset32 x29, sp, 56
+; xload64le_offset8 x17, sp, 104
+; xload64le_offset8 x18, sp, 96
+; xload64le_offset8 x20, sp, 88
+; xload64le_offset8 x21, sp, 80
+; xload64le_offset8 x22, sp, 72
+; xload64le_offset8 x23, sp, 64
+; xload64le_offset8 x29, sp, 56
 ; stack_free32 112
 ; pop_frame
 ; ret
