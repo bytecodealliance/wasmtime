@@ -2825,6 +2825,106 @@ impl OpVisitor for Interpreter<'_> {
         self.state[dst].set_u128((c & x) | (!c & y));
         ControlFlow::Continue(())
     }
+
+    fn vbitmask8x16(&mut self, dst: XReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u8x16();
+        let mut result = 0;
+        for item in a.iter().rev() {
+            result <<= 1;
+            result |= (*item >> 7) as u32;
+        }
+        self.state[dst].set_u32(result);
+        ControlFlow::Continue(())
+    }
+
+    fn vbitmask16x8(&mut self, dst: XReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u16x8();
+        let mut result = 0;
+        for item in a.iter().rev() {
+            result <<= 1;
+            result |= (*item >> 15) as u32;
+        }
+        self.state[dst].set_u32(result);
+        ControlFlow::Continue(())
+    }
+
+    fn vbitmask32x4(&mut self, dst: XReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u32x4();
+        let mut result = 0;
+        for item in a.iter().rev() {
+            result <<= 1;
+            result |= *item >> 31;
+        }
+        self.state[dst].set_u32(result);
+        ControlFlow::Continue(())
+    }
+
+    fn vbitmask64x2(&mut self, dst: XReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u64x2();
+        let mut result = 0;
+        for item in a.iter().rev() {
+            result <<= 1;
+            result |= (*item >> 63) as u32;
+        }
+        self.state[dst].set_u32(result);
+        ControlFlow::Continue(())
+    }
+
+    fn valltrue8x16(&mut self, dst: XReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u8x16();
+        let result = a.iter().all(|a| *a != 0);
+        self.state[dst].set_u32(u32::from(result));
+        ControlFlow::Continue(())
+    }
+
+    fn valltrue16x8(&mut self, dst: XReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u16x8();
+        let result = a.iter().all(|a| *a != 0);
+        self.state[dst].set_u32(u32::from(result));
+        ControlFlow::Continue(())
+    }
+
+    fn valltrue32x4(&mut self, dst: XReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u32x4();
+        let result = a.iter().all(|a| *a != 0);
+        self.state[dst].set_u32(u32::from(result));
+        ControlFlow::Continue(())
+    }
+
+    fn valltrue64x2(&mut self, dst: XReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u64x2();
+        let result = a.iter().all(|a| *a != 0);
+        self.state[dst].set_u32(u32::from(result));
+        ControlFlow::Continue(())
+    }
+
+    fn vanytrue8x16(&mut self, dst: XReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u8x16();
+        let result = a.iter().any(|a| *a != 0);
+        self.state[dst].set_u32(u32::from(result));
+        ControlFlow::Continue(())
+    }
+
+    fn vanytrue16x8(&mut self, dst: XReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u16x8();
+        let result = a.iter().any(|a| *a != 0);
+        self.state[dst].set_u32(u32::from(result));
+        ControlFlow::Continue(())
+    }
+
+    fn vanytrue32x4(&mut self, dst: XReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u32x4();
+        let result = a.iter().any(|a| *a != 0);
+        self.state[dst].set_u32(u32::from(result));
+        ControlFlow::Continue(())
+    }
+
+    fn vanytrue64x2(&mut self, dst: XReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u64x2();
+        let result = a.iter().any(|a| *a != 0);
+        self.state[dst].set_u32(u32::from(result));
+        ControlFlow::Continue(())
+    }
 }
 
 impl ExtendedOpVisitor for Interpreter<'_> {

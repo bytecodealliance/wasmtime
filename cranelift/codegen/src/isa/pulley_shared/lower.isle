@@ -843,3 +843,32 @@
 (rule (lower (has_type $I64X2 (splat a))) (pulley_vsplatx64 a))
 (rule (lower (has_type $F32X4 (splat a))) (pulley_vsplatf32 a))
 (rule (lower (has_type $F64X2 (splat a))) (pulley_vsplatf64 a))
+
+;;;; Rules for `vhigh_bits` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (fits_in_32 _) (vhigh_bits a @ (value_type $I8X16))))
+  (pulley_vbitmask8x16 a))
+(rule (lower (has_type (fits_in_32 _) (vhigh_bits a @ (value_type $I16X8))))
+  (pulley_vbitmask16x8 a))
+(rule (lower (has_type (fits_in_32 _) (vhigh_bits a @ (value_type $I32X4))))
+  (pulley_vbitmask32x4 a))
+(rule (lower (has_type (fits_in_32 _) (vhigh_bits a @ (value_type $I64X2))))
+  (pulley_vbitmask64x2 a))
+
+;;;; Rules for `vall_true`; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (vall_true a @ (value_type $I8X16))) (pulley_valltrue8x16 a))
+(rule (lower (vall_true a @ (value_type $I16X8))) (pulley_valltrue16x8 a))
+(rule (lower (vall_true a @ (value_type $I32X4))) (pulley_valltrue32x4 a))
+(rule (lower (vall_true a @ (value_type $I64X2))) (pulley_valltrue64x2 a))
+(rule (lower (vall_true a @ (value_type $F32X4))) (pulley_valltrue32x4 a))
+(rule (lower (vall_true a @ (value_type $F64X2))) (pulley_valltrue64x2 a))
+
+;;;; Rules for `vany_true`; ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (vany_true a @ (value_type $I8X16))) (pulley_vanytrue8x16 a))
+(rule (lower (vany_true a @ (value_type $I16X8))) (pulley_vanytrue16x8 a))
+(rule (lower (vany_true a @ (value_type $I32X4))) (pulley_vanytrue32x4 a))
+(rule (lower (vany_true a @ (value_type $I64X2))) (pulley_vanytrue64x2 a))
+(rule (lower (vany_true a @ (value_type $F32X4))) (pulley_vanytrue32x4 a))
+(rule (lower (vany_true a @ (value_type $F64X2))) (pulley_vanytrue64x2 a))
