@@ -66,9 +66,9 @@ fn push_pop_many() {
         &[
             // Prologue.
             Op::PushFrame(PushFrame {}),
-            Op::XPush32Many(XPush32Many {
+            Op::ExtendedOp(ExtendedOp::XPush32Many(XPush32Many {
                 srcs: RegSet::from_iter([XReg::x0, XReg::x1, XReg::x2, XReg::x3, XReg::x4]),
-            }),
+            })),
             // Function body.
             Op::Xadd32(Xadd32 {
                 operands: BinaryOperands {
@@ -78,9 +78,9 @@ fn push_pop_many() {
                 },
             }),
             // Epilogue.
-            Op::XPop32Many(XPop32Many {
+            Op::ExtendedOp(ExtendedOp::XPop32Many(XPop32Many {
                 dsts: RegSet::from_iter([XReg::x0, XReg::x1, XReg::x2, XReg::x3, XReg::x4]),
-            }),
+            })),
             Op::PopFrame(PopFrame {}),
             Op::Ret(Ret {}),
         ],
