@@ -2073,8 +2073,11 @@ after empty
 }
 
 #[test]
-#[cfg(target_pointer_width = "64")] // cranelift only supports 64-bit platforms
 fn settings_command() -> Result<()> {
+    // Skip this test on platforms that Cranelift doesn't support.
+    if cranelift_native::builder().is_err() {
+        return Ok(());
+    }
     let output = run_wasmtime(&["settings"])?;
     assert!(output.contains("Cranelift settings for target"));
     Ok(())
