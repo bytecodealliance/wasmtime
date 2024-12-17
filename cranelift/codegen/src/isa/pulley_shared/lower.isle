@@ -284,6 +284,9 @@
 (rule 1 (lower (has_type $I64 (band a b)))
   (pulley_xband64 a b))
 
+(rule 2 (lower (has_type (ty_vec128 _) (band a b)))
+  (pulley_vband128 a b))
+
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (has_type (fits_in_32 _) (bor a b)))
@@ -291,6 +294,9 @@
 
 (rule 1 (lower (has_type $I64 (bor a b)))
   (pulley_xbor64 a b))
+
+(rule 2 (lower (has_type (ty_vec128 _) (bor a b)))
+  (pulley_vbor128 a b))
 
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -300,6 +306,9 @@
 (rule 1 (lower (has_type $I64 (bxor a b)))
   (pulley_xbxor64 a b))
 
+(rule 2 (lower (has_type (ty_vec128 _) (bxor a b)))
+  (pulley_vbxor128 a b))
+
 ;;;; Rules for `bnot` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (has_type (fits_in_32 _) (bnot a)))
@@ -307,6 +316,14 @@
 
 (rule 1 (lower (has_type $I64 (bnot a)))
   (pulley_xbnot64 a))
+
+(rule 2 (lower (has_type (ty_vec128 _) (bnot a)))
+  (pulley_vbnot128 a))
+
+;;;; Rules for `bitselect` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type (ty_vec128 _) (bitselect c x y)))
+  (pulley_vbitselect128 c x y))
 
 ;;;; Rules for `umin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

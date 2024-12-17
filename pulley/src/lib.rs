@@ -644,6 +644,17 @@ macro_rules! for_each_op {
             vload32x2le_s_offset32 = VLoad32x2LeSOffset32 { dst: VReg, ptr: XReg, offset: i32 };
             /// Load the 64-bit source as u32x2 and zero-extend to i64x2.
             vload32x2le_u_offset32 = VLoad32x2LeUOffset32 { dst: VReg, ptr: XReg, offset: i32 };
+
+            /// `dst = src1 & src2`
+            vband128 = VBand128 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 | src2`
+            vbor128 = VBor128 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 ^ src2`
+            vbxor128 = VBxor128 { operands: BinaryOperands<VReg> };
+            /// `dst = !src1`
+            vbnot128 = VBnot128 { dst: VReg, src: VReg };
+            /// `dst = (c & x) | (!c & y)`
+            vbitselect128 = VBitselect128 { dst: VReg, c: VReg, x: VReg, y: VReg };
         }
     };
 }

@@ -2790,6 +2790,41 @@ impl OpVisitor for Interpreter<'_> {
         self.state[dst].set_u64x2(val.map(|i| u32::from_le(i).into()));
         ControlFlow::Continue(())
     }
+
+    fn vband128(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u128();
+        let b = self.state[operands.src2].get_u128();
+        self.state[operands.dst].set_u128(a & b);
+        ControlFlow::Continue(())
+    }
+
+    fn vbor128(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u128();
+        let b = self.state[operands.src2].get_u128();
+        self.state[operands.dst].set_u128(a | b);
+        ControlFlow::Continue(())
+    }
+
+    fn vbxor128(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u128();
+        let b = self.state[operands.src2].get_u128();
+        self.state[operands.dst].set_u128(a ^ b);
+        ControlFlow::Continue(())
+    }
+
+    fn vbnot128(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u128();
+        self.state[dst].set_u128(!a);
+        ControlFlow::Continue(())
+    }
+
+    fn vbitselect128(&mut self, dst: VReg, c: VReg, x: VReg, y: VReg) -> ControlFlow<Done> {
+        let c = self.state[c].get_u128();
+        let x = self.state[x].get_u128();
+        let y = self.state[y].get_u128();
+        self.state[dst].set_u128((c & x) | (!c & y));
+        ControlFlow::Continue(())
+    }
 }
 
 impl ExtendedOpVisitor for Interpreter<'_> {
