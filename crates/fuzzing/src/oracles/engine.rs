@@ -16,7 +16,16 @@ pub fn build(
     config: &mut Config,
 ) -> arbitrary::Result<Option<Box<dyn DiffEngine>>> {
     let engine: Box<dyn DiffEngine> = match name {
-        "wasmtime" => Box::new(WasmtimeEngine::new(u, config, CompilerStrategy::Cranelift)?),
+        "wasmtime" => Box::new(WasmtimeEngine::new(
+            u,
+            config,
+            CompilerStrategy::CraneliftNative,
+        )?),
+        "pulley" => Box::new(WasmtimeEngine::new(
+            u,
+            config,
+            CompilerStrategy::CraneliftPulley,
+        )?),
         "wasmi" => Box::new(WasmiEngine::new(config)),
 
         #[cfg(target_arch = "x86_64")]

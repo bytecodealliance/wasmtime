@@ -40,8 +40,9 @@ impl WasmtimeEngine {
 impl DiffEngine for WasmtimeEngine {
     fn name(&self) -> &'static str {
         match self.config.wasmtime.compiler_strategy {
-            CompilerStrategy::Cranelift => "wasmtime",
+            CompilerStrategy::CraneliftNative => "wasmtime",
             CompilerStrategy::Winch => "winch",
+            CompilerStrategy::CraneliftPulley => "pulley",
         }
     }
 
