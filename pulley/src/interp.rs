@@ -3297,4 +3297,40 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         self.state[operands.dst].set_i64x2(a);
         ControlFlow::Continue(())
     }
+
+    fn xextractv8x16(&mut self, dst: XReg, src: VReg, lane: u8) -> ControlFlow<Done> {
+        let a = unsafe { *self.state[src].get_u8x16().get_unchecked(usize::from(lane)) };
+        self.state[dst].set_u32(u32::from(a));
+        ControlFlow::Continue(())
+    }
+
+    fn xextractv16x8(&mut self, dst: XReg, src: VReg, lane: u8) -> ControlFlow<Done> {
+        let a = unsafe { *self.state[src].get_u16x8().get_unchecked(usize::from(lane)) };
+        self.state[dst].set_u32(u32::from(a));
+        ControlFlow::Continue(())
+    }
+
+    fn xextractv32x4(&mut self, dst: XReg, src: VReg, lane: u8) -> ControlFlow<Done> {
+        let a = unsafe { *self.state[src].get_u32x4().get_unchecked(usize::from(lane)) };
+        self.state[dst].set_u32(a);
+        ControlFlow::Continue(())
+    }
+
+    fn xextractv64x2(&mut self, dst: XReg, src: VReg, lane: u8) -> ControlFlow<Done> {
+        let a = unsafe { *self.state[src].get_u64x2().get_unchecked(usize::from(lane)) };
+        self.state[dst].set_u64(a);
+        ControlFlow::Continue(())
+    }
+
+    fn fextractv32x4(&mut self, dst: FReg, src: VReg, lane: u8) -> ControlFlow<Done> {
+        let a = unsafe { *self.state[src].get_f32x4().get_unchecked(usize::from(lane)) };
+        self.state[dst].set_f32(a);
+        ControlFlow::Continue(())
+    }
+
+    fn fextractv64x2(&mut self, dst: FReg, src: VReg, lane: u8) -> ControlFlow<Done> {
+        let a = unsafe { *self.state[src].get_f64x2().get_unchecked(usize::from(lane)) };
+        self.state[dst].set_f64(a);
+        ControlFlow::Continue(())
+    }
 }

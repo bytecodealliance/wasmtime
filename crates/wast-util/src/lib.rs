@@ -401,15 +401,12 @@ impl WastTest {
         // features in Pulley are implemented.
         if config.compiler == Compiler::CraneliftPulley {
             let unsupported = [
-                "misc_testsuite/memory64/simd.wast",
                 "misc_testsuite/simd/canonicalize-nan.wast",
                 "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
                 "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
                 "misc_testsuite/simd/replace-lane-preserve.wast",
-                "misc_testsuite/simd/spillslot-size-fuzzbug.wast",
                 "misc_testsuite/simd/v128-select.wast",
                 "spec_testsuite/proposals/annotations/simd_lane.wast",
-                "spec_testsuite/proposals/multi-memory/simd_memory-multi.wast",
                 "spec_testsuite/proposals/relaxed-simd/i16x8_relaxed_q15mulr_s.wast",
                 "spec_testsuite/proposals/relaxed-simd/i32x4_relaxed_trunc.wast",
                 "spec_testsuite/proposals/relaxed-simd/i8x16_relaxed_swizzle.wast",
@@ -418,7 +415,6 @@ impl WastTest {
                 "spec_testsuite/proposals/relaxed-simd/relaxed_madd_nmadd.wast",
                 "spec_testsuite/proposals/relaxed-simd/relaxed_min_max.wast",
                 "spec_testsuite/proposals/memory64/simd_lane.wast",
-                "spec_testsuite/proposals/memory64/simd_memory-multi.wast",
                 "spec_testsuite/proposals/memory64/relaxed_min_max.wast",
                 "spec_testsuite/proposals/memory64/relaxed_madd_nmadd.wast",
                 "spec_testsuite/proposals/memory64/relaxed_laneselect.wast",
@@ -462,14 +458,8 @@ impl WastTest {
                 "spec_testsuite/simd_load32_lane.wast",
                 "spec_testsuite/simd_load64_lane.wast",
                 "spec_testsuite/simd_load8_lane.wast",
-                "spec_testsuite/simd_load_extend.wast",
-                "spec_testsuite/simd_load_splat.wast",
                 "spec_testsuite/simd_load_zero.wast",
                 "spec_testsuite/simd_splat.wast",
-                "spec_testsuite/simd_store16_lane.wast",
-                "spec_testsuite/simd_store32_lane.wast",
-                "spec_testsuite/simd_store64_lane.wast",
-                "spec_testsuite/simd_store8_lane.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {

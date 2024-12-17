@@ -936,3 +936,18 @@
 ;;;; Rules for `fvdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (fvdemote a @ (value_type $F64X2))) (pulley_vfdemote a))
+
+;;;; Rules for `extractlane` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (extractlane a @ (value_type $I8X16) (u8_from_uimm8 lane)))
+  (pulley_xextractv8x16 a lane))
+(rule (lower (extractlane a @ (value_type $I16X8) (u8_from_uimm8 lane)))
+  (pulley_xextractv16x8 a lane))
+(rule (lower (extractlane a @ (value_type $I32X4) (u8_from_uimm8 lane)))
+  (pulley_xextractv32x4 a lane))
+(rule (lower (extractlane a @ (value_type $I64X2) (u8_from_uimm8 lane)))
+  (pulley_xextractv64x2 a lane))
+(rule (lower (extractlane a @ (value_type $F32X4) (u8_from_uimm8 lane)))
+  (pulley_fextractv32x4 a lane))
+(rule (lower (extractlane a @ (value_type $F64X2) (u8_from_uimm8 lane)))
+  (pulley_fextractv64x2 a lane))
