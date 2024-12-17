@@ -4,6 +4,8 @@
 // Currently the `VMContext` allocation by field looks like this:
 //
 // struct VMContext {
+//      // Fixed-width data comes first so the calculation of the offset of
+//      // these fields is a compile-time constant when using `HostPtr`.
 //      magic: u32,
 //      _padding: u32, // (On 64-bit systems)
 //      runtime_limits: *const VMRuntimeLimits,
@@ -15,6 +17,13 @@
 //      gc_heap_data: *mut T, // Collector-specific pointer
 //      store: *mut dyn Store,
 //      type_ids: *const VMSharedTypeIndex,
+//
+//      // Variable-width fields come after the fixed-width fields above. Place
+//      // memory-related items first as they're some of the most frequently
+//      // accessed items and minimizing their offset in this structure can
+//      // shrink the size of load/store instruction offset immediates on
+//      // platforms like x64 and Pulley (e.g. fit in an 8-bit offset instead
+//      // of needing a 32-bit offset)
 //      imported_memories: [VMMemoryImport; module.num_imported_memories],
 //      memories: [*mut VMMemoryDefinition; module.num_defined_memories],
 //      owned_memories: [VMMemoryDefinition; module.num_owned_memories],
