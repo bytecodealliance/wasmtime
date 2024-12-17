@@ -28,7 +28,7 @@ use cranelift_codegen::{
     ir::{Expr, Fact},
 };
 use cranelift_frontend::FunctionBuilder;
-use wasmtime_environ::WasmResult;
+use wasmtime_environ::{Unsigned, WasmResult};
 use Reachability::*;
 
 /// Helper used to emit bounds checks (as necessary) and compute the native
@@ -50,13 +50,6 @@ pub fn bounds_check_and_compute_addr(
     let pointer_bit_width = u16::try_from(env.pointer_type().bits()).unwrap();
     let bound_gv = heap.bound;
     let orig_index = index;
-    let index = cast_index_to_pointer_ty(
-        index,
-        heap.index_type(),
-        env.pointer_type(),
-        heap.pcc_memory_type.is_some(),
-        &mut builder.cursor(),
-    );
     let offset_and_size = offset_plus_size(offset, access_size);
     let clif_memory_traps_enabled = env.clif_memory_traps_enabled();
     let spectre_mitigations_enabled =
@@ -74,6 +67,38 @@ pub fn bounds_check_and_compute_addr(
         && clif_memory_traps_enabled;
     let memory_guard_size = env.tunables().memory_guard_size;
     let memory_reservation = env.tunables().memory_reservation;
+
+    // Boolean whether `index` is statically in-bounds with respect to this
+    // heap's configuration. This is `true` when `index` is a constant and when
+    // the offset/size are added in it's all still less than the minimum byte
+    // size of the heap.
+    let statically_in_bounds = builder
+        .func
+        .dfg
+        .value_def(index)
+        .inst()
+        .and_then(|i| {
+            let imm = match builder.func.dfg.insts[i] {
+                ir::InstructionData::UnaryImm {
+                    opcode: ir::Opcode::Iconst,
+                    imm,
+                } => imm,
+                _ => return None,
+            };
+            let ty = builder.func.dfg.value_type(index);
+            let index = imm.zero_extend_from_width(ty.bits()).bits().unsigned();
+            let final_addr = index.checked_add(offset_and_size)?;
+            Some(final_addr <= heap.memory.minimum_byte_size().unwrap_or(u64::MAX))
+        })
+        .unwrap_or(false);
+
+    let index = cast_index_to_pointer_ty(
+        index,
+        heap.index_type(),
+        env.pointer_type(),
+        heap.pcc_memory_type.is_some(),
+        &mut builder.cursor(),
+    );
 
     let make_compare = |builder: &mut FunctionBuilder,
                         compare_kind: IntCC,
@@ -211,6 +236,19 @@ pub fn bounds_check_and_compute_addr(
             can_use_virtual_memory,
             "static memories require the ability to use virtual memory"
         );
+        return Ok(Reachable(compute_addr(
+            &mut builder.cursor(),
+            heap,
+            env.pointer_type(),
+            index,
+            offset,
+            AddrPcc::static32(heap.pcc_memory_type, memory_reservation + memory_guard_size),
+        )));
+    }
+
+    // Special case when the `index` is a constant and statically known to be
+    // in-bounds on this memory, no bounds checks necessary.
+    if statically_in_bounds {
         return Ok(Reachable(compute_addr(
             &mut builder.cursor(),
             heap,

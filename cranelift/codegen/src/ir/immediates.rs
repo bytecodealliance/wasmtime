@@ -10,6 +10,7 @@ use core::fmt::{self, Display, Formatter};
 use core::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Sub};
 use core::str::FromStr;
 use core::{i32, u32};
+use cranelift_entity::{Signed, Unsigned};
 #[cfg(feature = "enable-serde")]
 use serde_derive::{Deserialize, Serialize};
 
@@ -92,7 +93,7 @@ impl Imm64 {
     /// Sign extend this immediate as if it were a signed integer of the given
     /// power-of-two width.
     #[must_use]
-    pub(crate) fn sign_extend_from_width(&self, bit_width: u32) -> Self {
+    pub fn sign_extend_from_width(&self, bit_width: u32) -> Self {
         debug_assert!(
             bit_width.is_power_of_two(),
             "{bit_width} is not a power of two"
@@ -106,6 +107,25 @@ impl Imm64 {
         let delta = 64 - bit_width;
         let sign_extended = (self.0 << delta) >> delta;
         Imm64(sign_extended)
+    }
+
+    /// Zero extend this immediate as if it were a signed integer of the given
+    /// power-of-two width.
+    #[must_use]
+    pub fn zero_extend_from_width(&self, bit_width: u32) -> Self {
+        debug_assert!(
+            bit_width.is_power_of_two(),
+            "{bit_width} is not a power of two"
+        );
+
+        if bit_width >= 64 {
+            return *self;
+        }
+
+        let bit_width = u64::from(bit_width);
+        let delta = 64 - bit_width;
+        let sign_extended = (self.0.unsigned() << delta) >> delta;
+        Imm64(sign_extended.signed())
     }
 }
 
