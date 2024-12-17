@@ -404,7 +404,6 @@ impl WastTest {
                 "misc_testsuite/simd/canonicalize-nan.wast",
                 "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
                 "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
-                "misc_testsuite/simd/replace-lane-preserve.wast",
                 "misc_testsuite/simd/v128-select.wast",
                 "spec_testsuite/proposals/annotations/simd_lane.wast",
                 "spec_testsuite/proposals/relaxed-simd/i16x8_relaxed_q15mulr_s.wast",
@@ -454,10 +453,6 @@ impl WastTest {
                 "spec_testsuite/simd_i8x16_sat_arith.wast",
                 "spec_testsuite/simd_lane.wast",
                 "spec_testsuite/simd_load.wast",
-                "spec_testsuite/simd_load16_lane.wast",
-                "spec_testsuite/simd_load32_lane.wast",
-                "spec_testsuite/simd_load64_lane.wast",
-                "spec_testsuite/simd_load8_lane.wast",
                 "spec_testsuite/simd_load_zero.wast",
                 "spec_testsuite/simd_splat.wast",
             ];

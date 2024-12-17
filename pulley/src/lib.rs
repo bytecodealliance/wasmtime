@@ -856,6 +856,19 @@ macro_rules! for_each_extended_op {
             fextractv32x4 = FExtractV32x4 { dst: FReg, src: VReg, lane: u8 };
             /// `dst = src[lane]`
             fextractv64x2 = FExtractV64x2 { dst: FReg, src: VReg, lane: u8 };
+
+            /// `dst = src1; dst[lane] = src2`
+            vinsertx8 = VInsertX8 { operands: BinaryOperands<VReg, VReg, XReg>, lane: u8 };
+            /// `dst = src1; dst[lane] = src2`
+            vinsertx16 = VInsertX16 { operands: BinaryOperands<VReg, VReg, XReg>, lane: u8 };
+            /// `dst = src1; dst[lane] = src2`
+            vinsertx32 = VInsertX32 { operands: BinaryOperands<VReg, VReg, XReg>, lane: u8 };
+            /// `dst = src1; dst[lane] = src2`
+            vinsertx64 = VInsertX64 { operands: BinaryOperands<VReg, VReg, XReg>, lane: u8 };
+            /// `dst = src1; dst[lane] = src2`
+            vinsertf32 = VInsertF32 { operands: BinaryOperands<VReg, VReg, FReg>, lane: u8 };
+            /// `dst = src1; dst[lane] = src2`
+            vinsertf64 = VInsertF64 { operands: BinaryOperands<VReg, VReg, FReg>, lane: u8 };
         }
     };
 }
