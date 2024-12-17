@@ -10,7 +10,7 @@ started!
 ## Getting started and simple example
 
 First, copy this example WebAssembly text module into your project. It exports
-a function for calculating the greatest common denominator of two numbers.
+a function for calculating the greatest common divisor of two numbers.
 
 ```wat
 {{#include ../examples/gcd.wat}}
