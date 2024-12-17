@@ -2,7 +2,7 @@
 
 use crate::gpr;
 use crate::xmm;
-use std::{num::NonZeroU8, ops::Index, vec::Vec};
+use std::{num::NonZeroU16, ops::Index, vec::Vec};
 
 /// Describe how an instruction is emitted into a code buffer.
 pub trait CodeSink {
@@ -79,7 +79,7 @@ pub struct Constant(pub u32);
 /// Wrap [`CodeSink`]-specific trap codes.
 #[derive(Debug, Clone, Copy)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
-pub struct TrapCode(pub NonZeroU8);
+pub struct TrapCode(pub NonZeroU16);
 
 /// A table mapping `KnownOffset` identifiers to their `i32` offset values.
 ///

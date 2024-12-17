@@ -2,7 +2,6 @@
 
 use super::TrapCode;
 use core::fmt;
-use core::num::NonZeroU8;
 use core::str::FromStr;
 
 #[cfg(feature = "enable-serde")]
@@ -387,10 +386,7 @@ impl MemFlags {
     /// A `None` trap code indicates that this memory access does not trap.
     pub const fn trap_code(self) -> Option<TrapCode> {
         let byte = ((self.bits & MASK_TRAP_CODE) >> TRAP_CODE_OFFSET) as u8;
-        match NonZeroU8::new(byte) {
-            Some(code) => Some(TrapCode::from_raw(code)),
-            None => None,
-        }
+        TrapCode::decode_from_byte(byte)
     }
 
     /// Configures these flags with the specified trap code `code`.
@@ -399,13 +395,28 @@ impl MemFlags {
     /// away and it must "stay where it is" in the programs. Traps are
     /// considered side effects, for example, and have meaning through the trap
     /// code that is communicated and which instruction trapped.
+    ///
+    /// Since [`MemFlags`] is optimized to fit in 16 bits it is unable to
+    /// represent arbitrary [`TrapCode`]s. User traps past `TrapCode::user(127)`
+    /// cannot be used.
+    ///
+    /// # Panics
+    ///
+    /// This function will panic if the trap code is not encodable into the flag
+    /// bits. This happens if the trap code is a user trap and its value is
+    /// greater than 127.
+    ///
+    /// This limitation should be manageable since the trap code will usually be
+    /// a reserved trap or a _statically allocated_ user trap.
     pub const fn with_trap_code(mut self, code: Option<TrapCode>) -> Self {
         let bits = match code {
-            Some(code) => code.as_raw().get() as u16,
+            Some(code) => code
+                .encode_as_byte()
+                .expect("MemFlags with_trap_code: trap code doesn't fit in flag bits"),
             None => 0,
         };
         self.bits &= !MASK_TRAP_CODE;
-        self.bits |= bits << TRAP_CODE_OFFSET;
+        self.bits |= (bits as u16) << TRAP_CODE_OFFSET;
         self
     }
 }
