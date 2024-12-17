@@ -762,13 +762,13 @@ macro_rules! for_each_extended_op {
             /// `dst = |src|`
             xabs64 = XAbs64 { dst: XReg, src: XReg };
 
-            /// TODO
+            /// Int-to-float conversion (same as `f32_from_x32_s`)
             vf32x4_from_i32x4_s = VF32x4FromI32x4S { dst: VReg, src: VReg };
-            /// TODO
+            /// Int-to-float conversion (same as `f32_from_x32_u`)
             vf32x4_from_i32x4_u = VF32x4FromI32x4U { dst: VReg, src: VReg };
-            /// TODO
+            /// Int-to-float conversion (same as `f64_from_x64_s`)
             vf64x2_from_i64x2_s = VF64x2FromI64x2S { dst: VReg, src: VReg };
-            /// TODO
+            /// Int-to-float conversion (same as `f64_from_x64_u`)
             vf64x2_from_i64x2_u = VF64x2FromI64x2U { dst: VReg, src: VReg };
 
             /// Widens the low lanes of the input vector, as signed, to twice
