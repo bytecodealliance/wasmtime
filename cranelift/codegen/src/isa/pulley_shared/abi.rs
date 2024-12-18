@@ -4,7 +4,7 @@ use super::{inst::*, PulleyFlags, PulleyTargetKind};
 use crate::isa::pulley_shared::{PointerWidth, PulleyBackend};
 use crate::{
     ir::{self, types::*, MemFlags, Signature},
-    isa::{self, unwind::UnwindInst},
+    isa::{self},
     machinst::*,
     settings, CodegenResult,
 };
@@ -290,7 +290,7 @@ where
 
     fn gen_prologue_frame_setup(
         _call_conv: isa::CallConv,
-        flags: &settings::Flags,
+        _flags: &settings::Flags,
         _isa_flags: &PulleyFlags,
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
@@ -298,16 +298,6 @@ where
 
         if frame_layout.setup_area_size > 0 {
             insts.push(RawInst::PushFrame.into());
-            if flags.unwind_info() {
-                insts.push(
-                    Inst::Unwind {
-                        inst: UnwindInst::PushFrameRegs {
-                            offset_upward_to_caller_sp: frame_layout.setup_area_size,
-                        },
-                    }
-                    .into(),
-                );
-            }
         }
 
         insts
@@ -350,7 +340,7 @@ where
 
     fn gen_clobber_save(
         _call_conv: isa::CallConv,
-        flags: &settings::Flags,
+        _flags: &settings::Flags,
         frame_layout: &FrameLayout,
     ) -> SmallVec<[Self::I; 16]> {
         let mut insts = SmallVec::new();
@@ -377,20 +367,6 @@ where
             if setup_frame {
                 insts.push(RawInst::PushFrame.into());
             }
-        }
-
-        if flags.unwind_info() && setup_frame {
-            // The *unwind* frame (but not the actual frame) starts at the
-            // clobbers, just below the saved FP/LR pair.
-            insts.push(
-                Inst::Unwind {
-                    inst: UnwindInst::DefineNewFrame {
-                        offset_downward_to_clobbers: frame_layout.clobber_size,
-                        offset_upward_to_caller_sp: frame_layout.setup_area_size,
-                    },
-                }
-                .into(),
-            );
         }
 
         // Adjust the stack pointer downward for clobbers, the function fixed
@@ -423,18 +399,6 @@ where
                     )
                     .into(),
                 );
-
-                if flags.unwind_info() {
-                    insts.push(
-                        Inst::Unwind {
-                            inst: UnwindInst::SaveReg {
-                                clobber_offset: frame_layout.clobber_size - cur_offset,
-                                reg: r_reg,
-                            },
-                        }
-                        .into(),
-                    );
-                }
 
                 cur_offset += 8
             }
