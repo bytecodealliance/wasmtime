@@ -158,6 +158,9 @@
 (decl u32_as_u16 (u16) u32)
 (extern extractor u32_as_u16 u32_as_u16)
 
+(decl i32_as_i8 (i8) i32)
+(extern extractor i32_as_i8 i32_as_i8)
+
 (decl pure u64_as_i32 (u64) i32)
 (extern constructor u64_as_i32 u64_as_i32)
 

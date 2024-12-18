@@ -320,6 +320,10 @@
 (extractor (u64_from_iconst x)
            (def_inst (iconst (u64_from_imm64 x))))
 
+(decl i8_from_iconst (i8) Value)
+(extractor (i8_from_iconst x)
+           (i32_from_iconst (i32_as_i8 x)))
+
 ;; Extract a constant `i32` from a value defined by an `iconst`.
 ;; The value is sign extended to 32 bits.
 (spec (i32_from_iconst arg)

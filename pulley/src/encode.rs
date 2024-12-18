@@ -180,6 +180,17 @@ impl<D: Reg, S1: Reg, S2: Reg> Encode for BinaryOperands<D, S1, S2> {
     }
 }
 
+impl<D: Reg, S1: Reg> Encode for BinaryOperands<D, S1, U6> {
+    const WIDTH: u8 = 2;
+
+    fn encode<E>(&self, sink: &mut E)
+    where
+        E: Extend<u8>,
+    {
+        self.to_bits().encode(sink);
+    }
+}
+
 impl<R: Reg + Encode> Encode for RegSet<R> {
     const WIDTH: u8 = 4;
 

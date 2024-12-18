@@ -431,6 +431,15 @@ impl<D: Reg, S1: Reg, S2: Reg> Decode for BinaryOperands<D, S1, S2> {
     }
 }
 
+impl<D: Reg, S1: Reg> Decode for BinaryOperands<D, S1, U6> {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        u16::decode(bytecode).map(|bits| Self::from_bits(bits))
+    }
+}
+
 impl<S: Decode + ScalarBitSetStorage> Decode for ScalarBitSet<S> {
     fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
     where

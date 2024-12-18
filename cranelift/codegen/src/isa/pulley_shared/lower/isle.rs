@@ -21,6 +21,7 @@ use crate::machinst::{
     CallInfo, IsTailCall, MachInst, Reg, VCodeConstant, VCodeConstantData,
 };
 use alloc::boxed::Box;
+use pulley_interpreter::U6;
 use regalloc2::PReg;
 type Unit = ();
 type VecArgPair = Vec<ArgPair>;
@@ -113,6 +114,10 @@ where
 
     fn cond_invert(&mut self, cond: &Cond) -> Cond {
         cond.invert()
+    }
+
+    fn u6_from_u8(&mut self, imm: u8) -> Option<U6> {
+        U6::new(imm)
     }
 }
 

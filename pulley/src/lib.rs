@@ -192,9 +192,17 @@ macro_rules! for_each_op {
 
             /// `low32(dst) = low32(src1) * low32(src2)`
             xmul32 = XMul32 { operands: BinaryOperands<XReg> };
+            /// Same as `xmul64` but `src2` is a sign-extended 8-bit immediate.
+            xmul32_s8 = Xmul32S8 { dst: XReg, src1: XReg, src2: i8 };
+            /// Same as `xmul32` but `src2` is a sign-extended 32-bit immediate.
+            xmul32_s32 = Xmul32S32 { dst: XReg, src1: XReg, src2: i32 };
 
             /// `dst = src1 * src2`
             xmul64 = XMul64 { operands: BinaryOperands<XReg> };
+            /// Same as `xmul64` but `src2` is a sign-extended 8-bit immediate.
+            xmul64_s8 = Xmul64S8 { dst: XReg, src1: XReg, src2: i8 };
+            /// Same as `xmul64` but `src2` is a sign-extended 64-bit immediate.
+            xmul64_s32 = Xmul64S32 { dst: XReg, src1: XReg, src2: i32 };
 
             /// `low32(dst) = trailing_zeros(low32(src))`
             xctz32 = Xctz32 { dst: XReg, src: XReg };
@@ -233,6 +241,19 @@ macro_rules! for_each_op {
             xshr64_s = Xshr64S { operands: BinaryOperands<XReg> };
             /// `dst = src1 >> low6(src2)`
             xshr64_u = Xshr64U { operands: BinaryOperands<XReg> };
+
+            /// `low32(dst) = low32(src1) << low5(src2)`
+            xshl32_u6 = Xshl32U6 { operands: BinaryOperands<XReg, XReg, U6> };
+            /// `low32(dst) = low32(src1) >> low5(src2)`
+            xshr32_s_u6 = Xshr32SU6 { operands: BinaryOperands<XReg, XReg, U6> };
+            /// `low32(dst) = low32(src1) >> low5(src2)`
+            xshr32_u_u6 = Xshr32UU6 { operands: BinaryOperands<XReg, XReg, U6> };
+            /// `dst = src1 << low5(src2)`
+            xshl64_u6 = Xshl64U6 { operands: BinaryOperands<XReg, XReg, U6> };
+            /// `dst = src1 >> low6(src2)`
+            xshr64_s_u6 = Xshr64SU6 { operands: BinaryOperands<XReg, XReg, U6> };
+            /// `dst = src1 >> low6(src2)`
+            xshr64_u_u6 = Xshr64UU6 { operands: BinaryOperands<XReg, XReg, U6> };
 
             /// `low32(dst) = -low32(src)`
             xneg32 = Xneg32 { dst: XReg, src: XReg };
@@ -354,17 +375,41 @@ macro_rules! for_each_op {
 
             /// `low32(dst) = low32(src1) & low32(src2)`
             xband32 = XBand32 { operands: BinaryOperands<XReg> };
+            /// Same as `xband64` but `src2` is a sign-extended 8-bit immediate.
+            xband32_s8 = Xband32S8 { dst: XReg, src1: XReg, src2: i8 };
+            /// Same as `xband32` but `src2` is a sign-extended 32-bit immediate.
+            xband32_s32 = Xband32S32 { dst: XReg, src1: XReg, src2: i32 };
             /// `dst = src1 & src2`
             xband64 = XBand64 { operands: BinaryOperands<XReg> };
+            /// Same as `xband64` but `src2` is a sign-extended 8-bit immediate.
+            xband64_s8 = Xband64S8 { dst: XReg, src1: XReg, src2: i8 };
+            /// Same as `xband64` but `src2` is a sign-extended 32-bit immediate.
+            xband64_s32 = Xband64S32 { dst: XReg, src1: XReg, src2: i32 };
             /// `low32(dst) = low32(src1) | low32(src2)`
             xbor32 = XBor32 { operands: BinaryOperands<XReg> };
+            /// Same as `xbor64` but `src2` is a sign-extended 8-bit immediate.
+            xbor32_s8 = Xbor32S8 { dst: XReg, src1: XReg, src2: i8 };
+            /// Same as `xbor32` but `src2` is a sign-extended 32-bit immediate.
+            xbor32_s32 = Xbor32S32 { dst: XReg, src1: XReg, src2: i32 };
             /// `dst = src1 | src2`
             xbor64 = XBor64 { operands: BinaryOperands<XReg> };
+            /// Same as `xbor64` but `src2` is a sign-extended 8-bit immediate.
+            xbor64_s8 = Xbor64S8 { dst: XReg, src1: XReg, src2: i8 };
+            /// Same as `xbor64` but `src2` is a sign-extended 32-bit immediate.
+            xbor64_s32 = Xbor64S32 { dst: XReg, src1: XReg, src2: i32 };
 
             /// `low32(dst) = low32(src1) ^ low32(src2)`
             xbxor32 = XBxor32 { operands: BinaryOperands<XReg> };
+            /// Same as `xbxor64` but `src2` is a sign-extended 8-bit immediate.
+            xbxor32_s8 = Xbxor32S8 { dst: XReg, src1: XReg, src2: i8 };
+            /// Same as `xbxor32` but `src2` is a sign-extended 32-bit immediate.
+            xbxor32_s32 = Xbxor32S32 { dst: XReg, src1: XReg, src2: i32 };
             /// `dst = src1 ^ src2`
             xbxor64 = XBxor64 { operands: BinaryOperands<XReg> };
+            /// Same as `xbxor64` but `src2` is a sign-extended 8-bit immediate.
+            xbxor64_s8 = Xbxor64S8 { dst: XReg, src1: XReg, src2: i8 };
+            /// Same as `xbxor64` but `src2` is a sign-extended 32-bit immediate.
+            xbxor64_s32 = Xbxor64S32 { dst: XReg, src1: XReg, src2: i32 };
 
             /// `low32(dst) = !low32(src1)`
             xbnot32 = XBnot32 { dst: XReg, src: XReg };

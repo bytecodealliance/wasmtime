@@ -193,6 +193,12 @@ impl Disas for PcRelOffset {
     }
 }
 
+impl Disas for U6 {
+    fn disas(&self, _position: usize, disas: &mut String) {
+        write!(disas, "{}", u8::from(*self)).unwrap();
+    }
+}
+
 fn disas_list<T: Disas>(position: usize, disas: &mut String, iter: impl IntoIterator<Item = T>) {
     let mut iter = iter.into_iter();
     let Some(first) = iter.next() else { return };
@@ -209,6 +215,20 @@ where
     D: Reg + Disas,
     S1: Reg + Disas,
     S2: Reg + Disas,
+{
+    fn disas(&self, position: usize, disas: &mut String) {
+        self.dst.disas(position, disas);
+        write!(disas, ", ").unwrap();
+        self.src1.disas(position, disas);
+        write!(disas, ", ").unwrap();
+        self.src2.disas(position, disas);
+    }
+}
+
+impl<D, S1> Disas for BinaryOperands<D, S1, U6>
+where
+    D: Reg + Disas,
+    S1: Reg + Disas,
 {
     fn disas(&self, position: usize, disas: &mut String) {
         self.dst.disas(position, disas);
