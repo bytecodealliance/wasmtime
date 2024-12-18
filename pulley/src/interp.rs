@@ -1457,6 +1457,70 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xload8_u32_offset8(&mut self, dst: XReg, ptr: XReg, offset: u8) -> ControlFlow<Done> {
+        self.xload8_u32_offset32(dst, ptr, offset.into())
+    }
+
+    fn xload8_s32_offset8(&mut self, dst: XReg, ptr: XReg, offset: u8) -> ControlFlow<Done> {
+        self.xload8_s32_offset32(dst, ptr, offset.into())
+    }
+
+    fn xload16le_u32_offset8(&mut self, dst: XReg, ptr: XReg, offset: u8) -> ControlFlow<Done> {
+        self.xload16le_u32_offset32(dst, ptr, offset.into())
+    }
+
+    fn xload16le_s32_offset8(&mut self, dst: XReg, ptr: XReg, offset: u8) -> ControlFlow<Done> {
+        self.xload16le_s32_offset32(dst, ptr, offset.into())
+    }
+
+    fn xload32le_offset8(&mut self, dst: XReg, ptr: XReg, offset: u8) -> ControlFlow<Done> {
+        self.xload32le_offset32(dst, ptr, offset.into())
+    }
+
+    fn xload8_u64_offset8(&mut self, dst: XReg, ptr: XReg, offset: u8) -> ControlFlow<Done> {
+        self.xload8_u64_offset32(dst, ptr, offset.into())
+    }
+
+    fn xload8_s64_offset8(&mut self, dst: XReg, ptr: XReg, offset: u8) -> ControlFlow<Done> {
+        self.xload8_s64_offset32(dst, ptr, offset.into())
+    }
+
+    fn xload16le_u64_offset8(&mut self, dst: XReg, ptr: XReg, offset: u8) -> ControlFlow<Done> {
+        self.xload16le_u64_offset32(dst, ptr, offset.into())
+    }
+
+    fn xload16le_s64_offset8(&mut self, dst: XReg, ptr: XReg, offset: u8) -> ControlFlow<Done> {
+        self.xload16le_s64_offset32(dst, ptr, offset.into())
+    }
+
+    fn xload32le_u64_offset8(&mut self, dst: XReg, ptr: XReg, offset: u8) -> ControlFlow<Done> {
+        self.xload32le_u64_offset32(dst, ptr, offset.into())
+    }
+
+    fn xload32le_s64_offset8(&mut self, dst: XReg, ptr: XReg, offset: u8) -> ControlFlow<Done> {
+        self.xload32le_s64_offset32(dst, ptr, offset.into())
+    }
+
+    fn xload64le_offset8(&mut self, dst: XReg, ptr: XReg, offset: u8) -> ControlFlow<Done> {
+        self.xload64le_offset32(dst, ptr, offset.into())
+    }
+
+    fn xstore8_offset8(&mut self, ptr: XReg, offset: u8, src: XReg) -> ControlFlow<Done> {
+        self.xstore8_offset32(ptr, offset.into(), src)
+    }
+
+    fn xstore16le_offset8(&mut self, ptr: XReg, offset: u8, src: XReg) -> ControlFlow<Done> {
+        self.xstore16le_offset32(ptr, offset.into(), src)
+    }
+
+    fn xstore32le_offset8(&mut self, ptr: XReg, offset: u8, src: XReg) -> ControlFlow<Done> {
+        self.xstore32le_offset32(ptr, offset.into(), src)
+    }
+
+    fn xstore64le_offset8(&mut self, ptr: XReg, offset: u8, src: XReg) -> ControlFlow<Done> {
+        self.xstore64le_offset32(ptr, offset.into(), src)
+    }
+
     fn xload8_u32_offset32(&mut self, dst: XReg, ptr: XReg, offset: i32) -> ControlFlow<Done> {
         let val = unsafe { self.load::<u8>(ptr, offset) };
         self.state[dst].set_u32(val.into());

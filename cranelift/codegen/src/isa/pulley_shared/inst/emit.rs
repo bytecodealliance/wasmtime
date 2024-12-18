@@ -119,6 +119,26 @@ where
     }
 }
 
+/// Representation of a static offset from a pointer.
+///
+/// In VCode this is always represented as an `i32` and then just before
+/// lowering this is used to determine which instruction to emit.
+enum Offset {
+    /// An unsigned 8-bit offset.
+    U8(u8),
+    /// A signed 32-bit offset.
+    I32(i32),
+}
+
+impl From<i32> for Offset {
+    fn from(i: i32) -> Offset {
+        if let Ok(i) = i.try_into() {
+            return Offset::U8(i);
+        }
+        Offset::I32(i)
+    }
+}
+
 fn pulley_emit<P>(
     inst: &Inst,
     sink: &mut MachBuffer<InstAndKind<P>>,
@@ -315,24 +335,40 @@ fn pulley_emit<P>(
             let endian = emit_info.endianness(*flags);
             match *ty {
                 I8 => match ext {
-                    X::None | X::Zero32 => enc::xload8_u32_offset32(sink, dst, r, x),
-                    X::Zero64 => enc::xload8_u64_offset32(sink, dst, r, x),
-                    X::Sign32 => enc::xload8_s32_offset32(sink, dst, r, x),
-                    X::Sign64 => enc::xload8_s64_offset32(sink, dst, r, x),
+                    X::None | X::Zero32 => match x.into() {
+                        Offset::I32(x) => enc::xload8_u32_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload8_u32_offset8(sink, dst, r, x),
+                    },
+                    X::Zero64 => match x.into() {
+                        Offset::I32(x) => enc::xload8_u64_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload8_u64_offset8(sink, dst, r, x),
+                    },
+                    X::Sign32 => match x.into() {
+                        Offset::I32(x) => enc::xload8_s32_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload8_s32_offset8(sink, dst, r, x),
+                    },
+                    X::Sign64 => match x.into() {
+                        Offset::I32(x) => enc::xload8_s64_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload8_s64_offset8(sink, dst, r, x),
+                    },
                 },
                 I16 => match (ext, endian) {
-                    (X::None | X::Zero32, E::Little) => {
-                        enc::xload16le_u32_offset32(sink, dst, r, x);
-                    }
-                    (X::Sign32, E::Little) => {
-                        enc::xload16le_s32_offset32(sink, dst, r, x);
-                    }
-                    (X::Zero64, E::Little) => {
-                        enc::xload16le_u64_offset32(sink, dst, r, x);
-                    }
-                    (X::Sign64, E::Little) => {
-                        enc::xload16le_s64_offset32(sink, dst, r, x);
-                    }
+                    (X::None | X::Zero32, E::Little) => match x.into() {
+                        Offset::I32(x) => enc::xload16le_u32_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload16le_u32_offset8(sink, dst, r, x),
+                    },
+                    (X::Sign32, E::Little) => match x.into() {
+                        Offset::I32(x) => enc::xload16le_s32_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload16le_s32_offset8(sink, dst, r, x),
+                    },
+                    (X::Zero64, E::Little) => match x.into() {
+                        Offset::I32(x) => enc::xload16le_u64_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload16le_u64_offset8(sink, dst, r, x),
+                    },
+                    (X::Sign64, E::Little) => match x.into() {
+                        Offset::I32(x) => enc::xload16le_s64_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload16le_s64_offset8(sink, dst, r, x),
+                    },
                     (X::None | X::Zero32 | X::Zero64, E::Big) => {
                         enc::xload16be_u64_offset32(sink, dst, r, x);
                     }
@@ -341,15 +377,18 @@ fn pulley_emit<P>(
                     }
                 },
                 I32 => match (ext, endian) {
-                    (X::None | X::Zero32 | X::Sign32, E::Little) => {
-                        enc::xload32le_offset32(sink, dst, r, x);
-                    }
-                    (X::Zero64, E::Little) => {
-                        enc::xload32le_u64_offset32(sink, dst, r, x);
-                    }
-                    (X::Sign64, E::Little) => {
-                        enc::xload32le_s64_offset32(sink, dst, r, x);
-                    }
+                    (X::None | X::Zero32 | X::Sign32, E::Little) => match x.into() {
+                        Offset::I32(x) => enc::xload32le_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload32le_offset8(sink, dst, r, x),
+                    },
+                    (X::Zero64, E::Little) => match x.into() {
+                        Offset::I32(x) => enc::xload32le_u64_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload32le_u64_offset8(sink, dst, r, x),
+                    },
+                    (X::Sign64, E::Little) => match x.into() {
+                        Offset::I32(x) => enc::xload32le_s64_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload32le_s64_offset8(sink, dst, r, x),
+                    },
                     (X::None | X::Zero32 | X::Zero64, E::Big) => {
                         enc::xload32be_u64_offset32(sink, dst, r, x);
                     }
@@ -358,7 +397,10 @@ fn pulley_emit<P>(
                     }
                 },
                 I64 => match endian {
-                    E::Little => enc::xload64le_offset32(sink, dst, r, x),
+                    E::Little => match x.into() {
+                        Offset::I32(x) => enc::xload64le_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload64le_offset8(sink, dst, r, x),
+                    },
                     E::Big => enc::xload64be_offset32(sink, dst, r, x),
                 },
                 _ => unimplemented!("xload ty={ty:?}"),
@@ -422,17 +464,29 @@ fn pulley_emit<P>(
             let x = mem.get_offset_with_state(state);
             let endian = emit_info.endianness(*flags);
             match *ty {
-                I8 => enc::xstore8_offset32(sink, r, x, src),
+                I8 => match x.into() {
+                    Offset::I32(x) => enc::xstore8_offset32(sink, r, x, src),
+                    Offset::U8(x) => enc::xstore8_offset8(sink, r, x, src),
+                },
                 I16 => match endian {
-                    E::Little => enc::xstore16le_offset32(sink, r, x, src),
+                    E::Little => match x.into() {
+                        Offset::I32(x) => enc::xstore16le_offset32(sink, r, x, src),
+                        Offset::U8(x) => enc::xstore16le_offset8(sink, r, x, src),
+                    },
                     E::Big => enc::xstore16be_offset32(sink, r, x, src),
                 },
                 I32 => match endian {
-                    E::Little => enc::xstore32le_offset32(sink, r, x, src),
+                    E::Little => match x.into() {
+                        Offset::I32(x) => enc::xstore32le_offset32(sink, r, x, src),
+                        Offset::U8(x) => enc::xstore32le_offset8(sink, r, x, src),
+                    },
                     E::Big => enc::xstore32be_offset32(sink, r, x, src),
                 },
                 I64 => match endian {
-                    E::Little => enc::xstore64le_offset32(sink, r, x, src),
+                    E::Little => match x.into() {
+                        Offset::I32(x) => enc::xstore64le_offset32(sink, r, x, src),
+                        Offset::U8(x) => enc::xstore64le_offset8(sink, r, x, src),
+                    },
                     E::Big => enc::xstore64be_offset32(sink, r, x, src),
                 },
                 _ => unimplemented!("xstore ty={ty:?}"),

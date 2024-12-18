@@ -299,6 +299,41 @@ macro_rules! for_each_op {
             /// `*(ptr + offset) = low64(src)`
             xstore64le_offset32 = XStore64LeOffset32 { ptr: XReg, offset: i32, src: XReg };
 
+            /// `low32(dst) = zext(*(ptr + offset))`
+            xload8_u32_offset8 = XLoad8U32Offset8 { dst: XReg, ptr: XReg, offset: u8 };
+            /// `low32(dst) = sext(*(ptr + offset))`
+            xload8_s32_offset8 = XLoad8S32Offset8 { dst: XReg, ptr: XReg, offset: u8 };
+            /// `low32(dst) = zext(*(ptr + offset))`
+            xload16le_u32_offset8 = XLoad16LeU32Offset8 { dst: XReg, ptr: XReg, offset: u8 };
+            /// `low32(dst) = sext(*(ptr + offset))`
+            xload16le_s32_offset8 = XLoad16LeS32Offset8 { dst: XReg, ptr: XReg, offset: u8 };
+            /// `low32(dst) = *(ptr + offset)`
+            xload32le_offset8 = XLoad32LeOffset8 { dst: XReg, ptr: XReg, offset: u8 };
+
+            /// `dst = zext(*(ptr + offset))`
+            xload8_u64_offset8 = XLoad8U64Offset8 { dst: XReg, ptr: XReg, offset: u8 };
+            /// `dst = sext(*(ptr + offset))`
+            xload8_s64_offset8 = XLoad8S64Offset8 { dst: XReg, ptr: XReg, offset: u8 };
+            /// `dst = zext(*(ptr + offset))`
+            xload16le_u64_offset8 = XLoad16LeU64Offset8 { dst: XReg, ptr: XReg, offset: u8 };
+            /// `dst = sext(*(ptr + offset))`
+            xload16le_s64_offset8 = XLoad16LeS64Offset8 { dst: XReg, ptr: XReg, offset: u8 };
+            /// `dst = zext(*(ptr + offset))`
+            xload32le_u64_offset8 = XLoad32LeU64Offset8 { dst: XReg, ptr: XReg, offset: u8 };
+            /// `dst = sext(*(ptr + offset))`
+            xload32le_s64_offset8 = XLoad32LeS64Offset8 { dst: XReg, ptr: XReg, offset: u8 };
+            /// `dst = *(ptr + offset)`
+            xload64le_offset8 = XLoad64LeOffset8 { dst: XReg, ptr: XReg, offset: u8 };
+
+            /// `*(ptr + offset) = low8(src)`
+            xstore8_offset8 = XStore8Offset8 { ptr: XReg, offset: u8, src: XReg };
+            /// `*(ptr + offset) = low16(src)`
+            xstore16le_offset8 = XStore16LeOffset8 { ptr: XReg, offset: u8, src: XReg };
+            /// `*(ptr + offset) = low32(src)`
+            xstore32le_offset8 = XStore32LeOffset8 { ptr: XReg, offset: u8, src: XReg };
+            /// `*(ptr + offset) = low64(src)`
+            xstore64le_offset8 = XStore64LeOffset8 { ptr: XReg, offset: u8, src: XReg };
+
             /// `push lr; push fp; fp = sp`
             push_frame = PushFrame ;
             /// `sp = fp; pop fp; pop lr`
