@@ -1040,30 +1040,36 @@
 ;  (spec (put_nonzero_in_reg_sext64 x)
 ;        (provide (= (sign_ext 64 x) result))
 ;        (require (not (= #x0000000000000000 result))))
-(decl put_nonzero_in_reg (Value ExtType) Reg)
+(decl put_nonzero_in_reg (Value ExtType Type) Reg)
 
 ;; Special case where if a `Value` is known to be nonzero we can trivially
 ;; move it into a register.
-(rule (put_nonzero_in_reg (and (value_type ty) (iconst (nonzero_u64_from_imm64 n))) _)
+
+;; zero-extend non-zero constant
+(rule (put_nonzero_in_reg (iconst (nonzero_u64_from_imm64 n)) (ExtType.Unsigned) ty)
       (imm ty (ImmExtend.Zero) n))
 
-(rule -1 (put_nonzero_in_reg (and (value_type $I64) val) _)
+;; sign-extend non-zero constant
+(rule (put_nonzero_in_reg (iconst (nonzero_u64_from_imm64 n)) (ExtType.Signed) ty)
+      (imm ty (ImmExtend.Sign) n))
+
+(rule -1 (put_nonzero_in_reg val _ $I64)
       (trap_if_zero_divisor (put_in_reg val) (operand_size $I64)))
 
-(rule -2 (put_nonzero_in_reg (and (value_type (fits_in_32 _)) val) (ExtType.Signed))
+(rule -2 (put_nonzero_in_reg val (ExtType.Signed) (fits_in_32 _))
       (trap_if_zero_divisor (put_in_reg_sext32 val) (operand_size $I32)))
 
-(rule -3 (put_nonzero_in_reg (and (value_type (fits_in_32 _)) val) (ExtType.Unsigned))
+(rule -2 (put_nonzero_in_reg val (ExtType.Unsigned) (fits_in_32 _))
       (trap_if_zero_divisor (put_in_reg_zext32 val) (operand_size $I32)))
 
 ;; Note that aarch64's `udiv` doesn't trap so to respect the semantics of
 ;; CLIF's `udiv` the check for zero needs to be manually performed.
 
 (rule udiv 1 (lower (has_type $I64 (udiv x y)))
-      (a64_udiv $I64 (put_in_reg x) (put_nonzero_in_reg y (ExtType.Unsigned))))
+      (a64_udiv $I64 (put_in_reg x) (put_nonzero_in_reg y (ExtType.Unsigned) $I64)))
 
 (rule udiv (lower (has_type (fits_in_32 ty) (udiv x y)))
-      (a64_udiv $I32 (put_in_reg_zext32 x) (put_nonzero_in_reg y (ExtType.Unsigned))))
+      (a64_udiv $I32 (put_in_reg_zext32 x) (put_nonzero_in_reg y (ExtType.Unsigned) ty)))
 
 ;;;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1089,16 +1095,16 @@
 ;; necessary, but right now `y` is checked to not be -1 as well.
 
 (rule sdiv_base_case (lower (has_type $I64 (sdiv x y)))
-      (let ((x64 Reg (put_in_reg_sext32 x))
-            (y64 Reg (put_nonzero_in_reg y (ExtType.Signed)))
+      (let ((x64 Reg (put_in_reg_sext64 x))
+            (y64 Reg (put_nonzero_in_reg y (ExtType.Signed) $I64))
             (intmin_check_x Reg (intmin_check $I64 x64))
             (valid_x64 Reg (trap_if_div_overflow $I64 intmin_check_x x64 y64))
             (result Reg (a64_sdiv $I64 valid_x64 y64)))
         result))
 
 (rule sdiv_base_case -1 (lower (has_type (fits_in_32 ty) (sdiv x y)))
-      (let ((x32 Reg (put_in_reg x))
-            (y32 Reg (put_nonzero_in_reg y (ExtType.Signed)))
+      (let ((x32 Reg (put_in_reg_sext32 x))
+            (y32 Reg (put_nonzero_in_reg y (ExtType.Signed) ty))
             (intmin_check_x Reg (intmin_check ty x32))
             (valid_x32 Reg (trap_if_div_overflow ty intmin_check_x x32 y32))
             (result Reg (a64_sdiv ty valid_x32 y32)))
@@ -1106,7 +1112,6 @@
 
 ;; Special case for `sdiv` where no checks are needed due to division by a
 ;; constant meaning the checks are always passed.
-;; this is not necessary, put_non_zero_reg already catch that case
 (rule sdiv_safe_divisor 2 (lower (has_type $I64 (sdiv x (iconst imm))))
       (if-let y (safe_divisor_from_imm64 $I64 imm))
       (a64_sdiv $I64 (put_in_reg_sext64 x) (imm $I64 (ImmExtend.Sign) y)))
@@ -1135,28 +1140,28 @@
 
 (rule urem (lower (has_type $I64 (urem x y)))
       (let ((x64 Reg (put_in_reg_zext64 x))
-            (y64 Reg (put_nonzero_in_reg y (ExtType.Unsigned)))
+            (y64 Reg (put_nonzero_in_reg y (ExtType.Unsigned) $I64))
             (div Reg (a64_udiv $I64 x64 y64))
             (result Reg (msub $I64 div y64 x64)))
         result))
 
 (rule urem -1 (lower (has_type (fits_in_32 ty) (urem x y)))
       (let ((x64 Reg (put_in_reg_zext32 x))
-            (y64 Reg (put_nonzero_in_reg y (ExtType.Unsigned)))
+            (y64 Reg (put_nonzero_in_reg y (ExtType.Unsigned) ty))
             (div Reg (a64_udiv ty x64 y64))
             (result Reg (msub ty div y64 x64)))
         result))
 
 (rule srem (lower (has_type $I64 (srem x y)))
       (let ((x64 Reg (put_in_reg_sext64 x))
-            (y64 Reg (put_nonzero_in_reg y (ExtType.Signed)))
+            (y64 Reg (put_nonzero_in_reg y (ExtType.Signed) $I64))
             (div Reg (a64_sdiv $I64 x64 y64))
             (result Reg (msub $I64 div y64 x64)))
         result))
 
 (rule srem -1 (lower (has_type (fits_in_32 ty) (srem x y)))
       (let ((x64 Reg (put_in_reg_sext32 x))
-            (y64 Reg (put_nonzero_in_reg y (ExtType.Signed)))
+            (y64 Reg (put_nonzero_in_reg y (ExtType.Signed) ty))
             (div Reg (a64_sdiv ty x64 y64))
             (result Reg (msub ty div y64 x64)))
         result))

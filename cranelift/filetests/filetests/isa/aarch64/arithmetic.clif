@@ -722,14 +722,14 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   movz x2, #2
+;   movz w2, #2
 ;   sdiv x4, x0, x2
 ;   msub x0, x4, x2, x0
 ;   ret
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   mov x2, #2
+;   mov w2, #2
 ;   sdiv x4, x0, x2
 ;   msub x0, x4, x2, x0
 ;   ret
@@ -780,4 +780,25 @@ block0(v0: i64):
 ;   sdiv x0, x0, x2
 ;   ret
 ;   .byte 0x1f, 0xc1, 0x00, 0x00 ; trap: int_ovf
+
+function %sdiv_i16_const(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i16 -2
+    v2 = sdiv v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   sxth w2, w0
+;   movn w4, #1
+;   sdiv w0, w2, w4
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   sxth w2, w0
+;   mov w4, #-2
+;   sdiv w0, w2, w4
+;   ret
 
