@@ -104,7 +104,7 @@ impl TargetIsa for X64 {
             pointer_bytes,
             self.shared_flags.clone(),
             self.isa_flags.clone(),
-        );
+        )?;
         let stack = Stack::new();
 
         let abi_sig = wasm_sig::<abi::X64ABI>(sig);
