@@ -1244,10 +1244,30 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xadd32_u8(&mut self, dst: XReg, src1: XReg, src2: u8) -> ControlFlow<Done> {
+        self.xadd32_u32(dst, src1, src2.into())
+    }
+
+    fn xadd32_u32(&mut self, dst: XReg, src1: XReg, src2: u32) -> ControlFlow<Done> {
+        let a = self.state[src1].get_u32();
+        self.state[dst].set_u32(a.wrapping_add(src2.into()));
+        ControlFlow::Continue(())
+    }
+
     fn xadd64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u64();
         let b = self.state[operands.src2].get_u64();
         self.state[operands.dst].set_u64(a.wrapping_add(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xadd64_u8(&mut self, dst: XReg, src1: XReg, src2: u8) -> ControlFlow<Done> {
+        self.xadd64_u32(dst, src1, src2.into())
+    }
+
+    fn xadd64_u32(&mut self, dst: XReg, src1: XReg, src2: u32) -> ControlFlow<Done> {
+        let a = self.state[src1].get_u64();
+        self.state[dst].set_u64(a.wrapping_add(src2.into()));
         ControlFlow::Continue(())
     }
 
@@ -1258,10 +1278,30 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xsub32_u8(&mut self, dst: XReg, src1: XReg, src2: u8) -> ControlFlow<Done> {
+        self.xsub32_u32(dst, src1, src2.into())
+    }
+
+    fn xsub32_u32(&mut self, dst: XReg, src1: XReg, src2: u32) -> ControlFlow<Done> {
+        let a = self.state[src1].get_u32();
+        self.state[dst].set_u32(a.wrapping_sub(src2.into()));
+        ControlFlow::Continue(())
+    }
+
     fn xsub64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u64();
         let b = self.state[operands.src2].get_u64();
         self.state[operands.dst].set_u64(a.wrapping_sub(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xsub64_u8(&mut self, dst: XReg, src1: XReg, src2: u8) -> ControlFlow<Done> {
+        self.xsub64_u32(dst, src1, src2.into())
+    }
+
+    fn xsub64_u32(&mut self, dst: XReg, src1: XReg, src2: u32) -> ControlFlow<Done> {
+        let a = self.state[src1].get_u64();
+        self.state[dst].set_u64(a.wrapping_sub(src2.into()));
         ControlFlow::Continue(())
     }
 

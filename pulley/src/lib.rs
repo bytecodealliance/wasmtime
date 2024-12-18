@@ -162,17 +162,33 @@ macro_rules! for_each_op {
             ///
             /// The upper 32-bits of `dst` are unmodified.
             xadd32 = Xadd32 { operands: BinaryOperands<XReg> };
+            /// Same as `xadd32` but `src2` is a zero-extended 8-bit immediate.
+            xadd32_u8 = Xadd32U8 { dst: XReg, src1: XReg, src2: u8 };
+            /// Same as `xadd32` but `src2` is a 32-bit immediate.
+            xadd32_u32 = Xadd32U32 { dst: XReg, src1: XReg, src2: u32 };
 
             /// 64-bit wrapping addition: `dst = src1 + src2`.
             xadd64 = Xadd64 { operands: BinaryOperands<XReg> };
+            /// Same as `xadd64` but `src2` is a zero-extended 8-bit immediate.
+            xadd64_u8 = Xadd64U8 { dst: XReg, src1: XReg, src2: u8 };
+            /// Same as `xadd64` but `src2` is a zero-extended 32-bit immediate.
+            xadd64_u32 = Xadd64U32 { dst: XReg, src1: XReg, src2: u32 };
 
             /// 32-bit wrapping subtraction: `low32(dst) = low32(src1) - low32(src2)`.
             ///
             /// The upper 32-bits of `dst` are unmodified.
             xsub32 = Xsub32 { operands: BinaryOperands<XReg> };
+            /// Same as `xsub32` but `src2` is a zero-extended 8-bit immediate.
+            xsub32_u8 = Xsub32U8 { dst: XReg, src1: XReg, src2: u8 };
+            /// Same as `xsub32` but `src2` is a 32-bit immediate.
+            xsub32_u32 = Xsub32U32 { dst: XReg, src1: XReg, src2: u32 };
 
             /// 64-bit wrapping subtraction: `dst = src1 - src2`.
             xsub64 = Xsub64 { operands: BinaryOperands<XReg> };
+            /// Same as `xsub64` but `src2` is a zero-extended 8-bit immediate.
+            xsub64_u8 = Xsub64U8 { dst: XReg, src1: XReg, src2: u8 };
+            /// Same as `xsub64` but `src2` is a zero-extended 32-bit immediate.
+            xsub64_u32 = Xsub64U32 { dst: XReg, src1: XReg, src2: u32 };
 
             /// `low32(dst) = low32(src1) * low32(src2)`
             xmul32 = XMul32 { operands: BinaryOperands<XReg> };

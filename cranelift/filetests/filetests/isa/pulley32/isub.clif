@@ -3,219 +3,116 @@ target pulley32
 
 function %i8(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):
-    v2 = iadd v0, v1
+    v2 = isub v0, v1
     return v2
 }
 
 ; VCode:
 ; block0:
-;   xadd32 x0, x0, x1
+;   xsub32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
-; xadd32 x0, x0, x1
+; xsub32 x0, x0, x1
 ; ret
 
 function %i16(i16, i16) -> i16 {
 block0(v0: i16, v1: i16):
-    v2 = iadd v0, v1
+    v2 = isub v0, v1
     return v2
 }
 
 ; VCode:
 ; block0:
-;   xadd32 x0, x0, x1
+;   xsub32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
-; xadd32 x0, x0, x1
+; xsub32 x0, x0, x1
 ; ret
 
 function %i32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):
-    v2 = iadd v0, v1
+    v2 = isub v0, v1
     return v2
 }
 
 ; VCode:
 ; block0:
-;   xadd32 x0, x0, x1
+;   xsub32 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
-; xadd32 x0, x0, x1
+; xsub32 x0, x0, x1
 ; ret
 
 function %i64(i64, i64) -> i64 {
 block0(v0: i64, v1: i64):
-    v2 = iadd v0, v1
+    v2 = isub v0, v1
     return v2
 }
 
 ; VCode:
 ; block0:
-;   xadd64 x0, x0, x1
+;   xsub64 x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
-; xadd64 x0, x0, x1
+; xsub64 x0, x0, x1
 ; ret
 
 function %i8_imm(i8) -> i8 {
 block0(v0: i8):
-    v2 = iadd_imm v0, 10
+    v1 = iconst.i8 10
+    v2 = isub v0, v1
     return v2
 }
 
 ; VCode:
 ; block0:
-;   xadd32_u8 x0, x0, 10
+;   xsub32_u8 x0, x0, 10
 ;   ret
 ;
 ; Disassembled:
-; xadd32_u8 x0, x0, 10
+; xsub32_u8 x0, x0, 10
 ; ret
 
 function %i16_imm(i16) -> i16 {
 block0(v0: i16):
-    v2 = iadd_imm v0, 10
+    v1 = iconst.i16 10
+    v2 = isub v0, v1
     return v2
 }
 
 ; VCode:
 ; block0:
-;   xadd32_u8 x0, x0, 10
+;   xsub32_u8 x0, x0, 10
 ;   ret
 ;
 ; Disassembled:
-; xadd32_u8 x0, x0, 10
+; xsub32_u8 x0, x0, 10
 ; ret
 
 function %i32_imm(i32) -> i32 {
 block0(v0: i32):
-    v2 = iadd_imm v0, 10
+    v1 = iconst.i32 10
+    v2 = isub v0, v1
     return v2
 }
 
 ; VCode:
 ; block0:
-;   xadd32_u8 x0, x0, 10
+;   xsub32_u8 x0, x0, 10
 ;   ret
 ;
 ; Disassembled:
-; xadd32_u8 x0, x0, 10
+; xsub32_u8 x0, x0, 10
 ; ret
 
 function %i64_imm(i64) -> i64 {
 block0(v0: i64):
-    v2 = iadd_imm v0, 10
-    return v2
-}
-
-; VCode:
-; block0:
-;   xadd64_u8 x0, x0, 10
-;   ret
-;
-; Disassembled:
-; xadd64_u8 x0, x0, 10
-; ret
-
-function %i32_imm_big(i32) -> i32 {
-block0(v0: i32):
-    v2 = iadd_imm v0, 65536
-    return v2
-}
-
-; VCode:
-; block0:
-;   xadd32_u32 x0, x0, 65536
-;   ret
-;
-; Disassembled:
-; xadd32_u32 x0, x0, 65536
-; ret
-
-function %i64_imm_big(i64) -> i64 {
-block0(v0: i64):
-    v2 = iadd_imm v0, 65536
-    return v2
-}
-
-; VCode:
-; block0:
-;   xadd64_u32 x0, x0, 65536
-;   ret
-;
-; Disassembled:
-; xadd64_u32 x0, x0, 65536
-; ret
-
-function %i64_imm_super_big(i64) -> i64 {
-block0(v0: i64):
-    v2 = iadd_imm v0, 0x1_1111_1111
-    return v2
-}
-
-; VCode:
-; block0:
-;   xconst64 x3, 4581298449
-;   xadd64 x0, x0, x3
-;   ret
-;
-; Disassembled:
-; xconst64 x3, 4581298449
-; xadd64 x0, x0, x3
-; ret
-
-function %i8_negative_imm(i8) -> i8 {
-block0(v0: i8):
-    v2 = iadd_imm v0, -10
-    return v2
-}
-
-; VCode:
-; block0:
-;   xsub32_u8 x0, x0, 10
-;   ret
-;
-; Disassembled:
-; xsub32_u8 x0, x0, 10
-; ret
-
-function %i16_negative_imm(i16) -> i16 {
-block0(v0: i16):
-    v2 = iadd_imm v0, -10
-    return v2
-}
-
-; VCode:
-; block0:
-;   xsub32_u8 x0, x0, 10
-;   ret
-;
-; Disassembled:
-; xsub32_u8 x0, x0, 10
-; ret
-
-function %i32_negative_imm(i32) -> i32 {
-block0(v0: i32):
-    v2 = iadd_imm v0, -10
-    return v2
-}
-
-; VCode:
-; block0:
-;   xsub32_u8 x0, x0, 10
-;   ret
-;
-; Disassembled:
-; xsub32_u8 x0, x0, 10
-; ret
-
-function %i64_negative_imm(i64) -> i64 {
-block0(v0: i64):
-    v2 = iadd_imm v0, -10
+    v1 = iconst.i64 10
+    v2 = isub v0, v1
     return v2
 }
 
@@ -228,9 +125,10 @@ block0(v0: i64):
 ; xsub64_u8 x0, x0, 10
 ; ret
 
-function %i32_negative_imm_big(i32) -> i32 {
+function %i32_imm_big(i32) -> i32 {
 block0(v0: i32):
-    v2 = iadd_imm v0, -65536
+    v1 = iconst.i32 65536
+    v2 = isub v0, v1
     return v2
 }
 
@@ -243,9 +141,10 @@ block0(v0: i32):
 ; xsub32_u32 x0, x0, 65536
 ; ret
 
-function %i64_negative_imm_big(i64) -> i64 {
+function %i64_imm_big(i64) -> i64 {
 block0(v0: i64):
-    v2 = iadd_imm v0, -65536
+    v1 = iconst.i64 65536
+    v2 = isub v0, v1
     return v2
 }
 
@@ -258,18 +157,99 @@ block0(v0: i64):
 ; xsub64_u32 x0, x0, 65536
 ; ret
 
-function %i32_negative_i32_min(i32) -> i32 {
-block0(v0: i32):
-    v2 = iadd_imm v0, 0x8000_0000
+function %i8_negative_imm(i8) -> i8 {
+block0(v0: i8):
+    v1 = iconst.i8 -10
+    v2 = isub v0, v1
     return v2
 }
 
 ; VCode:
 ; block0:
-;   xsub32_u32 x0, x0, 2147483648
+;   xadd32_u8 x0, x0, 10
 ;   ret
 ;
 ; Disassembled:
-; xsub32_u32 x0, x0, 2147483648
+; xadd32_u8 x0, x0, 10
+; ret
+
+function %i16_negative_imm(i16) -> i16 {
+block0(v0: i16):
+    v1 = iconst.i16 -10
+    v2 = isub v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   xadd32_u8 x0, x0, 10
+;   ret
+;
+; Disassembled:
+; xadd32_u8 x0, x0, 10
+; ret
+
+function %i32_negative_imm(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 -10
+    v2 = isub v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   xadd32_u8 x0, x0, 10
+;   ret
+;
+; Disassembled:
+; xadd32_u8 x0, x0, 10
+; ret
+
+function %i64_negative_imm(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -10
+    v2 = isub v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   xadd64_u8 x0, x0, 10
+;   ret
+;
+; Disassembled:
+; xadd64_u8 x0, x0, 10
+; ret
+
+function %i32_negative_big_imm(i32) -> i32 {
+block0(v0: i32):
+    v1 = iconst.i32 -65536
+    v2 = isub v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   xadd32_u32 x0, x0, 65536
+;   ret
+;
+; Disassembled:
+; xadd32_u32 x0, x0, 65536
+; ret
+
+function %i64_negative_big_imm(i64) -> i64 {
+block0(v0: i64):
+    v1 = iconst.i64 -65536
+    v2 = isub v0, v1
+    return v2
+}
+
+; VCode:
+; block0:
+;   xadd64_u32 x0, x0, 65536
+;   ret
+;
+; Disassembled:
+; xadd64_u32 x0, x0, 65536
 ; ret
 

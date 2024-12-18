@@ -109,11 +109,17 @@
 (decl pure u64_as_i64 (u64) i64)
 (extern constructor u64_as_i64 u64_as_i64)
 
+(decl pure partial u8_try_from_u64 (u64) u8)
+(extern constructor u8_try_from_u64 u8_try_from_u64)
+
 (decl pure partial u16_try_from_u64 (u64) u16)
 (extern constructor u16_try_from_u64 u16_try_from_u64)
 
 (decl pure partial u32_try_from_u64 (u64) u32)
 (extern constructor u32_try_from_u64 u32_try_from_u64)
+
+(decl pure partial u64_try_from_i64 (i64) u64)
+(extern constructor u64_try_from_i64 u64_try_from_i64)
 
 (decl pure partial i8_try_from_u64 (u64) i8)
 (extern constructor i8_try_from_u64 i8_try_from_u64)
