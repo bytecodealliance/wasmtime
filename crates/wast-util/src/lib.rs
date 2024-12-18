@@ -453,7 +453,6 @@ impl WastTest {
                 "spec_testsuite/simd_i8x16_sat_arith.wast",
                 "spec_testsuite/simd_lane.wast",
                 "spec_testsuite/simd_load.wast",
-                "spec_testsuite/simd_load_zero.wast",
                 "spec_testsuite/simd_splat.wast",
             ];
 
