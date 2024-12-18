@@ -220,9 +220,8 @@ where
     V: SparseMapValue<K> + fmt::Debug,
 {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("SparseMap")
-            .field("sparse", &self.sparse)
-            .field("dense", &self.dense)
+        f.debug_map()
+            .entries(self.values().map(|v| (v.key(), v)))
             .finish()
     }
 }
@@ -405,8 +404,8 @@ mod tests {
         let mut map = SparseMap::new();
         assert_eq!(map.insert(Obj(i1, "hi")), None);
 
-        let debug = format!("{:?}", map);
-        let expected= "SparseMap { sparse: SecondaryMap { elems: [0, 0], default: 0, unused: PhantomData<cranelift_entity::sparse::tests::Inst> }, dense: [Obj(inst1, \"hi\")] }";
+        let debug = format!("{map:?}");
+        let expected = "{inst1: Obj(inst1, \"hi\")}";
         assert_eq!(debug, expected);
     }
 }
