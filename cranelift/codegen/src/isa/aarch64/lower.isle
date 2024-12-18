@@ -1036,6 +1036,7 @@
 
 ;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero.
 ;; It takes a value and entension type, and perform emits the appropriate checks.
+;; TODO: restore spec
 ;  (spec (put_nonzero_in_reg_sext64 x)
 ;        (provide (= (sign_ext 64 x) result))
 ;        (require (not (= #x0000000000000000 result))))
@@ -1115,9 +1116,6 @@
       (a64_sdiv ty (put_in_reg_sext32 x) (imm ty (ImmExtend.Sign) y)))
 
 ;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero.
-;  (spec (put_nonzero_in_reg_sext64 x)
-;        (provide (= (sign_ext 64 x) result))
-;        (require (not (= #x0000000000000000 result))))
 
 ;;;; Rules for `urem` and `srem` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1133,18 +1131,34 @@
 ;;   div rd, x, y       ; rd = x / y
 ;;   msub rd, rd, y, x  ; rd = x - rd * y
 
-(rule urem (lower (has_type (fits_in_64 ty) (urem x y)))
+;; TODO: we can avoid a 0 check, if the dividend is a non-0 constant
+
+(rule urem (lower (has_type $I64 (urem x y)))
       (let ((x64 Reg (put_in_reg_zext64 x))
             (y64 Reg (put_nonzero_in_reg y (ExtType.Unsigned)))
             (div Reg (a64_udiv $I64 x64 y64))
             (result Reg (msub $I64 div y64 x64)))
         result))
 
-(rule srem (lower (has_type (fits_in_64 ty) (srem x y)))
+(rule urem -1 (lower (has_type (fits_in_32 ty) (urem x y)))
+      (let ((x64 Reg (put_in_reg_zext32 x))
+            (y64 Reg (put_nonzero_in_reg y (ExtType.Unsigned)))
+            (div Reg (a64_udiv ty x64 y64))
+            (result Reg (msub ty div y64 x64)))
+        result))
+
+(rule srem (lower (has_type $I64 (srem x y)))
       (let ((x64 Reg (put_in_reg_sext64 x))
             (y64 Reg (put_nonzero_in_reg y (ExtType.Signed)))
             (div Reg (a64_sdiv $I64 x64 y64))
             (result Reg (msub $I64 div y64 x64)))
+        result))
+
+(rule srem -1 (lower (has_type (fits_in_32 ty) (srem x y)))
+      (let ((x64 Reg (put_in_reg_sext32 x))
+            (y64 Reg (put_nonzero_in_reg y (ExtType.Signed)))
+            (div Reg (a64_sdiv ty x64 y64))
+            (result Reg (msub ty div y64 x64)))
         result))
 
 ;;; Rules for integer min/max: umin, smin, umax, smax ;;;;;;;;;;;;;;;;;;;;;;;;;
