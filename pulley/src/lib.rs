@@ -138,6 +138,88 @@ macro_rules! for_each_op {
             /// Branch if unsigned `a <= b`.
             br_if_xulteq64 = BrIfXulteq64 { a: XReg, b: XReg, offset: PcRelOffset };
 
+            /// Branch if `a == b`.
+            br_if_xeq32_i8 = BrIfXeq32I8 { a: XReg, b: i8, offset: PcRelOffset };
+            /// Branch if `a == b`.
+            br_if_xeq32_i32 = BrIfXeq32I32 { a: XReg, b: i32, offset: PcRelOffset };
+            /// Branch if `a != `b.
+            br_if_xneq32_i8 = BrIfXneq32I8 { a: XReg, b: i8, offset: PcRelOffset };
+            /// Branch if `a != `b.
+            br_if_xneq32_i32 = BrIfXneq32I32 { a: XReg, b: i32, offset: PcRelOffset };
+            /// Branch if signed `a < b`.
+            br_if_xslt32_i8 = BrIfXslt32I8 { a: XReg, b: i8, offset: PcRelOffset };
+            /// Branch if signed `a < b`.
+            br_if_xslt32_i32 = BrIfXslt32I32 { a: XReg, b: i32, offset: PcRelOffset };
+            /// Branch if signed `a > b`.
+            br_if_xsgt32_i8 = BrIfXsgt32I8 { a: XReg, b: i8, offset: PcRelOffset };
+            /// Branch if signed `a > b`.
+            br_if_xsgt32_i32 = BrIfXsgt32I32 { a: XReg, b: i32, offset: PcRelOffset };
+            /// Branch if signed `a <= b`.
+            br_if_xslteq32_i8 = BrIfXslteq32I8 { a: XReg, b: i8, offset: PcRelOffset };
+            /// Branch if signed `a <= b`.
+            br_if_xslteq32_i32 = BrIfXslteq32I32 { a: XReg, b: i32, offset: PcRelOffset };
+            /// Branch if signed `a >= b`.
+            br_if_xsgteq32_i8 = BrIfXsgteq32I8 { a: XReg, b: i8, offset: PcRelOffset };
+            /// Branch if signed `a >= b`.
+            br_if_xsgteq32_i32 = BrIfXsgteq32I32 { a: XReg, b: i32, offset: PcRelOffset };
+            /// Branch if unsigned `a < b`.
+            br_if_xult32_u8 = BrIfXult32U8 { a: XReg, b: u8, offset: PcRelOffset };
+            /// Branch if unsigned `a < b`.
+            br_if_xult32_u32 = BrIfXult32U32 { a: XReg, b: u32, offset: PcRelOffset };
+            /// Branch if unsigned `a <= b`.
+            br_if_xulteq32_u8 = BrIfXulteq32U8 { a: XReg, b: u8, offset: PcRelOffset };
+            /// Branch if unsigned `a <= b`.
+            br_if_xulteq32_u32 = BrIfXulteq32U32 { a: XReg, b: u32, offset: PcRelOffset };
+            /// Branch if unsigned `a > b`.
+            br_if_xugt32_u8 = BrIfXugt32U8 { a: XReg, b: u8, offset: PcRelOffset };
+            /// Branch if unsigned `a > b`.
+            br_if_xugt32_u32 = BrIfXugt32U32 { a: XReg, b: u32, offset: PcRelOffset };
+            /// Branch if unsigned `a >= b`.
+            br_if_xugteq32_u8 = BrIfXugteq32U8 { a: XReg, b: u8, offset: PcRelOffset };
+            /// Branch if unsigned `a >= b`.
+            br_if_xugteq32_u32 = BrIfXugteq32U32 { a: XReg, b: u32, offset: PcRelOffset };
+
+            /// Branch if `a == b`.
+            br_if_xeq64_i8 = BrIfXeq64I8 { a: XReg, b: i8, offset: PcRelOffset };
+            /// Branch if `a == b`.
+            br_if_xeq64_i32 = BrIfXeq64I32 { a: XReg, b: i32, offset: PcRelOffset };
+            /// Branch if `a != `b.
+            br_if_xneq64_i8 = BrIfXneq64I8 { a: XReg, b: i8, offset: PcRelOffset };
+            /// Branch if `a != `b.
+            br_if_xneq64_i32 = BrIfXneq64I32 { a: XReg, b: i32, offset: PcRelOffset };
+            /// Branch if signed `a < b`.
+            br_if_xslt64_i8 = BrIfXslt64I8 { a: XReg, b: i8, offset: PcRelOffset };
+            /// Branch if signed `a < b`.
+            br_if_xslt64_i32 = BrIfXslt64I32 { a: XReg, b: i32, offset: PcRelOffset };
+            /// Branch if signed `a > b`.
+            br_if_xsgt64_i8 = BrIfXsgt64I8 { a: XReg, b: i8, offset: PcRelOffset };
+            /// Branch if signed `a > b`.
+            br_if_xsgt64_i32 = BrIfXsgt64I32 { a: XReg, b: i32, offset: PcRelOffset };
+            /// Branch if signed `a <= b`.
+            br_if_xslteq64_i8 = BrIfXslteq64I8 { a: XReg, b: i8, offset: PcRelOffset };
+            /// Branch if signed `a <= b`.
+            br_if_xslteq64_i32 = BrIfXslteq64I32 { a: XReg, b: i32, offset: PcRelOffset };
+            /// Branch if signed `a >= b`.
+            br_if_xsgteq64_i8 = BrIfXsgteq64I8 { a: XReg, b: i8, offset: PcRelOffset };
+            /// Branch if signed `a >= b`.
+            br_if_xsgteq64_i32 = BrIfXsgteq64I32 { a: XReg, b: i32, offset: PcRelOffset };
+            /// Branch if unsigned `a < b`.
+            br_if_xult64_u8 = BrIfXult64U8 { a: XReg, b: u8, offset: PcRelOffset };
+            /// Branch if unsigned `a < b`.
+            br_if_xult64_u32 = BrIfXult64U32 { a: XReg, b: u32, offset: PcRelOffset };
+            /// Branch if unsigned `a <= b`.
+            br_if_xulteq64_u8 = BrIfXulteq64U8 { a: XReg, b: u8, offset: PcRelOffset };
+            /// Branch if unsigned `a <= b`.
+            br_if_xulteq64_u32 = BrIfXulteq64U32 { a: XReg, b: u32, offset: PcRelOffset };
+            /// Branch if unsigned `a > b`.
+            br_if_xugt64_u8 = BrIfXugt64U8 { a: XReg, b: u8, offset: PcRelOffset };
+            /// Branch if unsigned `a > b`.
+            br_if_xugt64_u32 = BrIfXugt64U32 { a: XReg, b: u32, offset: PcRelOffset };
+            /// Branch if unsigned `a >= b`.
+            br_if_xugteq64_u8 = BrIfXugteq64U8 { a: XReg, b: u8, offset: PcRelOffset };
+            /// Branch if unsigned `a >= b`.
+            br_if_xugteq64_u32 = BrIfXugteq64U32 { a: XReg, b: u32, offset: PcRelOffset };
+
             /// Branch to the label indicated by `low32(idx)`.
             ///
             /// After this instruction are `amt` instances of `PcRelOffset`

@@ -23,13 +23,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xconst8 x2, 42
-;   trap_if_xeq64 x0, x2 // code = TrapCode(1)
+;   trap_if_xeq64_i32 x0, 42 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
-; xconst8 x2, 42
-; br_if_xeq64 x0, x2, 0x8    // target = 0xb
+; br_if_xeq64_i8 x0, 42, 0x8    // target = 0x8
 ; ret
 ; trap
 
@@ -43,13 +41,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xconst8 x2, 42
-;   trap_if_xneq64 x0, x2 // code = TrapCode(1)
+;   trap_if_xneq64_i32 x0, 42 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
-; xconst8 x2, 42
-; br_if_xneq64 x0, x2, 0x8    // target = 0xb
+; br_if_xneq64_i8 x0, 42, 0x8    // target = 0x8
 ; ret
 ; trap
 
@@ -63,13 +59,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xconst8 x2, 42
-;   trap_if_xeq64 x0, x2 // code = TrapCode(1)
+;   trap_if_xeq64_i32 x0, 42 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
-; xconst8 x2, 42
-; br_if_xeq64 x0, x2, 0x8    // target = 0xb
+; br_if_xeq64_i8 x0, 42, 0x8    // target = 0x8
 ; ret
 ; trap
 
@@ -83,13 +77,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xconst8 x2, 42
-;   trap_if_xneq64 x0, x2 // code = TrapCode(1)
+;   trap_if_xneq64_i32 x0, 42 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
-; xconst8 x2, 42
-; br_if_xneq64 x0, x2, 0x8    // target = 0xb
+; br_if_xneq64_i8 x0, 42, 0x8    // target = 0x8
 ; ret
 ; trap
 

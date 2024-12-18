@@ -267,3 +267,126 @@ block2:
 ; xconst8 x0, 1
 ; ret
 
+function %brif_icmp_i32_imm(i32) -> i8 {
+block0(v0: i32):
+  v2 = icmp_imm slt v0, 10
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v3
+
+block2:
+  v4 = iconst.i8 0
+  return v4
+}
+
+; VCode:
+; block0:
+;   br_if_xslt32_i32 x0, 10, label2; jump label1
+; block1:
+;   xconst8 x0, 0
+;   ret
+; block2:
+;   xconst8 x0, 1
+;   ret
+;
+; Disassembled:
+; br_if_xslt32_i8 x0, 10, 0xb    // target = 0xb
+; xconst8 x0, 0
+; ret
+; xconst8 x0, 1
+; ret
+
+function %brif_icmp_i32_imm_big(i32) -> i8 {
+block0(v0: i32):
+  v2 = icmp_imm slt v0, 88888
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v3
+
+block2:
+  v4 = iconst.i8 0
+  return v4
+}
+
+; VCode:
+; block0:
+;   br_if_xslt32_i32 x0, 88888, label2; jump label1
+; block1:
+;   xconst8 x0, 0
+;   ret
+; block2:
+;   xconst8 x0, 1
+;   ret
+;
+; Disassembled:
+; br_if_xslt32_i32 x0, 88888, 0xe    // target = 0xe
+; xconst8 x0, 0
+; ret
+; xconst8 x0, 1
+; ret
+
+function %brif_icmp_i64_imm(i64) -> i8 {
+block0(v0: i64):
+  v2 = icmp_imm slt v0, 10
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v3
+
+block2:
+  v4 = iconst.i8 0
+  return v4
+}
+
+; VCode:
+; block0:
+;   br_if_xslt64_i32 x0, 10, label2; jump label1
+; block1:
+;   xconst8 x0, 0
+;   ret
+; block2:
+;   xconst8 x0, 1
+;   ret
+;
+; Disassembled:
+; br_if_xslt64_i8 x0, 10, 0xb    // target = 0xb
+; xconst8 x0, 0
+; ret
+; xconst8 x0, 1
+; ret
+
+function %brif_icmp_i64_imm_big(i64) -> i8 {
+block0(v0: i64):
+  v2 = icmp_imm slt v0, 88888
+  brif v2, block1, block2
+
+block1:
+  v3 = iconst.i8 1
+  return v3
+
+block2:
+  v4 = iconst.i8 0
+  return v4
+}
+
+; VCode:
+; block0:
+;   br_if_xslt64_i32 x0, 88888, label2; jump label1
+; block1:
+;   xconst8 x0, 0
+;   ret
+; block2:
+;   xconst8 x0, 1
+;   ret
+;
+; Disassembled:
+; br_if_xslt64_i32 x0, 88888, 0xe    // target = 0xe
+; xconst8 x0, 0
+; ret
+; xconst8 x0, 1
+; ret
