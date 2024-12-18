@@ -931,6 +931,14 @@ macro_rules! isle_common_prelude_methods {
             val as u16
         }
 
+        fn u8_try_from_u64(&mut self, val: u64) -> Option<u8> {
+            u8::try_from(val).ok()
+        }
+
+        fn u64_try_from_i64(&mut self, val: i64) -> Option<u64> {
+            u64::try_from(val).ok()
+        }
+
         fn u16_try_from_u64(&mut self, val: u64) -> Option<u16> {
             u16::try_from(val).ok()
         }

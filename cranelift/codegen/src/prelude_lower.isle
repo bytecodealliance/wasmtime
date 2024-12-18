@@ -306,6 +306,14 @@
 (decl def_inst (Inst) Value)
 (extern extractor def_inst def_inst)
 
+(decl u8_from_iconst (u8) Value)
+(extractor (u8_from_iconst x)
+           (def_inst (iconst (uimm8 x))))
+
+(decl u32_from_iconst (u32) Value)
+(extractor (u32_from_iconst x)
+           (u64_from_iconst (u64_as_u32 x)))
+
 ;; Extract a constant `u64` from a value defined by an `iconst`.
 (spec (u64_from_iconst arg) (provide (= arg (zero_ext 64 result))))
 (decl u64_from_iconst (u64) Value)

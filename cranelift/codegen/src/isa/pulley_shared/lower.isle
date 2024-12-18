@@ -129,41 +129,92 @@
 
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I8 (iadd a b)))
-      (pulley_xadd32 a b))
+(rule 0 (lower (has_type (ty_int (fits_in_64 ty)) (iadd a b))) (pulley_xadd32 a b))
+(rule 1 (lower (has_type $I64 (iadd a b))) (pulley_xadd64 a b))
 
-(rule (lower (has_type $I16 (iadd a b)))
-      (pulley_xadd32 a b))
+;; Fold constants into the instruction if possible
+(rule 2 (lower (has_type (ty_int (fits_in_32 _)) (iadd a (u32_from_iconst b))))
+  (pulley_xadd32_u32 a b))
+(rule 3 (lower (has_type (ty_int (fits_in_32 _)) (iadd a (u8_from_iconst b))))
+  (pulley_xadd32_u8 a b))
+(rule 4 (lower (has_type $I64 (iadd a (u32_from_iconst b))))
+  (pulley_xadd64_u32 a b))
+(rule 5 (lower (has_type $I64 (iadd a (u8_from_iconst b))))
+  (pulley_xadd64_u8 a b))
 
-(rule (lower (has_type $I32 (iadd a b)))
-      (pulley_xadd32 a b))
+;; If the rhs is a constant and the negated version can fit within a smaller
+;; constant then switch this to a subtraction with the negated constant.
+(rule 6 (lower (has_type (ty_int (fits_in_32 _)) (iadd a b)))
+  (if-let c (u32_from_negated_iconst b))
+  (pulley_xsub32_u32 a c))
+(rule 7 (lower (has_type $I64 (iadd a b)))
+  (if-let c (u32_from_negated_iconst b))
+  (pulley_xsub64_u32 a c))
+(rule 8 (lower (has_type (ty_int (fits_in_32 _)) (iadd a b)))
+  (if-let c (u8_from_negated_iconst b))
+  (pulley_xsub32_u8 a c))
+(rule 9 (lower (has_type $I64 (iadd a b)))
+  (if-let c (u8_from_negated_iconst b))
+  (pulley_xsub64_u8 a c))
 
-(rule (lower (has_type $I64 (iadd a b)))
-      (pulley_xadd64 a b))
+;; Helper extract a constant from a `Value`, negate it, and fit it within a
+;; `u8`.
+(decl pure partial u8_from_negated_iconst (Value) u8)
+(rule (u8_from_negated_iconst (i32_from_iconst i))
+  (if-let neg_i64 (i64_neg (i32_as_i64 i)))
+  (if-let neg_u64 (u64_try_from_i64 neg_i64))
+  (if-let neg_u8 (u8_try_from_u64 neg_u64))
+  neg_u8)
 
-(rule (lower (has_type $I8X16 (iadd a b))) (pulley_vaddi8x16 a b))
-(rule (lower (has_type $I16X8 (iadd a b))) (pulley_vaddi16x8 a b))
-(rule (lower (has_type $I32X4 (iadd a b))) (pulley_vaddi32x4 a b))
-(rule (lower (has_type $I64X2 (iadd a b))) (pulley_vaddi64x2 a b))
+;; Helper extract a constant from a `Value`, negate it, and fit it within a
+;; `u32`.
+(decl pure partial u32_from_negated_iconst (Value) u32)
+(rule (u32_from_negated_iconst (i32_from_iconst i))
+  (if-let neg_i64 (i64_neg (i32_as_i64 i)))
+  (if-let neg_u64 (u64_try_from_i64 neg_i64))
+  (if-let neg_u32 (u32_try_from_u64 neg_u64))
+  neg_u32)
+
+
+(rule 1 (lower (has_type $I8X16 (iadd a b))) (pulley_vaddi8x16 a b))
+(rule 1 (lower (has_type $I16X8 (iadd a b))) (pulley_vaddi16x8 a b))
+(rule 1 (lower (has_type $I32X4 (iadd a b))) (pulley_vaddi32x4 a b))
+(rule 1 (lower (has_type $I64X2 (iadd a b))) (pulley_vaddi64x2 a b))
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $I8 (isub a b)))
-      (pulley_xsub32 a b))
+(rule 0 (lower (has_type (ty_int (fits_in_32 _)) (isub a b))) (pulley_xsub32 a b))
+(rule 1 (lower (has_type $I64 (isub a b))) (pulley_xsub64 a b))
 
-(rule (lower (has_type $I16 (isub a b)))
-      (pulley_xsub32 a b))
+;; Fold a rhs constant into the instruction if possible.
+(rule 2 (lower (has_type (ty_int (fits_in_32 _)) (isub a (u32_from_iconst b))))
+  (pulley_xsub32_u32 a b))
+(rule 3 (lower (has_type (ty_int (fits_in_32 _)) (isub a (u8_from_iconst b))))
+  (pulley_xsub32_u8 a b))
+(rule 4 (lower (has_type $I64 (isub a (u32_from_iconst b))))
+  (pulley_xsub64_u32 a b))
+(rule 5 (lower (has_type $I64 (isub a (u8_from_iconst b))))
+  (pulley_xsub64_u8 a b))
 
-(rule (lower (has_type $I32 (isub a b)))
-      (pulley_xsub32 a b))
+;; If the rhs is a constant and the negated version can fit within a smaller
+;; constant then switch this to an addition with the negated constant.
+(rule 6 (lower (has_type (ty_int (fits_in_32 _)) (isub a b)))
+  (if-let c (u32_from_negated_iconst b))
+  (pulley_xadd32_u32 a c))
+(rule 7 (lower (has_type $I64 (isub a b)))
+  (if-let c (u32_from_negated_iconst b))
+  (pulley_xadd64_u32 a c))
+(rule 8 (lower (has_type (ty_int (fits_in_32 _)) (isub a b)))
+  (if-let c (u8_from_negated_iconst b))
+  (pulley_xadd32_u8 a c))
+(rule 9 (lower (has_type $I64 (isub a b)))
+  (if-let c (u8_from_negated_iconst b))
+  (pulley_xadd64_u8 a c))
 
-(rule (lower (has_type $I64 (isub a b)))
-      (pulley_xsub64 a b))
-
-(rule (lower (has_type $I8X16 (isub a b))) (pulley_vsubi8x16 a b))
-(rule (lower (has_type $I16X8 (isub a b))) (pulley_vsubi16x8 a b))
-(rule (lower (has_type $I32X4 (isub a b))) (pulley_vsubi32x4 a b))
-(rule (lower (has_type $I64X2 (isub a b))) (pulley_vsubi64x2 a b))
+(rule 1 (lower (has_type $I8X16 (isub a b))) (pulley_vsubi8x16 a b))
+(rule 1 (lower (has_type $I16X8 (isub a b))) (pulley_vsubi16x8 a b))
+(rule 1 (lower (has_type $I32X4 (isub a b))) (pulley_vsubi32x4 a b))
+(rule 1 (lower (has_type $I64X2 (isub a b))) (pulley_vsubi64x2 a b))
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
