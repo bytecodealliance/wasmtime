@@ -404,7 +404,7 @@
 ;;
 ;; While we could pretty easily add 128-bit comparisons to the interpreter it's
 ;; currently predicted that it's relatively niche to need this and that it's
-;; performance-sensitive in an interpreter context. In liue of adding more
+;; not performance-sensitive in an interpreter context. In lieu of adding more
 ;; opcodes this is an adaptation of riscv64's lowering rules for 128-bit
 ;; integers. In the future if this is a performance bottleneck it should be
 ;; possible to add new opcodes to pulley for 128-bit comparisons.
