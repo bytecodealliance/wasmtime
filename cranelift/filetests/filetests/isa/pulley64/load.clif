@@ -61,3 +61,20 @@ block0(v0: i64):
 ; xload64le_offset32 x0, x0, 8
 ; ret
 
+
+function %load_i64_with_add_and_offset(i64) -> i64 {
+block0(v0: i64):
+    v1 = iadd_imm v0, 10
+    v2 = load.i64 v1+8
+    return v2
+}
+
+; VCode:
+; block0:
+;   x0 = xload64 x0+18 // flags =
+;   ret
+;
+; Disassembled:
+; xload64le_offset32 x0, x0, 18
+; ret
+

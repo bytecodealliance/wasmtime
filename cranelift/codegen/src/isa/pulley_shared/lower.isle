@@ -540,6 +540,9 @@
 
 (decl amode (Value Offset32) Amode)
 (rule (amode addr (offset32 offset)) (Amode.RegOffset addr offset))
+(rule 1 (amode (iadd addr (i32_from_iconst b)) (offset32 offset))
+  (if-let new_offset (s32_add_fallible b offset))
+  (Amode.RegOffset addr new_offset))
 
 (rule (lower (has_type (ty_int (fits_in_64 ty)) (load flags addr offset)))
   (pulley_xload (amode addr offset) ty flags (ExtKind.None)))
