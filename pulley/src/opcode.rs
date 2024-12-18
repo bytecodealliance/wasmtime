@@ -28,10 +28,7 @@ macro_rules! define_opcode {
             /// The value of the maximum defined opcode.
             pub const MAX: u8 = Opcode::ExtendedOp as u8;
         }
-    };
-
-    ( @max $x:ident ) => { 0 };
-    ( @max $x:ident $( $xs:ident )* ) => { 1 + define_opcode!(@max $( $xs )* ) };
+    }
 }
 for_each_op!(define_opcode);
 
@@ -77,7 +74,9 @@ macro_rules! define_extended_opcode {
 
         impl ExtendedOpcode {
             /// The value of the maximum defined extended opcode.
-            pub const MAX: u16 = define_opcode!( @max $( $name )* ) + 1;
+            pub const MAX: u16 = $(
+                if true { 1 } else { ExtendedOpcode::$name as u16 } +
+            )* 0;
         }
     };
 }
