@@ -758,7 +758,7 @@ impl MachInstEmit for Inst {
                     ALUOp::EorNot => 0b01001010_001,
                     ALUOp::AddS => 0b00101011_000,
                     ALUOp::SubS => 0b01101011_000,
-                    ALUOp::SDiv => 0b10011010_110,
+                    ALUOp::SDiv => 0b00011010_110,
                     ALUOp::UDiv => 0b00011010_110,
                     ALUOp::RotR | ALUOp::Lsr | ALUOp::Asr | ALUOp::Lsl => 0b00011010_110,
                     ALUOp::SMulH => 0b10011011_010,
