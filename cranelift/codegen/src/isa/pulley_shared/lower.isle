@@ -403,9 +403,7 @@
 
 ;;;; Rules for `icmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 1 (lower (icmp cc a b @ (value_type $I64)))
-      (lower_icmp $I64 cc a b))
-(rule (lower (icmp cc a b @ (value_type (ty_int (fits_in_32 ty)))))
+(rule (lower (icmp cc a b @ (value_type (ty_int ty))))
       (lower_icmp ty cc a b))
 
 (decl lower_icmp (Type IntCC Value Value) XReg)
@@ -457,6 +455,61 @@
 (rule (lower_icmp ty (IntCC.UnsignedGreaterThanOrEqual) a b)
       (lower_icmp ty (IntCC.UnsignedLessThanOrEqual) b a))
 
+;; `i128` comparisons
+;;
+;; While we could pretty easily add 128-bit comparisons to the interpreter it's
+;; currently predicted that it's relatively niche to need this and that it's
+;; not performance-sensitive in an interpreter context. In lieu of adding more
+;; opcodes this is an adaptation of riscv64's lowering rules for 128-bit
+;; integers. In the future if this is a performance bottleneck it should be
+;; possible to add new opcodes to pulley for 128-bit comparisons.
+
+(rule (lower_icmp $I128 (IntCC.Equal) x y)
+  (let ((lo XReg (pulley_xbxor64 (value_regs_get x 0) (value_regs_get y 0)))
+        (hi XReg (pulley_xbxor64 (value_regs_get x 1) (value_regs_get y 1))))
+    (pulley_xeq64 (pulley_xbor64 lo hi) (pulley_xconst8 0))))
+(rule (lower_icmp $I128 (IntCC.NotEqual) x y)
+  (let ((lo XReg (pulley_xbxor64 (value_regs_get x 0) (value_regs_get y 0)))
+        (hi XReg (pulley_xbxor64 (value_regs_get x 1) (value_regs_get y 1))))
+    (pulley_xneq64 (pulley_xbor64 lo hi) (pulley_xconst8 0))))
+
+;; swap args for `>` to use `<` instead
+;;(rule 1 (lower_icmp $I128 cc @ (IntCC.SignedGreaterThan) x y)
+;;  (lower_icmp $I128 (intcc_swap_args cc) y x))
+;;(rule 1 (lower_icmp $I128 cc @ (IntCC.UnsignedGreaterThan) x y)
+;;  (lower_icmp $I128  (intcc_swap_args cc) y x))
+
+;; complement `=`-related conditions to get ones that don't use `=`.
+(rule 2 (lower_icmp $I128 cc @ (IntCC.SignedLessThanOrEqual) x y)
+  (pulley_xbxor32 (lower_icmp $I128 (intcc_complement cc) x y) (pulley_xconst8 1)))
+(rule 2 (lower_icmp $I128 cc @ (IntCC.SignedGreaterThanOrEqual) x y)
+  (pulley_xbxor32 (lower_icmp $I128 (intcc_complement cc) x y) (pulley_xconst8 1)))
+(rule 2 (lower_icmp $I128 cc @ (IntCC.UnsignedLessThanOrEqual) x y)
+  (pulley_xbxor32 (lower_icmp $I128 (intcc_complement cc) x y) (pulley_xconst8 1)))
+(rule 2 (lower_icmp $I128 cc @ (IntCC.UnsignedGreaterThanOrEqual) x y)
+  (pulley_xbxor32 (lower_icmp $I128 (intcc_complement cc) x y) (pulley_xconst8 1)))
+
+;; Compare both the bottom and upper halves of the 128-bit values. If
+;; the top half is equal use the bottom comparison, otherwise use the upper
+;; comparison. Note that the lower comparison is always unsigned since if it's
+;; used the top halves are all zeros and the semantic values are positive.
+(rule 3 (lower_icmp $I128 cc x y)
+  (if-let (IntCC.UnsignedLessThan) (intcc_unsigned cc))
+  (let ((x_lo XReg (value_regs_get x 0))
+        (x_hi XReg (value_regs_get x 1))
+        (y_lo XReg (value_regs_get y 0))
+        (y_hi XReg (value_regs_get y 1))
+        (top_cmp XReg (lower_icmp128_hi cc x_hi y_hi))
+        (bottom_cmp XReg (pulley_xult64 x_lo y_lo)))
+    (pulley_xselect32
+      (pulley_xeq64 (pulley_xbxor64 x_hi y_hi) (pulley_xconst8 0))
+      bottom_cmp
+      top_cmp)))
+
+(decl lower_icmp128_hi (IntCC XReg XReg) XReg)
+(rule (lower_icmp128_hi (IntCC.SignedLessThan) a b) (pulley_xslt64 a b))
+(rule (lower_icmp128_hi (IntCC.UnsignedLessThan) a b) (pulley_xult64 a b))
+
 ;;;; Rules for `fcmp` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (fcmp cc a b @ (value_type (ty_scalar_float ty))))
@@ -488,11 +541,17 @@
 (decl amode (Value Offset32) Amode)
 (rule (amode addr (offset32 offset)) (Amode.RegOffset addr offset))
 
-(rule (lower (has_type (ty_int ty) (load flags addr offset)))
+(rule (lower (has_type (ty_int (fits_in_64 ty)) (load flags addr offset)))
   (pulley_xload (amode addr offset) ty flags (ExtKind.None)))
 
 (rule 1 (lower (has_type (ty_scalar_float ty) (load flags addr offset)))
   (pulley_fload (amode addr offset) ty flags))
+
+(rule 3 (lower (has_type $I128 (load flags addr offset)))
+  (if-let offsetp8 (s32_add_fallible offset 8))
+  (let ((lo XReg (pulley_xload (amode addr offset) $I64 flags (ExtKind.None)))
+        (hi XReg (pulley_xload (amode addr offsetp8) $I64 flags (ExtKind.None))))
+    (value_regs lo hi)))
 
 (rule 0 (lower (has_type (ty_int (fits_in_32 _)) (uload8 flags addr offset)))
   (pulley_xload (amode addr offset) $I8 flags (ExtKind.Zero32)))
@@ -553,7 +612,7 @@
 
 ;;;; Rules for `store` and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (store flags src @ (value_type (ty_int ty)) addr offset))
+(rule (lower (store flags src @ (value_type (ty_int (fits_in_64 ty))) addr offset))
   (side_effect (pulley_xstore (amode addr offset) src ty flags)))
 
 (rule 1 (lower (store flags src @ (value_type (ty_scalar_float ty)) addr offset))
@@ -598,10 +657,27 @@
 (rule 1 (lower (has_type $I64 (sextend val)))
   (sext64 val))
 
+(rule 1 (lower (has_type $I128 (sextend val)))
+  (let ((lo XReg (sext64 val))
+        (hi XReg (pulley_xshr64_s lo (pulley_xconst8 63))))
+    (value_regs lo hi)))
+
 ;;;; Rules for `ireduce` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type (fits_in_64 _ty) (ireduce src)))
   src)
+
+;;;; Rules for `iconcat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I128 (iconcat a b)))
+  (value_regs a b))
+
+;;;; Rules for `isplit` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (isplit x @ (value_type $I128)))
+  (let ((lo XReg (value_regs_get x 0))
+        (hi XReg (value_regs_get x 1)))
+    (output_pair lo hi)))
 
 ;;;; Rules for `uadd_overflow_trap` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
