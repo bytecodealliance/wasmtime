@@ -109,8 +109,8 @@ impl Imm64 {
         Imm64(sign_extended)
     }
 
-    /// Zero extend this immediate as if it were a signed integer of the given
-    /// power-of-two width.
+    /// Zero extend this immediate as if it were an unsigned integer of the
+    /// given power-of-two width.
     #[must_use]
     pub fn zero_extend_from_width(&self, bit_width: u32) -> Self {
         debug_assert!(
@@ -124,8 +124,8 @@ impl Imm64 {
 
         let bit_width = u64::from(bit_width);
         let delta = 64 - bit_width;
-        let sign_extended = (self.0.unsigned() << delta) >> delta;
-        Imm64(sign_extended.signed())
+        let zero_extended = (self.0.unsigned() << delta) >> delta;
+        Imm64(zero_extended.signed())
     }
 }
 

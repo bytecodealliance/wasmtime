@@ -68,29 +68,7 @@ pub fn bounds_check_and_compute_addr(
     let memory_guard_size = env.tunables().memory_guard_size;
     let memory_reservation = env.tunables().memory_reservation;
 
-    // Boolean whether `index` is statically in-bounds with respect to this
-    // heap's configuration. This is `true` when `index` is a constant and when
-    // the offset/size are added in it's all still less than the minimum byte
-    // size of the heap.
-    let statically_in_bounds = builder
-        .func
-        .dfg
-        .value_def(index)
-        .inst()
-        .and_then(|i| {
-            let imm = match builder.func.dfg.insts[i] {
-                ir::InstructionData::UnaryImm {
-                    opcode: ir::Opcode::Iconst,
-                    imm,
-                } => imm,
-                _ => return None,
-            };
-            let ty = builder.func.dfg.value_type(index);
-            let index = imm.zero_extend_from_width(ty.bits()).bits().unsigned();
-            let final_addr = index.checked_add(offset_and_size)?;
-            Some(final_addr <= heap.memory.minimum_byte_size().unwrap_or(u64::MAX))
-        })
-        .unwrap_or(false);
+    let statically_in_bounds = statically_in_bounds(&builder.func, heap, index, offset_and_size);
 
     let index = cast_index_to_pointer_ty(
         index,
@@ -784,4 +762,37 @@ fn compute_addr(
 fn offset_plus_size(offset: u32, size: u8) -> u64 {
     // Cannot overflow because we are widening to `u64`.
     offset as u64 + size as u64
+}
+
+/// Returns whether `index` is statically in-bounds with respect to this
+/// `heap`'s configuration.
+///
+/// This is `true` when `index` is a constant and when the offset/size are added
+/// in it's all still less than the minimum byte size of the heap.
+///
+/// The `offset_and_size` here are the static offset that was listed on the wasm
+/// instruction plus the size of the access being made.
+fn statically_in_bounds(
+    func: &ir::Function,
+    heap: &HeapData,
+    index: ir::Value,
+    offset_and_size: u64,
+) -> bool {
+    func.dfg
+        .value_def(index)
+        .inst()
+        .and_then(|i| {
+            let imm = match func.dfg.insts[i] {
+                ir::InstructionData::UnaryImm {
+                    opcode: ir::Opcode::Iconst,
+                    imm,
+                } => imm,
+                _ => return None,
+            };
+            let ty = func.dfg.value_type(index);
+            let index = imm.zero_extend_from_width(ty.bits()).bits().unsigned();
+            let final_addr = index.checked_add(offset_and_size)?;
+            Some(final_addr <= heap.memory.minimum_byte_size().unwrap_or(u64::MAX))
+        })
+        .unwrap_or(false)
 }
