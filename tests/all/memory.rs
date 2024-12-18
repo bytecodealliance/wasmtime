@@ -94,9 +94,14 @@ fn test_traps(store: &mut Store<()>, funcs: &[TestFunc], addr: u32, mem: &Memory
 #[cfg_attr(miri, ignore)]
 fn offsets_static_dynamic_oh_my(config: &mut Config) -> Result<()> {
     const GB: u64 = 1 << 30;
+    const MB: u64 = 1 << 20;
 
     let mut engines = Vec::new();
-    let sizes = [0, 1 * GB, 4 * GB];
+    let sizes = if cfg!(target_pointer_width = "32") {
+        [0, 10 * MB, 20 * MB]
+    } else {
+        [0, 1 * GB, 4 * GB]
+    };
     for &memory_reservation in sizes.iter() {
         for &guard_size in sizes.iter() {
             for &guard_before_linear_memory in [true, false].iter() {
@@ -654,6 +659,7 @@ fn shared_memory_wait_notify() -> Result<()> {
 
 #[wasmtime_test]
 #[cfg_attr(miri, ignore)]
+#[cfg(target_pointer_width = "64")] // requires large VM reservation
 fn init_with_negative_segment(_: &mut Config) -> Result<()> {
     let engine = Engine::default();
     let module = Module::new(

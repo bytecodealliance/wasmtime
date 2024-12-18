@@ -62,8 +62,9 @@ pub fn run_wasmtime(args: &[&str]) -> Result<String> {
     let output = run_wasmtime_for_output(args, None)?;
     if !output.status.success() {
         bail!(
-            "Failed to execute wasmtime with: {:?}\n{}",
+            "Failed to execute wasmtime with: {:?}\nstatus: {}\n{}",
             args,
+            output.status,
             String::from_utf8_lossy(&output.stderr)
         );
     }
@@ -574,6 +575,10 @@ fn run_cwasm_from_stdin() -> Result<()> {
 #[cfg(feature = "wasi-threads")]
 #[test]
 fn run_threads() -> Result<()> {
+    // Skip this test on platforms that don't support threads.
+    if crate::threads::engine().is_none() {
+        return Ok(());
+    }
     let wasm = build_wasm("tests/all/cli_tests/threads.wat")?;
     let stdout = run_wasmtime(&[
         "run",
@@ -597,6 +602,10 @@ fn run_threads() -> Result<()> {
 #[cfg(feature = "wasi-threads")]
 #[test]
 fn run_simple_with_wasi_threads() -> Result<()> {
+    // Skip this test on platforms that don't support threads.
+    if crate::threads::engine().is_none() {
+        return Ok(());
+    }
     // We expect to be able to run Wasm modules that do not have correct
     // wasi-thread entry points or imported shared memory as long as no threads
     // are spawned.
@@ -919,10 +928,12 @@ fn table_growth_failure2() -> Result<()> {
         .output()?;
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("forcing trap when growing table to 4294967296 elements"),
-        "bad stderr: {stderr}"
-    );
+    let expected = if cfg!(target_pointer_width = "32") {
+        "overflow calculating new table size"
+    } else {
+        "forcing trap when growing table to 4294967296 elements"
+    };
+    assert!(stderr.contains(expected), "bad stderr: {stderr}");
     Ok(())
 }
 
@@ -2063,6 +2074,10 @@ after empty
 
 #[test]
 fn settings_command() -> Result<()> {
+    // Skip this test on platforms that Cranelift doesn't support.
+    if cranelift_native::builder().is_err() {
+        return Ok(());
+    }
     let output = run_wasmtime(&["settings"])?;
     assert!(output.contains("Cranelift settings for target"));
     Ok(())

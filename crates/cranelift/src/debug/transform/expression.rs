@@ -1222,6 +1222,11 @@ mod tests {
         use super::ValueLabelRangesBuilder;
         use crate::debug::ModuleMemoryOffset;
 
+        // Ignore this test if cranelift doesn't support the native platform.
+        if cranelift_native::builder().is_err() {
+            return;
+        }
+
         let addr_tr = create_mock_address_transform();
         let (value_ranges, value_labels) = create_mock_value_ranges();
         let fi = FunctionFrameInfo {
