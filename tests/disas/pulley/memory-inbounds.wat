@@ -98,12 +98,12 @@
 ;;       xconst32 x8, 131072
 ;;       xadd64_uoverflow_trap x7, x7, x8
 ;;       xload64le_offset32 x8, x0, 104
-;;       br_if_xult64 x8, x7, 0x17    // target = 0x2b
-;;   1b: xload64le_offset32 x8, x0, 96
+;;       br_if_xult64 x8, x7, 0x17    // target = 0x2d
+;;   1d: xload64le_offset32 x8, x0, 96
 ;;       xload32le_offset32 x0, x8, 131068
 ;;       pop_frame
 ;;       ret
-;;   2b: trap
+;;   2d: trap
 ;;
 ;; wasm[0]::function[9]::never_inbounds:
 ;;       push_frame
