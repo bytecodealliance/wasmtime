@@ -87,10 +87,10 @@ fn push_pop_many() {
         r#"
        0: push_frame
        1: xpush32_many x0, x1, x2, x3, x4
-       6: xadd32 x0, x0, x1
-       9: xpop32_many x0, x1, x2, x3, x4
-       e: pop_frame
-       f: ret
+       8: xadd32 x0, x0, x1
+       b: xpop32_many x0, x1, x2, x3, x4
+      12: pop_frame
+      13: ret
         "#,
     );
 }
