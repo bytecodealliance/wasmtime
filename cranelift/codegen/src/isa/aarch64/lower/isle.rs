@@ -207,24 +207,44 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     ///
     /// The logic here is nontrivial enough that it's not really worth porting
     /// this over to ISLE.
-    fn load_constant64_full(
+    fn load_constant_full(
         &mut self,
         ty: Type,
         extend: &generated_code::ImmExtend,
+        extend_to: &OperandSize,
         value: u64,
     ) -> Reg {
         let bits = ty.bits();
-        let value = if bits < 64 {
-            if *extend == generated_code::ImmExtend::Sign {
-                let shift = 64 - bits;
-                let value = value as i64;
 
-                ((value << shift) >> shift) as u64
-            } else {
-                value & !(u64::MAX << bits)
-            }
-        } else {
-            value
+        let value = match extend_to {
+            OperandSize::Size32 => {
+                if bits < 32 {
+                    if *extend == generated_code::ImmExtend::Sign {
+                        let shift = 32 - bits;
+                        let value = value as i32;
+
+                        ((value << shift) >> shift) as u64
+                    } else {
+                        value & !((u32::MAX as u64) << bits)
+                    }
+                } else {
+                    value
+                }
+            },
+            OperandSize::Size64 => {
+                if bits < 64 {
+                    if *extend == generated_code::ImmExtend::Sign {
+                        let shift = 64 - bits;
+                        let value = value as i64;
+
+                        ((value << shift) >> shift) as u64
+                    } else {
+                        value & !(u64::MAX << bits)
+                    }
+                } else {
+                    value
+                }
+            },
         };
 
         // Divide the value into 16-bit slices that we can manipulate using
@@ -749,131 +769,5 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             return None;
         }
         Some(bit as u8)
-    }
-
-    fn load_constant32_full(
-        &mut self,
-        ty: Type,
-        extend: &generated_code::ImmExtend,
-        value: u64,
-    ) -> Reg {
-        // value is a u64, because it saves us from code duplication for imm in isle. However the
-        // value passed to load_constant32_full should always fit a u32
-        debug_assert!(value <= u32::MAX as u64, "cannot fit u64 const in u32");
-        let value = value as u32;
-
-        let bits = ty.bits();
-        let value = if bits < 32 {
-            if *extend == generated_code::ImmExtend::Sign {
-                let shift = 32 - bits;
-                let value = value as i32;
-
-                ((value << shift) >> shift) as u32
-            } else {
-                value & !(u32::MAX << bits)
-            }
-        } else {
-            value
-        };
-
-        // Divide the value into 16-bit slices that we can manipulate using
-        // `movz`, `movn`, and `movk`.
-        fn get(value: u32, shift: u8) -> u16 {
-            (value >> (shift * 16)) as u16
-        }
-        fn replace(mut old: u32, new: u16, shift: u8) -> u32 {
-            let offset = shift * 16;
-            old &= !(0xffff << offset);
-            old |= u32::from(new) << offset;
-            old
-        }
-
-        // The 32-bit versions of `movz`/`movn`/`movk` will clear the upper 32
-        // bits, so if that's the outcome we want we might as well use them. For
-        // simplicity and ease of reading the disassembly, we use the same size
-        // for all instructions in the sequence.
-        let size = OperandSize::Size32;
-
-        // The `movz` instruction initially sets all bits to zero, while `movn`
-        // initially sets all bits to one. A good choice of initial value can
-        // reduce the number of `movk` instructions we need afterward, so we
-        // check both variants to determine which is closest to the constant
-        // we actually wanted. In case they're equally good, we prefer `movz`
-        // because the assembly listings are generally harder to read when the
-        // operands are negated.
-        let (mut running_value, op, first) = [
-            (MoveWideOp::MovZ, 0),
-            (MoveWideOp::MovN, size.max_value() as u32),
-        ]
-        .into_iter()
-        .map(|(op, base)| {
-            // Both `movz` and `movn` can overwrite one slice after setting
-            // the initial value; we get to pick which one. 32-bit variants
-            // can only modify the lower two slices.
-            let first = (0..(size.bits() / 16))
-                // Pick one slice that's different from the initial value
-                .find(|&i| get(base ^ value, i) != 0)
-                // If none are different, we still have to pick one
-                .unwrap_or(0);
-            // Compute the value we'll get from this `movz`/`movn`
-            (replace(base, get(value, first), first), op, first)
-        })
-        // Count how many `movk` instructions we'll need.
-        .min_by_key(|(base, ..)| (0..2).filter(|&i| get(base ^ value, i) != 0).count())
-        // `variants` isn't empty so `min_by_key` always returns something.
-        .unwrap();
-
-        // Build the initial instruction we chose above, putting the result
-        // into a new temporary virtual register. Note that the encoding for the
-        // immediate operand is bitwise-inverted for `movn`.
-        let mut rd = self.temp_writable_reg(I32);
-        self.lower_ctx.emit(MInst::MovWide {
-            op,
-            rd,
-            imm: MoveWideConst {
-                bits: match op {
-                    MoveWideOp::MovZ => get(value, first),
-                    MoveWideOp::MovN => !get(value, first),
-                },
-                shift: first,
-            },
-            size,
-        });
-        if self.backend.flags.enable_pcc() {
-            self.lower_ctx.add_range_fact(
-                rd.to_reg(),
-                64,
-                running_value as u64,
-                running_value as u64,
-            );
-        }
-
-        // Emit a `movk` instruction for each remaining slice of the desired
-        // constant that does not match the initial value constructed above.
-        for shift in (first + 1)..(size.bits() / 16) {
-            let bits = get(value, shift);
-            if bits != get(running_value, shift) {
-                let rn = rd.to_reg();
-                rd = self.temp_writable_reg(I32);
-                self.lower_ctx.emit(MInst::MovK {
-                    rd,
-                    rn,
-                    imm: MoveWideConst { bits, shift },
-                    size,
-                });
-                running_value = replace(running_value, bits, shift);
-                if self.backend.flags.enable_pcc() {
-                    self.lower_ctx.add_range_fact(
-                        rd.to_reg(),
-                        64,
-                        running_value as u64,
-                        running_value as u64,
-                    );
-                }
-            }
-        }
-
-        debug_assert_eq!(value, running_value);
-        return rd.to_reg();
     }
 }
