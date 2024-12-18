@@ -7,7 +7,7 @@ use crate::{
     },
     stack::TypedReg,
 };
-use anyhow::Result;
+use anyhow::{anyhow, bail, ensure, Result};
 use cranelift_codegen::{
     binemit::CodeOffset,
     ir::{RelSourceLoc, SourceLoc},
@@ -40,6 +40,9 @@ use bounds::{Bounds, ImmOffset, Index};
 
 mod phase;
 pub(crate) use phase::*;
+
+mod error;
+pub(crate) use error::*;
 
 /// Holds metadata about the source code location and the machine code emission.
 /// The fields of this struct are opaque and are not interpreted in any way.
@@ -79,10 +82,6 @@ where
     /// Information about the source code location.
     pub source_location: SourceLocation,
 
-    /// Flag indicating whether during translation an unsupported instruction
-    /// was found.
-    pub found_unsupported_instruction: Option<&'static str>,
-
     /// Compilation settings for code generation.
     pub tunables: &'a Tunables,
 
@@ -110,19 +109,19 @@ where
             tunables,
             source_location: Default::default(),
             control_frames: Default::default(),
-            found_unsupported_instruction: None,
             // Empty functions should consume at least 1 fuel unit.
             fuel_consumed: 1,
             phase: PhantomData,
         }
     }
 
+    /// Code generation prologue.
     pub fn emit_prologue(mut self) -> Result<CodeGen<'a, 'translation, 'data, M, Emission>> {
         let vmctx = self
             .sig
             .params()
             .first()
-            .expect("VMContext argument")
+            .ok_or_else(|| anyhow!(CodeGenError::vmcontext_arg_expected()))?
             .unwrap_reg()
             .into();
 
@@ -134,29 +133,33 @@ where
         self.masm.mov(
             writable!(vmctx!(M)),
             vmctx.into(),
-            self.env.ptr_type().into(),
+            self.env.ptr_type().try_into()?,
         );
 
         self.masm.reserve_stack(self.context.frame.locals_size);
-        self.spill_register_arguments();
+        self.spill_register_arguments()?;
 
         let defined_locals_range = &self.context.frame.defined_locals_range;
         self.masm.zero_mem_range(defined_locals_range.as_range());
 
         // Save the results base parameter register into its slot.
-        self.sig.params.has_retptr().then(|| {
+
+        if self.sig.params.has_retptr() {
             match self.sig.params.unwrap_results_area_operand() {
                 ABIOperand::Reg { ty, reg, .. } => {
                     let results_base_slot = self.context.frame.results_base_slot.as_ref().unwrap();
-                    debug_assert!(results_base_slot.addressed_from_sp());
+                    ensure!(
+                        results_base_slot.addressed_from_sp(),
+                        CodeGenError::sp_addressing_expected(),
+                    );
                     let addr = self.masm.local_address(results_base_slot);
-                    self.masm.store((*reg).into(), addr, (*ty).into());
+                    self.masm.store((*reg).into(), addr, (*ty).try_into()?);
                 }
                 // The result base parameter is a stack parameter, addressed
                 // from FP.
                 _ => {}
             }
-        });
+        }
 
         self.masm.end_source_loc();
 
@@ -168,13 +171,12 @@ where
             tunables: self.tunables,
             source_location: self.source_location,
             control_frames: self.control_frames,
-            found_unsupported_instruction: self.found_unsupported_instruction,
             fuel_consumed: self.fuel_consumed,
             phase: PhantomData,
         })
     }
 
-    fn spill_register_arguments(&mut self) {
+    fn spill_register_arguments(&mut self) -> Result<()> {
         use WasmValType::*;
         for (operand, slot) in self
             .sig
@@ -187,13 +189,13 @@ where
                     let addr = self.masm.local_address(slot);
                     match &ty {
                         I32 | I64 | F32 | F64 | V128 => {
-                            self.masm.store((*reg).into(), addr, (*ty).into())
+                            self.masm.store((*reg).into(), addr, (*ty).try_into()?)
                         }
                         Ref(rt) => match rt.heap_type {
                             WasmHeapType::Func | WasmHeapType::Extern => {
                                 self.masm.store_ptr((*reg).into(), addr)
                             }
-                            ht => unimplemented!("Support for WasmHeapType: {ht}"),
+                            _ => bail!(CodeGenError::unsupported_wasm_type()),
                         },
                     }
                 }
@@ -201,6 +203,7 @@ where
                 _ => {}
             }
         }
+        Ok(())
     }
 }
 
@@ -220,6 +223,13 @@ where
         Ok(())
     }
 
+    /// Pops a control frame from the control frame stack.
+    pub fn pop_control_frame(&mut self) -> Result<ControlStackFrame> {
+        self.control_frames
+            .pop()
+            .ok_or_else(|| anyhow!(CodeGenError::control_frame_expected()))
+    }
+
     /// Derives a [RelSourceLoc] from a [SourceLoc].
     pub fn source_loc_from(&mut self, loc: SourceLoc) -> RelSourceLoc {
         if self.source_location.base.is_none() && !loc.is_default() {
@@ -236,34 +246,40 @@ where
     ///
     /// When the compiler is in an unreachable state, all the other instructions
     /// are not visited.
-    pub fn handle_unreachable_else(&mut self) {
-        let frame = self.control_frames.last_mut().unwrap();
-        debug_assert!(frame.is_if());
+    pub fn handle_unreachable_else(&mut self) -> Result<()> {
+        let frame = self
+            .control_frames
+            .last_mut()
+            .ok_or_else(|| CodeGenError::control_frame_expected())?;
+        ensure!(frame.is_if(), CodeGenError::if_control_frame_expected());
         if frame.is_next_sequence_reachable() {
             // We entered an unreachable state when compiling the
             // if-then branch, but if the `if` was reachable at
             // entry, the if-else branch will be reachable.
             self.context.reachable = true;
-            frame.ensure_stack_state(self.masm, &mut self.context);
-            frame.bind_else(self.masm, &mut self.context);
+            frame.ensure_stack_state(self.masm, &mut self.context)?;
+            frame.bind_else(self.masm, &mut self.context)?;
         }
+        Ok(())
     }
 
-    pub fn handle_unreachable_end(&mut self) {
-        let mut frame = self.control_frames.pop().unwrap();
+    pub fn handle_unreachable_end(&mut self) -> Result<()> {
+        let mut frame = self.pop_control_frame()?;
         // We just popped the outermost block.
         let is_outermost = self.control_frames.len() == 0;
 
         if frame.is_next_sequence_reachable() {
             self.context.reachable = true;
-            frame.ensure_stack_state(self.masm, &mut self.context);
-            frame.bind_end(self.masm, &mut self.context);
+            frame.ensure_stack_state(self.masm, &mut self.context)?;
+            frame.bind_end(self.masm, &mut self.context)
         } else if is_outermost {
             // If we reach the end of the function in an unreachable
             // state, perform the necessary cleanup to leave the stack
             // and SP in the expected state.  The compiler can enter
             // in this state through an infinite loop.
-            frame.ensure_stack_state(self.masm, &mut self.context);
+            frame.ensure_stack_state(self.masm, &mut self.context)
+        } else {
+            Ok(())
         }
     }
 
@@ -272,9 +288,9 @@ where
         body: &mut BinaryReader<'a>,
         validator: &mut FuncValidator<ValidatorResources>,
     ) -> Result<()> {
-        self.maybe_emit_fuel_check();
+        self.maybe_emit_fuel_check()?;
 
-        self.maybe_emit_epoch_check();
+        self.maybe_emit_epoch_check()?;
 
         // Once we have emitted the epilogue and reserved stack space for the locals, we push the
         // base control flow block.
@@ -282,7 +298,7 @@ where
             BlockSig::from_sig(self.sig.clone()),
             self.masm,
             &mut self.context,
-        ));
+        )?);
 
         // Set the return area of the results *after* initializing the block. In
         // the function body block case, we'll treat the results as any other
@@ -301,10 +317,6 @@ where
                 self,
                 offset,
             ))??;
-
-            if let Some(insn) = self.found_unsupported_instruction {
-                anyhow::bail!("unsupported instruction in Winch: {insn}")
-            }
         }
         validator.finish(body.original_position())?;
         return Ok(());
@@ -318,12 +330,12 @@ where
                         self.0.$visit($($($arg.clone()),*)?)?;
                         let op = Operator::$op $({ $($arg: $arg.clone()),* })?;
                         if self.1.visit(&op) {
-                            self.1.before_visit_op(&op, self.2);
-                            let res = Ok(self.1.$visit($($($arg),*)?));
+                            self.1.before_visit_op(&op, self.2)?;
+                            let res = self.1.$visit($($($arg),*)?)?;
                             self.1.after_visit_op();
-                            res
+                            Ok(res)
                         } else {
-                            Ok(U::Output::default())
+                            Ok(())
                         }
                     }
                 )*
@@ -342,7 +354,7 @@ where
         /// operator.
         trait VisitorHooks {
             /// Hook prior to visiting an operator.
-            fn before_visit_op(&mut self, operator: &Operator, offset: usize);
+            fn before_visit_op(&mut self, operator: &Operator, offset: usize) -> Result<()>;
             /// Hook after visiting an operator.
             fn after_visit_op(&mut self);
 
@@ -364,14 +376,15 @@ where
                 self.context.reachable || visit_op_when_unreachable(op)
             }
 
-            fn before_visit_op(&mut self, operator: &Operator, offset: usize) {
+            fn before_visit_op(&mut self, operator: &Operator, offset: usize) -> Result<()> {
                 // Handle source location mapping.
                 self.source_location_before_visit_op(offset);
 
                 // Handle fuel.
                 if self.tunables.consume_fuel {
-                    self.fuel_before_visit_op(operator);
+                    self.fuel_before_visit_op(operator)?;
                 }
+                Ok(())
             }
 
             fn after_visit_op(&mut self) {
@@ -383,10 +396,9 @@ where
         impl<'a, T, U> VisitOperator<'a> for ValidateThenVisit<'_, T, U>
         where
             T: VisitSimdOperator<'a, Output = wasmparser::Result<()>>,
-            U: VisitSimdOperator<'a> + VisitorHooks,
-            U::Output: Default,
+            U: VisitSimdOperator<'a, Output = Result<()>> + VisitorHooks,
         {
-            type Output = Result<U::Output>;
+            type Output = U::Output;
 
             fn simd_visitor(
                 &mut self,
@@ -403,16 +415,19 @@ where
         impl<'a, T, U> VisitSimdOperator<'a> for ValidateThenVisit<'_, T, U>
         where
             T: VisitSimdOperator<'a, Output = wasmparser::Result<()>>,
-            U: VisitSimdOperator<'a> + VisitorHooks,
-            U::Output: Default,
+            U: VisitSimdOperator<'a, Output = Result<()>> + VisitorHooks,
         {
             wasmparser::for_each_visit_simd_operator!(validate_then_visit);
         }
     }
 
     /// Emits a a series of instructions that will type check a function reference call.
-    pub fn emit_typecheck_funcref(&mut self, funcref_ptr: Reg, type_index: TypeIndex) {
-        let ptr_size: OperandSize = self.env.ptr_type().into();
+    pub fn emit_typecheck_funcref(
+        &mut self,
+        funcref_ptr: Reg,
+        type_index: TypeIndex,
+    ) -> Result<()> {
+        let ptr_size: OperandSize = self.env.ptr_type().try_into()?;
         let sig_index_bytes = self.env.vmoffsets.size_of_vmshared_type_index();
         let sig_size = OperandSize::from_bytes(sig_index_bytes);
         let sig_index = self.env.translation.module.types[type_index];
@@ -432,14 +447,14 @@ where
         );
 
         // Get the caller id.
-        let caller_id = self.context.any_gpr(self.masm);
+        let caller_id = self.context.any_gpr(self.masm)?;
         self.masm.load(
             self.masm.address_at_reg(scratch, sig_offset),
             writable!(caller_id),
             sig_size,
         );
 
-        let callee_id = self.context.any_gpr(self.masm);
+        let callee_id = self.context.any_gpr(self.masm)?;
         self.masm.load(
             self.masm
                 .address_at_reg(funcref_ptr, funcref_sig_offset.into()),
@@ -452,6 +467,7 @@ where
         self.masm.trapif(IntCmpKind::Ne, TRAP_BAD_SIGNATURE);
         self.context.free_reg(callee_id);
         self.context.free_reg(caller_id);
+        Ok(())
     }
 
     /// Emit the usual function end instruction sequence.
@@ -467,15 +483,18 @@ where
                 &mut self.context,
                 self.masm,
                 |results, _, _| results.ret_area().copied(),
-            );
+            )?;
         } else {
             // If we reach the end of the function in an unreachable code state,
             // simply truncate to the expected values.
             // The compiler could enter this state through an infinite loop.
-            self.context.truncate_stack_to(0);
+            self.context.truncate_stack_to(0)?;
             self.masm.reset_stack_pointer(base);
         }
-        debug_assert_eq!(self.context.stack.len(), 0);
+        ensure!(
+            self.context.stack.len() == 0,
+            CodeGenError::unexpected_value_in_value_stack()
+        );
         self.masm.free_stack(self.context.frame.locals_size);
         self.masm.epilogue();
         self.masm.end_source_loc();
@@ -485,20 +504,20 @@ where
     /// Pops the value at the stack top and assigns it to the local at
     /// the given index, returning the typed register holding the
     /// source value.
-    pub fn emit_set_local(&mut self, index: u32) -> TypedReg {
+    pub fn emit_set_local(&mut self, index: u32) -> Result<TypedReg> {
         // Materialize any references to the same local index that are in the
         // value stack by spilling.
         if self.context.stack.contains_latent_local(index) {
-            self.context.spill(self.masm);
+            self.context.spill(self.masm)?;
         }
-        let src = self.context.pop_to_reg(self.masm, None);
+        let src = self.context.pop_to_reg(self.masm, None)?;
         // Need to get address of local after `pop_to_reg` since `pop_to_reg`
         // will pop the machine stack causing an incorrect address to be
         // calculated.
         let (ty, addr) = self.context.frame.get_local_address(index, self.masm);
-        self.masm.store(RegImm::reg(src.reg), addr, ty.into());
+        self.masm.store(RegImm::reg(src.reg), addr, ty.try_into()?);
 
-        src
+        Ok(src)
     }
 
     /// Loads the address of the given global.
@@ -517,7 +536,7 @@ where
         (data.ty, addr)
     }
 
-    pub fn emit_lazy_init_funcref(&mut self, table_index: TableIndex) {
+    pub fn emit_lazy_init_funcref(&mut self, table_index: TableIndex) -> Result<()> {
         assert!(self.tunables.table_lazy_init, "unsupported eager init");
         let table_data = self.env.resolve_table_data(table_index);
         let ptr_type = self.env.ptr_type();
@@ -530,19 +549,19 @@ where
         // element value. We preemptively spill and request this register to
         // avoid conflict at the control flow merge below. Requesting the result
         // register is safe since we know ahead-of-time the builtin's signature.
-        self.context.spill(self.masm);
+        self.context.spill(self.masm)?;
         let elem_value: Reg = self
             .context
             .reg(
                 builtin.sig().results.unwrap_singleton().unwrap_reg(),
                 self.masm,
-            )
+            )?
             .into();
 
-        let index = self.context.pop_to_reg(self.masm, None);
-        let base = self.context.any_gpr(self.masm);
+        let index = self.context.pop_to_reg(self.masm, None)?;
+        let base = self.context.any_gpr(self.masm)?;
 
-        let elem_addr = self.emit_compute_table_elem_addr(index.into(), base, &table_data);
+        let elem_addr = self.emit_compute_table_elem_addr(index.into(), base, &table_data)?;
         self.masm.load_ptr(elem_addr, writable!(elem_value));
         // Free the register used as base, once we have loaded the element
         // address into the element value register.
@@ -560,7 +579,7 @@ where
             elem_value,
             elem_value.into(),
             defined,
-            ptr_type.into(),
+            ptr_type.try_into()?,
         );
         // Free the element value register.
         // This is safe since the FnCall::emit call below, will ensure
@@ -571,13 +590,20 @@ where
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin.clone()),
-        );
+        )?;
 
         // We know the signature of the libcall in this case, so we assert that there's
         // one element in the stack and that it's  the ABI signature's result register.
-        let top = self.context.stack.peek().unwrap();
+        let top = self
+            .context
+            .stack
+            .peek()
+            .ok_or_else(|| CodeGenError::missing_values_in_stack())?;
         let top = top.unwrap_reg();
-        debug_assert!(top.reg == elem_value);
+        ensure!(
+            top.reg == elem_value,
+            CodeGenError::table_element_value_expected()
+        );
         self.masm.jmp(cont);
 
         // In the defined case, mask the funcref address in place, by peeking into the
@@ -586,9 +612,10 @@ where
         self.masm.bind(defined);
         let imm = RegImm::i64(FUNCREF_MASK as i64);
         let dst = top.into();
-        self.masm.and(writable!(dst), dst, imm, top.ty.into());
+        self.masm.and(writable!(dst), dst, imm, top.ty.try_into()?);
 
         self.masm.bind(cont);
+        Ok(())
     }
 
     /// Emits a series of instructions to bounds check and calculate the address
@@ -615,8 +642,8 @@ where
         &mut self,
         memarg: &MemArg,
         access_size: OperandSize,
-    ) -> Option<Reg> {
-        let ptr_size: OperandSize = self.env.ptr_type().into();
+    ) -> Result<Option<Reg>> {
+        let ptr_size: OperandSize = self.env.ptr_type().try_into()?;
         let enable_spectre_mitigation = self.env.heap_access_spectre_mitigation();
         let add_offset_and_access_size = |offset: ImmOffset, access_size: OperandSize| {
             (access_size.bytes() as u64) + (offset.as_u32() as u64)
@@ -624,12 +651,12 @@ where
 
         let memory_index = MemoryIndex::from_u32(memarg.memory);
         let heap = self.env.resolve_heap(memory_index);
-        let index = Index::from_typed_reg(self.context.pop_to_reg(self.masm, None));
+        let index = Index::from_typed_reg(self.context.pop_to_reg(self.masm, None)?);
         let offset = bounds::ensure_index_and_offset(
             self.masm,
             index,
             memarg.offset,
-            heap.index_type().into(),
+            heap.index_type().try_into()?,
         );
         let offset_with_access_size = add_offset_and_access_size(offset, access_size);
 
@@ -645,7 +672,7 @@ where
             // reachability is restored or when reaching the end of the
             // function.
 
-            self.emit_fuel_increment();
+            self.emit_fuel_increment()?;
             self.masm.trap(TrapCode::HEAP_OUT_OF_BOUNDS);
             self.context.reachable = false;
             None
@@ -660,13 +687,13 @@ where
                 self.masm,
                 &heap,
                 ptr_size,
-            );
+            )?;
 
             let index_reg = index.as_typed_reg().reg;
             // Allocate a temporary register to hold
             //      index + offset + access_size
             //  which will serve as the check condition.
-            let index_offset_and_access_size = self.context.any_gpr(self.masm);
+            let index_offset_and_access_size = self.context.any_gpr(self.masm)?;
 
             // Move the value of the index to the
             // index_offset_and_access_size register to perform the overflow
@@ -682,7 +709,7 @@ where
             self.masm.mov(
                 writable!(index_offset_and_access_size),
                 index_reg.into(),
-                heap.index_type().into(),
+                heap.index_type().try_into()?,
             );
             // Perform
             // index = index + offset + access_size, trapping if the
@@ -723,7 +750,7 @@ where
                     );
                     IntCmpKind::GtU
                 },
-            );
+            )?;
             self.context.free_reg(bounds.as_typed_reg().reg);
             self.context.free_reg(index_offset_and_access_size);
             Some(addr)
@@ -760,7 +787,7 @@ where
         {
             assert!(can_elide_bounds_check);
             assert!(heap.index_type() == WasmValType::I32);
-            let addr = self.context.any_gpr(self.masm);
+            let addr = self.context.any_gpr(self.masm)?;
             bounds::load_heap_addr_unchecked(self.masm, &heap, index, offset, addr, ptr_size);
             Some(addr)
 
@@ -799,12 +826,12 @@ where
                     );
                     IntCmpKind::GtU
                 },
-            );
+            )?;
             Some(addr)
         };
 
         self.context.free_reg(index.as_typed_reg().reg);
-        addr
+        Ok(addr)
     }
 
     /// Emit a WebAssembly load.
@@ -814,13 +841,14 @@ where
         ty: WasmValType,
         size: OperandSize,
         sextend: Option<ExtendKind>,
-    ) {
-        if let Some(addr) = self.emit_compute_heap_address(&arg, size) {
+    ) -> Result<()> {
+        let addr = self.emit_compute_heap_address(&arg, size)?;
+        if let Some(addr) = addr {
             let dst = match ty {
-                WasmValType::I32 | WasmValType::I64 => self.context.any_gpr(self.masm),
-                WasmValType::F32 | WasmValType::F64 => self.context.any_fpr(self.masm),
-                WasmValType::V128 => self.context.reg_for_type(ty, self.masm),
-                _ => unreachable!(),
+                WasmValType::I32 | WasmValType::I64 => self.context.any_gpr(self.masm)?,
+                WasmValType::F32 | WasmValType::F64 => self.context.any_fpr(self.masm)?,
+                WasmValType::V128 => self.context.reg_for_type(ty, self.masm)?,
+                _ => bail!(CodeGenError::unsupported_wasm_type()),
             };
 
             let src = self.masm.address_at_reg(addr, 0);
@@ -828,18 +856,23 @@ where
             self.context.stack.push(TypedReg::new(ty, dst).into());
             self.context.free_reg(addr);
         }
+
+        Ok(())
     }
 
     /// Emit a WebAssembly store.
-    pub fn emit_wasm_store(&mut self, arg: &MemArg, size: OperandSize) {
-        let src = self.context.pop_to_reg(self.masm, None);
-        if let Some(addr) = self.emit_compute_heap_address(&arg, size) {
+    pub fn emit_wasm_store(&mut self, arg: &MemArg, size: OperandSize) -> Result<()> {
+        let src = self.context.pop_to_reg(self.masm, None)?;
+        let addr = self.emit_compute_heap_address(&arg, size)?;
+        if let Some(addr) = addr {
             self.masm
                 .wasm_store(src.reg.into(), self.masm.address_at_reg(addr, 0), size);
 
             self.context.free_reg(addr);
         }
         self.context.free_reg(src);
+
+        Ok(())
     }
 
     /// Loads the address of the table element at a given index. Returns the
@@ -849,11 +882,11 @@ where
         index: Reg,
         base: Reg,
         table_data: &TableData,
-    ) -> M::Address {
+    ) -> Result<M::Address> {
         let scratch = scratch!(M);
-        let bound = self.context.any_gpr(self.masm);
-        let tmp = self.context.any_gpr(self.masm);
-        let ptr_size: OperandSize = self.env.ptr_type().into();
+        let bound = self.context.any_gpr(self.masm)?;
+        let tmp = self.context.any_gpr(self.masm)?;
+        let ptr_size: OperandSize = self.env.ptr_type().try_into()?;
 
         if let Some(offset) = table_data.import_from {
             // If the table data declares a particular offset base,
@@ -907,14 +940,14 @@ where
         }
         self.context.free_reg(bound);
         self.context.free_reg(tmp);
-        self.masm.address_at_reg(base, 0)
+        Ok(self.masm.address_at_reg(base, 0))
     }
 
     /// Retrieves the size of the table, pushing the result to the value stack.
-    pub fn emit_compute_table_size(&mut self, table_data: &TableData) {
+    pub fn emit_compute_table_size(&mut self, table_data: &TableData) -> Result<()> {
         let scratch = scratch!(M);
-        let size = self.context.any_gpr(self.masm);
-        let ptr_size: OperandSize = self.env.ptr_type().into();
+        let size = self.context.any_gpr(self.masm)?;
+        let ptr_size: OperandSize = self.env.ptr_type().try_into()?;
 
         if let Some(offset) = table_data.import_from {
             self.masm
@@ -934,11 +967,12 @@ where
         );
 
         self.context.stack.push(TypedReg::i32(size).into());
+        Ok(())
     }
 
     /// Retrieves the size of the memory, pushing the result to the value stack.
-    pub fn emit_compute_memory_size(&mut self, heap_data: &HeapData) {
-        let size_reg = self.context.any_gpr(self.masm);
+    pub fn emit_compute_memory_size(&mut self, heap_data: &HeapData) -> Result<()> {
+        let size_reg = self.context.any_gpr(self.masm)?;
         let scratch = scratch!(M);
 
         let base = if let Some(offset) = heap_data.import_from {
@@ -961,25 +995,26 @@ where
             pow as u64,
             dst.into(),
             ShiftKind::ShrU,
-            heap_data.index_type().into(),
+            heap_data.index_type().try_into()?,
         );
         self.context.stack.push(dst.into());
+        Ok(())
     }
 
     /// Checks if fuel consumption is enabled and emits a series of instructions
     /// that check the current fuel usage by performing a zero-comparison with
     /// the number of units stored in `VMRuntimeLimits`.
-    pub fn maybe_emit_fuel_check(&mut self) {
+    pub fn maybe_emit_fuel_check(&mut self) -> Result<()> {
         if !self.tunables.consume_fuel {
-            return;
+            return Ok(());
         }
 
         let out_of_fuel = self.env.builtins.out_of_gas::<M::ABI, M::Ptr>();
-        let fuel_reg =
-            self.context
-                .without::<Reg, M, _>(&out_of_fuel.sig().regs, self.masm, |cx, masm| {
-                    cx.any_gpr(masm)
-                });
+        let fuel_reg = self.context.without::<Result<Reg>, M, _>(
+            &out_of_fuel.sig().regs,
+            self.masm,
+            |cx, masm| cx.any_gpr(masm),
+        )??;
 
         self.emit_load_fuel_consumed(fuel_reg);
 
@@ -988,7 +1023,7 @@ where
 
         // Spill locals and registers to avoid conflicts at the out-of-fuel
         // control flow merge.
-        self.context.spill(self.masm);
+        self.context.spill(self.masm)?;
         // Fuel is stored as a negative i64, so if the number is less than zero,
         // we're still under the fuel limits.
         self.masm.branch(
@@ -1004,12 +1039,14 @@ where
             self.masm,
             &mut self.context,
             Callee::Builtin(out_of_fuel.clone()),
-        );
-        self.context.pop_and_free(self.masm);
+        )?;
+        self.context.pop_and_free(self.masm)?;
 
         // Under fuel limits branch.
         self.masm.bind(continuation);
         self.context.free_reg(fuel_reg);
+
+        Ok(())
     }
 
     /// Emits a series of instructions that load the `fuel_consumed` field from
@@ -1032,9 +1069,9 @@ where
 
     /// Checks if epoch interruption is configured and emits a series of
     /// instructions that check the current epoch against its deadline.
-    pub fn maybe_emit_epoch_check(&mut self) {
+    pub fn maybe_emit_epoch_check(&mut self) -> Result<()> {
         if !self.tunables.epoch_interruption {
-            return;
+            return Ok(());
         }
 
         // The continuation branch if the current epoch hasn't reached the
@@ -1049,17 +1086,18 @@ where
         // we must ensure that any registers used to hold the current epoch
         // value and deadline are not going to be needed later on by the
         // function call.
-        let (epoch_deadline_reg, epoch_counter_reg) = self.context.without::<(Reg, Reg), M, _>(
-            &new_epoch.sig().regs,
-            self.masm,
-            |cx, masm| (cx.any_gpr(masm), cx.any_gpr(masm)),
-        );
+        let (epoch_deadline_reg, epoch_counter_reg) =
+            self.context.without::<Result<(Reg, Reg)>, M, _>(
+                &new_epoch.sig().regs,
+                self.masm,
+                |cx, masm| Ok((cx.any_gpr(masm)?, cx.any_gpr(masm)?)),
+            )??;
 
         self.emit_load_epoch_deadline_and_counter(epoch_deadline_reg, epoch_counter_reg);
 
         // Spill locals and registers to avoid conflicts at the control flow
         // merge below.
-        self.context.spill(self.masm);
+        self.context.spill(self.masm)?;
         self.masm.branch(
             IntCmpKind::LtU,
             epoch_counter_reg,
@@ -1073,16 +1111,17 @@ where
             self.masm,
             &mut self.context,
             Callee::Builtin(new_epoch.clone()),
-        );
+        )?;
         // `new_epoch` returns the new deadline. However we don't
         // perform any caching, so we simply drop this value.
-        self.visit_drop();
+        self.visit_drop()?;
 
         // Under epoch deadline branch.
         self.masm.bind(cont);
 
         self.context.free_reg(epoch_deadline_reg);
         self.context.free_reg(epoch_counter_reg);
+        Ok(())
     }
 
     fn emit_load_epoch_deadline_and_counter(
@@ -1125,15 +1164,15 @@ where
 
     /// Increments the fuel consumed in `VMRuntimeLimits` by flushing
     /// `self.fuel_consumed` to memory.
-    fn emit_fuel_increment(&mut self) {
+    fn emit_fuel_increment(&mut self) -> Result<()> {
         let fuel_at_point = std::mem::replace(&mut self.fuel_consumed, 0);
         if fuel_at_point == 0 {
-            return;
+            return Ok(());
         }
 
         let limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
         let fuel_offset = self.env.vmoffsets.ptr.vmruntime_limits_fuel_consumed();
-        let limits_reg = self.context.any_gpr(self.masm);
+        let limits_reg = self.context.any_gpr(self.masm)?;
 
         // Load `VMRuntimeLimits` into the `limits_reg` reg.
         self.masm.load_ptr(
@@ -1165,15 +1204,16 @@ where
         );
 
         self.context.free_reg(limits_reg);
+
+        Ok(())
     }
 
     /// Hook to handle fuel before visiting an operator.
-    fn fuel_before_visit_op(&mut self, op: &Operator) {
+    fn fuel_before_visit_op(&mut self, op: &Operator) -> Result<()> {
         if !self.context.reachable {
             // `self.fuel_consumed` must be correctly flushed to memory when
             // entering an unreachable state.
-            debug_assert_eq!(self.fuel_consumed, 0);
-            return;
+            ensure!(self.fuel_consumed == 0, CodeGenError::illegal_fuel_state())
         }
 
         // Generally, most instructions require 1 fuel unit.
@@ -1216,10 +1256,8 @@ where
             | Operator::CallIndirect { .. }
             | Operator::Call { .. }
             | Operator::ReturnCall { .. }
-            | Operator::ReturnCallIndirect { .. } => {
-                self.emit_fuel_increment();
-            }
-            _ => {}
+            | Operator::ReturnCallIndirect { .. } => self.emit_fuel_increment(),
+            _ => Ok(()),
         }
     }
 
@@ -1246,8 +1284,8 @@ where
 
 /// Returns the index of the [`ControlStackFrame`] for the given
 /// depth.
-pub fn control_index(depth: u32, control_length: usize) -> usize {
+pub fn control_index(depth: u32, control_length: usize) -> Result<usize> {
     (control_length - 1)
         .checked_sub(depth as usize)
-        .unwrap_or_else(|| panic!("expected valid control stack frame at index: {depth}"))
+        .ok_or_else(|| anyhow!(CodeGenError::control_frame_expected()))
 }

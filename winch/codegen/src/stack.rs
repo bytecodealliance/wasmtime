@@ -1,4 +1,5 @@
-use crate::{isa::reg::Reg, masm::StackSlot};
+use crate::{codegen::CodeGenError, isa::reg::Reg, masm::StackSlot};
+use anyhow::{anyhow, Result};
 use smallvec::SmallVec;
 use wasmparser::{Ieee32, Ieee64};
 use wasmtime_environ::WasmValType;
@@ -278,6 +279,16 @@ impl Stack {
     pub fn new() -> Self {
         Self {
             inner: Default::default(),
+        }
+    }
+
+    /// Ensures that there are at least `n` elements in the value stack,
+    /// and returns the index calculated by: stack length minus `n`.
+    pub fn ensure_index_at(&self, n: usize) -> Result<usize> {
+        if self.len() >= n {
+            Ok(self.len() - n)
+        } else {
+            Err(anyhow!(CodeGenError::missing_values_in_stack()))
         }
     }
 

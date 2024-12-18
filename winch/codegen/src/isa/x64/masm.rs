@@ -4,6 +4,7 @@ use super::{
     asm::{Assembler, PatchableAddToReg},
     regs::{self, rbp, rsp},
 };
+use anyhow::Result;
 
 use crate::masm::{
     DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm, MulWideKind,
@@ -233,21 +234,21 @@ impl Masm for MacroAssembler {
     fn call(
         &mut self,
         stack_args_size: u32,
-        mut load_callee: impl FnMut(&mut Self) -> (CalleeKind, CallingConvention),
-    ) -> u32 {
+        mut load_callee: impl FnMut(&mut Self) -> Result<(CalleeKind, CallingConvention)>,
+    ) -> Result<u32> {
         let alignment: u32 = <Self::ABI as abi::ABI>::call_stack_align().into();
         let addend: u32 = <Self::ABI as abi::ABI>::arg_base_offset().into();
         let delta = calculate_frame_adjustment(self.sp_offset().as_u32(), addend, alignment);
         let aligned_args_size = align_to(stack_args_size, alignment);
         let total_stack = delta + aligned_args_size;
         self.reserve_stack(total_stack);
-        let (callee, cc) = load_callee(self);
+        let (callee, cc) = load_callee(self)?;
         match callee {
             CalleeKind::Indirect(reg) => self.asm.call_with_reg(cc, reg),
             CalleeKind::Direct(idx) => self.asm.call_with_name(cc, idx),
             CalleeKind::LibCall(lib) => self.asm.call_with_lib(cc, lib, regs::scratch()),
         };
-        total_stack
+        Ok(total_stack)
     }
 
     fn load_ptr(&mut self, src: Self::Address, dst: WritableReg) {
@@ -477,21 +478,24 @@ impl Masm for MacroAssembler {
         self.asm.xmm_and_rr(scratch_xmm, dst, size);
     }
 
-    fn float_round<F: FnMut(&mut FuncEnv<Self::Ptr>, &mut CodeGenContext<Emission>, &mut Self)>(
+    fn float_round<
+        F: FnMut(&mut FuncEnv<Self::Ptr>, &mut CodeGenContext<Emission>, &mut Self) -> Result<()>,
+    >(
         &mut self,
         mode: RoundingMode,
         env: &mut FuncEnv<Self::Ptr>,
         context: &mut CodeGenContext<Emission>,
         size: OperandSize,
         mut fallback: F,
-    ) {
+    ) -> Result<()> {
         if self.flags.has_sse41() {
-            let src = context.pop_to_reg(self, None);
+            let src = context.pop_to_reg(self, None)?;
             self.asm
                 .xmm_rounds_rr(src.into(), writable!(src.into()), mode, size);
             context.stack.push(src.into());
+            Ok(())
         } else {
-            fallback(env, context, self);
+            fallback(env, context, self)
         }
     }
 
@@ -573,30 +577,37 @@ impl Masm for MacroAssembler {
         context: &mut CodeGenContext<Emission>,
         kind: ShiftKind,
         size: OperandSize,
-    ) {
+    ) -> Result<()> {
         // Number of bits to shift must be in the CL register.
-        let src = context.pop_to_reg(self, Some(regs::rcx()));
-        let dst = context.pop_to_reg(self, None);
+        let src = context.pop_to_reg(self, Some(regs::rcx()))?;
+        let dst = context.pop_to_reg(self, None)?;
 
         self.asm
             .shift_rr(src.into(), writable!(dst.into()), kind, size);
 
         context.free_reg(src);
         context.stack.push(dst.into());
+
+        Ok(())
     }
 
-    fn div(&mut self, context: &mut CodeGenContext<Emission>, kind: DivKind, size: OperandSize) {
+    fn div(
+        &mut self,
+        context: &mut CodeGenContext<Emission>,
+        kind: DivKind,
+        size: OperandSize,
+    ) -> Result<()> {
         // Allocate rdx:rax.
-        let rdx = context.reg(regs::rdx(), self);
-        let rax = context.reg(regs::rax(), self);
+        let rdx = context.reg(regs::rdx(), self)?;
+        let rax = context.reg(regs::rax(), self)?;
 
         // Allocate the divisor, which can be any gpr.
-        let divisor = context.pop_to_reg(self, None);
+        let divisor = context.pop_to_reg(self, None)?;
 
         // Mark rax as allocatable.
         context.free_reg(rax);
         // Move the top value to rax.
-        let rax = context.pop_to_reg(self, Some(rax));
+        let rax = context.pop_to_reg(self, Some(rax))?;
         self.asm.div(divisor.into(), (rax.into(), rdx), kind, size);
 
         // Free the divisor and rdx.
@@ -605,20 +616,26 @@ impl Masm for MacroAssembler {
 
         // Push the quotient.
         context.stack.push(rax.into());
+        Ok(())
     }
 
-    fn rem(&mut self, context: &mut CodeGenContext<Emission>, kind: RemKind, size: OperandSize) {
+    fn rem(
+        &mut self,
+        context: &mut CodeGenContext<Emission>,
+        kind: RemKind,
+        size: OperandSize,
+    ) -> Result<()> {
         // Allocate rdx:rax.
-        let rdx = context.reg(regs::rdx(), self);
-        let rax = context.reg(regs::rax(), self);
+        let rdx = context.reg(regs::rdx(), self)?;
+        let rax = context.reg(regs::rax(), self)?;
 
         // Allocate the divisor, which can be any gpr.
-        let divisor = context.pop_to_reg(self, None);
+        let divisor = context.pop_to_reg(self, None)?;
 
         // Mark rax as allocatable.
         context.free_reg(rax);
         // Move the top value to rax.
-        let rax = context.pop_to_reg(self, Some(rax));
+        let rax = context.pop_to_reg(self, Some(rax))?;
         self.asm.rem(divisor.reg, (rax.into(), rdx), kind, size);
 
         // Free the divisor and rax.
@@ -627,6 +644,8 @@ impl Masm for MacroAssembler {
 
         // Push the remainder.
         context.stack.push(Val::reg(rdx, divisor.ty));
+
+        Ok(())
     }
 
     fn frame_restore(&mut self) {
@@ -795,16 +814,17 @@ impl Masm for MacroAssembler {
         self.asm.jmp(target);
     }
 
-    fn popcnt(&mut self, context: &mut CodeGenContext<Emission>, size: OperandSize) {
-        let src = context.pop_to_reg(self, None);
+    fn popcnt(&mut self, context: &mut CodeGenContext<Emission>, size: OperandSize) -> Result<()> {
+        let src = context.pop_to_reg(self, None)?;
         if self.flags.has_popcnt() && self.flags.has_sse42() {
             self.asm.popcnt(src.into(), size);
             context.stack.push(src.into());
+            Ok(())
         } else {
             // The fallback functionality here is based on `MacroAssembler::popcnt64` in:
             // https://searchfox.org/mozilla-central/source/js/src/jit/x64/MacroAssembler-x64-inl.h#495
 
-            let tmp = writable!(context.any_gpr(self));
+            let tmp = writable!(context.any_gpr(self)?);
             let dst = writable!(src.into());
             let (masks, shift_amt) = match size {
                 OperandSize::S64 => (
@@ -858,6 +878,8 @@ impl Masm for MacroAssembler {
 
             context.stack.push(src.into());
             context.free_reg(tmp.to_reg());
+
+            Ok(())
         }
     }
 
@@ -1036,18 +1058,22 @@ impl Masm for MacroAssembler {
         self.asm.sbb_rr(rhs_hi, dst_hi, OperandSize::S64);
     }
 
-    fn mul_wide(&mut self, context: &mut CodeGenContext<Emission>, kind: MulWideKind) {
+    fn mul_wide(
+        &mut self,
+        context: &mut CodeGenContext<Emission>,
+        kind: MulWideKind,
+    ) -> Result<()> {
         // Reserve rax/rdx since they're required by the `mul_wide` instruction
         // being used here.
-        let rax = context.reg(regs::rax(), self);
-        let rdx = context.reg(regs::rdx(), self);
+        let rax = context.reg(regs::rax(), self)?;
+        let rdx = context.reg(regs::rdx(), self)?;
 
         // The rhs of this binop can be in any register
-        let rhs = context.pop_to_reg(self, None);
+        let rhs = context.pop_to_reg(self, None)?;
         // Mark rax as allocatable. and then force the lhs operand to be placed
         // in `rax`.
         context.free_reg(rax);
-        let lhs = context.pop_to_reg(self, Some(rax));
+        let lhs = context.pop_to_reg(self, Some(rax))?;
 
         self.asm.mul_wide(
             writable!(rax),
@@ -1066,6 +1092,8 @@ impl Masm for MacroAssembler {
         context.stack.push(lhs.into());
         // The high bits of the result are in rdx, which we previously reserved.
         context.stack.push(Val::Reg(TypedReg::i64(rdx)));
+
+        Ok(())
     }
 }
 
@@ -1075,18 +1103,18 @@ impl MacroAssembler {
         ptr_size: impl PtrSize,
         shared_flags: settings::Flags,
         isa_flags: x64_settings::Flags,
-    ) -> Self {
+    ) -> Result<Self> {
         let ptr_type: WasmValType = ptr_type_from_ptr_size(ptr_size.size()).into();
 
-        Self {
+        Ok(Self {
             sp_offset: 0,
             sp_max: 0,
             stack_max_use_add: None,
             asm: Assembler::new(shared_flags.clone(), isa_flags.clone()),
             flags: isa_flags,
             shared_flags,
-            ptr_size: ptr_type.into(),
-        }
+            ptr_size: ptr_type.try_into()?,
+        })
     }
 
     /// Add the maximum stack used to a register, recording an obligation to update the

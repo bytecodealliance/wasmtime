@@ -58,7 +58,7 @@
 
 use crate::{
     abi::{scratch, vmctx, ABIOperand, ABISig, RetArea},
-    codegen::{BuiltinFunction, BuiltinType, Callee, CodeGenContext, Emission},
+    codegen::{BuiltinFunction, BuiltinType, Callee, CodeGenContext, CodeGenError, Emission},
     masm::{
         CalleeKind, ContextArgs, MacroAssembler, MemMoveDirection, OperandSize, SPOffset,
         VMContextLoc,
@@ -68,6 +68,7 @@ use crate::{
     stack::Val,
     FuncEnv,
 };
+use anyhow::{ensure, Result};
 use wasmtime_environ::{FuncIndex, PtrSize, VMOffsets};
 
 /// All the information needed to emit a function call.
@@ -87,17 +88,17 @@ impl FnCall {
         masm: &mut M,
         context: &mut CodeGenContext<Emission>,
         callee: Callee,
-    ) {
-        let (kind, callee_context) = Self::lower(env, context.vmoffsets, &callee, context, masm);
+    ) -> Result<()> {
+        let (kind, callee_context) = Self::lower(env, context.vmoffsets, &callee, context, masm)?;
 
         let sig = env.callee_sig::<M::ABI>(&callee);
-        context.spill(masm);
+        context.spill(masm)?;
         let ret_area = Self::make_ret_area(&sig, masm);
         let arg_stack_space = sig.params_stack_size();
         let reserved_stack = masm.call(arg_stack_space, |masm| {
-            Self::assign(sig, &callee_context, ret_area.as_ref(), context, masm);
-            (kind, sig.call_conv)
-        });
+            Self::assign(sig, &callee_context, ret_area.as_ref(), context, masm)?;
+            Ok((kind, sig.call_conv))
+        })?;
 
         Self::cleanup(
             sig,
@@ -107,7 +108,7 @@ impl FnCall {
             ret_area,
             masm,
             context,
-        );
+        )
     }
 
     /// Calculates the return area for the callee, if any.
@@ -131,14 +132,14 @@ impl FnCall {
         callee: &Callee,
         context: &mut CodeGenContext<Emission>,
         masm: &mut M,
-    ) -> (CalleeKind, ContextArgs) {
+    ) -> Result<(CalleeKind, ContextArgs)> {
         let ptr = vmoffsets.ptr.size();
         match callee {
-            Callee::Builtin(b) => Self::lower_builtin(env, b),
+            Callee::Builtin(b) => Ok(Self::lower_builtin(env, b)),
             Callee::FuncRef(_) => {
                 Self::lower_funcref(env.callee_sig::<M::ABI>(callee), ptr, context, masm)
             }
-            Callee::Local(i) => Self::lower_local(env, *i),
+            Callee::Local(i) => Ok(Self::lower_local(env, *i)),
             Callee::Import(i) => {
                 let sig = env.callee_sig::<M::ABI>(callee);
                 Self::lower_import(*i, sig, context, masm, vmoffsets)
@@ -180,11 +181,11 @@ impl FnCall {
         context: &mut CodeGenContext<Emission>,
         masm: &mut M,
         vmoffsets: &VMOffsets<P>,
-    ) -> (CalleeKind, ContextArgs) {
+    ) -> Result<(CalleeKind, ContextArgs)> {
         let (callee, callee_vmctx) =
-            context.without::<(Reg, Reg), M, _>(&sig.regs, masm, |context, masm| {
-                (context.any_gpr(masm), context.any_gpr(masm))
-            });
+            context.without::<Result<(Reg, Reg)>, M, _>(&sig.regs, masm, |context, masm| {
+                Ok((context.any_gpr(masm)?, context.any_gpr(masm)?))
+            })??;
         let callee_vmctx_offset = vmoffsets.vmctx_vmfunction_import_vmctx(index);
         let callee_vmctx_addr = masm.address_at_vmctx(callee_vmctx_offset);
         masm.load_ptr(callee_vmctx_addr, writable!(callee_vmctx));
@@ -193,10 +194,10 @@ impl FnCall {
         let callee_addr = masm.address_at_vmctx(callee_body_offset);
         masm.load_ptr(callee_addr, writable!(callee));
 
-        (
+        Ok((
             CalleeKind::indirect(callee),
             ContextArgs::with_callee_and_pinned_caller(callee_vmctx),
-        )
+        ))
     }
 
     /// Lowers a function reference by loading its address into the next
@@ -206,20 +207,20 @@ impl FnCall {
         ptr: impl PtrSize,
         context: &mut CodeGenContext<Emission>,
         masm: &mut M,
-    ) -> (CalleeKind, ContextArgs) {
+    ) -> Result<(CalleeKind, ContextArgs)> {
         // Pop the funcref pointer to a register and allocate a register to hold the
         // address of the funcref. Since the callee is not addressed from a global non
         // allocatable register (like the vmctx in the case of an import), we load the
         // funcref to a register ensuring that it doesn't get assigned to a register
         // used in the callee's signature.
-        let (funcref_ptr, funcref, callee_vmctx) =
-            context.without::<_, M, _>(&sig.regs, masm, |cx, masm| {
-                (
-                    cx.pop_to_reg(masm, None).into(),
-                    cx.any_gpr(masm),
-                    cx.any_gpr(masm),
-                )
-            });
+        let (funcref_ptr, funcref, callee_vmctx) = context
+            .without::<Result<(Reg, Reg, Reg)>, M, _>(&sig.regs, masm, |cx, masm| {
+                Ok((
+                    cx.pop_to_reg(masm, None)?.into(),
+                    cx.any_gpr(masm)?,
+                    cx.any_gpr(masm)?,
+                ))
+            })??;
 
         // Load the callee VMContext, that will be passed as first argument to
         // the function call.
@@ -235,15 +236,22 @@ impl FnCall {
         );
         context.free_reg(funcref_ptr);
 
-        (
+        Ok((
             CalleeKind::indirect(funcref),
             ContextArgs::with_callee_and_pinned_caller(callee_vmctx),
-        )
+        ))
     }
 
     /// Materializes any [ContextArgs] as a function argument.
-    fn assign_context_args<M: MacroAssembler>(sig: &ABISig, context: &ContextArgs, masm: &mut M) {
-        debug_assert!(sig.params().len() >= context.len());
+    fn assign_context_args<M: MacroAssembler>(
+        sig: &ABISig,
+        context: &ContextArgs,
+        masm: &mut M,
+    ) -> Result<()> {
+        ensure!(
+            sig.params().len() >= context.len(),
+            CodeGenError::vmcontext_arg_expected(),
+        );
         for (context_arg, operand) in context
             .as_slice()
             .iter()
@@ -251,23 +259,24 @@ impl FnCall {
         {
             match (context_arg, operand) {
                 (VMContextLoc::Pinned, ABIOperand::Reg { ty, reg, .. }) => {
-                    masm.mov(writable!(*reg), vmctx!(M).into(), (*ty).into());
+                    masm.mov(writable!(*reg), vmctx!(M).into(), (*ty).try_into()?);
                 }
                 (VMContextLoc::Pinned, ABIOperand::Stack { ty, offset, .. }) => {
                     let addr = masm.address_at_sp(SPOffset::from_u32(*offset));
-                    masm.store(vmctx!(M).into(), addr, (*ty).into());
+                    masm.store(vmctx!(M).into(), addr, (*ty).try_into()?);
                 }
 
                 (VMContextLoc::Reg(src), ABIOperand::Reg { ty, reg, .. }) => {
-                    masm.mov(writable!(*reg), (*src).into(), (*ty).into());
+                    masm.mov(writable!(*reg), (*src).into(), (*ty).try_into()?);
                 }
 
                 (VMContextLoc::Reg(src), ABIOperand::Stack { ty, offset, .. }) => {
                     let addr = masm.address_at_sp(SPOffset::from_u32(*offset));
-                    masm.store((*src).into(), addr, (*ty).into());
+                    masm.store((*src).into(), addr, (*ty).try_into()?);
                 }
             }
         }
+        Ok(())
     }
 
     /// Assign arguments for the function call.
@@ -277,14 +286,14 @@ impl FnCall {
         ret_area: Option<&RetArea>,
         context: &mut CodeGenContext<Emission>,
         masm: &mut M,
-    ) {
+    ) -> Result<()> {
         let arg_count = sig.params.len_without_retptr();
         debug_assert!(arg_count >= callee_context.len());
         let stack = &context.stack;
         let stack_values = stack.peekn(arg_count - callee_context.len());
 
         if callee_context.len() > 0 {
-            Self::assign_context_args(&sig, &callee_context, masm);
+            Self::assign_context_args(&sig, &callee_context, masm)?;
         }
 
         for (arg, val) in sig
@@ -295,13 +304,13 @@ impl FnCall {
         {
             match arg {
                 &ABIOperand::Reg { reg, .. } => {
-                    context.move_val_to_reg(&val, reg, masm);
+                    context.move_val_to_reg(&val, reg, masm)?;
                 }
                 &ABIOperand::Stack { ty, offset, .. } => {
                     let addr = masm.address_at_sp(SPOffset::from_u32(offset));
-                    let size: OperandSize = ty.into();
+                    let size: OperandSize = ty.try_into()?;
                     let scratch = scratch!(M, &ty);
-                    context.move_val_to_reg(val, scratch, masm);
+                    context.move_val_to_reg(val, scratch, masm)?;
                     masm.store(scratch.into(), addr, size);
                 }
             }
@@ -314,18 +323,19 @@ impl FnCall {
 
             match operand {
                 &ABIOperand::Reg { ty, reg, .. } => {
-                    masm.load_addr(addr, writable!(reg), ty.into());
+                    masm.load_addr(addr, writable!(reg), ty.try_into()?);
                 }
                 &ABIOperand::Stack { ty, offset, .. } => {
                     let slot = masm.address_at_sp(SPOffset::from_u32(offset));
                     // Don't rely on `ABI::scratch_for` as we always use
                     // an int register as the return pointer.
                     let scratch = scratch!(M);
-                    masm.load_addr(addr, writable!(scratch), ty.into());
-                    masm.store(scratch.into(), slot, ty.into());
+                    masm.load_addr(addr, writable!(scratch), ty.try_into()?);
+                    masm.store(scratch.into(), slot, ty.try_into()?);
                 }
             }
         }
+        Ok(())
     }
 
     /// Cleanup stack space, handle multiple results, and free registers after
@@ -338,7 +348,7 @@ impl FnCall {
         ret_area: Option<RetArea>,
         masm: &mut M,
         context: &mut CodeGenContext<Emission>,
-    ) {
+    ) -> Result<()> {
         // Free any registers holding any function references.
         match callee_kind {
             CalleeKind::Indirect(r) => context.free_reg(*r),
@@ -356,7 +366,10 @@ impl FnCall {
         // which was allocated last.
         masm.free_stack(reserved_space);
 
-        debug_assert!(sig.params.len_without_retptr() >= callee_context.len());
+        ensure!(
+            sig.params.len_without_retptr() >= callee_context.len(),
+            CodeGenError::vmcontext_arg_expected()
+        );
 
         // Drop params from value stack and calculate amount of machine stack
         // space they consumed.
@@ -364,12 +377,16 @@ impl FnCall {
         context.drop_last(
             sig.params.len_without_retptr() - callee_context.len(),
             |_regalloc, v| {
-                debug_assert!(v.is_mem() || v.is_const());
+                ensure!(
+                    v.is_mem() || v.is_const(),
+                    CodeGenError::unexpected_value_in_value_stack()
+                );
                 if let Val::Memory(mem) = v {
                     stack_consumed += mem.slot.size;
                 }
+                Ok(())
             },
-        );
+        )?;
 
         if let Some(ret_area) = ret_area {
             if stack_consumed > 0 {
@@ -379,7 +396,10 @@ impl FnCall {
                 // and after spilled values consumed by the call.
                 let sp = ret_area.unwrap_sp();
                 let result_bytes = sig.results_stack_size();
-                debug_assert!(sp.as_u32() >= stack_consumed + result_bytes);
+                ensure!(
+                    sp.as_u32() >= stack_consumed + result_bytes,
+                    CodeGenError::invalid_sp_offset(),
+                );
                 let dst = SPOffset::from_u32(sp.as_u32() - stack_consumed);
                 masm.memmove(sp, dst, result_bytes, MemMoveDirection::LowToHigh);
             }
@@ -388,27 +408,33 @@ impl FnCall {
         // Free the bytes consumed by the call.
         masm.free_stack(stack_consumed);
 
-        let ret_area = ret_area.map(|area| {
+        let mut calculated_ret_area = None;
+
+        if let Some(area) = ret_area {
             if stack_consumed > 0 {
                 // If there's a return area and stack space was consumed by the
                 // call, adjust the return area to be to the current stack
                 // pointer offset.
-                RetArea::sp(masm.sp_offset())
+                calculated_ret_area = Some(RetArea::sp(masm.sp_offset()));
             } else {
                 // Else if no stack space was consumed by the call, simply use
                 // the previously calculated area.
-                debug_assert_eq!(area.unwrap_sp(), masm.sp_offset());
-                area
+                ensure!(
+                    area.unwrap_sp() == masm.sp_offset(),
+                    CodeGenError::invalid_sp_offset()
+                );
+                calculated_ret_area = Some(area);
             }
-        });
+        }
 
         // In the case of [Callee], there's no need to set the [RetArea] of the
         // signature, as it's only used here to push abi results.
-        context.push_abi_results(&sig.results, masm, |_, _, _| ret_area);
+        context.push_abi_results(&sig.results, masm, |_, _, _| calculated_ret_area)?;
         // Reload the [VMContext] pointer into the corresponding pinned
         // register. Winch currently doesn't have any callee-saved registers in
         // the default ABI. So the callee might clobber the designated pinned
         // register.
         context.load_vmctx(masm);
+        Ok(())
     }
 }

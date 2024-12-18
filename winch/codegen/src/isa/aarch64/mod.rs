@@ -95,7 +95,7 @@ impl TargetIsa for Aarch64 {
         let pointer_bytes = self.pointer_bytes();
         let vmoffsets = VMOffsets::new(pointer_bytes, &translation.module);
         let mut body = body.get_binary_reader();
-        let mut masm = Aarch64Masm::new(pointer_bytes, self.shared_flags.clone());
+        let mut masm = Aarch64Masm::new(pointer_bytes, self.shared_flags.clone())?;
         let stack = Stack::new();
         let abi_sig = wasm_sig::<abi::Aarch64ABI>(sig);
 

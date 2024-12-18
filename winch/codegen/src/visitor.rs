@@ -5,13 +5,17 @@
 //! machine code emitter.
 
 use crate::abi::RetArea;
-use crate::codegen::{control_index, Callee, CodeGen, ControlStackFrame, Emission, FnCall};
+use crate::codegen::{
+    control_index, Callee, CodeGen, CodeGenError, ControlStackFrame, Emission, FnCall,
+};
 use crate::masm::{
     DivKind, ExtendKind, FloatCmpKind, IntCmpKind, MacroAssembler, MemMoveDirection, MulWideKind,
     OperandSize, RegImm, RemKind, RoundingMode, SPOffset, ShiftKind, TruncKind,
 };
+
 use crate::reg::{writable, Reg};
 use crate::stack::{TypedReg, Val};
+use anyhow::{anyhow, bail, ensure, Result};
 use regalloc2::RegClass;
 use smallvec::SmallVec;
 use wasmparser::{
@@ -39,7 +43,7 @@ macro_rules! def_unsupported {
                 fn $visit(&mut self $($(,$arg: $argty)*)?) -> Self::Output {
                     $($(let _ = $arg;)*)?
 
-                    self.found_unsupported_instruction = Some(stringify!($op));
+                    Err(anyhow!(CodeGenError::unimplemented_wasm_instruction()))
                 }
             );
         )*
@@ -257,211 +261,216 @@ impl<'a, 'translation, 'data, M> VisitOperator<'a> for CodeGen<'a, 'translation,
 where
     M: MacroAssembler,
 {
-    type Output = ();
+    type Output = Result<()>;
 
-    fn visit_i32_const(&mut self, val: i32) {
+    fn visit_i32_const(&mut self, val: i32) -> Self::Output {
         self.context.stack.push(Val::i32(val));
+
+        Ok(())
     }
 
-    fn visit_i64_const(&mut self, val: i64) {
+    fn visit_i64_const(&mut self, val: i64) -> Self::Output {
         self.context.stack.push(Val::i64(val));
+        Ok(())
     }
 
-    fn visit_f32_const(&mut self, val: Ieee32) {
+    fn visit_f32_const(&mut self, val: Ieee32) -> Self::Output {
         self.context.stack.push(Val::f32(val));
+        Ok(())
     }
 
-    fn visit_f64_const(&mut self, val: Ieee64) {
+    fn visit_f64_const(&mut self, val: Ieee64) -> Self::Output {
         self.context.stack.push(Val::f64(val));
+        Ok(())
     }
 
-    fn visit_f32_add(&mut self) {
+    fn visit_f32_add(&mut self) -> Self::Output {
         self.context.binop(
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_add(writable!(dst), dst, src, size);
-                TypedReg::f32(dst)
+                Ok(TypedReg::f32(dst))
             },
-        );
+        )
     }
 
-    fn visit_f64_add(&mut self) {
+    fn visit_f64_add(&mut self) -> Self::Output {
         self.context.binop(
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_add(writable!(dst), dst, src, size);
-                TypedReg::f64(dst)
+                Ok(TypedReg::f64(dst))
             },
-        );
+        )
     }
 
-    fn visit_f32_sub(&mut self) {
+    fn visit_f32_sub(&mut self) -> Self::Output {
         self.context.binop(
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_sub(writable!(dst), dst, src, size);
-                TypedReg::f32(dst)
+                Ok(TypedReg::f32(dst))
             },
-        );
+        )
     }
 
-    fn visit_f64_sub(&mut self) {
+    fn visit_f64_sub(&mut self) -> Self::Output {
         self.context.binop(
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_sub(writable!(dst), dst, src, size);
-                TypedReg::f64(dst)
+                Ok(TypedReg::f64(dst))
             },
-        );
+        )
     }
 
-    fn visit_f32_mul(&mut self) {
+    fn visit_f32_mul(&mut self) -> Self::Output {
         self.context.binop(
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_mul(writable!(dst), dst, src, size);
-                TypedReg::f32(dst)
+                Ok(TypedReg::f32(dst))
             },
-        );
+        )
     }
 
-    fn visit_f64_mul(&mut self) {
+    fn visit_f64_mul(&mut self) -> Self::Output {
         self.context.binop(
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_mul(writable!(dst), dst, src, size);
-                TypedReg::f64(dst)
+                Ok(TypedReg::f64(dst))
             },
-        );
+        )
     }
 
-    fn visit_f32_div(&mut self) {
+    fn visit_f32_div(&mut self) -> Self::Output {
         self.context.binop(
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_div(writable!(dst), dst, src, size);
-                TypedReg::f32(dst)
+                Ok(TypedReg::f32(dst))
             },
-        );
+        )
     }
 
-    fn visit_f64_div(&mut self) {
+    fn visit_f64_div(&mut self) -> Self::Output {
         self.context.binop(
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_div(writable!(dst), dst, src, size);
-                TypedReg::f64(dst)
+                Ok(TypedReg::f64(dst))
             },
-        );
+        )
     }
 
-    fn visit_f32_min(&mut self) {
+    fn visit_f32_min(&mut self) -> Self::Output {
         self.context.binop(
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_min(writable!(dst), dst, src, size);
-                TypedReg::f32(dst)
+                Ok(TypedReg::f32(dst))
             },
-        );
+        )
     }
 
-    fn visit_f64_min(&mut self) {
+    fn visit_f64_min(&mut self) -> Self::Output {
         self.context.binop(
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_min(writable!(dst), dst, src, size);
-                TypedReg::f64(dst)
+                Ok(TypedReg::f64(dst))
             },
-        );
+        )
     }
 
-    fn visit_f32_max(&mut self) {
+    fn visit_f32_max(&mut self) -> Self::Output {
         self.context.binop(
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_max(writable!(dst), dst, src, size);
-                TypedReg::f32(dst)
+                Ok(TypedReg::f32(dst))
             },
-        );
+        )
     }
 
-    fn visit_f64_max(&mut self) {
+    fn visit_f64_max(&mut self) -> Self::Output {
         self.context.binop(
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_max(writable!(dst), dst, src, size);
-                TypedReg::f64(dst)
+                Ok(TypedReg::f64(dst))
             },
-        );
+        )
     }
 
-    fn visit_f32_copysign(&mut self) {
+    fn visit_f32_copysign(&mut self) -> Self::Output {
         self.context.binop(
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_copysign(writable!(dst), dst, src, size);
-                TypedReg::f32(dst)
+                Ok(TypedReg::f32(dst))
             },
-        );
+        )
     }
 
-    fn visit_f64_copysign(&mut self) {
+    fn visit_f64_copysign(&mut self) -> Self::Output {
         self.context.binop(
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
                 masm.float_copysign(writable!(dst), dst, src, size);
-                TypedReg::f64(dst)
+                Ok(TypedReg::f64(dst))
             },
-        );
+        )
     }
 
-    fn visit_f32_abs(&mut self) {
+    fn visit_f32_abs(&mut self) -> Self::Output {
         self.context
             .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
                 masm.float_abs(writable!(reg), size);
                 TypedReg::f32(reg)
-            });
+            })
     }
 
-    fn visit_f64_abs(&mut self) {
+    fn visit_f64_abs(&mut self) -> Self::Output {
         self.context
             .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
                 masm.float_abs(writable!(reg), size);
                 TypedReg::f64(reg)
-            });
+            })
     }
 
-    fn visit_f32_neg(&mut self) {
+    fn visit_f32_neg(&mut self) -> Self::Output {
         self.context
             .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
                 masm.float_neg(writable!(reg), size);
                 TypedReg::f32(reg)
-            });
+            })
     }
 
-    fn visit_f64_neg(&mut self) {
+    fn visit_f64_neg(&mut self) -> Self::Output {
         self.context
             .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
                 masm.float_neg(writable!(reg), size);
                 TypedReg::f64(reg)
-            });
+            })
     }
 
-    fn visit_f32_floor(&mut self) {
+    fn visit_f32_floor(&mut self) -> Self::Output {
         self.masm.float_round(
             RoundingMode::Down,
             &mut self.env,
@@ -469,12 +478,12 @@ where
             OperandSize::S32,
             |env, cx, masm| {
                 let builtin = env.builtins.floor_f32::<M::ABI>();
-                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
-        );
+        )
     }
 
-    fn visit_f64_floor(&mut self) {
+    fn visit_f64_floor(&mut self) -> Self::Output {
         self.masm.float_round(
             RoundingMode::Down,
             &mut self.env,
@@ -482,12 +491,12 @@ where
             OperandSize::S64,
             |env, cx, masm| {
                 let builtin = env.builtins.floor_f64::<M::ABI>();
-                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
-        );
+        )
     }
 
-    fn visit_f32_ceil(&mut self) {
+    fn visit_f32_ceil(&mut self) -> Self::Output {
         self.masm.float_round(
             RoundingMode::Up,
             &mut self.env,
@@ -495,12 +504,12 @@ where
             OperandSize::S32,
             |env, cx, masm| {
                 let builtin = env.builtins.ceil_f32::<M::ABI>();
-                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
-        );
+        )
     }
 
-    fn visit_f64_ceil(&mut self) {
+    fn visit_f64_ceil(&mut self) -> Self::Output {
         self.masm.float_round(
             RoundingMode::Up,
             &mut self.env,
@@ -508,12 +517,12 @@ where
             OperandSize::S64,
             |env, cx, masm| {
                 let builtin = env.builtins.ceil_f64::<M::ABI>();
-                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
-        );
+        )
     }
 
-    fn visit_f32_nearest(&mut self) {
+    fn visit_f32_nearest(&mut self) -> Self::Output {
         self.masm.float_round(
             RoundingMode::Nearest,
             &mut self.env,
@@ -523,10 +532,10 @@ where
                 let builtin = env.builtins.nearest_f32::<M::ABI>();
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
-        );
+        )
     }
 
-    fn visit_f64_nearest(&mut self) {
+    fn visit_f64_nearest(&mut self) -> Self::Output {
         self.masm.float_round(
             RoundingMode::Nearest,
             &mut self.env,
@@ -534,12 +543,12 @@ where
             OperandSize::S64,
             |env, cx, masm| {
                 let builtin = env.builtins.nearest_f64::<M::ABI>();
-                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
-        );
+        )
     }
 
-    fn visit_f32_trunc(&mut self) {
+    fn visit_f32_trunc(&mut self) -> Self::Output {
         self.masm.float_round(
             RoundingMode::Zero,
             &mut self.env,
@@ -547,12 +556,12 @@ where
             OperandSize::S32,
             |env, cx, masm| {
                 let builtin = env.builtins.trunc_f32::<M::ABI>();
-                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
-        );
+        )
     }
 
-    fn visit_f64_trunc(&mut self) {
+    fn visit_f64_trunc(&mut self) -> Self::Output {
         self.masm.float_round(
             RoundingMode::Zero,
             &mut self.env,
@@ -560,155 +569,155 @@ where
             OperandSize::S64,
             |env, cx, masm| {
                 let builtin = env.builtins.trunc_f64::<M::ABI>();
-                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin));
+                FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
-        );
+        )
     }
 
-    fn visit_f32_sqrt(&mut self) {
+    fn visit_f32_sqrt(&mut self) -> Self::Output {
         self.context
             .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
                 masm.float_sqrt(writable!(reg), reg, size);
                 TypedReg::f32(reg)
-            });
+            })
     }
 
-    fn visit_f64_sqrt(&mut self) {
+    fn visit_f64_sqrt(&mut self) -> Self::Output {
         self.context
             .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
                 masm.float_sqrt(writable!(reg), reg, size);
                 TypedReg::f64(reg)
-            });
+            })
     }
 
-    fn visit_f32_eq(&mut self) {
+    fn visit_f32_eq(&mut self) -> Self::Output {
         self.context.float_cmp_op(
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src1, src2, size| {
                 masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Eq, size);
             },
-        );
+        )
     }
 
-    fn visit_f64_eq(&mut self) {
+    fn visit_f64_eq(&mut self) -> Self::Output {
         self.context.float_cmp_op(
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src1, src2, size| {
                 masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Eq, size);
             },
-        );
+        )
     }
 
-    fn visit_f32_ne(&mut self) {
+    fn visit_f32_ne(&mut self) -> Self::Output {
         self.context.float_cmp_op(
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src1, src2, size| {
                 masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Ne, size);
             },
-        );
+        )
     }
 
-    fn visit_f64_ne(&mut self) {
+    fn visit_f64_ne(&mut self) -> Self::Output {
         self.context.float_cmp_op(
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src1, src2, size| {
                 masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Ne, size);
             },
-        );
+        )
     }
 
-    fn visit_f32_lt(&mut self) {
+    fn visit_f32_lt(&mut self) -> Self::Output {
         self.context.float_cmp_op(
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src1, src2, size| {
                 masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Lt, size);
             },
-        );
+        )
     }
 
-    fn visit_f64_lt(&mut self) {
+    fn visit_f64_lt(&mut self) -> Self::Output {
         self.context.float_cmp_op(
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src1, src2, size| {
                 masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Lt, size);
             },
-        );
+        )
     }
 
-    fn visit_f32_gt(&mut self) {
+    fn visit_f32_gt(&mut self) -> Self::Output {
         self.context.float_cmp_op(
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src1, src2, size| {
                 masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Gt, size);
             },
-        );
+        )
     }
 
-    fn visit_f64_gt(&mut self) {
+    fn visit_f64_gt(&mut self) -> Self::Output {
         self.context.float_cmp_op(
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src1, src2, size| {
                 masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Gt, size);
             },
-        );
+        )
     }
 
-    fn visit_f32_le(&mut self) {
+    fn visit_f32_le(&mut self) -> Self::Output {
         self.context.float_cmp_op(
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src1, src2, size| {
                 masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Le, size);
             },
-        );
+        )
     }
 
-    fn visit_f64_le(&mut self) {
+    fn visit_f64_le(&mut self) -> Self::Output {
         self.context.float_cmp_op(
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src1, src2, size| {
                 masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Le, size);
             },
-        );
+        )
     }
 
-    fn visit_f32_ge(&mut self) {
+    fn visit_f32_ge(&mut self) -> Self::Output {
         self.context.float_cmp_op(
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src1, src2, size| {
                 masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Ge, size);
             },
-        );
+        )
     }
 
-    fn visit_f64_ge(&mut self) {
+    fn visit_f64_ge(&mut self) -> Self::Output {
         self.context.float_cmp_op(
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src1, src2, size| {
                 masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Ge, size);
             },
-        );
+        )
     }
 
-    fn visit_f32_convert_i32_s(&mut self) {
+    fn visit_f32_convert_i32_s(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::F32, |masm, dst, src, dst_size| {
                 masm.signed_convert(writable!(dst), src, OperandSize::S32, dst_size);
-            });
+            })
     }
 
-    fn visit_f32_convert_i32_u(&mut self) {
+    fn visit_f32_convert_i32_u(&mut self) -> Self::Output {
         self.context.convert_op_with_tmp_reg(
             self.masm,
             WasmValType::F32,
@@ -716,17 +725,17 @@ where
             |masm, dst, src, tmp_gpr, dst_size| {
                 masm.unsigned_convert(writable!(dst), src, tmp_gpr, OperandSize::S32, dst_size);
             },
-        );
+        )
     }
 
-    fn visit_f32_convert_i64_s(&mut self) {
+    fn visit_f32_convert_i64_s(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::F32, |masm, dst, src, dst_size| {
                 masm.signed_convert(writable!(dst), src, OperandSize::S64, dst_size);
-            });
+            })
     }
 
-    fn visit_f32_convert_i64_u(&mut self) {
+    fn visit_f32_convert_i64_u(&mut self) -> Self::Output {
         self.context.convert_op_with_tmp_reg(
             self.masm,
             WasmValType::F32,
@@ -734,17 +743,17 @@ where
             |masm, dst, src, tmp_gpr, dst_size| {
                 masm.unsigned_convert(writable!(dst), src, tmp_gpr, OperandSize::S64, dst_size);
             },
-        );
+        )
     }
 
-    fn visit_f64_convert_i32_s(&mut self) {
+    fn visit_f64_convert_i32_s(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::F64, |masm, dst, src, dst_size| {
                 masm.signed_convert(writable!(dst), src, OperandSize::S32, dst_size);
-            });
+            })
     }
 
-    fn visit_f64_convert_i32_u(&mut self) {
+    fn visit_f64_convert_i32_u(&mut self) -> Self::Output {
         self.context.convert_op_with_tmp_reg(
             self.masm,
             WasmValType::F64,
@@ -752,17 +761,17 @@ where
             |masm, dst, src, tmp_gpr, dst_size| {
                 masm.unsigned_convert(writable!(dst), src, tmp_gpr, OperandSize::S32, dst_size);
             },
-        );
+        )
     }
 
-    fn visit_f64_convert_i64_s(&mut self) {
+    fn visit_f64_convert_i64_s(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::F64, |masm, dst, src, dst_size| {
                 masm.signed_convert(writable!(dst), src, OperandSize::S64, dst_size);
-            });
+            })
     }
 
-    fn visit_f64_convert_i64_u(&mut self) {
+    fn visit_f64_convert_i64_u(&mut self) -> Self::Output {
         self.context.convert_op_with_tmp_reg(
             self.masm,
             WasmValType::F64,
@@ -770,475 +779,475 @@ where
             |masm, dst, src, tmp_gpr, dst_size| {
                 masm.unsigned_convert(writable!(dst), src, tmp_gpr, OperandSize::S64, dst_size);
             },
-        );
+        )
     }
 
-    fn visit_f32_reinterpret_i32(&mut self) {
+    fn visit_f32_reinterpret_i32(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::F32, |masm, dst, src, size| {
                 masm.reinterpret_int_as_float(writable!(dst), src.into(), size);
-            });
+            })
     }
 
-    fn visit_f64_reinterpret_i64(&mut self) {
+    fn visit_f64_reinterpret_i64(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::F64, |masm, dst, src, size| {
                 masm.reinterpret_int_as_float(writable!(dst), src.into(), size);
-            });
+            })
     }
 
-    fn visit_f32_demote_f64(&mut self) {
+    fn visit_f32_demote_f64(&mut self) -> Self::Output {
         self.context
             .unop(self.masm, OperandSize::S64, &mut |masm, reg, _size| {
                 masm.demote(writable!(reg), reg);
                 TypedReg::f32(reg)
-            });
+            })
     }
 
-    fn visit_f64_promote_f32(&mut self) {
+    fn visit_f64_promote_f32(&mut self) -> Self::Output {
         self.context
             .unop(self.masm, OperandSize::S32, &mut |masm, reg, _size| {
                 masm.promote(writable!(reg), reg);
                 TypedReg::f64(reg)
-            });
+            })
     }
 
-    fn visit_i32_add(&mut self) {
+    fn visit_i32_add(&mut self) -> Self::Output {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.add(writable!(dst), dst, src, size);
-            TypedReg::i32(dst)
-        });
+            Ok(TypedReg::i32(dst))
+        })
     }
 
-    fn visit_i64_add(&mut self) {
+    fn visit_i64_add(&mut self) -> Self::Output {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.add(writable!(dst), dst, src, size);
-            TypedReg::i64(dst)
-        });
+            Ok(TypedReg::i64(dst))
+        })
     }
 
-    fn visit_i32_sub(&mut self) {
+    fn visit_i32_sub(&mut self) -> Self::Output {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.sub(writable!(dst), dst, src, size);
-            TypedReg::i32(dst)
-        });
+            Ok(TypedReg::i32(dst))
+        })
     }
 
-    fn visit_i64_sub(&mut self) {
+    fn visit_i64_sub(&mut self) -> Self::Output {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.sub(writable!(dst), dst, src, size);
-            TypedReg::i64(dst)
-        });
+            Ok(TypedReg::i64(dst))
+        })
     }
 
-    fn visit_i32_mul(&mut self) {
+    fn visit_i32_mul(&mut self) -> Self::Output {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.mul(writable!(dst), dst, src, size);
-            TypedReg::i32(dst)
-        });
+            Ok(TypedReg::i32(dst))
+        })
     }
 
-    fn visit_i64_mul(&mut self) {
+    fn visit_i64_mul(&mut self) -> Self::Output {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.mul(writable!(dst), dst, src, size);
-            TypedReg::i64(dst)
-        });
+            Ok(TypedReg::i64(dst))
+        })
     }
 
-    fn visit_i32_div_s(&mut self) {
+    fn visit_i32_div_s(&mut self) -> Self::Output {
         use DivKind::*;
         use OperandSize::*;
 
-        self.masm.div(&mut self.context, Signed, S32);
+        self.masm.div(&mut self.context, Signed, S32)
     }
 
-    fn visit_i32_div_u(&mut self) {
+    fn visit_i32_div_u(&mut self) -> Self::Output {
         use DivKind::*;
         use OperandSize::*;
 
-        self.masm.div(&mut self.context, Unsigned, S32);
+        self.masm.div(&mut self.context, Unsigned, S32)
     }
 
-    fn visit_i64_div_s(&mut self) {
+    fn visit_i64_div_s(&mut self) -> Self::Output {
         use DivKind::*;
         use OperandSize::*;
 
-        self.masm.div(&mut self.context, Signed, S64);
+        self.masm.div(&mut self.context, Signed, S64)
     }
 
-    fn visit_i64_div_u(&mut self) {
+    fn visit_i64_div_u(&mut self) -> Self::Output {
         use DivKind::*;
         use OperandSize::*;
 
-        self.masm.div(&mut self.context, Unsigned, S64);
+        self.masm.div(&mut self.context, Unsigned, S64)
     }
 
-    fn visit_i32_rem_s(&mut self) {
+    fn visit_i32_rem_s(&mut self) -> Self::Output {
         use OperandSize::*;
         use RemKind::*;
 
-        self.masm.rem(&mut self.context, Signed, S32);
+        self.masm.rem(&mut self.context, Signed, S32)
     }
 
-    fn visit_i32_rem_u(&mut self) {
+    fn visit_i32_rem_u(&mut self) -> Self::Output {
         use OperandSize::*;
         use RemKind::*;
 
-        self.masm.rem(&mut self.context, Unsigned, S32);
+        self.masm.rem(&mut self.context, Unsigned, S32)
     }
 
-    fn visit_i64_rem_s(&mut self) {
+    fn visit_i64_rem_s(&mut self) -> Self::Output {
         use OperandSize::*;
         use RemKind::*;
 
-        self.masm.rem(&mut self.context, Signed, S64);
+        self.masm.rem(&mut self.context, Signed, S64)
     }
 
-    fn visit_i64_rem_u(&mut self) {
+    fn visit_i64_rem_u(&mut self) -> Self::Output {
         use OperandSize::*;
         use RemKind::*;
 
-        self.masm.rem(&mut self.context, Unsigned, S64);
+        self.masm.rem(&mut self.context, Unsigned, S64)
     }
 
-    fn visit_i32_eq(&mut self) {
-        self.cmp_i32s(IntCmpKind::Eq);
+    fn visit_i32_eq(&mut self) -> Self::Output {
+        self.cmp_i32s(IntCmpKind::Eq)
     }
 
-    fn visit_i64_eq(&mut self) {
-        self.cmp_i64s(IntCmpKind::Eq);
+    fn visit_i64_eq(&mut self) -> Self::Output {
+        self.cmp_i64s(IntCmpKind::Eq)
     }
 
-    fn visit_i32_ne(&mut self) {
-        self.cmp_i32s(IntCmpKind::Ne);
+    fn visit_i32_ne(&mut self) -> Self::Output {
+        self.cmp_i32s(IntCmpKind::Ne)
     }
 
-    fn visit_i64_ne(&mut self) {
-        self.cmp_i64s(IntCmpKind::Ne);
+    fn visit_i64_ne(&mut self) -> Self::Output {
+        self.cmp_i64s(IntCmpKind::Ne)
     }
 
-    fn visit_i32_lt_s(&mut self) {
-        self.cmp_i32s(IntCmpKind::LtS);
+    fn visit_i32_lt_s(&mut self) -> Self::Output {
+        self.cmp_i32s(IntCmpKind::LtS)
     }
 
-    fn visit_i64_lt_s(&mut self) {
-        self.cmp_i64s(IntCmpKind::LtS);
+    fn visit_i64_lt_s(&mut self) -> Self::Output {
+        self.cmp_i64s(IntCmpKind::LtS)
     }
 
-    fn visit_i32_lt_u(&mut self) {
-        self.cmp_i32s(IntCmpKind::LtU);
+    fn visit_i32_lt_u(&mut self) -> Self::Output {
+        self.cmp_i32s(IntCmpKind::LtU)
     }
 
-    fn visit_i64_lt_u(&mut self) {
-        self.cmp_i64s(IntCmpKind::LtU);
+    fn visit_i64_lt_u(&mut self) -> Self::Output {
+        self.cmp_i64s(IntCmpKind::LtU)
     }
 
-    fn visit_i32_le_s(&mut self) {
-        self.cmp_i32s(IntCmpKind::LeS);
+    fn visit_i32_le_s(&mut self) -> Self::Output {
+        self.cmp_i32s(IntCmpKind::LeS)
     }
 
-    fn visit_i64_le_s(&mut self) {
-        self.cmp_i64s(IntCmpKind::LeS);
+    fn visit_i64_le_s(&mut self) -> Self::Output {
+        self.cmp_i64s(IntCmpKind::LeS)
     }
 
-    fn visit_i32_le_u(&mut self) {
-        self.cmp_i32s(IntCmpKind::LeU);
+    fn visit_i32_le_u(&mut self) -> Self::Output {
+        self.cmp_i32s(IntCmpKind::LeU)
     }
 
-    fn visit_i64_le_u(&mut self) {
-        self.cmp_i64s(IntCmpKind::LeU);
+    fn visit_i64_le_u(&mut self) -> Self::Output {
+        self.cmp_i64s(IntCmpKind::LeU)
     }
 
-    fn visit_i32_gt_s(&mut self) {
-        self.cmp_i32s(IntCmpKind::GtS);
+    fn visit_i32_gt_s(&mut self) -> Self::Output {
+        self.cmp_i32s(IntCmpKind::GtS)
     }
 
-    fn visit_i64_gt_s(&mut self) {
-        self.cmp_i64s(IntCmpKind::GtS);
+    fn visit_i64_gt_s(&mut self) -> Self::Output {
+        self.cmp_i64s(IntCmpKind::GtS)
     }
 
-    fn visit_i32_gt_u(&mut self) {
-        self.cmp_i32s(IntCmpKind::GtU);
+    fn visit_i32_gt_u(&mut self) -> Self::Output {
+        self.cmp_i32s(IntCmpKind::GtU)
     }
 
-    fn visit_i64_gt_u(&mut self) {
-        self.cmp_i64s(IntCmpKind::GtU);
+    fn visit_i64_gt_u(&mut self) -> Self::Output {
+        self.cmp_i64s(IntCmpKind::GtU)
     }
 
-    fn visit_i32_ge_s(&mut self) {
-        self.cmp_i32s(IntCmpKind::GeS);
+    fn visit_i32_ge_s(&mut self) -> Self::Output {
+        self.cmp_i32s(IntCmpKind::GeS)
     }
 
-    fn visit_i64_ge_s(&mut self) {
-        self.cmp_i64s(IntCmpKind::GeS);
+    fn visit_i64_ge_s(&mut self) -> Self::Output {
+        self.cmp_i64s(IntCmpKind::GeS)
     }
 
-    fn visit_i32_ge_u(&mut self) {
-        self.cmp_i32s(IntCmpKind::GeU);
+    fn visit_i32_ge_u(&mut self) -> Self::Output {
+        self.cmp_i32s(IntCmpKind::GeU)
     }
 
-    fn visit_i64_ge_u(&mut self) {
-        self.cmp_i64s(IntCmpKind::GeU);
+    fn visit_i64_ge_u(&mut self) -> Self::Output {
+        self.cmp_i64s(IntCmpKind::GeU)
     }
 
-    fn visit_i32_eqz(&mut self) {
+    fn visit_i32_eqz(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, size| {
             masm.cmp_with_set(writable!(reg.into()), RegImm::i32(0), IntCmpKind::Eq, size);
             TypedReg::i32(reg)
-        });
+        })
     }
 
-    fn visit_i64_eqz(&mut self) {
+    fn visit_i64_eqz(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.unop(self.masm, S64, &mut |masm, reg, size| {
             masm.cmp_with_set(writable!(reg.into()), RegImm::i64(0), IntCmpKind::Eq, size);
             TypedReg::i32(reg) // Return value for `i64.eqz` is an `i32`.
-        });
+        })
     }
 
-    fn visit_i32_clz(&mut self) {
+    fn visit_i32_clz(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, size| {
             masm.clz(writable!(reg), reg, size);
             TypedReg::i32(reg)
-        });
+        })
     }
 
-    fn visit_i64_clz(&mut self) {
+    fn visit_i64_clz(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.unop(self.masm, S64, &mut |masm, reg, size| {
             masm.clz(writable!(reg), reg, size);
             TypedReg::i64(reg)
-        });
+        })
     }
 
-    fn visit_i32_ctz(&mut self) {
+    fn visit_i32_ctz(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, size| {
             masm.ctz(writable!(reg), reg, size);
             TypedReg::i32(reg)
-        });
+        })
     }
 
-    fn visit_i64_ctz(&mut self) {
+    fn visit_i64_ctz(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.unop(self.masm, S64, &mut |masm, reg, size| {
             masm.ctz(writable!(reg), reg, size);
             TypedReg::i64(reg)
-        });
+        })
     }
 
-    fn visit_i32_and(&mut self) {
+    fn visit_i32_and(&mut self) -> Self::Output {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.and(writable!(dst), dst, src, size);
-            TypedReg::i32(dst)
-        });
+            Ok(TypedReg::i32(dst))
+        })
     }
 
-    fn visit_i64_and(&mut self) {
+    fn visit_i64_and(&mut self) -> Self::Output {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.and(writable!(dst), dst, src, size);
-            TypedReg::i64(dst)
-        });
+            Ok(TypedReg::i64(dst))
+        })
     }
 
-    fn visit_i32_or(&mut self) {
+    fn visit_i32_or(&mut self) -> Self::Output {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.or(writable!(dst), dst, src, size);
-            TypedReg::i32(dst)
-        });
+            Ok(TypedReg::i32(dst))
+        })
     }
 
-    fn visit_i64_or(&mut self) {
+    fn visit_i64_or(&mut self) -> Self::Output {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.or(writable!(dst), dst, src, size);
-            TypedReg::i64(dst)
-        });
+            Ok(TypedReg::i64(dst))
+        })
     }
 
-    fn visit_i32_xor(&mut self) {
+    fn visit_i32_xor(&mut self) -> Self::Output {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.xor(writable!(dst), dst, src, size);
-            TypedReg::i32(dst)
-        });
+            Ok(TypedReg::i32(dst))
+        })
     }
 
-    fn visit_i64_xor(&mut self) {
+    fn visit_i64_xor(&mut self) -> Self::Output {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
             masm.xor(writable!(dst), dst, src, size);
-            TypedReg::i64(dst)
-        });
+            Ok(TypedReg::i64(dst))
+        })
     }
 
-    fn visit_i32_shl(&mut self) {
+    fn visit_i32_shl(&mut self) -> Self::Output {
         use ShiftKind::*;
 
-        self.context.i32_shift(self.masm, Shl);
+        self.context.i32_shift(self.masm, Shl)
     }
 
-    fn visit_i64_shl(&mut self) {
+    fn visit_i64_shl(&mut self) -> Self::Output {
         use ShiftKind::*;
 
-        self.context.i64_shift(self.masm, Shl);
+        self.context.i64_shift(self.masm, Shl)
     }
 
-    fn visit_i32_shr_s(&mut self) {
+    fn visit_i32_shr_s(&mut self) -> Self::Output {
         use ShiftKind::*;
 
-        self.context.i32_shift(self.masm, ShrS);
+        self.context.i32_shift(self.masm, ShrS)
     }
 
-    fn visit_i64_shr_s(&mut self) {
+    fn visit_i64_shr_s(&mut self) -> Self::Output {
         use ShiftKind::*;
 
-        self.context.i64_shift(self.masm, ShrS);
+        self.context.i64_shift(self.masm, ShrS)
     }
 
-    fn visit_i32_shr_u(&mut self) {
+    fn visit_i32_shr_u(&mut self) -> Self::Output {
         use ShiftKind::*;
 
-        self.context.i32_shift(self.masm, ShrU);
+        self.context.i32_shift(self.masm, ShrU)
     }
 
-    fn visit_i64_shr_u(&mut self) {
+    fn visit_i64_shr_u(&mut self) -> Self::Output {
         use ShiftKind::*;
 
-        self.context.i64_shift(self.masm, ShrU);
+        self.context.i64_shift(self.masm, ShrU)
     }
 
-    fn visit_i32_rotl(&mut self) {
+    fn visit_i32_rotl(&mut self) -> Self::Output {
         use ShiftKind::*;
 
-        self.context.i32_shift(self.masm, Rotl);
+        self.context.i32_shift(self.masm, Rotl)
     }
 
-    fn visit_i64_rotl(&mut self) {
+    fn visit_i64_rotl(&mut self) -> Self::Output {
         use ShiftKind::*;
 
-        self.context.i64_shift(self.masm, Rotl);
+        self.context.i64_shift(self.masm, Rotl)
     }
 
-    fn visit_i32_rotr(&mut self) {
+    fn visit_i32_rotr(&mut self) -> Self::Output {
         use ShiftKind::*;
 
-        self.context.i32_shift(self.masm, Rotr);
+        self.context.i32_shift(self.masm, Rotr)
     }
 
-    fn visit_i64_rotr(&mut self) {
+    fn visit_i64_rotr(&mut self) -> Self::Output {
         use ShiftKind::*;
 
-        self.context.i64_shift(self.masm, Rotr);
+        self.context.i64_shift(self.masm, Rotr)
     }
 
-    fn visit_end(&mut self) {
+    fn visit_end(&mut self) -> Self::Output {
         if !self.context.reachable {
-            self.handle_unreachable_end();
+            self.handle_unreachable_end()
         } else {
-            let mut control = self.control_frames.pop().unwrap();
-            control.emit_end(self.masm, &mut self.context);
+            let mut control = self.pop_control_frame()?;
+            control.emit_end(self.masm, &mut self.context)
         }
     }
 
-    fn visit_i32_popcnt(&mut self) {
+    fn visit_i32_popcnt(&mut self) -> Self::Output {
         use OperandSize::*;
-        self.masm.popcnt(&mut self.context, S32);
+        self.masm.popcnt(&mut self.context, S32)
     }
 
-    fn visit_i64_popcnt(&mut self) {
+    fn visit_i64_popcnt(&mut self) -> Self::Output {
         use OperandSize::*;
 
-        self.masm.popcnt(&mut self.context, S64);
+        self.masm.popcnt(&mut self.context, S64)
     }
 
-    fn visit_i32_wrap_i64(&mut self) {
+    fn visit_i32_wrap_i64(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
             masm.wrap(writable!(reg), reg);
             TypedReg::i32(reg)
-        });
+        })
     }
 
-    fn visit_i64_extend_i32_s(&mut self) {
+    fn visit_i64_extend_i32_s(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
             masm.extend(writable!(reg), reg, ExtendKind::I64ExtendI32S);
             TypedReg::i64(reg)
-        });
+        })
     }
 
-    fn visit_i64_extend_i32_u(&mut self) {
+    fn visit_i64_extend_i32_u(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
             masm.extend(writable!(reg), reg, ExtendKind::I64ExtendI32U);
             TypedReg::i64(reg)
-        });
+        })
     }
 
-    fn visit_i32_extend8_s(&mut self) {
+    fn visit_i32_extend8_s(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
             masm.extend(writable!(reg), reg, ExtendKind::I32Extend8S);
             TypedReg::i32(reg)
-        });
+        })
     }
 
-    fn visit_i32_extend16_s(&mut self) {
+    fn visit_i32_extend16_s(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
             masm.extend(writable!(reg), reg, ExtendKind::I32Extend16S);
             TypedReg::i32(reg)
-        });
+        })
     }
 
-    fn visit_i64_extend8_s(&mut self) {
+    fn visit_i64_extend8_s(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
             masm.extend(writable!(reg), reg, ExtendKind::I64Extend8S);
             TypedReg::i64(reg)
-        });
+        })
     }
 
-    fn visit_i64_extend16_s(&mut self) {
+    fn visit_i64_extend16_s(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
             masm.extend(writable!(reg), reg, ExtendKind::I64Extend16S);
             TypedReg::i64(reg)
-        });
+        })
     }
 
-    fn visit_i64_extend32_s(&mut self) {
+    fn visit_i64_extend32_s(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
             masm.extend(writable!(reg), reg, ExtendKind::I64Extend32S);
             TypedReg::i64(reg)
-        });
+        })
     }
 
-    fn visit_i32_trunc_f32_s(&mut self) {
+    fn visit_i32_trunc_f32_s(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context
             .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
                 masm.signed_truncate(writable!(dst), src, S32, dst_size, TruncKind::Unchecked);
-            });
+            })
     }
 
-    fn visit_i32_trunc_f32_u(&mut self) {
+    fn visit_i32_trunc_f32_u(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.convert_op_with_tmp_reg(
@@ -1255,19 +1264,19 @@ where
                     TruncKind::Unchecked,
                 );
             },
-        );
+        )
     }
 
-    fn visit_i32_trunc_f64_s(&mut self) {
+    fn visit_i32_trunc_f64_s(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context
             .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
                 masm.signed_truncate(writable!(dst), src, S64, dst_size, TruncKind::Unchecked);
-            });
+            })
     }
 
-    fn visit_i32_trunc_f64_u(&mut self) {
+    fn visit_i32_trunc_f64_u(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.convert_op_with_tmp_reg(
@@ -1284,19 +1293,19 @@ where
                     TruncKind::Unchecked,
                 );
             },
-        );
+        )
     }
 
-    fn visit_i64_trunc_f32_s(&mut self) {
+    fn visit_i64_trunc_f32_s(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context
             .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
                 masm.signed_truncate(writable!(dst), src, S32, dst_size, TruncKind::Unchecked);
-            });
+            })
     }
 
-    fn visit_i64_trunc_f32_u(&mut self) {
+    fn visit_i64_trunc_f32_u(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.convert_op_with_tmp_reg(
@@ -1313,19 +1322,19 @@ where
                     TruncKind::Unchecked,
                 );
             },
-        );
+        )
     }
 
-    fn visit_i64_trunc_f64_s(&mut self) {
+    fn visit_i64_trunc_f64_s(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context
             .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
                 masm.signed_truncate(writable!(dst), src, S64, dst_size, TruncKind::Unchecked);
-            });
+            })
     }
 
-    fn visit_i64_trunc_f64_u(&mut self) {
+    fn visit_i64_trunc_f64_u(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.convert_op_with_tmp_reg(
@@ -1342,24 +1351,24 @@ where
                     TruncKind::Unchecked,
                 );
             },
-        );
+        )
     }
 
-    fn visit_i32_reinterpret_f32(&mut self) {
+    fn visit_i32_reinterpret_f32(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::I32, |masm, dst, src, size| {
                 masm.reinterpret_float_as_int(writable!(dst), src.into(), size);
-            });
+            })
     }
 
-    fn visit_i64_reinterpret_f64(&mut self) {
+    fn visit_i64_reinterpret_f64(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::I64, |masm, dst, src, size| {
                 masm.reinterpret_float_as_int(writable!(dst), src.into(), size);
-            });
+            })
     }
 
-    fn visit_local_get(&mut self, index: u32) {
+    fn visit_local_get(&mut self, index: u32) -> Self::Output {
         use WasmValType::*;
         let context = &mut self.context;
         let slot = context.frame.get_wasm_local(index);
@@ -1367,58 +1376,63 @@ where
             I32 | I64 | F32 | F64 | V128 => context.stack.push(Val::local(index, slot.ty)),
             Ref(rt) => match rt.heap_type {
                 WasmHeapType::Func => context.stack.push(Val::local(index, slot.ty)),
-                WasmHeapType::Extern => {
-                    self.found_unsupported_instruction =
-                        Some("unsupported local.get of externref local");
-                }
-                ht => unimplemented!("Support for WasmHeapType: {ht}"),
+                _ => bail!(CodeGenError::unsupported_wasm_type()),
             },
         }
+
+        Ok(())
     }
 
-    fn visit_local_set(&mut self, index: u32) {
-        let src = self.emit_set_local(index);
+    fn visit_local_set(&mut self, index: u32) -> Self::Output {
+        let src = self.emit_set_local(index)?;
         self.context.free_reg(src);
+        Ok(())
     }
 
-    fn visit_call(&mut self, index: u32) {
+    fn visit_call(&mut self, index: u32) -> Self::Output {
         let callee = self.env.callee_from_index(FuncIndex::from_u32(index));
-        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, callee)
+        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, callee)?;
+        Ok(())
     }
 
-    fn visit_call_indirect(&mut self, type_index: u32, table_index: u32) {
+    fn visit_call_indirect(&mut self, type_index: u32, table_index: u32) -> Self::Output {
         // Spill now because `emit_lazy_init_funcref` and the `FnCall::emit`
         // invocations will both trigger spills since they both call functions.
         // However, the machine instructions for the spill emitted by
         // `emit_lazy_funcref` will be jumped over if the funcref was previously
         // initialized which may result in the machine stack becoming
         // unbalanced.
-        self.context.spill(self.masm);
+        self.context.spill(self.masm)?;
 
         let type_index = TypeIndex::from_u32(type_index);
         let table_index = TableIndex::from_u32(table_index);
 
-        self.emit_lazy_init_funcref(table_index);
+        self.emit_lazy_init_funcref(table_index)?;
 
         // Perform the indirect call.
         // This code assumes that [`Self::emit_lazy_init_funcref`] will
         // push the funcref to the value stack.
-        let funcref_ptr = self.context.stack.peek().map(|v| v.unwrap_reg()).unwrap();
+        let funcref_ptr = self
+            .context
+            .stack
+            .peek()
+            .map(|v| v.unwrap_reg())
+            .ok_or_else(|| CodeGenError::missing_values_in_stack())?;
         self.masm
             .trapz(funcref_ptr.into(), TRAP_INDIRECT_CALL_TO_NULL);
-        self.emit_typecheck_funcref(funcref_ptr.into(), type_index);
+        self.emit_typecheck_funcref(funcref_ptr.into(), type_index)?;
 
         let callee = self.env.funcref(type_index);
-        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, callee)
+        FnCall::emit::<M>(&mut self.env, self.masm, &mut self.context, callee)?;
+        Ok(())
     }
 
-    fn visit_table_init(&mut self, elem: u32, table: u32) {
-        debug_assert!(self.context.stack.len() >= 3);
-        let at = self.context.stack.len() - 3;
+    fn visit_table_init(&mut self, elem: u32, table: u32) -> Self::Output {
+        let at = self.context.stack.ensure_index_at(3)?;
 
         self.context
             .stack
-            .insert_many(at, &[table.try_into().unwrap(), elem.try_into().unwrap()]);
+            .insert_many(at, &[table.try_into()?, elem.try_into()?]);
 
         let builtin = self.env.builtins.table_init::<M::ABI, M::Ptr>();
         FnCall::emit::<M>(
@@ -1426,16 +1440,15 @@ where
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin.clone()),
-        );
-        self.context.pop_and_free(self.masm);
+        )?;
+        self.context.pop_and_free(self.masm)
     }
 
-    fn visit_table_copy(&mut self, dst: u32, src: u32) {
-        debug_assert!(self.context.stack.len() >= 3);
-        let at = self.context.stack.len() - 3;
+    fn visit_table_copy(&mut self, dst: u32, src: u32) -> Self::Output {
+        let at = self.context.stack.ensure_index_at(3)?;
         self.context
             .stack
-            .insert_many(at, &[dst.try_into().unwrap(), src.try_into().unwrap()]);
+            .insert_many(at, &[dst.try_into()?, src.try_into()?]);
 
         let builtin = self.env.builtins.table_copy::<M::ABI, M::Ptr>();
         FnCall::emit::<M>(
@@ -1443,39 +1456,32 @@ where
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin),
-        );
-        self.context.pop_and_free(self.masm);
+        )?;
+        self.context.pop_and_free(self.masm)
     }
 
-    fn visit_table_get(&mut self, table: u32) {
+    fn visit_table_get(&mut self, table: u32) -> Self::Output {
         let table_index = TableIndex::from_u32(table);
         let table = self.env.table(table_index);
         let heap_type = table.ref_type.heap_type;
 
         match heap_type {
             WasmHeapType::Func => self.emit_lazy_init_funcref(table_index),
-            WasmHeapType::Extern => {
-                self.found_unsupported_instruction =
-                    Some("unsupported table.get of externref table");
-            }
-            t => {
-                unimplemented!("Support for WasmHeapType: {t}")
-            }
+            _ => Err(anyhow!(CodeGenError::unsupported_wasm_type())),
         }
     }
 
-    fn visit_table_grow(&mut self, table: u32) {
+    fn visit_table_grow(&mut self, table: u32) -> Self::Output {
         let table_index = TableIndex::from_u32(table);
         let table_ty = self.env.table(table_index);
         let builtin = match table_ty.ref_type.heap_type {
             WasmHeapType::Func => self.env.builtins.table_grow_func_ref::<M::ABI, M::Ptr>(),
-            ty => unimplemented!("Support for HeapType: {ty}"),
+            _ => bail!(CodeGenError::unsupported_wasm_type()),
         };
 
         let len = self.context.stack.len();
         // table.grow` requires at least 2 elements on the value stack.
-        debug_assert!(len >= 2);
-        let at = len - 2;
+        let at = self.context.stack.ensure_index_at(2)?;
 
         // The table_grow builtin expects the parameters in a different
         // order.
@@ -1484,68 +1490,69 @@ where
         // but the builtin function expects the init value as the last
         // argument.
         self.context.stack.inner_mut().swap(len - 1, len - 2);
-        self.context
-            .stack
-            .insert_many(at, &[table.try_into().unwrap()]);
+        self.context.stack.insert_many(at, &[table.try_into()?]);
 
         FnCall::emit::<M>(
             &mut self.env,
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin.clone()),
-        );
+        )?;
+
+        Ok(())
     }
 
-    fn visit_table_size(&mut self, table: u32) {
+    fn visit_table_size(&mut self, table: u32) -> Self::Output {
         let table_index = TableIndex::from_u32(table);
         let table_data = self.env.resolve_table_data(table_index);
-        self.emit_compute_table_size(&table_data);
+        self.emit_compute_table_size(&table_data)
     }
 
-    fn visit_table_fill(&mut self, table: u32) {
+    fn visit_table_fill(&mut self, table: u32) -> Self::Output {
         let table_index = TableIndex::from_u32(table);
         let table_ty = self.env.table(table_index);
-        let builtin = match table_ty.ref_type.heap_type {
-            WasmHeapType::Func => self.env.builtins.table_fill_func_ref::<M::ABI, M::Ptr>(),
-            ty => unimplemented!("Support for heap type: {ty}"),
-        };
 
-        let len = self.context.stack.len();
-        debug_assert!(len >= 3);
-        let at = len - 3;
-        self.context
-            .stack
-            .insert_many(at, &[table.try_into().unwrap()]);
+        ensure!(
+            table_ty.ref_type.heap_type == WasmHeapType::Func,
+            CodeGenError::unsupported_wasm_type()
+        );
+
+        let builtin = self.env.builtins.table_fill_func_ref::<M::ABI, M::Ptr>();
+
+        let at = self.context.stack.ensure_index_at(3)?;
+
+        self.context.stack.insert_many(at, &[table.try_into()?]);
         FnCall::emit::<M>(
             &mut self.env,
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin.clone()),
-        );
-        self.context.pop_and_free(self.masm);
+        )?;
+        self.context.pop_and_free(self.masm)
     }
 
-    fn visit_table_set(&mut self, table: u32) {
+    fn visit_table_set(&mut self, table: u32) -> Self::Output {
         let ptr_type = self.env.ptr_type();
         let table_index = TableIndex::from_u32(table);
         let table_data = self.env.resolve_table_data(table_index);
         let table = self.env.table(table_index);
         match table.ref_type.heap_type {
             WasmHeapType::Func => {
-                assert!(
+                ensure!(
                     self.tunables.table_lazy_init,
-                    "unsupported table eager init"
+                    CodeGenError::unsupported_table_eager_init()
                 );
-                let value = self.context.pop_to_reg(self.masm, None);
-                let index = self.context.pop_to_reg(self.masm, None);
-                let base = self.context.any_gpr(self.masm);
-                let elem_addr = self.emit_compute_table_elem_addr(index.into(), base, &table_data);
+                let value = self.context.pop_to_reg(self.masm, None)?;
+                let index = self.context.pop_to_reg(self.masm, None)?;
+                let base = self.context.any_gpr(self.masm)?;
+                let elem_addr =
+                    self.emit_compute_table_elem_addr(index.into(), base, &table_data)?;
                 // Set the initialized bit.
                 self.masm.or(
                     writable!(value.into()),
                     value.into(),
                     RegImm::i64(FUNCREF_INIT_BIT as i64),
-                    ptr_type.into(),
+                    ptr_type.try_into()?,
                 );
 
                 self.masm.store_ptr(value.into(), elem_addr);
@@ -1553,56 +1560,52 @@ where
                 self.context.free_reg(value);
                 self.context.free_reg(index);
                 self.context.free_reg(base);
+                Ok(())
             }
-            ty => unimplemented!("Support for WasmHeapType: {ty}"),
-        };
+            _ => Err(anyhow!(CodeGenError::unsupported_wasm_type())),
+        }
     }
 
-    fn visit_elem_drop(&mut self, index: u32) {
+    fn visit_elem_drop(&mut self, index: u32) -> Self::Output {
         let elem_drop = self.env.builtins.elem_drop::<M::ABI, M::Ptr>();
-        self.context.stack.extend([index.try_into().unwrap()]);
+        self.context.stack.extend([index.try_into()?]);
         FnCall::emit::<M>(
             &mut self.env,
             self.masm,
             &mut self.context,
             Callee::Builtin(elem_drop),
-        )
+        )?;
+        Ok(())
     }
 
-    fn visit_memory_init(&mut self, data_index: u32, mem: u32) {
-        debug_assert!(self.context.stack.len() >= 3);
-        let at = self.context.stack.len() - 3;
-        self.context.stack.insert_many(
-            at,
-            &[mem.try_into().unwrap(), data_index.try_into().unwrap()],
-        );
+    fn visit_memory_init(&mut self, data_index: u32, mem: u32) -> Self::Output {
+        let at = self.context.stack.ensure_index_at(3)?;
+        self.context
+            .stack
+            .insert_many(at, &[mem.try_into()?, data_index.try_into()?]);
         let builtin = self.env.builtins.memory_init::<M::ABI, M::Ptr>();
         FnCall::emit::<M>(
             &mut self.env,
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin),
-        );
-        self.context.pop_and_free(self.masm);
+        )?;
+        self.context.pop_and_free(self.masm)
     }
 
-    fn visit_memory_copy(&mut self, dst_mem: u32, src_mem: u32) {
+    fn visit_memory_copy(&mut self, dst_mem: u32, src_mem: u32) -> Self::Output {
         // At this point, the stack is expected to contain:
         //     [ dst_offset, src_offset, len ]
         // The following code inserts the missing params, so that stack contains:
         //     [ vmctx, dst_mem, dst_offset, src_mem, src_offset, len ]
         // Which is the order expected by the builtin function.
-        debug_assert!(self.context.stack.len() >= 3);
-        let at = self.context.stack.len() - 2;
-        self.context
-            .stack
-            .insert_many(at, &[src_mem.try_into().unwrap()]);
+        let _ = self.context.stack.ensure_index_at(3)?;
+        let at = self.context.stack.ensure_index_at(2)?;
+        self.context.stack.insert_many(at, &[src_mem.try_into()?]);
 
         // One element was inserted above, so instead of 3, we use 4.
-        let at = self.context.stack.len() - 4;
-        self.context
-            .stack
-            .insert_many(at, &[dst_mem.try_into().unwrap()]);
+        let at = self.context.stack.ensure_index_at(4)?;
+        self.context.stack.insert_many(at, &[dst_mem.try_into()?]);
 
         let builtin = self.env.builtins.memory_copy::<M::ABI, M::Ptr>();
 
@@ -1611,17 +1614,14 @@ where
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin),
-        );
-        self.context.pop_and_free(self.masm);
+        )?;
+        self.context.pop_and_free(self.masm)
     }
 
-    fn visit_memory_fill(&mut self, mem: u32) {
-        debug_assert!(self.context.stack.len() >= 3);
-        let at = self.context.stack.len() - 3;
+    fn visit_memory_fill(&mut self, mem: u32) -> Self::Output {
+        let at = self.context.stack.ensure_index_at(3)?;
 
-        self.context
-            .stack
-            .insert_many(at, &[mem.try_into().unwrap()]);
+        self.context.stack.insert_many(at, &[mem.try_into()?]);
 
         let builtin = self.env.builtins.memory_fill::<M::ABI, M::Ptr>();
         FnCall::emit::<M>(
@@ -1629,21 +1629,21 @@ where
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin),
-        );
-        self.context.pop_and_free(self.masm);
+        )?;
+        self.context.pop_and_free(self.masm)
     }
 
-    fn visit_memory_size(&mut self, mem: u32) {
+    fn visit_memory_size(&mut self, mem: u32) -> Self::Output {
         let heap = self.env.resolve_heap(MemoryIndex::from_u32(mem));
-        self.emit_compute_memory_size(&heap);
+        self.emit_compute_memory_size(&heap)
     }
 
-    fn visit_memory_grow(&mut self, mem: u32) {
-        debug_assert!(self.context.stack.len() >= 1);
+    fn visit_memory_grow(&mut self, mem: u32) -> Self::Output {
+        let _ = self.context.stack.ensure_index_at(1)?;
         // The stack at this point contains: [ delta ]
         // The desired state is
         //   [ vmctx, delta, index ]
-        self.context.stack.extend([mem.try_into().unwrap()]);
+        self.context.stack.extend([mem.try_into()?]);
 
         let heap = self.env.resolve_heap(MemoryIndex::from_u32(mem));
         let builtin = self.env.builtins.memory32_grow::<M::ABI, M::Ptr>();
@@ -1652,26 +1652,27 @@ where
             self.masm,
             &mut self.context,
             Callee::Builtin(builtin),
-        );
+        )?;
 
         // The memory32_grow builtin returns a pointer type, therefore we must
         // ensure that the return type is representative of the address space of
         // the heap type.
         match (self.env.ptr_type(), heap.index_type()) {
-            (WasmValType::I64, WasmValType::I64) => {}
+            (WasmValType::I64, WasmValType::I64) => Ok(()),
             // When the heap type is smaller than the pointer type, we adjust
             // the result of the memory32_grow builtin.
             (WasmValType::I64, WasmValType::I32) => {
-                let top: Reg = self.context.pop_to_reg(self.masm, None).into();
+                let top: Reg = self.context.pop_to_reg(self.masm, None)?.into();
                 self.masm.wrap(writable!(top.into()), top.into());
                 self.context.stack.push(TypedReg::i32(top).into());
+                Ok(())
             }
-            _ => unimplemented!("Support for 32-bit platforms"),
+            _ => Err(anyhow!(CodeGenError::unsupported_32_bit_platform())),
         }
     }
 
-    fn visit_data_drop(&mut self, data_index: u32) {
-        self.context.stack.extend([data_index.try_into().unwrap()]);
+    fn visit_data_drop(&mut self, data_index: u32) -> Self::Output {
+        self.context.stack.extend([data_index.try_into()?]);
 
         let builtin = self.env.builtins.data_drop::<M::ABI, M::Ptr>();
         FnCall::emit::<M>(
@@ -1682,73 +1683,78 @@ where
         )
     }
 
-    fn visit_nop(&mut self) {}
+    fn visit_nop(&mut self) -> Self::Output {
+        Ok(())
+    }
 
-    fn visit_if(&mut self, blockty: BlockType) {
+    fn visit_if(&mut self, blockty: BlockType) -> Self::Output {
         self.control_frames.push(ControlStackFrame::r#if(
             self.env.resolve_block_sig(blockty),
             self.masm,
             &mut self.context,
-        ));
+        )?);
+
+        Ok(())
     }
 
-    fn visit_else(&mut self) {
+    fn visit_else(&mut self) -> Self::Output {
         if !self.context.reachable {
-            self.handle_unreachable_else();
+            self.handle_unreachable_else()
         } else {
             let control = self
                 .control_frames
                 .last_mut()
-                .unwrap_or_else(|| panic!("Expected active control stack frame for else"));
-            control.emit_else(self.masm, &mut self.context);
+                .ok_or_else(|| CodeGenError::control_frame_expected())?;
+            control.emit_else(self.masm, &mut self.context)
         }
     }
 
-    fn visit_block(&mut self, blockty: BlockType) {
+    fn visit_block(&mut self, blockty: BlockType) -> Self::Output {
         self.control_frames.push(ControlStackFrame::block(
             self.env.resolve_block_sig(blockty),
             self.masm,
             &mut self.context,
-        ));
+        )?);
+
+        Ok(())
     }
 
-    fn visit_loop(&mut self, blockty: BlockType) {
+    fn visit_loop(&mut self, blockty: BlockType) -> Self::Output {
         self.control_frames.push(ControlStackFrame::r#loop(
             self.env.resolve_block_sig(blockty),
             self.masm,
             &mut self.context,
-        ));
+        )?);
 
-        self.maybe_emit_epoch_check();
-        self.maybe_emit_fuel_check();
+        self.maybe_emit_epoch_check()?;
+        self.maybe_emit_fuel_check()
     }
 
-    fn visit_br(&mut self, depth: u32) {
-        let index = control_index(depth, self.control_frames.len());
+    fn visit_br(&mut self, depth: u32) -> Self::Output {
+        let index = control_index(depth, self.control_frames.len())?;
         let frame = &mut self.control_frames[index];
         self.context
             .unconditional_jump(frame, self.masm, |masm, cx, frame| {
-                frame
-                    .pop_abi_results::<M, _>(cx, masm, |results, _, _| results.ret_area().copied());
-            });
+                frame.pop_abi_results::<M, _>(cx, masm, |results, _, _| results.ret_area().copied())
+            })
     }
 
-    fn visit_br_if(&mut self, depth: u32) {
-        let index = control_index(depth, self.control_frames.len());
+    fn visit_br_if(&mut self, depth: u32) -> Self::Output {
+        let index = control_index(depth, self.control_frames.len())?;
         let frame = &mut self.control_frames[index];
         frame.set_as_target();
 
         let top = {
-            let top = self.context.without::<TypedReg, M, _>(
+            let top = self.context.without::<Result<TypedReg>, M, _>(
                 frame.results::<M>().regs(),
                 self.masm,
                 |ctx, masm| ctx.pop_to_reg(masm, None),
-            );
+            )??;
             // Explicitly save any live registers and locals before setting up
             // the branch state.
             // In some cases, calculating the `top` value above, will result in
             // a spill, thus the following one will result in a no-op.
-            self.context.spill(self.masm);
+            self.context.spill(self.masm)?;
             frame.top_abi_results::<M, _>(
                 &mut self.context,
                 self.masm,
@@ -1766,7 +1772,7 @@ where
                         RetArea::sp(SPOffset::from_u32(offs))
                     })
                 },
-            );
+            )?;
             top
         };
 
@@ -1802,9 +1808,11 @@ where
             self.masm.reset_stack_pointer(current_sp_offset);
             self.masm.bind(label);
         }
+
+        Ok(())
     }
 
-    fn visit_br_table(&mut self, targets: BrTable<'a>) {
+    fn visit_br_table(&mut self, targets: BrTable<'a>) -> Self::Output {
         // +1 to account for the default target.
         let len = targets.len() + 1;
         // SmallVec<[_; 5]> to match the binary emission layer (e.g
@@ -1812,22 +1820,24 @@ where
         // bundle the default target as the last element in the array.
         let labels: SmallVec<[_; 5]> = (0..len).map(|_| self.masm.get_label()).collect();
 
-        let default_index = control_index(targets.default(), self.control_frames.len());
+        let default_index = control_index(targets.default(), self.control_frames.len())?;
         let default_frame = &mut self.control_frames[default_index];
         let default_result = default_frame.results::<M>();
 
         let (index, tmp) = {
-            let index_and_tmp = self.context.without::<(TypedReg, _), M, _>(
+            let index_and_tmp = self.context.without::<Result<(TypedReg, _)>, M, _>(
                 default_result.regs(),
                 self.masm,
-                |cx, masm| (cx.pop_to_reg(masm, None), cx.any_gpr(masm)),
-            );
+                |cx, masm| Ok((cx.pop_to_reg(masm, None)?, cx.any_gpr(masm)?)),
+            )??;
 
             // Materialize any constants or locals into their result representation,
             // so that when reachability is restored, they are correctly located.
-            default_frame.top_abi_results::<M, _>(&mut self.context, self.masm, |results, _, _| {
-                results.ret_area().copied()
-            });
+            default_frame.top_abi_results::<M, _>(
+                &mut self.context,
+                self.masm,
+                |results, _, _| results.ret_area().copied(),
+            )?;
             index_and_tmp
         };
 
@@ -1844,7 +1854,7 @@ where
             .chain(std::iter::once(Ok(targets.default())))
             .zip(labels.iter())
         {
-            let control_index = control_index(t.unwrap(), self.control_frames.len());
+            let control_index = control_index(t?, self.control_frames.len())?;
             let frame = &mut self.control_frames[control_index];
             // Reset the stack pointer to its original offset. This is needed
             // because each jump will potentially adjust the stack pointer
@@ -1869,9 +1879,11 @@ where
         self.context.reachable = false;
         self.context.free_reg(index.reg);
         self.context.free_reg(tmp);
+
+        Ok(())
     }
 
-    fn visit_return(&mut self) {
+    fn visit_return(&mut self) -> Self::Output {
         // Grab the outermost frame, which is the function's body
         // frame. We don't rely on [`codegen::control_index`] since
         // this frame is implicit and we know that it should exist at
@@ -1879,54 +1891,61 @@ where
         let outermost = &mut self.control_frames[0];
         self.context
             .unconditional_jump(outermost, self.masm, |masm, cx, frame| {
-                frame
-                    .pop_abi_results::<M, _>(cx, masm, |results, _, _| results.ret_area().copied());
-            });
+                frame.pop_abi_results::<M, _>(cx, masm, |results, _, _| results.ret_area().copied())
+            })
     }
 
-    fn visit_unreachable(&mut self) {
+    fn visit_unreachable(&mut self) -> Self::Output {
         self.masm.unreachable();
         self.context.reachable = false;
         // Set the implicit outermost frame as target to perform the necessary
         // stack clean up.
         let outermost = &mut self.control_frames[0];
         outermost.set_as_target();
+
+        Ok(())
     }
 
-    fn visit_local_tee(&mut self, index: u32) {
-        let typed_reg = self.emit_set_local(index);
+    fn visit_local_tee(&mut self, index: u32) -> Self::Output {
+        let typed_reg = self.emit_set_local(index)?;
         self.context.stack.push(typed_reg.into());
+
+        Ok(())
     }
 
-    fn visit_global_get(&mut self, global_index: u32) {
+    fn visit_global_get(&mut self, global_index: u32) -> Self::Output {
         let index = GlobalIndex::from_u32(global_index);
         let (ty, addr) = self.emit_get_global_addr(index);
-        let dst = self.context.reg_for_type(ty, self.masm);
-        self.masm.load(addr, writable!(dst), ty.into());
+        let dst = self.context.reg_for_type(ty, self.masm)?;
+        self.masm.load(addr, writable!(dst), ty.try_into()?);
         self.context.stack.push(Val::reg(dst, ty));
+
+        Ok(())
     }
 
-    fn visit_global_set(&mut self, global_index: u32) {
+    fn visit_global_set(&mut self, global_index: u32) -> Self::Output {
         let index = GlobalIndex::from_u32(global_index);
         let (ty, addr) = self.emit_get_global_addr(index);
 
-        let typed_reg = self.context.pop_to_reg(self.masm, None);
+        let typed_reg = self.context.pop_to_reg(self.masm, None)?;
         self.context.free_reg(typed_reg.reg);
-        self.masm.store(typed_reg.reg.into(), addr, ty.into());
+        self.masm.store(typed_reg.reg.into(), addr, ty.try_into()?);
+
+        Ok(())
     }
 
-    fn visit_drop(&mut self) {
+    fn visit_drop(&mut self) -> Self::Output {
         self.context.drop_last(1, |regalloc, val| match val {
-            Val::Reg(tr) => regalloc.free(tr.reg.into()),
-            Val::Memory(m) => self.masm.free_stack(m.slot.size),
-            _ => {}
-        });
+            Val::Reg(tr) => Ok(regalloc.free(tr.reg.into())),
+            Val::Memory(m) => Ok(self.masm.free_stack(m.slot.size)),
+            _ => Ok(()),
+        })
     }
 
-    fn visit_select(&mut self) {
-        let cond = self.context.pop_to_reg(self.masm, None);
-        let val2 = self.context.pop_to_reg(self.masm, None);
-        let val1 = self.context.pop_to_reg(self.masm, None);
+    fn visit_select(&mut self) -> Self::Output {
+        let cond = self.context.pop_to_reg(self.masm, None)?;
+        let val2 = self.context.pop_to_reg(self.masm, None)?;
+        let val1 = self.context.pop_to_reg(self.masm, None)?;
         self.masm
             .cmp(cond.reg.into(), RegImm::i32(0), OperandSize::S32);
         // Conditionally move val1 to val2 if the comparison is
@@ -1935,31 +1954,33 @@ where
             writable!(val2.into()),
             val1.into(),
             IntCmpKind::Ne,
-            val1.ty.into(),
+            val1.ty.try_into()?,
         );
         self.context.stack.push(val2.into());
         self.context.free_reg(val1.reg);
         self.context.free_reg(cond);
+
+        Ok(())
     }
 
-    fn visit_i32_load(&mut self, memarg: MemArg) {
-        self.emit_wasm_load(&memarg, WasmValType::I32, OperandSize::S32, None);
+    fn visit_i32_load(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_load(&memarg, WasmValType::I32, OperandSize::S32, None)
     }
 
-    fn visit_i32_load8_s(&mut self, memarg: MemArg) {
+    fn visit_i32_load8_s(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
             OperandSize::S8,
             Some(ExtendKind::I32Extend8S),
-        );
+        )
     }
 
-    fn visit_i32_load8_u(&mut self, memarg: MemArg) {
-        self.emit_wasm_load(&memarg, WasmValType::I32, OperandSize::S8, None);
+    fn visit_i32_load8_u(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_load(&memarg, WasmValType::I32, OperandSize::S8, None)
     }
 
-    fn visit_i32_load16_s(&mut self, memarg: MemArg) {
+    fn visit_i32_load16_s(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
@@ -1968,23 +1989,23 @@ where
         )
     }
 
-    fn visit_i32_load16_u(&mut self, memarg: MemArg) {
+    fn visit_i32_load16_u(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(&memarg, WasmValType::I32, OperandSize::S16, None)
     }
 
-    fn visit_i32_store(&mut self, memarg: MemArg) {
-        self.emit_wasm_store(&memarg, OperandSize::S32);
+    fn visit_i32_store(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_store(&memarg, OperandSize::S32)
     }
 
-    fn visit_i32_store8(&mut self, memarg: MemArg) {
+    fn visit_i32_store8(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_store(&memarg, OperandSize::S8)
     }
 
-    fn visit_i32_store16(&mut self, memarg: MemArg) {
+    fn visit_i32_store16(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_store(&memarg, OperandSize::S16)
     }
 
-    fn visit_i64_load8_s(&mut self, memarg: MemArg) {
+    fn visit_i64_load8_s(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
@@ -1993,15 +2014,15 @@ where
         )
     }
 
-    fn visit_i64_load8_u(&mut self, memarg: MemArg) {
+    fn visit_i64_load8_u(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(&memarg, WasmValType::I64, OperandSize::S8, None)
     }
 
-    fn visit_i64_load16_u(&mut self, memarg: MemArg) {
+    fn visit_i64_load16_u(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(&memarg, WasmValType::I64, OperandSize::S16, None)
     }
 
-    fn visit_i64_load16_s(&mut self, memarg: MemArg) {
+    fn visit_i64_load16_s(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
@@ -2010,11 +2031,11 @@ where
         )
     }
 
-    fn visit_i64_load32_u(&mut self, memarg: MemArg) {
+    fn visit_i64_load32_u(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(&memarg, WasmValType::I64, OperandSize::S32, None)
     }
 
-    fn visit_i64_load32_s(&mut self, memarg: MemArg) {
+    fn visit_i64_load32_s(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
@@ -2023,7 +2044,7 @@ where
         )
     }
 
-    fn visit_i64_load(&mut self, memarg: MemArg) {
+    fn visit_i64_load(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(&memarg, WasmValType::I64, OperandSize::S64, None)
     }
 
@@ -2043,32 +2064,32 @@ where
         self.emit_wasm_store(&memarg, OperandSize::S32)
     }
 
-    fn visit_f32_load(&mut self, memarg: MemArg) {
+    fn visit_f32_load(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(&memarg, WasmValType::F32, OperandSize::S32, None)
     }
 
-    fn visit_f32_store(&mut self, memarg: MemArg) {
+    fn visit_f32_store(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_store(&memarg, OperandSize::S32)
     }
 
-    fn visit_f64_load(&mut self, memarg: MemArg) {
+    fn visit_f64_load(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(&memarg, WasmValType::F64, OperandSize::S64, None)
     }
 
-    fn visit_f64_store(&mut self, memarg: MemArg) {
+    fn visit_f64_store(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_store(&memarg, OperandSize::S64)
     }
 
-    fn visit_i32_trunc_sat_f32_s(&mut self) {
+    fn visit_i32_trunc_sat_f32_s(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context
             .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
                 masm.signed_truncate(writable!(dst), src, S32, dst_size, TruncKind::Checked);
-            });
+            })
     }
 
-    fn visit_i32_trunc_sat_f32_u(&mut self) {
+    fn visit_i32_trunc_sat_f32_u(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.convert_op_with_tmp_reg(
@@ -2085,19 +2106,19 @@ where
                     TruncKind::Checked,
                 );
             },
-        );
+        )
     }
 
-    fn visit_i32_trunc_sat_f64_s(&mut self) {
+    fn visit_i32_trunc_sat_f64_s(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context
             .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
                 masm.signed_truncate(writable!(dst), src, S64, dst_size, TruncKind::Checked);
-            });
+            })
     }
 
-    fn visit_i32_trunc_sat_f64_u(&mut self) {
+    fn visit_i32_trunc_sat_f64_u(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.convert_op_with_tmp_reg(
@@ -2114,19 +2135,19 @@ where
                     TruncKind::Checked,
                 );
             },
-        );
+        )
     }
 
-    fn visit_i64_trunc_sat_f32_s(&mut self) {
+    fn visit_i64_trunc_sat_f32_s(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context
             .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
                 masm.signed_truncate(writable!(dst), src, S32, dst_size, TruncKind::Checked);
-            });
+            })
     }
 
-    fn visit_i64_trunc_sat_f32_u(&mut self) {
+    fn visit_i64_trunc_sat_f32_u(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.convert_op_with_tmp_reg(
@@ -2143,19 +2164,19 @@ where
                     TruncKind::Checked,
                 );
             },
-        );
+        )
     }
 
-    fn visit_i64_trunc_sat_f64_s(&mut self) {
+    fn visit_i64_trunc_sat_f64_s(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context
             .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
                 masm.signed_truncate(writable!(dst), src, S64, dst_size, TruncKind::Checked);
-            });
+            })
     }
 
-    fn visit_i64_trunc_sat_f64_u(&mut self) {
+    fn visit_i64_trunc_sat_f64_u(&mut self) -> Self::Output {
         use OperandSize::*;
 
         self.context.convert_op_with_tmp_reg(
@@ -2172,10 +2193,10 @@ where
                     TruncKind::Checked,
                 );
             },
-        );
+        )
     }
 
-    fn visit_i64_add128(&mut self) {
+    fn visit_i64_add128(&mut self) -> Self::Output {
         self.context
             .binop128(self.masm, |masm, lhs_lo, lhs_hi, rhs_lo, rhs_hi| {
                 masm.add128(
@@ -2187,10 +2208,10 @@ where
                     rhs_hi,
                 );
                 (TypedReg::i64(lhs_lo), TypedReg::i64(lhs_hi))
-            });
+            })
     }
 
-    fn visit_i64_sub128(&mut self) {
+    fn visit_i64_sub128(&mut self) -> Self::Output {
         self.context
             .binop128(self.masm, |masm, lhs_lo, lhs_hi, rhs_lo, rhs_hi| {
                 masm.sub128(
@@ -2202,15 +2223,15 @@ where
                     rhs_hi,
                 );
                 (TypedReg::i64(lhs_lo), TypedReg::i64(lhs_hi))
-            });
+            })
     }
 
-    fn visit_i64_mul_wide_s(&mut self) {
-        self.masm.mul_wide(&mut self.context, MulWideKind::Signed);
+    fn visit_i64_mul_wide_s(&mut self) -> Self::Output {
+        self.masm.mul_wide(&mut self.context, MulWideKind::Signed)
     }
 
-    fn visit_i64_mul_wide_u(&mut self) {
-        self.masm.mul_wide(&mut self.context, MulWideKind::Unsigned);
+    fn visit_i64_mul_wide_u(&mut self) -> Self::Output {
+        self.masm.mul_wide(&mut self.context, MulWideKind::Unsigned)
     }
 
     wasmparser::for_each_visit_operator!(def_unsupported);
@@ -2221,15 +2242,16 @@ impl<'a, 'translation, 'data, M> VisitSimdOperator<'a>
 where
     M: MacroAssembler,
 {
-    fn visit_v128_const(&mut self, val: V128) {
-        self.context.stack.push(Val::v128(val.i128()))
+    fn visit_v128_const(&mut self, val: V128) -> Self::Output {
+        self.context.stack.push(Val::v128(val.i128()));
+        Ok(())
     }
 
-    fn visit_v128_load(&mut self, memarg: MemArg) {
+    fn visit_v128_load(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(&memarg, WasmValType::V128, OperandSize::S128, None)
     }
 
-    fn visit_v128_store(&mut self, memarg: MemArg) {
+    fn visit_v128_store(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_store(&memarg, OperandSize::S128)
     }
 
@@ -2240,25 +2262,26 @@ impl<'a, 'translation, 'data, M> CodeGen<'a, 'translation, 'data, M, Emission>
 where
     M: MacroAssembler,
 {
-    fn cmp_i32s(&mut self, kind: IntCmpKind) {
+    fn cmp_i32s(&mut self, kind: IntCmpKind) -> Result<()> {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
             masm.cmp_with_set(writable!(dst), src, kind, size);
-            TypedReg::i32(dst)
-        });
+            Ok(TypedReg::i32(dst))
+        })
     }
 
-    fn cmp_i64s(&mut self, kind: IntCmpKind) {
+    fn cmp_i64s(&mut self, kind: IntCmpKind) -> Result<()> {
         self.context
             .i64_binop(self.masm, move |masm, dst, src, size| {
                 masm.cmp_with_set(writable!(dst), src, kind, size);
-                TypedReg::i32(dst) // Return value for comparisons is an `i32`.
-            });
+                Ok(TypedReg::i32(dst)) // Return value for comparisons is an `i32`.
+            })
     }
 }
 
-impl From<WasmValType> for OperandSize {
-    fn from(ty: WasmValType) -> OperandSize {
-        match ty {
+impl TryFrom<WasmValType> for OperandSize {
+    type Error = anyhow::Error;
+    fn try_from(ty: WasmValType) -> Result<OperandSize> {
+        let ty = match ty {
             WasmValType::I32 | WasmValType::F32 => OperandSize::S32,
             WasmValType::I64 | WasmValType::F64 => OperandSize::S64,
             WasmValType::V128 => OperandSize::S128,
@@ -2270,9 +2293,10 @@ impl From<WasmValType> for OperandSize {
                     // OperandSize will depend on the target's  pointer size.
                     WasmHeapType::Func => OperandSize::S64,
                     WasmHeapType::Extern => OperandSize::S64,
-                    t => unimplemented!("Support for WasmHeapType: {t}"),
+                    _ => bail!(CodeGenError::unsupported_wasm_type()),
                 }
             }
-        }
+        };
+        Ok(ty)
     }
 }

@@ -4741,6 +4741,7 @@ dependencies = [
  "regalloc2",
  "smallvec",
  "target-lexicon",
+ "thiserror",
  "wasmparser 0.221.2",
  "wasmtime-cranelift",
  "wasmtime-environ",
