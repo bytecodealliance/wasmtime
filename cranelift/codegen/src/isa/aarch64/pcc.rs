@@ -438,6 +438,7 @@ fn check_addr<'a>(
                 if ctx.subsumes_fact_optionals(loaded_fact.as_ref(), result_fact) {
                     Ok(())
                 } else {
+                    dbg!();
                     Err(PccError::UnsupportedFact)
                 }
             }

@@ -30,8 +30,8 @@ use crate::{
         abi::ArgPair, ty_bits, InstOutput, IsTailCall, MachInst, VCodeConstant, VCodeConstantData,
     },
 };
-use regalloc2::PReg;
 use core::u32;
+use regalloc2::PReg;
 use std::boxed::Box;
 use std::vec::Vec;
 
@@ -399,7 +399,8 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         ImmLogic::maybe_from_u64(val, ty).unwrap()
     }
 
-    fn negate_imm_shift(&mut self, ty: Type, mut imm: ImmShift) -> ImmShift { let size = u8::try_from(ty.bits()).unwrap();
+    fn negate_imm_shift(&mut self, ty: Type, mut imm: ImmShift) -> ImmShift {
+        let size = u8::try_from(ty.bits()).unwrap();
         imm.imm = size.wrapping_sub(imm.value());
         imm.imm &= size - 1;
         imm
@@ -752,9 +753,9 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
 
     fn load_constant32_full(
         &mut self,
-        ty:Type,
+        ty: Type,
         extend: &generated_code::ImmExtend,
-        value: u64
+        value: u64,
     ) -> Reg {
         // value is a u64, because it saves us from code duplication for imm in isle. However the
         // value passed to load_constant32_full should always fit a u32
@@ -800,25 +801,27 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         // we actually wanted. In case they're equally good, we prefer `movz`
         // because the assembly listings are generally harder to read when the
         // operands are negated.
-        let (mut running_value, op, first) =
-            [(MoveWideOp::MovZ, 0), (MoveWideOp::MovN, size.max_value() as u32)]
-                .into_iter()
-                .map(|(op, base)| {
-                    // Both `movz` and `movn` can overwrite one slice after setting
-                    // the initial value; we get to pick which one. 32-bit variants
-                    // can only modify the lower two slices.
-                    let first = (0..(size.bits() / 16))
-                        // Pick one slice that's different from the initial value
-                        .find(|&i| get(base ^ value, i) != 0)
-                        // If none are different, we still have to pick one
-                        .unwrap_or(0);
-                    // Compute the value we'll get from this `movz`/`movn`
-                    (replace(base, get(value, first), first), op, first)
-                })
-                // Count how many `movk` instructions we'll need.
-                .min_by_key(|(base, ..)| (0..2).filter(|&i| get(base ^ value, i) != 0).count())
-                // `variants` isn't empty so `min_by_key` always returns something.
-                .unwrap();
+        let (mut running_value, op, first) = [
+            (MoveWideOp::MovZ, 0),
+            (MoveWideOp::MovN, size.max_value() as u32),
+        ]
+        .into_iter()
+        .map(|(op, base)| {
+            // Both `movz` and `movn` can overwrite one slice after setting
+            // the initial value; we get to pick which one. 32-bit variants
+            // can only modify the lower two slices.
+            let first = (0..(size.bits() / 16))
+                // Pick one slice that's different from the initial value
+                .find(|&i| get(base ^ value, i) != 0)
+                // If none are different, we still have to pick one
+                .unwrap_or(0);
+            // Compute the value we'll get from this `movz`/`movn`
+            (replace(base, get(value, first), first), op, first)
+        })
+        // Count how many `movk` instructions we'll need.
+        .min_by_key(|(base, ..)| (0..2).filter(|&i| get(base ^ value, i) != 0).count())
+        // `variants` isn't empty so `min_by_key` always returns something.
+        .unwrap();
 
         // Build the initial instruction we chose above, putting the result
         // into a new temporary virtual register. Note that the encoding for the
@@ -837,8 +840,12 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
             size,
         });
         if self.backend.flags.enable_pcc() {
-            self.lower_ctx
-                .add_range_fact(rd.to_reg(), 32, running_value as u64, running_value as u64);
+            self.lower_ctx.add_range_fact(
+                rd.to_reg(),
+                64,
+                running_value as u64,
+                running_value as u64,
+            );
         }
 
         // Emit a `movk` instruction for each remaining slice of the desired
@@ -856,8 +863,12 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
                 });
                 running_value = replace(running_value, bits, shift);
                 if self.backend.flags.enable_pcc() {
-                    self.lower_ctx
-                        .add_range_fact(rd.to_reg(), 32, running_value as u64, running_value as u64);
+                    self.lower_ctx.add_range_fact(
+                        rd.to_reg(),
+                        64,
+                        running_value as u64,
+                        running_value as u64,
+                    );
                 }
             }
         }
@@ -866,16 +877,3 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         return rd.to_reg();
     }
 }
-
-
-    // /// This is the fallback case for loading a 64-bit integral constant into a
-    // /// register.
-    // ///
-    // /// The logic here is nontrivial enough that it's not really worth porting
-    // /// this over to ISLE.
-    // fn load_constant_full32(
-    //     ty: Type,
-    //     extend: &generated_code::ImmExtend,
-    //     value: u32,
-    // ) -> Reg {
-    // }
