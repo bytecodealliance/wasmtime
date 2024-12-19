@@ -442,6 +442,16 @@ macro_rules! for_each_op {
             /// `sp = fp; pop fp; pop lr`
             pop_frame = PopFrame ;
 
+            /// Macro-instruction to enter a function, allocate some stack, and
+            /// then save some registers.
+            ///
+            /// This is equivalent to `push_frame`, `stack_alloc32 amt`, then
+            /// saving all of `regs` to the top of the stack just allocated.
+            push_frame_save = PushFrameSave { amt: u32, regs: RegSet<XReg> };
+            /// Inverse of `push_frame_save`. Restores `regs` from the top of
+            /// the stack, then runs `stack_free32 amt`, then runs `pop_frame`.
+            pop_frame_save = PopFrameSave { amt: u32, regs: RegSet<XReg> };
+
             /// `sp = sp.checked_sub(amt)`
             stack_alloc32 = StackAlloc32 { amt: u32 };
 
