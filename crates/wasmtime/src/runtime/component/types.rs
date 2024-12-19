@@ -663,7 +663,8 @@ impl Type {
         }
     }
 
-    fn desc(&self) -> &'static str {
+    /// Return a string description of this type
+    pub fn desc(&self) -> &'static str {
         match self {
             Type::Bool => "bool",
             Type::S8 => "s8",
