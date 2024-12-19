@@ -4165,6 +4165,9 @@ dependencies = [
  "file-per-thread-logger",
  "humantime",
  "rayon",
+ "serde",
+ "serde_derive",
+ "toml",
  "tracing-subscriber",
  "wasmtime",
 ]
