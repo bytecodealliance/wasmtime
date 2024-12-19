@@ -5,6 +5,19 @@
 // selectively enabled here.
 #![warn(clippy::cast_sign_loss)]
 
+// Polyfill `std::simd::i8x16` until it's stable.
+#[cfg(target_arch = "x86_64")]
+#[allow(non_camel_case_types)]
+pub(crate) type i8x16 = core::arch::x86_64::__m128i;
+// On platforms other than x86_64, define i8x16 to a non-constructible type;
+// we need a type because we have a lot of macros for defining builtin
+// functions that are awkward to make conditional on the target, but it
+// doesn't need to actually be constructible unless we're on x86_64.
+#[cfg(not(target_arch = "x86_64"))]
+#[allow(non_camel_case_types)]
+#[derive(Copy, Clone)]
+pub(crate) struct i8x16(());
+
 use crate::prelude::*;
 use crate::store::StoreOpaque;
 use alloc::sync::Arc;

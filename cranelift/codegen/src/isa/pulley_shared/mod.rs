@@ -228,6 +228,11 @@ where
         false
     }
 
+    fn has_round(&self) -> bool {
+        // The pulley interpreter does have rounding opcodes.
+        true
+    }
+
     fn has_x86_blendv_lowering(&self, _ty: ir::Type) -> bool {
         false
     }

@@ -5,7 +5,7 @@ mod vm_host_func_context;
 
 pub use self::vm_host_func_context::VMArrayCallHostFuncContext;
 use crate::prelude::*;
-use crate::runtime::vm::{GcStore, InterpreterRef, VMGcRef, VmPtr, VmSafe};
+use crate::runtime::vm::{i8x16, GcStore, InterpreterRef, VMGcRef, VmPtr, VmSafe};
 use crate::store::StoreOpaque;
 use core::cell::UnsafeCell;
 use core::ffi::c_void;
@@ -932,9 +932,12 @@ macro_rules! define_builtin_array {
     ) => {
         /// An array that stores addresses of builtin functions. We translate code
         /// to use indirect calls. This way, we don't have to patch the code.
+        ///
+        /// Ignore improper ctypes to permit `__m128i` on x86_64.
         #[repr(C)]
         pub struct VMBuiltinFunctionsArray {
             $(
+                #[allow(improper_ctypes_definitions)]
                 $name: unsafe extern "C" fn(
                     $(define_builtin_array!(@ty $param)),*
                 ) $( -> define_builtin_array!(@ty $result))?,
@@ -969,7 +972,10 @@ macro_rules! define_builtin_array {
 
     (@ty u32) => (u32);
     (@ty u64) => (u64);
+    (@ty f32) => (f32);
+    (@ty f64) => (f64);
     (@ty u8) => (u8);
+    (@ty i8x16) => (i8x16);
     (@ty bool) => (bool);
     (@ty pointer) => (*mut u8);
     (@ty vmctx) => (NonNull<VMContext>);
