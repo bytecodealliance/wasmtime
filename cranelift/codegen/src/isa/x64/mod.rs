@@ -167,6 +167,10 @@ impl TargetIsa for X64Backend {
         self.x64_flags.use_fma()
     }
 
+    fn has_round(&self) -> bool {
+        self.x64_flags.use_sse41()
+    }
+
     fn has_x86_blendv_lowering(&self, ty: Type) -> bool {
         // The `blendvpd`, `blendvps`, and `pblendvb` instructions are all only
         // available from SSE 4.1 and onwards. Otherwise the i16x8 type has no
