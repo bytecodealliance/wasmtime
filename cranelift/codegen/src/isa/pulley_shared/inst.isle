@@ -389,18 +389,8 @@
 (rule 0 (imm $I64 x) (pulley_xconst64 (u64_as_i64 x)))
 
 ;; Base cases for floats.
-(rule 0 (imm $F32 c) (gen_bitcast (imm $I32 c) $I32 $F32))
-(rule 0 (imm $F64 c) (gen_bitcast (imm $I64 c) $I64 $F64))
-
-;;;; Bitcasts ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Bitcast from the first type, into the second type.
-(decl gen_bitcast (Reg Type Type) Reg)
-(rule (gen_bitcast r $F32 $I32) (pulley_bitcast_float_from_int_32 r))
-(rule (gen_bitcast r $F64 $I64) (pulley_bitcast_float_from_int_64 r))
-(rule (gen_bitcast r $I32 $F32) (pulley_bitcast_int_from_float_32 r))
-(rule (gen_bitcast r $I64 $F64) (pulley_bitcast_int_from_float_64 r))
-(rule -1 (gen_bitcast r ty ty) r)
+(rule 0 (imm $F32 (u64_as_u32 c)) (pulley_fconst32 c))
+(rule 0 (imm $F64 c) (pulley_fconst64 c))
 
 ;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
