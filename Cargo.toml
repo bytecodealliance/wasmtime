@@ -144,6 +144,7 @@ members = [
   "crates/bench-api",
   "crates/c-api/artifact",
   "crates/environ/fuzz",
+  "crates/misc/component-async-tests",
   "crates/test-programs",
   "crates/wasi-preview1-component-adapter",
   "crates/wasi-preview1-component-adapter/verify",
@@ -227,6 +228,7 @@ wasmtime-versioned-export-macros = { path = "crates/versioned-export-macros", ve
 wasmtime-slab = { path = "crates/slab", version = "=29.0.0" }
 component-test-util = { path = "crates/misc/component-test-util" }
 component-fuzz-util = { path = "crates/misc/component-fuzz-util" }
+component-async-tests = { path = "crates/misc/component-async-tests" }
 wiggle = { path = "crates/wiggle", version = "=29.0.0", default-features = false }
 wiggle-macro = { path = "crates/wiggle/macro", version = "=29.0.0" }
 wiggle-generate = { path = "crates/wiggle/generate", version = "=29.0.0" }
@@ -279,20 +281,22 @@ io-lifetimes = { version = "2.0.3", default-features = false }
 io-extras = "0.18.1"
 rustix = "0.38.31"
 # wit-bindgen:
-wit-bindgen = { version = "0.35.0", default-features = false }
-wit-bindgen-rust-macro = { version = "0.35.0", default-features = false }
+wit-bindgen = { git = "https://github.com/dicej/wit-bindgen", branch = "async-v1.221.2", default-features = false }
+wit-bindgen-rt = { git = "https://github.com/dicej/wit-bindgen", branch = "async-v1.221.2", default-features = false }
+wit-bindgen-rust-macro = { git = "https://github.com/dicej/wit-bindgen", branch = "async-v1.221.2", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.221.2", default-features = false, features = ['simd'] }
-wat = "1.221.2"
-wast = "221.0.2"
-wasmprinter = "0.221.2"
-wasm-encoder = "0.221.2"
-wasm-smith = "0.221.2"
-wasm-mutate = "0.221.2"
-wit-parser = "0.221.2"
-wit-component = "0.221.2"
-wasm-wave = "0.221.2"
+wasmparser = { git = "https://github.com/dicej/wasm-tools", branch = "async-v1.221.2", default-features = false, features = ['simd'] }
+wat = { git = "https://github.com/dicej/wasm-tools", branch = "async-v1.221.2" }
+wast = { git = "https://github.com/dicej/wasm-tools", branch = "async-v1.221.2" }
+wasmprinter = { git = "https://github.com/dicej/wasm-tools", branch = "async-v1.221.2" }
+wasm-encoder = { git = "https://github.com/dicej/wasm-tools", branch = "async-v1.221.2" }
+wasm-smith = { git = "https://github.com/dicej/wasm-tools", branch = "async-v1.221.2" }
+wasm-mutate = { git = "https://github.com/dicej/wasm-tools", branch = "async-v1.221.2" }
+wit-parser = { git = "https://github.com/dicej/wasm-tools", branch = "async-v1.221.2" }
+wit-component = { git = "https://github.com/dicej/wasm-tools", branch = "async-v1.221.2" }
+wasm-wave = { git = "https://github.com/dicej/wasm-tools", branch = "async-v1.221.2" }
+wasm-compose = { git = "https://github.com/dicej/wasm-tools", branch = "async-v1.221.2" }
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------

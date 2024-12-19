@@ -101,6 +101,8 @@
 #![allow(rustdoc::redundant_explicit_links)]
 
 mod component;
+#[cfg(feature = "component-model-async")]
+pub(crate) mod concurrent;
 mod func;
 mod instance;
 mod linker;
@@ -112,6 +114,11 @@ mod store;
 pub mod types;
 mod values;
 pub use self::component::{Component, ComponentExportIndex};
+#[cfg(feature = "component-model-async")]
+pub use self::concurrent::{
+    for_any, future, stream, ErrorContext, FutureReader, FutureWriter, Promise, PromisesUnordered,
+    StreamReader, StreamWriter,
+};
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };
@@ -668,3 +675,477 @@ pub mod bindgen_examples;
 #[cfg(not(any(docsrs, test, doctest)))]
 #[doc(hidden)]
 pub mod bindgen_examples {}
+
+#[cfg(not(feature = "component-model-async"))]
+pub(crate) mod concurrent {
+    use {
+        crate::{
+            component::{
+                func::{ComponentType, LiftContext, LowerContext},
+                Val,
+            },
+            vm::{VMFuncRef, VMMemoryDefinition, VMOpaqueContext},
+            AsContextMut, StoreContextMut, ValRaw,
+        },
+        alloc::{sync::Arc, task::Wake},
+        anyhow::Result,
+        core::{
+            future::Future,
+            marker::PhantomData,
+            mem::MaybeUninit,
+            pin::pin,
+            task::{Context, Poll, Waker},
+        },
+        wasmtime_environ::component::{
+            InterfaceType, RuntimeComponentInstanceIndex, TypeErrorContextTableIndex,
+            TypeFutureTableIndex, TypeStreamTableIndex, TypeTaskReturnIndex,
+        },
+    };
+
+    pub fn for_any<F, R, T>(fun: F) -> F
+    where
+        F: FnOnce(StoreContextMut<T>) -> R + 'static,
+        R: 'static,
+    {
+        fun
+    }
+
+    fn dummy_waker() -> Waker {
+        struct DummyWaker;
+
+        impl Wake for DummyWaker {
+            fn wake(self: Arc<Self>) {}
+        }
+
+        Arc::new(DummyWaker).into()
+    }
+
+    pub(crate) fn poll_and_block<'a, T, R: Send + Sync + 'static>(
+        mut store: StoreContextMut<'a, T>,
+        future: impl Future<Output = impl FnOnce(StoreContextMut<T>) -> Result<R> + 'static>
+            + Send
+            + Sync
+            + 'static,
+        _caller_instance: RuntimeComponentInstanceIndex,
+    ) -> Result<(R, StoreContextMut<'a, T>)> {
+        match pin!(future).poll(&mut Context::from_waker(&dummy_waker())) {
+            Poll::Ready(fun) => {
+                let result = fun(store.as_context_mut())?;
+                Ok((result, store))
+            }
+            Poll::Pending => {
+                unreachable!()
+            }
+        }
+    }
+
+    pub(crate) extern "C" fn task_backpressure<T>(
+        _cx: *mut VMOpaqueContext,
+        _caller_instance: RuntimeComponentInstanceIndex,
+        _enabled: u32,
+    ) -> bool {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn task_return<T>(
+        _cx: *mut VMOpaqueContext,
+        _ty: TypeTaskReturnIndex,
+        _storage: *mut MaybeUninit<ValRaw>,
+        _storage_len: usize,
+    ) -> bool {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn task_wait<T>(
+        _cx: *mut VMOpaqueContext,
+        _caller_instance: RuntimeComponentInstanceIndex,
+        _async_: bool,
+        _memory: *mut VMMemoryDefinition,
+        _payload: u32,
+    ) -> u64 {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn task_poll<T>(
+        _cx: *mut VMOpaqueContext,
+        _caller_instance: RuntimeComponentInstanceIndex,
+        _async_: bool,
+        _memory: *mut VMMemoryDefinition,
+        _payload: u32,
+    ) -> u64 {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn task_yield<T>(_cx: *mut VMOpaqueContext, _async_: bool) -> bool {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn subtask_drop<T>(
+        _cx: *mut VMOpaqueContext,
+        _caller_instance: RuntimeComponentInstanceIndex,
+        _task_id: u32,
+    ) -> bool {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn async_enter<T>(
+        _cx: *mut VMOpaqueContext,
+        _start: *mut VMFuncRef,
+        _return_: *mut VMFuncRef,
+        _caller_instance: RuntimeComponentInstanceIndex,
+        _task_return_type: TypeTaskReturnIndex,
+        _params: u32,
+        _results: u32,
+    ) -> bool {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn async_exit<T>(
+        _cx: *mut VMOpaqueContext,
+        _callback: *mut VMFuncRef,
+        _caller_instance: RuntimeComponentInstanceIndex,
+        _callee: *mut VMFuncRef,
+        _callee_instance: RuntimeComponentInstanceIndex,
+        _param_count: u32,
+        _result_count: u32,
+        _flags: u32,
+    ) -> u64 {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn future_new<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _ty: TypeFutureTableIndex,
+    ) -> u64 {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn future_write<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _memory: *mut VMMemoryDefinition,
+        _realloc: *mut VMFuncRef,
+        _string_encoding: u8,
+        _ty: TypeFutureTableIndex,
+        _future: u32,
+        _address: u32,
+    ) -> u64 {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn future_read<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _memory: *mut VMMemoryDefinition,
+        _realloc: *mut VMFuncRef,
+        _string_encoding: u8,
+        _ty: TypeFutureTableIndex,
+        _future: u32,
+        _address: u32,
+    ) -> u64 {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn future_cancel_write<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _ty: TypeFutureTableIndex,
+        _async_: bool,
+        _writer: u32,
+    ) -> u64 {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn future_cancel_read<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _ty: TypeFutureTableIndex,
+        _async_: bool,
+        _reader: u32,
+    ) -> u64 {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn future_close_writable<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _ty: TypeFutureTableIndex,
+        _writer: u32,
+        _error: u32,
+    ) -> bool {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn future_close_readable<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _ty: TypeFutureTableIndex,
+        _reader: u32,
+    ) -> bool {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn stream_new<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _ty: TypeStreamTableIndex,
+    ) -> u64 {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn stream_write<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _memory: *mut VMMemoryDefinition,
+        _realloc: *mut VMFuncRef,
+        _string_encoding: u8,
+        _ty: TypeStreamTableIndex,
+        _stream: u32,
+        _address: u32,
+        _count: u32,
+    ) -> u64 {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn stream_read<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _memory: *mut VMMemoryDefinition,
+        _realloc: *mut VMFuncRef,
+        _string_encoding: u8,
+        _ty: TypeStreamTableIndex,
+        _stream: u32,
+        _address: u32,
+        _count: u32,
+    ) -> u64 {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn stream_cancel_write<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _ty: TypeStreamTableIndex,
+        _async_: bool,
+        _writer: u32,
+    ) -> u64 {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn stream_cancel_read<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _ty: TypeStreamTableIndex,
+        _async_: bool,
+        _reader: u32,
+    ) -> u64 {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn stream_close_writable<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _ty: TypeStreamTableIndex,
+        _writer: u32,
+        _error: u32,
+    ) -> bool {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn stream_close_readable<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _ty: TypeStreamTableIndex,
+        _reader: u32,
+    ) -> bool {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn flat_stream_write<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _memory: *mut VMMemoryDefinition,
+        _realloc: *mut VMFuncRef,
+        _ty: TypeStreamTableIndex,
+        _payload_size: u32,
+        _payload_align: u32,
+        _stream: u32,
+        _address: u32,
+        _count: u32,
+    ) -> u64 {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn flat_stream_read<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _memory: *mut VMMemoryDefinition,
+        _realloc: *mut VMFuncRef,
+        _ty: TypeStreamTableIndex,
+        _payload_size: u32,
+        _payload_align: u32,
+        _stream: u32,
+        _address: u32,
+        _count: u32,
+    ) -> u64 {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn error_context_new<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _memory: *mut VMMemoryDefinition,
+        _realloc: *mut VMFuncRef,
+        _string_encoding: u8,
+        _ty: TypeErrorContextTableIndex,
+        _address: u32,
+        _count: u32,
+    ) -> u64 {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn error_context_debug_message<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _memory: *mut VMMemoryDefinition,
+        _realloc: *mut VMFuncRef,
+        _string_encoding: u8,
+        _ty: TypeErrorContextTableIndex,
+        _handle: u32,
+        _address: u32,
+    ) -> bool {
+        unreachable!()
+    }
+
+    pub(crate) extern "C" fn error_context_drop<T>(
+        _vmctx: *mut VMOpaqueContext,
+        _ty: TypeErrorContextTableIndex,
+        _error: u32,
+    ) -> bool {
+        unreachable!()
+    }
+
+    pub struct ErrorContext;
+
+    impl ErrorContext {
+        pub(crate) fn new(_rep: u32) -> Self {
+            unreachable!()
+        }
+
+        pub(crate) fn into_val(self) -> Val {
+            unreachable!()
+        }
+
+        pub(crate) fn lower<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _dst: &mut MaybeUninit<<u32 as ComponentType>::Lower>,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn store<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _offset: usize,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn lift(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _src: &<u32 as ComponentType>::Lower,
+        ) -> Result<Self> {
+            unreachable!()
+        }
+
+        pub(crate) fn load(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _bytes: &[u8],
+        ) -> Result<Self> {
+            unreachable!()
+        }
+    }
+
+    pub struct StreamReader<P> {
+        _phantom: PhantomData<P>,
+    }
+
+    impl<P> StreamReader<P> {
+        pub(crate) fn new(_rep: u32) -> Self {
+            unreachable!()
+        }
+
+        pub(crate) fn into_val(self) -> Val {
+            unreachable!()
+        }
+
+        pub(crate) fn lower<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _dst: &mut MaybeUninit<<u32 as ComponentType>::Lower>,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn store<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _offset: usize,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn lift(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _src: &<u32 as ComponentType>::Lower,
+        ) -> Result<Self> {
+            unreachable!()
+        }
+
+        pub(crate) fn load(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _bytes: &[u8],
+        ) -> Result<Self> {
+            unreachable!()
+        }
+    }
+
+    pub struct FutureReader<P> {
+        _phantom: PhantomData<P>,
+    }
+
+    impl<P> FutureReader<P> {
+        pub(crate) fn new(_rep: u32) -> Self {
+            unreachable!()
+        }
+
+        pub(crate) fn into_val(self) -> Val {
+            unreachable!()
+        }
+
+        pub(crate) fn lower<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _dst: &mut MaybeUninit<<u32 as ComponentType>::Lower>,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn store<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _offset: usize,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn lift(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _src: &<u32 as ComponentType>::Lower,
+        ) -> Result<Self> {
+            unreachable!()
+        }
+
+        pub(crate) fn load(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _bytes: &[u8],
+        ) -> Result<Self> {
+            unreachable!()
+        }
+    }
+}

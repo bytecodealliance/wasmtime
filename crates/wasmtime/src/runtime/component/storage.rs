@@ -37,7 +37,32 @@ pub unsafe fn slice_to_storage_mut<T>(slice: &mut [MaybeUninit<ValRaw>]) -> &mut
     // stay within the bounds of the number of actual values given rather than
     // reading past the end of an array. This shouldn't actually trip unless
     // there's a bug in Wasmtime though.
-    assert!(mem::size_of_val(slice) >= mem::size_of::<T>());
+    assert!(
+        mem::size_of_val(slice) >= mem::size_of::<T>(),
+        "needed {}; got {}",
+        mem::size_of::<T>(),
+        mem::size_of_val(slice)
+    );
 
     &mut *slice.as_mut_ptr().cast()
+}
+
+/// Same as `storage_as_slice`, but in reverse
+#[cfg(feature = "component-model-async")]
+pub unsafe fn slice_to_storage<T>(slice: &[ValRaw]) -> &T {
+    assert_raw_slice_compat::<T>();
+
+    // This is an actual runtime assertion which if performance calls for we may
+    // need to relax to a debug assertion. This notably tries to ensure that we
+    // stay within the bounds of the number of actual values given rather than
+    // reading past the end of an array. This shouldn't actually trip unless
+    // there's a bug in Wasmtime though.
+    assert!(
+        mem::size_of_val(slice) >= mem::size_of::<T>(),
+        "needed {}; got {}",
+        mem::size_of::<T>(),
+        mem::size_of_val(slice)
+    );
+
+    &*slice.as_ptr().cast()
 }

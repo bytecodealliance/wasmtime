@@ -88,7 +88,10 @@ pub enum Trap {
     /// would have violated the reentrance rules of the component model,
     /// triggering a trap instead.
     CannotEnterComponent,
-    // if adding a variant here be sure to update the `check!` macro below
+
+    /// Async-lifted export failed to produce a result by calling `task.return`
+    /// before returning `STATUS_DONE` and/or after all host tasks completed.
+    NoAsyncResult, // if adding a variant here be sure to update the `check!` macro below
 }
 
 impl Trap {
@@ -124,6 +127,7 @@ impl Trap {
             AllocationTooLarge
             CastFailure
             CannotEnterComponent
+            NoAsyncResult
         }
 
         None
@@ -154,6 +158,7 @@ impl fmt::Display for Trap {
             AllocationTooLarge => "allocation size too large",
             CastFailure => "cast failure",
             CannotEnterComponent => "cannot enter component instance",
+            NoAsyncResult => "async-lifted export failed to produce a result",
         };
         write!(f, "wasm trap: {desc}")
     }
