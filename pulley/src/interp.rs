@@ -1828,7 +1828,7 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
-    fn pop_frame_save(&mut self, amt: u32, regs: RegSet<XReg>) -> ControlFlow<Done> {
+    fn pop_frame_restore(&mut self, amt: u32, regs: RegSet<XReg>) -> ControlFlow<Done> {
         // Restore all registers in `regs`, followed by the normal `pop_frame`
         // opcode below to restore fp/lr.
         unsafe {

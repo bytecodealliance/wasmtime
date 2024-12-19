@@ -386,7 +386,7 @@ where
                 frame_size,
                 saved_by_pulley,
             } => insts.push(
-                RawInst::PopFrameSave {
+                RawInst::PopFrameRestore {
                     amt: *frame_size,
                     regs: pulley_interpreter::RegSet::from_bitset(*saved_by_pulley),
                 }

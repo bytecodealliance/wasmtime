@@ -129,8 +129,7 @@ block0:
 }
 
 ; VCode:
-;   push_frame
-;   stack_alloc32 48
+;   push_frame_save 48, {}
 ; block0:
 ;   xconst8 x15, 0
 ;   xstore64 OutgoingArg(0), x15 // flags =  notrap aligned
@@ -155,13 +154,11 @@ block0:
 ;   xmov x13, x15
 ;   xmov x14, x15
 ;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }, CallArgPair { vreg: p1i, preg: p1i }, CallArgPair { vreg: p2i, preg: p2i }, CallArgPair { vreg: p3i, preg: p3i }, CallArgPair { vreg: p4i, preg: p4i }, CallArgPair { vreg: p5i, preg: p5i }, CallArgPair { vreg: p6i, preg: p6i }, CallArgPair { vreg: p7i, preg: p7i }, CallArgPair { vreg: p8i, preg: p8i }, CallArgPair { vreg: p9i, preg: p9i }, CallArgPair { vreg: p10i, preg: p10i }, CallArgPair { vreg: p11i, preg: p11i }, CallArgPair { vreg: p12i, preg: p12i }, CallArgPair { vreg: p13i, preg: p13i }, CallArgPair { vreg: p14i, preg: p14i }, CallArgPair { vreg: p15i, preg: p15i }], defs: [], clobbers: PRegSet { bits: [65535, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
-;   stack_free32 48
-;   pop_frame
+;   pop_frame_restore 48, {}
 ;   ret
 ;
 ; Disassembled:
-; push_frame
-; stack_alloc32 48
+; push_frame_save 48, 
 ; xconst8 x15, 0
 ; xstore64le_offset8 sp, 0, x15
 ; xstore64le_offset8 sp, 8, x15
@@ -184,9 +181,8 @@ block0:
 ; xmov x12, x15
 ; xmov x13, x15
 ; xmov x14, x15
-; call 0x0    // target = 0x4e
-; stack_free32 48
-; pop_frame
+; call 0x0    // target = 0x51
+; pop_frame_restore 48, 
 ; ret
 
 function %colocated_stack_rets() -> i64 {
@@ -226,15 +222,7 @@ block0:
 }
 
 ; VCode:
-;   push_frame
-;   stack_alloc32 112
-;   xstore64 sp+104, x17 // flags =  notrap aligned
-;   xstore64 sp+96, x18 // flags =  notrap aligned
-;   xstore64 sp+88, x20 // flags =  notrap aligned
-;   xstore64 sp+80, x21 // flags =  notrap aligned
-;   xstore64 sp+72, x22 // flags =  notrap aligned
-;   xstore64 sp+64, x23 // flags =  notrap aligned
-;   xstore64 sp+56, x29 // flags =  notrap aligned
+;   push_frame_save 112, {x17, x18, x20, x21, x22, x23, x29}
 ; block0:
 ;   x0 = load_addr OutgoingArg(0)
 ;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }, CallRetPair { vreg: Writable { reg: p1i }, preg: p1i }, CallRetPair { vreg: Writable { reg: p2i }, preg: p2i }, CallRetPair { vreg: Writable { reg: p3i }, preg: p3i }, CallRetPair { vreg: Writable { reg: p4i }, preg: p4i }, CallRetPair { vreg: Writable { reg: p5i }, preg: p5i }, CallRetPair { vreg: Writable { reg: p6i }, preg: p6i }, CallRetPair { vreg: Writable { reg: p7i }, preg: p7i }, CallRetPair { vreg: Writable { reg: p8i }, preg: p8i }, CallRetPair { vreg: Writable { reg: p9i }, preg: p9i }, CallRetPair { vreg: Writable { reg: p10i }, preg: p10i }, CallRetPair { vreg: Writable { reg: p11i }, preg: p11i }, CallRetPair { vreg: Writable { reg: p12i }, preg: p12i }, CallRetPair { vreg: Writable { reg: p13i }, preg: p13i }, CallRetPair { vreg: Writable { reg: p14i }, preg: p14i }, CallRetPair { vreg: Writable { reg: p15i }, preg: p15i }], clobbers: PRegSet { bits: [0, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
@@ -270,29 +258,13 @@ block0:
 ;   xadd64 x14, x0, x14
 ;   xadd64 x13, x13, x13
 ;   xadd64 x0, x14, x13
-;   x17 = xload64 sp+104 // flags = notrap aligned
-;   x18 = xload64 sp+96 // flags = notrap aligned
-;   x20 = xload64 sp+88 // flags = notrap aligned
-;   x21 = xload64 sp+80 // flags = notrap aligned
-;   x22 = xload64 sp+72 // flags = notrap aligned
-;   x23 = xload64 sp+64 // flags = notrap aligned
-;   x29 = xload64 sp+56 // flags = notrap aligned
-;   stack_free32 112
-;   pop_frame
+;   pop_frame_restore 112, {x17, x18, x20, x21, x22, x23, x29}
 ;   ret
 ;
 ; Disassembled:
-; push_frame
-; stack_alloc32 112
-; xstore64le_offset8 sp, 104, x17
-; xstore64le_offset8 sp, 96, x18
-; xstore64le_offset8 sp, 88, x20
-; xstore64le_offset8 sp, 80, x21
-; xstore64le_offset8 sp, 72, x22
-; xstore64le_offset8 sp, 64, x23
-; xstore64le_offset8 sp, 56, x29
+; push_frame_save 112, x17, x18, x20, x21, x22, x23, x29
 ; xmov x0, sp
-; call 0x0    // target = 0x25
+; call 0x0    // target = 0xc
 ; xmov x20, x13
 ; xmov x22, x11
 ; xload64le_offset8 x29, sp, 0
@@ -325,15 +297,7 @@ block0:
 ; xadd64 x14, x0, x14
 ; xadd64 x13, x13, x13
 ; xadd64 x0, x14, x13
-; xload64le_offset8 x17, sp, 104
-; xload64le_offset8 x18, sp, 96
-; xload64le_offset8 x20, sp, 88
-; xload64le_offset8 x21, sp, 80
-; xload64le_offset8 x22, sp, 72
-; xload64le_offset8 x23, sp, 64
-; xload64le_offset8 x29, sp, 56
-; stack_free32 112
-; pop_frame
+; pop_frame_restore 112, x17, x18, x20, x21, x22, x23, x29
 ; ret
 
 function %call_indirect(i32) -> i64 {

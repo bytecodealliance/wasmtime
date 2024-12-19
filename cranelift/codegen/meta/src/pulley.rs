@@ -187,11 +187,12 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
         let mut defs = Vec::new();
         for op in inst.operands() {
             match op {
-                // `{Push,Pop}FrameSave` doesn't participate in register allocation.
+                // `{Push,Pop}Frame{Save,Restore}` doesn't participate in
+                // register allocation.
                 Operand::Normal {
                     name: _,
                     ty: "XRegSet",
-                } if *name == "PushFrameSave" || *name == "PopFrameSave" => {}
+                } if *name == "PushFrameSave" || *name == "PopFrameRestore" => {}
 
                 Operand::Normal { name, ty } => {
                     if ty.contains("Reg") {

@@ -9,19 +9,15 @@ block0():
 }
 
 ; VCode:
-;   push_frame
-;   stack_alloc32 16
+;   push_frame_save 16, {}
 ; block0:
 ;   x0 = load_addr Slot(0)
-;   stack_free32 16
-;   pop_frame
+;   pop_frame_restore 16, {}
 ;   ret
 ;
 ; Disassembled:
-; push_frame
-; stack_alloc32 16
+; push_frame_save 16, 
 ; xmov x0, sp
-; stack_free32 16
-; pop_frame
+; pop_frame_restore 16, 
 ; ret
 
