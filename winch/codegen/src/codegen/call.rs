@@ -157,7 +157,6 @@ impl FnCall {
                 CalleeKind::direct(env.name_builtin(idx)),
                 ContextArgs::pinned_vmctx(),
             ),
-            BuiltinType::LibCall(c) => (CalleeKind::libcall(c), ContextArgs::none()),
         }
     }
 
