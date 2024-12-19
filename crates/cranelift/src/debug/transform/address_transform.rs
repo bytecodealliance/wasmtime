@@ -784,6 +784,10 @@ mod tests {
 
     #[test]
     fn test_addr_translate() {
+        // Ignore this test if cranelift doesn't support the native platform.
+        if cranelift_native::builder().is_err() {
+            return;
+        }
         let func = CompiledFunctionMetadata {
             address_map: create_simple_func(11),
             ..Default::default()
