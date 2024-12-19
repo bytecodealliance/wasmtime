@@ -73,6 +73,7 @@ humantime = { workspace = true }
 tempfile = { workspace = true, optional = true }
 
 async-trait = { workspace = true }
+trait-variant = { workspace = true }
 bytes = { workspace = true }
 cfg-if = { workspace = true }
 tokio = { workspace = true, optional = true, features = [ "signal", "macros" ] }
@@ -96,6 +97,7 @@ criterion = { workspace = true }
 num_cpus = "1.13.0"
 memchr = "2.4"
 async-trait = { workspace = true }
+trait-variant = { workspace = true }
 wat = { workspace = true }
 rayon = "1.5.0"
 wasmtime-wast = { workspace = true, features = ['component-model'] }
@@ -313,6 +315,7 @@ tracing = "0.1.26"
 bitflags = "2.0"
 thiserror = "1.0.43"
 async-trait = "0.1.71"
+trait-variant = "0.1.2"
 heck = "0.5"
 similar = "2.1.0"
 toml = "0.8.10"

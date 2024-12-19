@@ -145,9 +145,9 @@ pub mod __internal {
     pub use alloc::string::String;
     pub use alloc::vec::Vec;
     pub use anyhow;
-    #[cfg(feature = "async")]
-    pub use async_trait::async_trait;
     pub use core::mem::transmute;
+    #[cfg(feature = "async")]
+    pub use trait_variant::make as trait_variant_make;
     pub use wasmtime_environ;
     pub use wasmtime_environ::component::{CanonicalAbiInfo, ComponentTypes, InterfaceType};
 }
@@ -258,7 +258,7 @@ pub(crate) use self::store::ComponentStoreData;
 ///     // This option defaults to `false`.
 ///     verbose_tracing: false,
 ///
-///     // Imports will be async functions through #[async_trait] and exports
+///     // Imports will be async functions and exports
 ///     // are also invoked as async functions. Requires `Config::async_support`
 ///     // to be `true`.
 ///     //

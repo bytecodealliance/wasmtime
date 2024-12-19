@@ -24,7 +24,6 @@ const MAX_UDP_DATAGRAM_SIZE: usize = u16::MAX as usize;
 
 impl<T> udp::Host for WasiImpl<T> where T: WasiView {}
 
-#[async_trait::async_trait]
 impl<T> udp::HostUdpSocket for WasiImpl<T>
 where
     T: WasiView,
@@ -398,7 +397,6 @@ impl Subscribe for IncomingDatagramStream {
     }
 }
 
-#[async_trait::async_trait]
 impl<T> udp::HostOutgoingDatagramStream for WasiImpl<T>
 where
     T: WasiView,

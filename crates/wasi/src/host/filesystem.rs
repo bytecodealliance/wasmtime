@@ -32,7 +32,6 @@ where
     }
 }
 
-#[async_trait::async_trait]
 impl<T> types::Host for WasiImpl<T>
 where
     T: WasiView,
@@ -57,7 +56,6 @@ where
     }
 }
 
-#[async_trait::async_trait]
 impl<T> HostDescriptor for WasiImpl<T>
 where
     T: WasiView,
@@ -854,7 +852,6 @@ where
     }
 }
 
-#[async_trait::async_trait]
 impl<T> HostDirectoryEntryStream for WasiImpl<T>
 where
     T: WasiView,

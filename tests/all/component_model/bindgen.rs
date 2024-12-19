@@ -338,7 +338,6 @@ mod async_config {
 
     struct T;
 
-    #[async_trait::async_trait]
     impl T1Imports for T {
         async fn x(&mut self) {}
 
@@ -364,7 +363,6 @@ mod async_config {
         },
     });
 
-    #[async_trait::async_trait]
     impl T2Imports for T {
         fn x(&mut self) {}
 
@@ -390,7 +388,6 @@ mod async_config {
         },
     });
 
-    #[async_trait::async_trait]
     impl T3Imports for T {
         async fn x(&mut self) {}
 

@@ -52,6 +52,7 @@ once_cell = { version = "1.12.0", optional = true }
 rayon = { version = "1.0", optional = true }
 object = { workspace = true }
 async-trait = { workspace = true, optional = true }
+trait-variant = { workspace = true, optional = true }
 encoding_rs = { version = "0.8.31", optional = true }
 bumpalo = "3.11.0"
 fxprof-processed-profile = { version = "0.6.0", optional = true }
@@ -183,6 +184,7 @@ cache = ["dep:wasmtime-cache", "std"]
 async = [
   "dep:wasmtime-fiber",
   "dep:async-trait",
+  "dep:trait-variant",
   "wasmtime-component-macro?/async",
   "runtime",
 ]

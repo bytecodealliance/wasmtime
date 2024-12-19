@@ -32,6 +32,7 @@ io-lifetimes = { workspace = true }
 fs-set-times = { workspace = true }
 bitflags = { workspace = true }
 async-trait = { workspace = true }
+trait-variant = {workspace = true}
 system-interface = { workspace = true}
 futures = { workspace = true }
 url = { workspace = true }
