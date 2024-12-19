@@ -110,8 +110,7 @@ block2:
 
 ; VCode:
 ; block0:
-;   xconst8 x4, 0
-;   br_if_xneq64 x0, x4, label2; jump label1
+;   br_if_xneq64_i32 x0, 0, label2; jump label1
 ; block1:
 ;   xconst8 x0, 0
 ;   ret
@@ -120,8 +119,7 @@ block2:
 ;   ret
 ;
 ; Disassembled:
-; xconst8 x4, 0
-; br_if_xneq64 x0, x4, 0xb    // target = 0xe
+; br_if_xneq64_i8 x0, 0, 0xb    // target = 0xb
 ; xconst8 x0, 0
 ; ret
 ; xconst8 x0, 1
