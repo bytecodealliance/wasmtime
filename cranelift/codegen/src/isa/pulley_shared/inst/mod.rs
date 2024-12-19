@@ -151,7 +151,29 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             collector.reg_def(dst);
         }
 
-        Inst::Call { info } | Inst::IndirectCallHost { info } => {
+        Inst::Call { info } => {
+            let CallInfo {
+                uses, defs, dest, ..
+            } = &mut **info;
+
+            // Pulley supports having the first few integer arguments in any
+            // register, so flag that with `reg_use` here.
+            let PulleyCall { args, .. } = dest;
+            for arg in args {
+                collector.reg_use(arg);
+            }
+
+            // Remaining arguments (and return values) are all in fixed
+            // registers according to Pulley's ABI, however.
+            for CallArgPair { vreg, preg } in uses {
+                collector.reg_fixed_use(vreg, *preg);
+            }
+            for CallRetPair { vreg, preg } in defs {
+                collector.reg_fixed_def(vreg, *preg);
+            }
+            collector.reg_clobbers(info.clobbers);
+        }
+        Inst::IndirectCallHost { info } => {
             let CallInfo { uses, defs, .. } = &mut **info;
             for CallArgPair { vreg, preg } in uses {
                 collector.reg_fixed_use(vreg, *preg);

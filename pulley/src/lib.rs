@@ -92,7 +92,23 @@ macro_rules! for_each_op {
 
             /// Transfer control to the PC at the given offset and set the `lr`
             /// register to the PC just after this instruction.
+            ///
+            /// This instruction generally assumes that the Pulley ABI is being
+            /// respected where arguments are in argument registers (starting at
+            /// x0 for integer arguments) and results are in result registers.
+            /// This instruction itself assume that all arguments are already in
+            /// their registers. Subsequent instructions below enable moving
+            /// arguments into the correct registers as part of the same call
+            /// instruction.
             call = Call { offset: PcRelOffset };
+            /// Like `call`, but also `x0 = arg1`
+            call1 = Call1 { arg1: XReg, offset: PcRelOffset };
+            /// Like `call`, but also `x0, x1 = arg1, arg2`
+            call2 = Call2 { arg1: XReg, arg2: XReg, offset: PcRelOffset };
+            /// Like `call`, but also `x0, x1, x2 = arg1, arg2, arg3`
+            call3 = Call3 { arg1: XReg, arg2: XReg, arg3: XReg, offset: PcRelOffset };
+            /// Like `call`, but also `x0, x1, x2, x3 = arg1, arg2, arg3, arg4`
+            call4 = Call4 { arg1: XReg, arg2: XReg, arg3: XReg, arg4: XReg, offset: PcRelOffset };
 
             /// Transfer control to the PC in `reg` and set `lr` to the PC just
             /// after this instruction.

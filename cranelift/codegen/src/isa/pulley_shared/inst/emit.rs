@@ -172,16 +172,36 @@ fn pulley_emit<P>(
         Inst::LoadExtName { .. } => todo!(),
 
         Inst::Call { info } => {
-            sink.put1(pulley_interpreter::Opcode::Call as u8);
-            sink.add_reloc(
+            let offset = sink.cur_offset();
+
+            // If arguments happen to already be in the right register for the
+            // ABI then remove them from this list. Otherwise emit the
+            // appropriate `Call` instruction depending on how many arguments we
+            // have that aren't already in their correct register according to
+            // ABI conventions.
+            let mut args = &info.dest.args[..];
+            while !args.is_empty() && args.last().copied() == XReg::new(x_reg(args.len() - 1)) {
+                args = &args[..args.len() - 1];
+            }
+            match args {
+                [] => enc::call(sink, 0),
+                [x0] => enc::call1(sink, x0, 0),
+                [x0, x1] => enc::call2(sink, x0, x1, 0),
+                [x0, x1, x2] => enc::call3(sink, x0, x1, x2, 0),
+                [x0, x1, x2, x3] => enc::call4(sink, x0, x1, x2, x3, 0),
+                _ => unreachable!(),
+            }
+            let end = sink.cur_offset();
+            sink.add_reloc_at_offset(
+                end - 4,
                 // TODO: is it actually okay to reuse this reloc here?
                 Reloc::X86CallPCRel4,
-                &info.dest,
+                &info.dest.name,
                 // This addend adjusts for the difference between the start of
-                // the instruction and the beginning of the immediate field.
-                -1,
+                // the instruction and the beginning of the immediate offset
+                // field which is always the final 4 bytes of the instruction.
+                -i64::from(end - offset - 4),
             );
-            sink.put4(0);
             if let Some(s) = state.take_stack_map() {
                 let offset = sink.cur_offset();
                 sink.push_user_stack_map(state, offset, s);

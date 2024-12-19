@@ -10,7 +10,8 @@ use crate::ir::{condcodes::*, immediates::*, types::*, *};
 use crate::isa::pulley_shared::{
     abi::*,
     inst::{
-        FReg, OperandSize, ReturnCallInfo, VReg, WritableFReg, WritableVReg, WritableXReg, XReg,
+        FReg, OperandSize, PulleyCall, ReturnCallInfo, VReg, WritableFReg, WritableVReg,
+        WritableXReg, XReg,
     },
     lower::{regs, Cond},
     *,
@@ -26,8 +27,9 @@ use regalloc2::PReg;
 type Unit = ();
 type VecArgPair = Vec<ArgPair>;
 type VecRetPair = Vec<RetPair>;
-type BoxCallInfo = Box<CallInfo<ExternalName>>;
+type BoxCallInfo = Box<CallInfo<PulleyCall>>;
 type BoxCallIndInfo = Box<CallInfo<XReg>>;
+type BoxCallIndirectHostInfo = Box<CallInfo<ExternalName>>;
 type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
 type BoxReturnCallIndInfo = Box<ReturnCallInfo<XReg>>;
 type BoxExternalName = Box<ExternalName>;

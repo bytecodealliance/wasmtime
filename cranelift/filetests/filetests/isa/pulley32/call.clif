@@ -15,16 +15,16 @@ block0:
 ; VCode:
 ;   push_frame
 ; block0:
-;   xconst8 x0, 0
-;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }], clobbers: PRegSet { bits: [65534, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   xconst8 x2, 0
+;   call CallInfo { dest: PulleyCall { name: TestCase(%g), args: [XReg(p2i)] }, uses: [], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }], clobbers: PRegSet { bits: [65534, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
 ;   xconst8 x0, 1
 ;   pop_frame
 ;   ret
 ;
 ; Disassembled:
 ; push_frame
-; xconst8 x0, 0
-; call 0x0    // target = 0x4
+; xconst8 x2, 0
+; call1 x2, 0x0    // target = 0x4
 ; xconst8 x0, 1
 ; pop_frame
 ; ret
@@ -42,16 +42,16 @@ block0:
 ; VCode:
 ;   push_frame
 ; block0:
-;   xconst8 x0, 0
-;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }], clobbers: PRegSet { bits: [65534, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   xconst8 x2, 0
+;   call CallInfo { dest: PulleyCall { name: TestCase(%g), args: [XReg(p2i)] }, uses: [], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }], clobbers: PRegSet { bits: [65534, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
 ;   xconst8 x0, 1
 ;   pop_frame
 ;   ret
 ;
 ; Disassembled:
 ; push_frame
-; xconst8 x0, 0
-; call 0x0    // target = 0x4
+; xconst8 x2, 0
+; call1 x2, 0x0    // target = 0x4
 ; xconst8 x0, 1
 ; pop_frame
 ; ret
@@ -71,21 +71,21 @@ block0:
 ; VCode:
 ;   push_frame
 ; block0:
-;   xconst8 x0, 0
-;   xconst8 x1, 1
-;   xconst8 x2, 2
-;   xconst8 x3, 3
-;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }, CallArgPair { vreg: p1i, preg: p1i }, CallArgPair { vreg: p2i, preg: p2i }, CallArgPair { vreg: p3i, preg: p3i }], defs: [], clobbers: PRegSet { bits: [65535, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   xconst8 x3, 0
+;   xconst8 x4, 1
+;   xconst8 x5, 2
+;   xconst8 x6, 3
+;   call CallInfo { dest: PulleyCall { name: TestCase(%g), args: [XReg(p3i), XReg(p4i), XReg(p5i), XReg(p6i)] }, uses: [], defs: [], clobbers: PRegSet { bits: [65535, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
 ;   pop_frame
 ;   ret
 ;
 ; Disassembled:
 ; push_frame
-; xconst8 x0, 0
-; xconst8 x1, 1
-; xconst8 x2, 2
-; xconst8 x3, 3
-; call 0x0    // target = 0xd
+; xconst8 x3, 0
+; xconst8 x4, 1
+; xconst8 x5, 2
+; xconst8 x6, 3
+; call4 x3, x4, x5, x6, 0x0    // target = 0xd
 ; pop_frame
 ; ret
 
@@ -103,7 +103,7 @@ block0:
 ; VCode:
 ;   push_frame
 ; block0:
-;   call CallInfo { dest: TestCase(%g), uses: [], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }, CallRetPair { vreg: Writable { reg: p1i }, preg: p1i }, CallRetPair { vreg: Writable { reg: p2i }, preg: p2i }, CallRetPair { vreg: Writable { reg: p3i }, preg: p3i }], clobbers: PRegSet { bits: [65520, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   call CallInfo { dest: PulleyCall { name: TestCase(%g), args: [] }, uses: [], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }, CallRetPair { vreg: Writable { reg: p1i }, preg: p1i }, CallRetPair { vreg: Writable { reg: p2i }, preg: p2i }, CallRetPair { vreg: Writable { reg: p3i }, preg: p3i }], clobbers: PRegSet { bits: [65520, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
 ;   xadd64 x4, x0, x2
 ;   xadd64 x3, x1, x3
 ;   xadd64 x0, x4, x3
@@ -138,10 +138,6 @@ block0:
 ;   xstore64 OutgoingArg(24), x15 // flags =  notrap aligned
 ;   xstore64 OutgoingArg(32), x15 // flags =  notrap aligned
 ;   xstore64 OutgoingArg(40), x15 // flags =  notrap aligned
-;   xmov x0, x15
-;   xmov x1, x15
-;   xmov x2, x15
-;   xmov x3, x15
 ;   xmov x4, x15
 ;   xmov x5, x15
 ;   xmov x6, x15
@@ -153,7 +149,7 @@ block0:
 ;   xmov x12, x15
 ;   xmov x13, x15
 ;   xmov x14, x15
-;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }, CallArgPair { vreg: p1i, preg: p1i }, CallArgPair { vreg: p2i, preg: p2i }, CallArgPair { vreg: p3i, preg: p3i }, CallArgPair { vreg: p4i, preg: p4i }, CallArgPair { vreg: p5i, preg: p5i }, CallArgPair { vreg: p6i, preg: p6i }, CallArgPair { vreg: p7i, preg: p7i }, CallArgPair { vreg: p8i, preg: p8i }, CallArgPair { vreg: p9i, preg: p9i }, CallArgPair { vreg: p10i, preg: p10i }, CallArgPair { vreg: p11i, preg: p11i }, CallArgPair { vreg: p12i, preg: p12i }, CallArgPair { vreg: p13i, preg: p13i }, CallArgPair { vreg: p14i, preg: p14i }, CallArgPair { vreg: p15i, preg: p15i }], defs: [], clobbers: PRegSet { bits: [65535, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   call CallInfo { dest: PulleyCall { name: TestCase(%g), args: [XReg(p15i), XReg(p15i), XReg(p15i), XReg(p15i)] }, uses: [CallArgPair { vreg: p4i, preg: p4i }, CallArgPair { vreg: p5i, preg: p5i }, CallArgPair { vreg: p6i, preg: p6i }, CallArgPair { vreg: p7i, preg: p7i }, CallArgPair { vreg: p8i, preg: p8i }, CallArgPair { vreg: p9i, preg: p9i }, CallArgPair { vreg: p10i, preg: p10i }, CallArgPair { vreg: p11i, preg: p11i }, CallArgPair { vreg: p12i, preg: p12i }, CallArgPair { vreg: p13i, preg: p13i }, CallArgPair { vreg: p14i, preg: p14i }, CallArgPair { vreg: p15i, preg: p15i }], defs: [], clobbers: PRegSet { bits: [65535, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
 ;   pop_frame_restore 48, {}
 ;   ret
 ;
@@ -166,10 +162,6 @@ block0:
 ; xstore64le_offset8 sp, 24, x15
 ; xstore64le_offset8 sp, 32, x15
 ; xstore64le_offset8 sp, 40, x15
-; xmov x0, x15
-; xmov x1, x15
-; xmov x2, x15
-; xmov x3, x15
 ; xmov x4, x15
 ; xmov x5, x15
 ; xmov x6, x15
@@ -181,7 +173,7 @@ block0:
 ; xmov x12, x15
 ; xmov x13, x15
 ; xmov x14, x15
-; call 0x0    // target = 0x51
+; call4 x15, x15, x15, x15, 0x0    // target = 0x45
 ; pop_frame_restore 48, 
 ; ret
 
@@ -224,8 +216,8 @@ block0:
 ; VCode:
 ;   push_frame_save 112, {x17, x18, x20, x21, x22, x23, x29}
 ; block0:
-;   x0 = load_addr OutgoingArg(0)
-;   call CallInfo { dest: TestCase(%g), uses: [CallArgPair { vreg: p0i, preg: p0i }], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }, CallRetPair { vreg: Writable { reg: p1i }, preg: p1i }, CallRetPair { vreg: Writable { reg: p2i }, preg: p2i }, CallRetPair { vreg: Writable { reg: p3i }, preg: p3i }, CallRetPair { vreg: Writable { reg: p4i }, preg: p4i }, CallRetPair { vreg: Writable { reg: p5i }, preg: p5i }, CallRetPair { vreg: Writable { reg: p6i }, preg: p6i }, CallRetPair { vreg: Writable { reg: p7i }, preg: p7i }, CallRetPair { vreg: Writable { reg: p8i }, preg: p8i }, CallRetPair { vreg: Writable { reg: p9i }, preg: p9i }, CallRetPair { vreg: Writable { reg: p10i }, preg: p10i }, CallRetPair { vreg: Writable { reg: p11i }, preg: p11i }, CallRetPair { vreg: Writable { reg: p12i }, preg: p12i }, CallRetPair { vreg: Writable { reg: p13i }, preg: p13i }, CallRetPair { vreg: Writable { reg: p14i }, preg: p14i }, CallRetPair { vreg: Writable { reg: p15i }, preg: p15i }], clobbers: PRegSet { bits: [0, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   x12 = load_addr OutgoingArg(0)
+;   call CallInfo { dest: PulleyCall { name: TestCase(%g), args: [XReg(p12i)] }, uses: [], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }, CallRetPair { vreg: Writable { reg: p1i }, preg: p1i }, CallRetPair { vreg: Writable { reg: p2i }, preg: p2i }, CallRetPair { vreg: Writable { reg: p3i }, preg: p3i }, CallRetPair { vreg: Writable { reg: p4i }, preg: p4i }, CallRetPair { vreg: Writable { reg: p5i }, preg: p5i }, CallRetPair { vreg: Writable { reg: p6i }, preg: p6i }, CallRetPair { vreg: Writable { reg: p7i }, preg: p7i }, CallRetPair { vreg: Writable { reg: p8i }, preg: p8i }, CallRetPair { vreg: Writable { reg: p9i }, preg: p9i }, CallRetPair { vreg: Writable { reg: p10i }, preg: p10i }, CallRetPair { vreg: Writable { reg: p11i }, preg: p11i }, CallRetPair { vreg: Writable { reg: p12i }, preg: p12i }, CallRetPair { vreg: Writable { reg: p13i }, preg: p13i }, CallRetPair { vreg: Writable { reg: p14i }, preg: p14i }, CallRetPair { vreg: Writable { reg: p15i }, preg: p15i }], clobbers: PRegSet { bits: [0, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
 ;   xmov x20, x13
 ;   xmov x22, x11
 ;   x29 = xload64 OutgoingArg(0) // flags = notrap aligned
@@ -263,8 +255,8 @@ block0:
 ;
 ; Disassembled:
 ; push_frame_save 112, x17, x18, x20, x21, x22, x23, x29
-; xmov x0, sp
-; call 0x0    // target = 0xc
+; xmov x12, sp
+; call1 x12, 0x0    // target = 0xc
 ; xmov x20, x13
 ; xmov x22, x11
 ; xload64le_offset8 x29, sp, 0

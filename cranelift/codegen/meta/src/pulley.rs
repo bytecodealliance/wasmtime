@@ -89,7 +89,8 @@ impl Inst<'_> {
         match self.name {
             // Skip instructions related to control-flow as those require
             // special handling with `MachBuffer`.
-            "Jump" | "Call" | "CallIndirect" => true,
+            "Jump" => true,
+            n if n.starts_with("Call") => true,
 
             // Skip special instructions not used in Cranelift.
             "XPush32Many" | "XPush64Many" | "XPop32Many" | "XPop64Many" => true,
