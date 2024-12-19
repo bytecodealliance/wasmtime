@@ -197,6 +197,22 @@ macro_rules! foreach_builtin_function {
             #[cfg(feature = "gc")]
             table_fill_gc_ref(vmctx: vmctx, table: u32, dst: u64, val: u32, len: u64) -> bool;
 
+            // Wasm floating-point routines for when the CPU instructions aren't available.
+            ceil_f32(vmctx: vmctx, x: f32) -> f32;
+            ceil_f64(vmctx: vmctx, x: f64) -> f64;
+            floor_f32(vmctx: vmctx, x: f32) -> f32;
+            floor_f64(vmctx: vmctx, x: f64) -> f64;
+            trunc_f32(vmctx: vmctx, x: f32) -> f32;
+            trunc_f64(vmctx: vmctx, x: f64) -> f64;
+            nearest_f32(vmctx: vmctx, x: f32) -> f32;
+            nearest_f64(vmctx: vmctx, x: f64) -> f64;
+            fma_f32(vmctx: vmctx, x: f32, y: f32, z: f32) -> f32;
+            fma_f64(vmctx: vmctx, x: f64, y: f64, z: f64) -> f64;
+
+            // The `pshufb` on x86 when SSSE3 isn't available.
+            #[cfg(target_arch = "x86_64")]
+            x86_pshufb(vmctx: vmctx, a: __m128i, b: __m128i) -> __m128i ;
+
             // Raises an unconditional trap with the specified code.
             //
             // This is used when signals-based-traps are disabled for backends
@@ -373,6 +389,17 @@ impl BuiltinFunctionIndex {
             (@get get_interned_func_ref pointer) => (return None);
             (@get intern_func_ref_for_gc_heap u64) => (return None);
             (@get is_subtype u32) => (return None);
+            (@get ceil_f32 f32) => (return None);
+            (@get ceil_f64 f64) => (return None);
+            (@get floor_f32 f32) => (return None);
+            (@get floor_f64 f64) => (return None);
+            (@get trunc_f32 f32) => (return None);
+            (@get trunc_f64 f64) => (return None);
+            (@get nearest_f32 f32) => (return None);
+            (@get nearest_f64 f64) => (return None);
+            (@get fma_f32 f32) => (return None);
+            (@get fma_f64 f64) => (return None);
+            (@get x86_pshufb __m128i) => (return None);
 
             // Bool-returning functions use `false` as an indicator of a trap.
             (@get $name:ident bool) => (TrapSentinel::Falsy);

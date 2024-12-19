@@ -228,6 +228,10 @@ where
         false
     }
 
+    fn has_round(&self) -> bool {
+        false
+    }
+
     fn has_x86_blendv_lowering(&self, _ty: ir::Type) -> bool {
         false
     }
