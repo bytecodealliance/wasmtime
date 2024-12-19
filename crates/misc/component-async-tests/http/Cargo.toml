@@ -1,0 +1,9 @@
+[package]
+name = "wasi-http-draft"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+futures = { workspace = true }
+wasmtime = { workspace = true, features = ["component-model-async"] }

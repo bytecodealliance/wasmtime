@@ -18,7 +18,7 @@ impl<T> Clone for Host_Pre<T> {
         }
     }
 }
-impl<_T> Host_Pre<_T> {
+impl<_T: 'static> Host_Pre<_T> {
     /// Creates a new copy of `Host_Pre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -162,7 +162,10 @@ const _: () = {
             mut store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
-        ) -> wasmtime::Result<Host_> {
+        ) -> wasmtime::Result<Host_>
+        where
+            _T: 'static,
+        {
             let pre = linker.instantiate_pre(component)?;
             Host_Pre::new(pre)?.instantiate(store)
         }

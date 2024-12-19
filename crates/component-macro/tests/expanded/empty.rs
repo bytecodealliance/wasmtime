@@ -18,7 +18,7 @@ impl<T> Clone for EmptyPre<T> {
         }
     }
 }
-impl<_T> EmptyPre<_T> {
+impl<_T: 'static> EmptyPre<_T> {
     /// Creates a new copy of `EmptyPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -142,7 +142,10 @@ const _: () = {
             mut store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
-        ) -> wasmtime::Result<Empty> {
+        ) -> wasmtime::Result<Empty>
+        where
+            _T: 'static,
+        {
             let pre = linker.instantiate_pre(component)?;
             EmptyPre::new(pre)?.instantiate(store)
         }
