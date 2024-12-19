@@ -4079,4 +4079,56 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         self.state[dst].set_i64x2(a.map(|i| i.wrapping_neg()));
         ControlFlow::Continue(())
     }
+
+    fn vabsf32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32x4();
+        self.state[dst].set_f32x4(a.map(|i| i.wasm_abs()));
+        ControlFlow::Continue(())
+    }
+
+    fn vabsf64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64x2();
+        self.state[dst].set_f64x2(a.map(|i| i.wasm_abs()));
+        ControlFlow::Continue(())
+    }
+
+    fn vmaximumf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = a.wasm_maximum(*b);
+        }
+        self.state[operands.dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmaximumf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = a.wasm_maximum(*b);
+        }
+        self.state[operands.dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vminimumf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = a.wasm_minimum(*b);
+        }
+        self.state[operands.dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vminimumf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = a.wasm_minimum(*b);
+        }
+        self.state[operands.dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
 }

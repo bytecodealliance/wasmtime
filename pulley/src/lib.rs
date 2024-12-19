@@ -1116,6 +1116,19 @@ macro_rules! for_each_extended_op {
             vneg32x4 = Vneg32x4 { dst: VReg, src: VReg };
             /// `dst = -src`
             vneg64x2 = Vneg64x2 { dst: VReg, src: VReg };
+
+            /// `dst = |src|`
+            vabsf32x4 = Vabsf32x4 { dst: VReg, src: VReg };
+            /// `dst = |src|`
+            vabsf64x2 = Vabsf64x2 { dst: VReg, src: VReg };
+            /// `dst = ieee_maximum(src1, src2)`
+            vmaximumf32x4 = Vmaximumf32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = ieee_maximum(src1, src2)`
+            vmaximumf64x2 = Vmaximumf64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = ieee_minimum(src1, src2)`
+            vminimumf32x4 = Vminimumf32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = ieee_minimum(src1, src2)`
+            vminimumf64x2 = Vminimumf64x2 { operands: BinaryOperands<VReg> };
         }
     };
 }
