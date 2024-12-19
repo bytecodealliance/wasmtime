@@ -131,7 +131,7 @@ void VERSIONED_SYMBOL(wasmtime_longjmp)(void *JmpBuf) {
 #ifdef CFG_TARGET_OS_windows
 #define DEBUG_BUILTIN_EXPORT __declspec(dllexport)
 #else
-#define DEBUG_BUILTIN_EXPORT __attribute__((used, retain))
+#define DEBUG_BUILTIN_EXPORT
 #endif
 
 // This set of symbols is defined here in C because Rust's #[export_name]
@@ -163,6 +163,15 @@ __attribute__((weak, noinline))
     void __jit_debug_register_code() {
 #ifndef CFG_TARGET_OS_windows
   __asm__("");
+#ifdef FEATURE_DEBUG_BUILTINS
+  // Make sure these symbols do not get stripped by the compiler or linker.
+  // Once/if the Rust toolchain used gets new enough, this can be replaced by
+  // __attribute__((used, retain)).
+  void *volatile p;
+  p = (void *)&VERSIONED_SYMBOL(wasmtime_resolve_vmctx_memory_ptr);
+  p = (void *)&VERSIONED_SYMBOL(wasmtime_set_vmctx_memory);
+  (void)p;
+#endif // FEATURE_DEBUG_BUILTINS
 #endif
 }
 
