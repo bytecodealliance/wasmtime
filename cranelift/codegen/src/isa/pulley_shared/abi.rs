@@ -441,15 +441,40 @@ where
     fn gen_call(
         dest: &CallDest,
         _tmp: Writable<Reg>,
-        info: CallInfo<()>,
+        mut info: CallInfo<()>,
     ) -> SmallVec<[Self::I; 2]> {
         match dest {
             // "near" calls are pulley->pulley calls so they use a normal "call"
             // opcode
-            CallDest::ExtName(name, RelocDistance::Near) => smallvec![Inst::Call {
-                info: Box::new(info.map(|()| name.clone()))
+            CallDest::ExtName(name, RelocDistance::Near) => {
+                // The first four integer arguments to a call can be handled via
+                // special pulley call instructions. Assert here that
+                // `info.uses` is sorted in order and then take out x0-x3 if
+                // they're present and move them from `info.uses` to
+                // `info.dest.args` to be handled differently during register
+                // allocation.
+                let mut args = SmallVec::new();
+                assert!(info
+                    .uses
+                    .iter()
+                    .filter_map(|arg| XReg::new(arg.preg))
+                    .is_sorted());
+                info.uses.retain(|arg| {
+                    if arg.preg != x0() && arg.preg != x1() && arg.preg != x2() && arg.preg != x3()
+                    {
+                        return true;
+                    }
+                    args.push(XReg::new(arg.vreg).unwrap());
+                    false
+                });
+                smallvec![Inst::Call {
+                    info: Box::new(info.map(|()| PulleyCall {
+                        name: name.clone(),
+                        args,
+                    }))
+                }
+                .into()]
             }
-            .into()],
             // "far" calls are pulley->host calls so they use a different opcode
             // which is lowered with a special relocation in the backend.
             CallDest::ExtName(name, RelocDistance::Far) => smallvec![Inst::IndirectCallHost {

@@ -1,6 +1,7 @@
 //! Pulley instruction arguments.
 
 use super::*;
+use crate::ir::ExternalName;
 use crate::machinst::abi::StackAMode;
 use pulley_interpreter::encode;
 use pulley_interpreter::regs::Reg as _;
@@ -564,4 +565,16 @@ impl fmt::Display for Cond {
             }
         }
     }
+}
+
+/// Payload of `CallInfo` for call instructions
+#[derive(Clone, Debug)]
+pub struct PulleyCall {
+    /// The external name that's being called, or the Cranelift-generated
+    /// function that's being invoked.
+    pub name: ExternalName,
+    /// Arguments tracked in this call invocation which aren't assigned fixed
+    /// registers. This tracks up to 4 registers and all remaining registers
+    /// will be present and tracked in `CallInfo<T>` fields.
+    pub args: SmallVec<[XReg; 4]>,
 }

@@ -1065,6 +1065,65 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn call1(&mut self, arg1: XReg, offset: PcRelOffset) -> ControlFlow<Done> {
+        let return_addr = self.pc.as_ptr();
+        self.state.lr = return_addr.as_ptr();
+        self.state[XReg::x0] = self.state[arg1];
+        self.pc_rel_jump::<crate::Call1>(offset);
+        ControlFlow::Continue(())
+    }
+
+    fn call2(&mut self, arg1: XReg, arg2: XReg, offset: PcRelOffset) -> ControlFlow<Done> {
+        let return_addr = self.pc.as_ptr();
+        self.state.lr = return_addr.as_ptr();
+        let (x0, x1) = (self.state[arg1], self.state[arg2]);
+        self.state[XReg::x0] = x0;
+        self.state[XReg::x1] = x1;
+        self.pc_rel_jump::<crate::Call2>(offset);
+        ControlFlow::Continue(())
+    }
+
+    fn call3(
+        &mut self,
+        arg1: XReg,
+        arg2: XReg,
+        arg3: XReg,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        let return_addr = self.pc.as_ptr();
+        self.state.lr = return_addr.as_ptr();
+        let (x0, x1, x2) = (self.state[arg1], self.state[arg2], self.state[arg3]);
+        self.state[XReg::x0] = x0;
+        self.state[XReg::x1] = x1;
+        self.state[XReg::x2] = x2;
+        self.pc_rel_jump::<crate::Call3>(offset);
+        ControlFlow::Continue(())
+    }
+
+    fn call4(
+        &mut self,
+        arg1: XReg,
+        arg2: XReg,
+        arg3: XReg,
+        arg4: XReg,
+        offset: PcRelOffset,
+    ) -> ControlFlow<Done> {
+        let return_addr = self.pc.as_ptr();
+        self.state.lr = return_addr.as_ptr();
+        let (x0, x1, x2, x3) = (
+            self.state[arg1],
+            self.state[arg2],
+            self.state[arg3],
+            self.state[arg4],
+        );
+        self.state[XReg::x0] = x0;
+        self.state[XReg::x1] = x1;
+        self.state[XReg::x2] = x2;
+        self.state[XReg::x3] = x3;
+        self.pc_rel_jump::<crate::Call4>(offset);
+        ControlFlow::Continue(())
+    }
+
     fn call_indirect(&mut self, dst: XReg) -> ControlFlow<Done> {
         let return_addr = self.pc.as_ptr();
         self.state.lr = return_addr.as_ptr();
