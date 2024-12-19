@@ -31,6 +31,12 @@ type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
 type BoxReturnCallIndInfo = Box<ReturnCallInfo<XReg>>;
 type BoxExternalName = Box<ExternalName>;
 
+#[expect(
+    unused_imports,
+    reason = "used on other backends, used here to suppress warning elsewhere"
+)]
+use crate::machinst::isle::UnwindInst as _;
+
 pub(crate) struct PulleyIsleContext<'a, 'b, I, B>
 where
     I: VCodeInst,
