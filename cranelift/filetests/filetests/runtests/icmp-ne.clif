@@ -45,3 +45,39 @@ block0(v0: i64, v1: i64):
 ; run: %icmp_ne_i64(0, 0) == 0
 ; run: %icmp_ne_i64(1, 0) == 1
 ; run: %icmp_ne_i64(-1, -1) == 0
+
+function %icmp_ne_i8_imm(i8) -> i8 {
+block0(v0: i8):
+    v2 = icmp_imm ne v0, 10
+    return v2
+}
+; run: %icmp_ne_i8_imm(10) == 0
+; run: %icmp_ne_i8_imm(0) == 1
+; run: %icmp_ne_i8_imm(-1) == 1
+
+function %icmp_ne_i16_imm(i16) -> i8 {
+block0(v0: i16):
+    v2 = icmp_imm ne v0, 10
+    return v2
+}
+; run: %icmp_ne_i16_imm(10) == 0
+; run: %icmp_ne_i16_imm(0) == 1
+; run: %icmp_ne_i16_imm(-1) == 1
+
+function %icmp_ne_i32_imm(i32) -> i8 {
+block0(v0: i32):
+    v2 = icmp_imm ne v0, 10
+    return v2
+}
+; run: %icmp_ne_i32_imm(10) == 0
+; run: %icmp_ne_i32_imm(0) == 1
+; run: %icmp_ne_i32_imm(-1) == 1
+
+function %icmp_ne_i64_imm(i64) -> i8 {
+block0(v0: i64):
+    v2 = icmp_imm ne v0, 10
+    return v2
+}
+; run: %icmp_ne_i64_imm(10) == 0
+; run: %icmp_ne_i64_imm(0) == 1
+; run: %icmp_ne_i64_imm(-1) == 1
