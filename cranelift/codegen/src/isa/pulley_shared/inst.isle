@@ -109,6 +109,17 @@
     (IfXult32 (src1 XReg) (src2 XReg))
     (IfXulteq32 (src1 XReg) (src2 XReg))
 
+    (IfXeq32I32 (src1 XReg) (src2 i32))
+    (IfXneq32I32 (src1 XReg) (src2 i32))
+    (IfXslt32I32 (src1 XReg) (src2 i32))
+    (IfXslteq32I32 (src1 XReg) (src2 i32))
+    (IfXult32I32 (src1 XReg) (src2 u32))
+    (IfXulteq32I32 (src1 XReg) (src2 u32))
+    (IfXsgt32I32 (src1 XReg) (src2 i32))
+    (IfXsgteq32I32 (src1 XReg) (src2 i32))
+    (IfXugt32I32 (src1 XReg) (src2 u32))
+    (IfXugteq32I32 (src1 XReg) (src2 u32))
+
     ;; Conditionals for comparing two 64-bit registers.
     (IfXeq64 (src1 XReg) (src2 XReg))
     (IfXneq64 (src1 XReg) (src2 XReg))
@@ -116,6 +127,17 @@
     (IfXslteq64 (src1 XReg) (src2 XReg))
     (IfXult64 (src1 XReg) (src2 XReg))
     (IfXulteq64 (src1 XReg) (src2 XReg))
+
+    (IfXeq64I32 (src1 XReg) (src2 i32))
+    (IfXneq64I32 (src1 XReg) (src2 i32))
+    (IfXslt64I32 (src1 XReg) (src2 i32))
+    (IfXslteq64I32 (src1 XReg) (src2 i32))
+    (IfXult64I32 (src1 XReg) (src2 u32))
+    (IfXulteq64I32 (src1 XReg) (src2 u32))
+    (IfXsgt64I32 (src1 XReg) (src2 i32))
+    (IfXsgteq64I32 (src1 XReg) (src2 i32))
+    (IfXugt64I32 (src1 XReg) (src2 u32))
+    (IfXugteq64I32 (src1 XReg) (src2 u32))
   )
 )
 

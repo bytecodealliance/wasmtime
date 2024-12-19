@@ -255,6 +255,34 @@ impl Cond {
                 collector.reg_use(src1);
                 collector.reg_use(src2);
             }
+
+            Cond::IfXeq32I32 { src1, src2 }
+            | Cond::IfXneq32I32 { src1, src2 }
+            | Cond::IfXslt32I32 { src1, src2 }
+            | Cond::IfXslteq32I32 { src1, src2 }
+            | Cond::IfXsgt32I32 { src1, src2 }
+            | Cond::IfXsgteq32I32 { src1, src2 }
+            | Cond::IfXeq64I32 { src1, src2 }
+            | Cond::IfXneq64I32 { src1, src2 }
+            | Cond::IfXslt64I32 { src1, src2 }
+            | Cond::IfXslteq64I32 { src1, src2 }
+            | Cond::IfXsgt64I32 { src1, src2 }
+            | Cond::IfXsgteq64I32 { src1, src2 } => {
+                collector.reg_use(src1);
+                let _: &mut i32 = src2;
+            }
+
+            Cond::IfXult32I32 { src1, src2 }
+            | Cond::IfXulteq32I32 { src1, src2 }
+            | Cond::IfXugt32I32 { src1, src2 }
+            | Cond::IfXugteq32I32 { src1, src2 }
+            | Cond::IfXult64I32 { src1, src2 }
+            | Cond::IfXulteq64I32 { src1, src2 }
+            | Cond::IfXugt64I32 { src1, src2 }
+            | Cond::IfXugteq64I32 { src1, src2 } => {
+                collector.reg_use(src1);
+                let _: &mut u32 = src2;
+            }
         }
     }
 
@@ -263,7 +291,7 @@ impl Cond {
     /// Note that the offset encoded to jump by is filled in as 0 and it's
     /// assumed `MachBuffer` will come back and clean it up.
     pub fn encode(&self, sink: &mut impl Extend<u8>) {
-        match self {
+        match *self {
             Cond::If32 { reg } => encode::br_if32(sink, reg, 0),
             Cond::IfNot32 { reg } => encode::br_if_not32(sink, reg, 0),
             Cond::IfXeq32 { src1, src2 } => encode::br_if_xeq32(sink, src1, src2, 0),
@@ -278,6 +306,88 @@ impl Cond {
             Cond::IfXslteq64 { src1, src2 } => encode::br_if_xslteq64(sink, src1, src2, 0),
             Cond::IfXult64 { src1, src2 } => encode::br_if_xult64(sink, src1, src2, 0),
             Cond::IfXulteq64 { src1, src2 } => encode::br_if_xulteq64(sink, src1, src2, 0),
+
+            Cond::IfXeq32I32 { src1, src2 } => match i8::try_from(src2) {
+                Ok(src2) => encode::br_if_xeq32_i8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xeq32_i32(sink, src1, src2, 0),
+            },
+            Cond::IfXneq32I32 { src1, src2 } => match i8::try_from(src2) {
+                Ok(src2) => encode::br_if_xneq32_i8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xneq32_i32(sink, src1, src2, 0),
+            },
+            Cond::IfXslt32I32 { src1, src2 } => match i8::try_from(src2) {
+                Ok(src2) => encode::br_if_xslt32_i8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xslt32_i32(sink, src1, src2, 0),
+            },
+            Cond::IfXslteq32I32 { src1, src2 } => match i8::try_from(src2) {
+                Ok(src2) => encode::br_if_xslteq32_i8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xslteq32_i32(sink, src1, src2, 0),
+            },
+            Cond::IfXsgt32I32 { src1, src2 } => match i8::try_from(src2) {
+                Ok(src2) => encode::br_if_xsgt32_i8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xsgt32_i32(sink, src1, src2, 0),
+            },
+            Cond::IfXsgteq32I32 { src1, src2 } => match i8::try_from(src2) {
+                Ok(src2) => encode::br_if_xsgteq32_i8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xsgteq32_i32(sink, src1, src2, 0),
+            },
+            Cond::IfXult32I32 { src1, src2 } => match u8::try_from(src2) {
+                Ok(src2) => encode::br_if_xult32_u8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xult32_u32(sink, src1, src2, 0),
+            },
+            Cond::IfXulteq32I32 { src1, src2 } => match u8::try_from(src2) {
+                Ok(src2) => encode::br_if_xulteq32_u8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xulteq32_u32(sink, src1, src2, 0),
+            },
+            Cond::IfXugt32I32 { src1, src2 } => match u8::try_from(src2) {
+                Ok(src2) => encode::br_if_xugt32_u8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xugt32_u32(sink, src1, src2, 0),
+            },
+            Cond::IfXugteq32I32 { src1, src2 } => match u8::try_from(src2) {
+                Ok(src2) => encode::br_if_xugteq32_u8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xugteq32_u32(sink, src1, src2, 0),
+            },
+
+            Cond::IfXeq64I32 { src1, src2 } => match i8::try_from(src2) {
+                Ok(src2) => encode::br_if_xeq64_i8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xeq64_i32(sink, src1, src2, 0),
+            },
+            Cond::IfXneq64I32 { src1, src2 } => match i8::try_from(src2) {
+                Ok(src2) => encode::br_if_xneq64_i8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xneq64_i32(sink, src1, src2, 0),
+            },
+            Cond::IfXslt64I32 { src1, src2 } => match i8::try_from(src2) {
+                Ok(src2) => encode::br_if_xslt64_i8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xslt64_i32(sink, src1, src2, 0),
+            },
+            Cond::IfXslteq64I32 { src1, src2 } => match i8::try_from(src2) {
+                Ok(src2) => encode::br_if_xslteq64_i8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xslteq64_i32(sink, src1, src2, 0),
+            },
+            Cond::IfXsgt64I32 { src1, src2 } => match i8::try_from(src2) {
+                Ok(src2) => encode::br_if_xsgt64_i8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xsgt64_i32(sink, src1, src2, 0),
+            },
+            Cond::IfXsgteq64I32 { src1, src2 } => match i8::try_from(src2) {
+                Ok(src2) => encode::br_if_xsgteq64_i8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xsgteq64_i32(sink, src1, src2, 0),
+            },
+            Cond::IfXult64I32 { src1, src2 } => match u8::try_from(src2) {
+                Ok(src2) => encode::br_if_xult64_u8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xult64_u32(sink, src1, src2, 0),
+            },
+            Cond::IfXulteq64I32 { src1, src2 } => match u8::try_from(src2) {
+                Ok(src2) => encode::br_if_xulteq64_u8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xulteq64_u32(sink, src1, src2, 0),
+            },
+            Cond::IfXugt64I32 { src1, src2 } => match u8::try_from(src2) {
+                Ok(src2) => encode::br_if_xugt64_u8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xugt64_u32(sink, src1, src2, 0),
+            },
+            Cond::IfXugteq64I32 { src1, src2 } => match u8::try_from(src2) {
+                Ok(src2) => encode::br_if_xugteq64_u8(sink, src1, src2, 0),
+                Err(_) => encode::br_if_xugteq64_u32(sink, src1, src2, 0),
+            },
         }
     }
 
@@ -325,6 +435,28 @@ impl Cond {
                 src1: src2,
                 src2: src1,
             },
+
+            Cond::IfXeq32I32 { src1, src2 } => Cond::IfXneq32I32 { src1, src2 },
+            Cond::IfXneq32I32 { src1, src2 } => Cond::IfXeq32I32 { src1, src2 },
+            Cond::IfXslt32I32 { src1, src2 } => Cond::IfXsgteq32I32 { src1, src2 },
+            Cond::IfXslteq32I32 { src1, src2 } => Cond::IfXsgt32I32 { src1, src2 },
+            Cond::IfXult32I32 { src1, src2 } => Cond::IfXugteq32I32 { src1, src2 },
+            Cond::IfXulteq32I32 { src1, src2 } => Cond::IfXugt32I32 { src1, src2 },
+            Cond::IfXsgt32I32 { src1, src2 } => Cond::IfXslteq32I32 { src1, src2 },
+            Cond::IfXsgteq32I32 { src1, src2 } => Cond::IfXslt32I32 { src1, src2 },
+            Cond::IfXugt32I32 { src1, src2 } => Cond::IfXulteq32I32 { src1, src2 },
+            Cond::IfXugteq32I32 { src1, src2 } => Cond::IfXult32I32 { src1, src2 },
+
+            Cond::IfXeq64I32 { src1, src2 } => Cond::IfXneq64I32 { src1, src2 },
+            Cond::IfXneq64I32 { src1, src2 } => Cond::IfXeq64I32 { src1, src2 },
+            Cond::IfXslt64I32 { src1, src2 } => Cond::IfXsgteq64I32 { src1, src2 },
+            Cond::IfXslteq64I32 { src1, src2 } => Cond::IfXsgt64I32 { src1, src2 },
+            Cond::IfXult64I32 { src1, src2 } => Cond::IfXugteq64I32 { src1, src2 },
+            Cond::IfXulteq64I32 { src1, src2 } => Cond::IfXugt64I32 { src1, src2 },
+            Cond::IfXsgt64I32 { src1, src2 } => Cond::IfXslteq64I32 { src1, src2 },
+            Cond::IfXsgteq64I32 { src1, src2 } => Cond::IfXslt64I32 { src1, src2 },
+            Cond::IfXugt64I32 { src1, src2 } => Cond::IfXulteq64I32 { src1, src2 },
+            Cond::IfXugteq64I32 { src1, src2 } => Cond::IfXult64I32 { src1, src2 },
         }
     }
 }
@@ -369,6 +501,66 @@ impl fmt::Display for Cond {
             }
             Cond::IfXulteq64 { src1, src2 } => {
                 write!(f, "if_xulteq64 {}, {}", reg_name(**src1), reg_name(**src2))
+            }
+            Cond::IfXeq32I32 { src1, src2 } => {
+                write!(f, "if_xeq32_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXneq32I32 { src1, src2 } => {
+                write!(f, "if_xneq32_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXslt32I32 { src1, src2 } => {
+                write!(f, "if_xslt32_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXslteq32I32 { src1, src2 } => {
+                write!(f, "if_xslteq32_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXsgt32I32 { src1, src2 } => {
+                write!(f, "if_xsgt32_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXsgteq32I32 { src1, src2 } => {
+                write!(f, "if_xsgteq32_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXult32I32 { src1, src2 } => {
+                write!(f, "if_xult32_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXulteq32I32 { src1, src2 } => {
+                write!(f, "if_xulteq32_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXugt32I32 { src1, src2 } => {
+                write!(f, "if_xugt32_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXugteq32I32 { src1, src2 } => {
+                write!(f, "if_xugteq32_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXeq64I32 { src1, src2 } => {
+                write!(f, "if_xeq64_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXneq64I32 { src1, src2 } => {
+                write!(f, "if_xneq64_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXslt64I32 { src1, src2 } => {
+                write!(f, "if_xslt64_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXslteq64I32 { src1, src2 } => {
+                write!(f, "if_xslteq64_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXsgt64I32 { src1, src2 } => {
+                write!(f, "if_xsgt64_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXsgteq64I32 { src1, src2 } => {
+                write!(f, "if_xsgteq64_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXult64I32 { src1, src2 } => {
+                write!(f, "if_xult64_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXulteq64I32 { src1, src2 } => {
+                write!(f, "if_xulteq64_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXugt64I32 { src1, src2 } => {
+                write!(f, "if_xugt64_i32 {}, {src2}", reg_name(**src1))
+            }
+            Cond::IfXugteq64I32 { src1, src2 } => {
+                write!(f, "if_xugteq64_i32 {}, {src2}", reg_name(**src1))
             }
         }
     }

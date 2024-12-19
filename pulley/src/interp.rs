@@ -1024,6 +1024,22 @@ fn simple_push_pop() {
     }
 }
 
+macro_rules! br_if_imm {
+    ($(
+        fn $snake:ident(&mut self, a: XReg, b: $imm:ident, offset: PcRelOffset)
+            = $camel:ident / $op:tt / $get:ident;
+    )*) => {$(
+        fn $snake(&mut self, a: XReg, b: $imm, offset: PcRelOffset) -> ControlFlow<Done> {
+            let a = self.state[a].$get();
+            if a $op b.into() {
+                self.pc_rel_jump::<crate::$camel>(offset)
+            } else {
+                ControlFlow::Continue(())
+            }
+        }
+    )*};
+}
+
 impl OpVisitor for Interpreter<'_> {
     type BytecodeStream = UnsafeBytecodeStream;
     type Return = ControlFlow<Done>;
@@ -1209,6 +1225,94 @@ impl OpVisitor for Interpreter<'_> {
         } else {
             ControlFlow::Continue(())
         }
+    }
+
+    br_if_imm! {
+        fn br_if_xeq32_i8(&mut self, a: XReg, b: i8, offset: PcRelOffset)
+            = BrIfXeq32I8 / == / get_i32;
+        fn br_if_xeq32_i32(&mut self, a: XReg, b: i32, offset: PcRelOffset)
+            = BrIfXeq32I32 / == / get_i32;
+        fn br_if_xneq32_i8(&mut self, a: XReg, b: i8, offset: PcRelOffset)
+            = BrIfXneq32I8 / != / get_i32;
+        fn br_if_xneq32_i32(&mut self, a: XReg, b: i32, offset: PcRelOffset)
+            = BrIfXneq32I32 / != / get_i32;
+
+        fn br_if_xslt32_i8(&mut self, a: XReg, b: i8, offset: PcRelOffset)
+            = BrIfXslt32I8 / < / get_i32;
+        fn br_if_xslt32_i32(&mut self, a: XReg, b: i32, offset: PcRelOffset)
+            = BrIfXslt32I32 / < / get_i32;
+        fn br_if_xsgt32_i8(&mut self, a: XReg, b: i8, offset: PcRelOffset)
+            = BrIfXsgt32I8 / > / get_i32;
+        fn br_if_xsgt32_i32(&mut self, a: XReg, b: i32, offset: PcRelOffset)
+            = BrIfXsgt32I32 / > / get_i32;
+        fn br_if_xslteq32_i8(&mut self, a: XReg, b: i8, offset: PcRelOffset)
+            = BrIfXslteq32I8 / <= / get_i32;
+        fn br_if_xslteq32_i32(&mut self, a: XReg, b: i32, offset: PcRelOffset)
+            = BrIfXslteq32I32 / <= / get_i32;
+        fn br_if_xsgteq32_i8(&mut self, a: XReg, b: i8, offset: PcRelOffset)
+            = BrIfXsgteq32I8 / >= / get_i32;
+        fn br_if_xsgteq32_i32(&mut self, a: XReg, b: i32, offset: PcRelOffset)
+            = BrIfXsgteq32I32 / >= / get_i32;
+
+        fn br_if_xult32_u8(&mut self, a: XReg, b: u8, offset: PcRelOffset)
+            = BrIfXult32U8 / < / get_u32;
+        fn br_if_xult32_u32(&mut self, a: XReg, b: u32, offset: PcRelOffset)
+            = BrIfXult32U32 / < / get_u32;
+        fn br_if_xugt32_u8(&mut self, a: XReg, b: u8, offset: PcRelOffset)
+            = BrIfXugt32U8 / > / get_u32;
+        fn br_if_xugt32_u32(&mut self, a: XReg, b: u32, offset: PcRelOffset)
+            = BrIfXugt32U32 / > / get_u32;
+        fn br_if_xulteq32_u8(&mut self, a: XReg, b: u8, offset: PcRelOffset)
+            = BrIfXulteq32U8 / <= / get_u32;
+        fn br_if_xulteq32_u32(&mut self, a: XReg, b: u32, offset: PcRelOffset)
+            = BrIfXulteq32U32 / <= / get_u32;
+        fn br_if_xugteq32_u8(&mut self, a: XReg, b: u8, offset: PcRelOffset)
+            = BrIfXugteq32U8 / >= / get_u32;
+        fn br_if_xugteq32_u32(&mut self, a: XReg, b: u32, offset: PcRelOffset)
+            = BrIfXugteq32U32 / >= / get_u32;
+
+        fn br_if_xeq64_i8(&mut self, a: XReg, b: i8, offset: PcRelOffset)
+            = BrIfXeq64I8 / == / get_i64;
+        fn br_if_xeq64_i32(&mut self, a: XReg, b: i32, offset: PcRelOffset)
+            = BrIfXeq64I32 / == / get_i64;
+        fn br_if_xneq64_i8(&mut self, a: XReg, b: i8, offset: PcRelOffset)
+            = BrIfXneq64I8 / != / get_i64;
+        fn br_if_xneq64_i32(&mut self, a: XReg, b: i32, offset: PcRelOffset)
+            = BrIfXneq64I32 / != / get_i64;
+
+        fn br_if_xslt64_i8(&mut self, a: XReg, b: i8, offset: PcRelOffset)
+            = BrIfXslt64I8 / < / get_i64;
+        fn br_if_xslt64_i32(&mut self, a: XReg, b: i32, offset: PcRelOffset)
+            = BrIfXslt64I32 / < / get_i64;
+        fn br_if_xsgt64_i8(&mut self, a: XReg, b: i8, offset: PcRelOffset)
+            = BrIfXsgt64I8 / > / get_i64;
+        fn br_if_xsgt64_i32(&mut self, a: XReg, b: i32, offset: PcRelOffset)
+            = BrIfXsgt64I32 / > / get_i64;
+        fn br_if_xslteq64_i8(&mut self, a: XReg, b: i8, offset: PcRelOffset)
+            = BrIfXslteq64I8 / <= / get_i64;
+        fn br_if_xslteq64_i32(&mut self, a: XReg, b: i32, offset: PcRelOffset)
+            = BrIfXslteq64I32 / <= / get_i64;
+        fn br_if_xsgteq64_i8(&mut self, a: XReg, b: i8, offset: PcRelOffset)
+            = BrIfXsgteq64I8 / >= / get_i64;
+        fn br_if_xsgteq64_i32(&mut self, a: XReg, b: i32, offset: PcRelOffset)
+            = BrIfXsgteq64I32 / >= / get_i64;
+
+        fn br_if_xult64_u8(&mut self, a: XReg, b: u8, offset: PcRelOffset)
+            = BrIfXult64U8 / < / get_u64;
+        fn br_if_xult64_u32(&mut self, a: XReg, b: u32, offset: PcRelOffset)
+            = BrIfXult64U32 / < / get_u64;
+        fn br_if_xugt64_u8(&mut self, a: XReg, b: u8, offset: PcRelOffset)
+            = BrIfXugt64U8 / > / get_u64;
+        fn br_if_xugt64_u32(&mut self, a: XReg, b: u32, offset: PcRelOffset)
+            = BrIfXugt64U32 / > / get_u64;
+        fn br_if_xulteq64_u8(&mut self, a: XReg, b: u8, offset: PcRelOffset)
+            = BrIfXulteq64U8 / <= / get_u64;
+        fn br_if_xulteq64_u32(&mut self, a: XReg, b: u32, offset: PcRelOffset)
+            = BrIfXulteq64U32 / <= / get_u64;
+        fn br_if_xugteq64_u8(&mut self, a: XReg, b: u8, offset: PcRelOffset)
+            = BrIfXugteq64U8 / >= / get_u64;
+        fn br_if_xugteq64_u32(&mut self, a: XReg, b: u32, offset: PcRelOffset)
+            = BrIfXugteq64U32 / >= / get_u64;
     }
 
     fn xmov(&mut self, dst: XReg, src: XReg) -> ControlFlow<Done> {

@@ -48,15 +48,14 @@
 ;;
 ;; wasm[0]::function[4]::offset_just_bad:
 ;;       push_frame
-;;       xload64le_offset8 x6, x0, 104
-;;       xsub64_u8 x6, x6, 4
-;;       xconst32 x7, 65533
-;;       br_if_xult64 x6, x7, 0x14    // target = 0x23
-;;   16: xload64le_offset8 x7, x0, 96
-;;       xload32le_offset32 x0, x7, 65533
+;;       xload64le_offset8 x5, x0, 104
+;;       xsub64_u8 x5, x5, 4
+;;       br_if_xult64_u32 x5, 65533, 0x17    // target = 0x20
+;;   13: xload64le_offset8 x6, x0, 96
+;;       xload32le_offset32 x0, x6, 65533
 ;;       pop_frame
 ;;       ret
-;;   23: trap
+;;   20: trap
 ;;
 ;; wasm[0]::function[5]::offset_just_ok_v2:
 ;;       push_frame
@@ -67,27 +66,25 @@
 ;;
 ;; wasm[0]::function[6]::offset_just_bad_v2:
 ;;       push_frame
-;;       xload64le_offset8 x6, x0, 104
-;;       xsub64_u32 x6, x6, 65536
-;;       xconst8 x7, 0
-;;       br_if_xeq64 x6, x7, 0x14    // target = 0x23
-;;   16: xload64le_offset8 x7, x0, 96
-;;       xload32le_offset32 x0, x7, 65533
+;;       xload64le_offset8 x5, x0, 104
+;;       xsub64_u32 x5, x5, 65536
+;;       br_if_xeq64_i8 x5, 0, 0x14    // target = 0x20
+;;   13: xload64le_offset8 x6, x0, 96
+;;       xload32le_offset32 x0, x6, 65533
 ;;       pop_frame
 ;;       ret
-;;   23: trap
+;;   20: trap
 ;;
 ;; wasm[0]::function[7]::maybe_inbounds:
 ;;       push_frame
-;;       xload64le_offset8 x6, x0, 104
-;;       xsub64_u8 x6, x6, 4
-;;       xconst32 x7, 131068
-;;       br_if_xult64 x6, x7, 0x14    // target = 0x23
-;;   16: xload64le_offset8 x7, x0, 96
-;;       xload32le_offset32 x0, x7, 131068
+;;       xload64le_offset8 x5, x0, 104
+;;       xsub64_u8 x5, x5, 4
+;;       br_if_xult64_u32 x5, 131068, 0x17    // target = 0x20
+;;   13: xload64le_offset8 x6, x0, 96
+;;       xload32le_offset32 x0, x6, 131068
 ;;       pop_frame
 ;;       ret
-;;   23: trap
+;;   20: trap
 ;;
 ;; wasm[0]::function[8]::maybe_inbounds_v2:
 ;;       push_frame
@@ -104,15 +101,14 @@
 ;;
 ;; wasm[0]::function[9]::never_inbounds:
 ;;       push_frame
-;;       xload64le_offset8 x6, x0, 104
-;;       xsub64_u8 x6, x6, 4
-;;       xconst32 x7, 131069
-;;       br_if_xult64 x6, x7, 0x14    // target = 0x23
-;;   16: xload64le_offset8 x7, x0, 96
-;;       xload32le_offset32 x0, x7, 131069
+;;       xload64le_offset8 x5, x0, 104
+;;       xsub64_u8 x5, x5, 4
+;;       br_if_xult64_u32 x5, 131069, 0x17    // target = 0x20
+;;   13: xload64le_offset8 x6, x0, 96
+;;       xload32le_offset32 x0, x6, 131069
 ;;       pop_frame
 ;;       ret
-;;   23: trap
+;;   20: trap
 ;;
 ;; wasm[0]::function[10]::never_inbounds_v2:
 ;;       push_frame
