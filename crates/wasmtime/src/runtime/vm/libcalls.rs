@@ -145,6 +145,9 @@ pub mod raw {
 
         (@ty u32) => (u32);
         (@ty u64) => (u64);
+        (@ty f32) => (f32);
+        (@ty f64) => (f64);
+        (@ty __m128i) => (std::arch::x86_64::__m128i);
         (@ty u8) => (u8);
         (@ty bool) => (bool);
         (@ty pointer) => (*mut u8);
@@ -1228,6 +1231,100 @@ fn update_mem_size(_store: &mut dyn VMStore, instance: &mut Instance, num_pages:
     }
 }
 
+fn floor_f32(_store: &mut dyn VMStore, _instance: &mut Instance, val: f32) -> f32 {
+    wasmtime_math::WasmFloat::wasm_floor(val)
+}
+
+fn floor_f64(_store: &mut dyn VMStore, _instance: &mut Instance, val: f64) -> f64 {
+    wasmtime_math::WasmFloat::wasm_floor(val)
+}
+
+fn ceil_f32(_store: &mut dyn VMStore, _instance: &mut Instance, val: f32) -> f32 {
+    wasmtime_math::WasmFloat::wasm_ceil(val)
+}
+
+fn ceil_f64(_store: &mut dyn VMStore, _instance: &mut Instance, val: f64) -> f64 {
+    wasmtime_math::WasmFloat::wasm_ceil(val)
+}
+
+fn trunc_f32(_store: &mut dyn VMStore, _instance: &mut Instance, val: f32) -> f32 {
+    wasmtime_math::WasmFloat::wasm_trunc(val)
+}
+
+fn trunc_f64(_store: &mut dyn VMStore, _instance: &mut Instance, val: f64) -> f64 {
+    wasmtime_math::WasmFloat::wasm_trunc(val)
+}
+
+fn nearest_f32(_store: &mut dyn VMStore, _instance: &mut Instance, val: f32) -> f32 {
+    wasmtime_math::WasmFloat::wasm_nearest(val)
+}
+
+fn nearest_f64(_store: &mut dyn VMStore, _instance: &mut Instance, val: f64) -> f64 {
+    wasmtime_math::WasmFloat::wasm_nearest(val)
+}
+
+fn fma_f32(_store: &mut dyn VMStore, _insttance: &mut Instance, a: f32, b: f32, c: f32) -> f32 {
+    wasmtime_math::WasmFloat::mul_add(a, b, c)
+}
+
+fn fma_f64(_store: &mut dyn VMStore, _insttance: &mut Instance, a: f64, b: f64, c: f64) -> f64 {
+    wasmtime_math::WasmFloat::mul_add(a, b, c)
+}
+
+// This intrinsic is only used on x86_64 platforms as an implementation of
+// the `pshufb` instruction when SSSE3 is not available.
+#[cfg(target_arch = "x86_64")]
+use core::arch::x86_64::__m128i;
+#[cfg(target_arch = "x86_64")]
+#[target_feature(enable = "sse")]
+#[allow(improper_ctypes_definitions)]
+unsafe fn x86_pshufb(
+    _store: &mut dyn VMStore,
+    _insttance: &mut Instance,
+    a: __m128i,
+    b: __m128i,
+) -> __m128i {
+    union U {
+        reg: __m128i,
+        mem: [u8; 16],
+    }
+
+    unsafe {
+        let a = U { reg: a }.mem;
+        let b = U { reg: b }.mem;
+
+        let select = |arr: &[u8; 16], byte: u8| {
+            if byte & 0x80 != 0 {
+                0x00
+            } else {
+                arr[(byte & 0xf) as usize]
+            }
+        };
+
+        U {
+            mem: [
+                select(&a, b[0]),
+                select(&a, b[1]),
+                select(&a, b[2]),
+                select(&a, b[3]),
+                select(&a, b[4]),
+                select(&a, b[5]),
+                select(&a, b[6]),
+                select(&a, b[7]),
+                select(&a, b[8]),
+                select(&a, b[9]),
+                select(&a, b[10]),
+                select(&a, b[11]),
+                select(&a, b[12]),
+                select(&a, b[13]),
+                select(&a, b[14]),
+                select(&a, b[15]),
+            ],
+        }
+        .reg
+    }
+}
+
 /// This intrinsic is just used to record trap information.
 ///
 /// The `Infallible` "ok" type here means that this never returns success, it
@@ -1256,104 +1353,4 @@ fn raise(_store: &mut dyn VMStore, _instance: &mut Instance) {
     // just insert a stub to catch bugs if it's accidentally called.
     #[cfg(not(has_host_compiler_backend))]
     unreachable!()
-}
-
-/// This module contains functions which are used for resolving relocations at
-/// runtime if necessary.
-///
-/// These functions are not used by default and currently the only platform
-/// they're used for is on x86_64 when SIMD is disabled and then SSE features
-/// are further disabled. In these configurations Cranelift isn't allowed to use
-/// native CPU instructions so it falls back to libcalls and we rely on the Rust
-/// standard library generally for implementing these.
-#[allow(missing_docs)]
-pub mod relocs {
-    pub extern "C" fn floorf32(f: f32) -> f32 {
-        wasmtime_math::WasmFloat::wasm_floor(f)
-    }
-
-    pub extern "C" fn floorf64(f: f64) -> f64 {
-        wasmtime_math::WasmFloat::wasm_floor(f)
-    }
-
-    pub extern "C" fn ceilf32(f: f32) -> f32 {
-        wasmtime_math::WasmFloat::wasm_ceil(f)
-    }
-
-    pub extern "C" fn ceilf64(f: f64) -> f64 {
-        wasmtime_math::WasmFloat::wasm_ceil(f)
-    }
-
-    pub extern "C" fn truncf32(f: f32) -> f32 {
-        wasmtime_math::WasmFloat::wasm_trunc(f)
-    }
-
-    pub extern "C" fn truncf64(f: f64) -> f64 {
-        wasmtime_math::WasmFloat::wasm_trunc(f)
-    }
-
-    pub extern "C" fn nearestf32(x: f32) -> f32 {
-        wasmtime_math::WasmFloat::wasm_nearest(x)
-    }
-
-    pub extern "C" fn nearestf64(x: f64) -> f64 {
-        wasmtime_math::WasmFloat::wasm_nearest(x)
-    }
-
-    pub extern "C" fn fmaf32(a: f32, b: f32, c: f32) -> f32 {
-        wasmtime_math::WasmFloat::wasm_mul_add(a, b, c)
-    }
-
-    pub extern "C" fn fmaf64(a: f64, b: f64, c: f64) -> f64 {
-        wasmtime_math::WasmFloat::wasm_mul_add(a, b, c)
-    }
-
-    // This intrinsic is only used on x86_64 platforms as an implementation of
-    // the `pshufb` instruction when SSSE3 is not available.
-    #[cfg(target_arch = "x86_64")]
-    use core::arch::x86_64::__m128i;
-    #[cfg(target_arch = "x86_64")]
-    #[target_feature(enable = "sse")]
-    #[allow(improper_ctypes_definitions)]
-    pub unsafe extern "C" fn x86_pshufb(a: __m128i, b: __m128i) -> __m128i {
-        union U {
-            reg: __m128i,
-            mem: [u8; 16],
-        }
-
-        unsafe {
-            let a = U { reg: a }.mem;
-            let b = U { reg: b }.mem;
-
-            let select = |arr: &[u8; 16], byte: u8| {
-                if byte & 0x80 != 0 {
-                    0x00
-                } else {
-                    arr[(byte & 0xf) as usize]
-                }
-            };
-
-            U {
-                mem: [
-                    select(&a, b[0]),
-                    select(&a, b[1]),
-                    select(&a, b[2]),
-                    select(&a, b[3]),
-                    select(&a, b[4]),
-                    select(&a, b[5]),
-                    select(&a, b[6]),
-                    select(&a, b[7]),
-                    select(&a, b[8]),
-                    select(&a, b[9]),
-                    select(&a, b[10]),
-                    select(&a, b[11]),
-                    select(&a, b[12]),
-                    select(&a, b[13]),
-                    select(&a, b[14]),
-                    select(&a, b[15]),
-                ],
-            }
-            .reg
-        }
-    }
 }

@@ -867,6 +867,7 @@ impl ComponentCompiler for Compiler {
                     pointer_type,
                     &c.offsets.ptr,
                     limits,
+                    &self.tunables,
                 );
             }
 
