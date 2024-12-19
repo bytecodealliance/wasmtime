@@ -3598,12 +3598,17 @@
        (orr_imm ty (zero_reg) n)
        m k k))
 
-(decl load_constant64_full (Type ImmExtend u64) Reg)
-(extern constructor load_constant64_full load_constant64_full)
+(decl load_constant_full (Type ImmExtend OperandSize u64) Reg)
+(extern constructor load_constant_full load_constant_full)
+
+;; Fallback for integral 32-bit constants
+(rule (imm (fits_in_32 (integral_ty ty)) extend n)
+      (load_constant_full ty extend (operand_size $I32) n))
 
 ;; Fallback for integral 64-bit constants
-(rule (imm (integral_ty ty) extend n)
-      (load_constant64_full ty extend n))
+(rule -1 (imm (integral_ty $I64) extend n)
+      (load_constant_full $I64 extend (operand_size $I64) n))
+
 
 ;; Sign extension helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
