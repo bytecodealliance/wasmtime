@@ -892,10 +892,6 @@ macro_rules! for_each_extended_op {
             vaddi32x4 = VAddI32x4 { operands: BinaryOperands<VReg> };
             /// `dst = src1 + src2`
             vaddi64x2 = VAddI64x2 { operands: BinaryOperands<VReg> };
-            /// `dst = src1 + src2`
-            vaddf32x4 = VAddF32x4 { operands: BinaryOperands<VReg> };
-            /// `dst = src1 + src2`
-            vaddf64x2 = VAddF64x2 { operands: BinaryOperands<VReg> };
 
             /// `dst = src1 << src2`
             vshli8x16 = VShlI8x16 { operands: BinaryOperands<VReg, VReg, XReg> };
@@ -1165,6 +1161,49 @@ macro_rules! for_each_extended_op {
             vminimumf32x4 = Vminimumf32x4 { operands: BinaryOperands<VReg> };
             /// `dst = ieee_minimum(src1, src2)`
             vminimumf64x2 = Vminimumf64x2 { operands: BinaryOperands<VReg> };
+
+            /// `dst = src1 + src2`
+            vaddf32x4 = VAddF32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 + src2`
+            vaddf64x2 = VAddF64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 - src2`
+            vsubf32x4 = VSubF32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 - src2`
+            vsubf64x2 = VSubF64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 * src2`
+            vmulf32x4 = VMulF32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 * src2`
+            vmulf64x2 = VMulF64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 / src2`
+            vdivf32x4 = VDivF32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 / src2`
+            vdivf64x2 = VDivF64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = -src`
+            vnegf32x4 = Vnegf32x4 { dst: VReg, src: VReg };
+            /// `dst = -src`
+            vnegf64x2 = Vnegf64x2 { dst: VReg, src: VReg };
+
+            /// `dst = src == dst`
+            veqf32x4 = VeqF32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src != dst`
+            vneqf32x4 = VneqF32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src < dst`
+            vltf32x4 = VltF32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src <= dst`
+            vlteqf32x4 = VlteqF32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src == dst`
+            veqf64x2 = VeqF64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src != dst`
+            vneqf64x2 = VneqF64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src < dst`
+            vltf64x2 = VltF64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src <= dst`
+            vlteqf64x2 = VlteqF64x2 { operands: BinaryOperands<VReg> };
+
+            /// `dst = ieee_fma(a, b, c)`
+            vfma32x4 = Vfma32x4 { dst: VReg, a: VReg, b: VReg, c: VReg };
+            /// `dst = ieee_fma(a, b, c)`
+            vfma64x2 = Vfma64x2 { dst: VReg, a: VReg, b: VReg, c: VReg };
         }
     };
 }
