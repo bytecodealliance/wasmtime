@@ -1,7 +1,10 @@
 use crate::{
+    codegen::CodeGenError,
     isa::reg::{Reg, RegClass},
     regset::{RegBitSet, RegSet},
 };
+
+use anyhow::{anyhow, Result};
 
 /// The register allocator.
 ///
@@ -28,16 +31,19 @@ impl RegAlloc {
 
     /// Allocate the next available register for the given class,
     /// spilling if not available.
-    pub fn reg_for_class<F>(&mut self, class: RegClass, spill: &mut F) -> Reg
+    pub fn reg_for_class<F>(&mut self, class: RegClass, spill: &mut F) -> Result<Reg>
     where
-        F: FnMut(&mut RegAlloc),
+        F: FnMut(&mut RegAlloc) -> Result<()>,
     {
-        self.regset.reg_for_class(class).unwrap_or_else(|| {
-            spill(self);
-            self.regset
-                .reg_for_class(class)
-                .unwrap_or_else(|| panic!("expected register for class {class:?}, to be available"))
-        })
+        match self.regset.reg_for_class(class) {
+            Some(reg) => Ok(reg),
+            None => {
+                spill(self)?;
+                self.regset
+                    .reg_for_class(class)
+                    .ok_or_else(|| anyhow!(CodeGenError::expected_register_to_be_available()))
+            }
+        }
     }
 
     /// Returns true if the specified register is allocatable.
@@ -46,16 +52,19 @@ impl RegAlloc {
     }
 
     /// Request a specific register, spilling if not available.
-    pub fn reg<F>(&mut self, named: Reg, mut spill: F) -> Reg
+    pub fn reg<F>(&mut self, named: Reg, mut spill: F) -> Result<Reg>
     where
-        F: FnMut(&mut RegAlloc),
+        F: FnMut(&mut RegAlloc) -> Result<()>,
     {
-        self.regset.reg(named).unwrap_or_else(|| {
-            spill(self);
-            self.regset
-                .reg(named)
-                .unwrap_or_else(|| panic!("Expected register {named:?} to be available"))
-        })
+        match self.regset.reg(named) {
+            Some(reg) => Ok(reg),
+            None => {
+                spill(self)?;
+                self.regset
+                    .reg(named)
+                    .ok_or_else(|| anyhow!(CodeGenError::expected_register_to_be_available()))
+            }
+        }
     }
 
     /// Free the given register.

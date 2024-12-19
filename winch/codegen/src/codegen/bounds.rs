@@ -9,6 +9,7 @@ use crate::{
     masm::{IntCmpKind, MacroAssembler, OperandSize, RegImm, TrapCode},
     stack::TypedReg,
 };
+use anyhow::Result;
 use wasmtime_environ::Signed;
 
 /// A newtype to represent an immediate offset argument for a heap access.
@@ -86,11 +87,11 @@ pub(crate) fn load_dynamic_heap_bounds<M>(
     masm: &mut M,
     heap: &HeapData,
     ptr_size: OperandSize,
-) -> Bounds
+) -> Result<Bounds>
 where
     M: MacroAssembler,
 {
-    let dst = context.any_gpr(masm);
+    let dst = context.any_gpr(masm)?;
     match heap.memory.static_heap_size() {
         // Constant size, no need to perform a load.
         Some(size) => masm.mov(writable!(dst), RegImm::i64(size.signed()), ptr_size),
@@ -109,7 +110,10 @@ where
         }
     }
 
-    Bounds::from_typed_reg(TypedReg::new(heap.index_type(), dst))
+    Ok(Bounds::from_typed_reg(TypedReg::new(
+        heap.index_type(),
+        dst,
+    )))
 }
 
 /// This function ensures the following:
@@ -157,7 +161,7 @@ pub(crate) fn load_heap_addr_checked<M, F>(
     index: Index,
     offset: ImmOffset,
     mut emit_check_condition: F,
-) -> Reg
+) -> Result<Reg>
 where
     M: MacroAssembler,
     F: FnMut(&mut M, Bounds, Index) -> IntCmpKind,
@@ -165,20 +169,20 @@ where
     let cmp_kind = emit_check_condition(masm, bounds, index);
 
     masm.trapif(cmp_kind, TrapCode::HEAP_OUT_OF_BOUNDS);
-    let addr = context.any_gpr(masm);
+    let addr = context.any_gpr(masm)?;
 
     load_heap_addr_unchecked(masm, heap, index, offset, addr, ptr_size);
     if !enable_spectre_mitigation {
-        addr
+        Ok(addr)
     } else {
         // Conditionally assign 0 to the register holding the base address if
         // the comparison kind is met.
-        let tmp = context.any_gpr(masm);
+        let tmp = context.any_gpr(masm)?;
         masm.mov(writable!(tmp), RegImm::i64(0), ptr_size);
         let cmp_kind = emit_check_condition(masm, bounds, index);
         masm.cmov(writable!(addr), tmp, cmp_kind, ptr_size);
         context.free_reg(tmp);
-        addr
+        Ok(addr)
     }
 }
 
