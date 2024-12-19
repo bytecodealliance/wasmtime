@@ -401,17 +401,9 @@ impl WastTest {
         // features in Pulley are implemented.
         if config.compiler == Compiler::CraneliftPulley {
             let unsupported = [
-                "misc_testsuite/simd/canonicalize-nan.wast",
-                "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
                 "misc_testsuite/simd/v128-select.wast",
                 "spec_testsuite/proposals/relaxed-simd/i32x4_relaxed_trunc.wast",
-                "spec_testsuite/proposals/relaxed-simd/relaxed_madd_nmadd.wast",
-                "spec_testsuite/proposals/memory64/relaxed_madd_nmadd.wast",
                 "spec_testsuite/proposals/memory64/i32x4_relaxed_trunc.wast",
-                "spec_testsuite/simd_f32x4_cmp.wast",
-                "spec_testsuite/simd_f32x4_pmin_pmax.wast",
-                "spec_testsuite/simd_f64x2_cmp.wast",
-                "spec_testsuite/simd_f64x2_pmin_pmax.wast",
                 "spec_testsuite/simd_i32x4_trunc_sat_f32x4.wast",
                 "spec_testsuite/simd_i32x4_trunc_sat_f64x2.wast",
                 "spec_testsuite/simd_load.wast",
