@@ -486,3 +486,75 @@ pub mod _5_all_world_export_kinds;
 /// }
 /// ```
 pub mod _6_exported_resources;
+
+/// Example of generating **async** bindings for imported resources in a world.
+///
+/// Notable differences from [`_4_imported_resources`] are:
+/// * [`async_trait`] is used.
+/// * async functions are used
+/// * enabled async in bindgen! macro
+///
+/// See [wasi_async_example](https://github.com/bytecodealliance/wasmtime/tree/main/examples/wasi-async) for async function calls on a host.
+///
+/// ```rust
+/// use async_trait::async_trait;
+/// use wasmtime::Result;
+/// use wasmtime::component::{bindgen, ResourceTable, Resource};
+/// use example::imported_resources::logging::{Level, Host, HostLogger};
+///
+#[doc = include_str!("./_7_async.rs")]
+///
+/// #[derive(Default)]
+/// struct MyState {
+///     // Manages the mapping of `MyLogger` structures to `Resource<MyLogger>`.
+///     table: ResourceTable,
+/// }
+///
+/// // There are no free-functions on `interface logging`, so this is an empty
+/// // impl.
+/// impl Host for MyState {}
+///
+/// // This separate `HostLogger` trait serves to act as a namespace for just
+/// // the `logger`-related resource methods.
+/// #[async_trait]
+/// impl HostLogger for MyState {
+///     // A `constructor` in WIT maps to a `new` function in Rust.
+///     async fn new(&mut self, max_level: Level) -> Result<Resource<MyLogger>> {
+///         let id = self.table.push(MyLogger { max_level })?;
+///         Ok(id)
+///     }
+///
+///     async fn get_max_level(&mut self, logger: Resource<MyLogger>) -> Result<Level> {
+///         debug_assert!(!logger.owned());
+///         let logger = self.table.get(&logger)?;
+///         Ok(logger.max_level)
+///     }
+///
+///     async fn set_max_level(&mut self, logger: Resource<MyLogger>, level: Level) -> Result<()> {
+///         debug_assert!(!logger.owned());
+///         let logger = self.table.get_mut(&logger)?;
+///         logger.max_level = level;
+///         Ok(())
+///     }
+///
+///     async fn log(&mut self, logger: Resource<MyLogger>, level: Level, msg: String) -> Result<()> {
+///         debug_assert!(!logger.owned());
+///         let logger = self.table.get_mut(&logger)?;
+///         if (level as u32) <= (logger.max_level as u32) {
+///             println!("{msg}");
+///         }
+///         Ok(())
+///     }
+///
+///     async fn drop(&mut self, logger: Resource<MyLogger>) -> Result<()> {
+///         debug_assert!(logger.owned());
+///         let _logger: MyLogger = self.table.delete(logger)?;
+///         // ... custom destruction logic here if necessary, otherwise
+///         // a `Drop for MyLogger` would also work.
+///         Ok(())
+///     }
+/// }
+///
+/// # fn main() {}
+/// ```
+pub mod _7_async;
