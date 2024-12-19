@@ -4055,4 +4055,28 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         self.state[operands.dst].set_u64x2(c);
         ControlFlow::Continue(())
     }
+
+    fn vneg8x16(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i8x16();
+        self.state[dst].set_i8x16(a.map(|i| i.wrapping_neg()));
+        ControlFlow::Continue(())
+    }
+
+    fn vneg16x8(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i16x8();
+        self.state[dst].set_i16x8(a.map(|i| i.wrapping_neg()));
+        ControlFlow::Continue(())
+    }
+
+    fn vneg32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i32x4();
+        self.state[dst].set_i32x4(a.map(|i| i.wrapping_neg()));
+        ControlFlow::Continue(())
+    }
+
+    fn vneg64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i64x2();
+        self.state[dst].set_i64x2(a.map(|i| i.wrapping_neg()));
+        ControlFlow::Continue(())
+    }
 }

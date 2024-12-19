@@ -1162,6 +1162,13 @@
 (rule 0 (lower (has_type (fits_in_32 _) (ineg a))) (pulley_xneg32 (sext32 a)))
 (rule 1 (lower (has_type $I64 (ineg a))) (pulley_xneg64 a))
 
+;; vector negation
+
+(rule 1 (lower (has_type $I8X16 (ineg a))) (pulley_vneg8x16 a))
+(rule 1 (lower (has_type $I16X8 (ineg a))) (pulley_vneg16x8 a))
+(rule 1 (lower (has_type $I32X4 (ineg a))) (pulley_vneg32x4 a))
+(rule 1 (lower (has_type $I64X2 (ineg a))) (pulley_vneg64x2 a))
+
 ;;;; Rules for `fabs` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (fabs a))) (pulley_fabs32 a))
