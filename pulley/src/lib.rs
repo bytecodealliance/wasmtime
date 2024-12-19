@@ -1097,6 +1097,15 @@ macro_rules! for_each_extended_op {
             vult64x2 = Vult64x2 { operands: BinaryOperands<VReg> };
             /// `dst = src <= dst` (unsigned)
             vulteq64x2 = Vulteq64x2 { operands: BinaryOperands<VReg> };
+
+            /// `dst = -src`
+            vneg8x16 = Vneg8x16 { dst: VReg, src: VReg };
+            /// `dst = -src`
+            vneg16x8 = Vneg16x8 { dst: VReg, src: VReg };
+            /// `dst = -src`
+            vneg32x4 = Vneg32x4 { dst: VReg, src: VReg };
+            /// `dst = -src`
+            vneg64x2 = Vneg64x2 { dst: VReg, src: VReg };
         }
     };
 }
