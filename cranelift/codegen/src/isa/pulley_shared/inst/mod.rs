@@ -129,7 +129,7 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
         }
 
-        Inst::Unwind { .. } | Inst::Nop => {}
+        Inst::Nop => {}
 
         Inst::TrapIf { cond, code: _ } => {
             cond.get_operands(collector);
@@ -577,8 +577,6 @@ impl Inst {
                 }
                 s
             }
-
-            Inst::Unwind { inst } => format!("unwind {inst:?}"),
 
             Inst::TrapIf { cond, code } => {
                 format!("trap_{cond} // code = {code:?}")

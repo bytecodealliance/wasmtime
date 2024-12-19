@@ -18,9 +18,6 @@
     ;; A pseudo-instruction that moves vregs to return registers.
     (Rets (rets VecRetPair))
 
-    ;; A pseudo-instruction to update unwind info.
-    (Unwind (inst UnwindInst))
-
     ;; Implementation of `br_table`, uses `idx` to jump to one of `targets` or
     ;; jumps to `default` if it's out-of-bounds.
     (BrTable

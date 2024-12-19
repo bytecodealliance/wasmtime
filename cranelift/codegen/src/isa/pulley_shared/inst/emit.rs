@@ -150,7 +150,7 @@ fn pulley_emit<P>(
 {
     match inst {
         // Pseduo-instructions that don't actually encode to anything.
-        Inst::Args { .. } | Inst::Rets { .. } | Inst::Unwind { .. } => {}
+        Inst::Args { .. } | Inst::Rets { .. } => {}
 
         Inst::TrapIf { cond, code } => {
             let trap = sink.defer_trap(*code);
