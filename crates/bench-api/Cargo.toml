@@ -22,7 +22,7 @@ doctest = false
 anyhow = { workspace = true }
 shuffling-allocator = { version = "1.1.1", optional = true }
 target-lexicon = { workspace = true }
-wasmtime = { workspace = true, default-features = true, features = ["winch"] }
+wasmtime = { workspace = true, default-features = true, features = ["winch", 'pulley'] }
 wasmtime-cli-flags = { workspace = true, default-features = true, features = [
     "cranelift",
 ] }
