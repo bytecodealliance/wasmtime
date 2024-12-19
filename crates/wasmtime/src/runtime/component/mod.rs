@@ -148,6 +148,8 @@ pub mod __internal {
     #[cfg(feature = "async")]
     pub use async_trait::async_trait;
     pub use core::mem::transmute;
+    #[cfg(feature = "async")]
+    pub use trait_variant::make as trait_variant_make;
     pub use wasmtime_environ;
     pub use wasmtime_environ::component::{CanonicalAbiInfo, ComponentTypes, InterfaceType};
 }

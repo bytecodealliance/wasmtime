@@ -1358,7 +1358,7 @@ impl Wasmtime {
         let wt = self.wasmtime_path();
         let world_camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
         if self.opts.async_.maybe_async() {
-            uwriteln!(self.src, "#[{wt}::component::__internal::async_trait]")
+            uwriteln!(self.src, "#[{wt}::component::__internal::trait_variant_make(::core::marker::Send)]")
         }
         uwrite!(self.src, "pub trait {world_camel}Imports");
         let mut supertraits = vec![];
@@ -1404,18 +1404,15 @@ impl Wasmtime {
         );
 
         // Generate impl WorldImports for &mut WorldImports
-        let (async_trait, maybe_send) = if self.opts.async_.maybe_async() {
-            (
-                format!("#[{wt}::component::__internal::async_trait]\n"),
-                "+ Send",
-            )
+        let maybe_send = if self.opts.async_.maybe_async() {
+            "+ Send"
         } else {
-            (String::new(), "")
+            ""
         };
         if !self.opts.skip_mut_forwarding_impls {
             uwriteln!(
                 self.src,
-                "{async_trait}impl<_T: {world_camel}Imports + ?Sized {maybe_send}> {world_camel}Imports for &mut _T {{"
+                "impl<_T: {world_camel}Imports + ?Sized {maybe_send}> {world_camel}Imports for &mut _T {{"
             );
             // Forward each method call to &mut T
             for f in self.import_functions.iter() {
@@ -1710,7 +1707,7 @@ impl<'a> InterfaceGenerator<'a> {
 
             // Generate resource trait
             if self.gen.opts.async_.maybe_async() {
-                uwriteln!(self.src, "#[{wt}::component::__internal::async_trait]")
+                uwriteln!(self.src, "#[{wt}::component::__internal::trait_variant_make(::core::marker::Send)]")
             }
             uwriteln!(self.src, "pub trait Host{camel} {{");
 
@@ -1756,17 +1753,14 @@ impl<'a> InterfaceGenerator<'a> {
 
             // Generate impl HostResource for &mut HostResource
             if !self.gen.opts.skip_mut_forwarding_impls {
-                let (async_trait, maybe_send) = if self.gen.opts.async_.maybe_async() {
-                    (
-                        format!("#[{wt}::component::__internal::async_trait]\n"),
-                        "+ Send",
-                    )
+                let maybe_send = if self.gen.opts.async_.maybe_async() {
+                    "+ Send"
                 } else {
-                    (String::new(), "")
+                    ""
                 };
                 uwriteln!(
                     self.src,
-                    "{async_trait}impl <_T: Host{camel} + ?Sized {maybe_send}> Host{camel} for &mut _T {{"
+                    "impl <_T: Host{camel} + ?Sized {maybe_send}> Host{camel} for &mut _T {{"
                 );
                 for func in &functions {
                     self.generate_function_trait_sig(func);
@@ -2386,7 +2380,7 @@ impl<'a> InterfaceGenerator<'a> {
 
         let is_maybe_async = self.gen.opts.async_.maybe_async();
         if is_maybe_async {
-            uwriteln!(self.src, "#[{wt}::component::__internal::async_trait]")
+            uwriteln!(self.src, "#[{wt}::component::__internal::trait_variant_make(::core::marker::Send)]")
         }
         // Generate the `pub trait` which represents the host functionality for
         // this import which additionally inherits from all resource traits
@@ -2541,18 +2535,11 @@ impl<'a> InterfaceGenerator<'a> {
             );
 
             // Generate impl Host for &mut Host
-            let (async_trait, maybe_send) = if is_maybe_async {
-                (
-                    format!("#[{wt}::component::__internal::async_trait]"),
-                    "+ Send",
-                )
-            } else {
-                (String::new(), "")
-            };
+            let maybe_send = if is_maybe_async { "+ Send" } else { "" };
 
             uwriteln!(
                 self.src,
-                "{async_trait}impl<_T: Host + ?Sized {maybe_send}> Host for &mut _T {{"
+                "impl<_T: Host + ?Sized {maybe_send}> Host for &mut _T {{"
             );
             // Forward each method call to &mut T
             for (_, func) in iface.functions.iter() {
