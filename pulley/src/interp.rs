@@ -1312,10 +1312,30 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xmul32_s8(&mut self, dst: XReg, src1: XReg, src2: i8) -> ControlFlow<Done> {
+        self.xmul32_s32(dst, src1, src2.into())
+    }
+
+    fn xmul32_s32(&mut self, dst: XReg, src1: XReg, src2: i32) -> ControlFlow<Done> {
+        let a = self.state[src1].get_i32();
+        self.state[dst].set_i32(a.wrapping_mul(src2));
+        ControlFlow::Continue(())
+    }
+
     fn xmul64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u64();
         let b = self.state[operands.src2].get_u64();
         self.state[operands.dst].set_u64(a.wrapping_mul(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xmul64_s8(&mut self, dst: XReg, src1: XReg, src2: i8) -> ControlFlow<Done> {
+        self.xmul64_s32(dst, src1, src2.into())
+    }
+
+    fn xmul64_s32(&mut self, dst: XReg, src1: XReg, src2: i32) -> ControlFlow<Done> {
+        let a = self.state[src1].get_i64();
+        self.state[dst].set_i64(a.wrapping_mul(src2.into()));
         ControlFlow::Continue(())
     }
 
@@ -1357,6 +1377,48 @@ impl OpVisitor for Interpreter<'_> {
     fn xshr64_s(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_i64();
         let b = self.state[operands.src2].get_u32();
+        self.state[operands.dst].set_i64(a.wrapping_shr(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xshl32_u6(&mut self, operands: BinaryOperands<XReg, XReg, U6>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32();
+        let b = u32::from(u8::from(operands.src2));
+        self.state[operands.dst].set_u32(a.wrapping_shl(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xshr32_u_u6(&mut self, operands: BinaryOperands<XReg, XReg, U6>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u32();
+        let b = u32::from(u8::from(operands.src2));
+        self.state[operands.dst].set_u32(a.wrapping_shr(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xshr32_s_u6(&mut self, operands: BinaryOperands<XReg, XReg, U6>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i32();
+        let b = u32::from(u8::from(operands.src2));
+        self.state[operands.dst].set_i32(a.wrapping_shr(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xshl64_u6(&mut self, operands: BinaryOperands<XReg, XReg, U6>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64();
+        let b = u32::from(u8::from(operands.src2));
+        self.state[operands.dst].set_u64(a.wrapping_shl(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xshr64_u_u6(&mut self, operands: BinaryOperands<XReg, XReg, U6>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64();
+        let b = u32::from(u8::from(operands.src2));
+        self.state[operands.dst].set_u64(a.wrapping_shr(b));
+        ControlFlow::Continue(())
+    }
+
+    fn xshr64_s_u6(&mut self, operands: BinaryOperands<XReg, XReg, U6>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i64();
+        let b = u32::from(u8::from(operands.src2));
         self.state[operands.dst].set_i64(a.wrapping_shr(b));
         ControlFlow::Continue(())
     }
@@ -1833,10 +1895,30 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xband32_s8(&mut self, dst: XReg, src1: XReg, src2: i8) -> ControlFlow<Done> {
+        self.xband32_s32(dst, src1, src2.into())
+    }
+
+    fn xband32_s32(&mut self, dst: XReg, src1: XReg, src2: i32) -> ControlFlow<Done> {
+        let a = self.state[src1].get_i32();
+        self.state[dst].set_i32(a & src2);
+        ControlFlow::Continue(())
+    }
+
     fn xband64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u64();
         let b = self.state[operands.src2].get_u64();
         self.state[operands.dst].set_u64(a & b);
+        ControlFlow::Continue(())
+    }
+
+    fn xband64_s8(&mut self, dst: XReg, src1: XReg, src2: i8) -> ControlFlow<Done> {
+        self.xband64_s32(dst, src1, src2.into())
+    }
+
+    fn xband64_s32(&mut self, dst: XReg, src1: XReg, src2: i32) -> ControlFlow<Done> {
+        let a = self.state[src1].get_i64();
+        self.state[dst].set_i64(a & i64::from(src2));
         ControlFlow::Continue(())
     }
 
@@ -1847,10 +1929,30 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xbor32_s8(&mut self, dst: XReg, src1: XReg, src2: i8) -> ControlFlow<Done> {
+        self.xbor32_s32(dst, src1, src2.into())
+    }
+
+    fn xbor32_s32(&mut self, dst: XReg, src1: XReg, src2: i32) -> ControlFlow<Done> {
+        let a = self.state[src1].get_i32();
+        self.state[dst].set_i32(a | src2);
+        ControlFlow::Continue(())
+    }
+
     fn xbor64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u64();
         let b = self.state[operands.src2].get_u64();
         self.state[operands.dst].set_u64(a | b);
+        ControlFlow::Continue(())
+    }
+
+    fn xbor64_s8(&mut self, dst: XReg, src1: XReg, src2: i8) -> ControlFlow<Done> {
+        self.xbor64_s32(dst, src1, src2.into())
+    }
+
+    fn xbor64_s32(&mut self, dst: XReg, src1: XReg, src2: i32) -> ControlFlow<Done> {
+        let a = self.state[src1].get_i64();
+        self.state[dst].set_i64(a | i64::from(src2));
         ControlFlow::Continue(())
     }
 
@@ -1861,10 +1963,30 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xbxor32_s8(&mut self, dst: XReg, src1: XReg, src2: i8) -> ControlFlow<Done> {
+        self.xbxor32_s32(dst, src1, src2.into())
+    }
+
+    fn xbxor32_s32(&mut self, dst: XReg, src1: XReg, src2: i32) -> ControlFlow<Done> {
+        let a = self.state[src1].get_i32();
+        self.state[dst].set_i32(a ^ src2);
+        ControlFlow::Continue(())
+    }
+
     fn xbxor64(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u64();
         let b = self.state[operands.src2].get_u64();
         self.state[operands.dst].set_u64(a ^ b);
+        ControlFlow::Continue(())
+    }
+
+    fn xbxor64_s8(&mut self, dst: XReg, src1: XReg, src2: i8) -> ControlFlow<Done> {
+        self.xbxor64_s32(dst, src1, src2.into())
+    }
+
+    fn xbxor64_s32(&mut self, dst: XReg, src1: XReg, src2: i32) -> ControlFlow<Done> {
+        let a = self.state[src1].get_i64();
+        self.state[dst].set_i64(a ^ i64::from(src2));
         ControlFlow::Continue(())
     }
 

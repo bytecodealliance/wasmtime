@@ -223,6 +223,15 @@
 (rule (lower (has_type $I32 (imul a b))) (pulley_xmul32 a b))
 (rule (lower (has_type $I64 (imul a b))) (pulley_xmul64 a b))
 
+(rule 1 (lower (has_type (ty_int (fits_in_32 _)) (imul a (i32_from_iconst b))))
+  (pulley_xmul32_s32 a b))
+(rule 2 (lower (has_type $I64 (imul a (i32_from_iconst b))))
+  (pulley_xmul64_s32 a b))
+(rule 3 (lower (has_type (ty_int (fits_in_32 _)) (imul a (i8_from_iconst b))))
+  (pulley_xmul32_s8 a b))
+(rule 4 (lower (has_type $I64 (imul a (i8_from_iconst b))))
+  (pulley_xmul64_s8 a b))
+
 (rule (lower (has_type $I8X16 (imul a b))) (pulley_vmuli8x16 a b))
 (rule (lower (has_type $I16X8 (imul a b))) (pulley_vmuli16x8 a b))
 (rule (lower (has_type $I32X4 (imul a b))) (pulley_vmuli32x4 a b))
@@ -294,10 +303,30 @@
 (rule (lower (has_type $I64 (ishl a b)))
   (pulley_xshl64 a b))
 
+;; Special-case constant shift amounts.
+(rule 1 (lower (has_type $I32 (ishl a b)))
+  (if-let n (u6_shift_from_iconst b))
+  (pulley_xshl32_u6 a n))
+(rule 1 (lower (has_type $I64 (ishl a b)))
+  (if-let n (u6_shift_from_iconst b))
+  (pulley_xshl64_u6 a n))
+
+;; vector shifts
+
 (rule (lower (has_type $I8X16 (ishl a b))) (pulley_vshli8x16 a b))
 (rule (lower (has_type $I16X8 (ishl a b))) (pulley_vshli16x8 a b))
 (rule (lower (has_type $I32X4 (ishl a b))) (pulley_vshli32x4 a b))
 (rule (lower (has_type $I64X2 (ishl a b))) (pulley_vshli64x2 a b))
+
+;; Helper to extract a constant from `Value`, mask it to 6 bits, and then make a
+;; `U6`.
+(decl pure partial u6_shift_from_iconst (Value) U6)
+(rule (u6_shift_from_iconst (u64_from_iconst val))
+  (if-let (u6_from_u8 x) (u64_as_u8 (u64_and val 0x3f)))
+  x)
+
+(decl u6_from_u8 (U6) u8)
+(extern extractor u6_from_u8 u6_from_u8)
 
 ;;;; Rules for `ushr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -312,6 +341,16 @@
 
 (rule (lower (has_type $I64 (ushr a b)))
   (pulley_xshr64_u a b))
+
+;; Special-case constant shift amounts.
+(rule 1 (lower (has_type $I32 (ushr a b)))
+  (if-let n (u6_shift_from_iconst b))
+  (pulley_xshr32_u_u6 a n))
+(rule 1 (lower (has_type $I64 (ushr a b)))
+  (if-let n (u6_shift_from_iconst b))
+  (pulley_xshr64_u_u6 a n))
+
+;; vector shifts
 
 (rule (lower (has_type $I8X16 (ushr a b))) (pulley_vshri8x16_u a b))
 (rule (lower (has_type $I16X8 (ushr a b))) (pulley_vshri16x8_u a b))
@@ -332,6 +371,16 @@
 (rule (lower (has_type $I64 (sshr a b)))
   (pulley_xshr64_s a b))
 
+;; Special-case constant shift amounts.
+(rule 1 (lower (has_type $I32 (sshr a b)))
+  (if-let n (u6_shift_from_iconst b))
+  (pulley_xshr32_s_u6 a n))
+(rule 1 (lower (has_type $I64 (sshr a b)))
+  (if-let n (u6_shift_from_iconst b))
+  (pulley_xshr64_s_u6 a n))
+
+;; vector shifts
+
 (rule (lower (has_type $I8X16 (sshr a b))) (pulley_vshri8x16_s a b))
 (rule (lower (has_type $I16X8 (sshr a b))) (pulley_vshri16x8_s a b))
 (rule (lower (has_type $I32X4 (sshr a b))) (pulley_vshri32x4_s a b))
@@ -339,33 +388,51 @@
 
 ;;;; Rules for `band` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 0 (lower (has_type (fits_in_32 _) (band a b)))
-  (pulley_xband32 a b))
+(rule 0 (lower (has_type (fits_in_32 _) (band a b))) (pulley_xband32 a b))
+(rule 1 (lower (has_type $I64 (band a b))) (pulley_xband64 a b))
 
-(rule 1 (lower (has_type $I64 (band a b)))
-  (pulley_xband64 a b))
+(rule 3 (lower (has_type (ty_int (fits_in_32 _)) (band a (i32_from_iconst b))))
+  (pulley_xband32_s32 a b))
+(rule 4 (lower (has_type $I64 (band a (i32_from_iconst b))))
+  (pulley_xband64_s32 a b))
+(rule 5 (lower (has_type (ty_int (fits_in_32 _)) (band a (i8_from_iconst b))))
+  (pulley_xband32_s8 a b))
+(rule 6 (lower (has_type $I64 (band a (i8_from_iconst b))))
+  (pulley_xband64_s8 a b))
 
 (rule 2 (lower (has_type (ty_vec128 _) (band a b)))
   (pulley_vband128 a b))
 
 ;;;; Rules for `bor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 0 (lower (has_type (fits_in_32 _) (bor a b)))
-  (pulley_xbor32 a b))
+(rule 0 (lower (has_type (fits_in_32 _) (bor a b))) (pulley_xbor32 a b))
+(rule 1 (lower (has_type $I64 (bor a b))) (pulley_xbor64 a b))
 
-(rule 1 (lower (has_type $I64 (bor a b)))
-  (pulley_xbor64 a b))
+(rule 3 (lower (has_type (ty_int (fits_in_32 _)) (bor a (i32_from_iconst b))))
+  (pulley_xbor32_s32 a b))
+(rule 4 (lower (has_type $I64 (bor a (i32_from_iconst b))))
+  (pulley_xbor64_s32 a b))
+(rule 5 (lower (has_type (ty_int (fits_in_32 _)) (bor a (i8_from_iconst b))))
+  (pulley_xbor32_s8 a b))
+(rule 6 (lower (has_type $I64 (bor a (i8_from_iconst b))))
+  (pulley_xbor64_s8 a b))
 
 (rule 2 (lower (has_type (ty_vec128 _) (bor a b)))
   (pulley_vbor128 a b))
 
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule 0 (lower (has_type (fits_in_32 _) (bxor a b)))
-  (pulley_xbxor32 a b))
+(rule 0 (lower (has_type (fits_in_32 _) (bxor a b))) (pulley_xbxor32 a b))
+(rule 1 (lower (has_type $I64 (bxor a b))) (pulley_xbxor64 a b))
 
-(rule 1 (lower (has_type $I64 (bxor a b)))
-  (pulley_xbxor64 a b))
+(rule 3 (lower (has_type (ty_int (fits_in_32 _)) (bxor a (i32_from_iconst b))))
+  (pulley_xbxor32_s32 a b))
+(rule 4 (lower (has_type $I64 (bxor a (i32_from_iconst b))))
+  (pulley_xbxor64_s32 a b))
+(rule 5 (lower (has_type (ty_int (fits_in_32 _)) (bxor a (i8_from_iconst b))))
+  (pulley_xbxor32_s8 a b))
+(rule 6 (lower (has_type $I64 (bxor a (i8_from_iconst b))))
+  (pulley_xbxor64_s8 a b))
 
 (rule 2 (lower (has_type (ty_vec128 _) (bxor a b)))
   (pulley_vbxor128 a b))

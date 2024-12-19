@@ -1,5 +1,6 @@
 //! Pulley registers.
 
+use crate::U6;
 use core::hash::Hash;
 use core::marker::PhantomData;
 use core::{fmt, ops::Range};
@@ -173,7 +174,7 @@ pub struct BinaryOperands<D, S1 = D, S2 = D> {
     pub src2: S2,
 }
 
-impl<D: Reg, S1: Reg, S2: Reg> BinaryOperands<D, S1, S2> {
+impl<D, S1, S2> BinaryOperands<D, S1, S2> {
     /// Convenience constructor for applying `Into`
     pub fn new(dst: impl Into<D>, src1: impl Into<S1>, src2: impl Into<S2>) -> Self {
         Self {
@@ -182,7 +183,9 @@ impl<D: Reg, S1: Reg, S2: Reg> BinaryOperands<D, S1, S2> {
             src2: src2.into(),
         }
     }
+}
 
+impl<D: Reg, S1: Reg, S2: Reg> BinaryOperands<D, S1, S2> {
     /// Convert to dense 16 bit encoding.
     pub fn to_bits(self) -> u16 {
         let dst = self.dst.to_u8();
@@ -197,6 +200,25 @@ impl<D: Reg, S1: Reg, S2: Reg> BinaryOperands<D, S1, S2> {
             dst: D::new((bits & 0b11111) as u8).unwrap(),
             src1: S1::new(((bits >> 5) & 0b11111) as u8).unwrap(),
             src2: S2::new(((bits >> 10) & 0b11111) as u8).unwrap(),
+        }
+    }
+}
+
+impl<D: Reg, S1: Reg> BinaryOperands<D, S1, U6> {
+    /// Convert to dense 16 bit encoding.
+    pub fn to_bits(self) -> u16 {
+        let dst = self.dst.to_u8();
+        let src1 = self.src1.to_u8();
+        let src2 = u8::from(self.src2);
+        (dst as u16) | ((src1 as u16) << 5) | ((src2 as u16) << 10)
+    }
+
+    /// Convert from dense 16 bit encoding. The topmost bit is ignored.
+    pub fn from_bits(bits: u16) -> Self {
+        Self {
+            dst: D::new((bits & 0b11111) as u8).unwrap(),
+            src1: S1::new(((bits >> 5) & 0b11111) as u8).unwrap(),
+            src2: U6::new(((bits >> 10) & 0b111111) as u8).unwrap(),
         }
     }
 }
@@ -321,8 +343,8 @@ mod tests {
                         src2: XReg::new(src2).unwrap(),
                     };
                     assert_eq!(operands.to_bits(), i);
-                    assert_eq!(BinaryOperands::from_bits(i), operands);
-                    assert_eq!(BinaryOperands::from_bits(0x8000 | i), operands);
+                    assert_eq!(BinaryOperands::<XReg>::from_bits(i), operands);
+                    assert_eq!(BinaryOperands::<XReg>::from_bits(0x8000 | i), operands);
                     i += 1;
                 }
             }

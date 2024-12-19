@@ -919,6 +919,10 @@ macro_rules! isle_common_prelude_methods {
             val.try_into().ok()
         }
 
+        fn i32_as_i8(&mut self, val: i32) -> Option<i8> {
+            val.try_into().ok()
+        }
+
         fn u8_as_i8(&mut self, val: u8) -> i8 {
             val as i8
         }

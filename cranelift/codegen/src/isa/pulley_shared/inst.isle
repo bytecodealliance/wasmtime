@@ -126,6 +126,7 @@
 (rule (raw_inst_to_inst inst) (MInst.Raw inst))
 (convert RawInst MInst raw_inst_to_inst)
 
+(type U6 (primitive U6))
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
 (type BoxReturnCallInfo (primitive BoxReturnCallInfo))

@@ -137,12 +137,14 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
                     pat.push_str(",");
                     format_string.push_str(&format!(" // trap={{{name}:?}}"));
                 }
-                Operand::Binop { .. } => {
+                Operand::Binop { src2, .. } => {
                     pat.push_str("dst, src1, src2,");
                     format_string.push_str(" {dst}, {src1}, {src2}");
                     locals.push_str(&format!("let dst = reg_name(*dst.to_reg());\n"));
                     locals.push_str(&format!("let src1 = reg_name(**src1);\n"));
-                    locals.push_str(&format!("let src2 = reg_name(**src2);\n"));
+                    if src2.contains("Reg") {
+                        locals.push_str(&format!("let src2 = reg_name(**src2);\n"));
+                    }
                 }
             }
         }
@@ -189,11 +191,14 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
                     }
                 }
                 Operand::TrapCode { .. } => {}
-                Operand::Binop { .. } => {
-                    pat.push_str("dst, src1, src2,");
+                Operand::Binop { src2, .. } => {
+                    pat.push_str("dst, src1,");
                     uses.push("src1");
-                    uses.push("src2");
                     defs.push("dst");
+                    if src2.contains("Reg") {
+                        pat.push_str("src2,");
+                        uses.push("src2");
+                    }
                 }
             }
         }
