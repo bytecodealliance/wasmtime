@@ -9,11 +9,11 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   xshl32_u8 x0, x0, 7
+;   xshl32_u6 x0, x0, 7
 ;   ret
 ;
 ; Disassembled:
-; xshl32_u8 x0, x0, 7
+; xshl32_u6 x0, x0, 7
 ; ret
 
 function %i32_imm2(i32) -> i32 {
@@ -24,13 +24,12 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   xshl32_u8 x0, x0, 7
+;   xshl32_u6 x0, x0, 7
 ;   ret
 ;
 ; Disassembled:
-; xshl32_u8 x0, x0, 7
+; xshl32_u6 x0, x0, 7
 ; ret
-
 
 function %i64_imm(i64) -> i64 {
 block0(v0: i64):
@@ -40,11 +39,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xshl64_u8 x0, x0, 7
+;   xshl64_u6 x0, x0, 7
 ;   ret
 ;
 ; Disassembled:
-; xshl64_u8 x0, x0, 7
+; xshl64_u6 x0, x0, 7
 ; ret
 
 function %i64_imm2(i64) -> i64 {
@@ -55,13 +54,12 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xshl64_u8 x0, x0, 7
+;   xshl64_u6 x0, x0, 7
 ;   ret
 ;
 ; Disassembled:
-; xshl64_u8 x0, x0, 7
+; xshl64_u6 x0, x0, 7
 ; ret
-
 
 function %i32_ushr_imm(i32) -> i32 {
 block0(v0: i32):
@@ -71,11 +69,11 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   xshr32_u_u8 x0, x0, 7
+;   xshr32_u_u6 x0, x0, 7
 ;   ret
 ;
 ; Disassembled:
-; xshr32_u_u8 x0, x0, 7
+; xshr32_u_u6 x0, x0, 7
 ; ret
 
 function %i32_ushr_imm2(i32) -> i32 {
@@ -86,11 +84,11 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   xshr32_u_u8 x0, x0, 7
+;   xshr32_u_u6 x0, x0, 7
 ;   ret
 ;
 ; Disassembled:
-; xshr32_u_u8 x0, x0, 7
+; xshr32_u_u6 x0, x0, 7
 ; ret
 
 function %i64_ushr_imm(i64) -> i64 {
@@ -101,11 +99,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xshr64_u_u8 x0, x0, 7
+;   xshr64_u_u6 x0, x0, 7
 ;   ret
 ;
 ; Disassembled:
-; xshr64_u_u8 x0, x0, 7
+; xshr64_u_u6 x0, x0, 7
 ; ret
 
 function %i64_ushr_imm2(i64) -> i64 {
@@ -116,11 +114,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xshr64_u_u8 x0, x0, 7
+;   xshr64_u_u6 x0, x0, 7
 ;   ret
 ;
 ; Disassembled:
-; xshr64_u_u8 x0, x0, 7
+; xshr64_u_u6 x0, x0, 7
 ; ret
 
 function %i32_sshr_imm(i32) -> i32 {
@@ -131,11 +129,11 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   xshr32_s_u8 x0, x0, 7
+;   xshr32_s_u6 x0, x0, 7
 ;   ret
 ;
 ; Disassembled:
-; xshr32_s_u8 x0, x0, 7
+; xshr32_s_u6 x0, x0, 7
 ; ret
 
 function %i32_sshr_imm2(i32) -> i32 {
@@ -146,11 +144,11 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   xshr32_s_u8 x0, x0, 7
+;   xshr32_s_u6 x0, x0, 7
 ;   ret
 ;
 ; Disassembled:
-; xshr32_s_u8 x0, x0, 7
+; xshr32_s_u6 x0, x0, 7
 ; ret
 
 function %i64_sshr_imm(i64) -> i64 {
@@ -161,11 +159,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xshr64_s_u8 x0, x0, 7
+;   xshr64_s_u6 x0, x0, 7
 ;   ret
 ;
 ; Disassembled:
-; xshr64_s_u8 x0, x0, 7
+; xshr64_s_u6 x0, x0, 7
 ; ret
 
 function %i64_sshr_imm2(i64) -> i64 {
@@ -176,9 +174,10 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xshr64_s_u8 x0, x0, 7
+;   xshr64_s_u6 x0, x0, 7
 ;   ret
 ;
 ; Disassembled:
-; xshr64_s_u8 x0, x0, 7
+; xshr64_s_u6 x0, x0, 7
 ; ret
+
