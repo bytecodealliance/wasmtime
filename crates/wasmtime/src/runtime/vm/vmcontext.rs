@@ -932,7 +932,11 @@ macro_rules! define_builtin_array {
     ) => {
         /// An array that stores addresses of builtin functions. We translate code
         /// to use indirect calls. This way, we don't have to patch the code.
+        ///
+        /// Ignore improper_ctypes_definitions warnings on x86_64 to ignore
+        /// warnings about `__m128i` not being FFI-safe.
         #[repr(C)]
+        #[cfg_attr(target_arch = "x86_64", allow(improper_ctypes_definitions))]
         pub struct VMBuiltinFunctionsArray {
             $(
                 $name: unsafe extern "C" fn(
@@ -969,6 +973,9 @@ macro_rules! define_builtin_array {
 
     (@ty u32) => (u32);
     (@ty u64) => (u64);
+    (@ty f32) => (f32);
+    (@ty f64) => (f64);
+    (@ty __m128i) => (std::arch::x86_64::__m128i);
     (@ty u8) => (u8);
     (@ty bool) => (bool);
     (@ty pointer) => (*mut u8);
