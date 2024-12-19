@@ -1,9 +1,10 @@
+use anyhow::{bail, ensure, Result};
 use wasmtime_environ::{VMOffsets, WasmHeapType, WasmValType};
 
 use super::ControlStackFrame;
 use crate::{
     abi::{scratch, vmctx, ABIOperand, ABIResults, RetArea},
-    codegen::{CodeGenPhase, Emission, Prologue},
+    codegen::{CodeGenError, CodeGenPhase, Emission, Prologue},
     frame::Frame,
     isa::reg::RegClass,
     masm::{MacroAssembler, OperandSize, RegImm, SPOffset, ShiftKind, StackSlot},
@@ -42,18 +43,21 @@ pub(crate) struct CodeGenContext<'a, P: CodeGenPhase> {
 
 impl<'a> CodeGenContext<'a, Emission> {
     /// Prepares arguments for emitting an i32 shift operation.
-    pub fn i32_shift<M>(&mut self, masm: &mut M, kind: ShiftKind)
+    pub fn i32_shift<M>(&mut self, masm: &mut M, kind: ShiftKind) -> Result<()>
     where
         M: MacroAssembler,
     {
-        let top = self.stack.peek().expect("value at stack top");
+        let top = self
+            .stack
+            .peek()
+            .ok_or_else(|| CodeGenError::missing_values_in_stack())?;
 
         if top.is_i32_const() {
             let val = self
                 .stack
                 .pop_i32_const()
-                .expect("i32 const value at stack top");
-            let typed_reg = self.pop_to_reg(masm, None);
+                .ok_or_else(|| CodeGenError::missing_values_in_stack())?;
+            let typed_reg = self.pop_to_reg(masm, None)?;
             masm.shift_ir(
                 writable!(typed_reg.reg),
                 val as u64,
@@ -63,22 +67,26 @@ impl<'a> CodeGenContext<'a, Emission> {
             );
             self.stack.push(typed_reg.into());
         } else {
-            masm.shift(self, kind, OperandSize::S32);
+            masm.shift(self, kind, OperandSize::S32)?;
         }
+        Ok(())
     }
 
     /// Prepares arguments for emitting an i64 binary operation.
-    pub fn i64_shift<M>(&mut self, masm: &mut M, kind: ShiftKind)
+    pub fn i64_shift<M>(&mut self, masm: &mut M, kind: ShiftKind) -> Result<()>
     where
         M: MacroAssembler,
     {
-        let top = self.stack.peek().expect("value at stack top");
+        let top = self
+            .stack
+            .peek()
+            .ok_or_else(|| CodeGenError::missing_values_in_stack())?;
         if top.is_i64_const() {
             let val = self
                 .stack
                 .pop_i64_const()
-                .expect("i64 const value at stack top");
-            let typed_reg = self.pop_to_reg(masm, None);
+                .ok_or_else(|| CodeGenError::missing_values_in_stack())?;
+            let typed_reg = self.pop_to_reg(masm, None)?;
             masm.shift_ir(
                 writable!(typed_reg.reg),
                 val as u64,
@@ -88,8 +96,10 @@ impl<'a> CodeGenContext<'a, Emission> {
             );
             self.stack.push(typed_reg.into());
         } else {
-            masm.shift(self, kind, OperandSize::S64);
+            masm.shift(self, kind, OperandSize::S64)?;
         };
+
+        Ok(())
     }
 }
 
@@ -125,14 +135,18 @@ impl<'a> CodeGenContext<'a, Prologue> {
 impl<'a> CodeGenContext<'a, Emission> {
     /// Request a specific register to the register allocator,
     /// spilling if not available.
-    pub fn reg<M: MacroAssembler>(&mut self, named: Reg, masm: &mut M) -> Reg {
+    pub fn reg<M: MacroAssembler>(&mut self, named: Reg, masm: &mut M) -> Result<Reg> {
         self.regalloc.reg(named, |regalloc| {
             Self::spill_impl(&mut self.stack, regalloc, &self.frame, masm)
         })
     }
 
     /// Allocate a register for the given WebAssembly type.
-    pub fn reg_for_type<M: MacroAssembler>(&mut self, ty: WasmValType, masm: &mut M) -> Reg {
+    pub fn reg_for_type<M: MacroAssembler>(
+        &mut self,
+        ty: WasmValType,
+        masm: &mut M,
+    ) -> Result<Reg> {
         use WasmValType::*;
         match ty {
             I32 | I64 => self.reg_for_class(RegClass::Int, masm),
@@ -143,14 +157,18 @@ impl<'a> CodeGenContext<'a, Emission> {
                 WasmHeapType::Func | WasmHeapType::Extern => {
                     self.reg_for_class(RegClass::Int, masm)
                 }
-                ht => unimplemented!("Support for WasmHeapType: {ht}"),
+                _ => bail!(CodeGenError::unsupported_wasm_type()),
             },
         }
     }
 
     /// Request the register allocator to provide the next available
     /// register of the specified class.
-    pub fn reg_for_class<M: MacroAssembler>(&mut self, class: RegClass, masm: &mut M) -> Reg {
+    pub fn reg_for_class<M: MacroAssembler>(
+        &mut self,
+        class: RegClass,
+        masm: &mut M,
+    ) -> Result<Reg> {
         self.regalloc.reg_for_class(class, &mut |regalloc| {
             Self::spill_impl(&mut self.stack, regalloc, &self.frame, masm)
         })
@@ -158,13 +176,13 @@ impl<'a> CodeGenContext<'a, Emission> {
 
     /// Convenience wrapper around `CodeGenContext::reg_for_class`, to
     /// request the next available general purpose register.
-    pub fn any_gpr<M: MacroAssembler>(&mut self, masm: &mut M) -> Reg {
+    pub fn any_gpr<M: MacroAssembler>(&mut self, masm: &mut M) -> Result<Reg> {
         self.reg_for_class(RegClass::Int, masm)
     }
 
     /// Convenience wrapper around `CodeGenContext::reg_for_class`, to
     /// request the next available floating point register.
-    pub fn any_fpr<M: MacroAssembler>(&mut self, masm: &mut M) -> Reg {
+    pub fn any_fpr<M: MacroAssembler>(&mut self, masm: &mut M) -> Result<Reg> {
         self.reg_for_class(RegClass::Float, masm)
     }
 
@@ -176,13 +194,13 @@ impl<'a> CodeGenContext<'a, Emission> {
         regs: impl IntoIterator<Item = &'r Reg> + Copy,
         masm: &mut M,
         mut f: F,
-    ) -> T
+    ) -> Result<T>
     where
         M: MacroAssembler,
         F: FnMut(&mut Self, &mut M) -> T,
     {
         for r in regs {
-            self.reg(*r, masm);
+            self.reg(*r, masm)?;
         }
 
         let result = f(self, masm);
@@ -191,7 +209,7 @@ impl<'a> CodeGenContext<'a, Emission> {
             self.free_reg(*r);
         }
 
-        result
+        Ok(result)
     }
 
     /// Free the given register.
@@ -207,7 +225,11 @@ impl<'a> CodeGenContext<'a, Emission> {
     /// When a named register is requested and it's not at the top of the
     /// stack a move from register to register might happen, in which case
     /// the source register will be freed.
-    pub fn pop_to_reg<M: MacroAssembler>(&mut self, masm: &mut M, named: Option<Reg>) -> TypedReg {
+    pub fn pop_to_reg<M: MacroAssembler>(
+        &mut self,
+        masm: &mut M,
+        named: Option<Reg>,
+    ) -> Result<TypedReg> {
         let typed_reg = if let Some(dst) = named {
             self.stack.pop_named_reg(dst)
         } else {
@@ -215,36 +237,41 @@ impl<'a> CodeGenContext<'a, Emission> {
         };
 
         if let Some(dst) = typed_reg {
-            return dst;
+            return Ok(dst);
         }
 
         let val = self.stack.pop().expect("a value at stack top");
         let reg = if let Some(r) = named {
-            self.reg(r, masm)
+            self.reg(r, masm)?
         } else {
-            self.reg_for_type(val.ty(), masm)
+            self.reg_for_type(val.ty(), masm)?
         };
 
         if val.is_mem() {
             let mem = val.unwrap_mem();
-            debug_assert_eq!(mem.slot.offset.as_u32(), masm.sp_offset().as_u32());
-            masm.pop(writable!(reg), val.ty().into());
+            let curr_offset = masm.sp_offset().as_u32();
+            let slot_offset = mem.slot.offset.as_u32();
+            ensure!(
+                curr_offset == slot_offset,
+                CodeGenError::invalid_sp_offset(),
+            );
+            masm.pop(writable!(reg), val.ty().try_into()?);
         } else {
-            self.move_val_to_reg(&val, reg, masm);
+            self.move_val_to_reg(&val, reg, masm)?;
             // Free the source value if it is a register.
             if val.is_reg() {
                 self.free_reg(val.unwrap_reg());
             }
         }
 
-        TypedReg::new(val.ty(), reg)
+        Ok(TypedReg::new(val.ty(), reg))
     }
 
     /// Pops the value stack top and stores it at the specified address.
-    pub fn pop_to_addr<M: MacroAssembler>(&mut self, masm: &mut M, addr: M::Address) {
+    pub fn pop_to_addr<M: MacroAssembler>(&mut self, masm: &mut M, addr: M::Address) -> Result<()> {
         let val = self.stack.pop().expect("a value at stack top");
         let ty = val.ty();
-        let size: OperandSize = ty.into();
+        let size: OperandSize = ty.try_into()?;
         match val {
             Val::Reg(tr) => {
                 masm.store(tr.reg.into(), addr, size);
@@ -268,11 +295,18 @@ impl<'a> CodeGenContext<'a, Emission> {
                 masm.store(scratch.into(), addr, size);
             }
         }
+
+        Ok(())
     }
 
     /// Move a stack value to the given register.
-    pub fn move_val_to_reg<M: MacroAssembler>(&self, src: &Val, dst: Reg, masm: &mut M) {
-        let size: OperandSize = src.ty().into();
+    pub fn move_val_to_reg<M: MacroAssembler>(
+        &self,
+        src: &Val,
+        dst: Reg,
+        masm: &mut M,
+    ) -> Result<()> {
+        let size: OperandSize = src.ty().try_into()?;
         match src {
             Val::Reg(tr) => masm.mov(writable!(dst), RegImm::reg(tr.reg), size),
             Val::I32(imm) => masm.mov(writable!(dst), RegImm::i32(*imm), size),
@@ -290,45 +324,50 @@ impl<'a> CodeGenContext<'a, Emission> {
                 masm.load(addr, writable!(dst), size);
             }
         }
+        Ok(())
     }
 
     /// Prepares arguments for emitting a unary operation.
     ///
     /// The `emit` function returns the `TypedReg` to put on the value stack.
-    pub fn unop<F, M>(&mut self, masm: &mut M, size: OperandSize, emit: &mut F)
+    pub fn unop<F, M>(&mut self, masm: &mut M, size: OperandSize, emit: &mut F) -> Result<()>
     where
         F: FnMut(&mut M, Reg, OperandSize) -> TypedReg,
         M: MacroAssembler,
     {
-        let typed_reg = self.pop_to_reg(masm, None);
+        let typed_reg = self.pop_to_reg(masm, None)?;
         let dst = emit(masm, typed_reg.reg, size);
         self.stack.push(dst.into());
+
+        Ok(())
     }
 
     /// Prepares arguments for emitting a binary operation.
     ///
     /// The `emit` function returns the `TypedReg` to put on the value stack.
-    pub fn binop<F, M>(&mut self, masm: &mut M, size: OperandSize, emit: F)
+    pub fn binop<F, M>(&mut self, masm: &mut M, size: OperandSize, emit: F) -> Result<()>
     where
-        F: FnOnce(&mut M, Reg, Reg, OperandSize) -> TypedReg,
+        F: FnOnce(&mut M, Reg, Reg, OperandSize) -> Result<TypedReg>,
         M: MacroAssembler,
     {
-        let src = self.pop_to_reg(masm, None);
-        let dst = self.pop_to_reg(masm, None);
-        let dst = emit(masm, dst.reg, src.reg.into(), size);
+        let src = self.pop_to_reg(masm, None)?;
+        let dst = self.pop_to_reg(masm, None)?;
+        let dst = emit(masm, dst.reg, src.reg.into(), size)?;
         self.free_reg(src);
         self.stack.push(dst.into());
+
+        Ok(())
     }
 
     /// Prepares arguments for emitting an f32 or f64 comparison operation.
-    pub fn float_cmp_op<F, M>(&mut self, masm: &mut M, size: OperandSize, emit: F)
+    pub fn float_cmp_op<F, M>(&mut self, masm: &mut M, size: OperandSize, emit: F) -> Result<()>
     where
         F: FnOnce(&mut M, Reg, Reg, Reg, OperandSize),
         M: MacroAssembler,
     {
-        let src2 = self.pop_to_reg(masm, None);
-        let src1 = self.pop_to_reg(masm, None);
-        let dst = self.any_gpr(masm);
+        let src2 = self.pop_to_reg(masm, None)?;
+        let src1 = self.pop_to_reg(masm, None)?;
+        let dst = self.any_gpr(masm)?;
         emit(masm, dst, src1.reg, src2.reg, size);
         self.free_reg(src1);
         self.free_reg(src2);
@@ -338,17 +377,21 @@ impl<'a> CodeGenContext<'a, Emission> {
             // [f64 f64] -> i32
             // https://webassembly.github.io/spec/core/appendix/index-instructions.html
             OperandSize::S32 | OperandSize::S64 => TypedReg::i32(dst),
-            OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => unreachable!(),
+            OperandSize::S8 | OperandSize::S16 | OperandSize::S128 => {
+                bail!(CodeGenError::unexpected_operand_size())
+            }
         };
         self.stack.push(dst.into());
+
+        Ok(())
     }
 
     /// Prepares arguments for emitting an i32 binary operation.
     ///
     /// The `emit` function returns the `TypedReg` to put on the value stack.
-    pub fn i32_binop<F, M>(&mut self, masm: &mut M, mut emit: F)
+    pub fn i32_binop<F, M>(&mut self, masm: &mut M, mut emit: F) -> Result<()>
     where
-        F: FnMut(&mut M, Reg, RegImm, OperandSize) -> TypedReg,
+        F: FnMut(&mut M, Reg, RegImm, OperandSize) -> Result<TypedReg>,
         M: MacroAssembler,
     {
         let top = self.stack.peek().expect("value at stack top");
@@ -358,22 +401,24 @@ impl<'a> CodeGenContext<'a, Emission> {
                 .stack
                 .pop_i32_const()
                 .expect("i32 const value at stack top");
-            let typed_reg = self.pop_to_reg(masm, None);
-            let dst = emit(masm, typed_reg.reg, RegImm::i32(val), OperandSize::S32);
+            let typed_reg = self.pop_to_reg(masm, None)?;
+            let dst = emit(masm, typed_reg.reg, RegImm::i32(val), OperandSize::S32)?;
             self.stack.push(dst.into());
         } else {
             self.binop(masm, OperandSize::S32, |masm, dst, src, size| {
                 emit(masm, dst, src.into(), size)
-            });
+            })?;
         }
+
+        Ok(())
     }
 
     /// Prepares arguments for emitting an i64 binary operation.
     ///
     /// The `emit` function returns the `TypedReg` to put on the value stack.
-    pub fn i64_binop<F, M>(&mut self, masm: &mut M, emit: F)
+    pub fn i64_binop<F, M>(&mut self, masm: &mut M, emit: F) -> Result<()>
     where
-        F: FnOnce(&mut M, Reg, RegImm, OperandSize) -> TypedReg,
+        F: FnOnce(&mut M, Reg, RegImm, OperandSize) -> Result<TypedReg>,
         M: MacroAssembler,
     {
         let top = self.stack.peek().expect("value at stack top");
@@ -382,37 +427,40 @@ impl<'a> CodeGenContext<'a, Emission> {
                 .stack
                 .pop_i64_const()
                 .expect("i64 const value at stack top");
-            let typed_reg = self.pop_to_reg(masm, None);
-            let dst = emit(masm, typed_reg.reg, RegImm::i64(val), OperandSize::S64);
+            let typed_reg = self.pop_to_reg(masm, None)?;
+            let dst = emit(masm, typed_reg.reg, RegImm::i64(val), OperandSize::S64)?;
             self.stack.push(dst.into());
         } else {
             self.binop(masm, OperandSize::S64, |masm, dst, src, size| {
                 emit(masm, dst, src.into(), size)
-            });
+            })?;
         };
+
+        Ok(())
     }
 
     /// Prepares arguments for emitting a convert operation.
-    pub fn convert_op<F, M>(&mut self, masm: &mut M, dst_ty: WasmValType, emit: F)
+    pub fn convert_op<F, M>(&mut self, masm: &mut M, dst_ty: WasmValType, emit: F) -> Result<()>
     where
         F: FnOnce(&mut M, Reg, Reg, OperandSize),
         M: MacroAssembler,
     {
-        let src = self.pop_to_reg(masm, None);
-        let dst = self.reg_for_type(dst_ty, masm);
+        let src = self.pop_to_reg(masm, None)?;
+        let dst = self.reg_for_type(dst_ty, masm)?;
         let dst_size = match dst_ty {
             WasmValType::I32 => OperandSize::S32,
             WasmValType::I64 => OperandSize::S64,
             WasmValType::F32 => OperandSize::S32,
             WasmValType::F64 => OperandSize::S64,
-            WasmValType::V128 => unreachable!(),
-            WasmValType::Ref(_) => unreachable!(),
+            WasmValType::V128 => bail!(CodeGenError::unsupported_wasm_type()),
+            WasmValType::Ref(_) => bail!(CodeGenError::unsupported_wasm_type()),
         };
 
         emit(masm, dst, src.into(), dst_size);
 
         self.free_reg(src);
         self.stack.push(TypedReg::new(dst_ty, dst).into());
+        Ok(())
     }
 
     /// Prepares arguments for emitting a convert operation with a temporary
@@ -423,44 +471,48 @@ impl<'a> CodeGenContext<'a, Emission> {
         dst_ty: WasmValType,
         tmp_reg_class: RegClass,
         emit: F,
-    ) where
+    ) -> Result<()>
+    where
         F: FnOnce(&mut M, Reg, Reg, Reg, OperandSize),
         M: MacroAssembler,
     {
-        let tmp_gpr = self.reg_for_class(tmp_reg_class, masm);
+        let tmp_gpr = self.reg_for_class(tmp_reg_class, masm)?;
         self.convert_op(masm, dst_ty, |masm, dst, src, dst_size| {
             emit(masm, dst, src, tmp_gpr, dst_size);
-        });
+        })?;
         self.free_reg(tmp_gpr);
+        Ok(())
     }
 
     /// Drops the last `n` elements of the stack, calling the provided
     /// function for each `n` stack value.
     /// The values are dropped in top-to-bottom order.
-    pub fn drop_last<F>(&mut self, last: usize, mut f: F)
+    pub fn drop_last<F>(&mut self, last: usize, mut f: F) -> Result<()>
     where
-        F: FnMut(&mut RegAlloc, &Val),
+        F: FnMut(&mut RegAlloc, &Val) -> Result<()>,
     {
         if last > 0 {
             let len = self.stack.len();
-            assert!(last <= len);
+            ensure!(last <= len, CodeGenError::unexpected_value_stack_index(),);
             let truncate = self.stack.len() - last;
             let stack_mut = self.stack.inner_mut();
 
             // Invoke the callback in top-to-bottom order.
             for v in stack_mut[truncate..].into_iter().rev() {
-                f(&mut self.regalloc, v)
+                f(&mut self.regalloc, v)?
             }
             stack_mut.truncate(truncate);
         }
+
+        Ok(())
     }
 
     /// Convenience wrapper around [`Self::spill_callback`].
     ///
     /// This function exists for cases in which triggering an unconditional
     /// spill is needed, like before entering control flow.
-    pub fn spill<M: MacroAssembler>(&mut self, masm: &mut M) {
-        Self::spill_impl(&mut self.stack, &mut self.regalloc, &self.frame, masm);
+    pub fn spill<M: MacroAssembler>(&mut self, masm: &mut M) -> Result<()> {
+        Self::spill_impl(&mut self.stack, &mut self.regalloc, &self.frame, masm)
     }
 
     /// Prepares the compiler to emit an uncoditional jump to the given
@@ -470,10 +522,15 @@ impl<'a> CodeGenContext<'a, Emission> {
     ///   branch.
     /// * Updating the reachability state.
     /// * Marking the destination frame as a destination target.
-    pub fn unconditional_jump<M, F>(&mut self, dest: &mut ControlStackFrame, masm: &mut M, mut f: F)
+    pub fn unconditional_jump<M, F>(
+        &mut self,
+        dest: &mut ControlStackFrame,
+        masm: &mut M,
+        mut f: F,
+    ) -> Result<()>
     where
         M: MacroAssembler,
-        F: FnMut(&mut M, &mut Self, &mut ControlStackFrame),
+        F: FnMut(&mut M, &mut Self, &mut ControlStackFrame) -> Result<()>,
     {
         let state = dest.stack_state();
         let target_offset = state.target_offset;
@@ -481,8 +538,11 @@ impl<'a> CodeGenContext<'a, Emission> {
         // Invariant: The SP, must be greater or equal to the target
         // SP, given that we haven't popped any results by this point
         // yet. But it may happen in the callback.
-        assert!(masm.sp_offset().as_u32() >= base_offset.as_u32());
-        f(masm, self, dest);
+        ensure!(
+            masm.sp_offset().as_u32() >= base_offset.as_u32(),
+            CodeGenError::invalid_sp_offset()
+        );
+        f(masm, self, dest)?;
 
         // The following snippet, pops the stack pointer to ensure that it
         // is correctly placed according to the expectations of the destination
@@ -517,6 +577,7 @@ impl<'a> CodeGenContext<'a, Emission> {
         dest.set_as_target();
         masm.jmp(*dest.label());
         self.reachable = false;
+        Ok(())
     }
 
     /// Push the ABI representation of the results stack.
@@ -525,7 +586,8 @@ impl<'a> CodeGenContext<'a, Emission> {
         results: &ABIResults,
         masm: &mut M,
         mut calculate_ret_area: F,
-    ) where
+    ) -> Result<()>
+    where
         M: MacroAssembler,
         F: FnMut(&ABIResults, &mut CodeGenContext<Emission>, &mut M) -> Option<RetArea>,
     {
@@ -536,8 +598,12 @@ impl<'a> CodeGenContext<'a, Emission> {
         for operand in results.operands().iter() {
             match operand {
                 ABIOperand::Reg { reg, ty, .. } => {
-                    assert!(self.regalloc.reg_available(*reg));
-                    let typed_reg = TypedReg::new(*ty, self.reg(*reg, masm));
+                    ensure!(
+                        self.regalloc.reg_available(*reg),
+                        CodeGenError::expected_register_to_be_available(),
+                    );
+
+                    let typed_reg = TypedReg::new(*ty, self.reg(*reg, masm)?);
                     self.stack.push(typed_reg.into());
                 }
                 ABIOperand::Stack { ty, offset, size } => match area.unwrap() {
@@ -550,22 +616,26 @@ impl<'a> CodeGenContext<'a, Emission> {
                     // with control flow and when calling functions; as a
                     // callee, only [Self::pop_abi_results] is needed when
                     // finalizing the function compilation.
-                    _ => unreachable!(),
+                    _ => bail!(CodeGenError::unexpected_function_call()),
                 },
             }
         }
+
+        Ok(())
     }
 
     /// Truncates the value stack to the specified target.
     /// This function is intended to only be used when restoring the code
     /// generation's reachability state, when handling an unreachable end or
     /// else.
-    pub fn truncate_stack_to(&mut self, target: usize) {
+    pub fn truncate_stack_to(&mut self, target: usize) -> Result<()> {
         if self.stack.len() > target {
             self.drop_last(self.stack.len() - target, |regalloc, val| match val {
-                Val::Reg(tr) => regalloc.free(tr.reg),
-                _ => {}
-            });
+                Val::Reg(tr) => Ok(regalloc.free(tr.reg)),
+                _ => Ok(()),
+            })
+        } else {
+            Ok(())
         }
     }
 
@@ -588,47 +658,54 @@ impl<'a> CodeGenContext<'a, Emission> {
         regalloc: &mut RegAlloc,
         frame: &Frame<Emission>,
         masm: &mut M,
-    ) {
-        stack.inner_mut().iter_mut().for_each(|v| match v {
-            Val::Reg(r) => {
-                let slot = masm.push(r.reg, r.ty.into());
-                regalloc.free(r.reg);
-                *v = Val::mem(r.ty, slot);
+    ) -> Result<()> {
+        for v in stack.inner_mut() {
+            match v {
+                Val::Reg(r) => {
+                    let slot = masm.push(r.reg, r.ty.try_into()?);
+                    regalloc.free(r.reg);
+                    *v = Val::mem(r.ty, slot);
+                }
+                Val::Local(local) => {
+                    let slot = frame.get_wasm_local(local.index);
+                    let addr = masm.local_address(&slot);
+                    let scratch = scratch!(M, &slot.ty);
+                    masm.load(addr, writable!(scratch), slot.ty.try_into()?);
+                    let stack_slot = masm.push(scratch, slot.ty.try_into()?);
+                    *v = Val::mem(slot.ty, stack_slot);
+                }
+                _ => {}
             }
-            Val::Local(local) => {
-                let slot = frame.get_wasm_local(local.index);
-                let addr = masm.local_address(&slot);
-                let scratch = scratch!(M, &slot.ty);
-                masm.load(addr, writable!(scratch), slot.ty.into());
-                let stack_slot = masm.push(scratch, slot.ty.into());
-                *v = Val::mem(slot.ty, stack_slot);
-            }
-            _ => {}
-        });
+        }
+
+        Ok(())
     }
 
     /// Prepares for emitting a binary operation where four 64-bit operands are
     /// used to produce two 64-bit operands, e.g. a 128-bit binop.
-    pub fn binop128<F, M>(&mut self, masm: &mut M, emit: F)
+    pub fn binop128<F, M>(&mut self, masm: &mut M, emit: F) -> Result<()>
     where
         F: FnOnce(&mut M, Reg, Reg, Reg, Reg) -> (TypedReg, TypedReg),
         M: MacroAssembler,
     {
-        let rhs_hi = self.pop_to_reg(masm, None);
-        let rhs_lo = self.pop_to_reg(masm, None);
-        let lhs_hi = self.pop_to_reg(masm, None);
-        let lhs_lo = self.pop_to_reg(masm, None);
+        let rhs_hi = self.pop_to_reg(masm, None)?;
+        let rhs_lo = self.pop_to_reg(masm, None)?;
+        let lhs_hi = self.pop_to_reg(masm, None)?;
+        let lhs_lo = self.pop_to_reg(masm, None)?;
         let (lo, hi) = emit(masm, lhs_lo.reg, lhs_hi.reg, rhs_lo.reg, rhs_hi.reg);
         self.free_reg(rhs_hi);
         self.free_reg(rhs_lo);
         self.stack.push(lo.into());
         self.stack.push(hi.into());
+
+        Ok(())
     }
 
     /// Pops a register from the stack and then immediately frees it. Used to
     /// discard values from the last operation, for example.
-    pub fn pop_and_free<M: MacroAssembler>(&mut self, masm: &mut M) {
-        let reg = self.pop_to_reg(masm, None);
+    pub fn pop_and_free<M: MacroAssembler>(&mut self, masm: &mut M) -> Result<()> {
+        let reg = self.pop_to_reg(masm, None)?;
         self.free_reg(reg.reg);
+        Ok(())
     }
 }
