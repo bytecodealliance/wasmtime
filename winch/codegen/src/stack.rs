@@ -51,6 +51,14 @@ impl TypedReg {
             reg,
         }
     }
+
+    /// Create a v128 [`TypedReg`].
+    pub fn v128(reg: Reg) -> Self {
+        Self {
+            ty: WasmValType::V128,
+            reg,
+        }
+    }
 }
 
 impl From<TypedReg> for Reg {

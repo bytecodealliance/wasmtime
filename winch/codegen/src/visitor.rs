@@ -253,6 +253,7 @@ macro_rules! def_unsupported {
     (emit I64Sub128 $($rest:tt)*) => {};
     (emit I64MulWideS $($rest:tt)*) => {};
     (emit I64MulWideU $($rest:tt)*) => {};
+    (emit I8x16Shuffle $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -2158,6 +2159,18 @@ where
 
     fn visit_v128_store(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_store(&memarg, OperandSize::S128)
+    }
+
+    fn visit_i8x16_shuffle(&mut self, lanes: [u8; 16]) -> Self::Output {
+        let v2 = self.context.pop_to_reg(self.masm, None)?;
+        let v1 = self.context.pop_to_reg(self.masm, None)?;
+        let dst = self.context.any_fpr(self.masm)?;
+        self.masm
+            .shuffle(writable!(dst), v1.into(), v2.into(), lanes);
+        self.context.stack.push(TypedReg::v128(dst).into());
+        self.context.free_reg(v1);
+        self.context.free_reg(v2);
+        Ok(())
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);

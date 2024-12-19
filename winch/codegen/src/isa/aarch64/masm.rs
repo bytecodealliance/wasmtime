@@ -870,6 +870,10 @@ impl Masm for MacroAssembler {
         let _ = (context, kind);
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
+
+    fn shuffle(&mut self, _dst: WritableReg, _lhs: Reg, _rhs: Reg, _lanes: [u8; 16]) {
+        todo!()
+    }
 }
 
 impl MacroAssembler {

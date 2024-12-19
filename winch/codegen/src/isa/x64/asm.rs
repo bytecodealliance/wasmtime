@@ -1400,6 +1400,18 @@ impl Assembler {
             dst_hi: dst_hi.to_reg().into(),
         });
     }
+
+    /// Permutes byte values in the lhs operand and the rhs operand using the
+    /// byte indices in the dst operand to select byte elements from the lhs or
+    /// rhs operands.
+    pub fn vpermi2b(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg) {
+        self.emit(Inst::XmmRmREvex {
+            op: args::Avx512Opcode::Vpermi2b,
+            src1: lhs.into(),
+            src2: XmmMem::unwrap_new(rhs.into()),
+            dst: dst.to_reg().into(),
+        });
+    }
 }
 
 /// Captures the region in a MachBuffer where an add-with-immediate instruction would be emitted,
