@@ -63,6 +63,7 @@ create_target(wasi wasi/main.c)
 create_rust_test(anyref)
 create_rust_wasm(fib-debug wasm32-unknown-unknown)
 create_rust_wasm(tokio wasm32-wasip1)
+create_rust_wasm(wasi wasm32-wasip1)  # Make the outdated WASIp1 C example happy
 create_rust_wasm(wasi wasm32-wasip2)
 create_rust_wasm(component wasm32-unknown-unknown)
 create_rust_test(epochs)
