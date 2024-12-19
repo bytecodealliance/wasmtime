@@ -1035,7 +1035,7 @@
         (Unsigned)))
 
 ;; Helper for placing a `Value` into a `Reg` and validating that it's nonzero.
-;; It takes a value and entension type, and perform emits the appropriate checks.
+;; It takes a value and extension type, and performs the appropriate checks.
 ;; TODO: restore spec
 ;  (spec (put_nonzero_in_reg_sext64 x)
 ;        (provide (= (sign_ext 64 x) result))
