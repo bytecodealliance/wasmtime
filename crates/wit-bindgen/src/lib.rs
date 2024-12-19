@@ -1358,7 +1358,10 @@ impl Wasmtime {
         let wt = self.wasmtime_path();
         let world_camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
         if self.opts.async_.maybe_async() {
-            uwriteln!(self.src, "#[{wt}::component::__internal::trait_variant_make(::core::marker::Send)]")
+            uwriteln!(
+                self.src,
+                "#[{wt}::component::__internal::trait_variant_make(::core::marker::Send)]"
+            )
         }
         uwrite!(self.src, "pub trait {world_camel}Imports");
         let mut supertraits = vec![];
@@ -1707,7 +1710,10 @@ impl<'a> InterfaceGenerator<'a> {
 
             // Generate resource trait
             if self.gen.opts.async_.maybe_async() {
-                uwriteln!(self.src, "#[{wt}::component::__internal::trait_variant_make(::core::marker::Send)]")
+                uwriteln!(
+                    self.src,
+                    "#[{wt}::component::__internal::trait_variant_make(::core::marker::Send)]"
+                )
             }
             uwriteln!(self.src, "pub trait Host{camel} {{");
 
@@ -2380,7 +2386,10 @@ impl<'a> InterfaceGenerator<'a> {
 
         let is_maybe_async = self.gen.opts.async_.maybe_async();
         if is_maybe_async {
-            uwriteln!(self.src, "#[{wt}::component::__internal::trait_variant_make(::core::marker::Send)]")
+            uwriteln!(
+                self.src,
+                "#[{wt}::component::__internal::trait_variant_make(::core::marker::Send)]"
+            )
         }
         // Generate the `pub trait` which represents the host functionality for
         // this import which additionally inherits from all resource traits

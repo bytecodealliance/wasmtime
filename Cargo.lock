@@ -4435,6 +4435,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "trait-variant",
  "url",
  "wasmtime",
  "wiggle",
