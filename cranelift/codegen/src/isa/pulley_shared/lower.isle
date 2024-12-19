@@ -161,13 +161,11 @@
 
 ;;;; Rules for `f32const`;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (f32const (u32_from_ieee32 x)))
-      (pulley_fconst32 x))
+(rule (lower (f32const (u32_from_ieee32 x))) (imm $F32 x))
 
 ;;;; Rules for `f64const`;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (f64const (u64_from_ieee64 x)))
-      (pulley_fconst64 x))
+(rule (lower (f64const (u64_from_ieee64 x))) (imm $F64 x))
 
 ;;;; Rules for `iadd` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
