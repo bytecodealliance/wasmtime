@@ -573,7 +573,9 @@ fn pulley_emit<P>(
 
         Inst::Raw { raw } => {
             match raw {
-                RawInst::PushFrame | RawInst::StackAlloc32 { .. } => {
+                RawInst::PushFrame
+                | RawInst::StackAlloc32 { .. }
+                | RawInst::PushFrameSave { .. } => {
                     sink.add_trap(ir::TrapCode::STACK_OVERFLOW);
                 }
                 _ => {}

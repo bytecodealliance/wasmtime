@@ -1798,6 +1798,50 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    #[inline]
+    fn push_frame_save(&mut self, amt: u32, regs: RegSet<XReg>) -> ControlFlow<Done> {
+        // Decrement the stack pointer `amt` bytes plus 2 pointers more for
+        // fp/lr.
+        let ptr_size = size_of::<usize>();
+        let full_amt = usize::try_from(amt).unwrap() + 2 * ptr_size;
+        let new_sp = self.state[XReg::sp].get_ptr::<u8>().wrapping_sub(full_amt);
+        self.set_sp::<crate::PushFrameSave>(new_sp)?;
+
+        unsafe {
+            // Emulate `push_frame` by placing `lr` and `fp` onto the stack, in
+            // that order, at the top of the allocated area.
+            self.store(XReg::sp, (full_amt - 1 * ptr_size) as i32, self.state.lr);
+            self.store(XReg::sp, (full_amt - 2 * ptr_size) as i32, self.state.fp);
+
+            // Set `fp` to the top of our frame, where `fp` is stored.
+            let mut offset = amt as i32;
+            self.state.fp = self.state[XReg::sp]
+                .get_ptr::<u8>()
+                .byte_offset(offset as isize);
+
+            // Next save any registers in `regs` to the stack.
+            for reg in regs {
+                offset -= 8;
+                self.store(XReg::sp, offset, self.state[reg].get_u64());
+            }
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn pop_frame_restore(&mut self, amt: u32, regs: RegSet<XReg>) -> ControlFlow<Done> {
+        // Restore all registers in `regs`, followed by the normal `pop_frame`
+        // opcode below to restore fp/lr.
+        unsafe {
+            let mut offset = amt as i32;
+            for reg in regs {
+                offset -= 8;
+                let val = self.load(XReg::sp, offset);
+                self.state[reg].set_u64(val);
+            }
+        }
+        self.pop_frame()
+    }
+
     fn pop_frame(&mut self) -> ControlFlow<Done> {
         self.set_sp_unchecked(self.state.fp);
         let fp = self.pop();

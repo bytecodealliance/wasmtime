@@ -261,10 +261,32 @@ impl<R: Reg> Into<ScalarBitSet<u32>> for RegSet<R> {
 
 impl<R: Reg> IntoIterator for RegSet<R> {
     type Item = R;
-    type IntoIter = core::iter::FilterMap<cranelift_bitset::scalar::Iter<u32>, fn(u8) -> Option<R>>;
+    type IntoIter = RegSetIntoIter<R>;
 
     fn into_iter(self) -> Self::IntoIter {
-        self.bitset.into_iter().filter_map(R::new)
+        RegSetIntoIter {
+            iter: self.bitset.into_iter(),
+            _marker: PhantomData,
+        }
+    }
+}
+
+/// Returned iterator from `RegSet::into_iter`
+pub struct RegSetIntoIter<R> {
+    iter: cranelift_bitset::scalar::Iter<u32>,
+    _marker: PhantomData<R>,
+}
+
+impl<R: Reg> Iterator for RegSetIntoIter<R> {
+    type Item = R;
+    fn next(&mut self) -> Option<R> {
+        Some(R::new(self.iter.next()?).unwrap())
+    }
+}
+
+impl<R: Reg> DoubleEndedIterator for RegSetIntoIter<R> {
+    fn next_back(&mut self) -> Option<R> {
+        Some(R::new(self.iter.next_back()?).unwrap())
     }
 }
 

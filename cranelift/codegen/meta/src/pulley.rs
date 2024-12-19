@@ -69,6 +69,10 @@ impl Inst<'_> {
                     Operand::Binop { dst, src1, src2 }
                 }
                 ("dst", ty) => Operand::Writable { name, ty },
+                (name, "RegSet < XReg >") => Operand::Normal {
+                    name,
+                    ty: "XRegSet",
+                },
                 (name, ty) => Operand::Normal { name, ty },
             })
             .chain(if self.name.contains("Trap") {
@@ -120,10 +124,17 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
                     if i > 0 {
                         format_string.push_str(",");
                     }
+
+                    if ty == "XRegSet" {
+                        format_string.push_str(" {");
+                        format_string.push_str(name);
+                        format_string.push_str(":?}");
+                        continue;
+                    }
+
                     format_string.push_str(" {");
                     format_string.push_str(name);
                     format_string.push_str("}");
-
                     if ty.contains("Reg") {
                         if name == "dst" {
                             locals.push_str(&format!("let {name} = reg_name(*{name}.to_reg());\n"));
@@ -176,6 +187,13 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
         let mut defs = Vec::new();
         for op in inst.operands() {
             match op {
+                // `{Push,Pop}Frame{Save,Restore}` doesn't participate in
+                // register allocation.
+                Operand::Normal {
+                    name: _,
+                    ty: "XRegSet",
+                } if *name == "PushFrameSave" || *name == "PopFrameRestore" => {}
+
                 Operand::Normal { name, ty } => {
                     if ty.contains("Reg") {
                         uses.push(name);

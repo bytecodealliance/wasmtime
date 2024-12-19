@@ -10,6 +10,7 @@ use crate::{
 };
 use alloc::{boxed::Box, vec::Vec};
 use core::marker::PhantomData;
+use cranelift_bitset::ScalarBitSet;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
 use std::borrow::ToOwned;
@@ -288,6 +289,17 @@ where
         smallvec![inst.into()]
     }
 
+    /// Generates the entire prologue for the function.
+    ///
+    /// Note that this is different from other backends where it's not spread
+    /// out among a few individual functions. That's because the goal here is to
+    /// generate a single macro-instruction for the entire prologue in the most
+    /// common cases and we don't want to spread the logic over multiple
+    /// functions.
+    ///
+    /// The general machinst methods are split to accomodate stack checks and
+    /// things like stack probes, all of which are empty on Pulley because
+    /// Pulley has its own stack check mechanism.
     fn gen_prologue_frame_setup(
         _call_conv: isa::CallConv,
         _flags: &settings::Flags,
@@ -296,8 +308,37 @@ where
     ) -> SmallInstVec<Self::I> {
         let mut insts = SmallVec::new();
 
-        if frame_layout.setup_area_size > 0 {
-            insts.push(RawInst::PushFrame.into());
+        let incoming_args_diff = frame_layout.tail_args_size - frame_layout.incoming_args_size;
+        if incoming_args_diff > 0 {
+            // Decrement SP by the amount of additional incoming argument space
+            // we need
+            insts.extend(Self::gen_sp_reg_adjust(-(incoming_args_diff as i32)));
+        }
+
+        let style = frame_layout.pulley_frame_style();
+
+        match &style {
+            FrameStyle::None => {}
+            FrameStyle::PulleySetupNoClobbers => insts.push(RawInst::PushFrame.into()),
+            FrameStyle::PulleySetupAndSaveClobbers {
+                frame_size,
+                saved_by_pulley,
+            } => insts.push(
+                RawInst::PushFrameSave {
+                    amt: *frame_size,
+                    regs: pulley_interpreter::RegSet::from_bitset(*saved_by_pulley),
+                }
+                .into(),
+            ),
+            FrameStyle::Manual { frame_size } => insts.extend(Self::gen_sp_reg_adjust(
+                -i32::try_from(*frame_size).unwrap(),
+            )),
+        }
+
+        for (offset, ty, reg) in frame_layout.manually_managed_clobbers(&style) {
+            insts.push(
+                Inst::gen_store(Amode::SpOffset { offset }, reg, ty, MemFlags::trusted()).into(),
+            );
         }
 
         insts
@@ -308,29 +349,69 @@ where
         _call_conv: isa::CallConv,
         _flags: &settings::Flags,
         _isa_flags: &PulleyFlags,
+        _frame_layout: &FrameLayout,
+    ) -> SmallInstVec<Self::I> {
+        // Note that this is intentionally empty as `gen_return` does
+        // everything.
+        SmallVec::new()
+    }
+
+    fn gen_return(
+        _call_conv: isa::CallConv,
+        _isa_flags: &PulleyFlags,
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
         let mut insts = SmallVec::new();
 
-        if frame_layout.setup_area_size > 0 {
-            insts.push(RawInst::PopFrame.into());
+        let style = frame_layout.pulley_frame_style();
+
+        // Restore clobbered registers that are manually managed in Cranelift.
+        for (offset, ty, reg) in frame_layout.manually_managed_clobbers(&style) {
+            insts.push(
+                Inst::gen_load(
+                    Writable::from_reg(reg),
+                    Amode::SpOffset { offset },
+                    ty,
+                    MemFlags::trusted(),
+                )
+                .into(),
+            );
         }
 
+        // Perform the inverse of `gen_prologue_frame_setup`.
+        match &style {
+            FrameStyle::None => {}
+            FrameStyle::PulleySetupNoClobbers => insts.push(RawInst::PopFrame.into()),
+            FrameStyle::PulleySetupAndSaveClobbers {
+                frame_size,
+                saved_by_pulley,
+            } => insts.push(
+                RawInst::PopFrameRestore {
+                    amt: *frame_size,
+                    regs: pulley_interpreter::RegSet::from_bitset(*saved_by_pulley),
+                }
+                .into(),
+            ),
+            FrameStyle::Manual { frame_size } => {
+                insts.extend(Self::gen_sp_reg_adjust(i32::try_from(*frame_size).unwrap()))
+            }
+        }
+
+        // Handle final stack adjustments for the tail-call ABI.
         if frame_layout.tail_args_size > 0 {
             insts.extend(Self::gen_sp_reg_adjust(
                 frame_layout.tail_args_size.try_into().unwrap(),
             ));
         }
 
+        // And finally, return.
+        //
+        // FIXME: if `frame_layout.tail_args_size` is zero this instruction
+        // should get folded into the macro-instructions above. No need to have
+        // all functions do `pop_frame; ret`, that could be `pop_frame_and_ret`.
+        // Should benchmark whether this is worth it though.
+        insts.push(RawInst::Ret {}.into());
         insts
-    }
-
-    fn gen_return(
-        _call_conv: isa::CallConv,
-        _isa_flags: &PulleyFlags,
-        _frame_layout: &FrameLayout,
-    ) -> SmallInstVec<Self::I> {
-        smallvec![RawInst::Ret {}.into()]
     }
 
     fn gen_probestack(_insts: &mut SmallInstVec<Self::I>, _frame_size: u32) {
@@ -341,110 +422,20 @@ where
     fn gen_clobber_save(
         _call_conv: isa::CallConv,
         _flags: &settings::Flags,
-        frame_layout: &FrameLayout,
+        _frame_layout: &FrameLayout,
     ) -> SmallVec<[Self::I; 16]> {
-        let mut insts = SmallVec::new();
-        let setup_frame = frame_layout.setup_area_size > 0;
-
-        let incoming_args_diff = frame_layout.tail_args_size - frame_layout.incoming_args_size;
-        if incoming_args_diff > 0 {
-            // Pulley does not generate/probestack/stack checks/etc and doesn't
-            // expose the direct ability to modify fp/lr, so simulate a pop,
-            // perform the sp adjustment, then perform the same push that was
-            // done previously in the prologue.
-            //
-            // Note that for now this'll generate `push_frame pop_frame` pairs
-            // in the prologue which isn't great, and updating that is left for
-            // a future refactoring to only do a `push_frame` once (e.g. skip
-            // the one above if this block is going to be executed)
-            if setup_frame {
-                insts.push(RawInst::PopFrame.into());
-            }
-            // Decrement SP by the amount of additional incoming argument space
-            // we need
-            insts.extend(Self::gen_sp_reg_adjust(-(incoming_args_diff as i32)));
-
-            if setup_frame {
-                insts.push(RawInst::PushFrame.into());
-            }
-        }
-
-        // Adjust the stack pointer downward for clobbers, the function fixed
-        // frame (spillslots and storage slots), and outgoing arguments.
-        let stack_size = frame_layout.clobber_size
-            + frame_layout.fixed_frame_storage_size
-            + frame_layout.outgoing_args_size;
-
-        // Store each clobbered register in order at offsets from SP, placing
-        // them above the fixed frame slots.
-        if stack_size > 0 {
-            insts.extend(Self::gen_sp_reg_adjust(-i32::try_from(stack_size).unwrap()));
-
-            let mut cur_offset = 8;
-            for reg in &frame_layout.clobbered_callee_saves {
-                let r_reg = reg.to_reg();
-                let ty = match r_reg.class() {
-                    RegClass::Int => I64,
-                    RegClass::Float => F64,
-                    RegClass::Vector => unreachable!("no vector registers are callee-save"),
-                };
-                insts.push(
-                    Inst::gen_store(
-                        Amode::SpOffset {
-                            offset: i32::try_from(stack_size - cur_offset).unwrap(),
-                        },
-                        Reg::from(reg.to_reg()),
-                        ty,
-                        MemFlags::trusted(),
-                    )
-                    .into(),
-                );
-
-                cur_offset += 8
-            }
-        }
-
-        insts
+        // Note that this is intentionally empty because everything necessary
+        // was already done in `gen_prologue_frame_setup`.
+        SmallVec::new()
     }
 
     fn gen_clobber_restore(
         _call_conv: isa::CallConv,
         _flags: &settings::Flags,
-        frame_layout: &FrameLayout,
+        _frame_layout: &FrameLayout,
     ) -> SmallVec<[Self::I; 16]> {
-        let mut insts = SmallVec::new();
-
-        let stack_size = frame_layout.clobber_size
-            + frame_layout.fixed_frame_storage_size
-            + frame_layout.outgoing_args_size;
-
-        let mut cur_offset = 8;
-        for reg in &frame_layout.clobbered_callee_saves {
-            let rreg = reg.to_reg();
-            let ty = match rreg.class() {
-                RegClass::Int => I64,
-                RegClass::Float => F64,
-                RegClass::Vector => unreachable!("vector registers are never callee-saved"),
-            };
-            insts.push(
-                Inst::gen_load(
-                    reg.map(Reg::from),
-                    Amode::SpOffset {
-                        offset: i32::try_from(stack_size - cur_offset).unwrap(),
-                    },
-                    ty,
-                    MemFlags::trusted(),
-                )
-                .into(),
-            );
-            cur_offset += 8
-        }
-
-        if stack_size > 0 {
-            insts.extend(Self::gen_sp_reg_adjust(stack_size as i32));
-        }
-
-        insts
+        // Intentionally empty as restores happen for Pulley in `gen_return`.
+        SmallVec::new()
     }
 
     fn gen_call(
@@ -567,6 +558,158 @@ where
     ) {
         // Pulley doesn't need inline probestacks because it always checks stack
         // decrements.
+    }
+}
+
+/// Different styles of management of fp/lr and clobbered registers.
+///
+/// This helps decide, depending on Cranelift settings and frame layout, what
+/// macro instruction is used to setup the pulley frame.
+enum FrameStyle {
+    /// No management is happening, fp/lr aren't saved by Pulley or Cranelift.
+    /// No stack is being allocated either.
+    None,
+
+    /// No stack is being allocated and nothing is clobbered, but Pulley should
+    /// save the fp/lr combo.
+    PulleySetupNoClobbers,
+
+    /// Pulley is managing the fp/lr combo, the stack size, and clobbered
+    /// X-class registers.
+    ///
+    /// Note that `saved_by_pulley` is not the exhaustive set of clobbered
+    /// registers. It's only those that are part of the `PushFrameSave`
+    /// instruction.
+    PulleySetupAndSaveClobbers {
+        /// The size of the frame, including clobbers, that's being allocated.
+        frame_size: u32,
+        /// Registers that pulley is saving/restoring.
+        saved_by_pulley: ScalarBitSet<u32>,
+    },
+
+    /// Cranelift is manually managing everything, both clobbers and stack
+    /// increments/decrements.
+    ///
+    /// Note that fp/lr are not saved in this mode.
+    Manual {
+        /// The size of the stack being allocated.
+        frame_size: u32,
+    },
+}
+
+/// Pulley-specific helpers when dealing with ABI code.
+impl FrameLayout {
+    /// Whether or not this frame saves fp/lr.
+    fn setup_frame(&self) -> bool {
+        self.setup_area_size > 0
+    }
+
+    /// Returns the stack size allocated by this function, excluding incoming
+    /// tail args or the optional "setup area" of fp/lr.
+    fn stack_size(&self) -> u32 {
+        self.clobber_size + self.fixed_frame_storage_size + self.outgoing_args_size
+    }
+
+    /// Returns the style of frame being used for this function.
+    ///
+    /// See `FrameStyle` for more information.
+    fn pulley_frame_style(&self) -> FrameStyle {
+        let saved_by_pulley = self.clobbered_xregs_saved_by_pulley();
+        match (
+            self.stack_size(),
+            self.setup_frame(),
+            saved_by_pulley.is_empty(),
+        ) {
+            // No stack allocated, not saving fp/lr, no clobbers, nothing to do
+            (0, false, true) => FrameStyle::None,
+
+            // No stack allocated, saving fp/lr, no clobbers, so this is
+            // pulley-managed via push/pop_frame.
+            (0, true, true) => FrameStyle::PulleySetupNoClobbers,
+
+            // Some stack is being allocated and pulley is managing fp/lr. Let
+            // pulley manage clobbered registers as well, regardless if they're
+            // present or not.
+            (frame_size, true, _) => FrameStyle::PulleySetupAndSaveClobbers {
+                frame_size,
+                saved_by_pulley,
+            },
+
+            // Some stack is being allocated, but pulley isn't managing fp/lr,
+            // so we're manually doing everything.
+            (frame_size, false, true) => FrameStyle::Manual { frame_size },
+
+            // If there's no frame setup and there's clobbered registers this
+            // technically should have already hit a case above, so panic here.
+            (_, false, false) => unreachable!(),
+        }
+    }
+
+    /// Returns the set of clobbered registers that Pulley is managing via its
+    /// macro instructions rather than the generated code.
+    fn clobbered_xregs_saved_by_pulley(&self) -> ScalarBitSet<u32> {
+        let mut clobbered: ScalarBitSet<u32> = ScalarBitSet::new();
+        // Pulley only manages clobbers if it's also managing fp/lr.
+        if !self.setup_frame() {
+            return clobbered;
+        }
+        let mut found_manual_clobber = false;
+        for reg in self.clobbered_callee_saves.iter() {
+            let r_reg = reg.to_reg();
+            // Pulley can only manage clobbers of integer registers at this
+            // time, float registers are managed manually.
+            //
+            // Also assert that all pulley-managed clobbers come first,
+            // otherwise the loop below in `manually_managed_clobbers` is
+            // incorrect.
+            if r_reg.class() == RegClass::Int {
+                assert!(!found_manual_clobber);
+                clobbered.insert(r_reg.hw_enc());
+            } else {
+                found_manual_clobber = true;
+            }
+        }
+        clobbered
+    }
+
+    /// Returns an iterator over the clobbers that Cranelift is managing, not
+    /// Pulley.
+    ///
+    /// If this frame has clobbers then they're either saved by Pulley with
+    /// `FrameStyle::PulleySetupAndSaveClobbers`. Cranelift might need to manage
+    /// these registers depending on Cranelift settings. Cranelift also always
+    /// manages floating-point registers.
+    fn manually_managed_clobbers<'a>(
+        &'a self,
+        style: &'a FrameStyle,
+    ) -> impl Iterator<Item = (i32, Type, Reg)> + 'a {
+        let mut offset = self.stack_size();
+        self.clobbered_callee_saves.iter().filter_map(move |reg| {
+            // Allocate space for this clobber no matter what. If pulley is
+            // managing this then we're just accounting for the pulley-saved
+            // registers as well. Note that all pulley-managed registers come
+            // first in the list here.
+            offset -= 8;
+            let r_reg = reg.to_reg();
+            let ty = match r_reg.class() {
+                RegClass::Int => {
+                    // If this register is saved by pulley, skip this clobber.
+                    if let FrameStyle::PulleySetupAndSaveClobbers {
+                        saved_by_pulley, ..
+                    } = style
+                    {
+                        if saved_by_pulley.contains(r_reg.hw_enc()) {
+                            return None;
+                        }
+                    }
+                    I64
+                }
+                RegClass::Float => F64,
+                RegClass::Vector => unreachable!("no vector registers are callee-save"),
+            };
+            let offset = i32::try_from(offset).unwrap();
+            Some((offset, ty, Reg::from(reg.to_reg())))
+        })
     }
 }
 
