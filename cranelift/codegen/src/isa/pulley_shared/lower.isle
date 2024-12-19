@@ -727,8 +727,13 @@
 (rule (lower_fcmp $F32 (FloatCC.LessThanOrEqual) a b) (pulley_flteq32 a b))
 (rule (lower_fcmp $F64 (FloatCC.LessThanOrEqual) a b) (pulley_flteq64 a b))
 
-;; NB: Pulley doesn't have lowerings for `Ordered` or `Unordered` `FloatCC`
-;; conditions as that's not needed by wasm at this time.
+;; Ordered == !a.is_nan() && !b.is_nan()
+(rule (lower_fcmp ty (FloatCC.Ordered) a b)
+  (pulley_xband32 (lower_fcmp ty (FloatCC.Equal) a a) (lower_fcmp ty (FloatCC.Equal) b b)))
+
+;; OrderedNotEqual == a < b || a > b
+(rule (lower_fcmp ty (FloatCC.OrderedNotEqual) a b)
+  (pulley_xbor32 (lower_fcmp ty (FloatCC.LessThan) a b) (lower_fcmp ty (FloatCC.GreaterThan) a b)))
 
 ;; Pulley doesn't have instructions for `>` and `>=`, so we have to reverse the
 ;; operation.
@@ -736,6 +741,11 @@
   (lower_fcmp ty (FloatCC.LessThan) b a))
 (rule (lower_fcmp ty (FloatCC.GreaterThanOrEqual) a b)
   (lower_fcmp ty (FloatCC.LessThanOrEqual) b a))
+
+;; For other `Unordered*` comparisons generate its complement and invert the result.
+(rule -1 (lower_fcmp ty cc a b)
+  (if-let true (floatcc_unordered cc))
+  (pulley_xbxor32_s8 (lower_fcmp ty (floatcc_complement cc) a b) 1))
 
 ;;;; Rules for `load` and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -937,13 +947,13 @@
 
 ;; Note the operand swaps here
 (rule (emit_cond (Cond.IfXsgt32I32 src1 src2))
-  (pulley_xslteq32 (imm $I32 (i64_as_u64 (i32_as_i64 src2))) src1))
-(rule (emit_cond (Cond.IfXsgteq32I32 src1 src2))
   (pulley_xslt32 (imm $I32 (i64_as_u64 (i32_as_i64 src2))) src1))
+(rule (emit_cond (Cond.IfXsgteq32I32 src1 src2))
+  (pulley_xslteq32 (imm $I32 (i64_as_u64 (i32_as_i64 src2))) src1))
 (rule (emit_cond (Cond.IfXugt32I32 src1 src2))
-  (pulley_xulteq32 (imm $I32 (u32_as_u64 src2)) src1))
-(rule (emit_cond (Cond.IfXugteq32I32 src1 src2))
   (pulley_xult32 (imm $I32 (u32_as_u64 src2)) src1))
+(rule (emit_cond (Cond.IfXugteq32I32 src1 src2))
+  (pulley_xulteq32 (imm $I32 (u32_as_u64 src2)) src1))
 
 (rule (emit_cond (Cond.IfXeq64I32 src1 src2))
   (pulley_xeq64 src1 (imm $I64 (i64_as_u64 (i32_as_i64 src2)))))
@@ -960,13 +970,13 @@
 
 ;; Note the operand swaps here
 (rule (emit_cond (Cond.IfXsgt64I32 src1 src2))
-  (pulley_xslteq64 (imm $I64 (i64_as_u64 (i32_as_i64 src2))) src1))
-(rule (emit_cond (Cond.IfXsgteq64I32 src1 src2))
   (pulley_xslt64 (imm $I64 (i64_as_u64 (i32_as_i64 src2))) src1))
+(rule (emit_cond (Cond.IfXsgteq64I32 src1 src2))
+  (pulley_xslteq64 (imm $I64 (i64_as_u64 (i32_as_i64 src2))) src1))
 (rule (emit_cond (Cond.IfXugt64I32 src1 src2))
-  (pulley_xulteq64 (imm $I64 (u32_as_u64 src2)) src1))
-(rule (emit_cond (Cond.IfXugteq64I32 src1 src2))
   (pulley_xult64 (imm $I64 (u32_as_u64 src2)) src1))
+(rule (emit_cond (Cond.IfXugteq64I32 src1 src2))
+  (pulley_xulteq64 (imm $I64 (u32_as_u64 src2)) src1))
 
 ;;;; Rules for `bitcast` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -5,6 +5,10 @@ target x86_64 has_avx
 target s390x
 target riscv64
 target riscv64 has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 function %fcmp_ule_f32(f32, f32) -> i8 {
 block0(v0: f32, v1: f32):
