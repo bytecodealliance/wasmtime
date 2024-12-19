@@ -145,8 +145,6 @@ pub mod __internal {
     pub use alloc::string::String;
     pub use alloc::vec::Vec;
     pub use anyhow;
-    #[cfg(feature = "async")]
-    pub use async_trait::async_trait;
     pub use core::mem::transmute;
     #[cfg(feature = "async")]
     pub use trait_variant::make as trait_variant_make;
