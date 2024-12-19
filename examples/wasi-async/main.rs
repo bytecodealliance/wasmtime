@@ -7,10 +7,27 @@ You can execute this example with:
     cargo run --example wasi-async
 */
 
-use anyhow::Result;
-use wasmtime::{Config, Engine, Linker, Module, Store};
-use wasmtime_wasi::preview1::{self, WasiP1Ctx};
-use wasmtime_wasi::WasiCtxBuilder;
+use wasmtime::component::{Component, Linker, ResourceTable};
+use wasmtime::*;
+use wasmtime_wasi::bindings::Command;
+use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
+
+pub struct ComponentRunStates {
+    // These two are required basically as a standard way to enable the impl of WasiView
+    // impl of WasiView is required by [`wasmtime_wasi::add_to_linker_sync`]
+    pub wasi_ctx: WasiCtx,
+    pub resource_table: ResourceTable,
+    // You can add other custom host states if needed
+}
+
+impl WasiView for ComponentRunStates {
+    fn table(&mut self) -> &mut ResourceTable {
+        &mut self.resource_table
+    }
+    fn ctx(&mut self) -> &mut WasiCtx {
+        &mut self.wasi_ctx
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -18,30 +35,25 @@ async fn main() -> Result<()> {
     let mut config = Config::new();
     config.async_support(true);
     let engine = Engine::new(&config)?;
+    let mut linker = Linker::new(&engine);
+    wasmtime_wasi::add_to_linker_async(&mut linker)?;
 
-    // Add the WASI preview1 API to the linker (will be implemented in terms of
-    // the preview2 API)
-    let mut linker: Linker<WasiP1Ctx> = Linker::new(&engine);
-    preview1::add_to_linker_async(&mut linker, |t| t)?;
+    // Create a WASI context and put it in a Store; all instances in the store
+    // share this context. `WasiCtxBuilder` provides a number of ways to
+    // configure what the target program will have access to.
+    let wasi = WasiCtxBuilder::new().inherit_stdio().inherit_args().build();
+    let state = ComponentRunStates {
+        wasi_ctx: wasi,
+        resource_table: ResourceTable::new(),
+    };
+    let mut store = Store::new(&engine, state);
 
-    // Add capabilities (e.g. filesystem access) to the WASI preview2 context
-    // here. Here only stdio is inherited, but see docs of `WasiCtxBuilder` for
-    // more.
-    let wasi_ctx = WasiCtxBuilder::new().inherit_stdio().build_p1();
-
-    let mut store = Store::new(&engine, wasi_ctx);
-
-    // Instantiate our 'Hello World' wasm module.
-    // Note: This is a module built against the preview1 WASI API.
-    let module = Module::from_file(&engine, "target/wasm32-wasip1/debug/wasi.wasm")?;
-    let func = linker
-        .module_async(&mut store, "", &module)
-        .await?
-        .get_default(&mut store, "")?
-        .typed::<(), ()>(&store)?;
-
-    // Invoke the WASI program default function.
-    func.call_async(&mut store, ()).await?;
-
-    Ok(())
+    // Instantiate our component with the imports we've created, and run it.
+    let component = Component::from_file(&engine, "target/wasm32-wasip2/debug/wasi.wasm")?;
+    let command = Command::instantiate_async(&mut store, &component, &linker).await?;
+    let program_result = command.wasi_cli_run().call_run(&mut store).await?;
+    match program_result {
+        Ok(()) => Ok(()),
+        Err(()) => std::process::exit(1),
+    }
 }
