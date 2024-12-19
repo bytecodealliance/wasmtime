@@ -979,21 +979,37 @@ pub fn translate_operator(
             let arg = state.pop1();
             state.push1(builder.ins().sqrt(arg));
         }
-        Operator::F32Ceil | Operator::F64Ceil => {
+        Operator::F32Ceil => {
             let arg = state.pop1();
-            state.push1(builder.ins().ceil(arg));
+            state.push1(environ.ceil_f32(builder, arg));
         }
-        Operator::F32Floor | Operator::F64Floor => {
+        Operator::F64Ceil => {
             let arg = state.pop1();
-            state.push1(builder.ins().floor(arg));
+            state.push1(environ.ceil_f64(builder, arg));
         }
-        Operator::F32Trunc | Operator::F64Trunc => {
+        Operator::F32Floor => {
             let arg = state.pop1();
-            state.push1(builder.ins().trunc(arg));
+            state.push1(environ.floor_f32(builder, arg));
         }
-        Operator::F32Nearest | Operator::F64Nearest => {
+        Operator::F64Floor => {
             let arg = state.pop1();
-            state.push1(builder.ins().nearest(arg));
+            state.push1(environ.floor_f64(builder, arg));
+        }
+        Operator::F32Trunc => {
+            let arg = state.pop1();
+            state.push1(environ.trunc_f32(builder, arg));
+        }
+        Operator::F64Trunc => {
+            let arg = state.pop1();
+            state.push1(environ.trunc_f64(builder, arg));
+        }
+        Operator::F32Nearest => {
+            let arg = state.pop1();
+            state.push1(environ.nearest_f32(builder, arg));
+        }
+        Operator::F64Nearest => {
+            let arg = state.pop1();
+            state.push1(environ.nearest_f64(builder, arg));
         }
         Operator::F32Abs | Operator::F64Abs => {
             let val = state.pop1();

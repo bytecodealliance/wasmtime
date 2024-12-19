@@ -1,7 +1,7 @@
 //! Memory management for executable code.
 
 use crate::prelude::*;
-use crate::runtime::vm::{libcalls, MmapVec};
+use crate::runtime::vm::MmapVec;
 use crate::Engine;
 use alloc::sync::Arc;
 use core::ops::Range;
@@ -391,35 +391,7 @@ impl CodeMemory {
     }
 
     unsafe fn apply_relocations(&mut self) -> Result<()> {
-        if self.relocations.is_empty() {
-            return Ok(());
-        }
-
-        for (offset, libcall) in self.relocations.iter() {
-            let offset = self.text.start + offset;
-            let libcall = match libcall {
-                obj::LibCall::FloorF32 => libcalls::relocs::floorf32 as usize,
-                obj::LibCall::FloorF64 => libcalls::relocs::floorf64 as usize,
-                obj::LibCall::NearestF32 => libcalls::relocs::nearestf32 as usize,
-                obj::LibCall::NearestF64 => libcalls::relocs::nearestf64 as usize,
-                obj::LibCall::CeilF32 => libcalls::relocs::ceilf32 as usize,
-                obj::LibCall::CeilF64 => libcalls::relocs::ceilf64 as usize,
-                obj::LibCall::TruncF32 => libcalls::relocs::truncf32 as usize,
-                obj::LibCall::TruncF64 => libcalls::relocs::truncf64 as usize,
-                obj::LibCall::FmaF32 => libcalls::relocs::fmaf32 as usize,
-                obj::LibCall::FmaF64 => libcalls::relocs::fmaf64 as usize,
-                #[cfg(target_arch = "x86_64")]
-                obj::LibCall::X86Pshufb => libcalls::relocs::x86_pshufb as usize,
-                #[cfg(not(target_arch = "x86_64"))]
-                obj::LibCall::X86Pshufb => unreachable!(),
-            };
-            self.mmap
-                .as_mut_slice()
-                .as_mut_ptr()
-                .add(offset)
-                .cast::<usize>()
-                .write_unaligned(libcall);
-        }
+        assert!(self.relocations.is_empty());
         Ok(())
     }
 

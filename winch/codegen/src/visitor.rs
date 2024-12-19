@@ -702,7 +702,7 @@ where
             &mut self.context,
             OperandSize::S32,
             |env, cx, masm| {
-                let builtin = env.builtins.floor_f32::<M::ABI>()?;
+                let builtin = env.builtins.floor_f32::<M::ABI, M::Ptr>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -715,7 +715,7 @@ where
             &mut self.context,
             OperandSize::S64,
             |env, cx, masm| {
-                let builtin = env.builtins.floor_f64::<M::ABI>()?;
+                let builtin = env.builtins.floor_f64::<M::ABI, M::Ptr>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -728,7 +728,7 @@ where
             &mut self.context,
             OperandSize::S32,
             |env, cx, masm| {
-                let builtin = env.builtins.ceil_f32::<M::ABI>()?;
+                let builtin = env.builtins.ceil_f32::<M::ABI, M::Ptr>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -741,7 +741,7 @@ where
             &mut self.context,
             OperandSize::S64,
             |env, cx, masm| {
-                let builtin = env.builtins.ceil_f64::<M::ABI>()?;
+                let builtin = env.builtins.ceil_f64::<M::ABI, M::Ptr>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -754,7 +754,7 @@ where
             &mut self.context,
             OperandSize::S32,
             |env, cx, masm| {
-                let builtin = env.builtins.nearest_f32::<M::ABI>()?;
+                let builtin = env.builtins.nearest_f32::<M::ABI, M::Ptr>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -767,7 +767,7 @@ where
             &mut self.context,
             OperandSize::S64,
             |env, cx, masm| {
-                let builtin = env.builtins.nearest_f64::<M::ABI>()?;
+                let builtin = env.builtins.nearest_f64::<M::ABI, M::Ptr>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -780,7 +780,7 @@ where
             &mut self.context,
             OperandSize::S32,
             |env, cx, masm| {
-                let builtin = env.builtins.trunc_f32::<M::ABI>()?;
+                let builtin = env.builtins.trunc_f32::<M::ABI, M::Ptr>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
@@ -793,7 +793,7 @@ where
             &mut self.context,
             OperandSize::S64,
             |env, cx, masm| {
-                let builtin = env.builtins.trunc_f64::<M::ABI>()?;
+                let builtin = env.builtins.trunc_f64::<M::ABI, M::Ptr>()?;
                 FnCall::emit::<M>(env, masm, cx, Callee::Builtin(builtin))
             },
         )
