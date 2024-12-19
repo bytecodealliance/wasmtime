@@ -860,6 +860,7 @@ jobs:
         # workaround for https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1972855
         sudo mkdir -p /usr/lib/local/lib/python3.10/dist-packages/lldb
         sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb/* /usr/lib/python3/dist-packages/lldb/
+        cargo test --test all -- --ignored --test-threads 1 debug::
         cargo test --release --test all -- --ignored --test-threads 1 debug::
       env:
         LLDB: lldb-15 # override default version, 14
