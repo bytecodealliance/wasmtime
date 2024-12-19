@@ -31,6 +31,7 @@ type BoxCallIndInfo = Box<CallInfo<XReg>>;
 type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
 type BoxReturnCallIndInfo = Box<ReturnCallInfo<XReg>>;
 type BoxExternalName = Box<ExternalName>;
+type XRegSet = pulley_interpreter::RegSet<pulley_interpreter::XReg>;
 
 #[expect(
     unused_imports,

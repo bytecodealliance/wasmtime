@@ -556,14 +556,17 @@ pub trait ScalarBitSetStorage:
 macro_rules! impl_storage {
     ( $int:ty ) => {
         impl ScalarBitSetStorage for $int {
+            #[inline]
             fn leading_zeros(self) -> u8 {
                 u8::try_from(self.leading_zeros()).unwrap()
             }
 
+            #[inline]
             fn trailing_zeros(self) -> u8 {
                 u8::try_from(self.trailing_zeros()).unwrap()
             }
 
+            #[inline]
             fn count_ones(self) -> u8 {
                 u8::try_from(self.count_ones()).unwrap()
             }
