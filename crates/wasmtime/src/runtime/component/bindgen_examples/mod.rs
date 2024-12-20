@@ -490,14 +490,12 @@ pub mod _6_exported_resources;
 /// Example of generating **async** bindings for imported resources in a world.
 ///
 /// Notable differences from [`_4_imported_resources`] are:
-/// * [`async_trait`] is used.
 /// * async functions are used
 /// * enabled async in bindgen! macro
 ///
 /// See [wasi_async_example](https://github.com/bytecodealliance/wasmtime/tree/main/examples/wasi-async) for async function calls on a host.
 ///
 /// ```rust
-/// use async_trait::async_trait;
 /// use wasmtime::Result;
 /// use wasmtime::component::{bindgen, ResourceTable, Resource};
 /// use example::imported_resources::logging::{Level, Host, HostLogger};
@@ -516,7 +514,6 @@ pub mod _6_exported_resources;
 ///
 /// // This separate `HostLogger` trait serves to act as a namespace for just
 /// // the `logger`-related resource methods.
-/// #[async_trait]
 /// impl HostLogger for MyState {
 ///     // A `constructor` in WIT maps to a `new` function in Rust.
 ///     async fn new(&mut self, max_level: Level) -> Result<Resource<MyLogger>> {
