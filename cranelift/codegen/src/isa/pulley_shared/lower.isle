@@ -1150,26 +1150,44 @@
 
 (rule (lower (has_type $F32 (trunc a))) (pulley_ftrunc32 a))
 (rule (lower (has_type $F64 (trunc a))) (pulley_ftrunc64 a))
+(rule (lower (has_type $F32X4 (trunc a))) (pulley_vtrunc32x4 a))
+(rule (lower (has_type $F64X2 (trunc a))) (pulley_vtrunc64x2 a))
 
 ;;;; Rules for `floor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (floor a))) (pulley_ffloor32 a))
 (rule (lower (has_type $F64 (floor a))) (pulley_ffloor64 a))
-
+(rule (lower (has_type $F32X4 (floor a)))
+      (pulley_vfloor32x4 a))
+(rule (lower (has_type $F64X2 (floor a)))
+      (pulley_vfloor64x2 a))
 ;;;; Rules for `ceil` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (ceil a))) (pulley_fceil32 a))
 (rule (lower (has_type $F64 (ceil a))) (pulley_fceil64 a))
+(rule (lower (has_type $F64X2 (ceil a)))
+      (pulley_vceil64x2 a))
+(rule (lower (has_type $F32X4 (ceil a)))
+      (pulley_vceil32x4 a))
 
 ;;;; Rules for `nearest` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (nearest a))) (pulley_fnearest32 a))
 (rule (lower (has_type $F64 (nearest a))) (pulley_fnearest64 a))
+(rule (lower (has_type $F32X4 (nearest a)))
+      (pulley_vnearest32x4 a))
+(rule (lower (has_type $F64X2 (nearest a)))
+      (pulley_vnearest64x2 a))
 
 ;;;; Rules for `sqrt` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (sqrt a))) (pulley_fsqrt32 a))
 (rule (lower (has_type $F64 (sqrt a))) (pulley_fsqrt64 a))
+(rule (lower (has_type $F32X4 (sqrt a)))
+      (pulley_vsqrt32x4 a))
+(rule (lower (has_type $F64X2 (sqrt a)))
+      (pulley_vsqrt64x2 a))
+
 
 ;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
