@@ -3,7 +3,7 @@
 /*
 You can execute this example with:
     cmake examples/
-    cargo run --example wasi
+    cargo run --example wasip2
 */
 
 use wasmtime::component::{Component, Linker, ResourceTable};

@@ -18,7 +18,7 @@ For this WASI example, this Hello World program is compiled to a WebAssembly com
 
 `wasi.rs`
 ```rust
-{{#include ../examples/wasi/wasm/wasi.rs}}
+{{#include ../examples/wasm/wasi.rs}}
 ```
 
 > Building instructions:

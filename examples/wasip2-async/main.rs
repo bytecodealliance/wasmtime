@@ -4,7 +4,7 @@
 /*
 You can execute this example with:
     cmake examples/
-    cargo run --example wasi-async
+    cargo run --example wasip2-async
 */
 
 use wasmtime::component::{Component, Linker, ResourceTable};
