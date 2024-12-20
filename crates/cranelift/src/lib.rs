@@ -323,14 +323,6 @@ fn mach_reloc_to_reloc(
 fn libcall_cranelift_to_wasmtime(call: ir::LibCall) -> wasmtime_environ::obj::LibCall {
     use wasmtime_environ::obj::LibCall as LC;
     match call {
-        ir::LibCall::FloorF32 => LC::FloorF32,
-        ir::LibCall::FloorF64 => LC::FloorF64,
-        ir::LibCall::NearestF32 => LC::NearestF32,
-        ir::LibCall::NearestF64 => LC::NearestF64,
-        ir::LibCall::CeilF32 => LC::CeilF32,
-        ir::LibCall::CeilF64 => LC::CeilF64,
-        ir::LibCall::TruncF32 => LC::TruncF32,
-        ir::LibCall::TruncF64 => LC::TruncF64,
         ir::LibCall::FmaF32 => LC::FmaF32,
         ir::LibCall::FmaF64 => LC::FmaF64,
         ir::LibCall::X86Pshufb => LC::X86Pshufb,
