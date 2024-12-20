@@ -195,7 +195,7 @@ pub mod foo {
         pub mod multi_return {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::anyhow;
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {
                 async fn mra(&mut self) -> ();
                 async fn mrb(&mut self) -> ();
@@ -285,7 +285,6 @@ pub mod foo {
             {
                 add_to_linker_get_host(linker, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
                 async fn mra(&mut self) -> () {
                     Host::mra(*self).await

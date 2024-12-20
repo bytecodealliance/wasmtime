@@ -75,6 +75,7 @@ impl MemoryOutputPipe {
     }
 }
 
+#[async_trait::async_trait]
 impl HostOutputStream for MemoryOutputPipe {
     fn write(&mut self, bytes: Bytes) -> Result<(), StreamError> {
         let mut buf = self.buffer.lock().unwrap();
@@ -217,6 +218,7 @@ impl Subscribe for AsyncReadStream {
 #[derive(Copy, Clone)]
 pub struct SinkOutputStream;
 
+#[async_trait::async_trait]
 impl HostOutputStream for SinkOutputStream {
     fn write(&mut self, _buf: Bytes) -> Result<(), StreamError> {
         Ok(())
@@ -257,6 +259,7 @@ impl Subscribe for ClosedInputStream {
 #[derive(Copy, Clone)]
 pub struct ClosedOutputStream;
 
+#[async_trait::async_trait]
 impl HostOutputStream for ClosedOutputStream {
     fn write(&mut self, _: Bytes) -> Result<(), StreamError> {
         Err(StreamError::Closed)

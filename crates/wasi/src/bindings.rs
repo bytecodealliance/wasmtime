@@ -47,7 +47,6 @@
 //!     ctx: WasiCtx,
 //! }
 //!
-//! #[async_trait::async_trait]
 //! impl example::wasi::custom_host::Host for MyState {
 //!     async fn my_custom_function(&mut self) {
 //!         // ..
