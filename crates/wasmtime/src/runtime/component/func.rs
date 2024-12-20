@@ -332,7 +332,7 @@ impl Func {
             let instance = store.0[self.0].component_instance;
             // TODO: do we need to return the store here due to the possible
             // invalidation of the reference we were passed?
-            concurrent::on_fiber(store, instance, move |store| {
+            concurrent::on_fiber(store, Some(instance), move |store| {
                 self.call_impl(store, params, results)
             })
             .await?
@@ -367,7 +367,7 @@ impl Func {
         let instance = store.0[self.0].component_instance;
         // TODO: do we need to return the store here due to the possible
         // invalidation of the reference we were passed?
-        concurrent::on_fiber(store, instance, move |store| {
+        concurrent::on_fiber(store, Some(instance), move |store| {
             self.start_call(store.as_context_mut(), params)
         })
         .await?

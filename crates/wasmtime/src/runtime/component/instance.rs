@@ -864,12 +864,24 @@ impl<T> InstancePre<T> {
     where
         T: Send + 'static,
     {
-        let mut store = store.as_context_mut();
+        let store = store.as_context_mut();
         assert!(
             store.0.async_support(),
             "must use sync instantiation when async support is disabled"
         );
-        store.on_fiber(|store| self.instantiate_impl(store)).await?
+        #[cfg(feature = "component-model-async")]
+        {
+            // TODO: do we need to return the store here due to the possible
+            // invalidation of the reference we were passed?
+            concurrent::on_fiber(store, None, move |store| self.instantiate_impl(store))
+                .await?
+                .0
+        }
+        #[cfg(not(feature = "component-model-async"))]
+        {
+            let mut store = store;
+            store.on_fiber(|store| self.instantiate_impl(store)).await?
+        }
     }
 
     fn instantiate_impl(&self, mut store: impl AsContextMut<Data = T>) -> Result<Instance>

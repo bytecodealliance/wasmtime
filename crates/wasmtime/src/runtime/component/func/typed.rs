@@ -199,9 +199,11 @@ where
             let instance = store.0[self.func.0].component_instance;
             // TODO: do we need to return the store here due to the possible
             // invalidation of the reference we were passed?
-            concurrent::on_fiber(store, instance, move |store| self.call_impl(store, params))
-                .await?
-                .0
+            concurrent::on_fiber(store, Some(instance), move |store| {
+                self.call_impl(store, params)
+            })
+            .await?
+            .0
         }
         #[cfg(not(feature = "component-model-async"))]
         {
@@ -236,7 +238,7 @@ where
         let instance = store.0[self.func.0].component_instance;
         // TODO: do we need to return the store here due to the possible
         // invalidation of the reference we were passed?
-        concurrent::on_fiber(store, instance, move |store| {
+        concurrent::on_fiber(store, Some(instance), move |store| {
             self.start_call(store.as_context_mut(), params)
         })
         .await?

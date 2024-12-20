@@ -459,16 +459,29 @@ impl<T> Linker<T> {
         );
         assert!(ty.comes_from_same_engine(self.engine()));
         self.func_new(module, name, ty, move |mut caller, params, results| {
-            let async_cx = caller
-                .store
-                .as_context_mut()
-                .0
-                .async_cx()
-                .expect("Attempt to spawn new function on dying fiber");
-            let mut future = Pin::from(func(caller, params, results));
-            match unsafe { async_cx.block_on(future.as_mut()) } {
-                Ok(Ok(())) => Ok(()),
-                Ok(Err(trap)) | Err(trap) => Err(trap),
+            #[cfg(feature = "component-model-async")]
+            {
+                let async_cx =
+                    crate::component::concurrent::AsyncCx::new(&mut caller.store.as_context_mut());
+                let mut future = Pin::from(func(caller, params, results));
+                match unsafe { async_cx.block_on::<T, _>(future.as_mut(), None) } {
+                    Ok((Ok(()), _)) => Ok(()),
+                    Ok((Err(trap), _)) | Err(trap) => Err(trap),
+                }
+            }
+            #[cfg(not(feature = "component-model-async"))]
+            {
+                let async_cx = caller
+                    .store
+                    .as_context_mut()
+                    .0
+                    .async_cx()
+                    .expect("Attempt to spawn new function on dying fiber");
+                let mut future = Pin::from(func(caller, params, results));
+                match unsafe { async_cx.block_on(future.as_mut()) } {
+                    Ok(Ok(())) => Ok(()),
+                    Ok(Err(trap)) | Err(trap) => Err(trap),
+                }
             }
         })
     }
@@ -562,16 +575,31 @@ impl<T> Linker<T> {
         let func = HostFunc::wrap_inner(
             &self.engine,
             move |mut caller: Caller<'_, T>, args: Params| {
-                let async_cx = caller
-                    .store
-                    .as_context_mut()
-                    .0
-                    .async_cx()
-                    .expect("Attempt to start async function on dying fiber");
-                let mut future = Pin::from(func(caller, args));
-                match unsafe { async_cx.block_on(future.as_mut()) } {
-                    Ok(ret) => ret.into_fallible(),
-                    Err(e) => Args::fallible_from_error(e),
+                #[cfg(feature = "component-model-async")]
+                {
+                    let async_cx = crate::component::concurrent::AsyncCx::new(
+                        &mut caller.store.as_context_mut(),
+                    );
+                    let mut future = Pin::from(func(caller, args));
+
+                    match unsafe { async_cx.block_on::<T, _>(future.as_mut(), None) } {
+                        Ok((ret, _)) => ret.into_fallible(),
+                        Err(e) => Args::fallible_from_error(e),
+                    }
+                }
+                #[cfg(not(feature = "component-model-async"))]
+                {
+                    let async_cx = caller
+                        .store
+                        .as_context_mut()
+                        .0
+                        .async_cx()
+                        .expect("Attempt to start async function on dying fiber");
+                    let mut future = Pin::from(func(caller, args));
+                    match unsafe { async_cx.block_on(future.as_mut()) } {
+                        Ok(ret) => ret.into_fallible(),
+                        Err(e) => Args::fallible_from_error(e),
+                    }
                 }
             },
         );
