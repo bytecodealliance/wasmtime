@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use crate::runtime::vm::vmcontext::VMArrayCallNative;
-use crate::runtime::vm::{tls, TrapRegisters, TrapTest, VMContext, VMOpaqueContext};
+use crate::runtime::vm::{i8x16, tls, TrapRegisters, TrapTest, VMContext, VMOpaqueContext};
 use crate::{Engine, ValRaw};
 use core::ptr::NonNull;
 use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
@@ -267,8 +267,11 @@ impl InterpreterRef<'_> {
         /// `call(@host Ty(ty1, ty2, ...) -> retty)` - invoke a host function
         /// with the type `Ty`. The other types in the macro are checked by
         /// rustc to match the actual `Ty` definition in Rust.
+        ///
+        /// Ignore improper ctypes to permit `__m128i` on x86_64.
         macro_rules! call {
             (@builtin($($param:ident),*) $(-> $result:ident)?) => {{
+                #[allow(improper_ctypes_definitions)]
                 type T = unsafe extern "C" fn($(call!(@ty $param)),*) $(-> call!(@ty $result))?;
                 call!(@host T($($param),*) $(-> $result)?);
             }};
@@ -310,6 +313,7 @@ impl InterpreterRef<'_> {
             (@ty i64) => (i64);
             (@ty f32) => (f32);
             (@ty f64) => (f64);
+            (@ty i8x16) => (i8x16);
             (@ty vmctx) => (*mut VMContext);
             (@ty pointer) => (*mut u8);
             (@ty ptr_u8) => (*mut u8);
@@ -324,6 +328,7 @@ impl InterpreterRef<'_> {
             (@get u64 $reg:ident) => (self.0[$reg].get_u64());
             (@get f32 $reg:ident) => (self.0[$reg].get_f32());
             (@get f64 $reg:ident) => (self.0[$reg].get_f64());
+            (@get i8x16 $reg:ident) => (self.0[$reg].get_i8x16());
             (@get vmctx $reg:ident) => (self.0[$reg].get_ptr());
             (@get pointer $reg:ident) => (self.0[$reg].get_ptr());
             (@get ptr $reg:ident) => (self.0[$reg].get_ptr());
@@ -340,6 +345,7 @@ impl InterpreterRef<'_> {
             (@set u64 $reg:ident $val:ident) => (self.0[$reg].set_u64($val));
             (@set f32 $reg:ident $val:ident) => (self.0[$reg].set_f32($val));
             (@set f64 $reg:ident $val:ident) => (self.0[$reg].set_f64($val));
+            (@set i8x16 $reg:ident $val:ident) => (self.0[$reg].set_i8x16($val));
             (@set pointer $reg:ident $val:ident) => (self.0[$reg].set_ptr($val));
             (@set size $reg:ident $val:ident) => (self.0[$reg].set_ptr($val as *mut u8));
         }

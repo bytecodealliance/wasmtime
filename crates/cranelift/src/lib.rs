@@ -368,6 +368,10 @@ impl BuiltinFunctionSignatures {
         AbiParam::new(ir::types::I8)
     }
 
+    fn i8x16(&self) -> AbiParam {
+        AbiParam::new(ir::types::I8X16)
+    }
+
     fn bool(&self) -> AbiParam {
         AbiParam::new(ir::types::I8)
     }
