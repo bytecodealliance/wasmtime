@@ -314,6 +314,7 @@ fn is_stack_overflow(status: &ExitStatus, _stderr: &str) -> bool {
     }
 }
 
+/*
 fn overrun_with_big_module(approx_stack: usize) {
     // Each call to `$get` produces ten 8-byte values which need to be saved
     // onto the stack, so divide `approx_stack` by 80 to get
@@ -357,3 +358,4 @@ fn overrun_with_big_module(approx_stack: usize) {
         .unwrap();
     unreachable!();
 }
+*/
