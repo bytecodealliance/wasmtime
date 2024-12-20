@@ -167,14 +167,6 @@ macro_rules! libcalls {
 }
 
 libcalls! {
-    FloorF32 = "libcall_floor32"
-    FloorF64 = "libcall_floor64"
-    NearestF32 = "libcall_nearestf32"
-    NearestF64 = "libcall_nearestf64"
-    CeilF32 = "libcall_ceilf32"
-    CeilF64 = "libcall_ceilf64"
-    TruncF32 = "libcall_truncf32"
-    TruncF64 = "libcall_truncf64"
     FmaF32 = "libcall_fmaf32"
     FmaF64 = "libcall_fmaf64"
     X86Pshufb = "libcall_x86_pshufb"
