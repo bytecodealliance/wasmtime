@@ -712,8 +712,10 @@ impl CommonOptions {
         if let Some(enable) = self.debug.address_map {
             config.generate_address_map(enable);
         }
-        if let Some(enable) = self.opts.memory_init_cow {
-            config.memory_init_cow(enable);
+        match_feature! {
+            ["signals-based-traps" : self.opts.memory_init_cow]
+            enable => config.memory_init_cow(enable),
+            _ => err,
         }
         match_feature! {
             ["signals-based-traps" : self.opts.signals_based_traps]
