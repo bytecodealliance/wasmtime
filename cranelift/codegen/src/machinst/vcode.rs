@@ -1749,11 +1749,11 @@ mod test {
     fn size_of_constant_structs() {
         assert_eq!(size_of::<Constant>(), 4);
         assert_eq!(size_of::<VCodeConstant>(), 4);
-        assert_eq!(size_of::<ConstantData>(), 24);
-        assert_eq!(size_of::<VCodeConstantData>(), 32);
+        assert_eq!(size_of::<ConstantData>(), 3 * size_of::<usize>());
+        assert_eq!(size_of::<VCodeConstantData>(), 4 * size_of::<usize>());
         assert_eq!(
             size_of::<PrimaryMap<VCodeConstant, VCodeConstantData>>(),
-            24
+            3 * size_of::<usize>()
         );
         // TODO The VCodeConstants structure's memory size could be further optimized.
         // With certain versions of Rust, each `HashMap` in `VCodeConstants` occupied at

@@ -34,6 +34,12 @@ wasmtime-versioned-export-macros = { workspace = true }
 itertools = "0.12"
 pulley-interpreter = { workspace = true, optional = true }
 
+# On 32-bit platforms where Cranelift currently doesn't have any supported host
+# unconditionally enable the `pulley` feature of the Cranelift backend to ensure
+# that it's possible to run wasm code by default.
+[target.'cfg(target_pointer_width = "32")'.dependencies]
+cranelift-codegen = { workspace = true, features = ['pulley'] }
+
 [features]
 all-arch = ["cranelift-codegen/all-arch"]
 host-arch = ["cranelift-codegen/host-arch"]
