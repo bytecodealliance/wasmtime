@@ -7,7 +7,7 @@ use alloc::sync::Arc;
 use core::ops::Range;
 use object::endian::Endianness;
 use object::read::{elf::ElfFile64, Object, ObjectSection};
-use object::{ObjectSymbol, SectionFlags};
+use object::SectionFlags;
 use wasmtime_environ::{lookup_trap_code, obj, Trap};
 
 /// Management of executable memory within a `MmapVec`

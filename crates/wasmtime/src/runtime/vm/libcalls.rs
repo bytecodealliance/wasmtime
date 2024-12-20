@@ -147,7 +147,6 @@ pub mod raw {
         (@ty u64) => (u64);
         (@ty f32) => (f32);
         (@ty f64) => (f64);
-        (@ty __m128i) => (std::arch::x86_64::__m128i);
         (@ty u8) => (u8);
         (@ty bool) => (bool);
         (@ty pointer) => (*mut u8);
@@ -1268,60 +1267,6 @@ fn nearest_f32(_store: &mut dyn VMStore, _instance: &mut Instance, val: f32) -> 
 
 fn nearest_f64(_store: &mut dyn VMStore, _instance: &mut Instance, val: f64) -> f64 {
     wasmtime_math::WasmFloat::wasm_nearest(val)
-}
-
-// This intrinsic is only used on x86_64 platforms as an implementation of
-// the `pshufb` instruction when SSSE3 is not available.
-#[cfg(target_arch = "x86_64")]
-use core::arch::x86_64::__m128i;
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse")]
-#[allow(improper_ctypes_definitions)]
-unsafe fn x86_pshufb(
-    _store: &mut dyn VMStore,
-    _insttance: &mut Instance,
-    a: __m128i,
-    b: __m128i,
-) -> __m128i {
-    union U {
-        reg: __m128i,
-        mem: [u8; 16],
-    }
-
-    unsafe {
-        let a = U { reg: a }.mem;
-        let b = U { reg: b }.mem;
-
-        let select = |arr: &[u8; 16], byte: u8| {
-            if byte & 0x80 != 0 {
-                0x00
-            } else {
-                arr[(byte & 0xf) as usize]
-            }
-        };
-
-        U {
-            mem: [
-                select(&a, b[0]),
-                select(&a, b[1]),
-                select(&a, b[2]),
-                select(&a, b[3]),
-                select(&a, b[4]),
-                select(&a, b[5]),
-                select(&a, b[6]),
-                select(&a, b[7]),
-                select(&a, b[8]),
-                select(&a, b[9]),
-                select(&a, b[10]),
-                select(&a, b[11]),
-                select(&a, b[12]),
-                select(&a, b[13]),
-                select(&a, b[14]),
-                select(&a, b[15]),
-            ],
-        }
-        .reg
-    }
 }
 
 /// This intrinsic is just used to record trap information.
