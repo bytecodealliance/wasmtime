@@ -408,6 +408,7 @@ impl wasmtime_environ::Compiler for Compiler {
             &ptr,
             vm_store_context,
             &self.tunables,
+            isa,
         );
 
         // Spill all wasm arguments to the stack in `ValRaw` slots.
@@ -621,6 +622,7 @@ impl wasmtime_environ::Compiler for Compiler {
             &ptr_size,
             vm_store_context,
             &self.tunables,
+            isa,
         );
 
         // Now it's time to delegate to the actual builtin. Forward all our own
@@ -1196,9 +1198,10 @@ fn save_last_wasm_exit_fp_and_pc(
     ptr: &impl PtrSize,
     limits: Value,
     tunables: &Tunables,
+    isa: &dyn TargetIsa,
 ) {
     // If we're catching traps with signals, insert checks into trampolines.
-    if tunables.signals_based_traps {
+    if tunables.signals_based_traps && !isa.triple().is_pulley() {
         // The Wasm spec defines that stack overflows will raise a trap, and
         // there's also an added constraint where as an embedder you frequently are
         // running host-provided code called from wasm. WebAssembly and native code
