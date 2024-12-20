@@ -193,7 +193,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod http_types {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -274,7 +274,7 @@ pub mod foo {
 #[allow(clippy::all)]
 pub mod http_fetch {
     #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
+    use wasmtime::component::__internal::{anyhow, Box};
     pub type Request = super::foo::foo::http_types::Request;
     const _: () = {
         assert!(8 == < Request as wasmtime::component::ComponentType >::SIZE32);
@@ -358,7 +358,7 @@ pub mod exports {
     #[allow(clippy::all)]
     pub mod http_handler {
         #[allow(unused_imports)]
-        use wasmtime::component::__internal::anyhow;
+        use wasmtime::component::__internal::{anyhow, Box};
         pub type Request = super::super::foo::foo::http_types::Request;
         const _: () = {
             assert!(8 == < Request as wasmtime::component::ComponentType >::SIZE32);

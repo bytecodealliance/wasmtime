@@ -174,7 +174,7 @@ pub mod exports {
     #[allow(clippy::all)]
     pub mod the_name {
         #[allow(unused_imports)]
-        use wasmtime::component::__internal::anyhow;
+        use wasmtime::component::__internal::{anyhow, Box};
         pub struct Guest {
             y: wasmtime::component::Func,
         }

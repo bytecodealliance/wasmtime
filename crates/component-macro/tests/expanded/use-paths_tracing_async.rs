@@ -183,7 +183,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod a {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -268,7 +268,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod b {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub type Foo = super::super::super::foo::foo::a::Foo;
             const _: () = {
                 assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);
@@ -343,7 +343,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod c {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub type Foo = super::super::super::foo::foo::b::Foo;
             const _: () = {
                 assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);
@@ -420,7 +420,7 @@ pub mod foo {
 #[allow(clippy::all)]
 pub mod d {
     #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
+    use wasmtime::component::__internal::{anyhow, Box};
     pub type Foo = super::foo::foo::c::Foo;
     const _: () = {
         assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);

@@ -300,7 +300,7 @@ const _: () = {
                             "baz",
                             wasmtime::component::ResourceType::host::<Baz>(),
                             move |mut store, rep| {
-                                std::boxed::Box::new(async move {
+                                wasmtime::component::__internal::Box::new(async move {
                                     HostBaz::drop(
                                             &mut host_getter(store.data_mut()),
                                             wasmtime::component::Resource::new_own(rep),
@@ -370,7 +370,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod the_interface {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             /// Link-time configurations.
             #[derive(Clone, Debug, Default)]
             pub struct LinkOptions {
@@ -465,7 +465,7 @@ pub mod foo {
                             "bar",
                             wasmtime::component::ResourceType::host::<Bar>(),
                             move |mut store, rep| {
-                                std::boxed::Box::new(async move {
+                                wasmtime::component::__internal::Box::new(async move {
                                     HostBar::drop(
                                             &mut host_getter(store.data_mut()),
                                             wasmtime::component::Resource::new_own(rep),

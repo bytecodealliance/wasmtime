@@ -192,7 +192,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod simple {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             #[wasmtime::component::__internal::async_trait]
             pub trait Host: Send {
                 async fn f1(&mut self) -> ();
@@ -418,7 +418,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod simple {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::anyhow;
+                use wasmtime::component::__internal::{anyhow, Box};
                 pub struct Guest {
                     f1: wasmtime::component::Func,
                     f2: wasmtime::component::Func,

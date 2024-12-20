@@ -265,7 +265,7 @@ const _: () = {
                     "world-resource",
                     wasmtime::component::ResourceType::host::<WorldResource>(),
                     move |mut store, rep| {
-                        std::boxed::Box::new(async move {
+                        wasmtime::component::__internal::Box::new(async move {
                             HostWorldResource::drop(
                                     &mut host_getter(store.data_mut()),
                                     wasmtime::component::Resource::new_own(rep),
@@ -436,7 +436,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod resources {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub enum Bar {}
             #[wasmtime::component::__internal::async_trait]
             pub trait HostBar {
@@ -617,7 +617,7 @@ pub mod foo {
                     "bar",
                     wasmtime::component::ResourceType::host::<Bar>(),
                     move |mut store, rep| {
-                        std::boxed::Box::new(async move {
+                        wasmtime::component::__internal::Box::new(async move {
                             HostBar::drop(
                                     &mut host_getter(store.data_mut()),
                                     wasmtime::component::Resource::new_own(rep),
@@ -1348,7 +1348,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod long_use_chain1 {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub enum A {}
             #[wasmtime::component::__internal::async_trait]
             pub trait HostA {
@@ -1392,7 +1392,7 @@ pub mod foo {
                     "a",
                     wasmtime::component::ResourceType::host::<A>(),
                     move |mut store, rep| {
-                        std::boxed::Box::new(async move {
+                        wasmtime::component::__internal::Box::new(async move {
                             HostA::drop(
                                     &mut host_getter(store.data_mut()),
                                     wasmtime::component::Resource::new_own(rep),
@@ -1419,7 +1419,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod long_use_chain2 {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain1::A;
             #[wasmtime::component::__internal::async_trait]
             pub trait Host: Send {}
@@ -1461,7 +1461,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod long_use_chain3 {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain2::A;
             #[wasmtime::component::__internal::async_trait]
             pub trait Host: Send {}
@@ -1503,7 +1503,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod long_use_chain4 {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain3::A;
             #[wasmtime::component::__internal::async_trait]
             pub trait Host: Send {
@@ -1574,7 +1574,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod transitive_interface_with_resource {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub enum Foo {}
             #[wasmtime::component::__internal::async_trait]
             pub trait HostFoo {
@@ -1619,7 +1619,7 @@ pub mod foo {
                     "foo",
                     wasmtime::component::ResourceType::host::<Foo>(),
                     move |mut store, rep| {
-                        std::boxed::Box::new(async move {
+                        wasmtime::component::__internal::Box::new(async move {
                             HostFoo::drop(
                                     &mut host_getter(store.data_mut()),
                                     wasmtime::component::Resource::new_own(rep),
@@ -1651,7 +1651,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod uses_resource_transitively {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::anyhow;
+                use wasmtime::component::__internal::{anyhow, Box};
                 pub type Foo = super::super::super::super::foo::foo::transitive_interface_with_resource::Foo;
                 pub struct Guest {
                     handle: wasmtime::component::Func,

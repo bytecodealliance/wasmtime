@@ -254,7 +254,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod transitive_import {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub enum Y {}
             #[wasmtime::component::__internal::async_trait]
             pub trait HostY {
@@ -298,7 +298,7 @@ pub mod foo {
                     "y",
                     wasmtime::component::ResourceType::host::<Y>(),
                     move |mut store, rep| {
-                        std::boxed::Box::new(async move {
+                        wasmtime::component::__internal::Box::new(async move {
                             HostY::drop(
                                     &mut host_getter(store.data_mut()),
                                     wasmtime::component::Resource::new_own(rep),
@@ -330,7 +330,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod simple_export {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::anyhow;
+                use wasmtime::component::__internal::{anyhow, Box};
                 pub type A = wasmtime::component::ResourceAny;
                 pub struct GuestA<'a> {
                     funcs: &'a Guest,
@@ -537,7 +537,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod export_using_import {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::anyhow;
+                use wasmtime::component::__internal::{anyhow, Box};
                 pub type Y = super::super::super::super::foo::foo::transitive_import::Y;
                 pub type A = wasmtime::component::ResourceAny;
                 pub struct GuestA<'a> {
@@ -755,7 +755,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod export_using_export1 {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::anyhow;
+                use wasmtime::component::__internal::{anyhow, Box};
                 pub type A = wasmtime::component::ResourceAny;
                 pub struct GuestA<'a> {
                     funcs: &'a Guest,
@@ -881,7 +881,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod export_using_export2 {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::anyhow;
+                use wasmtime::component::__internal::{anyhow, Box};
                 pub type A = super::super::super::super::exports::foo::foo::export_using_export1::A;
                 pub type B = wasmtime::component::ResourceAny;
                 pub struct GuestB<'a> {

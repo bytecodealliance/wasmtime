@@ -179,7 +179,7 @@ pub mod paths {
         #[allow(clippy::all)]
         pub mod test {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             #[wasmtime::component::__internal::async_trait]
             pub trait Host: Send {}
             pub trait GetHost<
