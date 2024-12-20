@@ -3015,9 +3015,45 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vtrunc32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f32x4();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_trunc();
+        }
+        self.state[dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vtrunc64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f64x2();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_trunc();
+        }
+        self.state[dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
     fn ffloor32(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f32();
         self.state[dst].set_f32(a.wasm_floor());
+        ControlFlow::Continue(())
+    }
+
+    fn vfloor32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f32x4();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_floor();
+        }
+        self.state[dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vfloor64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f64x2();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_floor();
+        }
+        self.state[dst].set_f64x2(a);
         ControlFlow::Continue(())
     }
 
@@ -3027,15 +3063,71 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vceil32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f32x4();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_ceil();
+        }
+        self.state[dst].set_f32x4(a);
+
+        ControlFlow::Continue(())
+    }
+
+    fn vceil64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f64x2();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_ceil();
+        }
+        self.state[dst].set_f64x2(a);
+
+        ControlFlow::Continue(())
+    }
+
     fn fnearest32(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f32();
         self.state[dst].set_f32(a.wasm_nearest());
         ControlFlow::Continue(())
     }
 
+    fn vnearest32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f32x4();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_nearest();
+        }
+        self.state[dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vnearest64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f64x2();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_nearest();
+        }
+        self.state[dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
     fn fsqrt32(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f32();
         self.state[dst].set_f32(a.wasm_sqrt());
+        ControlFlow::Continue(())
+    }
+
+    fn vsqrt32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f32x4();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_sqrt();
+        }
+        self.state[dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vsqrt64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f64x2();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_sqrt();
+        }
+        self.state[dst].set_f64x2(a);
         ControlFlow::Continue(())
     }
 
