@@ -58,7 +58,7 @@
 
     ;; An indirect call out to a host-defined function. The host function
     ;; pointer is the first "argument" of this function call.
-    (IndirectCallHost (info BoxCallInfo))
+    (IndirectCallHost (info BoxCallIndirectHostInfo))
 
     ;; Unconditional jumps.
     (Jump (label MachLabel))
@@ -154,6 +154,7 @@
 (type BoxReturnCallInfo (primitive BoxReturnCallInfo))
 (type BoxReturnCallIndInfo (primitive BoxReturnCallIndInfo))
 (type XRegSet (primitive XRegSet))
+(type BoxCallIndirectHostInfo (primitive BoxCallIndirectHostInfo))
 
 ;;;; Address Modes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
