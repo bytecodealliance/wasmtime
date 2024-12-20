@@ -95,7 +95,7 @@ pub struct FooIndices {}
 /// [`Component`]: wasmtime::component::Component
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Foo {}
-#[wasmtime::component::__internal::async_trait]
+#[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
 pub trait FooImports: Send {
     async fn foo(&mut self) -> ();
 }
@@ -111,7 +111,6 @@ where
 {
     type Host = O;
 }
-#[wasmtime::component::__internal::async_trait]
 impl<_T: FooImports + ?Sized + Send> FooImports for &mut _T {
     async fn foo(&mut self) -> () {
         FooImports::foo(*self).await

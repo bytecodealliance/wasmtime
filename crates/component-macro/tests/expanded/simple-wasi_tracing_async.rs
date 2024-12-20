@@ -242,7 +242,7 @@ pub mod foo {
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::ALIGN32);
             };
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {
                 async fn create_directory_at(&mut self) -> Result<(), Errno>;
                 async fn stat(&mut self) -> Result<DescriptorStat, Errno>;
@@ -325,7 +325,6 @@ pub mod foo {
             {
                 add_to_linker_get_host(linker, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
                 async fn create_directory_at(&mut self) -> Result<(), Errno> {
                     Host::create_directory_at(*self).await
@@ -339,7 +338,7 @@ pub mod foo {
         pub mod wall_clock {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::anyhow;
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {}
             pub trait GetHost<
                 T,
@@ -373,7 +372,6 @@ pub mod foo {
             {
                 add_to_linker_get_host(linker, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
         }
     }

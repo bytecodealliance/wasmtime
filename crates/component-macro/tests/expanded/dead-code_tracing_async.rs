@@ -202,7 +202,7 @@ pub mod a {
                     4 == < LiveType as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {
                 async fn f(&mut self) -> LiveType;
             }
@@ -261,7 +261,6 @@ pub mod a {
             {
                 add_to_linker_get_host(linker, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
                 async fn f(&mut self) -> LiveType {
                     Host::f(*self).await
@@ -272,7 +271,7 @@ pub mod a {
         pub mod interface_with_dead_type {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::anyhow;
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {}
             pub trait GetHost<
                 T,
@@ -306,7 +305,6 @@ pub mod a {
             {
                 add_to_linker_get_host(linker, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
         }
     }
