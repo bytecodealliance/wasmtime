@@ -875,19 +875,6 @@ integers! {
 
 macro_rules! floats {
     ($($float:ident/$get_float:ident = $ty:ident with abi:$abi:ident)*) => ($(const _: () = {
-        /// All floats in-and-out of the canonical abi always have their nan
-        /// payloads canonicalized. conveniently the `NAN` constant in rust has
-        /// the same representation as canonical nan, so we can use that for the
-        /// nan value.
-        #[inline]
-        fn canonicalize(float: $float) -> $float {
-            if float.is_nan() {
-                $float::NAN
-            } else {
-                float
-            }
-        }
-
         unsafe impl ComponentType for $float {
             type Lower = ValRaw;
 
@@ -910,7 +897,7 @@ macro_rules! floats {
                 dst: &mut MaybeUninit<Self::Lower>,
             ) -> Result<()> {
                 debug_assert!(matches!(ty, InterfaceType::$ty));
-                dst.write(ValRaw::$float(canonicalize(*self).to_bits()));
+                dst.write(ValRaw::$float(self.to_bits()));
                 Ok(())
             }
 
@@ -924,7 +911,7 @@ macro_rules! floats {
                 debug_assert!(matches!(ty, InterfaceType::$ty));
                 debug_assert!(offset % Self::SIZE32 == 0);
                 let ptr = cx.get(offset);
-                *ptr = canonicalize(*self).to_bits().to_le_bytes();
+                *ptr = self.to_bits().to_le_bytes();
                 Ok(())
             }
         }
@@ -933,14 +920,14 @@ macro_rules! floats {
             #[inline]
             fn lift(_cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
                 debug_assert!(matches!(ty, InterfaceType::$ty));
-                Ok(canonicalize($float::from_bits(src.$get_float())))
+                Ok($float::from_bits(src.$get_float()))
             }
 
             #[inline]
             fn load(_cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
                 debug_assert!(matches!(ty, InterfaceType::$ty));
                 debug_assert!((bytes.as_ptr() as usize) % Self::SIZE32 == 0);
-                Ok(canonicalize($float::from_le_bytes(bytes.try_into().unwrap())))
+                Ok($float::from_le_bytes(bytes.try_into().unwrap()))
             }
         }
     };)*)
