@@ -307,8 +307,9 @@ fn mach_reloc_to_reloc(
             }
         }
         FinalizedRelocTarget::ExternalName(ExternalName::LibCall(libcall)) => {
-            let libcall = libcall_cranelift_to_wasmtime(libcall);
-            RelocationTarget::HostLibcall(libcall)
+            // We should have avoided any code that needs this style of libcalls
+            // in the Wasm-to-Cranelift translator.
+            panic!("unexpected libcall {:?}", libcall);
         }
         _ => panic!("unrecognized external name"),
     };
@@ -317,16 +318,6 @@ fn mach_reloc_to_reloc(
         reloc_target,
         offset,
         addend,
-    }
-}
-
-fn libcall_cranelift_to_wasmtime(call: ir::LibCall) -> wasmtime_environ::obj::LibCall {
-    use wasmtime_environ::obj::LibCall as LC;
-    match call {
-        ir::LibCall::FmaF32 => LC::FmaF32,
-        ir::LibCall::FmaF64 => LC::FmaF64,
-        ir::LibCall::X86Pshufb => LC::X86Pshufb,
-        _ => panic!("cranelift emitted a libcall wasmtime does not support: {call:?}"),
     }
 }
 

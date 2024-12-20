@@ -213,10 +213,6 @@ macro_rules! foreach_builtin_function {
             nearest_f32(vmctx: vmctx, x: f32) -> f32;
             nearest_f64(vmctx: vmctx, x: f64) -> f64;
 
-            // The `pshufb` on x86 when SSSE3 isn't available.
-            #[cfg(target_arch = "x86_64")]
-            x86_pshufb(vmctx: vmctx, a: __m128i, b: __m128i) -> __m128i ;
-
             // Raises an unconditional trap with the specified code.
             //
             // This is used when signals-based-traps are disabled for backends
@@ -401,7 +397,6 @@ impl BuiltinFunctionIndex {
             (@get trunc_f64 f64) => (return None);
             (@get nearest_f32 f32) => (return None);
             (@get nearest_f64 f64) => (return None);
-            (@get x86_pshufb __m128i) => (return None);
 
             // Bool-returning functions use `false` as an indicator of a trap.
             (@get $name:ident bool) => (TrapSentinel::Falsy);
