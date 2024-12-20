@@ -179,7 +179,6 @@ host_result_no_catch! {
     u64,
     f32,
     f64,
-    core::arch::x86_64::__m128i,
 }
 
 impl HostResult for NonNull<u8> {
