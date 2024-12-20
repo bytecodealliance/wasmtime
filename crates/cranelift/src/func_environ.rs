@@ -3257,6 +3257,10 @@ impl FuncEnvironment<'_> {
     }
 
     pub fn ceil_f32(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        // If the ISA has rounding instructions, let Cranelift use them. But if
+        // not, lower to a libcall here, rather than having Cranelift do it. We
+        // can pass our libcall the vmctx pointer, which we use for stack
+        // overflow checking.
         if self.isa.has_round() {
             builder.ins().ceil(value)
         } else {
@@ -3268,6 +3272,7 @@ impl FuncEnvironment<'_> {
     }
 
     pub fn ceil_f64(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        // See the comments in `ceil_f32` about libcalls.
         if self.isa.has_round() {
             builder.ins().ceil(value)
         } else {
@@ -3279,6 +3284,7 @@ impl FuncEnvironment<'_> {
     }
 
     pub fn floor_f32(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        // See the comments in `ceil_f32` about libcalls.
         if self.isa.has_round() {
             builder.ins().floor(value)
         } else {
@@ -3290,6 +3296,7 @@ impl FuncEnvironment<'_> {
     }
 
     pub fn floor_f64(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        // See the comments in `ceil_f32` about libcalls.
         if self.isa.has_round() {
             builder.ins().floor(value)
         } else {
@@ -3301,6 +3308,7 @@ impl FuncEnvironment<'_> {
     }
 
     pub fn trunc_f32(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        // See the comments in `ceil_f32` about libcalls.
         if self.isa.has_round() {
             builder.ins().trunc(value)
         } else {
@@ -3312,6 +3320,7 @@ impl FuncEnvironment<'_> {
     }
 
     pub fn trunc_f64(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        // See the comments in `ceil_f32` about libcalls.
         if self.isa.has_round() {
             builder.ins().trunc(value)
         } else {
@@ -3323,6 +3332,7 @@ impl FuncEnvironment<'_> {
     }
 
     pub fn nearest_f32(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        // See the comments in `ceil_f32` about libcalls.
         if self.isa.has_round() {
             builder.ins().nearest(value)
         } else {
@@ -3334,6 +3344,7 @@ impl FuncEnvironment<'_> {
     }
 
     pub fn nearest_f64(&mut self, builder: &mut FunctionBuilder, value: ir::Value) -> ir::Value {
+        // See the comments in `ceil_f32` about libcalls.
         if self.isa.has_round() {
             builder.ins().nearest(value)
         } else {
