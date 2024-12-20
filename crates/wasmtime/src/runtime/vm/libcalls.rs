@@ -1263,14 +1263,6 @@ fn nearest_f64(_store: &mut dyn VMStore, _instance: &mut Instance, val: f64) -> 
     wasmtime_math::WasmFloat::wasm_nearest(val)
 }
 
-fn fma_f32(_store: &mut dyn VMStore, _insttance: &mut Instance, a: f32, b: f32, c: f32) -> f32 {
-    wasmtime_math::WasmFloat::mul_add(a, b, c)
-}
-
-fn fma_f64(_store: &mut dyn VMStore, _insttance: &mut Instance, a: f64, b: f64, c: f64) -> f64 {
-    wasmtime_math::WasmFloat::mul_add(a, b, c)
-}
-
 // This intrinsic is only used on x86_64 platforms as an implementation of
 // the `pshufb` instruction when SSSE3 is not available.
 #[cfg(target_arch = "x86_64")]
