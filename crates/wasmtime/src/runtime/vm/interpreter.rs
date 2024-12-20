@@ -310,7 +310,6 @@ impl InterpreterRef<'_> {
             (@ty i64) => (i64);
             (@ty f32) => (f32);
             (@ty f64) => (f64);
-            (@ty __m128i) => (std::arch::x86_64::__m128i);
             (@ty vmctx) => (*mut VMContext);
             (@ty pointer) => (*mut u8);
             (@ty ptr_u8) => (*mut u8);
@@ -325,7 +324,6 @@ impl InterpreterRef<'_> {
             (@get u64 $reg:ident) => (self.0[$reg].get_u64());
             (@get f32 $reg:ident) => (self.0[$reg].get_f32());
             (@get f64 $reg:ident) => (self.0[$reg].get_f64());
-            (@get __m128i $reg:ident) => (self.0[$reg].get_v128());
             (@get vmctx $reg:ident) => (self.0[$reg].get_ptr());
             (@get pointer $reg:ident) => (self.0[$reg].get_ptr());
             (@get ptr $reg:ident) => (self.0[$reg].get_ptr());
@@ -342,7 +340,6 @@ impl InterpreterRef<'_> {
             (@set u64 $reg:ident $val:ident) => (self.0[$reg].set_u64($val));
             (@set f32 $reg:ident $val:ident) => (self.0[$reg].set_f32($val));
             (@set f64 $reg:ident $val:ident) => (self.0[$reg].set_f64($val));
-            (@set __m128i $reg:ident $val:ident) => (self.0[$reg].set_v128($val));
             (@set pointer $reg:ident $val:ident) => (self.0[$reg].set_ptr($val));
             (@set size $reg:ident $val:ident) => (self.0[$reg].set_ptr($val as *mut u8));
         }
