@@ -1493,6 +1493,7 @@ impl ComponentCompiler for Compiler {
                     &c.offsets.ptr,
                     vm_store_context,
                     &self.tunables,
+                    &*self.isa,
                 );
             }
 
