@@ -2,10 +2,19 @@
 
 use std::cell::Cell;
 
+#[cfg(feature = "signals-based-traps")]
 pub mod mmap;
 pub mod traphandlers;
-pub mod unwind;
 pub mod vm;
+
+#[cfg(target_pointer_width = "32")]
+pub mod unwind32;
+#[cfg(target_pointer_width = "32")]
+pub use unwind32 as unwind;
+#[cfg(target_pointer_width = "64")]
+pub mod unwind64;
+#[cfg(target_pointer_width = "64")]
+pub use unwind64 as unwind;
 
 std::thread_local!(static TLS: Cell<*mut u8> = const { Cell::new(std::ptr::null_mut()) });
 

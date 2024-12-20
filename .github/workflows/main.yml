@@ -193,6 +193,7 @@ jobs:
       audit: ${{ steps.calculate.outputs.audit }}
       preview1-adapter: ${{ steps.calculate.outputs.preview1-adapter }}
       run-dwarf: ${{ steps.calculate.outputs.run-dwarf }}
+      platform-checks: ${{ steps.calculate.outputs.platform-checks }}
     steps:
     - uses: actions/checkout@v4
     - id: calculate
@@ -215,6 +216,8 @@ jobs:
             run_full=true
           elif grep -q 'prtest:debug' commits.log; then
             echo run-dwarf=true >> $GITHUB_OUTPUT
+          elif grep -q 'prtest:platform-checks' commits.log; then
+            echo platform-checks=true >> $GITHUB_OUTPUT
           fi
           if grep -q crates.c-api names.log; then
             echo test-capi=true >> $GITHUB_OUTPUT
@@ -256,6 +259,7 @@ jobs:
             echo audit=true >> $GITHUB_OUTPUT
             echo preview1-adapter=true >> $GITHUB_OUTPUT
             echo run-dwarf=true >> $GITHUB_OUTPUT
+            echo platform-checks=true >> $GITHUB_OUTPUT
         fi
 
   # Build all documentation of Wasmtime, including the C API documentation,
@@ -440,29 +444,6 @@ jobs:
     - uses: ./.github/actions/cancel-on-failure
       if: failure()
 
-  # Checks for no_std support, ensure that crates can build on a no_std target
-  no_std_checks:
-    name: no_std checks
-    runs-on: ubuntu-latest
-    env:
-      CARGO_NDK_VERSION: 2.12.2
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - uses: ./.github/actions/install-rust
-
-    - run: rustup target add x86_64-unknown-none
-    - run: cargo check --target x86_64-unknown-none -p wasmtime --no-default-features --features runtime,component-model
-    - run: cargo check --target x86_64-unknown-none -p wasmtime --no-default-features --features runtime,gc,component-model
-    - run: cargo check --target x86_64-unknown-none -p wasmtime --no-default-features --features runtime,gc,component-model,signals-based-traps
-    - run: cargo check --target x86_64-unknown-none -p cranelift-control --no-default-features
-    - run: cargo check --target x86_64-unknown-none -p pulley-interpreter --features encode,decode,disas,interp
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
-
   # Check that Clippy lints are passing.
   clippy:
     name: Clippy
@@ -512,10 +493,6 @@ jobs:
       env:
         CARGO_PROFILE_DEV_DEBUG_ASSERTIONS: false
 
-    # Check whether `wasmtime` cross-compiles to x86_64-unknown-freebsd
-    - run: rustup target add x86_64-unknown-freebsd
-    - run: cargo check --target x86_64-unknown-freebsd
-
     # Re-vendor all WIT files and ensure that they're all up-to-date by ensuring
     # that there's no git changes.
     - name: Re-vendor WIT
@@ -531,44 +508,65 @@ jobs:
     - uses: ./.github/actions/cancel-on-failure
       if: failure()
 
-  checks_illumos:
-    name: Check illumos
-    runs-on: ubuntu-latest
+  # Various checks that Wasmtime builds for a variety of platforms. Each
+  # platform may not include the entire dependency tree and maybe just a few
+  # features here and there, see the `include` matrix for more details.
+  platform_checks:
+    needs: determine
+    if: needs.determine.outputs.platform-checks
+    name: "Platform: ${{ matrix.target }}"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+        - target: x86_64-unknown-freebsd
+          os: ubuntu-latest
+          test: cargo check
+        - target: aarch64-pc-windows-msvc
+          os: windows-latest
+          test: cargo check
+        # While we're here testing a windows target also test a feature'd build
+        # on Windows. Note that this isn't covered by `micro_checks` above since
+        # that's for unix platforms, not Windows, so include a small check here
+        # which isn't the full `micro_checks` matrix but hopefully enough bang
+        # for our buck.
+        - target: i686-pc-windows-msvc
+          os: windows-latest
+          test: cargo check && cargo build -p wasmtime --no-default-features --features runtime
+        # This is used for general compatibility with `#![no_std]` targets and a
+        # variety of crates are tested here.
+        - target: x86_64-unknown-none
+          os: ubuntu-latest
+          test: >
+            cargo check -p wasmtime --no-default-features --features runtime,component-model &&
+            cargo check -p wasmtime --no-default-features --features runtime,gc,component-model &&
+            cargo check -p wasmtime --no-default-features --features runtime,gc,component-model,signals-based-traps &&
+            cargo check -p wasmtime --no-default-features --features runtime,gc,component-model,signals-based-traps &&
+            cargo check -p cranelift-control --no-default-features &&
+            cargo check -p pulley-interpreter --features encode,decode,disas,interp
+        # Use `cross` for illumos to have a C compiler/linker available.
+        - target: x86_64-unknown-illumos
+          os: ubuntu-latest
+          cross: true
+          test: cross build
+        - target: wasm32-wasip1
+          os: ubuntu-latest
+          test: cargo build --no-default-features --features compile,cranelift,all-arch
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-
-    # Check whether `wasmtime` cross-compiles to illumos. We need to use `cross` for this (even for
-    # cargo check) because of non-Rust dependencies.
+    - run: rustup target add ${{ matrix.target }}
     - name: Install cross
       run: |
         curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
         cargo binstall --no-confirm cross
-    - name: Cross-compile to illumos
-      run:
-        cross build --target x86_64-unknown-illumos
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
-
-  # Check whether `wasmtime` cross-compiles to aarch64-pc-windows-msvc
-  # We don't build nor test it because it lacks trap handling.
-  # Tracking issue: https://github.com/bytecodealliance/wasmtime/issues/4992
-  checks_winarm64:
-    needs: determine
-    if: needs.determine.outputs.run-full
-    name: Check Windows ARM64
-    runs-on: windows-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - uses: ./.github/actions/install-rust
-    - run: rustup target add aarch64-pc-windows-msvc
-    - run: cargo check -p wasmtime --target aarch64-pc-windows-msvc
+      if: ${{ matrix.cross }}
+    - run: ${{ matrix.test }}
+      env:
+        CARGO_BUILD_TARGET: ${{ matrix.target }}
 
     # common logic to cancel the entire run if this job fails
     - uses: ./.github/actions/cancel-on-failure
@@ -956,27 +954,6 @@ jobs:
     - uses: ./.github/actions/cancel-on-failure
       if: failure()
 
-
-  build-wasmtime-target-wasm32:
-    name: Build wasmtime-target-wasm32
-    if: needs.determine.outputs.run-full
-    needs: determine
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - uses: ./.github/actions/install-rust
-    - run: rustup target add wasm32-wasip1 wasm32-unknown-unknown
-    - run: cargo build --target wasm32-wasip1 --no-default-features --features compile,cranelift,all-arch
-      env:
-        VERSION: ${{ github.sha }}
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
-
-
   bench:
     needs: determine
     if: needs.determine.outputs.run-full
@@ -1171,11 +1148,9 @@ jobs:
       - doc
       - micro_checks
       - fiber_tests
-      - no_std_checks
       - clippy
       - monolith_checks
-      - checks_illumos
-      - checks_winarm64
+      - platform_checks
       - bench
       - meta_deterministic_check
       - verify-publish
@@ -1183,7 +1158,6 @@ jobs:
       - miri
       - build-preview1-component-adapter
       - build-preview1-component-adapter-provider
-      - build-wasmtime-target-wasm32
       - test-min-platform-example
       - check_js
     if: always()

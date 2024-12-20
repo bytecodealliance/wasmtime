@@ -109,6 +109,11 @@ unsafe extern "system" fn exception_handler(exception_info: *mut EXCEPTION_POINT
                     pc: context.Pc as usize,
                     fp: context.Anonymous.Anonymous.Fp as usize,
                 };
+            } else if #[cfg(target_arch = "x86")] {
+                let regs = TrapRegisters {
+                    pc: context.Eip as usize,
+                    fp: context.Ebp as usize,
+                };
             } else {
                 compile_error!("unsupported platform");
             }
