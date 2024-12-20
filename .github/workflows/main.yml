@@ -530,7 +530,7 @@ jobs:
   platform_checks:
     needs: determine
     if: needs.determine.outputs.platform-checks
-    name: Platform: ${{ matrix.target }}
+    name: "Platform: ${{ matrix.target }}"
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
