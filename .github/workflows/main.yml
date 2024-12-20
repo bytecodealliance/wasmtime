@@ -526,9 +526,14 @@ jobs:
         - target: aarch64-pc-windows-msvc
           os: windows-latest
           test: cargo check
+        # While we're here testing a windows target also test a feature'd build
+        # on Windows. Note that this isn't covered by `micro_checks` above since
+        # that's for unix platforms, not Windows, so include a small check here
+        # which isn't the full `micro_checks` matrix but hopefully enough bang
+        # for our buck.
         - target: i686-pc-windows-msvc
           os: windows-latest
-          test: cargo check
+          test: cargo check && cargo build -p wasmtime --no-default-features --features runtime
         # This is used for general compatibility with `#![no_std]` targets and a
         # variety of crates are tested here.
         - target: x86_64-unknown-none
