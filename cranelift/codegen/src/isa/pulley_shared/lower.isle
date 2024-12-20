@@ -1131,11 +1131,15 @@
 
 (rule (lower (has_type $F32 (fmax a b))) (pulley_fmaximum32 a b))
 (rule (lower (has_type $F64 (fmax a b))) (pulley_fmaximum64 a b))
+(rule (lower (has_type $F32X4 (fmax a b))) (pulley_vmaximumf32x4 a b))
+(rule (lower (has_type $F64X2 (fmax a b))) (pulley_vmaximumf64x2 a b))
 
 ;;;; Rules for `fmin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (fmin a b))) (pulley_fminimum32 a b))
 (rule (lower (has_type $F64 (fmin a b))) (pulley_fminimum64 a b))
+(rule (lower (has_type $F32X4 (fmin a b))) (pulley_vminimumf32x4 a b))
+(rule (lower (has_type $F64X2 (fmin a b))) (pulley_vminimumf64x2 a b))
 
 ;;;; Rules for `trunc` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1183,6 +1187,8 @@
 
 (rule (lower (has_type $F32 (fabs a))) (pulley_fabs32 a))
 (rule (lower (has_type $F64 (fabs a))) (pulley_fabs64 a))
+(rule (lower (has_type $F32X4 (fabs a))) (pulley_vabsf32x4 a))
+(rule (lower (has_type $F64X2 (fabs a))) (pulley_vabsf64x2 a))
 
 ;;;; Rules for `vconst` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
