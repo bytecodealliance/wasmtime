@@ -454,11 +454,16 @@ where
                 // `info.dest.args` to be handled differently during register
                 // allocation.
                 let mut args = SmallVec::new();
-                assert!(info
-                    .uses
-                    .iter()
-                    .filter_map(|arg| XReg::new(arg.preg))
-                    .is_sorted());
+                if cfg!(debug_assertions) {
+                    let xargs = info
+                        .uses
+                        .iter()
+                        .filter_map(|a| XReg::new(a.preg))
+                        .collect::<Vec<_>>();
+                    for window in xargs.windows(2) {
+                        assert!(window[0] < window[1]);
+                    }
+                }
                 info.uses.retain(|arg| {
                     if arg.preg != x0() && arg.preg != x1() && arg.preg != x2() && arg.preg != x3()
                     {
