@@ -516,7 +516,7 @@ impl Wasmtime {
                             #[allow(clippy::all)]
                             pub mod {snake} {{
                                 #[allow(unused_imports)]
-                                use {wt}::component::__internal::anyhow;
+                                use {wt}::component::__internal::{{anyhow, Box}};
 
                                 {module}
                             }}
@@ -742,7 +742,7 @@ fn _new(
                         #[allow(clippy::all)]
                         pub mod {snake} {{
                             #[allow(unused_imports)]
-                            use {wt}::component::__internal::anyhow;
+                            use {wt}::component::__internal::{{anyhow, Box}};
 
                             {module}
                         }}
@@ -1600,7 +1600,7 @@ impl Wasmtime {
                     \"{name}\",
                     {wt}::component::ResourceType::host::<{camel}>(),
                     move |mut store, rep| {{
-                        std::boxed::Box::new(async move {{
+                        {wt}::component::__internal::Box::new(async move {{
                             Host{camel}::drop(&mut host_getter(store.data_mut()), {wt}::component::Resource::new_own(rep)).await
                         }})
                     }},
