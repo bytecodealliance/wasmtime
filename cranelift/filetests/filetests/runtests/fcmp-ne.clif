@@ -6,6 +6,10 @@ target aarch64
 target s390x
 target riscv64
 target riscv64 has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 function %fcmp_ne_f32(f32, f32) -> i8 {
 block0(v0: f32, v1: f32):

@@ -11,7 +11,7 @@ block0:
 ; VCode:
 ;   push_frame
 ; block0:
-;   indirect_call_host CallInfo { dest: User(userextname0), uses: [], defs: [], clobbers: PRegSet { bits: [65535, 65279, 4294967295, 0] }, callee_conv: SystemV, caller_conv: Fast, callee_pop_size: 0 }
+;   indirect_call_host CallInfo { dest: User(userextname0), uses: [], defs: [], clobbers: PRegSet { bits: [65535, 65535, 4294967295, 0] }, callee_conv: SystemV, caller_conv: Fast, callee_pop_size: 0 }
 ;   pop_frame
 ;   ret
 ;

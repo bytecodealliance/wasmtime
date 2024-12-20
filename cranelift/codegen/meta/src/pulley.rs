@@ -27,10 +27,23 @@ const OPS: &[Inst<'_>] = pulley_interpreter::for_each_op!(define);
 const EXTENDED_OPS: &[Inst<'_>] = pulley_interpreter::for_each_extended_op!(define);
 
 enum Operand<'a> {
-    Normal { name: &'a str, ty: &'a str },
-    Writable { name: &'a str, ty: &'a str },
-    TrapCode { name: &'a str, ty: &'a str },
-    Binop { reg: &'a str },
+    Normal {
+        name: &'a str,
+        ty: &'a str,
+    },
+    Writable {
+        name: &'a str,
+        ty: &'a str,
+    },
+    TrapCode {
+        name: &'a str,
+        ty: &'a str,
+    },
+    Binop {
+        dst: &'a str,
+        src1: &'a str,
+        src2: &'a str,
+    },
 }
 
 impl Inst<'_> {
@@ -38,12 +51,28 @@ impl Inst<'_> {
         self.fields
             .iter()
             .map(|(name, ty)| match (*name, *ty) {
-                ("operands", "BinaryOperands < XReg >") => Operand::Binop { reg: "XReg" },
+                ("operands", binop) => {
+                    // Parse "BinaryOperands < A >"` as A/A/A
+                    // Parse "BinaryOperands < A, B >"` as A/B/A
+                    // Parse "BinaryOperands < A, B, C >"` as A/B/C
+                    let mut parts = binop
+                        .strip_prefix("BinaryOperands <")
+                        .unwrap()
+                        .strip_suffix(">")
+                        .unwrap()
+                        .trim()
+                        .split(',')
+                        .map(|x| x.trim());
+                    let dst = parts.next().unwrap();
+                    let src1 = parts.next().unwrap_or(dst);
+                    let src2 = parts.next().unwrap_or(dst);
+                    Operand::Binop { dst, src1, src2 }
+                }
+                ("dst", ty) => Operand::Writable { name, ty },
                 (name, "RegSet < XReg >") => Operand::Normal {
                     name,
-                    ty: "VecXReg",
+                    ty: "XRegSet",
                 },
-                ("dst", ty) => Operand::Writable { name, ty },
                 (name, ty) => Operand::Normal { name, ty },
             })
             .chain(if self.name.contains("Trap") {
@@ -60,7 +89,8 @@ impl Inst<'_> {
         match self.name {
             // Skip instructions related to control-flow as those require
             // special handling with `MachBuffer`.
-            "Jump" | "Call" | "CallIndirect" => true,
+            "Jump" => true,
+            n if n.starts_with("Call") => true,
 
             // Skip special instructions not used in Cranelift.
             "XPush32Many" | "XPush64Many" | "XPop32Many" | "XPop64Many" => true,
@@ -95,10 +125,17 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
                     if i > 0 {
                         format_string.push_str(",");
                     }
+
+                    if ty == "XRegSet" {
+                        format_string.push_str(" {");
+                        format_string.push_str(name);
+                        format_string.push_str(":?}");
+                        continue;
+                    }
+
                     format_string.push_str(" {");
                     format_string.push_str(name);
                     format_string.push_str("}");
-
                     if ty.contains("Reg") {
                         if name == "dst" {
                             locals.push_str(&format!("let {name} = reg_name(*{name}.to_reg());\n"));
@@ -112,12 +149,14 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
                     pat.push_str(",");
                     format_string.push_str(&format!(" // trap={{{name}:?}}"));
                 }
-                Operand::Binop { reg: _ } => {
+                Operand::Binop { src2, .. } => {
                     pat.push_str("dst, src1, src2,");
                     format_string.push_str(" {dst}, {src1}, {src2}");
                     locals.push_str(&format!("let dst = reg_name(*dst.to_reg());\n"));
                     locals.push_str(&format!("let src1 = reg_name(**src1);\n"));
-                    locals.push_str(&format!("let src2 = reg_name(**src2);\n"));
+                    if src2.contains("Reg") {
+                        locals.push_str(&format!("let src2 = reg_name(**src2);\n"));
+                    }
                 }
             }
         }
@@ -149,6 +188,13 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
         let mut defs = Vec::new();
         for op in inst.operands() {
             match op {
+                // `{Push,Pop}Frame{Save,Restore}` doesn't participate in
+                // register allocation.
+                Operand::Normal {
+                    name: _,
+                    ty: "XRegSet",
+                } if *name == "PushFrameSave" || *name == "PopFrameRestore" => {}
+
                 Operand::Normal { name, ty } => {
                     if ty.contains("Reg") {
                         uses.push(name);
@@ -164,11 +210,14 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
                     }
                 }
                 Operand::TrapCode { .. } => {}
-                Operand::Binop { reg: _ } => {
-                    pat.push_str("dst, src1, src2,");
+                Operand::Binop { src2, .. } => {
+                    pat.push_str("dst, src1,");
                     uses.push("src1");
-                    uses.push("src2");
                     defs.push("dst");
+                    if src2.contains("Reg") {
+                        pat.push_str("src2,");
+                        uses.push("src2");
+                    }
                 }
             }
         }
@@ -224,7 +273,7 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
                     pat.push_str(",");
                     trap.push_str(&format!("sink.add_trap({name});\n"));
                 }
-                Operand::Binop { reg: _ } => {
+                Operand::Binop { .. } => {
                     pat.push_str("dst, src1, src2,");
                     args.push_str(
                         "pulley_interpreter::regs::BinaryOperands::new(dst, src1, src2),",
@@ -268,10 +317,10 @@ pub fn generate_isle(filename: &str, out_dir: &Path) -> Result<(), Error> {
                 Operand::Writable { name, ty } => {
                     isle.push_str(&format!("\n    ({name} Writable{ty})"));
                 }
-                Operand::Binop { reg } => {
-                    isle.push_str(&format!("\n    (dst Writable{reg})"));
-                    isle.push_str(&format!("\n    (src1 {reg})"));
-                    isle.push_str(&format!("\n    (src2 {reg})"));
+                Operand::Binop { dst, src1, src2 } => {
+                    isle.push_str(&format!("\n    (dst Writable{dst})"));
+                    isle.push_str(&format!("\n    (src1 {src1})"));
+                    isle.push_str(&format!("\n    (src2 {src2})"));
                 }
             }
         }
@@ -306,13 +355,13 @@ pub fn generate_isle(filename: &str, out_dir: &Path) -> Result<(), Error> {
                     assert!(result.is_none(), "{} has >1 result", inst.snake_name);
                     result = Some(ty);
                 }
-                Operand::Binop { reg } => {
-                    isle.push_str(&format!("{reg} {reg}"));
+                Operand::Binop { dst, src1, src2 } => {
+                    isle.push_str(&format!("{src1} {src2}"));
                     rule.push_str("src1 src2");
                     ops.push("src1");
                     ops.push("src2");
                     assert!(result.is_none(), "{} has >1 result", inst.snake_name);
-                    result = Some(reg);
+                    result = Some(dst);
                 }
             }
             isle.push_str(" ");

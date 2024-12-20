@@ -62,7 +62,7 @@ impl LinkOptions {
     }
 }
 pub enum Baz {}
-#[wasmtime::component::__internal::async_trait]
+#[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
 pub trait HostBaz {
     async fn foo(&mut self, self_: wasmtime::component::Resource<Baz>) -> ();
     async fn drop(
@@ -70,7 +70,6 @@ pub trait HostBaz {
         rep: wasmtime::component::Resource<Baz>,
     ) -> wasmtime::Result<()>;
 }
-#[wasmtime::component::__internal::async_trait]
 impl<_T: HostBaz + ?Sized + Send> HostBaz for &mut _T {
     async fn foo(&mut self, self_: wasmtime::component::Resource<Baz>) -> () {
         HostBaz::foo(*self, self_).await
@@ -196,7 +195,7 @@ pub struct TheWorldIndices {}
 /// [`Component`]: wasmtime::component::Component
 /// [`Linker`]: wasmtime::component::Linker
 pub struct TheWorld {}
-#[wasmtime::component::__internal::async_trait]
+#[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
 pub trait TheWorldImports: Send + HostBaz {
     async fn foo(&mut self) -> ();
 }
@@ -212,7 +211,6 @@ where
 {
     type Host = O;
 }
-#[wasmtime::component::__internal::async_trait]
 impl<_T: TheWorldImports + ?Sized + Send> TheWorldImports for &mut _T {
     async fn foo(&mut self) -> () {
         TheWorldImports::foo(*self).await
@@ -440,7 +438,7 @@ pub mod foo {
                 }
             }
             pub enum Bar {}
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait HostBar {
                 async fn foo(&mut self, self_: wasmtime::component::Resource<Bar>) -> ();
                 async fn drop(
@@ -448,7 +446,6 @@ pub mod foo {
                     rep: wasmtime::component::Resource<Bar>,
                 ) -> wasmtime::Result<()>;
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: HostBar + ?Sized + Send> HostBar for &mut _T {
                 async fn foo(
                     &mut self,
@@ -463,7 +460,7 @@ pub mod foo {
                     HostBar::drop(*self, rep).await
                 }
             }
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send + HostBar {
                 async fn foo(&mut self) -> ();
             }
@@ -574,7 +571,6 @@ pub mod foo {
             {
                 add_to_linker_get_host(linker, options, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
                 async fn foo(&mut self) -> () {
                     Host::foo(*self).await

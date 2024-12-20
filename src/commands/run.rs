@@ -26,7 +26,9 @@ use wasmtime_wasi_threads::WasiThreadsCtx;
 #[cfg(feature = "wasi-config")]
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 #[cfg(feature = "wasi-http")]
-use wasmtime_wasi_http::WasiHttpCtx;
+use wasmtime_wasi_http::{
+    WasiHttpCtx, DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS, DEFAULT_OUTGOING_BODY_CHUNK_SIZE,
+};
 #[cfg(feature = "wasi-keyvalue")]
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 
@@ -137,7 +139,18 @@ impl RunCommand {
             }
         }
 
-        let host = Host::default();
+        let host = Host {
+            #[cfg(feature = "wasi-http")]
+            wasi_http_outgoing_body_buffer_chunks: self
+                .run
+                .common
+                .wasi
+                .http_outgoing_body_buffer_chunks,
+            #[cfg(feature = "wasi-http")]
+            wasi_http_outgoing_body_chunk_size: self.run.common.wasi.http_outgoing_body_chunk_size,
+            ..Default::default()
+        };
+
         let mut store = Store::new(&engine, host);
         self.populate_with_wasi(&mut linker, &mut store, &main)?;
 
@@ -905,6 +918,10 @@ struct Host {
     wasi_threads: Option<Arc<WasiThreadsCtx<Host>>>,
     #[cfg(feature = "wasi-http")]
     wasi_http: Option<Arc<WasiHttpCtx>>,
+    #[cfg(feature = "wasi-http")]
+    wasi_http_outgoing_body_buffer_chunks: Option<usize>,
+    #[cfg(feature = "wasi-http")]
+    wasi_http_outgoing_body_chunk_size: Option<usize>,
     limits: StoreLimits,
     #[cfg(feature = "profiling")]
     guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
@@ -947,6 +964,16 @@ impl wasmtime_wasi_http::types::WasiHttpView for Host {
 
     fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
         self.preview2_ctx().table()
+    }
+
+    fn outgoing_body_buffer_chunks(&mut self) -> usize {
+        self.wasi_http_outgoing_body_buffer_chunks
+            .unwrap_or_else(|| DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS)
+    }
+
+    fn outgoing_body_chunk_size(&mut self) -> usize {
+        self.wasi_http_outgoing_body_chunk_size
+            .unwrap_or_else(|| DEFAULT_OUTGOING_BODY_CHUNK_SIZE)
     }
 }
 

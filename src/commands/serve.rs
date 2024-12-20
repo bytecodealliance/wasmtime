@@ -15,7 +15,10 @@ use wasmtime_wasi::{StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView
 use wasmtime_wasi_http::bindings::http::types::Scheme;
 use wasmtime_wasi_http::bindings::ProxyPre;
 use wasmtime_wasi_http::io::TokioIo;
-use wasmtime_wasi_http::{body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView};
+use wasmtime_wasi_http::{
+    body::HyperOutgoingBody, WasiHttpCtx, WasiHttpView, DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS,
+    DEFAULT_OUTGOING_BODY_CHUNK_SIZE,
+};
 
 #[cfg(feature = "wasi-config")]
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
@@ -28,6 +31,8 @@ struct Host {
     table: wasmtime::component::ResourceTable,
     ctx: WasiCtx,
     http: WasiHttpCtx,
+    http_outgoing_body_buffer_chunks: Option<usize>,
+    http_outgoing_body_chunk_size: Option<usize>,
 
     limits: StoreLimits,
 
@@ -59,6 +64,16 @@ impl WasiHttpView for Host {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
         &mut self.http
     }
+
+    fn outgoing_body_buffer_chunks(&mut self) -> usize {
+        self.http_outgoing_body_buffer_chunks
+            .unwrap_or_else(|| DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS)
+    }
+
+    fn outgoing_body_chunk_size(&mut self) -> usize {
+        self.http_outgoing_body_chunk_size
+            .unwrap_or_else(|| DEFAULT_OUTGOING_BODY_CHUNK_SIZE)
+    }
 }
 
 const DEFAULT_ADDR: std::net::SocketAddr = std::net::SocketAddr::new(
@@ -73,8 +88,13 @@ pub struct ServeCommand {
     run: RunCommon,
 
     /// Socket address for the web server to bind to.
-    #[arg(long = "addr", value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR )]
+    #[arg(long = "addr", value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR)]
     addr: SocketAddr,
+
+    /// Disable log prefixes of wasi-http handlers.
+    /// if unspecified, logs will be prefixed with 'stdout|stderr [{req_id}] :: '
+    #[arg(long = "no-logging-prefix")]
+    no_logging_prefix: bool,
 
     /// The WebAssembly component to run.
     #[arg(value_name = "WASM", required = true)]
@@ -138,20 +158,24 @@ impl ServeCommand {
 
         builder.env("REQUEST_ID", req_id.to_string());
 
-        builder.stdout(LogStream::new(
-            format!("stdout [{req_id}] :: "),
-            Output::Stdout,
-        ));
-
-        builder.stderr(LogStream::new(
-            format!("stderr [{req_id}] :: "),
-            Output::Stderr,
-        ));
+        let stdout_prefix: String;
+        let stderr_prefix: String;
+        if self.no_logging_prefix {
+            stdout_prefix = "".to_string();
+            stderr_prefix = "".to_string();
+        } else {
+            stdout_prefix = format!("stdout [{req_id}] :: ");
+            stderr_prefix = format!("stderr [{req_id}] :: ");
+        }
+        builder.stdout(LogStream::new(stdout_prefix, Output::Stdout));
+        builder.stderr(LogStream::new(stderr_prefix, Output::Stderr));
 
         let mut host = Host {
             table: wasmtime::component::ResourceTable::new(),
             ctx: builder.build(),
             http: WasiHttpCtx::new(),
+            http_outgoing_body_buffer_chunks: self.run.common.wasi.http_outgoing_body_buffer_chunks,
+            http_outgoing_body_chunk_size: self.run.common.wasi.http_outgoing_body_chunk_size,
 
             limits: StoreLimits::default(),
 

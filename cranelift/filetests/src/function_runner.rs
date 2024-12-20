@@ -13,9 +13,12 @@ use cranelift_jit::{JITBuilder, JITModule};
 use cranelift_module::{FuncId, Linkage, Module, ModuleError};
 use cranelift_native::builder_with_options;
 use cranelift_reader::TestFile;
+use pulley_interpreter::interp as pulley;
 use std::cmp::max;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::ptr::NonNull;
+use target_lexicon::Architecture;
 use thiserror::Error;
 
 const TESTFILE_NAMESPACE: u32 = 0;
@@ -370,11 +373,44 @@ impl<'a> Trampoline<'a> {
         let function_ptr = self.module.get_finalized_function(self.func_id);
         let trampoline_ptr = self.module.get_finalized_function(self.trampoline_id);
 
-        let callable_trampoline: fn(*const u8, *mut u128) -> () =
-            unsafe { mem::transmute(trampoline_ptr) };
-        callable_trampoline(function_ptr, arguments_address);
+        unsafe {
+            self.call_raw(trampoline_ptr, function_ptr, arguments_address);
+        }
 
         values.collect_returns(&self.func_signature)
+    }
+
+    unsafe fn call_raw(
+        &self,
+        trampoline_ptr: *const u8,
+        function_ptr: *const u8,
+        arguments_address: *mut u128,
+    ) {
+        match self.module.isa().triple().architecture {
+            // For the pulley target this is pulley bytecode, not machine code,
+            // so run the interpreter.
+            Architecture::Pulley32
+            | Architecture::Pulley64
+            | Architecture::Pulley32be
+            | Architecture::Pulley64be => {
+                let mut state = pulley::Vm::new();
+                state.call(
+                    NonNull::new(trampoline_ptr.cast_mut()).unwrap(),
+                    &[
+                        pulley::XRegVal::new_ptr(function_ptr.cast_mut()).into(),
+                        pulley::XRegVal::new_ptr(arguments_address).into(),
+                    ],
+                    [],
+                );
+            }
+
+            // Other targets natively execute this machine code.
+            _ => {
+                let callable_trampoline: fn(*const u8, *mut u128) -> () =
+                    unsafe { mem::transmute(trampoline_ptr) };
+                callable_trampoline(function_ptr, arguments_address);
+            }
+        }
     }
 }
 

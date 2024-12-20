@@ -120,7 +120,7 @@ block0:
 ;   sd ra,8(sp)
 ;   sd fp,0(sp)
 ;   mv fp,sp
-;   inline_stack_probe##guard_size=4096 probe_count=25 tmp=t3
+;   inline_stack_probe##guard_size=4096 probe_count=24 tmp=t3
 ;   lui t6,-24
 ;   addi t6,t6,-1696
 ;   add sp,sp,t6
@@ -140,7 +140,7 @@ block0:
 ;   sd ra, 8(sp)
 ;   sd s0, 0(sp)
 ;   mv s0, sp
-;   lui t6, 0x19
+;   lui t6, 0x18
 ;   lui t3, 1
 ;   bgeu t3, t6, 0x14
 ;   sub t5, sp, t6

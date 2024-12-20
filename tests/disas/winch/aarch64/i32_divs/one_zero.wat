@@ -22,7 +22,7 @@
 ;;       mov     w0, w16
 ;;       mov     x16, #1
 ;;       mov     w1, w16
-;;       cbz     x0, #0x60
+;;       cbz     w0, #0x60
 ;;   34: cmn     w0, #1
 ;;       ccmp    w1, #1, #0, eq
 ;;       b.vs    #0x64

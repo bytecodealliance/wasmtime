@@ -18,9 +18,6 @@
     ;; A pseudo-instruction that moves vregs to return registers.
     (Rets (rets VecRetPair))
 
-    ;; A pseudo-instruction to update unwind info.
-    (Unwind (inst UnwindInst))
-
     ;; Implementation of `br_table`, uses `idx` to jump to one of `targets` or
     ;; jumps to `default` if it's out-of-bounds.
     (BrTable
@@ -30,8 +27,8 @@
 
     ;;;; Actual Instructions ;;;;
 
-    ;; Trap if `src1 cond src2`.
-    (TrapIf (cond IntCC) (size OperandSize) (src1 XReg) (src2 XReg) (code TrapCode))
+    ;; Trap if `cond` is true.
+    (TrapIf (cond Cond) (code TrapCode))
 
     ;; Nothing.
     (Nop)
@@ -53,23 +50,21 @@
     ;; An indirect call to an unknown callee.
     (IndirectCall (info BoxCallIndInfo))
 
+    ;; A direct return-call macro instruction.
+    (ReturnCall (info BoxReturnCallInfo))
+
+    ;; An indirect return-call macro instruction.
+    (ReturnIndirectCall (info BoxReturnCallIndInfo))
+
     ;; An indirect call out to a host-defined function. The host function
     ;; pointer is the first "argument" of this function call.
-    (IndirectCallHost (info BoxCallInfo))
+    (IndirectCallHost (info BoxCallIndirectHostInfo))
 
     ;; Unconditional jumps.
     (Jump (label MachLabel))
 
-    ;; Jump to `then` if `c` is nonzero, otherwise to `else`.
-    (BrIf (c XReg) (taken MachLabel) (not_taken MachLabel))
-
-    ;; Compare-and-branch macro ops.
-    (BrIfXeq32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
-    (BrIfXneq32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
-    (BrIfXslt32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
-    (BrIfXslteq32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
-    (BrIfXult32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
-    (BrIfXulteq32 (src1 XReg) (src2 XReg) (taken MachLabel) (not_taken MachLabel))
+    ;; Jump to `then` if `c` is true, otherwise to `else`.
+    (BrIf (cond Cond) (taken MachLabel) (not_taken MachLabel))
 
     ;; Load the memory address referenced by `mem` into `dst`.
     (LoadAddr (dst WritableXReg) (mem Amode))
@@ -80,7 +75,7 @@
     ;; control behavior such as endianness.
     (XLoad (dst WritableXReg) (mem Amode) (ty Type) (flags MemFlags) (ext ExtKind))
     (FLoad (dst WritableFReg) (mem Amode) (ty Type) (flags MemFlags))
-    (VLoad (dst WritableVReg) (mem Amode) (ty Type) (flags MemFlags))
+    (VLoad (dst WritableVReg) (mem Amode) (ty Type) (flags MemFlags) (ext VExtKind))
 
     ;; Stores.
     (XStore (mem Amode) (src XReg) (ty Type) (flags MemFlags))
@@ -95,12 +90,71 @@
   )
 )
 
+;; Helper type on conditional branches and traps to represent what the
+;; condition that is being performed is.
+;;
+;; Used in `BrIf` and `TrapIf` above for example.
+(type Cond
+  (enum
+    ;; True if `reg` contains a nonzero value in the low 32-bits.
+    (If32 (reg XReg))
+    ;; True if `reg` contains a zero in the low 32-bits.
+    (IfNot32 (reg XReg))
+
+    ;; Conditionals for comparing the low 32-bits of two registers.
+    (IfXeq32 (src1 XReg) (src2 XReg))
+    (IfXneq32 (src1 XReg) (src2 XReg))
+    (IfXslt32 (src1 XReg) (src2 XReg))
+    (IfXslteq32 (src1 XReg) (src2 XReg))
+    (IfXult32 (src1 XReg) (src2 XReg))
+    (IfXulteq32 (src1 XReg) (src2 XReg))
+
+    (IfXeq32I32 (src1 XReg) (src2 i32))
+    (IfXneq32I32 (src1 XReg) (src2 i32))
+    (IfXslt32I32 (src1 XReg) (src2 i32))
+    (IfXslteq32I32 (src1 XReg) (src2 i32))
+    (IfXult32I32 (src1 XReg) (src2 u32))
+    (IfXulteq32I32 (src1 XReg) (src2 u32))
+    (IfXsgt32I32 (src1 XReg) (src2 i32))
+    (IfXsgteq32I32 (src1 XReg) (src2 i32))
+    (IfXugt32I32 (src1 XReg) (src2 u32))
+    (IfXugteq32I32 (src1 XReg) (src2 u32))
+
+    ;; Conditionals for comparing two 64-bit registers.
+    (IfXeq64 (src1 XReg) (src2 XReg))
+    (IfXneq64 (src1 XReg) (src2 XReg))
+    (IfXslt64 (src1 XReg) (src2 XReg))
+    (IfXslteq64 (src1 XReg) (src2 XReg))
+    (IfXult64 (src1 XReg) (src2 XReg))
+    (IfXulteq64 (src1 XReg) (src2 XReg))
+
+    (IfXeq64I32 (src1 XReg) (src2 i32))
+    (IfXneq64I32 (src1 XReg) (src2 i32))
+    (IfXslt64I32 (src1 XReg) (src2 i32))
+    (IfXslteq64I32 (src1 XReg) (src2 i32))
+    (IfXult64I32 (src1 XReg) (src2 u32))
+    (IfXulteq64I32 (src1 XReg) (src2 u32))
+    (IfXsgt64I32 (src1 XReg) (src2 i32))
+    (IfXsgteq64I32 (src1 XReg) (src2 i32))
+    (IfXugt64I32 (src1 XReg) (src2 u32))
+    (IfXugteq64I32 (src1 XReg) (src2 u32))
+  )
+)
+
+(decl cond_invert (Cond) Cond)
+(extern constructor cond_invert cond_invert)
+
 (decl raw_inst_to_inst (RawInst) MInst)
 (rule (raw_inst_to_inst inst) (MInst.Raw inst))
 (convert RawInst MInst raw_inst_to_inst)
 
+(type U6 (primitive U6))
 (type BoxCallInfo (primitive BoxCallInfo))
 (type BoxCallIndInfo (primitive BoxCallIndInfo))
+(type BoxReturnCallInfo (primitive BoxReturnCallInfo))
+(type BoxReturnCallIndInfo (primitive BoxReturnCallIndInfo))
+(type XRegSet (primitive XRegSet))
+(type BoxCallIndirectHostInfo (primitive BoxCallIndirectHostInfo))
 
 ;;;; Address Modes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -115,6 +169,8 @@
 )
 
 (type ExtKind (enum None Sign32 Sign64 Zero32 Zero64))
+
+(type VExtKind (enum None S8x8 U8x8 S16x4 U16x4 S32x2 U32x2))
 
 ;;;; Newtypes for Different Register Classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -334,33 +390,17 @@
 (rule 0 (imm $I64 x) (pulley_xconst64 (u64_as_i64 x)))
 
 ;; Base cases for floats.
-(rule 0 (imm $F32 c) (gen_bitcast (imm $I32 c) $I32 $F32))
-(rule 0 (imm $F64 c) (gen_bitcast (imm $I64 c) $I64 $F64))
-
-;;;; Bitcasts ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-;; Bitcast from the first type, into the second type.
-(decl gen_bitcast (Reg Type Type) Reg)
-(rule (gen_bitcast r $F32 $I32) (pulley_bitcast_float_from_int_32 r))
-(rule (gen_bitcast r $F64 $I64) (pulley_bitcast_float_from_int_64 r))
-(rule (gen_bitcast r $I32 $F32) (pulley_bitcast_int_from_float_32 r))
-(rule (gen_bitcast r $I64 $F64) (pulley_bitcast_int_from_float_64 r))
-(rule -1 (gen_bitcast r ty ty) r)
+(rule 0 (imm $F32 (u64_as_u32 c)) (pulley_fconst32 c))
+(rule 0 (imm $F64 c) (pulley_fconst64 c))
 
 ;;;; Instruction Constructors ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl pulley_trap_if (IntCC OperandSize XReg XReg TrapCode) SideEffectNoResult)
-(rule (pulley_trap_if cond size src1 src2 code)
-      (SideEffectNoResult.Inst (MInst.TrapIf cond size src1 src2 code)))
+(decl pulley_trap_if (Cond TrapCode) SideEffectNoResult)
+(rule (pulley_trap_if cond code)
+      (SideEffectNoResult.Inst (MInst.TrapIf cond code)))
 
 (decl sp_reg () XReg)
 (extern constructor sp_reg sp_reg)
-
-(decl fp_reg () XReg)
-(extern constructor fp_reg fp_reg)
-
-(decl lr_reg () XReg)
-(extern constructor lr_reg lr_reg)
 
 (decl pulley_get_special (XReg) XReg)
 (rule (pulley_get_special reg)
@@ -372,33 +412,9 @@
 (rule (pulley_jump label)
       (SideEffectNoResult.Inst (MInst.Jump label)))
 
-(decl pulley_br_if (XReg MachLabel MachLabel) SideEffectNoResult)
-(rule (pulley_br_if c taken not_taken)
-      (SideEffectNoResult.Inst (MInst.BrIf c taken not_taken)))
-
-(decl pulley_br_if_xeq32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
-(rule (pulley_br_if_xeq32 a b taken not_taken)
-      (SideEffectNoResult.Inst (MInst.BrIfXeq32 a b taken not_taken)))
-
-(decl pulley_br_if_xneq32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
-(rule (pulley_br_if_xneq32 a b taken not_taken)
-      (SideEffectNoResult.Inst (MInst.BrIfXneq32 a b taken not_taken)))
-
-(decl pulley_br_if_xslt32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
-(rule (pulley_br_if_xslt32 a b taken not_taken)
-      (SideEffectNoResult.Inst (MInst.BrIfXslt32 a b taken not_taken)))
-
-(decl pulley_br_if_xslteq32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
-(rule (pulley_br_if_xslteq32 a b taken not_taken)
-      (SideEffectNoResult.Inst (MInst.BrIfXslteq32 a b taken not_taken)))
-
-(decl pulley_br_if_xult32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
-(rule (pulley_br_if_xult32 a b taken not_taken)
-      (SideEffectNoResult.Inst (MInst.BrIfXult32 a b taken not_taken)))
-
-(decl pulley_br_if_xulteq32 (XReg XReg MachLabel MachLabel) SideEffectNoResult)
-(rule (pulley_br_if_xulteq32 a b taken not_taken)
-      (SideEffectNoResult.Inst (MInst.BrIfXulteq32 a b taken not_taken)))
+(decl pulley_br_if (Cond MachLabel MachLabel) SideEffectNoResult)
+(rule (pulley_br_if cond taken not_taken)
+      (SideEffectNoResult.Inst (MInst.BrIf cond taken not_taken)))
 
 (decl pulley_xload (Amode Type MemFlags ExtKind) XReg)
 (rule (pulley_xload amode ty flags ext)
@@ -420,6 +436,16 @@
 (rule (pulley_fstore amode src ty flags)
       (SideEffectNoResult.Inst (MInst.FStore amode src ty flags)))
 
+(decl pulley_vload (Amode Type MemFlags VExtKind) VReg)
+(rule (pulley_vload amode ty flags ext)
+      (let ((dst WritableVReg (temp_writable_vreg))
+            (_ Unit (emit (MInst.VLoad dst amode ty flags ext))))
+        dst))
+
+(decl pulley_vstore (Amode VReg Type MemFlags) SideEffectNoResult)
+(rule (pulley_vstore amode src ty flags)
+      (SideEffectNoResult.Inst (MInst.VStore amode src ty flags)))
+
 (decl gen_br_table (XReg MachLabel BoxVecMachLabel) Unit)
 (rule (gen_br_table idx default labels)
       (emit (MInst.BrTable idx default labels)))
@@ -432,10 +458,32 @@
 (decl gen_call_indirect (SigRef Value ValueSlice) InstOutput)
 (extern constructor gen_call_indirect gen_call_indirect)
 
-;;;; Helpers for Sign/Zero extension ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Helpers for Sign extension ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl zext (Value) XReg)
-(rule (zext val @ (value_type $I64)) val)
-(rule (zext val @ (value_type $I32)) (pulley_zext32 val))
-(rule (zext val @ (value_type $I16)) (pulley_zext16 val))
-(rule (zext val @ (value_type $I8)) (pulley_zext8 val))
+;; Sign extend a `Value` to at least 32-bit
+(decl zext32 (Value) XReg)
+(rule (zext32 val @ (value_type $I8)) (pulley_zext8 val))
+(rule (zext32 val @ (value_type $I16)) (pulley_zext16 val))
+(rule (zext32 val @ (value_type $I32)) val)
+(rule (zext32 val @ (value_type $I64)) val)
+
+;; Same as `zext32` but for sign-extension
+(decl sext32 (Value) XReg)
+(rule (sext32 val @ (value_type $I8)) (pulley_sext8 val))
+(rule (sext32 val @ (value_type $I16)) (pulley_sext16 val))
+(rule (sext32 val @ (value_type $I32)) val)
+(rule (sext32 val @ (value_type $I64)) val)
+
+;; Sign extend a `Value` to at least 64-bit
+(decl zext64 (Value) XReg)
+(rule (zext64 val @ (value_type $I8)) (pulley_zext8 val))
+(rule (zext64 val @ (value_type $I16)) (pulley_zext16 val))
+(rule (zext64 val @ (value_type $I32)) (pulley_zext32 val))
+(rule (zext64 val @ (value_type $I64)) val)
+
+;; Same as `zext64` but for sign-extension
+(decl sext64 (Value) XReg)
+(rule (sext64 val @ (value_type $I8)) (pulley_sext8 val))
+(rule (sext64 val @ (value_type $I16)) (pulley_sext16 val))
+(rule (sext64 val @ (value_type $I32)) (pulley_sext32 val))
+(rule (sext64 val @ (value_type $I64)) val)

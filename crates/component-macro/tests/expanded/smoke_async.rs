@@ -178,7 +178,7 @@ const _: () = {
 pub mod imports {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::{anyhow, Box};
-    #[wasmtime::component::__internal::async_trait]
+    #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
     pub trait Host: Send {
         async fn y(&mut self) -> ();
     }
@@ -224,7 +224,6 @@ pub mod imports {
     {
         add_to_linker_get_host(linker, get)
     }
-    #[wasmtime::component::__internal::async_trait]
     impl<_T: Host + ?Sized + Send> Host for &mut _T {
         async fn y(&mut self) -> () {
             Host::y(*self).await

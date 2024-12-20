@@ -484,10 +484,7 @@ impl BenchState {
     }
 
     fn compile(&mut self, bytes: &[u8]) -> Result<()> {
-        assert!(
-            self.module.is_none(),
-            "create a new engine to repeat compilation"
-        );
+        self.module = None;
 
         (self.compilation_start)(self.compilation_timer);
         let module = Module::from_binary(self.linker.engine(), bytes)?;
@@ -498,6 +495,8 @@ impl BenchState {
     }
 
     fn instantiate(&mut self) -> Result<()> {
+        self.store_and_instance = None;
+
         let module = self
             .module
             .as_ref()

@@ -208,7 +208,7 @@ pub mod foo {
                 assert!(12 == < Error as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < Error as wasmtime::component::ComponentType >::ALIGN32);
             };
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {
                 async fn g(&mut self) -> Result<(), Error>;
             }
@@ -254,7 +254,6 @@ pub mod foo {
             {
                 add_to_linker_get_host(linker, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
                 async fn g(&mut self) -> Result<(), Error> {
                     Host::g(*self).await

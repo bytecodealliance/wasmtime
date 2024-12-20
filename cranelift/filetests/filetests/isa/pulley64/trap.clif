@@ -23,13 +23,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xconst8 x2, 42
-;   trap_if eq, Size64, x0, x2 // code = TrapCode(1)
+;   trap_if_xeq64_i32 x0, 42 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
-; xconst8 x2, 42
-; br_if_xeq64 x0, x2, 0x8    // target = 0xb
+; br_if_xeq64_i8 x0, 42, 0x8    // target = 0x8
 ; ret
 ; trap
 
@@ -43,13 +41,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xconst8 x2, 42
-;   trap_if ne, Size64, x0, x2 // code = TrapCode(1)
+;   trap_if_xneq64_i32 x0, 42 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
-; xconst8 x2, 42
-; br_if_xneq64 x0, x2, 0x8    // target = 0xb
+; br_if_xneq64_i8 x0, 42, 0x8    // target = 0x8
 ; ret
 ; trap
 
@@ -63,13 +59,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xconst8 x2, 42
-;   trap_if eq, Size64, x0, x2 // code = TrapCode(1)
+;   trap_if_xeq64_i32 x0, 42 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
-; xconst8 x2, 42
-; br_if_xeq64 x0, x2, 0x8    // target = 0xb
+; br_if_xeq64_i8 x0, 42, 0x8    // target = 0x8
 ; ret
 ; trap
 
@@ -83,13 +77,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xconst8 x2, 42
-;   trap_if ne, Size64, x0, x2 // code = TrapCode(1)
+;   trap_if_xneq64_i32 x0, 42 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
-; xconst8 x2, 42
-; br_if_xneq64 x0, x2, 0x8    // target = 0xb
+; br_if_xneq64_i8 x0, 42, 0x8    // target = 0x8
 ; ret
 ; trap
 
@@ -110,22 +102,25 @@ block2:
 
 ; VCode:
 ; block0:
-;   br_if x0, label2; jump label1
+;   br_if_xneq64_i32 x0, 0, label2; jump label1
 ; block1:
+;   xconst8 x4, 0
+;   trap_if_xneq64_i32 x4, 0 // code = TrapCode(1)
 ;   ret
 ; block2:
-;   xconst8 x5, 42
-;   xconst8 x6, 0
-;   trap_if ne, Size64, x5, x6 // code = TrapCode(1)
+;   xconst8 x6, 42
+;   trap_if_xneq64_i32 x6, 0 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
-; br_if x0, 0x7    // target = 0x7
+; br_if_xneq64_i8 x0, 0, 0x12    // target = 0x12
+; xconst8 x4, 0
+; br_if_xneq64_i8 x4, 0, 0x13    // target = 0x1d
 ; ret
-; xconst8 x5, 42
-; xconst8 x6, 0
-; br_if_xneq64 x5, x6, 0x8    // target = 0x15
+; xconst8 x6, 42
+; br_if_xneq64_i8 x6, 0, 0xb    // target = 0x20
 ; ret
+; trap
 ; trap
 
 function %trapz_iconst_fold(i64) {
@@ -145,21 +140,24 @@ block2:
 
 ; VCode:
 ; block0:
-;   br_if x0, label2; jump label1
+;   br_if_xneq64_i32 x0, 0, label2; jump label1
 ; block1:
 ;   xconst8 x4, 0
-;   xconst8 x5, 0
-;   trap_if eq, Size64, x4, x5 // code = TrapCode(1)
+;   trap_if_xeq64_i32 x4, 0 // code = TrapCode(1)
 ;   ret
 ; block2:
+;   xconst8 x6, 42
+;   trap_if_xeq64_i32 x6, 0 // code = TrapCode(1)
 ;   ret
 ;
 ; Disassembled:
-; br_if x0, 0x14    // target = 0x14
+; br_if_xneq64_i8 x0, 0, 0x12    // target = 0x12
 ; xconst8 x4, 0
-; xconst8 x5, 0
-; br_if_xeq64 x4, x5, 0x9    // target = 0x15
+; br_if_xeq64_i8 x4, 0, 0x13    // target = 0x1d
 ; ret
+; xconst8 x6, 42
+; br_if_xeq64_i8 x6, 0, 0xb    // target = 0x20
 ; ret
+; trap
 ; trap
 

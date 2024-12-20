@@ -8,6 +8,10 @@ target x86_64 sse41 has_avx
 set enable_multi_ret_implicit_sret
 target riscv64 has_v
 target riscv64 has_v has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 function %swidenlow_i8x16(i8x16) -> i16x8 {
 block0(v0: i8x16):

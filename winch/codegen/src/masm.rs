@@ -23,11 +23,18 @@ pub(crate) enum DivKind {
 }
 
 /// Remainder kind.
+#[derive(Copy, Clone)]
 pub(crate) enum RemKind {
     /// Signed remainder.
     Signed,
     /// Unsigned remainder.
     Unsigned,
+}
+
+impl RemKind {
+    pub fn is_signed(&self) -> bool {
+        matches!(self, Self::Signed)
+    }
 }
 
 #[derive(Eq, PartialEq)]
@@ -163,6 +170,7 @@ pub(crate) enum ShiftKind {
 /// Kinds of extends in WebAssembly. Each MacroAssembler implementation
 /// is responsible for emitting the correct sequence of instructions when
 /// lowering to machine code.
+#[derive(Copy, Clone)]
 pub(crate) enum ExtendKind {
     /// Sign extends i32 to i64.
     I64ExtendI32S,

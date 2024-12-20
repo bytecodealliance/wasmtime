@@ -1,4 +1,4 @@
-package wasi:filesystem@0.2.2;
+package wasi:filesystem@0.2.3;
 /// WASI filesystem is a filesystem API primarily intended to let users run WASI
 /// programs that access their files on their existing filesystems, without
 /// significant overhead.
@@ -26,9 +26,9 @@ package wasi:filesystem@0.2.2;
 @since(version = 0.2.0)
 interface types {
     @since(version = 0.2.0)
-    use wasi:io/streams@0.2.2.{input-stream, output-stream, error};
+    use wasi:io/streams@0.2.3.{input-stream, output-stream, error};
     @since(version = 0.2.0)
-    use wasi:clocks/wall-clock@0.2.2.{datetime};
+    use wasi:clocks/wall-clock@0.2.3.{datetime};
 
     /// File size or length of a region within a file.
     @since(version = 0.2.0)
@@ -327,7 +327,7 @@ interface types {
         /// May fail with an error-code describing why the file cannot be appended.
         ///
         /// Note: This allows using `write-stream`, which is similar to `write` with
-        /// `O_APPEND` in in POSIX.
+        /// `O_APPEND` in POSIX.
         @since(version = 0.2.0)
         append-via-stream: func() -> result<output-stream, error-code>;
 
@@ -623,7 +623,7 @@ interface types {
         /// replaced. It may also include a secret value chosen by the
         /// implementation and not otherwise exposed.
         ///
-        /// Implementations are encourated to provide the following properties:
+        /// Implementations are encouraged to provide the following properties:
         ///
         ///  - If the file is not modified or replaced, the computed hash value should
         ///    usually not change.

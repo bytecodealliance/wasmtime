@@ -6,6 +6,10 @@ target x86_64
 target x86_64 has_bmi1
 target riscv64
 target riscv64 has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 function %blsi32(i32) -> i32 {
 block0(v0: i32):

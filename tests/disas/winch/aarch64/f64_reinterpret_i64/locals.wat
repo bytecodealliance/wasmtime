@@ -21,7 +21,7 @@
 ;;       mov     x16, #0
 ;;       stur    x16, [x28]
 ;;       ldur    x0, [x28]
-;;       scvtf   d0, x0
+;;       fmov    d0, x0
 ;;       add     sp, sp, #0x18
 ;;       mov     x28, sp
 ;;       ldp     x29, x30, [sp], #0x10

@@ -7,6 +7,10 @@ target x86_64
 target riscv64
 target riscv64 has_c has_zcb
 target s390x
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 function %or_and_y_with_not_y(i8, i8) -> i8 {
 block0(v0: i8, v1: i8):

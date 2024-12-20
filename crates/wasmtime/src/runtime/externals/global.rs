@@ -114,7 +114,7 @@ impl Global {
                 ValType::I64 => Val::from(*definition.as_i64()),
                 ValType::F32 => Val::F32(*definition.as_u32()),
                 ValType::F64 => Val::F64(*definition.as_u64()),
-                ValType::V128 => Val::V128((*definition.as_u128()).into()),
+                ValType::V128 => Val::V128(definition.get_u128().into()),
                 ValType::Ref(ref_ty) => {
                     let reference: Ref = match ref_ty.heap_type() {
                         HeapType::Func | HeapType::ConcreteFunc(_) => {
@@ -187,7 +187,7 @@ impl Global {
                 Val::I64(i) => *definition.as_i64_mut() = i,
                 Val::F32(f) => *definition.as_u32_mut() = f,
                 Val::F64(f) => *definition.as_u64_mut() = f,
-                Val::V128(i) => *definition.as_u128_mut() = i.into(),
+                Val::V128(i) => definition.set_u128(i.into()),
                 Val::FuncRef(f) => {
                     *definition.as_func_ref_mut() = f.map_or(ptr::null_mut(), |f| {
                         f.vm_func_ref(&mut store).as_ptr().cast()

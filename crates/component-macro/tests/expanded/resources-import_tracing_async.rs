@@ -1,5 +1,5 @@
 pub enum WorldResource {}
-#[wasmtime::component::__internal::async_trait]
+#[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
 pub trait HostWorldResource {
     async fn new(&mut self) -> wasmtime::component::Resource<WorldResource>;
     async fn foo(&mut self, self_: wasmtime::component::Resource<WorldResource>) -> ();
@@ -9,7 +9,6 @@ pub trait HostWorldResource {
         rep: wasmtime::component::Resource<WorldResource>,
     ) -> wasmtime::Result<()>;
 }
-#[wasmtime::component::__internal::async_trait]
 impl<_T: HostWorldResource + ?Sized + Send> HostWorldResource for &mut _T {
     async fn new(&mut self) -> wasmtime::component::Resource<WorldResource> {
         HostWorldResource::new(*self).await
@@ -130,7 +129,7 @@ pub struct TheWorld {
     interface1: exports::foo::foo::uses_resource_transitively::Guest,
     some_world_func2: wasmtime::component::Func,
 }
-#[wasmtime::component::__internal::async_trait]
+#[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
 pub trait TheWorldImports: Send + HostWorldResource {
     async fn some_world_func(&mut self) -> wasmtime::component::Resource<WorldResource>;
 }
@@ -146,7 +145,6 @@ where
 {
     type Host = O;
 }
-#[wasmtime::component::__internal::async_trait]
 impl<_T: TheWorldImports + ?Sized + Send> TheWorldImports for &mut _T {
     async fn some_world_func(&mut self) -> wasmtime::component::Resource<WorldResource> {
         TheWorldImports::some_world_func(*self).await
@@ -438,7 +436,7 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum Bar {}
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait HostBar {
                 async fn new(&mut self) -> wasmtime::component::Resource<Bar>;
                 async fn static_a(&mut self) -> u32;
@@ -451,7 +449,6 @@ pub mod foo {
                     rep: wasmtime::component::Resource<Bar>,
                 ) -> wasmtime::Result<()>;
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: HostBar + ?Sized + Send> HostBar for &mut _T {
                 async fn new(&mut self) -> wasmtime::component::Resource<Bar> {
                     HostBar::new(*self).await
@@ -527,7 +524,7 @@ pub mod foo {
                     4 == < SomeHandle as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send + HostBar {
                 async fn bar_own_arg(
                     &mut self,
@@ -1240,7 +1237,6 @@ pub mod foo {
             {
                 add_to_linker_get_host(linker, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
                 async fn bar_own_arg(
                     &mut self,
@@ -1350,14 +1346,13 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum A {}
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait HostA {
                 async fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<A>,
                 ) -> wasmtime::Result<()>;
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: HostA + ?Sized + Send> HostA for &mut _T {
                 async fn drop(
                     &mut self,
@@ -1366,7 +1361,7 @@ pub mod foo {
                     HostA::drop(*self, rep).await
                 }
             }
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send + HostA {}
             pub trait GetHost<
                 T,
@@ -1413,7 +1408,6 @@ pub mod foo {
             {
                 add_to_linker_get_host(linker, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
         }
         #[allow(clippy::all)]
@@ -1421,7 +1415,7 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain1::A;
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {}
             pub trait GetHost<
                 T,
@@ -1455,7 +1449,6 @@ pub mod foo {
             {
                 add_to_linker_get_host(linker, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
         }
         #[allow(clippy::all)]
@@ -1463,7 +1456,7 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain2::A;
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {}
             pub trait GetHost<
                 T,
@@ -1497,7 +1490,6 @@ pub mod foo {
             {
                 add_to_linker_get_host(linker, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
         }
         #[allow(clippy::all)]
@@ -1505,7 +1497,7 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain3::A;
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {
                 async fn foo(&mut self) -> wasmtime::component::Resource<A>;
             }
@@ -1564,7 +1556,6 @@ pub mod foo {
             {
                 add_to_linker_get_host(linker, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
                 async fn foo(&mut self) -> wasmtime::component::Resource<A> {
                     Host::foo(*self).await
@@ -1576,14 +1567,13 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum Foo {}
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait HostFoo {
                 async fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<Foo>,
                 ) -> wasmtime::Result<()>;
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: HostFoo + ?Sized + Send> HostFoo for &mut _T {
                 async fn drop(
                     &mut self,
@@ -1592,7 +1582,7 @@ pub mod foo {
                     HostFoo::drop(*self, rep).await
                 }
             }
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send + HostFoo {}
             pub trait GetHost<
                 T,
@@ -1640,7 +1630,6 @@ pub mod foo {
             {
                 add_to_linker_get_host(linker, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
         }
     }

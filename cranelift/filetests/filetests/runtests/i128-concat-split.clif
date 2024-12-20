@@ -5,6 +5,10 @@ target s390x
 target x86_64
 target riscv64
 target riscv64 has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 function %iconcat_isplit(i64, i64) -> i64, i64 {
 block0(v0: i64, v1: i64):

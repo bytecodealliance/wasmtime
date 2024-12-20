@@ -19,7 +19,6 @@ pub enum ResolveAddressStream {
     Done(Result<vec::IntoIter<IpAddress>, SocketError>),
 }
 
-#[async_trait::async_trait]
 impl<T> Host for WasiImpl<T>
 where
     T: WasiView,
@@ -43,7 +42,6 @@ where
     }
 }
 
-#[async_trait::async_trait]
 impl<T> HostResolveAddressStream for WasiImpl<T>
 where
     T: WasiView,

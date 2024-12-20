@@ -20,7 +20,7 @@
 ;;       stur    x1, [x28]
 ;;       mov     x16, #1
 ;;       mov     x0, x16
-;;       scvtf   d0, x0
+;;       fmov    d0, x0
 ;;       mov     x16, #1
 ;;       mov     x0, x16
 ;;       add     sp, sp, #0x10

@@ -181,15 +181,14 @@ pub fn test_debug_dwarf_generic_lldb() -> Result<()> {
             "-Ddebug-info",
             "tests/all/debug/testsuite/generic.wasm",
         ],
-        r#"b MainDefinedFunction
+        r#"br set -n debug_break -C up
 r
 p __vmctx->set()
-n
 p (x + x)
-b SatelliteFunction
 c
-n
 p (x + x)
+c
+p inst.BaseValue + inst.DerivedValue
 c"#,
     )?;
 
@@ -198,8 +197,10 @@ c"#,
         r#"
 check: stop reason = breakpoint 1.1
 check: 2
-check: stop reason = breakpoint 2.1
+check: stop reason = breakpoint 1.1
 check: 4
+check: stop reason = breakpoint 1.1
+check: 3
 check: exited with status = 0
 "#,
     )?;

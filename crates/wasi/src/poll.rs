@@ -116,7 +116,6 @@ where
     Ok(table.push_child(pollable, &resource)?)
 }
 
-#[async_trait::async_trait]
 impl<T> poll::Host for WasiImpl<T>
 where
     T: WasiView,
@@ -178,7 +177,6 @@ where
     }
 }
 
-#[async_trait::async_trait]
 impl<T> crate::bindings::io::poll::HostPollable for WasiImpl<T>
 where
     T: WasiView,

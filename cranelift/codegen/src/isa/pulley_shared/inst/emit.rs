@@ -119,6 +119,26 @@ where
     }
 }
 
+/// Representation of a static offset from a pointer.
+///
+/// In VCode this is always represented as an `i32` and then just before
+/// lowering this is used to determine which instruction to emit.
+enum Offset {
+    /// An unsigned 8-bit offset.
+    U8(u8),
+    /// A signed 32-bit offset.
+    I32(i32),
+}
+
+impl From<i32> for Offset {
+    fn from(i: i32) -> Offset {
+        if let Ok(i) = i.try_into() {
+            return Offset::U8(i);
+        }
+        Offset::I32(i)
+    }
+}
+
 fn pulley_emit<P>(
     inst: &Inst,
     sink: &mut MachBuffer<InstAndKind<P>>,
@@ -130,53 +150,19 @@ fn pulley_emit<P>(
 {
     match inst {
         // Pseduo-instructions that don't actually encode to anything.
-        Inst::Args { .. } | Inst::Rets { .. } | Inst::Unwind { .. } => {}
+        Inst::Args { .. } | Inst::Rets { .. } => {}
 
-        Inst::TrapIf {
-            cond,
-            size,
-            src1,
-            src2,
-            code,
-        } => {
-            let label = sink.defer_trap(*code);
+        Inst::TrapIf { cond, code } => {
+            let trap = sink.defer_trap(*code);
+            let not_trap = sink.get_label();
 
-            let cur_off = sink.cur_offset();
-            sink.use_label_at_offset(cur_off + 3, label, LabelUse::Jump(3));
-
-            use ir::condcodes::IntCC::*;
-            use OperandSize::*;
-            match (cond, size) {
-                (Equal, Size32) => enc::br_if_xeq32(sink, src1, src2, 0),
-                (Equal, Size64) => enc::br_if_xeq64(sink, src1, src2, 0),
-
-                (NotEqual, Size32) => enc::br_if_xneq32(sink, src1, src2, 0),
-                (NotEqual, Size64) => enc::br_if_xneq64(sink, src1, src2, 0),
-
-                (SignedLessThan, Size32) => enc::br_if_xslt32(sink, src1, src2, 0),
-                (SignedLessThan, Size64) => enc::br_if_xslt64(sink, src1, src2, 0),
-
-                (SignedLessThanOrEqual, Size32) => enc::br_if_xslteq32(sink, src1, src2, 0),
-                (SignedLessThanOrEqual, Size64) => enc::br_if_xslteq64(sink, src1, src2, 0),
-
-                (UnsignedLessThan, Size32) => enc::br_if_xult32(sink, src1, src2, 0),
-                (UnsignedLessThan, Size64) => enc::br_if_xult64(sink, src1, src2, 0),
-
-                (UnsignedLessThanOrEqual, Size32) => enc::br_if_xulteq32(sink, src1, src2, 0),
-                (UnsignedLessThanOrEqual, Size64) => enc::br_if_xulteq64(sink, src1, src2, 0),
-
-                (SignedGreaterThan, Size32) => enc::br_if_xslt32(sink, src2, src1, 0),
-                (SignedGreaterThan, Size64) => enc::br_if_xslt64(sink, src2, src1, 0),
-
-                (SignedGreaterThanOrEqual, Size32) => enc::br_if_xslteq32(sink, src2, src1, 0),
-                (SignedGreaterThanOrEqual, Size64) => enc::br_if_xslteq64(sink, src2, src1, 0),
-
-                (UnsignedGreaterThan, Size32) => enc::br_if_xult32(sink, src2, src1, 0),
-                (UnsignedGreaterThan, Size64) => enc::br_if_xult64(sink, src2, src1, 0),
-
-                (UnsignedGreaterThanOrEqual, Size32) => enc::br_if_xulteq32(sink, src2, src1, 0),
-                (UnsignedGreaterThanOrEqual, Size64) => enc::br_if_xulteq64(sink, src2, src1, 0),
-            }
+            <InstAndKind<P>>::from(Inst::BrIf {
+                cond: cond.clone(),
+                taken: trap,
+                not_taken: not_trap,
+            })
+            .emit(sink, emit_info, state);
+            sink.bind_label(not_trap, &mut state.ctrl_plane);
         }
 
         Inst::Nop => todo!(),
@@ -186,16 +172,36 @@ fn pulley_emit<P>(
         Inst::LoadExtName { .. } => todo!(),
 
         Inst::Call { info } => {
-            sink.put1(pulley_interpreter::Opcode::Call as u8);
-            sink.add_reloc(
+            let offset = sink.cur_offset();
+
+            // If arguments happen to already be in the right register for the
+            // ABI then remove them from this list. Otherwise emit the
+            // appropriate `Call` instruction depending on how many arguments we
+            // have that aren't already in their correct register according to
+            // ABI conventions.
+            let mut args = &info.dest.args[..];
+            while !args.is_empty() && args.last().copied() == XReg::new(x_reg(args.len() - 1)) {
+                args = &args[..args.len() - 1];
+            }
+            match args {
+                [] => enc::call(sink, 0),
+                [x0] => enc::call1(sink, x0, 0),
+                [x0, x1] => enc::call2(sink, x0, x1, 0),
+                [x0, x1, x2] => enc::call3(sink, x0, x1, x2, 0),
+                [x0, x1, x2, x3] => enc::call4(sink, x0, x1, x2, x3, 0),
+                _ => unreachable!(),
+            }
+            let end = sink.cur_offset();
+            sink.add_reloc_at_offset(
+                end - 4,
                 // TODO: is it actually okay to reuse this reloc here?
                 Reloc::X86CallPCRel4,
-                &info.dest,
+                &info.dest.name,
                 // This addend adjusts for the difference between the start of
-                // the instruction and the beginning of the immediate field.
-                -1,
+                // the instruction and the beginning of the immediate offset
+                // field which is always the final 4 bytes of the instruction.
+                -i64::from(end - offset - 4),
             );
-            sink.put4(0);
             if let Some(s) = state.take_stack_map() {
                 let offset = sink.cur_offset();
                 sink.push_user_stack_map(state, offset, s);
@@ -224,6 +230,29 @@ fn pulley_emit<P>(
             }
         }
 
+        Inst::ReturnCall { info } => {
+            emit_return_call_common_sequence(sink, emit_info, state, &info);
+
+            // Emit an unconditional jump which is quite similar to `Inst::Call`
+            // except that a `jump` opcode is used instead of a `call` opcode.
+            sink.put1(pulley_interpreter::Opcode::Jump as u8);
+            sink.add_reloc(Reloc::X86CallPCRel4, &info.dest, -1);
+            sink.put4(0);
+
+            // Islands were manually handled in
+            // `emit_return_call_common_sequence`.
+            *start_offset = sink.cur_offset();
+        }
+
+        Inst::ReturnIndirectCall { info } => {
+            emit_return_call_common_sequence(sink, emit_info, state, &info);
+            enc::xjump(sink, info.dest);
+
+            // Islands were manually handled in
+            // `emit_return_call_common_sequence`.
+            *start_offset = sink.cur_offset();
+        }
+
         Inst::IndirectCallHost { info } => {
             // Emit a relocation to fill in the actual immediate argument here
             // in `call_indirect_host`.
@@ -248,141 +277,38 @@ fn pulley_emit<P>(
         }
 
         Inst::BrIf {
-            c,
+            cond,
             taken,
             not_taken,
         } => {
-            // If taken.
-            let taken_start = *start_offset + 2;
-            let taken_end = taken_start + 4;
-
-            sink.use_label_at_offset(taken_start, *taken, LabelUse::Jump(2));
+            // Encode the inverted form of the branch. Branches always have
+            // their trailing 4 bytes as the relative offset which is what we're
+            // going to target here within the `MachBuffer`.
             let mut inverted = SmallVec::<[u8; 16]>::new();
-            enc::br_if_not(&mut inverted, c, 0x00000000);
-            debug_assert_eq!(
-                inverted.len(),
-                usize::try_from(taken_end - *start_offset).unwrap()
-            );
+            cond.invert().encode(&mut inverted);
+            let len = inverted.len() as u32;
+            debug_assert!(len > 4);
 
+            // Use the `taken` label 4 bytes before the end of the instruction
+            // we're about to emit as that's the base of `PcRelOffset`. Note
+            // that the `Jump` here factors in the offset from the start of the
+            // instruction to the start of the relative offset, hence `len - 4`
+            // as the factor to adjust by.
+            let taken_end = *start_offset + len;
+            sink.use_label_at_offset(taken_end - 4, *taken, LabelUse::Jump(len - 4));
             sink.add_cond_branch(*start_offset, taken_end, *taken, &inverted);
-            enc::br_if(sink, c, 0x00000000);
+            cond.encode(sink);
             debug_assert_eq!(sink.cur_offset(), taken_end);
 
-            // If not taken.
+            // For the not-taken branch use an unconditional jump to the
+            // relevant label, and we know that the jump instruction is 5 bytes
+            // long where the final 4 bytes are the offset to jump by.
             let not_taken_start = taken_end + 1;
             let not_taken_end = not_taken_start + 4;
-
             sink.use_label_at_offset(not_taken_start, *not_taken, LabelUse::Jump(1));
             sink.add_uncond_branch(taken_end, not_taken_end, *not_taken);
             enc::jump(sink, 0x00000000);
-        }
-
-        Inst::BrIfXeq32 {
-            src1,
-            src2,
-            taken,
-            not_taken,
-        } => {
-            br_if_cond_helper(
-                sink,
-                *start_offset,
-                *src1,
-                *src2,
-                taken,
-                not_taken,
-                enc::br_if_xeq32,
-                enc::br_if_xneq32,
-            );
-        }
-
-        Inst::BrIfXneq32 {
-            src1,
-            src2,
-            taken,
-            not_taken,
-        } => {
-            br_if_cond_helper(
-                sink,
-                *start_offset,
-                *src1,
-                *src2,
-                taken,
-                not_taken,
-                enc::br_if_xneq32,
-                enc::br_if_xeq32,
-            );
-        }
-
-        Inst::BrIfXslt32 {
-            src1,
-            src2,
-            taken,
-            not_taken,
-        } => {
-            br_if_cond_helper(
-                sink,
-                *start_offset,
-                *src1,
-                *src2,
-                taken,
-                not_taken,
-                enc::br_if_xslt32,
-                |s, src1, src2, x| enc::br_if_xslteq32(s, src2, src1, x),
-            );
-        }
-
-        Inst::BrIfXslteq32 {
-            src1,
-            src2,
-            taken,
-            not_taken,
-        } => {
-            br_if_cond_helper(
-                sink,
-                *start_offset,
-                *src1,
-                *src2,
-                taken,
-                not_taken,
-                enc::br_if_xslteq32,
-                |s, src1, src2, x| enc::br_if_xslt32(s, src2, src1, x),
-            );
-        }
-
-        Inst::BrIfXult32 {
-            src1,
-            src2,
-            taken,
-            not_taken,
-        } => {
-            br_if_cond_helper(
-                sink,
-                *start_offset,
-                *src1,
-                *src2,
-                taken,
-                not_taken,
-                enc::br_if_xult32,
-                |s, src1, src2, x| enc::br_if_xulteq32(s, src2, src1, x),
-            );
-        }
-
-        Inst::BrIfXulteq32 {
-            src1,
-            src2,
-            taken,
-            not_taken,
-        } => {
-            br_if_cond_helper(
-                sink,
-                *start_offset,
-                *src1,
-                *src2,
-                taken,
-                not_taken,
-                enc::br_if_xulteq32,
-                |s, src1, src2, x| enc::br_if_xult32(s, src2, src1, x),
-            );
+            assert_eq!(sink.cur_offset(), not_taken_end);
         }
 
         Inst::LoadAddr { dst, mem } => {
@@ -429,24 +355,40 @@ fn pulley_emit<P>(
             let endian = emit_info.endianness(*flags);
             match *ty {
                 I8 => match ext {
-                    X::None | X::Zero32 => enc::xload8_u32_offset32(sink, dst, r, x),
-                    X::Zero64 => enc::xload8_u64_offset32(sink, dst, r, x),
-                    X::Sign32 => enc::xload8_s32_offset32(sink, dst, r, x),
-                    X::Sign64 => enc::xload8_s64_offset32(sink, dst, r, x),
+                    X::None | X::Zero32 => match x.into() {
+                        Offset::I32(x) => enc::xload8_u32_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload8_u32_offset8(sink, dst, r, x),
+                    },
+                    X::Zero64 => match x.into() {
+                        Offset::I32(x) => enc::xload8_u64_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload8_u64_offset8(sink, dst, r, x),
+                    },
+                    X::Sign32 => match x.into() {
+                        Offset::I32(x) => enc::xload8_s32_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload8_s32_offset8(sink, dst, r, x),
+                    },
+                    X::Sign64 => match x.into() {
+                        Offset::I32(x) => enc::xload8_s64_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload8_s64_offset8(sink, dst, r, x),
+                    },
                 },
                 I16 => match (ext, endian) {
-                    (X::None | X::Zero32, E::Little) => {
-                        enc::xload16le_u32_offset32(sink, dst, r, x);
-                    }
-                    (X::Sign32, E::Little) => {
-                        enc::xload16le_s32_offset32(sink, dst, r, x);
-                    }
-                    (X::Zero64, E::Little) => {
-                        enc::xload16le_u64_offset32(sink, dst, r, x);
-                    }
-                    (X::Sign64, E::Little) => {
-                        enc::xload16le_s64_offset32(sink, dst, r, x);
-                    }
+                    (X::None | X::Zero32, E::Little) => match x.into() {
+                        Offset::I32(x) => enc::xload16le_u32_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload16le_u32_offset8(sink, dst, r, x),
+                    },
+                    (X::Sign32, E::Little) => match x.into() {
+                        Offset::I32(x) => enc::xload16le_s32_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload16le_s32_offset8(sink, dst, r, x),
+                    },
+                    (X::Zero64, E::Little) => match x.into() {
+                        Offset::I32(x) => enc::xload16le_u64_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload16le_u64_offset8(sink, dst, r, x),
+                    },
+                    (X::Sign64, E::Little) => match x.into() {
+                        Offset::I32(x) => enc::xload16le_s64_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload16le_s64_offset8(sink, dst, r, x),
+                    },
                     (X::None | X::Zero32 | X::Zero64, E::Big) => {
                         enc::xload16be_u64_offset32(sink, dst, r, x);
                     }
@@ -455,15 +397,18 @@ fn pulley_emit<P>(
                     }
                 },
                 I32 => match (ext, endian) {
-                    (X::None | X::Zero32 | X::Sign32, E::Little) => {
-                        enc::xload32le_offset32(sink, dst, r, x);
-                    }
-                    (X::Zero64, E::Little) => {
-                        enc::xload32le_u64_offset32(sink, dst, r, x);
-                    }
-                    (X::Sign64, E::Little) => {
-                        enc::xload32le_s64_offset32(sink, dst, r, x);
-                    }
+                    (X::None | X::Zero32 | X::Sign32, E::Little) => match x.into() {
+                        Offset::I32(x) => enc::xload32le_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload32le_offset8(sink, dst, r, x),
+                    },
+                    (X::Zero64, E::Little) => match x.into() {
+                        Offset::I32(x) => enc::xload32le_u64_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload32le_u64_offset8(sink, dst, r, x),
+                    },
+                    (X::Sign64, E::Little) => match x.into() {
+                        Offset::I32(x) => enc::xload32le_s64_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload32le_s64_offset8(sink, dst, r, x),
+                    },
                     (X::None | X::Zero32 | X::Zero64, E::Big) => {
                         enc::xload32be_u64_offset32(sink, dst, r, x);
                     }
@@ -472,7 +417,10 @@ fn pulley_emit<P>(
                     }
                 },
                 I64 => match endian {
-                    E::Little => enc::xload64le_offset32(sink, dst, r, x),
+                    E::Little => match x.into() {
+                        Offset::I32(x) => enc::xload64le_offset32(sink, dst, r, x),
+                        Offset::U8(x) => enc::xload64le_offset8(sink, dst, r, x),
+                    },
                     E::Big => enc::xload64be_offset32(sink, dst, r, x),
                 },
                 _ => unimplemented!("xload ty={ty:?}"),
@@ -507,13 +455,22 @@ fn pulley_emit<P>(
             mem,
             ty,
             flags,
+            ext,
         } => {
             let r = mem.get_base_register().unwrap();
             let x = mem.get_offset_with_state(state);
             let endian = emit_info.endianness(*flags);
             assert_eq!(endian, Endianness::Little);
             assert_eq!(ty.bytes(), 16);
-            enc::vload128le_offset32(sink, dst, r, x);
+            match ext {
+                VExtKind::None => enc::vload128le_offset32(sink, dst, r, x),
+                VExtKind::S8x8 => enc::vload8x8_s_offset32(sink, dst, r, x),
+                VExtKind::U8x8 => enc::vload8x8_u_offset32(sink, dst, r, x),
+                VExtKind::S16x4 => enc::vload16x4le_s_offset32(sink, dst, r, x),
+                VExtKind::U16x4 => enc::vload16x4le_u_offset32(sink, dst, r, x),
+                VExtKind::S32x2 => enc::vload32x2le_s_offset32(sink, dst, r, x),
+                VExtKind::U32x2 => enc::vload32x2le_u_offset32(sink, dst, r, x),
+            }
         }
 
         Inst::XStore {
@@ -527,17 +484,29 @@ fn pulley_emit<P>(
             let x = mem.get_offset_with_state(state);
             let endian = emit_info.endianness(*flags);
             match *ty {
-                I8 => enc::xstore8_offset32(sink, r, x, src),
+                I8 => match x.into() {
+                    Offset::I32(x) => enc::xstore8_offset32(sink, r, x, src),
+                    Offset::U8(x) => enc::xstore8_offset8(sink, r, x, src),
+                },
                 I16 => match endian {
-                    E::Little => enc::xstore16le_offset32(sink, r, x, src),
+                    E::Little => match x.into() {
+                        Offset::I32(x) => enc::xstore16le_offset32(sink, r, x, src),
+                        Offset::U8(x) => enc::xstore16le_offset8(sink, r, x, src),
+                    },
                     E::Big => enc::xstore16be_offset32(sink, r, x, src),
                 },
                 I32 => match endian {
-                    E::Little => enc::xstore32le_offset32(sink, r, x, src),
+                    E::Little => match x.into() {
+                        Offset::I32(x) => enc::xstore32le_offset32(sink, r, x, src),
+                        Offset::U8(x) => enc::xstore32le_offset8(sink, r, x, src),
+                    },
                     E::Big => enc::xstore32be_offset32(sink, r, x, src),
                 },
                 I64 => match endian {
-                    E::Little => enc::xstore64le_offset32(sink, r, x, src),
+                    E::Little => match x.into() {
+                        Offset::I32(x) => enc::xstore64le_offset32(sink, r, x, src),
+                        Offset::U8(x) => enc::xstore64le_offset8(sink, r, x, src),
+                    },
                     E::Big => enc::xstore64be_offset32(sink, r, x, src),
                 },
                 _ => unimplemented!("xstore ty={ty:?}"),
@@ -624,7 +593,9 @@ fn pulley_emit<P>(
 
         Inst::Raw { raw } => {
             match raw {
-                RawInst::PushFrame | RawInst::StackAlloc32 { .. } => {
+                RawInst::PushFrame
+                | RawInst::StackAlloc32 { .. }
+                | RawInst::PushFrameSave { .. } => {
                     sink.add_trap(ir::TrapCode::STACK_OVERFLOW);
                 }
                 _ => {}
@@ -634,39 +605,106 @@ fn pulley_emit<P>(
     }
 }
 
-fn br_if_cond_helper<P>(
+fn emit_return_call_common_sequence<T, P>(
     sink: &mut MachBuffer<InstAndKind<P>>,
-    start_offset: u32,
-    src1: XReg,
-    src2: XReg,
-    taken: &MachLabel,
-    not_taken: &MachLabel,
-    mut enc: impl FnMut(&mut MachBuffer<InstAndKind<P>>, XReg, XReg, i32),
-    mut enc_inverted: impl FnMut(&mut SmallVec<[u8; 16]>, XReg, XReg, i32),
+    emit_info: &EmitInfo,
+    state: &mut EmitState<P>,
+    info: &ReturnCallInfo<T>,
 ) where
     P: PulleyTargetKind,
 {
-    // If taken.
-    let taken_start = start_offset + 3;
-    let taken_end = taken_start + 4;
+    // The return call sequence can potentially emit a lot of instructions, so
+    // lets emit an island here if we need it.
+    //
+    // It is difficult to calculate exactly how many instructions are going to
+    // be emitted, so we calculate it by emitting it into a disposable buffer,
+    // and then checking how many instructions were actually emitted.
+    let mut buffer = MachBuffer::new();
+    let mut fake_emit_state = state.clone();
 
-    sink.use_label_at_offset(taken_start, *taken, LabelUse::Jump(3));
-    let mut inverted = SmallVec::<[u8; 16]>::new();
-    enc_inverted(&mut inverted, src1, src2, 0x00000000);
-    debug_assert_eq!(
-        inverted.len(),
-        usize::try_from(taken_end - start_offset).unwrap()
-    );
+    return_call_emit_impl(&mut buffer, emit_info, &mut fake_emit_state, info);
 
-    sink.add_cond_branch(start_offset, taken_end, *taken, &inverted);
-    enc(sink, src1, src2, 0x00000000);
-    debug_assert_eq!(sink.cur_offset(), taken_end);
+    // Finalize the buffer and get the number of bytes emitted.
+    let buffer = buffer.finish(&Default::default(), &mut Default::default());
+    let length = buffer.data().len() as u32;
 
-    // If not taken.
-    let not_taken_start = taken_end + 1;
-    let not_taken_end = not_taken_start + 4;
+    // And now emit the island inline with this instruction.
+    if sink.island_needed(length) {
+        let jump_around_label = sink.get_label();
+        <InstAndKind<P>>::gen_jump(jump_around_label).emit(sink, emit_info, state);
+        sink.emit_island(length + 4, &mut state.ctrl_plane);
+        sink.bind_label(jump_around_label, &mut state.ctrl_plane);
+    }
 
-    sink.use_label_at_offset(not_taken_start, *not_taken, LabelUse::Jump(1));
-    sink.add_uncond_branch(taken_end, not_taken_end, *not_taken);
-    enc::jump(sink, 0x00000000);
+    // Now that we're done, emit the *actual* return sequence.
+    return_call_emit_impl(sink, emit_info, state, info);
+}
+
+/// This should not be called directly, Instead prefer to call [emit_return_call_common_sequence].
+fn return_call_emit_impl<T, P>(
+    sink: &mut MachBuffer<InstAndKind<P>>,
+    emit_info: &EmitInfo,
+    state: &mut EmitState<P>,
+    info: &ReturnCallInfo<T>,
+) where
+    P: PulleyTargetKind,
+{
+    let sp_to_fp_offset = {
+        let frame_layout = state.frame_layout();
+        i64::from(
+            frame_layout.clobber_size
+                + frame_layout.fixed_frame_storage_size
+                + frame_layout.outgoing_args_size,
+        )
+    };
+
+    // Restore all clobbered registers before leaving the function.
+    let mut clobber_offset = sp_to_fp_offset - 8;
+    for reg in state.frame_layout().clobbered_callee_saves.clone() {
+        let rreg = reg.to_reg();
+        let ty = match rreg.class() {
+            RegClass::Int => I64,
+            RegClass::Float => F64,
+            RegClass::Vector => unimplemented!("Vector Clobber Restores"),
+        };
+
+        <InstAndKind<P>>::from(Inst::gen_load(
+            reg.map(Reg::from),
+            Amode::SpOffset {
+                offset: clobber_offset.try_into().unwrap(),
+            },
+            ty,
+            MemFlags::trusted(),
+        ))
+        .emit(sink, emit_info, state);
+
+        clobber_offset -= 8
+    }
+
+    // Restore the link register and frame pointer using a `pop_frame`
+    // instruction. This will move `sp` to the current frame pointer and then
+    // restore the old lr/fp, so this restores all of sp/fp/lr in one
+    // instruction.
+    let setup_area_size = i64::from(state.frame_layout().setup_area_size);
+    assert!(setup_area_size > 0, "must have frame pointers enabled");
+    <InstAndKind<P>>::from(RawInst::PopFrame).emit(sink, emit_info, state);
+
+    // Now that `sp` is restored to what it was on function entry it may need to
+    // be adjusted if the stack arguments of our own function differ from the
+    // stack arguments of the callee. Perform any necessary adjustment here.
+    //
+    // Note that this means that there's a brief window where stack arguments
+    // might be below `sp` in the case that the callee has more stack arguments
+    // than ourselves. That's in theory ok though as we're inventing the pulley
+    // ABI and nothing like async signals are happening that we have to worry
+    // about.
+    let incoming_args_diff =
+        i64::from(state.frame_layout().tail_args_size - info.new_stack_arg_size);
+
+    if incoming_args_diff != 0 {
+        let amt = i32::try_from(incoming_args_diff).unwrap();
+        for inst in PulleyMachineDeps::<P>::gen_sp_reg_adjust(amt) {
+            <InstAndKind<P>>::from(inst).emit(sink, emit_info, state);
+        }
+    }
 }

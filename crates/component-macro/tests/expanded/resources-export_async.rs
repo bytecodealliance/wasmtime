@@ -256,14 +256,13 @@ pub mod foo {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
             pub enum Y {}
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait HostY {
                 async fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<Y>,
                 ) -> wasmtime::Result<()>;
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: HostY + ?Sized + Send> HostY for &mut _T {
                 async fn drop(
                     &mut self,
@@ -272,7 +271,7 @@ pub mod foo {
                     HostY::drop(*self, rep).await
                 }
             }
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send + HostY {}
             pub trait GetHost<
                 T,
@@ -319,7 +318,6 @@ pub mod foo {
             {
                 add_to_linker_get_host(linker, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {}
         }
     }

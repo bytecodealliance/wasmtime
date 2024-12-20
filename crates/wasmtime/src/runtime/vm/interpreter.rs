@@ -3,9 +3,9 @@ use crate::runtime::vm::vmcontext::VMArrayCallNative;
 use crate::runtime::vm::{tls, TrapRegisters, TrapTest, VMContext, VMOpaqueContext};
 use crate::ValRaw;
 use core::ptr::NonNull;
-use pulley_interpreter::interp::{DoneReason, RegType, Val, Vm, XRegVal};
+use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
 use pulley_interpreter::{Reg, XReg};
-use wasmtime_environ::{BuiltinFunctionIndex, HostCall};
+use wasmtime_environ::{BuiltinFunctionIndex, HostCall, Trap};
 
 /// Interpreter state stored within a `Store<T>`.
 #[repr(transparent)]
@@ -73,8 +73,8 @@ impl InterpreterRef<'_> {
         // correct as it's not saving all callee-save state.
         let setjmp = Setjmp {
             sp: self.0[XReg::sp].get_ptr(),
-            fp: self.0[XReg::fp].get_ptr(),
-            lr: self.0[XReg::lr].get_ptr(),
+            fp: self.0.fp(),
+            lr: self.0.lr(),
         };
 
         // Run the interpreter as much as possible until it finishes, and then
@@ -109,46 +109,56 @@ impl InterpreterRef<'_> {
                     }
                 }
                 // If the VM trapped then process that here and return `false`.
-                DoneReason::Trap(pc) => {
-                    self.trap(pc, setjmp);
+                DoneReason::Trap { pc, kind } => {
+                    self.trap(pc, kind, setjmp);
                     break false;
                 }
             }
         };
 
         debug_assert!(self.0[XReg::sp].get_ptr() == setjmp.sp);
-        debug_assert!(self.0[XReg::fp].get_ptr() == setjmp.fp);
-        debug_assert!(self.0[XReg::lr].get_ptr() == setjmp.lr);
+        debug_assert!(self.0.fp() == setjmp.fp);
+        debug_assert!(self.0.lr() == setjmp.lr);
         ret
     }
 
     /// Handles an interpreter trap. This will initialize the trap state stored
     /// in TLS via the `test_if_trap` helper below by reading the pc/fp of the
     /// interpreter and seeing if that's a valid opcode to trap at.
-    fn trap(&mut self, pc: NonNull<u8>, setjmp: Setjmp) {
-        let result = tls::with(|s| {
+    fn trap(&mut self, pc: NonNull<u8>, kind: Option<TrapKind>, setjmp: Setjmp) {
+        let regs = TrapRegisters {
+            pc: pc.as_ptr() as usize,
+            fp: self.0.fp() as usize,
+        };
+        tls::with(|s| {
             let s = s.unwrap();
-            s.test_if_trap(
-                TrapRegisters {
-                    pc: pc.as_ptr() as usize,
-                    fp: self.0[XReg::fp].get_ptr::<u8>() as usize,
-                },
-                None,
-                |_| false,
-            )
+            match kind {
+                Some(kind) => {
+                    let trap = match kind {
+                        TrapKind::IntegerOverflow => Trap::IntegerOverflow,
+                        TrapKind::DivideByZero => Trap::IntegerDivisionByZero,
+                        TrapKind::BadConversionToInteger => Trap::BadConversionToInteger,
+                    };
+                    s.set_jit_trap(regs, None, trap);
+                }
+                None => {
+                    match s.test_if_trap(regs, None, |_| false) {
+                        // This shouldn't be possible, so this is a fatal error
+                        // if it happens.
+                        TrapTest::NotWasm => {
+                            panic!("pulley trap at {pc:?} without trap code registered")
+                        }
+
+                        // Not possible with our closure above returning `false`.
+                        TrapTest::HandledByEmbedder => unreachable!(),
+
+                        // Trap was handled, yay! We don't use `jmp_buf`.
+                        TrapTest::Trap { jmp_buf: _ } => {}
+                    }
+                }
+            }
         });
 
-        match result {
-            // This shouldn't be possible, so this is a fatal error if it
-            // happens.
-            TrapTest::NotWasm => panic!("pulley trap at {pc:?} without trap code registered"),
-
-            // Not possible with our closure above returning `false`.
-            TrapTest::HandledByEmbedder => unreachable!(),
-
-            // Trap was handled, yay! We don't use `jmp_buf`.
-            TrapTest::Trap { jmp_buf: _ } => {}
-        }
         self.longjmp(setjmp);
     }
 
@@ -169,9 +179,11 @@ impl InterpreterRef<'_> {
     /// them.
     fn longjmp(&mut self, setjmp: Setjmp) {
         let Setjmp { sp, fp, lr } = setjmp;
-        self.0[XReg::sp].set_ptr(sp);
-        self.0[XReg::fp].set_ptr(fp);
-        self.0[XReg::lr].set_ptr(lr);
+        unsafe {
+            self.0[XReg::sp].set_ptr(sp);
+            self.0.set_fp(fp);
+            self.0.set_lr(lr);
+        }
     }
 
     /// Handles the `call_indirect_host` instruction, dispatching the `sig`
@@ -180,6 +192,10 @@ impl InterpreterRef<'_> {
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
         reason = "macro-generated code"
+    )]
+    #[cfg_attr(
+        not(feature = "component-model"),
+        expect(unused_macro_rules, reason = "macro-code")
     )]
     unsafe fn call_indirect_host(&mut self, id: u8) {
         let id = u32::from(id);

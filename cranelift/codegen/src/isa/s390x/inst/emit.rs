@@ -220,7 +220,13 @@ pub fn mem_emit(
         &MemArg::Symbol {
             ref name, offset, ..
         } => {
-            sink.add_reloc_at_offset(2, Reloc::S390xPCRel32Dbl, &**name, (offset + 2).into());
+            let reloc_offset = sink.cur_offset() + 2;
+            sink.add_reloc_at_offset(
+                reloc_offset,
+                Reloc::S390xPCRel32Dbl,
+                &**name,
+                (offset + 2).into(),
+            );
             put(sink, &enc_ril_b(opcode_ril.unwrap(), rd, 0));
         }
         _ => unreachable!(),
@@ -3198,7 +3204,8 @@ impl Inst {
                 // Add relocation for target function.  This has to be done *before*
                 // the S390xTlsGdCall relocation if any, to ensure linker relaxation
                 // works correctly.
-                sink.add_reloc_at_offset(2, Reloc::S390xPLTRel32Dbl, &info.dest, 2);
+                let offset = sink.cur_offset() + 2;
+                sink.add_reloc_at_offset(offset, Reloc::S390xPLTRel32Dbl, &info.dest, 2);
 
                 if let Some(s) = state.take_stack_map() {
                     let offset = sink.cur_offset() + 6;
@@ -3232,7 +3239,8 @@ impl Inst {
                 }
 
                 let opcode = 0xc04; // BCRL
-                sink.add_reloc_at_offset(2, Reloc::S390xPLTRel32Dbl, &info.dest, 2);
+                let offset = sink.cur_offset() + 2;
+                sink.add_reloc_at_offset(offset, Reloc::S390xPLTRel32Dbl, &info.dest, 2);
                 put(sink, &enc_ril_c(opcode, 15, 0));
                 sink.add_call_site();
             }
@@ -3257,7 +3265,8 @@ impl Inst {
                 // *before* the S390xTlsGdCall, to ensure linker relaxation
                 // works correctly.
                 let dest = ExternalName::LibCall(LibCall::ElfTlsGetOffset);
-                sink.add_reloc_at_offset(2, Reloc::S390xPLTRel32Dbl, &dest, 2);
+                let offset = sink.cur_offset() + 2;
+                sink.add_reloc_at_offset(offset, Reloc::S390xPLTRel32Dbl, &dest, 2);
                 match &**symbol {
                     SymbolReloc::TlsGd { name } => sink.add_reloc(Reloc::S390xTlsGdCall, name, 0),
                     _ => unreachable!(),

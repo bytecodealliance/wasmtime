@@ -1809,16 +1809,16 @@ impl<M: ABIMachineSpec> Callee<M> {
 
             if self.flags.enable_probestack() {
                 let guard_size = 1 << self.flags.probestack_size_log2();
-                if total_stacksize >= guard_size {
-                    match self.flags.probestack_strategy() {
-                        ProbestackStrategy::Inline => M::gen_inline_probestack(
-                            &mut insts,
-                            self.call_conv,
-                            total_stacksize,
-                            guard_size,
-                        ),
-                        ProbestackStrategy::Outline => {
-                            M::gen_probestack(&mut insts, total_stacksize)
+                match self.flags.probestack_strategy() {
+                    ProbestackStrategy::Inline => M::gen_inline_probestack(
+                        &mut insts,
+                        self.call_conv,
+                        total_stacksize,
+                        guard_size,
+                    ),
+                    ProbestackStrategy::Outline => {
+                        if total_stacksize >= guard_size {
+                            M::gen_probestack(&mut insts, total_stacksize);
                         }
                     }
                 }

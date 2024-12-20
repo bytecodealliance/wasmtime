@@ -2,7 +2,7 @@
 
 // Pull in the ISLE generated code.
 pub mod generated_code;
-use generated_code::Context;
+use generated_code::{Context, ImmExtend};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
@@ -30,6 +30,7 @@ use crate::{
         abi::ArgPair, ty_bits, InstOutput, IsTailCall, MachInst, VCodeConstant, VCodeConstantData,
     },
 };
+use core::u32;
 use regalloc2::PReg;
 use std::boxed::Box;
 use std::vec::Vec;
@@ -206,24 +207,36 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     ///
     /// The logic here is nontrivial enough that it's not really worth porting
     /// this over to ISLE.
-    fn load_constant64_full(
+    fn load_constant_full(
         &mut self,
         ty: Type,
-        extend: &generated_code::ImmExtend,
+        extend: &ImmExtend,
+        extend_to: &OperandSize,
         value: u64,
     ) -> Reg {
         let bits = ty.bits();
-        let value = if bits < 64 {
-            if *extend == generated_code::ImmExtend::Sign {
+
+        let value = match (extend_to, *extend) {
+            (OperandSize::Size32, ImmExtend::Sign) if bits < 32 => {
+                let shift = 32 - bits;
+                let value = value as i32;
+
+                // we cast first to a u32 and then to a u64, to ensure that we are representing a
+                // i32 in a u64, and not a i64. This is important, otherwise value will not fit in
+                // 32 bits
+                ((value << shift) >> shift) as u32 as u64
+            }
+            (OperandSize::Size32, ImmExtend::Zero) if bits < 32 => {
+                value & !((u32::MAX as u64) << bits)
+            }
+            (OperandSize::Size64, ImmExtend::Sign) if bits < 64 => {
                 let shift = 64 - bits;
                 let value = value as i64;
 
                 ((value << shift) >> shift) as u64
-            } else {
-                value & !(u64::MAX << bits)
             }
-        } else {
-            value
+            (OperandSize::Size64, ImmExtend::Zero) if bits < 64 => value & !(u64::MAX << bits),
+            _ => value,
         };
 
         // Divide the value into 16-bit slices that we can manipulate using
@@ -354,12 +367,12 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         self.lower_ctx.emit(inst.clone());
     }
 
-    fn cond_br_zero(&mut self, reg: Reg) -> CondBrKind {
-        CondBrKind::Zero(reg)
+    fn cond_br_zero(&mut self, reg: Reg, size: &OperandSize) -> CondBrKind {
+        CondBrKind::Zero(reg, *size)
     }
 
-    fn cond_br_not_zero(&mut self, reg: Reg) -> CondBrKind {
-        CondBrKind::NotZero(reg)
+    fn cond_br_not_zero(&mut self, reg: Reg, size: &OperandSize) -> CondBrKind {
+        CondBrKind::NotZero(reg, *size)
     }
 
     fn cond_br_cond(&mut self, cond: &Cond) -> CondBrKind {

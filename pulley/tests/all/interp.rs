@@ -21,7 +21,7 @@ unsafe fn run(vm: &mut Vm, ops: &[Op]) -> Result<(), NonNull<u8>> {
     let ops = encoded(ops);
     match vm.call(NonNull::from(&ops[..]).cast(), &[], []) {
         DoneReason::ReturnToHost(_) => Ok(()),
-        DoneReason::Trap(pc) => Err(pc),
+        DoneReason::Trap { pc, .. } => Err(pc),
         DoneReason::CallIndirectHost { .. } => unimplemented!(),
     }
 }
@@ -194,7 +194,7 @@ fn xeq64() {
                     },
                 },
                 x(0),
-                expected,
+                expected | 0x1234567800000000,
             );
         }
     }
@@ -219,7 +219,7 @@ fn xneq64() {
                     },
                 },
                 x(0),
-                expected,
+                expected | 0x1234567800000000,
             );
         }
     }
@@ -251,7 +251,7 @@ fn xslt64() {
                     },
                 },
                 x(0),
-                expected,
+                expected | 0x1234567800000000,
             );
         }
     }
@@ -283,7 +283,7 @@ fn xslteq64() {
                     },
                 },
                 x(0),
-                expected,
+                expected | 0x1234567800000000,
             );
         }
     }
@@ -312,7 +312,7 @@ fn xult64() {
                     },
                 },
                 x(0),
-                expected,
+                expected | 0x1234567800000000,
             );
         }
     }
@@ -341,7 +341,7 @@ fn xulteq64() {
                     },
                 },
                 x(0),
-                expected,
+                expected | 0x1234567800000000,
             );
         }
     }
@@ -370,7 +370,7 @@ fn xeq32() {
                     },
                 },
                 x(0),
-                expected,
+                expected | 0x1234567800000000,
             );
         }
     }
@@ -396,7 +396,7 @@ fn xneq32() {
                     },
                 },
                 x(0),
-                expected,
+                expected | 0x1234567800000000,
             );
         }
     }
@@ -430,7 +430,7 @@ fn xslt32() {
                     },
                 },
                 x(0),
-                expected,
+                expected | 0x1234567800000000,
             );
         }
     }
@@ -462,7 +462,7 @@ fn xslteq32() {
                     },
                 },
                 x(0),
-                expected,
+                expected | 0x1234567800000000,
             );
         }
     }
@@ -490,7 +490,7 @@ fn xult32() {
                     },
                 },
                 x(0),
-                expected,
+                expected | 0x1234567800000000,
             );
         }
     }
@@ -518,7 +518,7 @@ fn xulteq32() {
                     },
                 },
                 x(0),
-                expected,
+                expected | 0x1234567800000000,
             );
         }
     }

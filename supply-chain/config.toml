@@ -566,6 +566,11 @@ criteria = "safe-to-deploy"
 version = "0.1.28"
 criteria = "safe-to-deploy"
 
+[[exemptions.trait-variant]]
+version = "0.1.2"
+criteria = "safe-to-deploy"
+notes = "This crate is maintained by the `rust-lang` maintainers and is [officially recommended](https://blog.rust-lang.org/2023/12/21/async-fn-rpit-in-traits.html) by the Rust project."
+
 [[exemptions.typenum]]
 version = "1.15.0"
 criteria = "safe-to-deploy"
