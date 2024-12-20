@@ -444,22 +444,6 @@ jobs:
     - uses: ./.github/actions/cancel-on-failure
       if: failure()
 
-  # Checks for no_std support, ensure that crates can build on a no_std target
-  no_std_checks:
-    name: no_std checks
-    runs-on: ubuntu-latest
-    env:
-      CARGO_NDK_VERSION: 2.12.2
-    steps:
-    - uses: actions/checkout@v4
-      with:
-        submodules: true
-    - uses: ./.github/actions/install-rust
-
-    # common logic to cancel the entire run if this job fails
-    - uses: ./.github/actions/cancel-on-failure
-      if: failure()
-
   # Check that Clippy lints are passing.
   clippy:
     name: Clippy
@@ -1159,7 +1143,6 @@ jobs:
       - doc
       - micro_checks
       - fiber_tests
-      - no_std_checks
       - clippy
       - monolith_checks
       - platform_checks
