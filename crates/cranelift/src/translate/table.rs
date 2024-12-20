@@ -65,6 +65,9 @@ impl TableData {
     ) -> (ir::Value, ir::MemFlags) {
         let index_ty = pos.func.dfg.value_type(index);
         let addr_ty = env.pointer_type();
+        let spectre_mitigations_enabled =
+            env.isa().flags().enable_table_access_spectre_mitigation()
+                && env.clif_memory_traps_enabled();
 
         // Start with the bounds check. Trap if `index + 1 > bound`.
         let bound = self.bound.bound(env.isa(), pos.cursor(), index_ty);
@@ -74,13 +77,15 @@ impl TableData {
             .ins()
             .icmp(IntCC::UnsignedGreaterThanOrEqual, index, bound);
 
-        if !env.isa().flags().enable_table_access_spectre_mitigation() {
+        if !spectre_mitigations_enabled {
             env.trapnz(pos, oob, crate::TRAP_TABLE_OUT_OF_BOUNDS);
         }
 
         // Convert `index` to `addr_ty`.
-        if index_ty != addr_ty {
+        if addr_ty.bytes() > index_ty.bytes() {
             index = pos.ins().uextend(addr_ty, index);
+        } else if addr_ty.bytes() < index_ty.bytes() {
+            index = pos.ins().ireduce(addr_ty, index);
         }
 
         // Add the table base address base
@@ -101,7 +106,7 @@ impl TableData {
         let base_flags = ir::MemFlags::new()
             .with_aligned()
             .with_alias_region(Some(ir::AliasRegion::Table));
-        if env.isa().flags().enable_table_access_spectre_mitigation() {
+        if spectre_mitigations_enabled {
             // Short-circuit the computed table element address to a null pointer
             // when out-of-bounds. The consumer of this address will trap when
             // trying to access it.

@@ -5,6 +5,10 @@ target aarch64
 target riscv64
 target riscv64 has_c has_zcb
 target s390x
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 ; NOTE: we don't currently have infrastructure for testing for traps, so these
 ; tests can only test the happy path. Once we eventually have annotations for

@@ -15,10 +15,10 @@ of doing so.
 #### Choose a test to get passing
 
 First off find a test in this repository, probably a `*.wast` test, which isn't
-currently passing. At the time of this writing almost no tests are passing, but
-for an up-to-date list check out the `WastTest::should_fail` method in
-`crates/wast-util/src/lib.rs`. Here we're going to select
-`./tests/misc_testsuite/control-flow.wast` as it's a reasonably small test.
+currently passing. Check out the `WastTest::should_fail` method in
+`crates/wast-util/src/lib.rs` which has a list of `unsupported` tests for
+Pulley. Here we're going to select `./tests/misc_testsuite/control-flow.wast`
+as it's a reasonably small test.
 
 #### See the test failure
 
@@ -232,8 +232,8 @@ error: test failed, to rerun pass `--test wast`
 
 This indicates that the test was previously flagged as "should fail", but that
 assertion is no longer true! Update the `WastTest::should_fail` method in
-`crates/wast-util/src/lib.rs` so that it expects the test to pass and we'll
-see:
+`crates/wast-util/src/lib.rs` so that it expects the test to pass by deleting
+the tests from the `unsupported` list. Then we'll see:
 
 ```
 $ cargo test --test wast control-flow.wast

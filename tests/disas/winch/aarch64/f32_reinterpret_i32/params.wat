@@ -18,7 +18,7 @@
 ;;       stur    x1, [x28, #8]
 ;;       stur    w2, [x28, #4]
 ;;       ldur    w0, [x28, #4]
-;;       scvtf   s0, w0
+;;       fmov    s0, w0
 ;;       add     sp, sp, #0x18
 ;;       mov     x28, sp
 ;;       ldp     x29, x30, [sp], #0x10

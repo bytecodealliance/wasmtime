@@ -20,7 +20,7 @@
 ;;       stur    x1, [x28]
 ;;       mov     x16, #1
 ;;       mov     w0, w16
-;;       scvtf   s0, w0
+;;       fmov    s0, w0
 ;;       sub     sp, sp, #4
 ;;       mov     x28, sp
 ;;       stur    s0, [x28]

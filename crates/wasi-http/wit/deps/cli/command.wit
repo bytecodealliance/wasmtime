@@ -1,4 +1,4 @@
-package wasi:cli@0.2.2;
+package wasi:cli@0.2.3;
 
 @since(version = 0.2.0)
 world command {

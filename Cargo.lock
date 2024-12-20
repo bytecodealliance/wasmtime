@@ -2488,6 +2488,7 @@ dependencies = [
  "log",
  "object",
  "sptr",
+ "wasmtime-math",
 ]
 
 [[package]]
@@ -3455,6 +3456,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "trait-variant"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70977707304198400eb4835a78f6a9f928bf41bba420deb8fdb175cd965d77a7"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.90",
+]
+
+[[package]]
 name = "try-lock"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3965,7 +3977,6 @@ dependencies = [
  "indexmap 2.2.6",
  "ittapi",
  "libc",
- "libm",
  "log",
  "mach2",
  "memfd",
@@ -3987,6 +3998,7 @@ dependencies = [
  "sptr",
  "target-lexicon",
  "tempfile",
+ "trait-variant",
  "wasi-common",
  "wasm-encoder 0.221.2",
  "wasm-wave",
@@ -4000,6 +4012,7 @@ dependencies = [
  "wasmtime-fiber",
  "wasmtime-jit-debug",
  "wasmtime-jit-icache-coherence",
+ "wasmtime-math",
  "wasmtime-slab",
  "wasmtime-versioned-export-macros",
  "wasmtime-winch",
@@ -4129,6 +4142,7 @@ dependencies = [
  "tokio",
  "toml",
  "tracing",
+ "trait-variant",
  "walkdir",
  "wasi-common",
  "wasm-encoder 0.221.2",
@@ -4365,6 +4379,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasmtime-math"
+version = "29.0.0"
+dependencies = [
+ "libm",
+]
+
+[[package]]
 name = "wasmtime-slab"
 version = "29.0.0"
 
@@ -4414,6 +4435,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "trait-variant",
  "url",
  "wasmtime",
  "wiggle",

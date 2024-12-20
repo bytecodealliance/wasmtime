@@ -69,7 +69,7 @@ macro_rules! define_extended_op {
         /// An extended operation/instruction.
         ///
         /// These tend to be colder than `Op`s.
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
         #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
         pub enum ExtendedOp {
             $(
@@ -80,7 +80,7 @@ macro_rules! define_extended_op {
 
         $(
             $( #[$attr] )*
-            #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+            #[derive(Clone, Copy, Debug, PartialEq, Eq)]
             #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
             pub struct $name { $(
                 $(

@@ -73,6 +73,7 @@ humantime = { workspace = true }
 tempfile = { workspace = true, optional = true }
 
 async-trait = { workspace = true }
+trait-variant = { workspace = true }
 bytes = { workspace = true }
 cfg-if = { workspace = true }
 tokio = { workspace = true, optional = true, features = [ "signal", "macros" ] }
@@ -96,6 +97,7 @@ criterion = { workspace = true }
 num_cpus = "1.13.0"
 memchr = "2.4"
 async-trait = { workspace = true }
+trait-variant = { workspace = true }
 wat = { workspace = true }
 rayon = "1.5.0"
 wasmtime-wast = { workspace = true, features = ['component-model'] }
@@ -177,8 +179,13 @@ unused_import_braces = 'warn'
 unused-lifetimes = 'warn'
 unused-macro-rules = 'warn'
 
-# Don't warn about unknown cfg condition in `#[cfg(pulley_tail_calls)]`
-unexpected_cfgs = { level = "warn", check-cfg = ['cfg(pulley_tail_calls)'] }
+# Don't warn about unknown cfgs for pulley
+[workspace.lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = [
+  'cfg(pulley_tail_calls)',
+  'cfg(pulley_assume_llvm_makes_tail_calls)',
+]
 
 [workspace.lints.clippy]
 # The default set of lints in Clippy is viewed as "too noisy" right now so
@@ -229,6 +236,7 @@ wasi-common = { path = "crates/wasi-common", version = "=29.0.0", default-featur
 wasmtime-fuzzing = { path = "crates/fuzzing" }
 wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version = "=29.0.0" }
 wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=29.0.0" }
+wasmtime-math = { path = "crates/math", version = "=29.0.0" }
 test-programs-artifacts = { path = 'crates/test-programs/artifacts' }
 
 pulley-interpreter = { path = 'pulley', version = "=29.0.0" }
@@ -307,6 +315,7 @@ tracing = "0.1.26"
 bitflags = "2.0"
 thiserror = "1.0.43"
 async-trait = "0.1.71"
+trait-variant = "0.1.2"
 heck = "0.5"
 similar = "2.1.0"
 toml = "0.8.10"
@@ -348,6 +357,7 @@ rustc-hash = "2.0.0"
 libtest-mimic = "0.7.0"
 semver = { version = "1.0.17", default-features = false }
 ittapi = "0.4.0"
+libm = "0.2.7"
 
 # =============================================================================
 #

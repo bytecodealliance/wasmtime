@@ -5,6 +5,10 @@ target s390x
 target x86_64
 target x86_64 has_bmi2
 target riscv64
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 function %bzhi32(i32, i32) -> i32 {
 block0(v0: i32, v1: i32):

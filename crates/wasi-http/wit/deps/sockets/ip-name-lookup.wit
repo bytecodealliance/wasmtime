@@ -1,7 +1,7 @@
 @since(version = 0.2.0)
 interface ip-name-lookup {
     @since(version = 0.2.0)
-    use wasi:io/poll@0.2.2.{pollable};
+    use wasi:io/poll@0.2.3.{pollable};
     @since(version = 0.2.0)
     use network.{network, error-code, ip-address};
 

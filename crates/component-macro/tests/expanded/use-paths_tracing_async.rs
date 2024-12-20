@@ -199,7 +199,7 @@ pub mod foo {
                 assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {
                 async fn a(&mut self) -> Foo;
             }
@@ -258,7 +258,6 @@ pub mod foo {
             {
                 add_to_linker_get_host(linker, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
                 async fn a(&mut self) -> Foo {
                     Host::a(*self).await
@@ -274,7 +273,7 @@ pub mod foo {
                 assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {
                 async fn a(&mut self) -> Foo;
             }
@@ -333,7 +332,6 @@ pub mod foo {
             {
                 add_to_linker_get_host(linker, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
                 async fn a(&mut self) -> Foo {
                     Host::a(*self).await
@@ -349,7 +347,7 @@ pub mod foo {
                 assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
             };
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {
                 async fn a(&mut self) -> Foo;
             }
@@ -408,7 +406,6 @@ pub mod foo {
             {
                 add_to_linker_get_host(linker, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
                 async fn a(&mut self) -> Foo {
                     Host::a(*self).await
@@ -426,7 +423,7 @@ pub mod d {
         assert!(0 == < Foo as wasmtime::component::ComponentType >::SIZE32);
         assert!(1 == < Foo as wasmtime::component::ComponentType >::ALIGN32);
     };
-    #[wasmtime::component::__internal::async_trait]
+    #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
     pub trait Host: Send {
         async fn b(&mut self) -> Foo;
     }
@@ -485,7 +482,6 @@ pub mod d {
     {
         add_to_linker_get_host(linker, get)
     }
-    #[wasmtime::component::__internal::async_trait]
     impl<_T: Host + ?Sized + Send> Host for &mut _T {
         async fn b(&mut self) -> Foo {
             Host::b(*self).await

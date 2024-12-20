@@ -5902,7 +5902,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::STACK_OVERFLOW,
-            kind: CondBrKind::NotZero(xreg(8)),
+            kind: CondBrKind::NotZero(xreg(8), OperandSize::Size64),
         },
         "280000B51FC10000",
         "cbnz x8, #trap=stk_ovf",
@@ -5910,7 +5910,7 @@ fn test_aarch64_binemit() {
     insns.push((
         Inst::TrapIf {
             trap_code: TrapCode::STACK_OVERFLOW,
-            kind: CondBrKind::Zero(xreg(8)),
+            kind: CondBrKind::Zero(xreg(8), OperandSize::Size64),
         },
         "280000B41FC10000",
         "cbz x8, #trap=stk_ovf",

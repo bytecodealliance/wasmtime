@@ -447,7 +447,7 @@ impl VMGlobalDefinition {
             WasmValType::I64 => *global.as_i64_mut() = raw.get_i64(),
             WasmValType::F32 => *global.as_f32_bits_mut() = raw.get_f32(),
             WasmValType::F64 => *global.as_f64_bits_mut() = raw.get_f64(),
-            WasmValType::V128 => *global.as_u128_mut() = raw.get_v128(),
+            WasmValType::V128 => global.set_u128(raw.get_v128()),
             WasmValType::Ref(r) => match r.heap_type.top() {
                 WasmHeapTopType::Extern => {
                     let r = VMGcRef::from_raw_u32(raw.get_externref());
@@ -478,7 +478,7 @@ impl VMGlobalDefinition {
             WasmValType::I64 => ValRaw::i64(*self.as_i64()),
             WasmValType::F32 => ValRaw::f32(*self.as_f32_bits()),
             WasmValType::F64 => ValRaw::f64(*self.as_f64_bits()),
-            WasmValType::V128 => ValRaw::v128(*self.as_u128()),
+            WasmValType::V128 => ValRaw::v128(self.get_u128()),
             WasmValType::Ref(r) => match r.heap_type.top() {
                 WasmHeapTopType::Extern => ValRaw::externref(match self.as_gc_ref() {
                     Some(r) => store.gc_store_mut()?.clone_gc_ref(r).as_raw_u32(),
@@ -575,14 +575,20 @@ impl VMGlobalDefinition {
         &mut *(self.storage.as_mut().as_mut_ptr().cast::<u64>())
     }
 
-    /// Return a reference to the value as an u128.
-    pub unsafe fn as_u128(&self) -> &u128 {
-        &*(self.storage.as_ref().as_ptr().cast::<u128>())
+    /// Gets the underlying 128-bit vector value.
+    //
+    // Note that vectors are stored in little-endian format while other types
+    // are stored in native-endian format.
+    pub unsafe fn get_u128(&self) -> u128 {
+        u128::from_le(*(self.storage.as_ref().as_ptr().cast::<u128>()))
     }
 
-    /// Return a mutable reference to the value as an u128.
-    pub unsafe fn as_u128_mut(&mut self) -> &mut u128 {
-        &mut *(self.storage.as_mut().as_mut_ptr().cast::<u128>())
+    /// Sets the 128-bit vector values.
+    //
+    // Note that vectors are stored in little-endian format while other types
+    // are stored in native-endian format.
+    pub unsafe fn set_u128(&mut self, val: u128) {
+        *self.storage.as_mut().as_mut_ptr().cast::<u128>() = val.to_le();
     }
 
     /// Return a reference to the value as u128 bits.

@@ -37,7 +37,6 @@ where
     }
 }
 
-#[async_trait::async_trait]
 impl<T> streams::HostOutputStream for WasiImpl<T>
 where
     T: WasiView,
@@ -171,7 +170,6 @@ where
     }
 }
 
-#[async_trait::async_trait]
 impl<T> streams::HostInputStream for WasiImpl<T>
 where
     T: WasiView,

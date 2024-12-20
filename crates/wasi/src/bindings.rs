@@ -26,7 +26,7 @@
 //!         // An example of extending the `wasi:cli/command` world with a
 //!         // custom host interface.
 //!         world my-world {
-//!             include wasi:cli/command@0.2.2;
+//!             include wasi:cli/command@0.2.3;
 //!
 //!             import custom-host;
 //!         }
@@ -47,7 +47,6 @@
 //!     ctx: WasiCtx,
 //! }
 //!
-//! #[async_trait::async_trait]
 //! impl example::wasi::custom_host::Host for MyState {
 //!     async fn my_custom_function(&mut self) {
 //!         // ..
@@ -96,7 +95,7 @@
 ///         // An example of extending the `wasi:cli/command` world with a
 ///         // custom host interface.
 ///         world my-world {
-///             include wasi:cli/command@0.2.2;
+///             include wasi:cli/command@0.2.3;
 ///
 ///             import custom-host;
 ///         }

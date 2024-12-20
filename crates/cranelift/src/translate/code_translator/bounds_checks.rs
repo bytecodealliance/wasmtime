@@ -28,7 +28,7 @@ use cranelift_codegen::{
     ir::{Expr, Fact},
 };
 use cranelift_frontend::FunctionBuilder;
-use wasmtime_environ::WasmResult;
+use wasmtime_environ::{Unsigned, WasmResult};
 use Reachability::*;
 
 /// Helper used to emit bounds checks (as necessary) and compute the native
@@ -50,13 +50,6 @@ pub fn bounds_check_and_compute_addr(
     let pointer_bit_width = u16::try_from(env.pointer_type().bits()).unwrap();
     let bound_gv = heap.bound;
     let orig_index = index;
-    let index = cast_index_to_pointer_ty(
-        index,
-        heap.index_type(),
-        env.pointer_type(),
-        heap.pcc_memory_type.is_some(),
-        &mut builder.cursor(),
-    );
     let offset_and_size = offset_plus_size(offset, access_size);
     let clif_memory_traps_enabled = env.clif_memory_traps_enabled();
     let spectre_mitigations_enabled =
@@ -74,6 +67,16 @@ pub fn bounds_check_and_compute_addr(
         && clif_memory_traps_enabled;
     let memory_guard_size = env.tunables().memory_guard_size;
     let memory_reservation = env.tunables().memory_reservation;
+
+    let statically_in_bounds = statically_in_bounds(&builder.func, heap, index, offset_and_size);
+
+    let index = cast_index_to_pointer_ty(
+        index,
+        heap.index_type(),
+        env.pointer_type(),
+        heap.pcc_memory_type.is_some(),
+        &mut builder.cursor(),
+    );
 
     let make_compare = |builder: &mut FunctionBuilder,
                         compare_kind: IntCC,
@@ -211,6 +214,19 @@ pub fn bounds_check_and_compute_addr(
             can_use_virtual_memory,
             "static memories require the ability to use virtual memory"
         );
+        return Ok(Reachable(compute_addr(
+            &mut builder.cursor(),
+            heap,
+            env.pointer_type(),
+            index,
+            offset,
+            AddrPcc::static32(heap.pcc_memory_type, memory_reservation + memory_guard_size),
+        )));
+    }
+
+    // Special case when the `index` is a constant and statically known to be
+    // in-bounds on this memory, no bounds checks necessary.
+    if statically_in_bounds {
         return Ok(Reachable(compute_addr(
             &mut builder.cursor(),
             heap,
@@ -491,11 +507,29 @@ fn cast_index_to_pointer_ty(
     if index_ty == pointer_ty {
         return index;
     }
-    // Note that using 64-bit heaps on a 32-bit host is not currently supported,
-    // would require at least a bounds check here to ensure that the truncation
-    // from 64-to-32 bits doesn't lose any upper bits. For now though we're
-    // mostly interested in the 32-bit-heaps-on-64-bit-hosts cast.
-    assert!(index_ty.bits() < pointer_ty.bits());
+
+    // If the index size is larger than the pointer, that means that this is a
+    // 32-bit host platform with a 64-bit wasm linear memory. If the index is
+    // larger than 2**32 then that's guranteed to be out-of-bounds, otherwise we
+    // `ireduce` the index.
+    //
+    // Also note that at this time this branch doesn't support pcc nor the
+    // value-label-ranges of the below path.
+    //
+    // Finally, note that the returned `low_bits` here are still subject to an
+    // explicit bounds check in wasm so in terms of Spectre speculation on
+    // either side of the `trapnz` should be ok.
+    if index_ty.bits() > pointer_ty.bits() {
+        assert_eq!(index_ty, ir::types::I64);
+        assert_eq!(pointer_ty, ir::types::I32);
+        let low_bits = pos.ins().ireduce(pointer_ty, index);
+        let c32 = pos.ins().iconst(pointer_ty, 32);
+        let high_bits = pos.ins().ushr(index, c32);
+        let high_bits = pos.ins().ireduce(pointer_ty, high_bits);
+        pos.ins()
+            .trapnz(high_bits, ir::TrapCode::HEAP_OUT_OF_BOUNDS);
+        return low_bits;
+    }
 
     // Convert `index` to `addr_ty`.
     let extended_index = pos.ins().uextend(pointer_ty, index);
@@ -728,4 +762,37 @@ fn compute_addr(
 fn offset_plus_size(offset: u32, size: u8) -> u64 {
     // Cannot overflow because we are widening to `u64`.
     offset as u64 + size as u64
+}
+
+/// Returns whether `index` is statically in-bounds with respect to this
+/// `heap`'s configuration.
+///
+/// This is `true` when `index` is a constant and when the offset/size are added
+/// in it's all still less than the minimum byte size of the heap.
+///
+/// The `offset_and_size` here are the static offset that was listed on the wasm
+/// instruction plus the size of the access being made.
+fn statically_in_bounds(
+    func: &ir::Function,
+    heap: &HeapData,
+    index: ir::Value,
+    offset_and_size: u64,
+) -> bool {
+    func.dfg
+        .value_def(index)
+        .inst()
+        .and_then(|i| {
+            let imm = match func.dfg.insts[i] {
+                ir::InstructionData::UnaryImm {
+                    opcode: ir::Opcode::Iconst,
+                    imm,
+                } => imm,
+                _ => return None,
+            };
+            let ty = func.dfg.value_type(index);
+            let index = imm.zero_extend_from_width(ty.bits()).bits().unsigned();
+            let final_addr = index.checked_add(offset_and_size)?;
+            Some(final_addr <= heap.memory.minimum_byte_size().unwrap_or(u64::MAX))
+        })
+        .unwrap_or(false)
 }

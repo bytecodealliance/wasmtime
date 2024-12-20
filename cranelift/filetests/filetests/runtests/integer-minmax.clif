@@ -7,6 +7,10 @@ target x86_64
 target riscv64
 target riscv64 has_zbb
 target riscv64 has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 
 ; sort three signed i8s with smin and smax only

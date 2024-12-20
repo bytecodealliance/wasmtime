@@ -1992,10 +1992,10 @@
 (decl nzcv (bool bool bool bool) NZCV)
 (extern constructor nzcv nzcv)
 
-(decl cond_br_zero (Reg) CondBrKind)
+(decl cond_br_zero (Reg OperandSize) CondBrKind)
 (extern constructor cond_br_zero cond_br_zero)
 
-(decl cond_br_not_zero (Reg) CondBrKind)
+(decl cond_br_not_zero (Reg OperandSize) CondBrKind)
 (extern constructor cond_br_not_zero cond_br_not_zero)
 
 (decl cond_br_cond (Cond) CondBrKind)
@@ -3514,19 +3514,19 @@
        Zero
        NonZero))
 
-(decl zero_cond_to_cond_br (ZeroCond Reg) CondBrKind)
-(rule (zero_cond_to_cond_br (ZeroCond.Zero) reg)
-      (cond_br_zero reg))
+(decl zero_cond_to_cond_br (ZeroCond Reg OperandSize) CondBrKind)
+(rule (zero_cond_to_cond_br (ZeroCond.Zero) reg size)
+      (cond_br_zero reg size))
 
-(rule (zero_cond_to_cond_br (ZeroCond.NonZero) reg)
-      (cond_br_not_zero reg))
+(rule (zero_cond_to_cond_br (ZeroCond.NonZero) reg size)
+      (cond_br_not_zero reg size))
 
 (decl trap_if_val (ZeroCond Value TrapCode) InstOutput)
 (rule (trap_if_val zero_cond val @ (value_type (fits_in_64 _)) trap_code)
       (let ((reg Reg (put_in_reg_zext64 val)))
       (side_effect
        (SideEffectNoResult.Inst
-        (MInst.TrapIf (zero_cond_to_cond_br zero_cond reg) trap_code)))))
+        (MInst.TrapIf (zero_cond_to_cond_br zero_cond reg (operand_size $I64)) trap_code)))))
 
 (rule -1 (trap_if_val zero_cond val @ (value_type $I128) trap_code)
   (let ((c ValueRegs (put_in_regs val))
@@ -3535,7 +3535,7 @@
         (c_test Reg (orr $I64 c_lo c_hi)))
       (side_effect
        (SideEffectNoResult.Inst
-        (MInst.TrapIf (zero_cond_to_cond_br zero_cond c_test) trap_code)))))
+        (MInst.TrapIf (zero_cond_to_cond_br zero_cond c_test (operand_size $I64)) trap_code)))))
 
 ;; Immediate value helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3598,12 +3598,17 @@
        (orr_imm ty (zero_reg) n)
        m k k))
 
-(decl load_constant64_full (Type ImmExtend u64) Reg)
-(extern constructor load_constant64_full load_constant64_full)
+(decl load_constant_full (Type ImmExtend OperandSize u64) Reg)
+(extern constructor load_constant_full load_constant_full)
+
+;; Fallback for integral 32-bit constants
+(rule (imm (fits_in_32 (integral_ty ty)) extend n)
+      (load_constant_full ty extend (operand_size $I32) n))
 
 ;; Fallback for integral 64-bit constants
-(rule (imm (integral_ty ty) extend n)
-      (load_constant64_full ty extend n))
+(rule -1 (imm (integral_ty $I64) extend n)
+      (load_constant_full $I64 extend (operand_size $I64) n))
+
 
 ;; Sign extension helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3659,9 +3664,9 @@
 
 ;; Misc instruction helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl trap_if_zero_divisor (Reg) Reg)
-(rule (trap_if_zero_divisor reg)
-      (let ((_ Unit (emit (MInst.TrapIf (cond_br_zero reg) (trap_code_division_by_zero)))))
+(decl trap_if_zero_divisor (Reg OperandSize) Reg)
+(rule (trap_if_zero_divisor reg size)
+      (let ((_ Unit (emit (MInst.TrapIf (cond_br_zero reg size ) (trap_code_division_by_zero)))))
         reg))
 
 (decl size_from_ty (Type) OperandSize)

@@ -1,0 +1,182 @@
+test compile precise-output
+target pulley64
+
+function %i8_imm(i8) -> i8 {
+block0(v0: i8):
+  v2 = bor_imm v0, 7
+  return v2
+}
+
+; VCode:
+; block0:
+;   xbor32_s8 x0, x0, 7
+;   ret
+;
+; Disassembled:
+; xbor32_s8 x0, x0, 7
+; ret
+
+function %i8_imm2(i8) -> i8 {
+block0(v0: i8):
+  v2 = bor_imm v0, -7
+  return v2
+}
+
+; VCode:
+; block0:
+;   xbor32_s8 x0, x0, -7
+;   ret
+;
+; Disassembled:
+; xbor32_s8 x0, x0, -7
+; ret
+
+function %i16_imm(i16) -> i16 {
+block0(v0: i16):
+  v2 = bor_imm v0, 7
+  return v2
+}
+
+; VCode:
+; block0:
+;   xbor32_s8 x0, x0, 7
+;   ret
+;
+; Disassembled:
+; xbor32_s8 x0, x0, 7
+; ret
+
+function %i16_imm2(i16) -> i16 {
+block0(v0: i16):
+  v2 = bor_imm v0, -7
+  return v2
+}
+
+; VCode:
+; block0:
+;   xbor32_s8 x0, x0, -7
+;   ret
+;
+; Disassembled:
+; xbor32_s8 x0, x0, -7
+; ret
+
+function %i32_imm(i32) -> i32 {
+block0(v0: i32):
+  v2 = bor_imm v0, 7
+  return v2
+}
+
+; VCode:
+; block0:
+;   xbor32_s8 x0, x0, 7
+;   ret
+;
+; Disassembled:
+; xbor32_s8 x0, x0, 7
+; ret
+
+function %i32_imm2(i32) -> i32 {
+block0(v0: i32):
+  v2 = bor_imm v0, -7
+  return v2
+}
+
+; VCode:
+; block0:
+;   xbor32_s8 x0, x0, -7
+;   ret
+;
+; Disassembled:
+; xbor32_s8 x0, x0, -7
+; ret
+
+function %i32_imm_big(i32) -> i32 {
+block0(v0: i32):
+  v2 = bor_imm v0, 77777
+  return v2
+}
+
+; VCode:
+; block0:
+;   xbor32_s32 x0, x0, 77777
+;   ret
+;
+; Disassembled:
+; xbor32_s32 x0, x0, 77777
+; ret
+
+function %i32_imm_big2(i32) -> i32 {
+block0(v0: i32):
+  v2 = bor_imm v0, -77777
+  return v2
+}
+
+; VCode:
+; block0:
+;   xbor32_s32 x0, x0, -77777
+;   ret
+;
+; Disassembled:
+; xbor32_s32 x0, x0, -77777
+; ret
+
+function %i64_imm(i64) -> i64 {
+block0(v0: i64):
+  v2 = bor_imm v0, 7
+  return v2
+}
+
+; VCode:
+; block0:
+;   xbor64_s8 x0, x0, 7
+;   ret
+;
+; Disassembled:
+; xbor64_s8 x0, x0, 7
+; ret
+
+function %i64_imm2(i64) -> i64 {
+block0(v0: i64):
+  v2 = bor_imm v0, -7
+  return v2
+}
+
+; VCode:
+; block0:
+;   xbor64_s8 x0, x0, -7
+;   ret
+;
+; Disassembled:
+; xbor64_s8 x0, x0, -7
+; ret
+
+function %i64_imm_big(i64) -> i64 {
+block0(v0: i64):
+  v2 = bor_imm v0, 77777
+  return v2
+}
+
+; VCode:
+; block0:
+;   xbor64_s32 x0, x0, 77777
+;   ret
+;
+; Disassembled:
+; xbor64_s32 x0, x0, 77777
+; ret
+
+function %i64_imm_big2(i64) -> i64 {
+block0(v0: i64):
+  v2 = bor_imm v0, -77777
+  return v2
+}
+
+; VCode:
+; block0:
+;   xbor64_s32 x0, x0, -77777
+;   ret
+;
+; Disassembled:
+; xbor64_s32 x0, x0, -77777
+; ret

@@ -873,7 +873,7 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
         }
         Inst::CondBr { kind, .. } => match kind {
-            CondBrKind::Zero(rt) | CondBrKind::NotZero(rt) => collector.reg_use(rt),
+            CondBrKind::Zero(rt, _) | CondBrKind::NotZero(rt, _) => collector.reg_use(rt),
             CondBrKind::Cond(_) => {}
         },
         Inst::TestBitAndBranch { rn, .. } => {
@@ -886,7 +886,7 @@ fn aarch64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         Inst::Brk => {}
         Inst::Udf { .. } => {}
         Inst::TrapIf { kind, .. } => match kind {
-            CondBrKind::Zero(rt) | CondBrKind::NotZero(rt) => collector.reg_use(rt),
+            CondBrKind::Zero(rt, _) | CondBrKind::NotZero(rt, _) => collector.reg_use(rt),
             CondBrKind::Cond(_) => {}
         },
         Inst::Adr { rd, .. } | Inst::Adrp { rd, .. } => {
@@ -2632,12 +2632,12 @@ impl Inst {
                 let taken = taken.pretty_print(0);
                 let not_taken = not_taken.pretty_print(0);
                 match kind {
-                    &CondBrKind::Zero(reg) => {
-                        let reg = pretty_print_reg(reg);
+                    &CondBrKind::Zero(reg, size) => {
+                        let reg = pretty_print_reg_sized(reg, size);
                         format!("cbz {reg}, {taken} ; b {not_taken}")
                     }
-                    &CondBrKind::NotZero(reg) => {
-                        let reg = pretty_print_reg(reg);
+                    &CondBrKind::NotZero(reg, size) => {
+                        let reg = pretty_print_reg_sized(reg, size);
                         format!("cbnz {reg}, {taken} ; b {not_taken}")
                     }
                     &CondBrKind::Cond(c) => {
@@ -2672,12 +2672,12 @@ impl Inst {
                 ref kind,
                 trap_code,
             } => match kind {
-                &CondBrKind::Zero(reg) => {
-                    let reg = pretty_print_reg(reg);
+                &CondBrKind::Zero(reg, size) => {
+                    let reg = pretty_print_reg_sized(reg, size);
                     format!("cbz {reg}, #trap={trap_code}")
                 }
-                &CondBrKind::NotZero(reg) => {
-                    let reg = pretty_print_reg(reg);
+                &CondBrKind::NotZero(reg, size) => {
+                    let reg = pretty_print_reg_sized(reg, size);
                     format!("cbnz {reg}, #trap={trap_code}")
                 }
                 &CondBrKind::Cond(c) => {

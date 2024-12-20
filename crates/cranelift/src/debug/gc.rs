@@ -109,23 +109,52 @@ fn build_unit_dependencies(
 }
 
 fn has_die_back_edge(die: &read::DebuggingInformationEntry<Reader<'_>>) -> read::Result<bool> {
+    // DIEs can be broadly divided into three categories:
+    // 1. Extensions of their parents; effectively attributes: DW_TAG_variable, DW_TAG_member, etc.
+    // 2. Standalone entities referred to by other DIEs via 'reference' class attributes: types.
+    // 3. Structural entities that organize how the above relate to each other: namespaces.
+    // Here, we must make sure to return 'true' for DIEs in the first category since stripping them,
+    // provided their parent is alive, is always wrong. To be conservatively correct in the face
+    // of new/vendor tags, we maintain a "(mostly) known good" list of tags of the latter categories.
     let result = match die.tag() {
-        constants::DW_TAG_variable
-        | constants::DW_TAG_constant
-        | constants::DW_TAG_inlined_subroutine
-        | constants::DW_TAG_lexical_block
-        | constants::DW_TAG_label
-        | constants::DW_TAG_with_stmt
-        | constants::DW_TAG_try_block
-        | constants::DW_TAG_catch_block
-        | constants::DW_TAG_template_type_parameter
-        | constants::DW_TAG_enumerator
-        | constants::DW_TAG_member
-        | constants::DW_TAG_variant_part
-        | constants::DW_TAG_variant
-        | constants::DW_TAG_formal_parameter => true,
+        constants::DW_TAG_array_type
+        | constants::DW_TAG_atomic_type
+        | constants::DW_TAG_base_type
+        | constants::DW_TAG_class_type
+        | constants::DW_TAG_const_type
+        | constants::DW_TAG_dwarf_procedure
+        | constants::DW_TAG_entry_point
+        | constants::DW_TAG_enumeration_type
+        | constants::DW_TAG_pointer_type
+        | constants::DW_TAG_ptr_to_member_type
+        | constants::DW_TAG_reference_type
+        | constants::DW_TAG_restrict_type
+        | constants::DW_TAG_rvalue_reference_type
+        | constants::DW_TAG_string_type
+        | constants::DW_TAG_structure_type
+        | constants::DW_TAG_typedef
+        | constants::DW_TAG_union_type
+        | constants::DW_TAG_unspecified_type
+        | constants::DW_TAG_volatile_type
+        | constants::DW_TAG_coarray_type
+        | constants::DW_TAG_common_block
+        | constants::DW_TAG_dynamic_type
+        | constants::DW_TAG_file_type
+        | constants::DW_TAG_immutable_type
+        | constants::DW_TAG_interface_type
+        | constants::DW_TAG_set_type
+        | constants::DW_TAG_shared_type
+        | constants::DW_TAG_subroutine_type
+        | constants::DW_TAG_packed_type
+        | constants::DW_TAG_template_alias
+        | constants::DW_TAG_namelist
+        | constants::DW_TAG_namespace
+        | constants::DW_TAG_imported_unit
+        | constants::DW_TAG_imported_declaration
+        | constants::DW_TAG_imported_module
+        | constants::DW_TAG_module => false,
         constants::DW_TAG_subprogram => die.attr(constants::DW_AT_declaration)?.is_some(),
-        _ => false,
+        _ => true,
     };
     Ok(result)
 }

@@ -19,8 +19,9 @@ use super::*;
 use crate::decode::unwrap_uninhabited;
 
 impl Interpreter<'_> {
-    pub fn run(mut self) -> Done {
+    pub fn run(self) -> Done {
         let mut decoder = Decoder::new();
+        let mut visitor = debug::Debug(self);
         loop {
             // Here `decode_one` will call the appropriate `OpVisitor` method on
             // `self` via the trait implementation in the module above this.
@@ -29,7 +30,7 @@ impl Interpreter<'_> {
             //
             // This will then continue indefinitely until the bytecode says it's
             // done. Note that only trusted bytecode is interpreted here.
-            match unwrap_uninhabited(decoder.decode_one(&mut self)) {
+            match unwrap_uninhabited(decoder.decode_one(&mut visitor)) {
                 ControlFlow::Continue(()) => {}
                 ControlFlow::Break(done) => break done,
             }

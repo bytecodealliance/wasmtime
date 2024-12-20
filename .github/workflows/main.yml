@@ -239,7 +239,6 @@ jobs:
           fi
           if grep -q pulley names.log; then
             echo test-nightly=true >> $GITHUB_OUTPUT
-            echo test-miri=true >> $GITHUB_OUTPUT
           fi
         fi
         matrix="$(node ./ci/build-test-matrix.js ./commits.log ./names.log $run_full)"
@@ -594,9 +593,12 @@ jobs:
     # Check that `pulley-interpreter` compiles with tail calls enabled.  Don't
     # actually run the tests with tail calls enabled, because they are not yet
     # implemented in rustc and cause an ICE.
-    - run: cargo check -p pulley-interpreter
+    - run: cargo check -p pulley-interpreter --all-features
       env:
         RUSTFLAGS: "--cfg pulley_tail_calls"
+    - run: cargo test -p pulley-interpreter --all-features --release
+      env:
+        RUSTFLAGS: "--cfg pulley_assume_llvm_makes_tail_calls"
 
     # Ensure that fuzzers still build.
     #
@@ -858,7 +860,8 @@ jobs:
         # workaround for https://bugs.launchpad.net/ubuntu/+source/llvm-defaults/+bug/1972855
         sudo mkdir -p /usr/lib/local/lib/python3.10/dist-packages/lldb
         sudo ln -s /usr/lib/llvm-15/lib/python3.10/dist-packages/lldb/* /usr/lib/python3/dist-packages/lldb/
-        cargo test --test all -- --ignored --test-threads 1 debug::
+        # Only testing release since it is more likely to expose issues with our low-level symbol handling.
+        cargo test --release --test all -- --ignored --test-threads 1 debug::
       env:
         LLDB: lldb-15 # override default version, 14
 

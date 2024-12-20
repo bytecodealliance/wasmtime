@@ -297,24 +297,18 @@ impl Compiler {
                 }
             }
 
-            // Pulley is just getting started, it implements almost no proposals
-            // yet.
             Compiler::CraneliftPulley => {
-                // Unsupported proposals
-                if config.memory64()
-                    || config.custom_page_sizes()
-                    || config.multi_memory()
-                    || config.threads()
-                    || config.gc()
-                    || config.function_references()
-                    || config.relaxed_simd()
-                    || config.reference_types()
-                    || config.tail_call()
-                    || config.extended_const()
-                    || config.wide_arithmetic()
-                    || config.simd()
-                    || config.gc_types()
-                {
+                // Pulley at this time fundamentally does not support threads
+                // due to being unable to implement non-atomic loads/stores
+                // safely.
+                if config.threads() {
+                    return true;
+                }
+                // Unsupported proposals. Note that other proposals have partial
+                // support at this time (pulley is a work-in-progress) and so
+                // individual tests are listed below as "should fail" even if
+                // they're not covered in this list.
+                if config.wide_arithmetic() {
                     return true;
                 }
             }
@@ -394,134 +388,62 @@ impl WastTest {
             }
         }
 
-        // Pulley is in a bit of a special state at this time where it supports
-        // only a subset of the initial MVP of WebAssembly. That means that no
-        // test technically passes by default but a few do happen to use just
-        // the right subset of wasm that we can pass it. For now maintain an
-        // allow-list of tests that are known to pass in Pulley. As tests are
-        // fixed they should get added to this list. Over time this list will
-        // instead get inverted to "these tests are known to fail" once Pulley
-        // implements more proposals.
-        if config.compiler == Compiler::CraneliftPulley {
-            let supported = [
-                "custom-page-sizes/custom-page-sizes-invalid.wast",
-                "exception-handling/exports.wast",
-                "extended-const/data.wast",
-                "misc_testsuite/component-model/adapter.wast",
-                "misc_testsuite/component-model/aliasing.wast",
-                "misc_testsuite/component-model/import.wast",
-                "misc_testsuite/component-model/instance.wast",
-                "misc_testsuite/component-model/linking.wast",
-                "misc_testsuite/component-model/nested.wast",
-                "misc_testsuite/component-model/types.wast",
-                "misc_testsuite/control-flow.wast",
-                "misc_testsuite/elem-ref-null.wast",
-                "misc_testsuite/elem_drop.wast",
-                "misc_testsuite/empty.wast",
-                "misc_testsuite/export-large-signature.wast",
-                "misc_testsuite/fib.wast",
-                "misc_testsuite/func-400-params.wast",
-                "misc_testsuite/gc/more-rec-groups-than-types.wast",
-                "misc_testsuite/gc/rec-group-funcs.wast",
-                "misc_testsuite/imported-memory-copy.wast",
-                "misc_testsuite/issue4857.wast",
-                "misc_testsuite/memory-copy.wast",
-                "misc_testsuite/partial-init-memory-segment.wast",
-                "misc_testsuite/rs2wasm-add-func.wast",
-                "misc_testsuite/stack_overflow.wast",
-                "misc_testsuite/winch/_simd_linking.wast",
-                "misc_testsuite/winch/misc.wast",
-                "misc_testsuite/winch/oob.wast",
-                "spec_testsuite/address.wast",
-                "spec_testsuite/binary-leb128.wast",
-                "spec_testsuite/binary.wast",
-                "spec_testsuite/comments.wast",
-                "spec_testsuite/custom.wast",
-                "spec_testsuite/data.wast",
-                "spec_testsuite/exports.wast",
-                "spec_testsuite/forward.wast",
-                "spec_testsuite/inline-module.wast",
-                "spec_testsuite/int_literals.wast",
-                "spec_testsuite/memory_copy.wast",
-                "spec_testsuite/memory_fill.wast",
-                "spec_testsuite/memory_init.wast",
-                "spec_testsuite/names.wast",
-                "spec_testsuite/obsolete-keywords.wast",
-                "spec_testsuite/proposals/annotations/annotations.wast",
-                "spec_testsuite/proposals/annotations/id.wast",
-                "spec_testsuite/proposals/annotations/token.wast",
-                "spec_testsuite/proposals/exception-handling/binary.wast",
-                "spec_testsuite/proposals/multi-memory/address0.wast",
-                "spec_testsuite/proposals/multi-memory/address1.wast",
-                "spec_testsuite/proposals/multi-memory/binary.wast",
-                "spec_testsuite/proposals/multi-memory/binary0.wast",
-                "spec_testsuite/proposals/multi-memory/data.wast",
-                "spec_testsuite/proposals/multi-memory/data0.wast",
-                "spec_testsuite/proposals/multi-memory/data1.wast",
-                "spec_testsuite/proposals/multi-memory/data_drop0.wast",
-                "spec_testsuite/proposals/multi-memory/exports0.wast",
-                "spec_testsuite/proposals/multi-memory/imports1.wast",
-                "spec_testsuite/proposals/multi-memory/imports2.wast",
-                "spec_testsuite/proposals/multi-memory/linking1.wast",
-                "spec_testsuite/proposals/multi-memory/load0.wast",
-                "spec_testsuite/proposals/multi-memory/load1.wast",
-                "spec_testsuite/proposals/multi-memory/memory-multi.wast",
-                "spec_testsuite/proposals/multi-memory/memory_copy0.wast",
-                "spec_testsuite/proposals/multi-memory/memory_copy1.wast",
-                "spec_testsuite/proposals/multi-memory/memory_fill0.wast",
-                "spec_testsuite/proposals/multi-memory/memory_init0.wast",
-                "spec_testsuite/proposals/multi-memory/memory_size3.wast",
-                "spec_testsuite/proposals/multi-memory/memory_trap1.wast",
-                "spec_testsuite/proposals/multi-memory/start0.wast",
-                "spec_testsuite/proposals/multi-memory/store.wast",
-                "spec_testsuite/proposals/multi-memory/store0.wast",
-                "spec_testsuite/proposals/multi-memory/store1.wast",
-                "spec_testsuite/proposals/multi-memory/traps0.wast",
-                "spec_testsuite/simd_linking.wast",
-                "spec_testsuite/skip-stack-guard-page.wast",
-                "spec_testsuite/start.wast",
-                "spec_testsuite/store.wast",
-                "spec_testsuite/table-sub.wast",
-                "spec_testsuite/table.wast",
-                "spec_testsuite/token.wast",
-                "spec_testsuite/type.wast",
-                "spec_testsuite/unreachable.wast",
-                "spec_testsuite/unreached-invalid.wast",
-                "spec_testsuite/unreached-valid.wast",
-                "spec_testsuite/unwind.wast",
-                "spec_testsuite/utf8-custom-section-id.wast",
-                "spec_testsuite/utf8-import-field.wast",
-                "spec_testsuite/utf8-import-module.wast",
-                "spec_testsuite/utf8-invalid-encoding.wast",
-                "threads/exports.wast",
-            ];
-
-            if supported.iter().any(|part| self.path.ends_with(part)) {
-                return false;
-            }
-
-            // FIXME: once the backend has enough instruction support move these
-            // into the above tests since they should pass on 64-bit platforms
-            // as well.
-            let supported32bit = [
-                "misc_testsuite/winch/table_grow.wast",
-                "misc_testsuite/table_grow_with_funcref.wast",
-                "spec_testsuite/proposals/multi-memory/trap0.wast",
-                "spec_testsuite/proposals/multi-memory/memory_trap0.wast",
-                "spec_testsuite/proposals/multi-memory/linking2.wast",
-                "spec_testsuite/memory_trap.wast",
-            ];
-            if cfg!(target_pointer_width = "32") {
-                if supported32bit.iter().any(|part| self.path.ends_with(part)) {
-                    return false;
-                }
-            }
-
+        if config.compiler.should_fail(&self.config) {
             return true;
         }
 
-        if config.compiler.should_fail(&self.config) {
-            return true;
+        // Pulley supports a mishmash of proposals at this time as it's in an
+        // interim state. It doesn't support all of the MVP but it supports
+        // enough to pass some GC tests for example. This means that
+        // `Compiler::should_fail` is pretty liberal (the check above). To
+        // handle this there's an extra check here for an exhaustive list of
+        // unsupported tests on Pulley. This list will get burned down as
+        // features in Pulley are implemented.
+        if config.compiler == Compiler::CraneliftPulley {
+            let unsupported = [
+                "misc_testsuite/simd/canonicalize-nan.wast",
+                "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
+                "misc_testsuite/simd/v128-select.wast",
+                "spec_testsuite/proposals/annotations/simd_lane.wast",
+                "spec_testsuite/proposals/relaxed-simd/i16x8_relaxed_q15mulr_s.wast",
+                "spec_testsuite/proposals/relaxed-simd/i32x4_relaxed_trunc.wast",
+                "spec_testsuite/proposals/relaxed-simd/i8x16_relaxed_swizzle.wast",
+                "spec_testsuite/proposals/relaxed-simd/relaxed_dot_product.wast",
+                "spec_testsuite/proposals/relaxed-simd/relaxed_madd_nmadd.wast",
+                "spec_testsuite/proposals/memory64/simd_lane.wast",
+                "spec_testsuite/proposals/memory64/relaxed_madd_nmadd.wast",
+                "spec_testsuite/proposals/memory64/relaxed_dot_product.wast",
+                "spec_testsuite/proposals/memory64/i16x8_relaxed_q15mulr_s.wast",
+                "spec_testsuite/proposals/memory64/i32x4_relaxed_trunc.wast",
+                "spec_testsuite/proposals/memory64/i8x16_relaxed_swizzle.wast",
+                "spec_testsuite/simd_f32x4_arith.wast",
+                "spec_testsuite/simd_f32x4_cmp.wast",
+                "spec_testsuite/simd_f32x4_pmin_pmax.wast",
+                "spec_testsuite/simd_f32x4_rounding.wast",
+                "spec_testsuite/simd_f64x2_arith.wast",
+                "spec_testsuite/simd_f64x2_cmp.wast",
+                "spec_testsuite/simd_f64x2_pmin_pmax.wast",
+                "spec_testsuite/simd_f64x2_rounding.wast",
+                "spec_testsuite/simd_i16x8_arith2.wast",
+                "spec_testsuite/simd_i16x8_extadd_pairwise_i8x16.wast",
+                "spec_testsuite/simd_i16x8_q15mulr_sat_s.wast",
+                "spec_testsuite/simd_i16x8_sat_arith.wast",
+                "spec_testsuite/simd_i32x4_arith2.wast",
+                "spec_testsuite/simd_i32x4_dot_i16x8.wast",
+                "spec_testsuite/simd_i32x4_extadd_pairwise_i16x8.wast",
+                "spec_testsuite/simd_i32x4_trunc_sat_f32x4.wast",
+                "spec_testsuite/simd_i32x4_trunc_sat_f64x2.wast",
+                "spec_testsuite/simd_i64x2_arith2.wast",
+                "spec_testsuite/simd_i8x16_arith2.wast",
+                "spec_testsuite/simd_i8x16_sat_arith.wast",
+                "spec_testsuite/simd_lane.wast",
+                "spec_testsuite/simd_load.wast",
+                "spec_testsuite/simd_splat.wast",
+            ];
+
+            if unsupported.iter().any(|part| self.path.ends_with(part)) {
+                return true;
+            }
         }
 
         // Disable spec tests for proposals that Winch does not implement yet.

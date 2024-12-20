@@ -214,8 +214,8 @@ impl Masm for MacroAssembler {
         }
     }
 
-    fn load_addr(&mut self, _src: Self::Address, _dst: WritableReg, _size: OperandSize) {
-        todo!()
+    fn load_addr(&mut self, src: Self::Address, dst: WritableReg, size: OperandSize) {
+        self.asm.uload(src, dst, size);
     }
 
     fn pop(&mut self, dst: WritableReg, size: OperandSize) {
@@ -483,8 +483,16 @@ impl Masm for MacroAssembler {
         })
     }
 
-    fn rem(&mut self, _context: &mut CodeGenContext<Emission>, _kind: RemKind, _size: OperandSize) {
-        todo!()
+    fn rem(&mut self, context: &mut CodeGenContext<Emission>, kind: RemKind, size: OperandSize) {
+        context.binop(self, size, |this, dividend, divisor, size| {
+            this.asm
+                .rem_rrr(divisor, dividend, writable!(dividend), kind, size);
+            match size {
+                OperandSize::S32 => TypedReg::new(WasmValType::I32, dividend),
+                OperandSize::S64 => TypedReg::new(WasmValType::I64, dividend),
+                s => unreachable!("invalid size for remainder: {s:?}"),
+            }
+        })
     }
 
     fn zero(&mut self, reg: WritableReg) {
@@ -527,31 +535,31 @@ impl Masm for MacroAssembler {
 
     fn signed_convert(
         &mut self,
-        _dst: WritableReg,
-        _src: Reg,
-        _src_size: OperandSize,
-        _dst_size: OperandSize,
+        dst: WritableReg,
+        src: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
     ) {
-        todo!()
+        self.asm.cvt_sint_to_float(src, dst, src_size, dst_size);
     }
 
     fn unsigned_convert(
         &mut self,
-        _dst: WritableReg,
-        _src: Reg,
+        dst: WritableReg,
+        src: Reg,
         _tmp_gpr: Reg,
-        _src_size: OperandSize,
-        _dst_size: OperandSize,
+        src_size: OperandSize,
+        dst_size: OperandSize,
     ) {
-        todo!()
+        self.asm.cvt_uint_to_float(src, dst, src_size, dst_size);
     }
 
     fn reinterpret_float_as_int(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
-        self.asm.fpu_to_int(src, dst, size);
+        self.asm.mov_from_vec(src, dst, 0, size);
     }
 
     fn reinterpret_int_as_float(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
-        self.asm.int_to_fpu(src, dst, size);
+        self.asm.mov_to_fpu(src, dst, size);
     }
 
     fn demote(&mut self, dst: WritableReg, src: Reg) {
@@ -690,7 +698,7 @@ impl Masm for MacroAssembler {
     }
 
     fn trapz(&mut self, src: Reg, code: TrapCode) {
-        self.asm.trapz(src, code);
+        self.asm.trapz(src, code, OperandSize::S64);
     }
 
     fn trapif(&mut self, cc: IntCmpKind, code: TrapCode) {

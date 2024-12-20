@@ -193,7 +193,7 @@ pub mod foo {
         pub mod simple {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::anyhow;
-            #[wasmtime::component::__internal::async_trait]
+            #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {
                 async fn f1(&mut self) -> ();
                 async fn f2(&mut self, a: u32) -> ();
@@ -300,7 +300,6 @@ pub mod foo {
             {
                 add_to_linker_get_host(linker, get)
             }
-            #[wasmtime::component::__internal::async_trait]
             impl<_T: Host + ?Sized + Send> Host for &mut _T {
                 async fn f1(&mut self) -> () {
                     Host::f1(*self).await

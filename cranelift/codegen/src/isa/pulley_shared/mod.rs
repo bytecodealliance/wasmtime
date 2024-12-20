@@ -54,6 +54,10 @@ impl PointerWidth {
             PointerWidth::PointerWidth64 => 64,
         }
     }
+
+    pub fn bytes(self) -> u8 {
+        self.bits() / 8
+    }
 }
 
 /// A Pulley backend.

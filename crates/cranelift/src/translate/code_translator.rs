@@ -177,6 +177,12 @@ pub fn translate_operator(
                 GlobalVariable::Memory { gv, offset, ty } => {
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
                     let mut flags = ir::MemFlags::trusted();
+                    // Store vector globals in little-endian format to avoid
+                    // byte swaps on big-endian platforms since at-rest vectors
+                    // should already be in little-endian format anyway.
+                    if ty.is_vector() {
+                        flags.set_endianness(ir::Endianness::Little);
+                    }
                     // Put globals in the "table" abstract heap category as well.
                     flags.set_alias_region(Some(ir::AliasRegion::Table));
                     builder.ins().load(ty, flags, addr, offset)
@@ -191,6 +197,10 @@ pub fn translate_operator(
                 GlobalVariable::Memory { gv, offset, ty } => {
                     let addr = builder.ins().global_value(environ.pointer_type(), gv);
                     let mut flags = ir::MemFlags::trusted();
+                    // Like `global.get`, store globals in little-endian format.
+                    if ty.is_vector() {
+                        flags.set_endianness(ir::Endianness::Little);
+                    }
                     // Put globals in the "table" abstract heap category as well.
                     flags.set_alias_region(Some(ir::AliasRegion::Table));
                     let mut val = state.pop1();

@@ -13,7 +13,7 @@ block0(v0: i32, v1: i32):
 ;   ret
 ;
 ; Disassembled:
-; xstore32le_offset32 x1, 0, x0
+; xstore32le_offset8 x1, 0, x0
 ; ret
 
 function %store_i64(i64, i32) {
@@ -28,7 +28,7 @@ block0(v0: i64, v1: i32):
 ;   ret
 ;
 ; Disassembled:
-; xstore64le_offset32 x1, 0, x0
+; xstore64le_offset8 x1, 0, x0
 ; ret
 
 function %store_i32_with_offset(i32, i32) {
@@ -43,7 +43,7 @@ block0(v0: i32, v1: i32):
 ;   ret
 ;
 ; Disassembled:
-; xstore32le_offset32 x1, 4, x0
+; xstore32le_offset8 x1, 4, x0
 ; ret
 
 function %store_i64_with_offset(i64, i32) {
@@ -58,6 +58,6 @@ block0(v0: i64, v1: i32):
 ;   ret
 ;
 ; Disassembled:
-; xstore64le_offset32 x1, 8, x0
+; xstore64le_offset8 x1, 8, x0
 ; ret
 

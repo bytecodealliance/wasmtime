@@ -5,6 +5,10 @@ target x86_64
 target s390x
 target riscv64
 target riscv64 has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 function %icmp_imm_eq_i8(i8) -> i8 {
 block0(v0: i8):

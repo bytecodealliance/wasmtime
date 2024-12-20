@@ -81,9 +81,10 @@ const FULL_MATRIX = [
     "isa": "x64"
   },
   {
-    "os": "macos-13",
+    "os": macos,
     "name": "Test macOS x86_64",
     "filter": "macos-x64",
+    "target": "x86_64-apple-darwin",
   },
   {
     "os": macos,

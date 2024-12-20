@@ -14,7 +14,6 @@ use wasmtime::component::Resource;
 
 impl<T> tcp::Host for WasiImpl<T> where T: WasiView {}
 
-#[async_trait::async_trait]
 impl<T> crate::host::tcp::tcp::HostTcpSocket for WasiImpl<T>
 where
     T: WasiView,
