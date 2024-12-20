@@ -240,7 +240,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod i {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub type T = u16;
             const _: () = {
                 assert!(2 == < T as wasmtime::component::ComponentType >::SIZE32);

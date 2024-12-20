@@ -194,7 +194,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod multi_return {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {
                 async fn mra(&mut self) -> ();
@@ -311,7 +311,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod multi_return {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::anyhow;
+                use wasmtime::component::__internal::{anyhow, Box};
                 pub struct Guest {
                     mra: wasmtime::component::Func,
                     mrb: wasmtime::component::Func,

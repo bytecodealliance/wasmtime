@@ -194,7 +194,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod simple_lists {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {
                 async fn simple_list1(
@@ -356,7 +356,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod simple_lists {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::anyhow;
+                use wasmtime::component::__internal::{anyhow, Box};
                 pub struct Guest {
                     simple_list1: wasmtime::component::Func,
                     simple_list2: wasmtime::component::Func,

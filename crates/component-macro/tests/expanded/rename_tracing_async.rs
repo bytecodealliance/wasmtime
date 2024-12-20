@@ -180,7 +180,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod green {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub type Thing = i32;
             const _: () = {
                 assert!(4 == < Thing as wasmtime::component::ComponentType >::SIZE32);
@@ -225,7 +225,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod red {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub type Thing = super::super::super::foo::foo::green::Thing;
             const _: () = {
                 assert!(4 == < Thing as wasmtime::component::ComponentType >::SIZE32);

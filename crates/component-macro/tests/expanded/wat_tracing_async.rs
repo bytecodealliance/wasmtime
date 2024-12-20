@@ -186,7 +186,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod this_name_is_duplicated {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::anyhow;
+                use wasmtime::component::__internal::{anyhow, Box};
                 pub type ThisNameIsDuplicated = wasmtime::component::ResourceAny;
                 pub struct GuestThisNameIsDuplicated<'a> {
                     funcs: &'a Guest,

@@ -192,7 +192,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod flegs {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             wasmtime::component::flags!(Flag1 { #[component(name = "b0")] const B0; });
             const _: () = {
                 assert!(1 == < Flag1 as wasmtime::component::ComponentType >::SIZE32);
@@ -584,7 +584,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod flegs {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::anyhow;
+                use wasmtime::component::__internal::{anyhow, Box};
                 wasmtime::component::flags!(
                     Flag1 { #[component(name = "b0")] const B0; }
                 );

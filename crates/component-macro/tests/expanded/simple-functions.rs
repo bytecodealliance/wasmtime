@@ -185,7 +185,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod simple {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub trait Host {
                 fn f1(&mut self) -> ();
                 fn f2(&mut self, a: u32) -> ();
@@ -305,7 +305,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod simple {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::anyhow;
+                use wasmtime::component::__internal::{anyhow, Box};
                 pub struct Guest {
                     f1: wasmtime::component::Func,
                     f2: wasmtime::component::Func,

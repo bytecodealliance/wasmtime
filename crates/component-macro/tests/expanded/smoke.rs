@@ -170,7 +170,7 @@ const _: () = {
 #[allow(clippy::all)]
 pub mod imports {
     #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
+    use wasmtime::component::__internal::{anyhow, Box};
     pub trait Host {
         fn y(&mut self) -> ();
     }
