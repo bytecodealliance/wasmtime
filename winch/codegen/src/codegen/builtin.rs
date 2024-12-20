@@ -121,7 +121,7 @@ macro_rules! declare_function_sig {
                 WasmValType::I64
             }
 
-            fn __m128i(&self) -> WasmValType {
+            fn i8x16(&self) -> WasmValType {
                 WasmValType::V128
             }
 

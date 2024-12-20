@@ -59,7 +59,9 @@ use crate::runtime::vm::table::{Table, TableElementType};
 use crate::runtime::vm::vmcontext::VMFuncRef;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMGcRef;
-use crate::runtime::vm::{HostResultHasUnwindSentinel, Instance, TrapReason, VMStore};
+use crate::runtime::vm::{
+    i8x16, HostResultHasUnwindSentinel, Instance, TrapReason, VMStore
+};
 use core::convert::Infallible;
 use core::ptr::NonNull;
 #[cfg(feature = "threads")]
@@ -92,7 +94,7 @@ pub mod raw {
     // between doc comments and `cfg`s.
     #![allow(unused_doc_comments, unused_attributes)]
 
-    use crate::runtime::vm::{InstanceAndStore, VMContext};
+    use crate::runtime::vm::{i8x16, InstanceAndStore, VMContext};
     use core::ptr::NonNull;
 
     macro_rules! libcall {
@@ -109,7 +111,10 @@ pub mod raw {
                 // This will delegate to the outer module to the actual
                 // implementation and automatically perform `catch_unwind` along
                 // with conversion of the return value in the face of traps.
+                //
+                // Ignore improper ctypes to permit `__m128i` on x86_64.
                 #[allow(unused_variables, missing_docs)]
+                #[allow(improper_ctypes_definitions)]
                 pub unsafe extern "C" fn $name(
                     vmctx: NonNull<VMContext>,
                     $( $pname : libcall!(@ty $param), )*
@@ -132,9 +137,12 @@ pub mod raw {
                 // This works around a `rustc` bug where compiling with LTO
                 // will sometimes strip out some of these symbols resulting
                 // in a linking failure.
+                //
+                // Ignore improper ctypes to permit `__m128i` on x86_64.
                 #[allow(non_upper_case_globals)]
                 const _: () = {
                     #[used]
+                    #[allow(improper_ctypes_definitions)]
                     static I_AM_USED: unsafe extern "C" fn(
                         NonNull<VMContext>,
                         $( $pname : libcall!(@ty $param), )*
@@ -148,6 +156,7 @@ pub mod raw {
         (@ty f32) => (f32);
         (@ty f64) => (f64);
         (@ty u8) => (u8);
+        (@ty i8x16) => (i8x16);
         (@ty bool) => (bool);
         (@ty pointer) => (*mut u8);
     }
@@ -1260,6 +1269,112 @@ fn nearest_f32(_store: &mut dyn VMStore, _instance: &mut Instance, val: f32) -> 
 
 fn nearest_f64(_store: &mut dyn VMStore, _instance: &mut Instance, val: f64) -> f64 {
     wasmtime_math::WasmFloat::wasm_nearest(val)
+}
+
+// This intrinsic is only used on x86_64 platforms as an implementation of
+// the `pshufb` instruction when SSSE3 is not available.
+#[cfg(target_arch = "x86_64")]
+#[allow(improper_ctypes_definitions)]
+fn i8x16_swizzle(_store: &mut dyn VMStore, _instance: &mut Instance, a: i8x16, b: i8x16) -> i8x16 {
+    union U {
+        reg: i8x16,
+        mem: [u8; 16],
+    }
+
+    unsafe {
+        let a = U { reg: a }.mem;
+        let b = U { reg: b }.mem;
+
+        // Use the `swizzle` semantics of returning 0 on any out-of-bounds
+        // index, rather than the x86 pshufb semantics, since Wasmtime uses
+        // this to implement `i8x16.swizzle`.
+        let select = |arr: &[u8; 16], byte: u8| {
+            if byte >= 16 {
+                0x00
+            } else {
+                arr[byte as usize]
+            }
+        };
+
+        U {
+            mem: [
+                select(&a, b[0]),
+                select(&a, b[1]),
+                select(&a, b[2]),
+                select(&a, b[3]),
+                select(&a, b[4]),
+                select(&a, b[5]),
+                select(&a, b[6]),
+                select(&a, b[7]),
+                select(&a, b[8]),
+                select(&a, b[9]),
+                select(&a, b[10]),
+                select(&a, b[11]),
+                select(&a, b[12]),
+                select(&a, b[13]),
+                select(&a, b[14]),
+                select(&a, b[15]),
+            ],
+        }
+        .reg
+    }
+}
+
+// This intrinsic is only used on x86_64 platforms as an implementation of
+// the `pshufb` instruction when SSSE3 is not available.
+#[cfg(target_arch = "x86_64")]
+#[allow(improper_ctypes_definitions)]
+fn i8x16_shuffle(
+    _store: &mut dyn VMStore,
+    _instance: &mut Instance,
+    a: i8x16,
+    b: i8x16,
+    c: i8x16,
+) -> i8x16 {
+    union U {
+        reg: i8x16,
+        mem: [u8; 16],
+    }
+
+    unsafe {
+        let ab = [U { reg: a }.mem, U { reg: b }.mem];
+        let c = U { reg: c }.mem;
+
+        // Use the `shuffle` semantics of returning 0 on any out-of-bounds
+        // index, rather than the x86 pshufb semantics, since Wasmtime uses
+        // this to implement `i8x16.shuffle`.
+        let select = |arr: &[[u8; 16]; 2], byte: u8| {
+            if byte >= 32 {
+                0x00
+            } else if byte >= 16 {
+                arr[1][byte as usize - 16]
+            } else {
+                arr[0][byte as usize]
+            }
+        };
+
+        U {
+            mem: [
+                select(&ab, c[0]),
+                select(&ab, c[1]),
+                select(&ab, c[2]),
+                select(&ab, c[3]),
+                select(&ab, c[4]),
+                select(&ab, c[5]),
+                select(&ab, c[6]),
+                select(&ab, c[7]),
+                select(&ab, c[8]),
+                select(&ab, c[9]),
+                select(&ab, c[10]),
+                select(&ab, c[11]),
+                select(&ab, c[12]),
+                select(&ab, c[13]),
+                select(&ab, c[14]),
+                select(&ab, c[15]),
+            ],
+        }
+        .reg
+    }
 }
 
 /// This intrinsic is just used to record trap information.

@@ -83,7 +83,7 @@ use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::Offset32;
 use cranelift_codegen::ir::types::*;
 use cranelift_codegen::ir::{
-    self, AtomicRmwOp, ConstantData, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
+    self, AtomicRmwOp, InstBuilder, JumpTableData, MemFlags, Value, ValueLabel,
 };
 use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
@@ -1740,10 +1740,7 @@ pub fn translate_operator(
         }
         Operator::I8x16Shuffle { lanes, .. } => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
-            let lanes = ConstantData::from(lanes.as_ref());
-            let mask = builder.func.dfg.immediates.push(lanes);
-            let shuffled = builder.ins().shuffle(a, b, mask);
-            state.push1(shuffled)
+            state.push1(environ.i8x16_shuffle(builder, a, b, lanes));
             // At this point the original types of a and b are lost; users of this value (i.e. this
             // WASM-to-CLIF translator) may need to bitcast for type-correctness. This is due
             // to WASM using the less specific v128 type for certain operations and more specific
@@ -1751,7 +1748,7 @@ pub fn translate_operator(
         }
         Operator::I8x16Swizzle => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
-            state.push1(builder.ins().swizzle(a, b))
+            state.push1(environ.swizzle(builder, a, b));
         }
         Operator::I8x16Add | Operator::I16x8Add | Operator::I32x4Add | Operator::I64x2Add => {
             let (a, b) = pop2_with_bitcast(state, type_of(op), builder);
@@ -2295,17 +2292,7 @@ pub fn translate_operator(
 
         Operator::I8x16RelaxedSwizzle => {
             let (a, b) = pop2_with_bitcast(state, I8X16, builder);
-            state.push1(
-                if environ.relaxed_simd_deterministic()
-                    || !environ.use_x86_pshufb_for_relaxed_swizzle()
-                {
-                    // Deterministic semantics match the `i8x16.swizzle`
-                    // instruction which is the CLIF `swizzle`.
-                    builder.ins().swizzle(a, b)
-                } else {
-                    builder.ins().x86_pshufb(a, b)
-                },
-            );
+            state.push1(environ.relaxed_swizzle(builder, a, b));
         }
 
         Operator::F32x4RelaxedMadd | Operator::F64x2RelaxedMadd => {
