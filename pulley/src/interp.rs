@@ -19,6 +19,20 @@ mod match_loop;
 #[cfg(any(pulley_tail_calls, pulley_assume_llvm_makes_tail_calls))]
 mod tail_loop;
 
+// Polyfill `std::simd::i8x16` until it's stable.
+#[cfg(target_arch = "x86_64")]
+#[allow(
+    non_camel_case_types,
+    reason = "this uses a name that's closer to the other builtin type names"
+)]
+type i8x16 = core::arch::x86_64::__m128i;
+#[cfg(not(target_arch = "x86_64"))]
+#[allow(
+    non_camel_case_types,
+    reason = "this uses a name that's closer to the other builtin type names"
+)]
+struct i8x16(());
+
 const DEFAULT_STACK_SIZE: usize = 1 << 20; // 1 MiB
 
 /// A virtual machine for interpreting Pulley bytecode.
@@ -487,7 +501,7 @@ impl XRegVal {
         f64::from_bits(u64::from_le(x))
     }
 
-    pub fn get_v128(&self) -> std::arch::x86_64::__m128i {
+    pub fn get_i8x16(&self) -> i8x16 {
         todo!()
     }
 
@@ -520,7 +534,7 @@ impl XRegVal {
         self.0.u64 = x.to_bits().to_le();
     }
 
-    pub fn set_v128(&mut self, _x: std::arch::x86_64::__m128i) {
+    pub fn set_i8x16(&mut self, _x: i8x16) {
         todo!()
     }
 
@@ -586,12 +600,20 @@ impl FRegVal {
         f64::from_le_bytes(val.to_ne_bytes())
     }
 
+    pub fn get_i8x16(&self) -> i8x16 {
+        todo!("how does pulley do simd?")
+    }
+
     pub fn set_f32(&mut self, val: f32) {
         self.0.f32 = u32::from_ne_bytes(val.to_le_bytes());
     }
 
     pub fn set_f64(&mut self, val: f64) {
         self.0.f64 = u64::from_ne_bytes(val.to_le_bytes());
+    }
+
+    pub fn set_i8x16(&self, _val: i8x16) {
+        todo!("how does pulley do simd?")
     }
 }
 

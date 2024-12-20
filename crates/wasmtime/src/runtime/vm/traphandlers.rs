@@ -19,7 +19,7 @@ use crate::prelude::*;
 use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
-use crate::runtime::vm::{InterpreterRef, VMContext, VMStoreContext};
+use crate::runtime::vm::{i8x16, InterpreterRef, VMContext, VMStoreContext};
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::num::NonZeroU32;
@@ -179,6 +179,7 @@ host_result_no_catch! {
     u64,
     f32,
     f64,
+    i8x16,
 }
 
 impl HostResult for NonNull<u8> {
