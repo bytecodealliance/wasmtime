@@ -3357,6 +3357,9 @@ impl FuncEnvironment<'_> {
         a: ir::Value,
         b: ir::Value,
     ) -> ir::Value {
+        // On x86, swizzle would typically be compiled to `pshufb`, except
+        // that that's not available on CPUs that lack SSSE3. In that case,
+        // fall back to a builtin function.
         if !self.is_x86() || self.isa.has_x86_pshufb_lowering() {
             builder.ins().swizzle(a, b)
         } else {
@@ -3373,6 +3376,7 @@ impl FuncEnvironment<'_> {
         a: ir::Value,
         b: ir::Value,
     ) -> ir::Value {
+        // As above, fall back to a builtin if we lack SSSE3.
         if !self.is_x86() || self.isa.has_x86_pshufb_lowering() {
             if self.relaxed_simd_deterministic() {
                 builder.ins().swizzle(a, b)
@@ -3394,6 +3398,8 @@ impl FuncEnvironment<'_> {
         b: ir::Value,
         lanes: &[u8; 16],
     ) -> ir::Value {
+        // As with swizzle, i8x16.shuffle would also commonly be implemented
+        // with pshufb, so if we lack SSSE3, fall back to a builtin.
         if !self.is_x86() || self.isa.has_x86_pshufb_lowering() {
             let lanes = ConstantData::from(&lanes[..]);
             let mask = builder.func.dfg.immediates.push(lanes);

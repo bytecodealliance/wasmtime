@@ -211,6 +211,8 @@ impl wasmtime_environ::Compiler for Compiler {
 
         let mut func_env = FuncEnvironment::new(self, translation, types, wasm_func_ty);
 
+        // If we're not catching traps with signals, insert checks at the
+        // beginnings of functions.
         if !self.tunables.signals_based_traps {
             // The `stack_limit` global value below is the implementation of stack
             // overflow checks in Wasmtime.
@@ -1195,6 +1197,7 @@ fn save_last_wasm_exit_fp_and_pc(
     limits: Value,
     tunables: &Tunables,
 ) {
+    // If we're catching traps with signals, insert checks into trampolines.
     if tunables.signals_based_traps {
         // The Wasm spec defines that stack overflows will raise a trap, and
         // there's also an added constraint where as an embedder you frequently are
