@@ -309,7 +309,7 @@ fn mach_reloc_to_reloc(
         FinalizedRelocTarget::ExternalName(ExternalName::LibCall(libcall)) => {
             // We should have avoided any code that needs this style of libcalls
             // in the Wasm-to-Cranelift translator.
-            panic!("unexpected libcall {:?}", libcall);
+            panic!("unexpected libcall {libcall:?}");
         }
         _ => panic!("unrecognized external name"),
     };
