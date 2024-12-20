@@ -7,6 +7,10 @@ target x86_64 has_sse3 has_ssse3 has_sse41 has_avx
 set enable_multi_ret_implicit_sret
 target riscv64 has_v
 target riscv64 has_v has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 function %uaddsat_i8x16(i8x16, i8x16) -> i8x16 {
 block0(v0: i8x16, v1: i8x16):

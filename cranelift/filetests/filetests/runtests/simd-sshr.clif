@@ -12,6 +12,10 @@ target x86_64 sse42 has_avx has_avx2 has_avx512f has_avx512vl
 set enable_multi_ret_implicit_sret
 target riscv64 has_v
 target riscv64 has_v has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 
 function %sshr_i8x16(i8x16, i32) -> i8x16 {
