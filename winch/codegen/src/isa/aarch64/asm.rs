@@ -1103,7 +1103,9 @@ impl Assembler {
 
                     (false, _) => -1.,
 
-                    (_, S128) => unimplemented!("floating point conversion to 128bit are not supported"),
+                    (_, S128) => {
+                        unimplemented!("floating point conversion to 128bit are not supported")
+                    }
                 };
 
                 self.emit_load_const_fp(min.to_bits() as u64, rd, in_size);
@@ -1117,7 +1119,9 @@ impl Assembler {
 
                     (false, _) => -1.,
 
-                    (_, S128) => unimplemented!("floating point conversion to 128bit are not supported"),
+                    (_, S128) => {
+                        unimplemented!("floating point conversion to 128bit are not supported")
+                    }
                 };
 
                 self.emit_load_const_fp(min.to_bits(), rd, in_size);
@@ -1150,7 +1154,9 @@ impl Assembler {
                     (false, S32) => u32::MAX as f32 + 1.,
                     (false, S64) => (u64::MAX as u128 + 1) as f32,
 
-                    (_, S128) => unimplemented!("floating point conversion to 128bit are not supported"),
+                    (_, S128) => {
+                        unimplemented!("floating point conversion to 128bit are not supported")
+                    }
                 };
 
                 self.emit_load_const_fp(max.to_bits() as u64, rd, in_size);
@@ -1167,7 +1173,9 @@ impl Assembler {
                     (false, S32) => u32::MAX as f64 + 1.,
                     (false, S64) => (u64::MAX as u128 + 1) as f64,
 
-                    (_, S128) => unimplemented!("floating point conversion to 128bit are not supported"),
+                    (_, S128) => {
+                        unimplemented!("floating point conversion to 128bit are not supported")
+                    }
                 };
 
                 self.emit_load_const_fp(max.to_bits(), rd, in_size);
