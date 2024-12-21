@@ -260,11 +260,10 @@ impl Masm for MacroAssembler {
                 let scratch = regs::scratch();
                 self.asm.load_constant(imm, writable!(scratch));
                 match rd.to_reg().class() {
-                    RegClass::Int => self.asm.mov_rr(scratch, rd, size),
-                    RegClass::Float => self.asm.mov_to_fpu(scratch, rd, size),
+                    RegClass::Int => Ok(self.asm.mov_rr(scratch, rd, size)),
+                    RegClass::Float => Ok(self.asm.mov_to_fpu(scratch, rd, size)),
                     _ => bail!(CodeGenError::invalid_operand_combination()),
-                };
-                Ok(())
+                }
             }
             (RegImm::Reg(rs), rd) => match (rs.class(), rd.to_reg().class()) {
                 (RegClass::Int, RegClass::Int) => Ok(self.asm.mov_rr(rs, rd, size)),
@@ -581,25 +580,42 @@ impl Masm for MacroAssembler {
 
     fn signed_truncate(
         &mut self,
-        _dst: WritableReg,
-        _src: Reg,
-        _src_size: OperandSize,
-        _dst_size: OperandSize,
-        _kind: TruncKind,
-    ) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        dst: WritableReg,
+        src: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+        kind: TruncKind,
+    ) {
+        self.asm.fpu_to_int(
+            dst,
+            src,
+            src_size,
+            dst_size,
+            kind,
+            // TODO: strangely, this register is provided in unsigned_truncate
+            regs::float_scratch(),
+            true,
+        );
     }
 
     fn unsigned_truncate(
         &mut self,
-        _dst: WritableReg,
-        _src: Reg,
-        _tmp_fpr: Reg,
-        _src_size: OperandSize,
-        _dst_size: OperandSize,
-        _kind: TruncKind,
-    ) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        dst: WritableReg,
+        src: Reg,
+        tmp_fpr: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+        kind: TruncKind,
+    ) {
+        self.asm.fpu_to_int(
+            dst,
+            src,
+            src_size,
+            dst_size,
+            kind,
+            tmp_fpr,
+            false,
+        );
     }
 
     fn signed_convert(

@@ -74,6 +74,14 @@ impl TruncKind {
     pub(crate) fn is_checked(&self) -> bool {
         *self == TruncKind::Checked
     }
+
+    /// Returns `true` if the trunc kind is [`Unchecked`].
+    ///
+    /// [`Unchecked`]: TruncKind::Unchecked
+    #[must_use]
+    pub(crate) fn is_unchecked(&self) -> bool {
+        matches!(self, Self::Unchecked)
+    }
 }
 
 /// Representation of the stack pointer offset.

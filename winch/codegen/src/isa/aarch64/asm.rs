@@ -1,9 +1,8 @@
 //! Assembler library implementation for Aarch64.
-
 use super::{address::Address, regs};
 use crate::aarch64::regs::zero;
 use crate::masm::{
-    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, RemKind, RoundingMode, ShiftKind,
+    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, RemKind, RoundingMode, ShiftKind, TruncKind,
 };
 use crate::CallingConvention;
 use crate::{
@@ -11,7 +10,7 @@ use crate::{
     reg::{writable, Reg, WritableReg},
 };
 
-use cranelift_codegen::isa::aarch64::inst::{UImm5, NZCV};
+use cranelift_codegen::isa::aarch64::inst::{ASIMDFPModImm, FpuToIntOp, UImm5, NZCV};
 use cranelift_codegen::{
     ir::{ExternalName, LibCall, MemFlags, SourceLoc, TrapCode, UserExternalNameRef},
     isa::aarch64::inst::{
@@ -1081,5 +1080,197 @@ impl Assembler {
             offset: 0,
         });
         self.call_with_reg(dst, call_conv)
+    }
+
+    /// Load the min value for an integer of size out_size, as a floating-point
+    /// of size `in-size`, into register `rd`.
+    fn emit_min_fp_value(
+        &mut self,
+        signed: bool,
+        in_size: OperandSize,
+        out_size: OperandSize,
+        rd: Writable<Reg>,
+    ) {
+        use OperandSize::*;
+
+        match in_size {
+            OperandSize::S32 => {
+                let min = match (signed, out_size) {
+                    (true, S8) => i8::MIN as f32 - 1.,
+                    (true, S16) => i16::MIN as f32 - 1.,
+                    (true, S32) => i32::MIN as f32, // I32_MIN - 1 isn't precisely representable as a f32.
+                    (true, S64) => i64::MIN as f32, // I64_MIN - 1 isn't precisely representable as a f32.
+
+                    (false, _) => -1.,
+
+                    (_, S128) => unimplemented!("floating point conversion to 128bit are not supported"),
+                };
+
+                self.emit_load_const_fp(min.to_bits() as u64, rd, in_size);
+            }
+            OperandSize::S64 => {
+                let min = match (signed, out_size) {
+                    (true, S8) => i8::MIN as f64 - 1.,
+                    (true, S16) => i16::MIN as f64 - 1.,
+                    (true, S32) => i32::MIN as f64 - 1.,
+                    (true, S64) => i64::MIN as f64,
+
+                    (false, _) => -1.,
+
+                    (_, S128) => unimplemented!("floating point conversion to 128bit are not supported"),
+                };
+
+                self.emit_load_const_fp(min.to_bits(), rd, in_size);
+            }
+            s => unreachable!("unsupported floating-point size: {}bit", s.num_bits()),
+        }
+    }
+
+    /// Load the max value for an integer of size out_size, as a floating-point
+    /// of size `in-size`, into register `rd`.
+    fn emit_max_fp_value(
+        &mut self,
+        signed: bool,
+        in_size: OperandSize,
+        out_size: OperandSize,
+        rd: Writable<Reg>,
+    ) {
+        use OperandSize::*;
+
+        match in_size {
+            OperandSize::S32 => {
+                let max = match (signed, out_size) {
+                    (true, S8) => i8::MAX as f32 + 1.,
+                    (true, S16) => i16::MAX as f32 + 1.,
+                    (true, S32) => i32::MAX as f32 + 1.,
+                    (true, S64) => (i64::MAX as u64 + 1) as f32,
+
+                    (false, S8) => u8::MAX as f32 + 1.,
+                    (false, S16) => u16::MAX as f32 + 1.,
+                    (false, S32) => u32::MAX as f32 + 1.,
+                    (false, S64) => (u64::MAX as u128 + 1) as f32,
+
+                    (_, S128) => unimplemented!("floating point conversion to 128bit are not supported"),
+                };
+
+                self.emit_load_const_fp(max.to_bits() as u64, rd, in_size);
+            }
+            OperandSize::S64 => {
+                let max = match (signed, out_size) {
+                    (true, S8) => i8::MAX as f64 + 1.,
+                    (true, S16) => i16::MAX as f64 + 1.,
+                    (true, S32) => i32::MAX as f64 + 1.,
+                    (true, S64) => (i64::MAX as u64 + 1) as f64,
+
+                    (false, S8) => u8::MAX as f64 + 1.,
+                    (false, S16) => u16::MAX as f64 + 1.,
+                    (false, S32) => u32::MAX as f64 + 1.,
+                    (false, S64) => (u64::MAX as u128 + 1) as f64,
+
+                    (_, S128) => unimplemented!("floating point conversion to 128bit are not supported"),
+                };
+
+                self.emit_load_const_fp(max.to_bits(), rd, in_size);
+            }
+            s => unreachable!("unsupported floating-point size: {}bit", s.num_bits()),
+        }
+    }
+
+    /// Load the floating point number encoded in `n` of size `size`, into `rd`.
+    fn emit_load_const_fp(&mut self, n: u64, rd: Writable<Reg>, size: OperandSize) {
+        // Check if we can load `n` directly, otherwise, load it into a tmp register, as an
+        // integer, and then move that to `rd`.
+        match ASIMDFPModImm::maybe_from_u64(n, size.into()) {
+            Some(imm) => {
+                self.emit(Inst::FpuMoveFPImm {
+                    rd: rd.map(Into::into),
+                    imm,
+                    size: size.into(),
+                });
+            }
+            None => {
+                let tmp = regs::scratch();
+                self.load_constant(n, Writable::from_reg(tmp));
+                self.mov_to_fpu(tmp, rd, size)
+            }
+        }
+    }
+
+    /// Emit the `fcmp` instruction with `rn` and `rm` as source registers.
+    fn emit_fpu_cmp(&mut self, rn: Reg, rm: Reg, size: OperandSize) {
+        self.emit(Inst::FpuCmp {
+            size: size.into(),
+            rn: rn.into(),
+            rm: rm.into(),
+        });
+    }
+
+    /// Emit instructions to check if the value in `rn` is NaN.
+    fn emit_check_nan(&mut self, rn: Reg, size: OperandSize) {
+        self.emit_fpu_cmp(rn, rn, size);
+        self.trapif(Cond::Vs, TrapCode::BAD_CONVERSION_TO_INTEGER);
+    }
+
+    /// Convert the floating point of size `src_size` stored in `src`, into a integer of size
+    /// `dst_size`, storing the result in `dst`.
+    pub fn fpu_to_int(
+        &mut self,
+        dst: Writable<Reg>,
+        src: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+        kind: TruncKind,
+        tmp_reg: Reg,
+        signed: bool,
+    ) {
+        if kind.is_unchecked() {
+            // Confusingly, when `kind` is `Unchecked` is when we actually need to perform the checks:
+            // - check if fp is NaN
+            // - check bounds
+            self.emit_check_nan(src, src_size);
+
+            self.emit_min_fp_value(signed, src_size, dst_size, Writable::from_reg(tmp_reg));
+            self.emit_fpu_cmp(src, tmp_reg, src_size);
+            self.trapif(Cond::Le, TrapCode::INTEGER_OVERFLOW);
+
+            self.emit_max_fp_value(signed, src_size, dst_size, Writable::from_reg(tmp_reg));
+            self.emit_fpu_cmp(src, tmp_reg, src_size);
+            self.trapif(Cond::Ge, TrapCode::INTEGER_OVERFLOW);
+        }
+
+        self.emit_cvt_fpu_to_int(dst, src, src_size, dst_size, signed)
+    }
+
+    /// Select and emit the appropriate `fcvt*` instruction
+    pub fn emit_cvt_fpu_to_int(
+        &mut self,
+        dst: Writable<Reg>,
+        src: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+        signed: bool,
+    ) {
+        let op = match (src_size, dst_size, signed) {
+            (OperandSize::S32, OperandSize::S32, false) => FpuToIntOp::F32ToU32,
+            (OperandSize::S32, OperandSize::S32, true) => FpuToIntOp::F32ToI32,
+            (OperandSize::S32, OperandSize::S64, false) => FpuToIntOp::F32ToU64,
+            (OperandSize::S32, OperandSize::S64, true) => FpuToIntOp::F32ToI64,
+            (OperandSize::S64, OperandSize::S32, false) => FpuToIntOp::F64ToU32,
+            (OperandSize::S64, OperandSize::S32, true) => FpuToIntOp::F64ToI32,
+            (OperandSize::S64, OperandSize::S64, false) => FpuToIntOp::F64ToU64,
+            (OperandSize::S64, OperandSize::S64, true) => FpuToIntOp::F64ToI64,
+            (fsize, int_size, signed) => unimplemented!(
+                "unsupported conversion: f{} to {}{}",
+                fsize.num_bits(),
+                if signed { "i" } else { "u" },
+                int_size.num_bits(),
+            ),
+        };
+
+        self.emit(Inst::FpuToInt {
+            op,
+            rd: dst.map(Into::into),
+            rn: src.into(),
+        });
     }
 }
