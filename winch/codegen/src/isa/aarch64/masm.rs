@@ -247,7 +247,7 @@ impl Masm for MacroAssembler {
                 self.asm.load_constant(imm, writable!(scratch));
                 match rd.to_reg().class() {
                     RegClass::Int => self.asm.mov_rr(scratch, rd, size),
-                    RegClass::Float => { self.asm.mov_to_fpu(scratch, rd, size) },
+                    RegClass::Float => self.asm.mov_to_fpu(scratch, rd, size),
                     _ => todo!(),
                 }
             }
@@ -539,15 +539,8 @@ impl Masm for MacroAssembler {
         dst_size: OperandSize,
         kind: TruncKind,
     ) {
-        self.asm.fpu_to_int(
-            dst,
-            src,
-            src_size,
-            dst_size,
-            kind,
-            tmp_fpr,
-            false,
-        );
+        self.asm
+            .fpu_to_int(dst, src, src_size, dst_size, kind, tmp_fpr, false);
     }
 
     fn signed_convert(
