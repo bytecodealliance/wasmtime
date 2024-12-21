@@ -247,7 +247,7 @@ impl Masm for MacroAssembler {
                 self.asm.load_constant(imm, writable!(scratch));
                 match rd.to_reg().class() {
                     RegClass::Int => self.asm.mov_rr(scratch, rd, size),
-                    RegClass::Float => self.asm.mov_to_fpu(scratch, rd, size),
+                    RegClass::Float => { self.asm.mov_to_fpu(scratch, rd, size) },
                     _ => todo!(),
                 }
             }
@@ -512,25 +512,42 @@ impl Masm for MacroAssembler {
 
     fn signed_truncate(
         &mut self,
-        _dst: WritableReg,
-        _src: Reg,
-        _src_size: OperandSize,
-        _dst_size: OperandSize,
-        _kind: TruncKind,
+        dst: WritableReg,
+        src: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+        kind: TruncKind,
     ) {
-        todo!()
+        self.asm.fpu_to_int(
+            dst,
+            src,
+            src_size,
+            dst_size,
+            kind,
+            // TODO: strangely, this register is provided in unsigned_truncate
+            regs::float_scratch(),
+            true,
+        );
     }
 
     fn unsigned_truncate(
         &mut self,
-        _dst: WritableReg,
-        _src: Reg,
-        _tmp_fpr: Reg,
-        _src_size: OperandSize,
-        _dst_size: OperandSize,
-        _kind: TruncKind,
+        dst: WritableReg,
+        src: Reg,
+        tmp_fpr: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+        kind: TruncKind,
     ) {
-        todo!()
+        self.asm.fpu_to_int(
+            dst,
+            src,
+            src_size,
+            dst_size,
+            kind,
+            tmp_fpr,
+            false,
+        );
     }
 
     fn signed_convert(
