@@ -24,7 +24,7 @@ features = [
     "Win32_System_Diagnostics_Debug",
 ]
 
-[target.'cfg(any(target_os = "linux", target_os = "macos", target_os = "freebsd", target_os = "android"))'.dependencies]
+[target.'cfg(any(target_os = "linux", target_vendor = "apple", target_os = "freebsd", target_os = "android"))'.dependencies]
 libc = { workspace = true }
 
 [features]

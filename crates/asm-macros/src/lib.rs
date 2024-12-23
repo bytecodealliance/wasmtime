@@ -9,7 +9,7 @@
 #![no_std]
 
 cfg_if::cfg_if! {
-    if #[cfg(target_os = "macos")] {
+    if #[cfg(target_vendor = "apple")] {
         #[macro_export]
         macro_rules! asm_func {
             ($name:expr, $body:expr $(, $($args:tt)*)?) => {

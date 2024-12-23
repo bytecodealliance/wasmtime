@@ -12,7 +12,7 @@ pub mod unwind;
 #[cfg(feature = "signals-based-traps")]
 pub mod vm;
 
-#[cfg(all(feature = "signals-based-traps", target_os = "macos"))]
+#[cfg(all(feature = "signals-based-traps", target_vendor = "apple"))]
 pub mod machports;
 #[cfg(feature = "signals-based-traps")]
 pub mod signals;
