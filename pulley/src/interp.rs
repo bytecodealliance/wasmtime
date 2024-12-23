@@ -4207,6 +4207,214 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vordf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a.is_nan() || b.is_nan() {
+                0
+            } else {
+                u32::MAX
+            };
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vunof32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a.is_nan() || b.is_nan() {
+                u32::MAX
+            } else {
+                0
+            };
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn veqf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a == b { u32::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vneqf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a != b { u32::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vordneqf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a == b || a.is_nan() || b.is_nan() {
+                0
+            } else {
+                u32::MAX
+            }
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vunoeqf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a == b || a.is_nan() || b.is_nan() {
+                u32::MAX
+            } else {
+                0
+            }
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vltf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a < b { u32::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vlteqf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a <= b { u32::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vordf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a.is_nan() || b.is_nan() {
+                0
+            } else {
+                u64::MAX
+            };
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vunof64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a.is_nan() || b.is_nan() {
+                u64::MAX
+            } else {
+                0
+            };
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
+
+    fn veqf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a == b { u64::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vneqf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a != b { u64::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vordneqf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a == b || a.is_nan() || b.is_nan() {
+                0
+            } else {
+                u64::MAX
+            }
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vunoeqf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a == b || a.is_nan() || b.is_nan() {
+                u64::MAX
+            } else {
+                0
+            }
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vltf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a < b { u64::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vlteqf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a <= b { u64::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
+
     fn vneg8x16(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
         let a = self.state[src].get_i8x16();
         self.state[dst].set_i8x16(a.map(|i| i.wrapping_neg()));
