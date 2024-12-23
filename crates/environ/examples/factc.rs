@@ -147,6 +147,8 @@ impl Factc {
                     realloc: Some(dummy_def()),
                     // Lowering never allows `post-return`
                     post_return: None,
+                    async_: false,
+                    callback: None,
                 },
                 lift_options: AdapterOptions {
                     instance: RuntimeComponentInstanceIndex::from_u32(1),
@@ -159,6 +161,8 @@ impl Factc {
                     } else {
                         None
                     },
+                    async_: false,
+                    callback: None,
                 },
                 func: dummy_def(),
             });

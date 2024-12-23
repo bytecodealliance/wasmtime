@@ -76,6 +76,8 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+#[cfg(feature = "component-model-async")]
+use crate::component::concurrent;
 use crate::hash_set::HashSet;
 use crate::instance::InstanceData;
 use crate::linker::Definition;
@@ -226,6 +228,47 @@ pub struct StoreInner<T> {
         Option<Box<dyn FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync>>,
     // for comments about `ManuallyDrop`, see `Store::into_data`
     data: ManuallyDrop<T>,
+    #[cfg(feature = "component-model-async")]
+    concurrent_state: concurrent::ConcurrentState<T>,
+}
+
+impl<T> StoreInner<T> {
+    /// Yields execution to the caller on out-of-gas or epoch interruption.
+    ///
+    /// This only works on async futures and stores, and assumes that we're
+    /// executing on a fiber. This will yield execution back to the caller once.
+    #[cfg(feature = "async")]
+    fn async_yield_impl(&mut self) -> Result<()> {
+        use crate::runtime::vm::Yield;
+
+        let mut future = Yield::new();
+
+        // When control returns, we have a `Result<()>` passed
+        // in from the host fiber. If this finished successfully then
+        // we were resumed normally via a `poll`, so keep going.  If
+        // the future was dropped while we were yielded, then we need
+        // to clean up this fiber. Do so by raising a trap which will
+        // abort all wasm and get caught on the other side to clean
+        // things up.
+        #[cfg(feature = "component-model-async")]
+        unsafe {
+            let async_cx =
+                crate::component::concurrent::AsyncCx::new(&mut (&mut *self).as_context_mut());
+            async_cx
+                .block_on(
+                    Pin::new_unchecked(&mut future),
+                    None::<StoreContextMut<'_, T>>,
+                )?
+                .0;
+            Ok(())
+        }
+        #[cfg(not(feature = "component-model-async"))]
+        unsafe {
+            self.async_cx()
+                .expect("attempted to pull async context during shutdown")
+                .block_on(Pin::new_unchecked(&mut future))
+        }
+    }
 }
 
 enum ResourceLimiterInner<T> {
@@ -408,7 +451,9 @@ struct AsyncState {
 #[derive(Clone, Copy)]
 struct PollContext {
     future_context: *mut Context<'static>,
+    #[cfg_attr(feature = "component-model-async", allow(dead_code))]
     guard_range_start: *mut u8,
+    #[cfg_attr(feature = "component-model-async", allow(dead_code))]
     guard_range_end: *mut u8,
 }
 
@@ -592,6 +637,8 @@ impl<T> Store<T> {
             call_hook: None,
             epoch_deadline_behavior: None,
             data: ManuallyDrop::new(data),
+            #[cfg(feature = "component-model-async")]
+            concurrent_state: Default::default(),
         });
 
         // Wasmtime uses the callee argument to host functions to learn about
@@ -1106,6 +1153,35 @@ impl<'a, T> StoreContextMut<'a, T> {
         self.0.data_mut()
     }
 
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn concurrent_state(&mut self) -> &mut concurrent::ConcurrentState<T> {
+        self.0.concurrent_state()
+    }
+
+    pub(crate) fn async_guard_range(&mut self) -> Range<*mut u8> {
+        #[cfg(feature = "component-model-async")]
+        {
+            self.concurrent_state().async_guard_range()
+        }
+        #[cfg(not(feature = "component-model-async"))]
+        {
+            #[cfg(feature = "async")]
+            unsafe {
+                let ptr = self.0.inner.async_state.current_poll_cx.get();
+                (*ptr).guard_range_start..(*ptr).guard_range_end
+            }
+            #[cfg(not(feature = "async"))]
+            {
+                core::ptr::null_mut()..core::ptr::null_mut()
+            }
+        }
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn has_pkey(&self) -> bool {
+        self.0.pkey.is_some()
+    }
+
     /// Returns the underlying [`Engine`] this store is connected to.
     pub fn engine(&self) -> &Engine {
         self.0.engine()
@@ -1191,6 +1267,11 @@ impl<T> StoreInner<T> {
         &mut self.data
     }
 
+    #[cfg(feature = "component-model-async")]
+    fn concurrent_state(&mut self) -> &mut concurrent::ConcurrentState<T> {
+        &mut self.concurrent_state
+    }
+
     #[inline]
     pub fn call_hook(&mut self, s: CallHook) -> Result<()> {
         if self.inner.pkey.is_none() && self.call_hook.is_none() {
@@ -1230,14 +1311,33 @@ impl<T> StoreInner<T> {
 
             #[cfg(all(feature = "async", feature = "call-hook"))]
             CallHookInner::Async(handler) => unsafe {
-                self.inner
-                    .async_cx()
-                    .ok_or_else(|| anyhow!("couldn't grab async_cx for call hook"))?
-                    .block_on(
-                        handler
-                            .handle_call_event((&mut *self).as_context_mut(), s)
-                            .as_mut(),
-                    )?
+                #[cfg(feature = "component-model-async")]
+                {
+                    let async_cx = crate::component::concurrent::AsyncCx::try_new(
+                        &mut (&mut *self).as_context_mut(),
+                    )
+                    .ok_or_else(|| anyhow!("couldn't grab async_cx for call hook"))?;
+
+                    async_cx
+                        .block_on(
+                            handler
+                                .handle_call_event((&mut *self).as_context_mut(), s)
+                                .as_mut(),
+                            None::<StoreContextMut<'_, T>>,
+                        )?
+                        .0
+                }
+                #[cfg(not(feature = "component-model-async"))]
+                {
+                    self.inner
+                        .async_cx()
+                        .ok_or_else(|| anyhow!("couldn't grab async_cx for call hook"))?
+                        .block_on(
+                            handler
+                                .handle_call_event((&mut *self).as_context_mut(), s)
+                                .as_mut(),
+                        )?
+                }
             },
 
             CallHookInner::ForceTypeParameterToBeUsed { uninhabited, .. } => {
@@ -1890,30 +1990,6 @@ impl StoreOpaque {
         self.set_fuel(self.get_fuel()?)
     }
 
-    /// Yields execution to the caller on out-of-gas or epoch interruption.
-    ///
-    /// This only works on async futures and stores, and assumes that we're
-    /// executing on a fiber. This will yield execution back to the caller once.
-    #[cfg(feature = "async")]
-    fn async_yield_impl(&mut self) -> Result<()> {
-        use crate::runtime::vm::Yield;
-
-        let mut future = Yield::new();
-
-        // When control returns, we have a `Result<()>` passed
-        // in from the host fiber. If this finished successfully then
-        // we were resumed normally via a `poll`, so keep going.  If
-        // the future was dropped while we were yielded, then we need
-        // to clean up this fiber. Do so by raising a trap which will
-        // abort all wasm and get caught on the other side to clean
-        // things up.
-        unsafe {
-            self.async_cx()
-                .expect("attempted to pull async context during shutdown")
-                .block_on(Pin::new_unchecked(&mut future))
-        }
-    }
-
     #[inline]
     pub fn signal_handler(&self) -> Option<*const SignalHandler> {
         let handler = self.signal_handler.as_ref()?;
@@ -2106,18 +2182,6 @@ at https://bytecodealliance.org/security.
         let _ = instance;
 
         self.num_component_instances += 1;
-    }
-
-    pub(crate) fn async_guard_range(&self) -> Range<*mut u8> {
-        #[cfg(feature = "async")]
-        unsafe {
-            let ptr = self.async_state.current_poll_cx.get();
-            (*ptr).guard_range_start..(*ptr).guard_range_end
-        }
-        #[cfg(not(feature = "async"))]
-        {
-            core::ptr::null_mut()..core::ptr::null_mut()
-        }
     }
 
     #[cfg(feature = "async")]
@@ -2567,14 +2631,35 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
             }
             #[cfg(feature = "async")]
             Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                self.inner
-                    .async_cx()
-                    .expect("ResourceLimiterAsync requires async Store")
-                    .block_on(
-                        limiter(&mut self.data)
-                            .memory_growing(current, desired, maximum)
-                            .as_mut(),
-                    )?
+                #[cfg(feature = "component-model-async")]
+                {
+                    _ = limiter;
+                    let async_cx = crate::component::concurrent::AsyncCx::new(
+                        &mut (&mut *self).as_context_mut(),
+                    );
+                    let Some(ResourceLimiterInner::Async(ref mut limiter)) = self.limiter else {
+                        unreachable!();
+                    };
+                    async_cx
+                        .block_on::<T, _>(
+                            limiter(&mut self.data)
+                                .memory_growing(current, desired, maximum)
+                                .as_mut(),
+                            None,
+                        )?
+                        .0
+                }
+                #[cfg(not(feature = "component-model-async"))]
+                {
+                    self.inner
+                        .async_cx()
+                        .expect("ResourceLimiterAsync requires async Store")
+                        .block_on(
+                            limiter(&mut self.data)
+                                .memory_growing(current, desired, maximum)
+                                .as_mut(),
+                        )?
+                }
             },
             None => Ok(true),
         }
@@ -2605,7 +2690,7 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
         // Need to borrow async_cx before the mut borrow of the limiter.
         // self.async_cx() panicks when used with a non-async store, so
         // wrap this in an option.
-        #[cfg(feature = "async")]
+        #[cfg(all(feature = "async", not(feature = "component-model-async")))]
         let async_cx = if self.async_support()
             && matches!(self.limiter, Some(ResourceLimiterInner::Async(_)))
         {
@@ -2620,13 +2705,34 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
             }
             #[cfg(feature = "async")]
             Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                async_cx
-                    .expect("ResourceLimiterAsync requires async Store")
-                    .block_on(
-                        limiter(&mut self.data)
-                            .table_growing(current, desired, maximum)
-                            .as_mut(),
-                    )?
+                #[cfg(feature = "component-model-async")]
+                {
+                    _ = limiter;
+                    let async_cx = crate::component::concurrent::AsyncCx::new(
+                        &mut (&mut *self).as_context_mut(),
+                    );
+                    let Some(ResourceLimiterInner::Async(ref mut limiter)) = self.limiter else {
+                        unreachable!();
+                    };
+                    async_cx
+                        .block_on::<T, _>(
+                            limiter(&mut self.data)
+                                .table_growing(current, desired, maximum)
+                                .as_mut(),
+                            None,
+                        )?
+                        .0
+                }
+                #[cfg(not(feature = "component-model-async"))]
+                {
+                    async_cx
+                        .expect("ResourceLimiterAsync requires async Store")
+                        .block_on(
+                            limiter(&mut self.data)
+                                .table_growing(current, desired, maximum)
+                                .as_mut(),
+                        )?
+                }
             },
             None => Ok(true),
         }

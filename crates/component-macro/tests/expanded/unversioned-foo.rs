@@ -18,7 +18,7 @@ impl<T> Clone for NopePre<T> {
         }
     }
 }
-impl<_T> NopePre<_T> {
+impl<_T: 'static> NopePre<_T> {
     /// Creates a new copy of `NopePre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -142,7 +142,10 @@ const _: () = {
             mut store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
-        ) -> wasmtime::Result<Nope> {
+        ) -> wasmtime::Result<Nope>
+        where
+            _T: 'static,
+        {
             let pre = linker.instantiate_pre(component)?;
             NopePre::new(pre)?.instantiate(store)
         }
@@ -206,19 +209,23 @@ pub mod foo {
             }
             pub trait GetHost<
                 T,
-            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                D,
+            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
                 type Host: Host;
             }
-            impl<F, T, O> GetHost<T> for F
+            impl<F, T, D, O> GetHost<T, D> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
                 O: Host,
             {
                 type Host = O;
             }
-            pub fn add_to_linker_get_host<T>(
+            pub fn add_to_linker_get_host<
+                T,
+                G: for<'a> GetHost<&'a mut T, T, Host: Host>,
+            >(
                 linker: &mut wasmtime::component::Linker<T>,
-                host_getter: impl for<'a> GetHost<&'a mut T>,
+                host_getter: G,
             ) -> wasmtime::Result<()> {
                 let mut inst = linker.instance("foo:foo/a")?;
                 inst.func_wrap(
