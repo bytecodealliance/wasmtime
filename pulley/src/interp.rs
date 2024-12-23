@@ -2980,10 +2980,30 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vsub32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = *a - b;
+        }
+        self.state[operands.dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
     fn fmul32(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_f32();
         let b = self.state[operands.src2].get_f32();
         self.state[operands.dst].set_f32(a * b);
+        ControlFlow::Continue(())
+    }
+
+    fn vmul32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = *a * b;
+        }
+        self.state[operands.dst].set_f32x4(a);
         ControlFlow::Continue(())
     }
 
@@ -3159,6 +3179,15 @@ impl ExtendedOpVisitor for Interpreter<'_> {
     fn fneg32(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f32();
         self.state[dst].set_f32(-a);
+        ControlFlow::Continue(())
+    }
+
+    fn vnegf32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f32x4();
+        for elem in a.iter_mut() {
+            *elem = -*elem;
+        }
+        self.state[dst].set_f32x4(a);
         ControlFlow::Continue(())
     }
 

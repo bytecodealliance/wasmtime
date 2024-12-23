@@ -811,8 +811,12 @@ macro_rules! for_each_extended_op {
             fadd32 = Fadd32 { operands: BinaryOperands<FReg> };
             /// `low32(dst) = low32(src1) - low32(src2)`
             fsub32 = Fsub32 { operands: BinaryOperands<FReg> };
+            /// `low128(dst) = low128(src1) - low128(src2)`
+            vsub32x4 = Vsub32x4 { operands: BinaryOperands<VReg> };
             /// `low32(dst) = low32(src1) * low32(src2)`
             fmul32 = Fmul32 { operands: BinaryOperands<FReg> };
+            /// `low128(dst) = low128(src1) * low128(src2)`
+            vmul32x4 = Vmul32x4 { operands: BinaryOperands<VReg> };
             /// `low32(dst) = low32(src1) / low32(src2)`
             fdiv32 = Fdiv32 { operands: BinaryOperands<FReg> };
             /// `low128(dst) = low128(src1) / low128(src2)`
@@ -849,6 +853,8 @@ macro_rules! for_each_extended_op {
             vsqrt64x2 = Vsqrt64x2 { dst: VReg, src: VReg };
             /// `low32(dst) = -low32(src)`
             fneg32 = Fneg32 { dst: FReg, src: FReg };
+            /// `low128(dst) = -low128(src)`
+            vnegf32x4 = Vnegf32x4 { dst: VReg, src: VReg };
             /// `low32(dst) = |low32(src)|`
             fabs32 = Fabs32 { dst: FReg, src: FReg };
 
