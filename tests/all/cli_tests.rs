@@ -2151,3 +2151,107 @@ fn unreachable_without_wasi() -> Result<()> {
     assert_trap_code(&output.status);
     Ok(())
 }
+
+#[test]
+fn config_cli_flag() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/simple.wat")?;
+
+    // Test some valid TOML values
+    let (mut cfg, cfg_path) = tempfile::NamedTempFile::new()?.into_parts();
+    cfg.write_all(
+        br#"
+        [optimize]
+        opt_level = 2
+        regalloc_algorithm = "single-pass"
+        signals_based_traps = false
+
+        [codegen]
+        collector = "null"
+
+        [debug]
+        debug_info = true
+
+        [wasm]
+        max_wasm_stack = 65536
+
+        [wasi]
+        cli = true
+        "#,
+    )?;
+    let output = run_wasmtime(&[
+        "run",
+        "--config",
+        cfg_path.to_str().unwrap(),
+        "--invoke",
+        "get_f64",
+        wasm.path().to_str().unwrap(),
+    ])?;
+    assert_eq!(output, "100\n");
+
+    // Make sure CLI flags overrides TOML values
+    let output = run_wasmtime(&[
+        "run",
+        "--config",
+        cfg_path.to_str().unwrap(),
+        "--invoke",
+        "get_f64",
+        "-W",
+        "max-wasm-stack=0", // should override TOML value 65536 specified above and execution should fail
+        wasm.path().to_str().unwrap(),
+    ]);
+    assert!(
+        output
+            .as_ref()
+            .unwrap_err()
+            .to_string()
+            .contains("max_wasm_stack size cannot be zero"),
+        "'{output:?}' did not contain expected error message",
+    );
+
+    // Test invalid TOML key
+    let (mut cfg, cfg_path) = tempfile::NamedTempFile::new()?.into_parts();
+    cfg.write_all(
+        br#"
+        [optimize]
+        this_key_does_not_exist = true
+        "#,
+    )?;
+    let output = run_wasmtime(&[
+        "run",
+        "--config",
+        cfg_path.to_str().unwrap(),
+        wasm.path().to_str().unwrap(),
+    ]);
+    assert!(
+        output
+            .as_ref()
+            .unwrap_err()
+            .to_string()
+            .contains("unknown field `this_key_does_not_exist`"),
+        "'{output:?}' did not contain expected error message"
+    );
+
+    // Test invalid TOML table
+    let (mut cfg, cfg_path) = tempfile::NamedTempFile::new()?.into_parts();
+    cfg.write_all(
+        br#"
+        [invalid_table]
+        "#,
+    )?;
+    let output = run_wasmtime(&[
+        "run",
+        "--config",
+        cfg_path.to_str().unwrap(),
+        wasm.path().to_str().unwrap(),
+    ]);
+    assert!(
+        output
+            .as_ref()
+            .unwrap_err()
+            .to_string()
+            .contains("unknown field `invalid_table`, expected one of `optimize`, `codegen`, `debug`, `wasm`, `wasi`"),
+        "'{output:?}' did not contain expected error message",
+    );
+
+    Ok(())
+}
