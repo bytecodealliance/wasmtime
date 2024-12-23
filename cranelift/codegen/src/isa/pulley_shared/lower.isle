@@ -1121,16 +1121,19 @@
 
 (rule (lower (has_type $F32 (fsub a b))) (pulley_fsub32 a b))
 (rule (lower (has_type $F64 (fsub a b))) (pulley_fsub64 a b))
+(rule (lower (has_type $F32X4 (fsub a b))) (pulley_vsub32x4 a b))
 
 ;;;; Rules for `fmul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (fmul a b))) (pulley_fmul32 a b))
 (rule (lower (has_type $F64 (fmul a b))) (pulley_fmul64 a b))
+(rule (lower (has_type $F32X4 (fmul a b))) (pulley_vmul32x4 a b))
 
 ;;;; Rules for `fdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (fdiv a b))) (pulley_fdiv32 a b))
 (rule (lower (has_type $F64 (fdiv a b))) (pulley_fdiv64 a b))
+(rule (lower (has_type $F32X4 (fdiv a b))) (pulley_vdiv32x4 a b))
 
 ;;;; Rules for `fmax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1193,6 +1196,7 @@
 
 (rule (lower (has_type $F32 (fneg a))) (pulley_fneg32 a))
 (rule (lower (has_type $F64 (fneg a))) (pulley_fneg64 a))
+(rule (lower (has_type $F32X4 (fneg a))) (pulley_vnegf32x4 a))
 
 ;;;; Rules for `ineg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
