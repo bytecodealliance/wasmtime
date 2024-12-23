@@ -1072,6 +1072,7 @@ jobs:
     strategy:
       fail-fast: ${{ github.event_name != 'pull_request' }}
       matrix: ${{ fromJson(needs.determine.outputs.build-matrix) }}
+    env: ${{ matrix.env || fromJSON('{}') }}
     steps:
     - uses: actions/checkout@v4
       with:
@@ -1089,16 +1090,13 @@ jobs:
     # it everywhere
     - run: ./ci/build-src-tarball.sh
       if: matrix.build == 'x86_64-linux'
-    - uses: ./.github/actions/binary-compatible-builds
-      with:
-        name: ${{ matrix.build }}
 
     - uses: ./.github/actions/android-ndk
       if: contains(matrix.target, 'android')
       with:
         target: ${{ matrix.target }}
 
-    - run: $CENTOS ./ci/build-release-artifacts.sh "${{ matrix.build }}" "${{ matrix.target }}"
+    - run: ./ci/build-release-artifacts.sh "${{ matrix.build }}" "${{ matrix.target }}"
 
     # Assemble release artifacts appropriate for this platform, then upload them
     # unconditionally to this workflow's files so we have a copy of them.
