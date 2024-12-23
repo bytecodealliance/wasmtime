@@ -2,7 +2,7 @@
 ;;
 ;; Some content here is derived from [CloudABI](https://github.com/NuxiNL/cloudabi).
 ;;
-;; This is a `witx` file. See [here](https://github.com/WebAssembly/WASI/tree/master/docs/witx.md)
+;; This is a `witx` file. See [here](https://github.com/WebAssembly/WASI/blob/main/legacy/tools/witx-docs.md)
 ;; for an explanation of what that means.
 
 (typename $size u32)
