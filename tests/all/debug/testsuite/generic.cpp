@@ -21,6 +21,16 @@ struct BaseType {
 };
 struct DerivedType : BaseType {
   long long DerivedValue = 2;
+
+  int InstanceMethod() {
+    debug_break();
+    return BaseValue + DerivedValue;
+  }
+
+  int ConstInstanceMethod() const {
+    debug_break();
+    return BaseValue + DerivedValue;
+  }
 };
 
 int TestInheritance() {
@@ -29,9 +39,32 @@ int TestInheritance() {
   return inst.BaseValue + inst.DerivedValue != 3 ? 1 : 0;
 }
 
+int TestInstanceMethod() {
+  debug_break();
+
+  DerivedType inst;
+  inst.BaseValue = 2;
+  inst.DerivedValue = 4;
+  if (inst.InstanceMethod() != 6)
+    return 1;
+
+  inst.BaseValue++;
+  volatile DerivedType volatileInst = inst;
+  if (inst.InstanceMethod() != 7)
+    return 2;
+
+  inst.DerivedValue++;
+  const DerivedType constInst = inst;
+  if (inst.ConstInstanceMethod() != 8)
+    return 3;
+
+  return 0;
+}
+
 int main() {
   int exitCode = 0;
   exitCode += TestClassDefinitionSpreadAcrossCompileUnits();
   exitCode += TestInheritance();
+  exitCode += TestInstanceMethod();
   return exitCode;
 }
