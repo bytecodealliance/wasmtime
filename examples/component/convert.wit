@@ -1,11 +1,23 @@
 package local:demo;
 
 world convert {
+    variant temperature {
+      celsius(f32),
+      fahrenheit(f32),
+    }
     /// This interface needs to be provided by the host
     import host: interface {
+      enum binary-operation {
+        add,
+        multiply,
+      }
       /// Example function that does a simple a × b operation
       multiply: func(a: f32, b: f32) -> f32;
+      /// Example function that does a simple operation 'op'
+      apply: func(a: f32, b: f32, op: binary-operation) -> f32;
     }
     /// Exported function for computing: (°C × 9/5) + 32 = °F
     export convert-celsius-to-fahrenheit: func(x: f32) -> f32;
+    /// Exported function for converting from one temperature scale to the other
+    export convert: func(t: temperature) -> temperature;
 }

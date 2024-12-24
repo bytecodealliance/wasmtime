@@ -38,6 +38,7 @@ default = [
   'gc-null',
   'cranelift',
   'winch',
+  'component-model',
   # ... if you add a line above this be sure to change the other locations
   # marked WASMTIME_FEATURE_LIST
 ]
@@ -52,6 +53,7 @@ coredump = ["wasmtime-c-api/coredump"]
 addr2line = ["wasmtime-c-api/addr2line"]
 demangle = ["wasmtime-c-api/demangle"]
 wat = ["wasmtime-c-api/wat"]
+component-model = ["wasmtime-c-api/component-model"]
 threads = ["wasmtime-c-api/threads"]
 gc = ["wasmtime-c-api/gc"]
 gc-drc = ["wasmtime-c-api/gc-drc"]
