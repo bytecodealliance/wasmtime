@@ -212,11 +212,6 @@ fn run_compilation(compilation: &IsleCompilation) -> Result<(), Errors> {
         isle::compile::from_files(file_paths, &options)?
     };
 
-    let code = rustfmt(&code).unwrap_or_else(|e| {
-        println!("cargo:warning=Failed to run `rustfmt` on ISLE-generated code: {e:?}");
-        code
-    });
-
     eprintln!(
         "Writing ISLE-generated Rust code to {}",
         compilation.output.display()
@@ -225,31 +220,4 @@ fn run_compilation(compilation: &IsleCompilation) -> Result<(), Errors> {
         .map_err(|e| Errors::from_io(e, "failed writing output"))?;
 
     Ok(())
-}
-
-fn rustfmt(code: &str) -> std::io::Result<String> {
-    use std::io::Write;
-
-    let mut rustfmt = std::process::Command::new("rustfmt")
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .spawn()?;
-
-    let mut stdin = rustfmt.stdin.take().unwrap();
-    stdin.write_all(code.as_bytes())?;
-    drop(stdin);
-
-    let mut stdout = rustfmt.stdout.take().unwrap();
-    let mut data = vec![];
-    stdout.read_to_end(&mut data)?;
-
-    let status = rustfmt.wait()?;
-    if !status.success() {
-        return Err(std::io::Error::new(
-            std::io::ErrorKind::Other,
-            format!("`rustfmt` exited with status {status}"),
-        ));
-    }
-
-    Ok(String::from_utf8(data).expect("rustfmt always writes utf-8 to stdout"))
 }
