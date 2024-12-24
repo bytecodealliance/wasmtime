@@ -47,3 +47,8 @@ pub extern "C" fn wasmtime_engine_clone(engine: &wasm_engine_t) -> Box<wasm_engi
 pub extern "C" fn wasmtime_engine_increment_epoch(engine: &wasm_engine_t) {
     engine.engine.increment_epoch();
 }
+
+#[no_mangle]
+pub extern "C" fn wasmtime_engine_is_pulley(engine: &wasm_engine_t) -> bool {
+    engine.engine.is_pulley()
+}

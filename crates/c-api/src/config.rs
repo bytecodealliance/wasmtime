@@ -249,7 +249,6 @@ pub extern "C" fn wasmtime_config_native_unwind_info_set(c: &mut wasm_config_t, 
 }
 
 #[no_mangle]
-#[cfg(any(feature = "cranelift", feature = "winch"))]
 pub unsafe extern "C" fn wasmtime_config_target_set(
     c: &mut wasm_config_t,
     target: *const c_char,

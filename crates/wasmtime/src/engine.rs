@@ -16,7 +16,7 @@ use object::SectionKind;
 use std::{fs::File, path::Path};
 use wasmparser::WasmFeatures;
 use wasmtime_environ::obj;
-use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
+use wasmtime_environ::{FlagValue, ObjectKind, TripleExt, Tunables};
 
 mod serialization;
 
@@ -223,13 +223,7 @@ impl Engine {
     /// Returns the target triple which this engine is compiling code for
     /// and/or running code for.
     pub(crate) fn target(&self) -> target_lexicon::Triple {
-        // If a compiler is configured, use that target.
-        #[cfg(any(feature = "cranelift", feature = "winch"))]
-        return self.compiler().triple().clone();
-
-        // ... otherwise it's the native target
-        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
-        return target_lexicon::Triple::host();
+        return self.config().compiler_target();
     }
 
     /// Verify that this engine's configuration is compatible with loading
@@ -258,7 +252,6 @@ impl Engine {
         #[cfg(any(feature = "cranelift", feature = "winch"))]
         {
             use target_lexicon::Triple;
-            use wasmtime_environ::TripleExt;
 
             let compiler = self.compiler();
 
@@ -528,6 +521,17 @@ impl Engine {
                  available at runtime"
             )),
         }
+    }
+
+    /// Returns whether this [`Engine`] is configured to execute with Pulley,
+    /// Wasmtime's interpreter.
+    ///
+    /// Note that Pulley is the default for host platforms that do not have a
+    /// Cranelift backend to support them. For example at the time of this
+    /// writing 32-bit x86 is not supported in Cranelift so the
+    /// `i686-unknown-linux-gnu` target would by default return `true` here.
+    pub fn is_pulley(&self) -> bool {
+        self.target().is_pulley()
     }
 }
 
