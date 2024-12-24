@@ -751,6 +751,33 @@
   (if-let true (floatcc_unordered cc))
   (pulley_xbxor32_s8 (lower_fcmp ty (floatcc_complement cc) a b) 1))
 
+;; vector comparisons
+
+(rule 1 (lower (has_type (ty_vec128 _) (fcmp cc a b @ (value_type (ty_vec128 ty)))))
+  (lower_vfcmp ty cc a b))
+
+(decl lower_vfcmp (Type FloatCC Value Value) VReg)
+(rule (lower_vfcmp $F32X4 (FloatCC.Ordered) a b) (pulley_vordf32x4 a b))
+(rule (lower_vfcmp $F32X4 (FloatCC.Unordered) a b) (pulley_vunof32x4 a b))
+(rule (lower_vfcmp $F32X4 (FloatCC.Equal) a b) (pulley_veqf32x4 a b))
+(rule (lower_vfcmp $F32X4 (FloatCC.NotEqual) a b) (pulley_vneqf32x4 a b))
+(rule (lower_vfcmp $F32X4 (FloatCC.OrderedNotEqual) a b) (pulley_vordneqf32x4 a b))
+(rule (lower_vfcmp $F32X4 (FloatCC.UnorderedOrEqual) a b) (pulley_vunoeqf32x4 a b))
+(rule (lower_vfcmp $F32X4 (FloatCC.LessThan) a b) (pulley_vltf32x4 a b))
+(rule (lower_vfcmp $F32X4 (FloatCC.LessThanOrEqual) a b) (pulley_vlteqf32x4 a b))
+(rule (lower_vfcmp $F32X4 (FloatCC.GreaterThan) a b) (pulley_vltf32x4 b a))
+(rule (lower_vfcmp $F32X4 (FloatCC.GreaterThanOrEqual) a b) (pulley_vlteqf32x4 b a))
+(rule (lower_vfcmp $F64X2 (FloatCC.Ordered) a b) (pulley_vordf64x2 a b))
+(rule (lower_vfcmp $F64X2 (FloatCC.Unordered) a b) (pulley_vunof64x2 a b))
+(rule (lower_vfcmp $F64X2 (FloatCC.Equal) a b) (pulley_veqf64x2 a b))
+(rule (lower_vfcmp $F64X2 (FloatCC.NotEqual) a b) (pulley_vneqf64x2 a b))
+(rule (lower_vfcmp $F64X2 (FloatCC.OrderedNotEqual) a b) (pulley_vordneqf64x2 a b))
+(rule (lower_vfcmp $F64X2 (FloatCC.UnorderedOrEqual) a b) (pulley_vunoeqf64x2 a b))
+(rule (lower_vfcmp $F64X2 (FloatCC.LessThan) a b) (pulley_vltf64x2 a b))
+(rule (lower_vfcmp $F64X2 (FloatCC.LessThanOrEqual) a b) (pulley_vlteqf64x2 a b))
+(rule (lower_vfcmp $F64X2 (FloatCC.GreaterThan) a b) (pulley_vltf64x2 b a))
+(rule (lower_vfcmp $F64X2 (FloatCC.GreaterThanOrEqual) a b) (pulley_vlteqf64x2 b a))
+
 ;;;; Rules for `load` and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (decl amode (Value Offset32) Amode)

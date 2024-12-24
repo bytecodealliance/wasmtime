@@ -1144,6 +1144,39 @@ macro_rules! for_each_extended_op {
             /// `dst = src <= dst` (unsigned)
             vulteq64x2 = Vulteq64x2 { operands: BinaryOperands<VReg> };
 
+            /// `dst = !src1.is_nan() && !src2.is_nan()`
+            vordf32x4 = Vordf32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src1.is_nan() || src2.is_nan()`
+            vunof32x4 = Vunof32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 == src2`
+            veqf32x4 = Veqf32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 != src2`
+            vneqf32x4 = Vneqf32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = !src1.is_nan() && !src2.is_nan() && src1 != src2`
+            vordneqf32x4 = Vordneqf32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src1.is_nan() || src2.is_nan() || src1 == src2`
+            vunoeqf32x4 = Vunoeqf32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 < src2`
+            vltf32x4 = Vltf32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 <= src2`
+            vlteqf32x4 = Vlteqf32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = !src1.is_nan() && !src2.is_nan()`
+            vordf64x2 = Vordf64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src1.is_nan() || src2.is_nan()`
+            vunof64x2 = Vunof64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 == src2`
+            veqf64x2 = Veqf64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 != src2`
+            vneqf64x2 = Vneqf64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = !src1.is_nan() && !src2.is_nan() && src1 != src2`
+            vordneqf64x2 = Vordneqf64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src1.is_nan() || src2.is_nan() || src1 == src2`
+            vunoeqf64x2 = Vunoeqf64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 < src2`
+            vltf64x2 = Vltf64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 <= src2`
+            vlteqf64x2 = Vlteqf64x2 { operands: BinaryOperands<VReg> };
+
             /// `dst = -src`
             vneg8x16 = Vneg8x16 { dst: VReg, src: VReg };
             /// `dst = -src`
