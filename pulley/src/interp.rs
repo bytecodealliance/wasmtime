@@ -4253,7 +4253,7 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         let b = self.state[operands.src2].get_f32x4();
         let mut c = [0; 4];
         for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
-            *c = if a != b { u32::MAX } else { 0 };
+            *c = if a == b { 0 } else { u32::MAX };
         }
         self.state[operands.dst].set_u32x4(c);
         ControlFlow::Continue(())
@@ -4357,7 +4357,7 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         let b = self.state[operands.src2].get_f64x2();
         let mut c = [0; 2];
         for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
-            *c = if a != b { u64::MAX } else { 0 };
+            *c = if a == b { 0 } else { u64::MAX };
         }
         self.state[operands.dst].set_u64x2(c);
         ControlFlow::Continue(())
