@@ -1,20 +1,34 @@
+use crate::debug::transform::utils::resolve_die_ref;
+use crate::debug::Reader;
+
 use super::address_transform::AddressTransform;
 use super::expression::{compile_expression, CompiledExpression, FunctionFrameInfo};
 use super::range_info_builder::RangeInfoBuilder;
 use super::refs::{PendingDebugInfoRefs, PendingUnitRefs};
-use super::{Reader, TransformError};
+use super::unit::InheritedAttr;
+use super::{dbi_log, TransformError};
 use anyhow::{bail, Error};
 use cranelift_codegen::isa::TargetIsa;
-use gimli::{write, AttributeValue, DebugLineOffset, DebuggingInformationEntry, Unit};
+use gimli::{
+    write, AttributeValue, DebugLineOffset, DebuggingInformationEntry, Dwarf, Unit, UnitOffset,
+};
 
 #[derive(Debug)]
-pub(crate) enum FileAttributeContext<'a> {
+pub(crate) enum EntryAttributesContext<'a> {
     Root(Option<DebugLineOffset>),
     Children {
+        depth: usize,
+        subprograms: &'a mut InheritedAttr<SubprogramContext>,
         file_map: &'a [write::FileId],
         file_index_base: u64,
         frame_base: Option<&'a CompiledExpression>,
     },
+}
+
+#[derive(Debug)]
+pub struct SubprogramContext {
+    pub obj_ptr: UnitOffset,
+    pub param_num: isize,
 }
 
 fn is_exprloc_to_loclist_allowed(attr_name: gimli::constants::DwAt) -> bool {
@@ -32,25 +46,22 @@ fn is_exprloc_to_loclist_allowed(attr_name: gimli::constants::DwAt) -> bool {
     }
 }
 
-pub(crate) fn clone_die_attributes<'a, R>(
-    dwarf: &gimli::Dwarf<R>,
-    unit: &Unit<R, R::Offset>,
-    entry: &DebuggingInformationEntry<R>,
+pub(crate) fn clone_die_attributes<'a>(
+    dwarf: &gimli::Dwarf<Reader<'a>>,
+    unit: &Unit<Reader<'a>>,
+    entry: &DebuggingInformationEntry<Reader<'a>>,
     addr_tr: &'a AddressTransform,
     frame_info: Option<&FunctionFrameInfo>,
     out_unit: &mut write::Unit,
-    current_scope_id: write::UnitEntryId,
+    out_entry_id: write::UnitEntryId,
     subprogram_range_builder: Option<RangeInfoBuilder>,
     scope_ranges: Option<&Vec<(u64, u64)>>,
     out_strings: &mut write::StringTable,
     pending_die_refs: &mut PendingUnitRefs,
     pending_di_refs: &mut PendingDebugInfoRefs,
-    file_context: FileAttributeContext<'a>,
+    mut attr_context: EntryAttributesContext<'a>,
     isa: &dyn TargetIsa,
-) -> Result<(), Error>
-where
-    R: Reader,
-{
+) -> Result<(), Error> {
     let unit_encoding = unit.encoding();
 
     let range_info = if let Some(subprogram_range_builder) = subprogram_range_builder {
@@ -61,7 +72,10 @@ where
         // transformation may be incomplete.
         RangeInfoBuilder::from(dwarf, unit, entry)?
     };
-    range_info.build(addr_tr, out_unit, current_scope_id);
+    range_info.build(addr_tr, out_unit, out_entry_id);
+
+    let mut is_obj_ptr = false;
+    prepare_die_context(dwarf, unit, entry, &mut attr_context, &mut is_obj_ptr)?;
 
     let mut attrs = entry.attrs();
     while let Some(attr) = attrs.next()? {
@@ -69,6 +83,33 @@ where
             gimli::DW_AT_low_pc | gimli::DW_AT_high_pc | gimli::DW_AT_ranges => {
                 // Handled by RangeInfoBuilder.
                 continue;
+            }
+            gimli::DW_AT_object_pointer => {
+                // Our consumers cannot handle 'this' typed as a non-pointer (recall
+                // we translate all pointers to wrapper types), making it unusable.
+                // To remedy this, we 'strip' instance-ness off of methods by removing
+                // DW_AT_object_pointer and renaming 'this' to '__this'.
+                if let EntryAttributesContext::Children {
+                    depth,
+                    ref mut subprograms,
+                    ..
+                } = attr_context
+                {
+                    if let Some(ref mut subprogram) = subprograms.top_with_depth_mut(depth) {
+                        // We expect this to reference a child entry in the same unit.
+                        if let Some(unit_offs) = match attr.value() {
+                            AttributeValue::DebugInfoRef(di_ref) => {
+                                di_ref.to_unit_offset(&unit.header)
+                            }
+                            AttributeValue::UnitRef(unit_ref) => Some(unit_ref),
+                            _ => None,
+                        } {
+                            subprogram.obj_ptr = unit_offs;
+                            dbi_log!("Stripped DW_AT_object_pointer");
+                            continue;
+                        }
+                    }
+                }
             }
             gimli::DW_AT_str_offsets_base
             | gimli::DW_AT_addr_base
@@ -84,6 +125,32 @@ where
             }
             _ => {}
         }
+
+        if is_obj_ptr {
+            match attr.name() {
+                gimli::DW_AT_artificial => {
+                    dbi_log!("Object pointer: stripped DW_AT_artificial");
+                    continue;
+                }
+                gimli::DW_AT_name => {
+                    let old_name: &str = &dwarf.attr_string(unit, attr.value())?.to_string_lossy();
+                    let new_name = format!("__{old_name}");
+                    dbi_log!(
+                        "Object pointer: renamed '{}' -> '{}'",
+                        old_name,
+                        new_name.as_str()
+                    );
+
+                    let attr_value = write::AttributeValue::StringRef(out_strings.add(new_name));
+                    out_unit
+                        .get_mut(out_entry_id)
+                        .set(gimli::DW_AT_name, attr_value);
+                    continue;
+                }
+                _ => {}
+            }
+        }
+
         let attr_value = attr.value();
         let out_attr_value = match attr_value {
             AttributeValue::Addr(u) => {
@@ -95,7 +162,7 @@ where
                 let addr = addr_tr.translate(u).unwrap_or(write::Address::Constant(0));
                 write::AttributeValue::Address(addr)
             }
-            AttributeValue::Block(d) => write::AttributeValue::Block(d.to_slice()?.into_owned()),
+            AttributeValue::Block(d) => write::AttributeValue::Block(d.to_vec()),
             AttributeValue::Udata(u) => write::AttributeValue::Udata(u),
             AttributeValue::Data1(d) => write::AttributeValue::Data1(d),
             AttributeValue::Data2(d) => write::AttributeValue::Data2(d),
@@ -104,7 +171,7 @@ where
             AttributeValue::Sdata(d) => write::AttributeValue::Sdata(d),
             AttributeValue::Flag(f) => write::AttributeValue::Flag(f),
             AttributeValue::DebugLineRef(line_program_offset) => {
-                if let FileAttributeContext::Root(o) = file_context {
+                if let EntryAttributesContext::Root(o) = attr_context {
                     if o != Some(line_program_offset) {
                         return Err(TransformError("invalid debug_line offset").into());
                     }
@@ -114,11 +181,11 @@ where
                 }
             }
             AttributeValue::FileIndex(i) => {
-                if let FileAttributeContext::Children {
+                if let EntryAttributesContext::Children {
                     file_map,
                     file_index_base,
                     ..
-                } = file_context
+                } = attr_context
                 {
                     let index = usize::try_from(i - file_index_base)
                         .ok()
@@ -133,10 +200,11 @@ where
                     return Err(TransformError("unexpected file index attribute").into());
                 }
             }
+            AttributeValue::String(d) => write::AttributeValue::String(d.to_vec()),
             AttributeValue::DebugStrRef(_) | AttributeValue::DebugStrOffsetsIndex(_) => {
                 let s = dwarf
                     .attr_string(unit, attr_value)?
-                    .to_string_lossy()?
+                    .to_string_lossy()
                     .into_owned();
                 write::AttributeValue::StringRef(out_strings.add(s))
             }
@@ -157,7 +225,7 @@ where
                     unit.addr_base,
                 )?;
                 let frame_base =
-                    if let FileAttributeContext::Children { frame_base, .. } = file_context {
+                    if let EntryAttributesContext::Children { frame_base, .. } = attr_context {
                         frame_base
                     } else {
                         None
@@ -213,7 +281,7 @@ where
             }
             AttributeValue::Exprloc(ref expr) => {
                 let frame_base =
-                    if let FileAttributeContext::Children { frame_base, .. } = file_context {
+                    if let EntryAttributesContext::Children { frame_base, .. } = attr_context {
                         frame_base
                     } else {
                         None
@@ -292,18 +360,94 @@ where
             AttributeValue::Inline(e) => write::AttributeValue::Inline(e),
             AttributeValue::Ordering(e) => write::AttributeValue::Ordering(e),
             AttributeValue::UnitRef(offset) => {
-                pending_die_refs.insert(current_scope_id, attr.name(), offset);
+                pending_die_refs.insert(out_entry_id, attr.name(), offset);
                 continue;
             }
             AttributeValue::DebugInfoRef(offset) => {
-                pending_di_refs.insert(current_scope_id, attr.name(), offset);
+                pending_di_refs.insert(out_entry_id, attr.name(), offset);
                 continue;
             }
-            AttributeValue::String(d) => write::AttributeValue::String(d.to_slice()?.into_owned()),
             a => bail!("Unexpected attribute: {:?}", a),
         };
-        let current_scope = out_unit.get_mut(current_scope_id);
-        current_scope.set(attr.name(), out_attr_value);
+        let out_entry: &mut write::DebuggingInformationEntry = out_unit.get_mut(out_entry_id);
+        out_entry.set(attr.name(), out_attr_value);
     }
     Ok(())
+}
+
+fn prepare_die_context(
+    dwarf: &Dwarf<Reader<'_>>,
+    unit: &Unit<Reader<'_>>,
+    entry: &DebuggingInformationEntry<Reader<'_>>,
+    attr_context: &mut EntryAttributesContext<'_>,
+    is_obj_ptr: &mut bool,
+) -> Result<(), Error> {
+    let EntryAttributesContext::Children {
+        depth, subprograms, ..
+    } = attr_context
+    else {
+        return Ok(());
+    };
+
+    // Update the current context based on what kind of entry this is.
+    match entry.tag() {
+        gimli::DW_TAG_subprogram | gimli::DW_TAG_inlined_subroutine | gimli::DW_TAG_entry_point => {
+            // Push the 'context' of there being no parameters (yet).
+            subprograms.push(
+                *depth,
+                SubprogramContext {
+                    obj_ptr: UnitOffset { 0: 0 },
+                    param_num: -1,
+                },
+            );
+        }
+        gimli::DW_TAG_formal_parameter => {
+            // Formal parameter tags can be parented by catch blocks
+            // and such - not just subprogram DIEs. So we need to check
+            // that this DIE is indeed a direct child of a subprogram.
+            if let Some(subprogram) = subprograms.top_with_depth_mut(*depth - 1) {
+                subprogram.param_num += 1;
+
+                if subprogram.obj_ptr == entry.offset()
+                    || is_obj_ptr_param(dwarf, unit, entry, subprogram.param_num)?
+                {
+                    *is_obj_ptr = true;
+                }
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+fn is_obj_ptr_param(
+    dwarf: &Dwarf<Reader<'_>>,
+    unit: &Unit<Reader<'_>>,
+    entry: &DebuggingInformationEntry<Reader<'_>>,
+    param_num: isize,
+) -> Result<bool, Error> {
+    debug_assert!(entry.tag() == gimli::DW_TAG_formal_parameter);
+
+    // This logic was taken loosely from LLDB. It is known
+    // that it is not fully correct (doesn't handle 'deduced
+    // this', for example).
+    // Q: DWARF includes DW_AT_object_pointer as we use it,
+    // why do we need this heuristic as well?
+    // A: Declarations do not include DW_AT_object_pointer.
+    if param_num == 0
+        && entry.attr_value(gimli::DW_AT_artificial)? == Some(AttributeValue::Flag(true))
+    {
+        // Either this has no name (declarations omit them), or its explicitly "this".
+        let name = entry.attr_value(gimli::DW_AT_name)?;
+        if name.is_none() || dwarf.attr_string(unit, name.unwrap())?.slice().eq(b"this") {
+            // Finally, a type check. We expect a pointer.
+            if let Some(type_attr) = entry.attr_value(gimli::DW_AT_type)? {
+                if let Some(type_die) = resolve_die_ref(unit, &type_attr)? {
+                    return Ok(type_die.tag() == gimli::DW_TAG_pointer_type);
+                }
+            }
+        }
+    };
+
+    return Ok(false);
 }
