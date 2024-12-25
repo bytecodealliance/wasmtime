@@ -541,11 +541,19 @@ impl CommonOptions {
         } else {
             use std::io::IsTerminal;
             use tracing_subscriber::{EnvFilter, FmtSubscriber};
-            let b = FmtSubscriber::builder()
+            let builder = FmtSubscriber::builder()
                 .with_writer(std::io::stderr)
                 .with_env_filter(EnvFilter::from_env("WASMTIME_LOG"))
                 .with_ansi(std::io::stderr().is_terminal());
-            b.init();
+            if std::env::var("WASMTIME_LOG_NO_CONTEXT").is_ok_and(|value| value.eq("1")) {
+                builder
+                    .with_level(false)
+                    .with_target(false)
+                    .without_time()
+                    .init()
+            } else {
+                builder.init();
+            }
         }
         #[cfg(not(feature = "logging"))]
         if self.debug.log_to_files == Some(true) || self.debug.logging == Some(true) {
