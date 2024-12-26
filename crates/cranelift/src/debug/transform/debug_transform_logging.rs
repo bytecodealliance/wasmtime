@@ -123,7 +123,10 @@ impl<'a> fmt::Debug for DieDetailedSummary<'a> {
                 AttributeValue::CallingConvention(value) => write!(f, "{value}"),
                 AttributeValue::Inline(value) => write!(f, "{value}"),
                 AttributeValue::Ordering(value) => write!(f, "{value}"),
-                AttributeValue::UnitRef(offset) => write!(f, "0x{:08x}", offset.0),
+                AttributeValue::UnitRef(offset) => {
+                    let section_offset = offset.to_unit_section_offset(unit);
+                    write!(f, "0x{:08x}", get_offset_value(section_offset))
+                }
                 AttributeValue::DebugInfoRef(offset) => write!(f, "0x{:08x}", offset.0),
                 unexpected_attr => write!(f, "<unexpected attr: {unexpected_attr:?}>"),
             }?;
