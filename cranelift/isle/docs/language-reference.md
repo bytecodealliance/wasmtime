@@ -1442,12 +1442,14 @@ The grammar accepted by the parser is as follows:
                | "\t"
                | "\n"
                | "\r"
+               | "\b"
+               | "\f"
 
 <comment> ::= <line-comment> | <block-comment>
 
 <line-comment> ::= ";" <line-char>* (<newline> | eof)
-<newline> ::= "\n" | "\r"
 <line-char> ::= <any character other than "\n" or "\r">
+<newline> ::= "\n" | "\r"
 
 <block-comment> ::= "(;" <block-char>* ";)"
 <block-char> ::= <any character other than ";" or "(">
@@ -1458,45 +1460,43 @@ The grammar accepted by the parser is as follows:
 <ISLE> ::= <def>*
 
 <def> ::= "(" "pragma" <pragma> ")"
-        | "(" "type" <typedecl> ")"
+        | "(" "type" <type> ")"
         | "(" "decl" <decl> ")"
         | "(" "rule" <rule> ")"
-        | "(" "extractor" <etor> ")"
+        | "(" "extractor" <extractor> ")"
         | "(" "extern" <extern> ")"
         | "(" "convert" <converter> ")"
 
-// No pragmas are defined yet
+;; No pragmas are defined yet
 <pragma> ::= <ident>
 
-<typedecl> ::= <ident> [ "extern" | "nodebug" ] <typevalue>
+<type> ::= <ident> [ "extern" | "nodebug" ] <typedef>
 
 <ident> ::= <ident-start> <ident-cont>*
 <const-ident> ::= "$" <ident-cont>*
-
 <ident-start> ::= <any non-whitespace character other than "-", "0".."9", "(", ")" or ";">
 <ident-cont>  ::= <any non-whitespace character other than "(", ")", ";" or "@">
 
-<int> ::= [ "-" ] ( "0".."9" | "_" )+
-        | [ "-" ] "0x" ( "0".."9" | "A".."F" | "a".."f" | "_" )+
-        | [ "-" ] "0o" ( "0".."7" | "_" )+
-        | [ "-" ] "0b" ( "0".."1" | "_" )+
+<typedef> ::= "(" "primitive" <ident> ")"
+            | "(" "enum" <enum-variant>* ")"
 
-<typevalue> ::= "(" "primitive" <ident> ")"
-              | "(" "enum" <enumvariant>* ")"
+<enum-variant> ::= <ident>
+                 | "(" <ident> <variant-field>* ")"
 
-<enumvariant> ::= <ident>
-                | "(" <ident> <enumfield>* ")"
-
-<enumfield> ::= "(" <ident> <ty> ")"
+<variant-field> ::= "(" <ident> <ty> ")"
 
 <ty> ::= <ident>
 
 <decl> ::= [ "pure" ] [ "multi" ] [ "partial" ] <ident> "(" <ty>* ")" <ty>
 
 <rule> ::= [ <ident> ] [ <prio> ] <pattern> <stmt>* <expr>
+
 <prio> ::= <int>
 
-<etor> ::= "(" <ident> <ident>* ")" <pattern>
+<int> ::= [ "-" ] ( "0".."9" | "_" )+
+        | [ "-" ] "0" ("x" | "X") ( "0".."9" | "A".."F" | "a".."f" | "_" )+
+        | [ "-" ] "0" ("o" | "O") ( "0".."7" | "_" )+
+        | [ "-" ] "0" ("b" | "B") ( "0".."1" | "_" )+
 
 <pattern> ::= <int>
             | "true" | "false"
@@ -1508,7 +1508,7 @@ The grammar accepted by the parser is as follows:
             | "(" <ident> <pattern-arg>* ")"
 
 <pattern-arg> ::= <pattern>
-                | "<" <expr>  ;; in-argument to an extractor
+                | <expr>
 
 <stmt> ::= "(" "if-let" <pattern> <expr> ")"
          | "(" "if" <expr> ")"
@@ -1521,6 +1521,8 @@ The grammar accepted by the parser is as follows:
          | "(" <ident> <expr>* ")"
 
 <let-binding> ::= "(" <ident> <ty> <expr> ")"
+
+<extractor> ::= "(" <ident> <ident>* ")" <pattern>
 
 <extern> ::= "constructor" <ident> <ident>
            | "extractor" [ "infallible" ] <ident> <ident>
