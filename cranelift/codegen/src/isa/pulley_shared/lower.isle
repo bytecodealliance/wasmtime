@@ -1139,6 +1139,7 @@
 
 (rule (lower (has_type $F32 (fdiv a b))) (pulley_fdiv32 a b))
 (rule (lower (has_type $F64 (fdiv a b))) (pulley_fdiv64 a b))
+(rule (lower (has_type $F32X4 (fdiv a b))) (pulley_vdivf32x4 a b))
 
 ;;;; Rules for `fmax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1367,3 +1368,8 @@
   (pulley_vinsertf32 (pulley_vconst128 0) a 0))
 (rule (lower (scalar_to_vector a @ (value_type $F64)))
   (pulley_vinsertf64 (pulley_vconst128 0) a 0))
+
+
+;;;; Rules for `swizzle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule 1 (lower (has_type $I8X16 (swizzle a b))) (pulley_vswizzlei8x16 a b))

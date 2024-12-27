@@ -13,7 +13,6 @@ use core::ops::{Index, IndexMut};
 use core::ptr::NonNull;
 use sptr::Strict;
 use wasmtime_math::WasmFloat;
-
 mod debug;
 #[cfg(all(not(pulley_tail_calls), not(pulley_assume_llvm_makes_tail_calls)))]
 mod match_loop;
@@ -2995,6 +2994,19 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vdivf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        let mut result = [0.0f32; 4];
+
+        for i in 0..4 {
+            result[i] = a[i] / b[i];
+        }
+
+        self.state[operands.dst].set_f32x4(result);
+        ControlFlow::Continue(())
+    }
+
     fn fmaximum32(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_f32();
         let b = self.state[operands.src2].get_f32();
@@ -4329,6 +4341,21 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vswizzlei8x16(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let src1 = self.state[operands.src1].get_i8x16();
+        let src2 = self.state[operands.src2].get_i8x16();
+        let mut dst = [0i8; 16];
+        for (i, &idx) in src2.iter().enumerate() {
+            if (idx as usize) < 16 {
+                dst[i] = src1[idx as usize];
+            } else {
+                dst[i] = 0
+            }
+        }
+        self.state[operands.dst].set_i8x16(dst);
+        ControlFlow::Continue(())
+    }
+
     fn vavground16x8(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
         let mut a = self.state[operands.src1].get_u16x8();
         let b = self.state[operands.src2].get_u16x8();
@@ -4337,6 +4364,5 @@ impl ExtendedOpVisitor for Interpreter<'_> {
             *a = ((u32::from(*a) + u32::from(*b) + 1) / 2) as u16;
         }
         self.state[operands.dst].set_u16x8(a);
-        ControlFlow::Continue(())
     }
 }

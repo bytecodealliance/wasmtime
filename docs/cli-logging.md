@@ -23,6 +23,9 @@ Wasmtime can also redirect the log messages into log files, with the
 `-D log-to-files` option. It creates one file per thread within Wasmtime, with
 the files named `wasmtime.dbg.*`.
 
+Additional environment variables that work with `WASMTIME_LOG` (__not__ `-D log-to-files`):
+ - `WASMTIME_LOG_NO_CONTEXT`: if set to `1`, removes the time, level and target from output.
+
 [`log`]: https://crates.io/crates/log
 [`tracing-subscriber`]: https://crates.io/crates/tracing-subscriber
 [tracing-subscriber's EnvFilter docs]: https://docs.rs/tracing-subscriber/latest/tracing_subscriber/filter/struct.EnvFilter.html#directives

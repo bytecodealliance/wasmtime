@@ -1,5 +1,5 @@
 use super::address_transform::AddressTransform;
-use super::attr::{clone_die_attributes, FileAttributeContext};
+use super::attr::{clone_die_attributes, EntryAttributesContext};
 use super::debug_transform_logging::{
     dbi_log, log_begin_input_die, log_end_output_die, log_end_output_die_skipped,
     log_get_cu_summary,
@@ -9,7 +9,7 @@ use super::line_program::clone_line_program;
 use super::range_info_builder::RangeInfoBuilder;
 use super::refs::{PendingDebugInfoRefs, PendingUnitRefs, UnitRefsMap};
 use super::synthetic::ModuleSyntheticUnit;
-use super::utils::append_vmctx_info;
+use super::utils::{append_vmctx_info, resolve_die_ref};
 use super::DebugInputContext;
 use crate::debug::{Compilation, Reader};
 use anyhow::{Context, Error};
@@ -21,7 +21,8 @@ use std::collections::HashSet;
 use wasmtime_environ::StaticModuleIndex;
 use wasmtime_versioned_export_macros::versioned_stringify_ident;
 
-struct InheritedAttr<T> {
+#[derive(Debug)]
+pub struct InheritedAttr<T> {
     stack: Vec<(usize, T)>,
 }
 
@@ -36,12 +37,19 @@ impl<T> InheritedAttr<T> {
         }
     }
 
-    fn push(&mut self, depth: usize, value: T) {
+    pub fn push(&mut self, depth: usize, value: T) {
         self.stack.push((depth, value));
     }
 
-    fn top(&self) -> Option<&T> {
+    pub fn top(&self) -> Option<&T> {
         self.stack.last().map(|entry| &entry.1)
+    }
+
+    pub fn top_with_depth_mut(&mut self, depth: usize) -> Option<&mut T> {
+        self.stack
+            .last_mut()
+            .filter(|entry| entry.0 == depth)
+            .map(|entry| &mut entry.1)
     }
 
     fn is_empty(&self) -> bool {
@@ -51,14 +59,12 @@ impl<T> InheritedAttr<T> {
 
 fn get_base_type_name(
     type_entry: &DebuggingInformationEntry<Reader<'_>>,
-    unit: &Unit<Reader<'_>, usize>,
+    unit: &Unit<Reader<'_>>,
     dwarf: &Dwarf<Reader<'_>>,
 ) -> Result<String, Error> {
     // FIXME remove recursion.
-    if let Some(AttributeValue::UnitRef(ref offset)) = type_entry.attr_value(gimli::DW_AT_type)? {
-        let mut entries = unit.entries_at_offset(*offset)?;
-        entries.next_entry()?;
-        if let Some(die) = entries.current() {
+    if let Some(die_ref) = type_entry.attr_value(gimli::DW_AT_type)? {
+        if let Some(ref die) = resolve_die_ref(unit, &die_ref)? {
             if let Some(value) = die.attr_value(gimli::DW_AT_name)? {
                 return Ok(String::from(dwarf.attr_string(unit, value)?.to_string()?));
             }
@@ -251,8 +257,8 @@ fn is_dead_code(entry: &DebuggingInformationEntry<Reader<'_>>) -> bool {
 pub(crate) fn clone_unit(
     compilation: &mut Compilation<'_>,
     module: StaticModuleIndex,
-    skeleton_unit: &Unit<Reader<'_>, usize>,
-    split_unit: Option<&Unit<Reader<'_>, usize>>,
+    skeleton_unit: &Unit<Reader<'_>>,
+    split_unit: Option<&Unit<Reader<'_>>>,
     split_dwarf: Option<&Dwarf<Reader<'_>>>,
     context: &DebugInputContext,
     addr_tr: &AddressTransform,
@@ -310,7 +316,7 @@ pub(crate) fn clone_unit(
                 out_strings,
                 &mut pending_die_refs,
                 &mut pending_di_refs,
-                FileAttributeContext::Root(Some(debug_line_offset)),
+                EntryAttributesContext::Root(Some(debug_line_offset)),
                 isa,
             )?;
             if split_unit.is_some() {
@@ -328,7 +334,7 @@ pub(crate) fn clone_unit(
                         out_strings,
                         &mut pending_die_refs,
                         &mut pending_di_refs,
-                        FileAttributeContext::Root(Some(debug_line_offset)),
+                        EntryAttributesContext::Root(Some(debug_line_offset)),
                         isa,
                     )?;
                 }
@@ -352,6 +358,7 @@ pub(crate) fn clone_unit(
     let mut current_frame_base = InheritedAttr::new();
     let mut current_value_range = InheritedAttr::new();
     let mut current_scope_ranges = InheritedAttr::new();
+    let mut current_subprogram = InheritedAttr::new();
     while let Some((depth_delta, entry)) = entries.next_dfs()? {
         current_depth += depth_delta;
         log_begin_input_die(dwarf, unit, entry, current_depth);
@@ -394,6 +401,7 @@ pub(crate) fn clone_unit(
         current_frame_base.update(new_stack_len);
         current_scope_ranges.update(new_stack_len);
         current_value_range.update(new_stack_len);
+        current_subprogram.update(new_stack_len);
         let range_builder = if entry.tag() == gimli::DW_TAG_subprogram {
             let range_builder =
                 RangeInfoBuilder::from_subprogram_die(dwarf, &unit, entry, addr_tr)?;
@@ -481,7 +489,9 @@ pub(crate) fn clone_unit(
             out_strings,
             &mut pending_die_refs,
             &mut pending_di_refs,
-            FileAttributeContext::Children {
+            EntryAttributesContext::Children {
+                depth: current_depth as usize,
+                subprograms: &mut current_subprogram,
                 file_map: &file_map,
                 file_index_base,
                 frame_base: current_frame_base.top(),

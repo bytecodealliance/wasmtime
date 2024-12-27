@@ -179,6 +179,7 @@ pub fn test_debug_dwarf_generic_lldb() -> Result<()> {
         &[
             "-Ccache=n",
             "-Ddebug-info",
+            "-Oopt-level=0",
             "tests/all/debug/testsuite/generic.wasm",
         ],
         r#"br set -n debug_break -C up
@@ -189,6 +190,14 @@ c
 p (x + x)
 c
 p inst.BaseValue + inst.DerivedValue
+c
+type lookup DerivedType
+c
+p __this->BaseValue + __this->DerivedValue
+c
+p __this->BaseValue + __this->DerivedValue
+c
+p __this->BaseValue + __this->DerivedValue
 c"#,
     )?;
 
@@ -201,6 +210,15 @@ check: stop reason = breakpoint 1.1
 check: 4
 check: stop reason = breakpoint 1.1
 check: 3
+check: stop reason = breakpoint 1.1
+check: static int InstanceMethod
+check: static int ConstInstanceMethod
+check: stop reason = breakpoint 1.1
+check: 6
+check: stop reason = breakpoint 1.1
+check: 7
+check: stop reason = breakpoint 1.1
+check: 8
 check: exited with status = 0
 "#,
     )?;
