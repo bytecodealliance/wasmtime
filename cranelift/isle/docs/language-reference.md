@@ -2,7 +2,7 @@
 
 This document will describe ISLE (Instruction Selection Lowering
 Expressions), a DSL (domain-specific language) that we have developed
-in order to help us express certain parts of the Cranelift compiler
+to help us express certain parts of the Cranelift compiler
 backend more naturally. ISLE was first [described in RFC
 #15](https://github.com/bytecodealliance/rfcs/pull/15) and now is used
 by and lives in the Cranelift tree in
@@ -14,9 +14,9 @@ Documentation on how ISLE is used in Cranelift can be found
 ## Intro and Whirlwind Tour: DSL for Instruction Lowering
 
 The goal of ISLE is to represent *instruction lowering patterns*. An
-instruction lowering pattern is a specification that a certain
-combination of operators in the IR (CLIF), when combined under certain
-conditions, can be compiled down into a certain sequence of machine
+instruction lowering pattern is a specification describing certain
+operators in the IR (CLIF) when combined under certain
+conditions, can be compiled down to a certain sequence of machine
 instructions. For example:
 
 - An `iadd` (integer add) operator can always be lowered to an x86
@@ -26,7 +26,7 @@ instructions. For example:
   be lowered to an x86 `ADD` instruction with a register and an
   immediate.
 
-One could write something like the following in ISLE (simplified from
+One can write something like the following in ISLE (simplified from
 the real code [here](https://github.com/bytecodealliance/wasmtime/blob/main/cranelift/codegen/src/isa/x64/lower.isle)):
 
 ```lisp
@@ -52,7 +52,7 @@ code that becomes part of Cranelift.
 
 The rest of this document will describe the semantics of the DSL
 itself. ISLE has been designed to be a general-purpose DSL that can
-apply to any sort of backtracking pattern-matching problem, and will
+apply to any backtracking pattern-matching problem, and will
 generate a decision tree in Rust that can call into arbitrary
 interface code.
 
@@ -91,7 +91,7 @@ This document is organized into the following sections:
 ## Background: Term-Rewriting Systems
 
 *Note: this section provides general background on term-rewriting
-systems that is useful to better understand the context for ISLE and
+systems that is useful to understand the context of ISLE better and
 how to develop systems using it. Readers already familiar with
 term-rewriting systems, or wishing to skip to details on ISLE's
 version of term rewriting, can skip to the [next
@@ -229,7 +229,7 @@ mathematical terms, and more.
 The heart of a term-rewriting system is in the set of *rules* that
 actually perform the rewrites. The "program" itself, in a
 term-rewriting DSL, consists simply of an unordered list of
-rules. Each rule may or may not apply; if it applies, then it can be
+rules. Each rule may or may not apply; when it does, it can be
 used to edit the term. Execution consists of repeated application of
 rules until some criteria are met.
 
@@ -252,7 +252,7 @@ Each left-hand side is written in a pattern language that commonly has
 a few different kinds of "matchers", or operators that can match
 subterms:
 
-* `(A pat1 pat2 ...)` matches a constructor `A` with patterms for each
+* `(A pat1 pat2 ...)` matches a constructor `A` with patterns for each
   of its arguments.
 
 * `x` matches any subterm and captures its value in a variable
@@ -262,19 +262,19 @@ subterms:
 * `_` is a wildcard and matches anything, without capturing it.
 
 * Primitive constant values, such as `42` or `$Symbol`, match only if
-  the term is exactly equal to this constant.
+  the term is an exact equivalent.
 
-These pattern-matching operators can be combined, so we could write,
+These pattern-matching operators can be combined, so we can write,
 for example, `(A (B x _) z)`. This pattern would match the term `(A (B
 1 2) 3)` but not `(A (C 4 5) 6)`.
 
-A pattern can properly be seen as a partial function from input term
-to captured (bound) variables: it either matches or it doesn't, and if
+A pattern can probably be seen as a partial function from the input term
+to captured (bound) variables: it either matches or it doesn't, and when
 it does, it provides specific term values for each variable binding
 that can be used by the right-hand side.
 
 A fully-featured term rewriting system usually has other operators as
-well, for convenience: for example, "match already-captured value", or
+well for convenience, for example, "match already-captured value", or
 "bind variable to subterm and also match it with subpattern", or
 "match subterm with all of these subpatterns". But even the above is
 powerful enough for Turing-complete term reduction, surprisingly; the
@@ -291,7 +291,7 @@ pattern might match on the input. For example, the two rules:
     (A _) -> (D)
 ```
 
-could *both* apply to an input term `(A (B 1))`. The first rule would
+can *both* apply to an input term `(A (B 1))`. The first rule would
 rewrite this input to `(C 1)`, and the second rule would rewrite it to
 `(D)`. Either rewrite would be an acceptable execution step under the
 base semantics of most term-rewriting systems; ordinarily, the
@@ -302,7 +302,7 @@ steps to get there.
 
 However, in order to provide a deterministic answer, the system must
 somehow specify which rule will be applied in such a situation based
-on precedence, or specificity, or some other tie-breaker. A common
+on precedence, specificity, or some other tie-breaker. A common
 heuristic is "more specific rule wins". We will see how ISLE resolves
 this question below by using both this heuristic and an explicit
 priority mechanism.[^4]
@@ -372,7 +372,7 @@ solved problem", apply here.
 Second, repeating the rewrite step is actually what grants
 term-rewriting its Turing-completeness: it allows for arbitrary
 control flow.[^6] This might be useful in cases where, for example, a
-term-rewriting program needs "loop" over a list of elements in the
+term-rewriting program needs to "loop" over a list of elements in the
 input: it can recurse and use intermediate terms to store state.
 
 While this full generality may not be used often in the
@@ -383,7 +383,7 @@ then defining additional rules to rewrite further -- when it helps to
 factor common behavior out of multiple rules, or aids in conceptual
 clarity.
 
-[^5]: In fact, ISLE actually compiles rules for different top-level
+[^5]: In fact, ISLE compiles rules for different top-level
       pattern terms (`(A ...)` and `(C ...)` in the example) into
       separate Rust functions, so factoring rules to use intermediate
       terms can provide code-size and compile-time benefits for the
@@ -403,14 +403,14 @@ In a domain such as instruction selection, we manipulate terms that
 represent computations described by an IR, and the terms are
 eventually rewritten into terms that name specific machine
 instructions. We can think of each term as having a denotational value
-that that *is* that program value. Then, any rewrite is correct if it
+that *is* that program value. Then, any rewrite is correct if it
 preserves the denotational value of the term.
 
 In other words, terms are just values, and rules specify alternative
 ways to compute the same values. We might have rewrite rules that
 correspond to common algebraic identities (`a + b` == `b + a`, and
-`a + 0` == `a`), for example. The main sort of rewrite rule, however,
-will be one that takes a machine-*independent* operator term and
+`a + 0` == `a`), for example. The main sort of rewrite rules, however,
+will be the kind that take a machine-*independent* operator term and
 rewrites it into a machine-*dependent* instruction term. For example:
 
 ```plain
@@ -438,7 +438,7 @@ and prioritization is nevertheless important for the quality of the
 instruction selector.
 
 [^7]: Note that this suggests an interesting testing strategy: we
-      could choose arbitrary (random) orders of lowering rules to
+      can choose arbitrary (random) orders of lowering rules to
       apply, or even deliberately worst-case orders according to some
       heuristic. If we can differentially test programs compiled with
       such randomized lowerings against "normally" compiled programs
@@ -457,7 +457,7 @@ This section describes the core ISLE language. ISLE's core is a
 term-rewriting system, with a design that very closely follows the
 generic concepts that we have described above.
 
-In the core language, ISLE's key departure from many other
+In the core language, one of ISLE's key departures from many other
 term-rewriting systems is that it is *strongly typed*. A classical
 term-rewriting system, especially one designed for instruction
 rewriting, will typically have just one type of term, corresponding to
@@ -490,18 +490,18 @@ in spirit to that shown above:
       (D x y))
 ```
 
-The pattern (left-hand side) is made up of the following match
+The pattern (left-hand side) can be made up of the following match
 operators:
 
 * Wildcards (`_`).
 * Integer constants (decimal/hex/binary/octal, positive/negative: `1`, `-1`,
   `0x80`, `-0x80`). Hex constants can start with either `0x` or `0X`.
   Binary constants start with `0b`. Octal constants start with `0o`.
-  Integers can also be interspersed with `_` as a separator, for example
-  `1_000` or `0x1234_5678`, for readability.
+  Integers can also be interspersed with `_` as a separator for readability,
+  for example, `1_000` and `0x1234_5678`.
 * constants imported from the embedding, of arbitrary type
   (`$MyConst`).
-* Variable captures and matches (bare identifiers like `x`; an
+* Variable captures and also matches (bare identifiers like `x`; an
   identifier consists of alphanumeric characters and underscores, and
   does not start with a digit). The first occurrence of a variable `x`
   captures the value; each subsequent occurrence matches on the
@@ -511,7 +511,7 @@ operators:
   subterm. For example, `x @ (A y z)` matches an `A` term and captures
   its arguments as `y` and `z`, but also captures the whole term as
   `x`.
-* conjunctions of subpatterns: `(and PAT1 PAT2 ...)` matches all of
+* Conjunctions of subpatterns: `(and PAT1 PAT2 ...)` matches all of
   the subpatterns against the term. If any subpattern does not match,
   then this matcher fails.
 * Term deconstruction: `(term PAT1 PAT2 ...)`, where `term` is a
@@ -519,13 +519,13 @@ operators:
   applied to each argument value in turn. Note that `term` cannot be a
   wildcard; it must be a specific, concrete term.
 
-The expression (right-hand side) is made up of the following
+The expression (right-hand side) can be made up of the following
 expression operators:
 
 * Integer and symbolic constants, as above.
 * Variable uses (bare `x` identifier).
 * Term constructors (`(term EXPR1 EXPR2 ...)`, where each
-  subexpression is evaluated first and then the term is constructed).
+  subexpression is evaluated first, then the term is constructed).
 * `let`-expressions that bind new variables, possibly using the values
   multiple times within the body: `(let ((var1 type1 EXPR1) (var2 ...)
   ...) BODY ...)`. Each variable's initialization expression can refer
@@ -544,24 +544,24 @@ undesirable choice occurs, explicit priorities can be specified.
 Rules with explicit priorities are written as `(rule PRIO lhs rhs)`
 where `PRIO` is a signed (positive or negative) integer. An applicable
 rule with a higher priority will always match before a rule with a
-lower priority. The default priority for all rules if not otherwise
-specified is `0`.
+lower priority. The default priority for all rules is `0` if not
+otherwise specified.
 
 Note that the system allows multiple applicable rules to exist with
 the same priority: that is, while the priority system allows for
-manual tie-breaking, this tie-breaking is not required.
+manual tie-breaking, it is not required.
 
-Finally, one important note: the priority system is considered part of
+One final note: the priority system is considered part of
 the core language semantics and execution of rules with different
-priorities is well-defined, so can be relied upon when specifying
-correct rules. However, the tie-breaking heuristic is *not* part of
-the specified language semantics, and so the user should never write
+priorities is well-defined, thus can be relied upon when specifying
+correct rules. However, the tie-breaking heuristic is **not** part of
+the specified language semantics, so the user should never write
 rules whose correctness depends on one rule overriding another
 according to the heuristic.
 
 ### Typed Terms
 
-ISLE allows the programmer to define types, and requires every term to
+ISLE allows the programmer to define types and requires every term to
 have *parameter types* and a *return type* (analogous to first-order
 functions).
 
@@ -572,9 +572,8 @@ variants that have named fields. There is no subtyping. Some examples
 of type definitions are:
 
 ```lisp
-
-    (type u32 (primitive u32))  ;; u32 is a primitive, and is
-                                ;; spelled `u32` in the generated Rust code.
+    (type u32 (primitive u32))  ;; u32 is a primitive and is spelled `u32`
+                                ;; in the generated Rust code.
 
     (type MyType (enum
                    (A (x u32) (y u32))
@@ -595,15 +594,14 @@ We then declare constructors with their parameter and return types as
 follows:
 
 ```lisp
-
     (decl Term1 (u32 u32) MyType)  ;; Term1 has two `u32`-typed parameters,
                                    ;; and itself has type `MyType`.
     (decl Term2 () u32)            ;; Term2 has no parameters and type `u32`.
 ```
 
-Note that when an enum type is defined, its variants are implicitly
+When an enum type is defined, its variants are implicitly
 defined as constructors as well. These constructors are namespaced
-under the name of the type, to avoid ambiguity (or the need to do
+under the name of the type to avoid ambiguity (or the need to do
 type-dependent lookups in the compiler, which can complicate type
 inference). For example, given the above `MyType` definitions, we
 automatically have the following constructors:
@@ -635,13 +633,13 @@ The types come into play when we define *rules*: one term of type `T`
 can only be rewritten into another term of type `T`, and when a
 parameter has a certain type, only subterms with that type can
 appear. Without explicit types on terms and their parameters, any term
-could be rewritten to any other, or substituted in as a parameter, and
+can be rewritten to any other, or substituted as a parameter, and
 there is thus a kind of dynamic typing about which the programmer must
 have some caution. In most applications of a term-rewriting system,
 there is already some de-facto "schema": some parameter of a term
 representing a machine instruction can only take on one of a few
 subterms (representing, say, different addressing modes). ISLE's types
-just make this explicit.
+make this explicit.
 
 Thus, the first answer to "why types" is that they enforce a schema on
 the terms, allowing the programmer to have stronger well-formed-data
@@ -703,8 +701,8 @@ MyType2, z: u32 }`. We then typecheck the rewrite expression.
   context. We check that the provided expression matches this type.
 
 * The top-level rewrite expression must have the same type as the
-  top-level constructor in the pattern. (In other words, a term can
-  only be rewritten to another term of the same type.)
+  top-level constructor in the pattern. In other words, a term can
+  only be rewritten to another term of the same type.
 
 * Constructors check their return values against the expected type,
   and typecheck their argument expressions against their parameter
@@ -718,7 +716,7 @@ MyType2, z: u32 }`. We then typecheck the rewrite expression.
 ### A Note on Heterogeneous Types
 
 We should illuminate one particular aspect of the ISLE type system
-that we described above. We have said that a term must be rewritten to
+described above. We have said that a term must be rewritten to
 another term of the same type. Note that this does *not* mean that,
 for example, a set of ISLE rules cannot be used to translate a term of
 type `T1` to a term of type `T2`. The trick is to define a top-level
@@ -737,28 +735,27 @@ a `T2`. Concretely:
           (T2.Y ...))
 ```
 
-This gets to the heart of rewrite-system-based computation, and has
+This gets to the heart of rewrite-system-based computation and has
 relevance for applications of ISLE to compiler backends. A common
-technique in rewrite systems is to "kick off" a computation by
+technique in rewrite systems is to "kick off" the computation by
 wrapping a term in some intermediate term that then drives a series of
 reductions. Here we are using `Translate` as this top-level term. A
 difference between ISLE and some other rewrite-based instruction
 selectors is that rewrites are always driven by term reduction from
-such a toplevel term, rather than a series of equivalences directly
+such a top-level term, rather than a series of equivalences directly
 from IR instruction to machine instruction forms.
 
 In other words, a conventional instruction selection pattern engine
 might let one specify `(Inst.A ...) -> (Inst.X ...)`. In this
 conventional design, the instruction/opcode type on the LHS and RHS
-must be the same single instruction type (otherwise rewrites could not
-be chained), and rewrite relation (which we wrote as `->`) is in
+must be the same single instruction type (otherwise rewrites cannot
+be chained), and the rewrite relation (which we wrote as `->`) is in
 essence a single privileged relation. One can see ISLE as a
-generalization: we can define many different types, and many different
-toplevel terms from which we can start the reduction. In principle,
-one could have:
+generalization: we can define many different types and many different
+top-level terms from which we can start the reduction. In principle,
+one can have:
 
 ```lisp
-
     (type IR ...)
     (type Machine1 ...)
     (type Machine2 ...)
@@ -770,7 +767,7 @@ one could have:
     (rule (TranslateToMachine2 (IR.add a b)) (Machine2.weird_inst a b))
 ```
 
-and then both translations are available. We are "rewriting" from `IR`
+then both translations are available. We are "rewriting" from `IR`
 to `Machine1` and from `IR` to `Machine2`, even if rewrites always
 preserve the same type; we get around the rule by using a constructor.
 
@@ -782,7 +779,7 @@ for data, like `(A arg1 arg2)`, while we have used the term
 notion somewhat and define what it means for a term to appear in the
 left-hand (pattern) or right-hand (expression) side of a rule.
 
-More precisely, a term, like `A`, can have three kinds of behavior
+More precisely, a term like `A` can have three kinds of behavior
 associated with it: it can be an enum type variant, it can be a
 constructor, or it can be an *extractor*, which we will define in a
 moment. A term can be both an extractor and constructor
@@ -805,10 +802,10 @@ constructor can be invoked from the right-hand side of other rules.
 #### Extractors
 
 Extractor behavior on a term allows it to be used in a pattern in the
-left-hand side of a rule. If one considers a constructor to be a
+left-hand side of a rule. If one considers a constructor a
 function that goes from argument values to the complete term, then an
 extractor is a function that takes a complete term and possibly
-matches on it (it is fallible). If it does match, it provides the
+matches it (fallible). If it does match, it provides the
 arguments *as results*.
 
 One can see extractors as "programmable match operators". They are a
@@ -818,7 +815,7 @@ memory, and can discover that a pattern `(A x y)` matches a term `A`
 at a particular point in the input, an extractor-based system instead
 sees `A` as an *arbitrary programmable operator* that is invoked
 wherever a pattern-match is attempted, and can return "success" with
-the resulting "fields" as if it were actually an enum variant. For
+the resulting "fields" as if it were an enum variant. For
 more on this topic, see the motivation and description in [RFC 15
 under "programmable matching on virtual
 nodes"](https://github.com/bytecodealliance/rfcs/blob/main/accepted/cranelift-isel-isle-peepmatic.md#extractors-programmable-matching-on-virtual-nodes).
@@ -841,7 +838,7 @@ then we have used `A` as an *extractor*. When `B` is invoked as a
 constructor with some `T`, this rule uses `A` as an extractor and
 attempts (via whatever programmable matching behavior) to use `A` to
 turn the `T` into two `u32`s, binding `x` and `y`. `A` can succeed or
-fail, just as any other part of a pattern-match can.
+fail, just as any other part of a pattern match can.
 
 Just as for constructors, there are *internal* and *external*
 extractors. Most of the interesting programmable behavior occurs in
@@ -905,7 +902,7 @@ This also works in the extractor position: for example, if one writes
 
 ```lisp
     (decl defining_instruction (Inst) Value)
-    (extern extractor definining_instruction ...)
+    (extern extractor defining_instruction ...)
 
     (decl iadd (Value Value) Inst)
 
@@ -917,8 +914,8 @@ This also works in the extractor position: for example, if one writes
 
 then the `(iadd (iadd a b) c)` form will be implicitly handled like
 `(iadd (defining_instruction (iadd a b)) c)`. Note that the conversion
-insertion needs to have local type context in order to find the right
-converter: so, for example, it cannot infer a target type from a
+insertion requires a local type context to find the right
+converter: for example, it cannot infer a target type from a
 pattern where just a variable binding occurs, even if the variable is
 used in some typed context on the right-hand side. Instead, the
 "inner" and "outer" types have to come from explicitly typed terms.
@@ -933,12 +930,12 @@ We start with a `term`, which is just a schema for data:
 
 A term can have:
 
-1. A single internal extractor body, via a toplevel `(extractor ...)`
+1. A single internal extractor body, via a top-level `(extractor ...)`
    form, OR
 
 2. A single external extractor binding (see next section); AND
 
-3. One or more `(rule (Term ...) ...)` toplevel forms, which together
+3. One or more `(rule (Term ...) ...)` top-level forms, which together
    make up an internal constructor definition, OR
 
 4. A single external constructor binding (see next section).
@@ -1000,11 +997,11 @@ right-hand side expression.
 #### Pure Expressions and Constructors
 
 In order for an expression to be used in an if-let clause, it has to
-be *pure*: it cannot have side-effects. A pure expression is one that
+be *pure*: it cannot have side effects. A pure expression
 uses constants and pure constructors only. Enum variant constructors
-are always pure. In general constructors that invoke function calls,
+are always pure. In general, constructors that invoke function calls,
 however (either as internal or external constructor calls), can lead
-to arbitrary Rust code and have side-effects. So, we add a new
+to arbitrary Rust code and have side effects. So, we add a new
 annotation to declarations as follows:
 
 ```lisp
@@ -1018,13 +1015,13 @@ annotation to declarations as follows:
 ```
 
 The `pure` keyword here is a declaration that the term, when used as a
-constructor, has no side-effects. Declaring an external constructor on
+constructor, has no side effects. Declaring an external constructor on
 a pure term is a promise by the ISLE programmer that the external Rust
-function we are naming (here `u32_fallible_add`) has no side-effects
+function we are naming (here `u32_fallible_add`) has no side effects
 and is thus safe to invoke during the match phase of a rule, when we
 have not committed to a given rule yet.
 
-When an internal constructor body is generated for a term that is pure
+When an internal constructor body is generated for a pure term
 (i.e., if we had `(rule (u32_fallible_add x y) ...)` in our program
 after the above declaration instead of the `extern`), the right-hand
 side expression of each rule that rewrites the term is also checked
@@ -1064,7 +1061,7 @@ one might want to write:
 where `isa_extension_enabled` is a pure constructor that is fallible,
 and succeeds only when a condition is true.
 
-To enable more succinct expression of this idiom, we allow the
+To enable a more succinct expression of this idiom, we allow the
 following shorthand notation using `if` instead:
 
 ```lisp
@@ -1099,7 +1096,7 @@ Rust. The basic principles are:
    flow. When we construct a term that appears on the left-hand side
    of rules, we do so by calling a function (the "constructor body");
    and this function *is* the rewrite logic, so the term is rewritten
-   as soon as it exists. The code that embeds the ISLE generated code
+   as soon as it exists. The code that embeds the ISLE-generated code
    will kick off execution by calling a top-level "driver"
    constructor. The body of the constructor will eventually choose one
    of several rules to apply, and execute code to build the right-hand
@@ -1109,8 +1106,8 @@ Rust. The basic principles are:
 
 4. This design means that "intermediate terms" -- constructed terms
    that are then further rewritten -- are never actually built as
-   in-memory data-structures. Rather, they exist only as ephemeral
-   stack-frames while the corresponding Rust function executes. This
+   in-memory data structures. Rather, they exist only as ephemeral
+   stack frames while the corresponding Rust function executes. This
    means that there is very little or no performance penalty to
    factoring code into many sub-rules (subject only to function-call
    overhead and/or the effectiveness of the Rust inliner).
@@ -1129,7 +1126,7 @@ Rust. The basic principles are:
    Said another way, the principle is that left-hand sides can be
    fallible, and have no side-effects as they execute; right-hand
    sides, in contrast, are infallible. This simplifies the control
-   flow and makes reasoning about side-effects (especially with
+   flow and makes reasoning about side effects (especially with
    respect to external Rust actions) easier.
 
 This will become more clear as we look at how Rust interfaces are
@@ -1159,8 +1156,8 @@ values. During the rewriting process, a constructor that can trigger
 further rewriting rules results in a Rust function call to the body of
 the "internal constructor" built from these rules; the term thus never
 exists except as argument values on the stack. However, ultimately the
-ISLE code needs to return some result to the outside world, and this
-result may be built up of many parts; this is where *external
+ISLE code needs to return some result to the outside world, and it may
+be built up of many parts; this is where *external
 constructors* come into play.
 
 For any term declared like
@@ -1192,7 +1189,7 @@ fallible.
 #### Extractors
 
 An *external extractor* is an implementation of matching behavior in
-left-hand sides (patterns) that is fully programmable to interface
+left-hand sides (patterns) that is fully programmable to the interface
 with the embedding application. When the generated pattern-matching
 code is attempting to match a rule, and has a value to match against
 an extractor pattern defined as an external extractor, it simply calls
@@ -1330,7 +1327,7 @@ These functions should be implemented as described above for external
 constructors and extractors.
 
 Note that some external extractors are known to always succeed, for
-example if they are just fetching some information that is always
+example, if they are just fetching some information that is always
 present; in this case, the generated code can be made slightly more
 efficient if we tell the ISLE compiler that this is so. By declaring
 
@@ -1383,7 +1380,7 @@ The decision trie is, as the name implies, a kind of decision tree, in
 the sense that we start at the root and move down the tree based on
 the result of match operations (each feeding one "decision").
 
-It is a "trie" (which is a kind of tree) because at each level, its
+It is a "trie" because at each level, its
 edges are labeled with match operations; a trie is a tree where one
 input character from an alphabet is used to index children at each
 level.
@@ -1424,7 +1421,7 @@ for more information regarding the trie construction algorithm.
       decision node also affects complexity: if mutually-exclusive
       match operations are not adjacent, then they cannot be merged
       into a single `match` with `O(1)` dispatch. In general this
-      ordering problem is quite difficult. We could do better with
+      ordering problem is quite difficult. We can do better with
       stronger heuristics; this is an open area for improvement in the
       DSL compiler!
 
