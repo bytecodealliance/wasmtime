@@ -3267,26 +3267,6 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
-    fn vaddf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
-        let mut a = self.state[operands.src1].get_f32x4();
-        let b = self.state[operands.src2].get_f32x4();
-        for (a, b) in a.iter_mut().zip(b) {
-            *a += b;
-        }
-        self.state[operands.dst].set_f32x4(a);
-        ControlFlow::Continue(())
-    }
-
-    fn vaddf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
-        let mut a = self.state[operands.src1].get_f64x2();
-        let b = self.state[operands.src2].get_f64x2();
-        for (a, b) in a.iter_mut().zip(b) {
-            *a += b;
-        }
-        self.state[operands.dst].set_f64x2(a);
-        ControlFlow::Continue(())
-    }
-
     fn vshli8x16(&mut self, operands: BinaryOperands<VReg, VReg, XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_i8x16();
         let b = self.state[operands.src2].get_u32();
@@ -4280,6 +4260,208 @@ impl ExtendedOpVisitor for Interpreter<'_> {
             *a = a.wasm_minimum(*b);
         }
         self.state[operands.dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vaddf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a += b;
+        }
+        self.state[operands.dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vaddf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a += b;
+        }
+        self.state[operands.dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vsubf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a -= b;
+        }
+        self.state[operands.dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vsubf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a -= b;
+        }
+        self.state[operands.dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmulf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a *= b;
+        }
+        self.state[operands.dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmulf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a *= b;
+        }
+        self.state[operands.dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vdivf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a /= b;
+        }
+        self.state[operands.dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vdivf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a /= b;
+        }
+        self.state[operands.dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vnegf32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32x4();
+        self.state[dst].set_f32x4(a.map(|i| -i));
+        ControlFlow::Continue(())
+    }
+
+    fn vnegf64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64x2();
+        self.state[dst].set_f64x2(a.map(|i| -i));
+        ControlFlow::Continue(())
+    }
+
+    fn veqf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a == b { u32::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vneqf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a != b { u32::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vltf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a < b { u32::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vlteqf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        let mut c = [0; 4];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a <= b { u32::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u32x4(c);
+        ControlFlow::Continue(())
+    }
+
+    fn veqf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a == b { u64::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vneqf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a != b { u64::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vltf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a < b { u64::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vlteqf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        let mut c = [0; 2];
+        for ((a, b), c) in a.iter().zip(&b).zip(&mut c) {
+            *c = if a <= b { u64::MAX } else { 0 };
+        }
+        self.state[operands.dst].set_u64x2(c);
+        ControlFlow::Continue(())
+    }
+
+    fn vfma32x4(&mut self, dst: VReg, a: VReg, b: VReg, c: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[a].get_f32x4();
+        let b = self.state[b].get_f32x4();
+        let c = self.state[c].get_f32x4();
+        for ((a, b), c) in a.iter_mut().zip(b).zip(c) {
+            *a = a.mul_add(b, c);
+        }
+        self.state[dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vfma64x2(&mut self, dst: VReg, a: VReg, b: VReg, c: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[a].get_f64x2();
+        let b = self.state[b].get_f64x2();
+        let c = self.state[c].get_f64x2();
+        for ((a, b), c) in a.iter_mut().zip(b).zip(c) {
+            *a = a.mul_add(b, c);
+        }
+        self.state[dst].set_f64x2(a);
         ControlFlow::Continue(())
     }
 }
