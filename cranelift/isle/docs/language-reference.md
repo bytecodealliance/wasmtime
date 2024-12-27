@@ -1442,8 +1442,6 @@ The grammar accepted by the parser is as follows:
                | "\t"
                | "\n"
                | "\r"
-               | "\b"
-               | "\f"
 
 <comment> ::= <line-comment> | <block-comment>
 
@@ -1460,7 +1458,7 @@ The grammar accepted by the parser is as follows:
 <ISLE> ::= <def>*
 
 <def> ::= "(" "pragma" <pragma> ")"
-        | "(" "type" <type> ")"
+        | "(" "type" <typedecl> ")"
         | "(" "decl" <decl> ")"
         | "(" "rule" <rule> ")"
         | "(" "extractor" <extractor> ")"
@@ -1470,15 +1468,15 @@ The grammar accepted by the parser is as follows:
 ;; No pragmas are defined yet
 <pragma> ::= <ident>
 
-<type> ::= <ident> [ "extern" | "nodebug" ] <typedef>
+<typedecl> ::= <ident> [ "extern" | "nodebug" ] <type-body>
 
 <ident> ::= <ident-start> <ident-cont>*
 <const-ident> ::= "$" <ident-cont>*
 <ident-start> ::= <any non-whitespace character other than "-", "0".."9", "(", ")" or ";">
 <ident-cont>  ::= <any non-whitespace character other than "(", ")", ";" or "@">
 
-<typedef> ::= "(" "primitive" <ident> ")"
-            | "(" "enum" <enum-variant>* ")"
+<type-body> ::= "(" "primitive" <ident> ")"
+              | "(" "enum" <enum-variant>* ")"
 
 <enum-variant> ::= <ident>
                  | "(" <ident> <variant-field>* ")"
@@ -1505,10 +1503,7 @@ The grammar accepted by the parser is as follows:
             | <ident>
             | <ident> "@" <pattern>
             | "(" "and" <pattern>* ")"
-            | "(" <ident> <pattern-arg>* ")"
-
-<pattern-arg> ::= <pattern>
-                | <expr>
+            | "(" <ident> <pattern>* ")"
 
 <stmt> ::= "(" "if-let" <pattern> <expr> ")"
          | "(" "if" <expr> ")"
