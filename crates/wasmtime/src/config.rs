@@ -2638,7 +2638,7 @@ pub enum Collector {
     /// over-approximation of all objects that are currently on the stack, trace
     /// the stack during collection to find the precise set of on-stack roots,
     /// and decrement the reference count of any object that was in the
-    /// over-approximation but not the precise set. This improves throughtput,
+    /// over-approximation but not the precise set. This improves throughput,
     /// compared to "pure" reference counting, by performing many fewer
     /// refcount-increment and -decrement operations. The cost is the increased
     /// latency associated with tracing the stack.

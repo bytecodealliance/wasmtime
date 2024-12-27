@@ -1043,7 +1043,7 @@ where
         let new_epoch = self.env.builtins.new_epoch::<M::ABI, M::Ptr>();
 
         // Checks for runtime limits (e.g., fuel, epoch) are special since they
-        // require inserting abritrary function calls and control flow.
+        // require inserting arbitrary function calls and control flow.
         // Special care must be taken to ensure that all invariants are met. In
         // this case, since `new_epoch` takes an argument and returns a value,
         // we must ensure that any registers used to hold the current epoch

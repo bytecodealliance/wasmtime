@@ -1,6 +1,6 @@
 //! These tests are intended to exercise various relocation-based logic of
 //! Wasmtime, especially the "jump veneer" insertion in the object-file-assembly
-//! for when platform-specific relative call instructios can't always reach
+//! for when platform-specific relative call instructors can't always reach
 //! their destination within the platform-specific limits.
 //!
 //! Note that the limits of AArch64 are primarily what's being stressed here
