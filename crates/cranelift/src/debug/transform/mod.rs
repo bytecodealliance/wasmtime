@@ -195,7 +195,7 @@ pub fn transform_dwarf(
             &mut out_units,
             &mut out_strings,
         );
-        // TODO-LLVM-DI-Cleanup: move the simulation code to be per-module and delete this map.
+        // TODO-DebugInfo-Cleanup: move the simulation code to be per-module and delete this map.
         vmctx_ptr_die_refs.push(out_module_synthetic_unit.vmctx_ptr_die_ref());
 
         let mut iter = di.dwarf.debug_info.units();

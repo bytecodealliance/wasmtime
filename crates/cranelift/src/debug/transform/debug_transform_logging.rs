@@ -1,7 +1,8 @@
 use crate::debug::Reader;
 use core::fmt;
 use gimli::{
-    write, AttributeValue, DebuggingInformationEntry, Dwarf, LittleEndian, Unit, UnitSectionOffset,
+    write, AttributeValue, DebuggingInformationEntry, Dwarf, LittleEndian, Unit, UnitOffset,
+    UnitSectionOffset,
 };
 
 macro_rules! dbi_log {
@@ -39,6 +40,26 @@ pub fn log_get_cu_summary<'a>(unit: &'a Unit<Reader<'a>, usize>) -> CompileUnitS
     CompileUnitSummary { unit }
 }
 
+pub struct DieRefSummary<'a> {
+    unit: &'a Unit<Reader<'a>, usize>,
+    unit_ref: UnitOffset,
+}
+
+impl<'a> fmt::Debug for DieRefSummary<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let section_offs = self.unit_ref.to_unit_section_offset(self.unit);
+        let offs = get_offset_value(section_offs);
+        write!(f, "0x{offs:08x}")
+    }
+}
+
+pub fn log_get_die_ref<'a>(
+    unit: &'a Unit<Reader<'a>, usize>,
+    unit_ref: UnitOffset,
+) -> DieRefSummary<'a> {
+    DieRefSummary { unit, unit_ref }
+}
+
 struct DieDetailedSummary<'a> {
     dwarf: &'a Dwarf<Reader<'a>>,
     unit: &'a Unit<Reader<'a>, usize>,
@@ -52,8 +73,8 @@ pub fn log_begin_input_die(
     depth: isize,
 ) {
     dbi_log!(
-        "=== Begin DIE at 0x{:08x} (depth = {}):\n{:?}",
-        get_offset_value(die.offset().to_unit_section_offset(unit)),
+        "=== Begin DIE at {:?} (depth = {}):\n{:?}",
+        log_get_die_ref(unit, die.offset()),
         depth,
         DieDetailedSummary { dwarf, unit, die }
     );
@@ -222,8 +243,8 @@ pub fn log_end_output_die(
     depth: isize,
 ) {
     dbi_log!(
-        "=== End DIE at 0x{:08x} (depth = {}):\n{:?}",
-        get_offset_value(input_die.offset().to_unit_section_offset(input_unit)),
+        "=== End DIE at {:?} (depth = {}):\n{:?}",
+        log_get_die_ref(input_unit, input_die.offset()),
         depth,
         OutDieDetailedSummary {
             die_id,
@@ -240,8 +261,8 @@ pub fn log_end_output_die_skipped(
     depth: isize,
 ) {
     dbi_log!(
-        "=== End DIE at 0x{:08x} (depth = {}):\n  Skipped as {}\n",
-        get_offset_value(input_die.offset().to_unit_section_offset(input_unit)),
+        "=== End DIE at {:?} (depth = {}):\n  Skipped as {}\n",
+        log_get_die_ref(input_unit, input_die.offset()),
         depth,
         reason
     );
