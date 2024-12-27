@@ -905,7 +905,7 @@ This also works in the extractor position: for example, if one writes
 
 ```lisp
     (decl defining_instruction (Inst) Value)
-    (extern extractor definining_instruction ...)
+    (extern extractor defining_instruction ...)
 
     (decl iadd (Value Value) Inst)
 

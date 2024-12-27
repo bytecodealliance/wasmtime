@@ -138,7 +138,7 @@ impl XReg {
         }
     }
 
-    /// Returns the pulley-typed register, if this is a phyiscal register.
+    /// Returns the pulley-typed register, if this is a physical register.
     pub fn as_pulley(&self) -> Option<pulley_interpreter::XReg> {
         let enc = self.to_real_reg()?.hw_enc();
         Some(pulley_interpreter::XReg::new(enc).unwrap())

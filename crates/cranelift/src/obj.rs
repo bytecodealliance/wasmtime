@@ -85,7 +85,7 @@ impl<'a> ModuleTextBuilder<'a> {
 
         // If this target is Pulley then flag the text section as not needing the
         // executable bit in virtual memory which means that the runtime won't
-        // try to call `Mmap::make_exectuable`, which makes Pulley more
+        // try to call `Mmap::make_executable`, which makes Pulley more
         // portable.
         if compiler.triple().is_pulley() {
             let section = obj.section_mut(text_section);

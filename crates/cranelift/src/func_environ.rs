@@ -3406,7 +3406,7 @@ impl FuncEnvironment<'_> {
     ///
     /// This is enabled if `signals_based_traps` is `true` since signal handlers
     /// are available, but this is additionally forcibly disabled if Pulley is
-    /// being targetted since the Pulley runtime doesn't catch segfaults for
+    /// being targeted since the Pulley runtime doesn't catch segfaults for
     /// itself.
     pub fn clif_memory_traps_enabled(&self) -> bool {
         self.tunables.signals_based_traps && !self.isa.triple().is_pulley()

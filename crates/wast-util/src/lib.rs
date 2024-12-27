@@ -317,7 +317,7 @@ impl Compiler {
         false
     }
 
-    /// Returns whether this complier configuration supports the current host
+    /// Returns whether this compiler configuration supports the current host
     /// architecture.
     pub fn supports_host(&self) -> bool {
         match self {
