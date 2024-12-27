@@ -4231,6 +4231,52 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vmin16x8_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).min(*b);
+        }
+        self.state[operands.dst].set_i16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmin16x8_u(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u16x8();
+        let b = self.state[operands.src2].get_u16x8();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).min(*b);
+        }
+        self.state[operands.dst].set_u16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmax16x8_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).max(*b);
+        }
+        self.state[operands.dst].set_i16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmax16x8_u(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u16x8();
+        let b = self.state[operands.src2].get_u16x8();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).max(*b);
+        }
+        self.state[operands.dst].set_u16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vabs16x8(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i16x8();
+        self.state[dst].set_i16x8(a.map(|i| i.wrapping_abs()));
+        ControlFlow::Continue(())
+    }
+
     fn vabsf32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f32x4();
         self.state[dst].set_f32x4(a.map(|i| i.wasm_abs()));
@@ -4280,6 +4326,17 @@ impl ExtendedOpVisitor for Interpreter<'_> {
             *a = a.wasm_minimum(*b);
         }
         self.state[operands.dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vavground16x8(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u16x8();
+        let b = self.state[operands.src2].get_u16x8();
+        for (a, b) in a.iter_mut().zip(&b) {
+            // rounding average
+            *a = (*a & *b) + ((*a ^ *b) >> 1) + ((*a ^ *b) & 1);
+        }
+        self.state[operands.dst].set_u16x8(a);
         ControlFlow::Continue(())
     }
 }
