@@ -815,6 +815,8 @@ macro_rules! for_each_extended_op {
             fmul32 = Fmul32 { operands: BinaryOperands<FReg> };
             /// `low32(dst) = low32(src1) / low32(src2)`
             fdiv32 = Fdiv32 { operands: BinaryOperands<FReg> };
+            /// `low128(dst) = low128(src1) / low128(src2)`
+            vdivf32x4 = Vdivf32x4 { operands: BinaryOperands<VReg> };
             /// `low32(dst) = ieee_maximum(low32(src1), low32(src2))`
             fmaximum32 = Fmaximum32 { operands: BinaryOperands<FReg> };
             /// `low32(dst) = ieee_minimum(low32(src1), low32(src2))`
@@ -1165,6 +1167,8 @@ macro_rules! for_each_extended_op {
             vminimumf32x4 = Vminimumf32x4 { operands: BinaryOperands<VReg> };
             /// `dst = ieee_minimum(src1, src2)`
             vminimumf64x2 = Vminimumf64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = swizzle(src1, src2)`
+            vswizzlei8x16 = Vswizzlei8x16 { operands: BinaryOperands<VReg> };
         }
     };
 }
