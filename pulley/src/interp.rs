@@ -4334,7 +4334,7 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         let b = self.state[operands.src2].get_u16x8();
         for (a, b) in a.iter_mut().zip(&b) {
             // rounding average
-            *a = (*a & *b) + ((*a ^ *b) >> 1) + ((*a ^ *b) & 1);
+            *a = ((u32::from(*a) + u32::from(*b) + 1) / 2) as u16;
         }
         self.state[operands.dst].set_u16x8(a);
         ControlFlow::Continue(())
