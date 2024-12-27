@@ -416,7 +416,6 @@ impl WastTest {
                 "spec_testsuite/proposals/memory64/i16x8_relaxed_q15mulr_s.wast",
                 "spec_testsuite/proposals/memory64/i32x4_relaxed_trunc.wast",
                 "spec_testsuite/proposals/memory64/i8x16_relaxed_swizzle.wast",
-                "spec_testsuite/simd_f32x4_arith.wast",
                 "spec_testsuite/simd_f32x4_cmp.wast",
                 "spec_testsuite/simd_f32x4_pmin_pmax.wast",
                 "spec_testsuite/simd_f64x2_arith.wast",
