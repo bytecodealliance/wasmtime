@@ -4364,5 +4364,6 @@ impl ExtendedOpVisitor for Interpreter<'_> {
             *a = ((u32::from(*a) + u32::from(*b) + 1) / 2) as u16;
         }
         self.state[operands.dst].set_u16x8(a);
+        ControlFlow::Continue(())
     }
 }
