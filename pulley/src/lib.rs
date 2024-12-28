@@ -903,6 +903,10 @@ macro_rules! for_each_extended_op {
             vaddi8x16_sat = VAddI8x16Sat { operands: BinaryOperands<VReg> };
             /// `dst = satruating_add(src1, src2)`
             vaddu8x16_sat = VAddU8x16Sat { operands: BinaryOperands<VReg> };
+            /// `dst = satruating_add(src1, src2)`
+            vaddi16x8_sat = VAddI16x8Sat { operands: BinaryOperands<VReg> };
+            /// `dst = satruating_add(src1, src2)`
+            vaddu16x8_sat = VAddU16x8Sat { operands: BinaryOperands<VReg> };
 
             /// `dst = src1 << src2`
             vshli8x16 = VShlI8x16 { operands: BinaryOperands<VReg, VReg, XReg> };
@@ -1071,6 +1075,10 @@ macro_rules! for_each_extended_op {
             vsubi8x16_sat = VSubI8x16Sat { operands: BinaryOperands<VReg> };
             /// `dst = saturating_sub(src1, src2)`
             vsubu8x16_sat = VSubU8x16Sat { operands: BinaryOperands<VReg> };
+            /// `dst = saturating_sub(src1, src2)`
+            vsubi16x8_sat = VSubI16x8Sat { operands: BinaryOperands<VReg> };
+            /// `dst = saturating_sub(src1, src2)`
+            vsubu16x8_sat = VSubU16x8Sat { operands: BinaryOperands<VReg> };
 
             /// `dst = src1 * src2`
             vmuli8x16 = VMulI8x16 { operands: BinaryOperands<VReg> };

@@ -223,6 +223,8 @@
 
 (rule 1 (lower (has_type $I8X16 (sadd_sat a b))) (pulley_vaddi8x16_sat a b))
 (rule 1 (lower (has_type $I8X16 (uadd_sat a b))) (pulley_vaddu8x16_sat a b))
+(rule 1 (lower (has_type $I16X8 (sadd_sat a b))) (pulley_vaddi16x8_sat a b))
+(rule 1 (lower (has_type $I16X8 (uadd_sat a b))) (pulley_vaddu16x8_sat a b))
 
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -261,6 +263,8 @@
 
 (rule 1 (lower (has_type $I8X16 (ssub_sat a b))) (pulley_vsubi8x16_sat a b))
 (rule 1 (lower (has_type $I8X16 (usub_sat a b))) (pulley_vsubu8x16_sat a b))
+(rule 1 (lower (has_type $I16X8 (ssub_sat a b))) (pulley_vsubi16x8_sat a b))
+(rule 1 (lower (has_type $I16X8 (usub_sat a b))) (pulley_vsubu16x8_sat a b))
 
 ;;;; Rules for `imul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

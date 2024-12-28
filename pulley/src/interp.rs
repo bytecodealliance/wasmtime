@@ -3319,6 +3319,26 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vaddi16x8_sat(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = (*a).saturating_add(b);
+        }
+        self.state[operands.dst].set_i16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vaddu16x8_sat(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u16x8();
+        let b = self.state[operands.src2].get_u16x8();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = (*a).saturating_add(b);
+        }
+        self.state[operands.dst].set_u16x8(a);
+        ControlFlow::Continue(())
+    }
+
     fn vshli8x16(&mut self, operands: BinaryOperands<VReg, VReg, XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_i8x16();
         let b = self.state[operands.src2].get_u32();
@@ -3832,6 +3852,26 @@ impl ExtendedOpVisitor for Interpreter<'_> {
             *a = a.saturating_sub(b);
         }
         self.state[operands.dst].set_u8x16(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vsubi16x8_sat(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = a.saturating_sub(b);
+        }
+        self.state[operands.dst].set_i16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vsubu16x8_sat(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u16x8();
+        let b = self.state[operands.src2].get_u16x8();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = a.saturating_sub(b);
+        }
+        self.state[operands.dst].set_u16x8(a);
         ControlFlow::Continue(())
     }
 
