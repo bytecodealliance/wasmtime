@@ -420,7 +420,6 @@ impl WastTest {
                 "spec_testsuite/simd_f64x2_arith.wast",
                 "spec_testsuite/simd_f64x2_cmp.wast",
                 "spec_testsuite/simd_f64x2_pmin_pmax.wast",
-                "spec_testsuite/simd_i16x8_arith2.wast",
                 "spec_testsuite/simd_i16x8_extadd_pairwise_i8x16.wast",
                 "spec_testsuite/simd_i16x8_q15mulr_sat_s.wast",
                 "spec_testsuite/simd_i16x8_sat_arith.wast",

@@ -1155,6 +1155,18 @@ macro_rules! for_each_extended_op {
             /// `dst = -src`
             vneg64x2 = Vneg64x2 { dst: VReg, src: VReg };
 
+            /// `dst = min(src1, src2)` (signed)
+            vmin16x8_s = Vmin16x8S { operands: BinaryOperands<VReg> };
+            /// `dst = min(src1, src2)` (unsigned)
+            vmin16x8_u = Vmin16x8U { operands: BinaryOperands<VReg> };
+            /// `dst = max(src1, src2)` (signed)
+            vmax16x8_s = Vmax16x8S { operands: BinaryOperands<VReg> };
+            /// `dst = max(src1, src2)` (unsigned)
+            vmax16x8_u = Vmax16x8U { operands: BinaryOperands<VReg> };
+
+            /// `dst = |src|`
+            vabs16x8 = Vabs16x8 { dst: VReg, src: VReg };
+
             /// `dst = |src|`
             vabsf32x4 = Vabsf32x4 { dst: VReg, src: VReg };
             /// `dst = |src|`
@@ -1167,8 +1179,12 @@ macro_rules! for_each_extended_op {
             vminimumf32x4 = Vminimumf32x4 { operands: BinaryOperands<VReg> };
             /// `dst = ieee_minimum(src1, src2)`
             vminimumf64x2 = Vminimumf64x2 { operands: BinaryOperands<VReg> };
+
             /// `dst = swizzle(src1, src2)`
             vswizzlei8x16 = Vswizzlei8x16 { operands: BinaryOperands<VReg> };
+
+            /// `dst = (src1 + src2 + 1) // 2`
+            vavground16x8 = Vavground16x8 { operands: BinaryOperands<VReg> };
         }
     };
 }
