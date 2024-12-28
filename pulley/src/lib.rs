@@ -1179,6 +1179,8 @@ macro_rules! for_each_extended_op {
             vabs8x16 = Vabs8x16 { dst: VReg, src: VReg };
             /// `dst = |src|`
             vabs16x8 = Vabs16x8 { dst: VReg, src: VReg };
+            /// `dst = |src|`
+            vabs64x2 = Vabs64x2 { dst: VReg, src: VReg };
 
             /// `dst = |src|`
             vabsf32x4 = Vabsf32x4 { dst: VReg, src: VReg };

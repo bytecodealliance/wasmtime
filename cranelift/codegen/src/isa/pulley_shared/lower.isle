@@ -1246,6 +1246,7 @@
 (rule 1 (lower (has_type $I64 (iabs a))) (pulley_xabs64 a))
 (rule 1 (lower (has_type $I8X16 (iabs a))) (pulley_vabs8x16 a))
 (rule 1 (lower (has_type $I16X8 (iabs a))) (pulley_vabs16x8 a))
+(rule 1 (lower (has_type $I64X2 (iabs a))) (pulley_vabs64x2 a))
 
 ;;;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

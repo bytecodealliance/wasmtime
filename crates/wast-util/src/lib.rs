@@ -428,7 +428,6 @@ impl WastTest {
                 "spec_testsuite/simd_i32x4_extadd_pairwise_i16x8.wast",
                 "spec_testsuite/simd_i32x4_trunc_sat_f32x4.wast",
                 "spec_testsuite/simd_i32x4_trunc_sat_f64x2.wast",
-                "spec_testsuite/simd_i64x2_arith2.wast",
                 "spec_testsuite/simd_i8x16_sat_arith.wast",
                 "spec_testsuite/simd_lane.wast",
                 "spec_testsuite/simd_load.wast",

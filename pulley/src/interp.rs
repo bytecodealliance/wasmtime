@@ -4341,6 +4341,12 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vabs64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i64x2();
+        self.state[dst].set_i64x2(a.map(|i| i.wrapping_abs()));
+        ControlFlow::Continue(())
+    }
+
     fn vabsf32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f32x4();
         self.state[dst].set_f32x4(a.map(|i| i.wasm_abs()));
