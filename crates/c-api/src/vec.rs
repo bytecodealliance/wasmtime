@@ -103,6 +103,15 @@ macro_rules! declare_vecs {
             }
         }
 
+        impl$(<$lt>)? Default for $name $(<$lt>)? {
+            fn default() -> Self {
+                Self {
+                    size: 0,
+                    data: ptr::null_mut()
+                }
+            }
+        }
+
         #[no_mangle]
         pub extern "C" fn $empty(out: &mut $name) {
             out.size = 0;
@@ -249,3 +258,5 @@ declare_vecs! {
         delete: wasm_extern_vec_delete,
     )
 }
+
+pub(crate) use declare_vecs;

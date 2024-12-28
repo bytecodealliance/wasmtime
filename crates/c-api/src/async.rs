@@ -7,9 +7,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::{ptr, str};
-use wasmtime::{
-    AsContextMut, Func, Instance, Result, RootScope, StackCreator, StackMemory, Trap, Val,
-};
+use wasmtime::{AsContextMut, Func, Instance, Result, RootScope, StackCreator, StackMemory, Val};
 
 use crate::{
     bad_utf8, handle_result, to_str, translate_args, wasm_config_t, wasm_functype_t, wasm_trap_t,
@@ -211,10 +209,8 @@ fn handle_call_error(
     trap_ret: &mut *mut wasm_trap_t,
     err_ret: &mut *mut wasmtime_error_t,
 ) {
-    if err.is::<Trap>() {
-        *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(err)));
-    } else {
-        *err_ret = Box::into_raw(Box::new(wasmtime_error_t::from(err)));
+    if let Some(err) = crate::handle_call_error(err, trap_ret) {
+        *err_ret = Box::into_raw(err);
     }
 }
 

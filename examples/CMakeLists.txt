@@ -58,6 +58,7 @@ create_target(multimemory multimemory.c)
 create_target(serialize serialize.c)
 create_target(threads threads.c)
 create_target(wasi wasi/main.c)
+create_target(component component/main.c)
 
 # Add rust tests
 create_rust_test(anyref)
@@ -65,6 +66,9 @@ create_rust_wasm(fib-debug wasm32-unknown-unknown)
 create_rust_wasm(tokio wasm32-wasip1)
 create_rust_wasm(wasi wasm32-wasip1)
 create_rust_wasm(component wasm32-unknown-unknown)
+# the C test for component needs a component binary, not a plain module
+# this is done using the rust example to do the conversion
+execute_process(COMMAND cargo run --example component copy WORKING_DIRECTORY ${CMAKE_CURRENT_LIST_DIR}/..)
 create_rust_test(epochs)
 create_rust_test(externref)
 create_rust_test(fib-debug)

@@ -70,6 +70,11 @@ mod wat2wasm;
 #[cfg(feature = "wat")]
 pub use crate::wat2wasm::*;
 
+#[cfg(feature = "component-model")]
+mod component;
+#[cfg(feature = "component-model")]
+pub use crate::component::*;
+
 /// Initialize a `MaybeUninit<T>`
 ///
 /// TODO: Replace calls to this function with
@@ -118,6 +123,20 @@ unsafe fn slice_from_raw_parts_mut<'a, T>(ptr: *mut T, len: usize) -> &'a mut [T
         &mut []
     } else {
         std::slice::from_raw_parts_mut(ptr, len)
+    }
+}
+
+#[cfg(any(feature = "async", feature = "component-model"))]
+pub(crate) fn handle_call_error(
+    err: wasmtime::Error,
+    trap_ret: &mut *mut wasm_trap_t,
+) -> Option<Box<wasmtime_error_t>> {
+    use wasmtime::Trap;
+    if err.is::<Trap>() {
+        *trap_ret = Box::into_raw(Box::new(wasm_trap_t::new(err)));
+        None
+    } else {
+        Some(Box::new(wasmtime_error_t::from(err)))
     }
 }
 
