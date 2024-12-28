@@ -1071,6 +1071,9 @@ macro_rules! for_each_extended_op {
             /// `dst = src1 * src2`
             vmuli64x2 = VMulI64x2 { operands: BinaryOperands<VReg> };
 
+            /// `dst = count_ones(src)`
+            vpopcnt8x16 = VPopcnt8x16 { dst: VReg, src: VReg };
+
             /// `low32(dst) = zext(src[lane])`
             xextractv8x16 = XExtractV8x16 { dst: XReg, src: VReg, lane: u8 };
             /// `low32(dst) = zext(src[lane])`
@@ -1156,14 +1159,24 @@ macro_rules! for_each_extended_op {
             vneg64x2 = Vneg64x2 { dst: VReg, src: VReg };
 
             /// `dst = min(src1, src2)` (signed)
+            vmin8x16_s = Vmin8x16S { operands: BinaryOperands<VReg> };
+            /// `dst = min(src1, src2)` (unsigned)
+            vmin8x16_u = Vmin8x16U { operands: BinaryOperands<VReg> };
+            /// `dst = min(src1, src2)` (signed)
             vmin16x8_s = Vmin16x8S { operands: BinaryOperands<VReg> };
             /// `dst = min(src1, src2)` (unsigned)
             vmin16x8_u = Vmin16x8U { operands: BinaryOperands<VReg> };
+            /// `dst = max(src1, src2)` (signed)
+            vmax8x16_s = Vmax8x16S { operands: BinaryOperands<VReg> };
+            /// `dst = max(src1, src2)` (unsigned)
+            vmax8x16_u = Vmax8x16U { operands: BinaryOperands<VReg> };
             /// `dst = max(src1, src2)` (signed)
             vmax16x8_s = Vmax16x8S { operands: BinaryOperands<VReg> };
             /// `dst = max(src1, src2)` (unsigned)
             vmax16x8_u = Vmax16x8U { operands: BinaryOperands<VReg> };
 
+            /// `dst = |src|`
+            vabs8x16 = Vabs8x16 { dst: VReg, src: VReg };
             /// `dst = |src|`
             vabs16x8 = Vabs16x8 { dst: VReg, src: VReg };
 
@@ -1183,6 +1196,8 @@ macro_rules! for_each_extended_op {
             /// `dst = swizzle(src1, src2)`
             vswizzlei8x16 = Vswizzlei8x16 { operands: BinaryOperands<VReg> };
 
+            /// `dst = (src1 + src2 + 1) // 2`
+            vavground8x16 = Vavground8x16 { operands: BinaryOperands<VReg> };
             /// `dst = (src1 + src2 + 1) // 2`
             vavground16x8 = Vavground16x8 { operands: BinaryOperands<VReg> };
         }

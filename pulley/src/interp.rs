@@ -3835,6 +3835,12 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vpopcnt8x16(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u8x16();
+        self.state[dst].set_u8x16(a.map(|i| i.count_ones() as u8));
+        ControlFlow::Continue(())
+    }
+
     fn xextractv8x16(&mut self, dst: XReg, src: VReg, lane: u8) -> ControlFlow<Done> {
         let a = unsafe { *self.state[src].get_u8x16().get_unchecked(usize::from(lane)) };
         self.state[dst].set_u32(u32::from(a));
@@ -4243,6 +4249,26 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vmin8x16_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i8x16();
+        let b = self.state[operands.src2].get_i8x16();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).min(*b);
+        }
+        self.state[operands.dst].set_i8x16(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmin8x16_u(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u8x16();
+        let b = self.state[operands.src2].get_u8x16();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).min(*b);
+        }
+        self.state[operands.dst].set_u8x16(a);
+        ControlFlow::Continue(())
+    }
+
     fn vmin16x8_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
         let mut a = self.state[operands.src1].get_i16x8();
         let b = self.state[operands.src2].get_i16x8();
@@ -4263,6 +4289,26 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vmax8x16_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i8x16();
+        let b = self.state[operands.src2].get_i8x16();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).max(*b);
+        }
+        self.state[operands.dst].set_i8x16(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmax8x16_u(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u8x16();
+        let b = self.state[operands.src2].get_u8x16();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).max(*b);
+        }
+        self.state[operands.dst].set_u8x16(a);
+        ControlFlow::Continue(())
+    }
+
     fn vmax16x8_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
         let mut a = self.state[operands.src1].get_i16x8();
         let b = self.state[operands.src2].get_i16x8();
@@ -4280,6 +4326,12 @@ impl ExtendedOpVisitor for Interpreter<'_> {
             *a = (*a).max(*b);
         }
         self.state[operands.dst].set_u16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vabs8x16(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i8x16();
+        self.state[dst].set_i8x16(a.map(|i| i.wrapping_abs()));
         ControlFlow::Continue(())
     }
 
@@ -4356,11 +4408,22 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vavground8x16(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u8x16();
+        let b = self.state[operands.src2].get_u8x16();
+        for (a, b) in a.iter_mut().zip(&b) {
+            // use wider precision to avoid overflow
+            *a = ((u32::from(*a) + u32::from(*b) + 1) / 2) as u8;
+        }
+        self.state[operands.dst].set_u8x16(a);
+        ControlFlow::Continue(())
+    }
+
     fn vavground16x8(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
         let mut a = self.state[operands.src1].get_u16x8();
         let b = self.state[operands.src2].get_u16x8();
         for (a, b) in a.iter_mut().zip(&b) {
-            // rounding average
+            // use wider precision to avoid overflow
             *a = ((u32::from(*a) + u32::from(*b) + 1) / 2) as u16;
         }
         self.state[operands.dst].set_u16x8(a);
