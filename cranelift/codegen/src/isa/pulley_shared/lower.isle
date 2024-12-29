@@ -221,6 +221,11 @@
 (rule 1 (lower (has_type $I32X4 (iadd a b))) (pulley_vaddi32x4 a b))
 (rule 1 (lower (has_type $I64X2 (iadd a b))) (pulley_vaddi64x2 a b))
 
+;;;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I16X8 (iadd_pairwise a b))) (pulley_vaddpairwisei16x8_s a b))
+(rule (lower (has_type $I32X4 (iadd_pairwise a b))) (pulley_vaddpairwisei32x4_s a b))
+
 ;;;; Rules for `isub` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (has_type (ty_int (fits_in_32 _)) (isub a b))) (pulley_xsub32 a b))

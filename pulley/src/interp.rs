@@ -3299,6 +3299,40 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vaddpairwisei16x8_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        let result = a
+            .chunks(2)
+            .chain(b.chunks(2))
+            .map(|pair| {
+                let [h, t]: [_; 2] = pair.try_into().unwrap();
+                h.wrapping_add(t)
+            })
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        self.state[operands.dst].set_i16x8(result);
+        ControlFlow::Continue(())
+    }
+
+    fn vaddpairwisei32x4_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i32x4();
+        let b = self.state[operands.src2].get_i32x4();
+        let result = a
+            .chunks(2)
+            .chain(b.chunks(2))
+            .map(|pair| {
+                let [h, t]: [_; 2] = pair.try_into().unwrap();
+                h.wrapping_add(t)
+            })
+            .collect::<Vec<_>>()
+            .try_into()
+            .unwrap();
+        self.state[operands.dst].set_i32x4(result);
+        ControlFlow::Continue(())
+    }
+
     fn vshli8x16(&mut self, operands: BinaryOperands<VReg, VReg, XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_i8x16();
         let b = self.state[operands.src2].get_u32();
