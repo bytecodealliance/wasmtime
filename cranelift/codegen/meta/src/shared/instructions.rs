@@ -1789,7 +1789,7 @@ pub(crate) fn define(
             r#"
         Fixed-point multiplication of numbers in the QN format, where N + 1
         is the number bitwidth:
-        `a := signed_saturate((x * y + 1 << (Q - 1)) >> Q)`
+        `a := signed_saturate((x * y + (1 << (Q - 1))) >> Q)`
 
         Polymorphic over all integer vector types with 16- or 32-bit numbers.
         "#,

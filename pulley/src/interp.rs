@@ -3835,6 +3835,19 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vqmulrsi16x8(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        const MIN: i32 = i16::MIN as i32;
+        const MAX: i32 = i16::MAX as i32;
+        for (a, b) in a.iter_mut().zip(b) {
+            let r = i32::from(*a) * i32::from(b) + (1 << 14) >> 15;
+            *a = r.clamp(MIN, MAX) as i16;
+        }
+        self.state[operands.dst].set_i16x8(a);
+        ControlFlow::Continue(())
+    }
+
     fn xextractv8x16(&mut self, dst: XReg, src: VReg, lane: u8) -> ControlFlow<Done> {
         let a = unsafe { *self.state[src].get_u8x16().get_unchecked(usize::from(lane)) };
         self.state[dst].set_u32(u32::from(a));

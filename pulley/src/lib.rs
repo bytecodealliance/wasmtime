@@ -1071,6 +1071,9 @@ macro_rules! for_each_extended_op {
             /// `dst = src1 * src2`
             vmuli64x2 = VMulI64x2 { operands: BinaryOperands<VReg> };
 
+            /// `dst = signed_saturate(src1 * src2 + (1 << (Q - 1)) >> Q)`
+            vqmulrsi16x8 = VQmulrsI16x8 { operands: BinaryOperands<VReg> };
+
             /// `low32(dst) = zext(src[lane])`
             xextractv8x16 = XExtractV8x16 { dst: XReg, src: VReg, lane: u8 };
             /// `low32(dst) = zext(src[lane])`
