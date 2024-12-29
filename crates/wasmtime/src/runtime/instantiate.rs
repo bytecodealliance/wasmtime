@@ -293,6 +293,12 @@ impl CompiledModule {
     pub fn has_address_map(&self) -> bool {
         !self.code_memory.address_map_data().is_empty()
     }
+
+    /// Returns the binary offset in the original wasm file to the start of the
+    /// code section.
+    pub fn code_section_offset(&self) -> u64 {
+        self.meta.code_section_offset
+    }
 }
 
 #[cfg(feature = "addr2line")]

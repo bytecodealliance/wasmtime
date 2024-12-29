@@ -1118,6 +1118,20 @@ impl Module {
 
         Some(&info.stack_maps[index].stack_map)
     }
+
+    /// Converts an absolute binary offset into a relative to the code section
+    /// one. Useful for generating Wasm codedump.
+    ///
+    /// Panics if the provided `codeoffset` is before the code section.
+    pub(crate) fn get_relative_codeoffset(&self, codeoffset: u32) -> u32 {
+        let code_section_offset = self.inner.module.code_section_offset();
+
+        assert!(
+            (codeoffset as u64) >= code_section_offset,
+            "the codeoffset cannot be before the code section"
+        );
+        (codeoffset as u64 - code_section_offset) as u32
+    }
 }
 
 /// Describes a function for a given module.

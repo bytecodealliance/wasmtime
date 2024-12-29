@@ -29,7 +29,6 @@ use std::fmt;
 /// [`Func::call`]: crate::Func::call
 /// [`Instance::new`]: crate::Instance::new
 pub struct WasmCoreDump {
-    name: String,
     modules: Vec<Module>,
     instances: Vec<Instance>,
     memories: Vec<Memory>,
@@ -47,7 +46,6 @@ impl WasmCoreDump {
         store.for_each_global(|_store, global| store_globals.push(global));
 
         WasmCoreDump {
-            name: String::from("store_name"),
             modules,
             instances,
             memories: store_memories,
@@ -280,19 +278,20 @@ impl WasmCoreDump {
                 // `module_to_instance` for details.
                 let instance = module_to_instance[&frame.module().id()];
 
-                let func = frame.func_index();
+                let funcidx = frame.func_index();
 
-                let offset = frame
-                    .func_offset()
+                let codeoffset = frame
+                    .module_offset()
                     .and_then(|o| u32::try_from(o).ok())
                     .unwrap_or(0);
+                let codeoffset = frame.module().get_relative_codeoffset(codeoffset);
 
                 // We can't currently recover locals and the operand stack. We
                 // should eventually be able to do that with Winch though.
                 let locals = [];
                 let operand_stack = [];
 
-                stack.frame(instance, func, offset, locals, operand_stack);
+                stack.frame(instance, funcidx, codeoffset, locals, operand_stack);
             }
             core_dump.section(&stack);
         }
@@ -303,7 +302,7 @@ impl WasmCoreDump {
 
 impl fmt::Display for WasmCoreDump {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "wasm coredump generated while executing {}:", self.name)?;
+        writeln!(f, "wasm coredump generated:")?;
         writeln!(f, "modules:")?;
         for module in self.modules.iter() {
             writeln!(f, "  {}", module.name().unwrap_or("<module>"))?;
