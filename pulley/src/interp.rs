@@ -3841,7 +3841,7 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         const MIN: i32 = i16::MIN as i32;
         const MAX: i32 = i16::MAX as i32;
         for (a, b) in a.iter_mut().zip(b) {
-            let r = i32::from(*a) * i32::from(b) + (1 << 14) >> 15;
+            let r = (i32::from(*a) * i32::from(b) + (1 << 14)) >> 15;
             *a = r.clamp(MIN, MAX) as i16;
         }
         self.state[operands.dst].set_i16x8(a);
