@@ -1193,10 +1193,21 @@ macro_rules! for_each_extended_op {
             /// `dst = max(src1, src2)` (unsigned)
             vmax16x8_u = Vmax16x8U { operands: BinaryOperands<VReg> };
 
+            /// `dst = min(src1, src2)` (signed)
+            vmin32x4_s = Vmin32x4S { operands: BinaryOperands<VReg> };
+            /// `dst = min(src1, src2)` (unsigned)
+            vmin32x4_u = Vmin32x4U { operands: BinaryOperands<VReg> };
+            /// `dst = max(src1, src2)` (signed)
+            vmax32x4_s = Vmax32x4S { operands: BinaryOperands<VReg> };
+            /// `dst = max(src1, src2)` (unsigned)
+            vmax32x4_u = Vmax32x4U { operands: BinaryOperands<VReg> };
+
             /// `dst = |src|`
             vabs8x16 = Vabs8x16 { dst: VReg, src: VReg };
             /// `dst = |src|`
             vabs16x8 = Vabs16x8 { dst: VReg, src: VReg };
+            /// `dst = |src|`
+            vabs32x4 = Vabs32x4 { dst: VReg, src: VReg };
             /// `dst = |src|`
             vabs64x2 = Vabs64x2 { dst: VReg, src: VReg };
 

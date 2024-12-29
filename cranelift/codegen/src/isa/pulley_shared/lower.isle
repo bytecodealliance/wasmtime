@@ -521,6 +521,7 @@
 (rule 1 (lower (has_type $I64 (umin a b))) (pulley_xmin64_u a b))
 (rule 1 (lower (has_type $I8X16 (umin a b))) (pulley_vmin8x16_u a b))
 (rule 1 (lower (has_type $I16X8 (umin a b))) (pulley_vmin16x8_u a b))
+(rule 1 (lower (has_type $I32X4 (umin a b))) (pulley_vmin32x4_u a b))
 
 ;;;; Rules for `smin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -529,6 +530,7 @@
 (rule 1 (lower (has_type $I64 (smin a b))) (pulley_xmin64_s a b))
 (rule 1 (lower (has_type $I8X16 (smin a b))) (pulley_vmin8x16_s a b))
 (rule 1 (lower (has_type $I16X8 (smin a b))) (pulley_vmin16x8_s a b))
+(rule 1 (lower (has_type $I32X4 (smin a b))) (pulley_vmin32x4_s a b))
 
 ;;;; Rules for `umax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -537,6 +539,7 @@
 (rule 1 (lower (has_type $I64 (umax a b))) (pulley_xmax64_u a b))
 (rule 1 (lower (has_type $I8X16 (umax a b))) (pulley_vmax8x16_u a b))
 (rule 1 (lower (has_type $I16X8 (umax a b))) (pulley_vmax16x8_u a b))
+(rule 1 (lower (has_type $I32X4 (umax a b))) (pulley_vmax32x4_u a b))
 
 ;;;; Rules for `smax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -545,6 +548,7 @@
 (rule 1 (lower (has_type $I64 (smax a b))) (pulley_xmax64_s a b))
 (rule 1 (lower (has_type $I8X16 (smax a b))) (pulley_vmax8x16_s a b))
 (rule 1 (lower (has_type $I16X8 (smax a b))) (pulley_vmax16x8_s a b))
+(rule 1 (lower (has_type $I32X4 (smax a b))) (pulley_vmax32x4_s a b))
 
 ;;;; Rules for `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1256,6 +1260,7 @@
 (rule 1 (lower (has_type $I64 (iabs a))) (pulley_xabs64 a))
 (rule 1 (lower (has_type $I8X16 (iabs a))) (pulley_vabs8x16 a))
 (rule 1 (lower (has_type $I16X8 (iabs a))) (pulley_vabs16x8 a))
+(rule 1 (lower (has_type $I32X4 (iabs a))) (pulley_vabs32x4 a))
 (rule 1 (lower (has_type $I64X2 (iabs a))) (pulley_vabs64x2 a))
 
 ;;;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

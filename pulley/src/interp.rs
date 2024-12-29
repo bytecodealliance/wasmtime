@@ -4369,6 +4369,26 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vmin32x4_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i32x4();
+        let b = self.state[operands.src2].get_i32x4();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).min(*b);
+        }
+        self.state[operands.dst].set_i32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmin32x4_u(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u32x4();
+        let b = self.state[operands.src2].get_u32x4();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).min(*b);
+        }
+        self.state[operands.dst].set_u32x4(a);
+        ControlFlow::Continue(())
+    }
+
     fn vmax8x16_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
         let mut a = self.state[operands.src1].get_i8x16();
         let b = self.state[operands.src2].get_i8x16();
@@ -4409,6 +4429,26 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vmax32x4_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i32x4();
+        let b = self.state[operands.src2].get_i32x4();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).max(*b);
+        }
+        self.state[operands.dst].set_i32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmax32x4_u(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u32x4();
+        let b = self.state[operands.src2].get_u32x4();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).max(*b);
+        }
+        self.state[operands.dst].set_u32x4(a);
+        ControlFlow::Continue(())
+    }
+
     fn vabs8x16(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
         let a = self.state[src].get_i8x16();
         self.state[dst].set_i8x16(a.map(|i| i.wrapping_abs()));
@@ -4418,6 +4458,12 @@ impl ExtendedOpVisitor for Interpreter<'_> {
     fn vabs16x8(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
         let a = self.state[src].get_i16x8();
         self.state[dst].set_i16x8(a.map(|i| i.wrapping_abs()));
+        ControlFlow::Continue(())
+    }
+
+    fn vabs32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i32x4();
+        self.state[dst].set_i32x4(a.map(|i| i.wrapping_abs()));
         ControlFlow::Continue(())
     }
 
