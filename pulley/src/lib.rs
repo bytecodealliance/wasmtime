@@ -908,6 +908,11 @@ macro_rules! for_each_extended_op {
             /// `dst = satruating_add(src1, src2)`
             vaddu16x8_sat = VAddU16x8Sat { operands: BinaryOperands<VReg> };
 
+            /// `dst = [src1[0] + src1[1], ..., src2[6] + src2[7]]`
+            vaddpairwisei16x8_s = VAddpairwiseI16x8S { operands: BinaryOperands<VReg> };
+            /// `dst = [src1[0] + src1[1], ..., src2[2] + src2[3]]`
+            vaddpairwisei32x4_s = VAddpairwiseI32x4S { operands: BinaryOperands<VReg> };
+
             /// `dst = src1 << src2`
             vshli8x16 = VShlI8x16 { operands: BinaryOperands<VReg, VReg, XReg> };
             /// `dst = src1 << src2`
