@@ -899,6 +899,15 @@ macro_rules! for_each_extended_op {
             /// `dst = src1 + src2`
             vaddf64x2 = VAddF64x2 { operands: BinaryOperands<VReg> };
 
+            /// `dst = satruating_add(src1, src2)`
+            vaddi8x16_sat = VAddI8x16Sat { operands: BinaryOperands<VReg> };
+            /// `dst = satruating_add(src1, src2)`
+            vaddu8x16_sat = VAddU8x16Sat { operands: BinaryOperands<VReg> };
+            /// `dst = satruating_add(src1, src2)`
+            vaddi16x8_sat = VAddI16x8Sat { operands: BinaryOperands<VReg> };
+            /// `dst = satruating_add(src1, src2)`
+            vaddu16x8_sat = VAddU16x8Sat { operands: BinaryOperands<VReg> };
+
             /// `dst = [src1[0] + src1[1], ..., src2[6] + src2[7]]`
             vaddpairwisei16x8_s = VAddpairwiseI16x8S { operands: BinaryOperands<VReg> };
             /// `dst = [src1[0] + src1[1], ..., src2[2] + src2[3]]`
@@ -1067,6 +1076,15 @@ macro_rules! for_each_extended_op {
             /// `dst = src1 - src2`
             vsubi64x2 = VSubI64x2 { operands: BinaryOperands<VReg> };
 
+            /// `dst = saturating_sub(src1, src2)`
+            vsubi8x16_sat = VSubI8x16Sat { operands: BinaryOperands<VReg> };
+            /// `dst = saturating_sub(src1, src2)`
+            vsubu8x16_sat = VSubU8x16Sat { operands: BinaryOperands<VReg> };
+            /// `dst = saturating_sub(src1, src2)`
+            vsubi16x8_sat = VSubI16x8Sat { operands: BinaryOperands<VReg> };
+            /// `dst = saturating_sub(src1, src2)`
+            vsubu16x8_sat = VSubU16x8Sat { operands: BinaryOperands<VReg> };
+
             /// `dst = src1 * src2`
             vmuli8x16 = VMulI8x16 { operands: BinaryOperands<VReg> };
             /// `dst = src1 * src2`
@@ -1078,6 +1096,9 @@ macro_rules! for_each_extended_op {
 
             /// `dst = signed_saturate(src1 * src2 + (1 << (Q - 1)) >> Q)`
             vqmulrsi16x8 = VQmulrsI16x8 { operands: BinaryOperands<VReg> };
+
+            /// `dst = count_ones(src)`
+            vpopcnt8x16 = VPopcnt8x16 { dst: VReg, src: VReg };
 
             /// `low32(dst) = zext(src[lane])`
             xextractv8x16 = XExtractV8x16 { dst: XReg, src: VReg, lane: u8 };
@@ -1164,9 +1185,17 @@ macro_rules! for_each_extended_op {
             vneg64x2 = Vneg64x2 { dst: VReg, src: VReg };
 
             /// `dst = min(src1, src2)` (signed)
+            vmin8x16_s = Vmin8x16S { operands: BinaryOperands<VReg> };
+            /// `dst = min(src1, src2)` (unsigned)
+            vmin8x16_u = Vmin8x16U { operands: BinaryOperands<VReg> };
+            /// `dst = min(src1, src2)` (signed)
             vmin16x8_s = Vmin16x8S { operands: BinaryOperands<VReg> };
             /// `dst = min(src1, src2)` (unsigned)
             vmin16x8_u = Vmin16x8U { operands: BinaryOperands<VReg> };
+            /// `dst = max(src1, src2)` (signed)
+            vmax8x16_s = Vmax8x16S { operands: BinaryOperands<VReg> };
+            /// `dst = max(src1, src2)` (unsigned)
+            vmax8x16_u = Vmax8x16U { operands: BinaryOperands<VReg> };
             /// `dst = max(src1, src2)` (signed)
             vmax16x8_s = Vmax16x8S { operands: BinaryOperands<VReg> };
             /// `dst = max(src1, src2)` (unsigned)
@@ -1182,9 +1211,13 @@ macro_rules! for_each_extended_op {
             vmax32x4_u = Vmax32x4U { operands: BinaryOperands<VReg> };
 
             /// `dst = |src|`
+            vabs8x16 = Vabs8x16 { dst: VReg, src: VReg };
+            /// `dst = |src|`
             vabs16x8 = Vabs16x8 { dst: VReg, src: VReg };
             /// `dst = |src|`
             vabs32x4 = Vabs32x4 { dst: VReg, src: VReg };
+            /// `dst = |src|`
+            vabs64x2 = Vabs64x2 { dst: VReg, src: VReg };
 
             /// `dst = |src|`
             vabsf32x4 = Vabsf32x4 { dst: VReg, src: VReg };
@@ -1199,9 +1232,14 @@ macro_rules! for_each_extended_op {
             /// `dst = ieee_minimum(src1, src2)`
             vminimumf64x2 = Vminimumf64x2 { operands: BinaryOperands<VReg> };
 
+            /// `dst = shuffle(src1, src2, mask)`
+            vshuffle = VShuffle { dst: VReg, src1: VReg, src2: VReg, mask: u128 };
+
             /// `dst = swizzle(src1, src2)`
             vswizzlei8x16 = Vswizzlei8x16 { operands: BinaryOperands<VReg> };
 
+            /// `dst = (src1 + src2 + 1) // 2`
+            vavground8x16 = Vavground8x16 { operands: BinaryOperands<VReg> };
             /// `dst = (src1 + src2 + 1) // 2`
             vavground16x8 = Vavground16x8 { operands: BinaryOperands<VReg> };
         }

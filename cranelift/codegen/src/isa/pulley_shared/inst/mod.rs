@@ -507,8 +507,11 @@ where
     }
 
     fn worst_case_size() -> CodeOffset {
-        // `Vconst128 { dst, imm }` is 20 bytes (3 byte opcode + dst + 16-byte imm)
-        20
+        // `VShuffle { dst, src1, src2, imm }` is 22 bytes:
+        // 3-byte opcode
+        // dst, src1, src2
+        // 16-byte immediate
+        22
     }
 
     fn ref_type_regclass(_settings: &settings::Flags) -> RegClass {

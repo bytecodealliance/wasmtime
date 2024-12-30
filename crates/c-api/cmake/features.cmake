@@ -43,5 +43,6 @@ feature(gc-null ON)
 feature(async ON)
 feature(cranelift ON)
 feature(winch ON)
+feature(debug-builtins ON)
 # ... if you add a line above this be sure to change the other locations
 # marked WASMTIME_FEATURE_LIST
