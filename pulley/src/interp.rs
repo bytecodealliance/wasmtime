@@ -3302,16 +3302,12 @@ impl ExtendedOpVisitor for Interpreter<'_> {
     fn vaddpairwisei16x8_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_i16x8();
         let b = self.state[operands.src2].get_i16x8();
-        let result = a
-            .chunks(2)
-            .chain(b.chunks(2))
-            .map(|pair| {
-                let [h, t]: [_; 2] = pair.try_into().unwrap();
-                h.wrapping_add(t)
-            })
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
+        let mut result = [0i16; 8];
+        let half = result.len() / 2;
+        for i in 0..half {
+            result[i] = a[2 * i].wrapping_add(a[2 * i + 1]);
+            result[i + half] = b[2 * i].wrapping_add(b[2 * i + 1]);
+        }
         self.state[operands.dst].set_i16x8(result);
         ControlFlow::Continue(())
     }
@@ -3319,16 +3315,11 @@ impl ExtendedOpVisitor for Interpreter<'_> {
     fn vaddpairwisei32x4_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_i32x4();
         let b = self.state[operands.src2].get_i32x4();
-        let result = a
-            .chunks(2)
-            .chain(b.chunks(2))
-            .map(|pair| {
-                let [h, t]: [_; 2] = pair.try_into().unwrap();
-                h.wrapping_add(t)
-            })
-            .collect::<Vec<_>>()
-            .try_into()
-            .unwrap();
+        let mut result = [0i32; 4];
+        result[0] = a[0].wrapping_add(a[1]);
+        result[1] = a[2].wrapping_add(a[3]);
+        result[2] = b[0].wrapping_add(b[1]);
+        result[3] = b[2].wrapping_add(b[3]);
         self.state[operands.dst].set_i32x4(result);
         ControlFlow::Continue(())
     }
