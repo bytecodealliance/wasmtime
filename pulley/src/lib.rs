@@ -1181,7 +1181,7 @@ macro_rules! for_each_extended_op {
             vminimumf64x2 = Vminimumf64x2 { operands: BinaryOperands<VReg> };
 
             /// `dst = shuffle(src1, src2, mask)`
-            vshuffle = VShuffle { dst: VReg, src1: VReg, src2: VReg, mask: VReg };
+            vshuffle = VShuffle { dst: VReg, src1: VReg, src2: VReg, mask: u128 };
 
             /// `dst = swizzle(src1, src2)`
             vswizzlei8x16 = Vswizzlei8x16 { operands: BinaryOperands<VReg> };

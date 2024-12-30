@@ -4341,11 +4341,10 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
-    fn vshuffle(&mut self, dst: VReg, src1: VReg, src2: VReg, mask: VReg) -> ControlFlow<Done> {
+    fn vshuffle(&mut self, dst: VReg, src1: VReg, src2: VReg, mask: u128) -> ControlFlow<Done> {
         let a = self.state[src1].get_u8x16();
         let b = self.state[src2].get_u8x16();
-        let mask = self.state[mask].get_u8x16();
-        let result = mask.map(|m| {
+        let result = mask.to_le_bytes().map(|m| {
             if m < 16 {
                 a[m as usize]
             } else {

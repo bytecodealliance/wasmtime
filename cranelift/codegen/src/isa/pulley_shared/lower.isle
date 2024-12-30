@@ -1372,8 +1372,7 @@
 ;;;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I8X16 (shuffle a b (u128_from_immediate mask))))
-  (let ((vmask VReg (pulley_vconst128 mask)))
-    (pulley_vshuffle a b vmask)))
+  (pulley_vshuffle a b mask))
 
 ;;;; Rules for `swizzle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
