@@ -4538,6 +4538,20 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vshuffle(&mut self, dst: VReg, src1: VReg, src2: VReg, mask: u128) -> ControlFlow<Done> {
+        let a = self.state[src1].get_u8x16();
+        let b = self.state[src2].get_u8x16();
+        let result = mask.to_le_bytes().map(|m| {
+            if m < 16 {
+                a[m as usize]
+            } else {
+                b[m as usize - 16]
+            }
+        });
+        self.state[dst].set_u8x16(result);
+        ControlFlow::Continue(())
+    }
+
     fn vswizzlei8x16(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
         let src1 = self.state[operands.src1].get_i8x16();
         let src2 = self.state[operands.src2].get_i8x16();

@@ -1396,6 +1396,10 @@
 (rule (lower (scalar_to_vector a @ (value_type $F64)))
   (pulley_vinsertf64 (pulley_vconst128 0) a 0))
 
+;;;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I8X16 (shuffle a b (u128_from_immediate mask))))
+  (pulley_vshuffle a b mask))
 
 ;;;; Rules for `swizzle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
