@@ -576,10 +576,8 @@ impl CommonOptions {
             collector => config.collector(collector),
             _ => err,
         }
-        match_feature! {
-            ["cranelift" : &self.target]
-            target => config.target(target)?,
-            _ => err,
+        if let Some(target) = &self.target {
+            config.target(target)?;
         }
         match_feature! {
             ["cranelift" : self.codegen.cranelift_debug_verifier]

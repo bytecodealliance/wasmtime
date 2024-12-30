@@ -35,6 +35,12 @@ WASM_API_EXTERN wasm_engine_t *wasmtime_engine_clone(wasm_engine_t *engine);
  */
 WASM_API_EXTERN void wasmtime_engine_increment_epoch(wasm_engine_t *engine);
 
+/**
+ * \brief Returns whether this engine is using the Pulley interpreter to execute
+ * WebAssembly code.
+ */
+WASM_API_EXTERN bool wasmtime_engine_is_pulley(wasm_engine_t *engine);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
