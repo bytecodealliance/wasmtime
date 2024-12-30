@@ -311,6 +311,10 @@
 (rule (lower (has_type $I64 (smulhi a b)))
   (pulley_xmulhi64_s a b))
 
+;;;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I16X8 (sqmul_round_sat a b))) (pulley_vqmulrsi16x8 a b))
+
 ;;;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (has_type (fits_in_32 _) (sdiv a b)))
@@ -335,7 +339,7 @@
   (pulley_xrem32_u (zext32 a) (zext32 b)))
 (rule 1 (lower (has_type $I64 (urem a b))) (pulley_xrem64_u a b))
 
-;;;; Rules for `avg_round` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `avg_round` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I16X8 (avg_round a b))) (pulley_vavground16x8 a b))
 
@@ -509,6 +513,7 @@
   (pulley_xmin32_u (zext32 a) (zext32 b)))
 (rule 1 (lower (has_type $I64 (umin a b))) (pulley_xmin64_u a b))
 (rule 1 (lower (has_type $I16X8 (umin a b))) (pulley_vmin16x8_u a b))
+(rule 1 (lower (has_type $I32X4 (umin a b))) (pulley_vmin32x4_u a b))
 
 ;;;; Rules for `smin` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -516,6 +521,7 @@
   (pulley_xmin32_s (sext32 a) (sext32 b)))
 (rule 1 (lower (has_type $I64 (smin a b))) (pulley_xmin64_s a b))
 (rule 1 (lower (has_type $I16X8 (smin a b))) (pulley_vmin16x8_s a b))
+(rule 1 (lower (has_type $I32X4 (smin a b))) (pulley_vmin32x4_s a b))
 
 ;;;; Rules for `umax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -523,6 +529,7 @@
   (pulley_xmax32_u (zext32 a) (zext32 b)))
 (rule 1 (lower (has_type $I64 (umax a b))) (pulley_xmax64_u a b))
 (rule 1 (lower (has_type $I16X8 (umax a b))) (pulley_vmax16x8_u a b))
+(rule 1 (lower (has_type $I32X4 (umax a b))) (pulley_vmax32x4_u a b))
 
 ;;;; Rules for `smax` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -530,6 +537,7 @@
   (pulley_xmax32_s (sext32 a) (sext32 b)))
 (rule 1 (lower (has_type $I64 (smax a b))) (pulley_xmax64_s a b))
 (rule 1 (lower (has_type $I16X8 (smax a b))) (pulley_vmax16x8_s a b))
+(rule 1 (lower (has_type $I32X4 (smax a b))) (pulley_vmax32x4_s a b))
 
 ;;;; Rules for `bmask` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1239,6 +1247,7 @@
 (rule 0 (lower (has_type (fits_in_32 _) (iabs a))) (pulley_xabs32 (sext32 a)))
 (rule 1 (lower (has_type $I64 (iabs a))) (pulley_xabs64 a))
 (rule 1 (lower (has_type $I16X8 (iabs a))) (pulley_vabs16x8 a))
+(rule 1 (lower (has_type $I32X4 (iabs a))) (pulley_vabs32x4 a))
 
 ;;;; Rules for `splat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
