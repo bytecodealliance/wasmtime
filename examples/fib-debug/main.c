@@ -5,6 +5,41 @@
 #include <wasm.h>
 #include <wasmtime.h>
 
+#ifdef WASMTIME_TEST_ONLY
+// These are the declarations provided from GDB documentation, used to validate
+// that we actually added some DWARF info:
+// https://sourceware.org/gdb/current/onlinedocs/gdb.html/Declarations.html#Declarations
+//
+// NOTE: These are not required in your code, rather they are used for wasmtime
+// testing only.
+typedef enum {
+  JIT_NOACTION = 0,
+  JIT_REGISTER_FN,
+  JIT_UNREGISTER_FN
+} jit_actions_t;
+
+struct jit_code_entry {
+  struct jit_code_entry *next_entry;
+  struct jit_code_entry *prev_entry;
+  const char *symfile_addr;
+  uint64_t symfile_size;
+};
+
+struct jit_descriptor {
+  uint32_t version;
+  /* This type should be jit_actions_t, but we use uint32_t
+     to be explicit about the bitwidth.  */
+  uint32_t action_flag;
+  struct jit_code_entry *relevant_entry;
+  struct jit_code_entry *first_entry;
+};
+
+/*
+ * Import the descriptor, defined elsewhere in wasmtime
+ */
+extern struct jit_descriptor __jit_debug_descriptor;
+#endif
+
 #define own
 
 static void exit_with_error(const char *message, wasmtime_error_t *error,
@@ -23,6 +58,15 @@ int main(int argc, const char *argv[]) {
   wasm_engine_t *engine = wasm_engine_new_with_config(config);
   wasmtime_store_t *store = wasmtime_store_new(engine, NULL, NULL);
   wasmtime_context_t *context = wasmtime_store_context(store);
+
+#ifdef WASMTIME_TEST_ONLY
+  // NOTE: This validation is for wasmtime testing and should not be included in
+  // your code.
+  if (__jit_debug_descriptor.first_entry != NULL) {
+    fprintf(stderr, "FAIL: JIT descriptor is already initialized\n");
+    return 1;
+  }
+#endif
 
   // Load binary.
   printf("Loading binary...\n");
@@ -59,6 +103,15 @@ int main(int argc, const char *argv[]) {
   if (error != NULL || trap != NULL)
     exit_with_error("failed to instantiate", error, trap);
   wasmtime_module_delete(module);
+
+#ifdef WASMTIME_TEST_ONLY
+  // NOTE: This validation is for wasmtime testing and should not be included in
+  // your code.
+  if (__jit_debug_descriptor.first_entry == NULL) {
+    fprintf(stderr, "FAIL: JIT descriptor is NOT initialized\n");
+    return 1;
+  }
+#endif
 
   // Extract export.
   wasmtime_extern_t fib;

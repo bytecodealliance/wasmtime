@@ -25,6 +25,7 @@
 #cmakedefine WASMTIME_FEATURE_ASYNC
 #cmakedefine WASMTIME_FEATURE_CRANELIFT
 #cmakedefine WASMTIME_FEATURE_WINCH
+#cmakedefine WASMTIME_FEATURE_DEBUG_BUILTINS
 // ... if you add a line above this be sure to change the other locations
 // marked WASMTIME_FEATURE_LIST
 
