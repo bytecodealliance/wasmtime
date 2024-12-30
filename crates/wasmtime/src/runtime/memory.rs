@@ -669,8 +669,8 @@ impl Memory {
 /// guard page.  Additionally the safety concerns explained in ['Memory'], for
 /// accessing the memory apply here as well.
 ///
-/// Note that this is a relatively new and experimental feature and it is
-/// recommended to be familiar with wasmtime runtime code to use it.
+/// Note that this is a relatively advanced feature and it is recommended to be
+/// familiar with wasmtime runtime code to use it.
 pub unsafe trait LinearMemory: Send + Sync + 'static {
     /// Returns the number of allocated bytes which are accessible at this time.
     fn byte_size(&self) -> usize;
@@ -702,8 +702,8 @@ pub unsafe trait LinearMemory: Send + Sync + 'static {
 /// treated as owned by wasmtime instance, and any modification of them outside
 /// of wasmtime invoked routines is unsafe and may lead to corruption.
 ///
-/// Note that this is a relatively new and experimental feature and it is
-/// recommended to be familiar with wasmtime runtime code to use it.
+/// Note that this is a relatively advanced feature and it is recommended to be
+/// familiar with Wasmtime runtime code to use it.
 pub unsafe trait MemoryCreator: Send + Sync {
     /// Create a new `LinearMemory` object from the specified parameters.
     ///
