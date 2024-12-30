@@ -321,6 +321,10 @@
 (rule (lower (has_type $I64 (smulhi a b)))
   (pulley_xmulhi64_s a b))
 
+;;;; Rules for `sqmul_round_sat` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $I16X8 (sqmul_round_sat a b))) (pulley_vqmulrsi16x8 a b))
+
 ;;;; Rules for `sdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 0 (lower (has_type (fits_in_32 _) (sdiv a b)))
@@ -345,7 +349,7 @@
   (pulley_xrem32_u (zext32 a) (zext32 b)))
 (rule 1 (lower (has_type $I64 (urem a b))) (pulley_xrem64_u a b))
 
-;;;; Rules for `avg_round` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `avg_round` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I8X16 (avg_round a b))) (pulley_vavground8x16 a b))
 (rule (lower (has_type $I16X8 (avg_round a b))) (pulley_vavground16x8 a b))

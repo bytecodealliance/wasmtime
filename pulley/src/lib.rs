@@ -1089,6 +1089,9 @@ macro_rules! for_each_extended_op {
             /// `dst = src1 * src2`
             vmuli64x2 = VMulI64x2 { operands: BinaryOperands<VReg> };
 
+            /// `dst = signed_saturate(src1 * src2 + (1 << (Q - 1)) >> Q)`
+            vqmulrsi16x8 = VQmulrsI16x8 { operands: BinaryOperands<VReg> };
+
             /// `dst = count_ones(src)`
             vpopcnt8x16 = VPopcnt8x16 { dst: VReg, src: VReg };
 
