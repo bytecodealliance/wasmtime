@@ -3007,6 +3007,19 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vdivf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        let mut result = [0.0f64; 2];
+
+        for i in 0..2 {
+            result[i] = a[i] / b[i];
+        }
+
+        self.state[operands.dst].set_f64x2(result);
+        ControlFlow::Continue(())
+    }
+
     fn fmaximum32(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_f32();
         let b = self.state[operands.src2].get_f32();
@@ -3900,6 +3913,16 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vsubf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = *a - b;
+        }
+        self.state[operands.dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
     fn vmuli8x16(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
         let mut a = self.state[operands.src1].get_i8x16();
         let b = self.state[operands.src2].get_i8x16();
@@ -3937,6 +3960,16 @@ impl ExtendedOpVisitor for Interpreter<'_> {
             *a = a.wrapping_mul(b);
         }
         self.state[operands.dst].set_i64x2(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmulf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = *a * b;
+        }
+        self.state[operands.dst].set_f64x2(a);
         ControlFlow::Continue(())
     }
 
@@ -4364,6 +4397,12 @@ impl ExtendedOpVisitor for Interpreter<'_> {
     fn vneg64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
         let a = self.state[src].get_i64x2();
         self.state[dst].set_i64x2(a.map(|i| i.wrapping_neg()));
+        ControlFlow::Continue(())
+    }
+
+    fn vnegf64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64x2();
+        self.state[dst].set_f64x2(a.map(|i| -i));
         ControlFlow::Continue(())
     }
 

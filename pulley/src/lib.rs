@@ -860,6 +860,8 @@ macro_rules! for_each_extended_op {
             fmul64 = Fmul64 { operands: BinaryOperands<FReg> };
             /// `dst = src1 / src2`
             fdiv64 = Fdiv64 { operands: BinaryOperands<FReg> };
+            /// `dst = src1 / src2`
+            vdivf64x2 = VDivF64x2 { operands: BinaryOperands<VReg> };
             /// `dst = ieee_maximum(src1, src2)`
             fmaximum64 = Fmaximum64 { operands: BinaryOperands<FReg> };
             /// `dst = ieee_minimum(src1, src2)`
@@ -1075,6 +1077,8 @@ macro_rules! for_each_extended_op {
             vsubi32x4 = VSubI32x4 { operands: BinaryOperands<VReg> };
             /// `dst = src1 - src2`
             vsubi64x2 = VSubI64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 - src2`
+            vsubf64x2 = VSubF64x2 { operands: BinaryOperands<VReg> };
 
             /// `dst = saturating_sub(src1, src2)`
             vsubi8x16_sat = VSubI8x16Sat { operands: BinaryOperands<VReg> };
@@ -1093,6 +1097,8 @@ macro_rules! for_each_extended_op {
             vmuli32x4 = VMulI32x4 { operands: BinaryOperands<VReg> };
             /// `dst = src1 * src2`
             vmuli64x2 = VMulI64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src1 * src2`
+            vmulf64x2 = VMulF64x2 { operands: BinaryOperands<VReg> };
 
             /// `dst = signed_saturate(src1 * src2 + (1 << (Q - 1)) >> Q)`
             vqmulrsi16x8 = VQmulrsI16x8 { operands: BinaryOperands<VReg> };
@@ -1183,6 +1189,8 @@ macro_rules! for_each_extended_op {
             vneg32x4 = Vneg32x4 { dst: VReg, src: VReg };
             /// `dst = -src`
             vneg64x2 = Vneg64x2 { dst: VReg, src: VReg };
+            /// `dst = -src`
+            vnegf64x2 = VnegF64x2 { dst: VReg, src: VReg };
 
             /// `dst = min(src1, src2)` (signed)
             vmin8x16_s = Vmin8x16S { operands: BinaryOperands<VReg> };
