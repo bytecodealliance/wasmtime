@@ -64,7 +64,7 @@ impl<'a> CodeGenContext<'a, Emission> {
                 typed_reg.reg,
                 kind,
                 OperandSize::S32,
-            );
+            )?;
             self.stack.push(typed_reg.into());
         } else {
             masm.shift(self, kind, OperandSize::S32)?;
@@ -93,7 +93,7 @@ impl<'a> CodeGenContext<'a, Emission> {
                 typed_reg.reg,
                 kind,
                 OperandSize::S64,
-            );
+            )?;
             self.stack.push(typed_reg.into());
         } else {
             masm.shift(self, kind, OperandSize::S64)?;
@@ -249,13 +249,13 @@ impl<'a> CodeGenContext<'a, Emission> {
 
         if val.is_mem() {
             let mem = val.unwrap_mem();
-            let curr_offset = masm.sp_offset().as_u32();
+            let curr_offset = masm.sp_offset()?.as_u32();
             let slot_offset = mem.slot.offset.as_u32();
             ensure!(
                 curr_offset == slot_offset,
                 CodeGenError::invalid_sp_offset(),
             );
-            masm.pop(writable!(reg), val.ty().try_into()?);
+            masm.pop(writable!(reg), val.ty().try_into()?)?;
         } else {
             self.move_val_to_reg(&val, reg, masm)?;
             // Free the source value if it is a register.
@@ -274,25 +274,25 @@ impl<'a> CodeGenContext<'a, Emission> {
         let size: OperandSize = ty.try_into()?;
         match val {
             Val::Reg(tr) => {
-                masm.store(tr.reg.into(), addr, size);
+                masm.store(tr.reg.into(), addr, size)?;
                 self.free_reg(tr.reg);
             }
-            Val::I32(v) => masm.store(RegImm::i32(v), addr, size),
-            Val::I64(v) => masm.store(RegImm::i64(v), addr, size),
-            Val::F32(v) => masm.store(RegImm::f32(v.bits()), addr, size),
-            Val::F64(v) => masm.store(RegImm::f64(v.bits()), addr, size),
-            Val::V128(v) => masm.store(RegImm::v128(v), addr, size),
+            Val::I32(v) => masm.store(RegImm::i32(v), addr, size)?,
+            Val::I64(v) => masm.store(RegImm::i64(v), addr, size)?,
+            Val::F32(v) => masm.store(RegImm::f32(v.bits()), addr, size)?,
+            Val::F64(v) => masm.store(RegImm::f64(v.bits()), addr, size)?,
+            Val::V128(v) => masm.store(RegImm::v128(v), addr, size)?,
             Val::Local(local) => {
                 let slot = self.frame.get_wasm_local(local.index);
                 let scratch = scratch!(M);
-                let local_addr = masm.local_address(&slot);
-                masm.load(local_addr, writable!(scratch), size);
-                masm.store(scratch.into(), addr, size);
+                let local_addr = masm.local_address(&slot)?;
+                masm.load(local_addr, writable!(scratch), size)?;
+                masm.store(scratch.into(), addr, size)?;
             }
             Val::Memory(_) => {
                 let scratch = scratch!(M, &ty);
-                masm.pop(writable!(scratch), size);
-                masm.store(scratch.into(), addr, size);
+                masm.pop(writable!(scratch), size)?;
+                masm.store(scratch.into(), addr, size)?;
             }
         }
 
@@ -316,15 +316,14 @@ impl<'a> CodeGenContext<'a, Emission> {
             Val::V128(imm) => masm.mov(writable!(dst), RegImm::v128(*imm), size),
             Val::Local(local) => {
                 let slot = self.frame.get_wasm_local(local.index);
-                let addr = masm.local_address(&slot);
-                masm.load(addr, writable!(dst), size);
+                let addr = masm.local_address(&slot)?;
+                masm.load(addr, writable!(dst), size)
             }
             Val::Memory(mem) => {
-                let addr = masm.address_from_sp(mem.slot.offset);
-                masm.load(addr, writable!(dst), size);
+                let addr = masm.address_from_sp(mem.slot.offset)?;
+                masm.load(addr, writable!(dst), size)
             }
         }
-        Ok(())
     }
 
     /// Prepares arguments for emitting a unary operation.
@@ -332,11 +331,11 @@ impl<'a> CodeGenContext<'a, Emission> {
     /// The `emit` function returns the `TypedReg` to put on the value stack.
     pub fn unop<F, M>(&mut self, masm: &mut M, size: OperandSize, emit: &mut F) -> Result<()>
     where
-        F: FnMut(&mut M, Reg, OperandSize) -> TypedReg,
+        F: FnMut(&mut M, Reg, OperandSize) -> Result<TypedReg>,
         M: MacroAssembler,
     {
         let typed_reg = self.pop_to_reg(masm, None)?;
-        let dst = emit(masm, typed_reg.reg, size);
+        let dst = emit(masm, typed_reg.reg, size)?;
         self.stack.push(dst.into());
 
         Ok(())
@@ -362,13 +361,13 @@ impl<'a> CodeGenContext<'a, Emission> {
     /// Prepares arguments for emitting an f32 or f64 comparison operation.
     pub fn float_cmp_op<F, M>(&mut self, masm: &mut M, size: OperandSize, emit: F) -> Result<()>
     where
-        F: FnOnce(&mut M, Reg, Reg, Reg, OperandSize),
+        F: FnOnce(&mut M, Reg, Reg, Reg, OperandSize) -> Result<()>,
         M: MacroAssembler,
     {
         let src2 = self.pop_to_reg(masm, None)?;
         let src1 = self.pop_to_reg(masm, None)?;
         let dst = self.any_gpr(masm)?;
-        emit(masm, dst, src1.reg, src2.reg, size);
+        emit(masm, dst, src1.reg, src2.reg, size)?;
         self.free_reg(src1);
         self.free_reg(src2);
 
@@ -442,7 +441,7 @@ impl<'a> CodeGenContext<'a, Emission> {
     /// Prepares arguments for emitting a convert operation.
     pub fn convert_op<F, M>(&mut self, masm: &mut M, dst_ty: WasmValType, emit: F) -> Result<()>
     where
-        F: FnOnce(&mut M, Reg, Reg, OperandSize),
+        F: FnOnce(&mut M, Reg, Reg, OperandSize) -> Result<()>,
         M: MacroAssembler,
     {
         let src = self.pop_to_reg(masm, None)?;
@@ -456,7 +455,7 @@ impl<'a> CodeGenContext<'a, Emission> {
             WasmValType::Ref(_) => bail!(CodeGenError::unsupported_wasm_type()),
         };
 
-        emit(masm, dst, src.into(), dst_size);
+        emit(masm, dst, src.into(), dst_size)?;
 
         self.free_reg(src);
         self.stack.push(TypedReg::new(dst_ty, dst).into());
@@ -473,12 +472,12 @@ impl<'a> CodeGenContext<'a, Emission> {
         emit: F,
     ) -> Result<()>
     where
-        F: FnOnce(&mut M, Reg, Reg, Reg, OperandSize),
+        F: FnOnce(&mut M, Reg, Reg, Reg, OperandSize) -> Result<()>,
         M: MacroAssembler,
     {
         let tmp_gpr = self.reg_for_class(tmp_reg_class, masm)?;
         self.convert_op(masm, dst_ty, |masm, dst, src, dst_size| {
-            emit(masm, dst, src, tmp_gpr, dst_size);
+            emit(masm, dst, src, tmp_gpr, dst_size)
         })?;
         self.free_reg(tmp_gpr);
         Ok(())
@@ -539,7 +538,7 @@ impl<'a> CodeGenContext<'a, Emission> {
         // SP, given that we haven't popped any results by this point
         // yet. But it may happen in the callback.
         ensure!(
-            masm.sp_offset().as_u32() >= base_offset.as_u32(),
+            masm.sp_offset()?.as_u32() >= base_offset.as_u32(),
             CodeGenError::invalid_sp_offset()
         );
         f(masm, self, dest)?;
@@ -573,9 +572,9 @@ impl<'a> CodeGenContext<'a, Emission> {
         // of the value stack once reachability is actually restored. At that
         // point, the right stack pointer offset will also be restored, which
         // should match the contents of the value stack.
-        masm.ensure_sp_for_jump(target_offset);
+        masm.ensure_sp_for_jump(target_offset)?;
         dest.set_as_target();
-        masm.jmp(*dest.label());
+        masm.jmp(*dest.label())?;
         self.reachable = false;
         Ok(())
     }
@@ -640,12 +639,12 @@ impl<'a> CodeGenContext<'a, Emission> {
     }
 
     /// Load the [VMContext] pointer into the designated pinned register.
-    pub fn load_vmctx<M>(&mut self, masm: &mut M)
+    pub fn load_vmctx<M>(&mut self, masm: &mut M) -> Result<()>
     where
         M: MacroAssembler,
     {
-        let addr = masm.local_address(&self.frame.vmctx_slot());
-        masm.load_ptr(addr, writable!(vmctx!(M)));
+        let addr = masm.local_address(&self.frame.vmctx_slot())?;
+        masm.load_ptr(addr, writable!(vmctx!(M)))
     }
 
     /// Spill locals and registers to memory.
@@ -662,16 +661,16 @@ impl<'a> CodeGenContext<'a, Emission> {
         for v in stack.inner_mut() {
             match v {
                 Val::Reg(r) => {
-                    let slot = masm.push(r.reg, r.ty.try_into()?);
+                    let slot = masm.push(r.reg, r.ty.try_into()?)?;
                     regalloc.free(r.reg);
                     *v = Val::mem(r.ty, slot);
                 }
                 Val::Local(local) => {
                     let slot = frame.get_wasm_local(local.index);
-                    let addr = masm.local_address(&slot);
+                    let addr = masm.local_address(&slot)?;
                     let scratch = scratch!(M, &slot.ty);
-                    masm.load(addr, writable!(scratch), slot.ty.try_into()?);
-                    let stack_slot = masm.push(scratch, slot.ty.try_into()?);
+                    masm.load(addr, writable!(scratch), slot.ty.try_into()?)?;
+                    let stack_slot = masm.push(scratch, slot.ty.try_into()?)?;
                     *v = Val::mem(slot.ty, stack_slot);
                 }
                 _ => {}
@@ -685,14 +684,14 @@ impl<'a> CodeGenContext<'a, Emission> {
     /// used to produce two 64-bit operands, e.g. a 128-bit binop.
     pub fn binop128<F, M>(&mut self, masm: &mut M, emit: F) -> Result<()>
     where
-        F: FnOnce(&mut M, Reg, Reg, Reg, Reg) -> (TypedReg, TypedReg),
+        F: FnOnce(&mut M, Reg, Reg, Reg, Reg) -> Result<(TypedReg, TypedReg)>,
         M: MacroAssembler,
     {
         let rhs_hi = self.pop_to_reg(masm, None)?;
         let rhs_lo = self.pop_to_reg(masm, None)?;
         let lhs_hi = self.pop_to_reg(masm, None)?;
         let lhs_lo = self.pop_to_reg(masm, None)?;
-        let (lo, hi) = emit(masm, lhs_lo.reg, lhs_hi.reg, rhs_lo.reg, rhs_hi.reg);
+        let (lo, hi) = emit(masm, lhs_lo.reg, lhs_hi.reg, rhs_lo.reg, rhs_hi.reg)?;
         self.free_reg(rhs_hi);
         self.free_reg(rhs_lo);
         self.stack.push(lo.into());

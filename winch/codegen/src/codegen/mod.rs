@@ -125,22 +125,22 @@ where
             .unwrap_reg()
             .into();
 
-        self.masm.start_source_loc(Default::default());
+        self.masm.start_source_loc(Default::default())?;
         // We need to use the vmctx parameter before pinning it for stack checking.
-        self.masm.prologue(vmctx);
+        self.masm.prologue(vmctx)?;
 
         // Pin the `VMContext` pointer.
         self.masm.mov(
             writable!(vmctx!(M)),
             vmctx.into(),
             self.env.ptr_type().try_into()?,
-        );
+        )?;
 
-        self.masm.reserve_stack(self.context.frame.locals_size);
+        self.masm.reserve_stack(self.context.frame.locals_size)?;
         self.spill_register_arguments()?;
 
         let defined_locals_range = &self.context.frame.defined_locals_range;
-        self.masm.zero_mem_range(defined_locals_range.as_range());
+        self.masm.zero_mem_range(defined_locals_range.as_range())?;
 
         // Save the results base parameter register into its slot.
 
@@ -152,8 +152,8 @@ where
                         results_base_slot.addressed_from_sp(),
                         CodeGenError::sp_addressing_expected(),
                     );
-                    let addr = self.masm.local_address(results_base_slot);
-                    self.masm.store((*reg).into(), addr, (*ty).try_into()?);
+                    let addr = self.masm.local_address(results_base_slot)?;
+                    self.masm.store((*reg).into(), addr, (*ty).try_into()?)?;
                 }
                 // The result base parameter is a stack parameter, addressed
                 // from FP.
@@ -161,7 +161,7 @@ where
             }
         }
 
-        self.masm.end_source_loc();
+        self.masm.end_source_loc()?;
 
         Ok(CodeGen {
             sig: self.sig,
@@ -186,14 +186,14 @@ where
         {
             match (operand, slot) {
                 (ABIOperand::Reg { ty, reg, .. }, slot) => {
-                    let addr = self.masm.local_address(slot);
+                    let addr = self.masm.local_address(slot)?;
                     match &ty {
                         I32 | I64 | F32 | F64 | V128 => {
-                            self.masm.store((*reg).into(), addr, (*ty).try_into()?)
+                            self.masm.store((*reg).into(), addr, (*ty).try_into()?)?;
                         }
                         Ref(rt) => match rt.heap_type {
                             WasmHeapType::Func | WasmHeapType::Extern => {
-                                self.masm.store_ptr((*reg).into(), addr)
+                                self.masm.store_ptr((*reg).into(), addr)?;
                             }
                             _ => bail!(CodeGenError::unsupported_wasm_type()),
                         },
@@ -332,7 +332,7 @@ where
                         if self.1.visit(&op) {
                             self.1.before_visit_op(&op, self.2)?;
                             let res = self.1.$visit($($($arg),*)?)?;
-                            self.1.after_visit_op();
+                            self.1.after_visit_op()?;
                             Ok(res)
                         } else {
                             Ok(())
@@ -356,7 +356,7 @@ where
             /// Hook prior to visiting an operator.
             fn before_visit_op(&mut self, operator: &Operator, offset: usize) -> Result<()>;
             /// Hook after visiting an operator.
-            fn after_visit_op(&mut self);
+            fn after_visit_op(&mut self) -> Result<()>;
 
             /// Returns `true` if the operator will be visited.
             ///
@@ -378,7 +378,7 @@ where
 
             fn before_visit_op(&mut self, operator: &Operator, offset: usize) -> Result<()> {
                 // Handle source location mapping.
-                self.source_location_before_visit_op(offset);
+                self.source_location_before_visit_op(offset)?;
 
                 // Handle fuel.
                 if self.tunables.consume_fuel {
@@ -387,9 +387,9 @@ where
                 Ok(())
             }
 
-            fn after_visit_op(&mut self) {
+            fn after_visit_op(&mut self) -> Result<()> {
                 // Handle source code location mapping.
-                self.source_location_after_visit_op();
+                self.source_location_after_visit_op()
             }
         }
 
@@ -441,30 +441,31 @@ where
 
         // Load the signatures address into the scratch register.
         self.masm.load(
-            self.masm.address_at_vmctx(signatures_base_offset.into()),
+            self.masm.address_at_vmctx(signatures_base_offset.into())?,
             writable!(scratch),
             ptr_size,
-        );
+        )?;
 
         // Get the caller id.
         let caller_id = self.context.any_gpr(self.masm)?;
         self.masm.load(
-            self.masm.address_at_reg(scratch, sig_offset),
+            self.masm.address_at_reg(scratch, sig_offset)?,
             writable!(caller_id),
             sig_size,
-        );
+        )?;
 
         let callee_id = self.context.any_gpr(self.masm)?;
         self.masm.load(
             self.masm
-                .address_at_reg(funcref_ptr, funcref_sig_offset.into()),
+                .address_at_reg(funcref_ptr, funcref_sig_offset.into())?,
             writable!(callee_id),
             sig_size,
-        );
+        )?;
 
         // Typecheck.
-        self.masm.cmp(caller_id, callee_id.into(), OperandSize::S32);
-        self.masm.trapif(IntCmpKind::Ne, TRAP_BAD_SIGNATURE);
+        self.masm
+            .cmp(caller_id, callee_id.into(), OperandSize::S32)?;
+        self.masm.trapif(IntCmpKind::Ne, TRAP_BAD_SIGNATURE)?;
         self.context.free_reg(callee_id);
         self.context.free_reg(caller_id);
         Ok(())
@@ -476,28 +477,28 @@ where
         // to the stack); so when reaching the end, we pop them taking as
         // reference the current function's signature.
         let base = SPOffset::from_u32(self.context.frame.locals_size);
-        self.masm.start_source_loc(Default::default());
+        self.masm.start_source_loc(Default::default())?;
         if self.context.reachable {
             ControlStackFrame::pop_abi_results_impl(
                 &mut self.sig.results,
                 &mut self.context,
                 self.masm,
-                |results, _, _| results.ret_area().copied(),
+                |results, _, _| Ok(results.ret_area().copied()),
             )?;
         } else {
             // If we reach the end of the function in an unreachable code state,
             // simply truncate to the expected values.
             // The compiler could enter this state through an infinite loop.
             self.context.truncate_stack_to(0)?;
-            self.masm.reset_stack_pointer(base);
+            self.masm.reset_stack_pointer(base)?;
         }
         ensure!(
             self.context.stack.len() == 0,
             CodeGenError::unexpected_value_in_value_stack()
         );
-        self.masm.free_stack(self.context.frame.locals_size);
-        self.masm.epilogue();
-        self.masm.end_source_loc();
+        self.masm.free_stack(self.context.frame.locals_size)?;
+        self.masm.epilogue()?;
+        self.masm.end_source_loc()?;
         Ok(())
     }
 
@@ -514,26 +515,30 @@ where
         // Need to get address of local after `pop_to_reg` since `pop_to_reg`
         // will pop the machine stack causing an incorrect address to be
         // calculated.
-        let (ty, addr) = self.context.frame.get_local_address(index, self.masm);
-        self.masm.store(RegImm::reg(src.reg), addr, ty.try_into()?);
+        let (ty, addr) = self.context.frame.get_local_address(index, self.masm)?;
+        self.masm
+            .store(RegImm::reg(src.reg), addr, ty.try_into()?)?;
 
         Ok(src)
     }
 
     /// Loads the address of the given global.
-    pub fn emit_get_global_addr(&mut self, index: GlobalIndex) -> (WasmValType, M::Address) {
+    pub fn emit_get_global_addr(
+        &mut self,
+        index: GlobalIndex,
+    ) -> Result<(WasmValType, M::Address)> {
         let data = self.env.resolve_global(index);
 
         let addr = if data.imported {
-            let global_base = self.masm.address_at_reg(vmctx!(M), data.offset);
+            let global_base = self.masm.address_at_reg(vmctx!(M), data.offset)?;
             let scratch = scratch!(M);
-            self.masm.load_ptr(global_base, writable!(scratch));
-            self.masm.address_at_reg(scratch, 0)
+            self.masm.load_ptr(global_base, writable!(scratch))?;
+            self.masm.address_at_reg(scratch, 0)?
         } else {
-            self.masm.address_at_reg(vmctx!(M), data.offset)
+            self.masm.address_at_reg(vmctx!(M), data.offset)?
         };
 
-        (data.ty, addr)
+        Ok((data.ty, addr))
     }
 
     pub fn emit_lazy_init_funcref(&mut self, table_index: TableIndex) -> Result<()> {
@@ -562,12 +567,12 @@ where
         let base = self.context.any_gpr(self.masm)?;
 
         let elem_addr = self.emit_compute_table_elem_addr(index.into(), base, &table_data)?;
-        self.masm.load_ptr(elem_addr, writable!(elem_value));
+        self.masm.load_ptr(elem_addr, writable!(elem_value))?;
         // Free the register used as base, once we have loaded the element
         // address into the element value register.
         self.context.free_reg(base);
 
-        let (defined, cont) = (self.masm.get_label(), self.masm.get_label());
+        let (defined, cont) = (self.masm.get_label()?, self.masm.get_label()?);
 
         // Push the built-in arguments to the stack.
         self.context
@@ -580,7 +585,7 @@ where
             elem_value.into(),
             defined,
             ptr_type.try_into()?,
-        );
+        )?;
         // Free the element value register.
         // This is safe since the FnCall::emit call below, will ensure
         // that the result register is placed on the value stack.
@@ -604,18 +609,18 @@ where
             top.reg == elem_value,
             CodeGenError::table_element_value_expected()
         );
-        self.masm.jmp(cont);
+        self.masm.jmp(cont)?;
 
         // In the defined case, mask the funcref address in place, by peeking into the
         // last element of the value stack, which was pushed by the `indirect` function
         // call above.
-        self.masm.bind(defined);
+        self.masm.bind(defined)?;
         let imm = RegImm::i64(FUNCREF_MASK as i64);
         let dst = top.into();
-        self.masm.and(writable!(dst), dst, imm, top.ty.try_into()?);
+        self.masm
+            .and(writable!(dst), dst, imm, top.ty.try_into()?)?;
 
-        self.masm.bind(cont);
-        Ok(())
+        self.masm.bind(cont)
     }
 
     /// Emits a series of instructions to bounds check and calculate the address
@@ -657,7 +662,7 @@ where
             index,
             memarg.offset,
             heap.index_type().try_into()?,
-        );
+        )?;
         let offset_with_access_size = add_offset_and_access_size(offset, access_size);
 
         let can_elide_bounds_check = heap
@@ -673,7 +678,7 @@ where
             // function.
 
             self.emit_fuel_increment()?;
-            self.masm.trap(TrapCode::HEAP_OUT_OF_BOUNDS);
+            self.masm.trap(TrapCode::HEAP_OUT_OF_BOUNDS)?;
             self.context.reachable = false;
             None
         } else if !can_elide_bounds_check {
@@ -710,7 +715,7 @@ where
                 writable!(index_offset_and_access_size),
                 index_reg.into(),
                 heap.index_type().try_into()?,
-            );
+            )?;
             // Perform
             // index = index + offset + access_size, trapping if the
             // addition overflows.
@@ -727,7 +732,7 @@ where
                 RegImm::i64(offset_with_access_size as i64),
                 ptr_size,
                 TrapCode::HEAP_OUT_OF_BOUNDS,
-            );
+            )?;
 
             let addr = bounds::load_heap_addr_checked(
                 self.masm,
@@ -747,8 +752,8 @@ where
                         // comparison consistent with the result of the
                         // overflow check above.
                         ptr_size,
-                    );
-                    IntCmpKind::GtU
+                    )?;
+                    Ok(IntCmpKind::GtU)
                 },
             )?;
             self.context.free_reg(bounds.as_typed_reg().reg);
@@ -788,7 +793,7 @@ where
             assert!(can_elide_bounds_check);
             assert!(heap.index_type() == WasmValType::I32);
             let addr = self.context.any_gpr(self.masm)?;
-            bounds::load_heap_addr_unchecked(self.masm, &heap, index, offset, addr, ptr_size);
+            bounds::load_heap_addr_unchecked(self.masm, &heap, index, offset, addr, ptr_size)?;
             Some(addr)
 
         // Account for the all remaining cases, aka. The access is out
@@ -823,8 +828,8 @@ where
                         // an erroneus comparison, therfore we rely on the
                         // target pointer size.
                         ptr_size,
-                    );
-                    IntCmpKind::GtU
+                    )?;
+                    Ok(IntCmpKind::GtU)
                 },
             )?;
             Some(addr)
@@ -851,8 +856,8 @@ where
                 _ => bail!(CodeGenError::unsupported_wasm_type()),
             };
 
-            let src = self.masm.address_at_reg(addr, 0);
-            self.masm.wasm_load(src, writable!(dst), size, sextend);
+            let src = self.masm.address_at_reg(addr, 0)?;
+            self.masm.wasm_load(src, writable!(dst), size, sextend)?;
             self.context.stack.push(TypedReg::new(ty, dst).into());
             self.context.free_reg(addr);
         }
@@ -866,7 +871,7 @@ where
         let addr = self.emit_compute_heap_address(&arg, size)?;
         if let Some(addr) = addr {
             self.masm
-                .wasm_store(src.reg.into(), self.masm.address_at_reg(addr, 0), size);
+                .wasm_store(src.reg.into(), self.masm.address_at_reg(addr, 0)?, size)?;
 
             self.context.free_reg(addr);
         }
@@ -893,54 +898,56 @@ where
             // load the address into a register to further use it as
             // the table address.
             self.masm
-                .load_ptr(self.masm.address_at_vmctx(offset), writable!(base));
+                .load_ptr(self.masm.address_at_vmctx(offset)?, writable!(base))?;
         } else {
             // Else, simply move the vmctx register into the addr register as
             // the base to calculate the table address.
-            self.masm.mov(writable!(base), vmctx!(M).into(), ptr_size);
+            self.masm.mov(writable!(base), vmctx!(M).into(), ptr_size)?;
         };
 
         // OOB check.
         let bound_addr = self
             .masm
-            .address_at_reg(base, table_data.current_elems_offset);
+            .address_at_reg(base, table_data.current_elems_offset)?;
         let bound_size = table_data.current_elements_size;
         self.masm
-            .load(bound_addr, writable!(bound), bound_size.into());
-        self.masm.cmp(index, bound.into(), bound_size);
-        self.masm.trapif(IntCmpKind::GeU, TRAP_TABLE_OUT_OF_BOUNDS);
+            .load(bound_addr, writable!(bound), bound_size.into())?;
+        self.masm.cmp(index, bound.into(), bound_size)?;
+        self.masm
+            .trapif(IntCmpKind::GeU, TRAP_TABLE_OUT_OF_BOUNDS)?;
 
         // Move the index into the scratch register to calculate the table
         // element address.
         // Moving the value of the index register to the scratch register
         // also avoids overwriting the context of the index register.
-        self.masm.mov(writable!(scratch), index.into(), bound_size);
+        self.masm
+            .mov(writable!(scratch), index.into(), bound_size)?;
         self.masm.mul(
             writable!(scratch),
             scratch,
             RegImm::i32(table_data.element_size.bytes() as i32),
             table_data.element_size,
-        );
+        )?;
         self.masm.load_ptr(
-            self.masm.address_at_reg(base, table_data.offset),
+            self.masm.address_at_reg(base, table_data.offset)?,
             writable!(base),
-        );
+        )?;
         // Copy the value of the table base into a temporary register
         // so that we can use it later in case of a misspeculation.
-        self.masm.mov(writable!(tmp), base.into(), ptr_size);
+        self.masm.mov(writable!(tmp), base.into(), ptr_size)?;
         // Calculate the address of the table element.
         self.masm
-            .add(writable!(base), base, scratch.into(), ptr_size);
+            .add(writable!(base), base, scratch.into(), ptr_size)?;
         if self.env.table_access_spectre_mitigation() {
             // Perform a bounds check and override the value of the
             // table element address in case the index is out of bounds.
-            self.masm.cmp(index, bound.into(), OperandSize::S32);
+            self.masm.cmp(index, bound.into(), OperandSize::S32)?;
             self.masm
-                .cmov(writable!(base), tmp, IntCmpKind::GeU, ptr_size);
+                .cmov(writable!(base), tmp, IntCmpKind::GeU, ptr_size)?;
         }
         self.context.free_reg(bound);
         self.context.free_reg(tmp);
-        Ok(self.masm.address_at_reg(base, 0))
+        self.masm.address_at_reg(base, 0)
     }
 
     /// Retrieves the size of the table, pushing the result to the value stack.
@@ -951,20 +958,20 @@ where
 
         if let Some(offset) = table_data.import_from {
             self.masm
-                .load_ptr(self.masm.address_at_vmctx(offset), writable!(scratch));
+                .load_ptr(self.masm.address_at_vmctx(offset)?, writable!(scratch))?;
         } else {
             self.masm
-                .mov(writable!(scratch), vmctx!(M).into(), ptr_size);
+                .mov(writable!(scratch), vmctx!(M).into(), ptr_size)?;
         };
 
         let size_addr = self
             .masm
-            .address_at_reg(scratch, table_data.current_elems_offset);
+            .address_at_reg(scratch, table_data.current_elems_offset)?;
         self.masm.load(
             size_addr,
             writable!(size),
             table_data.current_elements_size.into(),
-        );
+        )?;
 
         self.context.stack.push(TypedReg::i32(size).into());
         Ok(())
@@ -977,7 +984,7 @@ where
 
         let base = if let Some(offset) = heap_data.import_from {
             self.masm
-                .load_ptr(self.masm.address_at_vmctx(offset), writable!(scratch));
+                .load_ptr(self.masm.address_at_vmctx(offset)?, writable!(scratch))?;
             scratch
         } else {
             vmctx!(M)
@@ -985,8 +992,8 @@ where
 
         let size_addr = self
             .masm
-            .address_at_reg(base, heap_data.current_length_offset);
-        self.masm.load_ptr(size_addr, writable!(size_reg));
+            .address_at_reg(base, heap_data.current_length_offset)?;
+        self.masm.load_ptr(size_addr, writable!(size_reg))?;
         // Emit a shift to get the size in pages rather than in bytes.
         let dst = TypedReg::new(heap_data.index_type(), size_reg);
         let pow = heap_data.memory.page_size_log2;
@@ -996,7 +1003,7 @@ where
             dst.into(),
             ShiftKind::ShrU,
             heap_data.index_type().try_into()?,
-        );
+        )?;
         self.context.stack.push(dst.into());
         Ok(())
     }
@@ -1016,10 +1023,10 @@ where
             |cx, masm| cx.any_gpr(masm),
         )??;
 
-        self.emit_load_fuel_consumed(fuel_reg);
+        self.emit_load_fuel_consumed(fuel_reg)?;
 
         // The  continuation label if the current fuel is under the limit.
-        let continuation = self.masm.get_label();
+        let continuation = self.masm.get_label()?;
 
         // Spill locals and registers to avoid conflicts at the out-of-fuel
         // control flow merge.
@@ -1032,7 +1039,7 @@ where
             RegImm::i64(0),
             continuation,
             OperandSize::S64,
-        );
+        )?;
         // Out-of-fuel branch.
         FnCall::emit::<M>(
             &mut self.env,
@@ -1043,7 +1050,7 @@ where
         self.context.pop_and_free(self.masm)?;
 
         // Under fuel limits branch.
-        self.masm.bind(continuation);
+        self.masm.bind(continuation)?;
         self.context.free_reg(fuel_reg);
 
         Ok(())
@@ -1051,20 +1058,20 @@ where
 
     /// Emits a series of instructions that load the `fuel_consumed` field from
     /// `VMRuntimeLimits`.
-    fn emit_load_fuel_consumed(&mut self, fuel_reg: Reg) {
+    fn emit_load_fuel_consumed(&mut self, fuel_reg: Reg) -> Result<()> {
         let limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
         let fuel_offset = self.env.vmoffsets.ptr.vmruntime_limits_fuel_consumed();
         self.masm.load_ptr(
-            self.masm.address_at_vmctx(u32::from(limits_offset)),
+            self.masm.address_at_vmctx(u32::from(limits_offset))?,
             writable!(fuel_reg),
-        );
+        )?;
 
         self.masm.load(
-            self.masm.address_at_reg(fuel_reg, u32::from(fuel_offset)),
+            self.masm.address_at_reg(fuel_reg, u32::from(fuel_offset))?,
             writable!(fuel_reg),
             // Fuel is an i64.
             OperandSize::S64,
-        );
+        )
     }
 
     /// Checks if epoch interruption is configured and emits a series of
@@ -1076,7 +1083,7 @@ where
 
         // The continuation branch if the current epoch hasn't reached the
         // configured deadline.
-        let cont = self.masm.get_label();
+        let cont = self.masm.get_label()?;
         let new_epoch = self.env.builtins.new_epoch::<M::ABI, M::Ptr>();
 
         // Checks for runtime limits (e.g., fuel, epoch) are special since they
@@ -1093,7 +1100,7 @@ where
                 |cx, masm| Ok((cx.any_gpr(masm)?, cx.any_gpr(masm)?)),
             )??;
 
-        self.emit_load_epoch_deadline_and_counter(epoch_deadline_reg, epoch_counter_reg);
+        self.emit_load_epoch_deadline_and_counter(epoch_deadline_reg, epoch_counter_reg)?;
 
         // Spill locals and registers to avoid conflicts at the control flow
         // merge below.
@@ -1104,7 +1111,7 @@ where
             RegImm::reg(epoch_deadline_reg),
             cont,
             OperandSize::S64,
-        );
+        )?;
         // Epoch deadline reached branch.
         FnCall::emit::<M>(
             &mut self.env,
@@ -1117,7 +1124,7 @@ where
         self.visit_drop()?;
 
         // Under epoch deadline branch.
-        self.masm.bind(cont);
+        self.masm.bind(cont)?;
 
         self.context.free_reg(epoch_deadline_reg);
         self.context.free_reg(epoch_counter_reg);
@@ -1128,38 +1135,39 @@ where
         &mut self,
         epoch_deadline_reg: Reg,
         epoch_counter_reg: Reg,
-    ) {
+    ) -> Result<()> {
         let epoch_ptr_offset = self.env.vmoffsets.ptr.vmctx_epoch_ptr();
         let runtime_limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
         let epoch_deadline_offset = self.env.vmoffsets.ptr.vmruntime_limits_epoch_deadline();
 
         // Load the current epoch value into `epoch_counter_var`.
         self.masm.load_ptr(
-            self.masm.address_at_vmctx(u32::from(epoch_ptr_offset)),
+            self.masm.address_at_vmctx(u32::from(epoch_ptr_offset))?,
             writable!(epoch_counter_reg),
-        );
+        )?;
 
         // `epoch_deadline_var` contains the address of the value, so we need
         // to extract it.
         self.masm.load(
-            self.masm.address_at_reg(epoch_counter_reg, 0),
+            self.masm.address_at_reg(epoch_counter_reg, 0)?,
             writable!(epoch_counter_reg),
             OperandSize::S64,
-        );
+        )?;
 
         // Load the `VMRuntimeLimits`.
         self.masm.load_ptr(
-            self.masm.address_at_vmctx(u32::from(runtime_limits_offset)),
+            self.masm
+                .address_at_vmctx(u32::from(runtime_limits_offset))?,
             writable!(epoch_deadline_reg),
-        );
+        )?;
 
         self.masm.load(
             self.masm
-                .address_at_reg(epoch_deadline_reg, u32::from(epoch_deadline_offset)),
+                .address_at_reg(epoch_deadline_reg, u32::from(epoch_deadline_offset))?,
             writable!(epoch_deadline_reg),
             // The deadline value is a u64.
             OperandSize::S64,
-        );
+        )
     }
 
     /// Increments the fuel consumed in `VMRuntimeLimits` by flushing
@@ -1176,16 +1184,17 @@ where
 
         // Load `VMRuntimeLimits` into the `limits_reg` reg.
         self.masm.load_ptr(
-            self.masm.address_at_vmctx(u32::from(limits_offset)),
+            self.masm.address_at_vmctx(u32::from(limits_offset))?,
             writable!(limits_reg),
-        );
+        )?;
 
         // Load the fuel consumed at point into the scratch register.
         self.masm.load(
-            self.masm.address_at_reg(limits_reg, u32::from(fuel_offset)),
+            self.masm
+                .address_at_reg(limits_reg, u32::from(fuel_offset))?,
             writable!(scratch!(M)),
             OperandSize::S64,
-        );
+        )?;
 
         // Add the fuel consumed at point with the value in the scratch
         // register.
@@ -1194,14 +1203,15 @@ where
             scratch!(M),
             RegImm::i64(fuel_at_point),
             OperandSize::S64,
-        );
+        )?;
 
         // Store the updated fuel consumed to `VMRuntimeLimits`.
         self.masm.store(
             scratch!(M).into(),
-            self.masm.address_at_reg(limits_reg, u32::from(fuel_offset)),
+            self.masm
+                .address_at_reg(limits_reg, u32::from(fuel_offset))?,
             OperandSize::S64,
-        );
+        )?;
 
         self.context.free_reg(limits_reg);
 
@@ -1262,23 +1272,26 @@ where
     }
 
     // Hook to handle source location mapping before visiting an operator.
-    fn source_location_before_visit_op(&mut self, offset: usize) {
+    fn source_location_before_visit_op(&mut self, offset: usize) -> Result<()> {
         let loc = SourceLoc::new(offset as u32);
         let rel = self.source_loc_from(loc);
-        self.source_location.current = self.masm.start_source_loc(rel);
+        self.source_location.current = self.masm.start_source_loc(rel)?;
+        Ok(())
     }
 
     // Hook to handle source location mapping after visiting an operator.
-    fn source_location_after_visit_op(&mut self) {
+    fn source_location_after_visit_op(&mut self) -> Result<()> {
         // Because in Winch binary emission is done in a single pass
         // and because the MachBuffer performs optimizations during
         // emission, we have to be careful when calling
         // [`MacroAssembler::end_source_location`] to avoid breaking the
         // invariant that checks that the end [CodeOffset] must be equal
         // or greater than the start [CodeOffset].
-        if self.masm.current_code_offset() >= self.source_location.current.0 {
-            self.masm.end_source_loc();
+        if self.masm.current_code_offset()? >= self.source_location.current.0 {
+            self.masm.end_source_loc()?;
         }
+
+        Ok(())
     }
 }
 

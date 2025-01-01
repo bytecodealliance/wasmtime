@@ -93,7 +93,7 @@ impl FnCall {
 
         let sig = env.callee_sig::<M::ABI>(&callee);
         context.spill(masm)?;
-        let ret_area = Self::make_ret_area(&sig, masm);
+        let ret_area = Self::make_ret_area(&sig, masm)?;
         let arg_stack_space = sig.params_stack_size();
         let reserved_stack = masm.call(arg_stack_space, |masm| {
             Self::assign(sig, &callee_context, ret_area.as_ref(), context, masm)?;
@@ -112,15 +112,20 @@ impl FnCall {
     }
 
     /// Calculates the return area for the callee, if any.
-    fn make_ret_area<M: MacroAssembler>(callee_sig: &ABISig, masm: &mut M) -> Option<RetArea> {
-        callee_sig.has_stack_results().then(|| {
-            let base = masm.sp_offset().as_u32();
+    fn make_ret_area<M: MacroAssembler>(
+        callee_sig: &ABISig,
+        masm: &mut M,
+    ) -> Result<Option<RetArea>> {
+        if callee_sig.has_stack_results() {
+            let base = masm.sp_offset()?.as_u32();
             let end = base + callee_sig.results_stack_size();
             if end > base {
-                masm.reserve_stack(end - base);
+                masm.reserve_stack(end - base)?;
             }
-            RetArea::sp(SPOffset::from_u32(end))
-        })
+            Ok(Some(RetArea::sp(SPOffset::from_u32(end))))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Lowers the high-level [`Callee`] to a [`CalleeKind`] and
@@ -187,12 +192,12 @@ impl FnCall {
                 Ok((context.any_gpr(masm)?, context.any_gpr(masm)?))
             })??;
         let callee_vmctx_offset = vmoffsets.vmctx_vmfunction_import_vmctx(index);
-        let callee_vmctx_addr = masm.address_at_vmctx(callee_vmctx_offset);
-        masm.load_ptr(callee_vmctx_addr, writable!(callee_vmctx));
+        let callee_vmctx_addr = masm.address_at_vmctx(callee_vmctx_offset)?;
+        masm.load_ptr(callee_vmctx_addr, writable!(callee_vmctx))?;
 
         let callee_body_offset = vmoffsets.vmctx_vmfunction_import_wasm_call(index);
-        let callee_addr = masm.address_at_vmctx(callee_body_offset);
-        masm.load_ptr(callee_addr, writable!(callee));
+        let callee_addr = masm.address_at_vmctx(callee_body_offset)?;
+        masm.load_ptr(callee_addr, writable!(callee))?;
 
         Ok((
             CalleeKind::indirect(callee),
@@ -225,15 +230,15 @@ impl FnCall {
         // Load the callee VMContext, that will be passed as first argument to
         // the function call.
         masm.load_ptr(
-            masm.address_at_reg(funcref_ptr, ptr.vm_func_ref_vmctx().into()),
+            masm.address_at_reg(funcref_ptr, ptr.vm_func_ref_vmctx().into())?,
             writable!(callee_vmctx),
-        );
+        )?;
 
         // Load the function pointer to be called.
         masm.load_ptr(
-            masm.address_at_reg(funcref_ptr, ptr.vm_func_ref_wasm_call().into()),
+            masm.address_at_reg(funcref_ptr, ptr.vm_func_ref_wasm_call().into())?,
             writable!(funcref),
-        );
+        )?;
         context.free_reg(funcref_ptr);
 
         Ok((
@@ -259,20 +264,20 @@ impl FnCall {
         {
             match (context_arg, operand) {
                 (VMContextLoc::Pinned, ABIOperand::Reg { ty, reg, .. }) => {
-                    masm.mov(writable!(*reg), vmctx!(M).into(), (*ty).try_into()?);
+                    masm.mov(writable!(*reg), vmctx!(M).into(), (*ty).try_into()?)?;
                 }
                 (VMContextLoc::Pinned, ABIOperand::Stack { ty, offset, .. }) => {
-                    let addr = masm.address_at_sp(SPOffset::from_u32(*offset));
-                    masm.store(vmctx!(M).into(), addr, (*ty).try_into()?);
+                    let addr = masm.address_at_sp(SPOffset::from_u32(*offset))?;
+                    masm.store(vmctx!(M).into(), addr, (*ty).try_into()?)?;
                 }
 
                 (VMContextLoc::Reg(src), ABIOperand::Reg { ty, reg, .. }) => {
-                    masm.mov(writable!(*reg), (*src).into(), (*ty).try_into()?);
+                    masm.mov(writable!(*reg), (*src).into(), (*ty).try_into()?)?;
                 }
 
                 (VMContextLoc::Reg(src), ABIOperand::Stack { ty, offset, .. }) => {
-                    let addr = masm.address_at_sp(SPOffset::from_u32(*offset));
-                    masm.store((*src).into(), addr, (*ty).try_into()?);
+                    let addr = masm.address_at_sp(SPOffset::from_u32(*offset))?;
+                    masm.store((*src).into(), addr, (*ty).try_into()?)?;
                 }
             }
         }
@@ -307,11 +312,11 @@ impl FnCall {
                     context.move_val_to_reg(&val, reg, masm)?;
                 }
                 &ABIOperand::Stack { ty, offset, .. } => {
-                    let addr = masm.address_at_sp(SPOffset::from_u32(offset));
+                    let addr = masm.address_at_sp(SPOffset::from_u32(offset))?;
                     let size: OperandSize = ty.try_into()?;
                     let scratch = scratch!(M, &ty);
                     context.move_val_to_reg(val, scratch, masm)?;
-                    masm.store(scratch.into(), addr, size);
+                    masm.store(scratch.into(), addr, size)?;
                 }
             }
         }
@@ -319,19 +324,19 @@ impl FnCall {
         if sig.has_stack_results() {
             let operand = sig.params.unwrap_results_area_operand();
             let base = ret_area.unwrap().unwrap_sp();
-            let addr = masm.address_from_sp(base);
+            let addr = masm.address_from_sp(base)?;
 
             match operand {
                 &ABIOperand::Reg { ty, reg, .. } => {
-                    masm.load_addr(addr, writable!(reg), ty.try_into()?);
+                    masm.load_addr(addr, writable!(reg), ty.try_into()?)?;
                 }
                 &ABIOperand::Stack { ty, offset, .. } => {
-                    let slot = masm.address_at_sp(SPOffset::from_u32(offset));
+                    let slot = masm.address_at_sp(SPOffset::from_u32(offset))?;
                     // Don't rely on `ABI::scratch_for` as we always use
                     // an int register as the return pointer.
                     let scratch = scratch!(M);
-                    masm.load_addr(addr, writable!(scratch), ty.try_into()?);
-                    masm.store(scratch.into(), slot, ty.try_into()?);
+                    masm.load_addr(addr, writable!(scratch), ty.try_into()?)?;
+                    masm.store(scratch.into(), slot, ty.try_into()?)?;
                 }
             }
         }
@@ -364,7 +369,7 @@ impl FnCall {
         }
         // Deallocate the reserved space for stack arguments and for alignment,
         // which was allocated last.
-        masm.free_stack(reserved_space);
+        masm.free_stack(reserved_space)?;
 
         ensure!(
             sig.params.len_without_retptr() >= callee_context.len(),
@@ -401,12 +406,12 @@ impl FnCall {
                     CodeGenError::invalid_sp_offset(),
                 );
                 let dst = SPOffset::from_u32(sp.as_u32() - stack_consumed);
-                masm.memmove(sp, dst, result_bytes, MemMoveDirection::LowToHigh);
+                masm.memmove(sp, dst, result_bytes, MemMoveDirection::LowToHigh)?;
             }
         };
 
         // Free the bytes consumed by the call.
-        masm.free_stack(stack_consumed);
+        masm.free_stack(stack_consumed)?;
 
         let mut calculated_ret_area = None;
 
@@ -415,12 +420,12 @@ impl FnCall {
                 // If there's a return area and stack space was consumed by the
                 // call, adjust the return area to be to the current stack
                 // pointer offset.
-                calculated_ret_area = Some(RetArea::sp(masm.sp_offset()));
+                calculated_ret_area = Some(RetArea::sp(masm.sp_offset()?));
             } else {
                 // Else if no stack space was consumed by the call, simply use
                 // the previously calculated area.
                 ensure!(
-                    area.unwrap_sp() == masm.sp_offset(),
+                    area.unwrap_sp() == masm.sp_offset()?,
                     CodeGenError::invalid_sp_offset()
                 );
                 calculated_ret_area = Some(area);
@@ -434,7 +439,6 @@ impl FnCall {
         // register. Winch currently doesn't have any callee-saved registers in
         // the default ABI. So the callee might clobber the designated pinned
         // register.
-        context.load_vmctx(masm);
-        Ok(())
+        context.load_vmctx(masm)
     }
 }

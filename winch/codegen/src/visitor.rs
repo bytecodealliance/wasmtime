@@ -17,7 +17,7 @@ use crate::reg::{writable, Reg};
 use crate::stack::{TypedReg, Val};
 use anyhow::{anyhow, bail, ensure, Result};
 use regalloc2::RegClass;
-use smallvec::SmallVec;
+use smallvec::{smallvec, SmallVec};
 use wasmparser::{
     BlockType, BrTable, Ieee32, Ieee64, MemArg, VisitOperator, VisitSimdOperator, V128,
 };
@@ -289,7 +289,7 @@ where
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
-                masm.float_add(writable!(dst), dst, src, size);
+                masm.float_add(writable!(dst), dst, src, size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -300,7 +300,7 @@ where
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
-                masm.float_add(writable!(dst), dst, src, size);
+                masm.float_add(writable!(dst), dst, src, size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -311,7 +311,7 @@ where
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
-                masm.float_sub(writable!(dst), dst, src, size);
+                masm.float_sub(writable!(dst), dst, src, size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -322,7 +322,7 @@ where
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
-                masm.float_sub(writable!(dst), dst, src, size);
+                masm.float_sub(writable!(dst), dst, src, size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -333,7 +333,7 @@ where
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
-                masm.float_mul(writable!(dst), dst, src, size);
+                masm.float_mul(writable!(dst), dst, src, size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -344,7 +344,7 @@ where
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
-                masm.float_mul(writable!(dst), dst, src, size);
+                masm.float_mul(writable!(dst), dst, src, size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -355,7 +355,7 @@ where
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
-                masm.float_div(writable!(dst), dst, src, size);
+                masm.float_div(writable!(dst), dst, src, size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -366,7 +366,7 @@ where
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
-                masm.float_div(writable!(dst), dst, src, size);
+                masm.float_div(writable!(dst), dst, src, size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -377,7 +377,7 @@ where
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
-                masm.float_min(writable!(dst), dst, src, size);
+                masm.float_min(writable!(dst), dst, src, size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -388,7 +388,7 @@ where
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
-                masm.float_min(writable!(dst), dst, src, size);
+                masm.float_min(writable!(dst), dst, src, size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -399,7 +399,7 @@ where
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
-                masm.float_max(writable!(dst), dst, src, size);
+                masm.float_max(writable!(dst), dst, src, size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -410,7 +410,7 @@ where
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
-                masm.float_max(writable!(dst), dst, src, size);
+                masm.float_max(writable!(dst), dst, src, size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -421,7 +421,7 @@ where
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src, size| {
-                masm.float_copysign(writable!(dst), dst, src, size);
+                masm.float_copysign(writable!(dst), dst, src, size)?;
                 Ok(TypedReg::f32(dst))
             },
         )
@@ -432,7 +432,7 @@ where
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src, size| {
-                masm.float_copysign(writable!(dst), dst, src, size);
+                masm.float_copysign(writable!(dst), dst, src, size)?;
                 Ok(TypedReg::f64(dst))
             },
         )
@@ -441,32 +441,32 @@ where
     fn visit_f32_abs(&mut self) -> Self::Output {
         self.context
             .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
-                masm.float_abs(writable!(reg), size);
-                TypedReg::f32(reg)
+                masm.float_abs(writable!(reg), size)?;
+                Ok(TypedReg::f32(reg))
             })
     }
 
     fn visit_f64_abs(&mut self) -> Self::Output {
         self.context
             .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
-                masm.float_abs(writable!(reg), size);
-                TypedReg::f64(reg)
+                masm.float_abs(writable!(reg), size)?;
+                Ok(TypedReg::f64(reg))
             })
     }
 
     fn visit_f32_neg(&mut self) -> Self::Output {
         self.context
             .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
-                masm.float_neg(writable!(reg), size);
-                TypedReg::f32(reg)
+                masm.float_neg(writable!(reg), size)?;
+                Ok(TypedReg::f32(reg))
             })
     }
 
     fn visit_f64_neg(&mut self) -> Self::Output {
         self.context
             .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
-                masm.float_neg(writable!(reg), size);
-                TypedReg::f64(reg)
+                masm.float_neg(writable!(reg), size)?;
+                Ok(TypedReg::f64(reg))
             })
     }
 
@@ -577,16 +577,16 @@ where
     fn visit_f32_sqrt(&mut self) -> Self::Output {
         self.context
             .unop(self.masm, OperandSize::S32, &mut |masm, reg, size| {
-                masm.float_sqrt(writable!(reg), reg, size);
-                TypedReg::f32(reg)
+                masm.float_sqrt(writable!(reg), reg, size)?;
+                Ok(TypedReg::f32(reg))
             })
     }
 
     fn visit_f64_sqrt(&mut self) -> Self::Output {
         self.context
             .unop(self.masm, OperandSize::S64, &mut |masm, reg, size| {
-                masm.float_sqrt(writable!(reg), reg, size);
-                TypedReg::f64(reg)
+                masm.float_sqrt(writable!(reg), reg, size)?;
+                Ok(TypedReg::f64(reg))
             })
     }
 
@@ -595,7 +595,7 @@ where
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src1, src2, size| {
-                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Eq, size);
+                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Eq, size)
             },
         )
     }
@@ -605,7 +605,7 @@ where
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src1, src2, size| {
-                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Eq, size);
+                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Eq, size)
             },
         )
     }
@@ -615,7 +615,7 @@ where
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src1, src2, size| {
-                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Ne, size);
+                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Ne, size)
             },
         )
     }
@@ -625,7 +625,7 @@ where
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src1, src2, size| {
-                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Ne, size);
+                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Ne, size)
             },
         )
     }
@@ -635,7 +635,7 @@ where
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src1, src2, size| {
-                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Lt, size);
+                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Lt, size)
             },
         )
     }
@@ -645,7 +645,7 @@ where
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src1, src2, size| {
-                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Lt, size);
+                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Lt, size)
             },
         )
     }
@@ -655,7 +655,7 @@ where
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src1, src2, size| {
-                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Gt, size);
+                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Gt, size)
             },
         )
     }
@@ -665,7 +665,7 @@ where
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src1, src2, size| {
-                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Gt, size);
+                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Gt, size)
             },
         )
     }
@@ -675,7 +675,7 @@ where
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src1, src2, size| {
-                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Le, size);
+                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Le, size)
             },
         )
     }
@@ -685,7 +685,7 @@ where
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src1, src2, size| {
-                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Le, size);
+                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Le, size)
             },
         )
     }
@@ -695,7 +695,7 @@ where
             self.masm,
             OperandSize::S32,
             &mut |masm: &mut M, dst, src1, src2, size| {
-                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Ge, size);
+                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Ge, size)
             },
         )
     }
@@ -705,7 +705,7 @@ where
             self.masm,
             OperandSize::S64,
             &mut |masm: &mut M, dst, src1, src2, size| {
-                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Ge, size);
+                masm.float_cmp_with_set(writable!(dst), src1, src2, FloatCmpKind::Ge, size)
             },
         )
     }
@@ -713,7 +713,7 @@ where
     fn visit_f32_convert_i32_s(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::F32, |masm, dst, src, dst_size| {
-                masm.signed_convert(writable!(dst), src, OperandSize::S32, dst_size);
+                masm.signed_convert(writable!(dst), src, OperandSize::S32, dst_size)
             })
     }
 
@@ -723,7 +723,7 @@ where
             WasmValType::F32,
             RegClass::Int,
             |masm, dst, src, tmp_gpr, dst_size| {
-                masm.unsigned_convert(writable!(dst), src, tmp_gpr, OperandSize::S32, dst_size);
+                masm.unsigned_convert(writable!(dst), src, tmp_gpr, OperandSize::S32, dst_size)
             },
         )
     }
@@ -731,7 +731,7 @@ where
     fn visit_f32_convert_i64_s(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::F32, |masm, dst, src, dst_size| {
-                masm.signed_convert(writable!(dst), src, OperandSize::S64, dst_size);
+                masm.signed_convert(writable!(dst), src, OperandSize::S64, dst_size)
             })
     }
 
@@ -741,7 +741,7 @@ where
             WasmValType::F32,
             RegClass::Int,
             |masm, dst, src, tmp_gpr, dst_size| {
-                masm.unsigned_convert(writable!(dst), src, tmp_gpr, OperandSize::S64, dst_size);
+                masm.unsigned_convert(writable!(dst), src, tmp_gpr, OperandSize::S64, dst_size)
             },
         )
     }
@@ -749,7 +749,7 @@ where
     fn visit_f64_convert_i32_s(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::F64, |masm, dst, src, dst_size| {
-                masm.signed_convert(writable!(dst), src, OperandSize::S32, dst_size);
+                masm.signed_convert(writable!(dst), src, OperandSize::S32, dst_size)
             })
     }
 
@@ -759,7 +759,7 @@ where
             WasmValType::F64,
             RegClass::Int,
             |masm, dst, src, tmp_gpr, dst_size| {
-                masm.unsigned_convert(writable!(dst), src, tmp_gpr, OperandSize::S32, dst_size);
+                masm.unsigned_convert(writable!(dst), src, tmp_gpr, OperandSize::S32, dst_size)
             },
         )
     }
@@ -767,7 +767,7 @@ where
     fn visit_f64_convert_i64_s(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::F64, |masm, dst, src, dst_size| {
-                masm.signed_convert(writable!(dst), src, OperandSize::S64, dst_size);
+                masm.signed_convert(writable!(dst), src, OperandSize::S64, dst_size)
             })
     }
 
@@ -777,7 +777,7 @@ where
             WasmValType::F64,
             RegClass::Int,
             |masm, dst, src, tmp_gpr, dst_size| {
-                masm.unsigned_convert(writable!(dst), src, tmp_gpr, OperandSize::S64, dst_size);
+                masm.unsigned_convert(writable!(dst), src, tmp_gpr, OperandSize::S64, dst_size)
             },
         )
     }
@@ -785,71 +785,71 @@ where
     fn visit_f32_reinterpret_i32(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::F32, |masm, dst, src, size| {
-                masm.reinterpret_int_as_float(writable!(dst), src.into(), size);
+                masm.reinterpret_int_as_float(writable!(dst), src.into(), size)
             })
     }
 
     fn visit_f64_reinterpret_i64(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::F64, |masm, dst, src, size| {
-                masm.reinterpret_int_as_float(writable!(dst), src.into(), size);
+                masm.reinterpret_int_as_float(writable!(dst), src.into(), size)
             })
     }
 
     fn visit_f32_demote_f64(&mut self) -> Self::Output {
         self.context
             .unop(self.masm, OperandSize::S64, &mut |masm, reg, _size| {
-                masm.demote(writable!(reg), reg);
-                TypedReg::f32(reg)
+                masm.demote(writable!(reg), reg)?;
+                Ok(TypedReg::f32(reg))
             })
     }
 
     fn visit_f64_promote_f32(&mut self) -> Self::Output {
         self.context
             .unop(self.masm, OperandSize::S32, &mut |masm, reg, _size| {
-                masm.promote(writable!(reg), reg);
-                TypedReg::f64(reg)
+                masm.promote(writable!(reg), reg)?;
+                Ok(TypedReg::f64(reg))
             })
     }
 
     fn visit_i32_add(&mut self) -> Self::Output {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
-            masm.add(writable!(dst), dst, src, size);
+            masm.add(writable!(dst), dst, src, size)?;
             Ok(TypedReg::i32(dst))
         })
     }
 
     fn visit_i64_add(&mut self) -> Self::Output {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
-            masm.add(writable!(dst), dst, src, size);
+            masm.add(writable!(dst), dst, src, size)?;
             Ok(TypedReg::i64(dst))
         })
     }
 
     fn visit_i32_sub(&mut self) -> Self::Output {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
-            masm.sub(writable!(dst), dst, src, size);
+            masm.sub(writable!(dst), dst, src, size)?;
             Ok(TypedReg::i32(dst))
         })
     }
 
     fn visit_i64_sub(&mut self) -> Self::Output {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
-            masm.sub(writable!(dst), dst, src, size);
+            masm.sub(writable!(dst), dst, src, size)?;
             Ok(TypedReg::i64(dst))
         })
     }
 
     fn visit_i32_mul(&mut self) -> Self::Output {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
-            masm.mul(writable!(dst), dst, src, size);
+            masm.mul(writable!(dst), dst, src, size)?;
             Ok(TypedReg::i32(dst))
         })
     }
 
     fn visit_i64_mul(&mut self) -> Self::Output {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
-            masm.mul(writable!(dst), dst, src, size);
+            masm.mul(writable!(dst), dst, src, size)?;
             Ok(TypedReg::i64(dst))
         })
     }
@@ -994,8 +994,8 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, size| {
-            masm.cmp_with_set(writable!(reg.into()), RegImm::i32(0), IntCmpKind::Eq, size);
-            TypedReg::i32(reg)
+            masm.cmp_with_set(writable!(reg.into()), RegImm::i32(0), IntCmpKind::Eq, size)?;
+            Ok(TypedReg::i32(reg))
         })
     }
 
@@ -1003,8 +1003,8 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S64, &mut |masm, reg, size| {
-            masm.cmp_with_set(writable!(reg.into()), RegImm::i64(0), IntCmpKind::Eq, size);
-            TypedReg::i32(reg) // Return value for `i64.eqz` is an `i32`.
+            masm.cmp_with_set(writable!(reg.into()), RegImm::i64(0), IntCmpKind::Eq, size)?;
+            Ok(TypedReg::i32(reg)) // Return value for `i64.eqz` is an `i32`.
         })
     }
 
@@ -1012,8 +1012,8 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, size| {
-            masm.clz(writable!(reg), reg, size);
-            TypedReg::i32(reg)
+            masm.clz(writable!(reg), reg, size)?;
+            Ok(TypedReg::i32(reg))
         })
     }
 
@@ -1021,8 +1021,8 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S64, &mut |masm, reg, size| {
-            masm.clz(writable!(reg), reg, size);
-            TypedReg::i64(reg)
+            masm.clz(writable!(reg), reg, size)?;
+            Ok(TypedReg::i64(reg))
         })
     }
 
@@ -1030,8 +1030,8 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, size| {
-            masm.ctz(writable!(reg), reg, size);
-            TypedReg::i32(reg)
+            masm.ctz(writable!(reg), reg, size)?;
+            Ok(TypedReg::i32(reg))
         })
     }
 
@@ -1039,49 +1039,49 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S64, &mut |masm, reg, size| {
-            masm.ctz(writable!(reg), reg, size);
-            TypedReg::i64(reg)
+            masm.ctz(writable!(reg), reg, size)?;
+            Ok(TypedReg::i64(reg))
         })
     }
 
     fn visit_i32_and(&mut self) -> Self::Output {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
-            masm.and(writable!(dst), dst, src, size);
+            masm.and(writable!(dst), dst, src, size)?;
             Ok(TypedReg::i32(dst))
         })
     }
 
     fn visit_i64_and(&mut self) -> Self::Output {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
-            masm.and(writable!(dst), dst, src, size);
+            masm.and(writable!(dst), dst, src, size)?;
             Ok(TypedReg::i64(dst))
         })
     }
 
     fn visit_i32_or(&mut self) -> Self::Output {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
-            masm.or(writable!(dst), dst, src, size);
+            masm.or(writable!(dst), dst, src, size)?;
             Ok(TypedReg::i32(dst))
         })
     }
 
     fn visit_i64_or(&mut self) -> Self::Output {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
-            masm.or(writable!(dst), dst, src, size);
+            masm.or(writable!(dst), dst, src, size)?;
             Ok(TypedReg::i64(dst))
         })
     }
 
     fn visit_i32_xor(&mut self) -> Self::Output {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
-            masm.xor(writable!(dst), dst, src, size);
+            masm.xor(writable!(dst), dst, src, size)?;
             Ok(TypedReg::i32(dst))
         })
     }
 
     fn visit_i64_xor(&mut self) -> Self::Output {
         self.context.i64_binop(self.masm, |masm, dst, src, size| {
-            masm.xor(writable!(dst), dst, src, size);
+            masm.xor(writable!(dst), dst, src, size)?;
             Ok(TypedReg::i64(dst))
         })
     }
@@ -1170,8 +1170,8 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
-            masm.wrap(writable!(reg), reg);
-            TypedReg::i32(reg)
+            masm.wrap(writable!(reg), reg)?;
+            Ok(TypedReg::i32(reg))
         })
     }
 
@@ -1179,8 +1179,8 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
-            masm.extend(writable!(reg), reg, ExtendKind::I64ExtendI32S);
-            TypedReg::i64(reg)
+            masm.extend(writable!(reg), reg, ExtendKind::I64ExtendI32S)?;
+            Ok(TypedReg::i64(reg))
         })
     }
 
@@ -1188,8 +1188,8 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
-            masm.extend(writable!(reg), reg, ExtendKind::I64ExtendI32U);
-            TypedReg::i64(reg)
+            masm.extend(writable!(reg), reg, ExtendKind::I64ExtendI32U)?;
+            Ok(TypedReg::i64(reg))
         })
     }
 
@@ -1197,8 +1197,8 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
-            masm.extend(writable!(reg), reg, ExtendKind::I32Extend8S);
-            TypedReg::i32(reg)
+            masm.extend(writable!(reg), reg, ExtendKind::I32Extend8S)?;
+            Ok(TypedReg::i32(reg))
         })
     }
 
@@ -1206,8 +1206,8 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S32, &mut |masm, reg, _size| {
-            masm.extend(writable!(reg), reg, ExtendKind::I32Extend16S);
-            TypedReg::i32(reg)
+            masm.extend(writable!(reg), reg, ExtendKind::I32Extend16S)?;
+            Ok(TypedReg::i32(reg))
         })
     }
 
@@ -1215,8 +1215,8 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
-            masm.extend(writable!(reg), reg, ExtendKind::I64Extend8S);
-            TypedReg::i64(reg)
+            masm.extend(writable!(reg), reg, ExtendKind::I64Extend8S)?;
+            Ok(TypedReg::i64(reg))
         })
     }
 
@@ -1224,8 +1224,8 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
-            masm.extend(writable!(reg), reg, ExtendKind::I64Extend16S);
-            TypedReg::i64(reg)
+            masm.extend(writable!(reg), reg, ExtendKind::I64Extend16S)?;
+            Ok(TypedReg::i64(reg))
         })
     }
 
@@ -1233,8 +1233,8 @@ where
         use OperandSize::*;
 
         self.context.unop(self.masm, S64, &mut |masm, reg, _size| {
-            masm.extend(writable!(reg), reg, ExtendKind::I64Extend32S);
-            TypedReg::i64(reg)
+            masm.extend(writable!(reg), reg, ExtendKind::I64Extend32S)?;
+            Ok(TypedReg::i64(reg))
         })
     }
 
@@ -1243,7 +1243,7 @@ where
 
         self.context
             .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
-                masm.signed_truncate(writable!(dst), src, S32, dst_size, TruncKind::Unchecked);
+                masm.signed_truncate(writable!(dst), src, S32, dst_size, TruncKind::Unchecked)
             })
     }
 
@@ -1262,7 +1262,7 @@ where
                     S32,
                     dst_size,
                     TruncKind::Unchecked,
-                );
+                )
             },
         )
     }
@@ -1272,7 +1272,7 @@ where
 
         self.context
             .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
-                masm.signed_truncate(writable!(dst), src, S64, dst_size, TruncKind::Unchecked);
+                masm.signed_truncate(writable!(dst), src, S64, dst_size, TruncKind::Unchecked)
             })
     }
 
@@ -1291,7 +1291,7 @@ where
                     S64,
                     dst_size,
                     TruncKind::Unchecked,
-                );
+                )
             },
         )
     }
@@ -1301,7 +1301,7 @@ where
 
         self.context
             .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
-                masm.signed_truncate(writable!(dst), src, S32, dst_size, TruncKind::Unchecked);
+                masm.signed_truncate(writable!(dst), src, S32, dst_size, TruncKind::Unchecked)
             })
     }
 
@@ -1320,7 +1320,7 @@ where
                     S32,
                     dst_size,
                     TruncKind::Unchecked,
-                );
+                )
             },
         )
     }
@@ -1330,7 +1330,7 @@ where
 
         self.context
             .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
-                masm.signed_truncate(writable!(dst), src, S64, dst_size, TruncKind::Unchecked);
+                masm.signed_truncate(writable!(dst), src, S64, dst_size, TruncKind::Unchecked)
             })
     }
 
@@ -1349,7 +1349,7 @@ where
                     S64,
                     dst_size,
                     TruncKind::Unchecked,
-                );
+                )
             },
         )
     }
@@ -1357,14 +1357,14 @@ where
     fn visit_i32_reinterpret_f32(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::I32, |masm, dst, src, size| {
-                masm.reinterpret_float_as_int(writable!(dst), src.into(), size);
+                masm.reinterpret_float_as_int(writable!(dst), src.into(), size)
             })
     }
 
     fn visit_i64_reinterpret_f64(&mut self) -> Self::Output {
         self.context
             .convert_op(self.masm, WasmValType::I64, |masm, dst, src, size| {
-                masm.reinterpret_float_as_int(writable!(dst), src.into(), size);
+                masm.reinterpret_float_as_int(writable!(dst), src.into(), size)
             })
     }
 
@@ -1419,7 +1419,7 @@ where
             .map(|v| v.unwrap_reg())
             .ok_or_else(|| CodeGenError::missing_values_in_stack())?;
         self.masm
-            .trapz(funcref_ptr.into(), TRAP_INDIRECT_CALL_TO_NULL);
+            .trapz(funcref_ptr.into(), TRAP_INDIRECT_CALL_TO_NULL)?;
         self.emit_typecheck_funcref(funcref_ptr.into(), type_index)?;
 
         let callee = self.env.funcref(type_index);
@@ -1553,9 +1553,9 @@ where
                     value.into(),
                     RegImm::i64(FUNCREF_INIT_BIT as i64),
                     ptr_type.try_into()?,
-                );
+                )?;
 
-                self.masm.store_ptr(value.into(), elem_addr);
+                self.masm.store_ptr(value.into(), elem_addr)?;
 
                 self.context.free_reg(value);
                 self.context.free_reg(index);
@@ -1663,7 +1663,7 @@ where
             // the result of the memory32_grow builtin.
             (WasmValType::I64, WasmValType::I32) => {
                 let top: Reg = self.context.pop_to_reg(self.masm, None)?.into();
-                self.masm.wrap(writable!(top.into()), top.into());
+                self.masm.wrap(writable!(top.into()), top.into())?;
                 self.context.stack.push(TypedReg::i32(top).into());
                 Ok(())
             }
@@ -1735,7 +1735,9 @@ where
         let frame = &mut self.control_frames[index];
         self.context
             .unconditional_jump(frame, self.masm, |masm, cx, frame| {
-                frame.pop_abi_results::<M, _>(cx, masm, |results, _, _| results.ret_area().copied())
+                frame.pop_abi_results::<M, _>(cx, masm, |results, _, _| {
+                    Ok(results.ret_area().copied())
+                })
             })
     }
 
@@ -1765,12 +1767,14 @@ where
                     // it must be recalculated so that any values that are
                     // generated are correctly placed near the current stack
                     // pointer.
-                    results.on_stack().then(|| {
+                    if results.on_stack() {
                         let stack_consumed = context.stack.sizeof(results.stack_operands_len());
-                        let base = masm.sp_offset().as_u32() - stack_consumed;
+                        let base = masm.sp_offset()?.as_u32() - stack_consumed;
                         let offs = base + results.size();
-                        RetArea::sp(SPOffset::from_u32(offs))
-                    })
+                        Ok(Some(RetArea::sp(SPOffset::from_u32(offs))))
+                    } else {
+                        Ok(None)
+                    }
                 },
             )?;
             top
@@ -1778,17 +1782,17 @@ where
 
         // Emit instructions to balance the machine stack if the frame has
         // a different offset.
-        let current_sp_offset = self.masm.sp_offset();
+        let current_sp_offset = self.masm.sp_offset()?;
         let results_size = frame.results::<M>().size();
         let state = frame.stack_state();
         let (label, cmp, needs_cleanup) = if current_sp_offset > state.target_offset {
-            (self.masm.get_label(), IntCmpKind::Eq, true)
+            (self.masm.get_label()?, IntCmpKind::Eq, true)
         } else {
             (*frame.label(), IntCmpKind::Ne, false)
         };
 
         self.masm
-            .branch(cmp, top.reg.into(), top.reg.into(), label, OperandSize::S32);
+            .branch(cmp, top.reg.into(), top.reg.into(), label, OperandSize::S32)?;
         self.context.free_reg(top);
 
         if needs_cleanup {
@@ -1799,14 +1803,14 @@ where
                 state.target_offset,
                 results_size,
                 MemMoveDirection::LowToHigh,
-            );
-            self.masm.ensure_sp_for_jump(state.target_offset);
-            self.masm.jmp(*frame.label());
+            )?;
+            self.masm.ensure_sp_for_jump(state.target_offset)?;
+            self.masm.jmp(*frame.label())?;
 
             // Restore sp_offset to what it was for falling through and emit
             // fallthrough label.
-            self.masm.reset_stack_pointer(current_sp_offset);
-            self.masm.bind(label);
+            self.masm.reset_stack_pointer(current_sp_offset)?;
+            self.masm.bind(label)?;
         }
 
         Ok(())
@@ -1818,7 +1822,10 @@ where
         // SmallVec<[_; 5]> to match the binary emission layer (e.g
         // see `JmpTableSeq'), but here we use 5 instead since we
         // bundle the default target as the last element in the array.
-        let labels: SmallVec<[_; 5]> = (0..len).map(|_| self.masm.get_label()).collect();
+        let mut labels: SmallVec<[_; 5]> = smallvec![];
+        for _ in 0..len {
+            labels.push(self.masm.get_label()?);
+        }
 
         let default_index = control_index(targets.default(), self.control_frames.len())?;
         let default_frame = &mut self.control_frames[default_index];
@@ -1836,17 +1843,17 @@ where
             default_frame.top_abi_results::<M, _>(
                 &mut self.context,
                 self.masm,
-                |results, _, _| results.ret_area().copied(),
+                |results, _, _| Ok(results.ret_area().copied()),
             )?;
             index_and_tmp
         };
 
-        self.masm.jmp_table(&labels, index.into(), tmp);
+        self.masm.jmp_table(&labels, index.into(), tmp)?;
         // Save the original stack pointer offset; we will reset the stack
         // pointer to this offset after jumping to each of the targets. Each
         // jump might adjust the stack according to the base offset of the
         // target.
-        let current_sp = self.masm.sp_offset();
+        let current_sp = self.masm.sp_offset()?;
 
         for (t, l) in targets
             .targets()
@@ -1859,23 +1866,23 @@ where
             // Reset the stack pointer to its original offset. This is needed
             // because each jump will potentially adjust the stack pointer
             // according to the base offset of the target.
-            self.masm.reset_stack_pointer(current_sp);
+            self.masm.reset_stack_pointer(current_sp)?;
 
             // NB: We don't perform any result handling as it was
             // already taken care of above before jumping to the
             // jump table.
-            self.masm.bind(*l);
+            self.masm.bind(*l)?;
             // Ensure that the stack pointer is correctly positioned before
             // jumping to the jump table code.
             let state = frame.stack_state();
-            self.masm.ensure_sp_for_jump(state.target_offset);
-            self.masm.jmp(*frame.label());
+            self.masm.ensure_sp_for_jump(state.target_offset)?;
+            self.masm.jmp(*frame.label())?;
             frame.set_as_target();
         }
         // Finally reset the stack pointer to the original location.
         // The reachability analysis, will ensure it's correctly located
         // once reachability is restored.
-        self.masm.reset_stack_pointer(current_sp);
+        self.masm.reset_stack_pointer(current_sp)?;
         self.context.reachable = false;
         self.context.free_reg(index.reg);
         self.context.free_reg(tmp);
@@ -1891,12 +1898,14 @@ where
         let outermost = &mut self.control_frames[0];
         self.context
             .unconditional_jump(outermost, self.masm, |masm, cx, frame| {
-                frame.pop_abi_results::<M, _>(cx, masm, |results, _, _| results.ret_area().copied())
+                frame.pop_abi_results::<M, _>(cx, masm, |results, _, _| {
+                    Ok(results.ret_area().copied())
+                })
             })
     }
 
     fn visit_unreachable(&mut self) -> Self::Output {
-        self.masm.unreachable();
+        self.masm.unreachable()?;
         self.context.reachable = false;
         // Set the implicit outermost frame as target to perform the necessary
         // stack clean up.
@@ -1915,9 +1924,9 @@ where
 
     fn visit_global_get(&mut self, global_index: u32) -> Self::Output {
         let index = GlobalIndex::from_u32(global_index);
-        let (ty, addr) = self.emit_get_global_addr(index);
+        let (ty, addr) = self.emit_get_global_addr(index)?;
         let dst = self.context.reg_for_type(ty, self.masm)?;
-        self.masm.load(addr, writable!(dst), ty.try_into()?);
+        self.masm.load(addr, writable!(dst), ty.try_into()?)?;
         self.context.stack.push(Val::reg(dst, ty));
 
         Ok(())
@@ -1925,11 +1934,12 @@ where
 
     fn visit_global_set(&mut self, global_index: u32) -> Self::Output {
         let index = GlobalIndex::from_u32(global_index);
-        let (ty, addr) = self.emit_get_global_addr(index);
+        let (ty, addr) = self.emit_get_global_addr(index)?;
 
         let typed_reg = self.context.pop_to_reg(self.masm, None)?;
         self.context.free_reg(typed_reg.reg);
-        self.masm.store(typed_reg.reg.into(), addr, ty.try_into()?);
+        self.masm
+            .store(typed_reg.reg.into(), addr, ty.try_into()?)?;
 
         Ok(())
     }
@@ -1937,7 +1947,7 @@ where
     fn visit_drop(&mut self) -> Self::Output {
         self.context.drop_last(1, |regalloc, val| match val {
             Val::Reg(tr) => Ok(regalloc.free(tr.reg.into())),
-            Val::Memory(m) => Ok(self.masm.free_stack(m.slot.size)),
+            Val::Memory(m) => self.masm.free_stack(m.slot.size),
             _ => Ok(()),
         })
     }
@@ -1947,7 +1957,7 @@ where
         let val2 = self.context.pop_to_reg(self.masm, None)?;
         let val1 = self.context.pop_to_reg(self.masm, None)?;
         self.masm
-            .cmp(cond.reg.into(), RegImm::i32(0), OperandSize::S32);
+            .cmp(cond.reg.into(), RegImm::i32(0), OperandSize::S32)?;
         // Conditionally move val1 to val2 if the comparison is
         // not zero.
         self.masm.cmov(
@@ -1955,7 +1965,7 @@ where
             val1.into(),
             IntCmpKind::Ne,
             val1.ty.try_into()?,
-        );
+        )?;
         self.context.stack.push(val2.into());
         self.context.free_reg(val1.reg);
         self.context.free_reg(cond);
@@ -2085,7 +2095,7 @@ where
 
         self.context
             .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
-                masm.signed_truncate(writable!(dst), src, S32, dst_size, TruncKind::Checked);
+                masm.signed_truncate(writable!(dst), src, S32, dst_size, TruncKind::Checked)
             })
     }
 
@@ -2104,7 +2114,7 @@ where
                     S32,
                     dst_size,
                     TruncKind::Checked,
-                );
+                )
             },
         )
     }
@@ -2114,7 +2124,7 @@ where
 
         self.context
             .convert_op(self.masm, WasmValType::I32, |masm, dst, src, dst_size| {
-                masm.signed_truncate(writable!(dst), src, S64, dst_size, TruncKind::Checked);
+                masm.signed_truncate(writable!(dst), src, S64, dst_size, TruncKind::Checked)
             })
     }
 
@@ -2133,7 +2143,7 @@ where
                     S64,
                     dst_size,
                     TruncKind::Checked,
-                );
+                )
             },
         )
     }
@@ -2143,7 +2153,7 @@ where
 
         self.context
             .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
-                masm.signed_truncate(writable!(dst), src, S32, dst_size, TruncKind::Checked);
+                masm.signed_truncate(writable!(dst), src, S32, dst_size, TruncKind::Checked)
             })
     }
 
@@ -2162,7 +2172,7 @@ where
                     S32,
                     dst_size,
                     TruncKind::Checked,
-                );
+                )
             },
         )
     }
@@ -2172,7 +2182,7 @@ where
 
         self.context
             .convert_op(self.masm, WasmValType::I64, |masm, dst, src, dst_size| {
-                masm.signed_truncate(writable!(dst), src, S64, dst_size, TruncKind::Checked);
+                masm.signed_truncate(writable!(dst), src, S64, dst_size, TruncKind::Checked)
             })
     }
 
@@ -2191,7 +2201,7 @@ where
                     S64,
                     dst_size,
                     TruncKind::Checked,
-                );
+                )
             },
         )
     }
@@ -2206,8 +2216,8 @@ where
                     lhs_hi,
                     rhs_lo,
                     rhs_hi,
-                );
-                (TypedReg::i64(lhs_lo), TypedReg::i64(lhs_hi))
+                )?;
+                Ok((TypedReg::i64(lhs_lo), TypedReg::i64(lhs_hi)))
             })
     }
 
@@ -2221,8 +2231,8 @@ where
                     lhs_hi,
                     rhs_lo,
                     rhs_hi,
-                );
-                (TypedReg::i64(lhs_lo), TypedReg::i64(lhs_hi))
+                )?;
+                Ok((TypedReg::i64(lhs_lo), TypedReg::i64(lhs_hi)))
             })
     }
 
@@ -2264,7 +2274,7 @@ where
 {
     fn cmp_i32s(&mut self, kind: IntCmpKind) -> Result<()> {
         self.context.i32_binop(self.masm, |masm, dst, src, size| {
-            masm.cmp_with_set(writable!(dst), src, kind, size);
+            masm.cmp_with_set(writable!(dst), src, kind, size)?;
             Ok(TypedReg::i32(dst))
         })
     }
@@ -2272,7 +2282,7 @@ where
     fn cmp_i64s(&mut self, kind: IntCmpKind) -> Result<()> {
         self.context
             .i64_binop(self.masm, move |masm, dst, src, size| {
-                masm.cmp_with_set(writable!(dst), src, kind, size);
+                masm.cmp_with_set(writable!(dst), src, kind, size)?;
                 Ok(TypedReg::i32(dst)) // Return value for comparisons is an `i32`.
             })
     }

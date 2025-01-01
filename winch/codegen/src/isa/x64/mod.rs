@@ -143,7 +143,7 @@ impl TargetIsa for X64 {
 
         let names = body_codegen.env.take_name_map();
         Ok(CompiledFunction::new(
-            masm.finalize(base),
+            masm.finalize(base)?,
             names,
             self.function_alignment(),
         ))

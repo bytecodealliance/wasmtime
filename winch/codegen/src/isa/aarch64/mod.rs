@@ -130,7 +130,7 @@ impl TargetIsa for Aarch64 {
         let names = body_codegen.env.take_name_map();
         let base = body_codegen.source_location.base;
         Ok(CompiledFunction::new(
-            masm.finalize(base),
+            masm.finalize(base)?,
             names,
             self.function_alignment(),
         ))

@@ -18,7 +18,7 @@ use crate::{
     },
     stack::TypedReg,
 };
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use cranelift_codegen::{
     binemit::CodeOffset,
     ir::{RelSourceLoc, SourceLoc},
@@ -54,7 +54,7 @@ impl Masm for MacroAssembler {
     type Ptr = u8;
     type ABI = Aarch64ABI;
 
-    fn frame_setup(&mut self) {
+    fn frame_setup(&mut self) -> Result<()> {
         let lr = regs::lr();
         let fp = regs::fp();
         let sp = regs::sp();
@@ -63,14 +63,16 @@ impl Masm for MacroAssembler {
         self.asm.stp(fp, lr, addr);
         self.asm.mov_rr(sp, writable!(fp), OperandSize::S64);
         self.move_sp_to_shadow_sp();
+        Ok(())
     }
 
-    fn check_stack(&mut self, _vmctx: Reg) {
+    fn check_stack(&mut self, _vmctx: Reg) -> Result<()> {
         // TODO: Implement when we have more complete assembler support.
+        Ok(())
     }
 
-    fn frame_restore(&mut self) {
-        assert_eq!(self.sp_offset, 0);
+    fn frame_restore(&mut self) -> Result<()> {
+        debug_assert_eq!(self.sp_offset, 0);
 
         let lr = regs::lr();
         let fp = regs::fp();
@@ -78,11 +80,12 @@ impl Masm for MacroAssembler {
 
         self.asm.ldp(fp, lr, addr);
         self.asm.ret();
+        Ok(())
     }
 
-    fn reserve_stack(&mut self, bytes: u32) {
+    fn reserve_stack(&mut self, bytes: u32) -> Result<()> {
         if bytes == 0 {
-            return;
+            return Ok(());
         }
 
         let sp = regs::sp();
@@ -91,11 +94,12 @@ impl Masm for MacroAssembler {
         self.move_sp_to_shadow_sp();
 
         self.increment_sp(bytes);
+        Ok(())
     }
 
-    fn free_stack(&mut self, bytes: u32) {
+    fn free_stack(&mut self, bytes: u32) -> Result<()> {
         if bytes == 0 {
-            return;
+            return Ok(());
         }
 
         let sp = regs::sp();
@@ -104,13 +108,15 @@ impl Masm for MacroAssembler {
         self.move_sp_to_shadow_sp();
 
         self.decrement_sp(bytes);
+        Ok(())
     }
 
-    fn reset_stack_pointer(&mut self, offset: SPOffset) {
+    fn reset_stack_pointer(&mut self, offset: SPOffset) -> Result<()> {
         self.sp_offset = offset.as_u32();
+        Ok(())
     }
 
-    fn local_address(&mut self, local: &LocalSlot) -> Address {
+    fn local_address(&mut self, local: &LocalSlot) -> Result<Address> {
         let (reg, offset) = local
             .addressed_from_sp()
             .then(|| {
@@ -122,26 +128,28 @@ impl Masm for MacroAssembler {
             })
             .unwrap_or((regs::fp(), local.offset));
 
-        Address::offset(reg, offset as i64)
+        Ok(Address::offset(reg, offset as i64))
     }
 
-    fn address_from_sp(&self, offset: SPOffset) -> Self::Address {
-        Address::from_shadow_sp((self.sp_offset - offset.as_u32()) as i64)
+    fn address_from_sp(&self, offset: SPOffset) -> Result<Self::Address> {
+        Ok(Address::from_shadow_sp(
+            (self.sp_offset - offset.as_u32()) as i64,
+        ))
     }
 
-    fn address_at_sp(&self, offset: SPOffset) -> Self::Address {
-        Address::from_shadow_sp(offset.as_u32() as i64)
+    fn address_at_sp(&self, offset: SPOffset) -> Result<Self::Address> {
+        Ok(Address::from_shadow_sp(offset.as_u32() as i64))
     }
 
-    fn address_at_vmctx(&self, offset: u32) -> Self::Address {
-        Address::offset(vmctx!(Self), offset as i64)
+    fn address_at_vmctx(&self, offset: u32) -> Result<Self::Address> {
+        Ok(Address::offset(vmctx!(Self), offset as i64))
     }
 
-    fn store_ptr(&mut self, src: Reg, dst: Self::Address) {
-        self.store(src.into(), dst, self.ptr_size);
+    fn store_ptr(&mut self, src: Reg, dst: Self::Address) -> Result<()> {
+        self.store(src.into(), dst, self.ptr_size)
     }
 
-    fn store(&mut self, src: RegImm, dst: Address, size: OperandSize) {
+    fn store(&mut self, src: RegImm, dst: Address, size: OperandSize) -> Result<()> {
         let src = match src {
             RegImm::Imm(v) => {
                 let imm = match v {
@@ -164,10 +172,12 @@ impl Masm for MacroAssembler {
         };
 
         self.asm.str(src, dst, size);
+        Ok(())
     }
 
-    fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize) {
+    fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize) -> Result<()> {
         self.asm.str(src, dst, size);
+        Ok(())
     }
 
     fn call(
@@ -177,10 +187,10 @@ impl Masm for MacroAssembler {
     ) -> Result<u32> {
         let alignment: u32 = <Self::ABI as abi::ABI>::call_stack_align().into();
         let addend: u32 = <Self::ABI as abi::ABI>::arg_base_offset().into();
-        let delta = calculate_frame_adjustment(self.sp_offset().as_u32(), addend, alignment);
+        let delta = calculate_frame_adjustment(self.sp_offset()?.as_u32(), addend, alignment);
         let aligned_args_size = align_to(stack_args_size, alignment);
         let total_stack = delta + aligned_args_size;
-        self.reserve_stack(total_stack);
+        self.reserve_stack(total_stack)?;
         let (callee, call_conv) = load_callee(self)?;
         match callee {
             CalleeKind::Indirect(reg) => self.asm.call_with_reg(reg, call_conv),
@@ -191,12 +201,13 @@ impl Masm for MacroAssembler {
         Ok(total_stack)
     }
 
-    fn load(&mut self, src: Address, dst: WritableReg, size: OperandSize) {
+    fn load(&mut self, src: Address, dst: WritableReg, size: OperandSize) -> Result<()> {
         self.asm.uload(src, dst, size);
+        Ok(())
     }
 
-    fn load_ptr(&mut self, src: Self::Address, dst: WritableReg) {
-        self.load(src, dst, self.ptr_size);
+    fn load_ptr(&mut self, src: Self::Address, dst: WritableReg) -> Result<()> {
+        self.load(src, dst, self.ptr_size)
     }
 
     fn wasm_load(
@@ -205,7 +216,7 @@ impl Masm for MacroAssembler {
         dst: WritableReg,
         size: OperandSize,
         kind: Option<ExtendKind>,
-    ) {
+    ) -> Result<()> {
         // kind is some if the value is signed
         // unlike x64, unused bits are set to zero so we don't need to extend
         if kind.is_some() {
@@ -213,27 +224,29 @@ impl Masm for MacroAssembler {
         } else {
             self.asm.uload(src, dst, size);
         }
+        Ok(())
     }
 
-    fn load_addr(&mut self, src: Self::Address, dst: WritableReg, size: OperandSize) {
+    fn load_addr(&mut self, src: Self::Address, dst: WritableReg, size: OperandSize) -> Result<()> {
         self.asm.uload(src, dst, size);
+        Ok(())
     }
 
-    fn pop(&mut self, dst: WritableReg, size: OperandSize) {
-        let addr = self.address_from_sp(SPOffset::from_u32(self.sp_offset));
+    fn pop(&mut self, dst: WritableReg, size: OperandSize) -> Result<()> {
+        let addr = self.address_from_sp(SPOffset::from_u32(self.sp_offset))?;
         self.asm.uload(addr, dst, size);
-        self.free_stack(size.bytes());
+        self.free_stack(size.bytes())
     }
 
-    fn sp_offset(&self) -> SPOffset {
-        SPOffset::from_u32(self.sp_offset)
+    fn sp_offset(&self) -> Result<SPOffset> {
+        Ok(SPOffset::from_u32(self.sp_offset))
     }
 
-    fn finalize(self, base: Option<SourceLoc>) -> MachBufferFinalized<Final> {
-        self.asm.finalize(base)
+    fn finalize(self, base: Option<SourceLoc>) -> Result<MachBufferFinalized<Final>> {
+        Ok(self.asm.finalize(base))
     }
 
-    fn mov(&mut self, dst: WritableReg, src: RegImm, size: OperandSize) {
+    fn mov(&mut self, dst: WritableReg, src: RegImm, size: OperandSize) -> Result<()> {
         match (src, dst) {
             (RegImm::Imm(v), rd) => {
                 let imm = match v {
@@ -241,7 +254,7 @@ impl Masm for MacroAssembler {
                     I::I64(v) => v,
                     I::F32(v) => v as u64,
                     I::F64(v) => v,
-                    I::V128(_) => todo!(),
+                    I::V128(_) => bail!(CodeGenError::unsupported_imm()),
                 };
 
                 let scratch = regs::scratch();
@@ -249,36 +262,46 @@ impl Masm for MacroAssembler {
                 match rd.to_reg().class() {
                     RegClass::Int => self.asm.mov_rr(scratch, rd, size),
                     RegClass::Float => self.asm.mov_to_fpu(scratch, rd, size),
-                    _ => todo!(),
-                }
+                    _ => bail!(CodeGenError::invalid_operand_combination()),
+                };
+                Ok(())
             }
             (RegImm::Reg(rs), rd) => match (rs.class(), rd.to_reg().class()) {
-                (RegClass::Int, RegClass::Int) => self.asm.mov_rr(rs, rd, size),
-                (RegClass::Float, RegClass::Float) => self.asm.fmov_rr(rs, rd, size),
-                (RegClass::Int, RegClass::Float) => self.asm.mov_to_fpu(rs, rd, size),
-                _ => todo!(),
+                (RegClass::Int, RegClass::Int) => Ok(self.asm.mov_rr(rs, rd, size)),
+                (RegClass::Float, RegClass::Float) => Ok(self.asm.fmov_rr(rs, rd, size)),
+                (RegClass::Int, RegClass::Float) => Ok(self.asm.mov_to_fpu(rs, rd, size)),
+                _ => bail!(CodeGenError::invalid_operand_combination()),
             },
         }
     }
 
-    fn cmov(&mut self, dst: WritableReg, src: Reg, cc: IntCmpKind, _size: OperandSize) {
+    fn cmov(
+        &mut self,
+        dst: WritableReg,
+        src: Reg,
+        cc: IntCmpKind,
+        _size: OperandSize,
+    ) -> Result<()> {
         self.asm.csel(src, src, dst, Cond::from(cc));
+        Ok(())
     }
 
-    fn add(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+    fn add(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {
                 let imm = match v {
                     I::I32(v) => v as u64,
                     I::I64(v) => v,
-                    _ => unreachable!(),
+                    _ => bail!(CodeGenError::unsupported_imm()),
                 };
 
                 self.asm.add_ir(imm, rn, rd, size);
+                Ok(())
             }
 
             (RegImm::Reg(rm), rn, rd) => {
                 self.asm.add_rrr(rm, rn, rd, size);
+                Ok(())
             }
         }
     }
@@ -290,87 +313,107 @@ impl Masm for MacroAssembler {
         rhs: RegImm,
         size: OperandSize,
         trap: TrapCode,
-    ) {
-        self.add(dst, lhs, rhs, size);
+    ) -> Result<()> {
+        self.add(dst, lhs, rhs, size)?;
         self.asm.trapif(Cond::Hs, trap);
+        Ok(())
     }
 
-    fn sub(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+    fn sub(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {
                 let imm = match v {
                     I::I32(v) => v as u64,
                     I::I64(v) => v,
-                    _ => unreachable!(),
+                    _ => bail!(CodeGenError::unsupported_imm()),
                 };
 
                 self.asm.sub_ir(imm, rn, rd, size);
+                Ok(())
             }
 
             (RegImm::Reg(rm), rn, rd) => {
                 self.asm.sub_rrr(rm, rn, rd, size);
+                Ok(())
             }
         }
     }
 
-    fn mul(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+    fn mul(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {
                 let imm = match v {
                     I::I32(v) => v as u64,
                     I::I64(v) => v,
-                    _ => unreachable!(),
+                    _ => bail!(CodeGenError::unsupported_imm()),
                 };
 
                 self.asm.mul_ir(imm, rn, rd, size);
+                Ok(())
             }
 
             (RegImm::Reg(rm), rn, rd) => {
                 self.asm.mul_rrr(rm, rn, rd, size);
+                Ok(())
             }
         }
     }
 
-    fn float_add(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+    fn float_add(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) -> Result<()> {
         self.asm.fadd_rrr(rhs, lhs, dst, size);
+        Ok(())
     }
 
-    fn float_sub(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+    fn float_sub(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) -> Result<()> {
         self.asm.fsub_rrr(rhs, lhs, dst, size);
+        Ok(())
     }
 
-    fn float_mul(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+    fn float_mul(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) -> Result<()> {
         self.asm.fmul_rrr(rhs, lhs, dst, size);
+        Ok(())
     }
 
-    fn float_div(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+    fn float_div(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) -> Result<()> {
         self.asm.fdiv_rrr(rhs, lhs, dst, size);
+        Ok(())
     }
 
-    fn float_min(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+    fn float_min(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) -> Result<()> {
         self.asm.fmin_rrr(rhs, lhs, dst, size);
+        Ok(())
     }
 
-    fn float_max(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+    fn float_max(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) -> Result<()> {
         self.asm.fmax_rrr(rhs, lhs, dst, size);
+        Ok(())
     }
 
-    fn float_copysign(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+    fn float_copysign(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        size: OperandSize,
+    ) -> Result<()> {
         let max_shift = match size {
             OperandSize::S32 => 0x1f,
             OperandSize::S64 => 0x3f,
-            _ => unreachable!(),
+            _ => bail!(CodeGenError::unexpected_operand_size()),
         };
         self.asm.fushr_rri(rhs, writable!(rhs), max_shift, size);
         self.asm.fsli_rri_mod(lhs, rhs, dst, max_shift, size);
+        Ok(())
     }
 
-    fn float_neg(&mut self, dst: WritableReg, size: OperandSize) {
+    fn float_neg(&mut self, dst: WritableReg, size: OperandSize) -> Result<()> {
         self.asm.fneg_rr(dst.to_reg(), dst, size);
+        Ok(())
     }
 
-    fn float_abs(&mut self, dst: WritableReg, size: OperandSize) {
+    fn float_abs(&mut self, dst: WritableReg, size: OperandSize) -> Result<()> {
         self.asm.fabs_rr(dst.to_reg(), dst, size);
+        Ok(())
     }
 
     fn float_round<
@@ -390,60 +433,67 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn float_sqrt(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
+    fn float_sqrt(&mut self, dst: WritableReg, src: Reg, size: OperandSize) -> Result<()> {
         self.asm.fsqrt_rr(src, dst, size);
+        Ok(())
     }
 
-    fn and(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+    fn and(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {
                 let imm = match v {
                     I::I32(v) => v as u64,
                     I::I64(v) => v,
-                    _ => unreachable!(),
+                    _ => bail!(CodeGenError::unsupported_imm()),
                 };
 
                 self.asm.and_ir(imm, rn, rd, size);
+                Ok(())
             }
 
             (RegImm::Reg(rm), rn, rd) => {
                 self.asm.and_rrr(rm, rn, rd, size);
+                Ok(())
             }
         }
     }
 
-    fn or(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+    fn or(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {
                 let imm = match v {
                     I::I32(v) => v as u64,
                     I::I64(v) => v,
-                    _ => unreachable!(),
+                    _ => bail!(CodeGenError::unsupported_imm()),
                 };
 
                 self.asm.or_ir(imm, rn, rd, size);
+                Ok(())
             }
 
             (RegImm::Reg(rm), rn, rd) => {
                 self.asm.or_rrr(rm, rn, rd, size);
+                Ok(())
             }
         }
     }
 
-    fn xor(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) {
+    fn xor(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
         match (rhs, lhs, dst) {
             (RegImm::Imm(v), rn, rd) => {
                 let imm = match v {
                     I::I32(v) => v as u64,
                     I::I64(v) => v,
-                    _ => unreachable!(),
+                    _ => bail!(CodeGenError::unsupported_imm()),
                 };
 
                 self.asm.xor_ir(imm, rn, rd, size);
+                Ok(())
             }
 
             (RegImm::Reg(rm), rn, rd) => {
                 self.asm.xor_rrr(rm, rn, rd, size);
+                Ok(())
             }
         }
     }
@@ -455,8 +505,9 @@ impl Masm for MacroAssembler {
         lhs: Reg,
         kind: ShiftKind,
         size: OperandSize,
-    ) {
-        self.asm.shift_ir(imm, lhs, dst, kind, size)
+    ) -> Result<()> {
+        self.asm.shift_ir(imm, lhs, dst, kind, size);
+        Ok(())
     }
 
     fn shift(
@@ -511,8 +562,9 @@ impl Masm for MacroAssembler {
         })
     }
 
-    fn zero(&mut self, reg: WritableReg) {
+    fn zero(&mut self, reg: WritableReg) -> Result<()> {
         self.asm.load_constant(0, reg);
+        Ok(())
     }
 
     fn popcnt(&mut self, context: &mut CodeGenContext<Emission>, size: OperandSize) -> Result<()> {
@@ -534,8 +586,8 @@ impl Masm for MacroAssembler {
         _src_size: OperandSize,
         _dst_size: OperandSize,
         _kind: TruncKind,
-    ) {
-        todo!()
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn unsigned_truncate(
@@ -546,8 +598,8 @@ impl Masm for MacroAssembler {
         _src_size: OperandSize,
         _dst_size: OperandSize,
         _kind: TruncKind,
-    ) {
-        todo!()
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn signed_convert(
@@ -556,8 +608,9 @@ impl Masm for MacroAssembler {
         src: Reg,
         src_size: OperandSize,
         dst_size: OperandSize,
-    ) {
+    ) -> Result<()> {
         self.asm.cvt_sint_to_float(src, dst, src_size, dst_size);
+        Ok(())
     }
 
     fn unsigned_convert(
@@ -567,60 +620,84 @@ impl Masm for MacroAssembler {
         _tmp_gpr: Reg,
         src_size: OperandSize,
         dst_size: OperandSize,
-    ) {
+    ) -> Result<()> {
         self.asm.cvt_uint_to_float(src, dst, src_size, dst_size);
+        Ok(())
     }
 
-    fn reinterpret_float_as_int(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
+    fn reinterpret_float_as_int(
+        &mut self,
+        dst: WritableReg,
+        src: Reg,
+        size: OperandSize,
+    ) -> Result<()> {
         self.asm.mov_from_vec(src, dst, 0, size);
+        Ok(())
     }
 
-    fn reinterpret_int_as_float(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
+    fn reinterpret_int_as_float(
+        &mut self,
+        dst: WritableReg,
+        src: Reg,
+        size: OperandSize,
+    ) -> Result<()> {
         self.asm.mov_to_fpu(src, dst, size);
+        Ok(())
     }
 
-    fn demote(&mut self, dst: WritableReg, src: Reg) {
+    fn demote(&mut self, dst: WritableReg, src: Reg) -> Result<()> {
         self.asm
             .cvt_float_to_float(src.into(), dst, OperandSize::S64, OperandSize::S32);
+        Ok(())
     }
 
-    fn promote(&mut self, dst: WritableReg, src: Reg) {
+    fn promote(&mut self, dst: WritableReg, src: Reg) -> Result<()> {
         self.asm
             .cvt_float_to_float(src.into(), dst, OperandSize::S32, OperandSize::S64);
+        Ok(())
     }
 
-    fn push(&mut self, reg: Reg, size: OperandSize) -> StackSlot {
-        self.reserve_stack(size.bytes());
-        let address = self.address_from_sp(SPOffset::from_u32(self.sp_offset));
+    fn push(&mut self, reg: Reg, size: OperandSize) -> Result<StackSlot> {
+        self.reserve_stack(size.bytes())?;
+        let address = self.address_from_sp(SPOffset::from_u32(self.sp_offset))?;
         self.asm.str(reg, address, size);
 
-        StackSlot {
+        Ok(StackSlot {
             offset: SPOffset::from_u32(self.sp_offset),
             size: size.bytes(),
-        }
+        })
     }
 
-    fn address_at_reg(&self, reg: Reg, offset: u32) -> Self::Address {
-        Address::offset(reg, offset as i64)
+    fn address_at_reg(&self, reg: Reg, offset: u32) -> Result<Self::Address> {
+        Ok(Address::offset(reg, offset as i64))
     }
 
-    fn cmp_with_set(&mut self, dst: WritableReg, src: RegImm, kind: IntCmpKind, size: OperandSize) {
-        self.cmp(dst.to_reg(), src, size);
+    fn cmp_with_set(
+        &mut self,
+        dst: WritableReg,
+        src: RegImm,
+        kind: IntCmpKind,
+        size: OperandSize,
+    ) -> Result<()> {
+        self.cmp(dst.to_reg(), src, size)?;
         self.asm.cset(dst, kind.into());
+        Ok(())
     }
 
-    fn cmp(&mut self, src1: Reg, src2: RegImm, size: OperandSize) {
+    fn cmp(&mut self, src1: Reg, src2: RegImm, size: OperandSize) -> Result<()> {
         match src2 {
             RegImm::Reg(src2) => {
                 self.asm.subs_rrr(src2, src1, size);
+                Ok(())
             }
             RegImm::Imm(v) => {
                 let imm = match v {
                     I::I32(v) => v as u64,
                     I::I64(v) => v,
-                    _ => unreachable!(),
+                    _ => bail!(CodeGenError::unsupported_imm()),
                 };
                 self.asm.subs_ir(imm, src1, size);
+                Ok(())
             }
         }
     }
@@ -632,36 +709,42 @@ impl Masm for MacroAssembler {
         src2: Reg,
         kind: FloatCmpKind,
         size: OperandSize,
-    ) {
+    ) -> Result<()> {
         self.asm.fcmp(src1, src2, size);
         self.asm.cset(dst, kind.into());
+        Ok(())
     }
 
-    fn clz(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
+    fn clz(&mut self, dst: WritableReg, src: Reg, size: OperandSize) -> Result<()> {
         self.asm.clz(src, dst, size);
+        Ok(())
     }
 
-    fn ctz(&mut self, dst: WritableReg, src: Reg, size: OperandSize) {
+    fn ctz(&mut self, dst: WritableReg, src: Reg, size: OperandSize) -> Result<()> {
         let scratch = regs::scratch();
         self.asm.rbit(src, writable!(scratch), size);
         self.asm.clz(scratch, dst, size);
+        Ok(())
     }
 
-    fn wrap(&mut self, dst: WritableReg, src: Reg) {
+    fn wrap(&mut self, dst: WritableReg, src: Reg) -> Result<()> {
         self.asm.mov_rr(src, dst, OperandSize::S32);
+        Ok(())
     }
 
-    fn extend(&mut self, dst: WritableReg, src: Reg, kind: ExtendKind) {
+    fn extend(&mut self, dst: WritableReg, src: Reg, kind: ExtendKind) -> Result<()> {
         self.asm.extend(src, dst, kind);
+        Ok(())
     }
 
-    fn get_label(&mut self) -> MachLabel {
-        self.asm.get_label()
+    fn get_label(&mut self) -> Result<MachLabel> {
+        Ok(self.asm.get_label())
     }
 
-    fn bind(&mut self, label: MachLabel) {
+    fn bind(&mut self, label: MachLabel) -> Result<()> {
         let buffer = self.asm.buffer_mut();
         buffer.bind_label(label, &mut Default::default());
+        Ok(())
     }
 
     fn branch(
@@ -671,7 +754,7 @@ impl Masm for MacroAssembler {
         rhs: RegImm,
         taken: MachLabel,
         size: OperandSize,
-    ) {
+    ) -> Result<()> {
         use IntCmpKind::*;
 
         match &(lhs, rhs) {
@@ -682,25 +765,28 @@ impl Masm for MacroAssembler {
                 if (kind == Eq || kind == Ne) && (rlhs == rrhs) {
                     self.asm.ands_rr(*rlhs, *rrhs, size);
                 } else {
-                    self.cmp(lhs, rhs, size);
+                    self.cmp(lhs, rhs, size)?;
                 }
             }
-            _ => self.cmp(lhs, rhs, size),
+            _ => self.cmp(lhs, rhs, size)?,
         }
         self.asm.jmp_if(kind.into(), taken);
+        Ok(())
     }
 
-    fn jmp(&mut self, target: MachLabel) {
+    fn jmp(&mut self, target: MachLabel) -> Result<()> {
         self.asm.jmp(target);
+        Ok(())
     }
 
-    fn unreachable(&mut self) {
+    fn unreachable(&mut self) -> Result<()> {
         self.asm.udf(wasmtime_cranelift::TRAP_UNREACHABLE);
+        Ok(())
     }
 
-    fn jmp_table(&mut self, targets: &[MachLabel], index: Reg, tmp: Reg) {
+    fn jmp_table(&mut self, targets: &[MachLabel], index: Reg, tmp: Reg) -> Result<()> {
         // At least one default target.
-        assert!(targets.len() >= 1);
+        debug_assert!(targets.len() >= 1);
         let max = targets.len() as u64 - 1;
         self.asm.subs_ir(max, index, OperandSize::S64);
         let default_index = max as usize;
@@ -708,30 +794,35 @@ impl Masm for MacroAssembler {
         let rest = &targets[..default_index];
         let tmp1 = regs::scratch();
         self.asm.jmp_table(rest, default, index, tmp1, tmp);
+        Ok(())
     }
 
-    fn trap(&mut self, code: TrapCode) {
+    fn trap(&mut self, code: TrapCode) -> Result<()> {
         self.asm.udf(code);
+        Ok(())
     }
 
-    fn trapz(&mut self, src: Reg, code: TrapCode) {
+    fn trapz(&mut self, src: Reg, code: TrapCode) -> Result<()> {
         self.asm.trapz(src, code, OperandSize::S64);
+        Ok(())
     }
 
-    fn trapif(&mut self, cc: IntCmpKind, code: TrapCode) {
+    fn trapif(&mut self, cc: IntCmpKind, code: TrapCode) -> Result<()> {
         self.asm.trapif(cc.into(), code);
+        Ok(())
     }
 
-    fn start_source_loc(&mut self, loc: RelSourceLoc) -> (CodeOffset, RelSourceLoc) {
-        self.asm.buffer_mut().start_srcloc(loc)
+    fn start_source_loc(&mut self, loc: RelSourceLoc) -> Result<(CodeOffset, RelSourceLoc)> {
+        Ok(self.asm.buffer_mut().start_srcloc(loc))
     }
 
-    fn end_source_loc(&mut self) {
+    fn end_source_loc(&mut self) -> Result<()> {
         self.asm.buffer_mut().end_srcloc();
+        Ok(())
     }
 
-    fn current_code_offset(&self) -> CodeOffset {
-        self.asm.buffer().cur_offset()
+    fn current_code_offset(&self) -> Result<CodeOffset> {
+        Ok(self.asm.buffer().cur_offset())
     }
 
     fn add128(
@@ -742,9 +833,9 @@ impl Masm for MacroAssembler {
         lhs_hi: Reg,
         rhs_lo: Reg,
         rhs_hi: Reg,
-    ) {
+    ) -> Result<()> {
         let _ = (dst_lo, dst_hi, lhs_lo, lhs_hi, rhs_lo, rhs_hi);
-        todo!()
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn sub128(
@@ -755,9 +846,9 @@ impl Masm for MacroAssembler {
         lhs_hi: Reg,
         rhs_lo: Reg,
         rhs_hi: Reg,
-    ) {
+    ) -> Result<()> {
         let _ = (dst_lo, dst_hi, lhs_lo, lhs_hi, rhs_lo, rhs_hi);
-        todo!()
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn mul_wide(
@@ -766,7 +857,7 @@ impl Masm for MacroAssembler {
         kind: MulWideKind,
     ) -> Result<()> {
         let _ = (context, kind);
-        todo!()
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 }
 
