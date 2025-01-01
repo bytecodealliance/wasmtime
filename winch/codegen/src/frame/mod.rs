@@ -287,8 +287,8 @@ impl Frame<Emission> {
         &self,
         index: u32,
         masm: &mut M,
-    ) -> (WasmValType, M::Address) {
+    ) -> Result<(WasmValType, M::Address)> {
         let slot = self.get_wasm_local(index);
-        (slot.ty, masm.local_address(&slot))
+        Ok((slot.ty, masm.local_address(&slot)?))
     }
 }

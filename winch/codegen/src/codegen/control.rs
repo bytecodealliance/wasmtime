@@ -6,15 +6,15 @@
 //! next instruction is a control instruction, we could avoid emitting
 //! a [`crate::masm::MacroAssembler::cmp_with_set`] and instead emit
 //! a conditional jump inline when emitting the control flow instruction.
-use super::{CodeGenContext, OperandSize, Reg, TypedReg};
+use super::{CodeGenContext, CodeGenError, Emission, OperandSize, Reg, TypedReg};
 use crate::{
     abi::{ABIOperand, ABIResults, ABISig, RetArea, ABI},
-    codegen::Emission,
     masm::{IntCmpKind, MacroAssembler, MemMoveDirection, RegImm, SPOffset},
     reg::writable,
     stack::Val,
     CallingConvention,
 };
+use anyhow::{anyhow, bail, ensure, Result};
 use cranelift_codegen::MachLabel;
 use wasmtime_environ::{WasmFuncType, WasmValType};
 
@@ -250,17 +250,17 @@ impl ControlStackFrame {
         sig: BlockSig,
         masm: &mut M,
         context: &mut CodeGenContext<Emission>,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut control = Self::If {
-            cont: masm.get_label(),
-            exit: masm.get_label(),
+            cont: masm.get_label()?,
+            exit: masm.get_label()?,
             sig,
             reachable: context.reachable,
             stack_state: Default::default(),
         };
 
-        control.emit(masm, context);
-        control
+        control.emit(masm, context)?;
+        Ok(control)
     }
 
     /// Returns [`ControlStackFrame`] for a block.
@@ -268,16 +268,16 @@ impl ControlStackFrame {
         sig: BlockSig,
         masm: &mut M,
         context: &mut CodeGenContext<Emission>,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut control = Self::Block {
             sig,
             is_branch_target: false,
-            exit: masm.get_label(),
+            exit: masm.get_label()?,
             stack_state: Default::default(),
         };
 
-        control.emit(masm, context);
-        control
+        control.emit(masm, context)?;
+        Ok(control)
     }
 
     /// Returns [`ControlStackFrame`] for a loop.
@@ -285,19 +285,23 @@ impl ControlStackFrame {
         sig: BlockSig,
         masm: &mut M,
         context: &mut CodeGenContext<Emission>,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut control = Self::Loop {
             stack_state: Default::default(),
             sig,
-            head: masm.get_label(),
+            head: masm.get_label()?,
         };
 
-        control.emit(masm, context);
-        control
+        control.emit(masm, context)?;
+        Ok(control)
     }
 
-    fn init<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext<Emission>) {
-        self.calculate_stack_state(context, masm);
+    fn init<M: MacroAssembler>(
+        &mut self,
+        masm: &mut M,
+        context: &mut CodeGenContext<Emission>,
+    ) -> Result<()> {
+        self.calculate_stack_state(context, masm)?;
         // If the block has stack results, immediately resolve the return area
         // base.
         if self.results::<M>().on_stack() {
@@ -329,9 +333,10 @@ impl ControlStackFrame {
                 self.params::<M>(),
                 context,
                 masm,
-                |params: &ABIResults, _, _| params.ret_area().copied(),
-            );
+                |params: &ABIResults, _, _| Ok(params.ret_area().copied()),
+            )?;
         }
+        Ok(())
     }
 
     /// Calculates the [StackState] of the block.
@@ -339,7 +344,7 @@ impl ControlStackFrame {
         &mut self,
         context: &mut CodeGenContext<Emission>,
         masm: &mut M,
-    ) {
+    ) -> Result<()> {
         use ControlStackFrame::*;
         let sig = self.sig();
         // If the block type contains a full [ABISig], do not take into account
@@ -352,15 +357,18 @@ impl ControlStackFrame {
             sig.param_count()
         };
         let return_count = sig.return_count();
-        debug_assert!(context.stack.len() >= param_count);
+        ensure!(
+            context.stack.len() >= param_count,
+            CodeGenError::missing_values_in_stack()
+        );
         let results_size = self.results::<M>().size();
 
         // Save any live registers and locals.
-        context.spill(masm);
+        context.spill(masm)?;
 
         let base_len = context.stack.len() - param_count;
         let stack_consumed = context.stack.sizeof(param_count);
-        let current_sp = masm.sp_offset();
+        let current_sp = masm.sp_offset()?;
         let base_offset = SPOffset::from_u32(current_sp.as_u32() - stack_consumed);
 
         match self {
@@ -372,6 +380,7 @@ impl ControlStackFrame {
             }
             _ => {}
         }
+        Ok(())
     }
 
     /// This function ensures that the state of the -- machine and value --
@@ -390,7 +399,7 @@ impl ControlStackFrame {
         &mut self,
         masm: &mut M,
         context: &mut CodeGenContext<Emission>,
-    ) {
+    ) -> Result<()> {
         let state = self.stack_state();
         // This assumes that at jump sites, the machine stack pointer will be
         // adjusted to match the expectations of the target branch (e.g.
@@ -402,11 +411,11 @@ impl ControlStackFrame {
         // When restoring reachability we ensure that the MacroAssembler offset
         // is set to match the expectations of the target branch, similar to how
         // the machine stack pointer was adjusted at jump sites.
-        masm.reset_stack_pointer(state.target_offset);
+        masm.reset_stack_pointer(state.target_offset)?;
         // We use the base length, because this function is assumed to be called
         // *before* pushing any results to the value stack. This way, any excess
         // values will be discarded.
-        context.truncate_stack_to(state.base_len);
+        context.truncate_stack_to(state.base_len)
     }
 
     /// Return the type information of the block.
@@ -417,12 +426,16 @@ impl ControlStackFrame {
         }
     }
 
-    fn emit<M: MacroAssembler>(&mut self, masm: &mut M, context: &mut CodeGenContext<Emission>) {
+    fn emit<M: MacroAssembler>(
+        &mut self,
+        masm: &mut M,
+        context: &mut CodeGenContext<Emission>,
+    ) -> Result<()> {
         use ControlStackFrame::*;
 
         // Do not perform any emissions if we are in an unreachable state.
         if !context.reachable {
-            return;
+            return Ok(());
         }
 
         match *self {
@@ -431,26 +444,29 @@ impl ControlStackFrame {
                 // Because in the case of Self::If, Self::init, will top the
                 // branch params, we exclude any result registers from being
                 // used as the branch test.
-                let top =
-                    context.without::<_, _, _>(self.params::<M>().regs(), masm, |cx, masm| {
-                        cx.pop_to_reg(masm, None)
-                    });
-                self.init(masm, context);
+                let top = context.without::<Result<TypedReg>, _, _>(
+                    self.params::<M>().regs(),
+                    masm,
+                    |cx, masm| cx.pop_to_reg(masm, None),
+                )??;
+                self.init(masm, context)?;
                 masm.branch(
                     IntCmpKind::Eq,
                     top.reg.into(),
                     top.reg.into(),
                     cont,
                     OperandSize::S32,
-                );
+                )?;
                 context.free_reg(top);
+                Ok(())
             }
             Block { .. } => self.init(masm, context),
             Loop { head, .. } => {
-                self.init(masm, context);
-                masm.bind(head);
+                self.init(masm, context)?;
+                masm.bind(head)?;
+                Ok(())
             }
-            _ => unreachable!(),
+            _ => Err(anyhow!(CodeGenError::if_control_frame_expected())),
         }
     }
 
@@ -460,14 +476,20 @@ impl ControlStackFrame {
         &mut self,
         masm: &mut M,
         context: &mut CodeGenContext<Emission>,
-    ) {
-        debug_assert!(self.is_if());
+    ) -> Result<()> {
+        ensure!(self.is_if(), CodeGenError::if_control_frame_expected());
         let state = self.stack_state();
 
-        debug_assert_eq!(state.target_len, context.stack.len());
-        self.pop_abi_results(context, masm, |results, _, _| results.ret_area().copied());
-        masm.jmp(*self.exit_label().unwrap());
-        self.bind_else(masm, context);
+        ensure!(
+            state.target_len == context.stack.len(),
+            CodeGenError::control_frame_state_mismatch()
+        );
+        self.pop_abi_results(context, masm, |results, _, _| {
+            Ok(results.ret_area().copied())
+        })?;
+        masm.jmp(*self.exit_label().unwrap())?;
+        self.bind_else(masm, context)?;
+        Ok(())
     }
 
     /// Binds the else branch label and converts `self` to
@@ -476,7 +498,7 @@ impl ControlStackFrame {
         &mut self,
         masm: &mut M,
         context: &mut CodeGenContext<Emission>,
-    ) {
+    ) -> Result<()> {
         use ControlStackFrame::*;
         match self {
             If {
@@ -487,7 +509,7 @@ impl ControlStackFrame {
                 ..
             } => {
                 // Bind the else branch.
-                masm.bind(*cont);
+                masm.bind(*cont)?;
 
                 // Push the abi results to the value stack, so that they are
                 // used as params for the else branch. At the beginning of the
@@ -501,10 +523,10 @@ impl ControlStackFrame {
                 let params_size = sig.params::<M>().size();
                 context.push_abi_results::<M, _>(sig.params::<M>(), masm, |params, _, _| {
                     params.ret_area().copied()
-                });
+                })?;
                 masm.reset_stack_pointer(SPOffset::from_u32(
                     stack_state.base_offset.as_u32() + params_size,
-                ));
+                ))?;
 
                 // Update the stack control frame with an else control frame.
                 *self = ControlStackFrame::Else {
@@ -514,8 +536,9 @@ impl ControlStackFrame {
                     sig: sig.clone(),
                 };
             }
-            _ => unreachable!(),
+            _ => bail!(CodeGenError::if_control_frame_expected()),
         }
+        Ok(())
     }
 
     /// Handles the end of a control stack frame.
@@ -523,19 +546,29 @@ impl ControlStackFrame {
         &mut self,
         masm: &mut M,
         context: &mut CodeGenContext<Emission>,
-    ) {
+    ) -> Result<()> {
         use ControlStackFrame::*;
         match self {
             If { stack_state, .. } | Else { stack_state, .. } | Block { stack_state, .. } => {
-                debug_assert_eq!(stack_state.target_len, context.stack.len());
+                ensure!(
+                    stack_state.target_len == context.stack.len(),
+                    CodeGenError::control_frame_state_mismatch()
+                );
                 // Before binding the exit label, we handle the block results.
-                self.pop_abi_results(context, masm, |results, _, _| results.ret_area().copied());
-                self.bind_end(masm, context);
+                self.pop_abi_results(context, masm, |results, _, _| {
+                    Ok(results.ret_area().copied())
+                })?;
+                self.bind_end(masm, context)?;
             }
             Loop { stack_state, .. } => {
-                debug_assert_eq!(stack_state.target_len, context.stack.len());
+                ensure!(
+                    stack_state.target_len == context.stack.len(),
+                    CodeGenError::control_frame_state_mismatch()
+                );
             }
-        }
+        };
+
+        Ok(())
     }
 
     /// Binds the exit label of the current control stack frame and pushes the
@@ -544,25 +577,26 @@ impl ControlStackFrame {
         &mut self,
         masm: &mut M,
         context: &mut CodeGenContext<Emission>,
-    ) {
-        self.push_abi_results(context, masm);
-        self.bind_exit_label(masm);
+    ) -> Result<()> {
+        self.push_abi_results(context, masm)?;
+        self.bind_exit_label(masm)
     }
 
     /// Binds the exit label of the control stack frame.
-    pub fn bind_exit_label<M: MacroAssembler>(&self, masm: &mut M) {
+    pub fn bind_exit_label<M: MacroAssembler>(&self, masm: &mut M) -> Result<()> {
         use ControlStackFrame::*;
         match self {
             // We use an explicit label to track the exit of an if block. In case there's no
             // else, we bind the if's continuation block to make sure that any jumps from the if
             // condition are reachable and we bind the explicit exit label as well to ensure that any
             // branching instructions are able to correctly reach the block's end.
-            If { cont, .. } => masm.bind(*cont),
+            If { cont, .. } => masm.bind(*cont)?,
             _ => {}
         }
         if let Some(label) = self.exit_label() {
-            masm.bind(*label);
+            masm.bind(*label)?;
         }
+        Ok(())
     }
 
     /// Returns the continuation label of the current control stack frame.
@@ -647,9 +681,10 @@ impl ControlStackFrame {
         context: &mut CodeGenContext<Emission>,
         masm: &mut M,
         calculate_ret_area: F,
-    ) where
+    ) -> Result<()>
+    where
         M: MacroAssembler,
-        F: FnMut(&ABIResults, &mut CodeGenContext<Emission>, &mut M) -> Option<RetArea>,
+        F: FnMut(&ABIResults, &mut CodeGenContext<Emission>, &mut M) -> Result<Option<RetArea>>,
     {
         Self::pop_abi_results_impl(self.results::<M>(), context, masm, calculate_ret_area)
     }
@@ -668,31 +703,32 @@ impl ControlStackFrame {
         context: &mut CodeGenContext<Emission>,
         masm: &mut M,
         mut calculate_ret_area: F,
-    ) where
+    ) -> Result<()>
+    where
         M: MacroAssembler,
-        F: FnMut(&ABIResults, &mut CodeGenContext<Emission>, &mut M) -> Option<RetArea>,
+        F: FnMut(&ABIResults, &mut CodeGenContext<Emission>, &mut M) -> Result<Option<RetArea>>,
     {
         let mut iter = results.operands().iter().rev().peekable();
 
         while let Some(ABIOperand::Reg { reg, .. }) = iter.peek() {
-            let TypedReg { reg, .. } = context.pop_to_reg(masm, Some(*reg));
+            let TypedReg { reg, .. } = context.pop_to_reg(masm, Some(*reg))?;
             context.free_reg(reg);
             iter.next().unwrap();
         }
 
-        let ret_area = calculate_ret_area(results, context, masm);
+        let ret_area = calculate_ret_area(results, context, masm)?;
 
-        let retptr = Self::maybe_load_retptr(ret_area.as_ref(), &results, context, masm);
+        let retptr = Self::maybe_load_retptr(ret_area.as_ref(), &results, context, masm)?;
         if let Some(area) = ret_area {
             if area.is_sp() {
-                Self::ensure_ret_area(&area, context, masm);
+                Self::ensure_ret_area(&area, context, masm)?;
             }
         }
 
         if let Some(retptr) = retptr {
             while let Some(ABIOperand::Stack { offset, .. }) = iter.peek() {
-                let addr = masm.address_at_reg(retptr, *offset);
-                context.pop_to_addr(masm, addr);
+                let addr = masm.address_at_reg(retptr, *offset)?;
+                context.pop_to_addr(masm, addr)?;
                 iter.next().unwrap();
             }
             context.free_reg(retptr);
@@ -700,14 +736,20 @@ impl ControlStackFrame {
 
         if let Some(area) = ret_area {
             if area.is_sp() {
-                Self::adjust_stack_results(area, results, context, masm);
+                Self::adjust_stack_results(area, results, context, masm)?;
             }
         }
+
+        Ok(())
     }
 
     /// Convenience wrapper around [CodeGenContext::push_abi_results] using the
     /// results of the current frame.
-    fn push_abi_results<M>(&mut self, context: &mut CodeGenContext<Emission>, masm: &mut M)
+    fn push_abi_results<M>(
+        &mut self,
+        context: &mut CodeGenContext<Emission>,
+        masm: &mut M,
+    ) -> Result<()>
     where
         M: MacroAssembler,
     {
@@ -725,9 +767,10 @@ impl ControlStackFrame {
         context: &mut CodeGenContext<Emission>,
         masm: &mut M,
         calculate_ret_area: F,
-    ) where
+    ) -> Result<()>
+    where
         M: MacroAssembler,
-        F: FnMut(&ABIResults, &mut CodeGenContext<Emission>, &mut M) -> Option<RetArea>,
+        F: FnMut(&ABIResults, &mut CodeGenContext<Emission>, &mut M) -> Result<Option<RetArea>>,
     {
         Self::top_abi_results_impl::<M, _>(self.results::<M>(), context, masm, calculate_ret_area)
     }
@@ -740,18 +783,19 @@ impl ControlStackFrame {
         context: &mut CodeGenContext<Emission>,
         masm: &mut M,
         mut calculate_ret_area: F,
-    ) where
+    ) -> Result<()>
+    where
         M: MacroAssembler,
-        F: FnMut(&ABIResults, &mut CodeGenContext<Emission>, &mut M) -> Option<RetArea>,
+        F: FnMut(&ABIResults, &mut CodeGenContext<Emission>, &mut M) -> Result<Option<RetArea>>,
     {
         let mut area = None;
         Self::pop_abi_results_impl::<M, _>(results, context, masm, |r, context, masm| {
-            area = calculate_ret_area(r, context, masm);
-            area
-        });
+            area = calculate_ret_area(r, context, masm)?;
+            Ok(area)
+        })?;
         // Use the previously calculated area to ensure that the ret area is
         // kept in sync between both operations.
-        context.push_abi_results::<M, _>(results, masm, |_, _, _| area);
+        context.push_abi_results::<M, _>(results, masm, |_, _, _| area)
     }
 
     // If the results on the stack are handled via the stack pointer, ensure
@@ -783,10 +827,11 @@ impl ControlStackFrame {
         results: &ABIResults,
         context: &mut CodeGenContext<Emission>,
         masm: &mut M,
-    ) where
+    ) -> Result<()>
+    where
         M: MacroAssembler,
     {
-        debug_assert!(ret_area.is_sp());
+        ensure!(ret_area.is_sp(), CodeGenError::sp_addressing_expected());
         let results_offset = ret_area.unwrap_sp();
 
         // Start iterating from memory values that are closer to the
@@ -815,7 +860,7 @@ impl ControlStackFrame {
                         SPOffset::from_u32(dst),
                         *size,
                         MemMoveDirection::LowToHigh,
-                    );
+                    )?;
                 }
                 _ => {}
             }
@@ -849,7 +894,7 @@ impl ControlStackFrame {
                         SPOffset::from_u32(dst),
                         *size,
                         MemMoveDirection::HighToLow,
-                    );
+                    )?;
                 }
                 _ => {}
             }
@@ -867,29 +912,29 @@ impl ControlStackFrame {
             // bottom in the iteration of the operands.
             match (operand, context.stack.peek().unwrap()) {
                 (ABIOperand::Stack { ty, offset, .. }, Val::I32(v)) => {
-                    let addr =
-                        masm.address_from_sp(SPOffset::from_u32(results_offset.as_u32() - *offset));
-                    masm.store(RegImm::i32(*v), addr, (*ty).into());
+                    let addr = masm
+                        .address_from_sp(SPOffset::from_u32(results_offset.as_u32() - *offset))?;
+                    masm.store(RegImm::i32(*v), addr, (*ty).try_into()?)?;
                 }
                 (ABIOperand::Stack { ty, offset, .. }, Val::I64(v)) => {
-                    let addr =
-                        masm.address_from_sp(SPOffset::from_u32(results_offset.as_u32() - *offset));
-                    masm.store(RegImm::i64(*v), addr, (*ty).into());
+                    let addr = masm
+                        .address_from_sp(SPOffset::from_u32(results_offset.as_u32() - *offset))?;
+                    masm.store(RegImm::i64(*v), addr, (*ty).try_into()?)?;
                 }
                 (ABIOperand::Stack { ty, offset, .. }, Val::F32(v)) => {
-                    let addr =
-                        masm.address_from_sp(SPOffset::from_u32(results_offset.as_u32() - *offset));
-                    masm.store(RegImm::f32(v.bits()), addr, (*ty).into());
+                    let addr = masm
+                        .address_from_sp(SPOffset::from_u32(results_offset.as_u32() - *offset))?;
+                    masm.store(RegImm::f32(v.bits()), addr, (*ty).try_into()?)?;
                 }
                 (ABIOperand::Stack { ty, offset, .. }, Val::F64(v)) => {
-                    let addr =
-                        masm.address_from_sp(SPOffset::from_u32(results_offset.as_u32() - *offset));
-                    masm.store(RegImm::f64(v.bits()), addr, (*ty).into());
+                    let addr = masm
+                        .address_from_sp(SPOffset::from_u32(results_offset.as_u32() - *offset))?;
+                    masm.store(RegImm::f64(v.bits()), addr, (*ty).try_into()?)?;
                 }
                 (ABIOperand::Stack { ty, offset, .. }, Val::V128(v)) => {
                     let addr =
-                        masm.address_at_sp(SPOffset::from_u32(results_offset.as_u32() - *offset));
-                    masm.store(RegImm::v128(*v), addr, (*ty).into())
+                        masm.address_at_sp(SPOffset::from_u32(results_offset.as_u32() - *offset))?;
+                    masm.store(RegImm::v128(*v), addr, (*ty).try_into()?)?;
                 }
                 (_, v) => debug_assert!(v.is_mem()),
             }
@@ -899,25 +944,35 @@ impl ControlStackFrame {
 
         // Adjust any excess stack space: the stack space after handling the
         // block's results should be the exact amount needed by the return area.
-        debug_assert!(masm.sp_offset().as_u32() >= results_offset.as_u32());
-        masm.free_stack(masm.sp_offset().as_u32() - results_offset.as_u32());
+        ensure!(
+            masm.sp_offset()?.as_u32() >= results_offset.as_u32(),
+            CodeGenError::invalid_sp_offset()
+        );
+        masm.free_stack(masm.sp_offset()?.as_u32() - results_offset.as_u32())?;
+        Ok(())
     }
 
     /// Ensures that there is enough space for return values on the stack.
     /// This function is called at the end of all blocks and when branching from
     /// within blocks.
-    fn ensure_ret_area<M>(ret_area: &RetArea, context: &mut CodeGenContext<Emission>, masm: &mut M)
+    fn ensure_ret_area<M>(
+        ret_area: &RetArea,
+        context: &mut CodeGenContext<Emission>,
+        masm: &mut M,
+    ) -> Result<()>
     where
         M: MacroAssembler,
     {
-        debug_assert!(ret_area.is_sp());
+        ensure!(ret_area.is_sp(), CodeGenError::sp_addressing_expected());
         // Save any live registers and locals when exiting the block to ensure
         // that the respective values are correctly located in memory.
         // See [Self::adjust_stack_results] for more details.
-        context.spill(masm);
-        if ret_area.unwrap_sp() > masm.sp_offset() {
-            masm.reserve_stack(ret_area.unwrap_sp().as_u32() - masm.sp_offset().as_u32())
+        context.spill(masm)?;
+        if ret_area.unwrap_sp() > masm.sp_offset()? {
+            masm.reserve_stack(ret_area.unwrap_sp().as_u32() - masm.sp_offset()?.as_u32())?
         }
+
+        Ok(())
     }
 
     /// Loads the return pointer, if it exists, into the next available register.
@@ -926,22 +981,27 @@ impl ControlStackFrame {
         results: &ABIResults,
         context: &mut CodeGenContext<Emission>,
         masm: &mut M,
-    ) -> Option<Reg>
+    ) -> Result<Option<Reg>>
     where
         M: MacroAssembler,
     {
-        ret_area
-            .map(|area| match area {
+        if let Some(area) = ret_area {
+            match area {
                 RetArea::Slot(slot) => {
-                    let base = context
-                        .without::<_, M, _>(results.regs(), masm, |cx, masm| cx.any_gpr(masm));
-                    let local_addr = masm.local_address(&slot);
-                    masm.load_ptr(local_addr, writable!(base));
-                    Some(base)
+                    let base = context.without::<Result<Reg>, M, _>(
+                        results.regs(),
+                        masm,
+                        |cx, masm| cx.any_gpr(masm),
+                    )??;
+                    let local_addr = masm.local_address(&slot)?;
+                    masm.load_ptr(local_addr, writable!(base))?;
+                    Ok(Some(base))
                 }
-                _ => None,
-            })
-            .flatten()
+                _ => Ok(None),
+            }
+        } else {
+            Ok(None)
+        }
     }
 
     /// This function is used at the end of unreachable code handling
