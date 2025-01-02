@@ -3,7 +3,7 @@
 /*
 You can execute this example with:
     cmake examples/
-    cargo run --example wasi
+    cargo run --example wasip1
 */
 
 use wasi_common::sync::WasiCtxBuilder;

@@ -4,7 +4,7 @@
 /*
 You can execute this example with:
     cmake examples/
-    cargo run --example wasi-async
+    cargo run --example wasip1-async
 */
 
 use anyhow::Result;
