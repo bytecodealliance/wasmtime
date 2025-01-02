@@ -2980,7 +2980,7 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
-    fn vsub32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+    fn vsubf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
         let mut a = self.state[operands.src1].get_f32x4();
         let b = self.state[operands.src2].get_f32x4();
         for (a, b) in a.iter_mut().zip(b) {
@@ -2997,7 +2997,7 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
-    fn vmul32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+    fn vmulf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
         let mut a = self.state[operands.src1].get_f32x4();
         let b = self.state[operands.src2].get_f32x4();
         for (a, b) in a.iter_mut().zip(b) {

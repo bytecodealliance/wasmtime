@@ -1157,14 +1157,14 @@
 
 (rule (lower (has_type $F32 (fsub a b))) (pulley_fsub32 a b))
 (rule (lower (has_type $F64 (fsub a b))) (pulley_fsub64 a b))
-(rule (lower (has_type $F32X4 (fsub a b))) (pulley_vsub32x4 a b))
+(rule (lower (has_type $F32X4 (fsub a b))) (pulley_vsubf32x4 a b))
 (rule (lower (has_type $F64X2 (fsub a b))) (pulley_vsubf64x2 a b))
 
 ;;;; Rules for `fmul` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (fmul a b))) (pulley_fmul32 a b))
 (rule (lower (has_type $F64 (fmul a b))) (pulley_fmul64 a b))
-(rule (lower (has_type $F32X4 (fmul a b))) (pulley_vmul32x4 a b))
+(rule (lower (has_type $F32X4 (fmul a b))) (pulley_vmulf32x4 a b))
 (rule (lower (has_type $F64X2 (fmul a b))) (pulley_vmulf64x2 a b))
 
 ;;;; Rules for `fdiv` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

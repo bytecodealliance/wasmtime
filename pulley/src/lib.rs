@@ -812,11 +812,11 @@ macro_rules! for_each_extended_op {
             /// `low32(dst) = low32(src1) - low32(src2)`
             fsub32 = Fsub32 { operands: BinaryOperands<FReg> };
             /// `low128(dst) = low128(src1) - low128(src2)`
-            vsub32x4 = Vsub32x4 { operands: BinaryOperands<VReg> };
+            vsubf32x4 = Vsubf32x4 { operands: BinaryOperands<VReg> };
             /// `low32(dst) = low32(src1) * low32(src2)`
             fmul32 = Fmul32 { operands: BinaryOperands<FReg> };
             /// `low128(dst) = low128(src1) * low128(src2)`
-            vmul32x4 = Vmul32x4 { operands: BinaryOperands<VReg> };
+            vmulf32x4 = Vmulf32x4 { operands: BinaryOperands<VReg> };
             /// `low32(dst) = low32(src1) / low32(src2)`
             fdiv32 = Fdiv32 { operands: BinaryOperands<FReg> };
             /// `low128(dst) = low128(src1) / low128(src2)`
