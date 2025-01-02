@@ -17,41 +17,52 @@ const array = [
     "os": ubuntu,
     // The Rust target that will be used for the build.
     "target": "x86_64-unknown-linux-gnu",
+    "env": { "DOCKER_IMAGE": "./ci/docker/x86_64-linux/Dockerfile" },
   },
   {
     "build": "aarch64-linux",
     "os": ubuntu,
     "target": "aarch64-unknown-linux-gnu",
+    "env": { "DOCKER_IMAGE": "./ci/docker/aarch64-linux/Dockerfile" },
   },
   {
     "build": "s390x-linux",
     "os": ubuntu,
     "target": "s390x-unknown-linux-gnu",
+    "env": { "DOCKER_IMAGE": "./ci/docker/s390x-linux/Dockerfile" },
   },
   {
     "build": "riscv64gc-linux",
     "os": ubuntu,
     "target": "riscv64gc-unknown-linux-gnu",
+    "env": { "DOCKER_IMAGE": "./ci/docker/riscv64gc-linux/Dockerfile" },
   },
   {
     "build": "x86_64-macos",
     "os": macos,
     "target": "x86_64-apple-darwin",
+    // On OSX all we need to do is configure our deployment target as old as
+    // possible. For now 10.9 is the limit.
+    "env": { "MACOSX_DEPLOYMENT_TARGET": "10.9" },
   },
   {
     "build": "aarch64-macos",
     "os": macos,
     "target": "aarch64-apple-darwin",
+    "env": { "MACOSX_DEPLOYMENT_TARGET": "10.9" },
   },
   {
     "build": "x86_64-windows",
     "os": windows,
     "target": "x86_64-pc-windows-msvc",
+    // On Windows we build against the static CRT to reduce dll dependencies
+    "env": { "RUSTFLAGS": "-Ctarget-feature=+crt-static" },
   },
   {
     "build": "x86_64-mingw",
     "os": windows,
     "target": "x86_64-pc-windows-gnu",
+    "env": { "RUSTFLAGS": "-Ctarget-feature=+crt-static" },
   },
   {
     "build": "aarch64-android",
@@ -67,11 +78,19 @@ const array = [
     "build": "x86_64-musl",
     "os": ubuntu,
     "target": "x86_64-unknown-linux-musl",
+    "env": { "DOCKER_IMAGE": "./ci/docker/x86_64-musl/Dockerfile" },
+  },
+  {
+    "build": "aarch64-musl",
+    "os": ubuntu,
+    "target": "aarch64-unknown-linux-musl",
+    "env": { "DOCKER_IMAGE": "./ci/docker/aarch64-musl/Dockerfile" },
   },
   {
     "build": "aarch64-windows",
     "os": windows,
     "target": "aarch64-pc-windows-msvc",
+    "env": { "RUSTFLAGS": "-Ctarget-feature=+crt-static" },
   },
 ];
 
