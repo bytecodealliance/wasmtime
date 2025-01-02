@@ -260,7 +260,7 @@ impl Assembler {
     }
 
     /// Emit an unwind instruction.
-    pub fn emit_unwind_inst(&mut self, inst: UnwindInst) {
+    pub fn unwind_inst(&mut self, inst: UnwindInst) {
         self.emit(Inst::Unwind { inst })
     }
 
