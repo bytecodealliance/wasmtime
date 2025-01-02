@@ -424,6 +424,8 @@ wasmtime_option_group! {
         pub config_var: Vec<KeyValuePair>,
         /// Preset data for the In-Memory provider of WASI key-value API.
         pub keyvalue_in_memory_data: Vec<KeyValuePair>,
+        /// Set the working directory to the path provided.
+        pub cwd: Option<String>,
     }
 
     enum Wasi {
