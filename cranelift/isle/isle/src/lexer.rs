@@ -39,7 +39,7 @@ impl Pos {
     pub fn pretty_print_line(&self, files: &Files) -> String {
         format!(
             "{} line {}",
-            files.file_name(self.file).unwrap(),
+            files.file_name_relative(self.file).unwrap(),
             files.file_line_map(self.file).unwrap().line(self.offset)
         )
     }
