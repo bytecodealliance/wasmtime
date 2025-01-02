@@ -391,16 +391,11 @@ impl Func {
             );
         }
 
-        let (lower, lift) = if store.0[self.0].options.async_() {
-            (
-                Self::lower_args_async as LowerFn<_, _, _>,
-                Self::lift_results_async as LiftFn<_>,
-            )
+        let lower = Self::lower_args as LowerFn<_, _, _>;
+        let lift = if store.0[self.0].options.async_() {
+            Self::lift_results_async as LiftFn<_>
         } else {
-            (
-                Self::lower_args_sync as LowerFn<_, _, _>,
-                Self::lift_results_sync as LiftFn<_>,
-            )
+            Self::lift_results_sync as LiftFn<_>
         };
 
         Ok(self.start_call_raw_async(store, params, lower, lift)?.0)
@@ -439,7 +434,7 @@ impl Func {
                     .call_raw_async(
                         store,
                         params.iter().cloned().collect(),
-                        Self::lower_args_async,
+                        Self::lower_args,
                         Self::lift_results_async,
                     )?
                     .0
@@ -461,7 +456,7 @@ impl Func {
             self.call_raw(
                 store,
                 &params.iter().cloned().collect::<Vec<_>>(),
-                Self::lower_args_sync,
+                Self::lower_args,
                 |cx, results_ty, src: &[ValRaw; MAX_FLAT_RESULTS]| {
                     for (result, slot) in Self::lift_results_sync(cx, results_ty, src)?
                         .into_iter()
@@ -808,31 +803,11 @@ impl Func {
         Ok(())
     }
 
-    fn lower_args_sync<T>(
-        cx: &mut LowerContext<'_, T>,
-        params: &Vec<Val>,
-        params_ty: InterfaceType,
-        dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>,
-    ) -> Result<()> {
-        Self::lower_args(cx, params, params_ty, dst, false)
-    }
-
-    #[cfg(feature = "component-model-async")]
-    fn lower_args_async<T>(
-        cx: &mut LowerContext<'_, T>,
-        params: &Vec<Val>,
-        params_ty: InterfaceType,
-        dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>,
-    ) -> Result<()> {
-        Self::lower_args(cx, params, params_ty, dst, true)
-    }
-
     fn lower_args<T>(
         cx: &mut LowerContext<'_, T>,
-        params: &[Val],
+        params: &Vec<Val>,
         params_ty: InterfaceType,
         dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>,
-        async_: bool,
     ) -> Result<()> {
         let params_ty = match params_ty {
             InterfaceType::Tuple(i) => &cx.types[i],
@@ -849,11 +824,7 @@ impl Func {
                 .zip(params_ty.types.iter())
                 .try_for_each(|(param, ty)| param.lower(cx, *ty, dst))
         } else {
-            if async_ {
-                todo!()
-            } else {
-                Self::store_args(cx, &params_ty, params, dst)
-            }
+            Self::store_args(cx, &params_ty, params, dst)
         }
     }
 
@@ -916,11 +887,7 @@ impl Func {
                 .map(|ty| Val::lift(cx, *ty, &mut flat))
                 .collect()
         } else {
-            if async_ {
-                todo!()
-            } else {
-                Self::load_results(cx, results_ty, &mut src.iter())
-            }
+            Self::load_results(cx, results_ty, &mut src.iter())
         }
     }
 

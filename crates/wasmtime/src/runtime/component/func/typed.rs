@@ -271,7 +271,7 @@ where
                             store,
                             params,
                             Self::lower_stack_args,
-                            Self::lift_heap_result_guest,
+                            Self::lift_heap_result_raw,
                         )
                     }
                 } else {
@@ -279,15 +279,15 @@ where
                         self.func.start_call_raw_async(
                             store,
                             params,
-                            Self::lower_heap_args_guest,
+                            Self::lower_heap_args,
                             Self::lift_stack_result_raw,
                         )
                     } else {
                         self.func.start_call_raw_async(
                             store,
                             params,
-                            Self::lower_heap_args_guest,
-                            Self::lift_heap_result_guest,
+                            Self::lower_heap_args,
+                            Self::lift_heap_result_raw,
                         )
                     }
                 }
@@ -361,7 +361,7 @@ where
                             store,
                             params,
                             Self::lower_stack_args,
-                            Self::lift_heap_result_guest,
+                            Self::lift_heap_result_raw,
                         )
                     }
                 } else {
@@ -369,15 +369,15 @@ where
                         self.func.call_raw_async(
                             store,
                             params,
-                            Self::lower_heap_args_guest,
+                            Self::lower_heap_args,
                             Self::lift_stack_result_raw,
                         )
                     } else {
                         self.func.call_raw_async(
                             store,
                             params,
-                            Self::lower_heap_args_guest,
-                            Self::lift_heap_result_guest,
+                            Self::lower_heap_args,
+                            Self::lift_heap_result_raw,
                         )
                     }
                 }?
@@ -542,27 +542,6 @@ where
         dst: &[ValRaw],
     ) -> Result<Return> {
         Self::lift_heap_result(cx, ty, &dst[0])
-    }
-
-    #[cfg(feature = "component-model-async")]
-    fn lower_heap_args_guest<T>(
-        cx: &mut LowerContext<'_, T>,
-        params: &Params,
-        ty: InterfaceType,
-        dst: &mut MaybeUninit<ValRaw>,
-    ) -> Result<()> {
-        _ = (cx, params, ty, dst);
-        todo!()
-    }
-
-    #[cfg(feature = "component-model-async")]
-    fn lift_heap_result_guest(
-        cx: &mut LiftContext<'_>,
-        ty: InterfaceType,
-        dst: &[ValRaw],
-    ) -> Result<Return> {
-        _ = (cx, ty, dst);
-        todo!()
     }
 
     /// See [`Func::post_return`]
