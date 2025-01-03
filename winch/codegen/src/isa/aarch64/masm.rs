@@ -585,17 +585,18 @@ impl Masm for MacroAssembler {
         src_size: OperandSize,
         dst_size: OperandSize,
         kind: TruncKind,
-    ) {
+    ) -> Result<()> {
         self.asm.fpu_to_int(
             dst,
             src,
             src_size,
             dst_size,
             kind,
-            // TODO: strangely, this register is provided in unsigned_truncate
             writable!(regs::float_scratch()),
             true,
         );
+
+        Ok(())
     }
 
     fn unsigned_truncate(
@@ -606,9 +607,11 @@ impl Masm for MacroAssembler {
         src_size: OperandSize,
         dst_size: OperandSize,
         kind: TruncKind,
-    ) {
+    ) -> Result<()> {
         self.asm
             .fpu_to_int(dst, src, src_size, dst_size, kind, writable!(regs::float_scratch()), false);
+
+        Ok(())
     }
 
     fn signed_convert(
