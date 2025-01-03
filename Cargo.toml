@@ -100,7 +100,7 @@ async-trait = { workspace = true }
 trait-variant = { workspace = true }
 wat = { workspace = true }
 rayon = "1.5.0"
-wasmtime-wast = { workspace = true, features = ['component-model'] }
+wasmtime-wast = { workspace = true, features = ['component-model', 'component-model-async'] }
 wasmtime-component-util = { workspace = true }
 component-macro-test = { path = "crates/misc/component-macro-test" }
 component-test-util = { workspace = true }

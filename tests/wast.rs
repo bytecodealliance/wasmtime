@@ -123,6 +123,7 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
     };
 
     let mut cfg = Config::new();
+    cfg.wasm_component_model_async(true);
     component_test_util::apply_test_config(&mut cfg, &test_config);
     component_test_util::apply_wast_config(&mut cfg, &config);
 

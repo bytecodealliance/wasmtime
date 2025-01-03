@@ -96,6 +96,9 @@ pub fn link_component_spectest<T>(linker: &mut component::Linker<T>) -> Result<(
     let engine = linker.engine().clone();
     linker
         .root()
+        .func_wrap("host-echo-u32", |_, v: (u32,)| Ok(v))?;
+    linker
+        .root()
         .func_wrap("host-return-two", |_, _: ()| Ok((2u32,)))?;
     let mut i = linker.instance("host")?;
     i.func_wrap("return-three", |_, _: ()| Ok((3u32,)))?;
