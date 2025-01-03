@@ -1440,6 +1440,19 @@ impl Wasmtime {
             uwrite!(self.src, ": {}", supertraits.join(" + "));
         }
         uwriteln!(self.src, " {{");
+
+        let has_concurrent_function = self.import_functions.iter().any(|func| {
+            matches!(func.func.kind, FunctionKind::Freestanding)
+                && matches!(
+                    self.opts.import_call_style(None, &func.func.name),
+                    CallStyle::Concurrent
+                )
+        });
+
+        if has_concurrent_function {
+            self.src.push_str("type Data;\n");
+        }
+
         for f in self.import_functions.iter() {
             if let Some(sig) = &f.sig {
                 self.src.push_str(sig);
@@ -1448,23 +1461,31 @@ impl Wasmtime {
         }
         uwriteln!(self.src, "}}");
 
+        let get_host_bounds = if let CallStyle::Concurrent = self.opts.call_style() {
+            let constraints = world_imports_concurrent_constraints(resolve, world, &self.opts);
+
+            format!("{world_camel}Imports{}", constraints("D"))
+        } else {
+            format!("{world_camel}Imports")
+        };
+
         uwriteln!(
             self.src,
             "
-                pub trait {world_camel}ImportsGetHost<T>:
-                    Fn(T) -> <Self as {world_camel}ImportsGetHost<T>>::Host
+                pub trait {world_camel}ImportsGetHost<T, D>:
+                    Fn(T) -> <Self as {world_camel}ImportsGetHost<T, D>>::Host
                         + Send
                         + Sync
                         + Copy
                         + 'static
                 {{
-                    type Host: {world_camel}Imports;
+                    type Host: {get_host_bounds};
                 }}
 
-                impl<F, T, O> {world_camel}ImportsGetHost<T> for F
+                impl<F, T, D, O> {world_camel}ImportsGetHost<T, D> for F
                 where
                     F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                    O: {world_camel}Imports
+                    O: {get_host_bounds},
                 {{
                     type Host = O;
                 }}
@@ -1501,16 +1522,25 @@ impl Wasmtime {
             for f in self.import_functions.iter() {
                 if let Some(sig) = &f.sig {
                     self.src.push_str(sig);
-                    uwrite!(
-                        self.src,
-                        "{{ {world_camel}Imports::{}(*self,",
-                        rust_function_name(&f.func)
-                    );
+                    let call_style = self.opts.import_call_style(None, &f.func.name);
+                    if let CallStyle::Concurrent = &call_style {
+                        uwrite!(
+                            self.src,
+                            "{{ <_T as {world_camel}Imports>::{}(store,",
+                            rust_function_name(&f.func)
+                        );
+                    } else {
+                        uwrite!(
+                            self.src,
+                            "{{ {world_camel}Imports::{}(*self,",
+                            rust_function_name(&f.func)
+                        );
+                    }
                     for (name, _) in f.func.params.iter() {
                         uwrite!(self.src, "{},", to_rust_ident(name));
                     }
                     uwrite!(self.src, ")");
-                    if let CallStyle::Async = self.opts.import_call_style(None, &f.func.name) {
+                    if let CallStyle::Async = &call_style {
                         uwrite!(self.src, ".await");
                     }
                     uwriteln!(self.src, "}}");
@@ -1569,20 +1599,36 @@ impl Wasmtime {
         };
 
         let camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
+
         let data_bounds = if self.opts.is_store_data_send() {
-            "T: Send,"
+            if let CallStyle::Concurrent = self.opts.call_style() {
+                "T: Send + 'static,"
+            } else {
+                "T: Send,"
+            }
         } else {
             ""
         };
         let wt = self.wasmtime_path();
         if has_world_imports_trait {
+            let host_bounds = if let CallStyle::Concurrent = self.opts.call_style() {
+                let constraints = world_imports_concurrent_constraints(resolve, world, &self.opts);
+
+                format!("{camel}Imports{}", constraints("T"))
+            } else {
+                format!("{camel}Imports")
+            };
+
             uwrite!(
                 self.src,
                 "
-                    pub fn add_to_linker_imports_get_host<T>(
+                    pub fn add_to_linker_imports_get_host<
+                        T,
+                        G: for<'a> {camel}ImportsGetHost<&'a mut T, T, Host: {host_bounds}>
+                    >(
                         linker: &mut {wt}::component::Linker<T>,
                         {options_param}
-                        host_getter: impl for<'a> {camel}ImportsGetHost<&'a mut T>,
+                        host_getter: G,
                     ) -> {wt}::Result<()>
                         where {data_bounds}
                     {{
@@ -1634,6 +1680,14 @@ impl Wasmtime {
                             *id
                         )("T")
                     )
+                })
+                .chain(if self.has_world_imports_trait(resolve, world) {
+                    let world_camel = to_rust_upper_camel_case(&resolve.worlds[world].name);
+                    let constraints =
+                        world_imports_concurrent_constraints(resolve, world, &self.opts);
+                    Some(format!(" + {world_camel}Imports{}", constraints("T")))
+                } else {
+                    None
                 })
                 .collect::<Vec<_>>()
                 .concat();
@@ -2509,11 +2563,9 @@ impl<'a> InterfaceGenerator<'a> {
         match results {
             Results::Named(rs) if rs.is_empty() => self.push_str(")"),
             Results::Named(rs) => {
-                for (i, (_, ty)) in rs.iter().enumerate() {
-                    if i > 0 {
-                        self.push_str(", ")
-                    }
-                    self.print_ty(ty, mode)
+                for (_, ty) in rs {
+                    self.print_ty(ty, mode);
+                    self.push_str(", ");
                 }
                 self.push_str(")");
             }
@@ -3735,6 +3787,75 @@ fn concurrent_constraints<'a>(
             {
                 Some(format!("{}Data", name.to_upper_camel_case()))
             }
+            _ => None,
+        })
+        .chain(has_concurrent_function.then_some("Data".to_string()))
+        .collect::<Vec<_>>();
+
+    move |v| {
+        if types.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "<{}>",
+                types
+                    .iter()
+                    .map(|s| format!("{s} = {v}"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )
+        }
+    }
+}
+
+fn world_imports_concurrent_constraints<'a>(
+    resolve: &'a Resolve,
+    world: WorldId,
+    opts: &Opts,
+) -> impl Fn(&str) -> String + 'a {
+    let has_concurrent_function = resolve.worlds[world]
+        .imports
+        .values()
+        .any(|item| match item {
+            WorldItem::Function(func) => {
+                matches!(func.kind, FunctionKind::Freestanding)
+                    && matches!(
+                        opts.import_call_style(None, &func.name),
+                        CallStyle::Concurrent
+                    )
+            }
+            WorldItem::Interface { .. } | WorldItem::Type(_) => false,
+        });
+
+    let types = resolve.worlds[world]
+        .imports
+        .iter()
+        .filter_map(|(name, item)| match (name, item) {
+            (WorldKey::Name(name), WorldItem::Type(ty)) => match resolve.types[*ty].kind {
+                TypeDefKind::Resource
+                    if resolve.worlds[world]
+                        .imports
+                        .values()
+                        .any(|item| match item {
+                            WorldItem::Function(func) => match func.kind {
+                                FunctionKind::Freestanding => false,
+                                FunctionKind::Method(resource)
+                                | FunctionKind::Static(resource)
+                                | FunctionKind::Constructor(resource) => {
+                                    *ty == resource
+                                        && matches!(
+                                            opts.import_call_style(None, &func.name),
+                                            CallStyle::Concurrent
+                                        )
+                                }
+                            },
+                            WorldItem::Interface { .. } | WorldItem::Type(_) => false,
+                        }) =>
+                {
+                    Some(format!("{}Data", name.to_upper_camel_case()))
+                }
+                _ => None,
+            },
             _ => None,
         })
         .chain(has_concurrent_function.then_some("Data".to_string()))
