@@ -1084,7 +1084,7 @@ impl Assembler {
 
     /// Load the min value for an integer of size out_size, as a floating-point
     /// of size `in-size`, into register `rd`.
-    fn emit_min_fp_value(
+    fn min_fp_value(
         &mut self,
         signed: bool,
         in_size: OperandSize,
@@ -1094,7 +1094,7 @@ impl Assembler {
         use OperandSize::*;
 
         match in_size {
-            OperandSize::S32 => {
+            S32 => {
                 let min = match (signed, out_size) {
                     (true, S8) => i8::MIN as f32 - 1.,
                     (true, S16) => i16::MIN as f32 - 1.,
@@ -1108,9 +1108,9 @@ impl Assembler {
                     }
                 };
 
-                self.emit_load_const_fp(min.to_bits() as u64, rd, in_size);
+                self.load_const_fp(min.to_bits() as u64, rd, in_size);
             }
-            OperandSize::S64 => {
+            S64 => {
                 let min = match (signed, out_size) {
                     (true, S8) => i8::MIN as f64 - 1.,
                     (true, S16) => i16::MIN as f64 - 1.,
@@ -1124,15 +1124,15 @@ impl Assembler {
                     }
                 };
 
-                self.emit_load_const_fp(min.to_bits(), rd, in_size);
+                self.load_const_fp(min.to_bits(), rd, in_size);
             }
             s => unreachable!("unsupported floating-point size: {}bit", s.num_bits()),
         }
     }
 
     /// Load the max value for an integer of size out_size, as a floating-point
-    /// of size `in-size`, into register `rd`.
-    fn emit_max_fp_value(
+    /// of size `in_size`, into register `rd`.
+    fn max_fp_value(
         &mut self,
         signed: bool,
         in_size: OperandSize,
@@ -1142,7 +1142,7 @@ impl Assembler {
         use OperandSize::*;
 
         match in_size {
-            OperandSize::S32 => {
+            S32 => {
                 let max = match (signed, out_size) {
                     (true, S8) => i8::MAX as f32 + 1.,
                     (true, S16) => i16::MAX as f32 + 1.,
@@ -1159,9 +1159,9 @@ impl Assembler {
                     }
                 };
 
-                self.emit_load_const_fp(max.to_bits() as u64, rd, in_size);
+                self.load_const_fp(max.to_bits() as u64, rd, in_size);
             }
-            OperandSize::S64 => {
+            S64 => {
                 let max = match (signed, out_size) {
                     (true, S8) => i8::MAX as f64 + 1.,
                     (true, S16) => i16::MAX as f64 + 1.,
@@ -1178,14 +1178,14 @@ impl Assembler {
                     }
                 };
 
-                self.emit_load_const_fp(max.to_bits(), rd, in_size);
+                self.load_const_fp(max.to_bits(), rd, in_size);
             }
             s => unreachable!("unsupported floating-point size: {}bit", s.num_bits()),
         }
     }
 
     /// Load the floating point number encoded in `n` of size `size`, into `rd`.
-    fn emit_load_const_fp(&mut self, n: u64, rd: Writable<Reg>, size: OperandSize) {
+    fn load_const_fp(&mut self, n: u64, rd: Writable<Reg>, size: OperandSize) {
         // Check if we can load `n` directly, otherwise, load it into a tmp register, as an
         // integer, and then move that to `rd`.
         match ASIMDFPModImm::maybe_from_u64(n, size.into()) {
@@ -1204,18 +1204,9 @@ impl Assembler {
         }
     }
 
-    /// Emit the `fcmp` instruction with `rn` and `rm` as source registers.
-    fn emit_fpu_cmp(&mut self, rn: Reg, rm: Reg, size: OperandSize) {
-        self.emit(Inst::FpuCmp {
-            size: size.into(),
-            rn: rn.into(),
-            rm: rm.into(),
-        });
-    }
-
     /// Emit instructions to check if the value in `rn` is NaN.
-    fn emit_check_nan(&mut self, rn: Reg, size: OperandSize) {
-        self.emit_fpu_cmp(rn, rn, size);
+    fn check_nan(&mut self, rn: Reg, size: OperandSize) {
+        self.fcmp(rn, rn, size);
         self.trapif(Cond::Vs, TrapCode::BAD_CONVERSION_TO_INTEGER);
     }
 
@@ -1228,29 +1219,29 @@ impl Assembler {
         src_size: OperandSize,
         dst_size: OperandSize,
         kind: TruncKind,
-        tmp_reg: Reg,
+        tmp_reg: Writable<Reg>,
         signed: bool,
     ) {
         if kind.is_unchecked() {
             // Confusingly, when `kind` is `Unchecked` is when we actually need to perform the checks:
             // - check if fp is NaN
             // - check bounds
-            self.emit_check_nan(src, src_size);
+            self.check_nan(src, src_size);
 
-            self.emit_min_fp_value(signed, src_size, dst_size, Writable::from_reg(tmp_reg));
-            self.emit_fpu_cmp(src, tmp_reg, src_size);
+            self.min_fp_value(signed, src_size, dst_size, tmp_reg);
+            self.fcmp(src, tmp_reg.to_reg(), src_size);
             self.trapif(Cond::Le, TrapCode::INTEGER_OVERFLOW);
 
-            self.emit_max_fp_value(signed, src_size, dst_size, Writable::from_reg(tmp_reg));
-            self.emit_fpu_cmp(src, tmp_reg, src_size);
+            self.max_fp_value(signed, src_size, dst_size, tmp_reg);
+            self.fcmp(src, tmp_reg.to_reg(), src_size);
             self.trapif(Cond::Ge, TrapCode::INTEGER_OVERFLOW);
         }
 
-        self.emit_cvt_fpu_to_int(dst, src, src_size, dst_size, signed)
+        self.cvt_fpu_to_int(dst, src, src_size, dst_size, signed)
     }
 
     /// Select and emit the appropriate `fcvt*` instruction
-    pub fn emit_cvt_fpu_to_int(
+    pub fn cvt_fpu_to_int(
         &mut self,
         dst: Writable<Reg>,
         src: Reg,

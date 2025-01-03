@@ -25,11 +25,11 @@
 ;;       b.vs    #0x68
 ;;   34: mov     x16, #0xcf000000
 ;;       fmov    s31, w16
-;;       fcmp    s0, s31
+;;       fcmp    s31, s0
 ;;       b.le    #0x6c
 ;;   44: mov     x16, #0x4f000000
 ;;       fmov    s31, w16
-;;       fcmp    s0, s31
+;;       fcmp    s31, s0
 ;;       b.ge    #0x70
 ;;   54: fcvtzs  w0, s0
 ;;       add     sp, sp, #0x18

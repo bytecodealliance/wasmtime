@@ -20,12 +20,12 @@
 ;;       ldur    d1, [x28]
 ;;       fcmp    d1, d1
 ;;       b.vs    #0x60
-;;   30: fmov    d0, #-1.00000000
-;;       fcmp    d1, d0
+;;   30: fmov    d31, #-1.00000000
+;;       fcmp    d31, d1
 ;;       b.le    #0x64
 ;;   3c: mov     x16, #0x41f0000000000000
-;;       fmov    d0, x16
-;;       fcmp    d1, d0
+;;       fmov    d31, x16
+;;       fcmp    d31, d1
 ;;       b.ge    #0x68
 ;;   4c: fcvtzu  w0, d1
 ;;       add     sp, sp, #0x18
