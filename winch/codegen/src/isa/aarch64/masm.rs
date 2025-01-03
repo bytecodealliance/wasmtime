@@ -608,8 +608,15 @@ impl Masm for MacroAssembler {
         dst_size: OperandSize,
         kind: TruncKind,
     ) -> Result<()> {
-        self.asm
-            .fpu_to_int(dst, src, src_size, dst_size, kind, writable!(regs::float_scratch()), false);
+        self.asm.fpu_to_int(
+            dst,
+            src,
+            src_size,
+            dst_size,
+            kind,
+            writable!(regs::float_scratch()),
+            false,
+        );
 
         Ok(())
     }
