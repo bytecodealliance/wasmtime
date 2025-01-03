@@ -63,12 +63,33 @@ impl LinkOptions {
 }
 pub enum Baz {}
 pub trait HostBaz: Sized {
-    fn foo(&mut self, self_: wasmtime::component::Resource<Baz>) -> ();
+    type BazData;
+    fn foo(
+        store: wasmtime::StoreContextMut<'_, Self::BazData>,
+        self_: wasmtime::component::Resource<Baz>,
+    ) -> impl ::std::future::Future<
+        Output = impl FnOnce(
+            wasmtime::StoreContextMut<'_, Self::BazData>,
+        ) -> () + Send + Sync + 'static,
+    > + Send + Sync + 'static
+    where
+        Self: Sized;
     fn drop(&mut self, rep: wasmtime::component::Resource<Baz>) -> wasmtime::Result<()>;
 }
-impl<_T: HostBaz + ?Sized> HostBaz for &mut _T {
-    fn foo(&mut self, self_: wasmtime::component::Resource<Baz>) -> () {
-        HostBaz::foo(*self, self_)
+impl<_T: HostBaz> HostBaz for &mut _T {
+    type BazData = _T::BazData;
+    fn foo(
+        store: wasmtime::StoreContextMut<'_, Self::BazData>,
+        self_: wasmtime::component::Resource<Baz>,
+    ) -> impl ::std::future::Future<
+        Output = impl FnOnce(
+            wasmtime::StoreContextMut<'_, Self::BazData>,
+        ) -> () + Send + Sync + 'static,
+    > + Send + Sync + 'static
+    where
+        Self: Sized,
+    {
+        <_T as HostBaz>::foo(store, self_)
     }
     fn drop(&mut self, rep: wasmtime::component::Resource<Baz>) -> wasmtime::Result<()> {
         HostBaz::drop(*self, rep)
@@ -111,7 +132,7 @@ impl<T> Clone for TheWorldPre<T> {
         }
     }
 }
-impl<_T: 'static> TheWorldPre<_T> {
+impl<_T: Send + 'static> TheWorldPre<_T> {
     /// Creates a new copy of `TheWorldPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -136,12 +157,12 @@ impl<_T: 'static> TheWorldPre<_T> {
     /// instance to perform instantiation. Afterwards the preloaded
     /// indices in `self` are used to lookup all exports on the
     /// resulting instance.
-    pub fn instantiate(
+    pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
     ) -> wasmtime::Result<TheWorld> {
         let mut store = store.as_context_mut();
-        let instance = self.instance_pre.instantiate(&mut store)?;
+        let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
     }
 }
@@ -161,13 +182,13 @@ pub struct TheWorldIndices {}
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`TheWorld::instantiate`] which only needs a
+///   [`TheWorld::instantiate_async`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
 /// * Alternatively you can create a [`TheWorldPre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`TheWorldPre::instantiate`] to
+///   method then uses [`TheWorldPre::instantiate_async`] to
 ///   create a [`TheWorld`].
 ///
 /// * If you've instantiated the instance yourself already
@@ -186,24 +207,43 @@ pub struct TheWorldIndices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct TheWorld {}
 pub trait TheWorldImports: HostBaz {
-    fn foo(&mut self) -> ();
+    type Data;
+    fn foo(
+        store: wasmtime::StoreContextMut<'_, Self::Data>,
+    ) -> impl ::std::future::Future<
+        Output = impl FnOnce(
+            wasmtime::StoreContextMut<'_, Self::Data>,
+        ) -> () + Send + Sync + 'static,
+    > + Send + Sync + 'static
+    where
+        Self: Sized;
 }
 pub trait TheWorldImportsGetHost<
     T,
     D,
 >: Fn(T) -> <Self as TheWorldImportsGetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-    type Host: TheWorldImports;
+    type Host: TheWorldImports<BazData = D, Data = D>;
 }
 impl<F, T, D, O> TheWorldImportsGetHost<T, D> for F
 where
     F: Fn(T) -> O + Send + Sync + Copy + 'static,
-    O: TheWorldImports,
+    O: TheWorldImports<BazData = D, Data = D>,
 {
     type Host = O;
 }
-impl<_T: TheWorldImports + ?Sized> TheWorldImports for &mut _T {
-    fn foo(&mut self) -> () {
-        TheWorldImports::foo(*self)
+impl<_T: TheWorldImports> TheWorldImports for &mut _T {
+    type Data = _T::Data;
+    fn foo(
+        store: wasmtime::StoreContextMut<'_, Self::Data>,
+    ) -> impl ::std::future::Future<
+        Output = impl FnOnce(
+            wasmtime::StoreContextMut<'_, Self::Data>,
+        ) -> () + Send + Sync + 'static,
+    > + Send + Sync + 'static
+    where
+        Self: Sized,
+    {
+        <_T as TheWorldImports>::foo(store)
     }
 }
 const _: () = {
@@ -251,17 +291,17 @@ const _: () = {
     }
     impl TheWorld {
         /// Convenience wrapper around [`TheWorldPre::new`] and
-        /// [`TheWorldPre::instantiate`].
-        pub fn instantiate<_T>(
+        /// [`TheWorldPre::instantiate_async`].
+        pub async fn instantiate_async<_T>(
             mut store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
         ) -> wasmtime::Result<TheWorld>
         where
-            _T: 'static,
+            _T: Send + 'static,
         {
             let pre = linker.instantiate_pre(component)?;
-            TheWorldPre::new(pre)?.instantiate(store)
+            TheWorldPre::new(pre)?.instantiate_async(store).await
         }
         /// Convenience wrapper around [`TheWorldIndices::new_instance`] and
         /// [`TheWorldIndices::load`].
@@ -274,12 +314,19 @@ const _: () = {
         }
         pub fn add_to_linker_imports_get_host<
             T,
-            G: for<'a> TheWorldImportsGetHost<&'a mut T, T, Host: TheWorldImports>,
+            G: for<'a> TheWorldImportsGetHost<
+                    &'a mut T,
+                    T,
+                    Host: TheWorldImports<BazData = T, Data = T>,
+                >,
         >(
             linker: &mut wasmtime::component::Linker<T>,
             options: &LinkOptions,
             host_getter: G,
-        ) -> wasmtime::Result<()> {
+        ) -> wasmtime::Result<()>
+        where
+            T: Send + 'static,
+        {
             let mut linker = linker.root();
             if options.experimental_world {
                 if options.experimental_world_resource {
@@ -297,26 +344,74 @@ const _: () = {
                 }
                 if options.experimental_world_function_import {
                     linker
-                        .func_wrap(
+                        .func_wrap_concurrent(
                             "foo",
                             move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                                let host = &mut host_getter(caller.data_mut());
-                                let r = TheWorldImports::foo(host);
-                                Ok(r)
+                                let host = caller;
+                                let r = <G::Host as TheWorldImports>::foo(host);
+                                Box::pin(async move {
+                                    let fun = r.await;
+                                    Box::new(move |
+                                        mut caller: wasmtime::StoreContextMut<'_, T>|
+                                    {
+                                        let r = fun(caller);
+                                        Ok(r)
+                                    })
+                                        as Box<
+                                            dyn FnOnce(
+                                                wasmtime::StoreContextMut<'_, T>,
+                                            ) -> wasmtime::Result<()> + Send + Sync,
+                                        >
+                                })
+                                    as ::std::pin::Pin<
+                                        Box<
+                                            dyn ::std::future::Future<
+                                                Output = Box<
+                                                    dyn FnOnce(
+                                                        wasmtime::StoreContextMut<'_, T>,
+                                                    ) -> wasmtime::Result<()> + Send + Sync,
+                                                >,
+                                            > + Send + Sync + 'static,
+                                        >,
+                                    >
                             },
                         )?;
                 }
                 if options.experimental_world_resource_method {
                     linker
-                        .func_wrap(
+                        .func_wrap_concurrent(
                             "[method]baz.foo",
                             move |
                                 mut caller: wasmtime::StoreContextMut<'_, T>,
                                 (arg0,): (wasmtime::component::Resource<Baz>,)|
                             {
-                                let host = &mut host_getter(caller.data_mut());
-                                let r = HostBaz::foo(host, arg0);
-                                Ok(r)
+                                let host = caller;
+                                let r = <G::Host as HostBaz>::foo(host, arg0);
+                                Box::pin(async move {
+                                    let fun = r.await;
+                                    Box::new(move |
+                                        mut caller: wasmtime::StoreContextMut<'_, T>|
+                                    {
+                                        let r = fun(caller);
+                                        Ok(r)
+                                    })
+                                        as Box<
+                                            dyn FnOnce(
+                                                wasmtime::StoreContextMut<'_, T>,
+                                            ) -> wasmtime::Result<()> + Send + Sync,
+                                        >
+                                })
+                                    as ::std::pin::Pin<
+                                        Box<
+                                            dyn ::std::future::Future<
+                                                Output = Box<
+                                                    dyn FnOnce(
+                                                        wasmtime::StoreContextMut<'_, T>,
+                                                    ) -> wasmtime::Result<()> + Send + Sync,
+                                                >,
+                                            > + Send + Sync + 'static,
+                                        >,
+                                    >
                             },
                         )?;
                 }
@@ -329,7 +424,10 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
-            U: foo::foo::the_interface::Host + TheWorldImports,
+            T: Send + foo::foo::the_interface::Host<BarData = T, Data = T>
+                + TheWorldImports<BazData = T, Data = T> + 'static,
+            U: Send + foo::foo::the_interface::Host<BarData = T, Data = T>
+                + TheWorldImports<BazData = T, Data = T>,
         {
             if options.experimental_world {
                 Self::add_to_linker_imports_get_host(linker, options, get)?;
@@ -392,15 +490,36 @@ pub mod foo {
             }
             pub enum Bar {}
             pub trait HostBar: Sized {
-                fn foo(&mut self, self_: wasmtime::component::Resource<Bar>) -> ();
+                type BarData;
+                fn foo(
+                    store: wasmtime::StoreContextMut<'_, Self::BarData>,
+                    self_: wasmtime::component::Resource<Bar>,
+                ) -> impl ::std::future::Future<
+                    Output = impl FnOnce(
+                        wasmtime::StoreContextMut<'_, Self::BarData>,
+                    ) -> () + Send + Sync + 'static,
+                > + Send + Sync + 'static
+                where
+                    Self: Sized;
                 fn drop(
                     &mut self,
                     rep: wasmtime::component::Resource<Bar>,
                 ) -> wasmtime::Result<()>;
             }
-            impl<_T: HostBar + ?Sized> HostBar for &mut _T {
-                fn foo(&mut self, self_: wasmtime::component::Resource<Bar>) -> () {
-                    HostBar::foo(*self, self_)
+            impl<_T: HostBar> HostBar for &mut _T {
+                type BarData = _T::BarData;
+                fn foo(
+                    store: wasmtime::StoreContextMut<'_, Self::BarData>,
+                    self_: wasmtime::component::Resource<Bar>,
+                ) -> impl ::std::future::Future<
+                    Output = impl FnOnce(
+                        wasmtime::StoreContextMut<'_, Self::BarData>,
+                    ) -> () + Send + Sync + 'static,
+                > + Send + Sync + 'static
+                where
+                    Self: Sized,
+                {
+                    <_T as HostBar>::foo(store, self_)
                 }
                 fn drop(
                     &mut self,
@@ -410,29 +529,45 @@ pub mod foo {
                 }
             }
             pub trait Host: HostBar + Sized {
-                fn foo(&mut self) -> ();
+                type Data;
+                fn foo(
+                    store: wasmtime::StoreContextMut<'_, Self::Data>,
+                ) -> impl ::std::future::Future<
+                    Output = impl FnOnce(
+                        wasmtime::StoreContextMut<'_, Self::Data>,
+                    ) -> () + Send + Sync + 'static,
+                > + Send + Sync + 'static
+                where
+                    Self: Sized;
             }
             pub trait GetHost<
                 T,
                 D,
             >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-                type Host: Host;
+                type Host: Host<BarData = D, Data = D> + Send;
             }
             impl<F, T, D, O> GetHost<T, D> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
-                O: Host,
+                O: Host<BarData = D, Data = D> + Send,
             {
                 type Host = O;
             }
             pub fn add_to_linker_get_host<
                 T,
-                G: for<'a> GetHost<&'a mut T, T, Host: Host>,
+                G: for<'a> GetHost<
+                        &'a mut T,
+                        T,
+                        Host: Host<BarData = T, Data = T> + Send,
+                    >,
             >(
                 linker: &mut wasmtime::component::Linker<T>,
                 options: &LinkOptions,
                 host_getter: G,
-            ) -> wasmtime::Result<()> {
+            ) -> wasmtime::Result<()>
+            where
+                T: Send + 'static,
+            {
                 if options.experimental_interface {
                     let mut inst = linker.instance("foo:foo/the-interface")?;
                     if options.experimental_interface_resource {
@@ -448,25 +583,73 @@ pub mod foo {
                         )?;
                     }
                     if options.experimental_interface_function {
-                        inst.func_wrap(
+                        inst.func_wrap_concurrent(
                             "foo",
                             move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                                let host = &mut host_getter(caller.data_mut());
-                                let r = Host::foo(host);
-                                Ok(r)
+                                let host = caller;
+                                let r = <G::Host as Host>::foo(host);
+                                Box::pin(async move {
+                                    let fun = r.await;
+                                    Box::new(move |
+                                        mut caller: wasmtime::StoreContextMut<'_, T>|
+                                    {
+                                        let r = fun(caller);
+                                        Ok(r)
+                                    })
+                                        as Box<
+                                            dyn FnOnce(
+                                                wasmtime::StoreContextMut<'_, T>,
+                                            ) -> wasmtime::Result<()> + Send + Sync,
+                                        >
+                                })
+                                    as ::std::pin::Pin<
+                                        Box<
+                                            dyn ::std::future::Future<
+                                                Output = Box<
+                                                    dyn FnOnce(
+                                                        wasmtime::StoreContextMut<'_, T>,
+                                                    ) -> wasmtime::Result<()> + Send + Sync,
+                                                >,
+                                            > + Send + Sync + 'static,
+                                        >,
+                                    >
                             },
                         )?;
                     }
                     if options.experimental_interface_resource_method {
-                        inst.func_wrap(
+                        inst.func_wrap_concurrent(
                             "[method]bar.foo",
                             move |
                                 mut caller: wasmtime::StoreContextMut<'_, T>,
                                 (arg0,): (wasmtime::component::Resource<Bar>,)|
                             {
-                                let host = &mut host_getter(caller.data_mut());
-                                let r = HostBar::foo(host, arg0);
-                                Ok(r)
+                                let host = caller;
+                                let r = <G::Host as HostBar>::foo(host, arg0);
+                                Box::pin(async move {
+                                    let fun = r.await;
+                                    Box::new(move |
+                                        mut caller: wasmtime::StoreContextMut<'_, T>|
+                                    {
+                                        let r = fun(caller);
+                                        Ok(r)
+                                    })
+                                        as Box<
+                                            dyn FnOnce(
+                                                wasmtime::StoreContextMut<'_, T>,
+                                            ) -> wasmtime::Result<()> + Send + Sync,
+                                        >
+                                })
+                                    as ::std::pin::Pin<
+                                        Box<
+                                            dyn ::std::future::Future<
+                                                Output = Box<
+                                                    dyn FnOnce(
+                                                        wasmtime::StoreContextMut<'_, T>,
+                                                    ) -> wasmtime::Result<()> + Send + Sync,
+                                                >,
+                                            > + Send + Sync + 'static,
+                                        >,
+                                    >
                             },
                         )?;
                     }
@@ -479,13 +662,24 @@ pub mod foo {
                 get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
             ) -> wasmtime::Result<()>
             where
-                U: Host,
+                U: Host<BarData = T, Data = T> + Send,
+                T: Send + 'static,
             {
                 add_to_linker_get_host(linker, options, get)
             }
-            impl<_T: Host + ?Sized> Host for &mut _T {
-                fn foo(&mut self) -> () {
-                    Host::foo(*self)
+            impl<_T: Host> Host for &mut _T {
+                type Data = _T::Data;
+                fn foo(
+                    store: wasmtime::StoreContextMut<'_, Self::Data>,
+                ) -> impl ::std::future::Future<
+                    Output = impl FnOnce(
+                        wasmtime::StoreContextMut<'_, Self::Data>,
+                    ) -> () + Send + Sync + 'static,
+                > + Send + Sync + 'static
+                where
+                    Self: Sized,
+                {
+                    <_T as Host>::foo(store)
                 }
             }
         }

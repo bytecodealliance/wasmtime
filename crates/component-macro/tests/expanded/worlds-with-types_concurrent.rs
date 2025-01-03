@@ -1,3 +1,28 @@
+pub type U = foo::foo::i::T;
+const _: () = {
+    assert!(2 == < U as wasmtime::component::ComponentType >::SIZE32);
+    assert!(2 == < U as wasmtime::component::ComponentType >::ALIGN32);
+};
+pub type T = u32;
+const _: () = {
+    assert!(4 == < T as wasmtime::component::ComponentType >::SIZE32);
+    assert!(4 == < T as wasmtime::component::ComponentType >::ALIGN32);
+};
+#[derive(wasmtime::component::ComponentType)]
+#[derive(wasmtime::component::Lift)]
+#[derive(wasmtime::component::Lower)]
+#[component(record)]
+#[derive(Clone, Copy)]
+pub struct R {}
+impl core::fmt::Debug for R {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("R").finish()
+    }
+}
+const _: () = {
+    assert!(0 == < R as wasmtime::component::ComponentType >::SIZE32);
+    assert!(1 == < R as wasmtime::component::ComponentType >::ALIGN32);
+};
 /// Auto-generated bindings for a pre-instantiated version of a
 /// component which implements the world `foo`.
 ///
@@ -60,7 +85,9 @@ impl<_T: Send + 'static> FooPre<_T> {
 ///
 /// For more information see [`Foo`] as well.
 #[derive(Clone)]
-pub struct FooIndices {}
+pub struct FooIndices {
+    f: wasmtime::component::ComponentExportIndex,
+}
 /// Auto-generated bindings for an instance a component which
 /// implements the world `foo`.
 ///
@@ -91,28 +118,8 @@ pub struct FooIndices {}
 /// [`Store`]: wasmtime::Store
 /// [`Component`]: wasmtime::component::Component
 /// [`Linker`]: wasmtime::component::Linker
-pub struct Foo {}
-#[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
-pub trait FooImports: Send {
-    async fn foo(&mut self) -> ();
-}
-pub trait FooImportsGetHost<
-    T,
-    D,
->: Fn(T) -> <Self as FooImportsGetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-    type Host: FooImports;
-}
-impl<F, T, D, O> FooImportsGetHost<T, D> for F
-where
-    F: Fn(T) -> O + Send + Sync + Copy + 'static,
-    O: FooImports,
-{
-    type Host = O;
-}
-impl<_T: FooImports + ?Sized + Send> FooImports for &mut _T {
-    async fn foo(&mut self) -> () {
-        FooImports::foo(*self).await
-    }
+pub struct Foo {
+    f: wasmtime::component::Func,
 }
 const _: () = {
     #[allow(unused_imports)]
@@ -127,7 +134,11 @@ const _: () = {
             component: &wasmtime::component::Component,
         ) -> wasmtime::Result<Self> {
             let _component = component;
-            Ok(FooIndices {})
+            let f = _component
+                .export_index(None, "f")
+                .ok_or_else(|| anyhow::anyhow!("no function export `f` found"))?
+                .1;
+            Ok(FooIndices { f })
         }
         /// Creates a new instance of [`FooIndices`] from an
         /// instantiated component.
@@ -141,7 +152,10 @@ const _: () = {
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Self> {
             let _instance = instance;
-            Ok(FooIndices {})
+            let f = _instance
+                .get_export(&mut store, None, "f")
+                .ok_or_else(|| anyhow::anyhow!("no function export `f` found"))?;
+            Ok(FooIndices { f })
         }
         /// Uses the indices stored in `self` to load an instance
         /// of [`Foo`] from the instance provided.
@@ -154,7 +168,10 @@ const _: () = {
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Foo> {
             let _instance = instance;
-            Ok(Foo {})
+            let f = *_instance
+                .get_typed_func::<(), ((T, U, R),)>(&mut store, &self.f)?
+                .func();
+            Ok(Foo { f })
         }
     }
     impl Foo {
@@ -180,40 +197,81 @@ const _: () = {
             let indices = FooIndices::new_instance(&mut store, instance)?;
             indices.load(store, instance)
         }
-        pub fn add_to_linker_imports_get_host<
-            T,
-            G: for<'a> FooImportsGetHost<&'a mut T, T, Host: FooImports>,
-        >(
-            linker: &mut wasmtime::component::Linker<T>,
-            host_getter: G,
-        ) -> wasmtime::Result<()>
-        where
-            T: Send,
-        {
-            let mut linker = linker.root();
-            linker
-                .func_wrap_async(
-                    "foo",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        wasmtime::component::__internal::Box::new(async move {
-                            let host = &mut host_getter(caller.data_mut());
-                            let r = FooImports::foo(host).await;
-                            Ok(r)
-                        })
-                    },
-                )?;
-            Ok(())
-        }
         pub fn add_to_linker<T, U>(
             linker: &mut wasmtime::component::Linker<T>,
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
-            T: Send,
-            U: FooImports + Send,
+            T: Send + foo::foo::i::Host + 'static,
+            U: Send + foo::foo::i::Host,
         {
-            Self::add_to_linker_imports_get_host(linker, get)?;
+            foo::foo::i::add_to_linker(linker, get)?;
             Ok(())
+        }
+        pub async fn call_f<S: wasmtime::AsContextMut>(
+            &self,
+            mut store: S,
+        ) -> wasmtime::Result<wasmtime::component::Promise<(T, U, R)>>
+        where
+            <S as wasmtime::AsContext>::Data: Send + 'static,
+        {
+            let callee = unsafe {
+                wasmtime::component::TypedFunc::<(), ((T, U, R),)>::new_unchecked(self.f)
+            };
+            let promise = callee.call_concurrent(store.as_context_mut(), ()).await?;
+            Ok(promise.map(|(v,)| v))
         }
     }
 };
+pub mod foo {
+    pub mod foo {
+        #[allow(clippy::all)]
+        pub mod i {
+            #[allow(unused_imports)]
+            use wasmtime::component::__internal::{anyhow, Box};
+            pub type T = u16;
+            const _: () = {
+                assert!(2 == < T as wasmtime::component::ComponentType >::SIZE32);
+                assert!(2 == < T as wasmtime::component::ComponentType >::ALIGN32);
+            };
+            pub trait Host {}
+            pub trait GetHost<
+                T,
+                D,
+            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
+                type Host: Host + Send;
+            }
+            impl<F, T, D, O> GetHost<T, D> for F
+            where
+                F: Fn(T) -> O + Send + Sync + Copy + 'static,
+                O: Host + Send,
+            {
+                type Host = O;
+            }
+            pub fn add_to_linker_get_host<
+                T,
+                G: for<'a> GetHost<&'a mut T, T, Host: Host + Send>,
+            >(
+                linker: &mut wasmtime::component::Linker<T>,
+                host_getter: G,
+            ) -> wasmtime::Result<()>
+            where
+                T: Send + 'static,
+            {
+                let mut inst = linker.instance("foo:foo/i")?;
+                Ok(())
+            }
+            pub fn add_to_linker<T, U>(
+                linker: &mut wasmtime::component::Linker<T>,
+                get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
+            ) -> wasmtime::Result<()>
+            where
+                U: Host + Send,
+                T: Send + 'static,
+            {
+                add_to_linker_get_host(linker, get)
+            }
+            impl<_T: Host + ?Sized> Host for &mut _T {}
+        }
+    }
+}

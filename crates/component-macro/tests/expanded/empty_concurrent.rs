@@ -1,16 +1,16 @@
 /// Auto-generated bindings for a pre-instantiated version of a
-/// component which implements the world `host`.
+/// component which implements the world `empty`.
 ///
-/// This structure is created through [`Host_Pre::new`] which
+/// This structure is created through [`EmptyPre::new`] which
 /// takes a [`InstancePre`](wasmtime::component::InstancePre) that
 /// has been created through a [`Linker`](wasmtime::component::Linker).
 ///
-/// For more information see [`Host_`] as well.
-pub struct Host_Pre<T> {
+/// For more information see [`Empty`] as well.
+pub struct EmptyPre<T> {
     instance_pre: wasmtime::component::InstancePre<T>,
-    indices: Host_Indices,
+    indices: EmptyIndices,
 }
-impl<T> Clone for Host_Pre<T> {
+impl<T> Clone for EmptyPre<T> {
     fn clone(&self) -> Self {
         Self {
             instance_pre: self.instance_pre.clone(),
@@ -18,8 +18,8 @@ impl<T> Clone for Host_Pre<T> {
         }
     }
 }
-impl<_T: 'static> Host_Pre<_T> {
-    /// Creates a new copy of `Host_Pre` bindings which can then
+impl<_T: Send + 'static> EmptyPre<_T> {
+    /// Creates a new copy of `EmptyPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
     /// This method may fail if the component behind `instance_pre`
@@ -27,7 +27,7 @@ impl<_T: 'static> Host_Pre<_T> {
     pub fn new(
         instance_pre: wasmtime::component::InstancePre<_T>,
     ) -> wasmtime::Result<Self> {
-        let indices = Host_Indices::new(instance_pre.component())?;
+        let indices = EmptyIndices::new(instance_pre.component())?;
         Ok(Self { instance_pre, indices })
     }
     pub fn engine(&self) -> &wasmtime::Engine {
@@ -36,53 +36,53 @@ impl<_T: 'static> Host_Pre<_T> {
     pub fn instance_pre(&self) -> &wasmtime::component::InstancePre<_T> {
         &self.instance_pre
     }
-    /// Instantiates a new instance of [`Host_`] within the
+    /// Instantiates a new instance of [`Empty`] within the
     /// `store` provided.
     ///
     /// This function will use `self` as the pre-instantiated
     /// instance to perform instantiation. Afterwards the preloaded
     /// indices in `self` are used to lookup all exports on the
     /// resulting instance.
-    pub fn instantiate(
+    pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<Host_> {
+    ) -> wasmtime::Result<Empty> {
         let mut store = store.as_context_mut();
-        let instance = self.instance_pre.instantiate(&mut store)?;
+        let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
     }
 }
 /// Auto-generated bindings for index of the exports of
-/// `host`.
+/// `empty`.
 ///
-/// This is an implementation detail of [`Host_Pre`] and can
+/// This is an implementation detail of [`EmptyPre`] and can
 /// be constructed if needed as well.
 ///
-/// For more information see [`Host_`] as well.
+/// For more information see [`Empty`] as well.
 #[derive(Clone)]
-pub struct Host_Indices {}
+pub struct EmptyIndices {}
 /// Auto-generated bindings for an instance a component which
-/// implements the world `host`.
+/// implements the world `empty`.
 ///
 /// This structure can be created through a number of means
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`Host_::instantiate`] which only needs a
+///   [`Empty::instantiate_async`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
-/// * Alternatively you can create a [`Host_Pre`] ahead of
+/// * Alternatively you can create a [`EmptyPre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`Host_Pre::instantiate`] to
-///   create a [`Host_`].
+///   method then uses [`EmptyPre::instantiate_async`] to
+///   create a [`Empty`].
 ///
 /// * If you've instantiated the instance yourself already
-///   then you can use [`Host_::new`].
+///   then you can use [`Empty::new`].
 ///
 /// * You can also access the guts of instantiation through
-///   [`Host_Indices::new_instance`] followed
-///   by [`Host_Indices::load`] to crate an instance of this
+///   [`EmptyIndices::new_instance`] followed
+///   by [`EmptyIndices::load`] to crate an instance of this
 ///   type.
 ///
 /// These methods are all equivalent to one another and move
@@ -91,33 +91,12 @@ pub struct Host_Indices {}
 /// [`Store`]: wasmtime::Store
 /// [`Component`]: wasmtime::component::Component
 /// [`Linker`]: wasmtime::component::Linker
-pub struct Host_ {}
-pub trait Host_Imports {
-    fn foo(&mut self) -> ();
-}
-pub trait Host_ImportsGetHost<
-    T,
-    D,
->: Fn(T) -> <Self as Host_ImportsGetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-    type Host: Host_Imports;
-}
-impl<F, T, D, O> Host_ImportsGetHost<T, D> for F
-where
-    F: Fn(T) -> O + Send + Sync + Copy + 'static,
-    O: Host_Imports,
-{
-    type Host = O;
-}
-impl<_T: Host_Imports + ?Sized> Host_Imports for &mut _T {
-    fn foo(&mut self) -> () {
-        Host_Imports::foo(*self)
-    }
-}
+pub struct Empty {}
 const _: () = {
     #[allow(unused_imports)]
     use wasmtime::component::__internal::anyhow;
-    impl Host_Indices {
-        /// Creates a new copy of `Host_Indices` bindings which can then
+    impl EmptyIndices {
+        /// Creates a new copy of `EmptyIndices` bindings which can then
         /// be used to instantiate into a particular store.
         ///
         /// This method may fail if the component does not have the
@@ -126,24 +105,24 @@ const _: () = {
             component: &wasmtime::component::Component,
         ) -> wasmtime::Result<Self> {
             let _component = component;
-            Ok(Host_Indices {})
+            Ok(EmptyIndices {})
         }
-        /// Creates a new instance of [`Host_Indices`] from an
+        /// Creates a new instance of [`EmptyIndices`] from an
         /// instantiated component.
         ///
-        /// This method of creating a [`Host_`] will perform string
+        /// This method of creating a [`Empty`] will perform string
         /// lookups for all exports when this method is called. This
         /// will only succeed if the provided instance matches the
-        /// requirements of [`Host_`].
+        /// requirements of [`Empty`].
         pub fn new_instance(
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
         ) -> wasmtime::Result<Self> {
             let _instance = instance;
-            Ok(Host_Indices {})
+            Ok(EmptyIndices {})
         }
         /// Uses the indices stored in `self` to load an instance
-        /// of [`Host_`] from the instance provided.
+        /// of [`Empty`] from the instance provided.
         ///
         /// Note that at this time this method will additionally
         /// perform type-checks of all exports.
@@ -151,62 +130,33 @@ const _: () = {
             &self,
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Host_> {
+        ) -> wasmtime::Result<Empty> {
             let _instance = instance;
-            Ok(Host_ {})
+            Ok(Empty {})
         }
     }
-    impl Host_ {
-        /// Convenience wrapper around [`Host_Pre::new`] and
-        /// [`Host_Pre::instantiate`].
-        pub fn instantiate<_T>(
+    impl Empty {
+        /// Convenience wrapper around [`EmptyPre::new`] and
+        /// [`EmptyPre::instantiate_async`].
+        pub async fn instantiate_async<_T>(
             mut store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
-        ) -> wasmtime::Result<Host_>
+        ) -> wasmtime::Result<Empty>
         where
-            _T: 'static,
+            _T: Send + 'static,
         {
             let pre = linker.instantiate_pre(component)?;
-            Host_Pre::new(pre)?.instantiate(store)
+            EmptyPre::new(pre)?.instantiate_async(store).await
         }
-        /// Convenience wrapper around [`Host_Indices::new_instance`] and
-        /// [`Host_Indices::load`].
+        /// Convenience wrapper around [`EmptyIndices::new_instance`] and
+        /// [`EmptyIndices::load`].
         pub fn new(
             mut store: impl wasmtime::AsContextMut,
             instance: &wasmtime::component::Instance,
-        ) -> wasmtime::Result<Host_> {
-            let indices = Host_Indices::new_instance(&mut store, instance)?;
+        ) -> wasmtime::Result<Empty> {
+            let indices = EmptyIndices::new_instance(&mut store, instance)?;
             indices.load(store, instance)
-        }
-        pub fn add_to_linker_imports_get_host<
-            T,
-            G: for<'a> Host_ImportsGetHost<&'a mut T, T, Host: Host_Imports>,
-        >(
-            linker: &mut wasmtime::component::Linker<T>,
-            host_getter: G,
-        ) -> wasmtime::Result<()> {
-            let mut linker = linker.root();
-            linker
-                .func_wrap(
-                    "foo",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host_Imports::foo(host);
-                        Ok(r)
-                    },
-                )?;
-            Ok(())
-        }
-        pub fn add_to_linker<T, U>(
-            linker: &mut wasmtime::component::Linker<T>,
-            get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
-        ) -> wasmtime::Result<()>
-        where
-            U: Host_Imports,
-        {
-            Self::add_to_linker_imports_get_host(linker, get)?;
-            Ok(())
         }
     }
 };

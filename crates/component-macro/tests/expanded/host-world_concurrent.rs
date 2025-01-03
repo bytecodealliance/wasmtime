@@ -18,7 +18,7 @@ impl<T> Clone for Host_Pre<T> {
         }
     }
 }
-impl<_T: 'static> Host_Pre<_T> {
+impl<_T: Send + 'static> Host_Pre<_T> {
     /// Creates a new copy of `Host_Pre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -43,12 +43,12 @@ impl<_T: 'static> Host_Pre<_T> {
     /// instance to perform instantiation. Afterwards the preloaded
     /// indices in `self` are used to lookup all exports on the
     /// resulting instance.
-    pub fn instantiate(
+    pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
     ) -> wasmtime::Result<Host_> {
         let mut store = store.as_context_mut();
-        let instance = self.instance_pre.instantiate(&mut store)?;
+        let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
     }
 }
@@ -68,13 +68,13 @@ pub struct Host_Indices {}
 /// depending on your requirements and what you have on hand:
 ///
 /// * The most convenient way is to use
-///   [`Host_::instantiate`] which only needs a
+///   [`Host_::instantiate_async`] which only needs a
 ///   [`Store`], [`Component`], and [`Linker`].
 ///
 /// * Alternatively you can create a [`Host_Pre`] ahead of
 ///   time with a [`Component`] to front-load string lookups
 ///   of exports once instead of per-instantiation. This
-///   method then uses [`Host_Pre::instantiate`] to
+///   method then uses [`Host_Pre::instantiate_async`] to
 ///   create a [`Host_`].
 ///
 /// * If you've instantiated the instance yourself already
@@ -93,24 +93,43 @@ pub struct Host_Indices {}
 /// [`Linker`]: wasmtime::component::Linker
 pub struct Host_ {}
 pub trait Host_Imports {
-    fn foo(&mut self) -> ();
+    type Data;
+    fn foo(
+        store: wasmtime::StoreContextMut<'_, Self::Data>,
+    ) -> impl ::std::future::Future<
+        Output = impl FnOnce(
+            wasmtime::StoreContextMut<'_, Self::Data>,
+        ) -> () + Send + Sync + 'static,
+    > + Send + Sync + 'static
+    where
+        Self: Sized;
 }
 pub trait Host_ImportsGetHost<
     T,
     D,
 >: Fn(T) -> <Self as Host_ImportsGetHost<T, D>>::Host + Send + Sync + Copy + 'static {
-    type Host: Host_Imports;
+    type Host: Host_Imports<Data = D>;
 }
 impl<F, T, D, O> Host_ImportsGetHost<T, D> for F
 where
     F: Fn(T) -> O + Send + Sync + Copy + 'static,
-    O: Host_Imports,
+    O: Host_Imports<Data = D>,
 {
     type Host = O;
 }
-impl<_T: Host_Imports + ?Sized> Host_Imports for &mut _T {
-    fn foo(&mut self) -> () {
-        Host_Imports::foo(*self)
+impl<_T: Host_Imports> Host_Imports for &mut _T {
+    type Data = _T::Data;
+    fn foo(
+        store: wasmtime::StoreContextMut<'_, Self::Data>,
+    ) -> impl ::std::future::Future<
+        Output = impl FnOnce(
+            wasmtime::StoreContextMut<'_, Self::Data>,
+        ) -> () + Send + Sync + 'static,
+    > + Send + Sync + 'static
+    where
+        Self: Sized,
+    {
+        <_T as Host_Imports>::foo(store)
     }
 }
 const _: () = {
@@ -158,17 +177,17 @@ const _: () = {
     }
     impl Host_ {
         /// Convenience wrapper around [`Host_Pre::new`] and
-        /// [`Host_Pre::instantiate`].
-        pub fn instantiate<_T>(
+        /// [`Host_Pre::instantiate_async`].
+        pub async fn instantiate_async<_T>(
             mut store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
         ) -> wasmtime::Result<Host_>
         where
-            _T: 'static,
+            _T: Send + 'static,
         {
             let pre = linker.instantiate_pre(component)?;
-            Host_Pre::new(pre)?.instantiate(store)
+            Host_Pre::new(pre)?.instantiate_async(store).await
         }
         /// Convenience wrapper around [`Host_Indices::new_instance`] and
         /// [`Host_Indices::load`].
@@ -181,19 +200,44 @@ const _: () = {
         }
         pub fn add_to_linker_imports_get_host<
             T,
-            G: for<'a> Host_ImportsGetHost<&'a mut T, T, Host: Host_Imports>,
+            G: for<'a> Host_ImportsGetHost<&'a mut T, T, Host: Host_Imports<Data = T>>,
         >(
             linker: &mut wasmtime::component::Linker<T>,
             host_getter: G,
-        ) -> wasmtime::Result<()> {
+        ) -> wasmtime::Result<()>
+        where
+            T: Send + 'static,
+        {
             let mut linker = linker.root();
             linker
-                .func_wrap(
+                .func_wrap_concurrent(
                     "foo",
                     move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = &mut host_getter(caller.data_mut());
-                        let r = Host_Imports::foo(host);
-                        Ok(r)
+                        let host = caller;
+                        let r = <G::Host as Host_Imports>::foo(host);
+                        Box::pin(async move {
+                            let fun = r.await;
+                            Box::new(move |mut caller: wasmtime::StoreContextMut<'_, T>| {
+                                let r = fun(caller);
+                                Ok(r)
+                            })
+                                as Box<
+                                    dyn FnOnce(
+                                        wasmtime::StoreContextMut<'_, T>,
+                                    ) -> wasmtime::Result<()> + Send + Sync,
+                                >
+                        })
+                            as ::std::pin::Pin<
+                                Box<
+                                    dyn ::std::future::Future<
+                                        Output = Box<
+                                            dyn FnOnce(
+                                                wasmtime::StoreContextMut<'_, T>,
+                                            ) -> wasmtime::Result<()> + Send + Sync,
+                                        >,
+                                    > + Send + Sync + 'static,
+                                >,
+                            >
                     },
                 )?;
             Ok(())
@@ -203,7 +247,8 @@ const _: () = {
             get: impl Fn(&mut T) -> &mut U + Send + Sync + Copy + 'static,
         ) -> wasmtime::Result<()>
         where
-            U: Host_Imports,
+            T: Send + Host_Imports<Data = T> + 'static,
+            U: Send + Host_Imports<Data = T>,
         {
             Self::add_to_linker_imports_get_host(linker, get)?;
             Ok(())
