@@ -1219,7 +1219,6 @@ impl Assembler {
         src_size: OperandSize,
         dst_size: OperandSize,
         kind: TruncKind,
-        tmp_reg: Writable<Reg>,
         signed: bool,
     ) {
         if kind.is_unchecked() {
@@ -1228,6 +1227,7 @@ impl Assembler {
             // - check bounds
             self.check_nan(src, src_size);
 
+            let tmp_reg = writable!(regs::float_scratch());
             self.min_fp_value(signed, src_size, dst_size, tmp_reg);
             self.fcmp(src, tmp_reg.to_reg(), src_size);
             self.trapif(Cond::Le, TrapCode::INTEGER_OVERFLOW);

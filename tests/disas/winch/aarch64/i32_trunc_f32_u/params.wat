@@ -17,17 +17,17 @@
 ;;       stur    x0, [x28, #0x10]
 ;;       stur    x1, [x28, #8]
 ;;       stur    s0, [x28, #4]
-;;       ldur    s1, [x28, #4]
-;;       fcmp    s1, s1
+;;       ldur    s0, [x28, #4]
+;;       fcmp    s0, s0
 ;;       b.vs    #0x60
 ;;   30: fmov    s31, #-1.00000000
-;;       fcmp    s31, s1
+;;       fcmp    s31, s0
 ;;       b.le    #0x64
 ;;   3c: mov     x16, #0x4f800000
 ;;       fmov    s31, w16
-;;       fcmp    s31, s1
+;;       fcmp    s31, s0
 ;;       b.ge    #0x68
-;;   4c: fcvtzu  w0, s1
+;;   4c: fcvtzu  w0, s0
 ;;       add     sp, sp, #0x18
 ;;       mov     x28, sp
 ;;       ldp     x29, x30, [sp], #0x10

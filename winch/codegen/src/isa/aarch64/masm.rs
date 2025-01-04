@@ -586,39 +586,31 @@ impl Masm for MacroAssembler {
         dst_size: OperandSize,
         kind: TruncKind,
     ) -> Result<()> {
-        self.asm.fpu_to_int(
-            dst,
-            src,
-            src_size,
-            dst_size,
-            kind,
-            writable!(regs::float_scratch()),
-            true,
-        );
+        self.asm
+            .fpu_to_int(dst, src, src_size, dst_size, kind, true);
 
         Ok(())
     }
 
     fn unsigned_truncate(
         &mut self,
-        dst: WritableReg,
-        src: Reg,
-        _tmp_fpr: Reg,
+        ctx: &mut CodeGenContext<Emission>,
         src_size: OperandSize,
         dst_size: OperandSize,
         kind: TruncKind,
     ) -> Result<()> {
-        self.asm.fpu_to_int(
-            dst,
-            src,
-            src_size,
-            dst_size,
-            kind,
-            writable!(regs::float_scratch()),
-            false,
-        );
+        let dst_ty = match dst_size {
+            OperandSize::S32 => WasmValType::I32,
+            OperandSize::S64 => WasmValType::I64,
+            _ => bail!("invalid conversion size"),
+        };
 
-        Ok(())
+        ctx.convert_op(self, dst_ty, |masm, dst, src, dst_size| {
+            masm.asm
+                .fpu_to_int(writable!(dst), src, src_size, dst_size, kind, false);
+
+            Ok(())
+        })
     }
 
     fn signed_convert(

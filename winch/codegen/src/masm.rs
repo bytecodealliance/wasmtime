@@ -941,9 +941,7 @@ pub(crate) trait MacroAssembler {
     /// float into an integer.
     fn unsigned_truncate(
         &mut self,
-        dst: WritableReg,
-        src: Reg,
-        tmp_fpr: Reg,
+        context: &mut CodeGenContext<Emission>,
         src_size: OperandSize,
         dst_size: OperandSize,
         kind: TruncKind,
