@@ -1521,7 +1521,7 @@ The grammar accepted by the parser is as follows:
 
 <extern> ::= "constructor" <ident> <ident>
            | "extractor" [ "infallible" ] <ident> <ident>
-           | "const" <const-ident> <ident> <ty>
+           | "const" <const-ident> <ty>
 
 <converter> ::= <ty> <ty> <ident>
 ```
