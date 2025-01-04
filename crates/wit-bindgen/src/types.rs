@@ -148,10 +148,7 @@ impl Types {
                 info = self.type_info(resolve, ty);
                 info.has_list = true;
             }
-            TypeDefKind::Type(ty) => {
-                info = self.type_info(resolve, ty);
-            }
-            TypeDefKind::Option(ty) => {
+            TypeDefKind::Type(ty) | TypeDefKind::Option(ty) | TypeDefKind::Stream(ty) => {
                 info = self.type_info(resolve, ty);
             }
             TypeDefKind::Result(r) => {
@@ -161,12 +158,8 @@ impl Types {
             TypeDefKind::Future(ty) => {
                 info = self.optional_type_info(resolve, ty.as_ref());
             }
-            TypeDefKind::Stream(stream) => {
-                info = self.optional_type_info(resolve, stream.element.as_ref());
-                info |= self.optional_type_info(resolve, stream.end.as_ref());
-            }
             TypeDefKind::Handle(_) => info.has_handle = true,
-            TypeDefKind::Resource => {}
+            TypeDefKind::Resource | TypeDefKind::ErrorContext => {}
             TypeDefKind::Unknown => unreachable!(),
         }
         self.type_info.insert(ty, info);

@@ -17,6 +17,9 @@ use wasmtime_environ::component::{
     MAX_FLAT_RESULTS,
 };
 
+#[cfg(feature = "component-model-async")]
+use crate::component::concurrent::{self, Promise};
+
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
 ///
@@ -154,7 +157,14 @@ where
     /// Panics if this is called on a function in an asynchronous store. This
     /// only works with functions defined within a synchronous store. Also
     /// panics if `store` does not own this function.
-    pub fn call(&self, store: impl AsContextMut, params: Params) -> Result<Return> {
+    pub fn call<T: Send>(
+        &self,
+        store: impl AsContextMut<Data = T>,
+        params: Params,
+    ) -> Result<Return>
+    where
+        Return: Send + Sync + 'static,
+    {
         assert!(
             !store.as_context().async_support(),
             "must use `call_async` when async support is enabled on the config"
@@ -170,28 +180,217 @@ where
     /// only works with functions defined within an asynchronous store. Also
     /// panics if `store` does not own this function.
     #[cfg(feature = "async")]
-    pub async fn call_async<T>(
+    pub async fn call_async<T: Send>(
+        self,
+        mut store: impl AsContextMut<Data = T>,
+        params: Params,
+    ) -> Result<Return>
+    where
+        Params: Send + Sync,
+        Return: Send + Sync + 'static,
+    {
+        let store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `call_async` when async support is not enabled on the config"
+        );
+        #[cfg(feature = "component-model-async")]
+        {
+            let instance = store.0[self.func.0].component_instance;
+            // TODO: do we need to return the store here due to the possible
+            // invalidation of the reference we were passed?
+            concurrent::on_fiber(store, Some(instance), move |store| {
+                self.call_impl(store, params)
+            })
+            .await?
+            .0
+        }
+        #[cfg(not(feature = "component-model-async"))]
+        {
+            let mut store = store;
+            store
+                .on_fiber(|store| self.call_impl(store, params))
+                .await?
+        }
+    }
+
+    /// Start concurrent call to this function.
+    ///
+    /// Unlike [`Self::call`] and [`Self::call_async`] (both of which require
+    /// exclusive access to the store until the completion of the call), calls
+    /// made using this method may run concurrently with other calls to the same
+    /// instance.
+    #[cfg(feature = "component-model-async")]
+    pub async fn call_concurrent<T: Send>(
+        self,
+        mut store: impl AsContextMut<Data = T>,
+        params: Params,
+    ) -> Result<Promise<Return>>
+    where
+        Params: Send + Sync + 'static,
+        Return: Send + Sync + 'static,
+    {
+        let store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `call_concurrent` when async support is not enabled on the config"
+        );
+        let instance = store.0[self.func.0].component_instance;
+        // TODO: do we need to return the store here due to the possible
+        // invalidation of the reference we were passed?
+        concurrent::on_fiber(store, Some(instance), move |store| {
+            self.start_call(store.as_context_mut(), params)
+        })
+        .await?
+        .0
+    }
+
+    #[cfg(feature = "component-model-async")]
+    fn start_call<'a, T: Send>(
+        self,
+        store: StoreContextMut<'a, T>,
+        params: Params,
+    ) -> Result<Promise<Return>>
+    where
+        Params: Send + Sync + 'static,
+        Return: Send + Sync + 'static,
+    {
+        Ok(if store.0[self.func.0].options.async_() {
+            #[cfg(feature = "component-model-async")]
+            {
+                if Params::flatten_count() <= MAX_FLAT_PARAMS {
+                    if Return::flatten_count() <= MAX_FLAT_PARAMS {
+                        self.func.start_call_raw_async(
+                            store,
+                            params,
+                            Self::lower_stack_args,
+                            Self::lift_stack_result_raw,
+                        )
+                    } else {
+                        self.func.start_call_raw_async(
+                            store,
+                            params,
+                            Self::lower_stack_args,
+                            Self::lift_heap_result_raw,
+                        )
+                    }
+                } else {
+                    if Return::flatten_count() <= MAX_FLAT_PARAMS {
+                        self.func.start_call_raw_async(
+                            store,
+                            params,
+                            Self::lower_heap_args,
+                            Self::lift_stack_result_raw,
+                        )
+                    } else {
+                        self.func.start_call_raw_async(
+                            store,
+                            params,
+                            Self::lower_heap_args,
+                            Self::lift_heap_result_raw,
+                        )
+                    }
+                }
+            }
+            #[cfg(not(feature = "component-model-async"))]
+            {
+                unreachable!(
+                    "async-lifted exports should have failed validation \
+                     when `component-model-async` feature disabled"
+                );
+            }
+        } else if Params::flatten_count() <= MAX_FLAT_PARAMS {
+            if Return::flatten_count() <= MAX_FLAT_RESULTS {
+                self.func.start_call_raw_async(
+                    store,
+                    params,
+                    Self::lower_stack_args,
+                    Self::lift_stack_result_raw,
+                )
+            } else {
+                self.func.start_call_raw_async(
+                    store,
+                    params,
+                    Self::lower_stack_args,
+                    Self::lift_heap_result_raw,
+                )
+            }
+        } else {
+            if Return::flatten_count() <= MAX_FLAT_RESULTS {
+                self.func.start_call_raw_async(
+                    store,
+                    params,
+                    Self::lower_heap_args,
+                    Self::lift_stack_result_raw,
+                )
+            } else {
+                self.func.start_call_raw_async(
+                    store,
+                    params,
+                    Self::lower_heap_args,
+                    Self::lift_heap_result_raw,
+                )
+            }
+        }?
+        .0)
+    }
+
+    fn call_impl<T: Send>(
         &self,
         mut store: impl AsContextMut<Data = T>,
         params: Params,
     ) -> Result<Return>
     where
-        T: Send,
-        Params: Send + Sync,
-        Return: Send + Sync,
+        Return: Send + Sync + 'static,
     {
-        let mut store = store.as_context_mut();
-        assert!(
-            store.0.async_support(),
-            "cannot use `call_async` when async support is not enabled on the config"
-        );
-        store
-            .on_fiber(|store| self.call_impl(store, params))
-            .await?
-    }
+        let store = store.as_context_mut();
 
-    fn call_impl(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {
-        let store = &mut store.as_context_mut();
+        if store.0[self.func.0].options.async_() {
+            #[cfg(feature = "component-model-async")]
+            {
+                return Ok(if Params::flatten_count() <= MAX_FLAT_PARAMS {
+                    if Return::flatten_count() <= MAX_FLAT_PARAMS {
+                        self.func.call_raw_async(
+                            store,
+                            params,
+                            Self::lower_stack_args,
+                            Self::lift_stack_result_raw,
+                        )
+                    } else {
+                        self.func.call_raw_async(
+                            store,
+                            params,
+                            Self::lower_stack_args,
+                            Self::lift_heap_result_raw,
+                        )
+                    }
+                } else {
+                    if Return::flatten_count() <= MAX_FLAT_PARAMS {
+                        self.func.call_raw_async(
+                            store,
+                            params,
+                            Self::lower_heap_args,
+                            Self::lift_stack_result_raw,
+                        )
+                    } else {
+                        self.func.call_raw_async(
+                            store,
+                            params,
+                            Self::lower_heap_args,
+                            Self::lift_heap_result_raw,
+                        )
+                    }
+                }?
+                .0);
+            }
+            #[cfg(not(feature = "component-model-async"))]
+            {
+                bail!(
+                    "must enable the `component-model-async` feature to call async-lifted exports"
+                )
+            }
+        }
+
         // Note that this is in theory simpler than it might read at this time.
         // Here we're doing a runtime dispatch on the `flatten_count` for the
         // params/results to see whether they're inbounds. This creates 4 cases
@@ -266,8 +465,6 @@ where
         ty: InterfaceType,
         dst: &mut MaybeUninit<ValRaw>,
     ) -> Result<()> {
-        assert!(Params::flatten_count() > MAX_FLAT_PARAMS);
-
         // Memory must exist via validation if the arguments are stored on the
         // heap, so we can create a `MemoryMut` at this point. Afterwards
         // `realloc` is used to allocate space for all the arguments and then
@@ -302,8 +499,18 @@ where
         ty: InterfaceType,
         dst: &Return::Lower,
     ) -> Result<Return> {
-        assert!(Return::flatten_count() <= MAX_FLAT_RESULTS);
         Return::lift(cx, ty, dst)
+    }
+
+    #[cfg(feature = "component-model-async")]
+    fn lift_stack_result_raw(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        dst: &[ValRaw],
+    ) -> Result<Return> {
+        Self::lift_stack_result(cx, ty, unsafe {
+            crate::component::storage::slice_to_storage(dst)
+        })
     }
 
     /// Lift the result of a function where the result is stored indirectly on
@@ -326,6 +533,15 @@ where
             .and_then(|b| b.get(..Return::SIZE32))
             .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
         Return::load(cx, ty, bytes)
+    }
+
+    #[cfg(feature = "component-model-async")]
+    fn lift_heap_result_raw(
+        cx: &mut LiftContext<'_>,
+        ty: InterfaceType,
+        dst: &[ValRaw],
+    ) -> Result<Return> {
+        Self::lift_heap_result(cx, ty, &dst[0])
     }
 
     /// See [`Func::post_return`]
@@ -1504,7 +1720,7 @@ pub struct WasmList<T> {
 }
 
 impl<T: Lift> WasmList<T> {
-    fn new(
+    pub(crate) fn new(
         ptr: usize,
         len: usize,
         cx: &mut LiftContext<'_>,
@@ -2456,6 +2672,9 @@ pub fn desc(ty: &InterfaceType) -> &'static str {
         InterfaceType::Enum(_) => "enum",
         InterfaceType::Own(_) => "owned resource",
         InterfaceType::Borrow(_) => "borrowed resource",
+        InterfaceType::Future(_) => "future",
+        InterfaceType::Stream(_) => "stream",
+        InterfaceType::ErrorContext(_) => "error-context",
     }
 }
 

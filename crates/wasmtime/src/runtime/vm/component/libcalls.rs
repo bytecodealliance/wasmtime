@@ -6,7 +6,9 @@ use crate::runtime::vm::HostResultHasUnwindSentinel;
 use core::cell::Cell;
 use core::convert::Infallible;
 use core::slice;
-use wasmtime_environ::component::TypeResourceTableIndex;
+use wasmtime_environ::component::{
+    TypeErrorContextTableIndex, TypeFutureTableIndex, TypeResourceTableIndex, TypeStreamTableIndex,
+};
 
 const UTF16_TAG: usize = 1 << 31;
 
@@ -556,4 +558,43 @@ unsafe fn resource_exit_call(vmctx: *mut VMComponentContext) -> Result<()> {
 
 unsafe fn trap(_vmctx: *mut VMComponentContext, code: u8) -> Result<Infallible> {
     Err(wasmtime_environ::Trap::from_u8(code).unwrap().into())
+}
+
+unsafe fn future_transfer(
+    vmctx: *mut VMComponentContext,
+    src_idx: u32,
+    src_table: u32,
+    dst_table: u32,
+) -> Result<u32> {
+    let src_table = TypeFutureTableIndex::from_u32(src_table);
+    let dst_table = TypeFutureTableIndex::from_u32(dst_table);
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        instance.future_transfer(src_idx, src_table, dst_table)
+    })
+}
+
+unsafe fn stream_transfer(
+    vmctx: *mut VMComponentContext,
+    src_idx: u32,
+    src_table: u32,
+    dst_table: u32,
+) -> Result<u32> {
+    let src_table = TypeStreamTableIndex::from_u32(src_table);
+    let dst_table = TypeStreamTableIndex::from_u32(dst_table);
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        instance.stream_transfer(src_idx, src_table, dst_table)
+    })
+}
+
+unsafe fn error_context_transfer(
+    vmctx: *mut VMComponentContext,
+    src_idx: u32,
+    src_table: u32,
+    dst_table: u32,
+) -> Result<u32> {
+    let src_table = TypeErrorContextTableIndex::from_u32(src_table);
+    let dst_table = TypeErrorContextTableIndex::from_u32(dst_table);
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        instance.error_context_transfer(src_idx, src_table, dst_table)
+    })
 }

@@ -18,7 +18,7 @@ impl<T> Clone for TheWorldPre<T> {
         }
     }
 }
-impl<_T> TheWorldPre<_T> {
+impl<_T: 'static> TheWorldPre<_T> {
     /// Creates a new copy of `TheWorldPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -154,7 +154,10 @@ const _: () = {
             mut store: impl wasmtime::AsContextMut<Data = _T>,
             component: &wasmtime::component::Component,
             linker: &wasmtime::component::Linker<_T>,
-        ) -> wasmtime::Result<TheWorld> {
+        ) -> wasmtime::Result<TheWorld>
+        where
+            _T: 'static,
+        {
             let pre = linker.instantiate_pre(component)?;
             TheWorldPre::new(pre)?.instantiate(store)
         }
@@ -170,7 +173,10 @@ const _: () = {
         pub fn call_y<S: wasmtime::AsContextMut>(
             &self,
             mut store: S,
-        ) -> wasmtime::Result<()> {
+        ) -> wasmtime::Result<()>
+        where
+            <S as wasmtime::AsContext>::Data: Send + 'static,
+        {
             let callee = unsafe {
                 wasmtime::component::TypedFunc::<(), ()>::new_unchecked(self.y)
             };

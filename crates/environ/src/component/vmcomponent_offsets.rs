@@ -4,13 +4,40 @@
 //      magic: u32,
 //      builtins: &'static VMComponentBuiltins,
 //      store: *mut dyn Store,
+//      task_backpressure: VMTaskBackpressureCallback,
+//      task_return: VMTaskReturnCallback,
+//      task_wait: VMTaskWaitOrPollCallback,
+//      task_poll: VMTaskWaitOrPollCallback,
+//      task_yield: VMTaskYieldCallback,
+//      subtask_drop: VMSubtaskDropCallback,
+//      async_enter: VMAsyncEnterCallback,
+//      async_exit: VMAsyncExitCallback,
+//      future_new: VMFutureNewCallback,
+//      future_write: VMFutureTransmitCallback,
+//      future_read: VMFutureTransmitCallback,
+//      future_cancel_write: VMFutureCancelCallback,
+//      future_cancel_read: VMFutureCancelCallback,
+//      stream_cancel_write: VMStreamCancelCallback,
+//      stream_cancel_read: VMStreamCancelCallback,
+//      future_close_writable: VMFutureCloseWritableCallback,
+//      future_close_readable: VMFutureCloseReadableCallback,
+//      stream_close_writable: VMStreamCloseWritableCallback,
+//      stream_close_readable: VMStreamCloseReadableCallback,
+//      stream_new: VMStreamNewCallback,
+//      stream_write: VMStreamTransmitCallback,
+//      stream_read: VMStreamTransmitCallback,
+//      flat_stream_write: VMFlatStreamTransmitCallback,
+//      flat_stream_read: VMFlatStreamTransmitCallback,
+//      error_context_new: VMErrorContextNewCallback,
+//      error_context_debug_string: VMErrorContextDebugStringCallback,
+//      error_context_drop: VMErrorContextDropCallback,
 //      limits: *const VMRuntimeLimits,
 //      flags: [VMGlobalDefinition; component.num_runtime_component_instances],
 //      trampoline_func_refs: [VMFuncRef; component.num_trampolines],
 //      lowerings: [VMLowering; component.num_lowerings],
-//      memories: [*mut VMMemoryDefinition; component.num_memories],
-//      reallocs: [*mut VMFuncRef; component.num_reallocs],
-//      post_returns: [*mut VMFuncRef; component.num_post_returns],
+//      memories: [*mut VMMemoryDefinition; component.num_runtime_memories],
+//      reallocs: [*mut VMFuncRef; component.num_runtime_reallocs],
+//      post_returns: [*mut VMFuncRef; component.num_runtime_post_returns],
 //      resource_destructors: [*mut VMFuncRef; component.num_resources],
 // }
 
@@ -47,6 +74,8 @@ pub struct VMComponentOffsets<P> {
     pub num_runtime_memories: u32,
     /// The number of reallocs which are recorded in this component for options.
     pub num_runtime_reallocs: u32,
+    /// The number of callbacks which are recorded in this component for options.
+    pub num_runtime_callbacks: u32,
     /// The number of post-returns which are recorded in this component for options.
     pub num_runtime_post_returns: u32,
     /// Number of component instances internally in the component (always at
@@ -61,12 +90,40 @@ pub struct VMComponentOffsets<P> {
     magic: u32,
     builtins: u32,
     store: u32,
+    task_backpressure: u32,
+    task_return: u32,
+    task_wait: u32,
+    task_poll: u32,
+    task_yield: u32,
+    subtask_drop: u32,
+    async_enter: u32,
+    async_exit: u32,
+    future_new: u32,
+    future_write: u32,
+    future_read: u32,
+    future_cancel_write: u32,
+    future_cancel_read: u32,
+    future_close_writable: u32,
+    future_close_readable: u32,
+    stream_new: u32,
+    stream_write: u32,
+    stream_read: u32,
+    stream_cancel_write: u32,
+    stream_cancel_read: u32,
+    stream_close_writable: u32,
+    stream_close_readable: u32,
+    flat_stream_write: u32,
+    flat_stream_read: u32,
+    error_context_new: u32,
+    error_context_debug_message: u32,
+    error_context_drop: u32,
     limits: u32,
     flags: u32,
     trampoline_func_refs: u32,
     lowerings: u32,
     memories: u32,
     reallocs: u32,
+    callbacks: u32,
     post_returns: u32,
     resource_destructors: u32,
     size: u32,
@@ -87,6 +144,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             num_lowerings: component.num_lowerings,
             num_runtime_memories: component.num_runtime_memories.try_into().unwrap(),
             num_runtime_reallocs: component.num_runtime_reallocs.try_into().unwrap(),
+            num_runtime_callbacks: component.num_runtime_callbacks.try_into().unwrap(),
             num_runtime_post_returns: component.num_runtime_post_returns.try_into().unwrap(),
             num_runtime_component_instances: component
                 .num_runtime_component_instances
@@ -103,9 +161,37 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             lowerings: 0,
             memories: 0,
             reallocs: 0,
+            callbacks: 0,
             post_returns: 0,
             resource_destructors: 0,
             size: 0,
+            task_backpressure: 0,
+            task_return: 0,
+            task_wait: 0,
+            task_poll: 0,
+            task_yield: 0,
+            subtask_drop: 0,
+            async_enter: 0,
+            async_exit: 0,
+            future_new: 0,
+            future_write: 0,
+            future_read: 0,
+            future_cancel_write: 0,
+            future_cancel_read: 0,
+            future_close_writable: 0,
+            future_close_readable: 0,
+            stream_new: 0,
+            stream_write: 0,
+            stream_read: 0,
+            stream_cancel_write: 0,
+            stream_cancel_read: 0,
+            stream_close_writable: 0,
+            stream_close_readable: 0,
+            flat_stream_write: 0,
+            flat_stream_read: 0,
+            error_context_new: 0,
+            error_context_debug_message: 0,
+            error_context_drop: 0,
         };
 
         // Convenience functions for checked addition and multiplication.
@@ -138,6 +224,33 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             size(builtins) = ret.ptr.size(),
             size(store) = cmul(2, ret.ptr.size()),
             size(limits) = ret.ptr.size(),
+            size(task_backpressure) = ret.ptr.size(),
+            size(task_return) = ret.ptr.size(),
+            size(task_wait) = ret.ptr.size(),
+            size(task_poll) = ret.ptr.size(),
+            size(task_yield) = ret.ptr.size(),
+            size(subtask_drop) = ret.ptr.size(),
+            size(async_enter) = ret.ptr.size(),
+            size(async_exit) = ret.ptr.size(),
+            size(future_new) = ret.ptr.size(),
+            size(future_write) = ret.ptr.size(),
+            size(future_read) = ret.ptr.size(),
+            size(future_cancel_write) = ret.ptr.size(),
+            size(future_cancel_read) = ret.ptr.size(),
+            size(future_close_writable) = ret.ptr.size(),
+            size(future_close_readable) = ret.ptr.size(),
+            size(stream_new) = ret.ptr.size(),
+            size(stream_write) = ret.ptr.size(),
+            size(stream_read) = ret.ptr.size(),
+            size(stream_cancel_write) = ret.ptr.size(),
+            size(stream_cancel_read) = ret.ptr.size(),
+            size(stream_close_writable) = ret.ptr.size(),
+            size(stream_close_readable) = ret.ptr.size(),
+            size(flat_stream_write) = ret.ptr.size(),
+            size(flat_stream_read) = ret.ptr.size(),
+            size(error_context_new) = ret.ptr.size(),
+            size(error_context_debug_message) = ret.ptr.size(),
+            size(error_context_drop) = ret.ptr.size(),
             align(16),
             size(flags) = cmul(ret.num_runtime_component_instances, ret.ptr.size_of_vmglobal_definition()),
             align(u32::from(ret.ptr.size())),
@@ -145,6 +258,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             size(lowerings) = cmul(ret.num_lowerings, ret.ptr.size() * 2),
             size(memories) = cmul(ret.num_runtime_memories, ret.ptr.size()),
             size(reallocs) = cmul(ret.num_runtime_reallocs, ret.ptr.size()),
+            size(callbacks) = cmul(ret.num_runtime_callbacks, ret.ptr.size()),
             size(post_returns) = cmul(ret.num_runtime_post_returns, ret.ptr.size()),
             size(resource_destructors) = cmul(ret.num_resources, ret.ptr.size()),
         }
@@ -215,6 +329,141 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         self.lowerings
     }
 
+    /// The offset of the `task_backpressure` field.
+    pub fn task_backpressure(&self) -> u32 {
+        self.task_backpressure
+    }
+
+    /// The offset of the `task_return` field.
+    pub fn task_return(&self) -> u32 {
+        self.task_return
+    }
+
+    /// The offset of the `task_wait` field.
+    pub fn task_wait(&self) -> u32 {
+        self.task_wait
+    }
+
+    /// The offset of the `task_poll` field.
+    pub fn task_poll(&self) -> u32 {
+        self.task_poll
+    }
+
+    /// The offset of the `task_yield` field.
+    pub fn task_yield(&self) -> u32 {
+        self.task_yield
+    }
+
+    /// The offset of the `subtask_drop` field.
+    pub fn subtask_drop(&self) -> u32 {
+        self.subtask_drop
+    }
+
+    /// The offset of the `async_enter` field.
+    pub fn async_enter(&self) -> u32 {
+        self.async_enter
+    }
+
+    /// The offset of the `async_exit` field.
+    pub fn async_exit(&self) -> u32 {
+        self.async_exit
+    }
+
+    /// The offset of the `future_new` field.
+    pub fn future_new(&self) -> u32 {
+        self.future_new
+    }
+
+    /// The offset of the `future_write` field.
+    pub fn future_write(&self) -> u32 {
+        self.future_write
+    }
+
+    /// The offset of the `future_read` field.
+    pub fn future_read(&self) -> u32 {
+        self.future_read
+    }
+
+    /// The offset of the `future_cancel_write` field.
+    pub fn future_cancel_write(&self) -> u32 {
+        self.future_cancel_write
+    }
+
+    /// The offset of the `future_cancel_read` field.
+    pub fn future_cancel_read(&self) -> u32 {
+        self.future_cancel_read
+    }
+
+    /// The offset of the `future_close_writable` field.
+    pub fn future_close_writable(&self) -> u32 {
+        self.future_close_writable
+    }
+
+    /// The offset of the `future_close_readable` field.
+    pub fn future_close_readable(&self) -> u32 {
+        self.future_close_readable
+    }
+
+    /// The offset of the `stream_new` field.
+    pub fn stream_new(&self) -> u32 {
+        self.stream_new
+    }
+
+    /// The offset of the `stream_write` field.
+    pub fn stream_write(&self) -> u32 {
+        self.stream_write
+    }
+
+    /// The offset of the `stream_read` field.
+    pub fn stream_read(&self) -> u32 {
+        self.stream_read
+    }
+
+    /// The offset of the `stream_cancel_write` field.
+    pub fn stream_cancel_write(&self) -> u32 {
+        self.stream_cancel_write
+    }
+
+    /// The offset of the `stream_cancel_read` field.
+    pub fn stream_cancel_read(&self) -> u32 {
+        self.stream_cancel_read
+    }
+
+    /// The offset of the `stream_close_writable` field.
+    pub fn stream_close_writable(&self) -> u32 {
+        self.stream_close_writable
+    }
+
+    /// The offset of the `stream_close_readable` field.
+    pub fn stream_close_readable(&self) -> u32 {
+        self.stream_close_readable
+    }
+
+    /// The offset of the `flat_stream_write` field.
+    pub fn flat_stream_write(&self) -> u32 {
+        self.flat_stream_write
+    }
+
+    /// The offset of the `flat_stream_read` field.
+    pub fn flat_stream_read(&self) -> u32 {
+        self.flat_stream_read
+    }
+
+    /// The offset of the `error_context_new` field.
+    pub fn error_context_new(&self) -> u32 {
+        self.error_context_new
+    }
+
+    /// The offset of the `error_context_debug_message` field.
+    pub fn error_context_debug_message(&self) -> u32 {
+        self.error_context_debug_message
+    }
+
+    /// The offset of the `error_context_drop` field.
+    pub fn error_context_drop(&self) -> u32 {
+        self.error_context_drop
+    }
+
     /// The offset of the `VMLowering` for the `index` specified.
     #[inline]
     pub fn lowering(&self, index: LoweredIndex) -> u32 {
@@ -278,6 +527,20 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     pub fn runtime_realloc(&self, index: RuntimeReallocIndex) -> u32 {
         assert!(index.as_u32() < self.num_runtime_reallocs);
         self.runtime_reallocs() + index.as_u32() * u32::from(self.ptr.size())
+    }
+
+    /// The offset of the base of the `runtime_callbacks` field
+    #[inline]
+    pub fn runtime_callbacks(&self) -> u32 {
+        self.callbacks
+    }
+
+    /// The offset of the `*mut VMFuncRef` for the runtime index
+    /// provided.
+    #[inline]
+    pub fn runtime_callback(&self, index: RuntimeCallbackIndex) -> u32 {
+        assert!(index.as_u32() < self.num_runtime_callbacks);
+        self.runtime_callbacks() + index.as_u32() * u32::from(self.ptr.size())
     }
 
     /// The offset of the base of the `runtime_post_returns` field

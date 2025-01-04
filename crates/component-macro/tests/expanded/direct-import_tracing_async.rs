@@ -18,7 +18,7 @@ impl<T> Clone for FooPre<T> {
         }
     }
 }
-impl<_T> FooPre<_T> {
+impl<_T: Send + 'static> FooPre<_T> {
     /// Creates a new copy of `FooPre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -46,10 +46,7 @@ impl<_T> FooPre<_T> {
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<Foo>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<Foo> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
@@ -101,10 +98,11 @@ pub trait FooImports: Send {
 }
 pub trait FooImportsGetHost<
     T,
->: Fn(T) -> <Self as FooImportsGetHost<T>>::Host + Send + Sync + Copy + 'static {
+    D,
+>: Fn(T) -> <Self as FooImportsGetHost<T, D>>::Host + Send + Sync + Copy + 'static {
     type Host: FooImports;
 }
-impl<F, T, O> FooImportsGetHost<T> for F
+impl<F, T, D, O> FooImportsGetHost<T, D> for F
 where
     F: Fn(T) -> O + Send + Sync + Copy + 'static,
     O: FooImports,
@@ -168,7 +166,7 @@ const _: () = {
             linker: &wasmtime::component::Linker<_T>,
         ) -> wasmtime::Result<Foo>
         where
-            _T: Send,
+            _T: Send + 'static,
         {
             let pre = linker.instantiate_pre(component)?;
             FooPre::new(pre)?.instantiate_async(store).await
@@ -182,9 +180,12 @@ const _: () = {
             let indices = FooIndices::new_instance(&mut store, instance)?;
             indices.load(store, instance)
         }
-        pub fn add_to_linker_imports_get_host<T>(
+        pub fn add_to_linker_imports_get_host<
+            T,
+            G: for<'a> FooImportsGetHost<&'a mut T, T, Host: FooImports>,
+        >(
             linker: &mut wasmtime::component::Linker<T>,
-            host_getter: impl for<'a> FooImportsGetHost<&'a mut T>,
+            host_getter: G,
         ) -> wasmtime::Result<()>
         where
             T: Send,

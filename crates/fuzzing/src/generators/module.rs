@@ -16,6 +16,7 @@ pub struct ModuleConfig {
     // config-to-`wasmtime::Config` translation.
     pub function_references_enabled: bool,
     pub component_model_more_flags: bool,
+    pub component_model_async: bool,
 }
 
 impl<'a> Arbitrary<'a> for ModuleConfig {
@@ -62,6 +63,7 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
 
         Ok(ModuleConfig {
             component_model_more_flags: false,
+            component_model_async: false,
             function_references_enabled: config.gc_enabled,
             config,
         })

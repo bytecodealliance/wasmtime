@@ -821,13 +821,46 @@ fn strings() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn many_parameters() -> Result<()> {
-    let component = format!(
-        r#"(component
-            (core module $m
-                (memory (export "memory") 1)
-                (func (export "foo") (param i32) (result i32)
+#[tokio::test]
+async fn many_parameters() -> Result<()> {
+    test_many_parameters(false, false).await
+}
+
+#[tokio::test]
+async fn many_parameters_concurrent() -> Result<()> {
+    test_many_parameters(false, true).await
+}
+
+#[tokio::test]
+async fn many_parameters_dynamic() -> Result<()> {
+    test_many_parameters(true, false).await
+}
+
+#[tokio::test]
+async fn many_parameters_dynamic_concurrent() -> Result<()> {
+    test_many_parameters(true, true).await
+}
+
+async fn test_many_parameters(dynamic: bool, concurrent: bool) -> Result<()> {
+    let (body, async_opts) = if concurrent {
+        (
+            r#"
+                    (call $task-return
+                        (i32.const 0)
+                        (i32.mul
+                            (memory.size)
+                            (i32.const 65536)
+                        )
+                        (local.get 0)
+                    )
+
+                    (i32.const 0)
+            "#,
+            r#"async (callback (func $i "callback"))"#,
+        )
+    } else {
+        (
+            r#"
                     (local $base i32)
 
                     ;; Allocate space for the return
@@ -855,11 +888,28 @@ fn many_parameters() -> Result<()> {
                         (local.get 0))
 
                     (local.get $base)
+            "#,
+            "",
+        )
+    };
+
+    let component = format!(
+        r#"(component
+            (core module $m
+                (import "" "task.return" (func $task-return (param i32 i32 i32)))
+                (memory (export "memory") 1)
+                (func (export "foo") (param i32) (result i32)
+                    {body}
                 )
+                (func (export "callback") (param i32 i32 i32 i32) (result i32) unreachable)
 
                 {REALLOC_AND_FREE}
             )
-            (core instance $i (instantiate $m))
+            (core type $task-return-type (func (param i32 i32 i32)))
+            (core func $task-return (canon task.return $task-return-type))
+            (core instance $i (instantiate $m
+                (with "" (instance (export "task.return" (func $task-return))))
+            ))
 
             (type $t (func
                 (param "p1" s8)              ;; offset  0, size 1
@@ -870,11 +920,11 @@ fn many_parameters() -> Result<()> {
                 (param "p6" string)          ;; offset 24, size 8
                 (param "p7" (list u32))      ;; offset 32, size 8
                 (param "p8" bool)            ;; offset 40, size 1
-                (param "p0" bool)            ;; offset 40, size 1
-                (param "pa" char)            ;; offset 44, size 4
-                (param "pb" (list bool))     ;; offset 48, size 8
-                (param "pc" (list char))     ;; offset 56, size 8
-                (param "pd" (list string))   ;; offset 64, size 8
+                (param "p9" bool)            ;; offset 41, size 1
+                (param "p0" char)            ;; offset 44, size 4
+                (param "pa" (list bool))     ;; offset 48, size 8
+                (param "pb" (list char))     ;; offset 56, size 8
+                (param "pc" (list string))   ;; offset 64, size 8
 
                 (result (tuple (list u8) u32))
             ))
@@ -883,30 +933,22 @@ fn many_parameters() -> Result<()> {
                     (core func $i "foo")
                     (memory $i "memory")
                     (realloc (func $i "realloc"))
+                    {async_opts}
                 )
             )
         )"#
     );
 
-    let engine = super::engine();
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    config.async_support(true);
+    let engine = &Engine::new(&config)?;
     let component = Component::new(&engine, component)?;
     let mut store = Store::new(&engine, ());
-    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
-    let func = instance.get_typed_func::<(
-        i8,
-        u64,
-        f32,
-        u8,
-        i16,
-        &str,
-        &[u32],
-        bool,
-        bool,
-        char,
-        &[bool],
-        &[char],
-        &[&str],
-    ), ((WasmList<u8>, u32),)>(&mut store, "many-param")?;
+
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
 
     let input = (
         -100,
@@ -930,8 +972,76 @@ fn many_parameters() -> Result<()> {
         ]
         .as_slice(),
     );
-    let ((memory, pointer),) = func.call(&mut store, input)?;
-    let memory = memory.as_le_slice(&store);
+
+    let (memory, pointer) = if dynamic {
+        let input = vec![
+            Val::S8(input.0),
+            Val::U64(input.1),
+            Val::Float32(input.2),
+            Val::U8(input.3),
+            Val::S16(input.4),
+            Val::String(input.5.into()),
+            Val::List(input.6.iter().copied().map(Val::U32).collect()),
+            Val::Bool(input.7),
+            Val::Bool(input.8),
+            Val::Char(input.9),
+            Val::List(input.10.iter().copied().map(Val::Bool).collect()),
+            Val::List(input.11.iter().copied().map(Val::Char).collect()),
+            Val::List(input.12.iter().map(|&s| Val::String(s.into())).collect()),
+        ];
+        let func = instance.get_func(&mut store, "many-param").unwrap();
+
+        let mut results = if concurrent {
+            let promise = func.call_concurrent(&mut store, input).await?;
+            promise.get(&mut store).await?.into_iter()
+        } else {
+            let mut results = vec![Val::Bool(false)];
+            func.call_async(&mut store, &input, &mut results).await?;
+            results.into_iter()
+        };
+
+        let Some(Val::Tuple(results)) = results.next() else {
+            panic!()
+        };
+        let mut results = results.into_iter();
+        let Some(Val::List(memory)) = results.next() else {
+            panic!()
+        };
+        let Some(Val::U32(pointer)) = results.next() else {
+            panic!()
+        };
+        (
+            memory
+                .into_iter()
+                .map(|v| if let Val::U8(v) = v { v } else { panic!() })
+                .collect(),
+            pointer,
+        )
+    } else {
+        let func = instance.get_typed_func::<(
+            i8,
+            u64,
+            f32,
+            u8,
+            i16,
+            &str,
+            &[u32],
+            bool,
+            bool,
+            char,
+            &[bool],
+            &[char],
+            &[&str],
+        ), ((Vec<u8>, u32),)>(&mut store, "many-param")?;
+
+        if concurrent {
+            let promise = func.call_concurrent(&mut store, input).await?;
+            promise.get(&mut store).await?.0
+        } else {
+            func.call_async(&mut store, input).await?.0
+        }
+    };
+    let memory = &memory[..];
 
     let mut actual = &memory[pointer as usize..][..72];
     assert_eq!(i8::from_le_bytes(*actual.take_n::<1>()), input.0);
@@ -977,6 +1087,437 @@ fn many_parameters() -> Result<()> {
     }
     assert!(mem.is_empty());
     assert!(actual.is_empty());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn many_results() -> Result<()> {
+    test_many_results(false, false).await
+}
+
+#[tokio::test]
+async fn many_results_concurrent() -> Result<()> {
+    test_many_results(false, true).await
+}
+
+#[tokio::test]
+async fn many_results_dynamic() -> Result<()> {
+    test_many_results(true, false).await
+}
+
+#[tokio::test]
+async fn many_results_dynamic_concurrent() -> Result<()> {
+    test_many_results(true, true).await
+}
+
+async fn test_many_results(dynamic: bool, concurrent: bool) -> Result<()> {
+    let (ret, async_opts) = if concurrent {
+        (
+            r#"
+                   call $task-return
+                   i32.const 0
+            "#,
+            r#"async (callback (func $i "callback"))"#,
+        )
+    } else {
+        ("", "")
+    };
+
+    let my_nan = CANON_32BIT_NAN | 1;
+
+    let component = format!(
+        r#"(component
+            (core module $m
+                (import "" "task.return" (func $task-return (param i32)))
+                (memory (export "memory") 1)
+                (func (export "foo") (result i32)
+                    (local $base i32)
+                    (local $string i32)
+                    (local $list i32)
+
+                    (local.set $base
+                        (call $realloc
+                            (i32.const 0)
+                            (i32.const 0)
+                            (i32.const 8)
+                            (i32.const 72)))
+
+                    (i32.store8 offset=0
+                        (local.get $base)
+                        (i32.const -100))
+
+                    (i64.store offset=8
+                        (local.get $base)
+                        (i64.const 9223372036854775807))
+
+                    (f32.store offset=16
+                        (local.get $base)
+                        (f32.reinterpret_i32 (i32.const {my_nan})))
+
+                    (i32.store8 offset=20
+                        (local.get $base)
+                        (i32.const 38))
+
+                    (i32.store16 offset=22
+                        (local.get $base)
+                        (i32.const 18831))
+
+                    (local.set $string
+                        (call $realloc
+                            (i32.const 0)
+                            (i32.const 0)
+                            (i32.const 1)
+                            (i32.const 6)))
+
+                    (i32.store8 offset=0
+                        (local.get $string)
+                        (i32.const 97)) ;; 'a'
+                    (i32.store8 offset=1
+                        (local.get $string)
+                        (i32.const 98)) ;; 'b'
+                    (i32.store8 offset=2
+                        (local.get $string)
+                        (i32.const 99)) ;; 'c'
+                    (i32.store8 offset=3
+                        (local.get $string)
+                        (i32.const 100)) ;; 'd'
+                    (i32.store8 offset=4
+                        (local.get $string)
+                        (i32.const 101)) ;; 'e'
+                    (i32.store8 offset=5
+                        (local.get $string)
+                        (i32.const 102)) ;; 'f'
+
+                    (i32.store offset=24
+                        (local.get $base)
+                        (local.get $string))
+
+                    (i32.store offset=28
+                        (local.get $base)
+                        (i32.const 2))
+
+                    (local.set $list
+                        (call $realloc
+                            (i32.const 0)
+                            (i32.const 0)
+                            (i32.const 4)
+                            (i32.const 32)))
+
+                    (i32.store offset=0
+                        (local.get $list)
+                        (i32.const 1))
+                    (i32.store offset=4
+                        (local.get $list)
+                        (i32.const 2))
+                    (i32.store offset=8
+                        (local.get $list)
+                        (i32.const 3))
+                    (i32.store offset=12
+                        (local.get $list)
+                        (i32.const 4))
+                    (i32.store offset=16
+                        (local.get $list)
+                        (i32.const 5))
+                    (i32.store offset=20
+                        (local.get $list)
+                        (i32.const 6))
+                    (i32.store offset=24
+                        (local.get $list)
+                        (i32.const 7))
+                    (i32.store offset=28
+                        (local.get $list)
+                        (i32.const 8))
+
+                    (i32.store offset=32
+                        (local.get $base)
+                        (local.get $list))
+
+                    (i32.store offset=36
+                        (local.get $base)
+                        (i32.const 8))
+
+                    (i32.store8 offset=40
+                        (local.get $base)
+                        (i32.const 1))
+
+                    (i32.store8 offset=41
+                        (local.get $base)
+                        (i32.const 0))
+
+                    (i32.store offset=44
+                        (local.get $base)
+                        (i32.const 128681)) ;; '🚩'
+
+                    (local.set $list
+                        (call $realloc
+                            (i32.const 0)
+                            (i32.const 0)
+                            (i32.const 1)
+                            (i32.const 5)))
+
+                    (i32.store8 offset=0
+                        (local.get $list)
+                        (i32.const 0))
+                    (i32.store8 offset=1
+                        (local.get $list)
+                        (i32.const 1))
+                    (i32.store8 offset=2
+                        (local.get $list)
+                        (i32.const 0))
+                    (i32.store8 offset=3
+                        (local.get $list)
+                        (i32.const 1))
+                    (i32.store8 offset=4
+                        (local.get $list)
+                        (i32.const 1))
+
+                    (i32.store offset=48
+                        (local.get $base)
+                        (local.get $list))
+
+                    (i32.store offset=52
+                        (local.get $base)
+                        (i32.const 5))
+
+                    (local.set $list
+                        (call $realloc
+                            (i32.const 0)
+                            (i32.const 0)
+                            (i32.const 4)
+                            (i32.const 20)))
+
+                    (i32.store offset=0
+                        (local.get $list)
+                        (i32.const 127820)) ;; '🍌'
+                    (i32.store offset=4
+                        (local.get $list)
+                        (i32.const 129360)) ;; '🥐'
+                    (i32.store offset=8
+                        (local.get $list)
+                        (i32.const 127831)) ;; '🍗'
+                    (i32.store offset=12
+                        (local.get $list)
+                        (i32.const 127833)) ;; '🍙'
+                    (i32.store offset=16
+                        (local.get $list)
+                        (i32.const 127841)) ;; '🍡'
+
+                    (i32.store offset=56
+                        (local.get $base)
+                        (local.get $list))
+
+                    (i32.store offset=60
+                        (local.get $base)
+                        (i32.const 5))
+
+                    (local.set $list
+                        (call $realloc
+                            (i32.const 0)
+                            (i32.const 0)
+                            (i32.const 4)
+                            (i32.const 16)))
+
+                    (i32.store offset=0
+                        (local.get $list)
+                        (i32.add (local.get $string) (i32.const 2)))
+                    (i32.store offset=4
+                        (local.get $list)
+                        (i32.const 2))
+                    (i32.store offset=8
+                        (local.get $list)
+                        (i32.add (local.get $string) (i32.const 4)))
+                    (i32.store offset=12
+                        (local.get $list)
+                        (i32.const 2))
+
+                    (i32.store offset=64
+                        (local.get $base)
+                        (local.get $list))
+
+                    (i32.store offset=68
+                        (local.get $base)
+                        (i32.const 2))
+
+                    local.get $base
+
+                    {ret}
+                )
+                (func (export "callback") (param i32 i32 i32 i32) (result i32) unreachable)
+
+                {REALLOC_AND_FREE}
+            )
+            (core type $task-return-type (func (param i32)))
+            (core func $task-return (canon task.return $task-return-type))
+            (core instance $i (instantiate $m
+                (with "" (instance (export "task.return" (func $task-return))))
+            ))
+
+            (type $t (func (result (tuple
+                s8
+                u64
+                float32
+                u8
+                s16
+                string
+                (list u32)
+                bool
+                bool
+                char
+                (list bool)
+                (list char)
+                (list string)
+            ))))
+            (func (export "many-results") (type $t)
+                (canon lift
+                    (core func $i "foo")
+                    (memory $i "memory")
+                    (realloc (func $i "realloc"))
+                    {async_opts}
+                )
+            )
+        )"#
+    );
+
+    let mut config = Config::new();
+    config.wasm_component_model_async(true);
+    config.async_support(true);
+    let engine = &Engine::new(&config)?;
+    let component = Component::new(&engine, component)?;
+    let mut store = Store::new(&engine, ());
+
+    let instance = Linker::new(&engine)
+        .instantiate_async(&mut store, &component)
+        .await?;
+
+    let expected = (
+        -100i8,
+        u64::MAX / 2,
+        f32::from_bits(CANON_32BIT_NAN | 1),
+        38u8,
+        18831i16,
+        "ab".to_string(),
+        vec![1u32, 2, 3, 4, 5, 6, 7, 8],
+        true,
+        false,
+        '🚩',
+        vec![false, true, false, true, true],
+        vec!['🍌', '🥐', '🍗', '🍙', '🍡'],
+        vec!["cd".to_string(), "ef".to_string()],
+    );
+
+    let actual = if dynamic {
+        let func = instance.get_func(&mut store, "many-results").unwrap();
+
+        let mut results = if concurrent {
+            let promise = func.call_concurrent(&mut store, Vec::new()).await?;
+            promise.get(&mut store).await?.into_iter()
+        } else {
+            let mut results = vec![Val::Bool(false)];
+            func.call_async(&mut store, &[], &mut results).await?;
+            results.into_iter()
+        };
+
+        let Some(Val::Tuple(results)) = results.next() else {
+            panic!()
+        };
+        let mut results = results.into_iter();
+        let Some(Val::S8(p1)) = results.next() else {
+            panic!()
+        };
+        let Some(Val::U64(p2)) = results.next() else {
+            panic!()
+        };
+        let Some(Val::Float32(p3)) = results.next() else {
+            panic!()
+        };
+        let Some(Val::U8(p4)) = results.next() else {
+            panic!()
+        };
+        let Some(Val::S16(p5)) = results.next() else {
+            panic!()
+        };
+        let Some(Val::String(p6)) = results.next() else {
+            panic!()
+        };
+        let Some(Val::List(p7)) = results.next() else {
+            panic!()
+        };
+        let p7 = p7
+            .into_iter()
+            .map(|v| if let Val::U32(v) = v { v } else { panic!() })
+            .collect();
+        let Some(Val::Bool(p8)) = results.next() else {
+            panic!()
+        };
+        let Some(Val::Bool(p9)) = results.next() else {
+            panic!()
+        };
+        let Some(Val::Char(p0)) = results.next() else {
+            panic!()
+        };
+        let Some(Val::List(pa)) = results.next() else {
+            panic!()
+        };
+        let pa = pa
+            .into_iter()
+            .map(|v| if let Val::Bool(v) = v { v } else { panic!() })
+            .collect();
+        let Some(Val::List(pb)) = results.next() else {
+            panic!()
+        };
+        let pb = pb
+            .into_iter()
+            .map(|v| if let Val::Char(v) = v { v } else { panic!() })
+            .collect();
+        let Some(Val::List(pc)) = results.next() else {
+            panic!()
+        };
+        let pc = pc
+            .into_iter()
+            .map(|v| if let Val::String(v) = v { v } else { panic!() })
+            .collect();
+
+        (p1, p2, p3, p4, p5, p6, p7, p8, p9, p0, pa, pb, pc)
+    } else {
+        let func = instance.get_typed_func::<(), ((
+            i8,
+            u64,
+            f32,
+            u8,
+            i16,
+            String,
+            Vec<u32>,
+            bool,
+            bool,
+            char,
+            Vec<bool>,
+            Vec<char>,
+            Vec<String>,
+        ),)>(&mut store, "many-results")?;
+
+        if concurrent {
+            let promise = func.call_concurrent(&mut store, ()).await?;
+            promise.get(&mut store).await?.0
+        } else {
+            func.call_async(&mut store, ()).await?.0
+        }
+    };
+
+    assert_eq!(expected.0, actual.0);
+    assert_eq!(expected.1, actual.1);
+    assert!(expected.2.is_nan());
+    assert!(actual.2.is_nan());
+    assert_eq!(expected.3, actual.3);
+    assert_eq!(expected.4, actual.4);
+    assert_eq!(expected.5, actual.5);
+    assert_eq!(expected.6, actual.6);
+    assert_eq!(expected.7, actual.7);
+    assert_eq!(expected.8, actual.8);
+    assert_eq!(expected.9, actual.9);
+    assert_eq!(expected.10, actual.10);
+    assert_eq!(expected.11, actual.11);
+    assert_eq!(expected.12, actual.12);
 
     Ok(())
 }

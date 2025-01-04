@@ -8,15 +8,23 @@ use wasmtime::component::{ComponentNamedList, ComponentType, Func, Lift, Lower, 
 use wasmtime::{AsContextMut, Config, Engine};
 
 pub trait TypedFuncExt<P, R> {
-    fn call_and_post_return(&self, store: impl AsContextMut, params: P) -> Result<R>;
+    fn call_and_post_return<T: Send>(
+        &self,
+        store: impl AsContextMut<Data = T>,
+        params: P,
+    ) -> Result<R>;
 }
 
 impl<P, R> TypedFuncExt<P, R> for TypedFunc<P, R>
 where
     P: ComponentNamedList + Lower,
-    R: ComponentNamedList + Lift,
+    R: ComponentNamedList + Lift + Send + Sync + 'static,
 {
-    fn call_and_post_return(&self, mut store: impl AsContextMut, params: P) -> Result<R> {
+    fn call_and_post_return<T: Send>(
+        &self,
+        mut store: impl AsContextMut<Data = T>,
+        params: P,
+    ) -> Result<R> {
         let result = self.call(&mut store, params)?;
         self.post_return(&mut store)?;
         Ok(result)
@@ -24,18 +32,18 @@ where
 }
 
 pub trait FuncExt {
-    fn call_and_post_return(
+    fn call_and_post_return<T: Send>(
         &self,
-        store: impl AsContextMut,
+        store: impl AsContextMut<Data = T>,
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()>;
 }
 
 impl FuncExt for Func {
-    fn call_and_post_return(
+    fn call_and_post_return<T: Send>(
         &self,
-        mut store: impl AsContextMut,
+        mut store: impl AsContextMut<Data = T>,
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()> {
@@ -166,6 +174,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wasmtime_wast_util::
         extended_const,
         wide_arithmetic,
         component_model_more_flags,
+        component_model_async,
         nan_canonicalization,
         simd,
 
@@ -184,6 +193,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wasmtime_wast_util::
     let extended_const = extended_const.unwrap_or(false);
     let wide_arithmetic = wide_arithmetic.unwrap_or(false);
     let component_model_more_flags = component_model_more_flags.unwrap_or(false);
+    let component_model_async = component_model_async.unwrap_or(false);
     let nan_canonicalization = nan_canonicalization.unwrap_or(false);
     let relaxed_simd = relaxed_simd.unwrap_or(false);
 
@@ -210,5 +220,6 @@ pub fn apply_test_config(config: &mut Config, test_config: &wasmtime_wast_util::
         .wasm_extended_const(extended_const)
         .wasm_wide_arithmetic(wide_arithmetic)
         .wasm_component_model_more_flags(component_model_more_flags)
+        .wasm_component_model_async(component_model_async)
         .cranelift_nan_canonicalization(nan_canonicalization);
 }

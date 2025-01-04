@@ -18,7 +18,7 @@ impl<T> Clone for Host_Pre<T> {
         }
     }
 }
-impl<_T> Host_Pre<_T> {
+impl<_T: Send + 'static> Host_Pre<_T> {
     /// Creates a new copy of `Host_Pre` bindings which can then
     /// be used to instantiate into a particular store.
     ///
@@ -46,10 +46,7 @@ impl<_T> Host_Pre<_T> {
     pub async fn instantiate_async(
         &self,
         mut store: impl wasmtime::AsContextMut<Data = _T>,
-    ) -> wasmtime::Result<Host_>
-    where
-        _T: Send,
-    {
+    ) -> wasmtime::Result<Host_> {
         let mut store = store.as_context_mut();
         let instance = self.instance_pre.instantiate_async(&mut store).await?;
         self.indices.load(&mut store, &instance)
@@ -101,10 +98,11 @@ pub trait Host_Imports: Send {
 }
 pub trait Host_ImportsGetHost<
     T,
->: Fn(T) -> <Self as Host_ImportsGetHost<T>>::Host + Send + Sync + Copy + 'static {
+    D,
+>: Fn(T) -> <Self as Host_ImportsGetHost<T, D>>::Host + Send + Sync + Copy + 'static {
     type Host: Host_Imports;
 }
-impl<F, T, O> Host_ImportsGetHost<T> for F
+impl<F, T, D, O> Host_ImportsGetHost<T, D> for F
 where
     F: Fn(T) -> O + Send + Sync + Copy + 'static,
     O: Host_Imports,
@@ -168,7 +166,7 @@ const _: () = {
             linker: &wasmtime::component::Linker<_T>,
         ) -> wasmtime::Result<Host_>
         where
-            _T: Send,
+            _T: Send + 'static,
         {
             let pre = linker.instantiate_pre(component)?;
             Host_Pre::new(pre)?.instantiate_async(store).await
@@ -182,9 +180,12 @@ const _: () = {
             let indices = Host_Indices::new_instance(&mut store, instance)?;
             indices.load(store, instance)
         }
-        pub fn add_to_linker_imports_get_host<T>(
+        pub fn add_to_linker_imports_get_host<
+            T,
+            G: for<'a> Host_ImportsGetHost<&'a mut T, T, Host: Host_Imports>,
+        >(
             linker: &mut wasmtime::component::Linker<T>,
-            host_getter: impl for<'a> Host_ImportsGetHost<&'a mut T>,
+            host_getter: G,
         ) -> wasmtime::Result<()>
         where
             T: Send,
