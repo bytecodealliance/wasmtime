@@ -408,11 +408,7 @@ impl JITModule {
         }
     }
 
-    /// Returns the address of a finalized function.
-    ///
-    /// The pointer remains valid until either [`JITModule::free_memory`] is called or in the future
-    /// some way of deallocating this individual function is used.
-    pub fn get_finalized_function(&self, func_id: FuncId) -> *const u8 {
+    fn get_finalized_function_inner(&self, func_id: FuncId) -> &CompiledBlob {
         let info = &self.compiled_functions[func_id];
         assert!(
             !self.functions_to_finalize.iter().any(|x| *x == func_id),
@@ -420,7 +416,19 @@ impl JITModule {
         );
         info.as_ref()
             .expect("function must be compiled before it can be finalized")
-            .ptr
+    }
+
+    /// Returns the address of a finalized function.
+    ///
+    /// The pointer remains valid until either [`JITModule::free_memory`] is called or in the future
+    /// some way of deallocating this individual function is used.
+    pub fn get_finalized_function(&self, func_id: FuncId) -> *const u8 {
+        self.get_finalized_function_inner(func_id).ptr
+    }
+
+    /// Returns the bytes of a finalized function.
+    pub fn get_finalized_function_bytes(&self, func_id: FuncId) -> &[u8] {
+        self.get_finalized_function_inner(func_id).code()
     }
 
     /// Returns the address and size of a finalized data object.

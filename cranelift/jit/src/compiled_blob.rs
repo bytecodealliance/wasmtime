@@ -20,6 +20,10 @@ pub(crate) struct CompiledBlob {
 unsafe impl Send for CompiledBlob {}
 
 impl CompiledBlob {
+    pub(crate) fn code(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.ptr, self.size) }
+    }
+
     pub(crate) fn perform_relocations(
         &self,
         get_address: impl Fn(&ModuleRelocTarget) -> *const u8,
