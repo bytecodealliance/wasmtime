@@ -1,7 +1,7 @@
 [package]
 authors = ["The Cranelift Project Developers"]
 name = "cranelift-codegen-shared"
-version = "0.116.0"
+version = "0.117.0"
 description = "For code shared between cranelift-codegen-meta and cranelift-codegen"
 license = "Apache-2.0 WITH LLVM-exception"
 repository = "https://github.com/bytecodealliance/wasmtime"
