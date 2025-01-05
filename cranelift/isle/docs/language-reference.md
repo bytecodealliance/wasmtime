@@ -1491,7 +1491,7 @@ The grammar accepted by the parser is as follows:
 
 <prio> ::= <int>
 
-<int> ::= [ "-" ] ( "0".."9" | "_" )+
+<int> ::= [ "-" ] ( "0".."9" ) ( "0".."9" | "_" )*
         | [ "-" ] "0" ("x" | "X") ( "0".."9" | "A".."F" | "a".."f" | "_" )+
         | [ "-" ] "0" ("o" | "O") ( "0".."7" | "_" )+
         | [ "-" ] "0" ("b" | "B") ( "0".."1" | "_" )+
@@ -1521,7 +1521,7 @@ The grammar accepted by the parser is as follows:
 
 <extern> ::= "constructor" <ident> <ident>
            | "extractor" [ "infallible" ] <ident> <ident>
-           | "const" <const-ident> <ident> <ty>
+           | "const" <const-ident> <ty>
 
 <converter> ::= <ty> <ty> <ident>
 ```
