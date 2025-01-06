@@ -52,8 +52,15 @@ Once someone has reviewed your PR, it's easier for us if you _don't_ rebase it
 when making further changes. Instead, at that point we prefer that you make new
 commits on top of the already-reviewed work.
 
-That said, sometimes we may need to ask you to rebase for various technical
-reasons. If you need help doing that, please ask!
+That said rebasing (or merging from `main`) may still be required in situations
+such as:
+
+* Your PR has a merge conflict with the `main` branch.
+* CI on your PR is failing for unrelated reasons and a fix was applied to `main`
+  which needs to be picked up on your branch.
+* Other miscellaneous technical reasons may cause us to ask for a rebase.
+
+If you need help rebasing or merging, please ask!
 
 ### Review and merge
 
