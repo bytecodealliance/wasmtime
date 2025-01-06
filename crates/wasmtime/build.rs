@@ -36,6 +36,8 @@ fn build_c_helpers() {
         build.define("FEATURE_DEBUG_BUILTINS", None);
     }
 
+    // On MinGW targets work around a bug in the MinGW compiler described at
+    // https://github.com/bytecodealliance/wasmtime/pull/9688#issuecomment-2573367719
     if std::env::var("CARGO_CFG_WINDOWS").is_ok()
         && std::env::var("CARGO_CFG_TARGET_ENV").ok().as_deref() == Some("gnu")
     {
