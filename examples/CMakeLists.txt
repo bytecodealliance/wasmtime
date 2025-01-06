@@ -38,7 +38,13 @@ function(CREATE_RUST_TEST EXAMPLE)
 	endif()
 endfunction()
 function(CREATE_RUST_WASM EXAMPLE TARGET)
-	execute_process(COMMAND cargo build -p example-${EXAMPLE}-wasm --target ${TARGET})
+	execute_process(
+        COMMAND cargo build -p example-${EXAMPLE}-wasm --target ${TARGET}
+        RESULT_VARIABLE CARGO_RESULT
+    )
+    if(NOT CARGO_RESULT EQUAL 0)
+        message(FATAL_ERROR "Failed to build Rust WASM target: ${EXAMPLE} for ${TARGET}")
+    endif()
 endfunction()
 
 # Enable testing
