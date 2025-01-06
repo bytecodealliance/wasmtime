@@ -4,7 +4,7 @@ use crate::runtime::vm::{tls, TrapRegisters, TrapTest, VMContext, VMOpaqueContex
 use crate::{Engine, ValRaw};
 use core::ptr::NonNull;
 use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
-use pulley_interpreter::{Reg, XReg};
+use pulley_interpreter::{FReg, Reg, XReg};
 use wasmtime_environ::{BuiltinFunctionIndex, HostCall, Trap};
 
 /// Interpreter state stored within a `Store<T>`.
@@ -36,9 +36,36 @@ impl Interpreter {
 #[repr(transparent)]
 pub struct InterpreterRef<'a>(&'a mut Vm);
 
+/// Equivalent of a native platform's `jmp_buf` (sort of).
+///
+/// This structure ensures that all callee-save state in Pulley is saved at wasm
+/// function boundaries. This handles the case for example where a function is
+/// executed but it traps halfway through. The trap will unwind the Pulley stack
+/// and reset it back to what it was when the function started. This means that
+/// Pulley function prologues don't execute and callee-saved registers aren't
+/// restored. This structure is used to restore all that state to as it was
+/// when the function started.
+///
+/// Note that this is a blind copy of all callee-saved state which is kept in
+/// sync with `pulley_shared/abi.rs` in Cranelift. This includes the upper 16
+/// x-regs, the upper 16 f-regs, the frame pointer, and the link register. The
+/// stack pointer is included in the upper 16 x-regs. This representation is
+/// explicitly chosen over an alternative such as only saving a bare minimum
+/// amount of state and using function ABIs to auto-save registers. For example
+/// we could, in Cranelift, indicate that the Pulley-to-host function call
+/// clobbered all registers forcing the function prologue to save all
+/// xregs/fregs. This means though that every wasm->host call would save/restore
+/// all this state, even when a trap didn't happen. Alternatively this structure
+/// being large means that the state is only saved once per host->wasm call
+/// instead which is currently what's being optimized for.
+///
+/// If saving this structure is a performance hot spot in the future it might be
+/// worth reevaluating this decision or perhaps shrinking the register file of
+/// Pulley so less state need be saved.
 #[derive(Clone, Copy)]
 struct Setjmp {
-    sp: *mut u8,
+    xregs: [u64; 16],
+    fregs: [f64; 16],
     fp: *mut u8,
     lr: *mut u8,
 }
@@ -70,11 +97,7 @@ impl InterpreterRef<'_> {
         //
         // See more comments in `trap` below about how this isn't actually
         // correct as it's not saving all callee-save state.
-        let setjmp = Setjmp {
-            sp: self.0[XReg::sp].get_ptr(),
-            fp: self.0.fp(),
-            lr: self.0.lr(),
-        };
+        let setjmp = self.setjmp();
 
         let old_lr = self.0.call_start(&args);
 
@@ -117,9 +140,18 @@ impl InterpreterRef<'_> {
             }
         };
 
-        debug_assert!(self.0[XReg::sp].get_ptr() == setjmp.sp);
-        debug_assert!(self.0.fp() == setjmp.fp);
-        debug_assert!(self.0.lr() == setjmp.lr);
+        if cfg!(debug_assertions) {
+            for (i, val) in setjmp.xregs.iter().enumerate() {
+                assert!(self.0[XReg::new(i as u8 + 16).unwrap()].get_u64() == *val);
+            }
+            for (i, val) in setjmp.fregs.iter().enumerate() {
+                assert!(
+                    self.0[FReg::new(i as u8 + 16).unwrap()].get_f64().to_bits() == val.to_bits()
+                );
+            }
+            assert!(self.0.fp() == setjmp.fp);
+            assert!(self.0.lr() == setjmp.lr);
+        }
         ret
     }
 
@@ -163,25 +195,39 @@ impl InterpreterRef<'_> {
         self.longjmp(setjmp);
     }
 
+    fn setjmp(&self) -> Setjmp {
+        let mut xregs = [0; 16];
+        let mut fregs = [0.0; 16];
+        for (i, slot) in xregs.iter_mut().enumerate() {
+            *slot = self.0[XReg::new(i as u8 + 16).unwrap()].get_u64();
+        }
+        for (i, slot) in fregs.iter_mut().enumerate() {
+            *slot = self.0[FReg::new(i as u8 + 16).unwrap()].get_f64();
+        }
+        Setjmp {
+            xregs,
+            fregs,
+            fp: self.0.fp(),
+            lr: self.0.lr(),
+        }
+    }
+
     /// Perform a "longjmp" by restoring the "setjmp" context saved when this
     /// started.
-    ///
-    /// FIXME: this is not restoring callee-save state. For example if
-    /// there's more than one Pulley activation on the stack that means that
-    /// the previous one is expecting the callee (the host) to preserve all
-    /// callee-save registers. That's not restored here which means with
-    /// multiple activations we're effectively corrupting callee-save
-    /// registers.
-    ///
-    /// One fix for this is to possibly update the `SystemV` ABI on pulley to
-    /// have no callee-saved registers and make everything caller-saved. That
-    /// would force all trampolines to save all state which is basically
-    /// what we want as they'll naturally restore state if we later return to
-    /// them.
     fn longjmp(&mut self, setjmp: Setjmp) {
-        let Setjmp { sp, fp, lr } = setjmp;
+        let Setjmp {
+            xregs,
+            fregs,
+            fp,
+            lr,
+        } = setjmp;
         unsafe {
-            self.0[XReg::sp].set_ptr(sp);
+            for (i, val) in xregs.into_iter().enumerate() {
+                self.0[XReg::new(i as u8 + 16).unwrap()].set_u64(val);
+            }
+            for (i, val) in fregs.into_iter().enumerate() {
+                self.0[FReg::new(i as u8 + 16).unwrap()].set_f64(val);
+            }
             self.0.set_fp(fp);
             self.0.set_lr(lr);
         }
