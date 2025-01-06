@@ -13,6 +13,29 @@ set -ex
 
 build=$1
 target=$2
+wrapper=""
+
+# If `$DOCKER_IMAGE` is set then run the build inside of that docker container
+# instead of on the host machine. In CI this uses `./ci/docker/*/Dockerfile` to
+# have precise glibc requirements for Linux platforms for example.
+if [ "$DOCKER_IMAGE" != "" ]; then
+  if [ -f "$DOCKER_IMAGE" ]; then
+    docker build --tag build-image --file $DOCKER_IMAGE ci/docker
+    DOCKER_IMAGE=build-image
+  fi
+
+  # Inherit the environment's rustc and env vars related to cargo/rust, and then
+  # otherwise re-execute ourselves and we'll be missing `$DOCKER_IMAGE` in the
+  # container so we'll continue below.
+  exec docker run --interactive \
+    --volume `pwd`:`pwd` \
+    --volume `rustc --print sysroot`:/rust:ro \
+    --workdir `pwd` \
+    --interactive \
+    --env-file <(env | grep 'CARGO\|RUST') \
+    $DOCKER_IMAGE \
+    bash -c "PATH=\$PATH:/rust/bin RUSTFLAGS=\"\$RUSTFLAGS \$EXTRA_RUSTFLAGS\" `pwd`/$0 $*"
+fi
 
 # Default build flags for release artifacts. Leave debugging for
 # builds-from-source which have richer information anyway, and additionally the
