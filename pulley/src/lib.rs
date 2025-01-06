@@ -1256,6 +1256,28 @@ macro_rules! for_each_extended_op {
             vavground8x16 = Vavground8x16 { operands: BinaryOperands<VReg> };
             /// `dst = (src1 + src2 + 1) // 2`
             vavground16x8 = Vavground16x8 { operands: BinaryOperands<VReg> };
+
+            /// `dst = src == dst`
+            veqf32x4 = VeqF32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src != dst`
+            vneqf32x4 = VneqF32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src < dst`
+            vltf32x4 = VltF32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src <= dst`
+            vlteqf32x4 = VlteqF32x4 { operands: BinaryOperands<VReg> };
+            /// `dst = src == dst`
+            veqf64x2 = VeqF64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src != dst`
+            vneqf64x2 = VneqF64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src < dst`
+            vltf64x2 = VltF64x2 { operands: BinaryOperands<VReg> };
+            /// `dst = src <= dst`
+            vlteqf64x2 = VlteqF64x2 { operands: BinaryOperands<VReg> };
+
+            /// `dst = ieee_fma(a, b, c)`
+            vfma32x4 = Vfma32x4 { dst: VReg, a: VReg, b: VReg, c: VReg };
+            /// `dst = ieee_fma(a, b, c)`
+            vfma64x2 = Vfma64x2 { dst: VReg, a: VReg, b: VReg, c: VReg };
         }
     };
 }

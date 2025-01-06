@@ -756,6 +756,9 @@
 (rule (lower (fcmp cc a b @ (value_type (ty_scalar_float ty))))
   (lower_fcmp ty cc a b))
 
+(rule 1 (lower (fcmp cc a b @ (value_type (ty_vec128 ty))))
+  (lower_vfcmp ty cc a b))
+
 (decl lower_fcmp (Type FloatCC Value Value) XReg)
 
 (rule (lower_fcmp $F32 (FloatCC.Equal) a b) (pulley_feq32 a b))
@@ -786,6 +789,32 @@
 (rule -1 (lower_fcmp ty cc a b)
   (if-let true (floatcc_unordered cc))
   (pulley_xbxor32_s8 (lower_fcmp ty (floatcc_complement cc) a b) 1))
+
+(decl lower_vfcmp (Type FloatCC Value Value) VReg)
+
+(rule (lower_vfcmp $F32X4 (FloatCC.Equal) a b) (pulley_veqf32x4 a b))
+(rule (lower_vfcmp $F64X2 (FloatCC.Equal) a b) (pulley_veqf64x2 a b))
+(rule (lower_vfcmp $F32X4 (FloatCC.NotEqual) a b) (pulley_vneqf32x4 a b))
+(rule (lower_vfcmp $F64X2 (FloatCC.NotEqual) a b) (pulley_vneqf64x2 a b))
+(rule (lower_vfcmp $F32X4 (FloatCC.LessThan) a b) (pulley_vltf32x4 a b))
+(rule (lower_vfcmp $F64X2 (FloatCC.LessThan) a b) (pulley_vltf64x2 a b))
+(rule (lower_vfcmp $F32X4 (FloatCC.LessThanOrEqual) a b) (pulley_vlteqf32x4 a b))
+(rule (lower_vfcmp $F64X2 (FloatCC.LessThanOrEqual) a b) (pulley_vlteqf64x2 a b))
+
+(rule (lower_vfcmp ty (FloatCC.Unordered) a b)
+  (pulley_vbor128
+    (lower_vfcmp ty (FloatCC.NotEqual) a a)
+    (lower_vfcmp ty (FloatCC.NotEqual) b b)))
+
+;; NB: Pulley doesn't have lowerings for `Ordered` or `Unordered*` `FloatCC`
+;; conditions as that's not needed by wasm at this time.
+
+;; Pulley doesn't have instructions for `>` and `>=`, so we have to reverse the
+;; operation.
+(rule (lower_vfcmp ty (FloatCC.GreaterThan) a b)
+  (lower_vfcmp ty (FloatCC.LessThan) b a))
+(rule (lower_vfcmp ty (FloatCC.GreaterThanOrEqual) a b)
+  (lower_vfcmp ty (FloatCC.LessThanOrEqual) b a))
 
 ;;;; Rules for `load` and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1203,6 +1232,7 @@
       (pulley_vfloor32x4 a))
 (rule (lower (has_type $F64X2 (floor a)))
       (pulley_vfloor64x2 a))
+
 ;;;; Rules for `ceil` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $F32 (ceil a))) (pulley_fceil32 a))
@@ -1229,7 +1259,6 @@
       (pulley_vsqrt32x4 a))
 (rule (lower (has_type $F64X2 (sqrt a)))
       (pulley_vsqrt64x2 a))
-
 
 ;;;; Rules for `fneg` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1407,7 +1436,7 @@
 (rule (lower (scalar_to_vector a @ (value_type $F64)))
   (pulley_vinsertf64 (pulley_vconst128 0) a 0))
 
-;;;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;; Rules for `shuffle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (has_type $I8X16 (shuffle a b (u128_from_immediate mask))))
   (pulley_vshuffle a b mask))
@@ -1415,3 +1444,8 @@
 ;;;; Rules for `swizzle` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule 1 (lower (has_type $I8X16 (swizzle a b))) (pulley_vswizzlei8x16 a b))
+
+;;;; Rules for `fma` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (has_type $F32X4 (fma a b c))) (pulley_vfma32x4 a b c))
+(rule (lower (has_type $F64X2 (fma a b c))) (pulley_vfma64x2 a b c))

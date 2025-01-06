@@ -1289,11 +1289,11 @@ pub mod relocs {
     }
 
     pub extern "C" fn fmaf32(a: f32, b: f32, c: f32) -> f32 {
-        wasmtime_math::WasmFloat::mul_add(a, b, c)
+        wasmtime_math::WasmFloat::wasm_mul_add(a, b, c)
     }
 
     pub extern "C" fn fmaf64(a: f64, b: f64, c: f64) -> f64 {
-        wasmtime_math::WasmFloat::mul_add(a, b, c)
+        wasmtime_math::WasmFloat::wasm_mul_add(a, b, c)
     }
 
     // This intrinsic is only used on x86_64 platforms as an implementation of

@@ -5,6 +5,10 @@ target aarch64
 set enable_multi_ret_implicit_sret
 target riscv64 has_v
 target riscv64 has_v has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
 
 ;; This file is not enabled in the interpreter since SIMD fneg is currently broken
 ;; there.
