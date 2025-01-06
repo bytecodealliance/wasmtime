@@ -31,7 +31,7 @@ pub trait WasmFloat {
     fn wasm_nearest(self) -> Self;
     fn wasm_minimum(self, other: Self) -> Self;
     fn wasm_maximum(self, other: Self) -> Self;
-    fn mul_add(self, b: Self, c: Self) -> Self;
+    fn wasm_mul_add(self, b: Self, c: Self) -> Self;
 }
 
 impl WasmFloat for f32 {
@@ -148,9 +148,11 @@ impl WasmFloat for f32 {
         }
     }
     #[inline]
-    fn mul_add(self, b: f32, c: f32) -> f32 {
+    fn wasm_mul_add(self, b: f32, c: f32) -> f32 {
+        // The MinGW implementation of `fma` differs from other platforms, so
+        // favor `libm` there instead.
         #[cfg(feature = "std")]
-        if true {
+        if !(cfg!(windows) && cfg!(target_env = "gnu")) {
             return self.mul_add(b, c);
         }
         libm::fmaf(self, b, c)
@@ -271,7 +273,7 @@ impl WasmFloat for f64 {
         }
     }
     #[inline]
-    fn mul_add(self, b: f64, c: f64) -> f64 {
+    fn wasm_mul_add(self, b: f64, c: f64) -> f64 {
         // The MinGW implementation of `fma` differs from other platforms, so
         // favor `libm` there instead.
         #[cfg(feature = "std")]

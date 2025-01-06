@@ -4775,7 +4775,7 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         let b = self.state[b].get_f32x4();
         let c = self.state[c].get_f32x4();
         for ((a, b), c) in a.iter_mut().zip(b).zip(c) {
-            *a = a.mul_add(b, c);
+            *a = a.wasm_mul_add(b, c);
         }
         self.state[dst].set_f32x4(a);
         ControlFlow::Continue(())
@@ -4786,7 +4786,7 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         let b = self.state[b].get_f64x2();
         let c = self.state[c].get_f64x2();
         for ((a, b), c) in a.iter_mut().zip(b).zip(c) {
-            *a = a.mul_add(b, c);
+            *a = a.wasm_mul_add(b, c);
         }
         self.state[dst].set_f64x2(a);
         ControlFlow::Continue(())
