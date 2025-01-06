@@ -36,6 +36,12 @@ fn build_c_helpers() {
         build.define("FEATURE_DEBUG_BUILTINS", None);
     }
 
+    if std::env::var("CARGO_CFG_WINDOWS").is_ok()
+        && std::env::var("CARGO_CFG_TARGET_ENV").ok().as_deref() == Some("gnu")
+    {
+        build.define("__USE_MINGW_SETJMP_NON_SEH", None);
+    }
+
     println!("cargo:rerun-if-changed=src/runtime/vm/helpers.c");
     build.file("src/runtime/vm/helpers.c");
     build.compile("wasmtime-helpers");
