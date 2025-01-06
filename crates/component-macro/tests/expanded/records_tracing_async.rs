@@ -192,7 +192,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod records {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -718,7 +718,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod records {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::anyhow;
+                use wasmtime::component::__internal::{anyhow, Box};
                 #[derive(wasmtime::component::ComponentType)]
                 #[derive(wasmtime::component::Lift)]
                 #[derive(wasmtime::component::Lower)]

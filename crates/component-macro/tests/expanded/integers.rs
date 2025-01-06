@@ -185,7 +185,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod integers {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub trait Host {
                 fn a1(&mut self, x: u8) -> ();
                 fn a2(&mut self, x: i8) -> ();
@@ -485,7 +485,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod integers {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::anyhow;
+                use wasmtime::component::__internal::{anyhow, Box};
                 pub struct Guest {
                     a1: wasmtime::component::Func,
                     a2: wasmtime::component::Func,

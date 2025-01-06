@@ -317,7 +317,7 @@ impl Compiler {
         false
     }
 
-    /// Returns whether this complier configuration supports the current host
+    /// Returns whether this compiler configuration supports the current host
     /// architecture.
     pub fn supports_host(&self) -> bool {
         match self {
@@ -404,39 +404,16 @@ impl WastTest {
                 "misc_testsuite/simd/canonicalize-nan.wast",
                 "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
                 "misc_testsuite/simd/v128-select.wast",
-                "spec_testsuite/proposals/annotations/simd_lane.wast",
-                "spec_testsuite/proposals/relaxed-simd/i16x8_relaxed_q15mulr_s.wast",
                 "spec_testsuite/proposals/relaxed-simd/i32x4_relaxed_trunc.wast",
-                "spec_testsuite/proposals/relaxed-simd/i8x16_relaxed_swizzle.wast",
-                "spec_testsuite/proposals/relaxed-simd/relaxed_dot_product.wast",
                 "spec_testsuite/proposals/relaxed-simd/relaxed_madd_nmadd.wast",
-                "spec_testsuite/proposals/memory64/simd_lane.wast",
                 "spec_testsuite/proposals/memory64/relaxed_madd_nmadd.wast",
-                "spec_testsuite/proposals/memory64/relaxed_dot_product.wast",
-                "spec_testsuite/proposals/memory64/i16x8_relaxed_q15mulr_s.wast",
                 "spec_testsuite/proposals/memory64/i32x4_relaxed_trunc.wast",
-                "spec_testsuite/proposals/memory64/i8x16_relaxed_swizzle.wast",
-                "spec_testsuite/simd_f32x4_arith.wast",
                 "spec_testsuite/simd_f32x4_cmp.wast",
                 "spec_testsuite/simd_f32x4_pmin_pmax.wast",
-                "spec_testsuite/simd_f32x4_rounding.wast",
-                "spec_testsuite/simd_f64x2_arith.wast",
                 "spec_testsuite/simd_f64x2_cmp.wast",
                 "spec_testsuite/simd_f64x2_pmin_pmax.wast",
-                "spec_testsuite/simd_f64x2_rounding.wast",
-                "spec_testsuite/simd_i16x8_arith2.wast",
-                "spec_testsuite/simd_i16x8_extadd_pairwise_i8x16.wast",
-                "spec_testsuite/simd_i16x8_q15mulr_sat_s.wast",
-                "spec_testsuite/simd_i16x8_sat_arith.wast",
-                "spec_testsuite/simd_i32x4_arith2.wast",
-                "spec_testsuite/simd_i32x4_dot_i16x8.wast",
-                "spec_testsuite/simd_i32x4_extadd_pairwise_i16x8.wast",
                 "spec_testsuite/simd_i32x4_trunc_sat_f32x4.wast",
                 "spec_testsuite/simd_i32x4_trunc_sat_f64x2.wast",
-                "spec_testsuite/simd_i64x2_arith2.wast",
-                "spec_testsuite/simd_i8x16_arith2.wast",
-                "spec_testsuite/simd_i8x16_sat_arith.wast",
-                "spec_testsuite/simd_lane.wast",
                 "spec_testsuite/simd_load.wast",
                 "spec_testsuite/simd_splat.wast",
             ];

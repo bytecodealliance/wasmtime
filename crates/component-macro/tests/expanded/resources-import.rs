@@ -344,7 +344,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod resources {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub enum Bar {}
             pub trait HostBar {
                 fn new(&mut self) -> wasmtime::component::Resource<Bar>;
@@ -860,7 +860,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod long_use_chain1 {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub enum A {}
             pub trait HostA {
                 fn drop(
@@ -920,7 +920,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod long_use_chain2 {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain1::A;
             pub trait Host {}
             pub trait GetHost<
@@ -956,7 +956,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod long_use_chain3 {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain2::A;
             pub trait Host {}
             pub trait GetHost<
@@ -992,7 +992,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod long_use_chain4 {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub type A = super::super::super::foo::foo::long_use_chain3::A;
             pub trait Host {
                 fn foo(&mut self) -> wasmtime::component::Resource<A>;
@@ -1042,7 +1042,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod transitive_interface_with_resource {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub enum Foo {}
             pub trait HostFoo {
                 fn drop(
@@ -1108,7 +1108,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod uses_resource_transitively {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::anyhow;
+                use wasmtime::component::__internal::{anyhow, Box};
                 pub type Foo = super::super::super::super::foo::foo::transitive_interface_with_resource::Foo;
                 pub struct Guest {
                     handle: wasmtime::component::Func,

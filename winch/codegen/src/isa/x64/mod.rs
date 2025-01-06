@@ -104,7 +104,7 @@ impl TargetIsa for X64 {
             pointer_bytes,
             self.shared_flags.clone(),
             self.isa_flags.clone(),
-        );
+        )?;
         let stack = Stack::new();
 
         let abi_sig = wasm_sig::<abi::X64ABI>(sig);
@@ -143,7 +143,7 @@ impl TargetIsa for X64 {
 
         let names = body_codegen.env.take_name_map();
         Ok(CompiledFunction::new(
-            masm.finalize(base),
+            masm.finalize(base)?,
             names,
             self.function_alignment(),
         ))

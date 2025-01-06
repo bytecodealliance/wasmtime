@@ -343,7 +343,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod the_interface {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             /// Link-time configurations.
             #[derive(Clone, Debug, Default)]
             pub struct LinkOptions {

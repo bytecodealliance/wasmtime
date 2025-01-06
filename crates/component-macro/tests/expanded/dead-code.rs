@@ -174,7 +174,7 @@ pub mod a {
         #[allow(clippy::all)]
         pub mod interface_with_live_type {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             #[derive(wasmtime::component::ComponentType)]
             #[derive(wasmtime::component::Lift)]
             #[derive(wasmtime::component::Lower)]
@@ -243,7 +243,7 @@ pub mod a {
         #[allow(clippy::all)]
         pub mod interface_with_dead_type {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub trait Host {}
             pub trait GetHost<
                 T,

@@ -14,6 +14,8 @@ function(CREATE_TARGET TARGET TARGET_PATH)
 		target_compile_options(wasmtime-${TARGET} PRIVATE /W3)
 	endif()
 
+        target_compile_definitions(wasmtime-${TARGET} PRIVATE WASMTIME_TEST_ONLY)
+
 	set_target_properties(wasmtime-${TARGET} PROPERTIES
 		OUTPUT_NAME wasmtime-${TARGET}
 		RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/$<0:>

@@ -1860,7 +1860,7 @@ fn test_riscv64_binemit() {
             rd: writable_a0(),
             addr: a1(),
             src: a2(),
-            amo: AMO::Aquire,
+            amo: AMO::Acquire,
         },
         "amoswap.w.aq a0,a2,(a1)",
         0xcc5a52f,

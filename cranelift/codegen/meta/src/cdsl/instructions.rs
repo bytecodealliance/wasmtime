@@ -421,7 +421,7 @@ fn verify_polymorphic(
 /// Verify that the use of TypeVars is consistent with `ctrl_typevar` as the controlling type
 /// variable.
 ///
-/// All polymorhic inputs must either be derived from `ctrl_typevar` or be independent free type
+/// All polymorphic inputs must either be derived from `ctrl_typevar` or be independent free type
 /// variables only used once.
 ///
 /// All polymorphic results must be derived from `ctrl_typevar`.

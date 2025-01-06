@@ -237,7 +237,7 @@
                 (src1 Gpr)
                 (src2 GprMemImm))
 
-       ;; Materializes the requested condition code in the destinaton reg.
+       ;; Materializes the requested condition code in the destination reg.
        (Setcc (cc CC)
               (dst WritableGpr))
 
@@ -2218,7 +2218,7 @@
             (_ Unit (emit (MInst.XmmToGprVex op src dst size))))
         dst))
 
-;; Helper for creating `xmm_min_max_seq` psuedo-instructions.
+;; Helper for creating `xmm_min_max_seq` pseudo-instructions.
 (decl xmm_min_max_seq (Type bool Xmm Xmm) Xmm)
 (rule (xmm_min_max_seq ty is_min lhs rhs)
       (let ((dst WritableXmm (temp_writable_xmm))

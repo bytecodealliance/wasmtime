@@ -13,7 +13,6 @@ use core::ops::{Index, IndexMut};
 use core::ptr::NonNull;
 use sptr::Strict;
 use wasmtime_math::WasmFloat;
-
 mod debug;
 #[cfg(all(not(pulley_tail_calls), not(pulley_assume_llvm_makes_tail_calls)))]
 mod match_loop;
@@ -2981,6 +2980,16 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vsubf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = *a - b;
+        }
+        self.state[operands.dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
     fn fmul32(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_f32();
         let b = self.state[operands.src2].get_f32();
@@ -2988,10 +2997,46 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vmulf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = *a * b;
+        }
+        self.state[operands.dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
     fn fdiv32(&mut self, operands: BinaryOperands<FReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_f32();
         let b = self.state[operands.src2].get_f32();
         self.state[operands.dst].set_f32(a / b);
+        ControlFlow::Continue(())
+    }
+
+    fn vdivf32x4(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f32x4();
+        let b = self.state[operands.src2].get_f32x4();
+        let mut result = [0.0f32; 4];
+
+        for i in 0..4 {
+            result[i] = a[i] / b[i];
+        }
+
+        self.state[operands.dst].set_f32x4(result);
+        ControlFlow::Continue(())
+    }
+
+    fn vdivf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        let mut result = [0.0f64; 2];
+
+        for i in 0..2 {
+            result[i] = a[i] / b[i];
+        }
+
+        self.state[operands.dst].set_f64x2(result);
         ControlFlow::Continue(())
     }
 
@@ -3015,9 +3060,45 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vtrunc32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f32x4();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_trunc();
+        }
+        self.state[dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vtrunc64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f64x2();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_trunc();
+        }
+        self.state[dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
     fn ffloor32(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f32();
         self.state[dst].set_f32(a.wasm_floor());
+        ControlFlow::Continue(())
+    }
+
+    fn vfloor32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f32x4();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_floor();
+        }
+        self.state[dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vfloor64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f64x2();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_floor();
+        }
+        self.state[dst].set_f64x2(a);
         ControlFlow::Continue(())
     }
 
@@ -3027,9 +3108,47 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vceil32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f32x4();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_ceil();
+        }
+        self.state[dst].set_f32x4(a);
+
+        ControlFlow::Continue(())
+    }
+
+    fn vceil64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f64x2();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_ceil();
+        }
+        self.state[dst].set_f64x2(a);
+
+        ControlFlow::Continue(())
+    }
+
     fn fnearest32(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f32();
         self.state[dst].set_f32(a.wasm_nearest());
+        ControlFlow::Continue(())
+    }
+
+    fn vnearest32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f32x4();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_nearest();
+        }
+        self.state[dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vnearest64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f64x2();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_nearest();
+        }
+        self.state[dst].set_f64x2(a);
         ControlFlow::Continue(())
     }
 
@@ -3039,9 +3158,36 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vsqrt32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f32x4();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_sqrt();
+        }
+        self.state[dst].set_f32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vsqrt64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f64x2();
+        for elem in a.iter_mut() {
+            *elem = elem.wasm_sqrt();
+        }
+        self.state[dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
     fn fneg32(&mut self, dst: FReg, src: FReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f32();
         self.state[dst].set_f32(-a);
+        ControlFlow::Continue(())
+    }
+
+    fn vnegf32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let mut a = self.state[src].get_f32x4();
+        for elem in a.iter_mut() {
+            *elem = -*elem;
+        }
+        self.state[dst].set_f32x4(a);
         ControlFlow::Continue(())
     }
 
@@ -3192,6 +3338,71 @@ impl ExtendedOpVisitor for Interpreter<'_> {
             *a += b;
         }
         self.state[operands.dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vaddi8x16_sat(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i8x16();
+        let b = self.state[operands.src2].get_i8x16();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = (*a).saturating_add(b);
+        }
+        self.state[operands.dst].set_i8x16(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vaddu8x16_sat(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u8x16();
+        let b = self.state[operands.src2].get_u8x16();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = (*a).saturating_add(b);
+        }
+        self.state[operands.dst].set_u8x16(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vaddi16x8_sat(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = (*a).saturating_add(b);
+        }
+        self.state[operands.dst].set_i16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vaddu16x8_sat(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u16x8();
+        let b = self.state[operands.src2].get_u16x8();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = (*a).saturating_add(b);
+        }
+        self.state[operands.dst].set_u16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vaddpairwisei16x8_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        let mut result = [0i16; 8];
+        let half = result.len() / 2;
+        for i in 0..half {
+            result[i] = a[2 * i].wrapping_add(a[2 * i + 1]);
+            result[i + half] = b[2 * i].wrapping_add(b[2 * i + 1]);
+        }
+        self.state[operands.dst].set_i16x8(result);
+        ControlFlow::Continue(())
+    }
+
+    fn vaddpairwisei32x4_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i32x4();
+        let b = self.state[operands.src2].get_i32x4();
+        let mut result = [0i32; 4];
+        result[0] = a[0].wrapping_add(a[1]);
+        result[1] = a[2].wrapping_add(a[3]);
+        result[2] = b[0].wrapping_add(b[1]);
+        result[3] = b[2].wrapping_add(b[3]);
+        self.state[operands.dst].set_i32x4(result);
         ControlFlow::Continue(())
     }
 
@@ -3691,6 +3902,56 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vsubi8x16_sat(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i8x16();
+        let b = self.state[operands.src2].get_i8x16();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = a.saturating_sub(b);
+        }
+        self.state[operands.dst].set_i8x16(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vsubu8x16_sat(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u8x16();
+        let b = self.state[operands.src2].get_u8x16();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = a.saturating_sub(b);
+        }
+        self.state[operands.dst].set_u8x16(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vsubi16x8_sat(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = a.saturating_sub(b);
+        }
+        self.state[operands.dst].set_i16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vsubu16x8_sat(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u16x8();
+        let b = self.state[operands.src2].get_u16x8();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = a.saturating_sub(b);
+        }
+        self.state[operands.dst].set_u16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vsubf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = *a - b;
+        }
+        self.state[operands.dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
     fn vmuli8x16(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
         let mut a = self.state[operands.src1].get_i8x16();
         let b = self.state[operands.src2].get_i8x16();
@@ -3728,6 +3989,35 @@ impl ExtendedOpVisitor for Interpreter<'_> {
             *a = a.wrapping_mul(b);
         }
         self.state[operands.dst].set_i64x2(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmulf64x2(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_f64x2();
+        let b = self.state[operands.src2].get_f64x2();
+        for (a, b) in a.iter_mut().zip(b) {
+            *a = *a * b;
+        }
+        self.state[operands.dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vqmulrsi16x8(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        const MIN: i32 = i16::MIN as i32;
+        const MAX: i32 = i16::MAX as i32;
+        for (a, b) in a.iter_mut().zip(b) {
+            let r = (i32::from(*a) * i32::from(b) + (1 << 14)) >> 15;
+            *a = r.clamp(MIN, MAX) as i16;
+        }
+        self.state[operands.dst].set_i16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vpopcnt8x16(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_u8x16();
+        self.state[dst].set_u8x16(a.map(|i| i.count_ones() as u8));
         ControlFlow::Continue(())
     }
 
@@ -4139,6 +4429,156 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vnegf64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64x2();
+        self.state[dst].set_f64x2(a.map(|i| -i));
+        ControlFlow::Continue(())
+    }
+
+    fn vmin8x16_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i8x16();
+        let b = self.state[operands.src2].get_i8x16();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).min(*b);
+        }
+        self.state[operands.dst].set_i8x16(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmin8x16_u(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u8x16();
+        let b = self.state[operands.src2].get_u8x16();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).min(*b);
+        }
+        self.state[operands.dst].set_u8x16(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmin16x8_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).min(*b);
+        }
+        self.state[operands.dst].set_i16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmin16x8_u(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u16x8();
+        let b = self.state[operands.src2].get_u16x8();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).min(*b);
+        }
+        self.state[operands.dst].set_u16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmin32x4_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i32x4();
+        let b = self.state[operands.src2].get_i32x4();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).min(*b);
+        }
+        self.state[operands.dst].set_i32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmin32x4_u(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u32x4();
+        let b = self.state[operands.src2].get_u32x4();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).min(*b);
+        }
+        self.state[operands.dst].set_u32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmax8x16_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i8x16();
+        let b = self.state[operands.src2].get_i8x16();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).max(*b);
+        }
+        self.state[operands.dst].set_i8x16(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmax8x16_u(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u8x16();
+        let b = self.state[operands.src2].get_u8x16();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).max(*b);
+        }
+        self.state[operands.dst].set_u8x16(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmax16x8_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i16x8();
+        let b = self.state[operands.src2].get_i16x8();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).max(*b);
+        }
+        self.state[operands.dst].set_i16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmax16x8_u(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u16x8();
+        let b = self.state[operands.src2].get_u16x8();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).max(*b);
+        }
+        self.state[operands.dst].set_u16x8(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmax32x4_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_i32x4();
+        let b = self.state[operands.src2].get_i32x4();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).max(*b);
+        }
+        self.state[operands.dst].set_i32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vmax32x4_u(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u32x4();
+        let b = self.state[operands.src2].get_u32x4();
+        for (a, b) in a.iter_mut().zip(&b) {
+            *a = (*a).max(*b);
+        }
+        self.state[operands.dst].set_u32x4(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vabs8x16(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i8x16();
+        self.state[dst].set_i8x16(a.map(|i| i.wrapping_abs()));
+        ControlFlow::Continue(())
+    }
+
+    fn vabs16x8(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i16x8();
+        self.state[dst].set_i16x8(a.map(|i| i.wrapping_abs()));
+        ControlFlow::Continue(())
+    }
+
+    fn vabs32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i32x4();
+        self.state[dst].set_i32x4(a.map(|i| i.wrapping_abs()));
+        ControlFlow::Continue(())
+    }
+
+    fn vabs64x2(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_i64x2();
+        self.state[dst].set_i64x2(a.map(|i| i.wrapping_abs()));
+        ControlFlow::Continue(())
+    }
+
     fn vabsf32x4(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
         let a = self.state[src].get_f32x4();
         self.state[dst].set_f32x4(a.map(|i| i.wasm_abs()));
@@ -4188,6 +4628,57 @@ impl ExtendedOpVisitor for Interpreter<'_> {
             *a = a.wasm_minimum(*b);
         }
         self.state[operands.dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vshuffle(&mut self, dst: VReg, src1: VReg, src2: VReg, mask: u128) -> ControlFlow<Done> {
+        let a = self.state[src1].get_u8x16();
+        let b = self.state[src2].get_u8x16();
+        let result = mask.to_le_bytes().map(|m| {
+            if m < 16 {
+                a[m as usize]
+            } else {
+                b[m as usize - 16]
+            }
+        });
+        self.state[dst].set_u8x16(result);
+        ControlFlow::Continue(())
+    }
+
+    fn vswizzlei8x16(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let src1 = self.state[operands.src1].get_i8x16();
+        let src2 = self.state[operands.src2].get_i8x16();
+        let mut dst = [0i8; 16];
+        for (i, &idx) in src2.iter().enumerate() {
+            if (idx as usize) < 16 {
+                dst[i] = src1[idx as usize];
+            } else {
+                dst[i] = 0
+            }
+        }
+        self.state[operands.dst].set_i8x16(dst);
+        ControlFlow::Continue(())
+    }
+
+    fn vavground8x16(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u8x16();
+        let b = self.state[operands.src2].get_u8x16();
+        for (a, b) in a.iter_mut().zip(&b) {
+            // use wider precision to avoid overflow
+            *a = ((u32::from(*a) + u32::from(*b) + 1) / 2) as u8;
+        }
+        self.state[operands.dst].set_u8x16(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vavground16x8(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let mut a = self.state[operands.src1].get_u16x8();
+        let b = self.state[operands.src2].get_u16x8();
+        for (a, b) in a.iter_mut().zip(&b) {
+            // use wider precision to avoid overflow
+            *a = ((u32::from(*a) + u32::from(*b) + 1) / 2) as u16;
+        }
+        self.state[operands.dst].set_u16x8(a);
         ControlFlow::Continue(())
     }
 }

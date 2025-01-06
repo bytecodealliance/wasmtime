@@ -177,7 +177,7 @@ const _: () = {
 #[allow(clippy::all)]
 pub mod imports {
     #[allow(unused_imports)]
-    use wasmtime::component::__internal::anyhow;
+    use wasmtime::component::__internal::{anyhow, Box};
     #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
     pub trait Host: Send {
         async fn y(&mut self) -> ();

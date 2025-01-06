@@ -634,7 +634,7 @@ impl ABIMachineSpec for Riscv64MachineDeps {
 
     fn get_machine_env(_flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
         static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
-        MACHINE_ENV.get_or_init(create_reg_enviroment)
+        MACHINE_ENV.get_or_init(create_reg_environment)
     }
 
     fn get_regs_clobbered_by_call(_call_conv_of_callee: isa::CallConv) -> PRegSet {
@@ -894,7 +894,7 @@ const DEFAULT_CLOBBERS: PRegSet = PRegSet::empty()
     .with(pv_reg(30))
     .with(pv_reg(31));
 
-fn create_reg_enviroment() -> MachineEnv {
+fn create_reg_environment() -> MachineEnv {
     // Some C Extension instructions can only use a subset of the registers.
     // x8 - x15, f8 - f15, v8 - v15 so we should prefer to use those since
     // they allow us to emit C instructions more often.

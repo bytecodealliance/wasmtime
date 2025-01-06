@@ -185,7 +185,7 @@ pub mod foo {
         #[allow(clippy::all)]
         pub mod chars {
             #[allow(unused_imports)]
-            use wasmtime::component::__internal::anyhow;
+            use wasmtime::component::__internal::{anyhow, Box};
             pub trait Host {
                 /// A function that accepts a character
                 fn take_char(&mut self, x: char) -> ();
@@ -258,7 +258,7 @@ pub mod exports {
             #[allow(clippy::all)]
             pub mod chars {
                 #[allow(unused_imports)]
-                use wasmtime::component::__internal::anyhow;
+                use wasmtime::component::__internal::{anyhow, Box};
                 pub struct Guest {
                     take_char: wasmtime::component::Func,
                     return_char: wasmtime::component::Func,

@@ -888,7 +888,7 @@ mod tests {
                                     Err(e) => {
                                         // Only allow failure on 32-bit
                                         // platforms where the calculation
-                                        // exceeded the size of the addres
+                                        // exceeded the size of the address
                                         // space
                                         assert!(
                                             cfg!(target_pointer_width = "32")

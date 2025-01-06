@@ -510,7 +510,7 @@ fn cast_index_to_pointer_ty(
 
     // If the index size is larger than the pointer, that means that this is a
     // 32-bit host platform with a 64-bit wasm linear memory. If the index is
-    // larger than 2**32 then that's guranteed to be out-of-bounds, otherwise we
+    // larger than 2**32 then that's guaranteed to be out-of-bounds, otherwise we
     // `ireduce` the index.
     //
     // Also note that at this time this branch doesn't support pcc nor the
