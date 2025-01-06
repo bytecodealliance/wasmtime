@@ -27,15 +27,26 @@ fn main() {
     #[cfg(feature = "runtime")]
     build_c_helpers();
 
-    // Flag pulley as enabled unconditionally on 32-bit targets to ensure that
-    // wasm is runnable by default like it is on other 64-bit native platforms.
-    // Note that this doesn't actually enable the Cargo feature, it just changes
-    // the cfg's passed to the crate, so for example care is still taken in
-    // `Cargo.toml` to handle pulley-specific dependencies on 32-bit platforms.
-    let target_pointer_width = std::env::var("CARGO_CFG_TARGET_POINTER_WIDTH").unwrap();
-    if target_pointer_width == "32" {
-        println!("cargo:rustc-cfg=feature=\"pulley\"");
+    // Determine whether Pulley will be enabled and used for this target.
+    match std::env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str() {
+        // These targets use Cranelift by default as they have backends in
+        // Cranelift. Pulley can still be used on an opt-in basis, but it's not
+        // otherwise explicitly enabled here.
+        "x86_64" | "riscv64" | "s390x" | "aarch64" => {}
+
+        // All other targets at this time use Pulley by default. That means
+        // that the pulley feature is "enabled" here and the default target is
+        // pulley. Note that by enabling the feature here it doesn't actually
+        // enable the Cargo feature, it just passes a cfg to rustc. That means
+        // that conditional dependencies enabled in `Cargo.toml` (or other
+        // features) by `pulley` aren't activated, which is why the `pulley`
+        // feature of this crate depends on nothing else.
+        _ => {
+            println!("cargo:rustc-cfg=feature=\"pulley\"");
+            println!("cargo:rustc-cfg=default_target_pulley");
+        }
     }
+    println!("cargo:rustc-check-cfg=cfg(default_target_pulley)");
 }
 
 fn cfg(key: &str) -> bool {

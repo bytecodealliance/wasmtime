@@ -2054,17 +2054,9 @@ impl Config {
             return target;
         }
 
-        // Without an explicitly configured target the goal is then to select
-        // some default which can reasonably run code on this host. If pulley is
-        // enabled and the host has no support at all in the cranelift/winch
-        // backends then pulley becomes the default target. This means, for
-        // example, that 32-bit platforms will default to running pulley at this
-        // time.
-        let any_compiler_support = cfg!(target_arch = "x86_64")
-            || cfg!(target_arch = "aarch64")
-            || cfg!(target_arch = "riscv64")
-            || cfg!(target_arch = "s390x");
-        if !any_compiler_support && cfg!(feature = "pulley") {
+        // If the `build.rs` script determined that this platform uses pulley by
+        // default, then use Pulley.
+        if cfg!(default_target_pulley) {
             return target_lexicon::Triple::pulley_host();
         }
 
