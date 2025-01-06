@@ -4364,6 +4364,7 @@ dependencies = [
 name = "wasmtime-jit-debug"
 version = "30.0.0"
 dependencies = [
+ "cc",
  "object",
  "rustix",
  "wasmtime-versioned-export-macros",

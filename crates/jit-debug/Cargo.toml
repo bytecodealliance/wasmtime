@@ -14,6 +14,10 @@ rust-version.workspace = true
 [lints]
 workspace = true
 
+[build-dependencies]
+cc = { workspace = true }
+wasmtime-versioned-export-macros = { workspace = true }
+
 [dependencies]
 object = { workspace = true, optional = true }
 wasmtime-versioned-export-macros = { workspace = true }
