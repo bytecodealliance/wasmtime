@@ -1387,6 +1387,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.83 -> 1.1.6"
 
+[[audits.cc]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.1.6 -> 1.2.5"
+notes = "Lots of minor updates here and there along with refactorings and such. Everything in line with what `cc` is expected to do."
+
 [[audits.cfg-if]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -2806,6 +2812,12 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.1.4"
 notes = "I always really enjoy reading eliza's code, she left perfect comments at every use of unsafe."
+
+[[audits.shlex]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "1.1.0"
+notes = "Only minor `unsafe` code blocks which look valid and otherwise does what it says on the tin."
 
 [[audits.signal-hook-registry]]
 who = "Pat Hickey <phickey@fastly.com>"
