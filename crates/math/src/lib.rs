@@ -272,8 +272,10 @@ impl WasmFloat for f64 {
     }
     #[inline]
     fn mul_add(self, b: f64, c: f64) -> f64 {
+        // The MinGW implementation of `fma` differs from other platforms, so
+        // favor `libm` there instead.
         #[cfg(feature = "std")]
-        if true {
+        if !(cfg!(windows) && cfg!(target_env = "gnu")) {
             return self.mul_add(b, c);
         }
         libm::fma(self, b, c)
