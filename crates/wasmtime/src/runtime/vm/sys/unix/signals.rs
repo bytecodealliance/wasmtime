@@ -31,7 +31,7 @@ impl TrapHandler {
     pub unsafe fn new(macos_use_mach_ports: bool) -> TrapHandler {
         // Either mach ports shouldn't be in use or we shouldn't be on macOS,
         // otherwise the `machports.rs` module should be used instead.
-        assert!(!macos_use_mach_ports || !cfg!(target_os = "macos"));
+        assert!(!macos_use_mach_ports || !cfg!(target_vendor = "apple"));
 
         foreach_handler(|slot, signal| {
             let mut handler: libc::sigaction = mem::zeroed();
@@ -63,7 +63,7 @@ impl TrapHandler {
     }
 
     pub fn validate_config(&self, macos_use_mach_ports: bool) {
-        assert!(!macos_use_mach_ports || !cfg!(target_os = "macos"));
+        assert!(!macos_use_mach_ports || !cfg!(target_vendor = "apple"));
     }
 }
 
@@ -81,7 +81,7 @@ unsafe fn foreach_handler(mut f: impl FnMut(*mut libc::sigaction, i32)) {
 
     // Sometimes we need to handle SIGBUS too:
     // - On Darwin, guard page accesses are raised as SIGBUS.
-    if cfg!(target_os = "macos") || cfg!(target_os = "freebsd") {
+    if cfg!(target_vendor = "apple") || cfg!(target_os = "freebsd") {
         f(addr_of_mut!(PREV_SIGBUS), libc::SIGBUS);
     }
 
@@ -209,7 +209,7 @@ unsafe extern "C" fn trap_handler(
         // done running" which will clear the sigaltstack flag and allow
         // reusing it for the next signal. Then upon resuming in our custom
         // code we blow away the stack anyway with a longjmp.
-        if cfg!(target_os = "macos") {
+        if cfg!(target_vendor = "apple") {
             unsafe extern "C" fn wasmtime_longjmp_shim(jmp_buf: *const u8) {
                 wasmtime_longjmp(jmp_buf)
             }
@@ -303,13 +303,13 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
                 pc: (cx.uc_mcontext.psw.addr - trap_offset) as usize,
                 fp: *(cx.uc_mcontext.gregs[15] as *const usize),
             }
-        } else if #[cfg(all(target_os = "macos", target_arch = "x86_64"))] {
+        } else if #[cfg(all(target_vendor = "apple", target_arch = "x86_64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             TrapRegisters {
                 pc: (*cx.uc_mcontext).__ss.__rip as usize,
                 fp: (*cx.uc_mcontext).__ss.__rbp as usize,
             }
-        } else if #[cfg(all(target_os = "macos", target_arch = "aarch64"))] {
+        } else if #[cfg(all(target_vendor = "apple", target_arch = "aarch64"))] {
             let cx = &*(cx as *const libc::ucontext_t);
             TrapRegisters {
                 pc: (*cx.uc_mcontext).__ss.__pc as usize,
@@ -358,7 +358,7 @@ unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> Tra
 // See more comments above where this is called for what it's doing.
 unsafe fn set_pc(cx: *mut libc::c_void, pc: usize, arg1: usize) {
     cfg_if::cfg_if! {
-        if #[cfg(not(target_os = "macos"))] {
+        if #[cfg(not(target_vendor = "apple"))] {
             let _ = (cx, pc, arg1);
             unreachable!(); // not used on these platforms
         } else if #[cfg(target_arch = "x86_64")] {
@@ -382,7 +382,7 @@ unsafe fn set_pc(cx: *mut libc::c_void, pc: usize, arg1: usize) {
             (*cx.uc_mcontext).__ss.__pc = pc as u64;
             (*cx.uc_mcontext).__ss.__x[0] = arg1 as u64;
         } else {
-            compile_error!("unsupported macos target architecture");
+            compile_error!("unsupported apple target architecture");
         }
     }
 }

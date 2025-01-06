@@ -553,6 +553,12 @@ jobs:
         - target: wasm32-wasip1
           os: ubuntu-latest
           test: cargo build --no-default-features --features compile,cranelift,all-arch
+        - target: aarch64-apple-ios
+          os: macos-latest
+          test: cargo build
+          env:
+            IPHONEOS_DEPLOYMENT_TARGET: 13.0
+    env: ${{ matrix.env || fromJSON('{}') }}
     steps:
     - uses: actions/checkout@v4
       with:
