@@ -96,6 +96,17 @@ void VERSIONED_SYMBOL(set_vmctx_memory)(void *);
 DEBUG_BUILTIN_EXPORT void VERSIONED_SYMBOL(wasmtime_set_vmctx_memory)(void *p) {
   VERSIONED_SYMBOL(set_vmctx_memory)(p);
 }
+
+// Helper symbol called from Rust to force the above two functions to not get
+// stripped by the linker.
+void VERSIONED_SYMBOL(wasmtime_debug_builtins_init)() {
+#ifndef CFG_TARGET_OS_windows
+  void *volatile p;
+  p = (void *)&VERSIONED_SYMBOL(wasmtime_resolve_vmctx_memory_ptr);
+  p = (void *)&VERSIONED_SYMBOL(wasmtime_set_vmctx_memory);
+  (void)p;
+#endif
+}
 #endif // FEATURE_DEBUG_BUILTINS
 
 // For more information about this see `unix/unwind.rs` and the

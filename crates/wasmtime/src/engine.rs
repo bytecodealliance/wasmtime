@@ -101,6 +101,8 @@ impl Engine {
             // handlers, etc.
             #[cfg(all(feature = "signals-based-traps", not(miri)))]
             crate::runtime::vm::init_traps(config.macos_use_mach_ports);
+            #[cfg(feature = "debug-builtins")]
+            crate::runtime::vm::debug_builtins::init();
         }
 
         #[cfg(any(feature = "cranelift", feature = "winch"))]
