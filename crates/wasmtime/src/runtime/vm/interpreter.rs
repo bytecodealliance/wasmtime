@@ -141,13 +141,11 @@ impl InterpreterRef<'_> {
         };
 
         if cfg!(debug_assertions) {
-            for (i, val) in setjmp.xregs.iter().enumerate() {
-                assert!(self.0[XReg::new(i as u8 + 16).unwrap()].get_u64() == *val);
+            for (i, reg) in callee_save_xregs() {
+                assert!(self.0[reg].get_u64() == setjmp.xregs[i]);
             }
-            for (i, val) in setjmp.fregs.iter().enumerate() {
-                assert!(
-                    self.0[FReg::new(i as u8 + 16).unwrap()].get_f64().to_bits() == val.to_bits()
-                );
+            for (i, reg) in callee_save_fregs() {
+                assert!(self.0[reg].get_f64().to_bits() == setjmp.fregs[i].to_bits());
             }
             assert!(self.0.fp() == setjmp.fp);
             assert!(self.0.lr() == setjmp.lr);
@@ -198,11 +196,11 @@ impl InterpreterRef<'_> {
     fn setjmp(&self) -> Setjmp {
         let mut xregs = [0; 16];
         let mut fregs = [0.0; 16];
-        for (i, slot) in xregs.iter_mut().enumerate() {
-            *slot = self.0[XReg::new(i as u8 + 16).unwrap()].get_u64();
+        for (i, reg) in callee_save_xregs() {
+            xregs[i] = self.0[reg].get_u64();
         }
-        for (i, slot) in fregs.iter_mut().enumerate() {
-            *slot = self.0[FReg::new(i as u8 + 16).unwrap()].get_f64();
+        for (i, reg) in callee_save_fregs() {
+            fregs[i] = self.0[reg].get_f64();
         }
         Setjmp {
             xregs,
@@ -222,11 +220,11 @@ impl InterpreterRef<'_> {
             lr,
         } = setjmp;
         unsafe {
-            for (i, val) in xregs.into_iter().enumerate() {
-                self.0[XReg::new(i as u8 + 16).unwrap()].set_u64(val);
+            for (i, reg) in callee_save_xregs() {
+                self.0[reg].set_u64(xregs[i]);
             }
-            for (i, val) in fregs.into_iter().enumerate() {
-                self.0[FReg::new(i as u8 + 16).unwrap()].set_f64(val);
+            for (i, reg) in callee_save_fregs() {
+                self.0[reg].set_f64(fregs[i]);
             }
             self.0.set_fp(fp);
             self.0.set_lr(lr);
@@ -396,4 +394,12 @@ impl InterpreterRef<'_> {
         // if we got this far then something has gone seriously wrong.
         unreachable!()
     }
+}
+
+fn callee_save_xregs() -> impl Iterator<Item = (usize, XReg)> {
+    (0..16).map(|i| (i.into(), XReg::new(i + 16).unwrap()))
+}
+
+fn callee_save_fregs() -> impl Iterator<Item = (usize, FReg)> {
+    (0..16).map(|i| (i.into(), FReg::new(i + 16).unwrap()))
 }
