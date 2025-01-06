@@ -2023,6 +2023,7 @@ impl Config {
         features |= WasmFeatures::RELAXED_SIMD;
         features |= WasmFeatures::TAIL_CALL;
         features |= WasmFeatures::EXTENDED_CONST;
+        features |= WasmFeatures::MEMORY64;
         // NB: if you add a feature above this line please double-check
         // https://docs.wasmtime.dev/stability-wasm-proposals.html
         // to ensure all requirements are met and/or update the documentation
