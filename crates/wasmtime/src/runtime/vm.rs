@@ -95,17 +95,17 @@ pub use send_sync_unsafe_cell::SendSyncUnsafeCell;
 mod module_id;
 pub use module_id::CompiledModuleId;
 
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 mod byte_count;
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 mod cow;
-#[cfg(not(feature = "signals-based-traps"))]
+#[cfg(not(has_virtual_memory))]
 mod cow_disabled;
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 mod mmap;
 
 cfg_if::cfg_if! {
-    if #[cfg(feature = "signals-based-traps")] {
+    if #[cfg(has_virtual_memory)] {
         pub use crate::runtime::vm::byte_count::*;
         pub use crate::runtime::vm::mmap::{Mmap, MmapOffset};
         pub use self::cow::{MemoryImage, MemoryImageSlot, ModuleMemoryImages};
@@ -362,7 +362,7 @@ impl ModuleRuntimeInfo {
 }
 
 /// Returns the host OS page size, in bytes.
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 pub fn host_page_size() -> usize {
     static PAGE_SIZE: AtomicUsize = AtomicUsize::new(0);
 

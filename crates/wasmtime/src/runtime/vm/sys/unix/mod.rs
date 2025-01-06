@@ -5,16 +5,16 @@
 
 use core::cell::Cell;
 
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 pub mod mmap;
 pub mod traphandlers;
 pub mod unwind;
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 pub mod vm;
 
-#[cfg(all(feature = "signals-based-traps", target_vendor = "apple"))]
+#[cfg(all(has_native_signals, target_vendor = "apple"))]
 pub mod machports;
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_native_signals)]
 pub mod signals;
 
 std::thread_local!(static TLS: Cell<*mut u8> = const { Cell::new(std::ptr::null_mut()) });

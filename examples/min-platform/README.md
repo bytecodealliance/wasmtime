@@ -13,17 +13,16 @@ The example is organized into a few locations:
   embedding of Wasmtime itself. This is compiled to the target architecture
   and will have a minimal set of dependencies.
 
-* `examples/min-platform/embedding/*.json` - custom Rust target definitions
-  which are used when compiling this example. These are the custom target files
-  that are the compilation target of the `embedding` crate. This is a feature
-  of nightly Rust to be able to use these. Note that the contents can be
-  customized and these files are only examples.
-
 * `examples/min-platform/embedding/wasmtime-platform.{h,c}` - an example
   implementation of the platform dependencies that Wasmtime requires. This is
   defined and documented in
   `crates/wasmtime/src/runtime/vm/sys/custom/capi.rs`. The example here
-  implements the required functions with Linux syscalls.
+  implements the required functions with Linux syscalls. Note that by default
+  most of the file is not necessary to implement and is gated by
+  `WASMTIME_VIRTUAL_MEMORY` and `WASMTIME_NATIVE_SIGNALS`. These correspond
+  to the `custom-virtual-memory` and `custom-native-signals` crate features of
+  `wasmtime` which are off-by-default and are optional performance
+  optimizations.
 
 * `examples/min-platform/{Cargo.toml,src}` - an example "host embedding" which
   loads and runs the `embedding` from above. This is a bit contrived and mostly
@@ -35,43 +34,24 @@ The example is organized into a few locations:
 
 Taken together this example is unlikely to satisfy any one individual use case
 but should set up the scaffolding to show how Wasmtime can be built for a
-nonstandard platform. Wasmtime effectively only has one requirement from the
-system which is management of virtual memory, and beyond that everything else
-can be internalized.
-
-Note that at this time this support all relies on the fact that the Rust
-standard library can be built for a custom target. Most of the Rust standard
-library will be "stubbed out" however and won't work (e.g. opening a file would
-return an error). This means that not all of the `wasmtime` crate will work, nor
-will all features of the `wasmtime` crate, but the set of features activated
-here should suffice.
+nonstandard platform. Wasmtime effectively requires one pointer of thread-local
+memory and otherwise all other dependencies can be internalized.
 
 ## Description
 
-This example will compile Wasmtime to a custom Rust target specified in
-`*.json` files. This custom target, for the example, is modeled after Linux
-except for the fact that Rust won't be able to know that (e.g. the `#[cfg]`
-directives aren't set so code won't know it actually runs on Linux). The
-embedding will run a few small examples of WebAssembly modules and then return.
+This example will compile Wasmtime to any Rust target specified. The embedding
+will run a few small examples of WebAssembly modules and then return. This
+example is built in Wasmtime's CI with `x86_64-unknown-none` for example as a
+Rust target.
 
 The host for this is a Linux program which supplies the platform dependencies
 that the embedding requires, for example the `wasmtime_*` symbols. This host
-program will load the embedding and execute it.
-
-## Points of Note
-
-* Due to the usage of custom `*.json` targets, this example requires a nightly
-  Rust compiler.
-* Compiling the embedding requires `--cfg wasmtime_custom_platform` in the
-  `RUSTFLAGS` environment variable. to indicate that Wasmtime's custom C
-  API-based definition of platform support is desired.
-* Due to the usage of a custom target most of libstd doesn't work. For example
-  panics can't print anything and the process can only abort.
-* Due to the custom target not all features of Wasmtime can be enabled because
-  some crates may require platform functionality which can't be defined due to
-  the lack of knowledge of what platform is being targeted.
+program will load the embedding and execute it. This is mostly specific to
+executing this example in CI and is not necessarily representative of a "real"
+embedding where you'd probably use static linking instead of dynamic linking
+for example at the very least.
 
 ## Running this example
 
 This example can be built and run with the `./build.sh` script in this
-directory. Example output looks like.
+directory.

@@ -10,18 +10,18 @@
 
 #![warn(dead_code, unused_imports)]
 
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 use crate::prelude::*;
 
 pub mod capi;
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 pub mod mmap;
 pub mod traphandlers;
 pub mod unwind;
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 pub mod vm;
 
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 fn cvt(rc: i32) -> Result<()> {
     match rc {
         0 => Ok(()),

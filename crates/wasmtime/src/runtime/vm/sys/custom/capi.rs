@@ -3,20 +3,20 @@
 // Flags to either `wasmtime_mmap_{new,remap}` or `wasmtime_mprotect`.
 
 /// Indicates that the memory region should be readable.
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 pub const WASMTIME_PROT_READ: u32 = 1 << 0;
 /// Indicates that the memory region should be writable.
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 pub const WASMTIME_PROT_WRITE: u32 = 1 << 1;
 /// Indicates that the memory region should be executable.
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 pub const WASMTIME_PROT_EXEC: u32 = 1 << 2;
 
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 pub use WASMTIME_PROT_EXEC as PROT_EXEC;
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 pub use WASMTIME_PROT_READ as PROT_READ;
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 pub use WASMTIME_PROT_WRITE as PROT_WRITE;
 
 /// Handler function for traps in Wasmtime passed to `wasmtime_init_traps`.
@@ -43,13 +43,13 @@ pub use WASMTIME_PROT_WRITE as PROT_WRITE;
 ///
 /// When this function does not return it's because `wasmtime_longjmp` is
 /// used to handle a Wasm-based trap.
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_native_signals)]
 pub type wasmtime_trap_handler_t =
     extern "C" fn(ip: usize, fp: usize, has_faulting_addr: bool, faulting_addr: usize);
 
 /// Abstract pointer type used in the `wasmtime_memory_image_*` APIs which
 /// is defined by the embedder.
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 pub enum wasmtime_memory_image {}
 
 unsafe extern "C" {
@@ -63,7 +63,7 @@ unsafe extern "C" {
     /// Returns 0 on success and an error code on failure.
     ///
     /// Similar to `mmap(0, size, prot_flags, MAP_PRIVATE, 0, -1)` on Linux.
-    #[cfg(feature = "signals-based-traps")]
+    #[cfg(has_virtual_memory)]
     pub fn wasmtime_mmap_new(size: usize, prot_flags: u32, ret: &mut *mut u8) -> i32;
 
     /// Remaps the virtual memory starting at `addr` going for `size` bytes to
@@ -76,7 +76,7 @@ unsafe extern "C" {
     /// Returns 0 on success and an error code on failure.
     ///
     /// Similar to `mmap(addr, size, prot_flags, MAP_PRIVATE | MAP_FIXED, 0, -1)` on Linux.
-    #[cfg(feature = "signals-based-traps")]
+    #[cfg(has_virtual_memory)]
     pub fn wasmtime_mmap_remap(addr: *mut u8, size: usize, prot_flags: u32) -> i32;
 
     /// Unmaps memory at the specified `ptr` for `size` bytes.
@@ -87,7 +87,7 @@ unsafe extern "C" {
     /// Returns 0 on success and an error code on failure.
     ///
     /// Similar to `munmap` on Linux.
-    #[cfg(feature = "signals-based-traps")]
+    #[cfg(has_virtual_memory)]
     pub fn wasmtime_munmap(ptr: *mut u8, size: usize) -> i32;
 
     /// Configures the protections associated with a region of virtual memory
@@ -96,11 +96,11 @@ unsafe extern "C" {
     /// Returns 0 on success and an error code on failure.
     ///
     /// Similar to `mprotect` on Linux.
-    #[cfg(feature = "signals-based-traps")]
+    #[cfg(has_virtual_memory)]
     pub fn wasmtime_mprotect(ptr: *mut u8, size: usize, prot_flags: u32) -> i32;
 
     /// Returns the page size, in bytes, of the current system.
-    #[cfg(feature = "signals-based-traps")]
+    #[cfg(has_virtual_memory)]
     pub fn wasmtime_page_size() -> usize;
 
     /// Used to setup a frame on the stack to longjmp back to in the future.
@@ -147,7 +147,7 @@ unsafe extern "C" {
     /// the system.
     ///
     /// Returns 0 on success and an error code on failure.
-    #[cfg(feature = "signals-based-traps")]
+    #[cfg(has_native_signals)]
     pub fn wasmtime_init_traps(handler: wasmtime_trap_handler_t) -> i32;
 
     /// Attempts to create a new in-memory image of the `ptr`/`len` combo which
@@ -169,7 +169,7 @@ unsafe extern "C" {
     /// `NULL` into `ret` is not considered a failure, and failure is used to
     /// indicate that something fatal has happened and Wasmtime will propagate
     /// the error upwards.
-    #[cfg(feature = "signals-based-traps")]
+    #[cfg(has_virtual_memory)]
     pub fn wasmtime_memory_image_new(
         ptr: *const u8,
         len: usize,
@@ -190,7 +190,7 @@ unsafe extern "C" {
     /// the future.
     ///
     /// Aborts the process on failure.
-    #[cfg(feature = "signals-based-traps")]
+    #[cfg(has_virtual_memory)]
     pub fn wasmtime_memory_image_map_at(
         image: *mut wasmtime_memory_image,
         addr: *mut u8,
@@ -201,7 +201,7 @@ unsafe extern "C" {
     ///
     /// Note that mappings created from this image are not guaranteed to be
     /// deallocated and/or unmapped before this is called.
-    #[cfg(feature = "signals-based-traps")]
+    #[cfg(has_virtual_memory)]
     pub fn wasmtime_memory_image_free(image: *mut wasmtime_memory_image);
 
     /// Wasmtime requires a single pointer's space of TLS to be used at runtime,

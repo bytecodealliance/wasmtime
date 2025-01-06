@@ -69,7 +69,8 @@ fn main() -> Result<()> {
     // If signals-based-traps are disabled then that additionally means that
     // some configuration knobs need to be turned to match the expectations of
     // the guest program being loaded.
-    if !cfg!(feature = "signals-based-traps") {
+    if !cfg!(feature = "custom") {
+        config.memory_init_cow(false);
         config.memory_reservation(0);
         config.memory_guard_size(0);
         config.memory_reservation_for_growth(0);

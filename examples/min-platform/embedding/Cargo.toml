@@ -25,4 +25,4 @@ test = false
 doctest = false
 
 [features]
-signals-based-traps = ['wasmtime/signals-based-traps']
+custom = ['wasmtime/custom-virtual-memory', 'wasmtime/custom-native-signals']

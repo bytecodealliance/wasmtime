@@ -315,13 +315,13 @@ impl CodeMemory {
             // Note that if virtual memory is disabled this is skipped because
             // we aren't able to make it readonly, but this is just a
             // defense-in-depth measure and isn't required for correctness.
-            #[cfg(feature = "signals-based-traps")]
+            #[cfg(has_virtual_memory)]
             self.mmap.make_readonly(0..self.mmap.len())?;
 
             // Switch the executable portion from readonly to read/execute.
             if self.needs_executable {
                 if !self.custom_publish()? {
-                    #[cfg(feature = "signals-based-traps")]
+                    #[cfg(has_virtual_memory)]
                     {
                         let text = self.text();
 
@@ -341,7 +341,7 @@ impl CodeMemory {
                         // Flush any in-flight instructions from the pipeline
                         icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
                     }
-                    #[cfg(not(feature = "signals-based-traps"))]
+                    #[cfg(not(has_virtual_memory))]
                     bail!("this target requires virtual memory to be enabled");
                 }
             }

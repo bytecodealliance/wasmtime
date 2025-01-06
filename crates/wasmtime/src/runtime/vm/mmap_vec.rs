@@ -1,13 +1,13 @@
 use crate::prelude::*;
-#[cfg(not(feature = "signals-based-traps"))]
+#[cfg(not(has_virtual_memory))]
 use crate::runtime::vm::send_sync_ptr::SendSyncPtr;
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 use crate::runtime::vm::{mmap::UnalignedLength, Mmap};
-#[cfg(not(feature = "signals-based-traps"))]
+#[cfg(not(has_virtual_memory))]
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
 use core::ops::{Deref, Range};
-#[cfg(not(feature = "signals-based-traps"))]
+#[cfg(not(has_virtual_memory))]
 use core::ptr::NonNull;
 #[cfg(feature = "std")]
 use std::fs::File;
@@ -34,13 +34,13 @@ use std::fs::File;
 /// executable permissions on parts of this storage.
 pub enum MmapVec {
     #[doc(hidden)]
-    #[cfg(not(feature = "signals-based-traps"))]
+    #[cfg(not(has_virtual_memory))]
     Alloc {
         base: SendSyncPtr<u8>,
         layout: Layout,
     },
     #[doc(hidden)]
-    #[cfg(feature = "signals-based-traps")]
+    #[cfg(has_virtual_memory)]
     Mmap {
         mmap: Mmap<UnalignedLength>,
         len: usize,
@@ -53,7 +53,7 @@ impl MmapVec {
     /// The returned `MmapVec` will have the `size` specified, which can be
     /// smaller than the region mapped by the `Mmap`. The returned `MmapVec`
     /// will only have at most `size` bytes accessible.
-    #[cfg(feature = "signals-based-traps")]
+    #[cfg(has_virtual_memory)]
     fn new_mmap<M>(mmap: M, len: usize) -> MmapVec
     where
         M: Into<Mmap<UnalignedLength>>,
@@ -63,7 +63,7 @@ impl MmapVec {
         MmapVec::Mmap { mmap, len }
     }
 
-    #[cfg(not(feature = "signals-based-traps"))]
+    #[cfg(not(has_virtual_memory))]
     fn new_alloc(len: usize, alignment: usize) -> MmapVec {
         let layout = Layout::from_size_align(len, alignment)
             .expect("Invalid size or alignment for MmapVec allocation");
@@ -81,12 +81,12 @@ impl MmapVec {
     /// bytes. All bytes will be initialized to zero since this is a fresh OS
     /// page allocation.
     pub fn with_capacity_and_alignment(size: usize, alignment: usize) -> Result<MmapVec> {
-        #[cfg(feature = "signals-based-traps")]
+        #[cfg(has_virtual_memory)]
         {
             assert!(alignment <= crate::runtime::vm::host_page_size());
             return Ok(MmapVec::new_mmap(Mmap::with_at_least(size)?, size));
         }
-        #[cfg(not(feature = "signals-based-traps"))]
+        #[cfg(not(has_virtual_memory))]
         {
             return Ok(MmapVec::new_alloc(size, alignment));
         }
@@ -140,7 +140,7 @@ impl MmapVec {
     }
 
     /// Makes the specified `range` within this `mmap` to be read/execute.
-    #[cfg(feature = "signals-based-traps")]
+    #[cfg(has_virtual_memory)]
     pub unsafe fn make_executable(
         &self,
         range: Range<usize>,
@@ -155,7 +155,7 @@ impl MmapVec {
     }
 
     /// Makes the specified `range` within this `mmap` to be read-only.
-    #[cfg(feature = "signals-based-traps")]
+    #[cfg(has_virtual_memory)]
     pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
         let (mmap, len) = match self {
             MmapVec::Mmap { mmap, len } => (mmap, *len),
@@ -169,9 +169,9 @@ impl MmapVec {
     #[cfg(feature = "std")]
     pub fn original_file(&self) -> Option<&Arc<File>> {
         match self {
-            #[cfg(not(feature = "signals-based-traps"))]
+            #[cfg(not(has_virtual_memory))]
             MmapVec::Alloc { .. } => None,
-            #[cfg(feature = "signals-based-traps")]
+            #[cfg(has_virtual_memory)]
             MmapVec::Mmap { mmap, .. } => mmap.original_file(),
         }
     }
@@ -192,11 +192,11 @@ impl MmapVec {
     /// ensure that the memory is indeed writable
     pub unsafe fn as_mut_slice(&mut self) -> &mut [u8] {
         match self {
-            #[cfg(not(feature = "signals-based-traps"))]
+            #[cfg(not(has_virtual_memory))]
             MmapVec::Alloc { base, layout } => {
                 core::slice::from_raw_parts_mut(base.as_mut(), layout.size())
             }
-            #[cfg(feature = "signals-based-traps")]
+            #[cfg(has_virtual_memory)]
             MmapVec::Mmap { mmap, len } => mmap.slice_mut(0..*len),
         }
     }
@@ -208,11 +208,11 @@ impl Deref for MmapVec {
     #[inline]
     fn deref(&self) -> &[u8] {
         match self {
-            #[cfg(not(feature = "signals-based-traps"))]
+            #[cfg(not(has_virtual_memory))]
             MmapVec::Alloc { base, layout } => unsafe {
                 core::slice::from_raw_parts(base.as_ptr(), layout.size())
             },
-            #[cfg(feature = "signals-based-traps")]
+            #[cfg(has_virtual_memory)]
             MmapVec::Mmap { mmap, len } => {
                 // SAFETY: all bytes for this mmap, which is owned by
                 // `MmapVec`, are always at least readable.
@@ -225,11 +225,11 @@ impl Deref for MmapVec {
 impl Drop for MmapVec {
     fn drop(&mut self) {
         match self {
-            #[cfg(not(feature = "signals-based-traps"))]
+            #[cfg(not(has_virtual_memory))]
             MmapVec::Alloc { base, layout, .. } => unsafe {
                 alloc::alloc::dealloc(base.as_mut(), layout.clone());
             },
-            #[cfg(feature = "signals-based-traps")]
+            #[cfg(has_virtual_memory)]
             MmapVec::Mmap { .. } => {
                 // Drop impl on the `mmap` takes care of this case.
             }
