@@ -150,7 +150,7 @@ members = [
   "crates/wasi-preview1-component-adapter",
   "crates/wasi-preview1-component-adapter/verify",
   "examples/fib-debug/wasm",
-  "examples/wasi/wasm",
+  "examples/wasm",
   "examples/tokio/wasm",
   "examples/component/wasm",
   "examples/min-platform",
