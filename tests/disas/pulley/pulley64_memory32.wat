@@ -32,12 +32,13 @@
 ;;       push_frame
 ;;       xload64le_offset8 x8, x0, 104
 ;;       zext32 x7, x2
-;;       xbc32_bound64_trap x2, x8, 1
-;;       xload64le_offset8 x8, x0, 96
+;;       br_if_xulteq64 x8, x7, 0x14    // target = 0x1c
+;;    f: xload64le_offset8 x8, x0, 96
 ;;       xadd64 x8, x8, x7
 ;;       xload8_u32_offset8 x0, x8, 0
 ;;       pop_frame
 ;;       ret
+;;   1c: trap
 ;;
 ;; wasm[0]::function[1]::load16:
 ;;       push_frame

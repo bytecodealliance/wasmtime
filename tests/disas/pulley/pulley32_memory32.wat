@@ -31,12 +31,13 @@
 ;; wasm[0]::function[0]::load8:
 ;;       push_frame
 ;;       xload32le_offset8 x6, x0, 52
-;;       xbc32_bound32_trap x2, x6, 1
-;;       xload32le_offset8 x7, x0, 48
+;;       br_if_xulteq32 x6, x2, 0x14    // target = 0x19
+;;    c: xload32le_offset8 x7, x0, 48
 ;;       xadd32 x7, x7, x2
 ;;       xload8_u32_offset8 x0, x7, 0
 ;;       pop_frame
 ;;       ret
+;;   19: trap
 ;;
 ;; wasm[0]::function[1]::load16:
 ;;       push_frame
