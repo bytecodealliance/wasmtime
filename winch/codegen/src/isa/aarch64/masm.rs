@@ -602,7 +602,7 @@ impl Masm for MacroAssembler {
         let dst_ty = match dst_size {
             OperandSize::S32 => WasmValType::I32,
             OperandSize::S64 => WasmValType::I64,
-            _ => bail!("invalid conversion size"),
+            _ => bail!(CodeGenError::unexpected_operand_size()),
         };
 
         ctx.convert_op(self, dst_ty, |masm, dst, src, dst_size| {
