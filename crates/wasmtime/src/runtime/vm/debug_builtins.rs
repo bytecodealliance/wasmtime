@@ -33,3 +33,18 @@ pub unsafe extern "C" fn set_vmctx_memory(vmctx_ptr: *mut VMContext) {
     // TODO multi-memory
     VMCTX_AND_MEMORY = (vmctx_ptr, 0);
 }
+
+/// A bit of a hack around various linkage things. The goal here is to force the
+/// `wasmtime_*` symbols defined in `helpers.c` to actually get exported. That
+/// means they need to be referenced for the linker to include them which is
+/// what this function does with trickery in C.
+pub fn init() {
+    extern "C" {
+        #[wasmtime_versioned_export_macros::versioned_link]
+        fn wasmtime_debug_builtins_init();
+    }
+
+    unsafe {
+        wasmtime_debug_builtins_init();
+    }
+}
