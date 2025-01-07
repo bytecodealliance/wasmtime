@@ -1609,6 +1609,11 @@ criteria = "safe-to-deploy"
 delta = "0.3.0 -> 0.3.1"
 notes = "Just a dependency version bump and a bug fix for redox"
 
+[[audits.errno]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.3.9 -> 0.3.10"
+
 [[audits.errno-dragonfly]]
 who = "Jamey Sharp <jsharp@fastly.com>"
 criteria = "safe-to-deploy"
@@ -2072,6 +2077,11 @@ notes = """
 Minimal `unsafe` usage. Few blocks that existed looked reasonable. Does what it
 says on the tin: lots of iterators.
 """
+
+[[audits.itoa]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "1.0.11 -> 1.0.14"
 
 [[audits.ittapi]]
 who = "Andrew Brown <andrew.brown@intel.com>"
@@ -2743,7 +2753,17 @@ delta = "0.38.34 -> 0.38.37"
 [[audits.rustix]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
+delta = "0.38.34 -> 0.38.39"
+
+[[audits.rustix]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
 delta = "0.38.37 -> 0.38.38"
+
+[[audits.rustix]]
+who = "Dan Gohman <dev@sunfishcode.online>"
+criteria = "safe-to-deploy"
+delta = "0.38.39 -> 0.38.43"
 
 [[audits.rustls]]
 who = "Pat Hickey <phickey@fastly.com>"

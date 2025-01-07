@@ -924,8 +924,8 @@ user-login = "cuviper"
 user-name = "Josh Stone"
 
 [[publisher.errno]]
-version = "0.3.8"
-when = "2023-11-28"
+version = "0.3.9"
+when = "2024-05-08"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
@@ -1015,8 +1015,8 @@ user-login = "epage"
 user-name = "Ed Page"
 
 [[publisher.itoa]]
-version = "1.0.1"
-when = "2021-12-12"
+version = "1.0.11"
+when = "2024-03-26"
 user-id = 3618
 user-login = "dtolnay"
 user-name = "David Tolnay"
