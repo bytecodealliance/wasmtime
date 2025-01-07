@@ -1250,21 +1250,8 @@ where
     fn visit_i32_trunc_f32_u(&mut self) -> Self::Output {
         use OperandSize::*;
 
-        self.context.convert_op_with_tmp_reg(
-            self.masm,
-            WasmValType::I32,
-            RegClass::Float,
-            |masm, dst, src, tmp_fpr, dst_size| {
-                masm.unsigned_truncate(
-                    writable!(dst),
-                    src,
-                    tmp_fpr,
-                    S32,
-                    dst_size,
-                    TruncKind::Unchecked,
-                )
-            },
-        )
+        self.masm
+            .unsigned_truncate(&mut self.context, S32, S32, TruncKind::Unchecked)
     }
 
     fn visit_i32_trunc_f64_s(&mut self) -> Self::Output {
@@ -1278,22 +1265,8 @@ where
 
     fn visit_i32_trunc_f64_u(&mut self) -> Self::Output {
         use OperandSize::*;
-
-        self.context.convert_op_with_tmp_reg(
-            self.masm,
-            WasmValType::I32,
-            RegClass::Float,
-            |masm, dst, src, tmp_fpr, dst_size| {
-                masm.unsigned_truncate(
-                    writable!(dst),
-                    src,
-                    tmp_fpr,
-                    S64,
-                    dst_size,
-                    TruncKind::Unchecked,
-                )
-            },
-        )
+        self.masm
+            .unsigned_truncate(&mut self.context, S64, S32, TruncKind::Unchecked)
     }
 
     fn visit_i64_trunc_f32_s(&mut self) -> Self::Output {
@@ -1308,21 +1281,8 @@ where
     fn visit_i64_trunc_f32_u(&mut self) -> Self::Output {
         use OperandSize::*;
 
-        self.context.convert_op_with_tmp_reg(
-            self.masm,
-            WasmValType::I64,
-            RegClass::Float,
-            |masm, dst, src, tmp_fpr, dst_size| {
-                masm.unsigned_truncate(
-                    writable!(dst),
-                    src,
-                    tmp_fpr,
-                    S32,
-                    dst_size,
-                    TruncKind::Unchecked,
-                )
-            },
-        )
+        self.masm
+            .unsigned_truncate(&mut self.context, S32, S64, TruncKind::Unchecked)
     }
 
     fn visit_i64_trunc_f64_s(&mut self) -> Self::Output {
@@ -1337,21 +1297,8 @@ where
     fn visit_i64_trunc_f64_u(&mut self) -> Self::Output {
         use OperandSize::*;
 
-        self.context.convert_op_with_tmp_reg(
-            self.masm,
-            WasmValType::I64,
-            RegClass::Float,
-            |masm, dst, src, tmp_fpr, dst_size| {
-                masm.unsigned_truncate(
-                    writable!(dst),
-                    src,
-                    tmp_fpr,
-                    S64,
-                    dst_size,
-                    TruncKind::Unchecked,
-                )
-            },
-        )
+        self.masm
+            .unsigned_truncate(&mut self.context, S64, S64, TruncKind::Unchecked)
     }
 
     fn visit_i32_reinterpret_f32(&mut self) -> Self::Output {
@@ -2102,21 +2049,8 @@ where
     fn visit_i32_trunc_sat_f32_u(&mut self) -> Self::Output {
         use OperandSize::*;
 
-        self.context.convert_op_with_tmp_reg(
-            self.masm,
-            WasmValType::I32,
-            RegClass::Float,
-            |masm, dst, src, tmp_fpr, dst_size| {
-                masm.unsigned_truncate(
-                    writable!(dst),
-                    src,
-                    tmp_fpr,
-                    S32,
-                    dst_size,
-                    TruncKind::Checked,
-                )
-            },
-        )
+        self.masm
+            .unsigned_truncate(&mut self.context, S32, S32, TruncKind::Checked)
     }
 
     fn visit_i32_trunc_sat_f64_s(&mut self) -> Self::Output {
@@ -2131,21 +2065,8 @@ where
     fn visit_i32_trunc_sat_f64_u(&mut self) -> Self::Output {
         use OperandSize::*;
 
-        self.context.convert_op_with_tmp_reg(
-            self.masm,
-            WasmValType::I32,
-            RegClass::Float,
-            |masm, dst, src, tmp_fpr, dst_size| {
-                masm.unsigned_truncate(
-                    writable!(dst),
-                    src,
-                    tmp_fpr,
-                    S64,
-                    dst_size,
-                    TruncKind::Checked,
-                )
-            },
-        )
+        self.masm
+            .unsigned_truncate(&mut self.context, S64, S32, TruncKind::Checked)
     }
 
     fn visit_i64_trunc_sat_f32_s(&mut self) -> Self::Output {
@@ -2160,21 +2081,8 @@ where
     fn visit_i64_trunc_sat_f32_u(&mut self) -> Self::Output {
         use OperandSize::*;
 
-        self.context.convert_op_with_tmp_reg(
-            self.masm,
-            WasmValType::I64,
-            RegClass::Float,
-            |masm, dst, src, tmp_fpr, dst_size| {
-                masm.unsigned_truncate(
-                    writable!(dst),
-                    src,
-                    tmp_fpr,
-                    S32,
-                    dst_size,
-                    TruncKind::Checked,
-                )
-            },
-        )
+        self.masm
+            .unsigned_truncate(&mut self.context, S32, S64, TruncKind::Checked)
     }
 
     fn visit_i64_trunc_sat_f64_s(&mut self) -> Self::Output {
@@ -2189,21 +2097,8 @@ where
     fn visit_i64_trunc_sat_f64_u(&mut self) -> Self::Output {
         use OperandSize::*;
 
-        self.context.convert_op_with_tmp_reg(
-            self.masm,
-            WasmValType::I64,
-            RegClass::Float,
-            |masm, dst, src, tmp_fpr, dst_size| {
-                masm.unsigned_truncate(
-                    writable!(dst),
-                    src,
-                    tmp_fpr,
-                    S64,
-                    dst_size,
-                    TruncKind::Checked,
-                )
-            },
-        )
+        self.masm
+            .unsigned_truncate(&mut self.context, S64, S64, TruncKind::Checked)
     }
 
     fn visit_i64_add128(&mut self) -> Self::Output {

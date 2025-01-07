@@ -74,6 +74,14 @@ impl TruncKind {
     pub(crate) fn is_checked(&self) -> bool {
         *self == TruncKind::Checked
     }
+
+    /// Returns `true` if the trunc kind is [`Unchecked`].
+    ///
+    /// [`Unchecked`]: TruncKind::Unchecked
+    #[must_use]
+    pub(crate) fn is_unchecked(&self) -> bool {
+        matches!(self, Self::Unchecked)
+    }
 }
 
 /// Representation of the stack pointer offset.
@@ -933,9 +941,7 @@ pub(crate) trait MacroAssembler {
     /// float into an integer.
     fn unsigned_truncate(
         &mut self,
-        dst: WritableReg,
-        src: Reg,
-        tmp_fpr: Reg,
+        context: &mut CodeGenContext<Emission>,
         src_size: OperandSize,
         dst_size: OperandSize,
         kind: TruncKind,

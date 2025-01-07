@@ -260,11 +260,10 @@ impl Masm for MacroAssembler {
                 let scratch = regs::scratch();
                 self.asm.load_constant(imm, writable!(scratch));
                 match rd.to_reg().class() {
-                    RegClass::Int => self.asm.mov_rr(scratch, rd, size),
-                    RegClass::Float => self.asm.mov_to_fpu(scratch, rd, size),
+                    RegClass::Int => Ok(self.asm.mov_rr(scratch, rd, size)),
+                    RegClass::Float => Ok(self.asm.mov_to_fpu(scratch, rd, size)),
                     _ => bail!(CodeGenError::invalid_operand_combination()),
-                };
-                Ok(())
+                }
             }
             (RegImm::Reg(rs), rd) => match (rs.class(), rd.to_reg().class()) {
                 (RegClass::Int, RegClass::Int) => Ok(self.asm.mov_rr(rs, rd, size)),
@@ -581,25 +580,37 @@ impl Masm for MacroAssembler {
 
     fn signed_truncate(
         &mut self,
-        _dst: WritableReg,
-        _src: Reg,
-        _src_size: OperandSize,
-        _dst_size: OperandSize,
-        _kind: TruncKind,
+        dst: WritableReg,
+        src: Reg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+        kind: TruncKind,
     ) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        self.asm
+            .fpu_to_int(dst, src, src_size, dst_size, kind, true);
+
+        Ok(())
     }
 
     fn unsigned_truncate(
         &mut self,
-        _dst: WritableReg,
-        _src: Reg,
-        _tmp_fpr: Reg,
-        _src_size: OperandSize,
-        _dst_size: OperandSize,
-        _kind: TruncKind,
+        ctx: &mut CodeGenContext<Emission>,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+        kind: TruncKind,
     ) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+        let dst_ty = match dst_size {
+            OperandSize::S32 => WasmValType::I32,
+            OperandSize::S64 => WasmValType::I64,
+            _ => bail!(CodeGenError::unexpected_operand_size()),
+        };
+
+        ctx.convert_op(self, dst_ty, |masm, dst, src, dst_size| {
+            masm.asm
+                .fpu_to_int(writable!(dst), src, src_size, dst_size, kind, false);
+
+            Ok(())
+        })
     }
 
     fn signed_convert(

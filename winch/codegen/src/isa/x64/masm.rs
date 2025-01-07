@@ -995,25 +995,36 @@ impl Masm for MacroAssembler {
 
     fn unsigned_truncate(
         &mut self,
-        dst: WritableReg,
-        src: Reg,
-        tmp_fpr: Reg,
+        ctx: &mut CodeGenContext<Emission>,
         src_size: OperandSize,
         dst_size: OperandSize,
         kind: TruncKind,
     ) -> Result<()> {
-        self.asm.cvt_float_to_uint_seq(
-            src,
-            dst,
-            regs::scratch(),
-            regs::scratch_xmm(),
-            tmp_fpr,
-            src_size,
-            dst_size,
-            kind.is_checked(),
-        );
+        let dst_ty = match dst_size {
+            OperandSize::S32 => WasmValType::I32,
+            OperandSize::S64 => WasmValType::I64,
+            _ => bail!(CodeGenError::unexpected_operand_size()),
+        };
 
-        Ok(())
+        ctx.convert_op_with_tmp_reg(
+            self,
+            dst_ty,
+            RegClass::Float,
+            |masm, dst, src, tmp_fpr, dst_size| {
+                masm.asm.cvt_float_to_uint_seq(
+                    src,
+                    writable!(dst),
+                    regs::scratch(),
+                    regs::scratch_xmm(),
+                    tmp_fpr,
+                    src_size,
+                    dst_size,
+                    kind.is_checked(),
+                );
+
+                Ok(())
+            },
+        )
     }
 
     fn signed_convert(
