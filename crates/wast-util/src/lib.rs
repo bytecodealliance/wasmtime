@@ -304,13 +304,6 @@ impl Compiler {
                 if config.threads() {
                     return true;
                 }
-                // Unsupported proposals. Note that other proposals have partial
-                // support at this time (pulley is a work-in-progress) and so
-                // individual tests are listed below as "should fail" even if
-                // they're not covered in this list.
-                if config.wide_arithmetic() {
-                    return true;
-                }
             }
         }
 
