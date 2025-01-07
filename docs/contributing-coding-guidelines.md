@@ -89,7 +89,7 @@ $ cargo clippy --workspace --all-targets
 Contributors are welcome to enable new lints and send PRs for this. Feel free to
 reach out if you're not sure about a lint as well.
 
-### Minimum Supported `rustc` Version
+### Minimum Supported `rustc` Version (MSRV)
 
 Wasmtime and Cranelift support the latest three stable releases of Rust. This
 means that if the latest version of Rust is 1.72.0 then Wasmtime supports Rust
@@ -102,6 +102,13 @@ periodically and the general repository does not depend on nightly features.
 
 Updating Wasmtime's MSRV is done by editing the `rust-version` field in the
 workspace root's `Cargo.toml`
+
+Note that this policy is subject to change over time (notably it might be
+extended to include more rustc versions). Current Wasmtime users don't require a
+larger MSRV window to justify the maintenance needed to have a larger window. If
+your use case requires a larger MSRV range though please feel free to contact
+maintainers to raise your use case (e.g. an issue, in a Wasmtime meeting, on
+Zulip, etc).
 
 ### Dependencies of Wasmtime
 
