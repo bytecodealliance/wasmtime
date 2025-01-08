@@ -274,7 +274,7 @@ where
 }
 
 fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<usize> {
-    // FIXME: needs memory64 support
+    // FIXME(#4311): needs memory64 support
     let ptr = usize::try_from(ptr.get_u32())?;
     if ptr % usize::try_from(T::ALIGN32)? != 0 {
         bail!("pointer not aligned");
@@ -406,7 +406,7 @@ where
 }
 
 fn validate_inbounds_dynamic(abi: &CanonicalAbiInfo, memory: &[u8], ptr: &ValRaw) -> Result<usize> {
-    // FIXME: needs memory64 support
+    // FIXME(#4311): needs memory64 support
     let ptr = usize::try_from(ptr.get_u32())?;
     if ptr % usize::try_from(abi.align32)? != 0 {
         bail!("pointer not aligned");
