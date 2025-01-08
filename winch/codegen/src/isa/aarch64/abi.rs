@@ -167,14 +167,16 @@ mod tests {
         WasmValType::{self, *},
     };
 
+    use anyhow::Result;
+
     #[test]
-    fn xreg_abi_sig() {
+    fn xreg_abi_sig() -> Result<()> {
         let wasm_sig = WasmFuncType::new(
             [I32, I64, I32, I64, I32, I32, I64, I32, I64].into(),
             [].into(),
         );
 
-        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default);
+        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default)?;
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), I32, regs::xreg(0));
@@ -186,16 +188,17 @@ mod tests {
         match_reg_arg(params.get(6).unwrap(), I64, regs::xreg(6));
         match_reg_arg(params.get(7).unwrap(), I32, regs::xreg(7));
         match_stack_arg(params.get(8).unwrap(), I64, 0);
+        Ok(())
     }
 
     #[test]
-    fn vreg_abi_sig() {
+    fn vreg_abi_sig() -> Result<()> {
         let wasm_sig = WasmFuncType::new(
             [F32, F64, F32, F64, F32, F32, F64, F32, F64].into(),
             [].into(),
         );
 
-        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default);
+        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default)?;
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), F32, regs::vreg(0));
@@ -207,16 +210,17 @@ mod tests {
         match_reg_arg(params.get(6).unwrap(), F64, regs::vreg(6));
         match_reg_arg(params.get(7).unwrap(), F32, regs::vreg(7));
         match_stack_arg(params.get(8).unwrap(), F64, 0);
+        Ok(())
     }
 
     #[test]
-    fn mixed_abi_sig() {
+    fn mixed_abi_sig() -> Result<()> {
         let wasm_sig = WasmFuncType::new(
             [F32, I32, I64, F64, I32, F32, F64, F32, F64].into(),
             [].into(),
         );
 
-        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default);
+        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default)?;
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), F32, regs::vreg(0));
@@ -228,16 +232,17 @@ mod tests {
         match_reg_arg(params.get(6).unwrap(), F64, regs::vreg(3));
         match_reg_arg(params.get(7).unwrap(), F32, regs::vreg(4));
         match_reg_arg(params.get(8).unwrap(), F64, regs::vreg(5));
+        Ok(())
     }
 
     #[test]
-    fn int_abi_sig_multi_returns() {
+    fn int_abi_sig_multi_returns() -> Result<()> {
         let wasm_sig = WasmFuncType::new(
             [I32, I64, I32, I64, I32, I32].into(),
             [I32, I32, I32].into(),
         );
 
-        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default);
+        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default)?;
         let params = sig.params;
         let results = sig.results;
 
@@ -251,16 +256,17 @@ mod tests {
         match_stack_arg(results.get(0).unwrap(), I32, 4);
         match_stack_arg(results.get(1).unwrap(), I32, 0);
         match_reg_arg(results.get(2).unwrap(), I32, regs::xreg(0));
+        Ok(())
     }
 
     #[test]
-    fn mixed_abi_sig_multi_returns() {
+    fn mixed_abi_sig_multi_returns() -> Result<()> {
         let wasm_sig = WasmFuncType::new(
             [F32, I32, I64, F64, I32].into(),
             [I32, F32, I32, F32, I64].into(),
         );
 
-        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default);
+        let sig = Aarch64ABI::sig(&wasm_sig, &CallingConvention::Default)?;
         let params = sig.params;
         let results = sig.results;
 
@@ -275,6 +281,7 @@ mod tests {
         match_stack_arg(results.get(2).unwrap(), I32, 4);
         match_stack_arg(results.get(3).unwrap(), F32, 0);
         match_reg_arg(results.get(4).unwrap(), I64, regs::xreg(0));
+        Ok(())
     }
 
     #[track_caller]

@@ -282,17 +282,20 @@ mod tests {
         abi::{ABIOperand, ABI},
         isa::{reg::Reg, x64::regs, CallingConvention},
     };
+
+    use anyhow::Result;
+
     use wasmtime_environ::{
         WasmFuncType,
         WasmValType::{self, *},
     };
 
     #[test]
-    fn int_abi_sig() {
+    fn int_abi_sig() -> Result<()> {
         let wasm_sig =
             WasmFuncType::new([I32, I64, I32, I64, I32, I32, I64, I32].into(), [].into());
 
-        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default);
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default)?;
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), I32, regs::rdi());
@@ -303,16 +306,17 @@ mod tests {
         match_reg_arg(params.get(5).unwrap(), I32, regs::r9());
         match_stack_arg(params.get(6).unwrap(), I64, 0);
         match_stack_arg(params.get(7).unwrap(), I32, 8);
+        Ok(())
     }
 
     #[test]
-    fn int_abi_sig_multi_returns() {
+    fn int_abi_sig_multi_returns() -> Result<()> {
         let wasm_sig = WasmFuncType::new(
             [I32, I64, I32, I64, I32, I32, I64, I32].into(),
             [I32, I32, I32].into(),
         );
 
-        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default);
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default)?;
         let params = sig.params;
         let results = sig.results;
 
@@ -328,16 +332,17 @@ mod tests {
         match_stack_arg(results.get(0).unwrap(), I32, 4);
         match_stack_arg(results.get(1).unwrap(), I32, 0);
         match_reg_arg(results.get(2).unwrap(), I32, regs::rax());
+        Ok(())
     }
 
     #[test]
-    fn float_abi_sig() {
+    fn float_abi_sig() -> Result<()> {
         let wasm_sig = WasmFuncType::new(
             [F32, F64, F32, F64, F32, F32, F64, F32, F64].into(),
             [].into(),
         );
 
-        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default);
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default)?;
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), F32, regs::xmm0());
@@ -349,16 +354,17 @@ mod tests {
         match_reg_arg(params.get(6).unwrap(), F64, regs::xmm6());
         match_reg_arg(params.get(7).unwrap(), F32, regs::xmm7());
         match_stack_arg(params.get(8).unwrap(), F64, 0);
+        Ok(())
     }
 
     #[test]
-    fn vector_abi_sig() {
+    fn vector_abi_sig() -> Result<()> {
         let wasm_sig = WasmFuncType::new(
             [V128, V128, V128, V128, V128, V128, V128, V128, V128, V128].into(),
             [].into(),
         );
 
-        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default);
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default)?;
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), V128, regs::xmm0());
@@ -371,28 +377,30 @@ mod tests {
         match_reg_arg(params.get(7).unwrap(), V128, regs::xmm7());
         match_stack_arg(params.get(8).unwrap(), V128, 0);
         match_stack_arg(params.get(9).unwrap(), V128, 16);
+        Ok(())
     }
 
     #[test]
-    fn vector_abi_sig_multi_returns() {
+    fn vector_abi_sig_multi_returns() -> Result<()> {
         let wasm_sig = WasmFuncType::new([].into(), [V128, V128, V128].into());
 
-        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default);
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default)?;
         let results = sig.results;
 
         match_stack_arg(results.get(0).unwrap(), V128, 16);
         match_stack_arg(results.get(1).unwrap(), V128, 0);
         match_reg_arg(results.get(2).unwrap(), V128, regs::xmm0());
+        Ok(())
     }
 
     #[test]
-    fn mixed_abi_sig() {
+    fn mixed_abi_sig() -> Result<()> {
         let wasm_sig = WasmFuncType::new(
             [F32, I32, I64, F64, I32, F32, F64, F32, F64].into(),
             [].into(),
         );
 
-        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default);
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::Default)?;
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), F32, regs::xmm0());
@@ -404,16 +412,17 @@ mod tests {
         match_reg_arg(params.get(6).unwrap(), F64, regs::xmm3());
         match_reg_arg(params.get(7).unwrap(), F32, regs::xmm4());
         match_reg_arg(params.get(8).unwrap(), F64, regs::xmm5());
+        Ok(())
     }
 
     #[test]
-    fn system_v_call_conv() {
+    fn system_v_call_conv() -> Result<()> {
         let wasm_sig = WasmFuncType::new(
             [F32, I32, I64, F64, I32, F32, F64, F32, F64].into(),
             [].into(),
         );
 
-        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::SystemV);
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::SystemV)?;
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), F32, regs::xmm0());
@@ -425,16 +434,17 @@ mod tests {
         match_reg_arg(params.get(6).unwrap(), F64, regs::xmm3());
         match_reg_arg(params.get(7).unwrap(), F32, regs::xmm4());
         match_reg_arg(params.get(8).unwrap(), F64, regs::xmm5());
+        Ok(())
     }
 
     #[test]
-    fn fastcall_call_conv() {
+    fn fastcall_call_conv() -> Result<()> {
         let wasm_sig = WasmFuncType::new(
             [F32, I32, I64, F64, I32, F32, F64, F32, F64].into(),
             [].into(),
         );
 
-        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::WindowsFastcall);
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::WindowsFastcall)?;
         let params = sig.params;
 
         match_reg_arg(params.get(0).unwrap(), F32, regs::xmm0());
@@ -443,16 +453,17 @@ mod tests {
         match_reg_arg(params.get(3).unwrap(), F64, regs::xmm3());
         match_stack_arg(params.get(4).unwrap(), I32, 32);
         match_stack_arg(params.get(5).unwrap(), F32, 40);
+        Ok(())
     }
 
     #[test]
-    fn fastcall_call_conv_multi_returns() {
+    fn fastcall_call_conv_multi_returns() -> Result<()> {
         let wasm_sig = WasmFuncType::new(
             [F32, I32, I64, F64, I32, F32, F64, F32, F64].into(),
             [I32, F32, I32, F32, I64].into(),
         );
 
-        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::WindowsFastcall);
+        let sig = X64ABI::sig(&wasm_sig, &CallingConvention::WindowsFastcall)?;
         let params = sig.params;
         let results = sig.results;
 
@@ -470,6 +481,7 @@ mod tests {
         match_stack_arg(results.get(2).unwrap(), I32, 4);
         match_stack_arg(results.get(3).unwrap(), F32, 8);
         match_stack_arg(results.get(4).unwrap(), I64, 12);
+        Ok(())
     }
 
     #[track_caller]
