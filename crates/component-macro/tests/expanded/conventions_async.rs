@@ -238,7 +238,7 @@ pub mod foo {
                 async fn apple_pear_grape(&mut self) -> ();
                 async fn a0(&mut self) -> ();
                 /// Comment out identifiers that collide when mapped to snake_case, for now; see
-                /// https://github.com/WebAssembly/component-model/issues/118
+                ///  https://github.com/WebAssembly/component-model/issues/118
                 /// APPLE: func()
                 /// APPLE-pear-GRAPE: func()
                 /// apple-PEAR-grape: func()
@@ -429,7 +429,7 @@ pub mod foo {
                     Host::a0(*self).await
                 }
                 /// Comment out identifiers that collide when mapped to snake_case, for now; see
-                /// https://github.com/WebAssembly/component-model/issues/118
+                ///  https://github.com/WebAssembly/component-model/issues/118
                 /// APPLE: func()
                 /// APPLE-pear-GRAPE: func()
                 /// apple-PEAR-grape: func()
@@ -818,7 +818,7 @@ pub mod exports {
                         Ok(())
                     }
                     /// Comment out identifiers that collide when mapped to snake_case, for now; see
-                    /// https://github.com/WebAssembly/component-model/issues/118
+                    ///  https://github.com/WebAssembly/component-model/issues/118
                     /// APPLE: func()
                     /// APPLE-pear-GRAPE: func()
                     /// apple-PEAR-grape: func()
