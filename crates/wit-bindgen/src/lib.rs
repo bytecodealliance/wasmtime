@@ -1666,6 +1666,7 @@ impl<'a> InterfaceGenerator<'a> {
             TypeDefKind::Type(t) => self.type_alias(id, name, t, &ty.docs),
             TypeDefKind::Future(_) => todo!("generate for future"),
             TypeDefKind::Stream(_) => todo!("generate for stream"),
+            TypeDefKind::ErrorContext => todo!("generate for error-context"),
             TypeDefKind::Handle(handle) => self.type_handle(id, name, handle, &ty.docs),
             TypeDefKind::Resource => self.type_resource(id, name, ty, &ty.docs),
             TypeDefKind::Unknown => unreachable!(),
@@ -3237,6 +3238,7 @@ fn type_contains_lists(ty: Type, resolve: &Resolve) -> bool {
         Type::Id(id) => match &resolve.types[id].kind {
             TypeDefKind::Resource
             | TypeDefKind::Unknown
+            | TypeDefKind::ErrorContext
             | TypeDefKind::Flags(_)
             | TypeDefKind::Handle(_)
             | TypeDefKind::Enum(_) => false,
@@ -3258,11 +3260,8 @@ fn type_contains_lists(ty: Type, resolve: &Resolve) -> bool {
                 .iter()
                 .any(|case| option_type_contains_lists(case.ty, resolve)),
             TypeDefKind::Type(ty) => type_contains_lists(*ty, resolve),
-            TypeDefKind::Future(ty) => option_type_contains_lists(*ty, resolve),
-            TypeDefKind::Stream(Stream { element, end }) => {
-                option_type_contains_lists(*element, resolve)
-                    || option_type_contains_lists(*end, resolve)
-            }
+            TypeDefKind::Future(_) => todo!(),
+            TypeDefKind::Stream(_) => todo!(),
             TypeDefKind::List(_) => true,
         },
 

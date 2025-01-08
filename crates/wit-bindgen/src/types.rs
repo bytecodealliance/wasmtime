@@ -158,13 +158,9 @@ impl Types {
                 info = self.optional_type_info(resolve, r.ok.as_ref());
                 info |= self.optional_type_info(resolve, r.err.as_ref());
             }
-            TypeDefKind::Future(ty) => {
-                info = self.optional_type_info(resolve, ty.as_ref());
-            }
-            TypeDefKind::Stream(stream) => {
-                info = self.optional_type_info(resolve, stream.element.as_ref());
-                info |= self.optional_type_info(resolve, stream.end.as_ref());
-            }
+            TypeDefKind::Future(_) => todo!(),
+            TypeDefKind::Stream(_) => todo!(),
+            TypeDefKind::ErrorContext => todo!(),
             TypeDefKind::Handle(_) => info.has_handle = true,
             TypeDefKind::Resource => {}
             TypeDefKind::Unknown => unreachable!(),

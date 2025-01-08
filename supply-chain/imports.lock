@@ -980,8 +980,8 @@ user-login = "Amanieu"
 user-name = "Amanieu d'Antras"
 
 [[publisher.indexmap]]
-version = "2.2.6"
-when = "2024-03-23"
+version = "2.7.0"
+when = "2024-12-01"
 user-id = 539
 user-login = "cuviper"
 user-name = "Josh Stone"
@@ -1368,8 +1368,8 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasm-encoder]]
-version = "0.221.2"
-when = "2024-12-02"
+version = "0.223.0"
+when = "2025-01-08"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1380,14 +1380,14 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasm-metadata]]
-version = "0.221.2"
-when = "2024-12-02"
+version = "0.223.0"
+when = "2025-01-08"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasm-wave]]
-version = "0.221.2"
-when = "2024-12-02"
+version = "0.223.0"
+when = "2025-01-08"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1398,14 +1398,14 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmparser]]
-version = "0.221.2"
-when = "2024-12-02"
+version = "0.223.0"
+when = "2025-01-08"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmprinter]]
-version = "0.221.2"
-when = "2024-12-02"
+version = "0.223.0"
+when = "2025-01-08"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1554,14 +1554,14 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wast]]
-version = "221.0.2"
-when = "2024-12-02"
+version = "223.0.0"
+when = "2025-01-08"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wat]]
-version = "1.221.2"
-when = "2024-12-02"
+version = "1.223.0"
+when = "2025-01-08"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1822,8 +1822,8 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-component]]
-version = "0.221.2"
-when = "2024-12-02"
+version = "0.223.0"
+when = "2025-01-08"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1834,8 +1834,8 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-parser]]
-version = "0.221.2"
-when = "2024-12-02"
+version = "0.223.0"
+when = "2025-01-08"
 user-id = 73222
 user-login = "wasmtime-publish"
 
