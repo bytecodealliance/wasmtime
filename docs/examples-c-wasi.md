@@ -17,5 +17,5 @@ This example shows off how to instantiate a wasm module using WASI imports.
 ## `wasi.c`
 
 ```c
-{{#include ../examples/wasi/main.c}}
+{{#include ../examples/wasip1/main.c}}
 ```
