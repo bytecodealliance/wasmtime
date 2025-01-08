@@ -172,6 +172,42 @@
 
 (type VExtKind (enum None S8x8 U8x8 S16x4 U16x4 S32x2 U32x2))
 
+;; Helper to determine the endianness of `MemFlags` taking the current target
+;; into account.
+(decl pure endianness (MemFlags) Endianness)
+(extern constructor endianness endianness)
+(type Endianness extern (enum Little Big))
+
+;; Partial constructor and type representing a "sinkable load" which can be
+;; moved into another instruction. Note that `SinkableLoad` should not be used
+;; as-is and should instead be converted to a `SunkLoad`.
+(type SinkableLoad (enum (Load (inst Inst) (ty Type) (addr Value) (offset u8))))
+(decl pure partial sinkable_load (Value) SinkableLoad)
+(rule (sinkable_load value @ (value_type ty))
+  (if-let inst @ (load flags addr (offset32 offset)) (is_sinkable_inst value))
+  (if-let (Endianness.Little) (endianness flags))
+  (if-let offset8 (u8_try_from_i32 offset))
+  (SinkableLoad.Load inst ty addr offset8))
+
+;; Representation of a "sunk load" where once this is created it must be used.
+;;
+;; This is paired with `sinkable_load` above where that's used in an `if-let`
+;; and then once the rule is selected this is used to commit to using the load.
+;; Callers will likely match on `SunkLoad` itself to extract the
+;; type/value/offset that the load matches.
+(type SunkLoad (enum (Load (ty Type) (addr Value) (offset u8))))
+(decl sink_load (SinkableLoad) SunkLoad)
+(rule (sink_load (SinkableLoad.Load inst ty addr offset))
+  (let ((_ Unit (sink_inst inst)))
+    (SunkLoad.Load ty addr offset)))
+
+(convert SinkableLoad SunkLoad sink_load)
+
+;; Helper for determining what the pointer width of the host is.
+(type PointerWidth extern (enum PointerWidth32 PointerWidth64))
+(decl pure pointer_width () PointerWidth)
+(extern constructor pointer_width pointer_width)
+
 ;;;; Newtypes for Different Register Classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (type XReg (primitive XReg))

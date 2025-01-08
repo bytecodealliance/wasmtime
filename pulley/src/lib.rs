@@ -457,6 +457,33 @@ macro_rules! for_each_op {
             /// `*(ptr + offset) = low64(src)`
             xstore64le_offset8 = XStore64LeOffset8 { ptr: XReg, offset: u8, src: XReg };
 
+            // wasm addressing modes
+            //
+            // g32 = 32-bit guest, arithmetic is zero-extending the `addr`
+            //       to the host pointer width.
+
+            /// `low32(dst) = zext_8_32(*(base + zext(addr) + offset))`
+            xload8_u32_g32 = XLoad8U32G32 { dst: XReg, base: XReg, addr: XReg, offset: u8 };
+            /// `low32(dst) = sext_8_32(*(base + zext(addr) + offset))`
+            xload8_s32_g32 = XLoad8S32G32 { dst: XReg, base: XReg, addr: XReg, offset: u8 };
+            /// `low32(dst) = zext_16_32(*(base + zext(addr) + offset))`
+            xload16le_u32_g32 = XLoad16LeU32G32 { dst: XReg, base: XReg, addr: XReg, offset: u8 };
+            /// `low32(dst) = sext_16_32(*(base + zext(addr) + offset))`
+            xload16le_s32_g32 = XLoad16LeS32G32 { dst: XReg, base: XReg, addr: XReg, offset: u8 };
+            /// `low32(dst) = *(base + zext(addr) + offset)`
+            xload32le_g32 = XLoad32LeG32 { dst: XReg, base: XReg, addr: XReg, offset: u8 };
+            /// `dst = *(base + zext(addr) + offset)`
+            xload64le_g32 = XLoad64LeG32 { dst: XReg, base: XReg, addr: XReg, offset: u8 };
+
+            /// `*(base + zext(addr) + offset) = low8(src)`
+            xstore8_g32 = XStore8G32 { base: XReg, addr: XReg, offset: u8, src: XReg };
+            /// `*(base + zext(addr) + offset) = low16(src)`
+            xstore16le_g32 = XStore16LeG32 { base: XReg, addr: XReg, offset: u8, src: XReg };
+            /// `*(base + zext(addr) + offset) = low32(src)`
+            xstore32le_g32 = XStore32LeG32 { base: XReg, addr: XReg, offset: u8, src: XReg };
+            /// `*(base + zext(addr) + offset) = src`
+            xstore64le_g32 = XStore64LeG32 { base: XReg, addr: XReg, offset: u8, src: XReg };
+
             /// `push lr; push fp; fp = sp`
             push_frame = PushFrame ;
             /// `sp = fp; pop fp; pop lr`
@@ -585,11 +612,13 @@ macro_rules! for_each_op {
             /// `dst = low32(cond) ? if_nonzero : if_zero`
             xselect64 = XSelect64 { dst: XReg, cond: XReg, if_nonzero: XReg, if_zero: XReg };
 
-            /// `trapif(zext(low32(addr)) > bound - off)` (unsigned)
-            xbc32_bound64_trap = XBc32Bound64Trap { addr: XReg, bound: XReg, off: u8 };
-
-            /// `trapif(low32(addr) > low32(bound) - off)` (unsigned)
-            xbc32_bound32_trap = XBc32Bound32Trap { addr: XReg, bound: XReg, off: u8 };
+            /// `trapif(addr > *(bound_ptr + bound_off) - size)` (unsigned)
+            xbc32_bound_trap = XBc32BoundTrap {
+                addr: XReg,
+                bound_ptr: XReg,
+                bound_off: u8,
+                size: u8
+            };
         }
     };
 }
