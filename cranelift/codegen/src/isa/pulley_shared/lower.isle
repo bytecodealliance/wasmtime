@@ -119,6 +119,33 @@
 (rule (lower (trapnz cond code))
   (side_effect (pulley_trap_if (lower_cond cond) code)))
 
+;; Special-cases for bounds-checks-related traps emitted for wasm loads/stores.
+;; Each of these translates to a single "xbc" (x-register bounds check)
+;; instruction
+(rule 1 (lower (trapnz (icmp (IntCC.UnsignedGreaterThan)
+                          a
+                          b @ (value_type $I32))
+                       code))
+  (side_effect (pulley_xbc32_bound32_trap a b 0 code)))
+
+(rule 1 (lower (trapnz (icmp (IntCC.UnsignedGreaterThan)
+                          (uextend a @ (value_type $I32))
+                          b @ (value_type $I64))
+                       code))
+  (side_effect (pulley_xbc32_bound64_trap a b 0 code)))
+
+(rule 2 (lower (trapnz (icmp (IntCC.UnsignedGreaterThan)
+                          a
+                          (isub b @ (value_type $I32) (u8_from_iconst c)))
+                       code))
+  (side_effect (pulley_xbc32_bound32_trap a b c code)))
+
+(rule 2 (lower (trapnz (icmp (IntCC.UnsignedGreaterThan)
+                          (uextend a @ (value_type $I32))
+                          (isub b @ (value_type $I64) (u8_from_iconst c)))
+                       code))
+  (side_effect (pulley_xbc32_bound64_trap a b c code)))
+
 ;;;; Rules for `get_stack_pointer` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (get_stack_pointer))
