@@ -1,9 +1,11 @@
 use super::regs;
 use crate::{
     abi::{align_to, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrReturns, ABI},
+    codegen::CodeGenError,
     isa::{reg::Reg, CallingConvention},
     RegIndexEnv,
 };
+use anyhow::{bail, Result};
 use wasmtime_environ::{WasmHeapType, WasmRefType, WasmValType};
 
 #[derive(Default)]
@@ -39,7 +41,7 @@ impl ABI for X64ABI {
         params: &[WasmValType],
         returns: &[WasmValType],
         call_conv: &CallingConvention,
-    ) -> ABISig {
+    ) -> Result<ABISig> {
         assert!(call_conv.is_fastcall() || call_conv.is_systemv() || call_conv.is_default());
         let is_fastcall = call_conv.is_fastcall();
         // In the fastcall calling convention, the callee gets a contiguous
@@ -52,7 +54,7 @@ impl ABI for X64ABI {
             (0, RegIndexEnv::with_limits_per_class(6, 8))
         };
 
-        let results = Self::abi_results(returns, call_conv);
+        let results = Self::abi_results(returns, call_conv)?;
         let params = ABIParams::from::<_, Self>(
             params,
             params_stack_offset,
@@ -66,12 +68,12 @@ impl ABI for X64ABI {
                     ParamsOrReturns::Params,
                 )
             },
-        );
+        )?;
 
-        ABISig::new(*call_conv, params, results)
+        Ok(ABISig::new(*call_conv, params, results))
     }
 
-    fn abi_results(returns: &[WasmValType], call_conv: &CallingConvention) -> ABIResults {
+    fn abi_results(returns: &[WasmValType], call_conv: &CallingConvention) -> Result<ABIResults> {
         assert!(call_conv.is_default() || call_conv.is_fastcall() || call_conv.is_systemv());
         // Use absolute count for results given that for Winch's
         // default CallingConvention only one register is used for results
@@ -137,14 +139,14 @@ impl X64ABI {
         index_env: &mut RegIndexEnv,
         call_conv: &CallingConvention,
         params_or_returns: ParamsOrReturns,
-    ) -> (ABIOperand, u32) {
+    ) -> Result<(ABIOperand, u32)> {
         let (reg, ty) = match wasm_arg {
             ty @ WasmValType::Ref(rt) => match rt.heap_type {
                 WasmHeapType::Func | WasmHeapType::Extern => (
                     Self::int_reg_for(index_env.next_gpr(), call_conv, params_or_returns),
                     ty,
                 ),
-                ht => unimplemented!("Support for WasmHeapType: {ht}"),
+                _ => bail!(CodeGenError::unsupported_wasm_type()),
             },
 
             ty @ (WasmValType::I32 | WasmValType::I64) => (
@@ -187,9 +189,9 @@ impl X64ABI {
             (arg, next_stack)
         };
 
-        reg.map_or_else(default, |reg| {
+        Ok(reg.map_or_else(default, |reg| {
             (ABIOperand::reg(reg, *ty, ty_size as u32), stack_offset)
-        })
+        }))
     }
 
     fn int_reg_for(

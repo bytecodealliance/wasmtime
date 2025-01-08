@@ -107,7 +107,7 @@ impl TargetIsa for X64 {
         )?;
         let stack = Stack::new();
 
-        let abi_sig = wasm_sig::<abi::X64ABI>(sig);
+        let abi_sig = wasm_sig::<abi::X64ABI>(sig)?;
 
         let env = FuncEnv::new(
             &vmoffsets,

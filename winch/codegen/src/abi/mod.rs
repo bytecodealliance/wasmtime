@@ -48,6 +48,7 @@
 use crate::codegen::ptr_type_from_ptr_size;
 use crate::isa::{reg::Reg, CallingConvention};
 use crate::masm::SPOffset;
+use anyhow::Result;
 use smallvec::SmallVec;
 use std::collections::HashSet;
 use std::ops::{Add, BitAnd, Not, Sub};
@@ -86,7 +87,7 @@ pub(crate) use scratch;
 pub(crate) use vmctx;
 
 /// Constructs an [ABISig] using Winch's ABI.
-pub(crate) fn wasm_sig<A: ABI>(ty: &WasmFuncType) -> ABISig {
+pub(crate) fn wasm_sig<A: ABI>(ty: &WasmFuncType) -> Result<ABISig> {
     // 6 is used semi-arbitrarily here, we can modify as we see fit.
     let mut params: SmallVec<[WasmValType; 6]> = SmallVec::new();
     params.extend_from_slice(&vmctx_types::<A>());
@@ -116,7 +117,7 @@ pub(crate) trait ABI {
     /// Construct the ABI-specific signature from a WebAssembly
     /// function type.
     #[cfg(test)]
-    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> ABISig {
+    fn sig(wasm_sig: &WasmFuncType, call_conv: &CallingConvention) -> Result<ABISig> {
         Self::sig_from(wasm_sig.params(), wasm_sig.returns(), call_conv)
     }
 
@@ -125,10 +126,10 @@ pub(crate) trait ABI {
         params: &[WasmValType],
         returns: &[WasmValType],
         call_conv: &CallingConvention,
-    ) -> ABISig;
+    ) -> Result<ABISig>;
 
     /// Construct [`ABIResults`] from a slice of [`WasmType`].
-    fn abi_results(returns: &[WasmValType], call_conv: &CallingConvention) -> ABIResults;
+    fn abi_results(returns: &[WasmValType], call_conv: &CallingConvention) -> Result<ABIResults>;
 
     /// Returns the number of bits in a word.
     fn word_bits() -> u8;
@@ -315,24 +316,30 @@ impl ABIResults {
     /// representation, according to the calling convention. In the case of
     /// results, one result is stored in registers and the rest at particular
     /// offsets in the stack.
-    pub fn from<F>(returns: &[WasmValType], call_conv: &CallingConvention, mut map: F) -> Self
+    pub fn from<F>(
+        returns: &[WasmValType],
+        call_conv: &CallingConvention,
+        mut map: F,
+    ) -> Result<Self>
     where
-        F: FnMut(&WasmValType, u32) -> (ABIOperand, u32),
+        F: FnMut(&WasmValType, u32) -> Result<(ABIOperand, u32)>,
     {
         if returns.len() == 0 {
-            return Self::default();
+            return Ok(Self::default());
         }
 
         type FoldTuple = (SmallVec<[ABIOperand; 6]>, HashSet<Reg>, u32);
+        type FoldTupleResult = Result<FoldTuple>;
 
-        let fold_impl = |(mut operands, mut regs, stack_bytes): FoldTuple, arg| {
-            let (operand, bytes) = map(arg, stack_bytes);
-            if operand.is_reg() {
-                regs.insert(operand.unwrap_reg());
-            }
-            operands.push(operand);
-            (operands, regs, bytes)
-        };
+        let fold_impl =
+            |(mut operands, mut regs, stack_bytes): FoldTuple, arg| -> FoldTupleResult {
+                let (operand, bytes) = map(arg, stack_bytes)?;
+                if operand.is_reg() {
+                    regs.insert(operand.unwrap_reg());
+                }
+                operands.push(operand);
+                Ok((operands, regs, bytes))
+            };
 
         // When dealing with multiple results, Winch's calling convention stores the
         // last return value in a register rather than the first one. In that
@@ -342,15 +349,15 @@ impl ABIResults {
         // * Spilled memory values always precede register values
         // * Spilled values are stored from oldest to newest, matching their
         //   respective locations on the machine stack.
-        let (mut operands, regs, bytes): FoldTuple = if call_conv.is_default() {
+        let (mut operands, regs, bytes) = if call_conv.is_default() {
             returns
                 .iter()
                 .rev()
-                .fold((SmallVec::new(), HashSet::with_capacity(1), 0), fold_impl)
+                .try_fold((SmallVec::new(), HashSet::with_capacity(1), 0), fold_impl)?
         } else {
             returns
                 .iter()
-                .fold((SmallVec::new(), HashSet::with_capacity(1), 0), fold_impl)
+                .try_fold((SmallVec::new(), HashSet::with_capacity(1), 0), fold_impl)?
         };
 
         // Similar to above, we reverse the result of the operands calculation
@@ -359,11 +366,11 @@ impl ABIResults {
             operands.reverse();
         }
 
-        Self::new(ABIOperands {
+        Ok(Self::new(ABIOperands {
             inner: operands,
             regs,
             bytes,
-        })
+        }))
     }
 
     /// Create a new [`ABIResults`] from [`ABIOperands`].
@@ -464,12 +471,12 @@ impl ABIParams {
         initial_bytes: u32,
         needs_stack_results: bool,
         mut map: F,
-    ) -> Self
+    ) -> Result<Self>
     where
-        F: FnMut(&WasmValType, u32) -> (ABIOperand, u32),
+        F: FnMut(&WasmValType, u32) -> Result<(ABIOperand, u32)>,
     {
         if params.len() == 0 && !needs_stack_results {
-            return Self::with_bytes(initial_bytes);
+            return Ok(Self::with_bytes(initial_bytes));
         }
 
         let register_capacity = params.len().min(6);
@@ -480,7 +487,7 @@ impl ABIParams {
         let ptr_type = ptr_type_from_ptr_size(<A as ABI>::word_bytes());
         // Handle stack results by specifying an extra, implicit first argument.
         let stack_results = if needs_stack_results {
-            let (operand, bytes) = map(&ptr_type, stack_bytes);
+            let (operand, bytes) = map(&ptr_type, stack_bytes)?;
             if operand.is_reg() {
                 regs.insert(operand.unwrap_reg());
             }
@@ -491,7 +498,7 @@ impl ABIParams {
         };
 
         for arg in params.iter() {
-            let (operand, bytes) = map(arg, stack_bytes);
+            let (operand, bytes) = map(arg, stack_bytes)?;
             if operand.is_reg() {
                 regs.insert(operand.unwrap_reg());
             }
@@ -505,14 +512,14 @@ impl ABIParams {
             operands.push(operand);
         }
 
-        Self {
+        Ok(Self {
             operands: ABIOperands {
                 inner: operands,
                 regs,
                 bytes: stack_bytes,
             },
             has_retptr: needs_stack_results,
-        }
+        })
     }
 
     /// Creates new [`ABIParams`], with the specified amount of stack bytes.
