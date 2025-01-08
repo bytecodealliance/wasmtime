@@ -534,3 +534,26 @@ fn concurrent_type_modifications_and_checks(config: &mut Config) -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn validate_deterministic() {
+    let mut faulty_wat = "(module ".to_string();
+    for i in 0..1_000 {
+        faulty_wat.push_str(&format!(
+            "(func (export \"foo_{i}\") (result i64) (i64.add (i32.const 0) (i64.const 1)))"
+        ));
+    }
+    faulty_wat.push_str(")");
+    let binary = wat::parse_str(faulty_wat).unwrap();
+
+    let engine_parallel = Engine::new(&Config::new().parallel_compilation(true)).unwrap();
+    let result_parallel = Module::validate(&engine_parallel, &binary)
+        .unwrap_err()
+        .to_string();
+
+    let engine_sequential = Engine::new(&Config::new().parallel_compilation(false)).unwrap();
+    let result_sequential = Module::validate(&engine_sequential, &binary)
+        .unwrap_err()
+        .to_string();
+    assert_eq!(result_parallel, result_sequential);
+}

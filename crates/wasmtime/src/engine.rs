@@ -154,9 +154,14 @@ impl Engine {
             #[cfg(feature = "parallel-compilation")]
             {
                 use rayon::prelude::*;
+                // If we collect into Result<Vec<B>, E> directly, the returned error is not
+                // deterministic, because any error could be returned early. So we first materialize
+                // all results in order and then return the first error deterministically, or Ok(_).
                 return input
                     .into_par_iter()
                     .map(|a| f(a))
+                    .collect::<Vec<Result<B, E>>>()
+                    .into_iter()
                     .collect::<Result<Vec<B>, E>>();
             }
         }
