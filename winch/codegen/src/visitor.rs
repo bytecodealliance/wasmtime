@@ -257,6 +257,7 @@ macro_rules! def_unsupported {
     (emit I32AtomicLoad16U $($rest:tt)*) => {};
     (emit I32AtomicLoad $($rest:tt)*) => {};
     (emit I64AtomicLoad8U $($rest:tt)*) => {};
+    (emit I64AtomicLoad16U $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -2157,6 +2158,10 @@ where
 
     fn visit_i64_atomic_load8_u(&mut self, memarg: wasmparser::MemArg) {
         self.emit_wasm_load_atomic(&memarg, WasmValType::I64, OperandSize::S8, None);
+    }
+
+    fn visit_i64_atomic_load16_u(&mut self, memarg: wasmparser::MemArg) {
+        self.emit_wasm_load_atomic(&memarg, WasmValType::I64, OperandSize::S16, None);
     }
     wasmparser::for_each_visit_operator!(def_unsupported);
 }
