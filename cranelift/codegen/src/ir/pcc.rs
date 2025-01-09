@@ -965,15 +965,15 @@ impl<'a> FactContext<'a> {
                 },
                 Fact::DynamicRange {
                     bit_width: bw_dynamic,
-                    min: ref min_dynamic,
-                    max: ref max_dynamic,
+                    min: min_dynamic,
+                    max: max_dynamic,
                 },
             )
             | (
                 Fact::DynamicRange {
                     bit_width: bw_dynamic,
-                    min: ref min_dynamic,
-                    max: ref max_dynamic,
+                    min: min_dynamic,
+                    max: max_dynamic,
                 },
                 Fact::Range {
                     bit_width: bw_static,
@@ -1070,16 +1070,16 @@ impl<'a> FactContext<'a> {
                 },
                 Fact::DynamicMem {
                     ty,
-                    min: ref min_dynamic,
-                    max: ref max_dynamic,
+                    min: min_dynamic,
+                    max: max_dynamic,
                     nullable,
                 },
             )
             | (
                 Fact::DynamicMem {
                     ty,
-                    min: ref min_dynamic,
-                    max: ref max_dynamic,
+                    min: min_dynamic,
+                    max: max_dynamic,
                     nullable,
                 },
                 Fact::Range {

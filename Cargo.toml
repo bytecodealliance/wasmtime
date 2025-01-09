@@ -183,6 +183,10 @@ unused-macro-rules = 'warn'
 # bit too noisy to enable wholesale but some selective items are ones we want to
 # opt-in to.
 keyword_idents_2024 = 'warn'
+deprecated-safe-2024 = 'warn'
+rust-2024-guarded-string-incompatible-syntax = 'warn'
+rust-2024-prelude-collisions = 'warn'
+rust-2024-incompatible-pat = 'warn'
 
 # Don't warn about unknown cfgs for pulley
 [workspace.lints.rust.unexpected_cfgs]

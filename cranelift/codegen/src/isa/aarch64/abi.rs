@@ -1036,12 +1036,12 @@ impl ABIMachineSpec for AArch64MachineDeps {
 
     fn gen_call(dest: &CallDest, tmp: Writable<Reg>, info: CallInfo<()>) -> SmallVec<[Inst; 2]> {
         let mut insts = SmallVec::new();
-        match &dest {
-            &CallDest::ExtName(ref name, RelocDistance::Near) => {
+        match dest {
+            CallDest::ExtName(name, RelocDistance::Near) => {
                 let info = Box::new(info.map(|()| name.clone()));
                 insts.push(Inst::Call { info });
             }
-            &CallDest::ExtName(ref name, RelocDistance::Far) => {
+            CallDest::ExtName(name, RelocDistance::Far) => {
                 insts.push(Inst::LoadExtName {
                     rd: tmp,
                     name: Box::new(name.clone()),
@@ -1050,7 +1050,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 let info = Box::new(info.map(|()| tmp.to_reg()));
                 insts.push(Inst::CallInd { info });
             }
-            &CallDest::Reg(reg) => {
+            CallDest::Reg(reg) => {
                 let info = Box::new(info.map(|()| *reg));
                 insts.push(Inst::CallInd { info });
             }

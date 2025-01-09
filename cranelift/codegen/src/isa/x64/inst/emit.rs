@@ -4517,7 +4517,7 @@ pub(crate) fn emit(
             }
         }
 
-        Inst::ElfTlsGetAddr { ref symbol, dst } => {
+        Inst::ElfTlsGetAddr { symbol, dst } => {
             let dst = dst.to_reg().to_reg();
             debug_assert_eq!(dst, regs::rax());
 
@@ -4546,7 +4546,7 @@ pub(crate) fn emit(
             sink.put4(0); // offset
         }
 
-        Inst::MachOTlsGetAddr { ref symbol, dst } => {
+        Inst::MachOTlsGetAddr { symbol, dst } => {
             let dst = dst.to_reg().to_reg();
             debug_assert_eq!(dst, regs::rax());
 
@@ -4562,11 +4562,7 @@ pub(crate) fn emit(
             sink.put1(0x17);
         }
 
-        Inst::CoffTlsGetAddr {
-            ref symbol,
-            dst,
-            tmp,
-        } => {
+        Inst::CoffTlsGetAddr { symbol, dst, tmp } => {
             let dst = dst.to_reg().to_reg();
             debug_assert_eq!(dst, regs::rax());
 
@@ -4619,7 +4615,7 @@ pub(crate) fn emit(
             sink.put4(0); // offset
         }
 
-        Inst::Unwind { ref inst } => {
+        Inst::Unwind { inst } => {
             sink.add_unwind(inst.clone());
         }
 

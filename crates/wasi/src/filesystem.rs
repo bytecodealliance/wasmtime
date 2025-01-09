@@ -509,7 +509,7 @@ impl HostOutputStream for FileOutputStream {
             .await
         {
             Ok(nwritten) => {
-                if let FileOutputMode::Position(ref mut p) = &mut self.mode {
+                if let FileOutputMode::Position(p) = &mut self.mode {
                     *p += nwritten as u64;
                 }
                 self.state = OutputState::Ready;
@@ -571,7 +571,7 @@ impl Subscribe for FileOutputStream {
         if let OutputState::Waiting(task) = &mut self.state {
             self.state = match task.await {
                 Ok(nwritten) => {
-                    if let FileOutputMode::Position(ref mut p) = &mut self.mode {
+                    if let FileOutputMode::Position(p) = &mut self.mode {
                         *p += nwritten as u64;
                     }
                     OutputState::Ready

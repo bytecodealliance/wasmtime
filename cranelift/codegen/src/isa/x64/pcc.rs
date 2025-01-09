@@ -147,7 +147,7 @@ pub(crate) fn check(
             dst,
             ..
         } => match <&RegMemImm>::from(src2) {
-            RegMemImm::Mem { ref addr } => {
+            RegMemImm::Mem { addr } => {
                 let loaded = check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
                 check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
                     clamp_range(ctx, 64, size.to_bits().into(), loaded)
@@ -175,7 +175,7 @@ pub(crate) fn check(
             dst,
             ..
         } => match <&RegMem>::from(src2) {
-            RegMem::Mem { ref addr } => {
+            RegMem::Mem { addr } => {
                 let loaded = check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
                 check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
                     clamp_range(ctx, 64, size.to_bits().into(), loaded)
@@ -203,7 +203,7 @@ pub(crate) fn check(
         | Inst::UnaryRmRImmVex {
             size, ref src, dst, ..
         } => match <&RegMem>::from(src) {
-            RegMem::Mem { ref addr } => {
+            RegMem::Mem { addr } => {
                 check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
                 check_output(ctx, vcode, dst.to_writable_reg(), &[], |_vcode| {
                     clamp_range(ctx, 64, size.to_bits().into(), None)
@@ -224,7 +224,7 @@ pub(crate) fn check(
             ..
         } => {
             match <&RegMem>::from(divisor) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -237,7 +237,7 @@ pub(crate) fn check(
             dst, ref divisor, ..
         } => {
             match <&RegMem>::from(divisor) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, I8, 64)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -262,7 +262,7 @@ pub(crate) fn check(
             ..
         } => {
             match <&RegMem>::from(src2) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -273,7 +273,7 @@ pub(crate) fn check(
         }
         Inst::Mul8 { dst, ref src2, .. } => {
             match <&RegMem>::from(src2) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, I8, 64)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -288,7 +288,7 @@ pub(crate) fn check(
             ..
         } => {
             match <&RegMem>::from(src2) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -303,7 +303,7 @@ pub(crate) fn check(
             ..
         } => {
             match <&RegMem>::from(src1) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -351,7 +351,7 @@ pub(crate) fn check(
                         clamp_range(ctx, 64, from_bytes * 8, Some(src.clone()))
                     })
                 }
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     let loaded = check_load(
                         ctx,
                         Some(dst.to_writable_reg()),
@@ -397,7 +397,7 @@ pub(crate) fn check(
             dst,
         } => {
             match <&RegMem>::from(src) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, ext_mode.src_type(), 64)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -437,7 +437,7 @@ pub(crate) fn check(
 
         Inst::XmmRmiReg { dst, ref src2, .. } => {
             match <&RegMemImm>::from(src2) {
-                RegMemImm::Mem { ref addr } => {
+                RegMemImm::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, I8X16, 128)?;
                 }
                 _ => {}
@@ -465,7 +465,7 @@ pub(crate) fn check(
                 }
                 Ok(())
             }
-            RegMemImm::Mem { ref addr } => {
+            RegMemImm::Mem { addr } => {
                 if let Some(rhs) = check_load(ctx, None, addr, vcode, size.to_type(), 64)? {
                     let lhs = get_fact_or_default(vcode, src1.to_reg(), 64);
                     state.cmp_flags = Some((lhs, rhs));
@@ -498,7 +498,7 @@ pub(crate) fn check(
             cc,
             ..
         } => match <&RegMem>::from(consequent) {
-            RegMem::Mem { ref addr } => {
+            RegMem::Mem { addr } => {
                 check_load(ctx, None, addr, vcode, size.to_type(), 64)?;
                 Ok(())
             }
@@ -533,7 +533,7 @@ pub(crate) fn check(
         Inst::XmmCmove { dst, .. } => ensure_no_fact(vcode, dst.to_writable_reg().to_reg()),
 
         Inst::Push64 { ref src } => match <&RegMemImm>::from(src) {
-            RegMemImm::Mem { ref addr } => {
+            RegMemImm::Mem { addr } => {
                 check_load(ctx, None, addr, vcode, I64, 64)?;
                 Ok(())
             }
@@ -553,7 +553,7 @@ pub(crate) fn check(
             dst, src: ref src2, ..
         } => {
             match <&RegMem>::from(src2) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, I8X16, 128)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -568,7 +568,7 @@ pub(crate) fn check(
             ..
         } => {
             match <&RegMem>::from(src) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, F32, 32)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -582,7 +582,7 @@ pub(crate) fn check(
             ..
         } => {
             match <&RegMem>::from(src) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, F64, 64)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -610,7 +610,7 @@ pub(crate) fn check(
             ..
         } => {
             match <&RegMem>::from(src2) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, I8X16, 128)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -655,7 +655,7 @@ pub(crate) fn check(
             };
 
             match <&RegMem>::from(src2) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, ty, size)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -665,7 +665,7 @@ pub(crate) fn check(
 
         Inst::XmmRmiRVex { dst, ref src2, .. } => {
             match <&RegMemImm>::from(src2) {
-                RegMemImm::Mem { ref addr } => {
+                RegMemImm::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, I8X16, 128)?;
                 }
                 RegMemImm::Reg { .. } | RegMemImm::Imm { .. } => {}
@@ -675,7 +675,7 @@ pub(crate) fn check(
 
         Inst::XmmVexPinsr { dst, ref src2, .. } => {
             match <&RegMem>::from(src2) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, I64, 64)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -691,7 +691,7 @@ pub(crate) fn check(
 
         Inst::GprToXmmVex { dst, ref src, .. } | Inst::GprToXmm { dst, ref src, .. } => {
             match <&RegMem>::from(src) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, I64, 64)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -731,7 +731,7 @@ pub(crate) fn check(
         Inst::CvtIntToFloat { dst, ref src2, .. }
         | Inst::CvtIntToFloatVex { dst, ref src2, .. } => {
             match <&RegMem>::from(src2) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, I64, 64)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -783,7 +783,7 @@ pub(crate) fn check(
             ref src1, ref src2, ..
         } => {
             match <&RegMem>::from(src2) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, I8X16, 128)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -799,7 +799,7 @@ pub(crate) fn check(
             ..
         } if op.has_scalar_src2() => {
             match <&RegMem>::from(src2) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(
                         ctx,
                         None,
@@ -816,7 +816,7 @@ pub(crate) fn check(
 
         Inst::XmmRmRImm { dst, ref src2, .. } => {
             match <&RegMem>::from(src2) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, I8X16, 128)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -828,7 +828,7 @@ pub(crate) fn check(
             ref src1, ref src2, ..
         } => {
             match <&RegMem>::from(src2) {
-                RegMem::Mem { ref addr } => {
+                RegMem::Mem { addr } => {
                     check_load(ctx, None, addr, vcode, F32, 32)?;
                 }
                 RegMem::Reg { .. } => {}
@@ -852,7 +852,7 @@ pub(crate) fn check(
         Inst::ReturnCallUnknown { .. } => Ok(()),
 
         Inst::CallUnknown { ref info } => match <&RegMem>::from(&info.dest) {
-            RegMem::Mem { ref addr } => {
+            RegMem::Mem { addr } => {
                 check_load(ctx, None, addr, vcode, I64, 64)?;
                 Ok(())
             }
@@ -861,7 +861,7 @@ pub(crate) fn check(
         Inst::JmpUnknown {
             target: ref dest, ..
         } => match <&RegMem>::from(dest) {
-            RegMem::Mem { ref addr } => {
+            RegMem::Mem { addr } => {
                 check_load(ctx, None, addr, vcode, I64, 64)?;
                 Ok(())
             }

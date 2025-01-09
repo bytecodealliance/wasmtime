@@ -252,7 +252,7 @@ impl Memory {
         let iter = self.allocations[self.already_protected..].iter();
 
         #[cfg(all(not(target_os = "windows"), feature = "selinux-fix"))]
-        return iter.filter(|&PtrLen { ref map, len, .. }| *len != 0 && map.is_some());
+        return iter.filter(|&PtrLen { map, len, .. }| *len != 0 && map.is_some());
 
         #[cfg(any(target_os = "windows", not(feature = "selinux-fix")))]
         return iter.filter(|&PtrLen { len, .. }| *len != 0);
