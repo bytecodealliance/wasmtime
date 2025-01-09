@@ -179,6 +179,11 @@ unused_import_braces = 'warn'
 unused-lifetimes = 'warn'
 unused-macro-rules = 'warn'
 
+# Lints that are part of the `rust-2024-compatibility` group. This group is a
+# bit too noisy to enable wholesale but some selective items are ones we want to
+# opt-in to.
+keyword_idents_2024 = 'warn'
+
 # Don't warn about unknown cfgs for pulley
 [workspace.lints.rust.unexpected_cfgs]
 level = "warn"

@@ -448,20 +448,20 @@ impl Wasmtime {
     }
 
     fn import(&mut self, resolve: &Resolve, world: WorldId, name: &WorldKey, item: &WorldItem) {
-        let mut gen = InterfaceGenerator::new(self, resolve);
+        let mut generator = InterfaceGenerator::new(self, resolve);
         match item {
             WorldItem::Function(func) => {
                 // Only generate a trait signature for free functions since
                 // resource-related functions get their trait signatures
                 // during `type_resource`.
                 let sig = if let FunctionKind::Freestanding = func.kind {
-                    gen.generate_function_trait_sig(func);
-                    Some(mem::take(&mut gen.src).into())
+                    generator.generate_function_trait_sig(func);
+                    Some(mem::take(&mut generator.src).into())
                 } else {
                     None
                 };
-                gen.generate_add_function_to_linker(TypeOwner::World(world), func, "linker");
-                let add_to_linker = gen.src.into();
+                generator.generate_add_function_to_linker(TypeOwner::World(world), func, "linker");
+                let add_to_linker = generator.src.into();
                 self.import_functions.push(ImportFunction {
                     func: func.clone(),
                     sig,
@@ -469,8 +469,11 @@ impl Wasmtime {
                 });
             }
             WorldItem::Interface { id, .. } => {
-                gen.gen.interface_last_seen_as_import.insert(*id, true);
-                gen.current_interface = Some((*id, name, false));
+                generator
+                    .generator
+                    .interface_last_seen_as_import
+                    .insert(*id, true);
+                generator.current_interface = Some((*id, name, false));
                 let snake = match name {
                     WorldKey::Name(s) => s.to_snake_case(),
                     WorldKey::Interface(id) => resolve.interfaces[*id]
@@ -479,7 +482,10 @@ impl Wasmtime {
                         .unwrap()
                         .to_snake_case(),
                 };
-                let module = if gen.gen.name_interface(resolve, *id, name, false) {
+                let module = if generator
+                    .generator
+                    .name_interface(resolve, *id, name, false)
+                {
                     // If this interface is remapped then that means that it was
                     // provided via the `with` key in the bindgen configuration.
                     // That means that bindings generation is skipped here. To
@@ -487,11 +493,11 @@ impl Wasmtime {
                     // though we still generate a module which reexports the
                     // original module. This helps maintain the same output
                     // structure regardless of whether `with` is used.
-                    let name_at_root = match &gen.gen.interface_names[id] {
+                    let name_at_root = match &generator.generator.interface_names[id] {
                         InterfaceName::Remapped { name_at_root, .. } => name_at_root,
                         InterfaceName::Path(_) => unreachable!(),
                     };
-                    let path_to_root = gen.path_to_root();
+                    let path_to_root = generator.path_to_root();
                     format!(
                         "
                             pub mod {snake} {{
@@ -503,13 +509,13 @@ impl Wasmtime {
                 } else {
                     // If this interface is not remapped then it's time to
                     // actually generate bindings here.
-                    gen.gen.interface_link_options[id].write_struct(&mut gen.src);
-                    gen.types(*id);
+                    generator.generator.interface_link_options[id].write_struct(&mut generator.src);
+                    generator.types(*id);
                     let key_name = resolve.name_world_key(name);
-                    gen.generate_add_to_linker(*id, &key_name);
+                    generator.generate_add_to_linker(*id, &key_name);
 
-                    let module = &gen.src[..];
-                    let wt = gen.gen.wasmtime_path();
+                    let module = &generator.src[..];
+                    let wt = generator.generator.wasmtime_path();
 
                     format!(
                         "
@@ -535,8 +541,8 @@ impl Wasmtime {
                     WorldKey::Name(name) => name,
                     WorldKey::Interface(_) => unreachable!(),
                 };
-                gen.define_type(name, *ty);
-                let body = mem::take(&mut gen.src);
+                generator.define_type(name, *ty);
+                let body = mem::take(&mut generator.src);
                 self.src.push_str(&body);
             }
         };
@@ -544,7 +550,7 @@ impl Wasmtime {
 
     fn export(&mut self, resolve: &Resolve, name: &WorldKey, item: &WorldItem) {
         let wt = self.wasmtime_path();
-        let mut gen = InterfaceGenerator::new(self, resolve);
+        let mut generator = InterfaceGenerator::new(self, resolve);
         let field;
         let ty;
         let ty_index;
@@ -553,10 +559,10 @@ impl Wasmtime {
         let get_index_from_instance;
         match item {
             WorldItem::Function(func) => {
-                gen.define_rust_guest_export(resolve, None, func);
-                let body = mem::take(&mut gen.src).into();
-                load = gen.extract_typed_function(func).1;
-                assert!(gen.src.is_empty());
+                generator.define_rust_guest_export(resolve, None, func);
+                let body = mem::take(&mut generator.src).into();
+                load = generator.extract_typed_function(func).1;
+                assert!(generator.src.is_empty());
                 self.exports.funcs.push(body);
                 ty_index = format!("{wt}::component::ComponentExportIndex");
                 field = func_field_name(resolve, func);
@@ -574,41 +580,44 @@ impl Wasmtime {
             }
             WorldItem::Type(_) => unreachable!(),
             WorldItem::Interface { id, .. } => {
-                gen.gen.interface_last_seen_as_import.insert(*id, false);
-                gen.gen.name_interface(resolve, *id, name, true);
-                gen.current_interface = Some((*id, name, true));
-                gen.types(*id);
+                generator
+                    .generator
+                    .interface_last_seen_as_import
+                    .insert(*id, false);
+                generator.generator.name_interface(resolve, *id, name, true);
+                generator.current_interface = Some((*id, name, true));
+                generator.types(*id);
                 let struct_name = "Guest";
                 let iface = &resolve.interfaces[*id];
                 let iface_name = match name {
                     WorldKey::Name(name) => name,
                     WorldKey::Interface(_) => iface.name.as_ref().unwrap(),
                 };
-                uwriteln!(gen.src, "pub struct {struct_name} {{");
+                uwriteln!(generator.src, "pub struct {struct_name} {{");
                 for (_, func) in iface.functions.iter() {
                     uwriteln!(
-                        gen.src,
+                        generator.src,
                         "{}: {wt}::component::Func,",
                         func_field_name(resolve, func)
                     );
                 }
-                uwriteln!(gen.src, "}}");
+                uwriteln!(generator.src, "}}");
 
-                uwriteln!(gen.src, "#[derive(Clone)]");
-                uwriteln!(gen.src, "pub struct {struct_name}Indices {{");
+                uwriteln!(generator.src, "#[derive(Clone)]");
+                uwriteln!(generator.src, "pub struct {struct_name}Indices {{");
                 for (_, func) in iface.functions.iter() {
                     uwriteln!(
-                        gen.src,
+                        generator.src,
                         "{}: {wt}::component::ComponentExportIndex,",
                         func_field_name(resolve, func)
                     );
                 }
-                uwriteln!(gen.src, "}}");
+                uwriteln!(generator.src, "}}");
 
-                uwriteln!(gen.src, "impl {struct_name}Indices {{");
+                uwriteln!(generator.src, "impl {struct_name}Indices {{");
                 let instance_name = resolve.name_world_key(name);
                 uwrite!(
-                    gen.src,
+                    generator.src,
                     "
 /// Constructor for [`{struct_name}Indices`] which takes a
 /// [`Component`]({wt}::component::Component) as input and can be executed
@@ -657,18 +666,18 @@ fn _new(
                 let mut fields = Vec::new();
                 for (_, func) in iface.functions.iter() {
                     let name = func_field_name(resolve, func);
-                    uwriteln!(gen.src, "let {name} = lookup(\"{}\")?;", func.name);
+                    uwriteln!(generator.src, "let {name} = lookup(\"{}\")?;", func.name);
                     fields.push(name);
                 }
-                uwriteln!(gen.src, "Ok({struct_name}Indices {{");
+                uwriteln!(generator.src, "Ok({struct_name}Indices {{");
                 for name in fields {
-                    uwriteln!(gen.src, "{name},");
+                    uwriteln!(generator.src, "{name},");
                 }
-                uwriteln!(gen.src, "}})");
-                uwriteln!(gen.src, "}}"); // end `fn _new`
+                uwriteln!(generator.src, "}})");
+                uwriteln!(generator.src, "}}"); // end `fn _new`
 
                 uwrite!(
-                    gen.src,
+                    generator.src,
                     "
                         pub fn load(
                             &self,
@@ -682,25 +691,25 @@ fn _new(
                 );
                 let mut fields = Vec::new();
                 for (_, func) in iface.functions.iter() {
-                    let (name, getter) = gen.extract_typed_function(func);
-                    uwriteln!(gen.src, "let {name} = {getter};");
+                    let (name, getter) = generator.extract_typed_function(func);
+                    uwriteln!(generator.src, "let {name} = {getter};");
                     fields.push(name);
                 }
-                uwriteln!(gen.src, "Ok({struct_name} {{");
+                uwriteln!(generator.src, "Ok({struct_name} {{");
                 for name in fields {
-                    uwriteln!(gen.src, "{name},");
+                    uwriteln!(generator.src, "{name},");
                 }
-                uwriteln!(gen.src, "}})");
-                uwriteln!(gen.src, "}}"); // end `fn new`
-                uwriteln!(gen.src, "}}"); // end `impl {struct_name}Indices`
+                uwriteln!(generator.src, "}})");
+                uwriteln!(generator.src, "}}"); // end `fn new`
+                uwriteln!(generator.src, "}}"); // end `impl {struct_name}Indices`
 
-                uwriteln!(gen.src, "impl {struct_name} {{");
+                uwriteln!(generator.src, "impl {struct_name} {{");
                 let mut resource_methods = IndexMap::new();
 
                 for (_, func) in iface.functions.iter() {
                     match func.kind {
                         FunctionKind::Freestanding => {
-                            gen.define_rust_guest_export(resolve, Some(name), func);
+                            generator.define_rust_guest_export(resolve, Some(name), func);
                         }
                         FunctionKind::Method(id)
                         | FunctionKind::Constructor(id)
@@ -715,26 +724,26 @@ fn _new(
                     let snake = name.to_snake_case();
                     let camel = name.to_upper_camel_case();
                     uwriteln!(
-                        gen.src,
+                        generator.src,
                         "pub fn {snake}(&self) -> Guest{camel}<'_> {{
                             Guest{camel} {{ funcs: self }}
                         }}"
                     );
                 }
 
-                uwriteln!(gen.src, "}}");
+                uwriteln!(generator.src, "}}");
 
                 for (id, methods) in resource_methods {
                     let resource_name = resolve.types[id].name.as_ref().unwrap();
                     let camel = resource_name.to_upper_camel_case();
-                    uwriteln!(gen.src, "impl Guest{camel}<'_> {{");
+                    uwriteln!(generator.src, "impl Guest{camel}<'_> {{");
                     for method in methods {
-                        gen.define_rust_guest_export(resolve, Some(name), method);
+                        generator.define_rust_guest_export(resolve, Some(name), method);
                     }
-                    uwriteln!(gen.src, "}}");
+                    uwriteln!(generator.src, "}}");
                 }
 
-                let module = &gen.src[..];
+                let module = &generator.src[..];
                 let snake = to_rust_ident(iface_name);
 
                 let module = format!(
@@ -1624,16 +1633,16 @@ impl Wasmtime {
 
 struct InterfaceGenerator<'a> {
     src: Source,
-    gen: &'a mut Wasmtime,
+    generator: &'a mut Wasmtime,
     resolve: &'a Resolve,
     current_interface: Option<(InterfaceId, &'a WorldKey, bool)>,
 }
 
 impl<'a> InterfaceGenerator<'a> {
-    fn new(gen: &'a mut Wasmtime, resolve: &'a Resolve) -> InterfaceGenerator<'a> {
+    fn new(generator: &'a mut Wasmtime, resolve: &'a Resolve) -> InterfaceGenerator<'a> {
         InterfaceGenerator {
             src: Source::default(),
-            gen,
+            generator,
             resolve,
             current_interface: None,
         }
@@ -1684,16 +1693,19 @@ impl<'a> InterfaceGenerator<'a> {
 
     fn type_resource(&mut self, id: TypeId, name: &str, resource: &TypeDef, docs: &Docs) {
         let camel = name.to_upper_camel_case();
-        let wt = self.gen.wasmtime_path();
+        let wt = self.generator.wasmtime_path();
 
         if self.types_imported() {
             self.rustdoc(docs);
 
             let replacement = match self.current_interface {
-                Some((_, key, _)) => self.gen.lookup_replacement(self.resolve, key, Some(name)),
+                Some((_, key, _)) => {
+                    self.generator
+                        .lookup_replacement(self.resolve, key, Some(name))
+                }
                 None => {
-                    self.gen.used_with_opts.insert(name.into());
-                    self.gen.opts.with.get(name).cloned()
+                    self.generator.used_with_opts.insert(name.into());
+                    self.generator.opts.with.get(name).cloned()
                 }
             };
             match replacement {
@@ -1710,7 +1722,7 @@ impl<'a> InterfaceGenerator<'a> {
             }
 
             // Generate resource trait
-            if self.gen.opts.async_.maybe_async() {
+            if self.generator.opts.async_.maybe_async() {
                 uwriteln!(
                     self.src,
                     "#[{wt}::component::__internal::trait_variant_make(::core::marker::Send)]"
@@ -1748,7 +1760,7 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str(";\n");
             }
 
-            if self.gen.opts.async_.is_drop_async(name) {
+            if self.generator.opts.async_.is_drop_async(name) {
                 uwrite!(self.src, "async ");
             }
             uwrite!(
@@ -1759,8 +1771,8 @@ impl<'a> InterfaceGenerator<'a> {
             uwriteln!(self.src, "}}");
 
             // Generate impl HostResource for &mut HostResource
-            if !self.gen.opts.skip_mut_forwarding_impls {
-                let maybe_send = if self.gen.opts.async_.maybe_async() {
+            if !self.generator.opts.skip_mut_forwarding_impls {
+                let maybe_send = if self.generator.opts.async_.maybe_async() {
                     "+ Send"
                 } else {
                     ""
@@ -1780,12 +1792,12 @@ impl<'a> InterfaceGenerator<'a> {
                         uwrite!(self.src, "{},", to_rust_ident(name));
                     }
                     uwrite!(self.src, ")");
-                    if self.gen.opts.async_.is_import_async(&func.name) {
+                    if self.generator.opts.async_.is_import_async(&func.name) {
                         uwrite!(self.src, ".await");
                     }
                     uwriteln!(self.src, "}}");
                 }
-                if self.gen.opts.async_.is_drop_async(name) {
+                if self.generator.opts.async_.is_drop_async(name) {
                     uwriteln!(self.src, "
                         async fn drop(&mut self, rep: {wt}::component::Resource<{camel}>) -> {wt}::Result<()> {{
                             Host{camel}::drop(*self, rep).await
@@ -1817,11 +1829,11 @@ impl<'a> InterfaceGenerator<'a> {
 
     fn type_record(&mut self, id: TypeId, _name: &str, record: &Record, docs: &Docs) {
         let info = self.info(id);
-        let wt = self.gen.wasmtime_path();
+        let wt = self.generator.wasmtime_path();
 
         // We use a BTree set to make sure we don't have any duplicates and we have a stable order
         let additional_derives: BTreeSet<String> = self
-            .gen
+            .generator
             .opts
             .additional_derive_attributes
             .iter()
@@ -1840,7 +1852,7 @@ impl<'a> InterfaceGenerator<'a> {
             }
             uwriteln!(self.src, "#[derive({wt}::component::Lower)]");
             self.push_str("#[component(record)]\n");
-            if let Some(path) = &self.gen.opts.wasmtime_crate {
+            if let Some(path) = &self.generator.opts.wasmtime_crate {
                 uwriteln!(self.src, "#[component(wasmtime_crate = {path})]\n");
             }
 
@@ -1934,7 +1946,7 @@ impl<'a> InterfaceGenerator<'a> {
 
     fn type_flags(&mut self, id: TypeId, name: &str, flags: &Flags, docs: &Docs) {
         self.rustdoc(docs);
-        let wt = self.gen.wasmtime_path();
+        let wt = self.generator.wasmtime_path();
         let rust_name = to_rust_upper_camel_case(name);
         uwriteln!(self.src, "{wt}::component::flags!(\n");
         self.src.push_str(&format!("{rust_name} {{\n"));
@@ -1987,16 +1999,16 @@ impl<'a> InterfaceGenerator<'a> {
     // with the Wasmtime-understood size of a type.
     fn assert_type(&mut self, id: TypeId, name: &str) {
         self.push_str("const _: () = {\n");
-        let wt = self.gen.wasmtime_path();
+        let wt = self.generator.wasmtime_path();
         uwriteln!(
             self.src,
             "assert!({} == <{name} as {wt}::component::ComponentType>::SIZE32);",
-            self.gen.sizes.size(&Type::Id(id)).size_wasm32(),
+            self.generator.sizes.size(&Type::Id(id)).size_wasm32(),
         );
         uwriteln!(
             self.src,
             "assert!({} == <{name} as {wt}::component::ComponentType>::ALIGN32);",
-            self.gen.sizes.align(&Type::Id(id)).align_wasm32(),
+            self.generator.sizes.align(&Type::Id(id)).align_wasm32(),
         );
         self.push_str("};\n");
     }
@@ -2011,11 +2023,11 @@ impl<'a> InterfaceGenerator<'a> {
         Self: Sized,
     {
         let info = self.info(id);
-        let wt = self.gen.wasmtime_path();
+        let wt = self.generator.wasmtime_path();
 
         // We use a BTree set to make sure we don't have any duplicates and we have a stable order
         let additional_derives: BTreeSet<String> = self
-            .gen
+            .generator
             .opts
             .additional_derive_attributes
             .iter()
@@ -2035,7 +2047,7 @@ impl<'a> InterfaceGenerator<'a> {
             }
             uwriteln!(self.src, "#[derive({wt}::component::Lower)]");
             self.push_str(&format!("#[component({derive_component})]\n"));
-            if let Some(path) = &self.gen.opts.wasmtime_crate {
+            if let Some(path) = &self.generator.opts.wasmtime_crate {
                 uwriteln!(self.src, "#[component(wasmtime_crate = {path})]\n");
             }
             if info.is_copy() {
@@ -2165,11 +2177,11 @@ impl<'a> InterfaceGenerator<'a> {
 
     fn type_enum(&mut self, id: TypeId, name: &str, enum_: &Enum, docs: &Docs) {
         let info = self.info(id);
-        let wt = self.gen.wasmtime_path();
+        let wt = self.generator.wasmtime_path();
 
         // We use a BTree set to make sure we don't have any duplicates and have a stable order
         let mut derives: BTreeSet<String> = self
-            .gen
+            .generator
             .opts
             .additional_derive_attributes
             .iter()
@@ -2188,7 +2200,7 @@ impl<'a> InterfaceGenerator<'a> {
         uwriteln!(self.src, "#[derive({wt}::component::Lift)]");
         uwriteln!(self.src, "#[derive({wt}::component::Lower)]");
         self.push_str("#[component(enum)]\n");
-        if let Some(path) = &self.gen.opts.wasmtime_crate {
+        if let Some(path) = &self.generator.opts.wasmtime_crate {
             uwriteln!(self.src, "#[component(wasmtime_crate = {path})]\n");
         }
 
@@ -2349,7 +2361,7 @@ impl<'a> InterfaceGenerator<'a> {
     ) -> Option<(&'a Result_, TypeId, String)> {
         let results = &func.results;
 
-        self.gen
+        self.generator
             .used_trappable_imports_opts
             .insert(func.name.clone());
 
@@ -2373,7 +2385,7 @@ impl<'a> InterfaceGenerator<'a> {
             _ => return None,
         };
 
-        let name = self.gen.trappable_errors.get(&error_typeid)?;
+        let name = self.generator.trappable_errors.get(&error_typeid)?;
 
         let mut path = self.path_to_root();
         uwrite!(path, "{name}");
@@ -2383,9 +2395,9 @@ impl<'a> InterfaceGenerator<'a> {
     fn generate_add_to_linker(&mut self, id: InterfaceId, name: &str) {
         let iface = &self.resolve.interfaces[id];
         let owner = TypeOwner::Interface(id);
-        let wt = self.gen.wasmtime_path();
+        let wt = self.generator.wasmtime_path();
 
-        let is_maybe_async = self.gen.opts.async_.maybe_async();
+        let is_maybe_async = self.generator.opts.async_.maybe_async();
         if is_maybe_async {
             uwriteln!(
                 self.src,
@@ -2423,7 +2435,7 @@ impl<'a> InterfaceGenerator<'a> {
         let mut my_error_types = iface
             .types
             .iter()
-            .filter(|(_, id)| self.gen.trappable_errors.contains_key(*id))
+            .filter(|(_, id)| self.generator.trappable_errors.contains_key(*id))
             .map(|(_, id)| *id)
             .collect::<Vec<_>>();
         my_error_types.extend(
@@ -2435,7 +2447,7 @@ impl<'a> InterfaceGenerator<'a> {
         );
         let root = self.path_to_root();
         for err_id in my_error_types {
-            let custom_name = &self.gen.trappable_errors[&err_id];
+            let custom_name = &self.generator.trappable_errors[&err_id];
             let err = &self.resolve.types[resolve_type_definition_id(self.resolve, err_id)];
             let err_name = err.name.as_ref().unwrap();
             let err_snake = err_name.to_snake_case();
@@ -2460,7 +2472,7 @@ impl<'a> InterfaceGenerator<'a> {
         }
         uwriteln!(self.src, "}}");
 
-        let (data_bounds, mut host_bounds) = if self.gen.opts.is_store_data_send() {
+        let (data_bounds, mut host_bounds) = if self.generator.opts.is_store_data_send() {
             ("T: Send,", "Host + Send".to_string())
         } else {
             ("", "Host".to_string())
@@ -2469,7 +2481,7 @@ impl<'a> InterfaceGenerator<'a> {
             uwrite!(host_bounds, " + {ty}");
         }
 
-        let (options_param, options_arg) = if self.gen.interface_link_options[&id].has_any() {
+        let (options_param, options_arg) = if self.generator.interface_link_options[&id].has_any() {
             ("options: &LinkOptions,", ", options")
         } else {
             ("", "")
@@ -2511,7 +2523,7 @@ impl<'a> InterfaceGenerator<'a> {
         for (ty, name) in get_resources(self.resolve, id) {
             Wasmtime::generate_add_resource_to_linker(
                 &mut self.src,
-                &self.gen.opts,
+                &self.generator.opts,
                 &wt,
                 "inst",
                 name,
@@ -2526,7 +2538,7 @@ impl<'a> InterfaceGenerator<'a> {
         uwriteln!(self.src, "Ok(())");
         uwriteln!(self.src, "}}");
 
-        if !self.gen.opts.skip_mut_forwarding_impls {
+        if !self.generator.opts.skip_mut_forwarding_impls {
             // Generate add_to_linker (with closure)
             uwriteln!(
                 self.src,
@@ -2563,7 +2575,7 @@ impl<'a> InterfaceGenerator<'a> {
                     uwrite!(self.src, "{},", to_rust_ident(name));
                 }
                 uwrite!(self.src, ")");
-                if self.gen.opts.async_.is_import_async(&func.name) {
+                if self.generator.opts.async_.is_import_async(&func.name) {
                     uwrite!(self.src, ".await");
                 }
                 uwriteln!(self.src, "}}");
@@ -2574,7 +2586,7 @@ impl<'a> InterfaceGenerator<'a> {
                     "fn convert_{err_snake}(&mut self, err: {root}{custom_name}) -> {wt}::Result<{err_camel}> {{
                         Host::convert_{err_snake}(*self, err)
                     }}",
-                    custom_name = self.gen.trappable_errors[&err_id],
+                    custom_name = self.generator.trappable_errors[&err_id],
                     err_snake = err_name.to_snake_case(),
                     err_camel = err_name.to_upper_camel_case(),
                 );
@@ -2588,7 +2600,7 @@ impl<'a> InterfaceGenerator<'a> {
         uwrite!(
             self.src,
             "{linker}.{}(\"{}\", ",
-            if self.gen.opts.async_.is_import_async(&func.name) {
+            if self.generator.opts.async_.is_import_async(&func.name) {
                 "func_wrap_async"
             } else {
                 "func_wrap"
@@ -2604,7 +2616,7 @@ impl<'a> InterfaceGenerator<'a> {
         // Generate the closure that's passed to a `Linker`, the final piece of
         // codegen here.
 
-        let wt = self.gen.wasmtime_path();
+        let wt = self.generator.wasmtime_path();
         uwrite!(
             self.src,
             "move |mut caller: {wt}::StoreContextMut<'_, T>, ("
@@ -2623,8 +2635,8 @@ impl<'a> InterfaceGenerator<'a> {
         self.src.push_str(") |");
         self.src.push_str(" {\n");
 
-        if self.gen.opts.tracing {
-            if self.gen.opts.async_.is_import_async(&func.name) {
+        if self.generator.opts.tracing {
+            if self.generator.opts.async_.is_import_async(&func.name) {
                 self.src.push_str("use tracing::Instrument;\n");
             }
 
@@ -2650,7 +2662,7 @@ impl<'a> InterfaceGenerator<'a> {
             );
         }
 
-        if self.gen.opts.async_.is_import_async(&func.name) {
+        if self.generator.opts.async_.is_import_async(&func.name) {
             uwriteln!(
                 self.src,
                 " {wt}::component::__internal::Box::new(async move {{ "
@@ -2659,19 +2671,19 @@ impl<'a> InterfaceGenerator<'a> {
             // Only directly enter the span if the function is sync. Otherwise
             // we use tracing::Instrument to ensure that the span is not entered
             // across an await point.
-            if self.gen.opts.tracing {
+            if self.generator.opts.tracing {
                 self.push_str("let _enter = span.enter();\n");
             }
         }
 
-        if self.gen.opts.tracing {
+        if self.generator.opts.tracing {
             let mut event_fields = func
                 .params
                 .iter()
                 .enumerate()
                 .map(|(i, (name, ty))| {
                     let name = to_rust_ident(&name);
-                    formatting_for_arg(&name, i, *ty, &self.gen.opts, &self.resolve)
+                    formatting_for_arg(&name, i, *ty, &self.generator.opts, &self.resolve)
                 })
                 .collect::<Vec<String>>();
             event_fields.push(format!("\"call\""));
@@ -2707,21 +2719,21 @@ impl<'a> InterfaceGenerator<'a> {
         for (i, _) in func.params.iter().enumerate() {
             uwrite!(self.src, "arg{},", i);
         }
-        if self.gen.opts.async_.is_import_async(&func.name) {
+        if self.generator.opts.async_.is_import_async(&func.name) {
             uwrite!(self.src, ").await;\n");
         } else {
             uwrite!(self.src, ");\n");
         }
 
-        if self.gen.opts.tracing {
+        if self.generator.opts.tracing {
             uwrite!(
                 self.src,
                 "tracing::event!(tracing::Level::TRACE, {}, \"return\");",
-                formatting_for_results(&func.results, &self.gen.opts, &self.resolve)
+                formatting_for_results(&func.results, &self.generator.opts, &self.resolve)
             );
         }
 
-        if !self.gen.opts.trappable_imports.can_trap(&func) {
+        if !self.generator.opts.trappable_imports.can_trap(&func) {
             if func.results.iter_types().len() == 1 {
                 uwrite!(self.src, "Ok((r,))\n");
             } else {
@@ -2752,10 +2764,10 @@ impl<'a> InterfaceGenerator<'a> {
             uwrite!(self.src, "r\n");
         }
 
-        if self.gen.opts.async_.is_import_async(&func.name) {
+        if self.generator.opts.async_.is_import_async(&func.name) {
             // Need to close Box::new and async block
 
-            if self.gen.opts.tracing {
+            if self.generator.opts.tracing {
                 self.src.push_str("}.instrument(span))\n");
             } else {
                 self.src.push_str("})\n");
@@ -2766,10 +2778,10 @@ impl<'a> InterfaceGenerator<'a> {
     }
 
     fn generate_function_trait_sig(&mut self, func: &Function) {
-        let wt = self.gen.wasmtime_path();
+        let wt = self.generator.wasmtime_path();
         self.rustdoc(&func.docs);
 
-        if self.gen.opts.async_.is_import_async(&func.name) {
+        if self.generator.opts.async_.is_import_async(&func.name) {
             self.push_str("async ");
         }
         self.push_str("fn ");
@@ -2785,7 +2797,7 @@ impl<'a> InterfaceGenerator<'a> {
         self.push_str(")");
         self.push_str(" -> ");
 
-        if !self.gen.opts.trappable_imports.can_trap(func) {
+        if !self.generator.opts.trappable_imports.can_trap(func) {
             self.print_result_ty(&func.results, TypeMode::Owned);
         } else if let Some((r, _id, error_typename)) = self.special_case_trappable_error(func) {
             // Functions which have a single result `result<ok,err>` get special
@@ -2837,7 +2849,7 @@ impl<'a> InterfaceGenerator<'a> {
     ) {
         // Exports must be async if anything could be async, it's just imports
         // that get to be optionally async/sync.
-        let is_async = self.gen.opts.async_.maybe_async();
+        let is_async = self.generator.opts.async_.maybe_async();
 
         let (async_, async__, await_) = if is_async {
             ("async", "_async", ".await")
@@ -2846,7 +2858,7 @@ impl<'a> InterfaceGenerator<'a> {
         };
 
         self.rustdoc(&func.docs);
-        let wt = self.gen.wasmtime_path();
+        let wt = self.generator.wasmtime_path();
 
         uwrite!(
             self.src,
@@ -2869,7 +2881,7 @@ impl<'a> InterfaceGenerator<'a> {
             self.src.push_str("> {\n");
         }
 
-        if self.gen.opts.tracing {
+        if self.generator.opts.tracing {
             if is_async {
                 self.src.push_str("use tracing::Instrument;\n");
             }
@@ -2932,14 +2944,14 @@ impl<'a> InterfaceGenerator<'a> {
             uwrite!(self.src, "arg{}, ", i);
         }
 
-        let instrument = if is_async && self.gen.opts.tracing {
+        let instrument = if is_async && self.generator.opts.tracing {
             ".instrument(span.clone())"
         } else {
             ""
         };
         uwriteln!(self.src, ")){instrument}{await_}?;");
 
-        let instrument = if is_async && self.gen.opts.tracing {
+        let instrument = if is_async && self.generator.opts.tracing {
             ".instrument(span)"
         } else {
             ""
@@ -3002,7 +3014,7 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
     }
 
     fn ownership(&self) -> Ownership {
-        self.gen.opts.ownership
+        self.generator.opts.ownership
     }
 
     fn path_to_interface(&self, interface: InterfaceId) -> Option<String> {
@@ -3012,7 +3024,7 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
             }
         }
         let mut path_to_root = self.path_to_root();
-        match &self.gen.interface_names[&interface] {
+        match &self.generator.interface_names[&interface] {
             InterfaceName::Remapped { name_at_root, .. } => path_to_root.push_str(name_at_root),
             InterfaceName::Path(path) => {
                 for (i, name) in path.iter().enumerate() {
@@ -3031,15 +3043,15 @@ impl<'a> RustGenerator<'a> for InterfaceGenerator<'a> {
     }
 
     fn info(&self, ty: TypeId) -> TypeInfo {
-        self.gen.types.get(ty)
+        self.generator.types.get(ty)
     }
 
     fn is_imported_interface(&self, interface: InterfaceId) -> bool {
-        self.gen.interface_last_seen_as_import[&interface]
+        self.generator.interface_last_seen_as_import[&interface]
     }
 
     fn wasmtime_path(&self) -> String {
-        self.gen.wasmtime_path()
+        self.generator.wasmtime_path()
     }
 }
 

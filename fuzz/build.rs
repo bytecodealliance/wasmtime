@@ -41,7 +41,7 @@ mod component {
             seed.parse::<u64>()
                 .with_context(|| anyhow!("expected u64 in WASMTIME_FUZZ_SEED"))?
         } else {
-            StdRng::from_entropy().gen()
+            StdRng::from_entropy().r#gen()
         };
 
         eprintln!(
@@ -62,7 +62,7 @@ mod component {
 
         // First generate a set of type to select from.
         for _ in 0..TYPE_COUNT {
-            let ty = gen(&mut rng, |u| {
+            let ty = generate(&mut rng, |u| {
                 // Only discount fuel if the generation was successful,
                 // otherwise we'll get more random data and try again.
                 let mut fuel = type_fuel;
@@ -80,7 +80,7 @@ mod component {
         // Next generate a set of static API test cases driven by the above
         // types.
         for index in 0..TEST_CASE_COUNT {
-            let (case, rust_params, rust_results) = gen(&mut rng, |u| {
+            let (case, rust_params, rust_results) = generate(&mut rng, |u| {
                 let mut params = Vec::new();
                 let mut results = Vec::new();
                 let mut rust_params = TokenStream::new();
@@ -173,14 +173,14 @@ mod component {
         Ok(())
     }
 
-    fn gen<T>(
+    fn generate<T>(
         rng: &mut StdRng,
         mut f: impl FnMut(&mut Unstructured<'_>) -> arbitrary::Result<T>,
     ) -> Result<T> {
         let mut bytes = Vec::new();
         loop {
             let count = rng.gen_range(1000..2000);
-            bytes.extend(iter::repeat_with(|| rng.gen::<u8>()).take(count));
+            bytes.extend(iter::repeat_with(|| rng.r#gen::<u8>()).take(count));
 
             match f(&mut Unstructured::new(&bytes)) {
                 Ok(ret) => break Ok(ret),
