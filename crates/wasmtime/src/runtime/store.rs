@@ -1834,7 +1834,7 @@ impl StoreOpaque {
 
         Some(AsyncCx {
             current_suspend: self.async_state.current_suspend.get(),
-            current_poll_cx: unsafe { core::ptr::addr_of_mut!((*poll_cx_box_ptr).future_context) },
+            current_poll_cx: unsafe { &raw mut (*poll_cx_box_ptr).future_context },
             track_pkey_context_switch: self.pkey.is_some(),
         })
     }
