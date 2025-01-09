@@ -1262,11 +1262,7 @@ impl DataFlowGraph {
         {
             // We update the position of the old last arg.
             let mut last_arg_data = ValueData::from(self.values[last_arg_val]);
-            if let ValueData::Param {
-                num: ref mut old_num,
-                ..
-            } = &mut last_arg_data
-            {
+            if let ValueData::Param { num: old_num, .. } = &mut last_arg_data {
                 *old_num = num;
                 self.values[last_arg_val] = last_arg_data.into();
             } else {
@@ -1295,7 +1291,7 @@ impl DataFlowGraph {
                 .unwrap()];
             let mut data = ValueData::from(*packed);
             match &mut data {
-                ValueData::Param { ref mut num, .. } => {
+                ValueData::Param { num, .. } => {
                     *num -= 1;
                     *packed = data.into();
                 }

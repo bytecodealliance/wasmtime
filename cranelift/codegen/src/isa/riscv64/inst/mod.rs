@@ -1588,8 +1588,8 @@ impl Inst {
                 eew,
                 to,
                 from,
-                ref mask,
-                ref vstate,
+                mask,
+                vstate,
                 ..
             } => {
                 let base = format_vec_amode(from);
@@ -1602,8 +1602,8 @@ impl Inst {
                 eew,
                 to,
                 from,
-                ref mask,
-                ref vstate,
+                mask,
+                vstate,
                 ..
             } => {
                 let dst = format_vec_amode(to);
