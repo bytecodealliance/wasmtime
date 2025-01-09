@@ -747,7 +747,7 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
         }
     }
 
-    pub fn into_ranges(self) -> impl Iterator<Item = CachedValueLabelRange> {
+    pub fn into_ranges(self) -> impl Iterator<Item = CachedValueLabelRange> + use<> {
         // Ranges with not-enough labels are discarded.
         let processed_labels_len = self.processed_labels.len();
         self.ranges

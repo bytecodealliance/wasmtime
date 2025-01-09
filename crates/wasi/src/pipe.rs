@@ -364,7 +364,7 @@ mod test {
         assert_eq!(bs.len(), 0);
     }
 
-    async fn finite_async_reader(contents: &[u8]) -> impl AsyncRead + Send + 'static {
+    async fn finite_async_reader(contents: &[u8]) -> impl AsyncRead + Send + 'static + use<> {
         let (r, mut w) = simplex(contents.len());
         w.write_all(contents).await.unwrap();
         r

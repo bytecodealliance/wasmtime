@@ -147,7 +147,7 @@ impl<'a> Compilation<'a> {
     /// compilation.
     ///
     /// Each function is additionally accompanied with its module index.
-    fn indexes(&self) -> impl Iterator<Item = (StaticModuleIndex, DefinedFuncIndex)> + '_ {
+    fn indexes(&self) -> impl Iterator<Item = (StaticModuleIndex, DefinedFuncIndex)> + use<'_> {
         self.translations
             .iter()
             .flat_map(|(i, t)| t.module.defined_func_indices().map(move |j| (i, j)))

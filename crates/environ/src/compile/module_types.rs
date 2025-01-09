@@ -308,7 +308,7 @@ impl ModuleTypesBuilder {
     pub fn rec_group_elements(
         &self,
         rec_group: ModuleInternedRecGroupIndex,
-    ) -> impl ExactSizeIterator<Item = ModuleInternedTypeIndex> {
+    ) -> impl ExactSizeIterator<Item = ModuleInternedTypeIndex> + use<> {
         self.types.rec_group_elements(rec_group)
     }
 
