@@ -165,10 +165,10 @@ exclude = [
 [workspace.package]
 version = "30.0.0"
 authors = ["The Wasmtime Project Developers"]
-edition = "2021"
+edition = "2024"
 # Wasmtime's current policy is that this number can be no larger than the
 # current stable release of Rust minus 2.
-rust-version = "1.82.0"
+rust-version = "1.85.0"
 
 [workspace.lints.rust]
 # Turn on some lints which are otherwise allow-by-default in rustc.
@@ -190,6 +190,8 @@ rust-2024-prelude-collisions = 'warn'
 rust-2024-incompatible-pat = 'warn'
 missing-unsafe-on-extern = 'warn'
 impl-trait-overcaptures = 'warn'
+
+unsafe-op-in-unsafe-fn = 'allow'
 
 # Don't warn about unknown cfgs for pulley
 [workspace.lints.rust.unexpected_cfgs]
@@ -293,8 +295,8 @@ io-lifetimes = { version = "2.0.3", default-features = false }
 io-extras = "0.18.1"
 rustix = "0.38.43"
 # wit-bindgen:
-wit-bindgen = { version = "0.35.0", default-features = false }
-wit-bindgen-rust-macro = { version = "0.35.0", default-features = false }
+wit-bindgen = { version = "0.36.0", default-features = false }
+wit-bindgen-rust-macro = { version = "0.36.0", default-features = false }
 
 # wasm-tools family:
 wasmparser = { version = "0.223.0", default-features = false, features = ['simd'] }
@@ -563,3 +565,7 @@ opt-level = 's'
 inherits = "release"
 codegen-units = 1
 lto = true
+
+[patch.crates-io]
+wit-bindgen = { git = 'https://github.com/bytecodealliance/wit-bindgen' }
+wit-bindgen-rust-macro = { git = 'https://github.com/bytecodealliance/wit-bindgen' }

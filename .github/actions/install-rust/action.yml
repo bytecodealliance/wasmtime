@@ -24,9 +24,11 @@ runs:
         range=${{ inputs.msrv_range }}
 
         if [ "${{ inputs.toolchain }}" = "default" ]; then
-          echo "version=1.$((msrv+range)).0" >> "$GITHUB_OUTPUT"
+        #echo "version=1.$((msrv+range)).0" >> "$GITHUB_OUTPUT"
+          echo "version=beta" >> "$GITHUB_OUTPUT"
         elif [ "${{ inputs.toolchain }}" = "msrv" ]; then
-          echo "version=1.$msrv.0" >> "$GITHUB_OUTPUT"
+        #echo "version=1.$msrv.0" >> "$GITHUB_OUTPUT"
+          echo "version=beta" >> "$GITHUB_OUTPUT"
         elif [ "${{ inputs.toolchain }}" = "wasmtime-ci-pinned-nightly" ]; then
           echo "version=nightly-2025-01-09" >> "$GITHUB_OUTPUT"
         else
