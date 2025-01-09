@@ -37,7 +37,7 @@ impl StructRef {
     pub fn fields<'a, T: 'a>(
         &self,
         _store: impl Into<StoreContextMut<'a, T>>,
-    ) -> Result<impl ExactSizeIterator<Item = Val> + 'a> {
+    ) -> Result<impl ExactSizeIterator<Item = Val> + 'a + '_> {
         match *self {}
         Ok([].into_iter())
     }
