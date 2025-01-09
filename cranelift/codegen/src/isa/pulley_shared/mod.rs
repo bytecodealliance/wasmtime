@@ -21,6 +21,7 @@ use alloc::vec::Vec;
 use core::fmt::Debug;
 use core::marker::PhantomData;
 use cranelift_control::ControlPlane;
+use std::string::String;
 use target_lexicon::{Architecture, Triple};
 
 pub use settings::Flags as PulleyFlags;
@@ -213,6 +214,10 @@ where
 
     fn function_alignment(&self) -> FunctionAlignment {
         inst::InstAndKind::<P>::function_alignment()
+    }
+
+    fn pretty_print_reg(&self, reg: crate::Reg, _size: u8) -> String {
+        format!("{reg:?}")
     }
 
     fn has_native_fma(&self) -> bool {

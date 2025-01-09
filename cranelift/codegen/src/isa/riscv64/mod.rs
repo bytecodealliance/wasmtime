@@ -14,6 +14,7 @@ use crate::{ir, CodegenError};
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
+use std::string::String;
 use target_lexicon::{Architecture, Triple};
 mod abi;
 pub(crate) mod inst;
@@ -189,6 +190,11 @@ impl TargetIsa for Riscv64Backend {
         // of stopping on invalid bytes.
         cs.set_skipdata(true)?;
         Ok(cs)
+    }
+
+    fn pretty_print_reg(&self, reg: Reg, _size: u8) -> String {
+        // TODO-RISC-V: implement proper register pretty-printing.
+        format!("{reg:?}")
     }
 
     fn has_native_fma(&self) -> bool {
