@@ -880,9 +880,8 @@ impl Config {
     /// as the `v128` type and all of its operators being in a module. Note that
     /// this does not enable the [relaxed simd proposal].
     ///
-    /// On x86_64 platforms note that enabling this feature requires SSE 4.2 and
-    /// below to be available on the target platform. Compilation will fail if
-    /// the compile target does not include SSE 4.2.
+    /// **Note**: On x86_64 platforms the base CPU feature requirement for this
+    /// SIMD is SSE2.
     ///
     /// This is `true` by default.
     ///
