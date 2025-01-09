@@ -536,6 +536,7 @@ fn concurrent_type_modifications_and_checks(config: &mut Config) -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn validate_deterministic() {
     let mut faulty_wat = "(module ".to_string();
     for i in 0..1_000 {
