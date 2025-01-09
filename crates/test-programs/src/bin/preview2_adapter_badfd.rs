@@ -1,6 +1,6 @@
 fn main() {
     #[link(wasm_import_module = "wasi_snapshot_preview1")]
-    extern "C" {
+    unsafe extern "C" {
         #[cfg_attr(target_arch = "wasm32", link_name = "adapter_open_badfd")]
         fn adapter_open_badfd(fd: *mut u32) -> wasi::Errno;
 

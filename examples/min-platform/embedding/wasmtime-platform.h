@@ -23,7 +23,7 @@
 #ifndef _WASMTIME_PLATFORM_H
 #define _WASMTIME_PLATFORM_H
 
-/* Generated with cbindgen:0.26.0 */
+/* Generated with cbindgen:0.27.0 */
 
 #include <stdarg.h>
 #include <stdbool.h>
@@ -288,7 +288,7 @@ extern uint8_t *wasmtime_tls_get(void);
 extern void wasmtime_tls_set(uint8_t *ptr);
 
 #ifdef __cplusplus
-} // extern "C"
-#endif // __cplusplus
+}  // extern "C"
+#endif  // __cplusplus
 
-#endif /* _WASMTIME_PLATFORM_H */
+#endif  /* _WASMTIME_PLATFORM_H */

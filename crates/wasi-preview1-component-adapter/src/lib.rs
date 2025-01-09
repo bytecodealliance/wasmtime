@@ -114,12 +114,12 @@ pub mod bindings {
     }
 }
 
-#[export_name = "wasi:cli/run@0.2.3#run"]
+#[unsafe(export_name = "wasi:cli/run@0.2.3#run")]
 #[cfg(feature = "command")]
-pub unsafe extern "C" fn run() -> u32 {
+pub extern "C" fn run() -> u32 {
     #[link(wasm_import_module = "__main_module__")]
-    extern "C" {
-        fn _start();
+    unsafe extern "C" {
+        safe fn _start();
     }
     _start();
     0
@@ -457,7 +457,7 @@ impl BumpAlloc {
 
 #[cfg(not(feature = "proxy"))]
 #[link(wasm_import_module = "wasi:cli/environment@0.2.3")]
-extern "C" {
+unsafe extern "C" {
     #[link_name = "get-arguments"]
     fn wasi_cli_get_arguments(rval: *mut WasmStrList);
     #[link_name = "get-environment"]
@@ -2156,7 +2156,7 @@ pub unsafe extern "C" fn poll_oneoff(
         }
 
         #[link(wasm_import_module = "wasi:io/poll@0.2.3")]
-        extern "C" {
+        unsafe extern "C" {
             #[link_name = "poll"]
             fn poll_import(pollables: *const Pollable, len: usize, rval: *mut ReadyList);
         }
@@ -2731,7 +2731,7 @@ enum AllocationState {
 }
 
 #[expect(improper_ctypes, reason = "types behind pointers")]
-extern "C" {
+unsafe extern "C" {
     fn get_state_ptr() -> *mut State;
     fn set_state_ptr(state: *mut State);
     fn get_allocation_state() -> AllocationState;
@@ -2764,7 +2764,7 @@ impl State {
     #[cold]
     fn new() -> *mut State {
         #[link(wasm_import_module = "__main_module__")]
-        extern "C" {
+        unsafe extern "C" {
             fn cabi_realloc(
                 old_ptr: *mut u8,
                 old_len: usize,

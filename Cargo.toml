@@ -187,6 +187,7 @@ deprecated-safe-2024 = 'warn'
 rust-2024-guarded-string-incompatible-syntax = 'warn'
 rust-2024-prelude-collisions = 'warn'
 rust-2024-incompatible-pat = 'warn'
+missing-unsafe-on-extern = 'warn'
 
 # Don't warn about unknown cfgs for pulley
 [workspace.lints.rust.unexpected_cfgs]

@@ -936,7 +936,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: cargo install cbindgen --vers "^0.26" --locked
+    - run: cargo install cbindgen --vers "^0.27" --locked
     - run: rustup target add x86_64-unknown-none
     - run: ./build.sh x86_64-unknown-none
       working-directory: ./examples/min-platform
