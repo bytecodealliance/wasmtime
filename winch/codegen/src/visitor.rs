@@ -253,6 +253,7 @@ macro_rules! def_unsupported {
     (emit I64Sub128 $($rest:tt)*) => {};
     (emit I64MulWideS $($rest:tt)*) => {};
     (emit I64MulWideU $($rest:tt)*) => {};
+    (emit I32AtomicLoad8U $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -2139,7 +2140,12 @@ where
         self.masm.mul_wide(&mut self.context, MulWideKind::Unsigned)
     }
 
+    fn visit_i32_atomic_load8_u(&mut self, memarg: wasmparser::MemArg) {
+        self.emit_wasm_load_atomic(&memarg, WasmValType::I32, OperandSize::S8, None);
+    }
+
     wasmparser::for_each_visit_operator!(def_unsupported);
+
 }
 
 impl<'a, 'translation, 'data, M> VisitSimdOperator<'a>
