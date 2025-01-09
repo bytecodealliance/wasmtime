@@ -18,17 +18,17 @@ use crate::{
     WASMTIME_I32,
 };
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_config_async_support_set(c: &mut wasm_config_t, enable: bool) {
     c.config.async_support(enable);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_config_async_stack_size_set(c: &mut wasm_config_t, size: usize) {
     c.config.async_stack_size(size);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_context_epoch_deadline_async_yield_and_update(
     mut store: WasmtimeStoreContextMut<'_>,
     delta: u64,
@@ -36,7 +36,7 @@ pub extern "C" fn wasmtime_context_epoch_deadline_async_yield_and_update(
     store.epoch_deadline_async_yield_and_update(delta);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_context_fuel_async_yield_interval(
     mut store: WasmtimeStoreContextMut<'_>,
     interval: Option<NonZeroU64>,
@@ -194,10 +194,10 @@ pub struct wasmtime_call_future_t<'a> {
     underlying: Pin<Box<dyn Future<Output = ()> + 'a>>,
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_call_future_delete(_future: Box<wasmtime_call_future_t>) {}
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_call_future_poll(future: &mut wasmtime_call_future_t) -> bool {
     let w = futures::task::noop_waker_ref();
     match future.underlying.as_mut().poll(&mut Context::from_waker(w)) {
@@ -242,7 +242,7 @@ async fn do_func_call_async(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_func_call_async<'a>(
     store: WasmtimeStoreContextMut<'a>,
     func: &'a Func,
@@ -270,7 +270,7 @@ pub unsafe extern "C" fn wasmtime_func_call_async<'a>(
     Box::new(wasmtime_call_future_t { underlying: fut })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_linker_define_async_func(
     linker: &mut wasmtime_linker_t,
     module: *const u8,
@@ -308,7 +308,7 @@ async fn do_linker_instantiate_async(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_linker_instantiate_async<'a>(
     linker: &'a wasmtime_linker_t,
     store: WasmtimeStoreContextMut<'a>,
@@ -342,7 +342,7 @@ async fn do_instance_pre_instantiate_async(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_instance_pre_instantiate_async<'a>(
     instance_pre: &'a wasmtime_instance_pre_t,
     store: WasmtimeStoreContextMut<'a>,
@@ -438,7 +438,7 @@ unsafe impl StackCreator for CHostStackCreator {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_config_host_stack_creator_set(
     c: &mut wasm_config_t,
     creator: &wasmtime_stack_creator_t,

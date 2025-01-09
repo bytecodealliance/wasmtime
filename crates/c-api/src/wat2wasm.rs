@@ -1,6 +1,6 @@
 use crate::{bad_utf8, handle_result, wasm_byte_vec_t, wasmtime_error_t};
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_wat2wasm(
     wat: *const u8,
     wat_len: usize,

@@ -9,7 +9,7 @@ pub struct wasm_engine_t {
 
 wasmtime_c_api_macros::declare_own!(wasm_engine_t);
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_engine_new() -> Box<wasm_engine_t> {
     // Enable the `env_logger` crate since this is as good a place as any to
     // support some "top level initialization" for the C API. Almost all support
@@ -27,7 +27,7 @@ pub extern "C" fn wasm_engine_new() -> Box<wasm_engine_t> {
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_engine_new_with_config(c: Box<wasm_config_t>) -> Box<wasm_engine_t> {
     #[cfg(feature = "logging")]
     drop(env_logger::try_init());
@@ -38,17 +38,17 @@ pub extern "C" fn wasm_engine_new_with_config(c: Box<wasm_config_t>) -> Box<wasm
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_engine_clone(engine: &wasm_engine_t) -> Box<wasm_engine_t> {
     Box::new(engine.clone())
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_engine_increment_epoch(engine: &wasm_engine_t) {
     engine.engine.increment_epoch();
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_engine_is_pulley(engine: &wasm_engine_t) -> bool {
     engine.engine.is_pulley()
 }

@@ -7,7 +7,7 @@
 //
 // Embedders are expected to implement the symbols defined in this header file.
 // These symbols can be defined either in C/C++ or in Rust (using
-// `#[no_mangle]`).
+// `#[unsafe(no_mangle)]`).
 //
 // Note that there are some `#define`s here which can be added before this
 // header file is included to indicate how Wasmtime was built. This corresponds

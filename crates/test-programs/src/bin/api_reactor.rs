@@ -1,3 +1,8 @@
+#![expect(
+    unsafe_attr_outside_unsafe,
+    reason = "needs fixes in upstream wit-bindgen to satisfy this lint"
+)]
+
 use std::sync::{Mutex, MutexGuard};
 
 wit_bindgen::generate!({

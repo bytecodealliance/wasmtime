@@ -167,7 +167,7 @@ impl<T, E> TrappingUnwrap<T> for Result<T, E> {
 /// This is intended for use by `wasi-libc` during its incremental transition
 /// from WASI Preview 1 to Preview 2.  It will use this function to reserve
 /// descriptors for its own use, valid only for use with libc functions.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn adapter_open_badfd(fd: *mut u32) -> Errno {
     State::with(|state| {
         *fd = state.descriptors_mut().open(Descriptor::Bad)?;
@@ -176,12 +176,12 @@ pub unsafe extern "C" fn adapter_open_badfd(fd: *mut u32) -> Errno {
 }
 
 /// Close a descriptor previously opened using `adapter_open_badfd`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn adapter_close_badfd(fd: u32) -> Errno {
     State::with(|state| state.descriptors_mut().close(fd))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn reset_adapter_state() {
     let state = get_state_ptr();
     if !state.is_null() {
@@ -189,7 +189,7 @@ pub unsafe extern "C" fn reset_adapter_state() {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn cabi_import_realloc(
     old_ptr: *mut u8,
     old_size: usize,
@@ -466,7 +466,7 @@ unsafe extern "C" {
 
 /// Read command-line argument data.
 /// The size of the array should match that returned by `args_sizes_get`
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn args_get(argv: *mut *mut u8, argv_buf: *mut u8) -> Errno {
     State::with(|state| {
         #[cfg(not(feature = "proxy"))]
@@ -501,7 +501,7 @@ pub unsafe extern "C" fn args_get(argv: *mut *mut u8, argv_buf: *mut u8) -> Errn
 }
 
 /// Return command-line argument data sizes.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn args_sizes_get(argc: *mut Size, argv_buf_size: *mut Size) -> Errno {
     State::with(|state| {
         #[cfg(feature = "proxy")]
@@ -542,7 +542,7 @@ pub unsafe extern "C" fn args_sizes_get(argc: *mut Size, argv_buf_size: *mut Siz
 
 /// Read environment variable data.
 /// The sizes of the buffers should match that returned by `environ_sizes_get`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn environ_get(environ: *mut *const u8, environ_buf: *mut u8) -> Errno {
     State::with(|state| {
         #[cfg(not(feature = "proxy"))]
@@ -580,7 +580,7 @@ pub unsafe extern "C" fn environ_get(environ: *mut *const u8, environ_buf: *mut 
 }
 
 /// Return environment variable data sizes.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn environ_sizes_get(
     environc: *mut Size,
     environ_buf_size: *mut Size,
@@ -636,7 +636,7 @@ pub unsafe extern "C" fn environ_sizes_get(
 /// Implementations are required to provide a non-zero value for supported clocks. For unsupported clocks,
 /// return `errno::inval`.
 /// Note: This is similar to `clock_getres` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn clock_res_get(id: Clockid, resolution: &mut Timestamp) -> Errno {
     match id {
         CLOCKID_MONOTONIC => {
@@ -660,7 +660,7 @@ pub extern "C" fn clock_res_get(id: Clockid, resolution: &mut Timestamp) -> Errn
 
 /// Return the time value of a clock.
 /// Note: This is similar to `clock_gettime` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn clock_time_get(
     id: Clockid,
     _precision: Timestamp,
@@ -688,7 +688,7 @@ pub unsafe extern "C" fn clock_time_get(
 
 /// Provide file advisory information on a file descriptor.
 /// Note: This is similar to `posix_fadvise` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_advise(
     fd: Fd,
     offset: Filesize,
@@ -716,7 +716,7 @@ pub unsafe extern "C" fn fd_advise(
 
 /// Force the allocation of space in a file.
 /// Note: This is similar to `posix_fallocate` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_allocate(fd: Fd, _offset: Filesize, _len: Filesize) -> Errno {
     cfg_filesystem_available! {
         State::with(|state| {
@@ -731,7 +731,7 @@ pub unsafe extern "C" fn fd_allocate(fd: Fd, _offset: Filesize, _len: Filesize) 
 
 /// Close a file descriptor.
 /// Note: This is similar to `close` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
     State::with(|state| {
         if let Descriptor::Bad = state.descriptors().get(fd)? {
@@ -753,7 +753,7 @@ pub unsafe extern "C" fn fd_close(fd: Fd) -> Errno {
 
 /// Synchronize the data of a file to disk.
 /// Note: This is similar to `fdatasync` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_datasync(fd: Fd) -> Errno {
     cfg_filesystem_available! {
         State::with(|state| {
@@ -767,7 +767,7 @@ pub unsafe extern "C" fn fd_datasync(fd: Fd) -> Errno {
 
 /// Get the attributes of a file descriptor.
 /// Note: This returns similar flags to `fsync(fd, F_GETFL)` in POSIX, as well as additional fields.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
     cfg_filesystem_available! {
         State::with(|state| {
@@ -891,7 +891,7 @@ pub unsafe extern "C" fn fd_fdstat_get(fd: Fd, stat: *mut Fdstat) -> Errno {
 
 /// Adjust the flags associated with a file descriptor.
 /// Note: This is similar to `fcntl(fd, F_SETFL, flags)` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
     // Only support changing the NONBLOCK or APPEND flags.
     if flags & !(FDFLAGS_NONBLOCK | FDFLAGS_APPEND) != 0 {
@@ -920,7 +920,7 @@ pub unsafe extern "C" fn fd_fdstat_set_flags(fd: Fd, flags: Fdflags) -> Errno {
 }
 
 /// Does not do anything if `fd` corresponds to a valid descriptor and returns [`wasi::ERRNO_BADF`] otherwise.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_fdstat_set_rights(
     fd: Fd,
     _fs_rights_base: Rights,
@@ -936,7 +936,7 @@ pub unsafe extern "C" fn fd_fdstat_set_rights(
 }
 
 /// Return the attributes of an open file.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
     cfg_filesystem_available! {
         State::with(|state| {
@@ -986,7 +986,7 @@ pub unsafe extern "C" fn fd_filestat_get(fd: Fd, buf: *mut Filestat) -> Errno {
 
 /// Adjust the size of an open file. If this increases the file's size, the extra bytes are filled with zeros.
 /// Note: This is similar to `ftruncate` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_filestat_set_size(fd: Fd, size: Filesize) -> Errno {
     cfg_filesystem_available! {
         State::with(|state| {
@@ -1016,7 +1016,7 @@ fn systimespec(set: bool, ts: Timestamp, now: bool) -> Result<filesystem::NewTim
 
 /// Adjust the timestamps of an open file or directory.
 /// Note: This is similar to `futimens` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_filestat_set_times(
     fd: Fd,
     atim: Timestamp,
@@ -1045,7 +1045,7 @@ pub unsafe extern "C" fn fd_filestat_set_times(
 
 /// Read from a file descriptor, without using and updating the file descriptor's offset.
 /// Note: This is similar to `preadv` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_pread(
     fd: Fd,
     mut iovs_ptr: *const Iovec,
@@ -1088,7 +1088,7 @@ pub unsafe extern "C" fn fd_pread(
 }
 
 /// Return a description of the given preopened file descriptor.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
     if !matches!(
         get_allocation_state(),
@@ -1133,7 +1133,7 @@ pub unsafe extern "C" fn fd_prestat_get(fd: Fd, buf: *mut Prestat) -> Errno {
 }
 
 /// Return a description of the given preopened file descriptor.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_prestat_dir_name(fd: Fd, path: *mut u8, path_max_len: Size) -> Errno {
     cfg_filesystem_available! {
         State::with(|state| {
@@ -1160,7 +1160,7 @@ pub unsafe extern "C" fn fd_prestat_dir_name(fd: Fd, path: *mut u8, path_max_len
 
 /// Write to a file descriptor, without using and updating the file descriptor's offset.
 /// Note: This is similar to `pwritev` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_pwrite(
     fd: Fd,
     mut iovs_ptr: *const Ciovec,
@@ -1205,7 +1205,7 @@ pub unsafe extern "C" fn fd_pwrite(
 
 /// Read from a file descriptor.
 /// Note: This is similar to `readv` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_read(
     fd: Fd,
     mut iovs_ptr: *const Iovec,
@@ -1292,7 +1292,7 @@ fn stream_error_to_errno(err: streams::Error) -> Errno {
 /// truncating the last directory entry. This allows the caller to grow its
 /// read buffer size in case it's too small to fit a single large directory
 /// entry, or skip the oversized directory entry.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[cfg(feature = "proxy")]
 pub unsafe extern "C" fn fd_readdir(
     fd: Fd,
@@ -1304,7 +1304,7 @@ pub unsafe extern "C" fn fd_readdir(
     wasi::ERRNO_NOTSUP
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[cfg(not(feature = "proxy"))]
 pub unsafe extern "C" fn fd_readdir(
     fd: Fd,
@@ -1538,14 +1538,14 @@ pub unsafe extern "C" fn fd_readdir(
 /// thread at the same time.
 /// This function provides a way to atomically renumber file descriptors, which
 /// would disappear if `dup2()` were to be removed entirely.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_renumber(fd: Fd, to: Fd) -> Errno {
     State::with(|state| state.descriptors_mut().renumber(fd, to))
 }
 
 /// Move the offset of a file descriptor.
 /// Note: This is similar to `lseek` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_seek(
     fd: Fd,
     offset: Filedelta,
@@ -1590,7 +1590,7 @@ pub unsafe extern "C" fn fd_seek(
 
 /// Synchronize the data and metadata of a file to disk.
 /// Note: This is similar to `fsync` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_sync(fd: Fd) -> Errno {
     cfg_filesystem_available! {
         State::with(|state| {
@@ -1604,7 +1604,7 @@ pub unsafe extern "C" fn fd_sync(fd: Fd) -> Errno {
 
 /// Return the current offset of a file descriptor.
 /// Note: This is similar to `lseek(fd, 0, SEEK_CUR)` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_tell(fd: Fd, offset: *mut Filesize) -> Errno {
     cfg_filesystem_available! {
         State::with(|state| {
@@ -1618,7 +1618,7 @@ pub unsafe extern "C" fn fd_tell(fd: Fd, offset: *mut Filesize) -> Errno {
 
 /// Write to a file descriptor.
 /// Note: This is similar to `writev` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn fd_write(
     fd: Fd,
     mut iovs_ptr: *const Ciovec,
@@ -1691,7 +1691,7 @@ pub unsafe extern "C" fn fd_write(
 
 /// Create a directory.
 /// Note: This is similar to `mkdirat` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_create_directory(
     fd: Fd,
     path_ptr: *const u8,
@@ -1711,7 +1711,7 @@ pub unsafe extern "C" fn path_create_directory(
 
 /// Return the attributes of a file or directory.
 /// Note: This is similar to `stat` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_filestat_get(
     fd: Fd,
     flags: Lookupflags,
@@ -1746,7 +1746,7 @@ pub unsafe extern "C" fn path_filestat_get(
 
 /// Adjust the timestamps of a file or directory.
 /// Note: This is similar to `utimensat` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_filestat_set_times(
     fd: Fd,
     flags: Lookupflags,
@@ -1782,7 +1782,7 @@ pub unsafe extern "C" fn path_filestat_set_times(
 
 /// Create a hard link.
 /// Note: This is similar to `linkat` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_link(
     old_fd: Fd,
     old_flags: Lookupflags,
@@ -1814,7 +1814,7 @@ pub unsafe extern "C" fn path_link(
 /// is error-prone in multi-threaded contexts. The returned file descriptor is
 /// guaranteed to be less than 2**31.
 /// Note: This is similar to `openat` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_open(
     fd: Fd,
     dirflags: Lookupflags,
@@ -1872,7 +1872,7 @@ pub unsafe extern "C" fn path_open(
 
 /// Read the contents of a symbolic link.
 /// Note: This is similar to `readlinkat` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_readlink(
     fd: Fd,
     path_ptr: *const u8,
@@ -1924,7 +1924,7 @@ pub unsafe extern "C" fn path_readlink(
 /// Remove a directory.
 /// Return `errno::notempty` if the directory is not empty.
 /// Note: This is similar to `unlinkat(fd, path, AT_REMOVEDIR)` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_remove_directory(
     fd: Fd,
     path_ptr: *const u8,
@@ -1944,7 +1944,7 @@ pub unsafe extern "C" fn path_remove_directory(
 
 /// Rename a file or directory.
 /// Note: This is similar to `renameat` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_rename(
     old_fd: Fd,
     old_path_ptr: *const u8,
@@ -1969,7 +1969,7 @@ pub unsafe extern "C" fn path_rename(
 
 /// Create a symbolic link.
 /// Note: This is similar to `symlinkat` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_symlink(
     old_path_ptr: *const u8,
     old_path_len: usize,
@@ -1993,7 +1993,7 @@ pub unsafe extern "C" fn path_symlink(
 /// Unlink a file.
 /// Return `errno::isdir` if the path refers to a directory.
 /// Note: This is similar to `unlinkat(fd, path, 0)` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn path_unlink_file(fd: Fd, path_ptr: *const u8, path_len: usize) -> Errno {
     cfg_filesystem_available! {
         let path = slice::from_raw_parts(path_ptr, path_len);
@@ -2037,7 +2037,7 @@ impl Drop for Pollables {
 }
 
 /// Concurrently poll for the occurrence of a set of events.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn poll_oneoff(
     r#in: *const Subscription,
     out: *mut Event,
@@ -2266,7 +2266,7 @@ pub unsafe extern "C" fn poll_oneoff(
 /// Terminate the process normally. An exit code of 0 indicates successful
 /// termination of the program. The meanings of other values is dependent on
 /// the environment.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn proc_exit(rval: Exitcode) -> ! {
     #[cfg(feature = "proxy")]
     {
@@ -2282,14 +2282,14 @@ pub unsafe extern "C" fn proc_exit(rval: Exitcode) -> ! {
 
 /// Send a signal to the process of the calling thread.
 /// Note: This is similar to `raise` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn proc_raise(_sig: Signal) -> Errno {
     unreachable!()
 }
 
 /// Temporarily yield execution of the calling thread.
 /// Note: This is similar to `sched_yield` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn sched_yield() -> Errno {
     // TODO: This is not yet covered in Preview2.
 
@@ -2302,7 +2302,7 @@ pub unsafe extern "C" fn sched_yield() -> Errno {
 /// This function may execute slowly, so when large mounts of random data are
 /// required, it's advisable to use this function to seed a pseudo-random
 /// number generator, rather than to provide the random data directly.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn random_get(buf: *mut u8, buf_len: Size) -> Errno {
     if matches!(
         get_allocation_state(),
@@ -2327,7 +2327,7 @@ pub unsafe extern "C" fn random_get(buf: *mut u8, buf_len: Size) -> Errno {
 
 /// Accept a new incoming connection.
 /// Note: This is similar to `accept` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn sock_accept(_fd: Fd, _flags: Fdflags, _connection: *mut Fd) -> Errno {
     unreachable!()
 }
@@ -2335,7 +2335,7 @@ pub unsafe extern "C" fn sock_accept(_fd: Fd, _flags: Fdflags, _connection: *mut
 /// Receive a message from a socket.
 /// Note: This is similar to `recv` in POSIX, though it also supports reading
 /// the data into multiple buffers in the manner of `readv`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn sock_recv(
     _fd: Fd,
     _ri_data_ptr: *const Iovec,
@@ -2350,7 +2350,7 @@ pub unsafe extern "C" fn sock_recv(
 /// Send a message on a socket.
 /// Note: This is similar to `send` in POSIX, though it also supports writing
 /// the data from multiple buffers in the manner of `writev`.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn sock_send(
     _fd: Fd,
     _si_data_ptr: *const Ciovec,
@@ -2363,7 +2363,7 @@ pub unsafe extern "C" fn sock_send(
 
 /// Shut down socket send and receive channels.
 /// Note: This is similar to `shutdown` in POSIX.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn sock_shutdown(_fd: Fd, _how: Sdflags) -> Errno {
     unreachable!()
 }
