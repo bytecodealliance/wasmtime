@@ -244,7 +244,7 @@ impl CompiledExpression {
         addr_tr: &'a AddressTransform,
         frame_info: Option<&'a FunctionFrameInfo>,
         isa: &'a dyn TargetIsa,
-    ) -> impl Iterator<Item = Result<(write::Address, u64, write::Expression)>> + 'a {
+    ) -> impl Iterator<Item = Result<(write::Address, u64, write::Expression)>> + use<'a> {
         enum BuildWithLocalsResult<'a> {
             Empty,
             Simple(
