@@ -114,7 +114,7 @@ pub mod bindings {
     }
 }
 
-#[export_name = "wasi:cli/run@0.2.3#run"]
+#[unsafe(export_name = "wasi:cli/run@0.2.3#run")]
 #[cfg(feature = "command")]
 pub unsafe extern "C" fn run() -> u32 {
     #[link(wasm_import_module = "__main_module__")]
