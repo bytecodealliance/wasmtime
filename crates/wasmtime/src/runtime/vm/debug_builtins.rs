@@ -39,7 +39,7 @@ pub unsafe extern "C" fn set_vmctx_memory(vmctx_ptr: *mut VMContext) {
 /// means they need to be referenced for the linker to include them which is
 /// what this function does with trickery in C.
 pub fn init() {
-    extern "C" {
+    unsafe extern "C" {
         #[wasmtime_versioned_export_macros::versioned_link]
         fn wasmtime_debug_builtins_init();
     }
