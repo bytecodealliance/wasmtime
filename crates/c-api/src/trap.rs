@@ -41,7 +41,7 @@ wasmtime_c_api_macros::declare_own!(wasm_frame_t);
 
 pub type wasm_message_t = wasm_name_t;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_trap_new(
     _store: &wasm_store_t,
     message: &wasm_message_t,
@@ -56,7 +56,7 @@ pub extern "C" fn wasm_trap_new(
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_trap_new(message: *const u8, len: usize) -> Box<wasm_trap_t> {
     let bytes = crate::slice_from_raw_parts(message, len);
     let message = String::from_utf8_lossy(&bytes);
@@ -65,7 +65,7 @@ pub unsafe extern "C" fn wasmtime_trap_new(message: *const u8, len: usize) -> Bo
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_trap_message(trap: &wasm_trap_t, out: &mut wasm_message_t) {
     let mut buffer = Vec::new();
     buffer.extend_from_slice(format!("{:?}", trap.error).as_bytes());
@@ -74,7 +74,7 @@ pub extern "C" fn wasm_trap_message(trap: &wasm_trap_t, out: &mut wasm_message_t
     out.set_buffer(buffer);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_trap_origin(raw: &wasm_trap_t) -> Option<Box<wasm_frame_t<'_>>> {
     let trace = match raw.error.downcast_ref::<WasmBacktrace>() {
         Some(trap) => trap,
@@ -92,7 +92,7 @@ pub extern "C" fn wasm_trap_origin(raw: &wasm_trap_t) -> Option<Box<wasm_frame_t
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_trap_trace<'a>(raw: &'a wasm_trap_t, out: &mut wasm_frame_vec_t<'a>) {
     error_trace(&raw.error, out)
 }
@@ -115,7 +115,7 @@ pub(crate) fn error_trace<'a>(error: &'a Error, out: &mut wasm_frame_vec_t<'a>) 
     out.set_buffer(vec);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_trap_code(raw: &wasm_trap_t, code: &mut u8) -> bool {
     let trap = match raw.error.downcast_ref::<Trap>() {
         Some(trap) => trap,
@@ -140,12 +140,12 @@ pub extern "C" fn wasmtime_trap_code(raw: &wasm_trap_t, code: &mut u8) -> bool {
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_frame_func_index(frame: &wasm_frame_t<'_>) -> u32 {
     frame.trace.frames()[frame.idx].func_index()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_frame_func_name<'a>(
     frame: &'a wasm_frame_t<'_>,
 ) -> Option<&'a wasm_name_t> {
@@ -159,7 +159,7 @@ pub extern "C" fn wasmtime_frame_func_name<'a>(
         .as_ref()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_frame_module_name<'a>(
     frame: &'a wasm_frame_t<'_>,
 ) -> Option<&'a wasm_name_t> {
@@ -174,26 +174,26 @@ pub extern "C" fn wasmtime_frame_module_name<'a>(
         .as_ref()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_frame_func_offset(frame: &wasm_frame_t<'_>) -> usize {
     frame.trace.frames()[frame.idx]
         .func_offset()
         .unwrap_or(usize::MAX)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_frame_instance(_arg1: *const wasm_frame_t<'_>) -> *mut wasm_instance_t {
     unimplemented!("wasm_frame_instance")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_frame_module_offset(frame: &wasm_frame_t<'_>) -> usize {
     frame.trace.frames()[frame.idx]
         .module_offset()
         .unwrap_or(usize::MAX)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_frame_copy<'a>(frame: &wasm_frame_t<'a>) -> Box<wasm_frame_t<'a>> {
     Box::new(frame.clone())
 }

@@ -52,7 +52,7 @@ impl CGlobalType {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_globaltype_new(
     ty: Box<wasm_valtype_t>,
     mutability: wasm_mutability_t,
@@ -67,7 +67,7 @@ pub extern "C" fn wasm_globaltype_new(
     Some(Box::new(wasm_globaltype_t::new(ty)))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_globaltype_content(gt: &wasm_globaltype_t) -> &wasm_valtype_t {
     let gt = gt.ty();
     gt.content_cache.get_or_init(|| wasm_valtype_t {
@@ -75,7 +75,7 @@ pub extern "C" fn wasm_globaltype_content(gt: &wasm_globaltype_t) -> &wasm_valty
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_globaltype_mutability(gt: &wasm_globaltype_t) -> wasm_mutability_t {
     use wasmtime::Mutability::*;
     let gt = gt.ty();
@@ -85,12 +85,12 @@ pub extern "C" fn wasm_globaltype_mutability(gt: &wasm_globaltype_t) -> wasm_mut
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_globaltype_as_externtype(ty: &wasm_globaltype_t) -> &wasm_externtype_t {
     &ty.ext
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_globaltype_as_externtype_const(
     ty: &wasm_globaltype_t,
 ) -> &wasm_externtype_t {

@@ -35,28 +35,28 @@ pub(crate) fn ref_to_val(r: &wasm_ref_t) -> Val {
     Val::from(r.r.clone())
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_copy(r: Option<&wasm_ref_t>) -> Option<Box<wasm_ref_t>> {
     r.map(|r| Box::new(r.clone()))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_same(_a: Option<&wasm_ref_t>, _b: Option<&wasm_ref_t>) -> bool {
     // We need a store to determine whether these are the same reference or not.
     abort("wasm_ref_same")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_get_host_info(_ref: Option<&wasm_ref_t>) -> *mut c_void {
     std::ptr::null_mut()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_set_host_info(_ref: Option<&wasm_ref_t>, _info: *mut c_void) {
     abort("wasm_ref_set_host_info")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_set_host_info_with_finalizer(
     _ref: Option<&wasm_ref_t>,
     _info: *mut c_void,
@@ -65,108 +65,108 @@ pub extern "C" fn wasm_ref_set_host_info_with_finalizer(
     abort("wasm_ref_set_host_info_with_finalizer")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_extern(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_extern_t> {
     abort("wasm_ref_as_extern")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_extern_const(
     _ref: Option<&wasm_ref_t>,
 ) -> Option<&crate::wasm_extern_t> {
     abort("wasm_ref_as_extern_const")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_foreign(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_foreign_t> {
     abort("wasm_ref_as_foreign")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_foreign_const(
     _ref: Option<&wasm_ref_t>,
 ) -> Option<&crate::wasm_foreign_t> {
     abort("wasm_ref_as_foreign_const")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_func(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_func_t> {
     abort("wasm_ref_as_func")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_func_const(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_func_t> {
     abort("wasm_ref_as_func_const")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_global(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_global_t> {
     abort("wasm_ref_as_global")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_global_const(
     _ref: Option<&wasm_ref_t>,
 ) -> Option<&crate::wasm_global_t> {
     abort("wasm_ref_as_global_const")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_instance(
     _ref: Option<&wasm_ref_t>,
 ) -> Option<&crate::wasm_instance_t> {
     abort("wasm_ref_as_instance")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_instance_const(
     _ref: Option<&wasm_ref_t>,
 ) -> Option<&crate::wasm_instance_t> {
     abort("wasm_ref_as_instance_const")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_memory(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_memory_t> {
     abort("wasm_ref_as_memory")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_memory_const(
     _ref: Option<&wasm_ref_t>,
 ) -> Option<&crate::wasm_memory_t> {
     abort("wasm_ref_as_memory_const")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_module(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_module_t> {
     abort("wasm_ref_as_module")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_module_const(
     _ref: Option<&wasm_ref_t>,
 ) -> Option<&crate::wasm_module_t> {
     abort("wasm_ref_as_module_const")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_table(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_table_t> {
     abort("wasm_ref_as_table")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_table_const(
     _ref: Option<&wasm_ref_t>,
 ) -> Option<&crate::wasm_table_t> {
     abort("wasm_ref_as_table_const")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_trap(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_trap_t> {
     abort("wasm_ref_as_trap")
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_ref_as_trap_const(_ref: Option<&wasm_ref_t>) -> Option<&crate::wasm_trap_t> {
     abort("wasm_ref_as_trap_const")
 }
@@ -177,7 +177,7 @@ pub struct wasm_foreign_t {}
 
 wasmtime_c_api_macros::declare_ref!(wasm_foreign_t);
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_foreign_new(_store: &crate::wasm_store_t) -> Box<wasm_foreign_t> {
     abort("wasm_foreign_new")
 }
@@ -229,7 +229,7 @@ macro_rules! ref_wrapper {
 ref_wrapper!(AnyRef => wasmtime_anyref_t);
 ref_wrapper!(ExternRef => wasmtime_externref_t);
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_anyref_clone(
     cx: WasmtimeStoreContextMut<'_>,
     anyref: Option<&wasmtime_anyref_t>,
@@ -239,7 +239,7 @@ pub unsafe extern "C" fn wasmtime_anyref_clone(
     crate::initialize(out, anyref.into());
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_anyref_unroot(
     cx: WasmtimeStoreContextMut<'_>,
     val: Option<&mut MaybeUninit<wasmtime_anyref_t>>,
@@ -249,7 +249,7 @@ pub unsafe extern "C" fn wasmtime_anyref_unroot(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_anyref_to_raw(
     cx: WasmtimeStoreContextMut<'_>,
     val: Option<&wasmtime_anyref_t>,
@@ -259,7 +259,7 @@ pub unsafe extern "C" fn wasmtime_anyref_to_raw(
         .unwrap_or_default()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_anyref_from_raw(
     cx: WasmtimeStoreContextMut<'_>,
     raw: u32,
@@ -271,7 +271,7 @@ pub unsafe extern "C" fn wasmtime_anyref_from_raw(
     crate::initialize(val, anyref.into());
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_anyref_from_i31(
     cx: WasmtimeStoreContextMut<'_>,
     val: u32,
@@ -283,7 +283,7 @@ pub extern "C" fn wasmtime_anyref_from_i31(
     crate::initialize(out, Some(anyref).into())
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_anyref_i31_get_u(
     cx: WasmtimeStoreContextMut<'_>,
     anyref: Option<&wasmtime_anyref_t>,
@@ -302,7 +302,7 @@ pub unsafe extern "C" fn wasmtime_anyref_i31_get_u(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_anyref_i31_get_s(
     cx: WasmtimeStoreContextMut<'_>,
     anyref: Option<&wasmtime_anyref_t>,
@@ -321,7 +321,7 @@ pub unsafe extern "C" fn wasmtime_anyref_i31_get_s(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_externref_new(
     cx: WasmtimeStoreContextMut<'_>,
     data: *mut c_void,
@@ -338,7 +338,7 @@ pub extern "C" fn wasmtime_externref_new(
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_externref_data(
     cx: WasmtimeStoreContextMut<'_>,
     externref: Option<&wasmtime_externref_t>,
@@ -352,7 +352,7 @@ pub unsafe extern "C" fn wasmtime_externref_data(
         .unwrap_or(ptr::null_mut())
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_externref_clone(
     cx: WasmtimeStoreContextMut<'_>,
     externref: Option<&wasmtime_externref_t>,
@@ -362,7 +362,7 @@ pub unsafe extern "C" fn wasmtime_externref_clone(
     crate::initialize(out, externref.into());
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_externref_unroot(
     cx: WasmtimeStoreContextMut<'_>,
     val: Option<&mut MaybeUninit<wasmtime_externref_t>>,
@@ -372,7 +372,7 @@ pub unsafe extern "C" fn wasmtime_externref_unroot(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_externref_to_raw(
     cx: WasmtimeStoreContextMut<'_>,
     val: Option<&wasmtime_externref_t>,
@@ -382,7 +382,7 @@ pub unsafe extern "C" fn wasmtime_externref_to_raw(
         .unwrap_or_default()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_externref_from_raw(
     cx: WasmtimeStoreContextMut<'_>,
     raw: u32,

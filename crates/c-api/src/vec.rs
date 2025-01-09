@@ -103,18 +103,18 @@ macro_rules! declare_vecs {
             }
         }
 
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern "C" fn $empty(out: &mut $name) {
             out.size = 0;
             out.data = ptr::null_mut();
         }
 
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern "C" fn $uninit(out: &mut $name, size: usize) {
             out.set_buffer(vec![Default::default(); size]);
         }
 
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub unsafe extern "C" fn $new $(<$lt>)? (
             out: &mut $name $(<$lt>)?,
             size: usize,
@@ -124,7 +124,7 @@ macro_rules! declare_vecs {
             out.set_buffer(vec);
         }
 
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern "C" fn $copy $(<$lt>)? (
             out: &mut $name $(<$lt>)?,
             src: &$name $(<$lt>)?,
@@ -132,7 +132,7 @@ macro_rules! declare_vecs {
             out.set_buffer(src.as_slice().to_vec());
         }
 
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern "C" fn $delete $(<$lt>)? (out: &mut $name $(<$lt>)?) {
             out.take();
         }

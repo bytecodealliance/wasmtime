@@ -26,7 +26,7 @@ pub fn declare_own(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 
     (quote! {
         #[doc = #docs]
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern fn #delete(_: Box<#ty>) {}
     })
     .into()
@@ -48,7 +48,7 @@ pub fn declare_ty(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         wasmtime_c_api_macros::declare_own!(#ty);
 
         #[doc = #docs]
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern fn #copy(src: &#ty) -> Box<#ty> {
             Box::new(src.clone())
         }
@@ -96,27 +96,27 @@ pub fn declare_ref(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         wasmtime_c_api_macros::declare_ty!(#ty);
 
         #[doc = #same_docs]
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern fn #same(_a: &#ty, _b: &#ty) -> bool {
             eprintln!("`{}` is not implemented", stringify!(#same));
             std::process::abort();
         }
 
         #[doc = #get_host_info_docs]
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern fn #get_host_info(a: &#ty) -> *mut std::os::raw::c_void {
             std::ptr::null_mut()
         }
 
         #[doc = #set_host_info_docs]
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern fn #set_host_info(a: &#ty, info: *mut std::os::raw::c_void) {
             eprintln!("`{}` is not implemented", stringify!(#set_host_info));
             std::process::abort();
         }
 
         #[doc = #set_host_info_final_docs]
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern fn #set_host_info_final(
             a: &#ty,
             info: *mut std::os::raw::c_void,
@@ -127,14 +127,14 @@ pub fn declare_ref(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
         }
 
         #[doc = #as_ref_docs]
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern fn #as_ref(a: &#ty) -> Box<crate::wasm_ref_t> {
             eprintln!("`{}` is not implemented", stringify!(#as_ref));
             std::process::abort();
         }
 
         #[doc = #as_ref_const_docs]
-        #[no_mangle]
+        #[unsafe(no_mangle)]
         pub extern fn #as_ref_const(a: &#ty) -> Box<crate::wasm_ref_t> {
             eprintln!("`{}` is not implemented", stringify!(#as_ref_const));
             std::process::abort();

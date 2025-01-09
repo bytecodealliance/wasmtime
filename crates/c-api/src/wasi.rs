@@ -37,14 +37,14 @@ impl wasi_config_t {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasi_config_new() -> Box<wasi_config_t> {
     Box::new(wasi_config_t {
         builder: WasiCtxBuilder::new(),
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasi_config_set_argv(
     config: &mut wasi_config_t,
     argc: usize,
@@ -60,12 +60,12 @@ pub unsafe extern "C" fn wasi_config_set_argv(
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasi_config_inherit_argv(config: &mut wasi_config_t) {
     config.builder.inherit_args();
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasi_config_set_env(
     config: &mut wasi_config_t,
     envc: usize,
@@ -89,12 +89,12 @@ pub unsafe extern "C" fn wasi_config_set_env(
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasi_config_inherit_env(config: &mut wasi_config_t) {
     config.builder.inherit_env();
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasi_config_set_stdin_file(
     config: &mut wasi_config_t,
     path: *const c_char,
@@ -112,7 +112,7 @@ pub unsafe extern "C" fn wasi_config_set_stdin_file(
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasi_config_set_stdin_bytes(
     config: &mut wasi_config_t,
     binary: &mut wasm_byte_vec_t,
@@ -122,12 +122,12 @@ pub unsafe extern "C" fn wasi_config_set_stdin_bytes(
     config.builder.stdin(binary);
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasi_config_inherit_stdin(config: &mut wasi_config_t) {
     config.builder.inherit_stdin();
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasi_config_set_stdout_file(
     config: &mut wasi_config_t,
     path: *const c_char,
@@ -142,12 +142,12 @@ pub unsafe extern "C" fn wasi_config_set_stdout_file(
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasi_config_inherit_stdout(config: &mut wasi_config_t) {
     config.builder.inherit_stdout();
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasi_config_set_stderr_file(
     config: &mut wasi_config_t,
     path: *const c_char,
@@ -162,12 +162,12 @@ pub unsafe extern "C" fn wasi_config_set_stderr_file(
     true
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasi_config_inherit_stderr(config: &mut wasi_config_t) {
     config.builder.inherit_stderr();
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasi_config_preopen_dir(
     config: &mut wasi_config_t,
     path: *const c_char,
