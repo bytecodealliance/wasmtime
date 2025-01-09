@@ -371,7 +371,7 @@ mod asan {
 
     // These intrinsics are provided by the address sanitizer runtime. Their C
     // signatures were translated into Rust-isms here with `Option` and `&mut`.
-    extern "C" {
+    unsafe extern "C" {
         fn __sanitizer_start_switch_fiber(
             private_asan_pointer_save: Option<&mut *mut u8>,
             bottom: *const u8,
