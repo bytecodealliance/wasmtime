@@ -167,7 +167,7 @@ impl Builder {
     }
 
     /// Iterates the available settings in the builder.
-    pub fn iter(&self) -> impl Iterator<Item = Setting> {
+    pub fn iter(&self) -> impl Iterator<Item = Setting> + use<> {
         let template = self.template;
 
         template.descriptors.iter().map(move |d| {

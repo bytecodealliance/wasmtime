@@ -41,7 +41,7 @@ impl ModuleTypes {
     pub fn rec_group_elements(
         &self,
         rec_group: ModuleInternedRecGroupIndex,
-    ) -> impl ExactSizeIterator<Item = ModuleInternedTypeIndex> {
+    ) -> impl ExactSizeIterator<Item = ModuleInternedTypeIndex> + use<> {
         let range = &self.rec_groups[rec_group];
         (range.start.as_u32()..range.end.as_u32()).map(|i| ModuleInternedTypeIndex::from_u32(i))
     }

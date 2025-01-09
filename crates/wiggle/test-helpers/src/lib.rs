@@ -174,7 +174,7 @@ impl MemArea {
     }
 
     /// Enumerate all memareas of size `len` inside a given area
-    fn inside(&self, len: u32) -> impl Iterator<Item = MemArea> {
+    fn inside(&self, len: u32) -> impl Iterator<Item = MemArea> + use<'_> {
         let end: i64 = self.len as i64 - len as i64;
         let start = self.ptr;
         (0..end).into_iter().map(move |v| MemArea {

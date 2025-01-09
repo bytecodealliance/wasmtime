@@ -72,12 +72,15 @@ impl Vm {
     ///
     /// Returns either the resulting values, or the PC at which a trap was
     /// raised.
-    pub unsafe fn call<'a>(
+    pub unsafe fn call<'a, T>(
         &'a mut self,
         func: NonNull<u8>,
         args: &[Val],
-        rets: impl IntoIterator<Item = RegType> + 'a,
-    ) -> DoneReason<impl Iterator<Item = Val> + 'a> {
+        rets: T,
+    ) -> DoneReason<impl Iterator<Item = Val> + use<'a, T>>
+    where
+        T: IntoIterator<Item = RegType> + 'a,
+    {
         self.call_start(args);
 
         match self.call_run(func) {

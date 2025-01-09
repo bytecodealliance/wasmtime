@@ -165,7 +165,7 @@ async fn handle_request(request: IncomingRequest, response_out: ResponseOutparam
 async fn double_echo(
     incoming_request: IncomingRequest,
     url: &Url,
-) -> Result<(impl Future<Output = Result<()>>, IncomingResponse)> {
+) -> Result<(impl Future<Output = Result<()>> + use<>, IncomingResponse)> {
     let outgoing_request = OutgoingRequest::new(Fields::new());
 
     outgoing_request

@@ -76,7 +76,7 @@ fn gen_iterator(group: &SettingGroup, fmt: &mut Formatter) {
     fmtln!(fmt, "impl Flags {");
     fmt.indent(|fmt| {
         fmt.doc_comment("Iterates the setting values.");
-        fmtln!(fmt, "pub fn iter(&self) -> impl Iterator<Item = Value> {");
+        fmtln!(fmt, "pub fn iter(&self) -> impl Iterator<Item = Value> + use<> {");
         fmt.indent(|fmt| {
             fmtln!(fmt, "let mut bytes = [0; {}];", group.settings_size);
             fmtln!(fmt, "bytes.copy_from_slice(&self.bytes[0..{}]);", group.settings_size);

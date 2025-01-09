@@ -537,7 +537,7 @@ impl Module {
 
     /// Returns an iterator over all of the defined function indices in this
     /// module.
-    pub fn defined_func_indices(&self) -> impl Iterator<Item = DefinedFuncIndex> {
+    pub fn defined_func_indices(&self) -> impl Iterator<Item = DefinedFuncIndex> + use<> {
         (0..self.functions.len() - self.num_imported_funcs).map(|i| DefinedFuncIndex::new(i))
     }
 
