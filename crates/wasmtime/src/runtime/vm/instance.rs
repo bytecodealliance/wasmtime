@@ -644,7 +644,7 @@ impl Instance {
         // today so the `sptr` crate is used. This crate provides the extension
         // trait `Strict` but the method names conflict with the nightly methods
         // so a different syntax is used to invoke methods here.
-        let addr = ptr::addr_of!(self.vmctx);
+        let addr = &raw const self.vmctx;
         Strict::with_addr(self.vmctx_self_reference.as_ptr(), Strict::addr(addr))
     }
 
@@ -1067,7 +1067,7 @@ impl Instance {
 
     /// Get a locally-defined memory.
     pub fn get_defined_memory(&mut self, index: DefinedMemoryIndex) -> *mut Memory {
-        ptr::addr_of_mut!(self.memories[index].1)
+        &raw mut self.memories[index].1
     }
 
     /// Do a `memory.copy`
@@ -1287,20 +1287,20 @@ impl Instance {
             }
         }
 
-        ptr::addr_of_mut!(self.tables[idx].1)
+        &raw mut self.tables[idx].1
     }
 
     /// Get a table by index regardless of whether it is locally-defined or an
     /// imported, foreign table.
     pub(crate) fn get_table(&mut self, table_index: TableIndex) -> *mut Table {
         self.with_defined_table_index_and_instance(table_index, |idx, instance| {
-            ptr::addr_of_mut!(instance.tables[idx].1)
+            &raw mut instance.tables[idx].1
         })
     }
 
     /// Get a locally-defined table.
     pub(crate) fn get_defined_table(&mut self, index: DefinedTableIndex) -> *mut Table {
-        ptr::addr_of_mut!(self.tables[index].1)
+        &raw mut self.tables[index].1
     }
 
     pub(crate) fn with_defined_table_index_and_instance<R>(

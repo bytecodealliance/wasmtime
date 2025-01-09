@@ -270,7 +270,7 @@ impl Descriptors {
             if len >= (*table).len() {
                 return Err(wasi::ERRNO_NOMEM);
             }
-            core::ptr::addr_of_mut!((*table)[len]).write(desc);
+            (&raw mut (*table)[len]).write(desc);
             self.table_len.set(u16::try_from(len + 1).trapping_unwrap());
             Ok(Fd::from(u32::try_from(len).trapping_unwrap()))
         }

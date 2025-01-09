@@ -228,7 +228,7 @@ impl ComponentInstance {
     }
 
     fn vmctx(&self) -> *mut VMComponentContext {
-        let addr = core::ptr::addr_of!(self.vmctx);
+        let addr = &raw const self.vmctx;
         Strict::with_addr(self.vmctx_self_reference.as_ptr(), Strict::addr(addr))
     }
 

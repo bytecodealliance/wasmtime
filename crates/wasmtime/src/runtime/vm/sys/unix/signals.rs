@@ -6,7 +6,7 @@ use crate::runtime::vm::traphandlers::{tls, TrapRegisters, TrapTest};
 use std::cell::RefCell;
 use std::io;
 use std::mem;
-use std::ptr::{self, addr_of, addr_of_mut, null_mut};
+use std::ptr::{self, null_mut};
 
 /// Function which may handle custom signals while processing traps.
 pub type SignalHandler =
@@ -67,22 +67,22 @@ impl TrapHandler {
     }
 }
 
-unsafe fn foreach_handler(mut f: impl FnMut(*mut libc::sigaction, i32)) {
+fn foreach_handler(mut f: impl FnMut(*mut libc::sigaction, i32)) {
     // Allow handling OOB with signals on all architectures
-    f(addr_of_mut!(PREV_SIGSEGV), libc::SIGSEGV);
+    f(&raw mut PREV_SIGSEGV, libc::SIGSEGV);
 
     // Handle `unreachable` instructions which execute `ud2` right now
-    f(addr_of_mut!(PREV_SIGILL), libc::SIGILL);
+    f(&raw mut PREV_SIGILL, libc::SIGILL);
 
     // x86 and s390x use SIGFPE to report division by zero
     if cfg!(target_arch = "x86_64") || cfg!(target_arch = "s390x") {
-        f(addr_of_mut!(PREV_SIGFPE), libc::SIGFPE);
+        f(&raw mut PREV_SIGFPE, libc::SIGFPE);
     }
 
     // Sometimes we need to handle SIGBUS too:
     // - On Darwin, guard page accesses are raised as SIGBUS.
     if cfg!(target_vendor = "apple") || cfg!(target_os = "freebsd") {
-        f(addr_of_mut!(PREV_SIGBUS), libc::SIGBUS);
+        f(&raw mut PREV_SIGBUS, libc::SIGBUS);
     }
 
     // TODO(#1980): x86-32, if we support it, will also need a SIGFPE handler.
@@ -132,10 +132,10 @@ unsafe extern "C" fn trap_handler(
     context: *mut libc::c_void,
 ) {
     let previous = match signum {
-        libc::SIGSEGV => addr_of!(PREV_SIGSEGV),
-        libc::SIGBUS => addr_of!(PREV_SIGBUS),
-        libc::SIGFPE => addr_of!(PREV_SIGFPE),
-        libc::SIGILL => addr_of!(PREV_SIGILL),
+        libc::SIGSEGV => &raw const PREV_SIGSEGV,
+        libc::SIGBUS => &raw const PREV_SIGBUS,
+        libc::SIGFPE => &raw const PREV_SIGFPE,
+        libc::SIGILL => &raw const PREV_SIGILL,
         _ => panic!("unknown signal: {signum}"),
     };
     let handled = tls::with(|info| {
