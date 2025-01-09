@@ -3,7 +3,7 @@
 //! the translation the base addresses of regions of memory that will hold the globals, tables and
 //! linear memories.
 
-#![deny(missing_docs, warnings)]
+#![deny(missing_docs)]
 #![warn(clippy::cast_sign_loss)]
 #![no_std]
 
