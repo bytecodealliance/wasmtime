@@ -847,8 +847,29 @@ where
         size: OperandSize,
         sextend: Option<ExtendKind>,
     ) -> Result<()> {
-        let addr = self.emit_compute_heap_address(&arg, size)?;
-        if let Some(addr) = addr {
+        self.emit_wasm_load_full(arg, ty, size, sextend, false)
+    }
+
+    /// Emit a WebAssembly atomic load.
+    pub fn emit_wasm_load_atomic(
+        &mut self,
+        arg: &MemArg,
+        ty: WasmValType,
+        size: OperandSize,
+        sextend: Option<ExtendKind>,
+    ) -> Result<()> {
+        self.emit_wasm_load_full(arg, ty, size, sextend, true)
+    }
+
+    pub fn emit_wasm_load_full(
+        &mut self,
+        arg: &MemArg,
+        ty: WasmValType,
+        size: OperandSize,
+        sextend: Option<ExtendKind>,
+        atomic: bool,
+    ) -> Result<()> {
+        if let Some(addr) = self.emit_compute_heap_address(&arg, size)? {
             let dst = match ty {
                 WasmValType::I32 | WasmValType::I64 => self.context.any_gpr(self.masm)?,
                 WasmValType::F32 | WasmValType::F64 => self.context.any_fpr(self.masm)?,
@@ -857,7 +878,11 @@ where
             };
 
             let src = self.masm.address_at_reg(addr, 0)?;
-            self.masm.wasm_load(src, writable!(dst), size, sextend)?;
+            if atomic {
+                self.masm.wasm_load_atomic(src, writable!(dst), size, sextend)?;
+            } else {
+                self.masm.wasm_load(src, writable!(dst), size, sextend)?;
+            }
             self.context.stack.push(TypedReg::new(ty, dst).into());
             self.context.free_reg(addr);
         }
