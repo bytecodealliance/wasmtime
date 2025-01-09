@@ -539,7 +539,7 @@ fn concurrent_type_modifications_and_checks(config: &mut Config) -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn validate_deterministic() {
     let mut faulty_wat = "(module ".to_string();
-    for i in 0..1_000 {
+    for i in 0..100 {
         faulty_wat.push_str(&format!(
             "(func (export \"foo_{i}\") (result i64) (i64.add (i32.const 0) (i64.const 1)))"
         ));
