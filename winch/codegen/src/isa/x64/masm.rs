@@ -1219,9 +1219,8 @@ impl Masm for MacroAssembler {
         size: OperandSize,
         kind: Option<ExtendKind>,
     ) {
-        // The x86-64 architecture guarantee that a load
-        // operation will never be reodered with any memory operation appearing after it. Therefore
-        // loads are equivalent to their non-atomic counterparts.
+        // The guarantees of the x86-64 memory model ensure that `SeqCst`
+        // loads are equivalent to normal loads.
         self.wasm_load(src, dst, size, kind);
     }
 }
