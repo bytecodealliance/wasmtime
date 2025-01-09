@@ -1279,7 +1279,7 @@ macro_rules! for_each_extended_op {
             /// `dst = ieee_fma(a, b, c)`
             vfma64x2 = Vfma64x2 { dst: VReg, a: VReg, b: VReg, c: VReg };
 
-            /// `dst_lo:dst_hi = lhs_lo:lhs_hi + rhs_lo:rhs_hi`
+            /// `dst_hi:dst_lo = lhs_hi:lhs_lo + rhs_hi:rhs_lo`
             xadd128 = Xadd128 {
                 dst_lo: XReg,
                 dst_hi: XReg,
@@ -1288,7 +1288,7 @@ macro_rules! for_each_extended_op {
                 rhs_lo: XReg,
                 rhs_hi: XReg
             };
-            /// `dst_lo:dst_hi = lhs_lo:lhs_hi - rhs_lo:rhs_hi`
+            /// `dst_hi:dst_lo = lhs_hi:lhs_lo - rhs_hi:rhs_lo`
             xsub128 = Xsub128 {
                 dst_lo: XReg,
                 dst_hi: XReg,
@@ -1297,14 +1297,14 @@ macro_rules! for_each_extended_op {
                 rhs_lo: XReg,
                 rhs_hi: XReg
             };
-            /// `dst_lo:dst_hi = sext(lhs) * sext(rhs)`
+            /// `dst_hi:dst_lo = sext(lhs) * sext(rhs)`
             xwidemul64_s = Xwidemul64S {
                 dst_lo: XReg,
                 dst_hi: XReg,
                 lhs: XReg,
                 rhs: XReg
             };
-            /// `dst_lo:dst_hi = zext(lhs) * zext(rhs)`
+            /// `dst_hi:dst_lo = zext(lhs) * zext(rhs)`
             xwidemul64_u = Xwidemul64U {
                 dst_lo: XReg,
                 dst_hi: XReg,
