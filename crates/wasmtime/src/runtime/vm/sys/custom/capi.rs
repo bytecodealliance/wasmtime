@@ -52,7 +52,7 @@ pub type wasmtime_trap_handler_t =
 #[cfg(feature = "signals-based-traps")]
 pub enum wasmtime_memory_image {}
 
-extern "C" {
+unsafe extern "C" {
     /// Creates a new virtual memory mapping of the `size` specified with
     /// protection bits specified in `prot_flags`.
     ///
