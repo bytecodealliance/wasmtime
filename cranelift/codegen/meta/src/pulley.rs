@@ -47,7 +47,7 @@ enum Operand<'a> {
 }
 
 impl Inst<'_> {
-    fn operands(&self) -> impl Iterator<Item = Operand<'_>> {
+    fn operands(&self) -> impl Iterator<Item = Operand<'_>> + use<'_> {
         self.fields
             .iter()
             .map(|(name, ty)| match (*name, *ty) {
