@@ -245,9 +245,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn smoke_cranelift() {
+    fn smoke_cranelift_native() {
         crate::oracles::engine::smoke_test_engine(|u, config| {
-            WasmtimeEngine::new(u, config, CompilerStrategy::Cranelift)
+            WasmtimeEngine::new(u, config, CompilerStrategy::CraneliftNative)
+        })
+    }
+
+    #[test]
+    fn smoke_cranelift_pulley() {
+        crate::oracles::engine::smoke_test_engine(|u, config| {
+            WasmtimeEngine::new(u, config, CompilerStrategy::CraneliftPulley)
         })
     }
 

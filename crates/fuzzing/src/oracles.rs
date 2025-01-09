@@ -1222,7 +1222,7 @@ mod tests {
     ) -> bool {
         let mut rng = SmallRng::seed_from_u64(0);
         let mut buf = vec![0; 2048];
-        let n = 2000;
+        let n = 3000;
         for _ in 0..n {
             rng.fill_bytes(&mut buf);
             let mut u = Unstructured::new(&buf);
