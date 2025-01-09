@@ -184,23 +184,25 @@ impl<'a> Arbitrary<'a> for TestCase {
 
 impl TestCase {
     pub fn generate(u: &mut Unstructured) -> anyhow::Result<Self> {
-        let mut gen = FuzzGen::new(u);
+        let mut generator = FuzzGen::new(u);
 
-        let compare_against_host = gen.u.arbitrary()?;
+        let compare_against_host = generator.u.arbitrary()?;
 
         // TestCase is meant to be consumed by a runner, so we make the assumption here that we're
         // generating a TargetIsa for the host.
         let mut builder =
             builder_with_options(true).expect("Unable to build a TargetIsa for the current host");
-        let flags = gen.generate_flags(builder.triple().architecture)?;
-        gen.set_isa_flags(&mut builder, IsaFlagGen::Host)?;
+        let flags = generator.generate_flags(builder.triple().architecture)?;
+        generator.set_isa_flags(&mut builder, IsaFlagGen::Host)?;
         let isa = builder.finish(flags)?;
 
         // When generating functions, we allow each function to call any function that has
         // already been generated. This guarantees that we never have loops in the call graph.
         // We generate these backwards, and then reverse them so that the main function is at
         // the start.
-        let func_count = gen.u.int_in_range(gen.config.testcase_funcs.clone())?;
+        let func_count = generator
+            .u
+            .int_in_range(generator.config.testcase_funcs.clone())?;
         let mut functions: Vec<Function> = Vec::with_capacity(func_count);
         let mut ctrl_planes: Vec<ControlPlane> = Vec::with_capacity(func_count);
         for i in (0..func_count).rev() {
@@ -217,17 +219,21 @@ impl TestCase {
                 })
                 .collect();
 
-            let func =
-                gen.generate_func(fname, isa.clone(), usercalls, ALLOWED_LIBCALLS.to_vec())?;
+            let func = generator.generate_func(
+                fname,
+                isa.clone(),
+                usercalls,
+                ALLOWED_LIBCALLS.to_vec(),
+            )?;
             functions.push(func);
 
-            ctrl_planes.push(ControlPlane::arbitrary(gen.u)?);
+            ctrl_planes.push(ControlPlane::arbitrary(generator.u)?);
         }
         // Now reverse the functions so that the main function is at the start.
         functions.reverse();
 
         let main = &functions[0];
-        let inputs = gen.generate_test_inputs(&main.signature)?;
+        let inputs = generator.generate_test_inputs(&main.signature)?;
 
         Ok(TestCase {
             isa,

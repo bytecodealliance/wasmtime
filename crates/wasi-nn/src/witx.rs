@@ -5,10 +5,10 @@
 //!
 //! The only export from this module is [`add_to_linker`]. To implement it, this
 //! module proceeds in steps:
-//! 1. generate all of the Wiggle glue code into a `gen::*` namespace
-//! 2. wire up the `gen::*` glue to the context state, delegating actual
+//! 1. generate all of the Wiggle glue code into a `generated::*` namespace
+//! 2. wire up the `generated::*` glue to the context state, delegating actual
 //!    computation to a `Backend`
-//! 3. wrap up with some conversions, i.e., from `gen::*` types to this crate's
+//! 3. wrap up with some conversions, i.e., from `generated::*` types to this crate's
 //!    [`types`].
 //!
 //! [`types`]: crate::wit::types
@@ -22,7 +22,7 @@ use std::hash::Hash;
 use thiserror::Error;
 use wiggle::{GuestError, GuestMemory, GuestPtr};
 
-pub use gen::wasi_ephemeral_nn::add_to_linker;
+pub use generated::wasi_ephemeral_nn::add_to_linker;
 
 pub(crate) type WasiNnResult<T> = std::result::Result<T, WasiNnError>;
 type Result<T> = WasiNnResult<T>;
@@ -91,7 +91,7 @@ where
 }
 
 /// Generate the traits and types from the `wasi-nn` WITX specification.
-mod gen {
+mod generated {
     use super::*;
     wiggle::from_witx!({
         witx: ["$WASI_ROOT/wasi-nn.witx"],
@@ -124,14 +124,14 @@ mod gen {
 }
 
 /// Wire up the WITX-generated trait to the `wasi-nn` host state.
-impl gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
+impl generated::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
     fn load(
         &mut self,
         memory: &mut GuestMemory<'_>,
-        builders: gen::types::GraphBuilderArray,
-        encoding: gen::types::GraphEncoding,
-        target: gen::types::ExecutionTarget,
-    ) -> Result<gen::types::Graph> {
+        builders: generated::types::GraphBuilderArray,
+        encoding: generated::types::GraphEncoding,
+        target: generated::types::ExecutionTarget,
+    ) -> Result<generated::types::Graph> {
         let graph = if let Some(backend) = self.backends.get_mut(&encoding.into()) {
             // Retrieve all of the "builder lists" from the Wasm memory (see
             // $graph_builder_array) as slices for a backend to operate on.
@@ -157,7 +157,7 @@ impl gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
         &mut self,
         memory: &mut GuestMemory<'_>,
         name: wiggle::GuestPtr<str>,
-    ) -> Result<gen::types::Graph> {
+    ) -> Result<generated::types::Graph> {
         let name = memory.as_str(name)?.unwrap();
         if let Some(graph) = self.registry.get_mut(&name) {
             let graph_id = self.graphs.insert(graph.clone().into());
@@ -170,8 +170,8 @@ impl gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
     fn init_execution_context(
         &mut self,
         _memory: &mut GuestMemory<'_>,
-        graph_id: gen::types::Graph,
-    ) -> Result<gen::types::GraphExecutionContext> {
+        graph_id: generated::types::Graph,
+    ) -> Result<generated::types::GraphExecutionContext> {
         let exec_context = if let Some(graph) = self.graphs.get_mut(graph_id.into()) {
             graph.init_execution_context()?
         } else {
@@ -185,9 +185,9 @@ impl gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
     fn set_input(
         &mut self,
         memory: &mut GuestMemory<'_>,
-        exec_context_id: gen::types::GraphExecutionContext,
+        exec_context_id: generated::types::GraphExecutionContext,
         index: u32,
-        tensor: &gen::types::Tensor,
+        tensor: &generated::types::Tensor,
     ) -> Result<()> {
         if let Some(exec_context) = self.executions.get_mut(exec_context_id.into()) {
             let tensor = crate::wit::types::Tensor {
@@ -204,7 +204,7 @@ impl gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
     fn compute(
         &mut self,
         _memory: &mut GuestMemory<'_>,
-        exec_context_id: gen::types::GraphExecutionContext,
+        exec_context_id: generated::types::GraphExecutionContext,
     ) -> Result<()> {
         if let Some(exec_context) = self.executions.get_mut(exec_context_id.into()) {
             Ok(exec_context.compute()?)
@@ -216,7 +216,7 @@ impl gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
     fn get_output(
         &mut self,
         memory: &mut GuestMemory<'_>,
-        exec_context_id: gen::types::GraphExecutionContext,
+        exec_context_id: generated::types::GraphExecutionContext,
         index: u32,
         out_buffer: GuestPtr<u8>,
         out_buffer_max_size: u32,
@@ -243,38 +243,42 @@ impl gen::wasi_ephemeral_nn::WasiEphemeralNn for WasiNnCtx {
 
 // Implement some conversion from `witx::types::*` to this crate's version.
 
-impl From<gen::types::ExecutionTarget> for crate::wit::types::ExecutionTarget {
-    fn from(value: gen::types::ExecutionTarget) -> Self {
+impl From<generated::types::ExecutionTarget> for crate::wit::types::ExecutionTarget {
+    fn from(value: generated::types::ExecutionTarget) -> Self {
         match value {
-            gen::types::ExecutionTarget::Cpu => crate::wit::types::ExecutionTarget::Cpu,
-            gen::types::ExecutionTarget::Gpu => crate::wit::types::ExecutionTarget::Gpu,
-            gen::types::ExecutionTarget::Tpu => crate::wit::types::ExecutionTarget::Tpu,
+            generated::types::ExecutionTarget::Cpu => crate::wit::types::ExecutionTarget::Cpu,
+            generated::types::ExecutionTarget::Gpu => crate::wit::types::ExecutionTarget::Gpu,
+            generated::types::ExecutionTarget::Tpu => crate::wit::types::ExecutionTarget::Tpu,
         }
     }
 }
-impl From<gen::types::GraphEncoding> for crate::wit::types::GraphEncoding {
-    fn from(value: gen::types::GraphEncoding) -> Self {
+impl From<generated::types::GraphEncoding> for crate::wit::types::GraphEncoding {
+    fn from(value: generated::types::GraphEncoding) -> Self {
         match value {
-            gen::types::GraphEncoding::Openvino => crate::wit::types::GraphEncoding::Openvino,
-            gen::types::GraphEncoding::Onnx => crate::wit::types::GraphEncoding::Onnx,
-            gen::types::GraphEncoding::Tensorflow => crate::wit::types::GraphEncoding::Tensorflow,
-            gen::types::GraphEncoding::Pytorch => crate::wit::types::GraphEncoding::Pytorch,
-            gen::types::GraphEncoding::Tensorflowlite => {
+            generated::types::GraphEncoding::Openvino => crate::wit::types::GraphEncoding::Openvino,
+            generated::types::GraphEncoding::Onnx => crate::wit::types::GraphEncoding::Onnx,
+            generated::types::GraphEncoding::Tensorflow => {
+                crate::wit::types::GraphEncoding::Tensorflow
+            }
+            generated::types::GraphEncoding::Pytorch => crate::wit::types::GraphEncoding::Pytorch,
+            generated::types::GraphEncoding::Tensorflowlite => {
                 crate::wit::types::GraphEncoding::Tensorflowlite
             }
-            gen::types::GraphEncoding::Autodetect => crate::wit::types::GraphEncoding::Autodetect,
+            generated::types::GraphEncoding::Autodetect => {
+                crate::wit::types::GraphEncoding::Autodetect
+            }
         }
     }
 }
-impl From<gen::types::TensorType> for crate::wit::types::TensorType {
-    fn from(value: gen::types::TensorType) -> Self {
+impl From<generated::types::TensorType> for crate::wit::types::TensorType {
+    fn from(value: generated::types::TensorType) -> Self {
         match value {
-            gen::types::TensorType::F16 => crate::wit::types::TensorType::Fp16,
-            gen::types::TensorType::F32 => crate::wit::types::TensorType::Fp32,
-            gen::types::TensorType::U8 => crate::wit::types::TensorType::U8,
-            gen::types::TensorType::I32 => crate::wit::types::TensorType::I32,
-            gen::types::TensorType::I64 => crate::wit::types::TensorType::I64,
-            gen::types::TensorType::F64 => crate::wit::types::TensorType::Fp64,
+            generated::types::TensorType::F16 => crate::wit::types::TensorType::Fp16,
+            generated::types::TensorType::F32 => crate::wit::types::TensorType::Fp32,
+            generated::types::TensorType::U8 => crate::wit::types::TensorType::U8,
+            generated::types::TensorType::I32 => crate::wit::types::TensorType::I32,
+            generated::types::TensorType::I64 => crate::wit::types::TensorType::I64,
+            generated::types::TensorType::F64 => crate::wit::types::TensorType::Fp64,
         }
     }
 }

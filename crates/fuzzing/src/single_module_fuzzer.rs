@@ -311,10 +311,10 @@ mod tests {
             let mutate = mutate::<u32>;
             let run2 = run_config::<(u32, u32)>;
 
-            if let Ok((module, known_valid)) = execute(&buf[..seed_size], run1, gen) {
+            if let Ok((module, known_valid)) = execute(&buf[..seed_size], run1, generate) {
                 assert_eq!(known_valid, KnownValid::Yes);
-                let new_size = mutate(&mut buf, seed_size, max_size, gen, noop_mutate);
-                if let Ok((module2, known_valid)) = execute(&buf[..new_size], run2, gen) {
+                let new_size = mutate(&mut buf, seed_size, max_size, generate, noop_mutate);
+                if let Ok((module2, known_valid)) = execute(&buf[..new_size], run2, generate) {
                     assert_eq!(known_valid, KnownValid::No);
                     compares += 1;
                     if module != module2 {
@@ -340,7 +340,7 @@ mod tests {
             Ok((data.to_vec(), known_valid))
         }
 
-        fn gen<T>(_: &mut T, u: &mut Unstructured<'_>) -> Result<(Vec<u8>, KnownValid)>
+        fn generate<T>(_: &mut T, u: &mut Unstructured<'_>) -> Result<(Vec<u8>, KnownValid)>
         where
             T: for<'a> Arbitrary<'a>,
         {

@@ -54,5 +54,5 @@ mod test {
 pub fn thread_rng() -> Box<dyn RngCore + Send> {
     use cap_rand::{Rng, SeedableRng};
     let mut rng = cap_rand::thread_rng(cap_rand::ambient_authority());
-    Box::new(cap_rand::rngs::StdRng::from_seed(rng.gen()))
+    Box::new(cap_rand::rngs::StdRng::from_seed(rng.r#gen()))
 }

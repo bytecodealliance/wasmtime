@@ -355,15 +355,15 @@ struct TableSlot {
 pub struct HostResourceIndex(u64);
 
 impl HostResourceIndex {
-    fn new(idx: u32, gen: u32) -> HostResourceIndex {
-        HostResourceIndex(u64::from(idx) | (u64::from(gen) << 32))
+    fn new(idx: u32, generation: u32) -> HostResourceIndex {
+        HostResourceIndex(u64::from(idx) | (u64::from(generation) << 32))
     }
 
     fn index(&self) -> u32 {
         u32::try_from(self.0 & 0xffffffff).unwrap()
     }
 
-    fn gen(&self) -> u32 {
+    fn generation(&self) -> u32 {
         u32::try_from(self.0 >> 32).unwrap()
     }
 }
@@ -453,7 +453,7 @@ impl<'a> HostResourceTables<'a> {
         // situation the operation that this is guarding will return a more
         // precise error, such as a lift operation.
         if let Some(actual) = actual {
-            if actual.generation != idx.gen() {
+            if actual.generation != idx.generation() {
                 bail!("host-owned resource is being used with the wrong type");
             }
         }
