@@ -26,6 +26,7 @@ column is below.
 | [`threads`]              | ✅      | ✅    | ✅[^9]   | ❌[^3] | ✅  | ✅    |
 | [`tail-call`]            | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`extended-const`]       | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
+| [`memory64`]             | ✅      | ✅    | ✅       | ✅     | ✅  | ✅    |
 
 [^1]: The `component-model` proposal is not at phase 4 in the standardization
     process but it is still enabled-by-default in Wasmtime.
@@ -45,7 +46,6 @@ column is below.
 
 |  Proposal                | Phase 4 | Tests | Finished | Fuzzed | API | C API |
 |--------------------------|---------|-------|----------|--------|-----|-------|
-| [`memory64`]             | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
 | [`function-references`]  | ✅      | ✅    | ❌       | ❌     | ✅  | ❌    |
 | [`gc`] [^6]              | ✅      | ✅    | ❌[^7]   | ❌     | ✅  | ❌    |
 | [`wide-arithmetic`]      | ❌      | ✅    | ✅       | ✅     | ✅  | ✅    |
