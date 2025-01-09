@@ -1284,6 +1284,39 @@ macro_rules! for_each_extended_op {
             vfma32x4 = Vfma32x4 { dst: VReg, a: VReg, b: VReg, c: VReg };
             /// `dst = ieee_fma(a, b, c)`
             vfma64x2 = Vfma64x2 { dst: VReg, a: VReg, b: VReg, c: VReg };
+
+            /// `dst_hi:dst_lo = lhs_hi:lhs_lo + rhs_hi:rhs_lo`
+            xadd128 = Xadd128 {
+                dst_lo: XReg,
+                dst_hi: XReg,
+                lhs_lo: XReg,
+                lhs_hi: XReg,
+                rhs_lo: XReg,
+                rhs_hi: XReg
+            };
+            /// `dst_hi:dst_lo = lhs_hi:lhs_lo - rhs_hi:rhs_lo`
+            xsub128 = Xsub128 {
+                dst_lo: XReg,
+                dst_hi: XReg,
+                lhs_lo: XReg,
+                lhs_hi: XReg,
+                rhs_lo: XReg,
+                rhs_hi: XReg
+            };
+            /// `dst_hi:dst_lo = sext(lhs) * sext(rhs)`
+            xwidemul64_s = Xwidemul64S {
+                dst_lo: XReg,
+                dst_hi: XReg,
+                lhs: XReg,
+                rhs: XReg
+            };
+            /// `dst_hi:dst_lo = zext(lhs) * zext(rhs)`
+            xwidemul64_u = Xwidemul64U {
+                dst_lo: XReg,
+                dst_hi: XReg,
+                lhs: XReg,
+                rhs: XReg
+            };
         }
     };
 }

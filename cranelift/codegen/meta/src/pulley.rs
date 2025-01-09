@@ -68,7 +68,7 @@ impl Inst<'_> {
                     let src2 = parts.next().unwrap_or(dst);
                     Operand::Binop { dst, src1, src2 }
                 }
-                ("dst", ty) => Operand::Writable { name, ty },
+                (name, ty) if name.starts_with("dst") => Operand::Writable { name, ty },
                 (name, "RegSet < XReg >") => Operand::Normal {
                     name,
                     ty: "XRegSet",
@@ -137,7 +137,7 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
                     format_string.push_str(name);
                     format_string.push_str("}");
                     if ty.contains("Reg") {
-                        if name == "dst" {
+                        if matches!(op, Operand::Writable { .. }) {
                             locals.push_str(&format!("let {name} = reg_name(*{name}.to_reg());\n"));
                         } else {
                             locals.push_str(&format!("let {name} = reg_name(**{name});\n"));
@@ -342,7 +342,7 @@ pub fn generate_isle(filename: &str, out_dir: &Path) -> Result<(), Error> {
         let mut rule = String::new();
         isle.push_str(&format!("(decl pulley_{snake_name} ("));
         rule.push_str(&format!("(rule (pulley_{snake_name} "));
-        let mut result = None;
+        let mut results = Vec::new();
         let mut ops = Vec::new();
         for op in inst.operands() {
             match op {
@@ -352,16 +352,14 @@ pub fn generate_isle(filename: &str, out_dir: &Path) -> Result<(), Error> {
                     ops.push(name);
                 }
                 Operand::Writable { name: _, ty } => {
-                    assert!(result.is_none(), "{} has >1 result", inst.snake_name);
-                    result = Some(ty);
+                    results.push(ty);
                 }
                 Operand::Binop { dst, src1, src2 } => {
                     isle.push_str(&format!("{src1} {src2}"));
                     rule.push_str("src1 src2");
                     ops.push("src1");
                     ops.push("src2");
-                    assert!(result.is_none(), "{} has >1 result", inst.snake_name);
-                    result = Some(dst);
+                    results.push(dst);
                 }
             }
             isle.push_str(" ");
@@ -370,8 +368,8 @@ pub fn generate_isle(filename: &str, out_dir: &Path) -> Result<(), Error> {
         isle.push_str(") ");
         rule.push_str(")");
         let ops = ops.join(" ");
-        match result {
-            Some(result) => {
+        match &results[..] {
+            [result] => {
                 isle.push_str(result);
                 rule.push_str(&format!(
                     "
@@ -384,12 +382,28 @@ pub fn generate_isle(filename: &str, out_dir: &Path) -> Result<(), Error> {
                     result.to_lowercase()
                 ));
             }
-            None => {
+            [a, b] => {
+                isle.push_str("ValueRegs");
+                rule.push_str(&format!(
+                    "
+  (let (
+      (dst1 Writable{a} (temp_writable_{}))
+      (dst2 Writable{b} (temp_writable_{}))
+      (_ Unit (emit (RawInst.{name} dst1 dst2 {ops})))
+    )
+    (value_regs dst1 dst2)))\
+\n",
+                    a.to_lowercase(),
+                    b.to_lowercase(),
+                ));
+            }
+            [] => {
                 isle.push_str("SideEffectNoResult");
                 rule.push_str(&format!(
                     "  (SideEffectNoResult.Inst (RawInst.{name} {ops})))\n",
                 ));
             }
+            other => panic!("cannot codegen results {other:?}"),
         }
         isle.push_str(")\n");
 

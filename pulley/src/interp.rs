@@ -996,6 +996,17 @@ impl Interpreter<'_> {
         }
         ControlFlow::Continue(())
     }
+
+    fn get_i128(&self, lo: XReg, hi: XReg) -> i128 {
+        let lo = self.state[lo].get_u64();
+        let hi = self.state[hi].get_i64();
+        i128::from(lo) | (i128::from(hi) << 64)
+    }
+
+    fn set_i128(&mut self, lo: XReg, hi: XReg, val: i128) {
+        self.state[lo].set_u64(val as u64);
+        self.state[hi].set_u64((val >> 64) as u64);
+    }
 }
 
 #[test]
@@ -4809,6 +4820,66 @@ impl ExtendedOpVisitor for Interpreter<'_> {
             *a = a.wasm_mul_add(b, c);
         }
         self.state[dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
+    fn xadd128(
+        &mut self,
+        dst_lo: XReg,
+        dst_hi: XReg,
+        lhs_lo: XReg,
+        lhs_hi: XReg,
+        rhs_lo: XReg,
+        rhs_hi: XReg,
+    ) -> ControlFlow<Done> {
+        let lhs = self.get_i128(lhs_lo, lhs_hi);
+        let rhs = self.get_i128(rhs_lo, rhs_hi);
+        let result = lhs.wrapping_add(rhs);
+        self.set_i128(dst_lo, dst_hi, result);
+        ControlFlow::Continue(())
+    }
+
+    fn xsub128(
+        &mut self,
+        dst_lo: XReg,
+        dst_hi: XReg,
+        lhs_lo: XReg,
+        lhs_hi: XReg,
+        rhs_lo: XReg,
+        rhs_hi: XReg,
+    ) -> ControlFlow<Done> {
+        let lhs = self.get_i128(lhs_lo, lhs_hi);
+        let rhs = self.get_i128(rhs_lo, rhs_hi);
+        let result = lhs.wrapping_sub(rhs);
+        self.set_i128(dst_lo, dst_hi, result);
+        ControlFlow::Continue(())
+    }
+
+    fn xwidemul64_s(
+        &mut self,
+        dst_lo: XReg,
+        dst_hi: XReg,
+        lhs: XReg,
+        rhs: XReg,
+    ) -> ControlFlow<Done> {
+        let lhs = self.state[lhs].get_i64();
+        let rhs = self.state[rhs].get_i64();
+        let result = i128::from(lhs).wrapping_mul(i128::from(rhs));
+        self.set_i128(dst_lo, dst_hi, result);
+        ControlFlow::Continue(())
+    }
+
+    fn xwidemul64_u(
+        &mut self,
+        dst_lo: XReg,
+        dst_hi: XReg,
+        lhs: XReg,
+        rhs: XReg,
+    ) -> ControlFlow<Done> {
+        let lhs = self.state[lhs].get_u64();
+        let rhs = self.state[rhs].get_u64();
+        let result = u128::from(lhs).wrapping_mul(u128::from(rhs));
+        self.set_i128(dst_lo, dst_hi, result as i128);
         ControlFlow::Continue(())
     }
 }

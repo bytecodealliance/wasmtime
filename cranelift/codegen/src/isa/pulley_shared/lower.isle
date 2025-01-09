@@ -242,6 +242,17 @@
   (if-let neg_u32 (u32_try_from_u64 neg_u64))
   neg_u32)
 
+;; 128-bit addition
+(rule 1 (lower (has_type $I128 (iadd a b)))
+  (let ((a ValueRegs a)
+        (b ValueRegs b))
+    (pulley_xadd128
+      (value_regs_get a 0)
+      (value_regs_get a 1)
+      (value_regs_get b 0)
+      (value_regs_get b 1))))
+
+;; vector addition
 (rule 1 (lower (has_type $I8X16 (iadd a b))) (pulley_vaddi8x16 a b))
 (rule 1 (lower (has_type $I16X8 (iadd a b))) (pulley_vaddi16x8 a b))
 (rule 1 (lower (has_type $I32X4 (iadd a b))) (pulley_vaddi32x4 a b))
@@ -287,6 +298,17 @@
   (if-let c (u8_from_negated_iconst b))
   (pulley_xadd64_u8 a c))
 
+;; 128-bit subtraction
+(rule 1 (lower (has_type $I128 (isub a b)))
+  (let ((a ValueRegs a)
+        (b ValueRegs b))
+    (pulley_xsub128
+      (value_regs_get a 0)
+      (value_regs_get a 1)
+      (value_regs_get b 0)
+      (value_regs_get b 1))))
+
+;; vector subtraction
 (rule 1 (lower (has_type $I8X16 (isub a b))) (pulley_vsubi8x16 a b))
 (rule 1 (lower (has_type $I16X8 (isub a b))) (pulley_vsubi16x8 a b))
 (rule 1 (lower (has_type $I32X4 (isub a b))) (pulley_vsubi32x4 a b))
@@ -313,6 +335,13 @@
 (rule 4 (lower (has_type $I64 (imul a (i8_from_iconst b))))
   (pulley_xmul64_s8 a b))
 
+;; 128-bit (or wide) multiplication
+(rule (lower (has_type $I128 (imul (uextend a) (uextend b))))
+  (pulley_xwidemul64_u (zext64 a) (zext64 b)))
+(rule (lower (has_type $I128 (imul (sextend a) (sextend b))))
+  (pulley_xwidemul64_s (sext64 a) (sext64 b)))
+
+;; vector multiplication
 (rule (lower (has_type $I8X16 (imul a b))) (pulley_vmuli8x16 a b))
 (rule (lower (has_type $I16X8 (imul a b))) (pulley_vmuli16x8 a b))
 (rule (lower (has_type $I32X4 (imul a b))) (pulley_vmuli32x4 a b))
