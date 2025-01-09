@@ -2146,32 +2146,32 @@ where
         self.masm.mul_wide(&mut self.context, MulWideKind::Unsigned)
     }
 
-    fn visit_i32_atomic_load8_u(&mut self, memarg: wasmparser::MemArg) {
-        self.emit_wasm_load_atomic(&memarg, WasmValType::I32, OperandSize::S8, None);
+    fn visit_i32_atomic_load8_u(&mut self, memarg: wasmparser::MemArg) -> Self::Output {
+        self.emit_wasm_load_atomic(&memarg, WasmValType::I32, OperandSize::S8, None)
     }
 
-    fn visit_i32_atomic_load16_u(&mut self, memarg: wasmparser::MemArg) {
-        self.emit_wasm_load_atomic(&memarg, WasmValType::I32, OperandSize::S16, None);
+    fn visit_i32_atomic_load16_u(&mut self, memarg: wasmparser::MemArg) -> Self::Output {
+        self.emit_wasm_load_atomic(&memarg, WasmValType::I32, OperandSize::S16, None)
     }
 
-    fn visit_i32_atomic_load(&mut self, memarg: wasmparser::MemArg) {
-        self.emit_wasm_load_atomic(&memarg, WasmValType::I32, OperandSize::S32, None);
+    fn visit_i32_atomic_load(&mut self, memarg: wasmparser::MemArg) -> Self::Output {
+        self.emit_wasm_load_atomic(&memarg, WasmValType::I32, OperandSize::S32, None)
     }
 
-    fn visit_i64_atomic_load8_u(&mut self, memarg: wasmparser::MemArg) {
-        self.emit_wasm_load_atomic(&memarg, WasmValType::I64, OperandSize::S8, None);
+    fn visit_i64_atomic_load8_u(&mut self, memarg: wasmparser::MemArg) -> Self::Output {
+        self.emit_wasm_load_atomic(&memarg, WasmValType::I64, OperandSize::S8, None)
     }
 
-    fn visit_i64_atomic_load16_u(&mut self, memarg: wasmparser::MemArg) {
-        self.emit_wasm_load_atomic(&memarg, WasmValType::I64, OperandSize::S16, None);
+    fn visit_i64_atomic_load16_u(&mut self, memarg: wasmparser::MemArg) -> Self::Output {
+        self.emit_wasm_load_atomic(&memarg, WasmValType::I64, OperandSize::S16, None)
     }
 
-    fn visit_i64_atomic_load32_u(&mut self, memarg: wasmparser::MemArg) {
-        self.emit_wasm_load_atomic(&memarg, WasmValType::I64, OperandSize::S32, None);
+    fn visit_i64_atomic_load32_u(&mut self, memarg: wasmparser::MemArg) -> Self::Output {
+        self.emit_wasm_load_atomic(&memarg, WasmValType::I64, OperandSize::S32, None)
     }
 
-    fn visit_i64_atomic_load(&mut self, memarg: wasmparser::MemArg) {
-        self.emit_wasm_load_atomic(&memarg, WasmValType::I64, OperandSize::S64, None);
+    fn visit_i64_atomic_load(&mut self, memarg: wasmparser::MemArg) -> Self::Output {
+        self.emit_wasm_load_atomic(&memarg, WasmValType::I64, OperandSize::S64, None)
     }
 
     wasmparser::for_each_visit_operator!(def_unsupported);

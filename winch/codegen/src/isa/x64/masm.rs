@@ -1212,7 +1212,13 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn wasm_load_atomic(&mut self, src: Self::Address, dst: WritableReg, size: OperandSize, kind: Option<ExtendKind>) {
+    fn wasm_load_atomic(
+        &mut self,
+        src: Self::Address,
+        dst: WritableReg,
+        size: OperandSize,
+        kind: Option<ExtendKind>,
+    ) {
         // The x86-64 architecture guarantee that a load
         // operation will never be reodered with any memory operation appearing after it. Therefore
         // loads are equivalent to their non-atomic counterparts.

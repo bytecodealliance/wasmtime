@@ -871,7 +871,13 @@ impl Masm for MacroAssembler {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
-    fn wasm_load_atomic(&mut self, _src: Self::Address, _dst: WritableReg, _size: OperandSize, _sextend: Option<ExtendKind>) {
+    fn wasm_load_atomic(
+        &mut self,
+        _src: Self::Address,
+        _dst: WritableReg,
+        _size: OperandSize,
+        _sextend: Option<ExtendKind>,
+    ) -> Result<()> {
         todo!()
     }
 }

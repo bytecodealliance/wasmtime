@@ -879,7 +879,8 @@ where
 
             let src = self.masm.address_at_reg(addr, 0)?;
             if atomic {
-                self.masm.wasm_load_atomic(src, writable!(dst), size, sextend)?;
+                self.masm
+                    .wasm_load_atomic(src, writable!(dst), size, sextend)?;
             } else {
                 self.masm.wasm_load(src, writable!(dst), size, sextend)?;
             }

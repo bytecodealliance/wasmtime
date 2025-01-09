@@ -1132,7 +1132,14 @@ pub(crate) trait MacroAssembler {
     ///
     /// Note that some platforms require special handling of registers in this
     /// instruction (e.g. x64) so full access to `CodeGenContext` is provided.
-    fn mul_wide(&mut self, context: &mut CodeGenContext<Emission>, kind: MulWideKind);
+    fn mul_wide(&mut self, context: &mut CodeGenContext<Emission>, kind: MulWideKind)
+        -> Result<()>;
 
-    fn wasm_load_atomic(&mut self, src: Self::Address, dst: WritableReg, size: OperandSize, sextend: Option<ExtendKind>) -> Result<()>;
+    fn wasm_load_atomic(
+        &mut self,
+        src: Self::Address,
+        dst: WritableReg,
+        size: OperandSize,
+        sextend: Option<ExtendKind>,
+    ) -> Result<()>;
 }
