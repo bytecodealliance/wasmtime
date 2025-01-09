@@ -2,7 +2,6 @@
 //! to allocate the adapter stack, hence this test.
 
 #[export_name = "cabi_realloc"]
-#[no_mangle]
 unsafe extern "C" fn cabi_realloc(
     old_ptr: *mut u8,
     old_len: usize,
