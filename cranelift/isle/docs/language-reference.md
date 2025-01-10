@@ -1472,7 +1472,7 @@ The grammar accepted by the parser is as follows:
 
 <ident> ::= <ident-start> <ident-cont>*
 <const-ident> ::= "$" <ident-cont>*
-<ident-start> ::= <any non-whitespace character other than "-", "0".."9", "(", ")" or ";">
+<ident-start> ::= <any non-whitespace character other than "-", "0".."9", "(", ")", ";" or "$">
 <ident-cont>  ::= <any non-whitespace character other than "(", ")", ";" or "@">
 
 <type-body> ::= "(" "primitive" <ident> ")"
