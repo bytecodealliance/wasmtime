@@ -193,6 +193,7 @@ where
         })
     }
 
+    #[cfg(feature = "unwind")]
     fn emit_unwind_info(
         &self,
         _result: &crate::CompiledCode,
