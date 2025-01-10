@@ -422,6 +422,7 @@ default = [
   "gc-drc",
   "gc-null",
   "winch",
+  "pulley",
 
   # Enable some nice features of clap by default, but they come at a binary size
   # cost, so allow disabling this through disabling of our own `default`
@@ -436,7 +437,6 @@ default = [
 # These features are off-by-default but may optionally be enabled.
 all-arch = ["wasmtime/all-arch"]
 winch = ["wasmtime/winch"]
-pulley = ["wasmtime/pulley"]
 wmemcheck = ["wasmtime/wmemcheck"]
 trace-log = ["wasmtime/trace-log"]
 memory-protection-keys = ["wasmtime-cli-flags/memory-protection-keys"]
@@ -476,6 +476,7 @@ gc = ["wasmtime-cli-flags/gc", "wasmtime/gc"]
 gc-drc = ["gc", "wasmtime/gc-drc", "wasmtime-cli-flags/gc-drc"]
 gc-null = ["gc", "wasmtime/gc-null", "wasmtime-cli-flags/gc-null"]
 signals-based-traps = ["wasmtime/signals-based-traps", "wasmtime-cli-flags/signals-based-traps"]
+pulley = ["wasmtime-cli-flags/pulley"]
 
 # CLI subcommands for the `wasmtime` executable. See `wasmtime $cmd --help`
 # for more information on each subcommand.
