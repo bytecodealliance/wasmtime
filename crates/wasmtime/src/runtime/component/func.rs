@@ -668,7 +668,7 @@ impl Func {
         results: &mut [Val],
         src: &mut core::slice::Iter<'_, ValRaw>,
     ) -> Result<()> {
-        // FIXME: needs to read an i64 for memory64
+        // FIXME(#4311): needs to read an i64 for memory64
         let ptr = usize::try_from(src.next().unwrap().get_u32())?;
         if ptr % usize::try_from(results_ty.abi.align32)? != 0 {
             bail!("return pointer not aligned");

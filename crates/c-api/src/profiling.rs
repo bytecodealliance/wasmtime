@@ -16,7 +16,7 @@ pub struct wasmtime_guestprofiler_modules_t<'a> {
     module: &'a wasmtime_module_t,
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_guestprofiler_new(
     module_name: &wasm_name_t,
     interval_nanos: u64,
@@ -40,7 +40,7 @@ pub unsafe extern "C" fn wasmtime_guestprofiler_new(
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_guestprofiler_sample(
     guestprofiler: &mut wasmtime_guestprofiler_t,
     store: &wasmtime_store_t,
@@ -51,7 +51,7 @@ pub extern "C" fn wasmtime_guestprofiler_sample(
         .sample(&store.store, Duration::from_nanos(delta_nanos));
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_guestprofiler_finish(
     guestprofiler: Box<wasmtime_guestprofiler_t>,
     out: &mut wasm_byte_vec_t,

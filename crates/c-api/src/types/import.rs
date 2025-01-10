@@ -27,7 +27,7 @@ impl wasm_importtype_t {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_importtype_new(
     module: &mut wasm_name_t,
     name: &mut wasm_name_t,
@@ -44,19 +44,19 @@ pub extern "C" fn wasm_importtype_new(
     )))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_importtype_module(it: &wasm_importtype_t) -> &wasm_name_t {
     it.module_cache
         .get_or_init(|| wasm_name_t::from_name(it.module.clone()))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_importtype_name(it: &wasm_importtype_t) -> &wasm_name_t {
     it.name_cache
         .get_or_init(|| wasm_name_t::from_name(it.name.to_string()))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_importtype_type(it: &wasm_importtype_t) -> &wasm_externtype_t {
     it.type_cache
         .get_or_init(|| wasm_externtype_t::from_cextern_type(it.ty.clone()))

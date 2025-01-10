@@ -715,7 +715,7 @@ macro_rules! impl_wasm_params {
 
             #[inline]
             fn vmgcref_pointing_to_object_count(&self) -> usize {
-                let ($(ref $t,)*) = self;
+                let ($($t,)*) = self;
                 0 $(
                     + $t.is_vmgcref_and_points_to_object() as usize
                 )*

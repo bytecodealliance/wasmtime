@@ -31,7 +31,7 @@ impl wasm_memory_t {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_memory_new(
     store: &mut wasm_store_t,
     mt: &wasm_memorytype_t,
@@ -45,38 +45,38 @@ pub unsafe extern "C" fn wasm_memory_new(
     }))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_memory_as_extern(m: &mut wasm_memory_t) -> &mut wasm_extern_t {
     &mut m.ext
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_memory_as_extern_const(m: &wasm_memory_t) -> &wasm_extern_t {
     &m.ext
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_memory_type(m: &wasm_memory_t) -> Box<wasm_memorytype_t> {
     let ty = m.memory().ty(m.ext.store.context());
     Box::new(wasm_memorytype_t::new(ty))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_memory_data(m: &wasm_memory_t) -> *mut u8 {
     m.memory().data_ptr(m.ext.store.context())
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_memory_data_size(m: &wasm_memory_t) -> usize {
     m.memory().data_size(m.ext.store.context())
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_memory_size(m: &wasm_memory_t) -> wasm_memory_pages_t {
     u32::try_from(m.memory().size(m.ext.store.context())).unwrap()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_memory_grow(
     m: &mut wasm_memory_t,
     delta: wasm_memory_pages_t,
@@ -86,7 +86,7 @@ pub unsafe extern "C" fn wasm_memory_grow(
     memory.grow(&mut store, u64::from(delta)).is_ok()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_memory_new(
     store: WasmtimeStoreContextMut<'_>,
     ty: &wasm_memorytype_t,
@@ -95,7 +95,7 @@ pub extern "C" fn wasmtime_memory_new(
     handle_result(Memory::new(store, ty.ty().ty.clone()), |mem| *ret = mem)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_memory_type(
     store: WasmtimeStoreContext<'_>,
     mem: &Memory,
@@ -103,12 +103,12 @@ pub extern "C" fn wasmtime_memory_type(
     Box::new(wasm_memorytype_t::new(mem.ty(store)))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_memory_data(store: WasmtimeStoreContext<'_>, mem: &Memory) -> *const u8 {
     mem.data(store).as_ptr()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_memory_data_size(
     store: WasmtimeStoreContext<'_>,
     mem: &Memory,
@@ -116,12 +116,12 @@ pub extern "C" fn wasmtime_memory_data_size(
     mem.data(store).len()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_memory_size(store: WasmtimeStoreContext<'_>, mem: &Memory) -> u64 {
     mem.size(store)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_memory_grow(
     store: WasmtimeStoreContextMut<'_>,
     mem: &Memory,

@@ -314,7 +314,7 @@ where
         dst: &ValRaw,
     ) -> Result<Return> {
         assert!(Return::flatten_count() > MAX_FLAT_RESULTS);
-        // FIXME: needs to read an i64 for memory64
+        // FIXME(#4311): needs to read an i64 for memory64
         let ptr = usize::try_from(dst.get_u32())?;
         if ptr % usize::try_from(Return::ALIGN32)? != 0 {
             bail!("return pointer not aligned");
@@ -1052,7 +1052,7 @@ unsafe impl Lift for char {
     }
 }
 
-// TODO: these probably need different constants for memory64
+// FIXME(#4311): these probably need different constants for memory64
 const UTF16_TAG: usize = 1 << 31;
 const MAX_STRING_BYTE_LENGTH: usize = (1 << 31) - 1;
 
@@ -1096,7 +1096,7 @@ unsafe impl Lower for str {
         debug_assert!(matches!(ty, InterfaceType::String));
         debug_assert!(offset % (Self::ALIGN32 as usize) == 0);
         let (ptr, len) = lower_string(cx, self)?;
-        // FIXME: needs memory64 handling
+        // FIXME(#4311): needs memory64 handling
         *cx.get(offset + 0) = u32::try_from(ptr).unwrap().to_le_bytes();
         *cx.get(offset + 4) = u32::try_from(len).unwrap().to_le_bytes();
         Ok(())
@@ -1366,7 +1366,7 @@ unsafe impl Lift for WasmStr {
     #[inline]
     fn lift(cx: &mut LiftContext<'_>, ty: InterfaceType, src: &Self::Lower) -> Result<Self> {
         debug_assert!(matches!(ty, InterfaceType::String));
-        // FIXME: needs memory64 treatment
+        // FIXME(#4311): needs memory64 treatment
         let ptr = src[0].get_u32();
         let len = src[1].get_u32();
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
@@ -1377,7 +1377,7 @@ unsafe impl Lift for WasmStr {
     fn load(cx: &mut LiftContext<'_>, ty: InterfaceType, bytes: &[u8]) -> Result<Self> {
         debug_assert!(matches!(ty, InterfaceType::String));
         debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
-        // FIXME: needs memory64 treatment
+        // FIXME(#4311): needs memory64 treatment
         let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap());
         let len = u32::from_le_bytes(bytes[4..].try_into().unwrap());
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
@@ -1670,7 +1670,7 @@ unsafe impl<T: Lift> Lift for WasmList<T> {
             InterfaceType::List(i) => cx.types[i].element,
             _ => bad_type_info(),
         };
-        // FIXME: needs memory64 treatment
+        // FIXME(#4311): needs memory64 treatment
         let ptr = src[0].get_u32();
         let len = src[1].get_u32();
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);
@@ -1683,7 +1683,7 @@ unsafe impl<T: Lift> Lift for WasmList<T> {
             _ => bad_type_info(),
         };
         debug_assert!((bytes.as_ptr() as usize) % (Self::ALIGN32 as usize) == 0);
-        // FIXME: needs memory64 treatment
+        // FIXME(#4311): needs memory64 treatment
         let ptr = u32::from_le_bytes(bytes[..4].try_into().unwrap());
         let len = u32::from_le_bytes(bytes[4..].try_into().unwrap());
         let (ptr, len) = (usize::try_from(ptr)?, usize::try_from(len)?);

@@ -168,7 +168,7 @@ authors = ["The Wasmtime Project Developers"]
 edition = "2021"
 # Wasmtime's current policy is that this number can be no larger than the
 # current stable release of Rust minus 2.
-rust-version = "1.81.0"
+rust-version = "1.82.0"
 
 [workspace.lints.rust]
 # Turn on some lints which are otherwise allow-by-default in rustc.
@@ -178,6 +178,18 @@ unstable_features = 'warn'
 unused_import_braces = 'warn'
 unused-lifetimes = 'warn'
 unused-macro-rules = 'warn'
+
+# Lints that are part of the `rust-2024-compatibility` group. This group is a
+# bit too noisy to enable wholesale but some selective items are ones we want to
+# opt-in to.
+keyword_idents_2024 = 'warn'
+unsafe-attr-outside-unsafe = 'warn'
+deprecated-safe-2024 = 'warn'
+rust-2024-guarded-string-incompatible-syntax = 'warn'
+rust-2024-prelude-collisions = 'warn'
+rust-2024-incompatible-pat = 'warn'
+missing-unsafe-on-extern = 'warn'
+impl-trait-overcaptures = 'warn'
 
 # Don't warn about unknown cfgs for pulley
 [workspace.lints.rust.unexpected_cfgs]
@@ -279,22 +291,22 @@ fs-set-times = "0.20.1"
 system-interface = { version = "0.27.1", features = ["cap_std_impls"] }
 io-lifetimes = { version = "2.0.3", default-features = false }
 io-extras = "0.18.1"
-rustix = "0.38.31"
+rustix = "0.38.43"
 # wit-bindgen:
-wit-bindgen = { version = "0.35.0", default-features = false }
-wit-bindgen-rust-macro = { version = "0.35.0", default-features = false }
+wit-bindgen = { version = "0.37.0", default-features = false }
+wit-bindgen-rust-macro = { version = "0.37.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.221.2", default-features = false, features = ['simd'] }
-wat = "1.221.2"
-wast = "221.0.2"
-wasmprinter = "0.221.2"
-wasm-encoder = "0.221.2"
-wasm-smith = "0.221.2"
-wasm-mutate = "0.221.2"
-wit-parser = "0.221.2"
-wit-component = "0.221.2"
-wasm-wave = "0.221.2"
+wasmparser = { version = "0.223.0", default-features = false, features = ['simd'] }
+wat = "1.223.0"
+wast = "223.0.0"
+wasmprinter = "0.223.0"
+wasm-encoder = "0.223.0"
+wasm-smith = "0.223.0"
+wasm-mutate = "0.223.0"
+wit-parser = "0.223.0"
+wit-component = "0.223.0"
+wasm-wave = "0.223.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------
@@ -308,7 +320,7 @@ env_logger = "0.11.5"
 log = { version = "0.4.8", default-features = false }
 clap = { version = "4.5.17", default-features = false, features = ["std", "derive"] }
 clap_complete = "4.4.7"
-hashbrown = { version = "0.14", default-features = false }
+hashbrown = { version = "0.15", default-features = false }
 capstone = "0.12.0"
 smallvec = { version = "1.6.1", features = ["union"] }
 tracing = "0.1.26"

@@ -37,7 +37,7 @@ fn option_wasm_ref_t_to_ref(r: Option<&wasm_ref_t>, table_ty: &TableType) -> Ref
         .unwrap_or_else(|| Ref::null(table_ty.element().heap_type()))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_table_new(
     store: &mut wasm_store_t,
     tt: &wasm_tabletype_t,
@@ -54,14 +54,14 @@ pub unsafe extern "C" fn wasm_table_new(
     }))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_table_type(t: &wasm_table_t) -> Box<wasm_tabletype_t> {
     let table = t.table();
     let store = t.ext.store.context();
     Box::new(wasm_tabletype_t::new(table.ty(&store)))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_table_get(
     t: &mut wasm_table_t,
     index: wasm_table_size_t,
@@ -71,7 +71,7 @@ pub unsafe extern "C" fn wasm_table_get(
     wasm_ref_t::new(r)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_table_set(
     t: &mut wasm_table_t,
     index: wasm_table_size_t,
@@ -84,14 +84,14 @@ pub unsafe extern "C" fn wasm_table_set(
         .is_ok()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_table_size(t: &wasm_table_t) -> wasm_table_size_t {
     let table = t.table();
     let store = t.ext.store.context();
     u32::try_from(table.size(&store)).unwrap()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_table_grow(
     t: &mut wasm_table_t,
     delta: wasm_table_size_t,
@@ -104,17 +104,17 @@ pub unsafe extern "C" fn wasm_table_grow(
         .is_ok()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_table_as_extern(t: &mut wasm_table_t) -> &mut wasm_extern_t {
     &mut t.ext
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_table_as_extern_const(t: &wasm_table_t) -> &wasm_extern_t {
     &t.ext
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_table_new(
     mut store: WasmtimeStoreContextMut<'_>,
     tt: &wasm_tabletype_t,
@@ -131,7 +131,7 @@ pub unsafe extern "C" fn wasmtime_table_new(
     )
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_table_type(
     store: WasmtimeStoreContext<'_>,
     table: &Table,
@@ -139,7 +139,7 @@ pub unsafe extern "C" fn wasmtime_table_type(
     Box::new(wasm_tabletype_t::new(table.ty(store)))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_table_get(
     store: WasmtimeStoreContextMut<'_>,
     table: &Table,
@@ -156,7 +156,7 @@ pub extern "C" fn wasmtime_table_get(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_table_set(
     mut store: WasmtimeStoreContextMut<'_>,
     table: &Table,
@@ -173,12 +173,12 @@ pub unsafe extern "C" fn wasmtime_table_set(
     )
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_table_size(store: WasmtimeStoreContext<'_>, table: &Table) -> u64 {
     table.size(store)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_table_grow(
     mut store: WasmtimeStoreContextMut<'_>,
     table: &Table,

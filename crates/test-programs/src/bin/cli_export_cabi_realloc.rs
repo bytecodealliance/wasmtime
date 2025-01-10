@@ -1,8 +1,7 @@
 //! `wit-component` handles modules which export `cabi_realloc` in a special way, using it instead of `memory.grow`
 //! to allocate the adapter stack, hence this test.
 
-#[export_name = "cabi_realloc"]
-#[no_mangle]
+#[unsafe(export_name = "cabi_realloc")]
 unsafe extern "C" fn cabi_realloc(
     old_ptr: *mut u8,
     old_len: usize,

@@ -211,7 +211,7 @@ impl<T> IsaBuilder<T> {
     }
 
     /// Iterates the available settings in the builder.
-    pub fn iter(&self) -> impl Iterator<Item = settings::Setting> {
+    pub fn iter(&self) -> impl Iterator<Item = settings::Setting> + use<T> {
         self.setup.iter()
     }
 

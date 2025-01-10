@@ -122,12 +122,12 @@ impl wasm_val_t {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_val_copy(out: &mut MaybeUninit<wasm_val_t>, source: &wasm_val_t) {
     crate::initialize(out, source.clone());
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_val_delete(val: *mut wasm_val_t) {
     ptr::drop_in_place(val);
 }
@@ -294,7 +294,7 @@ impl wasmtime_val_t {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_val_unroot(
     cx: WasmtimeStoreContextMut<'_>,
     val: &mut MaybeUninit<wasmtime_val_t>,
@@ -315,7 +315,7 @@ pub unsafe extern "C" fn wasmtime_val_unroot(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_val_clone(
     cx: WasmtimeStoreContextMut<'_>,
     src: &wasmtime_val_t,

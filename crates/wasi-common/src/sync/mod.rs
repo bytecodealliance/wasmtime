@@ -131,7 +131,7 @@ impl WasiCtxBuilder {
 
 pub fn random_ctx() -> Box<dyn RngCore + Send + Sync> {
     let mut rng = cap_rand::thread_rng(cap_rand::ambient_authority());
-    Box::new(cap_rand::rngs::StdRng::from_seed(rng.gen()))
+    Box::new(cap_rand::rngs::StdRng::from_seed(rng.r#gen()))
 }
 
 #[cfg(feature = "wasmtime")]

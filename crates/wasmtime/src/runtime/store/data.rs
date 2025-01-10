@@ -103,7 +103,7 @@ impl StoreData {
         true
     }
 
-    pub fn iter<T>(&self) -> impl ExactSizeIterator<Item = Stored<T>>
+    pub fn iter<T>(&self) -> impl ExactSizeIterator<Item = Stored<T>> + use<T>
     where
         T: StoredData,
     {

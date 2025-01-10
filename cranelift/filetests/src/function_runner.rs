@@ -111,11 +111,11 @@ impl TestFileCompiler {
         // final binary doesn't link in `libm`.
         #[cfg(unix)]
         {
-            extern "C" {
-                fn ceilf(f: f32) -> f32;
+            unsafe extern "C" {
+                safe fn ceilf(f: f32) -> f32;
             }
             let f = 1.2_f32;
-            assert_eq!(f.ceil(), unsafe { ceilf(f) });
+            assert_eq!(f.ceil(), ceilf(f));
         }
 
         let module = JITModule::new(builder);

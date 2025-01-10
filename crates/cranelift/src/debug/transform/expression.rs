@@ -244,7 +244,7 @@ impl CompiledExpression {
         addr_tr: &'a AddressTransform,
         frame_info: Option<&'a FunctionFrameInfo>,
         isa: &'a dyn TargetIsa,
-    ) -> impl Iterator<Item = Result<(write::Address, u64, write::Expression)>> + 'a {
+    ) -> impl Iterator<Item = Result<(write::Address, u64, write::Expression)>> + use<'a> {
         enum BuildWithLocalsResult<'a> {
             Empty,
             Simple(
@@ -747,7 +747,7 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
         }
     }
 
-    pub fn into_ranges(self) -> impl Iterator<Item = CachedValueLabelRange> {
+    pub fn into_ranges(self) -> impl Iterator<Item = CachedValueLabelRange> + use<> {
         // Ranges with not-enough labels are discarded.
         let processed_labels_len = self.processed_labels.len();
         self.ranges

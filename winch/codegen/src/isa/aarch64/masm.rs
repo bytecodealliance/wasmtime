@@ -13,8 +13,8 @@ use crate::{
     },
     masm::{
         CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind,
-        MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, RoundingMode, SPOffset,
-        ShiftKind, StackSlot, TrapCode, TruncKind,
+        MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RoundingMode,
+        SPOffset, ShiftKind, StackSlot, TrapCode, TruncKind,
     },
     stack::TypedReg,
 };
@@ -216,21 +216,25 @@ impl Masm for MacroAssembler {
         dst: WritableReg,
         size: OperandSize,
         kind: LoadKind,
+        op_kind: MemOpKind,
     ) -> Result<()> {
-        match kind {
-            LoadKind::Simple => self.asm.uload(src, dst, size),
-            LoadKind::Splat => bail!(CodeGenError::UnimplementedWasmLoadKind),
-            LoadKind::ScalarExtend(extend_kind) => {
-                if extend_kind.signed() {
-                    self.asm.sload(src, dst, size)
-                } else {
-                    // unlike x64, unused bits are set to zero so we don't need to extend
-                    self.asm.uload(src, dst, size)
+        match op_kind {
+            MemOpKind::Normal => match kind {
+                LoadKind::Simple => self.asm.uload(src, dst, size),
+                LoadKind::Splat => bail!(CodeGenError::UnimplementedWasmLoadKind),
+                LoadKind::ScalarExtend(extend_kind) => {
+                    if extend_kind.signed() {
+                        self.asm.sload(src, dst, size)
+                    } else {
+                        // unlike x64, unused bits are set to zero so we don't need to extend
+                        self.asm.uload(src, dst, size)
+                    }
                 }
-            }
-            LoadKind::VectorExtend(_vector_extend_kind) => {
-                bail!(CodeGenError::UnimplementedWasmLoadKind)
-            }
+                LoadKind::VectorExtend(_vector_extend_kind) => {
+                    bail!(CodeGenError::UnimplementedWasmLoadKind)
+                }
+            },
+            MemOpKind::Atomic => bail!(CodeGenError::unimplemented_masm_instruction()),
         }
         Ok(())
     }

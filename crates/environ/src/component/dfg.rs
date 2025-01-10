@@ -697,7 +697,7 @@ impl LinearizeDfg<'_> {
         &mut self,
         key: K,
         map: impl Fn(&mut Self) -> &mut HashMap<K, V>,
-        gen: impl FnOnce(&mut Self, K) -> T,
+        generate: impl FnOnce(&mut Self, K) -> T,
         init: impl FnOnce(V, T) -> GlobalInitializer,
     ) -> V
     where
@@ -707,7 +707,7 @@ impl LinearizeDfg<'_> {
         if let Some(val) = map(self).get(&key) {
             return *val;
         }
-        let tmp = gen(self, key);
+        let tmp = generate(self, key);
         let index = V::new(map(self).len());
         self.initializers.push(init(index, tmp));
         let prev = map(self).insert(key, index);

@@ -52,7 +52,7 @@ unsafe impl Send for Options {}
 unsafe impl Sync for Options {}
 
 impl Options {
-    // TODO: prevent a ctor where the memory is memory64
+    // FIXME(#4311): prevent a ctor where the memory is memory64
 
     /// Creates a new set of options with the specified components.
     ///

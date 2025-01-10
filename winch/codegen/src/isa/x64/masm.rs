@@ -8,8 +8,8 @@ use anyhow::{anyhow, bail, Result};
 
 use crate::masm::{
     DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind, MacroAssembler as Masm,
-    MulWideKind, OperandSize, RegImm, RemKind, RoundingMode, ShiftKind, TrapCode, TruncKind,
-    TRUSTED_FLAGS, UNTRUSTED_FLAGS,
+    MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RoundingMode, ShiftKind, TrapCode,
+    TruncKind, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
@@ -282,37 +282,52 @@ impl Masm for MacroAssembler {
         dst: WritableReg,
         size: OperandSize,
         kind: LoadKind,
+        op_kind: MemOpKind,
     ) -> Result<()> {
         match kind {
+            // The guarantees of the x86-64 memory model ensure that `SeqCst`
+            // loads are equivalent to normal loads.
             LoadKind::ScalarExtend(ext) => self.asm.movsx_mr(&src, dst, ext, UNTRUSTED_FLAGS),
-            LoadKind::VectorExtend(ext) => {
-                if self.flags.has_avx() {
-                    self.asm.xmm_vpmov_mr(&src, dst, ext, UNTRUSTED_FLAGS)
-                } else {
-                    bail!(CodeGenError::UnimplementedForNoAvx)
-                }
-            }
-            LoadKind::Splat => {
-                if self.flags.has_avx() {
-                    if size == OperandSize::S64 {
-                        self.asm
-                            .xmm_mov_mr(&src, dst, OperandSize::S64, UNTRUSTED_FLAGS);
-                        // Results in the first 4 bytes and second 4 bytes being
-                        // swapped and then the swapped bytes being copied.
-                        // [d0, d1, d2, d3, d4, d5, d6, d7, ...] yields
-                        // [d4, d5, d6, d7, d0, d1, d2, d3, d4, d5, d6, d7, d0, d1, d2, d3].
-                        self.asm
-                            .xmm_vpshuf_rr(dst.to_reg(), dst, 0b0100_0100, OperandSize::S64);
-                    } else {
-                        self.asm
-                            .xmm_vpbroadcast_mr(&src, dst, size, UNTRUSTED_FLAGS);
-                    }
-                } else {
-                    bail!(CodeGenError::UnimplementedForNoAvx)
-                }
-            }
             LoadKind::Simple => self.load_impl::<Self>(src, dst, size, UNTRUSTED_FLAGS)?,
-        };
+            LoadKind::VectorExtend(ext) => match op_kind {
+                MemOpKind::Normal => {
+                    if self.flags.has_avx() {
+                        self.asm.xmm_vpmov_mr(&src, dst, ext, UNTRUSTED_FLAGS)
+                    } else {
+                        bail!(CodeGenError::UnimplementedForNoAvx)
+                    }
+                }
+                MemOpKind::Atomic => bail!(CodeGenError::unimplemented_masm_instruction()),
+            },
+            LoadKind::Splat => {
+                match op_kind {
+                    MemOpKind::Normal => {
+                        if self.flags.has_avx() {
+                            if size == OperandSize::S64 {
+                                self.asm
+                                    .xmm_mov_mr(&src, dst, OperandSize::S64, UNTRUSTED_FLAGS);
+                                // Results in the first 4 bytes and second 4 bytes being
+                                // swapped and then the swapped bytes being copied.
+                                // [d0, d1, d2, d3, d4, d5, d6, d7, ...] yields
+                                // [d4, d5, d6, d7, d0, d1, d2, d3, d4, d5, d6, d7, d0, d1, d2, d3].
+                                self.asm.xmm_vpshuf_rr(
+                                    dst.to_reg(),
+                                    dst,
+                                    0b0100_0100,
+                                    OperandSize::S64,
+                                );
+                            } else {
+                                self.asm
+                                    .xmm_vpbroadcast_mr(&src, dst, size, UNTRUSTED_FLAGS);
+                            }
+                        } else {
+                            bail!(CodeGenError::UnimplementedForNoAvx)
+                        }
+                    }
+                    MemOpKind::Atomic => bail!(CodeGenError::unimplemented_masm_instruction()),
+                }
+            }
+        }
         Ok(())
     }
 

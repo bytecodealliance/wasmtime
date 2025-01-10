@@ -23,7 +23,7 @@ cfg_if::cfg_if! {
     }
 }
 
-extern "C" {
+unsafe extern "C" {
     #[wasmtime_versioned_export_macros::versioned_link]
     pub(crate) fn wasmtime_fiber_init(
         top_of_stack: *mut u8,

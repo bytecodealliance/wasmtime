@@ -15,7 +15,7 @@ mod panic;
 /// This takes a number of parameters which are the precompiled module AOT
 /// images that are run for each of the various tests below. The first parameter
 /// is also where to put an error string, if any, if anything fails.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn run(
     error_buf: *mut u8,
     error_size: usize,

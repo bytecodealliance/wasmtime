@@ -380,6 +380,9 @@ impl ComponentTypesBuilder {
             ComponentDefinedType::Borrow(r) => {
                 InterfaceType::Borrow(self.resource_id(r.resource()))
             }
+            ComponentDefinedType::Future(_)
+            | ComponentDefinedType::Stream(_)
+            | ComponentDefinedType::ErrorContext => bail!("unsupported async type"),
         };
         let info = self.type_information(&ret);
         if info.depth > MAX_TYPE_DEPTH {

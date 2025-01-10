@@ -306,7 +306,7 @@ impl ResourceTable {
     pub fn iter_children<T>(
         &self,
         parent: &Resource<T>,
-    ) -> Result<impl Iterator<Item = &(dyn Any + Send)>, ResourceTableError>
+    ) -> Result<impl Iterator<Item = &(dyn Any + Send)> + use<'_, T>, ResourceTableError>
     where
         T: 'static,
     {

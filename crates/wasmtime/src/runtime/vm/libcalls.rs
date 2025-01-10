@@ -1301,8 +1301,9 @@ pub mod relocs {
     #[cfg(target_arch = "x86_64")]
     use core::arch::x86_64::__m128i;
     #[cfg(target_arch = "x86_64")]
+    #[target_feature(enable = "sse")]
     #[allow(improper_ctypes_definitions)]
-    pub extern "C" fn x86_pshufb(a: __m128i, b: __m128i) -> __m128i {
+    pub unsafe extern "C" fn x86_pshufb(a: __m128i, b: __m128i) -> __m128i {
         union U {
             reg: __m128i,
             mem: [u8; 16],

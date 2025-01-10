@@ -6,7 +6,7 @@ type wasmtime_sharedmemory_t = SharedMemory;
 
 wasmtime_c_api_macros::declare_own!(wasmtime_sharedmemory_t);
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[cfg(feature = "threads")]
 pub extern "C" fn wasmtime_sharedmemory_new(
     engine: &crate::wasm_engine_t,
@@ -19,38 +19,38 @@ pub extern "C" fn wasmtime_sharedmemory_new(
     )
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_sharedmemory_clone(
     mem: &wasmtime_sharedmemory_t,
 ) -> Box<wasmtime_sharedmemory_t> {
     Box::new(mem.clone())
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_sharedmemory_type(
     mem: &wasmtime_sharedmemory_t,
 ) -> Box<wasm_memorytype_t> {
     Box::new(wasm_memorytype_t::new(mem.ty()))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_sharedmemory_data(
     mem: &wasmtime_sharedmemory_t,
 ) -> *const UnsafeCell<u8> {
     mem.data().as_ptr()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_sharedmemory_data_size(mem: &wasmtime_sharedmemory_t) -> usize {
     mem.data().len()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_sharedmemory_size(mem: &wasmtime_sharedmemory_t) -> u64 {
     mem.size()
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_sharedmemory_grow(
     mem: &wasmtime_sharedmemory_t,
     delta: u64,

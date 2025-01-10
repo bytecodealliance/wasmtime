@@ -526,6 +526,32 @@ impl<'a, 'data> Translator<'a, 'data> {
                         | wasmparser::CanonicalFunction::ThreadHwConcurrency => {
                             bail!("unsupported intrinsic")
                         }
+
+                        wasmparser::CanonicalFunction::TaskBackpressure
+                        | wasmparser::CanonicalFunction::TaskPoll { .. }
+                        | wasmparser::CanonicalFunction::TaskYield { .. }
+                        | wasmparser::CanonicalFunction::SubtaskDrop
+                        | wasmparser::CanonicalFunction::StreamNew { .. }
+                        | wasmparser::CanonicalFunction::StreamRead { .. }
+                        | wasmparser::CanonicalFunction::StreamWrite { .. }
+                        | wasmparser::CanonicalFunction::StreamCancelRead { .. }
+                        | wasmparser::CanonicalFunction::StreamCancelWrite { .. }
+                        | wasmparser::CanonicalFunction::StreamCloseReadable { .. }
+                        | wasmparser::CanonicalFunction::StreamCloseWritable { .. }
+                        | wasmparser::CanonicalFunction::FutureNew { .. }
+                        | wasmparser::CanonicalFunction::FutureRead { .. }
+                        | wasmparser::CanonicalFunction::FutureWrite { .. }
+                        | wasmparser::CanonicalFunction::FutureCancelRead { .. }
+                        | wasmparser::CanonicalFunction::FutureCancelWrite { .. }
+                        | wasmparser::CanonicalFunction::FutureCloseReadable { .. }
+                        | wasmparser::CanonicalFunction::FutureCloseWritable { .. }
+                        | wasmparser::CanonicalFunction::ErrorContextNew { .. }
+                        | wasmparser::CanonicalFunction::ErrorContextDebugMessage { .. }
+                        | wasmparser::CanonicalFunction::ErrorContextDrop
+                        | wasmparser::CanonicalFunction::TaskReturn { .. }
+                        | wasmparser::CanonicalFunction::TaskWait { .. } => {
+                            bail!("unsupported intrinsic")
+                        }
                     };
                     self.result.initializers.push(init);
                 }
@@ -919,6 +945,9 @@ impl<'a, 'data> Translator<'a, 'data> {
                 wasmparser::CanonicalOption::PostReturn(idx) => {
                     let idx = FuncIndex::from_u32(*idx);
                     ret.post_return = Some(idx);
+                }
+                wasmparser::CanonicalOption::Async | wasmparser::CanonicalOption::Callback(_) => {
+                    todo!()
                 }
             }
         }

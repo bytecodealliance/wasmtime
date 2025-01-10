@@ -115,7 +115,8 @@ pub trait RustGenerator<'a> {
                     | TypeDefKind::Enum(_)
                     | TypeDefKind::Tuple(_)
                     | TypeDefKind::Handle(_)
-                    | TypeDefKind::Resource => true,
+                    | TypeDefKind::Resource
+                    | TypeDefKind::ErrorContext => true,
                     TypeDefKind::Type(Type::Id(t)) => {
                         needs_generics(resolve, &resolve.types[*t].kind)
                     }
@@ -165,18 +166,9 @@ pub trait RustGenerator<'a> {
             TypeDefKind::Enum(_) => {
                 panic!("unsupported anonymous type reference: enum")
             }
-            TypeDefKind::Future(ty) => {
-                self.push_str("Future<");
-                self.print_optional_ty(ty.as_ref(), mode);
-                self.push_str(">");
-            }
-            TypeDefKind::Stream(stream) => {
-                self.push_str("Stream<");
-                self.print_optional_ty(stream.element.as_ref(), mode);
-                self.push_str(",");
-                self.print_optional_ty(stream.end.as_ref(), mode);
-                self.push_str(">");
-            }
+            TypeDefKind::Future(_) => todo!(),
+            TypeDefKind::Stream(_) => todo!(),
+            TypeDefKind::ErrorContext => todo!(),
 
             TypeDefKind::Handle(handle) => {
                 self.print_handle(handle);

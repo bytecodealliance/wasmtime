@@ -1,4 +1,4 @@
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn fib(n: u32) -> u32 {
     let mut a = 1;
     let mut b = 1;

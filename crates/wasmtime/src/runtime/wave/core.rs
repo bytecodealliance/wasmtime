@@ -9,8 +9,8 @@ impl WasmType for crate::ValType {
         match self {
             Self::I32 => WasmTypeKind::S32,
             Self::I64 => WasmTypeKind::S64,
-            Self::F32 => WasmTypeKind::Float32,
-            Self::F64 => WasmTypeKind::Float64,
+            Self::F32 => WasmTypeKind::F32,
+            Self::F64 => WasmTypeKind::F64,
             Self::V128 => WasmTypeKind::Tuple,
 
             Self::Ref(_) => WasmTypeKind::Unsupported,
@@ -33,8 +33,8 @@ impl WasmValue for crate::Val {
         match self {
             Self::I32(_) => WasmTypeKind::S32,
             Self::I64(_) => WasmTypeKind::S64,
-            Self::F32(_) => WasmTypeKind::Float32,
-            Self::F64(_) => WasmTypeKind::Float64,
+            Self::F32(_) => WasmTypeKind::F32,
+            Self::F64(_) => WasmTypeKind::F64,
             Self::V128(_) => WasmTypeKind::Tuple,
             Self::FuncRef(_) => WasmTypeKind::Unsupported,
             Self::ExternRef(_) => WasmTypeKind::Unsupported,
@@ -48,11 +48,11 @@ impl WasmValue for crate::Val {
     fn make_s64(val: i64) -> Self {
         Self::I64(val)
     }
-    fn make_float32(val: f32) -> Self {
+    fn make_f32(val: f32) -> Self {
         let val = canonicalize_nan32(val);
         Self::F32(val.to_bits())
     }
-    fn make_float64(val: f64) -> Self {
+    fn make_f64(val: f64) -> Self {
         let val = canonicalize_nan64(val);
         Self::F64(val.to_bits())
     }
@@ -88,13 +88,13 @@ impl WasmValue for crate::Val {
         *unwrap_val!(self, Self::I64, "s64")
     }
 
-    fn unwrap_float32(&self) -> f32 {
-        let val = f32::from_bits(*unwrap_val!(self, Self::F32, "float32"));
+    fn unwrap_f32(&self) -> f32 {
+        let val = f32::from_bits(*unwrap_val!(self, Self::F32, "f32"));
         canonicalize_nan32(val)
     }
 
-    fn unwrap_float64(&self) -> f64 {
-        let val = f64::from_bits(*unwrap_val!(self, Self::F64, "float64"));
+    fn unwrap_f64(&self) -> f64 {
+        let val = f64::from_bits(*unwrap_val!(self, Self::F64, "f64"));
         canonicalize_nan64(val)
     }
 

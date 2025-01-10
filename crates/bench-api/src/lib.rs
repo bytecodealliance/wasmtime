@@ -265,7 +265,7 @@ impl WasmBenchConfig {
 /// that contains the engine's initialized state, and `0` is returned. On
 /// failure, a non-zero status code is returned and `out_bench_ptr` is left
 /// untouched.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_bench_create(
     config: WasmBenchConfig,
     out_bench_ptr: *mut *mut c_void,
@@ -347,7 +347,7 @@ pub extern "C" fn wasm_bench_create(
 }
 
 /// Free the engine state allocated by this library.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_bench_free(state: *mut c_void) {
     assert!(!state.is_null());
     unsafe {
@@ -356,7 +356,7 @@ pub extern "C" fn wasm_bench_free(state: *mut c_void) {
 }
 
 /// Compile the Wasm benchmark module.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_bench_compile(
     state: *mut c_void,
     wasm_bytes: *const u8,
@@ -369,7 +369,7 @@ pub extern "C" fn wasm_bench_compile(
 }
 
 /// Instantiate the Wasm benchmark module.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_bench_instantiate(state: *mut c_void) -> ExitCode {
     let state = unsafe { (state as *mut BenchState).as_mut().unwrap() };
     let result = state.instantiate().context("failed to instantiate");
@@ -377,7 +377,7 @@ pub extern "C" fn wasm_bench_instantiate(state: *mut c_void) -> ExitCode {
 }
 
 /// Execute the Wasm benchmark module.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_bench_execute(state: *mut c_void) -> ExitCode {
     let state = unsafe { (state as *mut BenchState).as_mut().unwrap() };
     let result = state.execute().context("failed to execute");

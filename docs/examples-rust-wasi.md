@@ -34,7 +34,7 @@ This example shows adding and configuring the WASI imports to invoke the above W
 
 `main.rs`
 ```rust,ignore
-{{#include ../examples/wasi/main.rs}}
+{{#include ../examples/wasip2/main.rs}}
 ```
 
 ### Async example
@@ -48,7 +48,7 @@ This does not require any change to the WASIp2 component, it's just the WASIp2 A
 [`wasmtime-wasi`]: https://docs.rs/wasmtime-wasi/*/wasmtime_wasi/preview2/index.html
 
 ```rust,ignore
-{{#include ../examples/wasi-async/main.rs}}
+{{#include ../examples/wasip2-async/main.rs}}
 ```
 
 You can also [browse this source code online][code2] and clone the wasmtime

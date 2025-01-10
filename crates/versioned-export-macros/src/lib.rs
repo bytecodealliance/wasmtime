@@ -24,7 +24,7 @@ pub fn versioned_export(
     let export_name = versioned_lit_str(&function.sig.ident);
     function
         .attrs
-        .push(syn::parse_quote! { #[export_name = #export_name] });
+        .push(syn::parse_quote! { #[unsafe(export_name = #export_name)] });
 
     function.to_token_stream().into()
 }

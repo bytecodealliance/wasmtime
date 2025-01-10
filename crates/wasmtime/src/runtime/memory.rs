@@ -116,35 +116,43 @@ impl std::error::Error for MemoryAccessError {}
 ///     // First and foremost, any borrow can be invalidated at any time via the
 ///     // `Memory::grow` function. This can relocate memory which causes any
 ///     // previous pointer to be possibly invalid now.
-///     let pointer: &u8 = &*mem.data_ptr(&store);
-///     mem.grow(&mut *store, 1)?; // invalidates `pointer`!
-///     // println!("{}", *pointer); // FATAL: use-after-free
+///     unsafe {
+///         let pointer: &u8 = &*mem.data_ptr(&store);
+///         mem.grow(&mut *store, 1)?; // invalidates `pointer`!
+///         // println!("{}", *pointer); // FATAL: use-after-free
+///     }
 ///
 ///     // Note that the use-after-free also applies to slices, whether they're
 ///     // slices of bytes or strings.
-///     let mem_slice = std::slice::from_raw_parts(
-///         mem.data_ptr(&store),
-///         mem.data_size(&store),
-///     );
-///     let slice: &[u8] = &mem_slice[0x100..0x102];
-///     mem.grow(&mut *store, 1)?; // invalidates `slice`!
-///     // println!("{:?}", slice); // FATAL: use-after-free
+///     unsafe {
+///         let mem_slice = std::slice::from_raw_parts(
+///             mem.data_ptr(&store),
+///             mem.data_size(&store),
+///         );
+///         let slice: &[u8] = &mem_slice[0x100..0x102];
+///         mem.grow(&mut *store, 1)?; // invalidates `slice`!
+///         // println!("{:?}", slice); // FATAL: use-after-free
+///     }
 ///
 ///     // The `Memory` type may be stored in other locations, so if you hand
 ///     // off access to the `Store` then those locations may also call
 ///     // `Memory::grow` or similar, so it's not enough to just audit code for
 ///     // calls to `Memory::grow`.
-///     let pointer: &u8 = &*mem.data_ptr(&store);
-///     some_other_function(store); // may invalidate `pointer` through use of `store`
-///     // println!("{:?}", pointer); // FATAL: maybe a use-after-free
+///     unsafe {
+///         let pointer: &u8 = &*mem.data_ptr(&store);
+///         some_other_function(store); // may invalidate `pointer` through use of `store`
+///         // println!("{:?}", pointer); // FATAL: maybe a use-after-free
+///     }
 ///
 ///     // An especially subtle aspect of accessing a wasm instance's memory is
 ///     // that you need to be extremely careful about aliasing. Anyone at any
 ///     // time can call `data_unchecked()` or `data_unchecked_mut()`, which
 ///     // means you can easily have aliasing mutable references:
-///     let ref1: &u8 = &*mem.data_ptr(&store).add(0x100);
-///     let ref2: &mut u8 = &mut *mem.data_ptr(&store).add(0x100);
-///     // *ref2 = *ref1; // FATAL: violates Rust's aliasing rules
+///     unsafe {
+///         let ref1: &u8 = &*mem.data_ptr(&store).add(0x100);
+///         let ref2: &mut u8 = &mut *mem.data_ptr(&store).add(0x100);
+///         // *ref2 = *ref1; // FATAL: violates Rust's aliasing rules
+///     }
 ///
 ///     Ok(())
 /// }
@@ -651,7 +659,7 @@ impl Memory {
     /// Even if the same underlying memory definition is added to the
     /// `StoreData` multiple times and becomes multiple `wasmtime::Memory`s,
     /// this hash key will be consistent across all of these memories.
-    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq {
+    pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq + use<> {
         store[self.0].definition as usize
     }
 }

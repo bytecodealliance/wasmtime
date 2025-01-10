@@ -334,11 +334,11 @@ macro_rules! map_maybe_uninit {
                 use $crate::MaybeUninitExt;
 
                 let m: &mut core::mem::MaybeUninit<_> = $maybe_uninit;
-                // Note the usage of `addr_of_mut!` here which is an attempt to "stay
+                // Note the usage of `&raw` here which is an attempt to "stay
                 // safe" here where we never accidentally create `&mut T` where `T` is
                 // actually uninitialized, hopefully appeasing the Rust unsafe
                 // guidelines gods.
-                m.map(|p| core::ptr::addr_of_mut!((*p)$($field)*))
+                m.map(|p| &raw mut (*p)$($field)*)
             }
         }
     })

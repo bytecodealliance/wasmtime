@@ -19,7 +19,7 @@ impl wasm_instance_t {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_instance_new(
     store: &mut wasm_store_t,
     wasm_module: &wasm_module_t,
@@ -48,7 +48,7 @@ pub unsafe extern "C" fn wasm_instance_new(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasm_instance_exports(
     instance: &mut wasm_instance_t,
     out: &mut wasm_extern_vec_t,
@@ -68,7 +68,7 @@ pub unsafe extern "C" fn wasm_instance_exports(
     );
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_instance_new(
     store: WasmtimeStoreContextMut<'_>,
     module: &wasmtime_module_t,
@@ -109,7 +109,7 @@ pub(crate) fn handle_instantiate(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_instance_export_get(
     store: WasmtimeStoreContextMut<'_>,
     instance: &Instance,
@@ -131,7 +131,7 @@ pub unsafe extern "C" fn wasmtime_instance_export_get(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_instance_export_nth(
     store: WasmtimeStoreContextMut<'_>,
     instance: &Instance,
@@ -156,11 +156,11 @@ pub struct wasmtime_instance_pre_t {
     pub(crate) underlying: InstancePre<WasmtimeStoreData>,
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_instance_pre_delete(_instance_pre: Box<wasmtime_instance_pre_t>) {
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_instance_pre_instantiate(
     instance_pre: &wasmtime_instance_pre_t,
     store: WasmtimeStoreContextMut<'_>,
@@ -171,7 +171,7 @@ pub unsafe extern "C" fn wasmtime_instance_pre_instantiate(
     handle_instantiate(result, instance_ptr, trap_ptr)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn wasmtime_instance_pre_module(
     instance_pre: &wasmtime_instance_pre_t,
 ) -> Box<wasmtime_module_t> {

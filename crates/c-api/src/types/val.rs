@@ -16,14 +16,14 @@ pub const WASM_F64: wasm_valkind_t = 3;
 pub const WASM_EXTERNREF: wasm_valkind_t = 128;
 pub const WASM_FUNCREF: wasm_valkind_t = 129;
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_valtype_new(kind: wasm_valkind_t) -> Box<wasm_valtype_t> {
     Box::new(wasm_valtype_t {
         ty: into_valtype(kind),
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_valtype_kind(vt: &wasm_valtype_t) -> wasm_valkind_t {
     from_valtype(&vt.ty)
 }

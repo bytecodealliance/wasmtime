@@ -72,12 +72,15 @@ impl Vm {
     ///
     /// Returns either the resulting values, or the PC at which a trap was
     /// raised.
-    pub unsafe fn call<'a>(
+    pub unsafe fn call<'a, T>(
         &'a mut self,
         func: NonNull<u8>,
         args: &[Val],
-        rets: impl IntoIterator<Item = RegType> + 'a,
-    ) -> DoneReason<impl Iterator<Item = Val> + 'a> {
+        rets: T,
+    ) -> DoneReason<impl Iterator<Item = Val> + use<'a, T>>
+    where
+        T: IntoIterator<Item = RegType> + 'a,
+    {
         self.call_start(args);
 
         match self.call_run(func) {
@@ -995,6 +998,17 @@ impl Interpreter<'_> {
             return self.done_trap_kind::<I>(Some(TrapKind::IntegerOverflow));
         }
         ControlFlow::Continue(())
+    }
+
+    fn get_i128(&self, lo: XReg, hi: XReg) -> i128 {
+        let lo = self.state[lo].get_u64();
+        let hi = self.state[hi].get_i64();
+        i128::from(lo) | (i128::from(hi) << 64)
+    }
+
+    fn set_i128(&mut self, lo: XReg, hi: XReg, val: i128) {
+        self.state[lo].set_u64(val as u64);
+        self.state[hi].set_u64((val >> 64) as u64);
     }
 }
 
@@ -2370,6 +2384,26 @@ impl OpVisitor for Interpreter<'_> {
         let a = self.state[src].get_i64();
         self.state[dst].set_i64(a.wrapping_abs());
         ControlFlow::Continue(())
+    }
+
+    fn xbc32_bound64_trap(&mut self, addr: XReg, bound: XReg, off: u8) -> ControlFlow<Done> {
+        let bound = self.state[bound].get_u64();
+        let addr = u64::from(self.state[addr].get_u32());
+        if addr > bound.wrapping_sub(u64::from(off)) {
+            self.done_trap::<crate::XBc32Bound64Trap>()
+        } else {
+            ControlFlow::Continue(())
+        }
+    }
+
+    fn xbc32_bound32_trap(&mut self, addr: XReg, bound: XReg, off: u8) -> ControlFlow<Done> {
+        let bound = self.state[bound].get_u32();
+        let addr = self.state[addr].get_u32();
+        if addr > bound.wrapping_sub(u32::from(off)) {
+            self.done_trap::<crate::XBc32Bound32Trap>()
+        } else {
+            ControlFlow::Continue(())
+        }
     }
 }
 
@@ -4789,6 +4823,66 @@ impl ExtendedOpVisitor for Interpreter<'_> {
             *a = a.wasm_mul_add(b, c);
         }
         self.state[dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
+    fn xadd128(
+        &mut self,
+        dst_lo: XReg,
+        dst_hi: XReg,
+        lhs_lo: XReg,
+        lhs_hi: XReg,
+        rhs_lo: XReg,
+        rhs_hi: XReg,
+    ) -> ControlFlow<Done> {
+        let lhs = self.get_i128(lhs_lo, lhs_hi);
+        let rhs = self.get_i128(rhs_lo, rhs_hi);
+        let result = lhs.wrapping_add(rhs);
+        self.set_i128(dst_lo, dst_hi, result);
+        ControlFlow::Continue(())
+    }
+
+    fn xsub128(
+        &mut self,
+        dst_lo: XReg,
+        dst_hi: XReg,
+        lhs_lo: XReg,
+        lhs_hi: XReg,
+        rhs_lo: XReg,
+        rhs_hi: XReg,
+    ) -> ControlFlow<Done> {
+        let lhs = self.get_i128(lhs_lo, lhs_hi);
+        let rhs = self.get_i128(rhs_lo, rhs_hi);
+        let result = lhs.wrapping_sub(rhs);
+        self.set_i128(dst_lo, dst_hi, result);
+        ControlFlow::Continue(())
+    }
+
+    fn xwidemul64_s(
+        &mut self,
+        dst_lo: XReg,
+        dst_hi: XReg,
+        lhs: XReg,
+        rhs: XReg,
+    ) -> ControlFlow<Done> {
+        let lhs = self.state[lhs].get_i64();
+        let rhs = self.state[rhs].get_i64();
+        let result = i128::from(lhs).wrapping_mul(i128::from(rhs));
+        self.set_i128(dst_lo, dst_hi, result);
+        ControlFlow::Continue(())
+    }
+
+    fn xwidemul64_u(
+        &mut self,
+        dst_lo: XReg,
+        dst_hi: XReg,
+        lhs: XReg,
+        rhs: XReg,
+    ) -> ControlFlow<Done> {
+        let lhs = self.state[lhs].get_u64();
+        let rhs = self.state[rhs].get_u64();
+        let result = u128::from(lhs).wrapping_mul(u128::from(rhs));
+        self.set_i128(dst_lo, dst_hi, result as i128);
         ControlFlow::Continue(())
     }
 }
