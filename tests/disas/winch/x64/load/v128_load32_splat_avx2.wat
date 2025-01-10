@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = [ "-Ccranelift-has-avx2=true" ]
+;;! flags = [ "-Ccranelift-has-avx=true", "-Ccranelift-has-avx2=true" ]
 
 (module
   (memory (data "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\a0\7f"))

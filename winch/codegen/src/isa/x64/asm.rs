@@ -539,18 +539,18 @@ impl Assembler {
     }
 
     /// Shuffle of bytes in vector.
-    pub fn xmm_pshuf_rr(&mut self, src: Reg, dst: WritableReg, mask: u8, size: OperandSize) {
+    pub fn xmm_vpshuf_rr(&mut self, src: Reg, dst: WritableReg, mask: u8, size: OperandSize) {
         assert!(src.is_float() && dst.to_reg().is_float());
 
         let op = match size {
-            OperandSize::S16 => SseOpcode::Pshuflw,
-            OperandSize::S64 => SseOpcode::Pshufd,
+            OperandSize::S16 => AvxOpcode::Vpshuflw,
+            OperandSize::S64 => AvxOpcode::Vpshufd,
             _ => unimplemented!(),
         };
 
-        self.emit(Inst::XmmUnaryRmRImm {
+        self.emit(Inst::XmmUnaryRmRImmVex {
             op,
-            src: XmmMemAligned::from(Xmm::from(src)),
+            src: XmmMem::from(Xmm::from(src)),
             imm: mask,
             dst: dst.to_reg().into(),
         });

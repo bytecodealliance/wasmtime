@@ -1,5 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
+;;! flags = [ "-Ccranelift-has-avx=true" ]
 
 (module
   (memory (data "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\a0\7f"))
@@ -22,7 +23,7 @@
 ;;       movq    0x60(%r14), %rcx
 ;;       addq    %rax, %rcx
 ;;       movsd   (%rcx), %xmm0
-;;       pshufd  $0x44, %xmm0, %xmm0
+;;       vpshufd $0x44, %xmm0, %xmm0
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq

@@ -293,18 +293,22 @@ impl Masm for MacroAssembler {
                 }
             }
             LoadKind::Splat => {
-                if size == OperandSize::S64 {
-                    self.asm
-                        .xmm_mov_mr(&src, dst, OperandSize::S64, UNTRUSTED_FLAGS);
-                    // Results in the first 4 bytes and second 4 bytes being
-                    // swapped and then the swapped bytes being copied.
-                    // [d0, d1, d2, d3, d4, d5, d6, d7, ...] yields
-                    // [d4, d5, d6, d7, d0, d1, d2, d3, d4, d5, d6, d7, d0, d1, d2, d3].
-                    self.asm
-                        .xmm_pshuf_rr(dst.to_reg(), dst, 0b0100_0100, OperandSize::S64);
+                if self.flags.has_avx() {
+                    if size == OperandSize::S64 {
+                        self.asm
+                            .xmm_mov_mr(&src, dst, OperandSize::S64, UNTRUSTED_FLAGS);
+                        // Results in the first 4 bytes and second 4 bytes being
+                        // swapped and then the swapped bytes being copied.
+                        // [d0, d1, d2, d3, d4, d5, d6, d7, ...] yields
+                        // [d4, d5, d6, d7, d0, d1, d2, d3, d4, d5, d6, d7, d0, d1, d2, d3].
+                        self.asm
+                            .xmm_vpshuf_rr(dst.to_reg(), dst, 0b0100_0100, OperandSize::S64);
+                    } else {
+                        self.asm
+                            .xmm_vpbroadcast_mr(&src, dst, size, UNTRUSTED_FLAGS);
+                    }
                 } else {
-                    self.asm
-                        .xmm_vpbroadcast_mr(&src, dst, size, UNTRUSTED_FLAGS);
+                    bail!(CodeGenError::UnimplementedForNoAvx)
                 }
             }
             LoadKind::Simple => self.load_impl::<Self>(src, dst, size, UNTRUSTED_FLAGS)?,
