@@ -92,9 +92,7 @@ impl<K, V> CtxHashMap<K, V> {
         match self.raw.find_mut(hash as u64, |bucket| {
             hash == bucket.hash && ctx.ctx_eq(&bucket.k, &k)
         }) {
-            Some(bucket) => {
-                Some(std::mem::replace(&mut bucket.v, v))
-            }
+            Some(bucket) => Some(std::mem::replace(&mut bucket.v, v)),
             None => {
                 let data = BucketData { hash, k, v };
                 self.raw
@@ -114,9 +112,7 @@ impl<K, V> CtxHashMap<K, V> {
             .find(hash as u64, |bucket| {
                 hash == bucket.hash && ctx.ctx_eq(&bucket.k, k)
             })
-            .map(|bucket| {
-                &bucket.v
-            })
+            .map(|bucket| &bucket.v)
     }
 }
 
