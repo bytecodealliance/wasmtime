@@ -54,7 +54,7 @@ pub struct HeapData {
     pub offset: u32,
     /// The offset to the current length field.
     pub current_length_offset: u32,
-    /// If the WebAssembly memory is imported, this field contains the offset to locate the
+    /// If the WebAssembly memory is imported or shared, this field contains the offset to locate the
     /// base of the heap.
     pub import_from: Option<u32>,
     /// The memory type this heap is associated with.
