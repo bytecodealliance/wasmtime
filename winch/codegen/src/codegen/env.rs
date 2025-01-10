@@ -254,36 +254,36 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
             Occupied(entry) => *entry.get(),
             Vacant(entry) => {
                 let (import_from, base_offset, current_length_offset) =
-                match self.translation.module.defined_memory_index(index) {
-                    Some(defined) => {
-                        if is_shared {
-                            (
-                                Some(self.vmoffsets.vmctx_vmmemory_pointer(defined)),
-                                self.vmoffsets.ptr.vmmemory_definition_base().into(),
-                                self.vmoffsets
-                                    .ptr
-                                    .vmmemory_definition_current_length()
-                                    .into(),
-                            )
-                        } else {
-                            let owned = self.translation.module.owned_memory_index(defined);
-                            (
-                                None,
-                                self.vmoffsets.vmctx_vmmemory_definition_base(owned),
-                                self.vmoffsets
-                                    .vmctx_vmmemory_definition_current_length(owned),
-                            )
+                    match self.translation.module.defined_memory_index(index) {
+                        Some(defined) => {
+                            if is_shared {
+                                (
+                                    Some(self.vmoffsets.vmctx_vmmemory_pointer(defined)),
+                                    self.vmoffsets.ptr.vmmemory_definition_base().into(),
+                                    self.vmoffsets
+                                        .ptr
+                                        .vmmemory_definition_current_length()
+                                        .into(),
+                                )
+                            } else {
+                                let owned = self.translation.module.owned_memory_index(defined);
+                                (
+                                    None,
+                                    self.vmoffsets.vmctx_vmmemory_definition_base(owned),
+                                    self.vmoffsets
+                                        .vmctx_vmmemory_definition_current_length(owned),
+                                )
+                            }
                         }
-                    }
-                    None => (
-                        Some(self.vmoffsets.vmctx_vmmemory_import_from(index)),
-                        self.vmoffsets.ptr.vmmemory_definition_base().into(),
-                        self.vmoffsets
-                            .ptr
-                            .vmmemory_definition_current_length()
-                            .into(),
-                    ),
-                };
+                        None => (
+                            Some(self.vmoffsets.vmctx_vmmemory_import_from(index)),
+                            self.vmoffsets.ptr.vmmemory_definition_base().into(),
+                            self.vmoffsets
+                                .ptr
+                                .vmmemory_definition_current_length()
+                                .into(),
+                        ),
+                    };
 
                 let memory = &self.translation.module.memories[index];
 
