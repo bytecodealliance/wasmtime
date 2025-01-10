@@ -882,3 +882,14 @@ fn table_copy_doesnt_leak() -> Result<()> {
     assert!(flag.load(SeqCst));
     Ok(())
 }
+
+#[test]
+fn null_extern_ref_matches() -> Result<()> {
+    let mut store = Store::<()>::default();
+
+    let val = Ref::Extern(None);
+    let ty = RefType::NULLEXTERNREF;
+    assert!(val.matches_ty(&mut store, &ty)?);
+
+    Ok(())
+}

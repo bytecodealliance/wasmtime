@@ -901,6 +901,7 @@ impl Ref {
         }
         Ok(match (self, ty.heap_type()) {
             (Ref::Extern(_), HeapType::Extern) => true,
+            (Ref::Extern(None), HeapType::NoExtern) => true,
             (Ref::Extern(_), _) => false,
 
             (Ref::Func(_), HeapType::Func) => true,
