@@ -1554,6 +1554,7 @@ The grammar accepted by the parser is as follows:
 
 <spec-expr> ::= <int>
               | <spec-bv>
+              | "result"
               | "true" | "false"
               | <ident>
               | "(" "switch" <spec-expr> <spec-pair>* ")"
