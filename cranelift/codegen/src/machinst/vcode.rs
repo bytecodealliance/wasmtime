@@ -29,7 +29,7 @@ use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstRange, MachineEnv, Operand,
     OperandConstraint, OperandKind, PRegSet, RegClass,
 };
-use rustc_hash::FxHashMap;
+use crate::fx::FxHashMap;
 
 use core::mem::take;
 use cranelift_entity::{entity_impl, Keys};

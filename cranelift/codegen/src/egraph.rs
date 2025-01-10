@@ -21,7 +21,7 @@ use core::cmp::Ordering;
 use cranelift_control::ControlPlane;
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::SecondaryMap;
-use rustc_hash::FxHashSet;
+use crate::fx::FxHashSet;
 use smallvec::SmallVec;
 use std::hash::Hasher;
 

@@ -93,6 +93,7 @@ pub use crate::result::{CodegenError, CodegenResult, CompileError};
 
 #[cfg(feature = "incremental-cache")]
 pub mod incremental_cache;
+mod fx;
 
 /// Even when trace logging is disabled, the trace macro has a significant performance cost so we
 /// disable it by default.

@@ -7,7 +7,7 @@ use crate::ir::{Block, BlockCall, Inst, Value};
 use crate::timing;
 use bumpalo::Bump;
 use cranelift_entity::SecondaryMap;
-use rustc_hash::{FxHashMap, FxHashSet};
+use crate::fx::{FxHashMap, FxHashSet};
 use smallvec::SmallVec;
 
 // A note on notation.  For the sake of clarity, this file uses the phrase
