@@ -23,7 +23,7 @@ impl test_programs::proxy::exports::wasi::http::incoming_handler::Guest for T {
         );
 
         assert!(req_hdrs.delete(&header).is_err());
-        assert!(req_hdrs.append(&header, &b"no".to_vec()).is_err());
+        assert!(req_hdrs.append(&header, b"no").is_err());
 
         assert!(
             !req_hdrs.has(&header),
@@ -31,7 +31,7 @@ impl test_programs::proxy::exports::wasi::http::incoming_handler::Guest for T {
         );
 
         assert!(
-            !req_hdrs.has(&"host".to_owned()),
+            !req_hdrs.has("host"),
             "forbidden host header present in incoming request"
         );
 

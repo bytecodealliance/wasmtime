@@ -3,48 +3,39 @@ use test_programs::wasi::http::types::{HeaderError, Headers, OutgoingRequest};
 fn main() {
     let hdrs = Headers::new();
     assert!(matches!(
-        hdrs.append(&"malformed header name".to_owned(), &b"ok value".to_vec()),
+        hdrs.append("malformed header name", b"ok value"),
+        Err(HeaderError::InvalidSyntax)
+    ));
+
+    assert!(matches!(hdrs.append("ok-header-name", b"ok value"), Ok(())));
+
+    assert!(matches!(
+        hdrs.append("ok-header-name", b"bad\nvalue"),
         Err(HeaderError::InvalidSyntax)
     ));
 
     assert!(matches!(
-        hdrs.append(&"ok-header-name".to_owned(), &b"ok value".to_vec()),
-        Ok(())
-    ));
-
-    assert!(matches!(
-        hdrs.append(&"ok-header-name".to_owned(), &b"bad\nvalue".to_vec()),
-        Err(HeaderError::InvalidSyntax)
-    ));
-
-    assert!(matches!(
-        hdrs.append(&"Connection".to_owned(), &b"keep-alive".to_vec()),
+        hdrs.append("Connection", b"keep-alive"),
         Err(HeaderError::Forbidden)
     ));
 
     assert!(matches!(
-        hdrs.append(&"Keep-Alive".to_owned(), &b"stuff".to_vec()),
+        hdrs.append("Keep-Alive", b"stuff"),
         Err(HeaderError::Forbidden)
     ));
 
     assert!(matches!(
-        hdrs.append(&"Host".to_owned(), &b"example.com".to_vec()),
+        hdrs.append("Host", b"example.com"),
         Err(HeaderError::Forbidden)
     ));
 
     assert!(matches!(
-        hdrs.append(
-            &"custom-forbidden-header".to_owned(),
-            &b"keep-alive".to_vec()
-        ),
+        hdrs.append("curbidden-header", b"keep-alive"),
         Err(HeaderError::Forbidden)
     ));
 
     assert!(matches!(
-        hdrs.append(
-            &"Custom-Forbidden-Header".to_owned(),
-            &b"keep-alive".to_vec()
-        ),
+        hdrs.append("Curbidden-Header", b"keep-alive"),
         Err(HeaderError::Forbidden)
     ));
 
@@ -67,17 +58,17 @@ fn main() {
     let hdrs = req.headers();
 
     assert!(matches!(
-        hdrs.set(&"Content-Length".to_owned(), &[b"10".to_vec()]),
+        hdrs.set("Content-Length", &[b"10".to_vec()]),
         Err(HeaderError::Immutable),
     ));
 
     assert!(matches!(
-        hdrs.append(&"Content-Length".to_owned(), &b"10".to_vec()),
+        hdrs.append("Content-Length", b"10"),
         Err(HeaderError::Immutable),
     ));
 
     assert!(matches!(
-        hdrs.delete(&"Content-Length".to_owned()),
+        hdrs.delete("Content-Length"),
         Err(HeaderError::Immutable),
     ));
 }
