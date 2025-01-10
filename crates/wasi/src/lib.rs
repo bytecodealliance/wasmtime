@@ -208,7 +208,7 @@ mod udp;
 mod write_stream;
 
 pub use self::clocks::{HostMonotonicClock, HostWallClock};
-pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiImpl, WasiView};
+pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiExecutor, WasiImpl, WasiSyncExecutor, WasiView};
 pub use self::error::{I32Exit, TrappableError};
 pub use self::filesystem::{DirPerms, FileInputStream, FilePerms, FsError, FsResult};
 pub use self::network::{Network, SocketAddrUse, SocketError, SocketResult};
@@ -347,7 +347,7 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{ResourceTable, Linker};
-/// use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder, Standalone};
 ///
 /// fn main() -> Result<()> {
 ///     let engine = Engine::default();
@@ -383,18 +383,24 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
 ///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
 /// }
 /// ```
-pub fn add_to_linker_sync<T: WasiView>(
-    linker: &mut wasmtime::component::Linker<T>,
-) -> anyhow::Result<()> {
+pub fn add_to_linker_sync<T>(linker: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
+where
+    T: WasiView,
+    <T as WasiView>::Executor: WasiSyncExecutor,
+{
     let options = crate::bindings::sync::LinkOptions::default();
     add_to_linker_with_options_sync(linker, &options)
 }
 
 /// Similar to [`add_to_linker_sync`], but with the ability to enable unstable features.
-pub fn add_to_linker_with_options_sync<T: WasiView>(
+pub fn add_to_linker_with_options_sync<T>(
     linker: &mut wasmtime::component::Linker<T>,
     options: &crate::bindings::sync::LinkOptions,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<()>
+where
+    T: WasiView,
+    <T as WasiView>::Executor: WasiSyncExecutor,
+{
     let l = linker;
     let closure = type_annotate::<T, _>(|t| WasiImpl(t));
 

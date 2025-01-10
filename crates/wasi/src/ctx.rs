@@ -463,7 +463,7 @@ impl WasiCtxBuilder {
     /// Panics if this method is called twice. Each [`WasiCtxBuilder`] can be
     /// used to create only a single [`WasiCtx`]. Repeated usage of this method
     /// is not allowed and should use a second builder instead.
-    pub fn build(&mut self) -> WasiCtx {
+    pub fn build<E: WasiExecutor>(&mut self) -> WasiCtx<E> {
         assert!(!self.built);
 
         let Self {
@@ -500,6 +500,7 @@ impl WasiCtxBuilder {
             monotonic_clock,
             allowed_network_uses,
             allow_blocking_current_thread,
+            _executor: std::marker::PhantomData,
         }
     }
 
@@ -519,7 +520,7 @@ impl WasiCtxBuilder {
     /// usage of this method is not allowed and should use a second builder
     /// instead.
     #[cfg(feature = "preview1")]
-    pub fn build_p1(&mut self) -> crate::preview1::WasiP1Ctx {
+    pub fn build_p1<E: WasiExecutor>(&mut self) -> crate::preview1::WasiP1Ctx<E> {
         let wasi = self.build();
         crate::preview1::WasiP1Ctx::new(wasi)
     }
@@ -545,7 +546,7 @@ impl WasiCtxBuilder {
 /// # Example
 ///
 /// ```
-/// use wasmtime_wasi::{WasiCtx, ResourceTable, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::{WasiCtx, ResourceTable, WasiView, Tokio, WasiCtxBuilder};
 ///
 /// struct MyState {
 ///     ctx: WasiCtx,
@@ -553,7 +554,8 @@ impl WasiCtxBuilder {
 /// }
 ///
 /// impl WasiView for MyState {
-///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+///     type Executor = Tokio;
+///     fn ctx(&mut self) -> &mut WasiCtx<Tokio> { &mut self.ctx }
 ///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
 /// }
 ///
@@ -572,6 +574,7 @@ impl WasiCtxBuilder {
 /// }
 /// ```
 pub trait WasiView: Send {
+    type Executor: WasiExecutor;
     /// Yields mutable access to the internal resource management that this
     /// context contains.
     ///
@@ -582,23 +585,25 @@ pub trait WasiView: Send {
     /// Yields mutable access to the configuration used for this context.
     ///
     /// The returned type is created through [`WasiCtxBuilder`].
-    fn ctx(&mut self) -> &mut WasiCtx;
+    fn ctx(&mut self) -> &mut WasiCtx<Self::Executor>;
 }
 
 impl<T: ?Sized + WasiView> WasiView for &mut T {
+    type Executor = T::Executor;
     fn table(&mut self) -> &mut ResourceTable {
         T::table(self)
     }
-    fn ctx(&mut self) -> &mut WasiCtx {
+    fn ctx(&mut self) -> &mut WasiCtx<Self::Executor> {
         T::ctx(self)
     }
 }
 
 impl<T: ?Sized + WasiView> WasiView for Box<T> {
+    type Executor = T::Executor;
     fn table(&mut self) -> &mut ResourceTable {
         T::table(self)
     }
-    fn ctx(&mut self) -> &mut WasiCtx {
+    fn ctx(&mut self) -> &mut WasiCtx<Self::Executor> {
         T::ctx(self)
     }
 }
@@ -619,11 +624,53 @@ impl<T: ?Sized + WasiView> WasiView for Box<T> {
 pub struct WasiImpl<T>(pub T);
 
 impl<T: WasiView> WasiView for WasiImpl<T> {
+    type Executor = T::Executor;
     fn table(&mut self) -> &mut ResourceTable {
         T::table(&mut self.0)
     }
-    fn ctx(&mut self) -> &mut WasiCtx {
+    fn ctx(&mut self) -> &mut WasiCtx<Self::Executor> {
         T::ctx(&mut self.0)
+    }
+}
+
+pub trait WasiExecutor: Send {
+    fn run_blocking<F, R>(body: F) -> impl std::future::Future<Output = R> + Send
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static;
+}
+pub trait WasiSyncExecutor: WasiExecutor {
+    fn block_on<F>(f: F) -> F::Output
+    where
+        F: Future;
+}
+
+pub struct Tokio;
+impl WasiExecutor for Tokio {
+    async fn run_blocking<F, R>(body: F) -> R
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        todo!()
+    }
+}
+pub struct Standalone;
+impl WasiExecutor for Standalone {
+    async fn run_blocking<F, R>(body: F) -> R
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        todo!()
+    }
+}
+impl WasiSyncExecutor for Standalone {
+    fn block_on<F>(f: F) -> F::Output
+    where
+        F: Future,
+    {
+        todo!()
     }
 }
 
@@ -639,7 +686,7 @@ impl<T: WasiView> WasiView for WasiImpl<T> {
 /// bindgen-generated traits.
 ///
 /// [`Store`]: wasmtime::Store
-pub struct WasiCtx {
+pub struct WasiCtx<E> {
     pub(crate) random: Box<dyn RngCore + Send>,
     pub(crate) insecure_random: Box<dyn RngCore + Send>,
     pub(crate) insecure_random_seed: u128,
@@ -654,9 +701,10 @@ pub struct WasiCtx {
     pub(crate) socket_addr_check: SocketAddrCheck,
     pub(crate) allowed_network_uses: AllowedNetworkUses,
     pub(crate) allow_blocking_current_thread: bool,
+    pub(crate) _executor: std::marker::PhantomData<E>,
 }
 
-impl WasiCtx {
+impl<E> WasiCtx<E> {
     /// Convenience function for calling [`WasiCtxBuilder::new`].
     pub fn builder() -> WasiCtxBuilder {
         WasiCtxBuilder::new()

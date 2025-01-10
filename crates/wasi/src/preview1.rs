@@ -73,7 +73,8 @@ use crate::bindings::{
     io::streams,
 };
 use crate::{
-    FsError, IsATTY, ResourceTable, StreamError, StreamResult, WasiCtx, WasiImpl, WasiView,
+    FsError, IsATTY, ResourceTable, StreamError, StreamResult, WasiCtx, WasiExecutor, WasiImpl,
+    WasiSyncExecutor, WasiView,
 };
 use anyhow::{bail, Context};
 use std::collections::{BTreeMap, HashSet};
@@ -137,14 +138,14 @@ use crate::bindings::random::random::Host as _;
 ///     Ok(())
 /// }
 /// ```
-pub struct WasiP1Ctx {
+pub struct WasiP1Ctx<E> {
     table: ResourceTable,
-    wasi: WasiCtx,
+    wasi: WasiCtx<E>,
     adapter: WasiPreview1Adapter,
 }
 
-impl WasiP1Ctx {
-    pub(crate) fn new(wasi: WasiCtx) -> Self {
+impl<E> WasiP1Ctx<E> {
+    pub(crate) fn new(wasi: WasiCtx<E>) -> Self {
         Self {
             table: ResourceTable::new(),
             wasi,
@@ -157,11 +158,12 @@ impl WasiP1Ctx {
     }
 }
 
-impl WasiView for WasiP1Ctx {
+impl<E: WasiExecutor> WasiView for WasiP1Ctx<E> {
+    type Executor = E;
     fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
-    fn ctx(&mut self) -> &mut WasiCtx {
+    fn ctx(&mut self) -> &mut WasiCtx<E> {
         &mut self.wasi
     }
 }
@@ -297,7 +299,7 @@ impl DerefMut for Descriptors {
 
 impl Descriptors {
     /// Initializes [Self] using `preopens`
-    fn new(mut host: WasiImpl<&mut WasiP1Ctx>) -> Result<Self, types::Error> {
+    fn new<E: WasiExecutor>(mut host: WasiImpl<&mut WasiP1Ctx<E>>) -> Result<Self, types::Error> {
         let mut descriptors = Self::default();
         descriptors.push(Descriptor::Stdin {
             stream: host
@@ -424,12 +426,12 @@ impl WasiPreview1Adapter {
 // of the [`WasiPreview1View`] to provide means to return mutably and immutably borrowed [`Descriptors`]
 // without having to rely on something like `Arc<Mutex<Descriptors>>`, while also being able to
 // call methods like [`Descriptor::is_file`] and hiding complexity from preview1 method implementations.
-struct Transaction<'a> {
-    view: &'a mut WasiP1Ctx,
+struct Transaction<'a, E> {
+    view: &'a mut WasiP1Ctx<E>,
     descriptors: Descriptors,
 }
 
-impl Drop for Transaction<'_> {
+impl<E> Drop for Transaction<'_, E> {
     /// Record changes in the [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     fn drop(&mut self) {
         let descriptors = mem::take(&mut self.descriptors);
@@ -437,7 +439,7 @@ impl Drop for Transaction<'_> {
     }
 }
 
-impl Transaction<'_> {
+impl<E> Transaction<'_, E> {
     /// Borrows [`Descriptor`] corresponding to `fd`.
     ///
     /// # Errors
@@ -517,10 +519,10 @@ impl Transaction<'_> {
     }
 }
 
-impl WasiP1Ctx {
+impl<E: WasiExecutor> WasiP1Ctx<E> {
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`Transaction`] on success
-    fn transact(&mut self) -> Result<Transaction<'_>, types::Error> {
+    fn transact(&mut self) -> Result<Transaction<'_, E>, types::Error> {
         let descriptors = if let Some(descriptors) = self.adapter.descriptors.take() {
             descriptors
         } else {
@@ -729,9 +731,9 @@ enum FdWrite {
 ///     Ok(())
 /// }
 /// ```
-pub fn add_to_linker_async<T: Send>(
+pub fn add_to_linker_async<E: WasiExecutor, T: Send>(
     linker: &mut wasmtime::Linker<T>,
-    f: impl Fn(&mut T) -> &mut WasiP1Ctx + Copy + Send + Sync + 'static,
+    f: impl Fn(&mut T) -> &mut WasiP1Ctx<E> + Copy + Send + Sync + 'static,
 ) -> anyhow::Result<()> {
     crate::preview1::wasi_snapshot_preview1::add_to_linker(linker, f)
 }
@@ -801,9 +803,9 @@ pub fn add_to_linker_async<T: Send>(
 ///     Ok(())
 /// }
 /// ```
-pub fn add_to_linker_sync<T: Send>(
+pub fn add_to_linker_sync<E: WasiSyncExecutor, T: Send>(
     linker: &mut wasmtime::Linker<T>,
-    f: impl Fn(&mut T) -> &mut WasiP1Ctx + Copy + Send + Sync + 'static,
+    f: impl Fn(&mut T) -> &mut WasiP1Ctx<E> + Copy + Send + Sync + 'static,
 ) -> anyhow::Result<()> {
     crate::preview1::sync::add_wasi_snapshot_preview1_to_linker(linker, f)
 }
@@ -1140,7 +1142,7 @@ fn first_non_empty_iovec(
 // Implement the WasiSnapshotPreview1 trait using only the traits that are
 // required for T, i.e., in terms of the preview 2 wit interface, and state
 // stored in the WasiPreview1Adapter struct.
-impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
+impl<E: WasiExecutor> wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx<E> {
     #[instrument(skip(self, memory))]
     fn args_get(
         &mut self,
