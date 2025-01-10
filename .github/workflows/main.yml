@@ -196,6 +196,7 @@ jobs:
       platform-checks: ${{ steps.calculate.outputs.platform-checks }}
     steps:
     - uses: actions/checkout@v4
+    - run: rustup update beta && rustup default beta
     - id: calculate
       env:
         GH_TOKEN: ${{ github.token }}
