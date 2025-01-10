@@ -2,12 +2,9 @@
 //!
 //! This modules provides facilities for timing the execution of individual compilation passes.
 
+use alloc::boxed::Box;
+use core::any::Any;
 use core::fmt;
-use std::any::Any;
-use std::boxed::Box;
-use std::cell::RefCell;
-use std::mem;
-use std::time::Duration;
 
 // Each pass that can be timed is predefined with the `define_passes!` macro. Each pass has a
 // snake_case name and a plain text description used when printing out the timing report.
@@ -110,114 +107,122 @@ pub trait Profiler {
     fn start_pass(&self, pass: Pass) -> Box<dyn Any>;
 }
 
-// Information about passes in a single thread.
-thread_local! {
-    static PROFILER: RefCell<Box<dyn Profiler>> = RefCell::new(Box::new(DefaultProfiler));
-}
-
-/// Set the profiler for the current thread.
-///
-/// Returns the old profiler.
-pub fn set_thread_profiler(new_profiler: Box<dyn Profiler>) -> Box<dyn Profiler> {
-    PROFILER.with(|profiler| std::mem::replace(&mut *profiler.borrow_mut(), new_profiler))
-}
-
-/// Start timing `pass` as a child of the currently running pass, if any.
-///
-/// This function is called by the publicly exposed pass functions.
-fn start_pass(pass: Pass) -> Box<dyn Any> {
-    PROFILER.with(|profiler| profiler.borrow().start_pass(pass))
-}
-
-/// Accumulated timing information for a single pass.
-#[derive(Default, Copy, Clone)]
-struct PassTime {
-    /// Total time spent running this pass including children.
-    total: Duration,
-
-    /// Time spent running in child passes.
-    child: Duration,
-}
-
-/// Accumulated timing for all passes.
-pub struct PassTimes {
-    pass: [PassTime; NUM_PASSES],
-}
-
-impl PassTimes {
-    /// Add `other` to the timings of this `PassTimes`.
-    pub fn add(&mut self, other: &Self) {
-        for (a, b) in self.pass.iter_mut().zip(&other.pass[..]) {
-            a.total += b.total;
-            a.child += b.child;
-        }
-    }
-
-    /// Returns the total amount of time taken by all the passes measured.
-    pub fn total(&self) -> Duration {
-        self.pass.iter().map(|p| p.total - p.child).sum()
-    }
-}
-
-impl Default for PassTimes {
-    fn default() -> Self {
-        Self {
-            pass: [Default::default(); NUM_PASSES],
-        }
-    }
-}
-
-impl fmt::Display for PassTimes {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        writeln!(f, "======== ========  ==================================")?;
-        writeln!(f, "   Total     Self  Pass")?;
-        writeln!(f, "-------- --------  ----------------------------------")?;
-        for (time, desc) in self.pass.iter().zip(&DESCRIPTIONS[..]) {
-            // Omit passes that haven't run.
-            if time.total == Duration::default() {
-                continue;
-            }
-
-            // Write a duration as secs.millis, trailing space.
-            fn fmtdur(mut dur: Duration, f: &mut fmt::Formatter) -> fmt::Result {
-                // Round to nearest ms by adding 500us.
-                dur += Duration::new(0, 500_000);
-                let ms = dur.subsec_millis();
-                write!(f, "{:4}.{:03} ", dur.as_secs(), ms)
-            }
-
-            fmtdur(time.total, f)?;
-            if let Some(s) = time.total.checked_sub(time.child) {
-                fmtdur(s, f)?;
-            }
-            writeln!(f, " {desc}")?;
-        }
-        writeln!(f, "======== ========  ==================================")
-    }
-}
-
-// Information about passes in a single thread.
-thread_local! {
-    static PASS_TIME: RefCell<PassTimes> = RefCell::new(Default::default());
-}
-
 /// The default profiler. You can get the results using [`take_current`].
 pub struct DefaultProfiler;
 
-/// Take the current accumulated pass timings and reset the timings for the current thread.
-///
-/// Only applies when [`DefaultProfiler`] is used.
-pub fn take_current() -> PassTimes {
-    PASS_TIME.with(|rc| mem::take(&mut *rc.borrow_mut()))
-}
+#[cfg(not(feature = "timing"))]
+pub(crate) use disabled::*;
+#[cfg(feature = "timing")]
+pub use enabled::*;
 
 #[cfg(feature = "timing")]
 mod enabled {
-    use super::{DefaultProfiler, Pass, Profiler, PASS_TIME};
+    use super::{DefaultProfiler, Pass, Profiler, DESCRIPTIONS, NUM_PASSES};
     use std::any::Any;
     use std::boxed::Box;
-    use std::cell::Cell;
+    use std::cell::{Cell, RefCell};
+    use std::fmt;
+    use std::mem;
+    use std::time::Duration;
     use std::time::Instant;
+
+    // Information about passes in a single thread.
+    thread_local! {
+        static PROFILER: RefCell<Box<dyn Profiler>> = RefCell::new(Box::new(DefaultProfiler));
+    }
+
+    /// Set the profiler for the current thread.
+    ///
+    /// Returns the old profiler.
+    pub fn set_thread_profiler(new_profiler: Box<dyn Profiler>) -> Box<dyn Profiler> {
+        PROFILER.with(|profiler| std::mem::replace(&mut *profiler.borrow_mut(), new_profiler))
+    }
+
+    /// Start timing `pass` as a child of the currently running pass, if any.
+    ///
+    /// This function is called by the publicly exposed pass functions.
+    pub fn start_pass(pass: Pass) -> Box<dyn Any> {
+        PROFILER.with(|profiler| profiler.borrow().start_pass(pass))
+    }
+
+    /// Accumulated timing information for a single pass.
+    #[derive(Default, Copy, Clone)]
+    struct PassTime {
+        /// Total time spent running this pass including children.
+        total: Duration,
+
+        /// Time spent running in child passes.
+        child: Duration,
+    }
+
+    /// Accumulated timing for all passes.
+    pub struct PassTimes {
+        pass: [PassTime; NUM_PASSES],
+    }
+
+    impl PassTimes {
+        /// Add `other` to the timings of this `PassTimes`.
+        pub fn add(&mut self, other: &Self) {
+            for (a, b) in self.pass.iter_mut().zip(&other.pass[..]) {
+                a.total += b.total;
+                a.child += b.child;
+            }
+        }
+
+        /// Returns the total amount of time taken by all the passes measured.
+        pub fn total(&self) -> Duration {
+            self.pass.iter().map(|p| p.total - p.child).sum()
+        }
+    }
+
+    impl Default for PassTimes {
+        fn default() -> Self {
+            Self {
+                pass: [Default::default(); NUM_PASSES],
+            }
+        }
+    }
+
+    impl fmt::Display for PassTimes {
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            writeln!(f, "======== ========  ==================================")?;
+            writeln!(f, "   Total     Self  Pass")?;
+            writeln!(f, "-------- --------  ----------------------------------")?;
+            for (time, desc) in self.pass.iter().zip(&DESCRIPTIONS[..]) {
+                // Omit passes that haven't run.
+                if time.total == Duration::default() {
+                    continue;
+                }
+
+                // Write a duration as secs.millis, trailing space.
+                fn fmtdur(mut dur: Duration, f: &mut fmt::Formatter) -> fmt::Result {
+                    // Round to nearest ms by adding 500us.
+                    dur += Duration::new(0, 500_000);
+                    let ms = dur.subsec_millis();
+                    write!(f, "{:4}.{:03} ", dur.as_secs(), ms)
+                }
+
+                fmtdur(time.total, f)?;
+                if let Some(s) = time.total.checked_sub(time.child) {
+                    fmtdur(s, f)?;
+                }
+                writeln!(f, " {desc}")?;
+            }
+            writeln!(f, "======== ========  ==================================")
+        }
+    }
+
+    // Information about passes in a single thread.
+    thread_local! {
+        static PASS_TIME: RefCell<PassTimes> = RefCell::new(Default::default());
+    }
+
+    /// Take the current accumulated pass timings and reset the timings for the current thread.
+    ///
+    /// Only applies when [`DefaultProfiler`] is used.
+    pub fn take_current() -> PassTimes {
+        PASS_TIME.with(|rc| mem::take(&mut *rc.borrow_mut()))
+    }
 
     // Information about passes in a single thread.
     thread_local! {
@@ -273,13 +278,17 @@ mod enabled {
 #[cfg(not(feature = "timing"))]
 mod disabled {
     use super::{DefaultProfiler, Pass, Profiler};
-    use std::any::Any;
-    use std::boxed::Box;
+    use alloc::boxed::Box;
+    use core::any::Any;
 
     impl Profiler for DefaultProfiler {
         fn start_pass(&self, _pass: Pass) -> Box<dyn Any> {
             Box::new(())
         }
+    }
+
+    pub fn start_pass(_pass: Pass) -> Box<dyn Any> {
+        Box::new(())
     }
 }
 
