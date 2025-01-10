@@ -1,11 +1,11 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = [ "-Ccranelift-has-sse41=true" ]
+;;! flags = [ "-Ccranelift-has-avx=true" ]
 
 (module
   (memory (data "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\a0\7f"))
 
-  (func (export "v128.load16x4_s") (result v128) (v128.load16x4_s (i32.const 0)))
+  (func (export "v128.load16x4_u") (result v128) (v128.load16x4_u (i32.const 0)))
 )
 ;; wasm[0]::function[0]:
 ;;       pushq   %rbp
@@ -22,7 +22,7 @@
 ;;       movl    $0, %eax
 ;;       movq    0x60(%r14), %rcx
 ;;       addq    %rax, %rcx
-;;       pmovsxwd (%rcx), %xmm0
+;;       vpmovzxwd (%rcx), %xmm0
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq

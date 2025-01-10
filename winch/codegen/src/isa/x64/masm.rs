@@ -30,10 +30,12 @@ use crate::{
 use cranelift_codegen::{
     binemit::CodeOffset,
     ir::{MemFlags, RelSourceLoc, SourceLoc},
-    isa::unwind::UnwindInst,
-    isa::x64::{
-        args::{ExtMode, CC},
-        settings as x64_settings,
+    isa::{
+        unwind::UnwindInst,
+        x64::{
+            args::{ExtMode, CC},
+            settings as x64_settings,
+        },
     },
     settings, Final, MachBufferFinalized, MachLabel,
 };
@@ -283,7 +285,13 @@ impl Masm for MacroAssembler {
     ) -> Result<()> {
         match kind {
             LoadKind::ScalarExtend(ext) => self.asm.movsx_mr(&src, dst, ext, UNTRUSTED_FLAGS),
-            LoadKind::VectorExtend(ext) => self.asm.xmm_pmov_mr(&src, dst, ext, UNTRUSTED_FLAGS),
+            LoadKind::VectorExtend(ext) => {
+                if self.flags.has_avx() {
+                    self.asm.xmm_vpmov_mr(&src, dst, ext, UNTRUSTED_FLAGS)
+                } else {
+                    bail!(CodeGenError::UnimplementedForNoAvx)
+                }
+            }
             LoadKind::Splat => {
                 if size == OperandSize::S64 {
                     self.asm

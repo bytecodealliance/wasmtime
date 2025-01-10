@@ -473,7 +473,7 @@ impl Assembler {
     }
 
     /// Vector load and extend.
-    pub fn xmm_pmov_mr(
+    pub fn xmm_vpmov_mr(
         &mut self,
         src: &Address,
         dst: WritableReg,
@@ -483,12 +483,12 @@ impl Assembler {
         assert!(dst.to_reg().is_float());
 
         let op = match ext {
-            VectorExtendKind::V128Extend8x8S => SseOpcode::Pmovsxbw,
-            VectorExtendKind::V128Extend8x8U => SseOpcode::Pmovzxbw,
-            VectorExtendKind::V128Extend16x4S => SseOpcode::Pmovsxwd,
-            VectorExtendKind::V128Extend16x4U => SseOpcode::Pmovzxwd,
-            VectorExtendKind::V128Extend32x2S => SseOpcode::Pmovsxdq,
-            VectorExtendKind::V128Extend32x2U => SseOpcode::Pmovzxdq,
+            VectorExtendKind::V128Extend8x8S => AvxOpcode::Vpmovsxbw,
+            VectorExtendKind::V128Extend8x8U => AvxOpcode::Vpmovzxbw,
+            VectorExtendKind::V128Extend16x4S => AvxOpcode::Vpmovsxwd,
+            VectorExtendKind::V128Extend16x4U => AvxOpcode::Vpmovzxwd,
+            VectorExtendKind::V128Extend32x2S => AvxOpcode::Vpmovsxdq,
+            VectorExtendKind::V128Extend32x2U => AvxOpcode::Vpmovzxdq,
         };
 
         let src = Self::to_synthetic_amode(
@@ -499,7 +499,7 @@ impl Assembler {
             flags,
         );
 
-        self.emit(Inst::XmmUnaryRmRUnaligned {
+        self.emit(Inst::XmmUnaryRmRVex {
             op,
             src: XmmMem::unwrap_new(RegMem::mem(src)),
             dst: dst.to_reg().into(),

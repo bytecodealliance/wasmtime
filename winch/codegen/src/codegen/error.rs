@@ -20,6 +20,9 @@ pub(crate) enum CodeGenError {
     /// Unimplemented Wasm load kind.
     #[error("Unimplemented Wasm load kind")]
     UnimplementedWasmLoadKind,
+    /// Unimplemented due to requiring AVX.
+    #[error("Instruction not implemented for CPUs without AVX support")]
+    UnimplementedForNoAvx,
     /// Unsupported eager initialization of tables.
     #[error("Unsupported eager initialization of tables")]
     UnsupportedTableEagerInit,

@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = [ "-Ccranelift-has-sse41=true" ]
+;;! flags = [ "-Ccranelift-has-avx=true" ]
 
 (module
   (memory (data "\00\00\00\00\00\00\00\00\00\00\00\00\00\00\a0\7f"))
@@ -22,7 +22,7 @@
 ;;       movl    $0, %eax
 ;;       movq    0x60(%r14), %rcx
 ;;       addq    %rax, %rcx
-;;       pmovsxdq (%rcx), %xmm0
+;;       vpmovsxdq (%rcx), %xmm0
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
