@@ -1549,7 +1549,7 @@ The grammar accepted by the parser is as follows:
 
 <form> ::= <ident> <signature>*
 
-<instantiation> ::= <ident> "(" <signature>* ")"
+<instantiation> ::= <ident> <signature>*
                   | <ident> <ident>
 
 <spec-expr> ::= <int>
