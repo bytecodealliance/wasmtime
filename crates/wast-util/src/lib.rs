@@ -524,9 +524,8 @@ impl WastTest {
             }
 
             // SIMD on Winch requires AVX instructions.
-            if cfg!(target_arch = "x86_64")
-                && !(std::is_x86_feature_detected!("avx") && std::is_x86_feature_detected!("avx2"))
-            {
+            #[cfg(target_arch = "x86_64")]
+            if !(std::is_x86_feature_detected!("avx") && std::is_x86_feature_detected!("avx2")) {
                 let unsupported = ["spec_testsuite/simd_align.wasm"];
 
                 if unsupported.iter().any(|part| self.path.ends_with(part)) {
