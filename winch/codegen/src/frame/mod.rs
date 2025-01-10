@@ -1,5 +1,5 @@
 use crate::{
-    abi::{align_to, ABIOperand, ABISig, LocalSlot, ABI},
+    abi::{ABI, ABIOperand, ABISig, LocalSlot, align_to},
     codegen::{CodeGenPhase, Emission, Prologue},
     masm::MacroAssembler,
 };

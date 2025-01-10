@@ -107,10 +107,12 @@ impl ComponentTypesBuilder {
 
         // Only parameters need to be checked since results should never have
         // borrowed resources.
-        debug_assert!(!self[ty.results]
-            .types
-            .iter()
-            .any(|t| self.ty_contains_borrow_resource(t)));
+        debug_assert!(
+            !self[ty.results]
+                .types
+                .iter()
+                .any(|t| self.ty_contains_borrow_resource(t))
+        );
         self[ty.params]
             .types
             .iter()

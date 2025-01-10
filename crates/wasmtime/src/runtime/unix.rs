@@ -10,10 +10,10 @@
 //! available on Unix.
 
 #[cfg(feature = "signals-based-traps")]
-use crate::prelude::*;
-#[cfg(feature = "signals-based-traps")]
 use crate::AsContextMut;
 use crate::Store;
+#[cfg(feature = "signals-based-traps")]
+use crate::prelude::*;
 
 /// Extensions for the [`Store`] type only available on Unix.
 pub trait StoreExt {

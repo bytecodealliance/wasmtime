@@ -8,11 +8,11 @@
 #![warn(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
 use cranelift_codegen::{
-    binemit,
+    FinalizedMachReloc, FinalizedRelocTarget, MachTrap, binemit,
     cursor::FuncCursor,
     ir::{self, AbiParam, ArgumentPurpose, ExternalName, InstBuilder, Signature, TrapCode},
     isa::{CallConv, TargetIsa},
-    settings, FinalizedMachReloc, FinalizedRelocTarget, MachTrap,
+    settings,
 };
 use cranelift_entity::PrimaryMap;
 

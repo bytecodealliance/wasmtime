@@ -46,20 +46,20 @@
 use crate::dominator_tree::DominatorTree;
 pub use crate::isa::call_conv::CallConv;
 
+use crate::CodegenResult;
 use crate::flowgraph;
 use crate::ir::{self, Function, Type};
 #[cfg(feature = "unwind")]
-use crate::isa::unwind::{systemv::RegisterMappingError, UnwindInfoKind};
+use crate::isa::unwind::{UnwindInfoKind, systemv::RegisterMappingError};
 use crate::machinst::{CompiledCode, CompiledCodeStencil, TextSectionBuilder};
 use crate::settings;
 use crate::settings::Configurable;
 use crate::settings::SetResult;
-use crate::CodegenResult;
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::fmt;
 use core::fmt::{Debug, Formatter};
 use cranelift_control::ControlPlane;
-use target_lexicon::{triple, Architecture, PointerWidth, Triple};
+use target_lexicon::{Architecture, PointerWidth, Triple, triple};
 
 // This module is made public here for benchmarking purposes. No guarantees are
 // made regarding API stability.

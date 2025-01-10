@@ -1,8 +1,8 @@
 #![cfg(not(miri))]
 
 use super::REALLOC_AND_FREE;
-use crate::call_hook::{sync_call_hook, Context, State};
-use anyhow::{bail, Result};
+use crate::call_hook::{Context, State, sync_call_hook};
+use anyhow::{Result, bail};
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{self, Poll};

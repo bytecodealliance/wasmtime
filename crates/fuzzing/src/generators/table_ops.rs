@@ -68,10 +68,11 @@ impl TableOps {
         );
 
         // 3: `make_refs`
-        types.ty().function(
-            vec![],
-            vec![ValType::EXTERNREF, ValType::EXTERNREF, ValType::EXTERNREF],
-        );
+        types.ty().function(vec![], vec![
+            ValType::EXTERNREF,
+            ValType::EXTERNREF,
+            ValType::EXTERNREF,
+        ]);
 
         // Import the GC function.
         let mut imports = ImportSection::new();

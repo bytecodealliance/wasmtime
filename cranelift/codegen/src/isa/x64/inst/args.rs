@@ -1,13 +1,13 @@
 //! Instruction operand sub-components (aka "parts"): definitions and printing.
 
 use super::regs::{self};
+use crate::ir::MemFlags;
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::types::*;
-use crate::ir::MemFlags;
-use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::isa::x64::inst::Inst;
+use crate::isa::x64::inst::regs::pretty_print_reg;
 use crate::machinst::*;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::fmt;
 use std::string::String;
 

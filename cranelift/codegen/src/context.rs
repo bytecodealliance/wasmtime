@@ -24,8 +24,8 @@ use crate::result::{CodegenResult, CompileResult};
 use crate::settings::{FlagsOrIsa, OptLevel};
 use crate::trace;
 use crate::unreachable_code::eliminate_unreachable_code;
-use crate::verifier::{verify_context, VerifierErrors, VerifierResult};
-use crate::{timing, CompileError};
+use crate::verifier::{VerifierErrors, VerifierResult, verify_context};
+use crate::{CompileError, timing};
 #[cfg(feature = "souper-harvest")]
 use alloc::string::String;
 use alloc::vec::Vec;

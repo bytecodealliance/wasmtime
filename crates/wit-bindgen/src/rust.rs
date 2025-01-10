@@ -1,4 +1,4 @@
-use crate::{types::TypeInfo, Ownership};
+use crate::{Ownership, types::TypeInfo};
 use heck::*;
 use wit_parser::*;
 
@@ -316,12 +316,9 @@ pub trait RustGenerator<'a> {
         info.has_list
             && info.borrowed
             && info.owned
-            && matches!(
-                self.ownership(),
-                Ownership::Borrowing {
-                    duplicate_if_necessary: true
-                }
-            )
+            && matches!(self.ownership(), Ownership::Borrowing {
+                duplicate_if_necessary: true
+            })
     }
 
     fn lifetime_for(&self, info: &TypeInfo, mode: TypeMode) -> Option<&'static str> {

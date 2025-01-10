@@ -96,7 +96,10 @@ impl CompiledBlob {
                 }
                 Reloc::Aarch64AdrGotPage21 => {
                     // Set the immediate value of an ADRP to bits [32:12] of X; check that –2^32 <= X < 2^32
-                    assert_eq!(addend, 0, "addend affects the address looked up in get_got_entry, which is currently only called with a symbol");
+                    assert_eq!(
+                        addend, 0,
+                        "addend affects the address looked up in get_got_entry, which is currently only called with a symbol"
+                    );
                     let what = get_got_entry(name);
                     let what_page = (what as usize) & !0xfff;
                     let at_page = (at as usize) & !0xfff;

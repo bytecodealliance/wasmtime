@@ -4,14 +4,14 @@
 use super::*;
 use crate::gc::gc_compiler;
 use crate::translate::TargetEnvironment;
-use crate::{func_environ::FuncEnvironment, gc::GcCompiler, TRAP_INTERNAL_ASSERT};
+use crate::{TRAP_INTERNAL_ASSERT, func_environ::FuncEnvironment, gc::GcCompiler};
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
 use wasmtime_environ::{
-    drc::DrcTypeLayouts, GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TypeIndex, VMGcKind,
-    WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType,
+    GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TypeIndex, VMGcKind, WasmHeapTopType,
+    WasmHeapType, WasmRefType, WasmResult, WasmStorageType, WasmValType, drc::DrcTypeLayouts,
 };
 
 #[derive(Default)]

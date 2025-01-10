@@ -8,8 +8,8 @@ use crate::error::Location;
 use crate::isaspec::IsaSpec;
 use crate::sourcemap::SourceMap;
 use crate::testcommand::TestCommand;
-use cranelift_codegen::ir::entities::AnyEntity;
 use cranelift_codegen::ir::Function;
+use cranelift_codegen::ir::entities::AnyEntity;
 
 /// A parsed test case.
 ///

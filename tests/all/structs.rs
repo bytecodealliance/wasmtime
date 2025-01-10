@@ -23,33 +23,27 @@ fn struct_new_empty() -> Result<()> {
 #[test]
 fn struct_new_with_fields() -> Result<()> {
     let mut store = gc_store()?;
-    let struct_ty = StructType::new(
-        store.engine(),
-        [
-            FieldType::new(Mutability::Const, StorageType::I8),
-            FieldType::new(Mutability::Const, StorageType::ValType(ValType::I32)),
-            FieldType::new(Mutability::Var, StorageType::ValType(ValType::ANYREF)),
-        ],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [
+        FieldType::new(Mutability::Const, StorageType::I8),
+        FieldType::new(Mutability::Const, StorageType::ValType(ValType::I32)),
+        FieldType::new(Mutability::Var, StorageType::ValType(ValType::ANYREF)),
+    ])?;
     let pre = StructRefPre::new(&mut store, struct_ty);
-    StructRef::new(
-        store,
-        &pre,
-        &[Val::I32(1), Val::I32(2), Val::null_any_ref()],
-    )?;
+    StructRef::new(store, &pre, &[
+        Val::I32(1),
+        Val::I32(2),
+        Val::null_any_ref(),
+    ])?;
     Ok(())
 }
 
 #[test]
 fn struct_new_unrooted_field() -> Result<()> {
     let mut store = gc_store()?;
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(
-            Mutability::Var,
-            StorageType::ValType(ValType::ANYREF),
-        )],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Var,
+        StorageType::ValType(ValType::ANYREF),
+    )])?;
     // Passing an unrooted `anyref` to `StructRef::new` results in an error.
     let anyref = {
         let mut scope = RootScope::new(&mut store);
@@ -65,13 +59,10 @@ fn struct_new_unrooted_field() -> Result<()> {
 #[should_panic = "wrong store"]
 fn struct_new_cross_store_field() {
     let mut store = gc_store().unwrap();
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(
-            Mutability::Var,
-            StorageType::ValType(ValType::ANYREF),
-        )],
-    )
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Var,
+        StorageType::ValType(ValType::ANYREF),
+    )])
     .unwrap();
 
     let mut other_store = gc_store().unwrap();
@@ -100,10 +91,10 @@ fn struct_new_cross_store_pre() {
 fn anyref_as_struct() -> Result<()> {
     let mut store = gc_store()?;
 
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(Mutability::Const, StorageType::I8)],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Const,
+        StorageType::I8,
+    )])?;
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
     let s0 = StructRef::new(&mut store, &pre, &[Val::I32(42)])?;
 
@@ -123,13 +114,10 @@ fn anyref_as_struct() -> Result<()> {
 #[test]
 fn struct_field_simple() -> Result<()> {
     let mut store = gc_store()?;
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(
-            Mutability::Var,
-            StorageType::ValType(ValType::I32),
-        )],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Var,
+        StorageType::ValType(ValType::I32),
+    )])?;
     let pre = StructRefPre::new(&mut store, struct_ty);
     let s = StructRef::new(&mut store, &pre, &[Val::I32(1234)])?;
     let val = s.field(&mut store, 0)?;
@@ -140,13 +128,10 @@ fn struct_field_simple() -> Result<()> {
 #[test]
 fn struct_field_out_of_bounds() -> Result<()> {
     let mut store = gc_store()?;
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(
-            Mutability::Var,
-            StorageType::ValType(ValType::I32),
-        )],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Var,
+        StorageType::ValType(ValType::I32),
+    )])?;
     let pre = StructRefPre::new(&mut store, struct_ty);
     let s = StructRef::new(&mut store, &pre, &[Val::I32(1234)])?;
     assert!(s.field(&mut store, 1).is_err());
@@ -156,13 +141,10 @@ fn struct_field_out_of_bounds() -> Result<()> {
 #[test]
 fn struct_field_on_unrooted() -> Result<()> {
     let mut store = gc_store()?;
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(
-            Mutability::Var,
-            StorageType::ValType(ValType::I32),
-        )],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Var,
+        StorageType::ValType(ValType::I32),
+    )])?;
     let pre = StructRefPre::new(&mut store, struct_ty);
     let s = {
         let mut scope = RootScope::new(&mut store);
@@ -176,13 +158,10 @@ fn struct_field_on_unrooted() -> Result<()> {
 #[test]
 fn struct_set_field_simple() -> Result<()> {
     let mut store = gc_store()?;
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(
-            Mutability::Var,
-            StorageType::ValType(ValType::I32),
-        )],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Var,
+        StorageType::ValType(ValType::I32),
+    )])?;
     let pre = StructRefPre::new(&mut store, struct_ty);
     let s = StructRef::new(&mut store, &pre, &[Val::I32(1234)])?;
     s.set_field(&mut store, 0, Val::I32(5678))?;
@@ -194,13 +173,10 @@ fn struct_set_field_simple() -> Result<()> {
 #[test]
 fn struct_set_field_out_of_bounds() -> Result<()> {
     let mut store = gc_store()?;
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(
-            Mutability::Var,
-            StorageType::ValType(ValType::I32),
-        )],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Var,
+        StorageType::ValType(ValType::I32),
+    )])?;
     let pre = StructRefPre::new(&mut store, struct_ty);
     let s = StructRef::new(&mut store, &pre, &[Val::I32(1234)])?;
     assert!(s.set_field(&mut store, 1, Val::I32(1)).is_err());
@@ -210,13 +186,10 @@ fn struct_set_field_out_of_bounds() -> Result<()> {
 #[test]
 fn struct_set_field_on_unrooted() -> Result<()> {
     let mut store = gc_store()?;
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(
-            Mutability::Var,
-            StorageType::ValType(ValType::I32),
-        )],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Var,
+        StorageType::ValType(ValType::I32),
+    )])?;
     let pre = StructRefPre::new(&mut store, struct_ty);
     let s = {
         let mut scope = RootScope::new(&mut store);
@@ -230,13 +203,10 @@ fn struct_set_field_on_unrooted() -> Result<()> {
 #[test]
 fn struct_set_field_with_unrooted() -> Result<()> {
     let mut store = gc_store()?;
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(
-            Mutability::Var,
-            StorageType::ValType(ValType::ANYREF),
-        )],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Var,
+        StorageType::ValType(ValType::ANYREF),
+    )])?;
     let pre = StructRefPre::new(&mut store, struct_ty);
     let s = StructRef::new(&mut store, &pre, &[Val::null_any_ref()])?;
     let anyref = {
@@ -251,13 +221,10 @@ fn struct_set_field_with_unrooted() -> Result<()> {
 #[test]
 fn struct_set_field_cross_store_value() -> Result<()> {
     let mut store = gc_store()?;
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(
-            Mutability::Var,
-            StorageType::ValType(ValType::EXTERNREF),
-        )],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Var,
+        StorageType::ValType(ValType::EXTERNREF),
+    )])?;
     let pre = StructRefPre::new(&mut store, struct_ty);
     let s = StructRef::new(&mut store, &pre, &[Val::null_extern_ref()])?;
 
@@ -271,13 +238,10 @@ fn struct_set_field_cross_store_value() -> Result<()> {
 #[test]
 fn struct_set_field_immutable() -> Result<()> {
     let mut store = gc_store()?;
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(
-            Mutability::Const,
-            StorageType::ValType(ValType::I32),
-        )],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Const,
+        StorageType::ValType(ValType::I32),
+    )])?;
     let pre = StructRefPre::new(&mut store, struct_ty);
     let s = StructRef::new(&mut store, &pre, &[Val::I32(1234)])?;
     assert!(s.set_field(&mut store, 0, Val::I32(5678)).is_err());
@@ -287,13 +251,10 @@ fn struct_set_field_immutable() -> Result<()> {
 #[test]
 fn struct_set_field_wrong_type() -> Result<()> {
     let mut store = gc_store()?;
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(
-            Mutability::Const,
-            StorageType::ValType(ValType::I32),
-        )],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Const,
+        StorageType::ValType(ValType::I32),
+    )])?;
     let pre = StructRefPre::new(&mut store, struct_ty);
     let s = StructRef::new(&mut store, &pre, &[Val::I32(1234)])?;
     assert!(s.set_field(&mut store, 0, Val::I64(5678)).is_err());
@@ -339,13 +300,10 @@ fn struct_fields_empty() -> Result<()> {
 #[test]
 fn struct_fields_non_empty() -> Result<()> {
     let mut store = gc_store()?;
-    let struct_ty = StructType::new(
-        store.engine(),
-        [
-            FieldType::new(Mutability::Const, StorageType::I8),
-            FieldType::new(Mutability::Var, StorageType::ValType(ValType::ANYREF)),
-        ],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [
+        FieldType::new(Mutability::Const, StorageType::I8),
+        FieldType::new(Mutability::Var, StorageType::ValType(ValType::ANYREF)),
+    ])?;
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
     let s = StructRef::new(&mut store, &pre, &[Val::I32(36), Val::null_any_ref()])?;
     let mut fields = s.fields(&mut store)?;
@@ -388,10 +346,10 @@ fn passing_structs_through_wasm_with_untyped_calls() -> Result<()> {
         "#,
     )?;
 
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(Mutability::Const, StorageType::I8)],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Const,
+        StorageType::I8,
+    )])?;
 
     let ref_ty = RefType::new(false, HeapType::ConcreteStruct(struct_ty.clone()));
     let func_ty = FuncType::new(store.engine(), [ref_ty.clone().into()], [ref_ty.into()]);
@@ -439,10 +397,10 @@ fn passing_structs_through_wasm_with_typed_calls() -> Result<()> {
         "#,
     )?;
 
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(Mutability::Const, StorageType::I8)],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Const,
+        StorageType::I8,
+    )])?;
 
     let func = Func::wrap(
         &mut store,
@@ -487,10 +445,10 @@ fn host_sets_struct_global() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[])?;
     let g = instance.get_global(&mut store, "g").unwrap();
 
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(Mutability::Const, StorageType::I8)],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Const,
+        StorageType::I8,
+    )])?;
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
     let s0 = StructRef::new(&mut store, &pre, &[Val::I32(42)])?;
     g.set(&mut store, s0.into())?;
@@ -533,10 +491,10 @@ fn wasm_sets_struct_global() -> Result<()> {
         "#,
     )?;
 
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(Mutability::Const, StorageType::I8)],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Const,
+        StorageType::I8,
+    )])?;
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
     let s0 = StructRef::new(&mut store, &pre, &[Val::I32(42)])?;
 
@@ -583,10 +541,10 @@ fn host_sets_struct_in_table() -> Result<()> {
     let instance = Instance::new(&mut store, &module, &[])?;
     let t = instance.get_table(&mut store, "t").unwrap();
 
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(Mutability::Const, StorageType::I8)],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Const,
+        StorageType::I8,
+    )])?;
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
     let s0 = StructRef::new(&mut store, &pre, &[Val::I32(42)])?;
     t.set(&mut store, 0, s0.into())?;
@@ -631,10 +589,10 @@ fn wasm_sets_struct_in_table() -> Result<()> {
         "#,
     )?;
 
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(Mutability::Const, StorageType::I8)],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Const,
+        StorageType::I8,
+    )])?;
     let pre = StructRefPre::new(&mut store, struct_ty.clone());
     let s0 = StructRef::new(&mut store, &pre, &[Val::I32(42)])?;
 
@@ -674,10 +632,10 @@ fn instantiate_with_struct_global() -> Result<()> {
         "#,
     )?;
 
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(Mutability::Const, StorageType::I8)],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Const,
+        StorageType::I8,
+    )])?;
     let global_ty = GlobalType::new(
         ValType::Ref(RefType::new(
             true,
@@ -712,10 +670,10 @@ fn instantiate_with_struct_global() -> Result<()> {
 fn can_put_funcrefs_in_structs() -> Result<()> {
     let mut store = gc_store()?;
 
-    let struct_ty = StructType::new(
-        store.engine(),
-        [FieldType::new(Mutability::Var, RefType::FUNCREF.into())],
-    )?;
+    let struct_ty = StructType::new(store.engine(), [FieldType::new(
+        Mutability::Var,
+        RefType::FUNCREF.into(),
+    )])?;
 
     let f0 = Func::wrap(&mut store, |_caller: Caller<()>| -> u32 { 0x1234 });
     let f1 = Func::wrap(&mut store, |_caller: Caller<()>| -> u32 { 0x5678 });

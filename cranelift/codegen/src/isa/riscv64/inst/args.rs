@@ -38,11 +38,7 @@ macro_rules! newtype_of_reg {
             /// Create this newtype from the given register, or return `None` if the register
             /// is not a valid instance of this newtype.
             pub fn new($check_reg: Reg) -> Option<Self> {
-                if $check {
-                    Some(Self($check_reg))
-                } else {
-                    None
-                }
+                if $check { Some(Self($check_reg)) } else { None }
             }
 
             /// Get this newtype's underlying `Reg`.
@@ -610,16 +606,12 @@ impl FpuOPRRR {
 
 impl Display for FpuOPWidth {
     fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                FpuOPWidth::H => "h",
-                FpuOPWidth::S => "s",
-                FpuOPWidth::D => "d",
-                FpuOPWidth::Q => "q",
-            }
-        )
+        write!(f, "{}", match self {
+            FpuOPWidth::H => "h",
+            FpuOPWidth::S => "s",
+            FpuOPWidth::D => "d",
+            FpuOPWidth::Q => "q",
+        })
     }
 }
 
@@ -1409,18 +1401,10 @@ impl AtomicOP {
     }
 
     pub(crate) fn load_op(t: Type) -> Self {
-        if t.bits() <= 32 {
-            Self::LrW
-        } else {
-            Self::LrD
-        }
+        if t.bits() <= 32 { Self::LrW } else { Self::LrD }
     }
     pub(crate) fn store_op(t: Type) -> Self {
-        if t.bits() <= 32 {
-            Self::ScW
-        } else {
-            Self::ScD
-        }
+        if t.bits() <= 32 { Self::ScW } else { Self::ScD }
     }
 
     /// extract

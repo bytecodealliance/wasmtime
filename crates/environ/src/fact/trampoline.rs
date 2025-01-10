@@ -16,10 +16,10 @@
 //! can be somewhat arbitrary, an intentional decision.
 
 use crate::component::{
-    CanonicalAbiInfo, ComponentTypesBuilder, FixedEncoding as FE, FlatType, InterfaceType,
-    StringEncoding, Transcode, TypeEnumIndex, TypeFlagsIndex, TypeListIndex, TypeOptionIndex,
-    TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex, TypeTupleIndex, TypeVariantIndex,
-    VariantInfo, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    CanonicalAbiInfo, ComponentTypesBuilder, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, FixedEncoding as FE,
+    FlatType, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS, StringEncoding, Transcode,
+    TypeEnumIndex, TypeFlagsIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
+    TypeResourceTableIndex, TypeResultIndex, TypeTupleIndex, TypeVariantIndex, VariantInfo,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::Transcoder;

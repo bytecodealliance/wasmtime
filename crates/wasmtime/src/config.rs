@@ -2305,7 +2305,9 @@ impl Config {
                 .compiler_config
                 .ensure_setting_unset_or_given("unwind_info", &unwind_requested.to_string())
             {
-                bail!("incompatible settings requested for Cranelift and Wasmtime `unwind-info` settings");
+                bail!(
+                    "incompatible settings requested for Cranelift and Wasmtime `unwind-info` settings"
+                );
             }
         }
 
@@ -2354,7 +2356,9 @@ impl Config {
                 .compiler_config
                 .ensure_setting_unset_or_given("enable_safepoints", "true")
             {
-                bail!("compiler option 'enable_safepoints' must be enabled when 'reference types' is enabled");
+                bail!(
+                    "compiler option 'enable_safepoints' must be enabled when 'reference types' is enabled"
+                );
             }
         }
 

@@ -32,15 +32,27 @@ fn wrap_func() -> Result<()> {
     linker.func_wrap("m3", "", || -> Option<Rooted<ExternRef>> { None })?;
     linker.func_wrap("m3", "f", || -> Option<Func> { None })?;
 
-    linker.func_wrap("", "f1", || -> Result<()> { loop {} })?;
-    linker.func_wrap("", "f2", || -> Result<i32> { loop {} })?;
-    linker.func_wrap("", "f3", || -> Result<i64> { loop {} })?;
-    linker.func_wrap("", "f4", || -> Result<f32> { loop {} })?;
-    linker.func_wrap("", "f5", || -> Result<f64> { loop {} })?;
+    linker.func_wrap("", "f1", || -> Result<()> {
+        loop {}
+    })?;
+    linker.func_wrap("", "f2", || -> Result<i32> {
+        loop {}
+    })?;
+    linker.func_wrap("", "f3", || -> Result<i64> {
+        loop {}
+    })?;
+    linker.func_wrap("", "f4", || -> Result<f32> {
+        loop {}
+    })?;
+    linker.func_wrap("", "f5", || -> Result<f64> {
+        loop {}
+    })?;
     linker.func_wrap("", "f6", || -> Result<Option<Rooted<ExternRef>>> {
         loop {}
     })?;
-    linker.func_wrap("", "f7", || -> Result<Option<Func>> { loop {} })?;
+    linker.func_wrap("", "f7", || -> Result<Option<Func>> {
+        loop {}
+    })?;
     Ok(())
 }
 
@@ -135,10 +147,18 @@ fn signatures_match() -> Result<()> {
     let mut linker = Linker::<()>::new(&engine);
 
     linker.func_wrap("", "f1", || {})?;
-    linker.func_wrap("", "f2", || -> i32 { loop {} })?;
-    linker.func_wrap("", "f3", || -> i64 { loop {} })?;
-    linker.func_wrap("", "f4", || -> f32 { loop {} })?;
-    linker.func_wrap("", "f5", || -> f64 { loop {} })?;
+    linker.func_wrap("", "f2", || -> i32 {
+        loop {}
+    })?;
+    linker.func_wrap("", "f3", || -> i64 {
+        loop {}
+    })?;
+    linker.func_wrap("", "f4", || -> f32 {
+        loop {}
+    })?;
+    linker.func_wrap("", "f5", || -> f64 {
+        loop {}
+    })?;
     linker.func_wrap(
         "",
         "f6",
@@ -618,9 +638,10 @@ fn func_return_nothing() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let f = linker.get(&mut store, "", "").unwrap().into_func().unwrap();
     let err = f.call(&mut store, &[], &mut [Val::I32(0)]).unwrap_err();
-    assert!(err
-        .to_string()
-        .contains("function attempted to return an incompatible value"));
+    assert!(
+        err.to_string()
+            .contains("function attempted to return an incompatible value")
+    );
     Ok(())
 }
 

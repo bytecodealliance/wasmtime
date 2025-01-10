@@ -1,8 +1,8 @@
 use super::regs;
 use crate::{
-    abi::{align_to, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrReturns, ABI},
-    isa::{reg::Reg, CallingConvention},
     RegIndexEnv,
+    abi::{ABI, ABIOperand, ABIParams, ABIResults, ABISig, ParamsOrReturns, align_to},
+    isa::{CallingConvention, reg::Reg},
 };
 use wasmtime_environ::{WasmHeapType, WasmRefType, WasmValType};
 
@@ -277,8 +277,8 @@ impl X64ABI {
 mod tests {
     use super::X64ABI;
     use crate::{
-        abi::{ABIOperand, ABI},
-        isa::{reg::Reg, x64::regs, CallingConvention},
+        abi::{ABI, ABIOperand},
+        isa::{CallingConvention, reg::Reg, x64::regs},
     };
     use wasmtime_environ::{
         WasmFuncType,

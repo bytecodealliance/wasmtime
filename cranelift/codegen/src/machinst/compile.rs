@@ -1,14 +1,14 @@
 //! Compilation backend pipeline: optimized IR to VCode / binemit.
 
+use crate::CodegenError;
 use crate::dominator_tree::DominatorTree;
-use crate::ir::pcc;
 use crate::ir::Function;
+use crate::ir::pcc;
 use crate::isa::TargetIsa;
 use crate::machinst::*;
 use crate::settings::RegallocAlgorithm;
 use crate::timing;
 use crate::trace;
-use crate::CodegenError;
 
 use regalloc2::{Algorithm, RegallocOptions};
 

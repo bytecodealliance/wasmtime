@@ -76,6 +76,7 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+use crate::RootSet;
 use crate::hash_set::HashSet;
 use crate::instance::InstanceData;
 use crate::linker::Definition;
@@ -90,8 +91,7 @@ use crate::runtime::vm::{
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::type_registry::RegisteredType;
-use crate::RootSet;
-use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
+use crate::{Engine, Module, Trap, Val, ValRaw, module::ModuleRegistry};
 use crate::{Global, Instance, Memory, RootScope, Table, Uninhabited};
 use alloc::sync::Arc;
 use core::cell::UnsafeCell;
@@ -783,9 +783,9 @@ impl<T> Store<T> {
     pub fn limiter_async(
         &mut self,
         mut limiter: impl FnMut(&mut T) -> &mut (dyn crate::ResourceLimiterAsync)
-            + Send
-            + Sync
-            + 'static,
+        + Send
+        + Sync
+        + 'static,
     ) {
         debug_assert!(self.inner.async_support());
         // Apply the limits on instances, tables, and memory given by the limiter:

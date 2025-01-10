@@ -213,7 +213,7 @@ pub fn take_current() -> PassTimes {
 
 #[cfg(feature = "timing")]
 mod enabled {
-    use super::{DefaultProfiler, Pass, Profiler, PASS_TIME};
+    use super::{DefaultProfiler, PASS_TIME, Pass, Profiler};
     use std::any::Any;
     use std::boxed::Box;
     use std::cell::Cell;

@@ -24,13 +24,10 @@ fn main() -> Result<()> {
     // contains an arbitrary piece of host information, and we use `MyState`
     // here.
     println!("Initializing...");
-    let mut store = Store::new(
-        &engine,
-        MyState {
-            name: "hello, world!".to_string(),
-            count: 0,
-        },
-    );
+    let mut store = Store::new(&engine, MyState {
+        name: "hello, world!".to_string(),
+        count: 0,
+    });
 
     // Our wasm module we'll be instantiating requires one imported function.
     // the function takes no parameters and returns no results. We create a host

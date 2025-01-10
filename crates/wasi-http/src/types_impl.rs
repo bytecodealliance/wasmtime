@@ -1,22 +1,22 @@
 //! Implementation for the `wasi:http/types` interface.
 
 use crate::{
+    WasiHttpImpl, WasiHttpView,
     bindings::http::types::{self, Headers, Method, Scheme, StatusCode, Trailers},
     body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, StreamContext},
     types::{
-        is_forbidden_header, remove_forbidden_headers, FieldMap, HostFields,
-        HostFutureIncomingResponse, HostIncomingRequest, HostIncomingResponse, HostOutgoingRequest,
-        HostOutgoingResponse, HostResponseOutparam,
+        FieldMap, HostFields, HostFutureIncomingResponse, HostIncomingRequest,
+        HostIncomingResponse, HostOutgoingRequest, HostOutgoingResponse, HostResponseOutparam,
+        is_forbidden_header, remove_forbidden_headers,
     },
-    WasiHttpImpl, WasiHttpView,
 };
 use anyhow::Context;
 use std::any::Any;
 use std::str::FromStr;
 use wasmtime::component::{Resource, ResourceTable};
 use wasmtime_wasi::{
-    bindings::io::streams::{InputStream, OutputStream},
     Pollable, ResourceTableError,
+    bindings::io::streams::{InputStream, OutputStream},
 };
 
 impl<T> crate::bindings::http::types::Host for WasiHttpImpl<T>

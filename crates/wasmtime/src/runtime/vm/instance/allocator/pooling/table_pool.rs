@@ -1,11 +1,11 @@
 use super::{
-    index_allocator::{SimpleIndexAllocator, SlotId},
     TableAllocationIndex,
+    index_allocator::{SimpleIndexAllocator, SlotId},
 };
 use crate::runtime::vm::sys::vm::commit_pages;
 use crate::runtime::vm::{
-    mmap::AlignedLength, InstanceAllocationRequest, Mmap, PoolingInstanceAllocatorConfig,
-    SendSyncPtr, Table,
+    InstanceAllocationRequest, Mmap, PoolingInstanceAllocatorConfig, SendSyncPtr, Table,
+    mmap::AlignedLength,
 };
 use crate::{prelude::*, vm::HostAlignedByteCount};
 use std::mem;

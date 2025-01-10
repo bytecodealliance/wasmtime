@@ -485,7 +485,7 @@ unsafe fn gc_alloc_raw(
     size: u32,
     align: u32,
 ) -> Result<u32> {
-    use crate::{vm::VMGcHeader, GcHeapOutOfMemory};
+    use crate::{GcHeapOutOfMemory, vm::VMGcHeader};
     use core::alloc::Layout;
     use wasmtime_environ::{ModuleInternedTypeIndex, VMGcKind};
 
@@ -563,7 +563,7 @@ unsafe fn get_interned_func_ref(
 ) -> *mut u8 {
     use super::FuncRefTableId;
     use crate::store::AutoAssertNoGc;
-    use wasmtime_environ::{packed_option::ReservedValue, ModuleInternedTypeIndex};
+    use wasmtime_environ::{ModuleInternedTypeIndex, packed_option::ReservedValue};
 
     let store = AutoAssertNoGc::new(store.store_opaque_mut());
 
@@ -759,9 +759,9 @@ unsafe fn array_new_elem(
     len: u32,
 ) -> Result<u32> {
     use crate::{
+        ArrayRef, ArrayRefPre, ArrayType, Func, GcHeapOutOfMemory, RootSet, RootedGcRefImpl, Val,
         store::AutoAssertNoGc,
         vm::const_expr::{ConstEvalContext, ConstExprEvaluator},
-        ArrayRef, ArrayRefPre, ArrayType, Func, GcHeapOutOfMemory, RootSet, RootedGcRefImpl, Val,
     };
     use wasmtime_environ::{ModuleInternedTypeIndex, TableSegmentElements};
 
@@ -847,9 +847,9 @@ unsafe fn array_init_elem(
     len: u32,
 ) -> Result<()> {
     use crate::{
+        ArrayRef, Func, OpaqueRootScope, Val,
         store::AutoAssertNoGc,
         vm::const_expr::{ConstEvalContext, ConstExprEvaluator},
-        ArrayRef, Func, OpaqueRootScope, Val,
     };
     use wasmtime_environ::{ModuleInternedTypeIndex, TableSegmentElements};
 
@@ -860,8 +860,8 @@ unsafe fn array_init_elem(
     let elem_index = ElemIndex::from_u32(elem_index);
 
     log::trace!(
-            "array.init_elem(array={array:#x}, dst={dst}, elem_index={elem_index:?}, src={src}, len={len})",
-        );
+        "array.init_elem(array={array:#x}, dst={dst}, elem_index={elem_index:?}, src={src}, len={len})",
+    );
 
     // Convert the raw GC ref into a `Rooted<ArrayRef>`.
     let array = VMGcRef::from_raw_u32(array).ok_or_else(|| Trap::NullReference)?;
@@ -945,11 +945,11 @@ unsafe fn array_copy(
     src: u32,
     len: u32,
 ) -> Result<()> {
-    use crate::{store::AutoAssertNoGc, ArrayRef, OpaqueRootScope};
+    use crate::{ArrayRef, OpaqueRootScope, store::AutoAssertNoGc};
 
     log::trace!(
-            "array.copy(dst_array={dst_array:#x}, dst_index={dst}, src_array={src_array:#x}, src_index={src}, len={len})",
-        );
+        "array.copy(dst_array={dst_array:#x}, dst_index={dst}, src_array={src_array:#x}, src_index={src}, len={len})",
+    );
 
     let mut store = OpaqueRootScope::new(store.store_opaque_mut());
     let mut store = AutoAssertNoGc::new(&mut store);

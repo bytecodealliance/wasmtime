@@ -1,13 +1,13 @@
+use crate::ScopeVec;
 use crate::component::*;
 use crate::prelude::*;
-use crate::ScopeVec;
 use crate::{
     EngineOrModuleTypeIndex, EntityIndex, ModuleEnvironment, ModuleInternedTypeIndex,
     ModuleTranslation, ModuleTypesBuilder, PrimaryMap, Tunables, TypeConvert, WasmHeapType,
     WasmResult, WasmValType,
 };
 use anyhow::anyhow;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use indexmap::IndexMap;
 use std::collections::HashMap;
 use std::mem;

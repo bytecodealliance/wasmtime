@@ -714,10 +714,9 @@ fn test_typevar_builder() {
         .dynamic_simd_lanes(Interval::All)
         .includes_scalars(false)
         .build();
-    assert_eq!(
-        type_set.dynamic_lanes,
-        num_set![2, 4, 8, 16, 32, 64, 128, 256]
-    );
+    assert_eq!(type_set.dynamic_lanes, num_set![
+        2, 4, 8, 16, 32, 64, 128, 256
+    ]);
     assert_eq!(type_set.ints, num_set![8, 16, 32, 64, 128]);
     assert_eq!(type_set.floats, num_set![16, 32, 64, 128]);
     assert_eq!(type_set.lanes, num_set![1]);
@@ -727,10 +726,9 @@ fn test_typevar_builder() {
         .dynamic_simd_lanes(Interval::All)
         .includes_scalars(false)
         .build();
-    assert_eq!(
-        type_set.dynamic_lanes,
-        num_set![2, 4, 8, 16, 32, 64, 128, 256]
-    );
+    assert_eq!(type_set.dynamic_lanes, num_set![
+        2, 4, 8, 16, 32, 64, 128, 256
+    ]);
     assert_eq!(type_set.floats, num_set![16, 32, 64, 128]);
     assert_eq!(type_set.lanes, num_set![1]);
     assert!(type_set.ints.is_empty());

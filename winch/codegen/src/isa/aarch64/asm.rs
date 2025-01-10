@@ -1,29 +1,29 @@
 //! Assembler library implementation for Aarch64.
 use super::{address::Address, regs};
+use crate::CallingConvention;
 use crate::aarch64::regs::zero;
 use crate::masm::{
     DivKind, ExtendKind, FloatCmpKind, IntCmpKind, RemKind, RoundingMode, ShiftKind, TruncKind,
 };
-use crate::CallingConvention;
 use crate::{
     masm::OperandSize,
-    reg::{writable, Reg, WritableReg},
+    reg::{Reg, WritableReg, writable},
 };
 
-use cranelift_codegen::isa::aarch64::inst::{ASIMDFPModImm, FpuToIntOp, UImm5, NZCV};
+use cranelift_codegen::isa::aarch64::inst::{ASIMDFPModImm, FpuToIntOp, NZCV, UImm5};
 use cranelift_codegen::{
+    Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState, MachLabel,
+    Writable,
     ir::{ExternalName, LibCall, MemFlags, SourceLoc, TrapCode, UserExternalNameRef},
     isa::aarch64::inst::{
-        self,
-        emit::{EmitInfo, EmitState},
-        ALUOp, ALUOp3, AMode, BitOp, BranchTarget, Cond, CondBrKind, ExtendOp, FPULeftShiftImm,
-        FPUOp1, FPUOp2,
+        self, ALUOp, ALUOp3, AMode, BitOp, BranchTarget, Cond, CondBrKind, ExtendOp,
+        FPULeftShiftImm, FPUOp1, FPUOp2,
         FPUOpRI::{self, UShr32, UShr64},
         FPUOpRIMod, FPURightShiftImm, FpuRoundMode, Imm12, ImmLogic, ImmShift, Inst, IntToFpuOp,
         PairAMode, ScalarSize, VecLanesOp, VecMisc2, VectorSize,
+        emit::{EmitInfo, EmitState},
     },
-    settings, Final, MachBuffer, MachBufferFinalized, MachInst, MachInstEmit, MachInstEmitState,
-    MachLabel, Writable,
+    settings,
 };
 
 impl From<OperandSize> for inst::OperandSize {

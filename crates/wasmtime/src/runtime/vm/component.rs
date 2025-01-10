@@ -24,7 +24,7 @@ use wasmtime_environ::component::*;
 use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};
 
 #[allow(clippy::cast_possible_truncation)] // it's intended this is truncated on
-                                           // 32-bit platforms
+// 32-bit platforms
 const INVALID_PTR: usize = 0xdead_dead_beef_beef_u64 as usize;
 
 mod libcalls;
@@ -203,26 +203,23 @@ impl ComponentInstance {
             component_resource_tables.push(ResourceTable::default());
         }
 
-        ptr::write(
-            ptr.as_ptr(),
-            ComponentInstance {
-                offsets,
-                vmctx_self_reference: SendSyncPtr::new(
-                    NonNull::new(
-                        ptr.as_ptr()
-                            .byte_add(mem::size_of::<ComponentInstance>())
-                            .cast(),
-                    )
-                    .unwrap(),
-                ),
-                component_resource_tables,
-                runtime_info,
-                resource_types,
-                vmctx: VMComponentContext {
-                    _marker: marker::PhantomPinned,
-                },
+        ptr::write(ptr.as_ptr(), ComponentInstance {
+            offsets,
+            vmctx_self_reference: SendSyncPtr::new(
+                NonNull::new(
+                    ptr.as_ptr()
+                        .byte_add(mem::size_of::<ComponentInstance>())
+                        .cast(),
+                )
+                .unwrap(),
+            ),
+            component_resource_tables,
+            runtime_info,
+            resource_types,
+            vmctx: VMComponentContext {
+                _marker: marker::PhantomPinned,
             },
-        );
+        });
 
         (*ptr.as_ptr()).initialize_vmctx(store);
     }

@@ -1,5 +1,5 @@
-use crate::runtime::vm::traphandlers::CallThreadState;
 use crate::runtime::vm::VMRuntimeLimits;
+use crate::runtime::vm::traphandlers::CallThreadState;
 
 /// A WebAssembly Coredump
 #[derive(Debug)]

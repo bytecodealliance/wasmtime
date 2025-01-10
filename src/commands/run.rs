@@ -7,13 +7,13 @@
 
 use crate::common::{Profile, RunCommon, RunTarget};
 
-use anyhow::{anyhow, bail, Context as _, Error, Result};
+use anyhow::{Context as _, Error, Result, anyhow, bail};
 use clap::Parser;
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use wasi_common::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
+use wasi_common::sync::{Dir, TcpListener, WasiCtxBuilder, ambient_authority};
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
 use wasmtime_wasi::WasiView;
 
@@ -27,7 +27,7 @@ use wasmtime_wasi_threads::WasiThreadsCtx;
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 #[cfg(feature = "wasi-http")]
 use wasmtime_wasi_http::{
-    WasiHttpCtx, DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS, DEFAULT_OUTGOING_BODY_CHUNK_SIZE,
+    DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS, DEFAULT_OUTGOING_BODY_CHUNK_SIZE, WasiHttpCtx,
 };
 #[cfg(feature = "wasi-keyvalue")]
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
@@ -371,9 +371,11 @@ impl RunCommand {
 
         store.set_epoch_deadline(1);
         let engine = store.engine().clone();
-        thread::spawn(move || loop {
-            thread::sleep(interval);
-            engine.increment_epoch();
+        thread::spawn(move || {
+            loop {
+                thread::sleep(interval);
+                engine.increment_epoch();
+            }
         });
 
         let path = path.to_string();
@@ -741,7 +743,9 @@ impl RunCommand {
         if self.run.common.wasi.keyvalue == Some(true) {
             #[cfg(not(feature = "wasi-keyvalue"))]
             {
-                bail!("Cannot enable wasi-keyvalue when the binary is not compiled with this feature.");
+                bail!(
+                    "Cannot enable wasi-keyvalue when the binary is not compiled with this feature."
+                );
             }
             #[cfg(all(feature = "wasi-keyvalue", feature = "component-model"))]
             {

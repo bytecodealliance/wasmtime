@@ -2,7 +2,7 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::sys::traphandlers::wasmtime_longjmp;
-use crate::runtime::vm::traphandlers::{tls, TrapRegisters, TrapTest};
+use crate::runtime::vm::traphandlers::{TrapRegisters, TrapTest, tls};
 use std::cell::RefCell;
 use std::io;
 use std::mem;
@@ -262,7 +262,7 @@ pub fn abort_stack_overflow() -> ! {
 }
 
 #[allow(clippy::cast_possible_truncation)] // too fiddly to handle and wouldn't
-                                           // help much anyway
+// help much anyway
 unsafe fn get_trap_registers(cx: *mut libc::c_void, _signum: libc::c_int) -> TrapRegisters {
     cfg_if::cfg_if! {
         if #[cfg(all(any(target_os = "linux", target_os = "android", target_os = "illumos"), target_arch = "x86_64"))] {

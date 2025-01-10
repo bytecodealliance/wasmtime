@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use anyhow::{bail, format_err, Result};
+use anyhow::{Result, bail, format_err};
 use filecheck::{CheckerBuilder, NO_VARIABLES};
 use std::env;
 use std::io::Write;
@@ -427,10 +427,9 @@ check: exited with status = 0
     #[test]
     #[ignore]
     fn dwarf_imported_memory() -> Result<()> {
-        test_dwarf_simple(
-            DWARF_IMPORTED_MEMORY,
-            &["--preload=env=./tests/all/debug/satisfy_memory_import.wat"],
-        )
+        test_dwarf_simple(DWARF_IMPORTED_MEMORY, &[
+            "--preload=env=./tests/all/debug/satisfy_memory_import.wat",
+        ])
     }
 
     #[test]

@@ -6,7 +6,7 @@
 
 use core::hash::Hash;
 use rustc_hash::FxHashMap;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 
 #[cfg(not(feature = "std"))]
 use crate::fx::FxHasher;

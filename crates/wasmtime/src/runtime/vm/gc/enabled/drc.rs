@@ -46,9 +46,9 @@ use super::{VMArrayRef, VMGcObjectDataMut, VMStructRef};
 use crate::hash_set::HashSet;
 use crate::prelude::*;
 use crate::runtime::vm::{
-    mmap::AlignedLength, ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap,
-    GcHeapObject, GcProgress, GcRootsIter, GcRuntime, Mmap, TypedGcRef, VMExternRef, VMGcHeader,
-    VMGcRef,
+    ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
+    GcProgress, GcRootsIter, GcRuntime, Mmap, TypedGcRef, VMExternRef, VMGcHeader, VMGcRef,
+    mmap::AlignedLength,
 };
 use core::ops::{Deref, DerefMut, Range};
 use core::{

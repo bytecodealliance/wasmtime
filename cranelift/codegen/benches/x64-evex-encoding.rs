@@ -8,7 +8,7 @@ mod x86 {
         evex::{EvexInstruction, EvexVectorLength, Register},
         rex::{LegacyPrefixes, OpcodeMap},
     };
-    use criterion::{criterion_group, Criterion};
+    use criterion::{Criterion, criterion_group};
 
     // Define the benchmarks.
     fn x64_evex_encoding_benchmarks(c: &mut Criterion) {

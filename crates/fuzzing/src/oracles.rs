@@ -709,11 +709,11 @@ pub fn table_ops(
         // test case.
         const MAX_GCS: usize = 5;
 
-        let func_ty = FuncType::new(
-            store.engine(),
-            vec![],
-            vec![ValType::EXTERNREF, ValType::EXTERNREF, ValType::EXTERNREF],
-        );
+        let func_ty = FuncType::new(store.engine(), vec![], vec![
+            ValType::EXTERNREF,
+            ValType::EXTERNREF,
+            ValType::EXTERNREF,
+        ]);
         let func = Func::new(&mut store, func_ty, {
             let num_dropped = num_dropped.clone();
             let expected_drops = expected_drops.clone();
@@ -782,11 +782,11 @@ pub fn table_ops(
             })
             .unwrap();
 
-        let func_ty = FuncType::new(
-            store.engine(),
-            vec![],
-            vec![ValType::EXTERNREF, ValType::EXTERNREF, ValType::EXTERNREF],
-        );
+        let func_ty = FuncType::new(store.engine(), vec![], vec![
+            ValType::EXTERNREF,
+            ValType::EXTERNREF,
+            ValType::EXTERNREF,
+        ]);
         let func = Func::new(&mut store, func_ty, {
             let num_dropped = num_dropped.clone();
             let expected_drops = expected_drops.clone();
@@ -921,7 +921,7 @@ impl Drop for HelperThread {
 /// arbitrary types and values.
 pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbitrary::Result<()> {
     use crate::generators::component_types;
-    use component_fuzz_util::{TestCase, Type, EXPORT_FUNCTION, IMPORT_FUNCTION, MAX_TYPE_DEPTH};
+    use component_fuzz_util::{EXPORT_FUNCTION, IMPORT_FUNCTION, MAX_TYPE_DEPTH, TestCase, Type};
     use component_test_util::FuncExt;
     use wasmtime::component::{Component, Linker, Val};
 

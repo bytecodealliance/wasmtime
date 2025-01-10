@@ -2,7 +2,7 @@
 mod convert_just_errno {
     use anyhow::Result;
     use wiggle::GuestMemory;
-    use wiggle_test::{impl_errno, HostMemory, WasiCtx};
+    use wiggle_test::{HostMemory, WasiCtx, impl_errno};
 
     /// The `errors` argument to the wiggle gives us a hook to map a rich error
     /// type like this one (typical of wiggle use cases in wasi-common and beyond)
@@ -95,7 +95,7 @@ mod convert_multiple_error_types {
     pub use super::convert_just_errno::RichError;
     use anyhow::Result;
     use wiggle::GuestMemory;
-    use wiggle_test::{impl_errno, WasiCtx};
+    use wiggle_test::{WasiCtx, impl_errno};
 
     /// Test that we can map multiple types of errors.
     #[derive(Debug, thiserror::Error)]

@@ -8,9 +8,9 @@ use crate::ir::instructions::{CallInfo, InstructionData};
 use crate::ir::pcc::Fact;
 use crate::ir::user_stack_maps::{UserStackMapEntry, UserStackMapEntryVec};
 use crate::ir::{
-    types, Block, BlockCall, ConstantData, ConstantPool, DynamicType, ExtFuncData, FuncRef,
-    Immediate, Inst, JumpTables, RelSourceLoc, SigRef, Signature, Type, Value,
-    ValueLabelAssignments, ValueList, ValueListPool,
+    Block, BlockCall, ConstantData, ConstantPool, DynamicType, ExtFuncData, FuncRef, Immediate,
+    Inst, JumpTables, RelSourceLoc, SigRef, Signature, Type, Value, ValueLabelAssignments,
+    ValueList, ValueListPool, types,
 };
 use crate::packed_option::ReservedValue;
 use crate::write::write_operands;
@@ -690,11 +690,7 @@ fn encode_narrow_field(x: u32, bits: u8) -> u32 {
 /// The inverse of the above `encode_narrow_field`: unpacks 2^n-1 into
 /// 2^32-1.
 fn decode_narrow_field(x: u32, bits: u8) -> u32 {
-    if x == (1 << bits) - 1 {
-        0xffff_ffff
-    } else {
-        x
-    }
+    if x == (1 << bits) - 1 { 0xffff_ffff } else { x }
 }
 
 impl ValueDataPacked {
@@ -1742,8 +1738,8 @@ mod tests {
 
     #[test]
     fn aliases() {
-        use crate::ir::condcodes::IntCC;
         use crate::ir::InstBuilder;
+        use crate::ir::condcodes::IntCC;
 
         let mut func = Function::new();
         let block0 = func.dfg.make_block();

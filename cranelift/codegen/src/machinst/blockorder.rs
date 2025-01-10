@@ -326,8 +326,8 @@ mod test {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::flowgraph::ControlFlowGraph;
-    use crate::ir::types::*;
     use crate::ir::UserFuncName;
+    use crate::ir::types::*;
     use crate::ir::{AbiParam, InstBuilder, Signature};
     use crate::isa::CallConv;
 
@@ -400,19 +400,16 @@ mod test {
         //
         // (3 -> 5, and 3 -> 6 are critical edges and must be split)
         //
-        let order = build_test_func(
-            7,
-            &[
-                (0, 1),
-                (0, 2),
-                (1, 3),
-                (1, 4),
-                (2, 5),
-                (3, 5),
-                (3, 6),
-                (4, 6),
-            ],
-        );
+        let order = build_test_func(7, &[
+            (0, 1),
+            (0, 2),
+            (1, 3),
+            (1, 4),
+            (2, 5),
+            (3, 5),
+            (3, 6),
+            (4, 6),
+        ]);
 
         assert_eq!(order.lowered_order.len(), 9);
         println!("ordered = {:?}", order.lowered_order);

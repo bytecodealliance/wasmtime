@@ -7,8 +7,8 @@ use crate::isa::aarch64::settings as aarch64_settings;
 use crate::isa::unwind::systemv;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment, TargetIsa};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
-    TextSectionBuilder, VCode,
+    CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
+    TextSectionBuilder, VCode, compile,
 };
 use crate::result::CodegenResult;
 use crate::settings as shared_settings;
@@ -161,7 +161,9 @@ impl TargetIsa for AArch64Backend {
             && self.isa_flags.sign_return_address_with_bkey()
             && !is_apple_os
         {
-            unimplemented!("Specifying that the B key is used with pointer authentication instructions in the CIE is not implemented.");
+            unimplemented!(
+                "Specifying that the B key is used with pointer authentication instructions in the CIE is not implemented."
+            );
         }
 
         Some(inst::unwind::systemv::create_cie())

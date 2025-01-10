@@ -1,10 +1,10 @@
-use anyhow::{anyhow, Result};
-use test_programs_artifacts::{foreach_config, CONFIG_GET_COMPONENT};
+use anyhow::{Result, anyhow};
+use test_programs_artifacts::{CONFIG_GET_COMPONENT, foreach_config};
 use wasmtime::{
-    component::{Component, Linker, ResourceTable},
     Store,
+    component::{Component, Linker, ResourceTable},
 };
-use wasmtime_wasi::{add_to_linker_async, bindings::Command, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView, add_to_linker_async, bindings::Command};
 use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
 
 struct Ctx {
@@ -55,13 +55,10 @@ foreach_config!(assert_test_exists);
 
 #[tokio::test(flavor = "multi_thread")]
 async fn config_get() -> Result<()> {
-    run_wasi(
-        CONFIG_GET_COMPONENT,
-        Ctx {
-            table: ResourceTable::new(),
-            wasi_ctx: WasiCtxBuilder::new().build(),
-            wasi_config_vars: WasiConfigVariables::from_iter(vec![("hello", "world")]),
-        },
-    )
+    run_wasi(CONFIG_GET_COMPONENT, Ctx {
+        table: ResourceTable::new(),
+        wasi_ctx: WasiCtxBuilder::new().build(),
+        wasi_config_vars: WasiConfigVariables::from_iter(vec![("hello", "world")]),
+    })
     .await
 }

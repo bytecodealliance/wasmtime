@@ -114,24 +114,30 @@ fn cross_store() -> anyhow::Result<()> {
     let s1_f = s1_inst.get_func(&mut store1, "f").unwrap();
     let s2_f = s2_inst.get_func(&mut store2, "f").unwrap();
 
-    assert!(s1_f
-        .call(&mut store1, &[Val::FuncRef(None)], &mut [])
-        .is_ok());
-    assert!(s2_f
-        .call(&mut store2, &[Val::FuncRef(None)], &mut [])
-        .is_ok());
-    assert!(s1_f
-        .call(&mut store1, &[Some(s1_f).into()], &mut [])
-        .is_ok());
-    assert!(s1_f
-        .call(&mut store1, &[Some(s2_f).into()], &mut [])
-        .is_err());
-    assert!(s2_f
-        .call(&mut store2, &[Some(s1_f).into()], &mut [])
-        .is_err());
-    assert!(s2_f
-        .call(&mut store2, &[Some(s2_f).into()], &mut [])
-        .is_ok());
+    assert!(
+        s1_f.call(&mut store1, &[Val::FuncRef(None)], &mut [])
+            .is_ok()
+    );
+    assert!(
+        s2_f.call(&mut store2, &[Val::FuncRef(None)], &mut [])
+            .is_ok()
+    );
+    assert!(
+        s1_f.call(&mut store1, &[Some(s1_f).into()], &mut [])
+            .is_ok()
+    );
+    assert!(
+        s1_f.call(&mut store1, &[Some(s2_f).into()], &mut [])
+            .is_err()
+    );
+    assert!(
+        s2_f.call(&mut store2, &[Some(s1_f).into()], &mut [])
+            .is_err()
+    );
+    assert!(
+        s2_f.call(&mut store2, &[Some(s2_f).into()], &mut [])
+            .is_ok()
+    );
 
     let s1_f_t = s1_f.typed::<Option<Func>, ()>(&store1)?;
     let s2_f_t = s2_f.typed::<Option<Func>, ()>(&store2)?;
@@ -165,10 +171,11 @@ fn get_set_externref_globals_via_api() -> anyhow::Result<()> {
     let hello = ExternRef::new(&mut store, "hello".to_string())?;
     global.set(&mut store, hello.into())?;
     let r = global.get(&mut store).unwrap_externref().cloned().unwrap();
-    assert!(r
-        .data(&store)?
-        .expect("should have host data")
-        .is::<String>());
+    assert!(
+        r.data(&store)?
+            .expect("should have host data")
+            .is::<String>()
+    );
     assert_eq!(
         r.data(&store)?
             .expect("should have host data")
@@ -440,13 +447,9 @@ fn dummy_funcs_and_subtypes(
 ) -> (FuncType, Func, FuncType, Func, FuncType, Func) {
     let engine = store.engine().clone();
 
-    let c_ty = FuncType::with_finality_and_supertype(
-        &engine,
-        Finality::NonFinal,
-        None,
-        [],
-        [ValType::FUNCREF],
-    )
+    let c_ty = FuncType::with_finality_and_supertype(&engine, Finality::NonFinal, None, [], [
+        ValType::FUNCREF,
+    ])
     .unwrap();
     let c = Func::new(
         &mut *store,
@@ -454,31 +457,25 @@ fn dummy_funcs_and_subtypes(
         |_caller, _args, _results| unreachable!(),
     );
 
-    let b_ty = FuncType::with_finality_and_supertype(
-        &engine,
-        Finality::NonFinal,
-        Some(&c_ty),
-        [],
-        [ValType::Ref(RefType::new(
-            true,
-            HeapType::ConcreteFunc(FuncType::new(&engine, None, None)),
-        ))],
-    )
-    .unwrap();
+    let b_ty =
+        FuncType::with_finality_and_supertype(&engine, Finality::NonFinal, Some(&c_ty), [], [
+            ValType::Ref(RefType::new(
+                true,
+                HeapType::ConcreteFunc(FuncType::new(&engine, None, None)),
+            )),
+        ])
+        .unwrap();
     let b = Func::new(
         &mut *store,
         b_ty.clone(),
         |_caller, _args, _results| unreachable!(),
     );
 
-    let a_ty = FuncType::with_finality_and_supertype(
-        &engine,
-        Finality::NonFinal,
-        Some(&b_ty),
-        [],
-        [ValType::NULLFUNCREF],
-    )
-    .unwrap();
+    let a_ty =
+        FuncType::with_finality_and_supertype(&engine, Finality::NonFinal, Some(&b_ty), [], [
+            ValType::NULLFUNCREF,
+        ])
+        .unwrap();
     let a = Func::new(
         &mut *store,
         a_ty.clone(),
@@ -787,10 +784,12 @@ fn table_copy_func_subtyping() {
 
             if expected {
                 for i in 2..7 {
-                    assert!(dest_table
-                        .get(&mut store, i)
-                        .expect("in bounds")
-                        .is_non_null());
+                    assert!(
+                        dest_table
+                            .get(&mut store, i)
+                            .expect("in bounds")
+                            .is_non_null()
+                    );
                 }
             }
         }

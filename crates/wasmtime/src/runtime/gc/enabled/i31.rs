@@ -6,8 +6,8 @@
 
 use crate::runtime::vm::{VMGcRef, ValRaw};
 use crate::{
-    store::{AutoAssertNoGc, StoreOpaque},
     HeapType, RefType, Result, ValType, WasmTy,
+    store::{AutoAssertNoGc, StoreOpaque},
 };
 use core::fmt;
 use core::mem::MaybeUninit;

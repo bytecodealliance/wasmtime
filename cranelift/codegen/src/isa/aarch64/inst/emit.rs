@@ -1372,13 +1372,15 @@ impl MachInstEmit for Inst {
             }
             &Inst::MovFromPReg { rd, rm } => {
                 let rm: Reg = rm.into();
-                debug_assert!([
-                    regs::fp_reg(),
-                    regs::stack_reg(),
-                    regs::link_reg(),
-                    regs::pinned_reg()
-                ]
-                .contains(&rm));
+                debug_assert!(
+                    [
+                        regs::fp_reg(),
+                        regs::stack_reg(),
+                        regs::link_reg(),
+                        regs::pinned_reg()
+                    ]
+                    .contains(&rm)
+                );
                 assert!(rm.class() == RegClass::Int);
                 assert!(rd.to_reg().class() == rm.class());
                 let size = OperandSize::Size64;
@@ -1386,13 +1388,15 @@ impl MachInstEmit for Inst {
             }
             &Inst::MovToPReg { rd, rm } => {
                 let rd: Writable<Reg> = Writable::from_reg(rd.into());
-                debug_assert!([
-                    regs::fp_reg(),
-                    regs::stack_reg(),
-                    regs::link_reg(),
-                    regs::pinned_reg()
-                ]
-                .contains(&rd.to_reg()));
+                debug_assert!(
+                    [
+                        regs::fp_reg(),
+                        regs::stack_reg(),
+                        regs::link_reg(),
+                        regs::pinned_reg()
+                    ]
+                    .contains(&rd.to_reg())
+                );
                 assert!(rd.to_reg().class() == RegClass::Int);
                 assert!(rm.class() == rd.to_reg().class());
                 let size = OperandSize::Size64;

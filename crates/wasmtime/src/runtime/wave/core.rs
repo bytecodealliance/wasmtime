@@ -65,7 +65,7 @@ impl WasmValue for crate::Val {
             _ => {
                 return Err(WasmValueError::Other(
                     "tuples only used for v128 (v64x2)".to_string(),
-                ))
+                ));
             }
         }
         let [l_val, h_val]: [Self; 2] = vals

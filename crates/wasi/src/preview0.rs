@@ -4,9 +4,9 @@
 //! You probably want to use [`preview1`](crate::preview1) instead.
 
 use crate::preview0::types::Error;
+use crate::preview1::WasiP1Ctx;
 use crate::preview1::types as snapshot1_types;
 use crate::preview1::wasi_snapshot_preview1::WasiSnapshotPreview1 as Snapshot1;
-use crate::preview1::WasiP1Ctx;
 use wiggle::{GuestError, GuestMemory, GuestPtr};
 
 pub fn add_to_linker_async<T: Send>(
@@ -521,23 +521,20 @@ impl<T: Snapshot1 + Send> wasi_unstable::WasiUnstable for T {
             let slot = slot?;
             let sub = memory.read(slot)?;
             old_subs.push(sub.clone());
-            memory.write(
-                slot.cast(),
-                snapshot1_types::Subscription {
-                    userdata: sub.userdata,
-                    u: match sub.u {
-                        types::SubscriptionU::Clock(c) => {
-                            snapshot1_types::SubscriptionU::Clock(c.into())
-                        }
-                        types::SubscriptionU::FdRead(c) => {
-                            snapshot1_types::SubscriptionU::FdRead(c.into())
-                        }
-                        types::SubscriptionU::FdWrite(c) => {
-                            snapshot1_types::SubscriptionU::FdWrite(c.into())
-                        }
-                    },
+            memory.write(slot.cast(), snapshot1_types::Subscription {
+                userdata: sub.userdata,
+                u: match sub.u {
+                    types::SubscriptionU::Clock(c) => {
+                        snapshot1_types::SubscriptionU::Clock(c.into())
+                    }
+                    types::SubscriptionU::FdRead(c) => {
+                        snapshot1_types::SubscriptionU::FdRead(c.into())
+                    }
+                    types::SubscriptionU::FdWrite(c) => {
+                        snapshot1_types::SubscriptionU::FdWrite(c.into())
+                    }
                 },
-            )?;
+            })?;
         }
         let ret = Snapshot1::poll_oneoff(self, memory, subs.cast(), events.cast(), nsubscriptions)
             .await?;

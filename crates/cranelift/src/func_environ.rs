@@ -3,7 +3,7 @@ use crate::translate::{
     FuncTranslationState, GlobalVariable, Heap, HeapData, StructFieldsVec, TableData, TableSize,
     TargetEnvironment,
 };
-use crate::{gc, BuiltinFunctionSignatures, TRAP_INTERNAL_ASSERT};
+use crate::{BuiltinFunctionSignatures, TRAP_INTERNAL_ASSERT, gc};
 use cranelift_codegen::cursor::FuncCursor;
 use cranelift_codegen::ir::condcodes::{FloatCC, IntCC};
 use cranelift_codegen::ir::immediates::{Imm64, Offset32};
@@ -1086,14 +1086,11 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let ty = builder.func.dfg.value_type(rhs);
         let minus_one = builder.ins().iconst(ty, -1);
         let rhs_is_minus_one = builder.ins().icmp(IntCC::Equal, rhs, minus_one);
-        let int_min = builder.ins().iconst(
-            ty,
-            match ty {
-                I32 => i64::from(i32::MIN),
-                I64 => i64::MIN,
-                _ => unreachable!(),
-            },
-        );
+        let int_min = builder.ins().iconst(ty, match ty {
+            I32 => i64::from(i32::MIN),
+            I64 => i64::MIN,
+            _ => unreachable!(),
+        });
         let lhs_is_int_min = builder.ins().icmp(IntCC::Equal, lhs, int_min);
         let is_integer_overflow = builder.ins().band(rhs_is_minus_one, lhs_is_int_min);
         self.conditionally_trap(builder, is_integer_overflow, ir::TrapCode::INTEGER_OVERFLOW);
@@ -2040,10 +2037,13 @@ impl FuncEnvironment<'_> {
             .ins()
             .iconst(I32, i64::from(interned_type_index.as_u32()));
         let data_index = builder.ins().iconst(I32, i64::from(data_index.as_u32()));
-        let call_inst = builder.ins().call(
-            libcall,
-            &[vmctx, interned_type_index, data_index, data_offset, len],
-        );
+        let call_inst = builder.ins().call(libcall, &[
+            vmctx,
+            interned_type_index,
+            data_index,
+            data_offset,
+            len,
+        ]);
         let result = builder.func.dfg.first_result(call_inst);
         Ok(builder.ins().ireduce(ir::types::I32, result))
     }
@@ -2063,10 +2063,13 @@ impl FuncEnvironment<'_> {
             .ins()
             .iconst(I32, i64::from(interned_type_index.as_u32()));
         let elem_index = builder.ins().iconst(I32, i64::from(elem_index.as_u32()));
-        let call_inst = builder.ins().call(
-            libcall,
-            &[vmctx, interned_type_index, elem_index, elem_offset, len],
-        );
+        let call_inst = builder.ins().call(libcall, &[
+            vmctx,
+            interned_type_index,
+            elem_index,
+            elem_offset,
+            len,
+        ]);
         let result = builder.func.dfg.first_result(call_inst);
         Ok(builder.ins().ireduce(ir::types::I32, result))
     }
@@ -2084,10 +2087,9 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<()> {
         let libcall = gc::builtins::array_copy(self, builder.func)?;
         let vmctx = self.vmctx_val(&mut builder.cursor());
-        builder.ins().call(
-            libcall,
-            &[vmctx, dst_array, dst_index, src_array, src_index, len],
-        );
+        builder.ins().call(libcall, &[
+            vmctx, dst_array, dst_index, src_array, src_index, len,
+        ]);
         Ok(())
     }
 
@@ -2120,18 +2122,15 @@ impl FuncEnvironment<'_> {
             .ins()
             .iconst(I32, i64::from(interned_type_index.as_u32()));
         let data_index = builder.ins().iconst(I32, i64::from(data_index.as_u32()));
-        builder.ins().call(
-            libcall,
-            &[
-                vmctx,
-                interned_type_index,
-                array,
-                dst_index,
-                data_index,
-                data_offset,
-                len,
-            ],
-        );
+        builder.ins().call(libcall, &[
+            vmctx,
+            interned_type_index,
+            array,
+            dst_index,
+            data_index,
+            data_offset,
+            len,
+        ]);
         Ok(())
     }
 
@@ -2152,18 +2151,15 @@ impl FuncEnvironment<'_> {
             .ins()
             .iconst(I32, i64::from(interned_type_index.as_u32()));
         let elem_index = builder.ins().iconst(I32, i64::from(elem_index.as_u32()));
-        builder.ins().call(
-            libcall,
-            &[
-                vmctx,
-                interned_type_index,
-                array,
-                dst_index,
-                elem_index,
-                elem_offset,
-                len,
-            ],
-        );
+        builder.ins().call(libcall, &[
+            vmctx,
+            interned_type_index,
+            array,
+            dst_index,
+            elem_index,
+            elem_offset,
+            len,
+        ]);
         Ok(())
     }
 
@@ -2862,10 +2858,14 @@ impl FuncEnvironment<'_> {
 
         let dst = self.cast_index_to_i64(&mut pos, dst, self.memory(memory_index).idx_type);
 
-        pos.ins().call(
-            memory_init,
-            &[vmctx, memory_index_arg, seg_index_arg, dst, src, len],
-        );
+        pos.ins().call(memory_init, &[
+            vmctx,
+            memory_index_arg,
+            seg_index_arg,
+            dst,
+            src,
+            len,
+        ]);
 
         Ok(())
     }
@@ -2914,17 +2914,14 @@ impl FuncEnvironment<'_> {
         let dst_table_index_arg = pos.ins().iconst(I32, dst_table_index_arg as i64);
         let src_table_index_arg = pos.ins().iconst(I32, src_table_index_arg as i64);
         let vmctx = self.vmctx_val(&mut pos);
-        pos.ins().call(
-            table_copy,
-            &[
-                vmctx,
-                dst_table_index_arg,
-                src_table_index_arg,
-                dst,
-                src,
-                len,
-            ],
-        );
+        pos.ins().call(table_copy, &[
+            vmctx,
+            dst_table_index_arg,
+            src_table_index_arg,
+            dst,
+            src,
+            len,
+        ]);
 
         Ok(())
     }
@@ -2948,10 +2945,14 @@ impl FuncEnvironment<'_> {
         let src = pos.ins().uextend(I64, src);
         let len = pos.ins().uextend(I64, len);
 
-        pos.ins().call(
-            table_init,
-            &[vmctx, table_index_arg, seg_index_arg, dst, src, len],
-        );
+        pos.ins().call(table_init, &[
+            vmctx,
+            table_index_arg,
+            seg_index_arg,
+            dst,
+            src,
+            len,
+        ]);
 
         Ok(())
     }
@@ -2985,10 +2986,13 @@ impl FuncEnvironment<'_> {
 
             let vmctx = self.vmctx_val(&mut pos);
 
-            let call_inst = pos.ins().call(
-                wait_func,
-                &[vmctx, memory_index_arg, addr, expected, timeout],
-            );
+            let call_inst = pos.ins().call(wait_func, &[
+                vmctx,
+                memory_index_arg,
+                addr,
+                expected,
+                timeout,
+            ]);
             let ret = pos.func.dfg.inst_results(call_inst)[0];
             Ok(builder.ins().ireduce(ir::types::I32, ret))
         }

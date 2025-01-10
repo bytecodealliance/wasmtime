@@ -195,11 +195,10 @@ fn test_trap_through_host() -> Result<()> {
         },
     );
 
-    let instance = Instance::new(
-        &mut store,
-        &module,
-        &[host_func_a.into(), host_func_b.into()],
-    )?;
+    let instance = Instance::new(&mut store, &module, &[
+        host_func_a.into(),
+        host_func_b.into(),
+    ])?;
     let a = instance.get_typed_func::<(), ()>(&mut store, "a")?;
     let err = a.call(&mut store, ()).unwrap_err();
     let trace = err.downcast_ref::<WasmBacktrace>().unwrap().frames();
@@ -569,9 +568,10 @@ fn call_signature_mismatch() -> Result<()> {
         .unwrap()
         .downcast::<Trap>()
         .unwrap();
-    assert!(err
-        .to_string()
-        .contains("wasm trap: indirect call type mismatch"));
+    assert!(
+        err.to_string()
+            .contains("wasm trap: indirect call type mismatch")
+    );
     Ok(())
 }
 
@@ -851,17 +851,21 @@ fn multithreaded_traps() -> Result<()> {
     )?;
     let instance = Instance::new(&mut store, &module, &[])?;
 
-    assert!(instance
-        .get_typed_func::<(), ()>(&mut store, "run")?
-        .call(&mut store, ())
-        .is_err());
+    assert!(
+        instance
+            .get_typed_func::<(), ()>(&mut store, "run")?
+            .call(&mut store, ())
+            .is_err()
+    );
 
     let handle = std::thread::spawn(move || {
-        assert!(instance
-            .get_typed_func::<(), ()>(&mut store, "run")
-            .unwrap()
-            .call(&mut store, ())
-            .is_err());
+        assert!(
+            instance
+                .get_typed_func::<(), ()>(&mut store, "run")
+                .unwrap()
+                .call(&mut store, ())
+                .is_err()
+        );
     });
 
     handle.join().expect("couldn't join thread");
@@ -954,13 +958,10 @@ fn catch_trap_calling_across_stores() -> Result<()> {
         },
     )?;
 
-    let mut store = Store::new(
-        &engine,
-        ParentCtx {
-            child_store,
-            child_instance,
-        },
-    );
+    let mut store = Store::new(&engine, ParentCtx {
+        child_store,
+        child_instance,
+    });
 
     let parent_module = Module::new(
         store.engine(),
@@ -1097,13 +1098,10 @@ async fn sync_then_async_trap() -> Result<()> {
         async_store: Store<()>,
     }
 
-    let mut sync_store = Store::new(
-        &Engine::default(),
-        SyncCtx {
-            async_instance,
-            async_store,
-        },
-    );
+    let mut sync_store = Store::new(&Engine::default(), SyncCtx {
+        async_instance,
+        async_store,
+    });
 
     let sync_module = Module::new(sync_store.engine(), wat)?;
 

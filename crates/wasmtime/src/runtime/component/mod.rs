@@ -134,13 +134,13 @@ pub use wasm_wave;
 #[doc(hidden)]
 pub mod __internal {
     pub use super::func::{
-        bad_type_info, format_flags, lower_payload, typecheck_enum, typecheck_flags,
-        typecheck_record, typecheck_variant, ComponentVariant, LiftContext, LowerContext, Options,
+        ComponentVariant, LiftContext, LowerContext, Options, bad_type_info, format_flags,
+        lower_payload, typecheck_enum, typecheck_flags, typecheck_record, typecheck_variant,
     };
     pub use super::matching::InstanceType;
+    pub use crate::MaybeUninitExt;
     pub use crate::map_maybe_uninit;
     pub use crate::store::StoreOpaque;
-    pub use crate::MaybeUninitExt;
     pub use alloc::boxed::Box;
     pub use alloc::string::String;
     pub use alloc::vec::Vec;

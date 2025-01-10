@@ -27,7 +27,7 @@ use core::str::FromStr;
 use object::endian::Endianness;
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};
-use object::{read::elf::ElfFile64, FileFlags, Object as _, ObjectSection, SectionKind};
+use object::{FileFlags, Object as _, ObjectSection, SectionKind, read::elf::ElfFile64};
 use serde_derive::{Deserialize, Serialize};
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
@@ -644,7 +644,7 @@ mod test {
 
     #[test]
     #[cfg(target_arch = "x86_64")] // test on a platform that is known to use
-                                   // Cranelift
+    // Cranelift
     fn test_os_mismatch() -> Result<()> {
         let engine = Engine::default();
         let mut metadata = Metadata::new(&engine);
@@ -725,7 +725,10 @@ Caused by:
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(e.to_string(), "Module was compiled with a memory guard size of '0' but '33554432' is expected for the host"),
+            Err(e) => assert_eq!(
+                e.to_string(),
+                "Module was compiled with a memory guard size of '0' but '33554432' is expected for the host"
+            ),
         }
 
         Ok(())
@@ -768,7 +771,7 @@ Caused by:
 
     #[test]
     #[cfg(target_arch = "x86_64")] // test on a platform that is known to
-                                   // implement threads
+    // implement threads
     fn test_feature_mismatch() -> Result<()> {
         let mut config = Config::new();
         config.wasm_threads(true);
@@ -779,7 +782,10 @@ Caused by:
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(e.to_string(), "Module was compiled without WebAssembly threads support but it is enabled for the host"),
+            Err(e) => assert_eq!(
+                e.to_string(),
+                "Module was compiled without WebAssembly threads support but it is enabled for the host"
+            ),
         }
 
         let mut config = Config::new();
@@ -791,7 +797,10 @@ Caused by:
 
         match metadata.check_compatible(&engine) {
             Ok(_) => unreachable!(),
-            Err(e) => assert_eq!(e.to_string(), "Module was compiled with WebAssembly threads support but it is not enabled for the host"),
+            Err(e) => assert_eq!(
+                e.to_string(),
+                "Module was compiled with WebAssembly threads support but it is not enabled for the host"
+            ),
         }
 
         Ok(())

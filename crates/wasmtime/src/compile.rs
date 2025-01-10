@@ -22,14 +22,14 @@
 //!   functions. It is up to the caller to serialize the relevant parts of the
 //!   `Artifacts` into the ELF file.
 
+use crate::Engine;
 use crate::hash_map::HashMap;
 use crate::hash_set::HashSet;
 use crate::prelude::*;
-use crate::Engine;
 use std::{
     any::Any,
     borrow::Cow,
-    collections::{btree_map, BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, btree_map},
     mem,
 };
 
@@ -131,10 +131,10 @@ pub(crate) fn build_component_artifacts<T: FinishedObject>(
     _dwarf_package: Option<&[u8]>,
     obj_state: &T::State,
 ) -> Result<(T, Option<wasmtime_environ::component::ComponentArtifacts>)> {
+    use wasmtime_environ::ScopeVec;
     use wasmtime_environ::component::{
         CompiledComponentInfo, ComponentArtifacts, ComponentTypesBuilder,
     };
-    use wasmtime_environ::ScopeVec;
 
     let tunables = engine.tunables();
     let compiler = engine.compiler();

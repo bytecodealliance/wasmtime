@@ -14,16 +14,14 @@ fn build_and_generate_tests() {
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
 
     let reactor_adapter = build_adapter(&out_dir, "reactor", &[]);
-    let command_adapter = build_adapter(
-        &out_dir,
-        "command",
-        &["--no-default-features", "--features=command"],
-    );
-    let proxy_adapter = build_adapter(
-        &out_dir,
-        "proxy",
-        &["--no-default-features", "--features=proxy"],
-    );
+    let command_adapter = build_adapter(&out_dir, "command", &[
+        "--no-default-features",
+        "--features=command",
+    ]);
+    let proxy_adapter = build_adapter(&out_dir, "proxy", &[
+        "--no-default-features",
+        "--features=proxy",
+    ]);
 
     println!("cargo:rerun-if-changed=../src");
 

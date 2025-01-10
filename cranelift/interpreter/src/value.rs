@@ -6,11 +6,11 @@
 use core::fmt::{self, Display, Formatter};
 use core::ops::Neg;
 use cranelift_codegen::data_value::{DataValue, DataValueCastFailure};
-use cranelift_codegen::ir::immediates::{Ieee128, Ieee16, Ieee32, Ieee64};
-use cranelift_codegen::ir::{types, Type};
+use cranelift_codegen::ir::immediates::{Ieee16, Ieee32, Ieee64, Ieee128};
+use cranelift_codegen::ir::{Type, types};
 use thiserror::Error;
 
-use crate::step::{extractlanes, SimdVec};
+use crate::step::{SimdVec, extractlanes};
 
 pub type ValueResult<T> = Result<T, ValueError>;
 
@@ -321,11 +321,7 @@ impl DataValueExt for DataValue {
         macro_rules! make_bool {
             ($ty:ident) => {
                 Ok(DataValue::$ty(if b {
-                    if vec_elem {
-                        -1
-                    } else {
-                        1
-                    }
+                    if vec_elem { -1 } else { 1 }
                 } else {
                     0
                 }))
@@ -504,37 +500,21 @@ impl DataValueExt for DataValue {
     fn umax(self, other: Self) -> ValueResult<Self> {
         let lhs = self.clone().into_int_unsigned()?;
         let rhs = other.clone().into_int_unsigned()?;
-        if lhs > rhs {
-            Ok(self)
-        } else {
-            Ok(other)
-        }
+        if lhs > rhs { Ok(self) } else { Ok(other) }
     }
 
     fn smax(self, other: Self) -> ValueResult<Self> {
-        if self > other {
-            Ok(self)
-        } else {
-            Ok(other)
-        }
+        if self > other { Ok(self) } else { Ok(other) }
     }
 
     fn umin(self, other: Self) -> ValueResult<Self> {
         let lhs = self.clone().into_int_unsigned()?;
         let rhs = other.clone().into_int_unsigned()?;
-        if lhs < rhs {
-            Ok(self)
-        } else {
-            Ok(other)
-        }
+        if lhs < rhs { Ok(self) } else { Ok(other) }
     }
 
     fn smin(self, other: Self) -> ValueResult<Self> {
-        if self < other {
-            Ok(self)
-        } else {
-            Ok(other)
-        }
+        if self < other { Ok(self) } else { Ok(other) }
     }
 
     fn uno(&self, other: &Self) -> ValueResult<bool> {

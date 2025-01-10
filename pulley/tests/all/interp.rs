@@ -836,15 +836,12 @@ fn trap() {
     let dst = XReg::new(0).unwrap();
 
     unsafe {
-        run(
-            &mut vm,
-            &[
-                Op::Xconst16(Xconst16 { dst, imm: 1 }),
-                Op::ExtendedOp(ExtendedOp::Trap(Trap {})),
-                Op::Xconst16(Xconst16 { dst, imm: 2 }),
-                Op::Ret(Ret {}),
-            ],
-        )
+        run(&mut vm, &[
+            Op::Xconst16(Xconst16 { dst, imm: 1 }),
+            Op::ExtendedOp(ExtendedOp::Trap(Trap {})),
+            Op::Xconst16(Xconst16 { dst, imm: 2 }),
+            Op::Ret(Ret {}),
+        ])
         .unwrap_err();
     }
 

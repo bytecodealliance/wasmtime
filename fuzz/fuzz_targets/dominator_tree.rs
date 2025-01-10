@@ -11,7 +11,7 @@ use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::dominator_tree::{DominatorTree, SimpleDominatorTree};
 use cranelift_codegen::flowgraph::ControlFlowGraph;
 use cranelift_codegen::ir::{
-    types::I32, Block, BlockCall, Function, InstBuilder, JumpTableData, Value,
+    Block, BlockCall, Function, InstBuilder, JumpTableData, Value, types::I32,
 };
 
 const MAX_BLOCKS: u16 = 1 << 12;

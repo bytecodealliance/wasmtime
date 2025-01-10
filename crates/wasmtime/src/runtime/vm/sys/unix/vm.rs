@@ -1,6 +1,6 @@
 use crate::runtime::vm::sys::DecommitBehavior;
 use rustix::fd::AsRawFd;
-use rustix::mm::{mmap_anonymous, mprotect, MapFlags, MprotectFlags, ProtFlags};
+use rustix::mm::{MapFlags, MprotectFlags, ProtFlags, mmap_anonymous, mprotect};
 use std::fs::File;
 use std::io;
 #[cfg(feature = "std")]
@@ -115,7 +115,7 @@ impl MemoryImageSource {
             // gracefully handle that and fall back to skipping the memfd
             // optimization.
             Err(memfd::Error::Create(err)) if err.kind() == ErrorKind::Unsupported => {
-                return Ok(None)
+                return Ok(None);
             }
             Err(e) => return Err(e.into()),
         };

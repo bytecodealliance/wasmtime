@@ -24,8 +24,8 @@
 use crate::prelude::*;
 use crate::runtime::store::StoreOpaque;
 use crate::runtime::vm::{
-    traphandlers::{tls, CallThreadState},
     Unwind, VMRuntimeLimits,
+    traphandlers::{CallThreadState, tls},
 };
 use core::ops::ControlFlow;
 

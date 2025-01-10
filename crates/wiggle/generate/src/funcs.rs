@@ -53,19 +53,16 @@ fn _define_func(
 
     let mut body = TokenStream::new();
     let mut bounds = vec![names::trait_name(&module.name)];
-    func.call_interface(
-        &module.name,
-        &mut Rust {
-            src: &mut body,
-            params: &param_names,
-            block_storage: Vec::new(),
-            blocks: Vec::new(),
-            module,
-            funcname: func.name.as_str(),
-            settings,
-            bounds: &mut bounds,
-        },
-    );
+    func.call_interface(&module.name, &mut Rust {
+        src: &mut body,
+        params: &param_names,
+        block_storage: Vec::new(),
+        blocks: Vec::new(),
+        module,
+        funcname: func.name.as_str(),
+        settings,
+        bounds: &mut bounds,
+    });
 
     let mod_name = &module.name.as_str();
     let func_name = &func.name.as_str();

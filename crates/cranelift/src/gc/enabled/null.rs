@@ -11,8 +11,8 @@ use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::VMSharedTypeIndex;
 use wasmtime_environ::{
-    null::NullTypeLayouts, GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TypeIndex, VMGcKind,
-    WasmRefType, WasmResult,
+    GcTypeLayouts, ModuleInternedTypeIndex, PtrSize, TypeIndex, VMGcKind, WasmRefType, WasmResult,
+    null::NullTypeLayouts,
 };
 
 #[derive(Default)]

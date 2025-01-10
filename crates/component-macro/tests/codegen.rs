@@ -524,7 +524,7 @@ mod trappable_imports {
 }
 
 mod custom_derives {
-    use std::collections::{hash_map::RandomState, HashSet};
+    use std::collections::{HashSet, hash_map::RandomState};
 
     wasmtime::component::bindgen!({
         inline: "

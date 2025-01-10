@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 
 macro_rules! genexpand {
     ($id:ident $name:tt $path:tt) => {
@@ -53,13 +53,11 @@ fn process_expanded(path: &str, suffix: &str, src: &str) -> Result<()> {
                         .header("expected", "actual")
                 )
             }
-            Err(err) => {
-                return Err(err).with_context(|| {
-                    format!(
+            Err(err) => return Err(err).with_context(|| {
+                format!(
                     "failed to read {expanded_path:?}; re-run with BINDGEN_TEST_BLESS=1 to create"
                 )
-                })
-            }
+            }),
         }
     }
     Ok(())

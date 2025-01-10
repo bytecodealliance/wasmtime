@@ -3,15 +3,15 @@
 pub use emit_state::EmitState;
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
-use crate::ir::{types, ExternalName, LibCall, TrapCode, Type};
+use crate::ir::{ExternalName, LibCall, TrapCode, Type, types};
 use crate::isa::x64::abi::X64ABIMachineSpec;
 use crate::isa::x64::inst::regs::{pretty_print_reg, show_ireg_sized};
 use crate::isa::x64::settings as x64_settings;
 use crate::isa::{CallConv, FunctionAlignment};
+use crate::{CodegenError, CodegenResult, settings};
 use crate::{machinst::*, trace};
-use crate::{settings, CodegenError, CodegenResult};
 use alloc::boxed::Box;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::fmt::{self, Write};
 use std::string::{String, ToString};
 
@@ -1728,7 +1728,9 @@ impl PrettyPrint for Inst {
                 let load_context_ptr = pretty_print_reg(**load_context_ptr, 8);
                 let in_payload0 = pretty_print_reg(**in_payload0, 8);
                 let out_payload0 = pretty_print_reg(*out_payload0.to_reg(), 8);
-                format!("{out_payload0} = stack_switch_basic {store_context_ptr}, {load_context_ptr}, {in_payload0}")
+                format!(
+                    "{out_payload0} = stack_switch_basic {store_context_ptr}, {load_context_ptr}, {in_payload0}"
+                )
             }
 
             Inst::JmpKnown { dst } => {
@@ -1895,7 +1897,9 @@ impl PrettyPrint for Inst {
                 let dst_old_low = pretty_print_reg(dst_old_low.to_reg(), 8);
                 let dst_old_high = pretty_print_reg(dst_old_high.to_reg(), 8);
                 let mem = mem.pretty_print(16);
-                format!("atomically {{ {dst_old_high}:{dst_old_low} = {mem}; {temp_high}:{temp_low} = {dst_old_high}:{dst_old_low} {op:?} {operand_high}:{operand_low}; {mem} = {temp_high}:{temp_low} }}")
+                format!(
+                    "atomically {{ {dst_old_high}:{dst_old_low} = {mem}; {temp_high}:{temp_low} = {dst_old_high}:{dst_old_low} {op:?} {operand_high}:{operand_low}; {mem} = {temp_high}:{temp_low} }}"
+                )
             }
 
             Inst::Atomic128XchgSeq {
@@ -1910,7 +1914,9 @@ impl PrettyPrint for Inst {
                 let dst_old_low = pretty_print_reg(dst_old_low.to_reg(), 8);
                 let dst_old_high = pretty_print_reg(dst_old_high.to_reg(), 8);
                 let mem = mem.pretty_print(16);
-                format!("atomically {{ {dst_old_high}:{dst_old_low} = {mem}; {mem} = {operand_high}:{operand_low} }}")
+                format!(
+                    "atomically {{ {dst_old_high}:{dst_old_low} = {mem}; {mem} = {operand_high}:{operand_low} }}"
+                )
             }
 
             Inst::Fence { kind } => match kind {

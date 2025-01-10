@@ -3,13 +3,13 @@
 
 use crate::prelude::*;
 use crate::{
-    obj, CompiledFunctionInfo, CompiledModuleInfo, DebugInfoData, DefinedFuncIndex, FunctionLoc,
+    CompiledFunctionInfo, CompiledModuleInfo, DebugInfoData, DefinedFuncIndex, FunctionLoc,
     FunctionName, MemoryInitialization, Metadata, ModuleInternedTypeIndex, ModuleTranslation,
-    PrimaryMap, Tunables,
+    PrimaryMap, Tunables, obj,
 };
-use anyhow::{bail, Result};
-use object::write::{Object, SectionId, StandardSegment, WritableBuffer};
+use anyhow::{Result, bail};
 use object::SectionKind;
+use object::write::{Object, SectionId, StandardSegment, WritableBuffer};
 use std::ops::Range;
 
 /// Helper structure to create an ELF file as a compilation artifact.

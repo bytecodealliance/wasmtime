@@ -5,19 +5,19 @@ pub mod generated_code;
 
 use crate::ir::ExternalName;
 // Types that the generated ISLE code uses via `use super::*`.
-use crate::isa::s390x::abi::{S390xMachineDeps, REG_SAVE_AREA_SIZE};
-use crate::isa::s390x::inst::{
-    gpr, stack_reg, writable_gpr, zero_reg, Cond, Inst as MInst, LaneOrder, MemArg, RegPair,
-    ReturnCallInfo, SymbolReloc, UImm12, UImm16Shifted, UImm32Shifted, WritableRegPair,
-};
 use crate::isa::s390x::S390xBackend;
+use crate::isa::s390x::abi::{REG_SAVE_AREA_SIZE, S390xMachineDeps};
+use crate::isa::s390x::inst::{
+    Cond, Inst as MInst, LaneOrder, MemArg, RegPair, ReturnCallInfo, SymbolReloc, UImm12,
+    UImm16Shifted, UImm32Shifted, WritableRegPair, gpr, stack_reg, writable_gpr, zero_reg,
+};
 use crate::machinst::isle::*;
 use crate::machinst::{CallInfo, MachLabel, Reg};
 use crate::{
     ir::{
-        condcodes::*, immediates::*, types::*, ArgumentExtension, ArgumentPurpose, AtomicRmwOp,
-        BlockCall, Endianness, Inst, InstructionData, KnownSymbol, MemFlags, Opcode, TrapCode,
-        Value, ValueList,
+        ArgumentExtension, ArgumentPurpose, AtomicRmwOp, BlockCall, Endianness, Inst,
+        InstructionData, KnownSymbol, MemFlags, Opcode, TrapCode, Value, ValueList, condcodes::*,
+        immediates::*, types::*,
     },
     isa::CallConv,
     machinst::abi::ABIMachineSpec,
@@ -403,11 +403,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
 
     #[inline]
     fn i64_nonequal(&mut self, val: i64, cmp: i64) -> Option<i64> {
-        if val != cmp {
-            Some(val)
-        } else {
-            None
-        }
+        if val != cmp { Some(val) } else { None }
     }
 
     #[inline]
@@ -468,21 +464,13 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     #[inline]
     fn u64_nonzero_hipart(&mut self, n: u64) -> Option<u64> {
         let part = n & 0xffff_ffff_0000_0000;
-        if part != 0 {
-            Some(part)
-        } else {
-            None
-        }
+        if part != 0 { Some(part) } else { None }
     }
 
     #[inline]
     fn u64_nonzero_lopart(&mut self, n: u64) -> Option<u64> {
         let part = n & 0x0000_0000_ffff_ffff;
-        if part != 0 {
-            Some(part)
-        } else {
-            None
-        }
+        if part != 0 { Some(part) } else { None }
     }
 
     #[inline]
@@ -868,11 +856,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
     #[inline]
     fn memarg_symbol_offset_sum(&mut self, off1: i64, off2: i64) -> Option<i32> {
         let off = i32::try_from(off1 + off2).ok()?;
-        if off & 1 == 0 {
-            Some(off)
-        } else {
-            None
-        }
+        if off & 1 == 0 { Some(off) } else { None }
     }
 
     #[inline]
@@ -915,11 +899,7 @@ impl generated_code::Context for IsleContext<'_, '_, MInst, S390xBackend> {
 
     #[inline]
     fn same_reg(&mut self, dst: WritableReg, src: Reg) -> Option<Reg> {
-        if dst.to_reg() == src {
-            Some(src)
-        } else {
-            None
-        }
+        if dst.to_reg() == src { Some(src) } else { None }
     }
 
     #[inline]

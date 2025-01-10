@@ -1,12 +1,12 @@
 //! Provides functionality for compiling and running CLIF IR for `run` tests.
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use core::mem;
 use cranelift_codegen::data_value::DataValue;
 use cranelift_codegen::ir::{
     ExternalName, Function, InstBuilder, Signature, UserExternalName, UserFuncName,
 };
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
-use cranelift_codegen::{ir, settings, CodegenError, Context};
+use cranelift_codegen::{CodegenError, Context, ir, settings};
 use cranelift_control::ControlPlane;
 use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
 use cranelift_jit::{JITBuilder, JITModule};
@@ -15,8 +15,8 @@ use cranelift_native::builder_with_options;
 use cranelift_reader::TestFile;
 use pulley_interpreter::interp as pulley;
 use std::cmp::max;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::ptr::NonNull;
 use target_lexicon::Architecture;
 use thiserror::Error;
@@ -613,7 +613,7 @@ extern "C" fn __cranelift_x86_pshufb(a: __m128i, b: __m128i) -> __m128i {
 #[cfg(test)]
 mod test {
     use super::*;
-    use cranelift_reader::{parse_functions, parse_test, ParseOptions};
+    use cranelift_reader::{ParseOptions, parse_functions, parse_test};
 
     fn parse(code: &str) -> Function {
         parse_functions(code).unwrap().into_iter().nth(0).unwrap()

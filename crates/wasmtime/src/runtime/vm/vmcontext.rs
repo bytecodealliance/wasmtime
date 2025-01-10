@@ -16,8 +16,8 @@ use core::ptr::{self, NonNull};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use sptr::Strict;
 use wasmtime_environ::{
-    BuiltinFunctionIndex, DefinedMemoryIndex, Unsigned, VMSharedTypeIndex, WasmHeapTopType,
-    WasmValType, VMCONTEXT_MAGIC,
+    BuiltinFunctionIndex, DefinedMemoryIndex, Unsigned, VMCONTEXT_MAGIC, VMSharedTypeIndex,
+    WasmHeapTopType, WasmValType,
 };
 
 /// A function pointer that exposes the array calling convention.

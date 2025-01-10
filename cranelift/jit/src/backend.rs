@@ -4,7 +4,7 @@ use crate::{compiled_blob::CompiledBlob, memory::BranchProtection, memory::Memor
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::settings::Configurable;
-use cranelift_codegen::{ir, settings, FinalizedMachReloc};
+use cranelift_codegen::{FinalizedMachReloc, ir, settings};
 use cranelift_control::ControlPlane;
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{

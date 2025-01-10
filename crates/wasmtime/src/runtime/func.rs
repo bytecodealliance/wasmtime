@@ -1,9 +1,9 @@
 use crate::prelude::*;
+use crate::runtime::Uninhabited;
 use crate::runtime::vm::{
     ExportFunction, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext,
     VMFuncRef, VMFunctionImport, VMOpaqueContext,
 };
-use crate::runtime::Uninhabited;
 use crate::store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored};
 use crate::type_registry::RegisteredType;
 use crate::{

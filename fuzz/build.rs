@@ -5,9 +5,9 @@ fn main() -> anyhow::Result<()> {
 }
 
 mod component {
-    use anyhow::{anyhow, Context, Error, Result};
+    use anyhow::{Context, Error, Result, anyhow};
     use arbitrary::Unstructured;
-    use component_fuzz_util::{Declarations, TestCase, Type, MAX_TYPE_DEPTH};
+    use component_fuzz_util::{Declarations, MAX_TYPE_DEPTH, TestCase, Type};
     use proc_macro2::TokenStream;
     use quote::quote;
     use rand::rngs::StdRng;

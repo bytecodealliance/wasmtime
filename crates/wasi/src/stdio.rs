@@ -136,7 +136,7 @@ impl Subscribe for AsyncStdinStream {
 }
 
 mod worker_thread_stdin;
-pub use self::worker_thread_stdin::{stdin, Stdin};
+pub use self::worker_thread_stdin::{Stdin, stdin};
 
 /// Similar to [`StdinStream`], except for output.
 pub trait StdoutStream: Send {

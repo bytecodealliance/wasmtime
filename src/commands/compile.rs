@@ -1,6 +1,6 @@
 //! The module that implements the `wasmtime compile` command.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
 use std::fs;
 use std::path::PathBuf;

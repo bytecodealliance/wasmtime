@@ -2,7 +2,7 @@
 use crate::component;
 use crate::core;
 use crate::spectest::*;
-use anyhow::{anyhow, bail, Context as _};
+use anyhow::{Context as _, anyhow, bail};
 use std::collections::HashMap;
 use std::path::Path;
 use std::str;
@@ -333,9 +333,9 @@ where
             #[cfg(feature = "component-model")]
             Export::Component(_) => bail!("no global named `{field}`"),
         };
-        Ok(Outcome::Ok(Results::Core(
-            vec![global.get(&mut self.store)],
-        )))
+        Ok(Outcome::Ok(Results::Core(vec![
+            global.get(&mut self.store),
+        ])))
     }
 
     fn assert_return(&mut self, result: Outcome, results: &[WastRet<'_>]) -> Result<()> {

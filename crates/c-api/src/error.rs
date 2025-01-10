@@ -1,5 +1,5 @@
 use crate::{wasm_frame_vec_t, wasm_name_t};
-use anyhow::{anyhow, Error, Result};
+use anyhow::{Error, Result, anyhow};
 
 #[repr(C)]
 pub struct wasmtime_error_t {

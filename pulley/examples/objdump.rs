@@ -4,7 +4,7 @@
 //!
 //!     cargo run --example objdump -F disas -p pulley-interpreter foo.cwasm
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use object::{File, Object as _, ObjectSection, ObjectSymbol, SymbolKind};
 use pulley_interpreter::decode::Decoder;
 use pulley_interpreter::disas::Disassembler;

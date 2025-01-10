@@ -1,7 +1,7 @@
 //! This module gives users to instantiate values that Cranelift understands. These values are used,
 //! for example, during interpretation and for wrapping immediates.
-use crate::ir::immediates::{Ieee128, Ieee16, Ieee32, Ieee64, Offset32};
-use crate::ir::{types, ConstantData, Type};
+use crate::ir::immediates::{Ieee16, Ieee32, Ieee64, Ieee128, Offset32};
+use crate::ir::{ConstantData, Type, types};
 use core::cmp::Ordering;
 use core::fmt::{self, Display, Formatter};
 

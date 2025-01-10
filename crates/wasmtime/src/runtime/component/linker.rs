@@ -12,8 +12,8 @@ use alloc::sync::Arc;
 use core::future::Future;
 use core::marker;
 use core::pin::Pin;
-use wasmtime_environ::component::{NameMap, NameMapIntern};
 use wasmtime_environ::PrimaryMap;
+use wasmtime_environ::component::{NameMap, NameMapIntern};
 
 /// A type used to instantiate [`Component`]s.
 ///
@@ -181,13 +181,10 @@ impl<T> Linker<T> {
     /// types imported by it replaced using imports present in [`Self`].
     pub fn substituted_component_type(&self, component: &Component) -> Result<types::Component> {
         let cx = self.typecheck(&component)?;
-        Ok(types::Component::from(
-            component.ty(),
-            &InstanceType {
-                types: cx.types,
-                resources: &cx.imported_resources,
-            },
-        ))
+        Ok(types::Component::from(component.ty(), &InstanceType {
+            types: cx.types,
+            resources: &cx.imported_resources,
+        }))
     }
 
     /// Performs a "pre-instantiation" to resolve the imports of the

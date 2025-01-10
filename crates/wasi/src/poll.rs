@@ -1,5 +1,5 @@
-use crate::{bindings::io::poll, WasiImpl, WasiView};
-use anyhow::{anyhow, Result};
+use crate::{WasiImpl, WasiView, bindings::io::poll};
+use anyhow::{Result, anyhow};
 use std::any::Any;
 use std::collections::HashMap;
 use std::future::Future;
@@ -209,10 +209,10 @@ where
 
 pub mod sync {
     use crate::{
+        WasiImpl, WasiView,
         bindings::io::poll as async_poll,
         bindings::sync::io::poll::{self, Pollable},
         runtime::in_tokio,
-        WasiImpl, WasiView,
     };
     use anyhow::Result;
     use wasmtime::component::Resource;

@@ -88,50 +88,44 @@ fn basic_struct_types() -> Result<()> {
 fn struct_type_matches() -> Result<()> {
     let engine = Engine::default();
 
-    let super_ty = StructType::with_finality_and_supertype(
-        &engine,
-        Finality::NonFinal,
-        None,
-        [imm_field(HeapType::Func)],
-    )?;
+    let super_ty =
+        StructType::with_finality_and_supertype(&engine, Finality::NonFinal, None, [imm_field(
+            HeapType::Func,
+        )])?;
 
     // Depth.
-    let sub_ty = StructType::with_finality_and_supertype(
-        &engine,
-        Finality::Final,
-        Some(&super_ty),
-        [imm_field(HeapType::NoFunc)],
-    )?;
+    let sub_ty =
+        StructType::with_finality_and_supertype(&engine, Finality::Final, Some(&super_ty), [
+            imm_field(HeapType::NoFunc),
+        ])?;
     assert!(sub_ty.matches(&super_ty));
     let not_sub_ty = StructType::new(&engine, [imm_field(HeapType::NoFunc)])?;
     assert!(!not_sub_ty.matches(&super_ty));
 
     // Width.
-    let sub_ty = StructType::with_finality_and_supertype(
-        &engine,
-        Finality::Final,
-        Some(&super_ty),
-        [imm_field(HeapType::Func), imm_field(HeapType::Extern)],
-    )?;
+    let sub_ty =
+        StructType::with_finality_and_supertype(&engine, Finality::Final, Some(&super_ty), [
+            imm_field(HeapType::Func),
+            imm_field(HeapType::Extern),
+        ])?;
     assert!(sub_ty.matches(&super_ty));
-    let not_sub_ty = StructType::new(
-        &engine,
-        [imm_field(HeapType::Func), imm_field(HeapType::Extern)],
-    )?;
+    let not_sub_ty = StructType::new(&engine, [
+        imm_field(HeapType::Func),
+        imm_field(HeapType::Extern),
+    ])?;
     assert!(!not_sub_ty.matches(&super_ty));
 
     // Depth and width.
-    let sub_ty = StructType::with_finality_and_supertype(
-        &engine,
-        Finality::Final,
-        Some(&super_ty),
-        [imm_field(HeapType::NoFunc), imm_field(HeapType::Extern)],
-    )?;
+    let sub_ty =
+        StructType::with_finality_and_supertype(&engine, Finality::Final, Some(&super_ty), [
+            imm_field(HeapType::NoFunc),
+            imm_field(HeapType::Extern),
+        ])?;
     assert!(sub_ty.matches(&super_ty));
-    let not_sub_ty = StructType::new(
-        &engine,
-        [imm_field(HeapType::NoFunc), imm_field(HeapType::Extern)],
-    )?;
+    let not_sub_ty = StructType::new(&engine, [
+        imm_field(HeapType::NoFunc),
+        imm_field(HeapType::Extern),
+    ])?;
     assert!(!not_sub_ty.matches(&super_ty));
 
     // Unrelated structs.
@@ -149,32 +143,25 @@ fn struct_type_matches() -> Result<()> {
 fn struct_subtyping_fields_must_match() -> Result<()> {
     let engine = Engine::default();
 
-    let a = StructType::with_finality_and_supertype(
-        &engine,
-        Finality::NonFinal,
-        None,
-        [imm_field(HeapType::Any)],
-    )?;
+    let a =
+        StructType::with_finality_and_supertype(&engine, Finality::NonFinal, None, [imm_field(
+            HeapType::Any,
+        )])?;
 
     for (msg, expected, fields) in [
         ("Missing field", false, vec![]),
-        (
-            "Non-matching field",
-            false,
-            vec![imm_field(HeapType::Extern)],
-        ),
+        ("Non-matching field", false, vec![imm_field(
+            HeapType::Extern,
+        )]),
         ("Wrong mutability field", false, vec![field(HeapType::Any)]),
         ("Exact match is okay", true, vec![imm_field(HeapType::Any)]),
-        (
-            "Subtype of the field is okay",
-            true,
-            vec![imm_field(HeapType::Eq)],
-        ),
-        (
-            "Extra fields are okay",
-            true,
-            vec![imm_field(HeapType::Any), imm_field(HeapType::Extern)],
-        ),
+        ("Subtype of the field is okay", true, vec![imm_field(
+            HeapType::Eq,
+        )]),
+        ("Extra fields are okay", true, vec![
+            imm_field(HeapType::Any),
+            imm_field(HeapType::Extern),
+        ]),
     ] {
         let actual =
             StructType::with_finality_and_supertype(&engine, Finality::NonFinal, Some(&a), fields)
@@ -243,18 +230,14 @@ fn struct_subtyping() -> Result<()> {
         // Have to add a field so that `g` doesn't dedupe to `base`.
         [field(HeapType::Any)],
     )?;
-    let h = StructType::with_finality_and_supertype(
-        &engine,
-        Finality::NonFinal,
-        Some(&g),
-        [field(HeapType::Any)],
-    )?;
-    let i = StructType::with_finality_and_supertype(
-        &engine,
-        Finality::NonFinal,
-        Some(&h),
-        [field(HeapType::Any)],
-    )?;
+    let h =
+        StructType::with_finality_and_supertype(&engine, Finality::NonFinal, Some(&g), [field(
+            HeapType::Any,
+        )])?;
+    let i =
+        StructType::with_finality_and_supertype(&engine, Finality::NonFinal, Some(&h), [field(
+            HeapType::Any,
+        )])?;
 
     for (expected, sub_name, sub, sup_name, sup) in [
         // Identity, at root.
@@ -525,21 +508,14 @@ fn func_subtyping_supertype_and_finality() -> Result<()> {
     let engine = Engine::default();
 
     for (expected, finality) in [(true, Finality::NonFinal), (false, Finality::Final)] {
-        let superty = FuncType::with_finality_and_supertype(
-            &engine,
-            finality,
-            None,
-            [],
-            [valty(HeapType::Any)],
-        )?;
-        let actual = FuncType::with_finality_and_supertype(
-            &engine,
-            Finality::Final,
-            Some(&superty),
-            [],
-            [valty(HeapType::Any)],
-        )
-        .is_ok();
+        let superty = FuncType::with_finality_and_supertype(&engine, finality, None, [], [valty(
+            HeapType::Any,
+        )])?;
+        let actual =
+            FuncType::with_finality_and_supertype(&engine, Finality::Final, Some(&superty), [], [
+                valty(HeapType::Any),
+            ])
+            .is_ok();
         assert_eq!(expected, actual);
     }
 
@@ -561,76 +537,43 @@ fn func_subtyping() -> Result<()> {
     //          e
     //         /
     //        f
-    let base = FuncType::with_finality_and_supertype(
-        &engine,
-        Finality::NonFinal,
-        None,
-        [],
-        [valty(HeapType::Any)],
-    )?;
-    let a = FuncType::with_finality_and_supertype(
-        &engine,
-        Finality::NonFinal,
-        Some(&base),
-        [],
-        [valty(HeapType::Any)],
-    )?;
-    let b = FuncType::with_finality_and_supertype(
-        &engine,
-        Finality::NonFinal,
-        Some(&base),
-        [],
-        [valty(HeapType::Eq)],
-    )?;
-    let c = FuncType::with_finality_and_supertype(
-        &engine,
-        Finality::NonFinal,
-        Some(&a),
-        [],
-        [valty(HeapType::Any)],
-    )?;
-    let d = FuncType::with_finality_and_supertype(
-        &engine,
-        Finality::NonFinal,
-        Some(&a),
-        [],
-        [valty(HeapType::Eq)],
-    )?;
-    let e = FuncType::with_finality_and_supertype(
-        &engine,
-        Finality::NonFinal,
-        Some(&c),
-        [],
-        [valty(HeapType::Any)],
-    )?;
-    let f = FuncType::with_finality_and_supertype(
-        &engine,
-        Finality::NonFinal,
-        Some(&e),
-        [],
-        [valty(HeapType::Any)],
-    )?;
-    let g = FuncType::with_finality_and_supertype(
-        &engine,
-        Finality::NonFinal,
-        None,
-        [],
-        [valty(HeapType::Eq)],
-    )?;
-    let h = FuncType::with_finality_and_supertype(
-        &engine,
-        Finality::NonFinal,
-        Some(&g),
-        [],
-        [valty(HeapType::Eq)],
-    )?;
-    let i = FuncType::with_finality_and_supertype(
-        &engine,
-        Finality::NonFinal,
-        Some(&h),
-        [],
-        [valty(HeapType::Eq)],
-    )?;
+    let base =
+        FuncType::with_finality_and_supertype(&engine, Finality::NonFinal, None, [], [valty(
+            HeapType::Any,
+        )])?;
+    let a = FuncType::with_finality_and_supertype(&engine, Finality::NonFinal, Some(&base), [], [
+        valty(HeapType::Any),
+    ])?;
+    let b = FuncType::with_finality_and_supertype(&engine, Finality::NonFinal, Some(&base), [], [
+        valty(HeapType::Eq),
+    ])?;
+    let c =
+        FuncType::with_finality_and_supertype(&engine, Finality::NonFinal, Some(&a), [], [valty(
+            HeapType::Any,
+        )])?;
+    let d =
+        FuncType::with_finality_and_supertype(&engine, Finality::NonFinal, Some(&a), [], [valty(
+            HeapType::Eq,
+        )])?;
+    let e =
+        FuncType::with_finality_and_supertype(&engine, Finality::NonFinal, Some(&c), [], [valty(
+            HeapType::Any,
+        )])?;
+    let f =
+        FuncType::with_finality_and_supertype(&engine, Finality::NonFinal, Some(&e), [], [valty(
+            HeapType::Any,
+        )])?;
+    let g = FuncType::with_finality_and_supertype(&engine, Finality::NonFinal, None, [], [valty(
+        HeapType::Eq,
+    )])?;
+    let h =
+        FuncType::with_finality_and_supertype(&engine, Finality::NonFinal, Some(&g), [], [valty(
+            HeapType::Eq,
+        )])?;
+    let i =
+        FuncType::with_finality_and_supertype(&engine, Finality::NonFinal, Some(&h), [], [valty(
+            HeapType::Eq,
+        )])?;
 
     for (expected, sub_name, sub, sup_name, sup) in [
         // Identity, at root.

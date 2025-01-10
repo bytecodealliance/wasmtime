@@ -5,13 +5,13 @@ use crate::{Engine, ExternType, FuncType};
 use alloc::sync::Arc;
 use core::fmt;
 use core::ops::Deref;
+use wasmtime_environ::PrimaryMap;
 use wasmtime_environ::component::{
     ComponentTypes, InterfaceType, ResourceIndex, TypeComponentIndex, TypeComponentInstanceIndex,
     TypeDef, TypeEnumIndex, TypeFlagsIndex, TypeFuncIndex, TypeListIndex, TypeModuleIndex,
     TypeOptionIndex, TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex, TypeTupleIndex,
     TypeVariantIndex,
 };
-use wasmtime_environ::PrimaryMap;
 
 pub use crate::component::resources::ResourceType;
 

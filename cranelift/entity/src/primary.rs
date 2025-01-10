@@ -1,8 +1,8 @@
 //! Densely numbered entity references as mapping keys.
+use crate::EntityRef;
 use crate::boxed_slice::BoxedSlice;
 use crate::iter::{IntoIter, Iter, IterMut};
 use crate::keys::Keys;
-use crate::EntityRef;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::marker::PhantomData;

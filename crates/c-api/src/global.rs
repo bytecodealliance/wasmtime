@@ -1,6 +1,6 @@
 use crate::{
-    handle_result, wasm_extern_t, wasm_globaltype_t, wasm_store_t, wasm_val_t, wasmtime_error_t,
-    wasmtime_val_t, WasmtimeStoreContext, WasmtimeStoreContextMut,
+    WasmtimeStoreContext, WasmtimeStoreContextMut, handle_result, wasm_extern_t, wasm_globaltype_t,
+    wasm_store_t, wasm_val_t, wasmtime_error_t, wasmtime_val_t,
 };
 use std::mem::MaybeUninit;
 use wasmtime::{Extern, Global, RootScope};

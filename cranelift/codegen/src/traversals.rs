@@ -161,7 +161,7 @@ impl Iterator for DfsPostOrderIter<'_> {
 mod tests {
     use super::*;
     use crate::cursor::{Cursor, FuncCursor};
-    use crate::ir::{types::I32, Function, InstBuilder, TrapCode};
+    use crate::ir::{Function, InstBuilder, TrapCode, types::I32};
 
     #[test]
     fn test_dfs_traversal() {
@@ -203,16 +203,13 @@ mod tests {
 
         let mut dfs = Dfs::new();
 
-        assert_eq!(
-            dfs.iter(&func).collect::<Vec<_>>(),
-            vec![
-                (Event::Enter, block0),
-                (Event::Enter, block2),
-                (Event::Exit, block2),
-                (Event::Enter, block3),
-                (Event::Exit, block3),
-                (Event::Exit, block0)
-            ],
-        );
+        assert_eq!(dfs.iter(&func).collect::<Vec<_>>(), vec![
+            (Event::Enter, block0),
+            (Event::Enter, block2),
+            (Event::Exit, block2),
+            (Event::Enter, block3),
+            (Event::Exit, block3),
+            (Event::Exit, block0)
+        ],);
     }
 }

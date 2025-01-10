@@ -1,8 +1,8 @@
 //! Lowering rules for S390x.
 
 use crate::ir::Inst as IRInst;
-use crate::isa::s390x::inst::Inst;
 use crate::isa::s390x::S390xBackend;
+use crate::isa::s390x::inst::Inst;
 use crate::machinst::{InstOutput, Lower, LowerBackend, MachLabel};
 
 pub mod isle;

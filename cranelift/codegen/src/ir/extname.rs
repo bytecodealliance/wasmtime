@@ -233,7 +233,7 @@ impl FromStr for ExternalName {
 mod tests {
     use super::ExternalName;
     use crate::ir::{
-        entities::UserExternalNameRef, function::FunctionParameters, LibCall, UserExternalName,
+        LibCall, UserExternalName, entities::UserExternalNameRef, function::FunctionParameters,
     };
     use alloc::string::ToString;
     use core::u32;

@@ -4,7 +4,7 @@ use crate::prelude::*;
 use crate::*;
 use alloc::collections::BTreeMap;
 use core::ops::Range;
-use cranelift_entity::{packed_option::ReservedValue, EntityRef};
+use cranelift_entity::{EntityRef, packed_option::ReservedValue};
 use serde_derive::{Deserialize, Serialize};
 
 /// A WebAssembly linear memory initializer.

@@ -9,8 +9,8 @@ use cranelift::codegen::ir::instructions::{InstructionFormat, ResolvedConstraint
 use cranelift::codegen::ir::stackslot::StackSize;
 
 use cranelift::codegen::ir::{
-    types::*, AliasRegion, AtomicRmwOp, Block, ConstantData, Endianness, ExternalName, FuncRef,
-    Function, LibCall, Opcode, SigRef, Signature, StackSlot, UserExternalName, UserFuncName, Value,
+    AliasRegion, AtomicRmwOp, Block, ConstantData, Endianness, ExternalName, FuncRef, Function,
+    LibCall, Opcode, SigRef, Signature, StackSlot, UserExternalName, UserFuncName, Value, types::*,
 };
 use cranelift::codegen::isa::CallConv;
 use cranelift::frontend::{FunctionBuilder, FunctionBuilderContext, Switch, Variable};
@@ -599,24 +599,27 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Select, &[_, I128, I128]),
                 // These stack accesses can cause segfaults if they are merged into an SSE instruction.
                 // See: #5922
-                (
-                    Opcode::StackStore,
-                    &[I8X16 | I16X8 | I32X4 | I64X2 | F32X4 | F64X2]
-                ),
-                (
-                    Opcode::StackLoad,
-                    &[],
-                    &[I8X16 | I16X8 | I32X4 | I64X2 | F32X4 | F64X2]
-                ),
+                (Opcode::StackStore, &[I8X16
+                    | I16X8
+                    | I32X4
+                    | I64X2
+                    | F32X4
+                    | F64X2]),
+                (Opcode::StackLoad, &[], &[I8X16
+                    | I16X8
+                    | I32X4
+                    | I64X2
+                    | F32X4
+                    | F64X2]),
                 // TODO
-                (
-                    Opcode::Sshr | Opcode::Ushr | Opcode::Ishl,
-                    &[I8X16 | I16X8 | I32X4 | I64X2, I128]
-                ),
-                (
-                    Opcode::Rotr | Opcode::Rotl,
-                    &[I8X16 | I16X8 | I32X4 | I64X2, _]
-                ),
+                (Opcode::Sshr | Opcode::Ushr | Opcode::Ishl, &[
+                    I8X16 | I16X8 | I32X4 | I64X2,
+                    I128
+                ]),
+                (Opcode::Rotr | Opcode::Rotl, &[
+                    I8X16 | I16X8 | I32X4 | I64X2,
+                    _
+                ]),
             )
         }
 
@@ -658,11 +661,9 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                     &[I128]
                 ),
                 // https://github.com/bytecodealliance/wasmtime/issues/4933
-                (
-                    Opcode::FcvtFromUint | Opcode::FcvtFromSint,
-                    &[I128],
-                    &[F32 | F64]
-                ),
+                (Opcode::FcvtFromUint | Opcode::FcvtFromSint, &[I128], &[
+                    F32 | F64
+                ]),
                 (
                     Opcode::Umulhi | Opcode::Smulhi,
                     &([I8X16, I8X16] | [I16X8, I16X8] | [I32X4, I32X4] | [I64X2, I64X2])
@@ -675,14 +676,14 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 (Opcode::Bitcast, &[I128], &[_]),
                 (Opcode::Bitcast, &[_], &[I128]),
                 // TODO
-                (
-                    Opcode::Sshr | Opcode::Ushr | Opcode::Ishl,
-                    &[I8X16 | I16X8 | I32X4 | I64X2, I128]
-                ),
-                (
-                    Opcode::Rotr | Opcode::Rotl,
-                    &[I8X16 | I16X8 | I32X4 | I64X2, _]
-                ),
+                (Opcode::Sshr | Opcode::Ushr | Opcode::Ishl, &[
+                    I8X16 | I16X8 | I32X4 | I64X2,
+                    I128
+                ]),
+                (Opcode::Rotr | Opcode::Rotl, &[
+                    I8X16 | I16X8 | I32X4 | I64X2,
+                    _
+                ]),
                 // TODO
                 (Opcode::Bitselect, &[_, _, _], &[F32 | F64]),
                 (Opcode::VhighBits, &[F32X4 | F64X2]),
@@ -719,11 +720,9 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                     &[F32 | F64],
                     &[I128]
                 ),
-                (
-                    Opcode::FcvtFromUint | Opcode::FcvtFromSint,
-                    &[I128],
-                    &[F32 | F64]
-                ),
+                (Opcode::FcvtFromUint | Opcode::FcvtFromSint, &[I128], &[
+                    F32 | F64
+                ]),
                 (Opcode::SsubSat | Opcode::SaddSat, &[I64X2, I64X2]),
                 // https://github.com/bytecodealliance/wasmtime/issues/6104
                 (Opcode::Bitcast, &[I128], &[_]),
@@ -752,34 +751,33 @@ fn valid_for_target(triple: &Triple, op: Opcode, args: &[Type], rets: &[Type]) -
                 // TODO
                 (Opcode::Bitselect, &[I128, I128, I128]),
                 // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (
-                    Opcode::FcvtToUint | Opcode::FcvtToSint,
-                    [F32 | F64],
-                    &[I128]
-                ),
+                (Opcode::FcvtToUint | Opcode::FcvtToSint, [F32 | F64], &[
+                    I128
+                ]),
                 (
                     Opcode::FcvtToUintSat | Opcode::FcvtToSintSat,
                     &[F32 | F64],
                     &[I128]
                 ),
                 // https://github.com/bytecodealliance/wasmtime/issues/5528
-                (
-                    Opcode::FcvtFromUint | Opcode::FcvtFromSint,
-                    &[I128],
-                    &[F32 | F64]
-                ),
+                (Opcode::FcvtFromUint | Opcode::FcvtFromSint, &[I128], &[
+                    F32 | F64
+                ]),
                 // TODO
-                (
-                    Opcode::SelectSpectreGuard,
-                    &[_, _, _],
-                    &[F32 | F64 | I8X16 | I16X8 | I32X4 | I64X2 | F64X2 | F32X4]
-                ),
+                (Opcode::SelectSpectreGuard, &[_, _, _], &[F32
+                    | F64
+                    | I8X16
+                    | I16X8
+                    | I32X4
+                    | I64X2
+                    | F64X2
+                    | F32X4]),
                 // TODO
                 (Opcode::Bitselect, &[_, _, _], &[F32 | F64]),
-                (
-                    Opcode::Rotr | Opcode::Rotl,
-                    &[I8X16 | I16X8 | I32X4 | I64X2, _]
-                ),
+                (Opcode::Rotr | Opcode::Rotl, &[
+                    I8X16 | I16X8 | I32X4 | I64X2,
+                    _
+                ]),
             )
         }
 

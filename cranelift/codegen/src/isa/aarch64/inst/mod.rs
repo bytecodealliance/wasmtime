@@ -1,16 +1,16 @@
 //! This module defines aarch64-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
-use crate::ir::types::{F128, F16, F32, F64, I128, I16, I32, I64, I8, I8X16};
-use crate::ir::{types, MemFlags, Type};
+use crate::ir::types::{F16, F32, F64, F128, I8, I8X16, I16, I32, I64, I128};
+use crate::ir::{MemFlags, Type, types};
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
-use crate::{settings, CodegenError, CodegenResult};
+use crate::{CodegenError, CodegenResult, settings};
 
 use crate::machinst::{PrettyPrint, Reg, RegClass, Writable};
 
 use alloc::vec::Vec;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::fmt::Write;
 use std::string::{String, ToString};
 

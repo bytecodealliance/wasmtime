@@ -86,17 +86,13 @@ fn i31ref_table_new() -> Result<()> {
     let mut store = Store::new(&engine, ());
 
     for (elem_ty, inits) in [
-        (
-            RefType::I31REF,
-            vec![
-                Ref::Any(None),
-                AnyRef::from_i31(&mut store, I31::default()).into(),
-            ],
-        ),
-        (
-            RefType::new(false, HeapType::I31),
-            vec![AnyRef::from_i31(&mut store, I31::default()).into()],
-        ),
+        (RefType::I31REF, vec![
+            Ref::Any(None),
+            AnyRef::from_i31(&mut store, I31::default()).into(),
+        ]),
+        (RefType::new(false, HeapType::I31), vec![
+            AnyRef::from_i31(&mut store, I31::default()).into(),
+        ]),
     ] {
         let table_ty = TableType::new(elem_ty, 10, None);
         for init in inits {
@@ -117,17 +113,13 @@ fn i31ref_table_get() -> Result<()> {
     let mut store = Store::new(&engine, ());
 
     for (elem_ty, inits) in [
-        (
-            RefType::I31REF,
-            vec![
-                Ref::Any(None),
-                AnyRef::from_i31(&mut store, I31::default()).into(),
-            ],
-        ),
-        (
-            RefType::new(false, HeapType::I31),
-            vec![AnyRef::from_i31(&mut store, I31::default()).into()],
-        ),
+        (RefType::I31REF, vec![
+            Ref::Any(None),
+            AnyRef::from_i31(&mut store, I31::default()).into(),
+        ]),
+        (RefType::new(false, HeapType::I31), vec![
+            AnyRef::from_i31(&mut store, I31::default()).into(),
+        ]),
     ] {
         let table_ty = TableType::new(elem_ty, 10, None);
         for init in inits {

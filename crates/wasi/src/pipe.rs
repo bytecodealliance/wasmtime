@@ -618,7 +618,9 @@ mod test {
                 assert!(should_be_closed);
             }
             r => {
-                panic!("stream should be reported closed by the end of write_ready after flush, got {r:?}. {write_ready_res:?} {flush_res:?}")
+                panic!(
+                    "stream should be reported closed by the end of write_ready after flush, got {r:?}. {write_ready_res:?} {flush_res:?}"
+                )
             }
         }
     }

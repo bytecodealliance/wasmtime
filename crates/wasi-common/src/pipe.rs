@@ -9,8 +9,8 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
-use crate::file::{FdFlags, FileType, WasiFile};
 use crate::Error;
+use crate::file::{FdFlags, FileType, WasiFile};
 use std::any::Any;
 use std::io::{self, Read, Write};
 use std::sync::{Arc, RwLock};

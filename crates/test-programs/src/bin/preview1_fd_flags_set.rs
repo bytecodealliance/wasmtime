@@ -18,13 +18,10 @@ unsafe fn test_fd_fdstat_set_flags(dir_fd: wasi::Fd) {
 
     // Write some data and then verify the written data
     assert_eq!(
-        wasi::fd_write(
-            file_fd,
-            &[wasi::Ciovec {
-                buf: data.as_ptr(),
-                buf_len: data.len(),
-            }],
-        )
+        wasi::fd_write(file_fd, &[wasi::Ciovec {
+            buf: data.as_ptr(),
+            buf_len: data.len(),
+        }],)
         .expect("writing to a file"),
         data.len(),
         "should write {} bytes",
@@ -36,13 +33,10 @@ unsafe fn test_fd_fdstat_set_flags(dir_fd: wasi::Fd) {
     let buffer = &mut [0u8; 100];
 
     assert_eq!(
-        wasi::fd_read(
-            file_fd,
-            &[wasi::Iovec {
-                buf: buffer.as_mut_ptr(),
-                buf_len: buffer.len(),
-            }]
-        )
+        wasi::fd_read(file_fd, &[wasi::Iovec {
+            buf: buffer.as_mut_ptr(),
+            buf_len: buffer.len(),
+        }])
         .expect("reading file"),
         buffer.len(),
         "should read {} bytes",
@@ -57,13 +51,10 @@ unsafe fn test_fd_fdstat_set_flags(dir_fd: wasi::Fd) {
     wasi::fd_seek(file_fd, 0, wasi::WHENCE_SET).expect("seeking file");
 
     assert_eq!(
-        wasi::fd_write(
-            file_fd,
-            &[wasi::Ciovec {
-                buf: data.as_ptr(),
-                buf_len: data.len(),
-            }],
-        )
+        wasi::fd_write(file_fd, &[wasi::Ciovec {
+            buf: data.as_ptr(),
+            buf_len: data.len(),
+        }],)
         .expect("writing to a file"),
         data.len(),
         "should write {} bytes",
@@ -73,13 +64,10 @@ unsafe fn test_fd_fdstat_set_flags(dir_fd: wasi::Fd) {
     wasi::fd_seek(file_fd, 100, wasi::WHENCE_SET).expect("seeking file");
 
     assert_eq!(
-        wasi::fd_read(
-            file_fd,
-            &[wasi::Iovec {
-                buf: buffer.as_mut_ptr(),
-                buf_len: buffer.len(),
-            }]
-        )
+        wasi::fd_read(file_fd, &[wasi::Iovec {
+            buf: buffer.as_mut_ptr(),
+            buf_len: buffer.len(),
+        }])
         .expect("reading file"),
         buffer.len(),
         "should read {} bytes",
@@ -96,13 +84,10 @@ unsafe fn test_fd_fdstat_set_flags(dir_fd: wasi::Fd) {
     let data = &[2u8; 100];
 
     assert_eq!(
-        wasi::fd_write(
-            file_fd,
-            &[wasi::Ciovec {
-                buf: data.as_ptr(),
-                buf_len: data.len(),
-            }],
-        )
+        wasi::fd_write(file_fd, &[wasi::Ciovec {
+            buf: data.as_ptr(),
+            buf_len: data.len(),
+        }],)
         .expect("writing to a file"),
         data.len(),
         "should write {} bytes",
@@ -112,13 +97,10 @@ unsafe fn test_fd_fdstat_set_flags(dir_fd: wasi::Fd) {
     wasi::fd_seek(file_fd, 0, wasi::WHENCE_SET).expect("seeking file");
 
     assert_eq!(
-        wasi::fd_read(
-            file_fd,
-            &[wasi::Iovec {
-                buf: buffer.as_mut_ptr(),
-                buf_len: buffer.len(),
-            }]
-        )
+        wasi::fd_read(file_fd, &[wasi::Iovec {
+            buf: buffer.as_mut_ptr(),
+            buf_len: buffer.len(),
+        }])
         .expect("reading file"),
         buffer.len(),
         "should read {} bytes",

@@ -1,14 +1,14 @@
-use crate::abi::{self, align_to, scratch, LocalSlot};
+use crate::abi::{self, LocalSlot, align_to, scratch};
 use crate::codegen::{CodeGenContext, Emission, FuncEnv};
 use crate::isa::{
-    reg::{writable, Reg, WritableReg},
     CallingConvention,
+    reg::{Reg, WritableReg, writable},
 };
 use anyhow::Result;
 use cranelift_codegen::{
+    Final, MachBufferFinalized, MachLabel,
     binemit::CodeOffset,
     ir::{Endianness, LibCall, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
-    Final, MachBufferFinalized, MachLabel,
 };
 use std::{fmt::Debug, ops::Range};
 use wasmtime_environ::PtrSize;
@@ -669,7 +669,7 @@ pub(crate) trait MacroAssembler {
 
     /// Perform a conditional move.
     fn cmov(&mut self, dst: WritableReg, src: Reg, cc: IntCmpKind, size: OperandSize)
-        -> Result<()>;
+    -> Result<()>;
 
     /// Performs a memory move of bytes from src to dest.
     /// Bytes are moved in blocks of 8 bytes, where possible.
@@ -1133,5 +1133,5 @@ pub(crate) trait MacroAssembler {
     /// Note that some platforms require special handling of registers in this
     /// instruction (e.g. x64) so full access to `CodeGenContext` is provided.
     fn mul_wide(&mut self, context: &mut CodeGenContext<Emission>, kind: MulWideKind)
-        -> Result<()>;
+    -> Result<()>;
 }

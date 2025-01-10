@@ -2,7 +2,7 @@
 
 use crate::isa::unwind::systemv::RegisterMappingError;
 use crate::machinst::{Reg, RegClass};
-use gimli::{write::CommonInformationEntry, Encoding, Format, Register};
+use gimli::{Encoding, Format, Register, write::CommonInformationEntry};
 
 /// Creates a new s390x common information entry (CIE).
 pub fn create_cie() -> CommonInformationEntry {
@@ -97,13 +97,13 @@ impl crate::isa::unwind::systemv::RegisterMapper<Reg> for RegisterMapper {
 
 #[cfg(test)]
 mod tests {
+    use crate::Context;
     use crate::cursor::{Cursor, FuncCursor};
     use crate::ir::{
-        types, AbiParam, Function, InstBuilder, Signature, StackSlotData, StackSlotKind,
+        AbiParam, Function, InstBuilder, Signature, StackSlotData, StackSlotKind, types,
     };
-    use crate::isa::{lookup, CallConv};
-    use crate::settings::{builder, Flags};
-    use crate::Context;
+    use crate::isa::{CallConv, lookup};
+    use crate::settings::{Flags, builder};
     use gimli::write::Address;
     use target_lexicon::triple;
 
@@ -133,7 +133,10 @@ mod tests {
             _ => panic!("expected unwind information"),
         };
 
-        assert_eq!(format!("{fde:?}"), "FrameDescriptionEntry { address: Constant(1234), length: 10, lsda: None, instructions: [(4, CfaOffset(224))] }");
+        assert_eq!(
+            format!("{fde:?}"),
+            "FrameDescriptionEntry { address: Constant(1234), length: 10, lsda: None, instructions: [(4, CfaOffset(224))] }"
+        );
     }
 
     fn create_function(call_conv: CallConv, stack_slot: Option<StackSlotData>) -> Function {
@@ -177,7 +180,10 @@ mod tests {
             _ => panic!("expected unwind information"),
         };
 
-        assert_eq!(format!("{fde:?}"), "FrameDescriptionEntry { address: Constant(4321), length: 26, lsda: None, instructions: [(4, CfaOffset(224))] }");
+        assert_eq!(
+            format!("{fde:?}"),
+            "FrameDescriptionEntry { address: Constant(4321), length: 26, lsda: None, instructions: [(4, CfaOffset(224))] }"
+        );
     }
 
     fn create_multi_return_function(

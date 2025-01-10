@@ -132,11 +132,9 @@ fn test_async_host_func_pending() {
     let trap = shim_inst
         .get_func(&mut store, "double_int_return_float_shim")
         .unwrap()
-        .call(
-            &mut store,
-            &[input.into(), result_location.into()],
-            &mut [Val::I32(0)],
-        )
+        .call(&mut store, &[input.into(), result_location.into()], &mut [
+            Val::I32(0),
+        ])
         .unwrap_err();
     assert!(
         format!("{trap:?}").contains("Cannot wait on pending future"),

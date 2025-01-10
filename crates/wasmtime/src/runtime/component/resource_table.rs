@@ -141,12 +141,9 @@ impl ResourceTable {
 
     /// Free an entry in the table, returning its [`TableEntry`]. Add the index to the free list.
     fn free_entry(&mut self, ix: usize) -> TableEntry {
-        let entry = match core::mem::replace(
-            &mut self.entries[ix],
-            Entry::Free {
-                next: self.free_head,
-            },
-        ) {
+        let entry = match core::mem::replace(&mut self.entries[ix], Entry::Free {
+            next: self.free_head,
+        }) {
             Entry::Occupied { entry } => entry,
             Entry::Free { .. } => unreachable!(),
         };

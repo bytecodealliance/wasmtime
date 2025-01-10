@@ -5,8 +5,8 @@
 //! handle memory allocation failures.
 
 use crate::prelude::*;
-use crate::runtime::vm::memory::{MemoryBase, RuntimeLinearMemory};
 use crate::runtime::vm::SendSyncPtr;
+use crate::runtime::vm::memory::{MemoryBase, RuntimeLinearMemory};
 use core::mem;
 use core::ptr::NonNull;
 use wasmtime_environ::Tunables;

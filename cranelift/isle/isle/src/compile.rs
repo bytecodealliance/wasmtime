@@ -43,7 +43,7 @@ pub fn from_files<P: AsRef<Path>>(
             return Err(Errors::from_io(
                 err,
                 format!("cannot read file {}", path.display()),
-            ))
+            ));
         }
     };
 
@@ -76,7 +76,7 @@ pub fn create_envs(
             return Err(Errors::from_io(
                 err,
                 format!("cannot read file {}", path.display()),
-            ))
+            ));
         }
     };
     let files = Arc::new(files);

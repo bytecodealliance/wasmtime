@@ -1,6 +1,6 @@
 use crate::{ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, PrimaryMap, WasmSubType};
 use core::ops::{Index, Range};
-use cranelift_entity::{packed_option::PackedOption, SecondaryMap};
+use cranelift_entity::{SecondaryMap, packed_option::PackedOption};
 use serde_derive::{Deserialize, Serialize};
 
 /// All types used in a core wasm module.
@@ -96,9 +96,11 @@ impl ModuleTypes {
         debug_assert!(!trampoline_ty.is_reserved_value());
         debug_assert!(self.wasm_types[for_ty].is_func());
         debug_assert!(self.trampoline_types[for_ty].is_none());
-        debug_assert!(self.wasm_types[trampoline_ty]
-            .unwrap_func()
-            .is_trampoline_type());
+        debug_assert!(
+            self.wasm_types[trampoline_ty]
+                .unwrap_func()
+                .is_trampoline_type()
+        );
 
         self.trampoline_types[for_ty] = Some(trampoline_ty).into();
     }

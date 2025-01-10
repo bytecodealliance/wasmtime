@@ -71,9 +71,9 @@ use crate::ir::entities::AnyEntity;
 use crate::ir::instructions::{CallInfo, InstructionFormat, ResolvedConstraint};
 use crate::ir::{self, ArgumentExtension};
 use crate::ir::{
-    types, ArgumentPurpose, Block, Constant, DynamicStackSlot, FuncRef, Function, GlobalValue,
-    Inst, JumpTable, MemFlags, MemoryTypeData, Opcode, SigRef, StackSlot, Type, Value, ValueDef,
-    ValueList,
+    ArgumentPurpose, Block, Constant, DynamicStackSlot, FuncRef, Function, GlobalValue, Inst,
+    JumpTable, MemFlags, MemoryTypeData, Opcode, SigRef, StackSlot, Type, Value, ValueDef,
+    ValueList, types,
 };
 use crate::isa::TargetIsa;
 use crate::print_errors::pretty_verifier_error;
@@ -202,11 +202,7 @@ impl VerifierErrors {
     /// and non-fatal otherwise.
     #[inline]
     pub fn as_result(&self) -> VerifierStepResult {
-        if self.is_empty() {
-            Ok(())
-        } else {
-            Err(())
-        }
+        if self.is_empty() { Ok(()) } else { Err(()) }
     }
 
     /// Report an error, adding it to the list of errors.
@@ -241,11 +237,7 @@ impl Into<Vec<VerifierError>> for VerifierErrors {
 
 impl Into<VerifierResult<()>> for VerifierErrors {
     fn into(self) -> VerifierResult<()> {
-        if self.is_empty() {
-            Ok(())
-        } else {
-            Err(self)
-        }
+        if self.is_empty() { Ok(()) } else { Err(self) }
     }
 }
 
@@ -1688,11 +1680,7 @@ impl<'a> Verifier<'a> {
             }
         }
 
-        if errors.has_error() {
-            Err(())
-        } else {
-            Ok(())
-        }
+        if errors.has_error() { Err(()) } else { Ok(()) }
     }
 
     pub fn run(&self, errors: &mut VerifierErrors) -> VerifierStepResult {
@@ -1732,7 +1720,7 @@ impl<'a> Verifier<'a> {
 mod tests {
     use super::{Verifier, VerifierError, VerifierErrors};
     use crate::ir::instructions::{InstructionData, Opcode};
-    use crate::ir::{types, AbiParam, Function, Type};
+    use crate::ir::{AbiParam, Function, Type, types};
     use crate::settings;
 
     macro_rules! assert_err_with_msg {

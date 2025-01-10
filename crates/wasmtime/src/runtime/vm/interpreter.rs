@@ -1,7 +1,7 @@
+use crate::ValRaw;
 use crate::prelude::*;
 use crate::runtime::vm::vmcontext::VMArrayCallNative;
-use crate::runtime::vm::{tls, TrapRegisters, TrapTest, VMContext, VMOpaqueContext};
-use crate::ValRaw;
+use crate::runtime::vm::{TrapRegisters, TrapTest, VMContext, VMOpaqueContext, tls};
 use core::ptr::NonNull;
 use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
 use pulley_interpreter::{Reg, XReg};

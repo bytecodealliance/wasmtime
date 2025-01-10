@@ -1,9 +1,9 @@
 //! Builtin function handling.
 
 use crate::{
-    abi::{ABISig, ABI},
-    codegen::env::ptr_type_from_ptr_size,
     CallingConvention,
+    abi::{ABI, ABISig},
+    codegen::env::ptr_type_from_ptr_size,
 };
 use cranelift_codegen::ir::LibCall;
 use std::sync::Arc;

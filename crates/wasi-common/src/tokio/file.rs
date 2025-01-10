@@ -1,7 +1,7 @@
 use crate::tokio::block_on_dummy_executor;
 use crate::{
-    file::{Advice, FdFlags, FileType, Filestat, WasiFile},
     Error,
+    file::{Advice, FdFlags, FileType, Filestat, WasiFile},
 };
 #[cfg(windows)]
 use io_extras::os::windows::{AsRawHandleOrSocket, RawHandleOrSocket};
@@ -181,7 +181,7 @@ macro_rules! wasi_file_impl {
                 // async method to ensure this is the only Future which can access the RawFd during the
                 // lifetime of the AsyncFd.
                 use std::os::unix::io::AsRawFd;
-                use tokio::io::{unix::AsyncFd, Interest};
+                use tokio::io::{Interest, unix::AsyncFd};
                 let rawfd = self.0.borrow().as_fd().as_raw_fd();
                 match AsyncFd::with_interest(rawfd, Interest::READABLE) {
                     Ok(asyncfd) => {
@@ -205,7 +205,7 @@ macro_rules! wasi_file_impl {
                 // async method to ensure this is the only Future which can access the RawFd during the
                 // lifetime of the AsyncFd.
                 use std::os::unix::io::AsRawFd;
-                use tokio::io::{unix::AsyncFd, Interest};
+                use tokio::io::{Interest, unix::AsyncFd};
                 let rawfd = self.0.borrow().as_fd().as_raw_fd();
                 match AsyncFd::with_interest(rawfd, Interest::WRITABLE) {
                     Ok(asyncfd) => {

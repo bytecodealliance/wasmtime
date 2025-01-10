@@ -19,8 +19,8 @@ use crate::trace;
 use crate::unionfind::UnionFind;
 use core::cmp::Ordering;
 use cranelift_control::ControlPlane;
-use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::SecondaryMap;
+use cranelift_entity::packed_option::ReservedValue;
 use rustc_hash::FxHashSet;
 use smallvec::SmallVec;
 use std::hash::Hasher;
@@ -365,8 +365,7 @@ where
         for optimized_value in optimized_values.drain(..) {
             trace!(
                 "Returned from ISLE for {}, got {:?}",
-                orig_value,
-                optimized_value
+                orig_value, optimized_value
             );
             if optimized_value == orig_value {
                 trace!(" -> same as orig value; skipping");
@@ -461,9 +460,7 @@ where
             let result = self.func.dfg.first_result(inst);
             trace!(
                 " -> inst {} has result {} replaced with {}",
-                inst,
-                result,
-                new_result
+                inst, result, new_result
             );
             self.value_to_opt_value[result] = new_result;
             self.func.dfg.merge_facts(result, new_result);

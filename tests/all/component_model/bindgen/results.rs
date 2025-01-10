@@ -1,8 +1,8 @@
 use super::{super::REALLOC_AND_FREE, engine};
-use anyhow::{anyhow, Error};
+use anyhow::{Error, anyhow};
 use wasmtime::{
-    component::{Component, Linker},
     Store,
+    component::{Component, Linker},
 };
 
 mod empty_error {
@@ -548,13 +548,10 @@ mod record_error {
             .expect("no trap")
             .err()
             .expect("error returned");
-        assert!(matches!(
-            e,
-            record_error::foo::E2 {
-                line: 420,
-                col: 1312
-            }
-        ));
+        assert!(matches!(e, record_error::foo::E2 {
+            line: 420,
+            col: 1312
+        }));
 
         let e = results
             .foo()

@@ -29,8 +29,10 @@ fn define_control_flow(
         "#,
             &formats.jump,
         )
-        .operands_in(vec![Operand::new("block_call", &entities.block_call)
-            .with_doc("Destination basic block, with its arguments provided")])
+        .operands_in(vec![
+            Operand::new("block_call", &entities.block_call)
+                .with_doc("Destination basic block, with its arguments provided"),
+        ])
         .branches(),
     );
 
@@ -174,7 +176,7 @@ fn define_control_flow(
             &formats.multiary,
         )
         .operands_in(vec![
-            Operand::new("rvals", &entities.varargs).with_doc("return values")
+            Operand::new("rvals", &entities.varargs).with_doc("return values"),
         ])
         .returns(),
     );
@@ -196,7 +198,7 @@ fn define_control_flow(
             Operand::new("args", &entities.varargs).with_doc("call arguments"),
         ])
         .operands_out(vec![
-            Operand::new("rvals", &entities.varargs).with_doc("return values")
+            Operand::new("rvals", &entities.varargs).with_doc("return values"),
         ])
         .call(),
     );
@@ -223,7 +225,7 @@ fn define_control_flow(
             Operand::new("args", &entities.varargs).with_doc("call arguments"),
         ])
         .operands_out(vec![
-            Operand::new("rvals", &entities.varargs).with_doc("return values")
+            Operand::new("rvals", &entities.varargs).with_doc("return values"),
         ])
         .call(),
     );
@@ -295,8 +297,10 @@ fn define_control_flow(
         "#,
             &formats.func_addr,
         )
-        .operands_in(vec![Operand::new("FN", &entities.func_ref)
-            .with_doc("function to call, declared by `function`")])
+        .operands_in(vec![
+            Operand::new("FN", &entities.func_ref)
+                .with_doc("function to call, declared by `function`"),
+        ])
         .operands_out(vec![Operand::new("addr", iAddr)]),
     );
 }
@@ -331,7 +335,7 @@ fn define_simd_lane_access(
             &formats.unary,
         )
         .operands_in(vec![
-            Operand::new("x", &TxN.lane_of()).with_doc("Value to splat to all lanes")
+            Operand::new("x", &TxN.lane_of()).with_doc("Value to splat to all lanes"),
         ])
         .operands_out(vec![Operand::new("a", TxN)]),
     );
@@ -1335,7 +1339,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("N", &imm.imm64)])
         .operands_out(vec![
-            Operand::new("a", NarrowInt).with_doc("A constant integer scalar or vector value")
+            Operand::new("a", NarrowInt).with_doc("A constant integer scalar or vector value"),
         ]),
     );
 
@@ -1351,7 +1355,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("N", &imm.ieee16)])
         .operands_out(vec![
-            Operand::new("a", f16_).with_doc("A constant f16 scalar value")
+            Operand::new("a", f16_).with_doc("A constant f16 scalar value"),
         ]),
     );
 
@@ -1367,7 +1371,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("N", &imm.ieee32)])
         .operands_out(vec![
-            Operand::new("a", f32_).with_doc("A constant f32 scalar value")
+            Operand::new("a", f32_).with_doc("A constant f32 scalar value"),
         ]),
     );
 
@@ -1383,7 +1387,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("N", &imm.ieee64)])
         .operands_out(vec![
-            Operand::new("a", f64_).with_doc("A constant f64 scalar value")
+            Operand::new("a", f64_).with_doc("A constant f64 scalar value"),
         ]),
     );
 
@@ -1399,7 +1403,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("N", &imm.pool_constant)])
         .operands_out(vec![
-            Operand::new("a", f128_).with_doc("A constant f128 scalar value")
+            Operand::new("a", f128_).with_doc("A constant f128 scalar value"),
         ]),
     );
 
@@ -1413,10 +1417,12 @@ pub(crate) fn define(
         "#,
             &formats.unary_const,
         )
-        .operands_in(vec![Operand::new("N", &imm.pool_constant)
-            .with_doc("The 16 immediate bytes of a 128-bit vector")])
+        .operands_in(vec![
+            Operand::new("N", &imm.pool_constant)
+                .with_doc("The 16 immediate bytes of a 128-bit vector"),
+        ])
         .operands_out(vec![
-            Operand::new("a", TxN).with_doc("A constant vector value")
+            Operand::new("a", TxN).with_doc("A constant vector value"),
         ]),
     );
 
@@ -2780,7 +2786,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("x", Float), Operand::new("y", Float)])
         .operands_out(vec![
-            Operand::new("a", Float).with_doc("Result of applying operator to each lane")
+            Operand::new("a", Float).with_doc("Result of applying operator to each lane"),
         ]),
     );
 
@@ -2794,7 +2800,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("x", Float), Operand::new("y", Float)])
         .operands_out(vec![
-            Operand::new("a", Float).with_doc("Result of applying operator to each lane")
+            Operand::new("a", Float).with_doc("Result of applying operator to each lane"),
         ]),
     );
 
@@ -2808,7 +2814,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("x", Float), Operand::new("y", Float)])
         .operands_out(vec![
-            Operand::new("a", Float).with_doc("Result of applying operator to each lane")
+            Operand::new("a", Float).with_doc("Result of applying operator to each lane"),
         ]),
     );
 
@@ -2826,7 +2832,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("x", Float), Operand::new("y", Float)])
         .operands_out(vec![
-            Operand::new("a", Float).with_doc("Result of applying operator to each lane")
+            Operand::new("a", Float).with_doc("Result of applying operator to each lane"),
         ]),
     );
 
@@ -2840,7 +2846,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("x", Float)])
         .operands_out(vec![
-            Operand::new("a", Float).with_doc("Result of applying operator to each lane")
+            Operand::new("a", Float).with_doc("Result of applying operator to each lane"),
         ]),
     );
 
@@ -2861,7 +2867,7 @@ pub(crate) fn define(
             Operand::new("z", Float),
         ])
         .operands_out(vec![
-            Operand::new("a", Float).with_doc("Result of applying operator to each lane")
+            Operand::new("a", Float).with_doc("Result of applying operator to each lane"),
         ]),
     );
 
@@ -2877,7 +2883,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("x", Float)])
         .operands_out(vec![
-            Operand::new("a", Float).with_doc("``x`` with its sign bit inverted")
+            Operand::new("a", Float).with_doc("``x`` with its sign bit inverted"),
         ]),
     );
 
@@ -2893,7 +2899,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("x", Float)])
         .operands_out(vec![
-            Operand::new("a", Float).with_doc("``x`` with its sign bit cleared")
+            Operand::new("a", Float).with_doc("``x`` with its sign bit cleared"),
         ]),
     );
 
@@ -2910,7 +2916,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("x", Float), Operand::new("y", Float)])
         .operands_out(vec![
-            Operand::new("a", Float).with_doc("``x`` with its sign bit changed to that of ``y``")
+            Operand::new("a", Float).with_doc("``x`` with its sign bit changed to that of ``y``"),
         ]),
     );
 
@@ -2929,7 +2935,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("x", Float), Operand::new("y", Float)])
         .operands_out(vec![
-            Operand::new("a", Float).with_doc("The smaller of ``x`` and ``y``")
+            Operand::new("a", Float).with_doc("The smaller of ``x`` and ``y``"),
         ]),
     );
 
@@ -2948,7 +2954,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("x", Float), Operand::new("y", Float)])
         .operands_out(vec![
-            Operand::new("a", Float).with_doc("The larger of ``x`` and ``y``")
+            Operand::new("a", Float).with_doc("The larger of ``x`` and ``y``"),
         ]),
     );
 
@@ -2962,7 +2968,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("x", Float)])
         .operands_out(vec![
-            Operand::new("a", Float).with_doc("``x`` rounded to integral value")
+            Operand::new("a", Float).with_doc("``x`` rounded to integral value"),
         ]),
     );
 
@@ -2976,7 +2982,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("x", Float)])
         .operands_out(vec![
-            Operand::new("a", Float).with_doc("``x`` rounded to integral value")
+            Operand::new("a", Float).with_doc("``x`` rounded to integral value"),
         ]),
     );
 
@@ -2990,7 +2996,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("x", Float)])
         .operands_out(vec![
-            Operand::new("a", Float).with_doc("``x`` rounded to integral value")
+            Operand::new("a", Float).with_doc("``x`` rounded to integral value"),
         ]),
     );
 
@@ -3005,7 +3011,7 @@ pub(crate) fn define(
         )
         .operands_in(vec![Operand::new("x", Float)])
         .operands_out(vec![
-            Operand::new("a", Float).with_doc("``x`` rounded to integral value")
+            Operand::new("a", Float).with_doc("``x`` rounded to integral value"),
         ]),
     );
 
@@ -3031,7 +3037,7 @@ pub(crate) fn define(
             Operand::new("x", Mem),
         ])
         .operands_out(vec![
-            Operand::new("a", MemTo).with_doc("Bits of `x` reinterpreted")
+            Operand::new("a", MemTo).with_doc("Bits of `x` reinterpreted"),
         ]),
     );
 
@@ -3045,7 +3051,7 @@ pub(crate) fn define(
             &formats.unary,
         )
         .operands_in(vec![
-            Operand::new("s", &TxN.lane_of()).with_doc("A scalar value")
+            Operand::new("s", &TxN.lane_of()).with_doc("A scalar value"),
         ])
         .operands_out(vec![Operand::new("a", TxN).with_doc("A vector value")]),
     );
@@ -3092,8 +3098,10 @@ pub(crate) fn define(
         "#,
             &formats.unary,
         )
-        .operands_in(vec![Operand::new("x", &Int.wider())
-            .with_doc("A scalar integer type, wider than the controlling type")])
+        .operands_in(vec![
+            Operand::new("x", &Int.wider())
+                .with_doc("A scalar integer type, wider than the controlling type"),
+        ])
         .operands_out(vec![Operand::new("a", Int)]),
     );
 
@@ -3629,8 +3637,10 @@ pub(crate) fn define(
             Operand::new("lo", NarrowInt),
             Operand::new("hi", NarrowInt),
         ])
-        .operands_out(vec![Operand::new("a", &NarrowInt.double_width())
-            .with_doc("The concatenation of `lo` and `hi`")]),
+        .operands_out(vec![
+            Operand::new("a", &NarrowInt.double_width())
+                .with_doc("The concatenation of `lo` and `hi`"),
+        ]),
     );
 
     // Instructions relating to atomic memory accesses and fences
@@ -3660,7 +3670,7 @@ pub(crate) fn define(
             Operand::new("x", AtomicMem).with_doc("Value to be atomically stored"),
         ])
         .operands_out(vec![
-            Operand::new("a", AtomicMem).with_doc("Value atomically loaded")
+            Operand::new("a", AtomicMem).with_doc("Value atomically loaded"),
         ])
         .can_load()
         .can_store()
@@ -3689,7 +3699,7 @@ pub(crate) fn define(
             Operand::new("x", AtomicMem).with_doc("Value to be atomically stored"),
         ])
         .operands_out(vec![
-            Operand::new("a", AtomicMem).with_doc("Value atomically loaded")
+            Operand::new("a", AtomicMem).with_doc("Value atomically loaded"),
         ])
         .can_load()
         .can_store()
@@ -3715,7 +3725,7 @@ pub(crate) fn define(
             Operand::new("p", iAddr),
         ])
         .operands_out(vec![
-            Operand::new("a", AtomicMem).with_doc("Value atomically loaded")
+            Operand::new("a", AtomicMem).with_doc("Value atomically loaded"),
         ])
         .can_load()
         .other_side_effects(),
@@ -3780,7 +3790,7 @@ pub(crate) fn define(
             Operand::new("y", &imm.uimm8).with_doc("128-bit vector index"),
         ])
         .operands_out(vec![
-            Operand::new("a", &TxN.dynamic_to_vector()).with_doc("New fixed vector")
+            Operand::new("a", &TxN.dynamic_to_vector()).with_doc("New fixed vector"),
         ]),
     );
 }

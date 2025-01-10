@@ -1,10 +1,10 @@
-use anyhow::{anyhow, Result};
-use test_programs_artifacts::{foreach_keyvalue, KEYVALUE_MAIN_COMPONENT};
+use anyhow::{Result, anyhow};
+use test_programs_artifacts::{KEYVALUE_MAIN_COMPONENT, foreach_keyvalue};
 use wasmtime::{
-    component::{Component, Linker, ResourceTable},
     Store,
+    component::{Component, Linker, ResourceTable},
 };
-use wasmtime_wasi::{bindings::Command, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView, bindings::Command};
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 
 struct Ctx {
@@ -55,15 +55,12 @@ foreach_keyvalue!(assert_test_exists);
 
 #[tokio::test(flavor = "multi_thread")]
 async fn keyvalue_main() -> Result<()> {
-    run_wasi(
-        KEYVALUE_MAIN_COMPONENT,
-        Ctx {
-            table: ResourceTable::new(),
-            wasi_ctx: WasiCtxBuilder::new().inherit_stderr().build(),
-            wasi_keyvalue_ctx: WasiKeyValueCtxBuilder::new()
-                .in_memory_data([("atomics_key", "5")])
-                .build(),
-        },
-    )
+    run_wasi(KEYVALUE_MAIN_COMPONENT, Ctx {
+        table: ResourceTable::new(),
+        wasi_ctx: WasiCtxBuilder::new().inherit_stderr().build(),
+        wasi_keyvalue_ctx: WasiKeyValueCtxBuilder::new()
+            .in_memory_data([("atomics_key", "5")])
+            .build(),
+    })
     .await
 }

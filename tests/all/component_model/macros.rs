@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use super::{make_echo_component, TypedFuncExt};
+use super::{TypedFuncExt, make_echo_component};
 use anyhow::Result;
 use component_macro_test::{add_variants, flags_test};
 use wasmtime::component::{Component, ComponentType, Lift, Linker, Lower};
@@ -42,9 +42,11 @@ fn record_derive() -> Result<()> {
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
-    assert!(instance
-        .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
-        .is_err());
+    assert!(
+        instance
+            .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
+            .is_err()
+    );
 
     // Sad path: field count mismatch (too many)
 
@@ -57,9 +59,11 @@ fn record_derive() -> Result<()> {
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
-    assert!(instance
-        .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
-        .is_err());
+    assert!(
+        instance
+            .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
+            .is_err()
+    );
 
     // Sad path: field name mismatch
 
@@ -69,9 +73,11 @@ fn record_derive() -> Result<()> {
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
-    assert!(instance
-        .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
-        .is_err());
+    assert!(
+        instance
+            .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
+            .is_err()
+    );
 
     // Sad path: field type mismatch
 
@@ -81,9 +87,11 @@ fn record_derive() -> Result<()> {
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
-    assert!(instance
-        .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
-        .is_err());
+    assert!(
+        instance
+            .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
+            .is_err()
+    );
 
     // Happy path redux, with generics this time
 
@@ -155,9 +163,11 @@ fn variant_derive() -> Result<()> {
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
-    assert!(instance
-        .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
-        .is_err());
+    assert!(
+        instance
+            .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
+            .is_err()
+    );
 
     // Sad path: case count mismatch (too many)
 
@@ -170,9 +180,11 @@ fn variant_derive() -> Result<()> {
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
-    assert!(instance
-        .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
-        .is_err());
+    assert!(
+        instance
+            .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
+            .is_err()
+    );
 
     // Sad path: case name mismatch
 
@@ -182,9 +194,11 @@ fn variant_derive() -> Result<()> {
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
-    assert!(instance
-        .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
-        .is_err());
+    assert!(
+        instance
+            .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
+            .is_err()
+    );
 
     // Sad path: case type mismatch
 
@@ -197,9 +211,11 @@ fn variant_derive() -> Result<()> {
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
-    assert!(instance
-        .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
-        .is_err());
+    assert!(
+        instance
+            .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
+            .is_err()
+    );
 
     // Happy path redux, with generics this time
 
@@ -270,9 +286,11 @@ fn enum_derive() -> Result<()> {
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
-    assert!(instance
-        .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
-        .is_err());
+    assert!(
+        instance
+            .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
+            .is_err()
+    );
 
     // Sad path: case count mismatch (too many)
 
@@ -282,18 +300,22 @@ fn enum_derive() -> Result<()> {
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
-    assert!(instance
-        .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
-        .is_err());
+    assert!(
+        instance
+            .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
+            .is_err()
+    );
 
     // Sad path: case name mismatch
 
     let component = Component::new(&engine, make_echo_component(r#"(enum "A" "B" "C")"#, 4))?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
-    assert!(instance
-        .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
-        .is_err());
+    assert!(
+        instance
+            .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
+            .is_err()
+    );
 
     // Happy path redux, with large enums (i.e. more than 2^8 cases)
 
@@ -396,9 +418,11 @@ fn flags() -> Result<()> {
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
-    assert!(instance
-        .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
-        .is_err());
+    assert!(
+        instance
+            .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
+            .is_err()
+    );
 
     // Sad path: flag count mismatch (too many)
 
@@ -408,18 +432,22 @@ fn flags() -> Result<()> {
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
-    assert!(instance
-        .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
-        .is_err());
+    assert!(
+        instance
+            .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
+            .is_err()
+    );
 
     // Sad path: flag name mismatch
 
     let component = Component::new(&engine, make_echo_component(r#"(flags "A" "B" "C")"#, 4))?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
 
-    assert!(instance
-        .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
-        .is_err());
+    assert!(
+        instance
+            .get_typed_func::<(Foo,), (Foo,)>(&mut store, "echo")
+            .is_err()
+    );
 
     // Happy path redux, with large flag count (exactly 8)
 

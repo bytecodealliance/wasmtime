@@ -2,11 +2,11 @@ use super::address_transform::AddressTransform;
 use crate::debug::ModuleMemoryOffset;
 use crate::translate::get_vmctx_value_label;
 use anyhow::{Context, Error, Result};
-use cranelift_codegen::ir::ValueLabel;
-use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::LabelValueLoc;
 use cranelift_codegen::ValueLabelsRanges;
-use gimli::{write, Expression, Operation, Reader, ReaderOffset};
+use cranelift_codegen::ir::ValueLabel;
+use cranelift_codegen::isa::TargetIsa;
+use gimli::{Expression, Operation, Reader, ReaderOffset, write};
 use std::cmp::PartialEq;
 use std::collections::{HashMap, HashSet};
 use std::hash::{Hash, Hasher};
@@ -797,11 +797,11 @@ impl std::fmt::Debug for JumpTargetMarker {
 #[expect(trivial_numeric_casts, reason = "macro-generated code")]
 mod tests {
     use super::{
-        compile_expression, AddressTransform, CompiledExpression, CompiledExpressionPart,
-        FunctionFrameInfo, JumpTargetMarker, ValueLabel, ValueLabelsRanges,
+        AddressTransform, CompiledExpression, CompiledExpressionPart, FunctionFrameInfo,
+        JumpTargetMarker, ValueLabel, ValueLabelsRanges, compile_expression,
     };
     use crate::CompiledFunctionMetadata;
-    use gimli::{constants, Encoding, EndianSlice, Expression, RunTimeEndian};
+    use gimli::{Encoding, EndianSlice, Expression, RunTimeEndian, constants};
     use wasmtime_environ::FilePos;
 
     macro_rules! dw_op {
@@ -868,16 +868,13 @@ mod tests {
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
             .expect("expression");
-        assert_eq!(
-            ce,
-            CompiledExpression {
-                parts: vec![CompiledExpressionPart::Local {
-                    label: val20,
-                    trailing: true
-                }],
-                need_deref: false,
-            }
-        );
+        assert_eq!(ce, CompiledExpression {
+            parts: vec![CompiledExpressionPart::Local {
+                label: val20,
+                trailing: true
+            }],
+            need_deref: false,
+        });
 
         let e = expression!(
             DW_OP_WASM_location,
@@ -890,19 +887,16 @@ mod tests {
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
             .expect("expression");
-        assert_eq!(
-            ce,
-            CompiledExpression {
-                parts: vec![
-                    CompiledExpressionPart::Local {
-                        label: val1,
-                        trailing: false
-                    },
-                    CompiledExpressionPart::Code(vec![35, 16, 159])
-                ],
-                need_deref: false,
-            }
-        );
+        assert_eq!(ce, CompiledExpression {
+            parts: vec![
+                CompiledExpressionPart::Local {
+                    label: val1,
+                    trailing: false
+                },
+                CompiledExpressionPart::Code(vec![35, 16, 159])
+            ],
+            need_deref: false,
+        });
 
         let e = expression!(DW_OP_WASM_location, 0x0, 3, DW_OP_stack_value);
         let fe = compile_expression(&e, DWARF_ENCODING, None).expect("non-error");
@@ -910,19 +904,16 @@ mod tests {
         let ce = compile_expression(&e, DWARF_ENCODING, fe.as_ref())
             .expect("non-error")
             .expect("expression");
-        assert_eq!(
-            ce,
-            CompiledExpression {
-                parts: vec![
-                    CompiledExpressionPart::Local {
-                        label: val3,
-                        trailing: false
-                    },
-                    CompiledExpressionPart::Code(vec![35, 18])
-                ],
-                need_deref: true,
-            }
-        );
+        assert_eq!(ce, CompiledExpression {
+            parts: vec![
+                CompiledExpressionPart::Local {
+                    label: val3,
+                    trailing: false
+                },
+                CompiledExpressionPart::Code(vec![35, 18])
+            ],
+            need_deref: true,
+        });
 
         let e = expression!(
             DW_OP_WASM_location,
@@ -936,21 +927,18 @@ mod tests {
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
             .expect("expression");
-        assert_eq!(
-            ce,
-            CompiledExpression {
-                parts: vec![
-                    CompiledExpressionPart::Local {
-                        label: val1,
-                        trailing: false
-                    },
-                    CompiledExpressionPart::Code(vec![35, 5]),
-                    CompiledExpressionPart::Deref,
-                    CompiledExpressionPart::Code(vec![6, 159])
-                ],
-                need_deref: false,
-            }
-        );
+        assert_eq!(ce, CompiledExpression {
+            parts: vec![
+                CompiledExpressionPart::Local {
+                    label: val1,
+                    trailing: false
+                },
+                CompiledExpressionPart::Code(vec![35, 5]),
+                CompiledExpressionPart::Deref,
+                CompiledExpressionPart::Code(vec![6, 159])
+            ],
+            need_deref: false,
+        });
 
         let e = expression!(
             DW_OP_WASM_location,
@@ -963,19 +951,16 @@ mod tests {
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
             .expect("expression");
-        assert_eq!(
-            ce,
-            CompiledExpression {
-                parts: vec![
-                    CompiledExpressionPart::Local {
-                        label: val1,
-                        trailing: false
-                    },
-                    CompiledExpressionPart::Code(vec![64, 35, 32, 22, 8, 32, 36, 22, 38, 159])
-                ],
-                need_deref: false,
-            }
-        );
+        assert_eq!(ce, CompiledExpression {
+            parts: vec![
+                CompiledExpressionPart::Local {
+                    label: val1,
+                    trailing: false
+                },
+                CompiledExpressionPart::Code(vec![64, 35, 32, 22, 8, 32, 36, 22, 38, 159])
+            ],
+            need_deref: false,
+        });
 
         let e = expression!(
             DW_OP_lit1,
@@ -1003,35 +988,32 @@ mod tests {
             .expect("expression");
         let targets = find_jump_targets(&ce);
         assert_eq!(targets.len(), 2);
-        assert_eq!(
-            ce,
-            CompiledExpression {
-                parts: vec![
-                    CompiledExpressionPart::Code(vec![49, 18]),
-                    CompiledExpressionPart::Local {
-                        label: val1,
-                        trailing: false
-                    },
-                    CompiledExpressionPart::Code(vec![26]),
-                    CompiledExpressionPart::Jump {
-                        conditionally: true,
-                        target: targets[0].clone(),
-                    },
-                    CompiledExpressionPart::Code(vec![22, 35, 32, 22, 8, 32, 36, 22, 37]),
-                    CompiledExpressionPart::Jump {
-                        conditionally: false,
-                        target: targets[1].clone(),
-                    },
-                    CompiledExpressionPart::LandingPad(targets[0].clone()), // capture from
-                    CompiledExpressionPart::Code(vec![34]),
-                    CompiledExpressionPart::Deref,
-                    CompiledExpressionPart::Code(vec![6]),
-                    CompiledExpressionPart::LandingPad(targets[1].clone()), // capture to
-                    CompiledExpressionPart::Code(vec![159])
-                ],
-                need_deref: false,
-            }
-        );
+        assert_eq!(ce, CompiledExpression {
+            parts: vec![
+                CompiledExpressionPart::Code(vec![49, 18]),
+                CompiledExpressionPart::Local {
+                    label: val1,
+                    trailing: false
+                },
+                CompiledExpressionPart::Code(vec![26]),
+                CompiledExpressionPart::Jump {
+                    conditionally: true,
+                    target: targets[0].clone(),
+                },
+                CompiledExpressionPart::Code(vec![22, 35, 32, 22, 8, 32, 36, 22, 37]),
+                CompiledExpressionPart::Jump {
+                    conditionally: false,
+                    target: targets[1].clone(),
+                },
+                CompiledExpressionPart::LandingPad(targets[0].clone()), // capture from
+                CompiledExpressionPart::Code(vec![34]),
+                CompiledExpressionPart::Deref,
+                CompiledExpressionPart::Code(vec![6]),
+                CompiledExpressionPart::LandingPad(targets[1].clone()), // capture to
+                CompiledExpressionPart::Code(vec![159])
+            ],
+            need_deref: false,
+        });
 
         let e = expression!(
             DW_OP_lit1,
@@ -1049,23 +1031,20 @@ mod tests {
             .expect("expression");
         let targets = find_jump_targets(&ce);
         assert_eq!(targets.len(), 1);
-        assert_eq!(
-            ce,
-            CompiledExpression {
-                parts: vec![
-                    CompiledExpressionPart::Code(vec![49, 18]),
-                    CompiledExpressionPart::Jump {
-                        conditionally: true,
-                        target: targets[0].clone(),
-                    },
-                    CompiledExpressionPart::Deref,
-                    CompiledExpressionPart::Code(vec![6, 48]),
-                    CompiledExpressionPart::LandingPad(targets[0].clone()), // capture to
-                    CompiledExpressionPart::Code(vec![159])
-                ],
-                need_deref: false,
-            }
-        );
+        assert_eq!(ce, CompiledExpression {
+            parts: vec![
+                CompiledExpressionPart::Code(vec![49, 18]),
+                CompiledExpressionPart::Jump {
+                    conditionally: true,
+                    target: targets[0].clone(),
+                },
+                CompiledExpressionPart::Deref,
+                CompiledExpressionPart::Code(vec![6, 48]),
+                CompiledExpressionPart::LandingPad(targets[0].clone()), // capture to
+                CompiledExpressionPart::Code(vec![159])
+            ],
+            need_deref: false,
+        });
 
         let e = expression!(
             DW_OP_lit1,
@@ -1087,46 +1066,40 @@ mod tests {
             .expect("expression");
         let targets = find_jump_targets(&ce);
         assert_eq!(targets.len(), 2);
-        assert_eq!(
-            ce,
-            CompiledExpression {
-                parts: vec![
-                    CompiledExpressionPart::Code(vec![49]),
-                    CompiledExpressionPart::LandingPad(targets[0].clone()),
-                    CompiledExpressionPart::Code(vec![18, 73, 42]),
-                    CompiledExpressionPart::Jump {
-                        conditionally: true,
-                        target: targets[1].clone(),
-                    },
-                    CompiledExpressionPart::Code(vec![35, 1]),
-                    CompiledExpressionPart::Jump {
-                        conditionally: false,
-                        target: targets[0].clone(),
-                    },
-                    CompiledExpressionPart::LandingPad(targets[1].clone()),
-                    CompiledExpressionPart::Code(vec![159])
-                ],
-                need_deref: false,
-            }
-        );
+        assert_eq!(ce, CompiledExpression {
+            parts: vec![
+                CompiledExpressionPart::Code(vec![49]),
+                CompiledExpressionPart::LandingPad(targets[0].clone()),
+                CompiledExpressionPart::Code(vec![18, 73, 42]),
+                CompiledExpressionPart::Jump {
+                    conditionally: true,
+                    target: targets[1].clone(),
+                },
+                CompiledExpressionPart::Code(vec![35, 1]),
+                CompiledExpressionPart::Jump {
+                    conditionally: false,
+                    target: targets[0].clone(),
+                },
+                CompiledExpressionPart::LandingPad(targets[1].clone()),
+                CompiledExpressionPart::Code(vec![159])
+            ],
+            need_deref: false,
+        });
 
         let e = expression!(DW_OP_WASM_location, 0x0, 1, DW_OP_plus_uconst, 5);
         let ce = compile_expression(&e, DWARF_ENCODING, None)
             .expect("non-error")
             .expect("expression");
-        assert_eq!(
-            ce,
-            CompiledExpression {
-                parts: vec![
-                    CompiledExpressionPart::Local {
-                        label: val1,
-                        trailing: false
-                    },
-                    CompiledExpressionPart::Code(vec![35, 5])
-                ],
-                need_deref: true,
-            }
-        );
+        assert_eq!(ce, CompiledExpression {
+            parts: vec![
+                CompiledExpressionPart::Local {
+                    label: val1,
+                    trailing: false
+                },
+                CompiledExpressionPart::Code(vec![35, 5])
+            ],
+            need_deref: true,
+        });
     }
 
     fn create_mock_address_transform() -> AddressTransform {
@@ -1183,37 +1156,28 @@ mod tests {
         let value_0 = ValueLabel::new(0);
         let value_1 = ValueLabel::new(1);
         let value_2 = ValueLabel::new(2);
-        value_ranges.insert(
-            value_0,
-            vec![ValueLocRange {
+        value_ranges.insert(value_0, vec![ValueLocRange {
+            loc: LabelValueLoc::CFAOffset(0),
+            start: 0,
+            end: 25,
+        }]);
+        value_ranges.insert(value_1, vec![ValueLocRange {
+            loc: LabelValueLoc::CFAOffset(0),
+            start: 5,
+            end: 30,
+        }]);
+        value_ranges.insert(value_2, vec![
+            ValueLocRange {
                 loc: LabelValueLoc::CFAOffset(0),
                 start: 0,
-                end: 25,
-            }],
-        );
-        value_ranges.insert(
-            value_1,
-            vec![ValueLocRange {
+                end: 10,
+            },
+            ValueLocRange {
                 loc: LabelValueLoc::CFAOffset(0),
-                start: 5,
+                start: 20,
                 end: 30,
-            }],
-        );
-        value_ranges.insert(
-            value_2,
-            vec![
-                ValueLocRange {
-                    loc: LabelValueLoc::CFAOffset(0),
-                    start: 0,
-                    end: 10,
-                },
-                ValueLocRange {
-                    loc: LabelValueLoc::CFAOffset(0),
-                    start: 20,
-                    end: 30,
-                },
-            ],
-        );
+            },
+        ]);
         (value_ranges, (value_0, value_1, value_2))
     }
 

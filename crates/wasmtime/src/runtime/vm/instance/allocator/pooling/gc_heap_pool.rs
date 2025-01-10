@@ -1,5 +1,5 @@
-use super::index_allocator::{SimpleIndexAllocator, SlotId};
 use super::GcHeapAllocationIndex;
+use super::index_allocator::{SimpleIndexAllocator, SlotId};
 use crate::prelude::*;
 use crate::runtime::vm::{GcHeap, GcRuntime, PoolingInstanceAllocatorConfig, Result};
 use std::sync::Mutex;

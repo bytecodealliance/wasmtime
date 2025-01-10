@@ -1,5 +1,5 @@
 use crate::BuiltinFunctions;
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use core::fmt::Formatter;
 use cranelift_codegen::isa::unwind::{UnwindInfo, UnwindInfoKind};
 use cranelift_codegen::isa::{CallConv, IsaBuilder};

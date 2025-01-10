@@ -8,13 +8,13 @@
 //! - ensuring alignment of constants within the pool,
 //! - bucketing constants by size.
 
-use crate::ir::immediates::{Ieee128, IntoBytes, V128Imm};
 use crate::ir::Constant;
+use crate::ir::immediates::{Ieee128, IntoBytes, V128Imm};
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::fmt;
 use core::slice::Iter;
-use core::str::{from_utf8, FromStr};
+use core::str::{FromStr, from_utf8};
 use cranelift_entity::EntityRef;
 
 #[cfg(feature = "enable-serde")]
@@ -454,32 +454,27 @@ mod tests {
                 .into_vec()
         }
 
-        assert_eq!(
-            parse_to_uimm128("0x42"),
-            [0x42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        );
-        assert_eq!(
-            parse_to_uimm128("0x00"),
-            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        );
-        assert_eq!(
-            parse_to_uimm128("0x12345678"),
-            [0x78, 0x56, 0x34, 0x12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        );
-        assert_eq!(
-            parse_to_uimm128("0x1234_5678"),
-            [0x78, 0x56, 0x34, 0x12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-        );
+        assert_eq!(parse_to_uimm128("0x42"), [
+            0x42, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ]);
+        assert_eq!(parse_to_uimm128("0x00"), [
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ]);
+        assert_eq!(parse_to_uimm128("0x12345678"), [
+            0x78, 0x56, 0x34, 0x12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ]);
+        assert_eq!(parse_to_uimm128("0x1234_5678"), [
+            0x78, 0x56, 0x34, 0x12, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+        ]);
     }
 
     #[test]
     fn constant_ieee128() {
         let value = Ieee128::with_bits(0x000102030405060708090a0b0c0d0e0f);
         let constant = ConstantData::from(value);
-        assert_eq!(
-            constant.as_slice(),
-            &[0xf, 0xe, 0xd, 0xc, 0xb, 0xa, 0x9, 0x8, 0x7, 0x6, 0x5, 0x4, 0x3, 0x2, 0x1, 0x0]
-        );
+        assert_eq!(constant.as_slice(), &[
+            0xf, 0xe, 0xd, 0xc, 0xb, 0xa, 0x9, 0x8, 0x7, 0x6, 0x5, 0x4, 0x3, 0x2, 0x1, 0x0
+        ]);
         assert_eq!(Ieee128::try_from(&constant).unwrap().bits(), value.bits());
     }
 }

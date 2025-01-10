@@ -1,5 +1,5 @@
-use crate::bindings::sockets::network::{ErrorCode, Ipv4Address, Ipv6Address};
 use crate::TrappableError;
+use crate::bindings::sockets::network::{ErrorCode, Ipv4Address, Ipv6Address};
 use std::future::Future;
 use std::net::SocketAddr;
 use std::pin::Pin;

@@ -10,7 +10,7 @@
 #![no_main]
 
 use arbitrary::Unstructured;
-use component_fuzz_util::{TestCase, Type, MAX_TYPE_DEPTH};
+use component_fuzz_util::{MAX_TYPE_DEPTH, TestCase, Type};
 use libfuzzer_sys::fuzz_target;
 use wasmparser::component_types::ComponentAnyTypeId;
 use wasmparser::{Parser, Payload, Validator, WasmFeatures};

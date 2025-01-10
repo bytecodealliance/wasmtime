@@ -1,4 +1,5 @@
 use crate::network::SocketAddrUse;
+use crate::{Pollable, SocketResult, WasiImpl, WasiView};
 use crate::{
     bindings::{
         io::streams::{InputStream, OutputStream},
@@ -7,7 +8,6 @@ use crate::{
     },
     network::SocketAddressFamily,
 };
-use crate::{Pollable, SocketResult, WasiImpl, WasiView};
 use std::net::SocketAddr;
 use std::time::Duration;
 use wasmtime::component::Resource;
@@ -316,6 +316,7 @@ pub mod sync {
     use wasmtime::component::Resource;
 
     use crate::{
+        SocketError, WasiImpl, WasiView,
         bindings::{
             sockets::{
                 network::Network,
@@ -327,7 +328,6 @@ pub mod sync {
             },
         },
         runtime::in_tokio,
-        SocketError, WasiImpl, WasiView,
     };
 
     impl<T> tcp::Host for WasiImpl<T> where T: WasiView {}

@@ -8,8 +8,8 @@ use std::boxed::Box;
 use std::string::String;
 use std::vec::Vec;
 
-use crate::module::ModuleReloc;
 use crate::ModuleRelocTarget;
+use crate::module::ModuleReloc;
 
 /// This specifies how data is to be initialized.
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -219,12 +219,9 @@ mod tests {
         let contents_clone = contents.clone();
         data.define(contents.into_boxed_slice());
 
-        assert_eq!(
-            data.init,
-            Init::Bytes {
-                contents: contents_clone.into_boxed_slice()
-            }
-        );
+        assert_eq!(data.init, Init::Bytes {
+            contents: contents_clone.into_boxed_slice()
+        });
         assert_eq!(data.function_decls.len(), 0);
         assert_eq!(data.data_decls.len(), 0);
         assert_eq!(data.function_relocs.len(), 0);

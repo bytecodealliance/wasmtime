@@ -1,5 +1,5 @@
 use crate::sched::subscription::{RwEventFlags, Subscription};
-use crate::{sched::Poll, Error, ErrorExt};
+use crate::{Error, ErrorExt, sched::Poll};
 use cap_std::time::Duration;
 use rustix::event::{PollFd, PollFlags};
 

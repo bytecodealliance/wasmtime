@@ -1,16 +1,16 @@
-use crate::debug::transform::utils::resolve_die_ref;
 use crate::debug::Reader;
+use crate::debug::transform::utils::resolve_die_ref;
 
 use super::address_transform::AddressTransform;
-use super::expression::{compile_expression, CompiledExpression, FunctionFrameInfo};
+use super::expression::{CompiledExpression, FunctionFrameInfo, compile_expression};
 use super::range_info_builder::RangeInfoBuilder;
 use super::refs::{PendingDebugInfoRefs, PendingUnitRefs};
 use super::unit::InheritedAttr;
-use super::{dbi_log, TransformError};
-use anyhow::{bail, Error};
+use super::{TransformError, dbi_log};
+use anyhow::{Error, bail};
 use cranelift_codegen::isa::TargetIsa;
 use gimli::{
-    write, AttributeValue, DebugLineOffset, DebuggingInformationEntry, Dwarf, Unit, UnitOffset,
+    AttributeValue, DebugLineOffset, DebuggingInformationEntry, Dwarf, Unit, UnitOffset, write,
 };
 
 #[derive(Debug)]
@@ -243,11 +243,7 @@ pub(crate) fn clone_die_attributes<'a>(
                             )
                             .filter(|i| {
                                 // Ignore empty range
-                                if let Ok((_, 0, _)) = i {
-                                    false
-                                } else {
-                                    true
-                                }
+                                if let Ok((_, 0, _)) = i { false } else { true }
                             })
                             .map(|i| {
                                 i.map(|(start, len, expr)| write::Location::StartLength {
@@ -393,13 +389,10 @@ fn prepare_die_context(
     match entry.tag() {
         gimli::DW_TAG_subprogram | gimli::DW_TAG_inlined_subroutine | gimli::DW_TAG_entry_point => {
             // Push the 'context' of there being no parameters (yet).
-            subprograms.push(
-                *depth,
-                SubprogramContext {
-                    obj_ptr: UnitOffset { 0: 0 },
-                    param_num: -1,
-                },
-            );
+            subprograms.push(*depth, SubprogramContext {
+                obj_ptr: UnitOffset { 0: 0 },
+                param_num: -1,
+            });
         }
         gimli::DW_TAG_formal_parameter => {
             // Formal parameter tags can be parented by catch blocks

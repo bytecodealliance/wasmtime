@@ -3,18 +3,18 @@
 use super::lower::isle::generated_code::{VecAMode, VecElementWidth, VecOpMasking};
 use crate::binemit::{Addend, CodeOffset, Reloc};
 pub use crate::ir::condcodes::IntCC;
-use crate::ir::types::{self, F128, F16, F32, F64, I128, I16, I32, I64, I8, I8X16};
+use crate::ir::types::{self, F16, F32, F64, F128, I8, I8X16, I16, I32, I64, I128};
 
 pub use crate::ir::{ExternalName, MemFlags, Type};
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
-use crate::{settings, CodegenError, CodegenResult};
+use crate::{CodegenError, CodegenResult, settings};
 
 pub use crate::ir::condcodes::FloatCC;
 
 use alloc::vec::Vec;
 use regalloc2::RegClass;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::boxed::Box;
 use std::fmt::Write;
 use std::string::{String, ToString};
@@ -46,8 +46,8 @@ pub(crate) type VecU8 = Vec<u8>;
 // Instructions (top level): definition
 
 pub use crate::isa::riscv64::lower::isle::generated_code::{
-    AluOPRRI, AluOPRRR, AtomicOP, CsrImmOP, CsrRegOP, FClassResult, FFlagsException, FpuOPRR,
-    FpuOPRRR, FpuOPRRRR, LoadOP, MInst as Inst, StoreOP, CSR, FRM,
+    AluOPRRI, AluOPRRR, AtomicOP, CSR, CsrImmOP, CsrRegOP, FClassResult, FFlagsException, FRM,
+    FpuOPRR, FpuOPRRR, FpuOPRRRR, LoadOP, MInst as Inst, StoreOP,
 };
 use crate::isa::riscv64::lower::isle::generated_code::{CjOp, MInst, VecAluOpRRImm5, VecAluOpRRR};
 

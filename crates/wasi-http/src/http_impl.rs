@@ -1,6 +1,7 @@
 //! Implementation of the `wasi:http/outgoing-handler` interface.
 
 use crate::{
+    WasiHttpImpl, WasiHttpView,
     bindings::http::{
         outgoing_handler,
         types::{self, Scheme},
@@ -8,7 +9,6 @@ use crate::{
     error::internal_error,
     http_request_error,
     types::{HostFutureIncomingResponse, HostOutgoingRequest, OutgoingRequestConfig},
-    WasiHttpImpl, WasiHttpView,
 };
 use bytes::Bytes;
 use http_body_util::{BodyExt, Empty};
@@ -93,15 +93,12 @@ where
             .body(body)
             .map_err(|err| internal_error(err.to_string()))?;
 
-        let future = self.send_request(
-            request,
-            OutgoingRequestConfig {
-                use_tls,
-                connect_timeout,
-                first_byte_timeout,
-                between_bytes_timeout,
-            },
-        )?;
+        let future = self.send_request(request, OutgoingRequestConfig {
+            use_tls,
+            connect_timeout,
+            first_byte_timeout,
+            between_bytes_timeout,
+        })?;
 
         Ok(self.table().push(future)?)
     }

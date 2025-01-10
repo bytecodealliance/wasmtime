@@ -2,8 +2,8 @@ use crate::component::func::{Func, LiftContext, LowerContext, Options};
 use crate::component::matching::InstanceType;
 use crate::component::storage::{storage_as_slice, storage_as_slice_mut};
 use crate::prelude::*;
-use crate::runtime::vm::component::ComponentInstance;
 use crate::runtime::vm::SendSyncPtr;
+use crate::runtime::vm::component::ComponentInstance;
 use crate::{AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use alloc::borrow::Cow;
 use alloc::sync::Arc;
@@ -13,8 +13,8 @@ use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use core::str;
 use wasmtime_environ::component::{
-    CanonicalAbiInfo, ComponentTypes, InterfaceType, StringEncoding, VariantInfo, MAX_FLAT_PARAMS,
-    MAX_FLAT_RESULTS,
+    CanonicalAbiInfo, ComponentTypes, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    StringEncoding, VariantInfo,
 };
 
 /// A statically-typed version of [`Func`] which takes `Params` as input and

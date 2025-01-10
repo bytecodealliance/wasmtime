@@ -107,8 +107,8 @@ pub fn export(instance: &SpecInstance, name: &str) -> Result<SpecExport, String>
 mod ocaml_bindings {
     use super::*;
     use ocaml_interop::{
-        impl_conv_ocaml_variant, ocaml, FromOCaml, OCaml, OCamlBytes, OCamlInt32, OCamlInt64,
-        OCamlList,
+        FromOCaml, OCaml, OCamlBytes, OCamlInt32, OCamlInt64, OCamlList, impl_conv_ocaml_variant,
+        ocaml,
     };
 
     // Using this macro converts the enum both ways: Rust to OCaml and OCaml to
@@ -268,12 +268,9 @@ mod tests {
         ])]);
         let results = interpret(&instance, "simd_not", parameters).unwrap();
 
-        assert_eq!(
-            results,
-            vec![SpecValue::V128(vec![
-                255, 0, 255, 255, 0, 255, 255, 255, 255, 0, 255, 255, 255, 255, 255, 255
-            ])]
-        );
+        assert_eq!(results, vec![SpecValue::V128(vec![
+            255, 0, 255, 255, 0, 255, 255, 255, 255, 0, 255, 255, 255, 255, 255, 255
+        ])]);
     }
 
     #[test]
@@ -285,12 +282,9 @@ mod tests {
         ])]);
         let results = interpret_legacy(&module, parameters).unwrap();
 
-        assert_eq!(
-            results,
-            vec![SpecValue::V128(vec![
-                255, 0, 255, 255, 0, 255, 255, 255, 255, 0, 255, 255, 255, 255, 255, 255
-            ])]
-        );
+        assert_eq!(results, vec![SpecValue::V128(vec![
+            255, 0, 255, 255, 0, 255, 255, 255, 255, 0, 255, 255, 255, 255, 255, 255
+        ])]);
     }
 
     // See issue https://github.com/bytecodealliance/wasmtime/issues/4671.

@@ -13,7 +13,7 @@ use core::mem;
 use cranelift_codegen::cursor::{Cursor, FuncCursor};
 use cranelift_codegen::entity::{EntityList, EntitySet, ListPool, SecondaryMap};
 use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
-use cranelift_codegen::ir::types::{F32, F64, I128, I64};
+use cranelift_codegen::ir::types::{F32, F64, I64, I128};
 use cranelift_codegen::ir::{Block, Function, Inst, InstBuilder, Type, Value};
 use cranelift_codegen::packed_option::PackedOption;
 
@@ -600,8 +600,8 @@ impl SSABuilder {
 
 #[cfg(test)]
 mod tests {
-    use crate::ssa::SSABuilder;
     use crate::Variable;
+    use crate::ssa::SSABuilder;
     use cranelift_codegen::cursor::{Cursor, FuncCursor};
     use cranelift_codegen::entity::EntityRef;
     use cranelift_codegen::ir;
@@ -954,13 +954,10 @@ mod tests {
         ssa.def_var(x_var, x1, block0);
         ssa.use_var(&mut func, x_var, I32, block0).0;
         let br_table = {
-            let jump_table = JumpTableData::new(
+            let jump_table = JumpTableData::new(func.dfg.block_call(block2, &[]), &[
                 func.dfg.block_call(block2, &[]),
-                &[
-                    func.dfg.block_call(block2, &[]),
-                    func.dfg.block_call(block1, &[]),
-                ],
-            );
+                func.dfg.block_call(block1, &[]),
+            ]);
             let jt = func.create_jump_table(jump_table);
             let mut cur = FuncCursor::new(&mut func).at_bottom(block0);
             cur.ins().br_table(x1, jt)

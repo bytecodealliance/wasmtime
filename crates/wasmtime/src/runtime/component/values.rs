@@ -1,7 +1,7 @@
-use crate::component::func::{desc, Lift, LiftContext, Lower, LowerContext};
-use crate::component::ResourceAny;
-use crate::prelude::*;
 use crate::ValRaw;
+use crate::component::ResourceAny;
+use crate::component::func::{Lift, LiftContext, Lower, LowerContext, desc};
+use crate::prelude::*;
 use core::mem::MaybeUninit;
 use core::slice::{Iter, IterMut};
 use wasmtime_component_util::{DiscriminantSize, FlagsSize};

@@ -1,4 +1,4 @@
-use crate::{wasm_engine_t, wasmtime_error_t, wasmtime_val_t, ForeignData};
+use crate::{ForeignData, wasm_engine_t, wasmtime_error_t, wasmtime_val_t};
 use std::cell::UnsafeCell;
 use std::ffi::c_void;
 use std::sync::Arc;
@@ -104,17 +104,14 @@ pub extern "C" fn wasmtime_store_new(
     finalizer: Option<extern "C" fn(*mut c_void)>,
 ) -> Box<wasmtime_store_t> {
     Box::new(wasmtime_store_t {
-        store: Store::new(
-            &engine.engine,
-            WasmtimeStoreData {
-                foreign: ForeignData { data, finalizer },
-                #[cfg(feature = "wasi")]
-                wasi: None,
-                hostcall_val_storage: Vec::new(),
-                wasm_val_storage: Vec::new(),
-                store_limits: StoreLimits::default(),
-            },
-        ),
+        store: Store::new(&engine.engine, WasmtimeStoreData {
+            foreign: ForeignData { data, finalizer },
+            #[cfg(feature = "wasi")]
+            wasi: None,
+            hostcall_val_storage: Vec::new(),
+            wasm_val_storage: Vec::new(),
+            store_limits: StoreLimits::default(),
+        }),
     })
 }
 

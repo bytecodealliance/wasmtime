@@ -113,11 +113,11 @@ fn array_new_fixed_with_elems() -> Result<()> {
         FieldType::new(Mutability::Const, ValType::I32.into()),
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
-    let array = ArrayRef::new_fixed(
-        &mut store,
-        &pre,
-        &[Val::I32(11), Val::I32(22), Val::I32(33)],
-    )?;
+    let array = ArrayRef::new_fixed(&mut store, &pre, &[
+        Val::I32(11),
+        Val::I32(22),
+        Val::I32(33),
+    ])?;
     assert_eq!(array.len(&store)?, 3);
     for i in 0..3 {
         assert_eq!(array.get(&mut store, i)?.unwrap_i32(), (i as i32 + 1) * 11);
@@ -226,11 +226,11 @@ fn array_len_non_empty() -> Result<()> {
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
 
-    let array = ArrayRef::new_fixed(
-        &mut store,
-        &pre,
-        &[Val::I32(11), Val::I32(22), Val::I32(33)],
-    )?;
+    let array = ArrayRef::new_fixed(&mut store, &pre, &[
+        Val::I32(11),
+        Val::I32(22),
+        Val::I32(33),
+    ])?;
     assert_eq!(array.len(&store)?, 3);
 
     Ok(())
@@ -246,11 +246,11 @@ fn array_get_in_bounds() -> Result<()> {
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
 
-    let array = ArrayRef::new_fixed(
-        &mut store,
-        &pre,
-        &[Val::I32(11), Val::I32(22), Val::I32(33)],
-    )?;
+    let array = ArrayRef::new_fixed(&mut store, &pre, &[
+        Val::I32(11),
+        Val::I32(22),
+        Val::I32(33),
+    ])?;
 
     assert_eq!(array.get(&mut store, 0)?.unwrap_i32(), 11);
     assert_eq!(array.get(&mut store, 1)?.unwrap_i32(), 22);
@@ -269,11 +269,11 @@ fn array_get_out_of_bounds() -> Result<()> {
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
 
-    let array = ArrayRef::new_fixed(
-        &mut store,
-        &pre,
-        &[Val::I32(11), Val::I32(22), Val::I32(33)],
-    )?;
+    let array = ArrayRef::new_fixed(&mut store, &pre, &[
+        Val::I32(11),
+        Val::I32(22),
+        Val::I32(33),
+    ])?;
 
     assert!(array.get(&mut store, 3).is_err());
     assert!(array.get(&mut store, 4).is_err());
@@ -425,11 +425,11 @@ fn array_set_immutable_elems() -> Result<()> {
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
 
-    let array = ArrayRef::new_fixed(
-        &mut store,
-        &pre,
-        &[Val::I32(11), Val::I32(22), Val::I32(33)],
-    )?;
+    let array = ArrayRef::new_fixed(&mut store, &pre, &[
+        Val::I32(11),
+        Val::I32(22),
+        Val::I32(33),
+    ])?;
 
     assert!(array.set(&mut store, 0, Val::I32(22)).is_err());
     assert!(array.set(&mut store, 1, Val::I32(33)).is_err());
@@ -506,11 +506,11 @@ fn array_elems_non_empty() -> Result<()> {
         FieldType::new(Mutability::Const, ValType::I32.into()),
     );
     let pre = ArrayRefPre::new(&mut store, array_ty);
-    let array = ArrayRef::new_fixed(
-        &mut store,
-        &pre,
-        &[Val::I32(11), Val::I32(22), Val::I32(33)],
-    )?;
+    let array = ArrayRef::new_fixed(&mut store, &pre, &[
+        Val::I32(11),
+        Val::I32(22),
+        Val::I32(33),
+    ])?;
     let mut elems = array.elems(&mut store)?;
     assert_eq!(elems.len(), 3);
     assert_eq!(elems.next().unwrap().unwrap_i32(), 11);

@@ -1,6 +1,6 @@
 use std::{env, process, time::Duration};
 use test_programs::preview1::{
-    assert_errno, assert_fs_time_eq, open_scratch_directory, TestConfig,
+    TestConfig, assert_errno, assert_fs_time_eq, open_scratch_directory,
 };
 
 unsafe fn test_path_filestat(dir_fd: wasi::Fd) {

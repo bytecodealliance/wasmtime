@@ -212,11 +212,11 @@ pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiImpl, WasiView};
 pub use self::error::{I32Exit, TrappableError};
 pub use self::filesystem::{DirPerms, FileInputStream, FilePerms, FsError, FsResult};
 pub use self::network::{Network, SocketAddrUse, SocketError, SocketResult};
-pub use self::poll::{subscribe, ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe};
-pub use self::random::{thread_rng, Deterministic};
+pub use self::poll::{ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe, subscribe};
+pub use self::random::{Deterministic, thread_rng};
 pub use self::stdio::{
-    stderr, stdin, stdout, AsyncStdinStream, AsyncStdoutStream, IsATTY, OutputFile, Stderr, Stdin,
-    StdinStream, Stdout, StdoutStream,
+    AsyncStdinStream, AsyncStdoutStream, IsATTY, OutputFile, Stderr, Stdin, StdinStream, Stdout,
+    StdoutStream, stderr, stdin, stdout,
 };
 pub use self::stream::{
     HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError, StreamResult,

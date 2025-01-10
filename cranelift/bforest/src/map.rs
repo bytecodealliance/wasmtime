@@ -1,6 +1,6 @@
 //! Forest of maps.
 
-use super::{Comparator, Forest, Node, NodeData, NodePool, Path, INNER_SIZE};
+use super::{Comparator, Forest, INNER_SIZE, Node, NodeData, NodePool, Path};
 use crate::packed_option::PackedOption;
 #[cfg(test)]
 use alloc::string::String;
@@ -480,18 +480,15 @@ mod tests {
 
         m.verify(f, &());
 
-        assert_eq!(
-            m.iter(f).collect::<Vec<_>>(),
-            [
-                (20, 2.0),
-                (40, 4.0),
-                (50, 5.5),
-                (60, 6.0),
-                (80, 8.0),
-                (90, 9.0),
-                (200, 20.0),
-            ]
-        );
+        assert_eq!(m.iter(f).collect::<Vec<_>>(), [
+            (20, 2.0),
+            (40, 4.0),
+            (50, 5.5),
+            (60, 6.0),
+            (80, 8.0),
+            (90, 9.0),
+            (200, 20.0),
+        ]);
 
         assert_eq!(m.get(0, f, &()), None);
         assert_eq!(m.get(20, f, &()), Some(2.0));
@@ -593,10 +590,11 @@ mod tests {
             *v = (k / 10) as f32;
             (k % 20) == 0
         });
-        assert_eq!(
-            m.iter(f).collect::<Vec<_>>(),
-            [(20, 2.0), (40, 4.0), (60, 6.0)]
-        );
+        assert_eq!(m.iter(f).collect::<Vec<_>>(), [
+            (20, 2.0),
+            (40, 4.0),
+            (60, 6.0)
+        ]);
 
         // Insert at back of leaf.
         let mut m = full_leaf(f);

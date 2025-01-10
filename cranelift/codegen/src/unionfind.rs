@@ -1,7 +1,7 @@
 //! Simple union-find data structure.
 
 use crate::trace;
-use cranelift_entity::{packed_option::ReservedValue, EntityRef, SecondaryMap};
+use cranelift_entity::{EntityRef, SecondaryMap, packed_option::ReservedValue};
 use std::hash::Hash;
 use std::mem::swap;
 

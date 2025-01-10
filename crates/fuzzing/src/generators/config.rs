@@ -10,7 +10,7 @@ use arbitrary::{Arbitrary, Unstructured};
 use std::sync::Arc;
 use std::time::Duration;
 use wasmtime::{Engine, Module, MpkEnabled, Store};
-use wasmtime_wast_util::{limits, WastConfig, WastTest};
+use wasmtime_wast_util::{WastConfig, WastTest, limits};
 
 /// Configuration for `wasmtime::Config` and generated modules for a session of
 /// fuzzing.

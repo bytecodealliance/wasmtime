@@ -1,6 +1,6 @@
+use crate::component::InstanceExportLookup;
 use crate::component::matching::InstanceType;
 use crate::component::types;
-use crate::component::InstanceExportLookup;
 use crate::prelude::*;
 use crate::runtime::vm::component::ComponentRuntimeInfo;
 #[cfg(feature = "std")]
@@ -9,8 +9,8 @@ use crate::runtime::vm::{
     CompiledModuleId, VMArrayCallFunction, VMFuncRef, VMFunctionBody, VMWasmCallFunction,
 };
 use crate::{
-    code::CodeObject, code_memory::CodeMemory, type_registry::TypeCollection, Engine, Module,
-    ResourcesRequired,
+    Engine, Module, ResourcesRequired, code::CodeObject, code_memory::CodeMemory,
+    type_registry::TypeCollection,
 };
 use crate::{FuncType, ValType};
 use alloc::sync::Arc;
@@ -722,13 +722,10 @@ impl Component {
         let item = self.with_uninstantiated_instance_type(|instance| {
             types::ComponentItem::from(&self.inner.engine, &ty, instance)
         });
-        Some((
-            item,
-            ComponentExportIndex {
-                id: self.inner.id,
-                index,
-            },
-        ))
+        Some((item, ComponentExportIndex {
+            id: self.inner.id,
+            index,
+        }))
     }
 
     pub(crate) fn lookup_export_index(

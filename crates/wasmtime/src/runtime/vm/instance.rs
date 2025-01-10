@@ -16,7 +16,7 @@ use crate::runtime::vm::{
     SendSyncPtr, VMFunctionBody, VMGcRef, VMStore, WasmFault,
 };
 use crate::store::{StoreInner, StoreOpaque};
-use crate::{prelude::*, StoreContextMut};
+use crate::{StoreContextMut, prelude::*};
 use alloc::sync::Arc;
 use core::alloc::Layout;
 use core::any::Any;
@@ -26,11 +26,11 @@ use core::sync::atomic::AtomicU64;
 use core::{mem, ptr};
 use sptr::Strict;
 use wasmtime_environ::{
-    packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
-    DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
-    HostPtr, MemoryIndex, Module, ModuleInternedTypeIndex, PrimaryMap, PtrSize, TableIndex,
-    TableInitialValue, TableSegmentElements, Trap, VMOffsets, VMSharedTypeIndex, WasmHeapTopType,
-    VMCONTEXT_MAGIC,
+    DataIndex, DefinedGlobalIndex, DefinedMemoryIndex, DefinedTableIndex, ElemIndex, EntityIndex,
+    EntityRef, EntitySet, FuncIndex, GlobalIndex, HostPtr, MemoryIndex, Module,
+    ModuleInternedTypeIndex, PrimaryMap, PtrSize, TableIndex, TableInitialValue,
+    TableSegmentElements, Trap, VMCONTEXT_MAGIC, VMOffsets, VMSharedTypeIndex, WasmHeapTopType,
+    packed_option::ReservedValue,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -313,36 +313,33 @@ impl Instance {
         #[cfg(not(feature = "wmemcheck"))]
         let _ = memory_tys;
 
-        ptr::write(
-            ptr,
-            Instance {
-                runtime_info: req.runtime_info.clone(),
-                memories,
-                tables,
-                dropped_elements,
-                dropped_data,
-                host_state: req.host_state,
-                vmctx_self_reference: SendSyncPtr::new(NonNull::new(ptr.add(1).cast()).unwrap()),
-                vmctx: VMContext {
-                    _marker: core::marker::PhantomPinned,
-                },
-                #[cfg(feature = "wmemcheck")]
-                wmemcheck_state: {
-                    if req.wmemcheck {
-                        let size = memory_tys
-                            .iter()
-                            .next()
-                            .map(|memory| memory.1.limits.min)
-                            .unwrap_or(0)
-                            * 64
-                            * 1024;
-                        Some(Wmemcheck::new(size as usize))
-                    } else {
-                        None
-                    }
-                },
+        ptr::write(ptr, Instance {
+            runtime_info: req.runtime_info.clone(),
+            memories,
+            tables,
+            dropped_elements,
+            dropped_data,
+            host_state: req.host_state,
+            vmctx_self_reference: SendSyncPtr::new(NonNull::new(ptr.add(1).cast()).unwrap()),
+            vmctx: VMContext {
+                _marker: core::marker::PhantomPinned,
             },
-        );
+            #[cfg(feature = "wmemcheck")]
+            wmemcheck_state: {
+                if req.wmemcheck {
+                    let size = memory_tys
+                        .iter()
+                        .next()
+                        .map(|memory| memory.1.limits.min)
+                        .unwrap_or(0)
+                        * 64
+                        * 1024;
+                    Some(Wmemcheck::new(size as usize))
+                } else {
+                    None
+                }
+            },
+        });
 
         (*ptr).initialize_vmctx(module, req.runtime_info.offsets(), req.store, req.imports);
         InstanceHandle {
@@ -527,14 +524,11 @@ impl Instance {
     ) -> impl ExactSizeIterator<Item = (GlobalIndex, ExportGlobal)> + 'a {
         let module = self.env_module().clone();
         module.globals.keys().map(move |idx| {
-            (
-                idx,
-                ExportGlobal {
-                    definition: self.defined_or_imported_global_ptr(idx),
-                    vmctx: self.vmctx(),
-                    global: self.env_module().globals[idx],
-                },
-            )
+            (idx, ExportGlobal {
+                definition: self.defined_or_imported_global_ptr(idx),
+                vmctx: self.vmctx(),
+                global: self.env_module().globals[idx],
+            })
         })
     }
 

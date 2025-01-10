@@ -175,17 +175,13 @@ pub fn mem_emit(
     emit_info: &EmitInfo,
     state: &mut EmitState,
 ) {
-    let (mem_insts, mem) = mem_finalize(
-        mem,
-        state,
-        MemInstType {
-            have_d12: opcode_rx.is_some(),
-            have_d20: opcode_rxy.is_some(),
-            have_pcrel: opcode_ril.is_some(),
-            have_unaligned_pcrel: opcode_ril.is_some() && !add_trap,
-            have_index: true,
-        },
-    );
+    let (mem_insts, mem) = mem_finalize(mem, state, MemInstType {
+        have_d12: opcode_rx.is_some(),
+        have_d20: opcode_rxy.is_some(),
+        have_pcrel: opcode_ril.is_some(),
+        have_unaligned_pcrel: opcode_ril.is_some() && !add_trap,
+        have_index: true,
+    });
     for inst in mem_insts.into_iter() {
         inst.emit(sink, emit_info, state);
     }
@@ -244,17 +240,13 @@ pub fn mem_rs_emit(
     emit_info: &EmitInfo,
     state: &mut EmitState,
 ) {
-    let (mem_insts, mem) = mem_finalize(
-        mem,
-        state,
-        MemInstType {
-            have_d12: opcode_rs.is_some(),
-            have_d20: opcode_rsy.is_some(),
-            have_pcrel: false,
-            have_unaligned_pcrel: false,
-            have_index: false,
-        },
-    );
+    let (mem_insts, mem) = mem_finalize(mem, state, MemInstType {
+        have_d12: opcode_rs.is_some(),
+        have_d20: opcode_rsy.is_some(),
+        have_pcrel: false,
+        have_unaligned_pcrel: false,
+        have_index: false,
+    });
     for inst in mem_insts.into_iter() {
         inst.emit(sink, emit_info, state);
     }
@@ -295,17 +287,13 @@ pub fn mem_imm8_emit(
     emit_info: &EmitInfo,
     state: &mut EmitState,
 ) {
-    let (mem_insts, mem) = mem_finalize(
-        mem,
-        state,
-        MemInstType {
-            have_d12: true,
-            have_d20: true,
-            have_pcrel: false,
-            have_unaligned_pcrel: false,
-            have_index: false,
-        },
-    );
+    let (mem_insts, mem) = mem_finalize(mem, state, MemInstType {
+        have_d12: true,
+        have_d20: true,
+        have_pcrel: false,
+        have_unaligned_pcrel: false,
+        have_index: false,
+    });
     for inst in mem_insts.into_iter() {
         inst.emit(sink, emit_info, state);
     }
@@ -342,17 +330,13 @@ pub fn mem_imm16_emit(
     emit_info: &EmitInfo,
     state: &mut EmitState,
 ) {
-    let (mem_insts, mem) = mem_finalize(
-        mem,
-        state,
-        MemInstType {
-            have_d12: true,
-            have_d20: false,
-            have_pcrel: false,
-            have_unaligned_pcrel: false,
-            have_index: false,
-        },
-    );
+    let (mem_insts, mem) = mem_finalize(mem, state, MemInstType {
+        have_d12: true,
+        have_d20: false,
+        have_pcrel: false,
+        have_unaligned_pcrel: false,
+        have_index: false,
+    });
     for inst in mem_insts.into_iter() {
         inst.emit(sink, emit_info, state);
     }
@@ -384,17 +368,13 @@ pub fn mem_vrx_emit(
     emit_info: &EmitInfo,
     state: &mut EmitState,
 ) {
-    let (mem_insts, mem) = mem_finalize(
-        mem,
-        state,
-        MemInstType {
-            have_d12: true,
-            have_d20: false,
-            have_pcrel: false,
-            have_unaligned_pcrel: false,
-            have_index: true,
-        },
-    );
+    let (mem_insts, mem) = mem_finalize(mem, state, MemInstType {
+        have_d12: true,
+        have_d20: false,
+        have_pcrel: false,
+        have_unaligned_pcrel: false,
+        have_index: true,
+    });
     for inst in mem_insts.into_iter() {
         inst.emit(sink, emit_info, state);
     }

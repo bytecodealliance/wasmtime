@@ -6,13 +6,13 @@
 
 use super::*;
 use crate::{
+    GcHeapOutOfMemory,
     prelude::*,
     vm::{
-        mmap::AlignedLength, ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection,
-        GcHeap, GcHeapObject, GcProgress, GcRootsIter, Mmap, SendSyncUnsafeCell, TypedGcRef,
-        VMGcHeader, VMGcRef,
+        ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection, GcHeap, GcHeapObject,
+        GcProgress, GcRootsIter, Mmap, SendSyncUnsafeCell, TypedGcRef, VMGcHeader, VMGcRef,
+        mmap::AlignedLength,
     },
-    GcHeapOutOfMemory,
 };
 use core::{
     alloc::Layout,
@@ -21,8 +21,8 @@ use core::{
     num::{NonZeroU32, NonZeroUsize},
 };
 use wasmtime_environ::{
-    null::NullTypeLayouts, GcArrayLayout, GcStructLayout, GcTypeLayouts, VMGcKind,
-    VMSharedTypeIndex,
+    GcArrayLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex,
+    null::NullTypeLayouts,
 };
 
 /// The null collector.

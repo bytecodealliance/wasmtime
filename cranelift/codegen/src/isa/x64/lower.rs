@@ -4,17 +4,17 @@
 pub(super) mod isle;
 
 use crate::ir::pcc::{FactContext, PccResult};
-use crate::ir::{types, ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type};
+use crate::ir::{ExternalName, Inst as IRInst, InstructionData, LibCall, Opcode, Type, types};
 use crate::isa::x64::abi::*;
 use crate::isa::x64::inst::args::*;
 use crate::isa::x64::inst::*;
 use crate::isa::x64::pcc;
-use crate::isa::{x64::X64Backend, CallConv};
+use crate::isa::{CallConv, x64::X64Backend};
 use crate::machinst::lower::*;
 use crate::machinst::*;
 use crate::result::CodegenResult;
 use crate::settings::Flags;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use target_lexicon::Triple;
 
 //=============================================================================
@@ -200,13 +200,10 @@ fn emit_vm_call(
 /// The goal is to embed it within an address mode.
 fn matches_small_constant_shift(ctx: &mut Lower<Inst>, spec: InsnInput) -> Option<(InsnInput, u8)> {
     matches_input(ctx, spec, Opcode::Ishl).and_then(|shift| {
-        match input_to_imm(
-            ctx,
-            InsnInput {
-                insn: shift,
-                input: 1,
-            },
-        ) {
+        match input_to_imm(ctx, InsnInput {
+            insn: shift,
+            input: 1,
+        }) {
             Some(shift_amt) if shift_amt <= 3 => Some((
                 InsnInput {
                     insn: shift,

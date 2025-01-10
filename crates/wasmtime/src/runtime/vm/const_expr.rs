@@ -1,9 +1,9 @@
 //! Evaluating const expressions.
 
-use crate::runtime::vm::{Instance, VMGcRef, ValRaw, I31};
+use crate::runtime::vm::{I31, Instance, VMGcRef, ValRaw};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
 use crate::{
-    prelude::*, ArrayRef, ArrayRefPre, ArrayType, StructRef, StructRefPre, StructType, Val,
+    ArrayRef, ArrayRefPre, ArrayType, StructRef, StructRefPre, StructType, Val, prelude::*,
 };
 use smallvec::SmallVec;
 use wasmtime_environ::{

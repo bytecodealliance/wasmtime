@@ -6,7 +6,7 @@ use crate::component::Component;
 use crate::prelude::*;
 use crate::runtime::vm::VMWasmCallFunction;
 use crate::sync::{OnceLock, RwLock};
-use crate::{code_memory::CodeMemory, FrameInfo, Module};
+use crate::{FrameInfo, Module, code_memory::CodeMemory};
 use alloc::collections::btree_map::{BTreeMap, Entry};
 use alloc::sync::Arc;
 use core::ptr::NonNull;

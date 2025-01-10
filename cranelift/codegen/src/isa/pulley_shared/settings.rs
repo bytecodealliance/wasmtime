@@ -5,7 +5,7 @@
 
 use crate::{
     machinst::IsaFlags,
-    settings::{self, detail, Builder, Value},
+    settings::{self, Builder, Value, detail},
 };
 use core::fmt;
 

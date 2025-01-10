@@ -1,15 +1,15 @@
 //! Proof-carrying code checking for AArch64 VCode.
 
+use crate::ir::MemFlags;
 use crate::ir::pcc::*;
 use crate::ir::types::*;
-use crate::ir::MemFlags;
+use crate::isa::aarch64::inst::Inst;
 use crate::isa::aarch64::inst::args::{Cond, PairAMode, ShiftOp};
 use crate::isa::aarch64::inst::regs::zero_reg;
-use crate::isa::aarch64::inst::Inst;
 use crate::isa::aarch64::inst::{ALUOp, MoveWideOp};
 use crate::isa::aarch64::inst::{AMode, ExtendOp};
-use crate::machinst::pcc::*;
 use crate::machinst::Reg;
+use crate::machinst::pcc::*;
 use crate::machinst::{InsnIndex, VCode};
 use crate::trace;
 
@@ -376,18 +376,11 @@ fn check_load(
 ) -> PccResult<()> {
     let result_fact = rd.and_then(|rd| vcode.vreg_fact(rd.into()));
     let bits = u16::try_from(ty.bits()).unwrap();
-    check_addr(
-        ctx,
-        flags,
-        addr,
-        vcode,
-        ty,
-        LoadOrStore::Load {
-            result_fact,
-            from_bits: bits,
-            to_bits: bits,
-        },
-    )
+    check_addr(ctx, flags, addr, vcode, ty, LoadOrStore::Load {
+        result_fact,
+        from_bits: bits,
+        to_bits: bits,
+    })
 }
 
 fn check_store(
@@ -399,14 +392,9 @@ fn check_store(
     ty: Type,
 ) -> PccResult<()> {
     let stored_fact = rd.and_then(|rd| vcode.vreg_fact(rd.into()));
-    check_addr(
-        ctx,
-        flags,
-        addr,
-        vcode,
-        ty,
-        LoadOrStore::Store { stored_fact },
-    )
+    check_addr(ctx, flags, addr, vcode, ty, LoadOrStore::Store {
+        stored_fact,
+    })
 }
 
 fn check_addr<'a>(

@@ -13,11 +13,11 @@
 //!
 
 use crate::match_directive::match_directive;
-use crate::subtest::{run_filecheck, Context, SubTest};
+use crate::subtest::{Context, SubTest, run_filecheck};
 use cranelift_codegen::dominator_tree::{DominatorTree, DominatorTreePreorder};
 use cranelift_codegen::flowgraph::ControlFlowGraph;
-use cranelift_codegen::ir::entities::AnyEntity;
 use cranelift_codegen::ir::Function;
+use cranelift_codegen::ir::entities::AnyEntity;
 use cranelift_reader::TestCommand;
 use std::borrow::{Borrow, Cow};
 use std::collections::HashMap;

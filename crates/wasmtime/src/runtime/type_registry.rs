@@ -3,11 +3,11 @@
 //! Helps implement fast indirect call signature checking, reference type
 //! downcasting, and etc...
 
+use crate::Engine;
 use crate::hash_set::HashSet;
 use crate::prelude::*;
 use crate::sync::RwLock;
 use crate::vm::GcRuntime;
-use crate::Engine;
 use alloc::borrow::Cow;
 use alloc::sync::Arc;
 use core::iter;
@@ -22,10 +22,9 @@ use core::{
     },
 };
 use wasmtime_environ::{
-    iter_entity_range,
-    packed_option::{PackedOption, ReservedValue},
     EngineOrModuleTypeIndex, GcLayout, ModuleInternedTypeIndex, ModuleTypes, PrimaryMap,
-    SecondaryMap, TypeTrace, VMSharedTypeIndex, WasmRecGroup, WasmSubType,
+    SecondaryMap, TypeTrace, VMSharedTypeIndex, WasmRecGroup, WasmSubType, iter_entity_range,
+    packed_option::{PackedOption, ReservedValue},
 };
 use wasmtime_slab::{Id as SlabId, Slab};
 
@@ -125,7 +124,9 @@ impl TypeCollection {
             let shared_ty = types[module_ty];
             let trampoline_shared_ty = registry.trampoline_type(shared_ty);
             trampolines[trampoline_shared_ty] = Some(module_trampoline_ty).into();
-            log::trace!("--> shared_to_module_trampolines[{trampoline_shared_ty:?}] = {module_trampoline_ty:?}");
+            log::trace!(
+                "--> shared_to_module_trampolines[{trampoline_shared_ty:?}] = {module_trampoline_ty:?}"
+            );
         }
         log::trace!("Done building module's shared-to-module-trampoline-types map");
 
@@ -732,9 +733,8 @@ impl TypeRegistryInner {
                         // This will recursively call into rec group
                         // registration, but at most once since trampoline
                         // function types are their own trampoline type.
-                        let trampoline_entry = self.register_singleton_rec_group(
-                            gc_runtime,
-                            WasmSubType {
+                        let trampoline_entry =
+                            self.register_singleton_rec_group(gc_runtime, WasmSubType {
                                 is_final: true,
                                 supertype: None,
                                 composite_type: wasmtime_environ::WasmCompositeType {
@@ -743,8 +743,7 @@ impl TypeRegistryInner {
                                         trampoline.into_owned(),
                                     ),
                                 },
-                            },
-                        );
+                            });
                         let trampoline_index = trampoline_entry.0.shared_type_indices[0];
                         log::trace!(
                             "Registering trampoline type:\n\

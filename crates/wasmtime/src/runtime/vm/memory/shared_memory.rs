@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use crate::runtime::vm::memory::{validate_atomic_addr, LocalMemory, MmapMemory};
+use crate::runtime::vm::memory::{LocalMemory, MmapMemory, validate_atomic_addr};
 use crate::runtime::vm::parking_spot::{ParkingSpot, Waiter};
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
 use crate::runtime::vm::{Memory, VMStore, WaitResult};

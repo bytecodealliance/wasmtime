@@ -1,8 +1,8 @@
-use crate::sync::file::{filetype_from, File};
+use crate::sync::file::{File, filetype_from};
 use crate::{
+    Error, ErrorExt,
     dir::{ReaddirCursor, ReaddirEntity, WasiDir},
     file::{FdFlags, FileType, Filestat, OFlags},
-    Error, ErrorExt,
 };
 use cap_fs_ext::{DirEntryExt, DirExt, MetadataExt, OpenOptionsMaybeDirExt, SystemTimeSpec};
 use cap_std::fs;
@@ -432,7 +432,9 @@ mod test {
         match f.as_mut().poll(&mut cx) {
             Poll::Ready(val) => return val,
             Poll::Pending => {
-                panic!("Cannot wait on pending future: must enable wiggle \"async\" future and execute on an async Store")
+                panic!(
+                    "Cannot wait on pending future: must enable wiggle \"async\" future and execute on an async Store"
+                )
             }
         }
 

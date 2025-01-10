@@ -1,5 +1,5 @@
-use anyhow::{anyhow, bail, Result};
-use futures::{future, stream, Future, SinkExt, StreamExt, TryStreamExt};
+use anyhow::{Result, anyhow, bail};
+use futures::{Future, SinkExt, StreamExt, TryStreamExt, future, stream};
 use test_programs::wasi::http::types::{
     Fields, IncomingRequest, IncomingResponse, Method, OutgoingBody, OutgoingRequest,
     OutgoingResponse, ResponseOutparam, Scheme,
@@ -304,8 +304,8 @@ async fn hash(url: &Url) -> Result<String> {
 fn main() {}
 
 mod executor {
-    use anyhow::{anyhow, Error, Result};
-    use futures::{future, sink, stream, Sink, Stream};
+    use anyhow::{Error, Result, anyhow};
+    use futures::{Sink, Stream, future, sink, stream};
     use std::{
         cell::RefCell,
         future::Future,

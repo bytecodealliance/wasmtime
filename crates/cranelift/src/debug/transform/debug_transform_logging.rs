@@ -1,8 +1,8 @@
 use crate::debug::Reader;
 use core::fmt;
 use gimli::{
-    write, AttributeValue, DebuggingInformationEntry, Dwarf, LittleEndian, Unit, UnitOffset,
-    UnitSectionOffset,
+    AttributeValue, DebuggingInformationEntry, Dwarf, LittleEndian, Unit, UnitOffset,
+    UnitSectionOffset, write,
 };
 
 macro_rules! dbi_log {

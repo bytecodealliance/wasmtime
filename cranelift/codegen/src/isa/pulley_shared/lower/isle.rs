@@ -13,13 +13,13 @@ use crate::isa::pulley_shared::{
         FReg, OperandSize, PulleyCall, ReturnCallInfo, VReg, WritableFReg, WritableVReg,
         WritableXReg, XReg,
     },
-    lower::{regs, Cond},
+    lower::{Cond, regs},
     *,
 };
 use crate::machinst::{
+    CallInfo, IsTailCall, MachInst, Reg, VCodeConstant, VCodeConstantData,
     abi::{ArgPair, RetPair, StackAMode},
     isle::*,
-    CallInfo, IsTailCall, MachInst, Reg, VCodeConstant, VCodeConstantData,
 };
 use alloc::boxed::Box;
 use pulley_interpreter::U6;

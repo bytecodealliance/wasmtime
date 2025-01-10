@@ -3,13 +3,13 @@
 use crate::runtime::vm::VMGcRef;
 use crate::store::StoreId;
 use crate::vm::{VMGcHeader, VMStructRef};
+use crate::{AnyRef, FieldType};
 use crate::{
-    prelude::*,
-    store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
     AsContext, AsContextMut, EqRef, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType,
     ManuallyRooted, RefType, Rooted, StructType, Val, ValRaw, ValType, WasmTy,
+    prelude::*,
+    store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
 };
-use crate::{AnyRef, FieldType};
 use core::mem::{self, MaybeUninit};
 use wasmtime_environ::{GcLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 
@@ -172,12 +172,9 @@ unsafe impl GcRefImpl for StructRef {
         let me: &Self = unsafe { mem::transmute(index) };
 
         // Assert we really are just a newtype of a `GcRootIndex`.
-        assert!(matches!(
-            me,
-            Self {
-                inner: GcRootIndex { .. },
-            }
-        ));
+        assert!(matches!(me, Self {
+            inner: GcRootIndex { .. },
+        }));
 
         me
     }

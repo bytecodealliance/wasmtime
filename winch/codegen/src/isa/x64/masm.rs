@@ -4,38 +4,39 @@ use super::{
     asm::{Assembler, PatchableAddToReg},
     regs::{self, rbp, rsp},
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 
 use crate::masm::{
     DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm, MulWideKind,
-    OperandSize, RegImm, RemKind, RoundingMode, ShiftKind, TrapCode, TruncKind, TRUSTED_FLAGS,
+    OperandSize, RegImm, RemKind, RoundingMode, ShiftKind, TRUSTED_FLAGS, TrapCode, TruncKind,
     UNTRUSTED_FLAGS,
 };
 use crate::{
-    abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
-    codegen::{ptr_type_from_ptr_size, CodeGenContext, CodeGenError, Emission, FuncEnv},
+    abi::{self, LocalSlot, align_to, calculate_frame_adjustment},
+    codegen::{CodeGenContext, CodeGenError, Emission, FuncEnv, ptr_type_from_ptr_size},
     stack::{TypedReg, Val},
 };
 use crate::{
-    abi::{vmctx, ABI},
+    abi::{ABI, vmctx},
     masm::{SPOffset, StackSlot},
 };
 use crate::{
     isa::{
-        reg::{writable, Reg, RegClass, WritableReg},
         CallingConvention,
+        reg::{Reg, RegClass, WritableReg, writable},
     },
     masm::CalleeKind,
 };
 use cranelift_codegen::{
+    Final, MachBufferFinalized, MachLabel,
     binemit::CodeOffset,
     ir::{MemFlags, RelSourceLoc, SourceLoc},
     isa::unwind::UnwindInst,
     isa::x64::{
-        args::{ExtMode, CC},
+        args::{CC, ExtMode},
         settings as x64_settings,
     },
-    settings, Final, MachBufferFinalized, MachLabel,
+    settings,
 };
 use wasmtime_cranelift::TRAP_UNREACHABLE;
 use wasmtime_environ::{PtrSize, WasmValType};

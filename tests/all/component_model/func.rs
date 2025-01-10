@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use super::{TypedFuncExt, REALLOC_AND_FREE};
+use super::{REALLOC_AND_FREE, TypedFuncExt};
 use anyhow::Result;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -2061,107 +2061,83 @@ fn raw_slice_of_various_types() -> Result<()> {
         .get_typed_func::<(), (WasmList<u8>,)>(&mut store, "list-u8")?
         .call_and_post_return(&mut store, ())?
         .0;
-    assert_eq!(
-        list.as_le_slice(&store),
-        [
-            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
-            0x0e, 0x0f,
-        ]
-    );
+    assert_eq!(list.as_le_slice(&store), [
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
+        0x0f,
+    ]);
     let list = instance
         .get_typed_func::<(), (WasmList<i8>,)>(&mut store, "list-i8")?
         .call_and_post_return(&mut store, ())?
         .0;
-    assert_eq!(
-        list.as_le_slice(&store),
-        [
-            0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d,
-            0x0e, 0x0f,
-        ]
-    );
+    assert_eq!(list.as_le_slice(&store), [
+        0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e,
+        0x0f,
+    ]);
 
     let list = instance
         .get_typed_func::<(), (WasmList<u16>,)>(&mut store, "list-u16")?
         .call_and_post_return(&mut store, ())?
         .0;
-    assert_eq!(
-        list.as_le_slice(&store),
-        [
-            u16::to_le(0x01_00),
-            u16::to_le(0x03_02),
-            u16::to_le(0x05_04),
-            u16::to_le(0x07_06),
-            u16::to_le(0x09_08),
-            u16::to_le(0x0b_0a),
-            u16::to_le(0x0d_0c),
-            u16::to_le(0x0f_0e),
-        ]
-    );
+    assert_eq!(list.as_le_slice(&store), [
+        u16::to_le(0x01_00),
+        u16::to_le(0x03_02),
+        u16::to_le(0x05_04),
+        u16::to_le(0x07_06),
+        u16::to_le(0x09_08),
+        u16::to_le(0x0b_0a),
+        u16::to_le(0x0d_0c),
+        u16::to_le(0x0f_0e),
+    ]);
     let list = instance
         .get_typed_func::<(), (WasmList<i16>,)>(&mut store, "list-i16")?
         .call_and_post_return(&mut store, ())?
         .0;
-    assert_eq!(
-        list.as_le_slice(&store),
-        [
-            i16::to_le(0x01_00),
-            i16::to_le(0x03_02),
-            i16::to_le(0x05_04),
-            i16::to_le(0x07_06),
-            i16::to_le(0x09_08),
-            i16::to_le(0x0b_0a),
-            i16::to_le(0x0d_0c),
-            i16::to_le(0x0f_0e),
-        ]
-    );
+    assert_eq!(list.as_le_slice(&store), [
+        i16::to_le(0x01_00),
+        i16::to_le(0x03_02),
+        i16::to_le(0x05_04),
+        i16::to_le(0x07_06),
+        i16::to_le(0x09_08),
+        i16::to_le(0x0b_0a),
+        i16::to_le(0x0d_0c),
+        i16::to_le(0x0f_0e),
+    ]);
     let list = instance
         .get_typed_func::<(), (WasmList<u32>,)>(&mut store, "list-u32")?
         .call_and_post_return(&mut store, ())?
         .0;
-    assert_eq!(
-        list.as_le_slice(&store),
-        [
-            u32::to_le(0x03_02_01_00),
-            u32::to_le(0x07_06_05_04),
-            u32::to_le(0x0b_0a_09_08),
-            u32::to_le(0x0f_0e_0d_0c),
-        ]
-    );
+    assert_eq!(list.as_le_slice(&store), [
+        u32::to_le(0x03_02_01_00),
+        u32::to_le(0x07_06_05_04),
+        u32::to_le(0x0b_0a_09_08),
+        u32::to_le(0x0f_0e_0d_0c),
+    ]);
     let list = instance
         .get_typed_func::<(), (WasmList<i32>,)>(&mut store, "list-i32")?
         .call_and_post_return(&mut store, ())?
         .0;
-    assert_eq!(
-        list.as_le_slice(&store),
-        [
-            i32::to_le(0x03_02_01_00),
-            i32::to_le(0x07_06_05_04),
-            i32::to_le(0x0b_0a_09_08),
-            i32::to_le(0x0f_0e_0d_0c),
-        ]
-    );
+    assert_eq!(list.as_le_slice(&store), [
+        i32::to_le(0x03_02_01_00),
+        i32::to_le(0x07_06_05_04),
+        i32::to_le(0x0b_0a_09_08),
+        i32::to_le(0x0f_0e_0d_0c),
+    ]);
     let list = instance
         .get_typed_func::<(), (WasmList<u64>,)>(&mut store, "list-u64")?
         .call_and_post_return(&mut store, ())?
         .0;
-    assert_eq!(
-        list.as_le_slice(&store),
-        [
-            u64::to_le(0x07_06_05_04_03_02_01_00),
-            u64::to_le(0x0f_0e_0d_0c_0b_0a_09_08),
-        ]
-    );
+    assert_eq!(list.as_le_slice(&store), [
+        u64::to_le(0x07_06_05_04_03_02_01_00),
+        u64::to_le(0x0f_0e_0d_0c_0b_0a_09_08),
+    ]);
     let list = instance
         .get_typed_func::<(), (WasmList<i64>,)>(&mut store, "list-i64")?
         .call_and_post_return(&mut store, ())?
         .0;
-    assert_eq!(
-        list.as_le_slice(&store),
-        [
-            i64::to_le(0x07_06_05_04_03_02_01_00),
-            i64::to_le(0x0f_0e_0d_0c_0b_0a_09_08),
-        ]
-    );
+    assert_eq!(list.as_le_slice(&store), [
+        i64::to_le(0x07_06_05_04_03_02_01_00),
+        i64::to_le(0x0f_0e_0d_0c_0b_0a_09_08),
+    ]);
 
     Ok(())
 }

@@ -55,9 +55,10 @@ fn code_too_large_without_panic() -> Result<()> {
     let store = Store::new(&engine, ());
     let result = Module::new(store.engine(), &module.finish());
     match result {
-        Err(e) => assert!(e
-            .to_string()
-            .starts_with("Compilation error: Code for function is too large")),
+        Err(e) => assert!(
+            e.to_string()
+                .starts_with("Compilation error: Code for function is too large")
+        ),
         Ok(_) => panic!("Please adjust limits to make the module too large to compile!"),
     }
     Ok(())

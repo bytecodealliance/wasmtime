@@ -7,7 +7,7 @@ pub mod stdio;
 use self::sched::sched_ctx;
 use crate::sync::net::Socket;
 pub use crate::sync::{clocks_ctx, random_ctx};
-use crate::{file::FileAccessMode, Error, Table, WasiCtx, WasiFile};
+use crate::{Error, Table, WasiCtx, WasiFile, file::FileAccessMode};
 pub use dir::Dir;
 pub use file::File;
 pub use net::*;

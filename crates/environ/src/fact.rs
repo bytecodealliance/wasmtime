@@ -222,18 +222,15 @@ impl<'a> Module<'a> {
 
         // This will internally create the adapter as specified and append
         // anything necessary to `self.funcs`.
-        trampoline::compile(
-            self,
-            &AdapterData {
-                name: name.to_string(),
-                lift,
-                lower,
-                callee,
-                // FIXME(#4185) should be plumbed and handled as part of the new
-                // reentrance rules not yet implemented here.
-                called_as_export: true,
-            },
-        );
+        trampoline::compile(self, &AdapterData {
+            name: name.to_string(),
+            lift,
+            lower,
+            callee,
+            // FIXME(#4185) should be plumbed and handled as part of the new
+            // reentrance rules not yet implemented here.
+            called_as_export: true,
+        });
 
         while let Some((result, helper)) = self.helper_worklist.pop() {
             trampoline::compile_helper(self, result, helper);
@@ -573,11 +570,7 @@ impl Options {
     }
 
     fn ptr_size(&self) -> u8 {
-        if self.memory64 {
-            8
-        } else {
-            4
-        }
+        if self.memory64 { 8 } else { 4 }
     }
 
     fn flat_types<'a>(

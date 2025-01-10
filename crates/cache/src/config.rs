@@ -1,18 +1,18 @@
 //! Module for configuring the cache system.
 
 use super::Worker;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result, anyhow, bail};
 use directories_next::ProjectDirs;
 use log::{trace, warn};
 use serde::{
-    de::{self, Deserializer},
     Deserialize,
+    de::{self, Deserializer},
 };
 use std::fmt::Debug;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use std::time::Duration;
 
 // wrapped, so we have named section in config,

@@ -4,7 +4,7 @@ use super::index_allocator::{SimpleIndexAllocator, SlotId};
 use crate::prelude::*;
 use crate::runtime::vm::sys::vm::commit_pages;
 use crate::runtime::vm::{
-    mmap::AlignedLength, HostAlignedByteCount, Mmap, PoolingInstanceAllocatorConfig,
+    HostAlignedByteCount, Mmap, PoolingInstanceAllocatorConfig, mmap::AlignedLength,
 };
 
 /// Represents a pool of execution stacks (used for the async fiber implementation).
@@ -30,7 +30,7 @@ pub struct StackPool {
 
 impl StackPool {
     pub fn new(config: &PoolingInstanceAllocatorConfig) -> Result<Self> {
-        use rustix::mm::{mprotect, MprotectFlags};
+        use rustix::mm::{MprotectFlags, mprotect};
 
         let page_size = HostAlignedByteCount::host_page_size();
 
@@ -286,21 +286,18 @@ mod tests {
             }
         }
 
-        assert_eq!(
-            pool.index_allocator.testing_freelist(),
-            [
-                SlotId(0),
-                SlotId(1),
-                SlotId(2),
-                SlotId(3),
-                SlotId(4),
-                SlotId(5),
-                SlotId(6),
-                SlotId(7),
-                SlotId(8),
-                SlotId(9)
-            ],
-        );
+        assert_eq!(pool.index_allocator.testing_freelist(), [
+            SlotId(0),
+            SlotId(1),
+            SlotId(2),
+            SlotId(3),
+            SlotId(4),
+            SlotId(5),
+            SlotId(6),
+            SlotId(7),
+            SlotId(8),
+            SlotId(9)
+        ],);
 
         Ok(())
     }

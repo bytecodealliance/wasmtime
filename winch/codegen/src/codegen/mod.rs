@@ -1,13 +1,13 @@
 use crate::{
-    abi::{scratch, vmctx, ABIOperand, ABISig, RetArea},
+    abi::{ABIOperand, ABISig, RetArea, scratch, vmctx},
     codegen::BlockSig,
-    isa::reg::{writable, Reg},
+    isa::reg::{Reg, writable},
     masm::{
         ExtendKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, ShiftKind, TrapCode,
     },
     stack::TypedReg,
 };
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{Result, anyhow, bail, ensure};
 use cranelift_codegen::{
     binemit::CodeOffset,
     ir::{RelSourceLoc, SourceLoc},
@@ -20,8 +20,8 @@ use wasmparser::{
 };
 use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_TABLE_OUT_OF_BOUNDS};
 use wasmtime_environ::{
-    GlobalIndex, MemoryIndex, PtrSize, TableIndex, Tunables, TypeIndex, WasmHeapType, WasmValType,
-    FUNCREF_MASK,
+    FUNCREF_MASK, GlobalIndex, MemoryIndex, PtrSize, TableIndex, Tunables, TypeIndex, WasmHeapType,
+    WasmValType,
 };
 
 mod context;

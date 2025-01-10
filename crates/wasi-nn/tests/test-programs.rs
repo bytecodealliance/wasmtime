@@ -20,7 +20,7 @@ use anyhow::Result;
 use libtest_mimic::{Arguments, Trial};
 use std::{borrow::Cow, env};
 use test_programs_artifacts::*;
-use wasmtime_wasi_nn::{backend, Backend};
+use wasmtime_wasi_nn::{Backend, backend};
 
 fn main() -> Result<()> {
     tracing_subscriber::fmt::init();

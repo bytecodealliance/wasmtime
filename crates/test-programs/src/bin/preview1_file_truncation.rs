@@ -18,13 +18,10 @@ unsafe fn test_file_truncation(dir_fd: wasi::Fd) {
 
     // Write to the file
     let content = b"this content will be truncated!";
-    let nwritten = wasi::fd_write(
-        file_fd,
-        &[wasi::Ciovec {
-            buf: content.as_ptr() as *const _,
-            buf_len: content.len(),
-        }],
-    )
+    let nwritten = wasi::fd_write(file_fd, &[wasi::Ciovec {
+        buf: content.as_ptr() as *const _,
+        buf_len: content.len(),
+    }])
     .expect("writing file content");
     assert_eq!(nwritten, content.len(), "nwritten bytes check");
 
@@ -44,13 +41,10 @@ unsafe fn test_file_truncation(dir_fd: wasi::Fd) {
 
     // Read the file's contents
     let buffer = &mut [0u8; 100];
-    let nread = wasi::fd_read(
-        file_fd,
-        &[wasi::Iovec {
-            buf: buffer.as_mut_ptr(),
-            buf_len: buffer.len(),
-        }],
-    )
+    let nread = wasi::fd_read(file_fd, &[wasi::Iovec {
+        buf: buffer.as_mut_ptr(),
+        buf_len: buffer.len(),
+    }])
     .expect("reading file content");
 
     // The file should be empty due to truncation

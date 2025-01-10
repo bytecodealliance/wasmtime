@@ -1,8 +1,8 @@
 use crate::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
 use crate::bindings::sockets::network::{ErrorCode, IpAddress, Network};
 use crate::host::network::util;
-use crate::poll::{subscribe, Pollable, Subscribe};
-use crate::runtime::{spawn_blocking, AbortOnDropJoinHandle};
+use crate::poll::{Pollable, Subscribe, subscribe};
+use crate::runtime::{AbortOnDropJoinHandle, spawn_blocking};
 use crate::{SocketError, WasiImpl, WasiView};
 use anyhow::Result;
 use std::mem;

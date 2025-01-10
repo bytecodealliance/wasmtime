@@ -13,7 +13,7 @@ use core::slice;
 use core::{cmp, usize};
 use sptr::Strict;
 use wasmtime_environ::{
-    IndexType, Trap, Tunables, WasmHeapTopType, WasmRefType, FUNCREF_INIT_BIT, FUNCREF_MASK,
+    FUNCREF_INIT_BIT, FUNCREF_MASK, IndexType, Trap, Tunables, WasmHeapTopType, WasmRefType,
 };
 
 /// An element going into or coming out of a table.

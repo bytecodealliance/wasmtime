@@ -1,4 +1,4 @@
-use crate::{wasm_externtype_t, wasm_valtype_t, wasm_valtype_vec_t, CExternType};
+use crate::{CExternType, wasm_externtype_t, wasm_valtype_t, wasm_valtype_vec_t};
 use std::cell::OnceCell;
 use std::{
     mem,

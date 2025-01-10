@@ -525,11 +525,7 @@ const fn align_to(a: u32, b: u32) -> u32 {
 }
 
 const fn max(a: u32, b: u32) -> u32 {
-    if a > b {
-        a
-    } else {
-        b
-    }
+    if a > b { a } else { b }
 }
 
 impl CanonicalAbiInfo {
@@ -758,11 +754,7 @@ impl CanonicalAbiInfo {
     /// doesn't exceed the `max` specified.
     pub fn flat_count(&self, max: usize) -> Option<usize> {
         let flat = usize::from(self.flat_count?);
-        if flat > max {
-            None
-        } else {
-            Some(flat)
-        }
+        if flat > max { None } else { Some(flat) }
     }
 }
 
@@ -817,7 +809,7 @@ impl VariantInfo {
 
 mod serde_discrim_size {
     use super::DiscriminantSize;
-    use serde::{de::Error, Deserialize, Deserializer, Serialize, Serializer};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error};
 
     pub fn serialize<S>(disc: &DiscriminantSize, ser: S) -> Result<S::Ok, S::Error>
     where
@@ -1008,11 +1000,7 @@ const fn add_flat(a: Option<u8>, b: Option<u8>) -> Option<u8> {
         },
         _ => return None,
     };
-    if sum > MAX {
-        None
-    } else {
-        Some(sum)
-    }
+    if sum > MAX { None } else { Some(sum) }
 }
 
 const fn max_flat(a: Option<u8>, b: Option<u8>) -> Option<u8> {

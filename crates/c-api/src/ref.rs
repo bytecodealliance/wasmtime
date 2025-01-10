@@ -1,6 +1,6 @@
-use crate::{abort, WasmtimeStoreContextMut};
+use crate::{WasmtimeStoreContextMut, abort};
 use std::{mem::MaybeUninit, num::NonZeroU64, os::raw::c_void, ptr};
-use wasmtime::{AnyRef, ExternRef, ManuallyRooted, Ref, RootScope, Val, I31};
+use wasmtime::{AnyRef, ExternRef, I31, ManuallyRooted, Ref, RootScope, Val};
 
 /// `*mut wasm_ref_t` is a reference type (`externref` or `funcref`), as seen by
 /// the C API. Because we do not have a uniform representation for `funcref`s

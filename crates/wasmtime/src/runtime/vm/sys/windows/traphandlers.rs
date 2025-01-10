@@ -1,6 +1,6 @@
 use crate::prelude::*;
-use crate::runtime::vm::traphandlers::{tls, TrapRegisters, TrapTest};
 use crate::runtime::vm::VMContext;
+use crate::runtime::vm::traphandlers::{TrapRegisters, TrapTest, tls};
 use std::ffi::c_void;
 use std::io;
 use windows_sys::Win32::Foundation::*;

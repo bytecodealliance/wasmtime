@@ -5,7 +5,7 @@ use crate::error::{Error, Span};
 use crate::lexer::Pos;
 use crate::sema;
 use crate::stablemapset::StableSet;
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{HashMap, hash_map::Entry};
 
 /// A field index in a tuple or an enum variant.
 #[derive(Clone, Copy, Debug, Default, Eq, Hash, Ord, PartialEq, PartialOrd)]
@@ -565,14 +565,11 @@ impl sema::PatternVisitor for RuleSetBuilder {
         variant: sema::VariantId,
     ) -> Vec<BindingId> {
         let fields = TupleIndex(arg_tys.len().try_into().unwrap());
-        self.set_constraint(
-            input,
-            Constraint::Variant {
-                fields,
-                ty: input_ty,
-                variant,
-            },
-        )
+        self.set_constraint(input, Constraint::Variant {
+            fields,
+            ty: input_ty,
+            variant,
+        })
     }
 
     fn add_extract(

@@ -178,10 +178,10 @@ use crate::machinst::{
     BlockIndex, MachInstLabelUse, TextSectionBuilder, VCodeConstant, VCodeConstants, VCodeInst,
 };
 use crate::trace;
-use crate::{ir, MachInstEmitState};
-use crate::{timing, VCodeConstantData};
+use crate::{MachInstEmitState, ir};
+use crate::{VCodeConstantData, timing};
 use cranelift_control::ControlPlane;
-use cranelift_entity::{entity_impl, PrimaryMap};
+use cranelift_entity::{PrimaryMap, entity_impl};
 use smallvec::SmallVec;
 use std::cmp::Ordering;
 use std::collections::BinaryHeap;
@@ -718,9 +718,7 @@ impl<I: VCodeInst> MachBuffer<I> {
     pub fn use_label_at_offset(&mut self, offset: CodeOffset, label: MachLabel, kind: I::LabelUse) {
         trace!(
             "MachBuffer: use_label_at_offset: offset {} label {:?} kind {:?}",
-            offset,
-            label,
-            kind
+            offset, label, kind
         );
 
         // Add the fixup, and update the worst-case island size based on a
@@ -864,8 +862,7 @@ impl<I: VCodeInst> MachBuffer<I> {
 
         trace!(
             "truncate_last_branch: truncated {:?}; off now {}",
-            b,
-            cur_off
+            b, cur_off
         );
 
         // Fix up resolved label offsets for labels at tail.
@@ -925,9 +922,7 @@ impl<I: VCodeInst> MachBuffer<I> {
 
         trace!(
             "enter optimize_branches:\n b = {:?}\n l = {:?}\n f = {:?}",
-            self.latest_branches,
-            self.labels_at_tail,
-            self.pending_fixup_records
+            self.latest_branches, self.labels_at_tail, self.pending_fixup_records
         );
 
         // We continue to munch on branches at the tail of the buffer until no
@@ -1093,8 +1088,7 @@ impl<I: VCodeInst> MachBuffer<I> {
                     for &l in &b.labels_at_this_branch {
                         trace!(
                             " -> label at start of branch {:?} redirected to target {:?}",
-                            l,
-                            b.target
+                            l, b.target
                         );
                         self.label_aliases[l.0 as usize] = b.target;
                         // NOTE: we continue to ensure the invariant that labels
@@ -1145,7 +1139,9 @@ impl<I: VCodeInst> MachBuffer<I> {
                         && prev_b.end == b.start
                         && self.resolve_label_offset(prev_b.target) == cur_off
                     {
-                        trace!(" -> uncond follows a conditional, and conditional's target resolves to current offset");
+                        trace!(
+                            " -> uncond follows a conditional, and conditional's target resolves to current offset"
+                        );
                         // Save the target of the uncond (this becomes the
                         // target of the cond), and truncate the uncond.
                         let target = b.target;
@@ -1186,9 +1182,7 @@ impl<I: VCodeInst> MachBuffer<I> {
 
         trace!(
             "leave optimize_branches:\n b = {:?}\n l = {:?}\n f = {:?}",
-            self.latest_branches,
-            self.labels_at_tail,
-            self.pending_fixup_records
+            self.latest_branches, self.labels_at_tail, self.pending_fixup_records
         );
     }
 
@@ -1411,7 +1405,9 @@ impl<I: VCodeInst> MachBuffer<I> {
                 self.emit_veneer(label, offset, kind);
             } else {
                 let slice = &mut self.data[start..end];
-                trace!("patching in-range! slice = {slice:?}; offset = {offset:#x}; label_offset = {label_offset:#x}");
+                trace!(
+                    "patching in-range! slice = {slice:?}; offset = {offset:#x}; label_offset = {label_offset:#x}"
+                );
                 kind.patch(slice, offset, label_offset);
             }
         } else {
@@ -1447,8 +1443,7 @@ impl<I: VCodeInst> MachBuffer<I> {
         // Patch the original label use to refer to the veneer.
         trace!(
             "patching original at offset {} to veneer offset {}",
-            offset,
-            veneer_offset
+            offset, veneer_offset
         );
         kind.patch(slice, offset, veneer_offset);
         // Generate the veneer.
@@ -1457,8 +1452,7 @@ impl<I: VCodeInst> MachBuffer<I> {
             kind.generate_veneer(veneer_slice, veneer_offset);
         trace!(
             "generated veneer; fixup offset {}, label_use {:?}",
-            veneer_fixup_off,
-            veneer_label_use
+            veneer_fixup_off, veneer_label_use
         );
         // Register a new use of `label` with our new veneer fixup and
         // offset. This'll recalculate deadlines accordingly and
@@ -2061,8 +2055,8 @@ mod test {
 
     use super::*;
     use crate::ir::UserExternalNameRef;
-    use crate::isa::aarch64::inst::{xreg, OperandSize};
     use crate::isa::aarch64::inst::{BranchTarget, CondBrKind, EmitInfo, Inst};
+    use crate::isa::aarch64::inst::{OperandSize, xreg};
     use crate::machinst::{MachInstEmit, MachInstEmitState};
     use crate::settings;
 

@@ -7,7 +7,7 @@ use wasmtime_environ::{
     WasmSubType, WasmValType,
 };
 
-use crate::{type_registry::RegisteredType, Engine};
+use crate::{Engine, type_registry::RegisteredType};
 
 pub(crate) mod matching;
 
@@ -1764,17 +1764,14 @@ impl StructType {
              ({MAX_FIELDS})",
         );
 
-        let ty = RegisteredType::new(
-            engine,
-            WasmSubType {
-                is_final,
-                supertype,
-                composite_type: WasmCompositeType {
-                    shared: is_shared,
-                    inner: WasmCompositeInnerType::Struct(ty),
-                },
+        let ty = RegisteredType::new(engine, WasmSubType {
+            is_final,
+            supertype,
+            composite_type: WasmCompositeType {
+                shared: is_shared,
+                inner: WasmCompositeInnerType::Struct(ty),
             },
-        );
+        });
         Ok(Self {
             registered_type: ty,
         })
@@ -2007,17 +2004,14 @@ impl ArrayType {
         supertype: Option<EngineOrModuleTypeIndex>,
         ty: WasmArrayType,
     ) -> ArrayType {
-        let ty = RegisteredType::new(
-            engine,
-            WasmSubType {
-                is_final,
-                supertype,
-                composite_type: WasmCompositeType {
-                    shared: false,
-                    inner: WasmCompositeInnerType::Array(ty),
-                },
+        let ty = RegisteredType::new(engine, WasmSubType {
+            is_final,
+            supertype,
+            composite_type: WasmCompositeType {
+                shared: false,
+                inner: WasmCompositeInnerType::Array(ty),
             },
-        );
+        });
         Self {
             registered_type: ty,
         }
@@ -2366,17 +2360,14 @@ impl FuncType {
         supertype: Option<EngineOrModuleTypeIndex>,
         ty: WasmFuncType,
     ) -> FuncType {
-        let ty = RegisteredType::new(
-            engine,
-            WasmSubType {
-                is_final,
-                supertype,
-                composite_type: WasmCompositeType {
-                    shared: false,
-                    inner: WasmCompositeInnerType::Func(ty),
-                },
+        let ty = RegisteredType::new(engine, WasmSubType {
+            is_final,
+            supertype,
+            composite_type: WasmCompositeType {
+                shared: false,
+                inner: WasmCompositeInnerType::Func(ty),
             },
-        );
+        });
         Self {
             registered_type: ty,
         }

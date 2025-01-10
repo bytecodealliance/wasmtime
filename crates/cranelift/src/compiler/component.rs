@@ -1,6 +1,6 @@
 //! Compilation support for the component model.
 
-use crate::{compiler::Compiler, TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_INTERNAL_ASSERT};
+use crate::{TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_INTERNAL_ASSERT, compiler::Compiler};
 use anyhow::Result;
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
@@ -42,13 +42,10 @@ impl<'a> TrampolineCompiler<'a> {
         let isa = &*compiler.isa;
         let signature = component.trampolines[index];
         let ty = types[signature].unwrap_func();
-        let func = ir::Function::with_name_signature(
-            ir::UserFuncName::user(0, 0),
-            match abi {
-                Abi::Wasm => crate::wasm_call_signature(isa, ty, &compiler.tunables),
-                Abi::Array => crate::array_call_signature(isa),
-            },
-        );
+        let func = ir::Function::with_name_signature(ir::UserFuncName::user(0, 0), match abi {
+            Abi::Wasm => crate::wasm_call_signature(isa, ty, &compiler.tunables),
+            Abi::Array => crate::array_call_signature(isa),
+        });
         let (builder, block0) = func_compiler.builder(func);
         TrampolineCompiler {
             compiler,
@@ -291,13 +288,8 @@ impl<'a> TrampolineCompiler<'a> {
             ir::types::I8,
             i64::from(wasmtime_environ::Trap::AlwaysTrapAdapter as u8),
         );
-        self.compiler.call_indirect_host(
-            &mut self.builder,
-            index,
-            host_sig,
-            host_fn,
-            &[vmctx, code],
-        );
+        self.compiler
+            .call_indirect_host(&mut self.builder, index, host_sig, host_fn, &[vmctx, code]);
         let succeeded = self.builder.ins().iconst(ir::types::I8, 0);
         self.raise_if_host_trapped(succeeded);
         // debug trap in case execution actually falls through, but this
@@ -532,11 +524,11 @@ impl<'a> TrampolineCompiler<'a> {
             // takes ourselves out of the chain here but that's ok since the
             // caller is only used for store/limits and that same info is
             // stored, but elsewhere, in the component context.
-            self.builder.ins().call_indirect(
-                sig_ref,
-                func_addr,
-                &[callee_vmctx, caller_vmctx, rep],
-            );
+            self.builder.ins().call_indirect(sig_ref, func_addr, &[
+                callee_vmctx,
+                caller_vmctx,
+                rep,
+            ]);
         }
         self.builder.ins().jump(return_block, &[]);
         self.builder.seal_block(run_destructor_block);

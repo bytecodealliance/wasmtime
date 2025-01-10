@@ -1,5 +1,6 @@
+use super::DebugInputContext;
 use super::address_transform::AddressTransform;
-use super::attr::{clone_die_attributes, EntryAttributesContext};
+use super::attr::{EntryAttributesContext, clone_die_attributes};
 use super::debug_transform_logging::{
     dbi_log, log_begin_input_die, log_end_output_die, log_end_output_die_skipped,
     log_get_cu_summary,
@@ -10,7 +11,6 @@ use super::range_info_builder::RangeInfoBuilder;
 use super::refs::{PendingDebugInfoRefs, PendingUnitRefs, UnitRefsMap};
 use super::synthetic::ModuleSyntheticUnit;
 use super::utils::{append_vmctx_info, resolve_die_ref};
-use super::DebugInputContext;
 use crate::debug::{Compilation, Reader};
 use anyhow::{Context, Error};
 use cranelift_codegen::ir::Endianness;

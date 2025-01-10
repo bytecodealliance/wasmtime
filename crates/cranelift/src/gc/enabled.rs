@@ -1,19 +1,19 @@
 use super::GcCompiler;
+use crate::TRAP_INTERNAL_ASSERT;
 use crate::func_environ::FuncEnvironment;
 use crate::gc::ArrayInit;
 use crate::translate::{StructFieldsVec, TargetEnvironment};
-use crate::TRAP_INTERNAL_ASSERT;
 use cranelift_codegen::{
     cursor::FuncCursor,
-    ir::{self, condcodes::IntCC, InstBuilder},
+    ir::{self, InstBuilder, condcodes::IntCC},
 };
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
 use wasmtime_environ::{
-    wasm_unsupported, Collector, GcArrayLayout, GcLayout, GcStructLayout, ModuleInternedTypeIndex,
-    PtrSize, TypeIndex, VMGcKind, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
-    WasmStorageType, WasmValType, I31_DISCRIMINANT, NON_NULL_NON_I31_MASK,
+    Collector, GcArrayLayout, GcLayout, GcStructLayout, I31_DISCRIMINANT, ModuleInternedTypeIndex,
+    NON_NULL_NON_I31_MASK, PtrSize, TypeIndex, VMGcKind, WasmHeapTopType, WasmHeapType,
+    WasmRefType, WasmResult, WasmStorageType, WasmValType, wasm_unsupported,
 };
 
 #[cfg(feature = "gc-drc")]
@@ -148,9 +148,11 @@ fn read_field_at_addr(
                         .builtin_functions
                         .get_interned_func_ref(builder.func);
 
-                    let call_inst = builder
-                        .ins()
-                        .call(get_interned_func_ref, &[vmctx, func_ref_id, expected_ty]);
+                    let call_inst = builder.ins().call(get_interned_func_ref, &[
+                        vmctx,
+                        func_ref_id,
+                        expected_ty,
+                    ]);
                     builder.func.dfg.first_result(call_inst)
                 }
             },
@@ -448,12 +450,10 @@ pub fn translate_array_new(
     elem: ir::Value,
     len: ir::Value,
 ) -> WasmResult<ir::Value> {
-    gc_compiler(func_env)?.alloc_array(
-        func_env,
-        builder,
-        array_type_index,
-        ArrayInit::Fill { elem, len },
-    )
+    gc_compiler(func_env)?.alloc_array(func_env, builder, array_type_index, ArrayInit::Fill {
+        elem,
+        len,
+    })
 }
 
 pub fn translate_array_new_default(
@@ -465,12 +465,10 @@ pub fn translate_array_new_default(
     let interned_ty = func_env.module.types[array_type_index];
     let array_ty = func_env.types.unwrap_array(interned_ty)?;
     let elem = default_value(&mut builder.cursor(), func_env, &array_ty.0.element_type);
-    gc_compiler(func_env)?.alloc_array(
-        func_env,
-        builder,
-        array_type_index,
-        ArrayInit::Fill { elem, len },
-    )
+    gc_compiler(func_env)?.alloc_array(func_env, builder, array_type_index, ArrayInit::Fill {
+        elem,
+        len,
+    })
 }
 
 pub fn translate_array_new_fixed(

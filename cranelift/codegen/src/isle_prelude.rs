@@ -367,20 +367,12 @@ macro_rules! isle_common_prelude_methods {
 
         #[inline]
         fn ty_32(&mut self, ty: Type) -> Option<Type> {
-            if ty.bits() == 32 {
-                Some(ty)
-            } else {
-                None
-            }
+            if ty.bits() == 32 { Some(ty) } else { None }
         }
 
         #[inline]
         fn ty_64(&mut self, ty: Type) -> Option<Type> {
-            if ty.bits() == 64 {
-                Some(ty)
-            } else {
-                None
-            }
+            if ty.bits() == 64 { Some(ty) } else { None }
         }
 
         #[inline]
@@ -441,20 +433,12 @@ macro_rules! isle_common_prelude_methods {
 
         #[inline]
         fn ty_scalar(&mut self, ty: Type) -> Option<Type> {
-            if ty.lane_count() == 1 {
-                Some(ty)
-            } else {
-                None
-            }
+            if ty.lane_count() == 1 { Some(ty) } else { None }
         }
 
         #[inline]
         fn ty_scalar_float(&mut self, ty: Type) -> Option<Type> {
-            if ty.is_float() {
-                Some(ty)
-            } else {
-                None
-            }
+            if ty.is_float() { Some(ty) } else { None }
         }
 
         #[inline]
@@ -572,11 +556,7 @@ macro_rules! isle_common_prelude_methods {
 
         #[inline]
         fn u64_from_bool(&mut self, b: bool) -> u64 {
-            if b {
-                u64::MAX
-            } else {
-                0
-            }
+            if b { u64::MAX } else { 0 }
         }
 
         #[inline]
@@ -640,11 +620,7 @@ macro_rules! isle_common_prelude_methods {
         }
 
         fn not_i64x2(&mut self, ty: Type) -> Option<()> {
-            if ty == I64X2 {
-                None
-            } else {
-                Some(())
-            }
+            if ty == I64X2 { None } else { Some(()) }
         }
 
         fn trap_code_division_by_zero(&mut self) -> TrapCode {
@@ -693,38 +669,22 @@ macro_rules! isle_common_prelude_methods {
 
         #[inline]
         fn u32_nonnegative(&mut self, x: u32) -> Option<u32> {
-            if (x as i32) >= 0 {
-                Some(x)
-            } else {
-                None
-            }
+            if (x as i32) >= 0 { Some(x) } else { None }
         }
 
         #[inline]
         fn u32_lteq(&mut self, a: u32, b: u32) -> Option<()> {
-            if a <= b {
-                Some(())
-            } else {
-                None
-            }
+            if a <= b { Some(()) } else { None }
         }
 
         #[inline]
         fn u8_lteq(&mut self, a: u8, b: u8) -> Option<()> {
-            if a <= b {
-                Some(())
-            } else {
-                None
-            }
+            if a <= b { Some(()) } else { None }
         }
 
         #[inline]
         fn u8_lt(&mut self, a: u8, b: u8) -> Option<()> {
-            if a < b {
-                Some(())
-            } else {
-                None
-            }
+            if a < b { Some(()) } else { None }
         }
 
         #[inline]

@@ -1,20 +1,20 @@
 //! Implementation of the standard x64 ABI.
 
-use crate::ir::{self, types, LibCall, MemFlags, Signature, TrapCode};
-use crate::ir::{types::*, ExternalName};
+use crate::CodegenResult;
+use crate::ir::{self, LibCall, MemFlags, Signature, TrapCode, types};
+use crate::ir::{ExternalName, types::*};
 use crate::isa;
 use crate::isa::winch;
 use crate::isa::x64::X64Backend;
-use crate::isa::{unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings, CallConv};
+use crate::isa::{CallConv, unwind::UnwindInst, x64::inst::*, x64::settings as x64_settings};
 use crate::machinst::abi::*;
 use crate::machinst::*;
 use crate::settings;
-use crate::CodegenResult;
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use args::*;
 use regalloc2::{MachineEnv, PReg, PRegSet};
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::borrow::ToOwned;
 use std::sync::OnceLock;
 

@@ -36,7 +36,7 @@ pub use crate::ir::builder::{
 };
 pub use crate::ir::constant::{ConstantData, ConstantPool};
 pub use crate::ir::dfg::{BlockData, DataFlowGraph, ValueDef};
-pub use crate::ir::dynamic_type::{dynamic_to_fixed, DynamicTypeData, DynamicTypes};
+pub use crate::ir::dynamic_type::{DynamicTypeData, DynamicTypes, dynamic_to_fixed};
 pub use crate::ir::entities::{
     Block, Constant, DynamicStackSlot, DynamicType, FuncRef, GlobalValue, Immediate, Inst,
     JumpTable, MemoryType, SigRef, StackSlot, UserExternalNameRef, Value,
@@ -53,7 +53,7 @@ pub use crate::ir::instructions::{
 pub use crate::ir::jumptable::JumpTableData;
 pub use crate::ir::known_symbol::KnownSymbol;
 pub use crate::ir::layout::Layout;
-pub use crate::ir::libcall::{get_probestack_funcref, LibCall};
+pub use crate::ir::libcall::{LibCall, get_probestack_funcref};
 pub use crate::ir::memflags::{AliasRegion, Endianness, MemFlags};
 pub use crate::ir::memtype::{MemoryTypeData, MemoryTypeField};
 pub use crate::ir::pcc::{BaseExpr, Expr, Fact, FactContext, PccError, PccResult};
@@ -67,7 +67,7 @@ pub use crate::ir::trapcode::TrapCode;
 pub use crate::ir::types::Type;
 pub use crate::ir::user_stack_maps::{UserStackMap, UserStackMapEntry};
 
-use crate::entity::{entity_impl, PrimaryMap, SecondaryMap};
+use crate::entity::{PrimaryMap, SecondaryMap, entity_impl};
 
 /// Map of jump tables.
 pub type JumpTables = PrimaryMap<JumpTable, JumpTableData>;

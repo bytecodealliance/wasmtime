@@ -297,7 +297,7 @@ extern crate alloc;
 
 pub(crate) mod prelude {
     pub use crate::{Error, Result};
-    pub use anyhow::{anyhow, bail, ensure, format_err, Context};
+    pub use anyhow::{Context, anyhow, bail, ensure, format_err};
     pub use wasmtime_environ::prelude::*;
 }
 
@@ -351,7 +351,7 @@ pub trait MaybeUninitExt<T> {
     /// Note that this is `unsafe` as there is no guarantee that `U` comes from
     /// `T`.
     unsafe fn map<U>(&mut self, f: impl FnOnce(*mut T) -> *mut U)
-        -> &mut core::mem::MaybeUninit<U>;
+    -> &mut core::mem::MaybeUninit<U>;
 }
 
 impl<T> MaybeUninitExt<T> for core::mem::MaybeUninit<T> {

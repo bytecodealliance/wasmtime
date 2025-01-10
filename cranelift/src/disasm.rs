@@ -1,7 +1,7 @@
 use anyhow::Result;
 use cfg_if::cfg_if;
-use cranelift_codegen::ir::function::FunctionParameters;
 use cranelift_codegen::ir::Function;
+use cranelift_codegen::ir::function::FunctionParameters;
 use cranelift_codegen::isa::TargetIsa;
 use cranelift_codegen::{FinalizedMachReloc, MachTrap};
 use std::fmt::Write;

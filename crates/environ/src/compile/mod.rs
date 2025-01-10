@@ -2,11 +2,11 @@
 //! module.
 
 use crate::prelude::*;
-use crate::{obj, Tunables};
 use crate::{
     BuiltinFunctionIndex, DefinedFuncIndex, FlagValue, FuncIndex, FunctionLoc, ObjectKind,
     PrimaryMap, StaticModuleIndex, TripleExt, WasmError, WasmFuncType, WasmFunctionInfo,
 };
+use crate::{Tunables, obj};
 use anyhow::Result;
 use object::write::{Object, SymbolId};
 use object::{Architecture, BinaryFormat, FileFlags};

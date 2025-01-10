@@ -1,11 +1,11 @@
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use libtest_mimic::{Arguments, FormatSetting, Trial};
 use std::sync::{Condvar, LazyLock, Mutex};
 use wasmtime::{
     Config, Engine, InstanceAllocationStrategy, MpkEnabled, PoolingAllocationConfig, Store,
 };
 use wasmtime_wast::{SpectestConfig, WastContext};
-use wasmtime_wast_util::{limits, Collector, Compiler, WastConfig, WastTest};
+use wasmtime_wast_util::{Collector, Compiler, WastConfig, WastTest, limits};
 
 fn main() {
     env_logger::init();
@@ -54,14 +54,11 @@ fn main() {
                         {
                             let test = test.clone();
                             move || {
-                                run_wast(
-                                    &test,
-                                    WastConfig {
-                                        compiler,
-                                        pooling,
-                                        collector,
-                                    },
-                                )
+                                run_wast(&test, WastConfig {
+                                    compiler,
+                                    pooling,
+                                    collector,
+                                })
                                 .map_err(|e| format!("{e:?}").into())
                             }
                         },

@@ -2,11 +2,11 @@
 
 use crate::wasm_byte_vec_t;
 use anyhow::Result;
-use std::ffi::{c_char, CStr};
+use std::ffi::{CStr, c_char};
 use std::fs::File;
 use std::path::Path;
 use std::slice;
-use wasmtime_wasi::{preview1::WasiP1Ctx, WasiCtxBuilder};
+use wasmtime_wasi::{WasiCtxBuilder, preview1::WasiP1Ctx};
 
 unsafe fn cstr_to_path<'a>(path: *const c_char) -> Option<&'a Path> {
     CStr::from_ptr(path).to_str().map(Path::new).ok()

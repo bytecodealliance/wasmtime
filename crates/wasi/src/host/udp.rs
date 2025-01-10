@@ -1,14 +1,14 @@
 use crate::host::network::util;
 use crate::network::{SocketAddrUse, SocketAddressFamily};
+use crate::{Pollable, SocketError, SocketResult, WasiImpl, WasiView};
 use crate::{
+    Subscribe,
     bindings::{
         sockets::network::{ErrorCode, IpAddressFamily, IpSocketAddress, Network},
         sockets::udp,
     },
     udp::{IncomingDatagramStream, OutgoingDatagramStream, SendState, UdpState},
-    Subscribe,
 };
-use crate::{Pollable, SocketError, SocketResult, WasiImpl, WasiView};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use io_lifetimes::AsSocketlike;
@@ -471,12 +471,12 @@ where
             SendState::Permitted(_) => {
                 return Err(SocketError::trap(anyhow::anyhow!(
                     "unpermitted: argument exceeds permitted size"
-                )))
+                )));
             }
             SendState::Idle | SendState::Waiting => {
                 return Err(SocketError::trap(anyhow::anyhow!(
                     "unpermitted: must call check-send first"
-                )))
+                )));
             }
         }
 
@@ -546,6 +546,7 @@ pub mod sync {
     use wasmtime::component::Resource;
 
     use crate::{
+        SocketError, WasiImpl, WasiView,
         bindings::{
             sockets::{
                 network::Network,
@@ -564,7 +565,6 @@ pub mod sync {
             },
         },
         runtime::in_tokio,
-        SocketError, WasiImpl, WasiView,
     };
 
     impl<T> udp::Host for WasiImpl<T> where T: WasiView {}

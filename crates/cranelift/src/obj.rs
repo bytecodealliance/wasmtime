@@ -15,12 +15,12 @@
 
 use crate::{CompiledFunction, RelocationTarget};
 use anyhow::Result;
-use cranelift_codegen::binemit::Reloc;
-use cranelift_codegen::isa::unwind::{systemv, UnwindInfo};
 use cranelift_codegen::TextSectionBuilder;
+use cranelift_codegen::binemit::Reloc;
+use cranelift_codegen::isa::unwind::{UnwindInfo, systemv};
 use cranelift_control::ControlPlane;
-use gimli::write::{Address, EhFrame, EndianVec, FrameTable, Writer};
 use gimli::RunTimeEndian;
+use gimli::write::{Address, EhFrame, EndianVec, FrameTable, Writer};
 use object::write::{Object, SectionId, StandardSegment, Symbol, SymbolId, SymbolSection};
 use object::{Architecture, SectionFlags, SectionKind, SymbolFlags, SymbolKind, SymbolScope};
 use std::collections::HashMap;
@@ -206,15 +206,12 @@ impl<'a> ModuleTextBuilder<'a> {
                         other => unimplemented!("unimplemented relocation kind {other:?}"),
                     };
                     self.obj
-                        .add_relocation(
-                            self.text_section,
-                            object::write::Relocation {
-                                symbol,
-                                flags,
-                                offset: reloc_offset,
-                                addend: r.addend,
-                            },
-                        )
+                        .add_relocation(self.text_section, object::write::Relocation {
+                            symbol,
+                            flags,
+                            offset: reloc_offset,
+                            addend: r.addend,
+                        })
                         .unwrap();
                 }
 

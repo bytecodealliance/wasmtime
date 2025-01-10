@@ -1,14 +1,14 @@
-use anyhow::{bail, ensure, Result};
+use anyhow::{Result, bail, ensure};
 use wasmtime_environ::{VMOffsets, WasmHeapType, WasmValType};
 
 use super::ControlStackFrame;
 use crate::{
-    abi::{scratch, vmctx, ABIOperand, ABIResults, RetArea},
+    abi::{ABIOperand, ABIResults, RetArea, scratch, vmctx},
     codegen::{CodeGenError, CodeGenPhase, Emission, Prologue},
     frame::Frame,
     isa::reg::RegClass,
     masm::{MacroAssembler, OperandSize, RegImm, SPOffset, ShiftKind, StackSlot},
-    reg::{writable, Reg},
+    reg::{Reg, writable},
     regalloc::RegAlloc,
     stack::{Stack, TypedReg, Val},
 };

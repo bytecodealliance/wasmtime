@@ -1,6 +1,6 @@
 use proptest::prelude::*;
 use wiggle::{GuestMemory, GuestPtr, GuestType};
-use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
+use wiggle_test::{HostMemory, MemArea, WasiCtx, impl_errno};
 
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/variant.witx"],
@@ -22,11 +22,7 @@ fn mult_zero_nan(a: f32, b: u32) -> f32 {
         0.0
     } else {
         let product = a * b as f32;
-        if product.is_nan() {
-            0.0
-        } else {
-            product
-        }
+        if product.is_nan() { 0.0 } else { product }
     }
 }
 

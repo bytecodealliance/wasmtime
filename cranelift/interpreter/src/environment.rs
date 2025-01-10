@@ -1,6 +1,6 @@
 //! Implements the function environment (e.g. a name-to-function mapping) for interpretation.
 use cranelift_codegen::ir::{FuncRef, Function};
-use cranelift_entity::{entity_impl, PrimaryMap};
+use cranelift_entity::{PrimaryMap, entity_impl};
 use std::collections::HashMap;
 
 /// A function store contains all of the functions that are accessible to an interpreter.

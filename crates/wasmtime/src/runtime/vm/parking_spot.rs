@@ -15,8 +15,8 @@ use crate::prelude::*;
 use crate::runtime::vm::{SendSyncPtr, WaitResult};
 use std::collections::BTreeMap;
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering::SeqCst};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering::SeqCst};
 use std::thread::{self, Thread};
 use std::time::{Duration, Instant};
 
@@ -363,8 +363,8 @@ mod tests {
         // This is a modified version of the parking_lot_core tests,
         // which are licensed under the MIT and Apache 2.0 licenses.
         use super::*;
-        use std::sync::atomic::AtomicU32;
         use std::sync::Arc;
+        use std::sync::atomic::AtomicU32;
 
         macro_rules! test {
             ( $( $name:ident(

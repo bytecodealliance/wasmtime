@@ -1,6 +1,6 @@
 use crate::{
-    handle_result, wasm_extern_t, wasm_memorytype_t, wasm_store_t, wasmtime_error_t,
-    WasmtimeStoreContext, WasmtimeStoreContextMut,
+    WasmtimeStoreContext, WasmtimeStoreContextMut, handle_result, wasm_extern_t, wasm_memorytype_t,
+    wasm_store_t, wasmtime_error_t,
 };
 use std::convert::TryFrom;
 use wasmtime::{Extern, Memory};

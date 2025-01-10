@@ -1,4 +1,4 @@
-use crate::component::func::{bad_type_info, desc, LiftContext, LowerContext};
+use crate::component::func::{LiftContext, LowerContext, bad_type_info, desc};
 use crate::component::matching::InstanceType;
 use crate::component::{ComponentType, Lift, Lower};
 use crate::prelude::*;

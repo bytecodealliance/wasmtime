@@ -29,12 +29,12 @@
 //! If the wasm feature is not supported by any of the compiler strategies, no
 //! tests will be generated for such strategy.
 use proc_macro::TokenStream;
-use quote::{quote, ToTokens, TokenStreamExt};
+use quote::{ToTokens, TokenStreamExt, quote};
 use syn::{
-    braced,
+    Attribute, Ident, Result, ReturnType, Signature, Visibility, braced,
     meta::ParseNestedMeta,
     parse::{Parse, ParseStream},
-    parse_macro_input, token, Attribute, Ident, Result, ReturnType, Signature, Visibility,
+    parse_macro_input, token,
 };
 use wasmtime_wast_util::Compiler;
 

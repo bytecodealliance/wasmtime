@@ -209,11 +209,9 @@ pub fn smoke_test_engine<T>(
         .unwrap();
         let mut instance = engine.instantiate(&wasm).unwrap();
         let results = instance
-            .evaluate(
-                "add",
-                &[DiffValue::I32(1), DiffValue::I32(2)],
-                &[DiffValueType::I32],
-            )
+            .evaluate("add", &[DiffValue::I32(1), DiffValue::I32(2)], &[
+                DiffValueType::I32,
+            ])
             .unwrap();
         assert_eq!(results, Some(vec![DiffValue::I32(3)]));
 

@@ -9,12 +9,12 @@ use super::HashMap;
 use crate::data_context::DataDescription;
 use core::fmt::Display;
 use cranelift_codegen::binemit::{CodeOffset, Reloc};
-use cranelift_codegen::entity::{entity_impl, PrimaryMap};
-use cranelift_codegen::ir::function::{Function, VersionMarker};
+use cranelift_codegen::entity::{PrimaryMap, entity_impl};
 use cranelift_codegen::ir::ExternalName;
+use cranelift_codegen::ir::function::{Function, VersionMarker};
 use cranelift_codegen::settings::SetError;
 use cranelift_codegen::{
-    ir, isa, CodegenError, CompileError, Context, FinalizedMachReloc, FinalizedRelocTarget,
+    CodegenError, CompileError, Context, FinalizedMachReloc, FinalizedRelocTarget, ir, isa,
 };
 use cranelift_control::ControlPlane;
 use std::borrow::{Cow, ToOwned};

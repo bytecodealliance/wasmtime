@@ -1,8 +1,8 @@
 //! Implementation of string transcoding required by the component model.
 
 use crate::prelude::*;
-use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
 use crate::runtime::vm::HostResultHasUnwindSentinel;
+use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
 use core::cell::Cell;
 use core::convert::Infallible;
 use core::slice;

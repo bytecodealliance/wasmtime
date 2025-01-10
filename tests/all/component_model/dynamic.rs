@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use super::{make_echo_component, make_echo_component_with_params, Param, Type};
+use super::{Param, Type, make_echo_component, make_echo_component_with_params};
 use anyhow::Result;
 use component_test_util::FuncExt;
 use wasmtime::component::types::{self, Case, ComponentItem, Field};
@@ -269,14 +269,11 @@ fn variants() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component_with_params(
-            fragment,
-            &[
-                Param(Type::U8, Some(0)),
-                Param(Type::I64, Some(8)),
-                Param(Type::I32, None),
-            ],
-        ),
+        make_echo_component_with_params(fragment, &[
+            Param(Type::U8, Some(0)),
+            Param(Type::I64, Some(8)),
+            Param(Type::I32, None),
+        ]),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
@@ -290,14 +287,11 @@ fn variants() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component_with_params(
-            fragment,
-            &[
-                Param(Type::U8, Some(0)),
-                Param(Type::I64, Some(8)),
-                Param(Type::I32, Some(12)),
-            ],
-        ),
+        make_echo_component_with_params(fragment, &[
+            Param(Type::U8, Some(0)),
+            Param(Type::I64, Some(8)),
+            Param(Type::I32, Some(12)),
+        ]),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
@@ -401,10 +395,10 @@ fn flags() -> Result<()> {
 
     let component = Component::new(
         &engine,
-        make_echo_component_with_params(
-            r#"(flags "A" "B" "C" "D" "E")"#,
-            &[Param(Type::U8, Some(0))],
-        ),
+        make_echo_component_with_params(r#"(flags "A" "B" "C" "D" "E")"#, &[Param(
+            Type::U8,
+            Some(0),
+        )]),
     )?;
     let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
     let func = instance.get_func(&mut store, "echo").unwrap();
@@ -792,10 +786,9 @@ fn introspection() -> Result<()> {
     let ComponentItem::Type(f_ty) = f_ty else {
         panic!("`f` export item of wrong type")
     };
-    assert_eq!(
-        f_ty.unwrap_flags().names().collect::<Vec<_>>(),
-        ["G", "H", "I"]
-    );
+    assert_eq!(f_ty.unwrap_flags().names().collect::<Vec<_>>(), [
+        "G", "H", "I"
+    ]);
 
     let (name, m_ty) = exports.next().unwrap();
     assert_eq!(name, "m");
@@ -880,10 +873,10 @@ fn introspection() -> Result<()> {
         assert_eq!(ty, types::Type::Char);
         let Field { name, ty } = fields.next().unwrap();
         assert_eq!(name, "Y");
-        assert_eq!(
-            ty.unwrap_tuple().types().collect::<Vec<_>>(),
-            [types::Type::U32, types::Type::U32]
-        );
+        assert_eq!(ty.unwrap_tuple().types().collect::<Vec<_>>(), [
+            types::Type::U32,
+            types::Type::U32
+        ]);
         let Field { name, ty } = fields.next().unwrap();
         assert_eq!(name, "AA");
         assert_eq!(ty.unwrap_option().ty(), types::Type::U32);

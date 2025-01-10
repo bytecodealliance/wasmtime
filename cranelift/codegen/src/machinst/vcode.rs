@@ -17,13 +17,13 @@
 //! See the main module comment in `mod.rs` for more details on the VCode-based
 //! backend pipeline.
 
+use crate::CodegenError;
 use crate::ir::pcc::*;
-use crate::ir::{self, types, Constant, ConstantData, ValueLabel};
+use crate::ir::{self, Constant, ConstantData, ValueLabel, types};
 use crate::machinst::*;
 use crate::ranges::Ranges;
 use crate::timing;
 use crate::trace;
-use crate::CodegenError;
 use crate::{LabelValueLoc, ValueLocRange};
 use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstRange, MachineEnv, Operand,
@@ -32,9 +32,9 @@ use regalloc2::{
 use rustc_hash::FxHashMap;
 
 use core::mem::take;
-use cranelift_entity::{entity_impl, Keys};
-use std::collections::hash_map::Entry;
+use cranelift_entity::{Keys, entity_impl};
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::fmt;
 
 /// Index referring to an instruction in VCode.
@@ -1109,9 +1109,7 @@ impl<I: VCodeInst> VCode<I> {
             if inst_offset > next_offset {
                 trace!(
                     "Fixing code offset of the removed Inst {}: {} -> {}",
-                    inst_index,
-                    inst_offset,
-                    next_offset
+                    inst_index, inst_offset, next_offset
                 );
                 inst_offsets[inst_index] = next_offset;
                 continue;
@@ -1189,9 +1187,7 @@ impl<I: VCodeInst> VCode<I> {
                 if last_loc_range.loc == loc && last_loc_range.end == start {
                     trace!(
                         "Extending debug range for VL{} in {:?} to {}",
-                        label,
-                        loc,
-                        end
+                        label, loc, end
                     );
                     last_loc_range.end = end;
                     continue;
@@ -1732,11 +1728,7 @@ impl VCodeConstantData {
 
     /// Calculate the alignment of the constant data.
     pub fn alignment(&self) -> u32 {
-        if self.as_slice().len() <= 8 {
-            8
-        } else {
-            16
-        }
+        if self.as_slice().len() <= 8 { 8 } else { 16 }
     }
 }
 

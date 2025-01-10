@@ -3,11 +3,11 @@
 use crate::ir::pcc::*;
 use crate::ir::types::*;
 use crate::isa::x64::args::AvxOpcode;
-use crate::isa::x64::inst::args::{
-    AluRmiROpcode, Amode, Gpr, Imm8Reg, RegMem, RegMemImm, ShiftKind, SseOpcode, SyntheticAmode,
-    ToWritableReg, CC,
-};
 use crate::isa::x64::inst::Inst;
+use crate::isa::x64::inst::args::{
+    AluRmiROpcode, Amode, CC, Gpr, Imm8Reg, RegMem, RegMemImm, ShiftKind, SseOpcode,
+    SyntheticAmode, ToWritableReg,
+};
 use crate::machinst::pcc::*;
 use crate::machinst::{InsnIndex, VCode, VCodeConstantData};
 use crate::machinst::{Reg, Writable};
@@ -992,17 +992,11 @@ fn check_load(
 ) -> PccResult<Option<Fact>> {
     let result_fact = dst.and_then(|dst| vcode.vreg_fact(dst.to_reg().into()));
     let from_bits = u16::try_from(ty.bits()).unwrap();
-    check_mem(
-        ctx,
-        src,
-        vcode,
-        ty,
-        LoadOrStore::Load {
-            result_fact,
-            from_bits,
-            to_bits,
-        },
-    )
+    check_mem(ctx, src, vcode, ty, LoadOrStore::Load {
+        result_fact,
+        from_bits,
+        to_bits,
+    })
 }
 
 fn check_store(
@@ -1039,8 +1033,7 @@ fn check_mem<'a>(
             let loaded_fact = clamp_range(ctx, to_bits, from_bits, ctx.load(&addr, ty)?.cloned())?;
             trace!(
                 "loaded_fact = {:?} result_fact = {:?}",
-                loaded_fact,
-                result_fact
+                loaded_fact, result_fact
             );
             if ctx.subsumes_fact_optionals(loaded_fact.as_ref(), result_fact) {
                 Ok(loaded_fact.clone())

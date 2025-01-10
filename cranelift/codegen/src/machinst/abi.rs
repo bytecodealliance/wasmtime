@@ -98,12 +98,12 @@
 //! registers. In some cases this is an extension of the base system
 //! ABI. See each platform's `abi.rs` implementation for details.
 
+use crate::CodegenError;
 use crate::entity::SecondaryMap;
 use crate::ir::types::*;
 use crate::ir::{ArgumentExtension, ArgumentPurpose, Signature};
 use crate::isa::TargetIsa;
 use crate::settings::ProbestackStrategy;
-use crate::CodegenError;
 use crate::{ir, isa};
 use crate::{machinst::*, trace};
 use regalloc2::{MachineEnv, PReg, PRegSet};
@@ -2418,19 +2418,15 @@ impl<M: ABIMachineSpec> CallSite<M> {
         // function that establish the SP invariants that are relied on elsewhere and are generated
         // after the register allocator has run and thus cannot have register allocator-inserted
         // references to SP offsets.)
-        for inst in M::gen_call(
-            &self.dest,
-            tmp,
-            CallInfo {
-                dest: (),
-                uses,
-                defs,
-                clobbers,
-                callee_conv: call_conv,
-                caller_conv: self.caller_conv,
-                callee_pop_size,
-            },
-        )
+        for inst in M::gen_call(&self.dest, tmp, CallInfo {
+            dest: (),
+            uses,
+            defs,
+            clobbers,
+            callee_conv: call_conv,
+            caller_conv: self.caller_conv,
+            callee_pop_size,
+        })
         .into_iter()
         {
             ctx.emit(inst);

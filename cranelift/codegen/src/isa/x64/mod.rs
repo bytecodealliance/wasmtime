@@ -1,17 +1,17 @@
 //! X86_64-bit Instruction Set Architecture.
 
-pub use self::inst::{args, EmitInfo, EmitState, Inst};
+pub use self::inst::{EmitInfo, EmitState, Inst, args};
 
 use super::{OwnedTargetIsa, TargetIsa};
 use crate::dominator_tree::DominatorTree;
-use crate::ir::{types, Function, Type};
+use crate::ir::{Function, Type, types};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
 use crate::isa::x64::settings as x64_settings;
 use crate::isa::{Builder as IsaBuilder, FunctionAlignment};
 use crate::machinst::{
-    compile, CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
-    TextSectionBuilder, VCode,
+    CompiledCode, CompiledCodeStencil, MachInst, MachTextSectionBuilder, Reg, SigSet,
+    TextSectionBuilder, VCode, compile,
 };
 use crate::result::CodegenResult;
 use crate::settings::{self as shared_settings, Flags};

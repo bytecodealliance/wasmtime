@@ -1070,26 +1070,32 @@ fn type_mismatch() -> Result<()> {
     let mut store = Store::new(&engine, ());
     let i = Linker::new(&engine).instantiate(&mut store, &c)?;
 
-    assert!(i
-        .get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f1")
-        .is_err());
-    assert!(i
-        .get_typed_func::<(&ResourceAny,), ()>(&mut store, "f1")
-        .is_ok());
+    assert!(
+        i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f1")
+            .is_err()
+    );
+    assert!(
+        i.get_typed_func::<(&ResourceAny,), ()>(&mut store, "f1")
+            .is_ok()
+    );
 
-    assert!(i
-        .get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f2")
-        .is_err());
-    assert!(i
-        .get_typed_func::<(&ResourceAny,), ()>(&mut store, "f2")
-        .is_ok());
+    assert!(
+        i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f2")
+            .is_err()
+    );
+    assert!(
+        i.get_typed_func::<(&ResourceAny,), ()>(&mut store, "f2")
+            .is_ok()
+    );
 
-    assert!(i
-        .get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f3")
-        .is_err());
-    assert!(i
-        .get_typed_func::<(&ResourceAny,), ()>(&mut store, "f3")
-        .is_err());
+    assert!(
+        i.get_typed_func::<(&Resource<MyType>,), ()>(&mut store, "f3")
+            .is_err()
+    );
+    assert!(
+        i.get_typed_func::<(&ResourceAny,), ()>(&mut store, "f3")
+            .is_err()
+    );
     assert!(i.get_typed_func::<(u32,), ()>(&mut store, "f3").is_ok());
 
     Ok(())

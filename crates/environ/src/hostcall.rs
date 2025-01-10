@@ -1,6 +1,6 @@
+use crate::BuiltinFunctionIndex;
 #[cfg(feature = "component-model")]
 use crate::component::ComponentBuiltinFunctionIndex;
-use crate::BuiltinFunctionIndex;
 
 /// Enumeration of all possible ways that wasm may execute code in the
 /// host.

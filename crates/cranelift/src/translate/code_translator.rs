@@ -89,12 +89,12 @@ use cranelift_codegen::packed_option::ReservedValue;
 use cranelift_frontend::{FunctionBuilder, Variable};
 use itertools::Itertools;
 use smallvec::SmallVec;
-use std::collections::{hash_map, HashMap};
+use std::collections::{HashMap, hash_map};
 use std::vec::Vec;
 use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
 use wasmtime_environ::{
-    wasm_unsupported, DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, Signed,
-    TableIndex, TypeConvert, TypeIndex, Unsigned, WasmRefType, WasmResult,
+    DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, Signed, TableIndex, TypeConvert,
+    TypeIndex, Unsigned, WasmRefType, WasmResult, wasm_unsupported,
 };
 
 /// Given a `Reachability<T>`, unwrap the inner `T` or, when unreachable, set
@@ -312,13 +312,10 @@ pub fn translate_operator(
                     destination,
                     state.peekn(params.len()),
                 );
-                (
-                    destination,
-                    ElseData::NoElse {
-                        branch_inst,
-                        placeholder: destination,
-                    },
-                )
+                (destination, ElseData::NoElse {
+                    branch_inst,
+                    placeholder: destination,
+                })
             } else {
                 // The `if` type signature is not valid without an `else` block,
                 // so we eagerly allocate the `else` block here.
@@ -3418,7 +3415,7 @@ fn translate_atomic_rmw(
             return Err(wasm_unsupported!(
                 "atomic_rmw: unsupported access type {:?}",
                 access_ty
-            ))
+            ));
         }
     };
     let w_ty_ok = match widened_ty {
@@ -3471,7 +3468,7 @@ fn translate_atomic_cas(
             return Err(wasm_unsupported!(
                 "atomic_cas: unsupported access type {:?}",
                 access_ty
-            ))
+            ));
         }
     };
     let w_ty_ok = match widened_ty {
@@ -3523,7 +3520,7 @@ fn translate_atomic_load(
             return Err(wasm_unsupported!(
                 "atomic_load: unsupported access type {:?}",
                 access_ty
-            ))
+            ));
         }
     };
     let w_ty_ok = match widened_ty {
@@ -3568,7 +3565,7 @@ fn translate_atomic_store(
             return Err(wasm_unsupported!(
                 "atomic_store: unsupported access type {:?}",
                 access_ty
-            ))
+            ));
         }
     };
     let d_ty_ok = match data_ty {

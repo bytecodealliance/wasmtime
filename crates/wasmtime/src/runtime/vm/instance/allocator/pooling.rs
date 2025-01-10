@@ -48,9 +48,9 @@ use super::{
 };
 use crate::prelude::*;
 use crate::runtime::vm::{
+    CompiledModuleId, Memory, Table,
     instance::Instance,
     mpk::{self, MpkEnabled, ProtectionKey, ProtectionMask},
-    CompiledModuleId, Memory, Table,
 };
 use std::borrow::Cow;
 use std::fmt::Display;
@@ -75,8 +75,8 @@ use stack_pool::StackPool;
 
 #[cfg(feature = "component-model")]
 use wasmtime_environ::{
-    component::{Component, VMComponentOffsets},
     StaticModuleIndex,
+    component::{Component, VMComponentOffsets},
 };
 
 fn round_up_to_pow2(n: usize, to: usize) -> usize {
@@ -714,13 +714,10 @@ mod test {
             ..PoolingInstanceAllocatorConfig::default()
         };
         assert_eq!(
-            PoolingInstanceAllocator::new(
-                &config,
-                &Tunables {
-                    memory_reservation: 0x10000,
-                    ..Tunables::default_host()
-                },
-            )
+            PoolingInstanceAllocator::new(&config, &Tunables {
+                memory_reservation: 0x10000,
+                ..Tunables::default_host()
+            },)
             .map_err(|e| e.to_string())
             .expect_err("expected a failure constructing instance allocator"),
             "maximum memory size of 0x100010000 bytes exceeds the configured \

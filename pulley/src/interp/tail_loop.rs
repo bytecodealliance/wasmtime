@@ -27,9 +27,9 @@
 //!   at this time but doesn't actually run anywhere.
 
 use super::*;
-use crate::decode::{unwrap_uninhabited, ExtendedOpVisitor};
-use crate::opcode::Opcode;
 use crate::ExtendedOpcode;
+use crate::decode::{ExtendedOpVisitor, unwrap_uninhabited};
+use crate::opcode::Opcode;
 
 type Handler = fn(Interpreter<'_>) -> Done;
 

@@ -1,5 +1,5 @@
 use crate::core;
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use std::collections::BTreeSet;
 use std::fmt::Debug;
 use wast::component::WastVal;

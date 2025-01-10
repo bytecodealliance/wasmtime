@@ -2,10 +2,9 @@ use {
     proc_macro2::{Span, TokenStream},
     std::{collections::HashMap, path::PathBuf},
     syn::{
-        braced, bracketed,
+        Error, Ident, LitStr, Result, Token, braced, bracketed,
         parse::{Parse, ParseStream},
         punctuated::Punctuated,
-        Error, Ident, LitStr, Result, Token,
     },
 };
 
@@ -304,10 +303,11 @@ impl Parse for ErrorConf {
                     return Err(Error::new(
                         *i.err_loc(),
                         format!(
-                        "duplicate definition of rich error type for {:?}: previously defined at {:?}",
-                        i.abi_error(), prev_def.err_loc(),
-                    ),
-                    ))
+                            "duplicate definition of rich error type for {:?}: previously defined at {:?}",
+                            i.abi_error(),
+                            prev_def.err_loc(),
+                        ),
+                    ));
                 }
             }
         }

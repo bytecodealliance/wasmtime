@@ -205,20 +205,20 @@ mod test {
         }
 
         invert_equality(&[], &[MemArea { ptr: 0, len: 4096 }]);
-        invert_equality(
-            &[MemArea { ptr: 0, len: 1 }],
-            &[MemArea { ptr: 1, len: 4095 }],
-        );
+        invert_equality(&[MemArea { ptr: 0, len: 1 }], &[MemArea {
+            ptr: 1,
+            len: 4095,
+        }]);
 
-        invert_equality(
-            &[MemArea { ptr: 1, len: 1 }],
-            &[MemArea { ptr: 0, len: 1 }, MemArea { ptr: 2, len: 4094 }],
-        );
+        invert_equality(&[MemArea { ptr: 1, len: 1 }], &[
+            MemArea { ptr: 0, len: 1 },
+            MemArea { ptr: 2, len: 4094 },
+        ]);
 
-        invert_equality(
-            &[MemArea { ptr: 1, len: 4095 }],
-            &[MemArea { ptr: 0, len: 1 }],
-        );
+        invert_equality(&[MemArea { ptr: 1, len: 4095 }], &[MemArea {
+            ptr: 0,
+            len: 1,
+        }]);
 
         invert_equality(
             &[MemArea { ptr: 0, len: 1 }, MemArea { ptr: 1, len: 4095 }],

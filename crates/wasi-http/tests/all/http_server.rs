@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
-use http_body_util::{combinators::BoxBody, BodyExt, Full};
-use hyper::{body::Bytes, service::service_fn, Request, Response};
+use http_body_util::{BodyExt, Full, combinators::BoxBody};
+use hyper::{Request, Response, body::Bytes, service::service_fn};
 use std::{
     future::Future,
     net::{SocketAddr, TcpStream},

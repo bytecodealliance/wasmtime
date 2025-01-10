@@ -20,24 +20,18 @@ fn main() {
 
         let mut buffer = [0_u8; 1];
         assert_eq!(
-            wasi::fd_read(
-                fd,
-                &[wasi::Iovec {
-                    buf: buffer.as_mut_ptr(),
-                    buf_len: 1
-                }]
-            ),
+            wasi::fd_read(fd, &[wasi::Iovec {
+                buf: buffer.as_mut_ptr(),
+                buf_len: 1
+            }]),
             Err(wasi::ERRNO_BADF)
         );
 
         assert_eq!(
-            wasi::fd_write(
-                fd,
-                &[wasi::Ciovec {
-                    buf: buffer.as_ptr(),
-                    buf_len: 1
-                }]
-            ),
+            wasi::fd_write(fd, &[wasi::Ciovec {
+                buf: buffer.as_ptr(),
+                buf_len: 1
+            }]),
             Err(wasi::ERRNO_BADF)
         );
 

@@ -1,10 +1,10 @@
 use crate::compiler::Compiler;
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::sync::Arc;
 use target_lexicon::Triple;
 use wasmtime_cranelift::isa_builder::IsaBuilder;
 use wasmtime_environ::{CompilerBuilder, Setting, Tunables};
-use winch_codegen::{isa, TargetIsa};
+use winch_codegen::{TargetIsa, isa};
 
 /// Compiler builder.
 struct Builder {

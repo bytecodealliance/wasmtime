@@ -1,6 +1,6 @@
 use proptest::prelude::*;
 use wiggle::{GuestMemory, GuestPtr};
-use wiggle_test::{impl_errno, HostMemory, MemArea, WasiCtx};
+use wiggle_test::{HostMemory, MemArea, WasiCtx, impl_errno};
 
 wiggle::from_witx!({
     witx: ["$CARGO_MANIFEST_DIR/tests/pointers.witx"],

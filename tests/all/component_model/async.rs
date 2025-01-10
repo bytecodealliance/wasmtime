@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use crate::async_functions::{execute_across_threads, PollOnce};
+use crate::async_functions::{PollOnce, execute_across_threads};
 use anyhow::Result;
 use wasmtime::component::*;
 use wasmtime::{Engine, Store, StoreContextMut, Trap};

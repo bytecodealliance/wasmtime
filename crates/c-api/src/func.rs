@@ -1,9 +1,9 @@
+use crate::{WasmtimeCaller, WasmtimeStoreData, wasm_trap_t};
 use crate::{
-    wasm_extern_t, wasm_functype_t, wasm_store_t, wasm_val_t, wasm_val_vec_t, wasmtime_error_t,
-    wasmtime_extern_t, wasmtime_val_t, wasmtime_val_union, WasmtimeStoreContext,
-    WasmtimeStoreContextMut,
+    WasmtimeStoreContext, WasmtimeStoreContextMut, wasm_extern_t, wasm_functype_t, wasm_store_t,
+    wasm_val_t, wasm_val_vec_t, wasmtime_error_t, wasmtime_extern_t, wasmtime_val_t,
+    wasmtime_val_union,
 };
-use crate::{wasm_trap_t, WasmtimeCaller, WasmtimeStoreData};
 use anyhow::{Error, Result};
 use std::any::Any;
 use std::ffi::c_void;
@@ -55,9 +55,9 @@ unsafe fn create_function(
     store: &mut wasm_store_t,
     ty: &wasm_functype_t,
     func: impl Fn(*const wasm_val_vec_t, *mut wasm_val_vec_t) -> Option<Box<wasm_trap_t>>
-        + Send
-        + Sync
-        + 'static,
+    + Send
+    + Sync
+    + 'static,
 ) -> Box<wasm_func_t> {
     let ty = ty.ty().ty(store.store.context().engine());
     let func = Func::new(

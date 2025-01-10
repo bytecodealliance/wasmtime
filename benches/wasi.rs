@@ -1,8 +1,8 @@
 //! Measure some common WASI call scenarios.
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use std::{fs::File, path::Path, time::Instant};
-use wasi_common::{sync::WasiCtxBuilder, WasiCtx};
+use wasi_common::{WasiCtx, sync::WasiCtxBuilder};
 use wasmtime::{Engine, Linker, Module, Store, TypedFunc};
 
 criterion_group!(benches, bench_wasi);

@@ -2,8 +2,8 @@
 
 use super::*;
 use crate::ir::{self, Endianness};
-use crate::isa::pulley_shared::abi::PulleyMachineDeps;
 use crate::isa::pulley_shared::PointerWidth;
+use crate::isa::pulley_shared::abi::PulleyMachineDeps;
 use core::marker::PhantomData;
 use cranelift_control::ControlPlane;
 use pulley_interpreter::encode as enc;

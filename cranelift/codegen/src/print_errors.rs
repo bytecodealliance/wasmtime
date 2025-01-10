@@ -7,7 +7,7 @@ use crate::ir::function::Function;
 use crate::ir::pcc::Fact;
 use crate::result::CodegenError;
 use crate::verifier::{VerifierError, VerifierErrors};
-use crate::write::{decorate_function, FuncWriter, PlainWriter};
+use crate::write::{FuncWriter, PlainWriter, decorate_function};
 use alloc::boxed::Box;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;

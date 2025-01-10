@@ -8,7 +8,7 @@ use std::sync::{Mutex, Once};
 use wasmtime_fuzzing::generators::{Config, DiffValue, DiffValueType, SingleInstModule};
 use wasmtime_fuzzing::oracles::diff_wasmtime::WasmtimeInstance;
 use wasmtime_fuzzing::oracles::engine::{build_allowed_env_list, parse_env_list};
-use wasmtime_fuzzing::oracles::{differential, engine, log_wasm, DiffEqResult};
+use wasmtime_fuzzing::oracles::{DiffEqResult, differential, engine, log_wasm};
 
 // Upper limit on the number of invocations for each WebAssembly function
 // executed by this fuzz target.
@@ -36,14 +36,13 @@ fuzz_target!(|data: &[u8]| {
 
         // Retrieve the configuration for this fuzz target from `ALLOWED_*`
         // environment variables.
-        let allowed_engines = build_allowed_env_list(
-            parse_env_list("ALLOWED_ENGINES"),
-            &["wasmtime", "wasmi", "spec", "v8", "winch"],
-        );
-        let allowed_modules = build_allowed_env_list(
-            parse_env_list("ALLOWED_MODULES"),
-            &["wasm-smith", "single-inst"],
-        );
+        let allowed_engines = build_allowed_env_list(parse_env_list("ALLOWED_ENGINES"), &[
+            "wasmtime", "wasmi", "spec", "v8", "winch",
+        ]);
+        let allowed_modules = build_allowed_env_list(parse_env_list("ALLOWED_MODULES"), &[
+            "wasm-smith",
+            "single-inst",
+        ]);
 
         *ALLOWED_ENGINES.lock().unwrap() = allowed_engines;
         *ALLOWED_MODULES.lock().unwrap() = allowed_modules;

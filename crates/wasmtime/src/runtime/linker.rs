@@ -2,11 +2,11 @@ use crate::func::HostFunc;
 use crate::hash_map::{Entry, HashMap};
 use crate::instance::InstancePre;
 use crate::store::StoreOpaque;
-use crate::{prelude::*, IntoFunc};
 use crate::{
     AsContext, AsContextMut, Caller, Engine, Extern, ExternType, Func, FuncType, ImportType,
     Instance, Module, StoreContextMut, Val, ValRaw, ValType, WasmTyList,
 };
+use crate::{IntoFunc, prelude::*};
 use alloc::sync::Arc;
 use core::fmt;
 #[cfg(feature = "async")]
@@ -950,7 +950,9 @@ impl<T> Linker<T> {
             } else if export.name() == "__rtti_base" && export.ty().global().is_some() {
                 // Allow an exported "__rtti_base" memory for compatibility with
                 // AssemblyScript.
-                warn!("command module exporting '__rtti_base' is deprecated; pass `--runtime half` to the AssemblyScript compiler");
+                warn!(
+                    "command module exporting '__rtti_base' is deprecated; pass `--runtime half` to the AssemblyScript compiler"
+                );
             } else if !self.allow_unknown_exports {
                 bail!("command export '{}' is not a function", export.name());
             }

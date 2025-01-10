@@ -1,9 +1,9 @@
 use crate::prelude::*;
 use crate::runtime::vm::{GcStore, VMGcRef};
 use crate::{
+    AsContext, AsContextMut, GcRef, Result, RootedGcRef,
     runtime::Uninhabited,
     store::{AutoAssertNoGc, StoreOpaque},
-    AsContext, AsContextMut, GcRef, Result, RootedGcRef,
 };
 use core::any::Any;
 use core::ffi::c_void;

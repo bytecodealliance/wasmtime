@@ -7,7 +7,7 @@ use crate::prelude::*;
 use crate::runtime::vm::{StoreBox, VMFuncRef};
 use core::any::Any;
 use core::ptr::{self, NonNull};
-use wasmtime_environ::{VMSharedTypeIndex, VM_ARRAY_CALL_HOST_FUNC_MAGIC};
+use wasmtime_environ::{VM_ARRAY_CALL_HOST_FUNC_MAGIC, VMSharedTypeIndex};
 
 /// The `VM*Context` for array-call host functions.
 ///

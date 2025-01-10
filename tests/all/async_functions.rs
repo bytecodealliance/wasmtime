@@ -235,11 +235,10 @@ async fn suspend_while_suspending() {
         ",
     )
     .unwrap();
-    let instance = Instance::new_async(
-        &mut store,
-        &module,
-        &[sync_call_async_thunk.into(), async_import.into()],
-    )
+    let instance = Instance::new_async(&mut store, &module, &[
+        sync_call_async_thunk.into(),
+        async_import.into(),
+    ])
     .await
     .unwrap();
     let func = instance.get_func(&mut store, "").unwrap();

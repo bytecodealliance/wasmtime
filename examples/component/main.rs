@@ -2,8 +2,8 @@ use anyhow::Context;
 use std::{fs, path::Path};
 
 use wasmtime::{
-    component::{bindgen, Component, Linker},
     Config, Engine, Result, Store,
+    component::{Component, Linker, bindgen},
 };
 
 // Generate bindings of the guest and host components.
@@ -47,12 +47,9 @@ fn main() -> Result<()> {
 
     // Create our component and call our generated host function.
     let component = Component::from_binary(&engine, &component)?;
-    let mut store = Store::new(
-        &engine,
-        MyState {
-            host: HostComponent {},
-        },
-    );
+    let mut store = Store::new(&engine, MyState {
+        host: HostComponent {},
+    });
     let mut linker = Linker::new(&engine);
     host::add_to_linker(&mut linker, |state: &mut MyState| &mut state.host)?;
     let convert = Convert::instantiate(&mut store, &component, &linker)?;

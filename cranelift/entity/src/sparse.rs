@@ -7,8 +7,8 @@
 //! > Briggs, Torczon, *An efficient representation for sparse sets*,
 //! > ACM Letters on Programming Languages and Systems, Volume 2, Issue 1-4, March-Dec. 1993.
 
-use crate::map::SecondaryMap;
 use crate::EntityRef;
+use crate::map::SecondaryMap;
 use alloc::vec::Vec;
 use core::fmt;
 use core::mem;
@@ -334,10 +334,9 @@ mod tests {
         assert_eq!(map.insert(Obj(i0, "baz")), None);
 
         // Iteration order = insertion order when nothing has been removed yet.
-        assert_eq!(
-            map.values().map(|obj| obj.1).collect::<Vec<_>>(),
-            ["foo", "bar", "baz"]
-        );
+        assert_eq!(map.values().map(|obj| obj.1).collect::<Vec<_>>(), [
+            "foo", "bar", "baz"
+        ]);
 
         assert_eq!(map.len(), 3);
         assert_eq!(map.get(i0), Some(&Obj(i0, "baz")));

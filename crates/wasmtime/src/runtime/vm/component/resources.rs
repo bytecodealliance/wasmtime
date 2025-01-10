@@ -25,8 +25,8 @@
 
 use crate::prelude::*;
 use core::mem;
-use wasmtime_environ::component::TypeResourceTableIndex;
 use wasmtime_environ::PrimaryMap;
+use wasmtime_environ::component::TypeResourceTableIndex;
 
 /// The maximum handle value is specified in
 /// <https://github.com/WebAssembly/component-model/blob/main/design/mvp/CanonicalABI.md>

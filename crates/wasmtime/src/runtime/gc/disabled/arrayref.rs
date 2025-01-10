@@ -1,7 +1,7 @@
 use crate::runtime::vm::VMGcRef;
 use crate::{
+    ArrayType, AsContext, AsContextMut, GcRefImpl, I31, Result, Rooted, Val,
     store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
-    ArrayType, AsContext, AsContextMut, GcRefImpl, Result, Rooted, Val, I31,
 };
 
 /// Support for `ArrayRefPre` disabled at compile time because the `gc` cargo

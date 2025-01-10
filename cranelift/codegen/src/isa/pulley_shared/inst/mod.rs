@@ -3,12 +3,12 @@
 use core::marker::PhantomData;
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
-use crate::ir::types::{self, F32, F64, I128, I16, I32, I64, I8, I8X16};
+use crate::ir::types::{self, F32, F64, I8, I8X16, I16, I32, I64, I128};
 use crate::ir::{self, MemFlags, Type};
-use crate::isa::pulley_shared::abi::PulleyMachineDeps;
 use crate::isa::FunctionAlignment;
+use crate::isa::pulley_shared::abi::PulleyMachineDeps;
+use crate::{CodegenError, CodegenResult, settings};
 use crate::{machinst::*, trace};
-use crate::{settings, CodegenError, CodegenResult};
 use alloc::string::{String, ToString};
 use regalloc2::RegClass;
 use smallvec::SmallVec;

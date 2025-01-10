@@ -125,7 +125,7 @@ impl Display for Comparison {
 mod test {
     use super::*;
     use crate::parse_run_command;
-    use cranelift_codegen::ir::{types, AbiParam, Signature};
+    use cranelift_codegen::ir::{AbiParam, Signature, types};
     use cranelift_codegen::isa::CallConv;
 
     #[test]

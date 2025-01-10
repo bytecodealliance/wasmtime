@@ -81,7 +81,10 @@ impl<'a> fmt::Debug for PrintableTestCase<'a> {
         }
 
         if !self.inputs.is_empty() {
-            writeln!(f, "; Note: the results in the below test cases are simply a placeholder and probably will be wrong\n")?;
+            writeln!(
+                f,
+                "; Note: the results in the below test cases are simply a placeholder and probably will be wrong\n"
+            )?;
         }
 
         for input in self.inputs.iter() {

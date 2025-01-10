@@ -495,11 +495,13 @@ fn memory64_maximum_minimum(config: &mut Config) -> Result<()> {
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
-    assert!(MemoryTypeBuilder::default()
-        .memory64(true)
-        .min(1 << 48)
-        .build()
-        .is_err());
+    assert!(
+        MemoryTypeBuilder::default()
+            .memory64(true)
+            .min(1 << 48)
+            .build()
+            .is_err()
+    );
 
     let module = Module::new(
         &engine,
@@ -551,12 +553,14 @@ fn shared_memory_basics() -> Result<()> {
     assert!(SharedMemory::new(&engine, MemoryType::new(1, Some(1))).is_err());
     assert!(SharedMemory::new(&engine, MemoryType::new64(1, None)).is_err());
     assert!(SharedMemory::new(&engine, MemoryType::new64(1, Some(1))).is_err());
-    assert!(MemoryTypeBuilder::default()
-        .shared(true)
-        .min(1)
-        .max(Some(0))
-        .build()
-        .is_err());
+    assert!(
+        MemoryTypeBuilder::default()
+            .shared(true)
+            .min(1)
+            .max(Some(0))
+            .build()
+            .is_err()
+    );
 
     let memory = SharedMemory::new(&engine, MemoryType::shared(1, 1))?;
     assert!(memory.ty().is_shared());

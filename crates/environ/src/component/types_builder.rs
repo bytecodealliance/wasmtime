@@ -4,11 +4,12 @@ use crate::{
     EngineOrModuleTypeIndex, EntityType, ModuleInternedTypeIndex, ModuleTypes, ModuleTypesBuilder,
     PrimaryMap, TypeConvert, WasmHeapType, WasmValType,
 };
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use cranelift_entity::EntityRef;
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::ops::Index;
+use wasmparser::Validator;
 use wasmparser::component_types::{
     ComponentAnyTypeId, ComponentCoreModuleTypeId, ComponentDefinedType, ComponentDefinedTypeId,
     ComponentEntityType, ComponentFuncTypeId, ComponentInstanceTypeId, ComponentTypeId,
@@ -16,7 +17,6 @@ use wasmparser::component_types::{
 };
 use wasmparser::names::KebabString;
 use wasmparser::types::TypesRef;
-use wasmparser::Validator;
 use wasmtime_component_util::FlagsSize;
 
 mod resources;
@@ -430,13 +430,10 @@ impl ComponentTypesBuilder {
                 if case.refines.is_some() {
                     bail!("refines is not supported at this time");
                 }
-                Ok((
-                    name.to_string(),
-                    match &case.ty.as_ref() {
-                        Some(ty) => Some(self.valtype(types, ty)?),
-                        None => None,
-                    },
-                ))
+                Ok((name.to_string(), match &case.ty.as_ref() {
+                    Some(ty) => Some(self.valtype(types, ty)?),
+                    None => None,
+                }))
             })
             .collect::<Result<IndexMap<_, _>>>()?;
         let (info, abi) = VariantInfo::new(

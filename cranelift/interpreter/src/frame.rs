@@ -1,7 +1,7 @@
 //! Implements a call frame (activation record) for the Cranelift interpreter.
 
 use cranelift_codegen::data_value::DataValue;
-use cranelift_codegen::ir::{types, Function, Value as ValueRef};
+use cranelift_codegen::ir::{Function, Value as ValueRef, types};
 use cranelift_entity::EntityRef;
 use log::trace;
 
@@ -110,8 +110,8 @@ impl<'a> Frame<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
     use cranelift_codegen::ir::InstBuilder;
+    use cranelift_codegen::ir::immediates::{Ieee32, Ieee64};
     use cranelift_frontend::{FunctionBuilder, FunctionBuilderContext};
     use cranelift_reader::parse_functions;
 

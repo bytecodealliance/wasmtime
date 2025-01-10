@@ -18,10 +18,10 @@ use crate::error::*;
 use crate::lexer::Pos;
 use crate::log;
 use crate::stablemapset::{StableMap, StableSet};
-use std::collections::hash_map::Entry;
 use std::collections::BTreeMap;
 use std::collections::BTreeSet;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::fmt;
 
 declare_id!(
@@ -507,13 +507,10 @@ impl Term {
 
     /// Is this term partial?
     pub fn is_partial(&self) -> bool {
-        matches!(
-            self.kind,
-            TermKind::Decl {
-                flags: TermFlags { partial: true, .. },
-                ..
-            }
-        )
+        matches!(self.kind, TermKind::Decl {
+            flags: TermFlags { partial: true, .. },
+            ..
+        })
     }
 
     /// Does this term have a constructor?
@@ -542,24 +539,18 @@ impl Term {
 
     /// Is this term's extractor external?
     pub fn has_external_extractor(&self) -> bool {
-        matches!(
-            self.kind,
-            TermKind::Decl {
-                extractor_kind: Some(ExtractorKind::ExternalExtractor { .. }),
-                ..
-            }
-        )
+        matches!(self.kind, TermKind::Decl {
+            extractor_kind: Some(ExtractorKind::ExternalExtractor { .. }),
+            ..
+        })
     }
 
     /// Is this term's constructor external?
     pub fn has_external_constructor(&self) -> bool {
-        matches!(
-            self.kind,
-            TermKind::Decl {
-                constructor_kind: Some(ConstructorKind::ExternalConstructor { .. }),
-                ..
-            }
-        )
+        matches!(self.kind, TermKind::Decl {
+            constructor_kind: Some(ConstructorKind::ExternalConstructor { .. }),
+            ..
+        })
     }
 
     /// Get this term's extractor's external function signature, if any.
@@ -2668,14 +2659,10 @@ mod test {
         assert_eq!(tyenv.type_map.get(&sym_a).unwrap(), &TypeId(14));
 
         let expected_types = vec![
-            Type::Primitive(
-                TypeId(13),
-                sym_uimm8,
-                Pos {
-                    file: 0,
-                    offset: 19,
-                },
-            ),
+            Type::Primitive(TypeId(13), sym_uimm8, Pos {
+                file: 0,
+                offset: 19,
+            }),
             Type::Enum {
                 name: sym_a,
                 id: TypeId(14),

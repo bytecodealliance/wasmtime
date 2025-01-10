@@ -10,7 +10,7 @@ use crate::{
     TableIndex, TableInitialValue, Tunables, TypeConvert, TypeIndex, Unsigned, WasmError,
     WasmHeapTopType, WasmHeapType, WasmResult, WasmValType, WasmparserTypeConverter,
 };
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use cranelift_entity::packed_option::ReservedValue;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -18,9 +18,9 @@ use std::mem;
 use std::path::PathBuf;
 use std::sync::Arc;
 use wasmparser::{
-    types::Types, CustomSectionReader, DataKind, ElementItems, ElementKind, Encoding, ExternalKind,
+    CustomSectionReader, DataKind, ElementItems, ElementKind, Encoding, ExternalKind,
     FuncToValidate, FunctionBody, KnownCustom, NameSectionReader, Naming, Parser, Payload, TypeRef,
-    Validator, ValidatorResources,
+    Validator, ValidatorResources, types::Types,
 };
 
 /// Object containing the standalone environment information.

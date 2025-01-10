@@ -3,7 +3,7 @@
 use crate::isa::riscv64::inst::regs;
 use crate::isa::unwind::systemv::RegisterMappingError;
 use crate::machinst::Reg;
-use gimli::{write::CommonInformationEntry, Encoding, Format, Register};
+use gimli::{Encoding, Format, Register, write::CommonInformationEntry};
 use regalloc2::RegClass;
 
 /// Creates a new riscv64 common information entry (CIE).
@@ -61,13 +61,13 @@ impl crate::isa::unwind::systemv::RegisterMapper<Reg> for RegisterMapper {
 mod tests {
     use crate::cursor::{Cursor, FuncCursor};
 
-    use crate::ir::{
-        types, AbiParam, Function, InstBuilder, Signature, StackSlotData, StackSlotKind,
-        UserFuncName,
-    };
-    use crate::isa::{lookup, CallConv};
-    use crate::settings::{builder, Flags};
     use crate::Context;
+    use crate::ir::{
+        AbiParam, Function, InstBuilder, Signature, StackSlotData, StackSlotKind, UserFuncName,
+        types,
+    };
+    use crate::isa::{CallConv, lookup};
+    use crate::settings::{Flags, builder};
     use gimli::write::Address;
     use target_lexicon::triple;
 
@@ -97,7 +97,10 @@ mod tests {
             _ => panic!("expected unwind information"),
         };
 
-        assert_eq!(format!("{fde:?}"), "FrameDescriptionEntry { address: Constant(1234), length: 40, lsda: None, instructions: [(12, CfaOffset(16)), (12, Offset(Register(8), -16)), (12, Offset(Register(1), -8)), (16, CfaRegister(Register(8)))] }");
+        assert_eq!(
+            format!("{fde:?}"),
+            "FrameDescriptionEntry { address: Constant(1234), length: 40, lsda: None, instructions: [(12, CfaOffset(16)), (12, Offset(Register(8), -16)), (12, Offset(Register(1), -8)), (16, CfaRegister(Register(8)))] }"
+        );
     }
 
     fn create_function(call_conv: CallConv, stack_slot: Option<StackSlotData>) -> Function {

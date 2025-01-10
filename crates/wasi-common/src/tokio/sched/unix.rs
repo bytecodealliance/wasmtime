@@ -1,9 +1,9 @@
 use crate::{
-    sched::{
-        subscription::{RwEventFlags, Subscription},
-        Poll,
-    },
     Error,
+    sched::{
+        Poll,
+        subscription::{RwEventFlags, Subscription},
+    },
 };
 use std::future::Future;
 use std::pin::Pin;

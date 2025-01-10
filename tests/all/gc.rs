@@ -1,7 +1,7 @@
 use super::ref_types_module;
 use super::skip_pooling_allocator_tests;
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst};
 use wasmtime::*;
 
 struct SetFlagOnDrop(Arc<AtomicBool>);

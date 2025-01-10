@@ -1,5 +1,5 @@
 use crate::{codegen::CodeGenError, isa::reg::Reg, masm::StackSlot};
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use smallvec::SmallVec;
 use wasmparser::{Ieee32, Ieee64};
 use wasmtime_environ::WasmValType;

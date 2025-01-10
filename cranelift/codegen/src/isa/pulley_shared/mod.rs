@@ -8,13 +8,13 @@ mod settings;
 use self::inst::EmitInfo;
 use super::{Builder as IsaBuilder, FunctionAlignment};
 use crate::{
+    MachTextSectionBuilder, TextSectionBuilder,
     dominator_tree::DominatorTree,
     ir,
     isa::{self, OwnedTargetIsa, TargetIsa},
     machinst::{self, CompiledCodeStencil, MachInst, SigSet, VCode},
     result::CodegenResult,
     settings::{self as shared_settings, Flags},
-    MachTextSectionBuilder, TextSectionBuilder,
 };
 use alloc::boxed::Box;
 use alloc::vec::Vec;

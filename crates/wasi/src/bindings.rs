@@ -417,9 +417,9 @@ mod async_io {
     });
 }
 
+pub use self::async_io::LinkOptions;
 pub use self::async_io::exports;
 pub use self::async_io::wasi::*;
-pub use self::async_io::LinkOptions;
 
 /// Asynchronous bindings to execute and run a `wasi:cli/command`.
 ///

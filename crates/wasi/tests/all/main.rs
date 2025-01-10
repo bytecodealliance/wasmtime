@@ -1,12 +1,12 @@
 use anyhow::Result;
 use tempfile::TempDir;
 use wasmtime::{
-    component::{Component, Linker, ResourceTable},
     Engine, Store,
+    component::{Component, Linker, ResourceTable},
 };
 use wasmtime_wasi::preview1::WasiP1Ctx;
 use wasmtime_wasi::{
-    pipe::MemoryOutputPipe, DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView,
+    DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView, pipe::MemoryOutputPipe,
 };
 
 struct Ctx {

@@ -11,8 +11,8 @@ use alloc::sync::Arc;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use wasmtime_environ::component::{
-    CanonicalOptions, ComponentTypes, CoreDef, InterfaceType, RuntimeComponentInstanceIndex,
-    TypeFuncIndex, TypeTuple, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    CanonicalOptions, ComponentTypes, CoreDef, InterfaceType, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    RuntimeComponentInstanceIndex, TypeFuncIndex, TypeTuple,
 };
 
 mod host;

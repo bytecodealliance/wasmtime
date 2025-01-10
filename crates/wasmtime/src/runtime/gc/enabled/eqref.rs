@@ -1,11 +1,11 @@
 //! Working with GC `eqref`s.
 
 use crate::{
+    AnyRef, ArrayRef, ArrayType, AsContext, GcRefImpl, GcRootIndex, HeapType, I31, ManuallyRooted,
+    RefType, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy,
     prelude::*,
     runtime::vm::VMGcRef,
     store::{AutoAssertNoGc, StoreOpaque},
-    AnyRef, ArrayRef, ArrayType, AsContext, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted,
-    RefType, Rooted, StructRef, StructType, ValRaw, ValType, WasmTy, I31,
 };
 use core::mem::{self, MaybeUninit};
 use wasmtime_environ::VMGcKind;
@@ -127,12 +127,9 @@ unsafe impl GcRefImpl for EqRef {
         let me: &Self = unsafe { mem::transmute(index) };
 
         // Assert we really are just a newtype of a `GcRootIndex`.
-        assert!(matches!(
-            me,
-            Self {
-                inner: GcRootIndex { .. },
-            }
-        ));
+        assert!(matches!(me, Self {
+            inner: GcRootIndex { .. },
+        }));
 
         me
     }

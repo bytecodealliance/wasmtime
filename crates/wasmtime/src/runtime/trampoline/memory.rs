@@ -1,3 +1,4 @@
+use crate::MemoryType;
 use crate::memory::{LinearMemory, MemoryCreator};
 use crate::prelude::*;
 use crate::runtime::vm::mpk::ProtectionKey;
@@ -8,7 +9,6 @@ use crate::runtime::vm::{
     Table, TableAllocationIndex,
 };
 use crate::store::{InstanceId, StoreOpaque};
-use crate::MemoryType;
 use alloc::sync::Arc;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, EntityIndex, HostPtr, Module, Tunables, VMOffsets,
@@ -16,8 +16,8 @@ use wasmtime_environ::{
 
 #[cfg(feature = "component-model")]
 use wasmtime_environ::{
-    component::{Component, VMComponentOffsets},
     StaticModuleIndex,
+    component::{Component, VMComponentOffsets},
 };
 
 /// Create a "frankenstein" instance with a single memory.

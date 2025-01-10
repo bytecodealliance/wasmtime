@@ -1,6 +1,6 @@
 //! Forest of sets.
 
-use super::{Comparator, Forest, Node, NodeData, NodePool, Path, SetValue, INNER_SIZE};
+use super::{Comparator, Forest, INNER_SIZE, Node, NodeData, NodePool, Path, SetValue};
 use crate::packed_option::PackedOption;
 #[cfg(test)]
 use alloc::string::String;
@@ -548,10 +548,9 @@ mod tests {
         let mut f = SetForest::<i32>::new();
         let mut s = dense4l(&mut f);
 
-        assert_eq!(
-            s.iter(&f).collect::<Vec<_>>()[0..10],
-            [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
-        );
+        assert_eq!(s.iter(&f).collect::<Vec<_>>()[0..10], [
+            0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+        ]);
 
         let mut c = s.cursor(&mut f, &());
 

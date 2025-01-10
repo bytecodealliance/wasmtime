@@ -1,10 +1,10 @@
 use crate::prelude::*;
 use crate::runtime::vm::{GcRootsList, SendSyncPtr};
 use crate::{
-    store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored},
-    trampoline::generate_global_export,
     AnyRef, AsContext, AsContextMut, ExternRef, Func, GlobalType, HeapType, Mutability, Ref,
     RootedGcRefImpl, Val, ValType,
+    store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored},
+    trampoline::generate_global_export,
 };
 use core::ptr;
 use core::ptr::NonNull;

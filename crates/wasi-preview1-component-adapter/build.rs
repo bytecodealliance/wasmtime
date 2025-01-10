@@ -239,7 +239,7 @@ fn build_raw_intrinsics() -> Vec<u8> {
 /// Like above this is still tricky, mainly around the production of the symbol
 /// table.
 fn build_archive(wasm: &[u8]) -> Vec<u8> {
-    use object::{bytes_of, endian::BigEndian, U32Bytes};
+    use object::{U32Bytes, bytes_of, endian::BigEndian};
 
     let mut archive = Vec::new();
     archive.extend_from_slice(&object::archive::MAGIC);

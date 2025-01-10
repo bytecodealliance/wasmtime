@@ -2,7 +2,7 @@ use crate::prelude::*;
 #[cfg(not(feature = "signals-based-traps"))]
 use crate::runtime::vm::send_sync_ptr::SendSyncPtr;
 #[cfg(feature = "signals-based-traps")]
-use crate::runtime::vm::{mmap::UnalignedLength, Mmap};
+use crate::runtime::vm::{Mmap, mmap::UnalignedLength};
 #[cfg(not(feature = "signals-based-traps"))]
 use alloc::alloc::Layout;
 use alloc::sync::Arc;

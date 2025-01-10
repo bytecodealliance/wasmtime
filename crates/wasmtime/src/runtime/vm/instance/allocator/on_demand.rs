@@ -2,11 +2,11 @@ use super::{
     InstanceAllocationRequest, InstanceAllocatorImpl, MemoryAllocationIndex, TableAllocationIndex,
 };
 use crate::prelude::*;
+use crate::runtime::vm::CompiledModuleId;
 use crate::runtime::vm::instance::RuntimeMemoryCreator;
 use crate::runtime::vm::memory::{DefaultMemoryCreator, Memory};
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::table::Table;
-use crate::runtime::vm::CompiledModuleId;
 use alloc::sync::Arc;
 use wasmtime_environ::{
     DefinedMemoryIndex, DefinedTableIndex, HostPtr, Module, Tunables, VMOffsets,
@@ -20,8 +20,8 @@ use wasmtime_fiber::RuntimeFiberStackCreator;
 
 #[cfg(feature = "component-model")]
 use wasmtime_environ::{
-    component::{Component, VMComponentOffsets},
     StaticModuleIndex,
+    component::{Component, VMComponentOffsets},
 };
 
 /// Represents the on-demand instance allocator.

@@ -1,11 +1,11 @@
 //! This module defines s390x-specific machine instruction types.
 
 use crate::binemit::{Addend, CodeOffset, Reloc};
-use crate::ir::{types, ExternalName, Type};
+use crate::ir::{ExternalName, Type, types};
 use crate::isa::s390x::abi::S390xMachineDeps;
 use crate::isa::{CallConv, FunctionAlignment};
 use crate::machinst::*;
-use crate::{settings, CodegenError, CodegenResult};
+use crate::{CodegenError, CodegenResult, settings};
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use regalloc2::{PReg, PRegSet};
@@ -1030,13 +1030,10 @@ impl MachInst for Inst {
     const TRAP_OPCODE: &'static [u8] = &[0, 0];
 
     fn get_operands(&mut self, collector: &mut impl OperandVisitor) {
-        s390x_get_operands(
-            self,
-            &mut DenyReuseVisitor {
-                inner: collector,
-                deny_reuse: false,
-            },
-        );
+        s390x_get_operands(self, &mut DenyReuseVisitor {
+            inner: collector,
+            deny_reuse: false,
+        });
     }
 
     fn is_move(&self) -> Option<(Writable<Reg>, Reg)> {
@@ -1342,17 +1339,13 @@ impl Inst {
 
                 let rd = pretty_print_reg_mod(rd, ri);
                 let mem = mem.clone();
-                let (mem_str, mem) = mem_finalize_for_show(
-                    &mem,
-                    state,
-                    MemInstType {
-                        have_d12: opcode_rx.is_some(),
-                        have_d20: opcode_rxy.is_some(),
-                        have_pcrel: false,
-                        have_unaligned_pcrel: false,
-                        have_index: true,
-                    },
-                );
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                    have_d12: opcode_rx.is_some(),
+                    have_d20: opcode_rxy.is_some(),
+                    have_pcrel: false,
+                    have_unaligned_pcrel: false,
+                    have_index: true,
+                });
                 let op = match &mem {
                     &MemArg::BXD12 { .. } => opcode_rx,
                     &MemArg::BXD20 { .. } => opcode_rxy,
@@ -1624,17 +1617,13 @@ impl Inst {
 
                 let rn = pretty_print_reg(rn);
                 let mem = mem.clone();
-                let (mem_str, mem) = mem_finalize_for_show(
-                    &mem,
-                    state,
-                    MemInstType {
-                        have_d12: opcode_rx.is_some(),
-                        have_d20: opcode_rxy.is_some(),
-                        have_pcrel: opcode_ril.is_some(),
-                        have_unaligned_pcrel: false,
-                        have_index: true,
-                    },
-                );
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                    have_d12: opcode_rx.is_some(),
+                    have_d20: opcode_rxy.is_some(),
+                    have_pcrel: opcode_ril.is_some(),
+                    have_unaligned_pcrel: false,
+                    have_index: true,
+                });
                 let op = match &mem {
                     &MemArg::BXD12 { .. } => opcode_rx,
                     &MemArg::BXD20 { .. } => opcode_rxy,
@@ -1734,17 +1723,13 @@ impl Inst {
                 let rd = pretty_print_reg(rd.to_reg());
                 let rn = pretty_print_reg(rn);
                 let mem = mem.clone();
-                let (mem_str, mem) = mem_finalize_for_show(
-                    &mem,
-                    state,
-                    MemInstType {
-                        have_d12: false,
-                        have_d20: true,
-                        have_pcrel: false,
-                        have_unaligned_pcrel: false,
-                        have_index: false,
-                    },
-                );
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                    have_d12: false,
+                    have_d20: true,
+                    have_pcrel: false,
+                    have_unaligned_pcrel: false,
+                    have_index: false,
+                });
                 let mem = mem.pretty_print_default();
                 format!("{mem_str}{op} {rd}, {rn}, {mem}")
             }
@@ -1769,17 +1754,13 @@ impl Inst {
                 let rd = pretty_print_reg_mod(rd, ri);
                 let rn = pretty_print_reg(rn);
                 let mem = mem.clone();
-                let (mem_str, mem) = mem_finalize_for_show(
-                    &mem,
-                    state,
-                    MemInstType {
-                        have_d12: opcode_rs.is_some(),
-                        have_d20: opcode_rsy.is_some(),
-                        have_pcrel: false,
-                        have_unaligned_pcrel: false,
-                        have_index: false,
-                    },
-                );
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                    have_d12: opcode_rs.is_some(),
+                    have_d20: opcode_rsy.is_some(),
+                    have_pcrel: false,
+                    have_unaligned_pcrel: false,
+                    have_index: false,
+                });
                 let op = match &mem {
                     &MemArg::BXD12 { .. } => opcode_rs,
                     &MemArg::BXD20 { .. } => opcode_rsy,
@@ -1826,17 +1807,13 @@ impl Inst {
 
                 let rd = pretty_print_reg(rd.to_reg());
                 let mem = mem.clone();
-                let (mem_str, mem) = mem_finalize_for_show(
-                    &mem,
-                    state,
-                    MemInstType {
-                        have_d12: opcode_rx.is_some(),
-                        have_d20: opcode_rxy.is_some(),
-                        have_pcrel: opcode_ril.is_some(),
-                        have_unaligned_pcrel: false,
-                        have_index: true,
-                    },
-                );
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                    have_d12: opcode_rx.is_some(),
+                    have_d20: opcode_rxy.is_some(),
+                    have_pcrel: opcode_ril.is_some(),
+                    have_unaligned_pcrel: false,
+                    have_index: true,
+                });
                 let op = match &mem {
                     &MemArg::BXD12 { .. } => opcode_rx,
                     &MemArg::BXD20 { .. } => opcode_rxy,
@@ -1866,17 +1843,13 @@ impl Inst {
 
                 let rd = pretty_print_reg(rd);
                 let mem = mem.clone();
-                let (mem_str, mem) = mem_finalize_for_show(
-                    &mem,
-                    state,
-                    MemInstType {
-                        have_d12: opcode_rx.is_some(),
-                        have_d20: opcode_rxy.is_some(),
-                        have_pcrel: opcode_ril.is_some(),
-                        have_unaligned_pcrel: false,
-                        have_index: true,
-                    },
-                );
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                    have_d12: opcode_rx.is_some(),
+                    have_d20: opcode_rxy.is_some(),
+                    have_pcrel: opcode_ril.is_some(),
+                    have_unaligned_pcrel: false,
+                    have_index: true,
+                });
                 let op = match &mem {
                     &MemArg::BXD12 { .. } => opcode_rx,
                     &MemArg::BXD20 { .. } => opcode_rxy,
@@ -1889,17 +1862,13 @@ impl Inst {
             }
             &Inst::StoreImm8 { imm, ref mem } => {
                 let mem = mem.clone();
-                let (mem_str, mem) = mem_finalize_for_show(
-                    &mem,
-                    state,
-                    MemInstType {
-                        have_d12: true,
-                        have_d20: true,
-                        have_pcrel: false,
-                        have_unaligned_pcrel: false,
-                        have_index: false,
-                    },
-                );
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                    have_d12: true,
+                    have_d20: true,
+                    have_pcrel: false,
+                    have_unaligned_pcrel: false,
+                    have_index: false,
+                });
                 let op = match &mem {
                     &MemArg::BXD12 { .. } => "mvi",
                     &MemArg::BXD20 { .. } => "mviy",
@@ -1913,17 +1882,13 @@ impl Inst {
             | &Inst::StoreImm32SExt16 { imm, ref mem }
             | &Inst::StoreImm64SExt16 { imm, ref mem } => {
                 let mem = mem.clone();
-                let (mem_str, mem) = mem_finalize_for_show(
-                    &mem,
-                    state,
-                    MemInstType {
-                        have_d12: false,
-                        have_d20: true,
-                        have_pcrel: false,
-                        have_unaligned_pcrel: false,
-                        have_index: false,
-                    },
-                );
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                    have_d12: false,
+                    have_d20: true,
+                    have_pcrel: false,
+                    have_unaligned_pcrel: false,
+                    have_index: false,
+                });
                 let op = match self {
                     &Inst::StoreImm16 { .. } => "mvhhi",
                     &Inst::StoreImm32SExt16 { .. } => "mvhi",
@@ -1936,17 +1901,13 @@ impl Inst {
             }
             &Inst::LoadMultiple64 { rt, rt2, ref mem } => {
                 let mem = mem.clone();
-                let (mem_str, mem) = mem_finalize_for_show(
-                    &mem,
-                    state,
-                    MemInstType {
-                        have_d12: false,
-                        have_d20: true,
-                        have_pcrel: false,
-                        have_unaligned_pcrel: false,
-                        have_index: false,
-                    },
-                );
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                    have_d12: false,
+                    have_d20: true,
+                    have_pcrel: false,
+                    have_unaligned_pcrel: false,
+                    have_index: false,
+                });
                 let rt = pretty_print_reg(rt.to_reg());
                 let rt2 = pretty_print_reg(rt2.to_reg());
                 let mem = mem.pretty_print_default();
@@ -1954,17 +1915,13 @@ impl Inst {
             }
             &Inst::StoreMultiple64 { rt, rt2, ref mem } => {
                 let mem = mem.clone();
-                let (mem_str, mem) = mem_finalize_for_show(
-                    &mem,
-                    state,
-                    MemInstType {
-                        have_d12: false,
-                        have_d20: true,
-                        have_pcrel: false,
-                        have_unaligned_pcrel: false,
-                        have_index: false,
-                    },
-                );
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                    have_d12: false,
+                    have_d20: true,
+                    have_pcrel: false,
+                    have_unaligned_pcrel: false,
+                    have_index: false,
+                });
                 let rt = pretty_print_reg(rt);
                 let rt2 = pretty_print_reg(rt2);
                 let mem = mem.pretty_print_default();
@@ -2659,17 +2616,13 @@ impl Inst {
 
                 let rd = pretty_print_reg(rd.to_reg());
                 let mem = mem.clone();
-                let (mem_str, mem) = mem_finalize_for_show(
-                    &mem,
-                    state,
-                    MemInstType {
-                        have_d12: true,
-                        have_d20: false,
-                        have_pcrel: false,
-                        have_unaligned_pcrel: false,
-                        have_index: true,
-                    },
-                );
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                    have_d12: true,
+                    have_d20: false,
+                    have_pcrel: false,
+                    have_unaligned_pcrel: false,
+                    have_index: true,
+                });
                 let mem = mem.pretty_print_default();
                 format!("{mem_str}{opcode} {rd}, {mem}")
             }
@@ -2695,17 +2648,13 @@ impl Inst {
 
                 let rd = pretty_print_reg(rd);
                 let mem = mem.clone();
-                let (mem_str, mem) = mem_finalize_for_show(
-                    &mem,
-                    state,
-                    MemInstType {
-                        have_d12: true,
-                        have_d20: false,
-                        have_pcrel: false,
-                        have_unaligned_pcrel: false,
-                        have_index: true,
-                    },
-                );
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                    have_d12: true,
+                    have_d20: false,
+                    have_pcrel: false,
+                    have_unaligned_pcrel: false,
+                    have_index: true,
+                });
                 let mem = mem.pretty_print_default();
                 format!("{mem_str}{opcode} {rd}, {mem}")
             }
@@ -2724,17 +2673,13 @@ impl Inst {
 
                 let rd = pretty_print_reg(rd.to_reg());
                 let mem = mem.clone();
-                let (mem_str, mem) = mem_finalize_for_show(
-                    &mem,
-                    state,
-                    MemInstType {
-                        have_d12: true,
-                        have_d20: false,
-                        have_pcrel: false,
-                        have_unaligned_pcrel: false,
-                        have_index: true,
-                    },
-                );
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                    have_d12: true,
+                    have_d20: false,
+                    have_pcrel: false,
+                    have_unaligned_pcrel: false,
+                    have_index: true,
+                });
                 let mem = mem.pretty_print_default();
                 format!("{mem_str}{opcode} {rd}, {mem}")
             }
@@ -2841,17 +2786,13 @@ impl Inst {
 
                 let (rd, _) = pretty_print_fpr(rd.to_reg());
                 let mem = mem.clone();
-                let (mem_str, mem) = mem_finalize_for_show(
-                    &mem,
-                    state,
-                    MemInstType {
-                        have_d12: true,
-                        have_d20: false,
-                        have_pcrel: false,
-                        have_unaligned_pcrel: false,
-                        have_index: true,
-                    },
-                );
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                    have_d12: true,
+                    have_d20: false,
+                    have_pcrel: false,
+                    have_unaligned_pcrel: false,
+                    have_index: true,
+                });
                 let mem = mem.pretty_print_default();
                 format!("{mem_str}{opcode_vrx} {rd}, {mem}, {lane_imm}")
             }
@@ -2881,17 +2822,13 @@ impl Inst {
                 let (rd, rd_fpr) = pretty_print_fpr(rd.to_reg());
                 let mem = mem.clone();
                 if lane_imm == 0 && rd_fpr.is_some() && opcode_rx.is_some() {
-                    let (mem_str, mem) = mem_finalize_for_show(
-                        &mem,
-                        state,
-                        MemInstType {
-                            have_d12: true,
-                            have_d20: true,
-                            have_pcrel: false,
-                            have_unaligned_pcrel: false,
-                            have_index: true,
-                        },
-                    );
+                    let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                        have_d12: true,
+                        have_d20: true,
+                        have_pcrel: false,
+                        have_unaligned_pcrel: false,
+                        have_index: true,
+                    });
                     let op = match &mem {
                         &MemArg::BXD12 { .. } => opcode_rx,
                         &MemArg::BXD20 { .. } => opcode_rxy,
@@ -2900,17 +2837,13 @@ impl Inst {
                     let mem = mem.pretty_print_default();
                     format!("{}{} {}, {}", mem_str, op.unwrap(), rd_fpr.unwrap(), mem)
                 } else {
-                    let (mem_str, mem) = mem_finalize_for_show(
-                        &mem,
-                        state,
-                        MemInstType {
-                            have_d12: true,
-                            have_d20: false,
-                            have_pcrel: false,
-                            have_unaligned_pcrel: false,
-                            have_index: true,
-                        },
-                    );
+                    let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                        have_d12: true,
+                        have_d20: false,
+                        have_pcrel: false,
+                        have_unaligned_pcrel: false,
+                        have_index: true,
+                    });
                     let mem = mem.pretty_print_default();
                     format!("{mem_str}{opcode_vrx} {rd}, {mem}, {lane_imm}")
                 }
@@ -2941,17 +2874,13 @@ impl Inst {
                 let (rd, rd_fpr) = pretty_print_fpr(rd);
                 let mem = mem.clone();
                 if lane_imm == 0 && rd_fpr.is_some() && opcode_rx.is_some() {
-                    let (mem_str, mem) = mem_finalize_for_show(
-                        &mem,
-                        state,
-                        MemInstType {
-                            have_d12: true,
-                            have_d20: true,
-                            have_pcrel: false,
-                            have_unaligned_pcrel: false,
-                            have_index: true,
-                        },
-                    );
+                    let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                        have_d12: true,
+                        have_d20: true,
+                        have_pcrel: false,
+                        have_unaligned_pcrel: false,
+                        have_index: true,
+                    });
                     let op = match &mem {
                         &MemArg::BXD12 { .. } => opcode_rx,
                         &MemArg::BXD20 { .. } => opcode_rxy,
@@ -2960,17 +2889,13 @@ impl Inst {
                     let mem = mem.pretty_print_default();
                     format!("{}{} {}, {}", mem_str, op.unwrap(), rd_fpr.unwrap(), mem)
                 } else {
-                    let (mem_str, mem) = mem_finalize_for_show(
-                        &mem,
-                        state,
-                        MemInstType {
-                            have_d12: true,
-                            have_d20: false,
-                            have_pcrel: false,
-                            have_unaligned_pcrel: false,
-                            have_index: true,
-                        },
-                    );
+                    let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                        have_d12: true,
+                        have_d20: false,
+                        have_pcrel: false,
+                        have_unaligned_pcrel: false,
+                        have_index: true,
+                    });
                     let mem = mem.pretty_print_default();
                     format!("{mem_str}{opcode_vrx} {rd}, {mem}, {lane_imm}",)
                 }
@@ -3263,17 +3188,13 @@ impl Inst {
             &Inst::LoadAddr { rd, ref mem } => {
                 let rd = pretty_print_reg(rd.to_reg());
                 let mem = mem.clone();
-                let (mem_str, mem) = mem_finalize_for_show(
-                    &mem,
-                    state,
-                    MemInstType {
-                        have_d12: true,
-                        have_d20: true,
-                        have_pcrel: true,
-                        have_unaligned_pcrel: true,
-                        have_index: true,
-                    },
-                );
+                let (mem_str, mem) = mem_finalize_for_show(&mem, state, MemInstType {
+                    have_d12: true,
+                    have_d20: true,
+                    have_pcrel: true,
+                    have_unaligned_pcrel: true,
+                    have_index: true,
+                });
                 let op = match &mem {
                     &MemArg::BXD12 { .. } => "la",
                     &MemArg::BXD20 { .. } => "lay",
@@ -3290,7 +3211,9 @@ impl Inst {
             } => {
                 let probe_count = pretty_print_reg(probe_count.to_reg());
                 let stack_reg = pretty_print_reg(stack_reg());
-                format!("0: aghi {stack_reg}, -{guard_size} ; mvi 0({stack_reg}), 0 ; brct {probe_count}, 0b")
+                format!(
+                    "0: aghi {stack_reg}, -{guard_size} ; mvi 0({stack_reg}), 0 ; brct {probe_count}, 0b"
+                )
             }
             &Inst::Loop { ref body, cond } => {
                 let body = body

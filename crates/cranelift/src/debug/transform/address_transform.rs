@@ -1,5 +1,5 @@
-use crate::debug::Compilation;
 use crate::FunctionAddressMap;
+use crate::debug::Compilation;
 use gimli::write;
 use std::collections::BTreeMap;
 use wasmtime_environ::{DefinedFuncIndex, FilePos, PrimaryMap, StaticModuleIndex};
@@ -474,15 +474,12 @@ impl AddressTransform {
             let (fn_start, fn_end, lookup) =
                 build_function_lookup(&metadata.address_map, code_section_offset);
 
-            func.insert(
-                fn_start,
-                FuncTransform {
-                    start: fn_start,
-                    end: fn_end,
-                    index: idx,
-                    lookup,
-                },
-            );
+            func.insert(fn_start, FuncTransform {
+                start: fn_start,
+                end: fn_end,
+                index: idx,
+                lookup,
+            });
         }
 
         let map = build_function_addr_map(compilation, module);
@@ -661,7 +658,7 @@ impl AddressTransform {
 
 #[cfg(test)]
 mod tests {
-    use super::{build_function_lookup, get_wasm_code_offset, AddressTransform};
+    use super::{AddressTransform, build_function_lookup, get_wasm_code_offset};
     use crate::{CompiledFunctionMetadata, FunctionAddressMap};
     use cranelift_entity::PrimaryMap;
     use gimli::write::Address;
@@ -789,15 +786,12 @@ mod tests {
             ..Default::default()
         };
         let input = PrimaryMap::from_iter([&func]);
-        let at = AddressTransform::mock(
-            &input,
-            WasmFileInfo {
-                path: None,
-                code_section_offset: 1,
-                imported_func_count: 0,
-                funcs: Vec::new(),
-            },
-        );
+        let at = AddressTransform::mock(&input, WasmFileInfo {
+            path: None,
+            code_section_offset: 1,
+            imported_func_count: 0,
+            funcs: Vec::new(),
+        });
 
         let addr = at.translate(10);
         assert_eq!(

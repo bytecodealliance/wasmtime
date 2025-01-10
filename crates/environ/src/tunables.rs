@@ -1,4 +1,4 @@
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use core::fmt;
 use serde_derive::{Deserialize, Serialize};
 use target_lexicon::{PointerWidth, Triple};

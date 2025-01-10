@@ -18,27 +18,22 @@ fn main() {
     bucket.delete("hello").unwrap();
     assert_eq!(bucket.exists("hello").unwrap(), false);
 
-    batch::set_many(
-        &bucket,
-        &[
-            ("a1".to_string(), "v1".as_bytes().to_vec()),
-            ("b1".to_string(), "v1".as_bytes().to_vec()),
-            ("c1".to_string(), "v1".as_bytes().to_vec()),
-        ],
-    )
+    batch::set_many(&bucket, &[
+        ("a1".to_string(), "v1".as_bytes().to_vec()),
+        ("b1".to_string(), "v1".as_bytes().to_vec()),
+        ("c1".to_string(), "v1".as_bytes().to_vec()),
+    ])
     .unwrap();
     batch::delete_many(&bucket, &["a1".to_string(), "c1".to_string()]).unwrap();
-    let values = batch::get_many(
-        &bucket,
-        &["a1".to_string(), "b1".to_string(), "c1".to_string()],
-    )
+    let values = batch::get_many(&bucket, &[
+        "a1".to_string(),
+        "b1".to_string(),
+        "c1".to_string(),
+    ])
     .unwrap();
-    assert_eq!(
-        values,
-        vec![
-            None,
-            Some(("b1".to_string(), "v1".as_bytes().to_vec())),
-            None
-        ]
-    );
+    assert_eq!(values, vec![
+        None,
+        Some(("b1".to_string(), "v1".as_bytes().to_vec())),
+        None
+    ]);
 }

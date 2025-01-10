@@ -1,9 +1,9 @@
 use crate::utils::{iterate_files, read_to_string};
 use anyhow::{Context as _, Result};
 use clap::Parser;
+use cranelift_codegen::Context;
 use cranelift_codegen::control::ControlPlane;
 use cranelift_codegen::ir::Function;
-use cranelift_codegen::Context;
 use cranelift_reader::parse_sets_and_triple;
 use rayon::iter::{IntoParallelIterator, ParallelBridge, ParallelIterator};
 use std::collections::HashSet;
@@ -64,7 +64,7 @@ pub fn run(options: &Options) -> Result<()> {
             return Err(e).context(format!(
                 "failed to create output directory: {}",
                 options.output_dir.display()
-            ))
+            ));
         }
     }
 

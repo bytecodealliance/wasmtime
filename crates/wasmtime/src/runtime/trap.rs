@@ -4,7 +4,7 @@ use crate::prelude::*;
 use crate::store::StoreOpaque;
 use crate::{AsContext, Module};
 use core::fmt;
-use wasmtime_environ::{demangle_function_name, demangle_function_name_or_index, FilePos};
+use wasmtime_environ::{FilePos, demangle_function_name, demangle_function_name_or_index};
 
 /// Representation of a WebAssembly trap and what caused it to occur.
 ///
@@ -394,7 +394,10 @@ impl fmt::Display for WasmBacktrace {
             }
         }
         if self.hint_wasm_backtrace_details_env {
-            write!(f, "\nnote: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable may show more debugging information")?;
+            write!(
+                f,
+                "\nnote: using the `WASMTIME_BACKTRACE_DETAILS=1` environment variable may show more debugging information"
+            )?;
         }
         Ok(())
     }

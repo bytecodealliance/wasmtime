@@ -236,11 +236,7 @@ impl VMGcRef {
     ///
     /// Returns `None` for `i31ref`s.
     pub fn as_heap_index(&self) -> Option<NonZeroU32> {
-        if self.is_i31() {
-            None
-        } else {
-            Some(self.0)
-        }
+        if self.is_i31() { None } else { Some(self.0) }
     }
 
     /// Get this GC reference as a raw u32 value, regardless whether it is
@@ -310,13 +306,10 @@ impl VMGcRef {
         if T::is(gc_heap.header(&self)) {
             let ptr = self as *const VMGcRef;
             let ret = unsafe { &*ptr.cast() };
-            assert!(matches!(
-                ret,
-                TypedGcRef {
-                    gc_ref: VMGcRef(_),
-                    _phantom
-                }
-            ));
+            assert!(matches!(ret, TypedGcRef {
+                gc_ref: VMGcRef(_),
+                _phantom
+            }));
             Some(ret)
         } else {
             None
@@ -336,13 +329,10 @@ impl VMGcRef {
         debug_assert!(!self.is_i31());
         let ptr = self as *const VMGcRef;
         let ret = unsafe { &*ptr.cast() };
-        assert!(matches!(
-            ret,
-            TypedGcRef {
-                gc_ref: VMGcRef(_),
-                _phantom
-            }
-        ));
+        assert!(matches!(ret, TypedGcRef {
+            gc_ref: VMGcRef(_),
+            _phantom
+        }));
         ret
     }
 

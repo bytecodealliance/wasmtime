@@ -6,25 +6,25 @@
 
 use crate::abi::RetArea;
 use crate::codegen::{
-    control_index, Callee, CodeGen, CodeGenError, ControlStackFrame, Emission, FnCall,
+    Callee, CodeGen, CodeGenError, ControlStackFrame, Emission, FnCall, control_index,
 };
 use crate::masm::{
     DivKind, ExtendKind, FloatCmpKind, IntCmpKind, MacroAssembler, MemMoveDirection, MulWideKind,
     OperandSize, RegImm, RemKind, RoundingMode, SPOffset, ShiftKind, TruncKind,
 };
 
-use crate::reg::{writable, Reg};
+use crate::reg::{Reg, writable};
 use crate::stack::{TypedReg, Val};
-use anyhow::{anyhow, bail, ensure, Result};
+use anyhow::{Result, anyhow, bail, ensure};
 use regalloc2::RegClass;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use wasmparser::{
-    BlockType, BrTable, Ieee32, Ieee64, MemArg, VisitOperator, VisitSimdOperator, V128,
+    BlockType, BrTable, Ieee32, Ieee64, MemArg, V128, VisitOperator, VisitSimdOperator,
 };
 use wasmtime_cranelift::TRAP_INDIRECT_CALL_TO_NULL;
 use wasmtime_environ::{
-    FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmHeapType, WasmValType,
-    FUNCREF_INIT_BIT,
+    FUNCREF_INIT_BIT, FuncIndex, GlobalIndex, MemoryIndex, TableIndex, TypeIndex, WasmHeapType,
+    WasmValType,
 };
 
 /// A macro to define unsupported WebAssembly operators.

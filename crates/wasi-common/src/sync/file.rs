@@ -1,6 +1,6 @@
 use crate::{
-    file::{Advice, FdFlags, FileType, Filestat, WasiFile},
     Error, ErrorExt,
+    file::{Advice, FdFlags, FileType, Filestat, WasiFile},
 };
 use cap_fs_ext::MetadataExt;
 use fs_set_times::{SetTimes, SystemTimeSpec};

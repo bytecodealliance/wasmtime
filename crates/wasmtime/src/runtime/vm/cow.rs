@@ -8,7 +8,7 @@
 use super::sys::DecommitBehavior;
 use crate::prelude::*;
 use crate::runtime::vm::sys::vm::{self, MemoryImageSource};
-use crate::runtime::vm::{host_page_size, HostAlignedByteCount, MmapOffset, MmapVec};
+use crate::runtime::vm::{HostAlignedByteCount, MmapOffset, MmapVec, host_page_size};
 use alloc::sync::Arc;
 use core::ops::Range;
 use core::ptr;
@@ -786,7 +786,7 @@ mod test {
     use super::*;
     use crate::runtime::vm::mmap::{AlignedLength, Mmap};
     use crate::runtime::vm::sys::vm::decommit_pages;
-    use crate::runtime::vm::{host_page_size, HostAlignedByteCount};
+    use crate::runtime::vm::{HostAlignedByteCount, host_page_size};
     use std::sync::Arc;
     use wasmtime_environ::{IndexType, Limits, Memory};
 

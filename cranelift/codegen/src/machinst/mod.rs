@@ -46,7 +46,7 @@
 
 use crate::binemit::{Addend, CodeInfo, CodeOffset, Reloc};
 use crate::ir::{
-    self, function::FunctionParameters, DynamicStackSlot, RelSourceLoc, StackSlot, Type,
+    self, DynamicStackSlot, RelSourceLoc, StackSlot, Type, function::FunctionParameters,
 };
 use crate::isa::FunctionAlignment;
 use crate::result::CodegenResult;
@@ -58,7 +58,7 @@ use core::fmt::Debug;
 use cranelift_control::ControlPlane;
 use cranelift_entity::PrimaryMap;
 use regalloc2::VReg;
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::string::String;
 
 #[cfg(feature = "enable-serde")]

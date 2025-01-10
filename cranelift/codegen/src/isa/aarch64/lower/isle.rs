@@ -6,28 +6,28 @@ use generated_code::{Context, ImmExtend};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::{
-    fp_reg, lower_condcode, lower_fp_condcode, stack_reg, writable_link_reg, writable_zero_reg,
-    zero_reg, ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallInfo, Cond, CondBrKind, ExtendOp,
-    FPUOpRI, FPUOpRIMod, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC, MachLabel,
-    MemLabel, MoveWideConst, MoveWideOp, Opcode, OperandSize, Reg, SImm9, ScalarSize,
-    ShiftOpAndAmt, UImm12Scaled, UImm5, VecMisc2, VectorSize, NZCV,
+    ASIMDFPModImm, ASIMDMovModImm, BranchTarget, CallInfo, Cond, CondBrKind, ExtendOp, FPUOpRI,
+    FPUOpRIMod, FloatCC, Imm12, ImmLogic, ImmShift, Inst as MInst, IntCC, MachLabel, MemLabel,
+    MoveWideConst, MoveWideOp, NZCV, Opcode, OperandSize, Reg, SImm9, ScalarSize, ShiftOpAndAmt,
+    UImm5, UImm12Scaled, VecMisc2, VectorSize, fp_reg, lower_condcode, lower_fp_condcode,
+    stack_reg, writable_link_reg, writable_zero_reg, zero_reg,
 };
-use crate::ir::{condcodes, ArgumentExtension};
+use crate::ir::{ArgumentExtension, condcodes};
 use crate::isa;
-use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm, ReturnCallInfo};
 use crate::isa::aarch64::AArch64Backend;
+use crate::isa::aarch64::inst::{FPULeftShiftImm, FPURightShiftImm, ReturnCallInfo};
 use crate::machinst::isle::*;
 use crate::{
     binemit::CodeOffset,
     ir::{
-        immediates::*, types::*, AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData,
-        MemFlags, TrapCode, Value, ValueList,
+        AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData, MemFlags, TrapCode, Value,
+        ValueList, immediates::*, types::*,
     },
     isa::aarch64::abi::AArch64CallSite,
-    isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     isa::aarch64::inst::SImm7Scaled,
+    isa::aarch64::inst::args::{ShiftOp, ShiftOpShiftImm},
     machinst::{
-        abi::ArgPair, ty_bits, InstOutput, IsTailCall, MachInst, VCodeConstant, VCodeConstantData,
+        InstOutput, IsTailCall, MachInst, VCodeConstant, VCodeConstantData, abi::ArgPair, ty_bits,
     },
 };
 use core::u32;
@@ -179,19 +179,11 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     }
 
     fn is_zero_simm9(&mut self, imm: &SImm9) -> Option<()> {
-        if imm.value() == 0 {
-            Some(())
-        } else {
-            None
-        }
+        if imm.value() == 0 { Some(()) } else { None }
     }
 
     fn is_zero_uimm12(&mut self, imm: &UImm12Scaled) -> Option<()> {
-        if imm.value() == 0 {
-            Some(())
-        } else {
-            None
-        }
+        if imm.value() == 0 { Some(()) } else { None }
     }
 
     /// This is target-word-size dependent.  And it excludes booleans and reftypes.
@@ -705,11 +697,7 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
     }
     fn shuffle_dup64_from_imm(&mut self, imm: Immediate) -> Option<u8> {
         let (a, b) = self.shuffle64_from_imm(imm)?;
-        if a == b && a < 2 {
-            Some(a)
-        } else {
-            None
-        }
+        if a == b && a < 2 { Some(a) } else { None }
     }
 
     fn asimd_mov_mod_imm_zero(&mut self, size: &ScalarSize) -> ASIMDMovModImm {

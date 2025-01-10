@@ -9,8 +9,8 @@ pub mod windows;
 pub use windows::poll_oneoff;
 
 use crate::{
-    sched::{Poll, WasiSched},
     Error,
+    sched::{Poll, WasiSched},
 };
 use std::thread;
 use std::time::Duration;

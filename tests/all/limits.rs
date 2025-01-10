@@ -125,13 +125,10 @@ async fn test_limits_async() -> Result<()> {
         }
     }
 
-    let mut store = Store::new(
-        &engine,
-        LimitsAsync {
-            memory_size: 10 * WASM_PAGE_SIZE,
-            table_elements: 5,
-        },
-    );
+    let mut store = Store::new(&engine, LimitsAsync {
+        memory_size: 10 * WASM_PAGE_SIZE,
+        table_elements: 5,
+    });
 
     store.limiter_async(|s| s as &mut dyn ResourceLimiterAsync);
 

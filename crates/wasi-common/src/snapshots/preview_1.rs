@@ -1,14 +1,14 @@
 use crate::{
+    I32Exit, SystemTimeSpec, WasiCtx,
     dir::{DirEntry, OpenResult, ReaddirCursor, ReaddirEntity, TableDirExt},
     file::{
         Advice, FdFlags, FdStat, FileAccessMode, FileEntry, FileType, Filestat, OFlags, RiFlags,
         RoFlags, SdFlags, SiFlags, TableFileExt, WasiFile,
     },
     sched::{
-        subscription::{RwEventFlags, SubscriptionResult},
         Poll, Userdata,
+        subscription::{RwEventFlags, SubscriptionResult},
     },
-    I32Exit, SystemTimeSpec, WasiCtx,
 };
 use cap_std::time::{Duration, SystemClock};
 use std::borrow::Cow;
@@ -228,7 +228,9 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                 .set_fdflags(FdFlags::from(flags))
                 .await
         } else {
-            log::warn!("`fd_fdstat_set_flags` does not work with wasi-threads enabled; see https://github.com/bytecodealliance/wasmtime/issues/5643");
+            log::warn!(
+                "`fd_fdstat_set_flags` does not work with wasi-threads enabled; see https://github.com/bytecodealliance/wasmtime/issues/5643"
+            );
             Err(Error::not_supported())
         }
     }
@@ -931,15 +933,12 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
                     self.sched
                         .sleep(Duration::from_nanos(clocksub.timeout))
                         .await?;
-                    memory.write(
-                        events,
-                        types::Event {
-                            userdata: sub.userdata,
-                            error: types::Errno::Success,
-                            type_: types::Eventtype::Clock,
-                            fd_readwrite: fd_readwrite_empty(),
-                        },
-                    )?;
+                    memory.write(events, types::Event {
+                        userdata: sub.userdata,
+                        error: types::Errno::Success,
+                        type_: types::Eventtype::Clock,
+                        fd_readwrite: fd_readwrite_empty(),
+                    })?;
                     return Ok(1);
                 }
             }
@@ -1058,63 +1057,60 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiCtx {
         for ((result, userdata), event_elem) in results.into_iter().zip(events.iter()) {
             let event_ptr = event_elem?;
             let userdata: types::Userdata = userdata.into();
-            memory.write(
-                event_ptr,
-                match result {
-                    SubscriptionResult::Read(r) => {
-                        let type_ = types::Eventtype::FdRead;
-                        match r {
-                            Ok((nbytes, flags)) => types::Event {
-                                userdata,
-                                error: types::Errno::Success,
-                                type_,
-                                fd_readwrite: types::EventFdReadwrite {
-                                    nbytes,
-                                    flags: types::Eventrwflags::from(&flags),
-                                },
-                            },
-                            Err(e) => types::Event {
-                                userdata,
-                                error: e.downcast().map_err(Error::trap)?,
-                                type_,
-                                fd_readwrite: fd_readwrite_empty(),
-                            },
-                        }
-                    }
-                    SubscriptionResult::Write(r) => {
-                        let type_ = types::Eventtype::FdWrite;
-                        match r {
-                            Ok((nbytes, flags)) => types::Event {
-                                userdata,
-                                error: types::Errno::Success,
-                                type_,
-                                fd_readwrite: types::EventFdReadwrite {
-                                    nbytes,
-                                    flags: types::Eventrwflags::from(&flags),
-                                },
-                            },
-                            Err(e) => types::Event {
-                                userdata,
-                                error: e.downcast().map_err(Error::trap)?,
-                                type_,
-                                fd_readwrite: fd_readwrite_empty(),
-                            },
-                        }
-                    }
-                    SubscriptionResult::MonotonicClock(r) => {
-                        let type_ = types::Eventtype::Clock;
-                        types::Event {
+            memory.write(event_ptr, match result {
+                SubscriptionResult::Read(r) => {
+                    let type_ = types::Eventtype::FdRead;
+                    match r {
+                        Ok((nbytes, flags)) => types::Event {
                             userdata,
-                            error: match r {
-                                Ok(()) => types::Errno::Success,
-                                Err(e) => e.downcast().map_err(Error::trap)?,
+                            error: types::Errno::Success,
+                            type_,
+                            fd_readwrite: types::EventFdReadwrite {
+                                nbytes,
+                                flags: types::Eventrwflags::from(&flags),
                             },
+                        },
+                        Err(e) => types::Event {
+                            userdata,
+                            error: e.downcast().map_err(Error::trap)?,
                             type_,
                             fd_readwrite: fd_readwrite_empty(),
-                        }
+                        },
                     }
-                },
-            )?;
+                }
+                SubscriptionResult::Write(r) => {
+                    let type_ = types::Eventtype::FdWrite;
+                    match r {
+                        Ok((nbytes, flags)) => types::Event {
+                            userdata,
+                            error: types::Errno::Success,
+                            type_,
+                            fd_readwrite: types::EventFdReadwrite {
+                                nbytes,
+                                flags: types::Eventrwflags::from(&flags),
+                            },
+                        },
+                        Err(e) => types::Event {
+                            userdata,
+                            error: e.downcast().map_err(Error::trap)?,
+                            type_,
+                            fd_readwrite: fd_readwrite_empty(),
+                        },
+                    }
+                }
+                SubscriptionResult::MonotonicClock(r) => {
+                    let type_ = types::Eventtype::Clock;
+                    types::Event {
+                        userdata,
+                        error: match r {
+                            Ok(()) => types::Errno::Success,
+                            Err(e) => e.downcast().map_err(Error::trap)?,
+                        },
+                        type_,
+                        fd_readwrite: fd_readwrite_empty(),
+                    }
+                }
+            })?;
         }
 
         Ok(num_results.try_into().expect("results fit into memory"))

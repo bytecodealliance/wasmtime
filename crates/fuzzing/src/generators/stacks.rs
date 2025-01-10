@@ -128,10 +128,10 @@ impl Stacks {
             .function(vec![wasm_encoder::ValType::I32], vec![]);
 
         let get_stack_type = types.len();
-        types.ty().function(
-            vec![],
-            vec![wasm_encoder::ValType::I32, wasm_encoder::ValType::I32],
-        );
+        types.ty().function(vec![], vec![
+            wasm_encoder::ValType::I32,
+            wasm_encoder::ValType::I32,
+        ]);
 
         let call_func_type = types.len();
         types
@@ -143,10 +143,10 @@ impl Stacks {
 
         let func_types_start = types.len();
         for func in self.funcs.iter() {
-            types.ty().function(
-                vec![ValType::I32; func.params],
-                vec![ValType::I32; func.results],
-            );
+            types.ty().function(vec![ValType::I32; func.params], vec![
+                ValType::I32;
+                func.results
+            ]);
         }
 
         section(&mut module, types);

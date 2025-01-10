@@ -1,7 +1,7 @@
 //! S390x ISA definitions: instruction arguments.
 
-use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::MemFlags;
+use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::isa::s390x::inst::*;
 
 //=============================================================================

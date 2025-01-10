@@ -1,6 +1,6 @@
 #![cfg(not(miri))]
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use std::fs::File;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -1109,7 +1109,7 @@ fn increase_stack_size() -> Result<()> {
 
 mod test_programs {
     use super::{get_wasmtime_command, run_wasmtime};
-    use anyhow::{bail, Context, Result};
+    use anyhow::{Context, Result, bail};
     use http_body_util::BodyExt;
     use hyper::header::HeaderValue;
     use std::io::{BufRead, BufReader, Read, Write};
@@ -1739,9 +1739,9 @@ mod test_programs {
 
     #[tokio::test]
     #[ignore] // TODO: printing stderr in the child and killing the child at the
-              // end of this test race so the stderr may be present or not. Need
-              // to implement a more graceful shutdown routine for `wasmtime
-              // serve`.
+    // end of this test race so the stderr may be present or not. Need
+    // to implement a more graceful shutdown routine for `wasmtime
+    // serve`.
     async fn cli_serve_respect_pooling_options() -> Result<()> {
         let server = WasmtimeServe::new(CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
             cmd.arg("-Opooling-total-memories=0").arg("-Scli");

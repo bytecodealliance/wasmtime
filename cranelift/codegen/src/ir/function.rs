@@ -3,16 +3,16 @@
 //! The `Function` struct defined in this module owns all of its basic blocks and
 //! instructions.
 
+use crate::HashMap;
 use crate::entity::{PrimaryMap, SecondaryMap};
 use crate::ir::{
-    self, pcc::Fact, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData,
-    DynamicStackSlots, DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst,
-    JumpTable, JumpTableData, Layout, MemoryType, MemoryTypeData, SigRef, Signature, SourceLocs,
-    StackSlot, StackSlotData, StackSlots, Type,
+    self, Block, DataFlowGraph, DynamicStackSlot, DynamicStackSlotData, DynamicStackSlots,
+    DynamicType, ExtFuncData, FuncRef, GlobalValue, GlobalValueData, Inst, JumpTable,
+    JumpTableData, Layout, MemoryType, MemoryTypeData, SigRef, Signature, SourceLocs, StackSlot,
+    StackSlotData, StackSlots, Type, pcc::Fact,
 };
 use crate::isa::CallConv;
 use crate::write::write_function;
-use crate::HashMap;
 #[cfg(feature = "enable-serde")]
 use alloc::string::String;
 use core::fmt;
@@ -349,12 +349,13 @@ impl FunctionStencil {
             self.dfg.inst_results(dst).len(),
             self.dfg.inst_results(src).len()
         );
-        debug_assert!(self
-            .dfg
-            .inst_results(dst)
-            .iter()
-            .zip(self.dfg.inst_results(src))
-            .all(|(a, b)| self.dfg.value_type(*a) == self.dfg.value_type(*b)));
+        debug_assert!(
+            self.dfg
+                .inst_results(dst)
+                .iter()
+                .zip(self.dfg.inst_results(src))
+                .all(|(a, b)| self.dfg.value_type(*a) == self.dfg.value_type(*b))
+        );
 
         self.dfg.insts[dst] = self.dfg.insts[src];
         self.layout.remove_inst(src);

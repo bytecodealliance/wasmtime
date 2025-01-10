@@ -1,18 +1,19 @@
 //! Implementation of a standard Pulley ABI.
 
-use super::{inst::*, PulleyFlags, PulleyTargetKind};
+use super::{PulleyFlags, PulleyTargetKind, inst::*};
 use crate::isa::pulley_shared::{PointerWidth, PulleyBackend};
 use crate::{
-    ir::{self, types::*, MemFlags, Signature},
+    CodegenResult,
+    ir::{self, MemFlags, Signature, types::*},
     isa,
     machinst::*,
-    settings, CodegenResult,
+    settings,
 };
 use alloc::{boxed::Box, vec::Vec};
 use core::marker::PhantomData;
 use cranelift_bitset::ScalarBitSet;
 use regalloc2::{MachineEnv, PReg, PRegSet};
-use smallvec::{smallvec, SmallVec};
+use smallvec::{SmallVec, smallvec};
 use std::borrow::ToOwned;
 use std::sync::OnceLock;
 
@@ -472,25 +473,31 @@ where
                     args.push(XReg::new(arg.vreg).unwrap());
                     false
                 });
-                smallvec![Inst::Call {
-                    info: Box::new(info.map(|()| PulleyCall {
-                        name: name.clone(),
-                        args,
-                    }))
-                }
-                .into()]
+                smallvec![
+                    Inst::Call {
+                        info: Box::new(info.map(|()| PulleyCall {
+                            name: name.clone(),
+                            args,
+                        }))
+                    }
+                    .into()
+                ]
             }
             // "far" calls are pulley->host calls so they use a different opcode
             // which is lowered with a special relocation in the backend.
-            CallDest::ExtName(name, RelocDistance::Far) => smallvec![Inst::IndirectCallHost {
-                info: Box::new(info.map(|()| name.clone()))
-            }
-            .into()],
+            CallDest::ExtName(name, RelocDistance::Far) => smallvec![
+                Inst::IndirectCallHost {
+                    info: Box::new(info.map(|()| name.clone()))
+                }
+                .into()
+            ],
             // Indirect calls are all assumed to be pulley->pulley calls
-            CallDest::Reg(reg) => smallvec![Inst::IndirectCall {
-                info: Box::new(info.map(|()| XReg::new(*reg).unwrap()))
-            }
-            .into()],
+            CallDest::Reg(reg) => smallvec![
+                Inst::IndirectCall {
+                    info: Box::new(info.map(|()| XReg::new(*reg).unwrap()))
+                }
+                .into()
+            ],
         }
     }
 

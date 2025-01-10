@@ -50,14 +50,11 @@ mod tests {
     fn test_generate_table() {
         let v = vec!["Hello".to_string(), "world".to_string()];
         let table = generate_table(v.iter(), v.len(), |s| simple_hash(&s));
-        assert_eq!(
-            table,
-            vec![
-                None,
-                Some(&"Hello".to_string()),
-                Some(&"world".to_string()),
-                None
-            ]
-        );
+        assert_eq!(table, vec![
+            None,
+            Some(&"Hello".to_string()),
+            Some(&"world".to_string()),
+            None
+        ]);
     }
 }

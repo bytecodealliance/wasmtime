@@ -4,13 +4,13 @@ use crate::runtime::vm::open_file_for_mmap;
 use crate::runtime::vm::{CompiledModuleId, MmapVec, ModuleMemoryImages, VMWasmCallFunction};
 use crate::sync::OnceLock;
 use crate::{
+    Engine,
     code::CodeObject,
     code_memory::CodeMemory,
     instantiate::CompiledModule,
     resources::ResourcesRequired,
     type_registry::TypeCollection,
     types::{ExportType, ExternType, ImportType},
-    Engine,
 };
 use alloc::sync::Arc;
 use core::fmt;
@@ -1061,20 +1061,21 @@ impl Module {
             .code
             .signatures()
             .trampoline_type(trampoline_shared_ty)?;
-        debug_assert!(self
-            .inner
-            .engine
-            .signatures()
-            .borrow(
-                self.inner
-                    .code
-                    .signatures()
-                    .shared_type(trampoline_module_ty)
-                    .unwrap()
-            )
-            .unwrap()
-            .unwrap_func()
-            .is_trampoline_type());
+        debug_assert!(
+            self.inner
+                .engine
+                .signatures()
+                .borrow(
+                    self.inner
+                        .code
+                        .signatures()
+                        .shared_type(trampoline_module_ty)
+                        .unwrap()
+                )
+                .unwrap()
+                .unwrap_func()
+                .is_trampoline_type()
+        );
 
         let ptr = self
             .compiled_module()

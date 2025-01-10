@@ -1,12 +1,12 @@
+use super::AddressTransform;
 use super::expression::{CompiledExpression, FunctionFrameInfo};
 use super::utils::append_vmctx_info;
-use super::AddressTransform;
 use crate::debug::Compilation;
 use crate::translate::get_vmctx_value_label;
 use anyhow::{Context, Error};
 use cranelift_codegen::isa::TargetIsa;
-use gimli::write;
 use gimli::LineEncoding;
+use gimli::write;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
@@ -94,11 +94,7 @@ fn generate_line_info(
 }
 
 fn check_invalid_chars_in_name(s: &str) -> Option<&str> {
-    if s.contains('\x00') {
-        None
-    } else {
-        Some(s)
-    }
+    if s.contains('\x00') { None } else { Some(s) }
 }
 
 fn autogenerate_dwarf_wasm_path(di: &DebugInfoData) -> PathBuf {
@@ -301,11 +297,12 @@ pub fn generate_simulated_dwarf(
     };
 
     let (unit, root_id, file_id) = {
-        let comp_dir_id = out_strings.add(assert_dwarf_str!(path
-            .parent()
-            .context("path dir")?
-            .to_str()
-            .context("path dir encoding")?));
+        let comp_dir_id = out_strings.add(assert_dwarf_str!(
+            path.parent()
+                .context("path dir")?
+                .to_str()
+                .context("path dir encoding")?
+        ));
         let name = path
             .file_name()
             .context("path name")?

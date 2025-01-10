@@ -27,7 +27,7 @@ use core::ptr::{self, NonNull};
 
 pub use self::backtrace::Backtrace;
 pub use self::coredump::CoreDumpStack;
-pub use self::tls::{tls_eager_initialize, AsyncWasmCallState, PreviousAsyncWasmCallState};
+pub use self::tls::{AsyncWasmCallState, PreviousAsyncWasmCallState, tls_eager_initialize};
 
 pub use traphandlers::SignalHandler;
 

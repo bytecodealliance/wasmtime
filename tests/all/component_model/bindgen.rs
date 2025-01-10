@@ -4,8 +4,8 @@
 use super::engine;
 use anyhow::Result;
 use wasmtime::{
-    component::{Component, Linker},
     Store,
+    component::{Component, Linker},
 };
 
 mod ownership;
@@ -598,31 +598,28 @@ mod exported_resources {
         // call the root export `f` twice
         let ret = i.call_f(&mut store, Resource::new_own(1), Resource::new_own(2))?;
         assert_eq!(ret.rep(), 2);
-        assert_eq!(
-            mem::take(&mut store.data_mut().hostcalls),
-            [Hostcall::DropRootX(1)]
-        );
+        assert_eq!(mem::take(&mut store.data_mut().hostcalls), [
+            Hostcall::DropRootX(1)
+        ]);
         let ret = i.call_f(&mut store, Resource::new_own(3), Resource::new_own(4))?;
         assert_eq!(ret.rep(), 4);
-        assert_eq!(
-            mem::take(&mut store.data_mut().hostcalls),
-            [Hostcall::DropRootX(3)]
-        );
+        assert_eq!(mem::take(&mut store.data_mut().hostcalls), [
+            Hostcall::DropRootX(3)
+        ]);
 
         // interact with the `b` export
         let b = i.b();
         let b_x = b.x().call_constructor(&mut store, Resource::new_own(5))?;
-        assert_eq!(
-            mem::take(&mut store.data_mut().hostcalls),
-            [Hostcall::DropAX(5), Hostcall::NewA]
-        );
+        assert_eq!(mem::take(&mut store.data_mut().hostcalls), [
+            Hostcall::DropAX(5),
+            Hostcall::NewA
+        ]);
         b.x().call_foo(&mut store, b_x)?;
         assert_eq!(mem::take(&mut store.data_mut().hostcalls), []);
         b_x.resource_drop(&mut store)?;
-        assert_eq!(
-            mem::take(&mut store.data_mut().hostcalls),
-            [Hostcall::DropAX(0)],
-        );
+        assert_eq!(mem::take(&mut store.data_mut().hostcalls), [
+            Hostcall::DropAX(0)
+        ],);
         Ok(())
     }
 }
@@ -688,7 +685,10 @@ mod unstable_import {
     }
     fn assert_failure(link_options: &LinkOptions) {
         let err = run_with_options(link_options).unwrap_err().to_string();
-        assert_eq!(err, "component imports instance `foo:foo/my-interface`, but a matching implementation was not found in the linker");
+        assert_eq!(
+            err,
+            "component imports instance `foo:foo/my-interface`, but a matching implementation was not found in the linker"
+        );
     }
 
     fn run_with_options(link_options: &LinkOptions) -> Result<()> {

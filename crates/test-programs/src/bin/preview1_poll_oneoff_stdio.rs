@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::mem::MaybeUninit;
-use test_programs::preview1::{assert_errno, STDERR_FD, STDIN_FD, STDOUT_FD};
+use test_programs::preview1::{STDERR_FD, STDIN_FD, STDOUT_FD, assert_errno};
 
 const TIMEOUT: u64 = 200_000_000u64; // 200 milliseconds, required to satisfy slow execution in CI
 const CLOCK_ID: wasi::Userdata = 0x0123_45678;

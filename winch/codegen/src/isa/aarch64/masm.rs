@@ -6,10 +6,10 @@ use super::{
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, local::LocalSlot, vmctx},
-    codegen::{ptr_type_from_ptr_size, CodeGenContext, CodeGenError, Emission, FuncEnv},
+    codegen::{CodeGenContext, CodeGenError, Emission, FuncEnv, ptr_type_from_ptr_size},
     isa::{
-        reg::{writable, Reg, WritableReg},
         CallingConvention,
+        reg::{Reg, WritableReg, writable},
     },
     masm::{
         CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
@@ -18,12 +18,13 @@ use crate::{
     },
     stack::TypedReg,
 };
-use anyhow::{anyhow, bail, Result};
+use anyhow::{Result, anyhow, bail};
 use cranelift_codegen::{
+    Final, MachBufferFinalized, MachLabel,
     binemit::CodeOffset,
     ir::{RelSourceLoc, SourceLoc},
     isa::aarch64::inst::{Cond, VectorSize},
-    settings, Final, MachBufferFinalized, MachLabel,
+    settings,
 };
 use regalloc2::RegClass;
 use wasmtime_environ::{PtrSize, WasmValType};

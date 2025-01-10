@@ -23,13 +23,10 @@ unsafe fn test_file_long_write(dir_fd: wasi::Fd, filename: &str) {
     }
 
     // Write to the file
-    let nwritten = wasi::fd_write(
-        file_fd,
-        &[wasi::Ciovec {
-            buf: content.as_slice().as_ptr() as *const _,
-            buf_len: content.len(),
-        }],
-    )
+    let nwritten = wasi::fd_write(file_fd, &[wasi::Ciovec {
+        buf: content.as_slice().as_ptr() as *const _,
+        buf_len: content.len(),
+    }])
     .expect("writing file content");
     assert_eq!(nwritten, content.len(), "nwritten bytes check");
 
@@ -47,13 +44,10 @@ unsafe fn test_file_long_write(dir_fd: wasi::Fd, filename: &str) {
 
     // Read the file's contents
     let buffer = &mut [0u8; 100];
-    let nread = wasi::fd_read(
-        file_fd,
-        &[wasi::Iovec {
-            buf: buffer.as_mut_ptr(),
-            buf_len: buffer.len(),
-        }],
-    )
+    let nread = wasi::fd_read(file_fd, &[wasi::Iovec {
+        buf: buffer.as_mut_ptr(),
+        buf_len: buffer.len(),
+    }])
     .expect("reading first chunk file content");
 
     assert_eq!(nread, buffer.len(), "read first chunk");
@@ -67,13 +61,10 @@ unsafe fn test_file_long_write(dir_fd: wasi::Fd, filename: &str) {
     wasi::fd_seek(file_fd, end_cursor as i64, wasi::WHENCE_SET)
         .expect("seeking to end of file minus buffer size");
 
-    let nread = wasi::fd_read(
-        file_fd,
-        &[wasi::Iovec {
-            buf: buffer.as_mut_ptr(),
-            buf_len: buffer.len(),
-        }],
-    )
+    let nread = wasi::fd_read(file_fd, &[wasi::Iovec {
+        buf: buffer.as_mut_ptr(),
+        buf_len: buffer.len(),
+    }])
     .expect("reading end chunk of file content");
 
     assert_eq!(nread, buffer.len(), "read end chunk len");
@@ -96,13 +87,10 @@ unsafe fn test_file_long_write(dir_fd: wasi::Fd, filename: &str) {
     wasi::fd_close(file_fd).expect("closing the file");
     let file_fd = wasi::path_open(dir_fd, 0, filename, 0, wasi::RIGHTS_FD_READ, 0, 0)
         .expect("opening a file for writing");
-    let res = wasi::fd_write(
-        file_fd,
-        &[wasi::Ciovec {
-            buf: 3 as *const u8,
-            buf_len: 0,
-        }],
-    );
+    let res = wasi::fd_write(file_fd, &[wasi::Ciovec {
+        buf: 3 as *const u8,
+        buf_len: 0,
+    }]);
     assert!(
         res == Err(wasi::ERRNO_BADF) || res == Err(wasi::ERRNO_PERM),
         "bad result {res:?}"

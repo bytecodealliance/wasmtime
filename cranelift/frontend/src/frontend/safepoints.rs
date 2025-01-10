@@ -675,14 +675,12 @@ impl SafepointSpiller {
                 func.dfg.display_inst(inst)
             );
             let ty = func.dfg.value_type(*val);
-            func.dfg.append_user_stack_map_entry(
-                inst,
-                ir::UserStackMapEntry {
+            func.dfg
+                .append_user_stack_map_entry(inst, ir::UserStackMapEntry {
                     ty,
                     slot,
                     offset: 0,
-                },
-            );
+                });
         }
     }
 

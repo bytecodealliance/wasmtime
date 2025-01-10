@@ -13,16 +13,16 @@ use crate::backend::{
 use crate::wit::{ExecutionTarget, GraphEncoding, Tensor, TensorType};
 use crate::{ExecutionContext, Graph};
 use std::{fs::File, io::Read, mem::size_of, path::Path};
-use windows::core::{ComInterface, Error, IInspectable, HSTRING};
-use windows::Foundation::Collections::IVectorView;
-use windows::Storage::Streams::{
-    DataWriter, InMemoryRandomAccessStream, RandomAccessStreamReference,
-};
 use windows::AI::MachineLearning::{
     ILearningModelFeatureDescriptor, LearningModel, LearningModelBinding, LearningModelDevice,
     LearningModelDeviceKind, LearningModelEvaluationResult, LearningModelSession,
     TensorFeatureDescriptor, TensorFloat, TensorFloat16Bit, TensorInt64Bit, TensorKind,
 };
+use windows::Foundation::Collections::IVectorView;
+use windows::Storage::Streams::{
+    DataWriter, InMemoryRandomAccessStream, RandomAccessStreamReference,
+};
+use windows::core::{ComInterface, Error, HSTRING, IInspectable};
 
 #[derive(Default)]
 pub struct WinMLBackend();

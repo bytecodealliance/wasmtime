@@ -39,10 +39,10 @@
 //! at the start of the file. These comments are then parsed as TOML and
 //! deserialized into `TestConfig` in this crate.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use clap::Parser;
 use cranelift_codegen::ir::{Function, UserExternalName, UserFuncName};
-use cranelift_codegen::isa::{lookup_by_name, TargetIsa};
+use cranelift_codegen::isa::{TargetIsa, lookup_by_name};
 use cranelift_codegen::settings::{Configurable, Flags, SetError};
 use libtest_mimic::{Arguments, Trial};
 use pulley_interpreter::decode::OpVisitor;

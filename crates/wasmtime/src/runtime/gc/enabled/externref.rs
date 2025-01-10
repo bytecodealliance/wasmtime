@@ -4,9 +4,9 @@ use super::{AnyRef, RootedGcRefImpl};
 use crate::prelude::*;
 use crate::runtime::vm::VMGcRef;
 use crate::{
-    store::{AutoAssertNoGc, StoreOpaque},
     AsContextMut, GcHeapOutOfMemory, GcRefImpl, GcRootIndex, HeapType, ManuallyRooted, RefType,
     Result, Rooted, StoreContext, StoreContextMut, ValRaw, ValType, WasmTy,
+    store::{AutoAssertNoGc, StoreOpaque},
 };
 use core::any::Any;
 use core::mem;
@@ -125,12 +125,9 @@ unsafe impl GcRefImpl for ExternRef {
         let me: &Self = unsafe { mem::transmute(index) };
 
         // Assert we really are just a newtype of a `GcRootIndex`.
-        assert!(matches!(
-            me,
-            Self {
-                inner: GcRootIndex { .. },
-            }
-        ));
+        assert!(matches!(me, Self {
+            inner: GcRootIndex { .. },
+        }));
 
         me
     }

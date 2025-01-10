@@ -1,6 +1,6 @@
 //! Small lists of entity references.
-use crate::packed_option::ReservedValue;
 use crate::EntityRef;
+use crate::packed_option::ReservedValue;
 use alloc::vec::Vec;
 use core::marker::PhantomData;
 use core::mem;
@@ -784,10 +784,9 @@ mod tests {
 
         list.extend([i1, i1, i2, i2, i3, i3, i4, i4].iter().cloned(), pool);
         assert_eq!(list.len(pool), 12);
-        assert_eq!(
-            list.as_slice(pool),
-            &[i1, i2, i3, i4, i1, i1, i2, i2, i3, i3, i4, i4]
-        );
+        assert_eq!(list.as_slice(pool), &[
+            i1, i2, i3, i4, i1, i1, i2, i2, i3, i3, i4, i4
+        ]);
 
         let list2 = EntityList::from_iter([i1, i1, i2, i2, i3, i3, i4, i4].iter().cloned(), pool);
         assert_eq!(list2.len(pool), 8);
@@ -941,14 +940,12 @@ mod tests {
         assert_eq!(list.as_slice(pool), &[i4, i3, i2, i1, i1, i2, i3, i4]);
         // Panic should occur on the line below because `list.index == other.index`
         list.copy_from(&list_again, 0..=1, 8, pool);
-        assert_eq!(
-            list.as_slice(pool),
-            &[i4, i3, i2, i1, i1, i2, i3, i4, i4, i3]
-        );
+        assert_eq!(list.as_slice(pool), &[
+            i4, i3, i2, i1, i1, i2, i3, i4, i4, i3
+        ]);
         list.copy_from(&list_again, .., 7, pool);
-        assert_eq!(
-            list.as_slice(pool),
-            &[i4, i3, i2, i1, i1, i2, i4, i3, i2, i1, i1, i2, i3, i4, i4, i3, i3, i4, i4, i3]
-        )
+        assert_eq!(list.as_slice(pool), &[
+            i4, i3, i2, i1, i1, i2, i4, i3, i2, i1, i1, i2, i3, i4, i4, i3, i3, i4, i4, i3
+        ])
     }
 }

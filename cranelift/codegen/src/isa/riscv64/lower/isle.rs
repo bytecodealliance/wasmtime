@@ -8,18 +8,18 @@ use generated_code::MInst;
 // Types that the generated ISLE code uses via `use super::*`.
 use self::generated_code::{FpuOPWidth, VecAluOpRR, VecLmul};
 use crate::isa;
+use crate::isa::riscv64::Riscv64Backend;
 use crate::isa::riscv64::abi::Riscv64ABICallSite;
 use crate::isa::riscv64::lower::args::{
     FReg, VReg, WritableFReg, WritableVReg, WritableXReg, XReg,
 };
-use crate::isa::riscv64::Riscv64Backend;
 use crate::machinst::Reg;
-use crate::machinst::{isle::*, CallInfo, MachInst};
+use crate::machinst::{CallInfo, MachInst, isle::*};
 use crate::machinst::{VCodeConstant, VCodeConstantData};
 use crate::{
     ir::{
-        immediates::*, types::*, AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData,
-        MemFlags, Opcode, TrapCode, Value, ValueList,
+        AtomicRmwOp, BlockCall, ExternalName, Inst, InstructionData, MemFlags, Opcode, TrapCode,
+        Value, ValueList, immediates::*, types::*,
     },
     isa::riscv64::inst::*,
     machinst::{ArgPair, InstOutput, IsTailCall},
@@ -171,11 +171,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
             _ => false,
         };
 
-        if supported {
-            Some(ty)
-        } else {
-            None
-        }
+        if supported { Some(ty) } else { None }
     }
 
     fn ty_supported_float(&mut self, ty: Type) -> Option<Type> {
@@ -264,11 +260,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
     #[inline]
     fn imm12_is_zero(&mut self, imm: Imm12) -> Option<()> {
-        if imm.as_i16() == 0 {
-            Some(())
-        } else {
-            None
-        }
+        if imm.as_i16() == 0 { Some(()) } else { None }
     }
 
     #[inline]
@@ -281,11 +273,7 @@ impl generated_code::Context for RV64IsleContext<'_, '_, MInst, Riscv64Backend> 
     }
     #[inline]
     fn imm20_is_zero(&mut self, imm: Imm20) -> Option<()> {
-        if imm.as_i32() == 0 {
-            Some(())
-        } else {
-            None
-        }
+        if imm.as_i32() == 0 { Some(()) } else { None }
     }
 
     #[inline]

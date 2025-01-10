@@ -1,7 +1,7 @@
 use crate::runtime::vm::VMGcRef;
 use crate::{
+    AsContext, AsContextMut, GcRefImpl, I31, Result, Rooted, StructType, Val,
     store::{AutoAssertNoGc, StoreContextMut, StoreOpaque},
-    AsContext, AsContextMut, GcRefImpl, Result, Rooted, StructType, Val, I31,
 };
 
 /// Support for `StructRefPre` disabled at compile time because the `gc` cargo

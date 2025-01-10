@@ -3,8 +3,8 @@ use crate::check::artifacts_dir;
 use anyhow::Result;
 use std::path::Path;
 use wasmtime::{Config, Engine, Linker, Module, Store};
-use wasmtime_wasi::{preview1::WasiP1Ctx, DirPerms, FilePerms, WasiCtxBuilder};
-use wasmtime_wasi_nn::{witx::WasiNnCtx, Backend, InMemoryRegistry};
+use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder, preview1::WasiP1Ctx};
+use wasmtime_wasi_nn::{Backend, InMemoryRegistry, witx::WasiNnCtx};
 
 /// Run a wasi-nn test program. This is modeled after
 /// `crates/wasi/tests/all/main.rs` but still uses the older preview1 API

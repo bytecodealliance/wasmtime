@@ -455,9 +455,7 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
                     ReturnKind::Plain => format!(
                         "unreachable!(\"no rule matched for term {{}} at {{}}; should it be partial?\", {:?}, {:?})",
                         term_name,
-                        termdata
-                            .decl_pos
-                            .pretty_print_line(&self.files)
+                        termdata.decl_pos.pretty_print_line(&self.files)
                     ),
                 }
             };
@@ -481,10 +479,12 @@ impl<L: Length, C> Length for ContextIterWrapper<L, C> {{
     fn validate_block(ret_kind: ReturnKind, block: &Block) -> Nested {
         if !matches!(ret_kind, ReturnKind::Iterator) {
             // Loops are only allowed if we're returning an iterator.
-            assert!(!block
-                .steps
-                .iter()
-                .any(|c| matches!(c.check, ControlFlow::Loop { .. })));
+            assert!(
+                !block
+                    .steps
+                    .iter()
+                    .any(|c| matches!(c.check, ControlFlow::Loop { .. }))
+            );
 
             // Unless we're returning an iterator, a case which returns a result must be the last
             // case in a block.

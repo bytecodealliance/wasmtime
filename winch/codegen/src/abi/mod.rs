@@ -46,7 +46,7 @@
 //! |                               | ----> Space allocated for calls
 //! |                               |
 use crate::codegen::ptr_type_from_ptr_size;
-use crate::isa::{reg::Reg, CallingConvention};
+use crate::isa::{CallingConvention, reg::Reg};
 use crate::masm::SPOffset;
 use smallvec::SmallVec;
 use std::collections::HashSet;

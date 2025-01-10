@@ -222,14 +222,10 @@ impl fmt::Display for LaneType {
 impl fmt::Debug for LaneType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let inner_msg = format!("bits={}", self.lane_bits());
-        write!(
-            f,
-            "{}",
-            match *self {
-                LaneType::Float(_) => format!("FloatType({inner_msg})"),
-                LaneType::Int(_) => format!("IntType({inner_msg})"),
-            }
-        )
+        write!(f, "{}", match *self {
+            LaneType::Float(_) => format!("FloatType({inner_msg})"),
+            LaneType::Int(_) => format!("IntType({inner_msg})"),
+        })
     }
 }
 
@@ -368,8 +364,7 @@ impl DynamicVectorType {
     pub fn doc(&self) -> String {
         format!(
             "A dynamically-scaled SIMD vector with a minimum of {} lanes containing `{}` bits each.",
-            self.unscaled_lanes,
-            self.base
+            self.unscaled_lanes, self.base
         )
     }
 

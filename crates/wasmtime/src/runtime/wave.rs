@@ -25,18 +25,10 @@ pub(crate) use unwrap_val;
 
 #[inline]
 pub(crate) fn canonicalize_nan32(val: f32) -> f32 {
-    if val.is_nan() {
-        f32::NAN
-    } else {
-        val
-    }
+    if val.is_nan() { f32::NAN } else { val }
 }
 
 #[inline]
 pub(crate) fn canonicalize_nan64(val: f64) -> f64 {
-    if val.is_nan() {
-        f64::NAN
-    } else {
-        val
-    }
+    if val.is_nan() { f64::NAN } else { val }
 }

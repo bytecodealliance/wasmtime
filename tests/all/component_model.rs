@@ -1,5 +1,5 @@
 use anyhow::Result;
-use component_test_util::{async_engine, engine, TypedFuncExt};
+use component_test_util::{TypedFuncExt, async_engine, engine};
 use std::fmt::Write;
 use std::iter;
 use wasmtime::component::Component;
