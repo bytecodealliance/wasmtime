@@ -3,7 +3,8 @@ use crate::{
     codegen::BlockSig,
     isa::reg::{writable, Reg},
     masm::{
-        ExtendKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, ShiftKind, TrapCode,
+        ExtendKind, IntCmpKind, MacroAssembler, MemOpKind, OperandSize, RegImm, SPOffset,
+        ShiftKind, TrapCode,
     },
     stack::TypedReg,
 };
@@ -846,28 +847,7 @@ where
         ty: WasmValType,
         size: OperandSize,
         sextend: Option<ExtendKind>,
-    ) -> Result<()> {
-        self.emit_wasm_load_full(arg, ty, size, sextend, false)
-    }
-
-    /// Emit a WebAssembly atomic load.
-    pub fn emit_wasm_load_atomic(
-        &mut self,
-        arg: &MemArg,
-        ty: WasmValType,
-        size: OperandSize,
-        sextend: Option<ExtendKind>,
-    ) -> Result<()> {
-        self.emit_wasm_load_full(arg, ty, size, sextend, true)
-    }
-
-    pub fn emit_wasm_load_full(
-        &mut self,
-        arg: &MemArg,
-        ty: WasmValType,
-        size: OperandSize,
-        sextend: Option<ExtendKind>,
-        atomic: bool,
+        op_kind: MemOpKind,
     ) -> Result<()> {
         if let Some(addr) = self.emit_compute_heap_address(&arg, size)? {
             let dst = match ty {
@@ -878,12 +858,8 @@ where
             };
 
             let src = self.masm.address_at_reg(addr, 0)?;
-            if atomic {
-                self.masm
-                    .wasm_load_atomic(src, writable!(dst), size, sextend)?;
-            } else {
-                self.masm.wasm_load(src, writable!(dst), size, sextend)?;
-            }
+            self.masm
+                .wasm_load(src, writable!(dst), size, sextend, op_kind)?;
             self.context.stack.push(TypedReg::new(ty, dst).into());
             self.context.free_reg(addr);
         }

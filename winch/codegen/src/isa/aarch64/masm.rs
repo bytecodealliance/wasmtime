@@ -13,8 +13,8 @@ use crate::{
     },
     masm::{
         CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
-        MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, RoundingMode, SPOffset,
-        ShiftKind, StackSlot, TrapCode, TruncKind,
+        MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RoundingMode,
+        SPOffset, ShiftKind, StackSlot, TrapCode, TruncKind,
     },
     stack::TypedReg,
 };
@@ -216,15 +216,23 @@ impl Masm for MacroAssembler {
         dst: WritableReg,
         size: OperandSize,
         kind: Option<ExtendKind>,
+        op_kind: MemOpKind,
     ) -> Result<()> {
-        // kind is some if the value is signed
-        // unlike x64, unused bits are set to zero so we don't need to extend
-        if kind.is_some() {
-            self.asm.sload(src, dst, size);
-        } else {
-            self.asm.uload(src, dst, size);
+        match op_kind {
+            MemOpKind::Normal => {
+                // kind is some if the value is signed
+                // unlike x64, unused bits are set to zero so we don't need to extend
+                if kind.is_some() {
+                    self.asm.sload(src, dst, size);
+                } else {
+                    self.asm.uload(src, dst, size);
+                }
+
+                Ok(())
+            }
+
+            MemOpKind::Atomic => Err(anyhow!(CodeGenError::unimplemented_masm_instruction())),
         }
-        Ok(())
     }
 
     fn load_addr(&mut self, src: Self::Address, dst: WritableReg, size: OperandSize) -> Result<()> {
@@ -869,16 +877,6 @@ impl Masm for MacroAssembler {
     ) -> Result<()> {
         let _ = (context, kind);
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
-    }
-
-    fn wasm_load_atomic(
-        &mut self,
-        _src: Self::Address,
-        _dst: WritableReg,
-        _size: OperandSize,
-        _sextend: Option<ExtendKind>,
-    ) -> Result<()> {
-        todo!()
     }
 }
 

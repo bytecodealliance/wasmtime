@@ -7,9 +7,9 @@ use super::{
 use anyhow::{anyhow, bail, Result};
 
 use crate::masm::{
-    DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm, MulWideKind,
-    OperandSize, RegImm, RemKind, RoundingMode, ShiftKind, TrapCode, TruncKind, TRUSTED_FLAGS,
-    UNTRUSTED_FLAGS,
+    DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, MacroAssembler as Masm, MemOpKind,
+    MulWideKind, OperandSize, RegImm, RemKind, RoundingMode, ShiftKind, TrapCode, TruncKind,
+    TRUSTED_FLAGS, UNTRUSTED_FLAGS,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
@@ -280,7 +280,10 @@ impl Masm for MacroAssembler {
         dst: WritableReg,
         size: OperandSize,
         kind: Option<ExtendKind>,
+        _op_kind: MemOpKind,
     ) -> Result<()> {
+        // The guarantees of the x86-64 memory model ensure that `SeqCst`
+        // loads are equivalent to normal loads.
         if let Some(ext) = kind {
             self.asm.movsx_mr(&src, dst, ext, UNTRUSTED_FLAGS);
             Ok(())
@@ -1210,18 +1213,6 @@ impl Masm for MacroAssembler {
         context.stack.push(Val::Reg(TypedReg::i64(rdx)));
 
         Ok(())
-    }
-
-    fn wasm_load_atomic(
-        &mut self,
-        src: Self::Address,
-        dst: WritableReg,
-        size: OperandSize,
-        kind: Option<ExtendKind>,
-    ) {
-        // The guarantees of the x86-64 memory model ensure that `SeqCst`
-        // loads are equivalent to normal loads.
-        self.wasm_load(src, dst, size, kind);
     }
 }
 
