@@ -52,11 +52,11 @@ impl DiffEngine for WasmtimeEngine {
         Ok(Box::new(instance))
     }
 
-    fn assert_error_match(&self, trap: &Trap, err: &Error) {
-        let trap2 = err
+    fn assert_error_match(&self, lhs: &Error, rhs: &Trap) {
+        let lhs = lhs
             .downcast_ref::<Trap>()
-            .expect(&format!("not a trap: {err:?}"));
-        assert_eq!(trap, trap2, "{trap}\nis not equal to\n{trap2}");
+            .expect(&format!("not a trap: {lhs:?}"));
+        assert_eq!(lhs, rhs, "{lhs}\nis not equal to\n{rhs}");
     }
 
     fn is_stack_overflow(&self, err: &Error) -> bool {
