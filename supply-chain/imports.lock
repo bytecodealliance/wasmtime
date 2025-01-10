@@ -1786,32 +1786,32 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.wit-bindgen]]
-version = "0.35.0"
-when = "2024-11-13"
+version = "0.37.0"
+when = "2025-01-10"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-core]]
-version = "0.35.0"
-when = "2024-11-13"
+version = "0.37.0"
+when = "2025-01-10"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rt]]
-version = "0.35.0"
-when = "2024-11-13"
+version = "0.37.0"
+when = "2025-01-10"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rust]]
-version = "0.35.0"
-when = "2024-11-13"
+version = "0.37.0"
+when = "2025-01-10"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rust-macro]]
-version = "0.35.0"
-when = "2024-11-13"
+version = "0.37.0"
+when = "2025-01-10"
 user-id = 73222
 user-login = "wasmtime-publish"
 
