@@ -18,7 +18,7 @@ use cranelift_codegen::{
                 self, AluRmiROpcode, Amode, CmpOpcode, DivSignedness, ExtMode, FromWritableReg,
                 Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem, RegMemImm,
                 ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr,
-                WritableXmm, Xmm, XmmMem, XmmMemAligned, CC,
+                WritableXmm, Xmm, XmmMem, XmmMemAligned, XmmMemImm, CC,
             },
             encoding::rex::{encode_modrm, RexFlags},
             settings as x64_settings, EmitInfo, EmitState, Inst,
@@ -1401,16 +1401,33 @@ impl Assembler {
         });
     }
 
-    /// Permutes byte values in the lhs operand and the rhs operand using the
-    /// byte indices in the dst operand to select byte elements from the lhs or
-    /// rhs operands.
-    pub fn vpermi2b(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg) {
-        self.emit(Inst::XmmRmREvex {
-            op: args::Avx512Opcode::Vpermi2b,
-            src1: lhs.into(),
-            src2: XmmMem::unwrap_new(rhs.into()),
+    /// Shuffles bytes in `src` according to contents of `mask` and puts
+    /// result in `dst`.
+    pub fn vpshufb_rrm(&mut self, dst: WritableReg, src: Reg, mask: &Address) {
+        let mask = Self::to_synthetic_amode(
+            mask,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
+
+        self.emit(Inst::XmmRmiRVex {
+            op: args::AvxOpcode::Vpshufb,
+            src1: src.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::Mem { addr: mask }),
             dst: dst.to_reg().into(),
         });
+    }
+
+    /// Bitwise OR of `src1` and `src2`.
+    pub fn vpor(&mut self, dst: WritableReg, src1: Reg, src2: Reg) {
+        self.emit(Inst::XmmRmiRVex {
+            op: args::AvxOpcode::Vpor,
+            src1: src1.into(),
+            src2: XmmMemImm::unwrap_new(src2.into()),
+            dst: dst.to_reg().into(),
+        })
     }
 }
 

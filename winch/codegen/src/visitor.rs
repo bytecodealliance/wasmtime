@@ -2162,14 +2162,12 @@ where
     }
 
     fn visit_i8x16_shuffle(&mut self, lanes: [u8; 16]) -> Self::Output {
-        let v2 = self.context.pop_to_reg(self.masm, None)?;
-        let v1 = self.context.pop_to_reg(self.masm, None)?;
-        let dst = self.context.any_fpr(self.masm)?;
+        let rhs = self.context.pop_to_reg(self.masm, None)?;
+        let lhs = self.context.pop_to_reg(self.masm, None)?;
         self.masm
-            .shuffle(writable!(dst), v1.into(), v2.into(), lanes);
-        self.context.stack.push(TypedReg::v128(dst).into());
-        self.context.free_reg(v1);
-        self.context.free_reg(v2);
+            .shuffle(writable!(lhs.into()), lhs.into(), rhs.into(), lanes);
+        self.context.stack.push(TypedReg::v128(lhs.into()).into());
+        self.context.free_reg(rhs);
         Ok(())
     }
 

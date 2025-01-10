@@ -1,6 +1,6 @@
 ;;! target = "x86_64"
 ;;! test = "winch"
-;;! flags = [ "-Ccranelift-has-avx512vl", "-Ccranelift-has-avx512vbmi" ]
+;;! flags = [ "-Ccranelift-has-avx" ]
 
 (module
     (func (result v128)
@@ -16,24 +16,21 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x54
+;;       ja      0x5c
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
 ;;       movdqu  0x2c(%rip), %xmm0
 ;;       movdqu  0x34(%rip), %xmm1
-;;       movdqu  0x3c(%rip), %xmm2
-;;       vpermi2b %xmm0, %xmm1, %xmm2
-;;       movdqa  %xmm2, %xmm0
+;;       vpshufb 0x3b(%rip), %xmm1, %xmm1
+;;       vpshufb 0x42(%rip), %xmm0, %xmm15
+;;       vpor    %xmm1, %xmm15, %xmm1
+;;       movdqa  %xmm1, %xmm0
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   54: ud2
-;;   56: addb    %al, (%rax)
-;;   58: addb    %al, (%rax)
-;;   5a: addb    %al, (%rax)
-;;   5c: addb    %al, (%rax)
+;;   5c: ud2
 ;;   5e: addb    %al, (%rax)
 ;;   60: addb    (%rax), %al
 ;;   62: addb    %al, (%rax)
@@ -53,4 +50,4 @@
 ;;   7e: addb    %al, (%rax)
 ;;   80: addb    %al, (%rcx)
 ;;   82: addb    (%rbx), %al
-;;   84: adcb    $0x15, %al
+;;   84: addb    $6, 0x5048080(%rax)
