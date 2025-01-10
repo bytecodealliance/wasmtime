@@ -3919,6 +3919,31 @@ criteria = "safe-to-deploy"
 delta = "0.35.0 -> 0.35.1"
 notes = "Just a dependency version bump"
 
+[[audits.wit-bindgen]]
+who = "Joel Dice <joel.dice@gmail.com>"
+criteria = "safe-to-run"
+version = "0.37.0"
+
+[[audits.wit-bindgen-core]]
+who = "Joel Dice <joel.dice@gmail.com>"
+criteria = "safe-to-run"
+version = "0.37.0"
+
+[[audits.wit-bindgen-rt]]
+who = "Joel Dice <joel.dice@gmail.com>"
+criteria = "safe-to-run"
+version = "0.37.0"
+
+[[audits.wit-bindgen-rust]]
+who = "Joel Dice <joel.dice@gmail.com>"
+criteria = "safe-to-run"
+version = "0.37.0"
+
+[[audits.wit-bindgen-rust-macro]]
+who = "Joel Dice <joel.dice@gmail.com>"
+criteria = "safe-to-run"
+version = "0.37.0"
+
 [[audits.wit-parser]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
