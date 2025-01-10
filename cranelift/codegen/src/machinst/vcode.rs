@@ -24,12 +24,12 @@ use crate::ranges::Ranges;
 use crate::timing;
 use crate::trace;
 use crate::CodegenError;
+use crate::FxHashMap;
 use crate::{LabelValueLoc, ValueLocRange};
 use regalloc2::{
     Edit, Function as RegallocFunction, InstOrEdit, InstRange, MachineEnv, Operand,
     OperandConstraint, OperandKind, PRegSet, RegClass,
 };
-use crate::fx::FxHashMap;
 
 use core::mem::take;
 use cranelift_entity::{entity_impl, Keys};

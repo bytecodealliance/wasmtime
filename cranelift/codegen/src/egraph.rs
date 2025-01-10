@@ -17,11 +17,11 @@ use crate::scoped_hash_map::{Entry as ScopedEntry, ScopedHashMap};
 use crate::settings::Flags;
 use crate::trace;
 use crate::unionfind::UnionFind;
+use crate::FxHashSet;
 use core::cmp::Ordering;
 use cranelift_control::ControlPlane;
 use cranelift_entity::packed_option::ReservedValue;
 use cranelift_entity::SecondaryMap;
-use crate::fx::FxHashSet;
 use smallvec::SmallVec;
 use std::hash::Hasher;
 

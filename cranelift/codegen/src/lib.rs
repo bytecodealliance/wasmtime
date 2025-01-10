@@ -25,6 +25,13 @@ use hashbrown::{hash_map, HashMap};
 #[cfg(feature = "std")]
 use std::collections::{hash_map, HashMap};
 
+#[cfg(feature = "std")]
+pub use rustc_hash::{FxHashMap, FxHashSet};
+#[cfg(not(feature = "std"))]
+pub type FxHashMap<K, V> = HashMap<K, V, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+#[cfg(not(feature = "std"))]
+pub type FxHashSet<V> = HashSet<V, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+
 pub use crate::context::Context;
 pub use crate::value_label::{LabelValueLoc, ValueLabelsRanges, ValueLocRange};
 pub use crate::verifier::verify_function;
@@ -93,7 +100,6 @@ pub use crate::result::{CodegenError, CodegenResult, CompileError};
 
 #[cfg(feature = "incremental-cache")]
 pub mod incremental_cache;
-mod fx;
 
 /// Even when trace logging is disabled, the trace macro has a significant performance cost so we
 /// disable it by default.

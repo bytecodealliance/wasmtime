@@ -10,10 +10,10 @@ use crate::ir::{Block, Function, Inst, Value, ValueDef};
 use crate::loop_analysis::{Loop, LoopAnalysis};
 use crate::scoped_hash_map::ScopedHashMap;
 use crate::trace;
+use crate::{FxHashMap, FxHashSet};
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
 use cranelift_entity::{packed_option::ReservedValue, SecondaryMap};
-use crate::fx::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 
 pub(crate) struct Elaborator<'a> {
