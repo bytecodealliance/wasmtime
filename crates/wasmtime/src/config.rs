@@ -1972,7 +1972,6 @@ impl Config {
             Some(Strategy::Winch) => {
                 let mut unsupported = WasmFeatures::GC
                     | WasmFeatures::FUNCTION_REFERENCES
-                    | WasmFeatures::THREADS
                     | WasmFeatures::RELAXED_SIMD
                     | WasmFeatures::TAIL_CALL
                     | WasmFeatures::GC_TYPES;
@@ -1985,6 +1984,7 @@ impl Config {
                         // winch on aarch64 but this helps gate most spec tests
                         // by default which otherwise currently cause panics.
                         unsupported |= WasmFeatures::REFERENCE_TYPES;
+                        unsupported |= WasmFeatures::THREADS
                     }
 
                     // Winch doesn't support other non-x64 architectures at this

@@ -38,6 +38,14 @@ impl RemKind {
     }
 }
 
+#[derive(Copy, Clone)]
+pub(crate) enum MemOpKind {
+    /// An atomic memory operation with SeqCst memory ordering.
+    Atomic,
+    /// A memory operation with no memory ordering constraint.
+    Normal,
+}
+
 #[derive(Eq, PartialEq)]
 pub(crate) enum MulWideKind {
     Signed,
@@ -646,7 +654,8 @@ pub(crate) trait MacroAssembler {
         src: Self::Address,
         dst: WritableReg,
         size: OperandSize,
-        kind: Option<ExtendKind>,
+        ext_kind: Option<ExtendKind>,
+        op_kind: MemOpKind,
     ) -> Result<()>;
 
     /// Alias for `MacroAssembler::load` with the operand size corresponding

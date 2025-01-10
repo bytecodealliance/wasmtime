@@ -54,7 +54,7 @@ pub struct HeapData {
     pub offset: u32,
     /// The offset to the current length field.
     pub current_length_offset: u32,
-    /// If the WebAssembly memory is imported, this field contains the offset to locate the
+    /// If the WebAssembly memory is imported or shared, this field contains the offset to locate the
     /// base of the heap.
     pub import_from: Option<u32>,
     /// The memory type this heap is associated with.
@@ -247,22 +247,33 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     }
 
     /// Resolve a `HeapData` from a [MemoryIndex].
-    // TODO: (@saulecabrera)
-    // Handle shared memories when implementing support for Wasm Threads.
     pub fn resolve_heap(&mut self, index: MemoryIndex) -> HeapData {
+        let mem = self.translation.module.memories[index];
+        let is_shared = mem.shared;
         match self.resolved_heaps.entry(index) {
             Occupied(entry) => *entry.get(),
             Vacant(entry) => {
                 let (import_from, base_offset, current_length_offset) =
                     match self.translation.module.defined_memory_index(index) {
                         Some(defined) => {
-                            let owned = self.translation.module.owned_memory_index(defined);
-                            (
-                                None,
-                                self.vmoffsets.vmctx_vmmemory_definition_base(owned),
-                                self.vmoffsets
-                                    .vmctx_vmmemory_definition_current_length(owned),
-                            )
+                            if is_shared {
+                                (
+                                    Some(self.vmoffsets.vmctx_vmmemory_pointer(defined)),
+                                    self.vmoffsets.ptr.vmmemory_definition_base().into(),
+                                    self.vmoffsets
+                                        .ptr
+                                        .vmmemory_definition_current_length()
+                                        .into(),
+                                )
+                            } else {
+                                let owned = self.translation.module.owned_memory_index(defined);
+                                (
+                                    None,
+                                    self.vmoffsets.vmctx_vmmemory_definition_base(owned),
+                                    self.vmoffsets
+                                        .vmctx_vmmemory_definition_current_length(owned),
+                                )
+                            }
                         }
                         None => (
                             Some(self.vmoffsets.vmctx_vmmemory_import_from(index)),

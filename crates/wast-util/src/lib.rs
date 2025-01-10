@@ -286,7 +286,6 @@ impl Compiler {
             // Cranelift has quite yet.
             Compiler::Winch => {
                 if config.gc()
-                    || config.threads()
                     || config.tail_call()
                     || config.function_references()
                     || config.gc()
@@ -511,6 +510,17 @@ impl WastTest {
                 "spec_testsuite/simd_store32_lane.wast",
                 "spec_testsuite/simd_store64_lane.wast",
                 "spec_testsuite/simd_store8_lane.wast",
+                // thread related failures
+                "proposals/threads/atomic.wast",
+                "misc_testsuite/threads/MP_wait.wast",
+                "misc_testsuite/threads/load-store-alignment.wast",
+                "misc_testsuite/threads/MP_atomic.wast",
+                "misc_testsuite/threads/SB_atomic.wast",
+                "misc_testsuite/threads/wait_notify.wast",
+                "misc_testsuite/threads/LB_atomic.wast",
+                "misc_testsuite/threads/atomics_wait_address.wast",
+                "misc_testsuite/threads/atomics_notify.wast",
+                "misc_testsuite/threads/load-store-alignment.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {
