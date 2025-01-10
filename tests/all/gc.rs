@@ -884,12 +884,127 @@ fn table_copy_doesnt_leak() -> Result<()> {
 }
 
 #[test]
-fn null_extern_ref_matches() -> Result<()> {
+fn ref_matches() -> Result<()> {
     let mut store = Store::<()>::default();
+    let engine = store.engine().clone();
 
-    let val = Ref::Extern(None);
-    let ty = RefType::NULLEXTERNREF;
-    assert!(val.matches_ty(&mut store, &ty)?);
+    let func_ty = FuncType::new(&engine, None, None);
+    let func_ref_ty = RefType::new(true, HeapType::ConcreteFunc(func_ty.clone()));
+    let f = Func::new(&mut store, func_ty, |_, _, _| Ok(()));
+
+    let pre = StructRefPre::new(&mut store, StructType::new(&engine, [])?);
+    let s = StructRef::new(&mut store, &pre, &[])?.to_anyref();
+
+    let pre = ArrayRefPre::new(
+        &mut store,
+        ArrayType::new(&engine, FieldType::new(Mutability::Const, StorageType::I8)),
+    );
+    let a = ArrayRef::new(&mut store, &pre, &Val::I32(0), 0)?.to_anyref();
+
+    let i31 = AnyRef::from_i31(&mut store, I31::wrapping_i32(1234));
+
+    let e = ExternRef::new(&mut store, "hello")?;
+
+    for (val, ty, expected) in [
+        // nulls to nullexternref
+        (Ref::Extern(None), RefType::NULLEXTERNREF, true),
+        (Ref::Any(None), RefType::NULLEXTERNREF, false),
+        (Ref::Func(None), RefType::NULLEXTERNREF, false),
+        // nulls to externref
+        (Ref::Extern(None), RefType::EXTERNREF, true),
+        (Ref::Any(None), RefType::EXTERNREF, false),
+        (Ref::Func(None), RefType::EXTERNREF, false),
+        // nulls to nullref
+        (Ref::Extern(None), RefType::NULLREF, false),
+        (Ref::Any(None), RefType::NULLREF, true),
+        (Ref::Func(None), RefType::NULLREF, false),
+        // nulls to structref
+        (Ref::Extern(None), RefType::STRUCTREF, false),
+        (Ref::Any(None), RefType::STRUCTREF, true),
+        (Ref::Func(None), RefType::STRUCTREF, false),
+        // nulls to arrayref
+        (Ref::Extern(None), RefType::ARRAYREF, false),
+        (Ref::Any(None), RefType::ARRAYREF, true),
+        (Ref::Func(None), RefType::ARRAYREF, false),
+        // nulls to i31ref
+        (Ref::Extern(None), RefType::I31REF, false),
+        (Ref::Any(None), RefType::I31REF, true),
+        (Ref::Func(None), RefType::I31REF, false),
+        // nulls to eqref
+        (Ref::Extern(None), RefType::EQREF, false),
+        (Ref::Any(None), RefType::EQREF, true),
+        (Ref::Func(None), RefType::EQREF, false),
+        // nulls to anyref
+        (Ref::Extern(None), RefType::ANYREF, false),
+        (Ref::Any(None), RefType::ANYREF, true),
+        (Ref::Func(None), RefType::ANYREF, false),
+        // non-null structref
+        (Ref::Any(Some(s)), RefType::NULLFUNCREF, false),
+        (Ref::Any(Some(s)), func_ref_ty.clone(), false),
+        (Ref::Any(Some(s)), RefType::FUNCREF, false),
+        (Ref::Any(Some(s)), RefType::NULLEXTERNREF, false),
+        (Ref::Any(Some(s)), RefType::EXTERNREF, false),
+        (Ref::Any(Some(s)), RefType::NULLREF, false),
+        (Ref::Any(Some(s)), RefType::STRUCTREF, true),
+        (Ref::Any(Some(s)), RefType::ARRAYREF, false),
+        (Ref::Any(Some(s)), RefType::I31REF, false),
+        (Ref::Any(Some(s)), RefType::EQREF, true),
+        (Ref::Any(Some(s)), RefType::ANYREF, true),
+        // non-null arrayref
+        (Ref::Any(Some(a)), RefType::NULLFUNCREF, false),
+        (Ref::Any(Some(a)), func_ref_ty.clone(), false),
+        (Ref::Any(Some(a)), RefType::FUNCREF, false),
+        (Ref::Any(Some(a)), RefType::NULLEXTERNREF, false),
+        (Ref::Any(Some(a)), RefType::EXTERNREF, false),
+        (Ref::Any(Some(a)), RefType::NULLREF, false),
+        (Ref::Any(Some(a)), RefType::STRUCTREF, false),
+        (Ref::Any(Some(a)), RefType::ARRAYREF, true),
+        (Ref::Any(Some(a)), RefType::I31REF, false),
+        (Ref::Any(Some(a)), RefType::EQREF, true),
+        (Ref::Any(Some(a)), RefType::ANYREF, true),
+        // non-null i31ref
+        (Ref::Any(Some(i31)), RefType::NULLFUNCREF, false),
+        (Ref::Any(Some(i31)), func_ref_ty.clone(), false),
+        (Ref::Any(Some(i31)), RefType::FUNCREF, false),
+        (Ref::Any(Some(i31)), RefType::NULLEXTERNREF, false),
+        (Ref::Any(Some(i31)), RefType::EXTERNREF, false),
+        (Ref::Any(Some(i31)), RefType::NULLREF, false),
+        (Ref::Any(Some(i31)), RefType::STRUCTREF, false),
+        (Ref::Any(Some(i31)), RefType::ARRAYREF, false),
+        (Ref::Any(Some(i31)), RefType::I31REF, true),
+        (Ref::Any(Some(i31)), RefType::EQREF, true),
+        (Ref::Any(Some(i31)), RefType::ANYREF, true),
+        // non-null funcref
+        (Ref::Func(Some(f.clone())), RefType::NULLFUNCREF, false),
+        (Ref::Func(Some(f.clone())), func_ref_ty.clone(), true),
+        (Ref::Func(Some(f.clone())), RefType::FUNCREF, true),
+        (Ref::Func(Some(f.clone())), RefType::NULLEXTERNREF, false),
+        (Ref::Func(Some(f.clone())), RefType::EXTERNREF, false),
+        (Ref::Func(Some(f.clone())), RefType::NULLREF, false),
+        (Ref::Func(Some(f.clone())), RefType::STRUCTREF, false),
+        (Ref::Func(Some(f.clone())), RefType::ARRAYREF, false),
+        (Ref::Func(Some(f.clone())), RefType::I31REF, false),
+        (Ref::Func(Some(f.clone())), RefType::EQREF, false),
+        (Ref::Func(Some(f.clone())), RefType::ANYREF, false),
+        // non-null externref
+        (Ref::Extern(Some(e)), RefType::NULLFUNCREF, false),
+        (Ref::Extern(Some(e)), func_ref_ty.clone(), false),
+        (Ref::Extern(Some(e)), RefType::FUNCREF, false),
+        (Ref::Extern(Some(e)), RefType::NULLEXTERNREF, false),
+        (Ref::Extern(Some(e)), RefType::EXTERNREF, true),
+        (Ref::Extern(Some(e)), RefType::NULLREF, false),
+        (Ref::Extern(Some(e)), RefType::STRUCTREF, false),
+        (Ref::Extern(Some(e)), RefType::ARRAYREF, false),
+        (Ref::Extern(Some(e)), RefType::I31REF, false),
+        (Ref::Extern(Some(e)), RefType::EQREF, false),
+        (Ref::Extern(Some(e)), RefType::ANYREF, false),
+    ] {
+        let actual = val.matches_ty(&mut store, &ty)?;
+        assert_eq!(
+            actual, expected,
+            "{val:?} matches {ty:?}? expected {expected}, got {actual}"
+        );
+    }
 
     Ok(())
 }
