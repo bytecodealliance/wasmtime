@@ -522,6 +522,16 @@ impl WastTest {
             if unsupported.iter().any(|part| self.path.ends_with(part)) {
                 return true;
             }
+
+            // SIMD on Winch requires AVX instructions which aren't supported
+            // by Rosetta on MacOS.
+            if cfg!(target_arch = "x86_64") && cfg!(target_os = "macos") {
+                let unsupported = ["spec_testsuite/simd_align.wasm"];
+
+                if unsupported.iter().any(|part| self.path.ends_with(part)) {
+                    return true;
+                }
+            }
         }
 
         for part in self.path.iter() {
