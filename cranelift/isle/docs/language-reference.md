@@ -1533,7 +1533,7 @@ The grammar accepted by the parser is as follows:
        | "(" "form" <form> ")"
        | "(" "instantiate" <instantiation> ")"
 
-<spec> ::= "(" <ident> <ident>* <provide> [ <require> ] ")"
+<spec> ::= "(" <ident> <ident>* ")" <provide> [ <require> ]
 <provide> ::= "(" "provide" <spec-expr>* ")"
 <require> ::= "(" "require" <spec-expr>* ")"
 
