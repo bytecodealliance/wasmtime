@@ -247,7 +247,7 @@ pub(crate) enum VectorExtendKind {
 /// Kinds of behavior supported by Wasm loads.
 pub(crate) enum LoadKind {
     /// Do not extend or splat.
-    None,
+    Simple,
     /// Duplicate value into vector lanes.
     Splat,
     /// Scalar (non-vector) extend.

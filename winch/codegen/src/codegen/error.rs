@@ -17,6 +17,9 @@ pub(crate) enum CodeGenError {
     /// Unimplemented MacroAssembler instruction.
     #[error("Unimplemented Masm instruction")]
     UnimplementedMasmInstruction,
+    /// Unimplemented Wasm load kind.
+    #[error("Unimplemented Wasm load kind")]
+    UnimplementedWasmLoadKind,
     /// Unsupported eager initialization of tables.
     #[error("Unsupported eager initialization of tables")]
     UnsupportedTableEagerInit,

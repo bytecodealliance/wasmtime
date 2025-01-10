@@ -1932,7 +1932,12 @@ where
     }
 
     fn visit_i32_load(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_load(&memarg, WasmValType::I32, OperandSize::S32, LoadKind::None)
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::I32,
+            OperandSize::S32,
+            LoadKind::Simple,
+        )
     }
 
     fn visit_i32_load8_s(&mut self, memarg: MemArg) -> Self::Output {
@@ -1945,7 +1950,7 @@ where
     }
 
     fn visit_i32_load8_u(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_load(&memarg, WasmValType::I32, OperandSize::S8, LoadKind::None)
+        self.emit_wasm_load(&memarg, WasmValType::I32, OperandSize::S8, LoadKind::Simple)
     }
 
     fn visit_i32_load16_s(&mut self, memarg: MemArg) -> Self::Output {
@@ -1958,7 +1963,12 @@ where
     }
 
     fn visit_i32_load16_u(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_load(&memarg, WasmValType::I32, OperandSize::S16, LoadKind::None)
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::I32,
+            OperandSize::S16,
+            LoadKind::Simple,
+        )
     }
 
     fn visit_i32_store(&mut self, memarg: MemArg) -> Self::Output {
@@ -1983,11 +1993,16 @@ where
     }
 
     fn visit_i64_load8_u(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_load(&memarg, WasmValType::I64, OperandSize::S8, LoadKind::None)
+        self.emit_wasm_load(&memarg, WasmValType::I64, OperandSize::S8, LoadKind::Simple)
     }
 
     fn visit_i64_load16_u(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_load(&memarg, WasmValType::I64, OperandSize::S16, LoadKind::None)
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::I64,
+            OperandSize::S16,
+            LoadKind::Simple,
+        )
     }
 
     fn visit_i64_load16_s(&mut self, memarg: MemArg) -> Self::Output {
@@ -2000,7 +2015,12 @@ where
     }
 
     fn visit_i64_load32_u(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_load(&memarg, WasmValType::I64, OperandSize::S32, LoadKind::None)
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::I64,
+            OperandSize::S32,
+            LoadKind::Simple,
+        )
     }
 
     fn visit_i64_load32_s(&mut self, memarg: MemArg) -> Self::Output {
@@ -2013,7 +2033,12 @@ where
     }
 
     fn visit_i64_load(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_load(&memarg, WasmValType::I64, OperandSize::S64, LoadKind::None)
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::I64,
+            OperandSize::S64,
+            LoadKind::Simple,
+        )
     }
 
     fn visit_i64_store(&mut self, memarg: MemArg) -> Self::Output {
@@ -2033,7 +2058,12 @@ where
     }
 
     fn visit_f32_load(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_load(&memarg, WasmValType::F32, OperandSize::S32, LoadKind::None)
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::F32,
+            OperandSize::S32,
+            LoadKind::Simple,
+        )
     }
 
     fn visit_f32_store(&mut self, memarg: MemArg) -> Self::Output {
@@ -2041,7 +2071,12 @@ where
     }
 
     fn visit_f64_load(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_load(&memarg, WasmValType::F64, OperandSize::S64, LoadKind::None)
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::F64,
+            OperandSize::S64,
+            LoadKind::Simple,
+        )
     }
 
     fn visit_f64_store(&mut self, memarg: MemArg) -> Self::Output {
@@ -2168,7 +2203,7 @@ where
             &memarg,
             WasmValType::V128,
             OperandSize::S128,
-            LoadKind::None,
+            LoadKind::Simple,
         )
     }
 

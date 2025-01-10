@@ -218,17 +218,19 @@ impl Masm for MacroAssembler {
         kind: LoadKind,
     ) -> Result<()> {
         match kind {
-            LoadKind::None => self.asm.uload(src, dst, size),
-            LoadKind::Splat => todo!(),
+            LoadKind::Simple => self.asm.uload(src, dst, size),
+            LoadKind::Splat => bail!(CodeGenError::UnimplementedWasmLoadKind),
             LoadKind::ScalarExtend(extend_kind) => {
                 if extend_kind.signed() {
-                    self.asm.sload(src, dst, size);
+                    self.asm.sload(src, dst, size)
                 } else {
                     // unlike x64, unused bits are set to zero so we don't need to extend
-                    self.asm.uload(src, dst, size);
+                    self.asm.uload(src, dst, size)
                 }
             }
-            LoadKind::VectorExtend(_vector_extend_kind) => todo!(),
+            LoadKind::VectorExtend(_vector_extend_kind) => {
+                bail!(CodeGenError::UnimplementedWasmLoadKind)
+            }
         }
         Ok(())
     }

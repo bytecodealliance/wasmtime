@@ -299,7 +299,7 @@ impl Masm for MacroAssembler {
                         .xmm_vpbroadcast_mr(&src, dst, size, UNTRUSTED_FLAGS);
                 }
             }
-            LoadKind::None => self.load_impl::<Self>(src, dst, size, UNTRUSTED_FLAGS)?,
+            LoadKind::Simple => self.load_impl::<Self>(src, dst, size, UNTRUSTED_FLAGS)?,
         };
         Ok(())
     }
