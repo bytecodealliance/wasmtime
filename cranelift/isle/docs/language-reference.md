@@ -1544,7 +1544,7 @@ The grammar accepted by the parser is as follows:
 <model-ty> ::= "Bool"
              | "Int"
              | "Unit"
-             | "(" "bv" <int> ")"
+             | "(" "bv" [ <int> ] ")"
 
 <model-variant> ::= "(" <ident> [ <spec-expr> ] ")"
 
