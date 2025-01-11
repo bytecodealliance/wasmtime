@@ -1561,6 +1561,9 @@ The grammar accepted by the parser is as follows:
               | "(" <ident> ")"
               | "(" ")"
 
+<spec-bv> ::= "#b" [ "+" | "-" ] ("0".."1")+
+            | "#x" [ "+" | "-" ] ("0".."9" | "A".."F" | "a".."f")+
+
 <spec-pair> ::= "(" <spec-expr> <spec-expr> ")"
 
 <spec-op> ::= "and" | "not" | "or" | "=>"
