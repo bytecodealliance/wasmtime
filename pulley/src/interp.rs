@@ -1398,6 +1398,16 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xzero(&mut self, dst: XReg) -> ControlFlow<Done> {
+        self.state[dst].set_i64(0);
+        ControlFlow::Continue(())
+    }
+
+    fn xone(&mut self, dst: XReg) -> ControlFlow<Done> {
+        self.state[dst].set_i64(1);
+        ControlFlow::Continue(())
+    }
+
     fn xconst16(&mut self, dst: XReg, imm: i16) -> ControlFlow<Done> {
         self.state[dst].set_i64(i64::from(imm));
         ControlFlow::Continue(())

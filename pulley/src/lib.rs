@@ -247,6 +247,10 @@ macro_rules! for_each_op {
             /// Move between `x` registers.
             xmov = Xmov { dst: XReg, src: XReg };
 
+            /// Set `dst = 0`
+            xzero = Xzero { dst: XReg };
+            /// Set `dst = 1`
+            xone = Xone { dst: XReg };
             /// Set `dst = sign_extend(imm8)`.
             xconst8 = Xconst8 { dst: XReg, imm: i8 };
             /// Set `dst = sign_extend(imm16)`.
