@@ -1527,6 +1527,7 @@ The grammar accepted by the parser is as follows:
 ```
 
 ## Reference: ISLE Language Grammar verification extensions
+
 ```bnf
 <def> += "(" "spec" <spec> ")"
        | "(" "model" <model> ")"
@@ -1545,7 +1546,7 @@ The grammar accepted by the parser is as follows:
              | "Unit"
              | "(" "bv" <int> ")"
 
-<model-variant> ::= "(" <ident> [ <spec-expr> ]  ")"
+<model-variant> ::= "(" <ident> [ <spec-expr> ] ")"
 
 <form> ::= <ident> <signature>*
 
@@ -1571,7 +1572,7 @@ The grammar accepted by the parser is as follows:
             | "bvnot" | "bvand" | "bvor" | "bvxor"
             | "bvneg" | "bvadd" | "bvsub" | "bvmul"
             | "bvudiv" | "bvurem" | "bvsdiv" | "bvsrem"
-            | "bvshl" | "bvlshr| | "bvashr"
+            | "bvshl" | "bvlshr" | "bvashr"
             | "bvsaddo" | "subs"
             | "bvule" | "bvult" | "bvugt" | "bvuge"
             | "bvsle" | "bvslt" | "bvsgt" | "bvsge"
