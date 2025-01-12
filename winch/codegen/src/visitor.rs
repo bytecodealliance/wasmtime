@@ -271,6 +271,14 @@ macro_rules! def_unsupported {
     (emit V128Load16Splat $($rest:tt)*) => {};
     (emit V128Load32Splat $($rest:tt)*) => {};
     (emit V128Load64Splat $($rest:tt)*) => {};
+    (emit I32AtomicStore8 $($rest:tt)*) => {};
+    (emit I32AtomicStore16 $($rest:tt)*) => {};
+    (emit I32AtomicStore $($rest:tt)*) => {};
+    (emit I64AtomicStore8 $($rest:tt)*) => {};
+    (emit I64AtomicStore16 $($rest:tt)*) => {};
+    (emit I64AtomicStore32 $($rest:tt)*) => {};
+    (emit I64AtomicStore $($rest:tt)*) => {};
+
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
 
@@ -2201,7 +2209,7 @@ where
         self.masm.mul_wide(&mut self.context, MulWideKind::Unsigned)
     }
 
-    fn visit_i32_atomic_load8_u(&mut self, memarg: wasmparser::MemArg) -> Self::Output {
+    fn visit_i32_atomic_load8_u(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
@@ -2210,7 +2218,7 @@ where
         )
     }
 
-    fn visit_i32_atomic_load16_u(&mut self, memarg: wasmparser::MemArg) -> Self::Output {
+    fn visit_i32_atomic_load16_u(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
@@ -2219,7 +2227,7 @@ where
         )
     }
 
-    fn visit_i32_atomic_load(&mut self, memarg: wasmparser::MemArg) -> Self::Output {
+    fn visit_i32_atomic_load(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
@@ -2228,7 +2236,7 @@ where
         )
     }
 
-    fn visit_i64_atomic_load8_u(&mut self, memarg: wasmparser::MemArg) -> Self::Output {
+    fn visit_i64_atomic_load8_u(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
@@ -2237,7 +2245,7 @@ where
         )
     }
 
-    fn visit_i64_atomic_load16_u(&mut self, memarg: wasmparser::MemArg) -> Self::Output {
+    fn visit_i64_atomic_load16_u(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
@@ -2246,7 +2254,7 @@ where
         )
     }
 
-    fn visit_i64_atomic_load32_u(&mut self, memarg: wasmparser::MemArg) -> Self::Output {
+    fn visit_i64_atomic_load32_u(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
@@ -2255,13 +2263,41 @@ where
         )
     }
 
-    fn visit_i64_atomic_load(&mut self, memarg: wasmparser::MemArg) -> Self::Output {
+    fn visit_i64_atomic_load(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
             LoadKind::Operand(OperandSize::S64),
             MemOpKind::Atomic,
         )
+    }
+
+    fn visit_i32_atomic_store(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_store(&memarg, OperandSize::S32, MemOpKind::Atomic)
+    }
+
+    fn visit_i64_atomic_store(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_store(&memarg, OperandSize::S64, MemOpKind::Atomic)
+    }
+
+    fn visit_i32_atomic_store8(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_store(&memarg, OperandSize::S8, MemOpKind::Atomic)
+    }
+
+    fn visit_i32_atomic_store16(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_store(&memarg, OperandSize::S16, MemOpKind::Atomic)
+    }
+
+    fn visit_i64_atomic_store8(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_store(&memarg, OperandSize::S8, MemOpKind::Atomic)
+    }
+
+    fn visit_i64_atomic_store16(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_store(&memarg, OperandSize::S16, MemOpKind::Atomic)
+    }
+
+    fn visit_i64_atomic_store32(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_store(&memarg, OperandSize::S32, MemOpKind::Atomic)
     }
 
     wasmparser::for_each_visit_operator!(def_unsupported);
