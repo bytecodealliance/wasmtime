@@ -868,12 +868,21 @@ where
     }
 
     /// Emit a WebAssembly store.
-    pub fn emit_wasm_store(&mut self, arg: &MemArg, size: OperandSize, op_kind: MemOpKind) -> Result<()> {
+    pub fn emit_wasm_store(
+        &mut self,
+        arg: &MemArg,
+        size: OperandSize,
+        op_kind: MemOpKind,
+    ) -> Result<()> {
         let src = self.context.pop_to_reg(self.masm, None)?;
         let addr = self.emit_compute_heap_address(&arg, size)?;
         if let Some(addr) = addr {
-            self.masm
-                .wasm_store(src.reg.into(), self.masm.address_at_reg(addr, 0)?, size, op_kind)?;
+            self.masm.wasm_store(
+                src.reg.into(),
+                self.masm.address_at_reg(addr, 0)?,
+                size,
+                op_kind,
+            )?;
 
             self.context.free_reg(addr);
         }

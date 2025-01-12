@@ -217,7 +217,13 @@ impl Masm for MacroAssembler {
         self.store_impl(src, dst, size, TRUSTED_FLAGS)
     }
 
-    fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize, op_kind: MemOpKind) -> Result<()> {
+    fn wasm_store(
+        &mut self,
+        src: Reg,
+        dst: Self::Address,
+        size: OperandSize,
+        op_kind: MemOpKind,
+    ) -> Result<()> {
         match op_kind {
             MemOpKind::Atomic => {
                 if size == OperandSize::S128 {
@@ -229,10 +235,8 @@ impl Masm for MacroAssembler {
                 self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS)?;
                 self.asm.fence(FenceKind::MFence);
                 Ok(())
-            },
-            MemOpKind::Normal => {
-                self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS)
-            },
+            }
+            MemOpKind::Normal => self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS),
         }
     }
 
