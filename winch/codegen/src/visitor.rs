@@ -1983,15 +1983,15 @@ where
     }
 
     fn visit_i32_store(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S32)
+        self.emit_wasm_store(&memarg, OperandSize::S32, MemOpKind::Normal)
     }
 
     fn visit_i32_store8(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S8)
+        self.emit_wasm_store(&memarg, OperandSize::S8, MemOpKind::Normal)
     }
 
     fn visit_i32_store16(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S16)
+        self.emit_wasm_store(&memarg, OperandSize::S16, MemOpKind::Normal)
     }
 
     fn visit_i64_load8_s(&mut self, memarg: MemArg) -> Self::Output {
@@ -2058,19 +2058,19 @@ where
     }
 
     fn visit_i64_store(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S64)
+        self.emit_wasm_store(&memarg, OperandSize::S64, MemOpKind::Normal)
     }
 
     fn visit_i64_store8(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S8)
+        self.emit_wasm_store(&memarg, OperandSize::S8, MemOpKind::Normal)
     }
 
     fn visit_i64_store16(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S16)
+        self.emit_wasm_store(&memarg, OperandSize::S16, MemOpKind::Normal)
     }
 
     fn visit_i64_store32(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S32)
+        self.emit_wasm_store(&memarg, OperandSize::S32, MemOpKind::Normal)
     }
 
     fn visit_f32_load(&mut self, memarg: MemArg) -> Self::Output {
@@ -2083,7 +2083,7 @@ where
     }
 
     fn visit_f32_store(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S32)
+        self.emit_wasm_store(&memarg, OperandSize::S32, MemOpKind::Normal)
     }
 
     fn visit_f64_load(&mut self, memarg: MemArg) -> Self::Output {
@@ -2096,7 +2096,7 @@ where
     }
 
     fn visit_f64_store(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S64)
+        self.emit_wasm_store(&memarg, OperandSize::S64, MemOpKind::Normal)
     }
 
     fn visit_i32_trunc_sat_f32_s(&mut self) -> Self::Output {
@@ -2287,7 +2287,7 @@ where
     }
 
     fn visit_v128_store(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S128)
+        self.emit_wasm_store(&memarg, OperandSize::S128, MemOpKind::Normal)
     }
 
     fn visit_v128_load8x8_s(&mut self, memarg: MemArg) -> Self::Output {
