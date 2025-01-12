@@ -220,6 +220,10 @@ impl Masm for MacroAssembler {
     fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize, op_kind: MemOpKind) -> Result<()> {
         match op_kind {
             MemOpKind::Atomic => {
+                if size == OperandSize::S128 {
+                    // TODO: we don't support 128-bit atomic store yet.
+                    bail!(CodeGenError::unexpected_operand_size());
+                }
                 // To stay consistent with cranelift, we emit a normal load followed by a mfence,
                 // although, we could probably just emit a xchg.
                 self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS)?;
