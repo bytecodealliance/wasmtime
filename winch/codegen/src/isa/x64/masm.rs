@@ -217,8 +217,13 @@ impl Masm for MacroAssembler {
         self.store_impl(src, dst, size, TRUSTED_FLAGS)
     }
 
-    fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize) -> Result<()> {
-        self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS)
+    fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize, op_kind: MemOpKind) -> Result<()> {
+        match op_kind {
+            MemOpKind::Atomic => Err(anyhow!(CodeGenError::unimplemented_masm_instruction())),
+            MemOpKind::Normal => {
+                self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS)
+            },
+        }
     }
 
     fn pop(&mut self, dst: WritableReg, size: OperandSize) -> Result<()> {

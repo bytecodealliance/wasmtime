@@ -873,7 +873,7 @@ where
         let addr = self.emit_compute_heap_address(&arg, size)?;
         if let Some(addr) = addr {
             self.masm
-                .wasm_store(src.reg.into(), self.masm.address_at_reg(addr, 0)?, size)?;
+                .wasm_store(src.reg.into(), self.masm.address_at_reg(addr, 0)?, size, MemOpKind::Normal)?;
 
             self.context.free_reg(addr);
         }
