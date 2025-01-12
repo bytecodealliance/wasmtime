@@ -16,10 +16,7 @@ use cranelift_codegen::{
         unwind::UnwindInst,
         x64::{
             args::{
-                self, AluRmiROpcode, Amode, AvxOpcode, CmpOpcode, DivSignedness, ExtMode,
-                FromWritableReg, Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem, RegMemImm,
-                ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr,
-                WritableXmm, Xmm, XmmMem, XmmMemAligned, CC,
+                self, AluRmiROpcode, Amode, AvxOpcode, CmpOpcode, DivSignedness, ExtMode, FenceKind, FromWritableReg, Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem, RegMemImm, ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr, WritableXmm, Xmm, XmmMem, XmmMemAligned, CC
             },
             encoding::rex::{encode_modrm, RexFlags},
             settings as x64_settings, EmitInfo, EmitState, Inst,
@@ -1482,6 +1479,10 @@ impl Assembler {
             dst_lo: dst_lo.to_reg().into(),
             dst_hi: dst_hi.to_reg().into(),
         });
+    }
+
+    pub fn fence(&mut self, kind: FenceKind) {
+        self.emit(Inst::Fence { kind });
     }
 }
 
