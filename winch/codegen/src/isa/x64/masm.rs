@@ -280,8 +280,13 @@ impl Masm for MacroAssembler {
         dst: WritableReg,
         size: OperandSize,
         kind: Option<ExtendKind>,
-        _op_kind: MemOpKind,
+        op_kind: MemOpKind,
     ) -> Result<()> {
+        if op_kind == MemOpKind::Atomic && size == OperandSize::S128 {
+            // TODO: handle 128bits atomic loads
+            bail!(CodeGenError::unexpected_operand_size())
+        }
+
         // The guarantees of the x86-64 memory model ensure that `SeqCst`
         // loads are equivalent to normal loads.
         if let Some(ext) = kind {

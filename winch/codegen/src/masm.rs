@@ -38,7 +38,7 @@ impl RemKind {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq, Eq)]
 pub(crate) enum MemOpKind {
     /// An atomic memory operation with SeqCst memory ordering.
     Atomic,
