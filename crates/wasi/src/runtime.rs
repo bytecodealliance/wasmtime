@@ -4,7 +4,7 @@
 //! wasmtime-wasi requires a tokio executor in a way that is [deeply tied to
 //! its
 //! design](https://github.com/bytecodealliance/wasmtime/issues/7973#issuecomment-1960513214).
-//! When used from a sychrnonous wasmtime context, this module provides the
+//! When used from a synchronous wasmtime context, this module provides the
 //! wrapper function [`in_tokio`] used throughout the shim implementations of
 //! synchronous component binding `Host` traits in terms of the async ones.
 //!
