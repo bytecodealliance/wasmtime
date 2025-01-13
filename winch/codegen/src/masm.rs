@@ -46,6 +46,12 @@ pub(crate) enum MemOpKind {
     Normal,
 }
 
+impl MemOpKind {
+    pub(crate) fn is_atomic(&self) -> bool {
+        matches!(self, Self::Atomic)
+    }
+}
+
 #[derive(Eq, PartialEq)]
 pub(crate) enum MulWideKind {
     Signed,

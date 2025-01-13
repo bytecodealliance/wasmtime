@@ -488,11 +488,9 @@ impl WastTest {
                 "spec_testsuite/simd_store8_lane.wast",
                 // thread related failures
                 "proposals/threads/atomic.wast",
-                "misc_testsuite/threads/load-store-alignment.wast",
                 "misc_testsuite/threads/wait_notify.wast",
                 "misc_testsuite/threads/atomics_wait_address.wast",
                 "misc_testsuite/threads/atomics_notify.wast",
-                "misc_testsuite/threads/load-store-alignment.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {

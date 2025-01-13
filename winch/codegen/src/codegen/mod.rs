@@ -3,8 +3,7 @@ use crate::{
     codegen::BlockSig,
     isa::reg::{writable, Reg},
     masm::{
-        IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm, SPOffset, ShiftKind,
-        TrapCode,
+        Imm, IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm, SPOffset, ShiftKind, TrapCode
     },
     stack::TypedReg,
 };
@@ -19,7 +18,7 @@ use wasmparser::{
     BinaryReader, FuncValidator, MemArg, Operator, ValidatorResources, VisitOperator,
     VisitSimdOperator,
 };
-use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_TABLE_OUT_OF_BOUNDS};
+use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_HEAP_MISALIGNED, TRAP_TABLE_OUT_OF_BOUNDS};
 use wasmtime_environ::{
     GlobalIndex, MemoryIndex, PtrSize, TableIndex, Tunables, TypeIndex, WasmHeapType, WasmValType,
     FUNCREF_MASK,
@@ -648,7 +647,12 @@ where
         &mut self,
         memarg: &MemArg,
         access_size: OperandSize,
+        check_align: bool,
     ) -> Result<Option<Reg>> {
+        if check_align {
+            self.check_align(memarg, access_size)?;
+        }
+
         let ptr_size: OperandSize = self.env.ptr_type().try_into()?;
         let enable_spectre_mitigation = self.env.heap_access_spectre_mitigation();
         let add_offset_and_access_size = |offset: ImmOffset, access_size: OperandSize| {
@@ -840,6 +844,40 @@ where
         Ok(addr)
     }
 
+    fn check_align(&mut self, memarg: &MemArg, size: OperandSize) -> Result<()> {
+        if size.bytes() > 1 {
+            let addr = *self.context.stack.peek().unwrap();
+            let effective_addr_reg = self.context.any_gpr(self.masm)?;
+            self.context
+                .move_val_to_reg(&addr, effective_addr_reg, self.masm)?;
+            if memarg.offset != 0 {
+                // self.masm.add(dst, lhs, rhs, size)
+                // self.context.builder.ins().iadd_imm(addr, memarg.offset.signed())
+                self.masm.add(
+                    writable!(effective_addr_reg),
+                    effective_addr_reg,
+                    RegImm::Imm(Imm::I64(memarg.offset)),
+                    size,
+                )?;
+            };
+            self.masm.and(
+                writable!(effective_addr_reg),
+                effective_addr_reg,
+                RegImm::Imm(Imm::I32(size.bytes() - 1)),
+                size,
+            )?;
+
+            self.masm
+                .cmp(effective_addr_reg, RegImm::Imm(Imm::i64(0)), size)?;
+            self.masm.trapif(IntCmpKind::Ne, TRAP_HEAP_MISALIGNED)?;
+
+            // environ.trapnz(builder, f, crate::TRAP_HEAP_MISALIGNED);
+            self.context.free_reg(effective_addr_reg);
+        }
+
+        Ok(())
+    }
+
     /// Emit a WebAssembly load.
     pub fn emit_wasm_load(
         &mut self,
@@ -875,7 +913,7 @@ where
         op_kind: MemOpKind,
     ) -> Result<()> {
         let src = self.context.pop_to_reg(self.masm, None)?;
-        let addr = self.emit_compute_heap_address(&arg, size)?;
+        let addr = self.emit_compute_heap_address(&arg, size, op_kind.is_atomic())?;
         if let Some(addr) = addr {
             self.masm.wasm_store(
                 src.reg.into(),
