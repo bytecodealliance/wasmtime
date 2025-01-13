@@ -1885,7 +1885,7 @@ impl OpVisitor for Interpreter<'_> {
         // Decrement the stack pointer `amt` bytes plus 2 pointers more for
         // fp/lr.
         let ptr_size = size_of::<usize>();
-        let full_amt = usize::try_from(amt).unwrap() + 2 * ptr_size;
+        let full_amt = usize::from(amt) + 2 * ptr_size;
         let new_sp = self.state[XReg::sp].get_ptr::<u8>().wrapping_sub(full_amt);
         self.set_sp::<crate::PushFrameSave>(new_sp)?;
 
