@@ -2133,13 +2133,13 @@ fn hex_integer_args() -> Result<()> {
             wasm.path().to_str().unwrap(),
             "--invoke",
             "sum",
-            "0x2A",      // 42 in hex
-            "0xFF",      // 255 in hex
+            "0x2A", // 42 in hex
+            "0xFF", // 255 in hex
         ],
         None,
     )?;
     assert!(output.status.success());
     let stdout = String::from_utf8(output.stdout)?;
-    assert_eq!(stdout.trim(), "297");  // 42 + 255 = 297
+    assert_eq!(stdout.trim(), "297"); // 42 + 255 = 297
     Ok(())
 }
