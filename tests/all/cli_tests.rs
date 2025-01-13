@@ -999,7 +999,7 @@ fn preview2_stdin() -> Result<()> {
         .stderr(Stdio::piped())
         .spawn()?;
     let mut stdin = child.stdin.take().unwrap();
-    std::thread::spawn(move || {
+    let t = std::thread::spawn(move || {
         stdin.write_all(b"hello").unwrap();
     });
     let output = child.wait_with_output()?;
@@ -2130,11 +2130,12 @@ fn hex_integer_args() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/hex_args.wat")?;
     let output = run_wasmtime_for_output(
         &[
+            "run",
             "-Ccache=n",
             "-Scli=n",
-            wasm.path().to_str().unwrap(),
             "--invoke",
             "sum",
+            wasm.path().to_str().unwrap(),
             "0x2A", // 42 in hex
             "0xFF", // 255 in hex
         ],
