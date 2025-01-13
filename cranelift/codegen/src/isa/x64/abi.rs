@@ -1375,8 +1375,6 @@ static DEFAULT_MACHINE_ENV: MachineEnv = {
 };
 
 static PINNED_MACHINE_ENV: MachineEnv = {
-    debug_assert!(regs::r15() == regs::pinned_reg());
-
     MachineEnv {
         preferred_regs_by_class: [
             // Preferred GPRs: caller-saved in the SysV ABI.
