@@ -48,11 +48,13 @@ pub fn first_user_vreg_index() -> usize {
 pub struct Reg(VReg);
 
 impl Reg {
+    /// Create a register from a physical register
     // FIXME(const-hack) remove in favor of `From` impl
     pub const fn from_preg(preg: PReg) -> Reg {
         Reg(RealReg(preg).to_vreg())
     }
 
+    /// Create a register from a virtual register
     pub const fn from_vreg(vreg: VReg) -> Reg {
         Reg(vreg)
     }
