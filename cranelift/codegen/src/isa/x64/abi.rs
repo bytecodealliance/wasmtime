@@ -15,8 +15,6 @@ use alloc::vec::Vec;
 use args::*;
 use regalloc2::{MachineEnv, PReg, PRegSet};
 use smallvec::{smallvec, SmallVec};
-use std::borrow::ToOwned;
-use std::sync::OnceLock;
 
 /// Support for the x64 ABI from the callee side (within a function body).
 pub(crate) type X64Callee = Callee<X64ABIMachineSpec>;
@@ -898,11 +896,9 @@ impl ABIMachineSpec for X64ABIMachineSpec {
 
     fn get_machine_env(flags: &settings::Flags, _call_conv: isa::CallConv) -> &MachineEnv {
         if flags.enable_pinned_reg() {
-            static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
-            MACHINE_ENV.get_or_init(|| create_reg_env_systemv(true))
+            &PINNED_MACHINE_ENV
         } else {
-            static MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
-            MACHINE_ENV.get_or_init(|| create_reg_env_systemv(false))
+            &DEFAULT_MACHINE_ENV
         }
     }
 
@@ -1316,15 +1312,15 @@ const fn all_clobbers() -> PRegSet {
         .with(regs::fpr_preg(15))
 }
 
-fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
-    fn preg(r: Reg) -> PReg {
-        r.to_real_reg().unwrap().into()
-    }
+fn preg(r: Reg) -> PReg {
+    r.to_physical_reg().unwrap()
+}
 
-    let mut env = MachineEnv {
+static DEFAULT_MACHINE_ENV: MachineEnv = {
+    MachineEnv {
         preferred_regs_by_class: [
             // Preferred GPRs: caller-saved in the SysV ABI.
-            vec![
+            &[
                 preg(regs::rsi()),
                 preg(regs::rdi()),
                 preg(regs::rax()),
@@ -1337,7 +1333,7 @@ fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
             ],
             // Preferred XMMs: the first 8, which can have smaller encodings
             // with AVX instructions.
-            vec![
+            &[
                 preg(regs::xmm0()),
                 preg(regs::xmm1()),
                 preg(regs::xmm2()),
@@ -1348,11 +1344,11 @@ fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
                 preg(regs::xmm7()),
             ],
             // The Vector Regclass is unused
-            vec![],
+            &[],
         ],
         non_preferred_regs_by_class: [
             // Non-preferred GPRs: callee-saved in the SysV ABI.
-            vec![
+            &[
                 preg(regs::rbx()),
                 preg(regs::r12()),
                 preg(regs::r13()),
@@ -1360,7 +1356,7 @@ fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
             ],
             // Non-preferred XMMs: the last 8 registers, which can have larger
             // encodings with AVX instructions.
-            vec![
+            &[
                 preg(regs::xmm8()),
                 preg(regs::xmm9()),
                 preg(regs::xmm10()),
@@ -1371,16 +1367,85 @@ fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
                 preg(regs::xmm15()),
             ],
             // The Vector Regclass is unused
-            vec![],
+            &[],
         ],
-        fixed_stack_slots: vec![],
+        fixed_stack_slots: &[],
         scratch_by_class: [None, None, None],
-    };
-
-    debug_assert_eq!(regs::r15(), regs::pinned_reg());
-    if !enable_pinned_reg {
-        env.non_preferred_regs_by_class[0].push(preg(regs::r15()));
     }
+};
 
-    env
-}
+static PINNED_MACHINE_ENV: MachineEnv = {
+    debug_assert!(regs::r15() == regs::pinned_reg());
+
+    MachineEnv {
+        preferred_regs_by_class: [
+            // Preferred GPRs: caller-saved in the SysV ABI.
+            &[
+                preg(regs::rsi()),
+                preg(regs::rdi()),
+                preg(regs::rax()),
+                preg(regs::rcx()),
+                preg(regs::rdx()),
+                preg(regs::r8()),
+                preg(regs::r9()),
+                preg(regs::r10()),
+                preg(regs::r11()),
+            ],
+            // Preferred XMMs: the first 8, which can have smaller encodings
+            // with AVX instructions.
+            &[
+                preg(regs::xmm0()),
+                preg(regs::xmm1()),
+                preg(regs::xmm2()),
+                preg(regs::xmm3()),
+                preg(regs::xmm4()),
+                preg(regs::xmm5()),
+                preg(regs::xmm6()),
+                preg(regs::xmm7()),
+            ],
+            // The Vector Regclass is unused
+            &[],
+        ],
+        non_preferred_regs_by_class: [
+            // Non-preferred GPRs: callee-saved in the SysV ABI.
+            &[
+                preg(regs::rbx()),
+                preg(regs::r12()),
+                preg(regs::r13()),
+                preg(regs::r14()),
+                preg(regs::r15()),
+            ],
+            // Non-preferred XMMs: the last 8 registers, which can have larger
+            // encodings with AVX instructions.
+            &[
+                preg(regs::xmm8()),
+                preg(regs::xmm9()),
+                preg(regs::xmm10()),
+                preg(regs::xmm11()),
+                preg(regs::xmm12()),
+                preg(regs::xmm13()),
+                preg(regs::xmm14()),
+                preg(regs::xmm15()),
+            ],
+            // The Vector Regclass is unused
+            &[],
+        ],
+        fixed_stack_slots: &[],
+        scratch_by_class: [None, None, None],
+    }
+};
+
+// fn create_reg_env_systemv(enable_pinned_reg: bool) -> MachineEnv {
+//
+//
+//     let mut env = MachineEnv {
+//
+//     };
+//
+//
+//     if !enable_pinned_reg {
+//         env.non_preferred_regs_by_class[0].push();
+//     }
+//
+//     env
+// }

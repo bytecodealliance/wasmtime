@@ -31,7 +31,7 @@ pub const ENC_R15: u8 = 15;
 
 // Constructors for Regs.
 
-fn gpr(enc: u8) -> Reg {
+const fn gpr(enc: u8) -> Reg {
     let preg = gpr_preg(enc);
     Reg::from(VReg::new(preg.index(), RegClass::Int))
 }
@@ -39,65 +39,65 @@ pub(crate) const fn gpr_preg(enc: u8) -> PReg {
     PReg::new(enc as usize, RegClass::Int)
 }
 
-pub(crate) fn rsi() -> Reg {
+pub(crate) const fn rsi() -> Reg {
     gpr(ENC_RSI)
 }
-pub(crate) fn rdi() -> Reg {
+pub(crate) const fn rdi() -> Reg {
     gpr(ENC_RDI)
 }
-pub(crate) fn rax() -> Reg {
+pub(crate) const fn rax() -> Reg {
     gpr(ENC_RAX)
 }
-pub(crate) fn rcx() -> Reg {
+pub(crate) const fn rcx() -> Reg {
     gpr(ENC_RCX)
 }
-pub(crate) fn rdx() -> Reg {
+pub(crate) const fn rdx() -> Reg {
     gpr(ENC_RDX)
 }
-pub(crate) fn r8() -> Reg {
+pub(crate) const fn r8() -> Reg {
     gpr(ENC_R8)
 }
-pub(crate) fn r9() -> Reg {
+pub(crate) const fn r9() -> Reg {
     gpr(ENC_R9)
 }
-pub(crate) fn r10() -> Reg {
+pub(crate) const fn r10() -> Reg {
     gpr(ENC_R10)
 }
-pub(crate) fn r11() -> Reg {
+pub(crate) const fn r11() -> Reg {
     gpr(ENC_R11)
 }
-pub(crate) fn r12() -> Reg {
+pub(crate) const fn r12() -> Reg {
     gpr(ENC_R12)
 }
-pub(crate) fn r13() -> Reg {
+pub(crate) const fn r13() -> Reg {
     gpr(ENC_R13)
 }
-pub(crate) fn r14() -> Reg {
+pub(crate) const fn r14() -> Reg {
     gpr(ENC_R14)
 }
-pub(crate) fn rbx() -> Reg {
+pub(crate) const fn rbx() -> Reg {
     gpr(ENC_RBX)
 }
 
-pub(crate) fn r15() -> Reg {
+pub(crate) const fn r15() -> Reg {
     gpr(ENC_R15)
 }
 
-pub(crate) fn rsp() -> Reg {
+pub(crate) const fn rsp() -> Reg {
     gpr(ENC_RSP)
 }
-pub(crate) fn rbp() -> Reg {
+pub(crate) const fn rbp() -> Reg {
     gpr(ENC_RBP)
 }
 
 /// The pinned register on this architecture.
 /// It must be the same as Spidermonkey's HeapReg, as found in this file.
 /// https://searchfox.org/mozilla-central/source/js/src/jit/x64/Assembler-x64.h#99
-pub(crate) fn pinned_reg() -> Reg {
+pub(crate) const fn pinned_reg() -> Reg {
     r15()
 }
 
-fn fpr(enc: u8) -> Reg {
+const fn fpr(enc: u8) -> Reg {
     let preg = fpr_preg(enc);
     Reg::from(VReg::new(preg.index(), RegClass::Float))
 }
@@ -106,52 +106,52 @@ pub(crate) const fn fpr_preg(enc: u8) -> PReg {
     PReg::new(enc as usize, RegClass::Float)
 }
 
-pub(crate) fn xmm0() -> Reg {
+pub(crate) const fn xmm0() -> Reg {
     fpr(0)
 }
-pub(crate) fn xmm1() -> Reg {
+pub(crate) const fn xmm1() -> Reg {
     fpr(1)
 }
-pub(crate) fn xmm2() -> Reg {
+pub(crate) const fn xmm2() -> Reg {
     fpr(2)
 }
-pub(crate) fn xmm3() -> Reg {
+pub(crate) const fn xmm3() -> Reg {
     fpr(3)
 }
-pub(crate) fn xmm4() -> Reg {
+pub(crate) const fn xmm4() -> Reg {
     fpr(4)
 }
-pub(crate) fn xmm5() -> Reg {
+pub(crate) const fn xmm5() -> Reg {
     fpr(5)
 }
-pub(crate) fn xmm6() -> Reg {
+pub(crate) const fn xmm6() -> Reg {
     fpr(6)
 }
-pub(crate) fn xmm7() -> Reg {
+pub(crate) const fn xmm7() -> Reg {
     fpr(7)
 }
-pub(crate) fn xmm8() -> Reg {
+pub(crate) const fn xmm8() -> Reg {
     fpr(8)
 }
-pub(crate) fn xmm9() -> Reg {
+pub(crate) const fn xmm9() -> Reg {
     fpr(9)
 }
-pub(crate) fn xmm10() -> Reg {
+pub(crate) const fn xmm10() -> Reg {
     fpr(10)
 }
-pub(crate) fn xmm11() -> Reg {
+pub(crate) const fn xmm11() -> Reg {
     fpr(11)
 }
-pub(crate) fn xmm12() -> Reg {
+pub(crate) const fn xmm12() -> Reg {
     fpr(12)
 }
-pub(crate) fn xmm13() -> Reg {
+pub(crate) const fn xmm13() -> Reg {
     fpr(13)
 }
-pub(crate) fn xmm14() -> Reg {
+pub(crate) const fn xmm14() -> Reg {
     fpr(14)
 }
-pub(crate) fn xmm15() -> Reg {
+pub(crate) const fn xmm15() -> Reg {
     fpr(15)
 }
 

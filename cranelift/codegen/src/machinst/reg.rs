@@ -20,7 +20,7 @@ use serde_derive::{Deserialize, Serialize};
 const PINNED_VREGS: usize = 192;
 
 /// Convert a `VReg` to its pinned `PReg`, if any.
-pub fn pinned_vreg_to_preg(vreg: VReg) -> Option<PReg> {
+pub const fn pinned_vreg_to_preg(vreg: VReg) -> Option<PReg> {
     if vreg.vreg() < PINNED_VREGS {
         Some(PReg::from_index(vreg.vreg()))
     } else {
@@ -48,10 +48,20 @@ pub fn first_user_vreg_index() -> usize {
 pub struct Reg(VReg);
 
 impl Reg {
+    // FIXME(const-hack) remove in favor of `From` impl
+    pub(crate) const fn from_preg(preg: PReg) -> Reg {
+        Reg(RealReg(preg).to_vreg())
+    }
+
     /// Get the physical register (`RealReg`), if this register is
     /// one.
-    pub fn to_real_reg(self) -> Option<RealReg> {
-        pinned_vreg_to_preg(self.0).map(RealReg)
+    pub const fn to_real_reg(self) -> Option<RealReg> {
+        // FIXME(const-hack) use `.map`
+        if let Some(preg) = pinned_vreg_to_preg(self.0) {
+            Some(RealReg(preg))
+        } else {
+            None
+        }
     }
 
     /// Get the virtual (non-physical) register, if this register is
@@ -59,6 +69,16 @@ impl Reg {
     pub fn to_virtual_reg(self) -> Option<VirtualReg> {
         if pinned_vreg_to_preg(self.0).is_none() {
             Some(VirtualReg(self.0))
+        } else {
+            None
+        }
+    }
+
+    /// get the physical (non-virtual) register, if this register is one.
+    pub const fn to_physical_reg(self) -> Option<PReg> {
+        // FIXME(const-hack) use try (?)
+        if let Some(reg) = self.to_real_reg() {
+            Some(reg.0)
         } else {
             None
         }
@@ -108,7 +128,16 @@ impl AsMut<Reg> for Reg {
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct RealReg(PReg);
 
+impl RealReg {}
+
 impl RealReg {
+    /// Get the equivalent virtual register.
+    pub const fn to_vreg(&self) -> VReg {
+        // This representation is redundant: the class is implied in the vreg
+        // index as well as being in the vreg class field.
+        VReg::new(self.0.index(), self.0.class())
+    }
+
     /// Get the class of this register.
     pub fn class(self) -> RegClass {
         self.0.class()
@@ -230,9 +259,7 @@ impl std::convert::From<VirtualReg> for regalloc2::VReg {
 
 impl std::convert::From<RealReg> for regalloc2::VReg {
     fn from(reg: RealReg) -> regalloc2::VReg {
-        // This representation is redundant: the class is implied in the vreg
-        // index as well as being in the vreg class field.
-        VReg::new(reg.0.index(), reg.0.class())
+        reg.to_vreg()
     }
 }
 
@@ -250,7 +277,7 @@ impl std::convert::From<regalloc2::PReg> for RealReg {
 
 impl std::convert::From<regalloc2::PReg> for Reg {
     fn from(preg: regalloc2::PReg) -> Reg {
-        RealReg(preg).into()
+        Reg::from_preg(preg)
     }
 }
 

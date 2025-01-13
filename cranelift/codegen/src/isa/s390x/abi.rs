@@ -147,8 +147,6 @@ use crate::CodegenResult;
 use alloc::vec::Vec;
 use regalloc2::{MachineEnv, PRegSet};
 use smallvec::{smallvec, SmallVec};
-use std::borrow::ToOwned;
-use std::sync::OnceLock;
 
 // We use a generic implementation that factors out ABI commonalities.
 
@@ -881,14 +879,8 @@ impl ABIMachineSpec for S390xMachineDeps {
 
     fn get_machine_env(_flags: &settings::Flags, call_conv: isa::CallConv) -> &MachineEnv {
         match call_conv {
-            isa::CallConv::Tail => {
-                static TAIL_MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
-                TAIL_MACHINE_ENV.get_or_init(tail_create_machine_env)
-            }
-            _ => {
-                static SYSV_MACHINE_ENV: OnceLock<MachineEnv> = OnceLock::new();
-                SYSV_MACHINE_ENV.get_or_init(sysv_create_machine_env)
-            }
+            isa::CallConv::Tail => &TAIL_MACHINE_ENV,
+            _ => &SYSV_MACHINE_ENV,
         }
     }
 
@@ -1255,18 +1247,21 @@ const fn tail_clobbers() -> PRegSet {
 }
 const TAIL_CLOBBERS: PRegSet = tail_clobbers();
 
-fn sysv_create_machine_env() -> MachineEnv {
+static TAIL_MACHINE_ENV: MachineEnv = {
+    // Same as the SystemV ABI below, except that %r6 and %r7 are preferred.
     MachineEnv {
         preferred_regs_by_class: [
-            vec![
+            &[
                 // no r0; can't use for addressing?
                 // no r1; it is our spilltmp.
                 gpr_preg(2),
                 gpr_preg(3),
                 gpr_preg(4),
                 gpr_preg(5),
+                gpr_preg(6),
+                gpr_preg(7),
             ],
-            vec![
+            &[
                 vr_preg(0),
                 vr_preg(1),
                 vr_preg(2),
@@ -1293,12 +1288,10 @@ fn sysv_create_machine_env() -> MachineEnv {
                 vr_preg(31),
             ],
             // Vector Regclass is unused
-            vec![],
+            &[],
         ],
         non_preferred_regs_by_class: [
-            vec![
-                gpr_preg(6),
-                gpr_preg(7),
+            &[
                 gpr_preg(8),
                 gpr_preg(9),
                 gpr_preg(10),
@@ -1308,7 +1301,7 @@ fn sysv_create_machine_env() -> MachineEnv {
                 gpr_preg(14),
                 // no r15; it is the stack pointer.
             ],
-            vec![
+            &[
                 vr_preg(8),
                 vr_preg(9),
                 vr_preg(10),
@@ -1319,28 +1312,25 @@ fn sysv_create_machine_env() -> MachineEnv {
                 vr_preg(15),
             ],
             // Vector Regclass is unused
-            vec![],
+            &[],
         ],
-        fixed_stack_slots: vec![],
         scratch_by_class: [None, None, None],
+        fixed_stack_slots: &[],
     }
-}
+};
 
-fn tail_create_machine_env() -> MachineEnv {
-    // Same as the SystemV ABI, except that %r6 and %r7 are preferred.
+static SYSV_MACHINE_ENV: MachineEnv = {
     MachineEnv {
         preferred_regs_by_class: [
-            vec![
+            &[
                 // no r0; can't use for addressing?
                 // no r1; it is our spilltmp.
                 gpr_preg(2),
                 gpr_preg(3),
                 gpr_preg(4),
                 gpr_preg(5),
-                gpr_preg(6),
-                gpr_preg(7),
             ],
-            vec![
+            &[
                 vr_preg(0),
                 vr_preg(1),
                 vr_preg(2),
@@ -1367,10 +1357,12 @@ fn tail_create_machine_env() -> MachineEnv {
                 vr_preg(31),
             ],
             // Vector Regclass is unused
-            vec![],
+            &[],
         ],
         non_preferred_regs_by_class: [
-            vec![
+            &[
+                gpr_preg(6),
+                gpr_preg(7),
                 gpr_preg(8),
                 gpr_preg(9),
                 gpr_preg(10),
@@ -1380,7 +1372,7 @@ fn tail_create_machine_env() -> MachineEnv {
                 gpr_preg(14),
                 // no r15; it is the stack pointer.
             ],
-            vec![
+            &[
                 vr_preg(8),
                 vr_preg(9),
                 vr_preg(10),
@@ -1391,9 +1383,9 @@ fn tail_create_machine_env() -> MachineEnv {
                 vr_preg(15),
             ],
             // Vector Regclass is unused
-            vec![],
+            &[],
         ],
-        fixed_stack_slots: vec![],
         scratch_by_class: [None, None, None],
+        fixed_stack_slots: &[],
     }
-}
+};
