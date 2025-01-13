@@ -234,6 +234,36 @@ impl ExtendKind {
     }
 }
 
+/// Kinds of vector extends in WebAssembly. Each MacroAssembler implementation
+/// is responsible for emitting the correct sequence of instructions when
+/// lowering to machine code.
+pub(crate) enum VectorExtendKind {
+    /// Sign extends eight 8 bit integers to eight 16 bit lanes.
+    V128Extend8x8S,
+    /// Zero extends eight 8 bit integers to eight 16 bit lanes.
+    V128Extend8x8U,
+    /// Sign extends four 16 bit integers to four 32 bit lanes.
+    V128Extend16x4S,
+    /// Zero extends four 16 bit integers to four 32 bit lanes.
+    V128Extend16x4U,
+    /// Sign extends two 32 bit integers to two 64 bit lanes.
+    V128Extend32x2S,
+    /// Zero extends two 32 bit integers to two 64 bit lanes.
+    V128Extend32x2U,
+}
+
+/// Kinds of behavior supported by Wasm loads.
+pub(crate) enum LoadKind {
+    /// Do not extend or splat.
+    Simple,
+    /// Duplicate value into vector lanes.
+    Splat,
+    /// Scalar (non-vector) extend.
+    ScalarExtend(ExtendKind),
+    /// Vector extend.
+    VectorExtend(VectorExtendKind),
+}
+
 /// Operand size, in bits.
 #[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub(crate) enum OperandSize {
@@ -654,7 +684,7 @@ pub(crate) trait MacroAssembler {
         src: Self::Address,
         dst: WritableReg,
         size: OperandSize,
-        ext_kind: Option<ExtendKind>,
+        kind: LoadKind,
         op_kind: MemOpKind,
     ) -> Result<()>;
 

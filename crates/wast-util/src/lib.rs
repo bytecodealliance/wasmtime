@@ -456,7 +456,6 @@ impl WastTest {
                 "misc_testsuite/simd/spillslot-size-fuzzbug.wast",
                 "misc_testsuite/simd/unaligned-load.wast",
                 "multi-memory/simd_memory-multi.wast",
-                "spec_testsuite/simd_align.wast",
                 "spec_testsuite/simd_bit_shift.wast",
                 "spec_testsuite/simd_bitwise.wast",
                 "spec_testsuite/simd_boolean.wast",
@@ -525,6 +524,16 @@ impl WastTest {
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {
                 return true;
+            }
+
+            // SIMD on Winch requires AVX instructions.
+            #[cfg(target_arch = "x86_64")]
+            if !(std::is_x86_feature_detected!("avx") && std::is_x86_feature_detected!("avx2")) {
+                let unsupported = ["spec_testsuite/simd_align.wast"];
+
+                if unsupported.iter().any(|part| self.path.ends_with(part)) {
+                    return true;
+                }
             }
         }
 

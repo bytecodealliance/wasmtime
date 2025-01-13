@@ -12,7 +12,7 @@ use crate::{
         CallingConvention,
     },
     masm::{
-        CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind,
+        CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind,
         MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RoundingMode,
         SPOffset, ShiftKind, StackSlot, TrapCode, TruncKind,
     },
@@ -215,24 +215,28 @@ impl Masm for MacroAssembler {
         src: Self::Address,
         dst: WritableReg,
         size: OperandSize,
-        kind: Option<ExtendKind>,
+        kind: LoadKind,
         op_kind: MemOpKind,
     ) -> Result<()> {
         match op_kind {
-            MemOpKind::Normal => {
-                // kind is some if the value is signed
-                // unlike x64, unused bits are set to zero so we don't need to extend
-                if kind.is_some() {
-                    self.asm.sload(src, dst, size);
-                } else {
-                    self.asm.uload(src, dst, size);
+            MemOpKind::Normal => match kind {
+                LoadKind::Simple => self.asm.uload(src, dst, size),
+                LoadKind::Splat => bail!(CodeGenError::UnimplementedWasmLoadKind),
+                LoadKind::ScalarExtend(extend_kind) => {
+                    if extend_kind.signed() {
+                        self.asm.sload(src, dst, size)
+                    } else {
+                        // unlike x64, unused bits are set to zero so we don't need to extend
+                        self.asm.uload(src, dst, size)
+                    }
                 }
-
-                Ok(())
-            }
-
-            MemOpKind::Atomic => Err(anyhow!(CodeGenError::unimplemented_masm_instruction())),
+                LoadKind::VectorExtend(_vector_extend_kind) => {
+                    bail!(CodeGenError::UnimplementedWasmLoadKind)
+                }
+            },
+            MemOpKind::Atomic => bail!(CodeGenError::unimplemented_masm_instruction()),
         }
+        Ok(())
     }
 
     fn load_addr(&mut self, src: Self::Address, dst: WritableReg, size: OperandSize) -> Result<()> {

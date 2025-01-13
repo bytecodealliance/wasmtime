@@ -9,8 +9,9 @@ use crate::codegen::{
     control_index, Callee, CodeGen, CodeGenError, ControlStackFrame, Emission, FnCall,
 };
 use crate::masm::{
-    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, MacroAssembler, MemMoveDirection, MemOpKind,
-    MulWideKind, OperandSize, RegImm, RemKind, RoundingMode, SPOffset, ShiftKind, TruncKind,
+    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler, MemMoveDirection,
+    MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RoundingMode, SPOffset, ShiftKind,
+    TruncKind, VectorExtendKind,
 };
 
 use crate::reg::{writable, Reg};
@@ -260,7 +261,16 @@ macro_rules! def_unsupported {
     (emit I64AtomicLoad16U $($rest:tt)*) => {};
     (emit I64AtomicLoad32U $($rest:tt)*) => {};
     (emit I64AtomicLoad $($rest:tt)*) => {};
-
+    (emit V128Load8x8S $($rest:tt)*) => {};
+    (emit V128Load8x8U $($rest:tt)*) => {};
+    (emit V128Load16x4S $($rest:tt)*) => {};
+    (emit V128Load16x4U $($rest:tt)*) => {};
+    (emit V128Load32x2S $($rest:tt)*) => {};
+    (emit V128Load32x2U $($rest:tt)*) => {};
+    (emit V128Load8Splat $($rest:tt)*) => {};
+    (emit V128Load16Splat $($rest:tt)*) => {};
+    (emit V128Load32Splat $($rest:tt)*) => {};
+    (emit V128Load64Splat $($rest:tt)*) => {};
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
 
@@ -1932,7 +1942,7 @@ where
             &memarg,
             WasmValType::I32,
             OperandSize::S32,
-            None,
+            LoadKind::Simple,
             MemOpKind::Normal,
         )
     }
@@ -1942,7 +1952,7 @@ where
             &memarg,
             WasmValType::I32,
             OperandSize::S8,
-            Some(ExtendKind::I32Extend8S),
+            LoadKind::ScalarExtend(ExtendKind::I32Extend8S),
             MemOpKind::Normal,
         )
     }
@@ -1952,7 +1962,7 @@ where
             &memarg,
             WasmValType::I32,
             OperandSize::S8,
-            None,
+            LoadKind::Simple,
             MemOpKind::Normal,
         )
     }
@@ -1962,7 +1972,7 @@ where
             &memarg,
             WasmValType::I32,
             OperandSize::S16,
-            Some(ExtendKind::I32Extend16S),
+            LoadKind::ScalarExtend(ExtendKind::I32Extend16S),
             MemOpKind::Normal,
         )
     }
@@ -1972,7 +1982,7 @@ where
             &memarg,
             WasmValType::I32,
             OperandSize::S16,
-            None,
+            LoadKind::Simple,
             MemOpKind::Normal,
         )
     }
@@ -1994,7 +2004,7 @@ where
             &memarg,
             WasmValType::I64,
             OperandSize::S8,
-            Some(ExtendKind::I64Extend8S),
+            LoadKind::ScalarExtend(ExtendKind::I64Extend8S),
             MemOpKind::Normal,
         )
     }
@@ -2004,7 +2014,7 @@ where
             &memarg,
             WasmValType::I64,
             OperandSize::S8,
-            None,
+            LoadKind::Simple,
             MemOpKind::Normal,
         )
     }
@@ -2014,7 +2024,7 @@ where
             &memarg,
             WasmValType::I64,
             OperandSize::S16,
-            None,
+            LoadKind::Simple,
             MemOpKind::Normal,
         )
     }
@@ -2024,7 +2034,7 @@ where
             &memarg,
             WasmValType::I64,
             OperandSize::S16,
-            Some(ExtendKind::I64Extend16S),
+            LoadKind::ScalarExtend(ExtendKind::I64Extend16S),
             MemOpKind::Normal,
         )
     }
@@ -2034,7 +2044,7 @@ where
             &memarg,
             WasmValType::I64,
             OperandSize::S32,
-            None,
+            LoadKind::Simple,
             MemOpKind::Normal,
         )
     }
@@ -2044,7 +2054,7 @@ where
             &memarg,
             WasmValType::I64,
             OperandSize::S32,
-            Some(ExtendKind::I64Extend32S),
+            LoadKind::ScalarExtend(ExtendKind::I64Extend32S),
             MemOpKind::Normal,
         )
     }
@@ -2054,7 +2064,7 @@ where
             &memarg,
             WasmValType::I64,
             OperandSize::S64,
-            None,
+            LoadKind::Simple,
             MemOpKind::Normal,
         )
     }
@@ -2080,7 +2090,7 @@ where
             &memarg,
             WasmValType::F32,
             OperandSize::S32,
-            None,
+            LoadKind::Simple,
             MemOpKind::Normal,
         )
     }
@@ -2094,7 +2104,7 @@ where
             &memarg,
             WasmValType::F64,
             OperandSize::S64,
-            None,
+            LoadKind::Simple,
             MemOpKind::Normal,
         )
     }
@@ -2210,7 +2220,7 @@ where
             &memarg,
             WasmValType::I32,
             OperandSize::S8,
-            None,
+            LoadKind::Simple,
             MemOpKind::Normal,
         )
     }
@@ -2220,7 +2230,7 @@ where
             &memarg,
             WasmValType::I32,
             OperandSize::S16,
-            None,
+            LoadKind::Simple,
             MemOpKind::Atomic,
         )
     }
@@ -2230,7 +2240,7 @@ where
             &memarg,
             WasmValType::I32,
             OperandSize::S32,
-            None,
+            LoadKind::Simple,
             MemOpKind::Atomic,
         )
     }
@@ -2240,7 +2250,7 @@ where
             &memarg,
             WasmValType::I64,
             OperandSize::S8,
-            None,
+            LoadKind::Simple,
             MemOpKind::Atomic,
         )
     }
@@ -2250,7 +2260,7 @@ where
             &memarg,
             WasmValType::I64,
             OperandSize::S16,
-            None,
+            LoadKind::Simple,
             MemOpKind::Atomic,
         )
     }
@@ -2260,7 +2270,7 @@ where
             &memarg,
             WasmValType::I64,
             OperandSize::S32,
-            None,
+            LoadKind::Simple,
             MemOpKind::Atomic,
         )
     }
@@ -2270,7 +2280,7 @@ where
             &memarg,
             WasmValType::I64,
             OperandSize::S64,
-            None,
+            LoadKind::Simple,
             MemOpKind::Atomic,
         )
     }
@@ -2293,13 +2303,113 @@ where
             &memarg,
             WasmValType::V128,
             OperandSize::S128,
-            None,
+            LoadKind::Simple,
             MemOpKind::Normal,
         )
     }
 
     fn visit_v128_store(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_store(&memarg, OperandSize::S128)
+    }
+
+    fn visit_v128_load8x8_s(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::V128,
+            OperandSize::S64,
+            LoadKind::VectorExtend(VectorExtendKind::V128Extend8x8S),
+            MemOpKind::Normal,
+        )
+    }
+
+    fn visit_v128_load8x8_u(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::V128,
+            OperandSize::S64,
+            LoadKind::VectorExtend(VectorExtendKind::V128Extend8x8U),
+            MemOpKind::Normal,
+        )
+    }
+
+    fn visit_v128_load16x4_s(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::V128,
+            OperandSize::S64,
+            LoadKind::VectorExtend(VectorExtendKind::V128Extend16x4S),
+            MemOpKind::Normal,
+        )
+    }
+
+    fn visit_v128_load16x4_u(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::V128,
+            OperandSize::S64,
+            LoadKind::VectorExtend(VectorExtendKind::V128Extend16x4U),
+            MemOpKind::Normal,
+        )
+    }
+
+    fn visit_v128_load32x2_s(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::V128,
+            OperandSize::S64,
+            LoadKind::VectorExtend(VectorExtendKind::V128Extend32x2S),
+            MemOpKind::Normal,
+        )
+    }
+
+    fn visit_v128_load32x2_u(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::V128,
+            OperandSize::S64,
+            LoadKind::VectorExtend(VectorExtendKind::V128Extend32x2U),
+            MemOpKind::Normal,
+        )
+    }
+
+    fn visit_v128_load8_splat(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::V128,
+            OperandSize::S8,
+            LoadKind::Splat,
+            MemOpKind::Normal,
+        )
+    }
+
+    fn visit_v128_load16_splat(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::V128,
+            OperandSize::S16,
+            LoadKind::Splat,
+            MemOpKind::Normal,
+        )
+    }
+
+    fn visit_v128_load32_splat(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::V128,
+            OperandSize::S32,
+            LoadKind::Splat,
+            MemOpKind::Normal,
+        )
+    }
+
+    fn visit_v128_load64_splat(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::V128,
+            OperandSize::S64,
+            LoadKind::Splat,
+            MemOpKind::Normal,
+        )
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);
