@@ -912,33 +912,123 @@ const DEFAULT_CLOBBERS: PRegSet = PRegSet::empty()
     .with(pv_reg(30))
     .with(pv_reg(31));
 
-static DEFAULT_MACHINE_ENV: MachineEnv = { todo!() };
+static DEFAULT_MACHINE_ENV: MachineEnv = {
+    debug_assert!(XReg::SPECIAL_START == 30);
+    // Prefer caller-saved registers over callee-saved registers, because that
+    // way we don't need to emit code to save and restore them if we don't
+    // mutate them.
 
-// fn create_reg_environment() -> MachineEnv {
-//     // Prefer caller-saved registers over callee-saved registers, because that
-//     // way we don't need to emit code to save and restore them if we don't
-//     // mutate them.
-//
-//     let preferred_regs_by_class: [Vec<PReg>; 3] = {
-//         let x_registers: Vec<PReg> = (0..16).map(|x| px_reg(x)).collect();
-//         let f_registers: Vec<PReg> = (0..16).map(|x| pf_reg(x)).collect();
-//         let v_registers: Vec<PReg> = (0..32).map(|x| pv_reg(x)).collect();
-//         [x_registers, f_registers, v_registers]
-//     };
-//
-//     let non_preferred_regs_by_class: [Vec<PReg>; 3] = {
-//         let x_registers: Vec<PReg> = (16..XReg::SPECIAL_START)
-//             .map(|x| px_reg(x.into()))
-//             .collect();
-//         let f_registers: Vec<PReg> = (16..32).map(|x| pf_reg(x)).collect();
-//         let v_registers: Vec<PReg> = vec![];
-//         [x_registers, f_registers, v_registers]
-//     };
-//
-//     MachineEnv {
-//         preferred_regs_by_class,
-//         non_preferred_regs_by_class,
-//         fixed_stack_slots: vec![],
-//         scratch_by_class: [None, None, None],
-//     }
-// }
+    MachineEnv {
+        preferred_regs_by_class: [
+            &[
+                px_reg(0),
+                px_reg(1),
+                px_reg(2),
+                px_reg(3),
+                px_reg(4),
+                px_reg(5),
+                px_reg(6),
+                px_reg(7),
+                px_reg(8),
+                px_reg(9),
+                px_reg(10),
+                px_reg(11),
+                px_reg(12),
+                px_reg(13),
+                px_reg(14),
+                px_reg(15),
+            ],
+            &[
+                pf_reg(0),
+                pf_reg(1),
+                pf_reg(2),
+                pf_reg(3),
+                pf_reg(4),
+                pf_reg(5),
+                pf_reg(6),
+                pf_reg(7),
+                pf_reg(8),
+                pf_reg(9),
+                pf_reg(10),
+                pf_reg(11),
+                pf_reg(12),
+                pf_reg(13),
+                pf_reg(14),
+                pf_reg(15),
+            ],
+            &[
+                pv_reg(0),
+                pv_reg(1),
+                pv_reg(2),
+                pv_reg(3),
+                pv_reg(4),
+                pv_reg(5),
+                pv_reg(6),
+                pv_reg(7),
+                pv_reg(8),
+                pv_reg(9),
+                pv_reg(10),
+                pv_reg(11),
+                pv_reg(12),
+                pv_reg(13),
+                pv_reg(14),
+                pv_reg(15),
+                pv_reg(16),
+                pv_reg(17),
+                pv_reg(18),
+                pv_reg(19),
+                pv_reg(20),
+                pv_reg(21),
+                pv_reg(22),
+                pv_reg(23),
+                pv_reg(24),
+                pv_reg(25),
+                pv_reg(26),
+                pv_reg(27),
+                pv_reg(28),
+                pv_reg(29),
+                pv_reg(30),
+                pv_reg(31),
+            ]
+        ],
+        non_preferred_regs_by_class: [
+            &[
+                px_reg(16),
+                px_reg(17),
+                px_reg(18),
+                px_reg(19),
+                px_reg(20),
+                px_reg(21),
+                px_reg(22),
+                px_reg(23),
+                px_reg(24),
+                px_reg(25),
+                px_reg(26),
+                px_reg(27),
+                px_reg(28),
+                px_reg(29),
+            ],
+            &[
+                pf_reg(16),
+                pf_reg(17),
+                pf_reg(18),
+                pf_reg(19),
+                pf_reg(20),
+                pf_reg(21),
+                pf_reg(22),
+                pf_reg(23),
+                pf_reg(24),
+                pf_reg(25),
+                pf_reg(26),
+                pf_reg(27),
+                pf_reg(28),
+                pf_reg(29),
+                pf_reg(30),
+                pf_reg(31),
+            ],
+            &[]
+        ],
+        scratch_by_class: [None, None, None],
+        fixed_stack_slots: &[],
+    }
+};
