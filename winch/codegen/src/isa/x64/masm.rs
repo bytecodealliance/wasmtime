@@ -1279,9 +1279,9 @@ impl Masm for MacroAssembler {
             let mask_lhs = self.asm.add_constant(&mask_lhs);
             let mask_rhs = self.asm.add_constant(&mask_rhs);
 
-            self.asm.vpshufb_rrm(dst, lhs, &mask_lhs);
+            self.asm.xmm_vpshufb_rrm(dst, lhs, &mask_lhs);
             let scratch = writable!(regs::scratch_xmm());
-            self.asm.vpshufb_rrm(scratch, rhs, &mask_rhs);
+            self.asm.xmm_vpshufb_rrm(scratch, rhs, &mask_rhs);
             self.asm.vpor(dst, dst.to_reg(), scratch.to_reg());
         } else {
             bail!(CodeGenError::UnimplementedForNoAvx)

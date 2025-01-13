@@ -1488,7 +1488,7 @@ impl Assembler {
 
     /// Shuffles bytes in `src` according to contents of `mask` and puts
     /// result in `dst`.
-    pub fn vpshufb_rrm(&mut self, dst: WritableReg, src: Reg, mask: &Address) {
+    pub fn xmm_vpshufb_rrm(&mut self, dst: WritableReg, src: Reg, mask: &Address) {
         let mask = Self::to_synthetic_amode(
             mask,
             &mut self.pool,
