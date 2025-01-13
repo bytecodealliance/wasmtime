@@ -287,7 +287,7 @@ mod disabled {
         }
     }
 
-    pub fn start_pass(_pass: Pass) -> Box<dyn Any> {
+    pub(crate) fn start_pass(_pass: Pass) -> Box<dyn Any> {
         Box::new(())
     }
 }
