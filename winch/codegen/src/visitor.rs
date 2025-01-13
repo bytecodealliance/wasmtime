@@ -2417,7 +2417,7 @@ where
         let rhs = self.context.pop_to_reg(self.masm, None)?;
         let lhs = self.context.pop_to_reg(self.masm, None)?;
         self.masm
-            .shuffle(writable!(lhs.into()), lhs.into(), rhs.into(), lanes);
+            .shuffle(writable!(lhs.into()), lhs.into(), rhs.into(), lanes)?;
         self.context.stack.push(TypedReg::v128(lhs.into()).into());
         self.context.free_reg(rhs);
         Ok(())
