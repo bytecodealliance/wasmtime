@@ -76,6 +76,10 @@ pub struct RunCommand {
     /// arguments will be interpreted as arguments to the function specified.
     #[arg(value_name = "WASM", trailing_var_arg = true, required = true)]
     pub module_and_args: Vec<OsString>,
+
+    /// Add a newline at the end of the output
+    #[arg(long)]
+    pub add_newline: bool,
 }
 
 enum CliLinker {
@@ -576,7 +580,7 @@ impl RunCommand {
             match result {
                 Val::I32(i) => {
                     eprintln!("Debug: Result value: {i}");
-                    print!("{i}")
+                    print!("{i}");
                 }
                 Val::I64(i) => print!("{i}"),
                 Val::F32(f) => print!("{}", f32::from_bits(f)),
@@ -590,7 +594,9 @@ impl RunCommand {
                 Val::AnyRef(Some(_)) => print!("<anyref>"),
             }
         }
-
+        if self.add_newline {
+            println!();
+        }
         Ok(())
     }
 
