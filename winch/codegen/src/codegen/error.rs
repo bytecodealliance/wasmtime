@@ -30,7 +30,7 @@ pub(crate) enum CodeGenError {
     ///
     /// This error means that an internal invariant was not met and usually
     /// implies a compiler bug.
-    #[error("Winch internal error")]
+    #[error("Winch internal error: {0}")]
     Internal(InternalError),
 }
 
