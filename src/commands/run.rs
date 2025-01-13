@@ -522,12 +522,20 @@ impl RunCommand {
             let val = val
                 .to_str()
                 .ok_or_else(|| anyhow!("argument is not valid utf-8: {val:?}"))?;
+            eprintln!("Debug: Processing argument: {}", val);
             values.push(match ty {
-                ValType::I32 => Val::I32(if val.starts_with("0x") || val.starts_with("0X") {
-                    i32::from_str_radix(&val[2..], 16)?
-                } else {
-                    val.parse()?
-                }),
+                ValType::I32 => {
+                    let parsed = if val.starts_with("0x") || val.starts_with("0X") {
+                        let hex_val = i32::from_str_radix(&val[2..], 16)?;
+                        eprintln!("Debug: Parsed hex value: {}", hex_val);
+                        hex_val
+                    } else {
+                        let dec_val = val.parse()?;
+                        eprintln!("Debug: Parsed decimal value: {}", dec_val);
+                        dec_val
+                    };
+                    Val::I32(parsed)
+                },
                 ValType::I64 => Val::I64(if val.starts_with("0x") || val.starts_with("0X") {
                     i64::from_str_radix(&val[2..], 16)?
                 } else {
@@ -566,17 +574,20 @@ impl RunCommand {
 
         for result in results {
             match result {
-                Val::I32(i) => println!("{i}"),
-                Val::I64(i) => println!("{i}"),
-                Val::F32(f) => println!("{}", f32::from_bits(f)),
-                Val::F64(f) => println!("{}", f64::from_bits(f)),
-                Val::V128(i) => println!("{}", i.as_u128()),
-                Val::ExternRef(None) => println!("<null externref>"),
-                Val::ExternRef(Some(_)) => println!("<externref>"),
-                Val::FuncRef(None) => println!("<null funcref>"),
-                Val::FuncRef(Some(_)) => println!("<funcref>"),
-                Val::AnyRef(None) => println!("<null anyref>"),
-                Val::AnyRef(Some(_)) => println!("<anyref>"),
+                Val::I32(i) => {
+                    eprintln!("Debug: Result value: {}", i);
+                    print!("{}", i);
+                },
+                Val::I64(i) => print!("{}", i),
+                Val::F32(f) => print!("{}", f32::from_bits(f)),
+                Val::F64(f) => print!("{}", f64::from_bits(f)),
+                Val::V128(i) => print!("{}", i.as_u128()),
+                Val::ExternRef(None) => print!("<null externref>"),
+                Val::ExternRef(Some(_)) => print!("<externref>"),
+                Val::FuncRef(None) => print!("<null funcref>"),
+                Val::FuncRef(Some(_)) => print!("<funcref>"),
+                Val::AnyRef(None) => print!("<null anyref>"),
+                Val::AnyRef(Some(_)) => print!("<anyref>"),
             }
         }
 
