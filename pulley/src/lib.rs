@@ -588,7 +588,7 @@ macro_rules! for_each_op {
             /// `trapif(zext(low32(addr)) > bound - off)` (unsigned)
             xbc32_bound64_trap = XBc32Bound64Trap { addr: XReg, bound: XReg, off: u8 };
 
-            /// `trapif(zext(low32(addr)) > low32(bound) - off)` (unsigned)
+            /// `trapif(low32(addr) > low32(bound) - off)` (unsigned)
             xbc32_bound32_trap = XBc32Bound32Trap { addr: XReg, bound: XReg, off: u8 };
         }
     };
