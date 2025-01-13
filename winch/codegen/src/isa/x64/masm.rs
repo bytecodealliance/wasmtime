@@ -1259,7 +1259,7 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn shuffle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, lanes: [u8; 16]) {
+    fn shuffle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, lanes: [u8; 16]) -> Result<()> {
         if self.flags.has_avx() {
             // Use `vpshufb` with `lanes` to set the lanes in `lhs` and `rhs`
             // separately to either the selected index or 0.
@@ -1284,9 +1284,9 @@ impl Masm for MacroAssembler {
             self.asm.vpshufb_rrm(scratch, rhs, &mask_rhs);
             self.asm.vpor(dst, dst.to_reg(), scratch.to_reg());
         } else {
-            // FIXME change to error
-            todo!("Support for shuffle on x64 without AVX not yet implemented")
+            bail!(CodeGenError::UnimplementedForNoAvx)
         }
+        Ok(())
     }
 }
 

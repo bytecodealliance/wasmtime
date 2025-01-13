@@ -1176,5 +1176,5 @@ pub(crate) trait MacroAssembler {
 
     /// Performs a shuffle between two 128-bit vectors into a 128-bit result
     /// using lanes as a mask to select which indexes to copy.
-    fn shuffle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, lanes: [u8; 16]);
+    fn shuffle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, lanes: [u8; 16]) -> Result<()>;
 }
