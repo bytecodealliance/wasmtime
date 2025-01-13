@@ -2131,11 +2131,9 @@ fn hex_integer_args() -> Result<()> {
     let output = run_wasmtime_for_output(
         &[
             "run",
-            "-Ccache=n",
-            "-Scli=n",
+            wasm.path().to_str().unwrap(),
             "--invoke",
             "sum",
-            wasm.path().to_str().unwrap(),
             "0x2A", // 42 in hex
             "0xFF", // 255 in hex
         ],
