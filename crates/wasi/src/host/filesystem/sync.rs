@@ -29,7 +29,7 @@ where
 {
     fn advise(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         offset: sync_filesystem::Filesize,
         len: sync_filesystem::Filesize,
         advice: sync_filesystem::Advice,
@@ -39,30 +39,27 @@ where
         })
     }
 
-    fn sync_data(
-        &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
-    ) -> FsResult<()> {
+    fn sync_data(&mut self, fd: Resource<sync_filesystem::Descriptor>) -> FsResult<()> {
         in_tokio(async { async_filesystem::HostDescriptor::sync_data(self, fd).await })
     }
 
     fn get_flags(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
     ) -> FsResult<sync_filesystem::DescriptorFlags> {
         Ok(in_tokio(async { async_filesystem::HostDescriptor::get_flags(self, fd).await })?.into())
     }
 
     fn get_type(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
     ) -> FsResult<sync_filesystem::DescriptorType> {
         Ok(in_tokio(async { async_filesystem::HostDescriptor::get_type(self, fd).await })?.into())
     }
 
     fn set_size(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         size: sync_filesystem::Filesize,
     ) -> FsResult<()> {
         in_tokio(async { async_filesystem::HostDescriptor::set_size(self, fd, size).await })
@@ -70,7 +67,7 @@ where
 
     fn set_times(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         atim: sync_filesystem::NewTimestamp,
         mtim: sync_filesystem::NewTimestamp,
     ) -> FsResult<()> {
@@ -81,7 +78,7 @@ where
 
     fn read(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         len: sync_filesystem::Filesize,
         offset: sync_filesystem::Filesize,
     ) -> FsResult<(Vec<u8>, bool)> {
@@ -90,7 +87,7 @@ where
 
     fn write(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         buf: Vec<u8>,
         offset: sync_filesystem::Filesize,
     ) -> FsResult<sync_filesystem::Filesize> {
@@ -99,18 +96,18 @@ where
 
     fn read_directory(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
     ) -> FsResult<Resource<sync_filesystem::DirectoryEntryStream>> {
         in_tokio(async { async_filesystem::HostDescriptor::read_directory(self, fd).await })
     }
 
-    fn sync(&mut self, fd: Resource<sync_filesystem::Descriptor<T::Executor>>) -> FsResult<()> {
+    fn sync(&mut self, fd: Resource<sync_filesystem::Descriptor>) -> FsResult<()> {
         in_tokio(async { async_filesystem::HostDescriptor::sync(self, fd).await })
     }
 
     fn create_directory_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         path: String,
     ) -> FsResult<()> {
         in_tokio(async {
@@ -120,14 +117,14 @@ where
 
     fn stat(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
     ) -> FsResult<sync_filesystem::DescriptorStat> {
         Ok(in_tokio(async { async_filesystem::HostDescriptor::stat(self, fd).await })?.into())
     }
 
     fn stat_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         path_flags: sync_filesystem::PathFlags,
         path: String,
     ) -> FsResult<sync_filesystem::DescriptorStat> {
@@ -139,7 +136,7 @@ where
 
     fn set_times_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         path_flags: sync_filesystem::PathFlags,
         path: String,
         atim: sync_filesystem::NewTimestamp,
@@ -160,11 +157,11 @@ where
 
     fn link_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         // TODO delete the path flags from this function
         old_path_flags: sync_filesystem::PathFlags,
         old_path: String,
-        new_descriptor: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        new_descriptor: Resource<sync_filesystem::Descriptor>,
         new_path: String,
     ) -> FsResult<()> {
         in_tokio(async {
@@ -182,12 +179,12 @@ where
 
     fn open_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         path_flags: sync_filesystem::PathFlags,
         path: String,
         oflags: sync_filesystem::OpenFlags,
         flags: sync_filesystem::DescriptorFlags,
-    ) -> FsResult<Resource<sync_filesystem::Descriptor<T::Executor>>> {
+    ) -> FsResult<Resource<sync_filesystem::Descriptor>> {
         in_tokio(async {
             async_filesystem::HostDescriptor::open_at(
                 self,
@@ -201,16 +198,13 @@ where
         })
     }
 
-    fn drop(
-        &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
-    ) -> anyhow::Result<()> {
+    fn drop(&mut self, fd: Resource<sync_filesystem::Descriptor>) -> anyhow::Result<()> {
         async_filesystem::HostDescriptor::drop(self, fd)
     }
 
     fn readlink_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         path: String,
     ) -> FsResult<String> {
         in_tokio(async { async_filesystem::HostDescriptor::readlink_at(self, fd, path).await })
@@ -218,7 +212,7 @@ where
 
     fn remove_directory_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         path: String,
     ) -> FsResult<()> {
         in_tokio(async {
@@ -228,9 +222,9 @@ where
 
     fn rename_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         old_path: String,
-        new_fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        new_fd: Resource<sync_filesystem::Descriptor>,
         new_path: String,
     ) -> FsResult<()> {
         in_tokio(async {
@@ -240,7 +234,7 @@ where
 
     fn symlink_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         src_path: String,
         dest_path: String,
     ) -> FsResult<()> {
@@ -251,7 +245,7 @@ where
 
     fn unlink_file_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         path: String,
     ) -> FsResult<()> {
         in_tokio(async { async_filesystem::HostDescriptor::unlink_file_at(self, fd, path).await })
@@ -259,7 +253,7 @@ where
 
     fn read_via_stream(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         offset: sync_filesystem::Filesize,
     ) -> FsResult<Resource<streams::InputStream>> {
         Ok(async_filesystem::HostDescriptor::read_via_stream(
@@ -269,7 +263,7 @@ where
 
     fn write_via_stream(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         offset: sync_filesystem::Filesize,
     ) -> FsResult<Resource<streams::OutputStream>> {
         Ok(async_filesystem::HostDescriptor::write_via_stream(
@@ -279,7 +273,7 @@ where
 
     fn append_via_stream(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
     ) -> FsResult<Resource<streams::OutputStream>> {
         Ok(async_filesystem::HostDescriptor::append_via_stream(
             self, fd,
@@ -288,14 +282,14 @@ where
 
     fn is_same_object(
         &mut self,
-        a: Resource<sync_filesystem::Descriptor<T::Executor>>,
-        b: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        a: Resource<sync_filesystem::Descriptor>,
+        b: Resource<sync_filesystem::Descriptor>,
     ) -> anyhow::Result<bool> {
         in_tokio(async { async_filesystem::HostDescriptor::is_same_object(self, a, b).await })
     }
     fn metadata_hash(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
     ) -> FsResult<sync_filesystem::MetadataHashValue> {
         Ok(
             in_tokio(async { async_filesystem::HostDescriptor::metadata_hash(self, fd).await })?
@@ -304,7 +298,7 @@ where
     }
     fn metadata_hash_at(
         &mut self,
-        fd: Resource<sync_filesystem::Descriptor<T::Executor>>,
+        fd: Resource<sync_filesystem::Descriptor>,
         path_flags: sync_filesystem::PathFlags,
         path: String,
     ) -> FsResult<sync_filesystem::MetadataHashValue> {

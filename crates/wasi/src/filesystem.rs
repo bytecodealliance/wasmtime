@@ -7,7 +7,6 @@ use crate::{
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
 use std::io;
-use std::marker::PhantomData;
 use std::mem;
 use std::sync::Arc;
 
@@ -27,20 +26,20 @@ impl From<io::Error> for FsError {
     }
 }
 
-pub enum Descriptor<E> {
-    File(File<E>),
-    Dir(Dir<E>),
+pub enum Descriptor {
+    File(File),
+    Dir(Dir),
 }
 
-impl<E> Descriptor<E> {
-    pub fn file(&self) -> Result<&File<E>, types::ErrorCode> {
+impl Descriptor {
+    pub fn file(&self) -> Result<&File, types::ErrorCode> {
         match self {
             Descriptor::File(f) => Ok(f),
             Descriptor::Dir(_) => Err(types::ErrorCode::BadDescriptor),
         }
     }
 
-    pub fn dir(&self) -> Result<&Dir<E>, types::ErrorCode> {
+    pub fn dir(&self) -> Result<&Dir, types::ErrorCode> {
         match self {
             Descriptor::Dir(d) => Ok(d),
             Descriptor::File(_) => Err(types::ErrorCode::NotDirectory),
@@ -78,7 +77,8 @@ bitflags::bitflags! {
     }
 }
 
-pub struct File<E> {
+#[derive(Clone)]
+pub struct File {
     /// The operating system File this struct is mediating access to.
     ///
     /// Wrapped in an Arc because the same underlying file is used for
@@ -98,22 +98,9 @@ pub struct File<E> {
     pub open_mode: OpenMode,
 
     allow_blocking_current_thread: bool,
-    _executor: PhantomData<E>,
 }
 
-impl<E> Clone for File<E> {
-    fn clone(&self) -> Self {
-        File {
-            file: self.file.clone(),
-            perms: self.perms.clone(),
-            open_mode: self.open_mode.clone(),
-            allow_blocking_current_thread: self.allow_blocking_current_thread,
-            _executor: PhantomData,
-        }
-    }
-}
-
-impl<E: WasiExecutor> File<E> {
+impl File {
     pub fn new(
         file: cap_std::fs::File,
         perms: FilePerms,
@@ -125,7 +112,6 @@ impl<E: WasiExecutor> File<E> {
             perms,
             open_mode,
             allow_blocking_current_thread,
-            _executor: PhantomData,
         }
     }
 
@@ -192,7 +178,8 @@ bitflags::bitflags! {
     }
 }
 
-pub struct Dir<E> {
+#[derive(Clone)]
+pub struct Dir {
     /// The operating system file descriptor this struct is mediating access
     /// to.
     ///
@@ -216,23 +203,9 @@ pub struct Dir<E> {
     pub open_mode: OpenMode,
 
     allow_blocking_current_thread: bool,
-    _executor: PhantomData<E>,
 }
 
-impl<E> Clone for Dir<E> {
-    fn clone(&self) -> Self {
-        Dir {
-            dir: self.dir.clone(),
-            perms: self.perms.clone(),
-            file_perms: self.file_perms.clone(),
-            open_mode: self.open_mode.clone(),
-            allow_blocking_current_thread: self.allow_blocking_current_thread,
-            _executor: PhantomData,
-        }
-    }
-}
-
-impl<E> Dir<E> {
+impl Dir {
     pub fn new(
         dir: cap_std::fs::Dir,
         perms: DirPerms,
@@ -246,11 +219,8 @@ impl<E> Dir<E> {
             file_perms,
             open_mode,
             allow_blocking_current_thread,
-            _executor: PhantomData,
         }
     }
-}
-impl<E: WasiExecutor> Dir<E> {
     /// Execute the blocking `body` function.
     ///
     /// Depending on how the WasiCtx was configured, the body may either be:
@@ -279,8 +249,8 @@ impl<E: WasiExecutor> Dir<E> {
     }
 }
 
-pub struct FileInputStream<E> {
-    file: File<E>,
+pub struct FileInputStream {
+    file: File,
     position: u64,
     state: ReadState,
 }
@@ -291,8 +261,8 @@ enum ReadState {
     Error(io::Error),
     Closed,
 }
-impl<E: WasiExecutor> FileInputStream<E> {
-    pub fn new(file: &File<E>, position: u64) -> Self {
+impl FileInputStream {
+    pub fn new(file: &File, position: u64) -> Self {
         Self {
             file: file.clone(),
             position,
@@ -300,7 +270,7 @@ impl<E: WasiExecutor> FileInputStream<E> {
         }
     }
 }
-impl<E: WasiExecutor> FileInputStream<E> {
+impl FileInputStream {
     fn blocking_read(file: &cap_std::fs::File, offset: u64, size: usize) -> ReadState {
         use system_interface::fs::FileIoExt;
 
@@ -331,7 +301,7 @@ impl<E: WasiExecutor> FileInputStream<E> {
     }
 }
 #[async_trait::async_trait]
-impl<E: WasiExecutor> HostInputStream for FileInputStream<E> {
+impl HostInputStream for FileInputStream {
     fn read(&mut self, size: usize) -> StreamResult<Bytes> {
         match &mut self.state {
             ReadState::Idle => {
@@ -399,7 +369,7 @@ impl<E: WasiExecutor> HostInputStream for FileInputStream<E> {
     }
 }
 #[async_trait::async_trait]
-impl<E: WasiExecutor> Subscribe for FileInputStream<E> {
+impl Subscribe for FileInputStream {
     async fn ready(&mut self) {
         if let ReadState::Idle = self.state {
             // The guest hasn't initiated any read, but is nonetheless waiting
@@ -423,8 +393,8 @@ pub(crate) enum FileOutputMode {
     Append,
 }
 
-pub(crate) struct FileOutputStream<E> {
-    file: File<E>,
+pub(crate) struct FileOutputStream {
+    file: File,
     mode: FileOutputMode,
     state: OutputState,
 }
@@ -439,8 +409,8 @@ enum OutputState {
     Closed,
 }
 
-impl<E: WasiExecutor> FileOutputStream<E> {
-    pub fn write_at(file: &File<E>, position: u64) -> Self {
+impl FileOutputStream {
+    pub fn write_at(file: &File, position: u64) -> Self {
         Self {
             file: file.clone(),
             mode: FileOutputMode::Position(position),
@@ -448,7 +418,7 @@ impl<E: WasiExecutor> FileOutputStream<E> {
         }
     }
 
-    pub fn append(file: &File<E>) -> Self {
+    pub fn append(file: &File) -> Self {
         Self {
             file: file.clone(),
             mode: FileOutputMode::Append,
@@ -498,7 +468,7 @@ impl<E: WasiExecutor> FileOutputStream<E> {
 const FILE_WRITE_CAPACITY: usize = 1024 * 1024;
 
 #[async_trait::async_trait]
-impl<E: WasiExecutor> HostOutputStream for FileOutputStream<E> {
+impl HostOutputStream for FileOutputStream {
     fn write(&mut self, buf: Bytes) -> Result<(), StreamError> {
         match self.state {
             OutputState::Ready => {}
@@ -597,7 +567,7 @@ impl<E: WasiExecutor> HostOutputStream for FileOutputStream<E> {
 }
 
 #[async_trait::async_trait]
-impl<E: WasiExecutor> Subscribe for FileOutputStream<E> {
+impl Subscribe for FileOutputStream {
     async fn ready(&mut self) {
         if let OutputState::Waiting(task) = &mut self.state {
             self.state = match task.await {

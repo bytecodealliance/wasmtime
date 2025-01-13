@@ -141,7 +141,7 @@ use crate::bindings::random::random::Host as _;
 pub struct WasiP1Ctx<E> {
     table: ResourceTable,
     wasi: WasiCtx<E>,
-    adapter: WasiPreview1Adapter<E>,
+    adapter: WasiPreview1Adapter,
 }
 
 impl<E> WasiP1Ctx<E> {
@@ -169,9 +169,9 @@ impl<E: WasiExecutor> WasiView for WasiP1Ctx<E> {
 }
 
 #[derive(Debug)]
-struct File<E> {
+struct File {
     /// The handle to the preview2 descriptor of type [`crate::filesystem::Descriptor::File`].
-    fd: Resource<filesystem::Descriptor<E>>,
+    fd: Resource<filesystem::Descriptor>,
 
     /// The current-position pointer.
     position: Arc<AtomicU64>,
@@ -248,7 +248,7 @@ impl BlockingMode {
 }
 
 #[derive(Debug)]
-enum Descriptor<E> {
+enum Descriptor {
     Stdin {
         stream: Resource<streams::InputStream>,
         isatty: IsATTY,
@@ -263,58 +263,43 @@ enum Descriptor<E> {
     },
     /// A fd of type [`crate::filesystem::Descriptor::Dir`]
     Directory {
-        fd: Resource<filesystem::Descriptor<E>>,
+        fd: Resource<filesystem::Descriptor>,
         /// The path this directory was preopened as.
         /// `None` means this directory was opened using `open-at`.
         preopen_path: Option<String>,
     },
     /// A fd of type [`crate::filesystem::Descriptor::File`]
-    File(File<E>),
+    File(File),
 }
 
-#[derive(Debug)]
-struct WasiPreview1Adapter<E> {
-    descriptors: Option<Descriptors<E>>,
-}
-impl<E> Default for WasiPreview1Adapter<E> {
-    fn default() -> Self {
-        Self {
-            descriptors: Default::default(),
-        }
-    }
+#[derive(Debug, Default)]
+struct WasiPreview1Adapter {
+    descriptors: Option<Descriptors>,
 }
 
-#[derive(Debug)]
-struct Descriptors<E> {
-    used: BTreeMap<u32, Descriptor<E>>,
+#[derive(Debug, Default)]
+struct Descriptors {
+    used: BTreeMap<u32, Descriptor>,
     free: Vec<u32>,
 }
-impl<E> Default for Descriptors<E> {
-    fn default() -> Self {
-        Self {
-            used: BTreeMap::new(),
-            free: Default::default(),
-        }
-    }
-}
 
-impl<E> Deref for Descriptors<E> {
-    type Target = BTreeMap<u32, Descriptor<E>>;
+impl Deref for Descriptors {
+    type Target = BTreeMap<u32, Descriptor>;
 
     fn deref(&self) -> &Self::Target {
         &self.used
     }
 }
 
-impl<E> DerefMut for Descriptors<E> {
+impl DerefMut for Descriptors {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.used
     }
 }
 
-impl<E: WasiExecutor> Descriptors<E> {
+impl Descriptors {
     /// Initializes [Self] using `preopens`
-    fn new(mut host: WasiImpl<&mut WasiP1Ctx<E>>) -> Result<Self, types::Error> {
+    fn new<E: WasiExecutor>(mut host: WasiImpl<&mut WasiP1Ctx<E>>) -> Result<Self, types::Error> {
         let mut descriptors = Self::default();
         descriptors.push(Descriptor::Stdin {
             stream: host
@@ -405,7 +390,7 @@ impl<E: WasiExecutor> Descriptors<E> {
     }
 
     /// Removes the [Descriptor] corresponding to `fd`
-    fn remove(&mut self, fd: types::Fd) -> Option<Descriptor<E>> {
+    fn remove(&mut self, fd: types::Fd) -> Option<Descriptor> {
         let fd = fd.into();
         let desc = self.used.remove(&fd)?;
         self.free.push(fd);
@@ -415,7 +400,7 @@ impl<E: WasiExecutor> Descriptors<E> {
     /// Pushes the [Descriptor] returning corresponding number.
     /// This operation will try to reuse numbers previously removed via [`Self::remove`]
     /// and rely on [`Self::unused`] if no free numbers are recorded
-    fn push(&mut self, desc: Descriptor<E>) -> Result<u32> {
+    fn push(&mut self, desc: Descriptor) -> Result<u32> {
         let fd = if let Some(fd) = self.free.pop() {
             fd
         } else {
@@ -426,7 +411,7 @@ impl<E: WasiExecutor> Descriptors<E> {
     }
 }
 
-impl<E> WasiPreview1Adapter<E> {
+impl WasiPreview1Adapter {
     fn new() -> Self {
         Self::default()
     }
@@ -443,7 +428,7 @@ impl<E> WasiPreview1Adapter<E> {
 // call methods like [`Descriptor::is_file`] and hiding complexity from preview1 method implementations.
 struct Transaction<'a, E> {
     view: &'a mut WasiP1Ctx<E>,
-    descriptors: Descriptors<E>,
+    descriptors: Descriptors,
 }
 
 impl<E> Drop for Transaction<'_, E> {
@@ -454,13 +439,13 @@ impl<E> Drop for Transaction<'_, E> {
     }
 }
 
-impl<E: 'static> Transaction<'_, E> {
+impl<E> Transaction<'_, E> {
     /// Borrows [`Descriptor`] corresponding to `fd`.
     ///
     /// # Errors
     ///
     /// Returns [`types::Errno::Badf`] if no [`Descriptor`] is found
-    fn get_descriptor(&self, fd: types::Fd) -> Result<&Descriptor<E>> {
+    fn get_descriptor(&self, fd: types::Fd) -> Result<&Descriptor> {
         let fd = fd.into();
         let desc = self.descriptors.get(&fd).ok_or(types::Errno::Badf)?;
         Ok(desc)
@@ -468,7 +453,7 @@ impl<E: 'static> Transaction<'_, E> {
 
     /// Borrows [`File`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`]
-    fn get_file(&self, fd: types::Fd) -> Result<&File<E>> {
+    fn get_file(&self, fd: types::Fd) -> Result<&File> {
         let fd = fd.into();
         match self.descriptors.get(&fd) {
             Some(Descriptor::File(file)) => Ok(file),
@@ -478,7 +463,7 @@ impl<E: 'static> Transaction<'_, E> {
 
     /// Mutably borrows [`File`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`]
-    fn get_file_mut(&mut self, fd: types::Fd) -> Result<&mut File<E>> {
+    fn get_file_mut(&mut self, fd: types::Fd) -> Result<&mut File> {
         let fd = fd.into();
         match self.descriptors.get_mut(&fd) {
             Some(Descriptor::File(file)) => Ok(file),
@@ -492,7 +477,7 @@ impl<E: 'static> Transaction<'_, E> {
     /// # Errors
     ///
     /// Returns [`types::Errno::Spipe`] if the descriptor corresponds to stdio
-    fn get_seekable(&self, fd: types::Fd) -> Result<&File<E>> {
+    fn get_seekable(&self, fd: types::Fd) -> Result<&File> {
         let fd = fd.into();
         match self.descriptors.get(&fd) {
             Some(Descriptor::File(file)) => Ok(file),
@@ -507,7 +492,7 @@ impl<E: 'static> Transaction<'_, E> {
     }
 
     /// Returns [`filesystem::Descriptor`] corresponding to `fd`
-    fn get_fd(&self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor<E>>> {
+    fn get_fd(&self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor>> {
         match self.get_descriptor(fd)? {
             Descriptor::File(File { fd, .. }) => Ok(fd.borrowed()),
             Descriptor::Directory { fd, .. } => Ok(fd.borrowed()),
@@ -519,13 +504,13 @@ impl<E: 'static> Transaction<'_, E> {
 
     /// Returns [`filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::File`]
-    fn get_file_fd(&self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor<E>>> {
+    fn get_file_fd(&self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor>> {
         self.get_file(fd).map(|File { fd, .. }| fd.borrowed())
     }
 
     /// Returns [`filesystem::Descriptor`] corresponding to `fd`
     /// if it describes a [`Descriptor::Directory`]
-    fn get_dir_fd(&self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor<E>>> {
+    fn get_dir_fd(&self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor>> {
         let fd = fd.into();
         match self.descriptors.get(&fd) {
             Some(Descriptor::Directory { fd, .. }) => Ok(fd.borrowed()),
@@ -552,10 +537,7 @@ impl<E: WasiExecutor> WasiP1Ctx<E> {
 
     /// Lazily initializes [`WasiPreview1Adapter`] returned by [`WasiPreview1View::adapter_mut`]
     /// and returns [`filesystem::Descriptor`] corresponding to `fd`
-    fn get_fd(
-        &mut self,
-        fd: types::Fd,
-    ) -> Result<Resource<filesystem::Descriptor<E>>, types::Error> {
+    fn get_fd(&mut self, fd: types::Fd) -> Result<Resource<filesystem::Descriptor>, types::Error> {
         let st = self.transact()?;
         let fd = st.get_fd(fd)?;
         Ok(fd)
@@ -567,7 +549,7 @@ impl<E: WasiExecutor> WasiP1Ctx<E> {
     fn get_file_fd(
         &mut self,
         fd: types::Fd,
-    ) -> Result<Resource<filesystem::Descriptor<E>>, types::Error> {
+    ) -> Result<Resource<filesystem::Descriptor>, types::Error> {
         let st = self.transact()?;
         let fd = st.get_file_fd(fd)?;
         Ok(fd)
@@ -580,7 +562,7 @@ impl<E: WasiExecutor> WasiP1Ctx<E> {
     fn get_dir_fd(
         &mut self,
         fd: types::Fd,
-    ) -> Result<Resource<filesystem::Descriptor<E>>, types::Error> {
+    ) -> Result<Resource<filesystem::Descriptor>, types::Error> {
         let st = self.transact()?;
         let fd = st.get_dir_fd(fd)?;
         Ok(fd)
