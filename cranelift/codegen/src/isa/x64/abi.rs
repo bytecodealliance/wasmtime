@@ -1312,7 +1312,7 @@ const fn all_clobbers() -> PRegSet {
         .with(regs::fpr_preg(15))
 }
 
-fn preg(r: Reg) -> PReg {
+const fn preg(r: Reg) -> PReg {
     r.to_physical_reg().unwrap()
 }
 

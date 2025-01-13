@@ -33,7 +33,7 @@ pub const ENC_R15: u8 = 15;
 
 const fn gpr(enc: u8) -> Reg {
     let preg = gpr_preg(enc);
-    Reg::from(VReg::new(preg.index(), RegClass::Int))
+    Reg::from_vreg(VReg::new(preg.index(), RegClass::Int))
 }
 pub(crate) const fn gpr_preg(enc: u8) -> PReg {
     PReg::new(enc as usize, RegClass::Int)
@@ -99,7 +99,7 @@ pub(crate) const fn pinned_reg() -> Reg {
 
 const fn fpr(enc: u8) -> Reg {
     let preg = fpr_preg(enc);
-    Reg::from(VReg::new(preg.index(), RegClass::Float))
+    Reg::from_vreg(VReg::new(preg.index(), RegClass::Float))
 }
 
 pub(crate) const fn fpr_preg(enc: u8) -> PReg {

@@ -49,8 +49,12 @@ pub struct Reg(VReg);
 
 impl Reg {
     // FIXME(const-hack) remove in favor of `From` impl
-    pub(crate) const fn from_preg(preg: PReg) -> Reg {
+    pub const fn from_preg(preg: PReg) -> Reg {
         Reg(RealReg(preg).to_vreg())
+    }
+
+    pub const fn from_vreg(vreg: VReg) -> Reg {
+        Reg(vreg)
     }
 
     /// Get the physical register (`RealReg`), if this register is
