@@ -38,13 +38,13 @@ use wasmtime::component::ResourceTable;
 /// ```
 ///
 /// [`Store`]: wasmtime::Store
-pub struct WasiCtxBuilder {
+pub struct WasiCtxBuilder<E> {
     stdin: Box<dyn StdinStream>,
     stdout: Box<dyn StdoutStream>,
     stderr: Box<dyn StdoutStream>,
     env: Vec<(String, String)>,
     args: Vec<String>,
-    preopens: Vec<(Dir, String)>,
+    preopens: Vec<(Dir<E>, String)>,
     socket_addr_check: SocketAddrCheck,
     random: Box<dyn RngCore + Send>,
     insecure_random: Box<dyn RngCore + Send>,
@@ -56,7 +56,7 @@ pub struct WasiCtxBuilder {
     built: bool,
 }
 
-impl WasiCtxBuilder {
+impl<E> WasiCtxBuilder<E> {
     /// Creates a builder for a new context with default parameters set.
     ///
     /// The current defaults are:
@@ -463,7 +463,7 @@ impl WasiCtxBuilder {
     /// Panics if this method is called twice. Each [`WasiCtxBuilder`] can be
     /// used to create only a single [`WasiCtx`]. Repeated usage of this method
     /// is not allowed and should use a second builder instead.
-    pub fn build<E: WasiExecutor>(&mut self) -> WasiCtx<E> {
+    pub fn build(&mut self) -> WasiCtx<E> {
         assert!(!self.built);
 
         let Self {
@@ -520,7 +520,7 @@ impl WasiCtxBuilder {
     /// usage of this method is not allowed and should use a second builder
     /// instead.
     #[cfg(feature = "preview1")]
-    pub fn build_p1<E: WasiExecutor>(&mut self) -> crate::preview1::WasiP1Ctx<E> {
+    pub fn build_p1(&mut self) -> crate::preview1::WasiP1Ctx<E> {
         let wasi = self.build();
         crate::preview1::WasiP1Ctx::new(wasi)
     }
@@ -633,7 +633,7 @@ impl<T: WasiView> WasiView for WasiImpl<T> {
     }
 }
 
-pub trait WasiExecutor: Send {
+pub trait WasiExecutor: Send + Sync + 'static {
     fn run_blocking<F, R>(body: F) -> impl std::future::Future<Output = R> + Send
     where
         F: FnOnce() -> R + Send + 'static,
@@ -694,7 +694,7 @@ pub struct WasiCtx<E> {
     pub(crate) monotonic_clock: Box<dyn HostMonotonicClock + Send>,
     pub(crate) env: Vec<(String, String)>,
     pub(crate) args: Vec<String>,
-    pub(crate) preopens: Vec<(Dir, String)>,
+    pub(crate) preopens: Vec<(Dir<E>, String)>,
     pub(crate) stdin: Box<dyn StdinStream>,
     pub(crate) stdout: Box<dyn StdoutStream>,
     pub(crate) stderr: Box<dyn StdoutStream>,
@@ -706,7 +706,7 @@ pub struct WasiCtx<E> {
 
 impl<E> WasiCtx<E> {
     /// Convenience function for calling [`WasiCtxBuilder::new`].
-    pub fn builder() -> WasiCtxBuilder {
+    pub fn builder() -> WasiCtxBuilder<E> {
         WasiCtxBuilder::new()
     }
 }

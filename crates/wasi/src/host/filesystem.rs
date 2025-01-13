@@ -7,7 +7,7 @@ use crate::bindings::io::streams::{InputStream, OutputStream};
 use crate::filesystem::{
     Descriptor, Dir, File, FileInputStream, FileOutputStream, OpenMode, ReaddirIterator,
 };
-use crate::{DirPerms, FilePerms, FsError, FsResult, WasiImpl, WasiView};
+use crate::{DirPerms, FilePerms, FsError, FsResult, WasiExecutor, WasiImpl, WasiView};
 use anyhow::Context;
 use wasmtime::component::Resource;
 
@@ -19,7 +19,7 @@ where
 {
     fn get_directories(
         &mut self,
-    ) -> Result<Vec<(Resource<types::Descriptor>, String)>, anyhow::Error> {
+    ) -> Result<Vec<(Resource<types::Descriptor<T::Executor>>, String)>, anyhow::Error> {
         let mut results = Vec::new();
         for (dir, name) in self.ctx().preopens.clone() {
             let fd = self
@@ -62,7 +62,7 @@ where
 {
     async fn advise(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         offset: types::Filesize,
         len: types::Filesize,
         advice: types::Advice,
@@ -85,7 +85,7 @@ where
         Ok(())
     }
 
-    async fn sync_data(&mut self, fd: Resource<types::Descriptor>) -> FsResult<()> {
+    async fn sync_data(&mut self, fd: Resource<types::Descriptor<T::Executor>>) -> FsResult<()> {
         let descriptor = self.table().get(&fd)?;
 
         match descriptor {
@@ -114,7 +114,7 @@ where
 
     async fn get_flags(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
     ) -> FsResult<types::DescriptorFlags> {
         use system_interface::fs::{FdFlags, GetSetFdFlags};
         use types::DescriptorFlags;
@@ -162,7 +162,7 @@ where
 
     async fn get_type(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
     ) -> FsResult<types::DescriptorType> {
         let descriptor = self.table().get(&fd)?;
 
@@ -177,7 +177,7 @@ where
 
     async fn set_size(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         size: types::Filesize,
     ) -> FsResult<()> {
         let f = self.table().get(&fd)?.file()?;
@@ -190,7 +190,7 @@ where
 
     async fn set_times(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         atim: types::NewTimestamp,
         mtim: types::NewTimestamp,
     ) -> FsResult<()> {
@@ -221,7 +221,7 @@ where
 
     async fn read(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         len: types::Filesize,
         offset: types::Filesize,
     ) -> FsResult<(Vec<u8>, bool)> {
@@ -259,7 +259,7 @@ where
 
     async fn write(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         buf: Vec<u8>,
         offset: types::Filesize,
     ) -> FsResult<types::Filesize> {
@@ -281,7 +281,7 @@ where
 
     async fn read_directory(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
     ) -> FsResult<Resource<types::DirectoryEntryStream>> {
         let table = self.table();
         let d = table.get(&fd)?.dir()?;
@@ -344,7 +344,7 @@ where
         Ok(table.push(ReaddirIterator::new(entries))?)
     }
 
-    async fn sync(&mut self, fd: Resource<types::Descriptor>) -> FsResult<()> {
+    async fn sync(&mut self, fd: Resource<types::Descriptor<T::Executor>>) -> FsResult<()> {
         let descriptor = self.table().get(&fd)?;
 
         match descriptor {
@@ -373,7 +373,7 @@ where
 
     async fn create_directory_at(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         path: String,
     ) -> FsResult<()> {
         let table = self.table();
@@ -385,7 +385,10 @@ where
         Ok(())
     }
 
-    async fn stat(&mut self, fd: Resource<types::Descriptor>) -> FsResult<types::DescriptorStat> {
+    async fn stat(
+        &mut self,
+        fd: Resource<types::Descriptor<T::Executor>>,
+    ) -> FsResult<types::DescriptorStat> {
         let descriptor = self.table().get(&fd)?;
         match descriptor {
             Descriptor::File(f) => {
@@ -403,7 +406,7 @@ where
 
     async fn stat_at(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         path_flags: types::PathFlags,
         path: String,
     ) -> FsResult<types::DescriptorStat> {
@@ -423,7 +426,7 @@ where
 
     async fn set_times_at(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         path_flags: types::PathFlags,
         path: String,
         atim: types::NewTimestamp,
@@ -462,11 +465,11 @@ where
 
     async fn link_at(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         // TODO delete the path flags from this function
         old_path_flags: types::PathFlags,
         old_path: String,
-        new_descriptor: Resource<types::Descriptor>,
+        new_descriptor: Resource<types::Descriptor<T::Executor>>,
         new_path: String,
     ) -> FsResult<()> {
         let table = self.table();
@@ -490,12 +493,12 @@ where
 
     async fn open_at(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         path_flags: types::PathFlags,
         path: String,
         oflags: types::OpenFlags,
         flags: types::DescriptorFlags,
-    ) -> FsResult<Resource<types::Descriptor>> {
+    ) -> FsResult<Resource<types::Descriptor<T::Executor>>> {
         use cap_fs_ext::{FollowSymlinks, OpenOptionsFollowExt, OpenOptionsMaybeDirExt};
         use system_interface::fs::{FdFlags, GetSetFdFlags};
         use types::{DescriptorFlags, OpenFlags};
@@ -631,7 +634,7 @@ where
         }
     }
 
-    fn drop(&mut self, fd: Resource<types::Descriptor>) -> anyhow::Result<()> {
+    fn drop(&mut self, fd: Resource<types::Descriptor<T::Executor>>) -> anyhow::Result<()> {
         let table = self.table();
 
         // The Drop will close the file/dir, but if the close syscall
@@ -646,7 +649,7 @@ where
 
     async fn readlink_at(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         path: String,
     ) -> FsResult<String> {
         let table = self.table();
@@ -663,7 +666,7 @@ where
 
     async fn remove_directory_at(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         path: String,
     ) -> FsResult<()> {
         let table = self.table();
@@ -676,9 +679,9 @@ where
 
     async fn rename_at(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         old_path: String,
-        new_fd: Resource<types::Descriptor>,
+        new_fd: Resource<types::Descriptor<T::Executor>>,
         new_path: String,
     ) -> FsResult<()> {
         let table = self.table();
@@ -698,7 +701,7 @@ where
 
     async fn symlink_at(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         src_path: String,
         dest_path: String,
     ) -> FsResult<()> {
@@ -717,7 +720,7 @@ where
 
     async fn unlink_file_at(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         path: String,
     ) -> FsResult<()> {
         use cap_fs_ext::DirExt;
@@ -733,7 +736,7 @@ where
 
     fn read_via_stream(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         offset: types::Filesize,
     ) -> FsResult<Resource<InputStream>> {
         // Trap if fd lookup fails:
@@ -754,7 +757,7 @@ where
 
     fn write_via_stream(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         offset: types::Filesize,
     ) -> FsResult<Resource<OutputStream>> {
         // Trap if fd lookup fails:
@@ -776,7 +779,7 @@ where
 
     fn append_via_stream(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
     ) -> FsResult<Resource<OutputStream>> {
         // Trap if fd lookup fails:
         let f = self.table().get(&fd)?.file()?;
@@ -797,8 +800,8 @@ where
 
     async fn is_same_object(
         &mut self,
-        a: Resource<types::Descriptor>,
-        b: Resource<types::Descriptor>,
+        a: Resource<types::Descriptor<T::Executor>>,
+        b: Resource<types::Descriptor<T::Executor>>,
     ) -> anyhow::Result<bool> {
         use cap_fs_ext::MetadataExt;
         let descriptor_a = self.table().get(&a)?;
@@ -824,7 +827,7 @@ where
     }
     async fn metadata_hash(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
     ) -> FsResult<types::MetadataHashValue> {
         let descriptor_a = self.table().get(&fd)?;
         let meta = get_descriptor_metadata(descriptor_a).await?;
@@ -832,7 +835,7 @@ where
     }
     async fn metadata_hash_at(
         &mut self,
-        fd: Resource<types::Descriptor>,
+        fd: Resource<types::Descriptor<T::Executor>>,
         path_flags: types::PathFlags,
         path: String,
     ) -> FsResult<types::MetadataHashValue> {
@@ -871,7 +874,9 @@ where
     }
 }
 
-async fn get_descriptor_metadata(fd: &types::Descriptor) -> FsResult<cap_std::fs::Metadata> {
+async fn get_descriptor_metadata<E: WasiExecutor>(
+    fd: &types::Descriptor<E>,
+) -> FsResult<cap_std::fs::Metadata> {
     match fd {
         Descriptor::File(f) => {
             // No permissions check on metadata: if opened, allowed to stat it
