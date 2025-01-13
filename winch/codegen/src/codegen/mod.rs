@@ -848,32 +848,29 @@ where
     fn check_align(&mut self, memarg: &MemArg, size: OperandSize) -> Result<()> {
         if size.bytes() > 1 {
             let addr = *self.context.stack.peek().unwrap();
-            let effective_addr_reg = self.context.any_gpr(self.masm)?;
+            let tmp = self.context.any_gpr(self.masm)?;
             self.context
-                .move_val_to_reg(&addr, effective_addr_reg, self.masm)?;
+                .move_val_to_reg(&addr, tmp, self.masm)?;
             if memarg.offset != 0 {
-                // self.masm.add(dst, lhs, rhs, size)
-                // self.context.builder.ins().iadd_imm(addr, memarg.offset.signed())
                 self.masm.add(
-                    writable!(effective_addr_reg),
-                    effective_addr_reg,
+                    writable!(tmp),
+                    tmp,
                     RegImm::Imm(Imm::I64(memarg.offset)),
                     size,
                 )?;
             };
             self.masm.and(
-                writable!(effective_addr_reg),
-                effective_addr_reg,
+                writable!(tmp),
+                tmp,
                 RegImm::Imm(Imm::I32(size.bytes() - 1)),
                 size,
             )?;
 
             self.masm
-                .cmp(effective_addr_reg, RegImm::Imm(Imm::i64(0)), size)?;
+                .cmp(tmp, RegImm::Imm(Imm::i64(0)), size)?;
             self.masm.trapif(IntCmpKind::Ne, TRAP_HEAP_MISALIGNED)?;
 
-            // environ.trapnz(builder, f, crate::TRAP_HEAP_MISALIGNED);
-            self.context.free_reg(effective_addr_reg);
+            self.context.free_reg(tmp);
         }
 
         Ok(())
