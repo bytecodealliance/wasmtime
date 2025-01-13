@@ -564,3 +564,6 @@ opt-level = 's'
 inherits = "release"
 codegen-units = 1
 lto = true
+
+[patch.crates-io]
+regalloc2 = { git = "https://github.com/bytecodealliance/regalloc2", branch = "jonas/refactor/static-machine-env" }
