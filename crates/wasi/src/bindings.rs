@@ -385,6 +385,7 @@ mod async_io {
                 "[method]pollable.ready",
                 "[method]tcp-socket.start-bind",
                 "[method]tcp-socket.start-connect",
+                "[method]tcp-socket.finish-connect",
                 "[method]udp-socket.start-bind",
                 "[method]udp-socket.stream",
                 "[method]outgoing-datagram-stream.send",

@@ -263,20 +263,11 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn finish_connect(&mut self) -> SocketResult<(InputStream, OutputStream)> {
+    pub async fn finish_connect(&mut self) -> SocketResult<(InputStream, OutputStream)> {
         let previous_state = std::mem::replace(&mut self.tcp_state, TcpState::Closed);
         let result = match previous_state {
             TcpState::ConnectReady(result) => result,
-            TcpState::Connecting(mut future) => {
-                let mut cx = std::task::Context::from_waker(futures::task::noop_waker_ref());
-                match with_ambient_tokio_runtime(|| future.as_mut().poll(&mut cx)) {
-                    Poll::Ready(result) => result,
-                    Poll::Pending => {
-                        self.tcp_state = TcpState::Connecting(future);
-                        return Err(ErrorCode::WouldBlock.into());
-                    }
-                }
-            }
+            TcpState::Connecting(future) => future.await,
             previous_state => {
                 self.tcp_state = previous_state;
                 return Err(ErrorCode::NotInProgress.into());
@@ -360,7 +351,7 @@ impl TcpSocket {
         }
     }
 
-    pub fn accept(&mut self) -> SocketResult<(Self, InputStream, OutputStream)> {
+    pub async fn accept(&mut self) -> SocketResult<(Self, InputStream, OutputStream)> {
         let TcpState::Listening {
             listener,
             pending_accept,

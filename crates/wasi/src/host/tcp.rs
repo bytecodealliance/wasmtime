@@ -69,14 +69,14 @@ where
         Ok(())
     }
 
-    fn finish_connect(
+    async fn finish_connect(
         &mut self,
         this: Resource<tcp::TcpSocket>,
     ) -> SocketResult<(Resource<InputStream>, Resource<OutputStream>)> {
         let table = self.table();
         let socket = table.get_mut(&this)?;
 
-        let (input, output) = socket.finish_connect()?;
+        let (input, output) = socket.finish_connect().await?;
 
         let input_stream = self.table().push_child(input, &this)?;
         let output_stream = self.table().push_child(output, &this)?;
@@ -366,7 +366,7 @@ pub mod sync {
             &mut self,
             self_: Resource<TcpSocket>,
         ) -> Result<(Resource<InputStream>, Resource<OutputStream>), SocketError> {
-            AsyncHostTcpSocket::finish_connect(self, self_)
+            in_tokio(async { AsyncHostTcpSocket::finish_connect(self, self_).await })
         }
 
         fn start_listen(&mut self, self_: Resource<TcpSocket>) -> Result<(), SocketError> {
