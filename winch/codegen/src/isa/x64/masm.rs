@@ -284,6 +284,11 @@ impl Masm for MacroAssembler {
         kind: LoadKind,
         op_kind: MemOpKind,
     ) -> Result<()> {
+        if op_kind == MemOpKind::Atomic && size == OperandSize::S128 {
+            // TODO: handle 128bits atomic loads
+            bail!(CodeGenError::unexpected_operand_size())
+        }
+
         match kind {
             // The guarantees of the x86-64 memory model ensure that `SeqCst`
             // loads are equivalent to normal loads.
