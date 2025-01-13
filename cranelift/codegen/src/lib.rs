@@ -21,16 +21,14 @@ extern crate alloc;
 extern crate std;
 
 #[cfg(not(feature = "std"))]
-use hashbrown::{hash_map, HashMap};
+use hashbrown::{hash_map, HashMap, HashSet};
 #[cfg(feature = "std")]
-use std::collections::{hash_map, HashMap};
+use std::collections::{hash_map, HashMap, HashSet};
 
-#[cfg(feature = "std")]
-pub use rustc_hash::{FxHashMap, FxHashSet};
-#[cfg(not(feature = "std"))]
-pub type FxHashMap<K, V> = HashMap<K, V, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
-#[cfg(not(feature = "std"))]
-pub type FxHashSet<V> = HashSet<V, core::hash::BuildHasherDefault<rustc_hash::FxHasher>>;
+#[allow(missing_docs)]
+pub(crate) type FxHashMap<K, V> = HashMap<K, V, rustc_hash::FxBuildHasher>;
+#[allow(missing_docs)]
+pub(crate) type FxHashSet<V> = HashSet<V, rustc_hash::FxBuildHasher>;
 
 pub use crate::context::Context;
 pub use crate::value_label::{LabelValueLoc, ValueLabelsRanges, ValueLocRange};
