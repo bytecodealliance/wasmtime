@@ -522,16 +522,16 @@ impl RunCommand {
             let val = val
                 .to_str()
                 .ok_or_else(|| anyhow!("argument is not valid utf-8: {val:?}"))?;
-            eprintln!("Debug: Processing argument: {}", val);
+            eprintln!("Debug: Processing argument: {val}");
             values.push(match ty {
                 ValType::I32 => {
                     let parsed = if val.starts_with("0x") || val.starts_with("0X") {
                         let hex_val = i32::from_str_radix(&val[2..], 16)?;
-                        eprintln!("Debug: Parsed hex value: {}", hex_val);
+                        eprintln!("Debug: Parsed hex value: {hex_val}");
                         hex_val
                     } else {
                         let dec_val = val.parse()?;
-                        eprintln!("Debug: Parsed decimal value: {}", dec_val);
+                        eprintln!("Debug: Parsed decimal value: {dec_val}");
                         dec_val
                     };
                     Val::I32(parsed)
@@ -575,10 +575,10 @@ impl RunCommand {
         for result in results {
             match result {
                 Val::I32(i) => {
-                    eprintln!("Debug: Result value: {}", i);
-                    print!("{}", i)
+                    eprintln!("Debug: Result value: {i}");
+                    print!("{i}")
                 }
-                Val::I64(i) => print!("{}", i),
+                Val::I64(i) => print!("{i}"),
                 Val::F32(f) => print!("{}", f32::from_bits(f)),
                 Val::F64(f) => print!("{}", f64::from_bits(f)),
                 Val::V128(i) => print!("{}", i.as_u128()),
