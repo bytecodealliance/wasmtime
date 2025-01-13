@@ -3770,6 +3770,30 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn vi32x4_from_f32x4_s(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32x4();
+        self.state[dst].set_i32x4(a.map(|f| f as i32));
+        ControlFlow::Continue(())
+    }
+
+    fn vi32x4_from_f32x4_u(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f32x4();
+        self.state[dst].set_u32x4(a.map(|f| f as u32));
+        ControlFlow::Continue(())
+    }
+
+    fn vi64x2_from_f64x2_s(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64x2();
+        self.state[dst].set_i64x2(a.map(|f| f as i64));
+        ControlFlow::Continue(())
+    }
+
+    fn vi64x2_from_f64x2_u(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
+        let a = self.state[src].get_f64x2();
+        self.state[dst].set_u64x2(a.map(|f| f as u64));
+        ControlFlow::Continue(())
+    }
+
     fn vwidenlow8x16_s(&mut self, dst: VReg, src: VReg) -> ControlFlow<Done> {
         let a = *self.state[src].get_i8x16().first_chunk().unwrap();
         self.state[dst].set_i16x8(a.map(|i| i.into()));
@@ -3891,6 +3915,43 @@ impl ExtendedOpVisitor for Interpreter<'_> {
                 .unwrap_or(if *i < 0 { u16::MIN } else { u16::MAX });
         }
         self.state[operands.dst].set_u16x8(result);
+        ControlFlow::Continue(())
+    }
+
+    fn vnarrow64x2_s(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i64x2();
+        let b = self.state[operands.src2].get_i64x2();
+        let mut result = [0; 4];
+        for (i, d) in a.iter().chain(&b).zip(&mut result) {
+            *d = (*i)
+                .try_into()
+                .unwrap_or(if *i < 0 { i32::MIN } else { i32::MAX });
+        }
+        self.state[operands.dst].set_i32x4(result);
+        ControlFlow::Continue(())
+    }
+
+    fn vnarrow64x2_u(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_i64x2();
+        let b = self.state[operands.src2].get_i64x2();
+        let mut result = [0; 4];
+        for (i, d) in a.iter().chain(&b).zip(&mut result) {
+            *d = (*i)
+                .try_into()
+                .unwrap_or(if *i < 0 { u32::MIN } else { u32::MAX });
+        }
+        self.state[operands.dst].set_u32x4(result);
+        ControlFlow::Continue(())
+    }
+
+    fn vunarrow64x2_u(&mut self, operands: BinaryOperands<VReg>) -> ControlFlow<Done> {
+        let a = self.state[operands.src1].get_u64x2();
+        let b = self.state[operands.src2].get_u64x2();
+        let mut result = [0; 4];
+        for (i, d) in a.iter().chain(&b).zip(&mut result) {
+            *d = (*i).try_into().unwrap_or(u32::MAX);
+        }
+        self.state[operands.dst].set_u32x4(result);
         ControlFlow::Continue(())
     }
 
@@ -4833,6 +4894,22 @@ impl ExtendedOpVisitor for Interpreter<'_> {
             *a = a.wasm_mul_add(b, c);
         }
         self.state[dst].set_f64x2(a);
+        ControlFlow::Continue(())
+    }
+
+    fn vselect(
+        &mut self,
+        dst: VReg,
+        cond: XReg,
+        if_nonzero: VReg,
+        if_zero: VReg,
+    ) -> ControlFlow<Done> {
+        let result = if self.state[cond].get_u32() != 0 {
+            self.state[if_nonzero]
+        } else {
+            self.state[if_zero]
+        };
+        self.state[dst] = result;
         ControlFlow::Continue(())
     }
 

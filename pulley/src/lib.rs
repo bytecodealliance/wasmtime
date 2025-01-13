@@ -1029,6 +1029,14 @@ macro_rules! for_each_extended_op {
             vf64x2_from_i64x2_s = VF64x2FromI64x2S { dst: VReg, src: VReg };
             /// Int-to-float conversion (same as `f64_from_x64_u`)
             vf64x2_from_i64x2_u = VF64x2FromI64x2U { dst: VReg, src: VReg };
+            /// Float-to-int conversion (same as `x32_from_f32_s`
+            vi32x4_from_f32x4_s = VI32x4FromF32x4S { dst: VReg, src: VReg };
+            /// Float-to-int conversion (same as `x32_from_f32_u`
+            vi32x4_from_f32x4_u = VI32x4FromF32x4U { dst: VReg, src: VReg };
+            /// Float-to-int conversion (same as `x64_from_f64_s`
+            vi64x2_from_f64x2_s = VI64x2FromF64x2S { dst: VReg, src: VReg };
+            /// Float-to-int conversion (same as `x64_from_f64_u`
+            vi64x2_from_f64x2_u = VI64x2FromF64x2U { dst: VReg, src: VReg };
 
             /// Widens the low lanes of the input vector, as signed, to twice
             /// the width.
@@ -1079,6 +1087,15 @@ macro_rules! for_each_extended_op {
             /// Narrows the two 32x4 vectors, assuming all input lanes are
             /// signed, to half the width. Narrowing is unsigned and saturating.
             vnarrow32x4_u = Vnarrow32x4U { operands: BinaryOperands<VReg> };
+            /// Narrows the two 64x2 vectors, assuming all input lanes are
+            /// signed, to half the width. Narrowing is signed and saturating.
+            vnarrow64x2_s = Vnarrow64x2S { operands: BinaryOperands<VReg> };
+            /// Narrows the two 64x2 vectors, assuming all input lanes are
+            /// signed, to half the width. Narrowing is unsigned and saturating.
+            vnarrow64x2_u = Vnarrow64x2U { operands: BinaryOperands<VReg> };
+            /// Narrows the two 64x2 vectors, assuming all input lanes are
+            /// unsigned, to half the width. Narrowing is unsigned and saturating.
+            vunarrow64x2_u = Vunarrow64x2U { operands: BinaryOperands<VReg> };
             /// Promotes the low two lanes of the f32x4 input to f64x2.
             vfpromotelow = VFpromoteLow { dst: VReg, src: VReg };
             /// Demotes the two f64x2 lanes to f32x2 and then extends with two
@@ -1288,6 +1305,9 @@ macro_rules! for_each_extended_op {
             vfma32x4 = Vfma32x4 { dst: VReg, a: VReg, b: VReg, c: VReg };
             /// `dst = ieee_fma(a, b, c)`
             vfma64x2 = Vfma64x2 { dst: VReg, a: VReg, b: VReg, c: VReg };
+
+            /// `dst = low32(cond) ? if_nonzero : if_zero`
+            vselect = Vselect { dst: VReg, cond: XReg, if_nonzero: VReg, if_zero: VReg };
 
             /// `dst_hi:dst_lo = lhs_hi:lhs_lo + rhs_hi:rhs_lo`
             xadd128 = Xadd128 {

@@ -1041,6 +1041,9 @@
 (rule 1 (lower (has_type $F64 (select c a b)))
   (pulley_fselect64 (emit_cond (lower_cond c)) a b))
 
+(rule 2 (lower (has_type (ty_vec128 _) (select c a b)))
+  (pulley_vselect (emit_cond (lower_cond c)) a b))
+
 ;; Helper to emit a conditional into a register itself.
 (decl emit_cond (Cond) XReg)
 (rule (emit_cond (Cond.If32 reg)) reg)
@@ -1212,6 +1215,18 @@
 
 (rule (lower (has_type $I64 (fcvt_to_sint_sat val @ (value_type $F64))))
   (pulley_x64_from_f64_s_sat val))
+
+(rule (lower (has_type $I32X4 (fcvt_to_sint_sat val @ (value_type $F32X4))))
+  (pulley_vi32x4_from_f32x4_s val))
+
+(rule (lower (has_type $I32X4 (fcvt_to_uint_sat val @ (value_type $F32X4))))
+  (pulley_vi32x4_from_f32x4_u val))
+
+(rule (lower (has_type $I64X2 (fcvt_to_sint_sat val @ (value_type $F64X2))))
+  (pulley_vi64x2_from_f64x2_s val))
+
+(rule (lower (has_type $I64X2 (fcvt_to_uint_sat val @ (value_type $F64X2))))
+  (pulley_vi64x2_from_f64x2_u val))
 
 ;;;; Rules for `fdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1429,11 +1444,16 @@
 
 (rule (lower (snarrow a @ (value_type $I16X8) b)) (pulley_vnarrow16x8_s a b))
 (rule (lower (snarrow a @ (value_type $I32X4) b)) (pulley_vnarrow32x4_s a b))
+(rule (lower (snarrow a @ (value_type $I64X2) b)) (pulley_vnarrow64x2_s a b))
 
 ;;;; Rules for `unarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (unarrow a @ (value_type $I16X8) b)) (pulley_vnarrow16x8_u a b))
 (rule (lower (unarrow a @ (value_type $I32X4) b)) (pulley_vnarrow32x4_u a b))
+
+;;;; Rules for `uunarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (uunarrow a @ (value_type $I64X2) b)) (pulley_vunarrow64x2_u a b))
 
 ;;;; Rules for `fvpromote_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
