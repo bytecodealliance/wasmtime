@@ -239,7 +239,7 @@ where
     }
 }
 
-impl<R: Reg + Disas> Disas for RegSet<R> {
+impl<R: Reg + Disas> Disas for UpperRegSet<R> {
     fn disas(&self, position: usize, disas: &mut String) {
         disas_list(position, disas, *self)
     }

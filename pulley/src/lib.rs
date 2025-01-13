@@ -467,10 +467,10 @@ macro_rules! for_each_op {
             ///
             /// This is equivalent to `push_frame`, `stack_alloc32 amt`, then
             /// saving all of `regs` to the top of the stack just allocated.
-            push_frame_save = PushFrameSave { amt: u32, regs: RegSet<XReg> };
+            push_frame_save = PushFrameSave { amt: u16, regs: UpperRegSet<XReg> };
             /// Inverse of `push_frame_save`. Restores `regs` from the top of
             /// the stack, then runs `stack_free32 amt`, then runs `pop_frame`.
-            pop_frame_restore = PopFrameRestore { amt: u32, regs: RegSet<XReg> };
+            pop_frame_restore = PopFrameRestore { amt: u16, regs: UpperRegSet<XReg> };
 
             /// `sp = sp.checked_sub(amt)`
             stack_alloc32 = StackAlloc32 { amt: u32 };
@@ -655,24 +655,6 @@ macro_rules! for_each_extended_op {
             xbmask32 = Xbmask32 { dst: XReg, src: XReg };
             /// dst = if src == 0 { 0 } else { -1 }
             xbmask64 = Xbmask64 { dst: XReg, src: XReg };
-
-            /// `*sp = low32(src); sp = sp.checked_add(4)`
-            xpush32 = XPush32 { src: XReg };
-            /// `for src in srcs { xpush32 src }`
-            xpush32_many = XPush32Many { srcs: RegSet<XReg> };
-            /// `*sp = src; sp = sp.checked_add(8)`
-            xpush64 = XPush64 { src: XReg };
-            /// `for src in srcs { xpush64 src }`
-            xpush64_many = XPush64Many { srcs: RegSet<XReg> };
-
-            /// `*dst = *sp; sp -= 4`
-            xpop32 = XPop32 { dst: XReg };
-            /// `for dst in dsts.rev() { xpop32 dst }`
-            xpop32_many = XPop32Many { dsts: RegSet<XReg> };
-            /// `*dst = *sp; sp -= 8`
-            xpop64 = XPop64 { dst: XReg };
-            /// `for dst in dsts.rev() { xpop64 dst }`
-            xpop64_many = XPop64Many { dsts: RegSet<XReg> };
 
             /// `dst = zext(*(ptr + offset))`
             xload16be_u64_offset32 = XLoad16BeU64Offset32 { dst: XReg, ptr: XReg, offset: i32 };

@@ -449,7 +449,7 @@ impl<S: Decode + ScalarBitSetStorage> Decode for ScalarBitSet<S> {
     }
 }
 
-impl<R: Reg + Decode> Decode for RegSet<R> {
+impl<R: Reg + Decode> Decode for UpperRegSet<R> {
     fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
     where
         T: BytecodeStream,
