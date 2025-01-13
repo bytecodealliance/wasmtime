@@ -535,7 +535,7 @@ impl RunCommand {
                         dec_val
                     };
                     Val::I32(parsed)
-                },
+                }
                 ValType::I64 => Val::I64(if val.starts_with("0x") || val.starts_with("0X") {
                     i64::from_str_radix(&val[2..], 16)?
                 } else {
@@ -576,8 +576,8 @@ impl RunCommand {
             match result {
                 Val::I32(i) => {
                     eprintln!("Debug: Result value: {}", i);
-                    print!("{}", i);
-                },
+                    print!("{}", i)
+                }
                 Val::I64(i) => print!("{}", i),
                 Val::F32(f) => print!("{}", f32::from_bits(f)),
                 Val::F64(f) => print!("{}", f64::from_bits(f)),
