@@ -845,12 +845,12 @@ where
         Ok(addr)
     }
 
+    /// Emit checks to ensure that the address at `memarg` is correctly aligned for `size`.
     fn check_align(&mut self, memarg: &MemArg, size: OperandSize) -> Result<()> {
         if size.bytes() > 1 {
             let addr = *self.context.stack.peek().unwrap();
             let tmp = self.context.any_gpr(self.masm)?;
-            self.context
-                .move_val_to_reg(&addr, tmp, self.masm)?;
+            self.context.move_val_to_reg(&addr, tmp, self.masm)?;
             if memarg.offset != 0 {
                 self.masm.add(
                     writable!(tmp),
@@ -866,8 +866,7 @@ where
                 size,
             )?;
 
-            self.masm
-                .cmp(tmp, RegImm::Imm(Imm::i64(0)), size)?;
+            self.masm.cmp(tmp, RegImm::Imm(Imm::i64(0)), size)?;
             self.masm.trapif(IntCmpKind::Ne, TRAP_HEAP_MISALIGNED)?;
 
             self.context.free_reg(tmp);
