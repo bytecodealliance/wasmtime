@@ -7,9 +7,7 @@ use super::{
 use anyhow::{anyhow, bail, Result};
 
 use crate::masm::{
-    DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind, MacroAssembler as Masm,
-    MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RoundingMode, ShiftKind, TrapCode,
-    TruncKind, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
+    DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind, MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode, ShiftKind, TrapCode, TruncKind, TRUSTED_FLAGS, UNTRUSTED_FLAGS
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
@@ -1282,6 +1280,38 @@ impl Masm for MacroAssembler {
         context.stack.push(lhs.into());
         // The high bits of the result are in rdx, which we previously reserved.
         context.stack.push(Val::Reg(TypedReg::i64(rdx)));
+
+        Ok(())
+    }
+
+    fn atomic_rmw(
+        &mut self,
+        addr: Self::Address,
+        operand: WritableReg,
+        size: OperandSize,
+        op: RmwOp,
+        flags: MemFlags,
+        extend: Option<ExtendKind>,
+    ) -> Result<()> {
+        match op {
+            RmwOp::Add => {
+                self.asm
+                    .lock_xadd(addr, operand.to_reg(), operand, size, flags);
+                match extend {
+                    // It is only necessary to zero-extend when the operand is less than 32bits.
+                    // x64 automatically zero-extend 32bits to 64bit.
+                    Some(
+                        extend @ (ExtendKind::I32Extend8S
+                        | ExtendKind::I64Extend8S
+                        | ExtendKind::I64Extend16S
+                        | ExtendKind::I32Extend16S),
+                    ) => {
+                        self.asm.movzx_rr(operand.to_reg(), operand, extend);
+                    }
+                    _ => (),
+                }
+            }
+        }
 
         Ok(())
     }

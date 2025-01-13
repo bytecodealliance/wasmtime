@@ -52,6 +52,11 @@ pub(crate) enum MulWideKind {
     Unsigned,
 }
 
+/// Type of operation for a read-modify-write instruction.
+pub(crate) enum RmwOp {
+    Add,
+}
+
 /// The direction to perform the memory move.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum MemMoveDirection {
@@ -1251,4 +1256,17 @@ pub(crate) trait MacroAssembler {
     /// instruction (e.g. x64) so full access to `CodeGenContext` is provided.
     fn mul_wide(&mut self, context: &mut CodeGenContext<Emission>, kind: MulWideKind)
         -> Result<()>;
+
+    /// Performs the RMW `op` operation on the passed `addr`.
+    ///
+    /// The value *before* the operation was performed is written back to the `operand` register.
+    fn atomic_rmw(
+        &mut self,
+        addr: Self::Address,
+        operand: WritableReg,
+        size: OperandSize,
+        op: RmwOp,
+        flags: MemFlags,
+        extend: Option<ExtendKind>,
+    ) -> Result<()>;
 }
