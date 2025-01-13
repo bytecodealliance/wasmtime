@@ -38,7 +38,7 @@ fuzz_target!(|data: &[u8]| {
         // environment variables.
         let allowed_engines = build_allowed_env_list(
             parse_env_list("ALLOWED_ENGINES"),
-            &["wasmtime", "wasmi", "spec", "v8", "winch"],
+            &["wasmtime", "wasmi", "spec", "v8", "winch", "pulley"],
         );
         let allowed_modules = build_allowed_env_list(
             parse_env_list("ALLOWED_MODULES"),
@@ -201,6 +201,7 @@ struct RuntimeStats {
     spec: AtomicUsize,
     wasmtime: AtomicUsize,
     winch: AtomicUsize,
+    pulley: AtomicUsize,
 
     // Counters for which style of module is chosen
     wasm_smith_modules: AtomicUsize,
@@ -218,6 +219,7 @@ impl RuntimeStats {
             spec: AtomicUsize::new(0),
             wasmtime: AtomicUsize::new(0),
             winch: AtomicUsize::new(0),
+            pulley: AtomicUsize::new(0),
             wasm_smith_modules: AtomicUsize::new(0),
             single_instruction_modules: AtomicUsize::new(0),
         }
@@ -241,14 +243,18 @@ impl RuntimeStats {
         let wasmi = self.wasmi.load(SeqCst);
         let wasmtime = self.wasmtime.load(SeqCst);
         let winch = self.winch.load(SeqCst);
-        let total = v8 + spec + wasmi + wasmtime + winch;
+        let pulley = self.pulley.load(SeqCst);
+        let total = v8 + spec + wasmi + wasmtime + winch + pulley;
         println!(
-            "\twasmi: {:.02}%, spec: {:.02}%, wasmtime: {:.02}%, v8: {:.02}%, winch: {:.02}%",
+            "\twasmi: {:.02}%, spec: {:.02}%, wasmtime: {:.02}%, v8: {:.02}%, \
+             winch: {:.02}, \
+             pulley: {:.02}%",
             wasmi as f64 / total as f64 * 100f64,
             spec as f64 / total as f64 * 100f64,
             wasmtime as f64 / total as f64 * 100f64,
             v8 as f64 / total as f64 * 100f64,
             winch as f64 / total as f64 * 100f64,
+            pulley as f64 / total as f64 * 100f64,
         );
 
         let wasm_smith = self.wasm_smith_modules.load(SeqCst);
@@ -268,6 +274,7 @@ impl RuntimeStats {
             "spec" => self.spec.fetch_add(1, SeqCst),
             "v8" => self.v8.fetch_add(1, SeqCst),
             "winch" => self.winch.fetch_add(1, SeqCst),
+            "pulley" => self.pulley.fetch_add(1, SeqCst),
             _ => return,
         };
     }

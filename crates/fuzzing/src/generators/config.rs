@@ -233,7 +233,8 @@ impl Config {
                 InstanceAllocationStrategy::Pooling(_)
             ),
             compiler: match self.wasmtime.compiler_strategy {
-                CompilerStrategy::Cranelift => wasmtime_wast_util::Compiler::CraneliftNative,
+                CompilerStrategy::CraneliftNative => wasmtime_wast_util::Compiler::CraneliftNative,
+                CompilerStrategy::CraneliftPulley => wasmtime_wast_util::Compiler::CraneliftPulley,
                 CompilerStrategy::Winch => wasmtime_wast_util::Compiler::Winch,
             },
         }
@@ -281,8 +282,11 @@ impl Config {
         }
 
         let compiler_strategy = &self.wasmtime.compiler_strategy;
-        let cranelift_strategy = *compiler_strategy == CompilerStrategy::Cranelift;
-        cfg.strategy(self.wasmtime.compiler_strategy.to_wasmtime());
+        let cranelift_strategy = match compiler_strategy {
+            CompilerStrategy::CraneliftNative | CompilerStrategy::CraneliftPulley => true,
+            CompilerStrategy::Winch => false,
+        };
+        self.wasmtime.compiler_strategy.configure(&mut cfg);
         cfg.collector(self.wasmtime.collector.to_wasmtime());
 
         self.wasmtime.codegen.configure(&mut cfg);
@@ -560,23 +564,32 @@ impl WasmtimeConfig {
         config: &mut wasm_smith::Config,
         u: &mut Unstructured<'_>,
     ) -> arbitrary::Result<()> {
-        // Winch doesn't support the same set of wasm proposal as Cranelift at
-        // this time, so if winch is selected be sure to disable wasm proposals
-        // in `Config` to ensure that Winch can compile the module that
-        // wasm-smith generates.
-        if let CompilerStrategy::Winch = self.compiler_strategy {
-            config.simd_enabled = false;
-            config.relaxed_simd_enabled = false;
-            config.gc_enabled = false;
-            config.threads_enabled = false;
-            config.tail_call_enabled = false;
-            config.reference_types_enabled = false;
+        match self.compiler_strategy {
+            CompilerStrategy::CraneliftNative => {}
 
-            // Tuning  the following engine options is currently not supported
-            // by Winch.
-            self.signals_based_traps = true;
-            self.table_lazy_init = true;
-            self.debug_info = false;
+            // Winch doesn't support the same set of wasm proposal as Cranelift
+            // at this time, so if winch is selected be sure to disable wasm
+            // proposals in `Config` to ensure that Winch can compile the
+            // module that wasm-smith generates.
+            CompilerStrategy::Winch => {
+                config.simd_enabled = false;
+                config.relaxed_simd_enabled = false;
+                config.gc_enabled = false;
+                config.threads_enabled = false;
+                config.tail_call_enabled = false;
+                config.reference_types_enabled = false;
+
+                // Tuning  the following engine options is currently not supported
+                // by Winch.
+                self.signals_based_traps = true;
+                self.table_lazy_init = true;
+                self.debug_info = false;
+            }
+
+            CompilerStrategy::CraneliftPulley => {
+                config.simd_enabled = false;
+                config.threads_enabled = false;
+            }
         }
 
         // Forcibly don't use the `CustomUnaligned` memory configuration when
@@ -745,27 +758,43 @@ impl RegallocAlgorithm {
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 /// Compiler to use.
 pub enum CompilerStrategy {
-    /// Cranelift compiler.
-    Cranelift,
+    /// Cranelift compiler for the native architecture.
+    CraneliftNative,
     /// Winch compiler.
     Winch,
+    /// Cranelift compiler for the native architecture.
+    CraneliftPulley,
 }
 
 impl CompilerStrategy {
-    fn to_wasmtime(&self) -> wasmtime::Strategy {
+    /// Configures `config` to use this compilation strategy
+    pub fn configure(&self, config: &mut wasmtime::Config) {
         match self {
-            CompilerStrategy::Cranelift => wasmtime::Strategy::Cranelift,
-            CompilerStrategy::Winch => wasmtime::Strategy::Winch,
+            CompilerStrategy::CraneliftNative => {
+                config.strategy(wasmtime::Strategy::Cranelift);
+            }
+            CompilerStrategy::Winch => {
+                config.strategy(wasmtime::Strategy::Winch);
+            }
+            CompilerStrategy::CraneliftPulley => {
+                config
+                    .strategy(wasmtime::Strategy::Cranelift)
+                    .target("pulley64")
+                    .unwrap();
+            }
         }
     }
 }
 
 impl Arbitrary<'_> for CompilerStrategy {
-    fn arbitrary(_: &mut Unstructured<'_>) -> arbitrary::Result<Self> {
-        // NB: Winch isn't selected here yet as it doesn't yet implement all the
-        // compiler features for things such as trampolines, so it's only used
-        // on fuzz targets that don't need those trampolines.
-        Ok(Self::Cranelift)
+    fn arbitrary(u: &mut Unstructured<'_>) -> arbitrary::Result<Self> {
+        // Favor fuzzing native cranelift, but if allowed also enable
+        // winch/pulley.
+        match u.int_in_range(0..=19)? {
+            1 => Ok(Self::CraneliftPulley),
+            2 => Ok(Self::Winch),
+            _ => Ok(Self::CraneliftNative),
+        }
     }
 }
 
