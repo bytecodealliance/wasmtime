@@ -19,18 +19,18 @@ block2:
 ;   zext8 x4, x0
 ;   br_if32 x4, label2; jump label1
 ; block1:
-;   xconst8 x0, 0
+;   xzero x0
 ;   ret
 ; block2:
-;   xconst8 x0, 1
+;   xone x0
 ;   ret
 ;
 ; Disassembled:
 ; zext8 x4, x0
-; br_if32 x4, 0xa    // target = 0xd
-; xconst8 x0, 0
+; br_if32 x4, 0x9    // target = 0xc
+; xzero x0
 ; ret
-; xconst8 x0, 1
+; xone x0
 ; ret
 
 function %brif_i16(i16) -> i8 {
@@ -51,18 +51,18 @@ block2:
 ;   zext16 x4, x0
 ;   br_if32 x4, label2; jump label1
 ; block1:
-;   xconst8 x0, 0
+;   xzero x0
 ;   ret
 ; block2:
-;   xconst8 x0, 1
+;   xone x0
 ;   ret
 ;
 ; Disassembled:
 ; zext16 x4, x0
-; br_if32 x4, 0xa    // target = 0xd
-; xconst8 x0, 0
+; br_if32 x4, 0x9    // target = 0xc
+; xzero x0
 ; ret
-; xconst8 x0, 1
+; xone x0
 ; ret
 
 function %brif_i32(i32) -> i8 {
@@ -82,17 +82,17 @@ block2:
 ; block0:
 ;   br_if32 x0, label2; jump label1
 ; block1:
-;   xconst8 x0, 0
+;   xzero x0
 ;   ret
 ; block2:
-;   xconst8 x0, 1
+;   xone x0
 ;   ret
 ;
 ; Disassembled:
-; br_if32 x0, 0xa    // target = 0xa
-; xconst8 x0, 0
+; br_if32 x0, 0x9    // target = 0x9
+; xzero x0
 ; ret
-; xconst8 x0, 1
+; xone x0
 ; ret
 
 function %brif_i64(i64) -> i8 {
@@ -112,17 +112,17 @@ block2:
 ; block0:
 ;   br_if_xneq64_i32 x0, 0, label2; jump label1
 ; block1:
-;   xconst8 x0, 0
+;   xzero x0
 ;   ret
 ; block2:
-;   xconst8 x0, 1
+;   xone x0
 ;   ret
 ;
 ; Disassembled:
-; br_if_xneq64_i8 x0, 0, 0xb    // target = 0xb
-; xconst8 x0, 0
+; br_if_xneq64_i8 x0, 0, 0xa    // target = 0xa
+; xzero x0
 ; ret
-; xconst8 x0, 1
+; xone x0
 ; ret
 
 function %brif_icmp_i8(i8, i8) -> i8 {
@@ -147,10 +147,10 @@ block2:
 ;   zext8 x8, x10
 ;   br_if32 x8, label2; jump label1
 ; block1:
-;   xconst8 x0, 0
+;   xzero x0
 ;   ret
 ; block2:
-;   xconst8 x0, 1
+;   xone x0
 ;   ret
 ;
 ; Disassembled:
@@ -158,10 +158,10 @@ block2:
 ; zext8 x8, x1
 ; xeq32 x10, x6, x8
 ; zext8 x8, x10
-; br_if32 x8, 0xa    // target = 0x16
-; xconst8 x0, 0
+; br_if32 x8, 0x9    // target = 0x15
+; xzero x0
 ; ret
-; xconst8 x0, 1
+; xone x0
 ; ret
 
 function %brif_icmp_i16(i16, i16) -> i8 {
@@ -186,10 +186,10 @@ block2:
 ;   zext8 x8, x10
 ;   br_if32 x8, label2; jump label1
 ; block1:
-;   xconst8 x0, 0
+;   xzero x0
 ;   ret
 ; block2:
-;   xconst8 x0, 1
+;   xone x0
 ;   ret
 ;
 ; Disassembled:
@@ -197,10 +197,10 @@ block2:
 ; zext16 x8, x1
 ; xneq32 x10, x6, x8
 ; zext8 x8, x10
-; br_if32 x8, 0xa    // target = 0x16
-; xconst8 x0, 0
+; br_if32 x8, 0x9    // target = 0x15
+; xzero x0
 ; ret
-; xconst8 x0, 1
+; xone x0
 ; ret
 
 function %brif_icmp_i32(i32, i32) -> i8 {
@@ -221,17 +221,17 @@ block2:
 ; block0:
 ;   br_if_xslt32 x0, x1, label2; jump label1
 ; block1:
-;   xconst8 x0, 0
+;   xzero x0
 ;   ret
 ; block2:
-;   xconst8 x0, 1
+;   xone x0
 ;   ret
 ;
 ; Disassembled:
-; br_if_xslt32 x0, x1, 0xb    // target = 0xb
-; xconst8 x0, 0
+; br_if_xslt32 x0, x1, 0xa    // target = 0xa
+; xzero x0
 ; ret
-; xconst8 x0, 1
+; xone x0
 ; ret
 
 function %brif_icmp_i64(i64, i64) -> i8 {
@@ -252,16 +252,16 @@ block2:
 ; block0:
 ;   br_if_xulteq64 x1, x0, label2; jump label1
 ; block1:
-;   xconst8 x0, 0
+;   xzero x0
 ;   ret
 ; block2:
-;   xconst8 x0, 1
+;   xone x0
 ;   ret
 ;
 ; Disassembled:
-; br_if_xulteq64 x1, x0, 0xb    // target = 0xb
-; xconst8 x0, 0
+; br_if_xulteq64 x1, x0, 0xa    // target = 0xa
+; xzero x0
 ; ret
-; xconst8 x0, 1
+; xone x0
 ; ret
 

@@ -40,7 +40,7 @@ block5(v5: i32):
 ;   xconst8 x5, 2
 ;   jump label7
 ; block5:
-;   xconst8 x5, 1
+;   xone x5
 ;   jump label7
 ; block6:
 ;   xconst8 x5, 4
@@ -55,14 +55,14 @@ block5(v5: i32):
 ; 0x1d    // target = 0x27
 ; 0x19    // target = 0x27
 ; 0xd    // target = 0x1f
-; 0x21    // target = 0x37
+; 0x20    // target = 0x36
 ; jump 0xd    // target = 0x27
 ; xconst8 x5, 3
-; jump 0x18    // target = 0x3a
+; jump 0x17    // target = 0x39
 ; xconst8 x5, 2
-; jump 0x10    // target = 0x3a
-; xconst8 x5, 1
-; jump 0x8    // target = 0x3a
+; jump 0xf    // target = 0x39
+; xone x5
+; jump 0x8    // target = 0x39
 ; xconst8 x5, 4
 ; xadd32 x0, x0, x5
 ; ret
