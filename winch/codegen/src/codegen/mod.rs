@@ -3,8 +3,7 @@ use crate::{
     codegen::BlockSig,
     isa::reg::{writable, Reg},
     masm::{
-        Imm, IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm, SPOffset,
-        ShiftKind, TrapCode,
+        ExtendKind, Imm, IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm, RmwOp, SPOffset, ShiftKind, TrapCode, UNTRUSTED_FLAGS
     },
     stack::TypedReg,
 };
@@ -1359,6 +1358,31 @@ where
         // or greater than the start [CodeOffset].
         if self.masm.current_code_offset()? >= self.source_location.current.0 {
             self.masm.end_source_loc()?;
+        }
+
+        Ok(())
+    }
+
+    pub(crate) fn atomic_rmw(
+        &mut self,
+        arg: &MemArg,
+        op: RmwOp,
+        size: OperandSize,
+        extend: Option<ExtendKind>,
+    ) -> Result<()> {
+        let operand = self.context.pop_to_reg(self.masm, None).unwrap();
+        if let Some(addr) = self.emit_compute_heap_address(arg, size)? {
+            let src = self.masm.address_at_reg(addr, 0)?;
+            self.masm.atomic_rmw(
+                src,
+                writable!(operand.reg),
+                size,
+                op,
+                UNTRUSTED_FLAGS,
+                extend,
+            )?;
+            self.context.stack.push(operand.into());
+            self.context.free_reg(addr);
         }
 
         Ok(())
