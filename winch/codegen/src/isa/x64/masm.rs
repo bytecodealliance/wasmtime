@@ -230,7 +230,7 @@ impl Masm for MacroAssembler {
                     // TODO: we don't support 128-bit atomic store yet.
                     bail!(CodeGenError::unexpected_operand_size());
                 }
-                // To stay consistent with cranelift, we emit a normal load followed by a mfence,
+                // To stay consistent with cranelift, we emit a normal store followed by a mfence,
                 // although, we could probably just emit a xchg.
                 self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS)?;
                 self.asm.fence(FenceKind::MFence);
