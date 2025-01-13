@@ -23,7 +23,7 @@ impl wasm_exporttype_t {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_exporttype_new(
     name: &mut wasm_name_t,
     ty: Box<wasm_externtype_t>,
@@ -33,13 +33,13 @@ pub extern "C" fn wasm_exporttype_new(
     Some(Box::new(wasm_exporttype_t::new(name, ty.which.clone())))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_exporttype_name(et: &wasm_exporttype_t) -> &wasm_name_t {
     et.name_cache
         .get_or_init(|| wasm_name_t::from_name(et.name.clone()))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_exporttype_type(et: &wasm_exporttype_t) -> &wasm_externtype_t {
     et.type_cache
         .get_or_init(|| wasm_externtype_t::from_cextern_type(et.ty.clone()))

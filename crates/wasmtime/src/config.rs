@@ -880,9 +880,8 @@ impl Config {
     /// as the `v128` type and all of its operators being in a module. Note that
     /// this does not enable the [relaxed simd proposal].
     ///
-    /// On x86_64 platforms note that enabling this feature requires SSE 4.2 and
-    /// below to be available on the target platform. Compilation will fail if
-    /// the compile target does not include SSE 4.2.
+    /// **Note**: On x86_64 platforms the base CPU feature requirement for SIMD
+    /// is SSE2.
     ///
     /// This is `true` by default.
     ///
@@ -1973,7 +1972,6 @@ impl Config {
             Some(Strategy::Winch) => {
                 let mut unsupported = WasmFeatures::GC
                     | WasmFeatures::FUNCTION_REFERENCES
-                    | WasmFeatures::THREADS
                     | WasmFeatures::RELAXED_SIMD
                     | WasmFeatures::TAIL_CALL
                     | WasmFeatures::GC_TYPES;
@@ -1986,6 +1984,7 @@ impl Config {
                         // winch on aarch64 but this helps gate most spec tests
                         // by default which otherwise currently cause panics.
                         unsupported |= WasmFeatures::REFERENCE_TYPES;
+                        unsupported |= WasmFeatures::THREADS
                     }
 
                     // Winch doesn't support other non-x64 architectures at this
@@ -2023,6 +2022,7 @@ impl Config {
         features |= WasmFeatures::RELAXED_SIMD;
         features |= WasmFeatures::TAIL_CALL;
         features |= WasmFeatures::EXTENDED_CONST;
+        features |= WasmFeatures::MEMORY64;
         // NB: if you add a feature above this line please double-check
         // https://docs.wasmtime.dev/stability-wasm-proposals.html
         // to ensure all requirements are met and/or update the documentation

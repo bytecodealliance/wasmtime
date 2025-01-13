@@ -24,7 +24,7 @@ cfg_if::cfg_if! {
             false
         }
     } else {
-        extern "C" {
+        unsafe extern "C" {
             // libunwind import
             fn __register_frame(fde: *const u8);
             fn __deregister_frame(fde: *const u8);

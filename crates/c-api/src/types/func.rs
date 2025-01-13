@@ -140,7 +140,7 @@ impl CFuncType {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_functype_new(
     params: &mut wasm_valtype_vec_t,
     results: &mut wasm_valtype_vec_t,
@@ -158,7 +158,7 @@ pub extern "C" fn wasm_functype_new(
     Box::new(wasm_functype_t::lazy(params, results))
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_functype_params(ft: &wasm_functype_t) -> &wasm_valtype_vec_t {
     let ft = ft.ty();
     ft.params_cache.get_or_init(|| {
@@ -170,7 +170,7 @@ pub extern "C" fn wasm_functype_params(ft: &wasm_functype_t) -> &wasm_valtype_ve
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_functype_results(ft: &wasm_functype_t) -> &wasm_valtype_vec_t {
     let ft = ft.ty();
     ft.returns_cache.get_or_init(|| {
@@ -182,12 +182,12 @@ pub extern "C" fn wasm_functype_results(ft: &wasm_functype_t) -> &wasm_valtype_v
     })
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_functype_as_externtype(ty: &wasm_functype_t) -> &wasm_externtype_t {
     &ty.ext
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_functype_as_externtype_const(ty: &wasm_functype_t) -> &wasm_externtype_t {
     &ty.ext
 }

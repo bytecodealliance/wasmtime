@@ -133,7 +133,7 @@ impl<'a> Parser<'a> {
 
     fn eat_sym_str(&mut self, s: &str) -> Result<bool> {
         self.eat(|tok| match tok {
-            Token::Symbol(ref tok_s) if tok_s == s => true,
+            Token::Symbol(tok_s) if tok_s == s => true,
             _ => false,
         })
         .map(|token| token.is_some())

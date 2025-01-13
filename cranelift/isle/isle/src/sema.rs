@@ -2245,7 +2245,7 @@ impl TermEnv {
                         ..
                     } => {}
                     TermKind::Decl {
-                        extractor_kind: Some(ExtractorKind::InternalExtractor { ref template }),
+                        extractor_kind: Some(ExtractorKind::InternalExtractor { template }),
                         ..
                     } => {
                         if self.expand_internal_extractors {

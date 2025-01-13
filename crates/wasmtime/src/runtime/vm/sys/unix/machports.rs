@@ -56,7 +56,6 @@ use mach2::thread_status::*;
 use mach2::traps::*;
 use std::io;
 use std::mem;
-use std::ptr::addr_of_mut;
 use std::thread;
 use wasmtime_environ::Trap;
 
@@ -85,7 +84,7 @@ impl TrapHandler {
         // Allocate our WASMTIME_PORT and make sure that it can be sent to so we
         // can receive exceptions.
         let me = mach_task_self();
-        let kret = mach_port_allocate(me, MACH_PORT_RIGHT_RECEIVE, addr_of_mut!(WASMTIME_PORT));
+        let kret = mach_port_allocate(me, MACH_PORT_RIGHT_RECEIVE, &raw mut WASMTIME_PORT);
         assert_eq!(kret, KERN_SUCCESS, "failed to allocate port");
         let kret =
             mach_port_insert_right(me, WASMTIME_PORT, WASMTIME_PORT, MACH_MSG_TYPE_MAKE_SEND);
@@ -103,7 +102,7 @@ impl TrapHandler {
             handler.sa_flags = libc::SA_SIGINFO | libc::SA_ONSTACK;
             handler.sa_sigaction = sigbus_handler as usize;
             libc::sigemptyset(&mut handler.sa_mask);
-            if libc::sigaction(libc::SIGBUS, &handler, addr_of_mut!(PREV_SIGBUS)) != 0 {
+            if libc::sigaction(libc::SIGBUS, &handler, &raw mut PREV_SIGBUS) != 0 {
                 panic!(
                     "unable to install signal handler: {}",
                     io::Error::last_os_error(),
@@ -149,7 +148,7 @@ unsafe extern "C" fn sigbus_handler(
     });
 
     super::signals::delegate_signal_to_previous_handler(
-        addr_of_mut!(PREV_SIGBUS),
+        &raw mut PREV_SIGBUS,
         signum,
         siginfo,
         context,

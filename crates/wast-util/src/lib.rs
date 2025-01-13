@@ -286,7 +286,6 @@ impl Compiler {
             // Cranelift has quite yet.
             Compiler::Winch => {
                 if config.gc()
-                    || config.threads()
                     || config.tail_call()
                     || config.function_references()
                     || config.gc()
@@ -302,13 +301,6 @@ impl Compiler {
                 // due to being unable to implement non-atomic loads/stores
                 // safely.
                 if config.threads() {
-                    return true;
-                }
-                // Unsupported proposals. Note that other proposals have partial
-                // support at this time (pulley is a work-in-progress) and so
-                // individual tests are listed below as "should fail" even if
-                // they're not covered in this list.
-                if config.wide_arithmetic() {
                     return true;
                 }
             }
@@ -464,7 +456,6 @@ impl WastTest {
                 "misc_testsuite/simd/spillslot-size-fuzzbug.wast",
                 "misc_testsuite/simd/unaligned-load.wast",
                 "multi-memory/simd_memory-multi.wast",
-                "spec_testsuite/simd_align.wast",
                 "spec_testsuite/simd_bit_shift.wast",
                 "spec_testsuite/simd_bitwise.wast",
                 "spec_testsuite/simd_boolean.wast",
@@ -518,10 +509,31 @@ impl WastTest {
                 "spec_testsuite/simd_store32_lane.wast",
                 "spec_testsuite/simd_store64_lane.wast",
                 "spec_testsuite/simd_store8_lane.wast",
+                // thread related failures
+                "proposals/threads/atomic.wast",
+                "misc_testsuite/threads/MP_wait.wast",
+                "misc_testsuite/threads/load-store-alignment.wast",
+                "misc_testsuite/threads/MP_atomic.wast",
+                "misc_testsuite/threads/SB_atomic.wast",
+                "misc_testsuite/threads/wait_notify.wast",
+                "misc_testsuite/threads/LB_atomic.wast",
+                "misc_testsuite/threads/atomics_wait_address.wast",
+                "misc_testsuite/threads/atomics_notify.wast",
+                "misc_testsuite/threads/load-store-alignment.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {
                 return true;
+            }
+
+            // SIMD on Winch requires AVX instructions.
+            #[cfg(target_arch = "x86_64")]
+            if !(std::is_x86_feature_detected!("avx") && std::is_x86_feature_detected!("avx2")) {
+                let unsupported = ["spec_testsuite/simd_align.wast"];
+
+                if unsupported.iter().any(|part| self.path.ends_with(part)) {
+                    return true;
+                }
             }
         }
 

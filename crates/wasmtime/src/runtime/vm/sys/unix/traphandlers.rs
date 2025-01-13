@@ -1,7 +1,7 @@
 use crate::vm::VMContext;
 
 #[link(name = "wasmtime-helpers")]
-extern "C" {
+unsafe extern "C" {
     #[wasmtime_versioned_export_macros::versioned_link]
     #[allow(improper_ctypes)]
     pub fn wasmtime_setjmp(

@@ -64,7 +64,7 @@ struct StartState {
 
 const FIBER_FLAG_FLOAT_SWITCH: u32 = 1;
 
-extern "C" {
+unsafe extern "C" {
     #[wasmtime_versioned_export_macros::versioned_link]
     fn wasmtime_fiber_get_current() -> *mut c_void;
 }

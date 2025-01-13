@@ -91,7 +91,7 @@ impl FnCall {
     ) -> Result<()> {
         let (kind, callee_context) = Self::lower(env, context.vmoffsets, &callee, context, masm)?;
 
-        let sig = env.callee_sig::<M::ABI>(&callee);
+        let sig = env.callee_sig::<M::ABI>(&callee)?;
         context.spill(masm)?;
         let ret_area = Self::make_ret_area(&sig, masm)?;
         let arg_stack_space = sig.params_stack_size();
@@ -142,11 +142,11 @@ impl FnCall {
         match callee {
             Callee::Builtin(b) => Ok(Self::lower_builtin(env, b)),
             Callee::FuncRef(_) => {
-                Self::lower_funcref(env.callee_sig::<M::ABI>(callee), ptr, context, masm)
+                Self::lower_funcref(env.callee_sig::<M::ABI>(callee)?, ptr, context, masm)
             }
             Callee::Local(i) => Ok(Self::lower_local(env, *i)),
             Callee::Import(i) => {
-                let sig = env.callee_sig::<M::ABI>(callee);
+                let sig = env.callee_sig::<M::ABI>(callee)?;
                 Self::lower_import(*i, sig, context, masm, vmoffsets)
             }
         }

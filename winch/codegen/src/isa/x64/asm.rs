@@ -3,7 +3,8 @@
 use crate::{
     isa::{reg::Reg, CallingConvention},
     masm::{
-        DivKind, ExtendKind, IntCmpKind, MulWideKind, OperandSize, RemKind, RoundingMode, ShiftKind,
+        DivKind, ExtendKind, IntCmpKind, MulWideKind, OperandSize, RemKind, RoundingMode,
+        ShiftKind, VectorExtendKind,
     },
 };
 use cranelift_codegen::{
@@ -15,8 +16,8 @@ use cranelift_codegen::{
         unwind::UnwindInst,
         x64::{
             args::{
-                self, AluRmiROpcode, Amode, CmpOpcode, DivSignedness, ExtMode, FromWritableReg,
-                Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem, RegMemImm,
+                self, AluRmiROpcode, Amode, AvxOpcode, CmpOpcode, DivSignedness, ExtMode,
+                FromWritableReg, Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem, RegMemImm,
                 ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr,
                 WritableXmm, Xmm, XmmMem, XmmMemAligned, XmmMemImm, CC,
             },
@@ -468,6 +469,90 @@ impl Assembler {
             op,
             src: XmmMem::unwrap_new(RegMem::mem(src)),
             dst: dst.map(Into::into),
+        });
+    }
+
+    /// Vector load and extend.
+    pub fn xmm_vpmov_mr(
+        &mut self,
+        src: &Address,
+        dst: WritableReg,
+        ext: VectorExtendKind,
+        flags: MemFlags,
+    ) {
+        assert!(dst.to_reg().is_float());
+
+        let op = match ext {
+            VectorExtendKind::V128Extend8x8S => AvxOpcode::Vpmovsxbw,
+            VectorExtendKind::V128Extend8x8U => AvxOpcode::Vpmovzxbw,
+            VectorExtendKind::V128Extend16x4S => AvxOpcode::Vpmovsxwd,
+            VectorExtendKind::V128Extend16x4U => AvxOpcode::Vpmovzxwd,
+            VectorExtendKind::V128Extend32x2S => AvxOpcode::Vpmovsxdq,
+            VectorExtendKind::V128Extend32x2U => AvxOpcode::Vpmovzxdq,
+        };
+
+        let src = Self::to_synthetic_amode(
+            src,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            flags,
+        );
+
+        self.emit(Inst::XmmUnaryRmRVex {
+            op,
+            src: XmmMem::unwrap_new(RegMem::mem(src)),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Vector load and broadcast.
+    pub fn xmm_vpbroadcast_mr(
+        &mut self,
+        src: &Address,
+        dst: WritableReg,
+        size: OperandSize,
+        flags: MemFlags,
+    ) {
+        assert!(dst.to_reg().is_float());
+
+        let src = Self::to_synthetic_amode(
+            src,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            flags,
+        );
+
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpbroadcastb,
+            OperandSize::S16 => AvxOpcode::Vpbroadcastw,
+            OperandSize::S32 => AvxOpcode::Vpbroadcastd,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmUnaryRmRVex {
+            op,
+            src: XmmMem::unwrap_new(RegMem::mem(src)),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Shuffle of bytes in vector.
+    pub fn xmm_vpshuf_rr(&mut self, src: Reg, dst: WritableReg, mask: u8, size: OperandSize) {
+        assert!(src.is_float() && dst.to_reg().is_float());
+
+        let op = match size {
+            OperandSize::S16 => AvxOpcode::Vpshuflw,
+            OperandSize::S64 => AvxOpcode::Vpshufd,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmUnaryRmRImmVex {
+            op,
+            src: XmmMem::from(Xmm::from(src)),
+            imm: mask,
+            dst: dst.to_reg().into(),
         });
     }
 

@@ -105,7 +105,7 @@ fn run_all(testsuite_dir: &str, extra_flags: &[&str], ignore: &[&str]) -> Result
     clean_garbage(testsuite_dir)
 }
 
-fn list_files<F>(testsuite_dir: &str, filter: F) -> impl Iterator<Item = PathBuf>
+fn list_files<F>(testsuite_dir: &str, filter: F) -> impl Iterator<Item = PathBuf> + use<F>
 where
     F: FnMut(&DirEntry) -> bool,
 {

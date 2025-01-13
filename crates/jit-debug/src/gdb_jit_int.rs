@@ -27,7 +27,7 @@ struct JITDescriptor {
     first_entry: *mut JITCodeEntry,
 }
 
-extern "C" {
+unsafe extern "C" {
     #[versioned_link]
     fn wasmtime_jit_debug_descriptor() -> *mut JITDescriptor;
     fn __jit_debug_register_code();

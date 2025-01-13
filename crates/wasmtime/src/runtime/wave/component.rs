@@ -28,8 +28,8 @@ impl WasmType for component::Type {
             Self::U32 => WasmTypeKind::U32,
             Self::S64 => WasmTypeKind::S64,
             Self::U64 => WasmTypeKind::U64,
-            Self::Float32 => WasmTypeKind::Float32,
-            Self::Float64 => WasmTypeKind::Float64,
+            Self::Float32 => WasmTypeKind::F32,
+            Self::Float64 => WasmTypeKind::F64,
             Self::Char => WasmTypeKind::Char,
             Self::String => WasmTypeKind::String,
             Self::List(_) => WasmTypeKind::List,
@@ -122,8 +122,8 @@ impl WasmValue for component::Val {
             Self::U32(_) => WasmTypeKind::U32,
             Self::S64(_) => WasmTypeKind::S64,
             Self::U64(_) => WasmTypeKind::U64,
-            Self::Float32(_) => WasmTypeKind::Float32,
-            Self::Float64(_) => WasmTypeKind::Float64,
+            Self::Float32(_) => WasmTypeKind::F32,
+            Self::Float64(_) => WasmTypeKind::F64,
             Self::Char(_) => WasmTypeKind::Char,
             Self::String(_) => WasmTypeKind::String,
             Self::List(_) => WasmTypeKind::List,
@@ -152,11 +152,11 @@ impl WasmValue for component::Val {
         (Char, char, make_char, unwrap_char)
     );
 
-    fn make_float32(val: f32) -> Self {
+    fn make_f32(val: f32) -> Self {
         let val = canonicalize_nan32(val);
         Self::Float32(val)
     }
-    fn make_float64(val: f64) -> Self {
+    fn make_f64(val: f64) -> Self {
         let val = canonicalize_nan64(val);
         Self::Float64(val)
     }
@@ -238,12 +238,12 @@ impl WasmValue for component::Val {
         Ok(val)
     }
 
-    fn unwrap_float32(&self) -> f32 {
-        let val = *unwrap_val!(self, Self::Float32, "float32");
+    fn unwrap_f32(&self) -> f32 {
+        let val = *unwrap_val!(self, Self::Float32, "f32");
         canonicalize_nan32(val)
     }
-    fn unwrap_float64(&self) -> f64 {
-        let val = *unwrap_val!(self, Self::Float64, "float64");
+    fn unwrap_f64(&self) -> f64 {
+        let val = *unwrap_val!(self, Self::Float64, "f64");
         canonicalize_nan64(val)
     }
     fn unwrap_string(&self) -> Cow<str> {

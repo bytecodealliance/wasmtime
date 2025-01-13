@@ -86,7 +86,7 @@ impl WasiCtxBuilder {
         // `thread_rng()`, so that it's not guessable from the insecure_random
         // API.
         let insecure_random_seed =
-            cap_rand::thread_rng(cap_rand::ambient_authority()).gen::<u128>();
+            cap_rand::thread_rng(cap_rand::ambient_authority()).r#gen::<u128>();
         Self {
             stdin: Box::new(pipe::ClosedInputStream),
             stdout: Box::new(pipe::SinkOutputStream),

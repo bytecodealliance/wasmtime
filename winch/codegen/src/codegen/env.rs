@@ -16,6 +16,8 @@ use wasmtime_environ::{
     TypeIndex, VMOffsets, WasmHeapType, WasmValType,
 };
 
+use anyhow::Result;
+
 #[derive(Debug, Clone, Copy)]
 pub struct GlobalData {
     /// The offset of the global.
@@ -54,7 +56,7 @@ pub struct HeapData {
     pub offset: u32,
     /// The offset to the current length field.
     pub current_length_offset: u32,
-    /// If the WebAssembly memory is imported, this field contains the offset to locate the
+    /// If the WebAssembly memory is imported or shared, this field contains the offset to locate the
     /// base of the heap.
     pub import_from: Option<u32>,
     /// The memory type this heap is associated with.
@@ -247,22 +249,33 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
     }
 
     /// Resolve a `HeapData` from a [MemoryIndex].
-    // TODO: (@saulecabrera)
-    // Handle shared memories when implementing support for Wasm Threads.
     pub fn resolve_heap(&mut self, index: MemoryIndex) -> HeapData {
+        let mem = self.translation.module.memories[index];
+        let is_shared = mem.shared;
         match self.resolved_heaps.entry(index) {
             Occupied(entry) => *entry.get(),
             Vacant(entry) => {
                 let (import_from, base_offset, current_length_offset) =
                     match self.translation.module.defined_memory_index(index) {
                         Some(defined) => {
-                            let owned = self.translation.module.owned_memory_index(defined);
-                            (
-                                None,
-                                self.vmoffsets.vmctx_vmmemory_definition_base(owned),
-                                self.vmoffsets
-                                    .vmctx_vmmemory_definition_current_length(owned),
-                            )
+                            if is_shared {
+                                (
+                                    Some(self.vmoffsets.vmctx_vmmemory_pointer(defined)),
+                                    self.vmoffsets.ptr.vmmemory_definition_base().into(),
+                                    self.vmoffsets
+                                        .ptr
+                                        .vmmemory_definition_current_length()
+                                        .into(),
+                                )
+                            } else {
+                                let owned = self.translation.module.owned_memory_index(defined);
+                                (
+                                    None,
+                                    self.vmoffsets.vmctx_vmmemory_definition_base(owned),
+                                    self.vmoffsets
+                                        .vmctx_vmmemory_definition_current_length(owned),
+                                )
+                            }
                         }
                         None => (
                             Some(self.vmoffsets.vmctx_vmmemory_import_from(index)),
@@ -302,32 +315,37 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
         self.table_access_spectre_mitigation
     }
 
-    pub(crate) fn callee_sig<'b, A>(&'b mut self, callee: &'b Callee) -> &'b ABISig
+    pub(crate) fn callee_sig<'b, A>(&'b mut self, callee: &'b Callee) -> Result<&'b ABISig>
     where
         A: ABI,
     {
         match callee {
             Callee::Local(idx) | Callee::Import(idx) => {
-                let types = self.translation.get_types();
-                let types = types.as_ref();
-                let ty = types[types.core_function_at(idx.as_u32())].unwrap_func();
-                let val = || {
+                if self.resolved_callees.contains_key(idx) {
+                    Ok(self.resolved_callees.get(idx).unwrap())
+                } else {
+                    let types = self.translation.get_types();
+                    let types = types.as_ref();
+                    let ty = types[types.core_function_at(idx.as_u32())].unwrap_func();
                     let converter = TypeConverter::new(self.translation, self.types);
                     let ty = converter.convert_func_type(&ty);
-                    wasm_sig::<A>(&ty)
-                };
-                self.resolved_callees.entry(*idx).or_insert_with(val)
+                    let sig = wasm_sig::<A>(&ty)?;
+                    self.resolved_callees.insert(*idx, sig);
+                    Ok(self.resolved_callees.get(idx).unwrap())
+                }
             }
             Callee::FuncRef(idx) => {
-                let val = || {
+                if self.resolved_sigs.contains_key(idx) {
+                    Ok(self.resolved_sigs.get(idx).unwrap())
+                } else {
                     let sig_index = self.translation.module.types[*idx];
                     let ty = self.types[sig_index].unwrap_func();
-                    let sig = wasm_sig::<A>(ty);
-                    sig
-                };
-                self.resolved_sigs.entry(*idx).or_insert_with(val)
+                    let sig = wasm_sig::<A>(ty)?;
+                    self.resolved_sigs.insert(*idx, sig);
+                    Ok(self.resolved_sigs.get(idx).unwrap())
+                }
             }
-            Callee::Builtin(b) => b.sig(),
+            Callee::Builtin(b) => Ok(b.sig()),
         }
     }
 

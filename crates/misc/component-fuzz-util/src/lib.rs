@@ -68,13 +68,13 @@ impl<T, const L: u32, const H: u32> VecInRange<T, L, H> {
     fn new<'a>(
         input: &mut Unstructured<'a>,
         fuel: &mut u32,
-        gen: impl Fn(&mut Unstructured<'a>, &mut u32) -> arbitrary::Result<T>,
+        generate: impl Fn(&mut Unstructured<'a>, &mut u32) -> arbitrary::Result<T>,
     ) -> arbitrary::Result<Self> {
         let mut ret = Vec::new();
         input.arbitrary_loop(Some(L), Some(H), |input| {
             if *fuel > 0 {
                 *fuel = *fuel - 1;
-                ret.push(gen(input, fuel)?);
+                ret.push(generate(input, fuel)?);
                 Ok(std::ops::ControlFlow::Continue(()))
             } else {
                 Ok(std::ops::ControlFlow::Break(()))

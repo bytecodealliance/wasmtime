@@ -3,7 +3,8 @@ use crate::{
     codegen::BlockSig,
     isa::reg::{writable, Reg},
     masm::{
-        ExtendKind, IntCmpKind, MacroAssembler, OperandSize, RegImm, SPOffset, ShiftKind, TrapCode,
+        IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm, SPOffset, ShiftKind,
+        TrapCode,
     },
     stack::TypedReg,
 };
@@ -548,7 +549,7 @@ where
         let builtin = self
             .env
             .builtins
-            .table_get_lazy_init_func_ref::<M::ABI, M::Ptr>();
+            .table_get_lazy_init_func_ref::<M::ABI, M::Ptr>()?;
 
         // Request the builtin's  result register and use it to hold the table
         // element value. We preemptively spill and request this register to
@@ -845,10 +846,10 @@ where
         arg: &MemArg,
         ty: WasmValType,
         size: OperandSize,
-        sextend: Option<ExtendKind>,
+        kind: LoadKind,
+        op_kind: MemOpKind,
     ) -> Result<()> {
-        let addr = self.emit_compute_heap_address(&arg, size)?;
-        if let Some(addr) = addr {
+        if let Some(addr) = self.emit_compute_heap_address(&arg, size)? {
             let dst = match ty {
                 WasmValType::I32 | WasmValType::I64 => self.context.any_gpr(self.masm)?,
                 WasmValType::F32 | WasmValType::F64 => self.context.any_fpr(self.masm)?,
@@ -857,7 +858,8 @@ where
             };
 
             let src = self.masm.address_at_reg(addr, 0)?;
-            self.masm.wasm_load(src, writable!(dst), size, sextend)?;
+            self.masm
+                .wasm_load(src, writable!(dst), size, kind, op_kind)?;
             self.context.stack.push(TypedReg::new(ty, dst).into());
             self.context.free_reg(addr);
         }
@@ -1016,7 +1018,7 @@ where
             return Ok(());
         }
 
-        let out_of_fuel = self.env.builtins.out_of_gas::<M::ABI, M::Ptr>();
+        let out_of_fuel = self.env.builtins.out_of_gas::<M::ABI, M::Ptr>()?;
         let fuel_reg = self.context.without::<Result<Reg>, M, _>(
             &out_of_fuel.sig().regs,
             self.masm,
@@ -1084,7 +1086,7 @@ where
         // The continuation branch if the current epoch hasn't reached the
         // configured deadline.
         let cont = self.masm.get_label()?;
-        let new_epoch = self.env.builtins.new_epoch::<M::ABI, M::Ptr>();
+        let new_epoch = self.env.builtins.new_epoch::<M::ABI, M::Ptr>()?;
 
         // Checks for runtime limits (e.g., fuel, epoch) are special since they
         // require inserting arbitrary function calls and control flow.

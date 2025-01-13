@@ -48,7 +48,7 @@ impl wasm_externtype_t {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_externtype_kind(et: &wasm_externtype_t) -> wasm_externkind_t {
     match &et.which {
         CExternType::Func(_) => WASM_EXTERN_FUNC,
@@ -58,54 +58,54 @@ pub extern "C" fn wasm_externtype_kind(et: &wasm_externtype_t) -> wasm_externkin
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_externtype_as_functype(et: &wasm_externtype_t) -> Option<&wasm_functype_t> {
     wasm_externtype_as_functype_const(et)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_externtype_as_functype_const(
     et: &wasm_externtype_t,
 ) -> Option<&wasm_functype_t> {
     wasm_functype_t::try_from(et)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_externtype_as_globaltype(
     et: &wasm_externtype_t,
 ) -> Option<&wasm_globaltype_t> {
     wasm_externtype_as_globaltype_const(et)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_externtype_as_globaltype_const(
     et: &wasm_externtype_t,
 ) -> Option<&wasm_globaltype_t> {
     wasm_globaltype_t::try_from(et)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_externtype_as_tabletype(
     et: &wasm_externtype_t,
 ) -> Option<&wasm_tabletype_t> {
     wasm_externtype_as_tabletype_const(et)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_externtype_as_tabletype_const(
     et: &wasm_externtype_t,
 ) -> Option<&wasm_tabletype_t> {
     wasm_tabletype_t::try_from(et)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_externtype_as_memorytype(
     et: &wasm_externtype_t,
 ) -> Option<&wasm_memorytype_t> {
     wasm_externtype_as_memorytype_const(et)
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn wasm_externtype_as_memorytype_const(
     et: &wasm_externtype_t,
 ) -> Option<&wasm_memorytype_t> {

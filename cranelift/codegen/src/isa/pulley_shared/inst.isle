@@ -368,6 +368,9 @@
 ;; Lower a constant into a register.
 (decl imm (Type u64) Reg)
 
+(rule 4 (imm (ty_int _) 0) (pulley_xzero))
+(rule 5 (imm (ty_int _) 1) (pulley_xone))
+
 ;; If a value can fit into 8 bits, then prioritize that.
 (rule 3 (imm (ty_int _) x)
       (if-let y (i8_try_from_u64 x))

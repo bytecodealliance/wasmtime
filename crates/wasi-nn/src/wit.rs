@@ -7,8 +7,8 @@
 //! This module exports its [`types`] for use throughout the crate and the
 //! [`ML`] object, which exposes [`ML::add_to_linker`]. To implement all of
 //! this, this module proceeds in steps:
-//! 1. generate all of the WIT glue code into a `gen::*` namespace
-//! 2. wire up the `gen::*` glue to the context state, delegating actual
+//! 1. generate all of the WIT glue code into a `generated::*` namespace
+//! 2. wire up the `generated::*` glue to the context state, delegating actual
 //!    computation to a [`Backend`]
 //! 3. convert some types
 //!
@@ -115,7 +115,7 @@ pub enum ErrorCode {
 }
 
 /// Generate the traits and types from the `wasi-nn` WIT specification.
-mod gen_ {
+mod generated_ {
     wasmtime::component::bindgen!({
         world: "ml",
         path: "wit/wasi-nn.wit",
@@ -133,20 +133,20 @@ mod gen_ {
         },
     });
 }
-use gen_::wasi::nn::{self as gen}; // Shortcut to the module containing the types we need.
+use generated_::wasi::nn::{self as generated}; // Shortcut to the module containing the types we need.
 
 // Export the `types` used in this crate as well as `ML::add_to_linker`.
 pub mod types {
-    use super::gen;
-    pub use gen::errors::Error;
-    pub use gen::graph::{ExecutionTarget, Graph, GraphBuilder, GraphEncoding};
-    pub use gen::inference::GraphExecutionContext;
-    pub use gen::tensor::{Tensor, TensorType};
+    use super::generated;
+    pub use generated::errors::Error;
+    pub use generated::graph::{ExecutionTarget, Graph, GraphBuilder, GraphEncoding};
+    pub use generated::inference::GraphExecutionContext;
+    pub use generated::tensor::{Tensor, TensorType};
 }
-pub use gen::graph::{ExecutionTarget, Graph, GraphBuilder, GraphEncoding};
-pub use gen::inference::GraphExecutionContext;
-pub use gen::tensor::{Tensor, TensorData, TensorDimensions, TensorType};
-pub use gen_::Ml as ML;
+pub use generated::graph::{ExecutionTarget, Graph, GraphBuilder, GraphEncoding};
+pub use generated::inference::GraphExecutionContext;
+pub use generated::tensor::{Tensor, TensorData, TensorDimensions, TensorType};
+pub use generated_::Ml as ML;
 
 /// Add the WIT-based version of the `wasi-nn` API to a
 /// [`wasmtime::component::Linker`].
@@ -154,14 +154,14 @@ pub fn add_to_linker<T>(
     l: &mut wasmtime::component::Linker<T>,
     f: impl Fn(&mut T) -> WasiNnView<'_> + Send + Sync + Copy + 'static,
 ) -> anyhow::Result<()> {
-    gen::graph::add_to_linker_get_host(l, f)?;
-    gen::tensor::add_to_linker_get_host(l, f)?;
-    gen::inference::add_to_linker_get_host(l, f)?;
-    gen::errors::add_to_linker_get_host(l, f)?;
+    generated::graph::add_to_linker_get_host(l, f)?;
+    generated::tensor::add_to_linker_get_host(l, f)?;
+    generated::inference::add_to_linker_get_host(l, f)?;
+    generated::errors::add_to_linker_get_host(l, f)?;
     Ok(())
 }
 
-impl gen::graph::Host for WasiNnView<'_> {
+impl generated::graph::Host for WasiNnView<'_> {
     fn load(
         &mut self,
         builders: Vec<GraphBuilder>,
@@ -210,7 +210,7 @@ impl gen::graph::Host for WasiNnView<'_> {
     }
 }
 
-impl gen::graph::HostGraph for WasiNnView<'_> {
+impl generated::graph::HostGraph for WasiNnView<'_> {
     fn init_execution_context(
         &mut self,
         graph: Resource<Graph>,
@@ -235,7 +235,7 @@ impl gen::graph::HostGraph for WasiNnView<'_> {
     }
 }
 
-impl gen::inference::HostGraphExecutionContext for WasiNnView<'_> {
+impl generated::inference::HostGraphExecutionContext for WasiNnView<'_> {
     fn set_input(
         &mut self,
         exec_context: Resource<GraphExecutionContext>,
@@ -291,7 +291,7 @@ impl gen::inference::HostGraphExecutionContext for WasiNnView<'_> {
     }
 }
 
-impl gen::tensor::HostTensor for WasiNnView<'_> {
+impl generated::tensor::HostTensor for WasiNnView<'_> {
     fn new(
         &mut self,
         dimensions: TensorDimensions,
@@ -328,17 +328,19 @@ impl gen::tensor::HostTensor for WasiNnView<'_> {
     }
 }
 
-impl gen::errors::HostError for WasiNnView<'_> {
-    fn code(&mut self, error: Resource<Error>) -> wasmtime::Result<gen::errors::ErrorCode> {
+impl generated::errors::HostError for WasiNnView<'_> {
+    fn code(&mut self, error: Resource<Error>) -> wasmtime::Result<generated::errors::ErrorCode> {
         let error = self.table.get(&error)?;
         match error.code {
-            ErrorCode::InvalidArgument => Ok(gen::errors::ErrorCode::InvalidArgument),
-            ErrorCode::InvalidEncoding => Ok(gen::errors::ErrorCode::InvalidEncoding),
-            ErrorCode::Timeout => Ok(gen::errors::ErrorCode::Timeout),
-            ErrorCode::RuntimeError => Ok(gen::errors::ErrorCode::RuntimeError),
-            ErrorCode::UnsupportedOperation => Ok(gen::errors::ErrorCode::UnsupportedOperation),
-            ErrorCode::TooLarge => Ok(gen::errors::ErrorCode::TooLarge),
-            ErrorCode::NotFound => Ok(gen::errors::ErrorCode::NotFound),
+            ErrorCode::InvalidArgument => Ok(generated::errors::ErrorCode::InvalidArgument),
+            ErrorCode::InvalidEncoding => Ok(generated::errors::ErrorCode::InvalidEncoding),
+            ErrorCode::Timeout => Ok(generated::errors::ErrorCode::Timeout),
+            ErrorCode::RuntimeError => Ok(generated::errors::ErrorCode::RuntimeError),
+            ErrorCode::UnsupportedOperation => {
+                Ok(generated::errors::ErrorCode::UnsupportedOperation)
+            }
+            ErrorCode::TooLarge => Ok(generated::errors::ErrorCode::TooLarge),
+            ErrorCode::NotFound => Ok(generated::errors::ErrorCode::NotFound),
             ErrorCode::Trap => Err(anyhow!(error.data.to_string())),
         }
     }
@@ -354,7 +356,7 @@ impl gen::errors::HostError for WasiNnView<'_> {
     }
 }
 
-impl gen::errors::Host for WasiNnView<'_> {
+impl generated::errors::Host for WasiNnView<'_> {
     fn convert_error(&mut self, err: Error) -> wasmtime::Result<Error> {
         if matches!(err.code, ErrorCode::Trap) {
             Err(err.data)
@@ -364,18 +366,18 @@ impl gen::errors::Host for WasiNnView<'_> {
     }
 }
 
-impl gen::tensor::Host for WasiNnView<'_> {}
-impl gen::inference::Host for WasiNnView<'_> {}
+impl generated::tensor::Host for WasiNnView<'_> {}
+impl generated::inference::Host for WasiNnView<'_> {}
 
-impl Hash for gen::graph::GraphEncoding {
+impl Hash for generated::graph::GraphEncoding {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.to_string().hash(state)
     }
 }
 
-impl fmt::Display for gen::graph::GraphEncoding {
+impl fmt::Display for generated::graph::GraphEncoding {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use gen::graph::GraphEncoding::*;
+        use generated::graph::GraphEncoding::*;
         match self {
             Openvino => write!(f, "openvino"),
             Onnx => write!(f, "onnx"),
@@ -388,16 +390,16 @@ impl fmt::Display for gen::graph::GraphEncoding {
     }
 }
 
-impl FromStr for gen::graph::GraphEncoding {
+impl FromStr for generated::graph::GraphEncoding {
     type Err = GraphEncodingParseError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "openvino" => Ok(gen::graph::GraphEncoding::Openvino),
-            "onnx" => Ok(gen::graph::GraphEncoding::Onnx),
-            "pytorch" => Ok(gen::graph::GraphEncoding::Pytorch),
-            "tensorflow" => Ok(gen::graph::GraphEncoding::Tensorflow),
-            "tensorflowlite" => Ok(gen::graph::GraphEncoding::Tensorflowlite),
-            "autodetect" => Ok(gen::graph::GraphEncoding::Autodetect),
+            "openvino" => Ok(generated::graph::GraphEncoding::Openvino),
+            "onnx" => Ok(generated::graph::GraphEncoding::Onnx),
+            "pytorch" => Ok(generated::graph::GraphEncoding::Pytorch),
+            "tensorflow" => Ok(generated::graph::GraphEncoding::Tensorflow),
+            "tensorflowlite" => Ok(generated::graph::GraphEncoding::Tensorflowlite),
+            "autodetect" => Ok(generated::graph::GraphEncoding::Autodetect),
             _ => Err(GraphEncodingParseError(s.into())),
         }
     }

@@ -97,7 +97,7 @@ impl TargetIsa for Aarch64 {
         let mut body = body.get_binary_reader();
         let mut masm = Aarch64Masm::new(pointer_bytes, self.shared_flags.clone())?;
         let stack = Stack::new();
-        let abi_sig = wasm_sig::<abi::Aarch64ABI>(sig);
+        let abi_sig = wasm_sig::<abi::Aarch64ABI>(sig)?;
 
         let env = FuncEnv::new(
             &vmoffsets,

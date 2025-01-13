@@ -3069,13 +3069,14 @@ impl<'a> Source<'a> {
 
 impl<'a> Destination<'a> {
     /// Same as `Source::record_field_srcs` but for destinations.
-    fn record_field_dsts<'b>(
+    fn record_field_dsts<'b, I>(
         &'b self,
         types: &'b ComponentTypesBuilder,
-        fields: impl IntoIterator<Item = InterfaceType> + 'b,
-    ) -> impl Iterator<Item = Destination<'b>> + 'b
+        fields: I,
+    ) -> impl Iterator<Item = Destination<'b>> + use<'b, I>
     where
         'a: 'b,
+        I: IntoIterator<Item = InterfaceType> + 'b,
     {
         let mut offset = 0;
         fields.into_iter().map(move |ty| match self {

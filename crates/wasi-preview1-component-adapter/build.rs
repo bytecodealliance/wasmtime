@@ -33,7 +33,7 @@ fn main() {
 ///     "
 /// );
 ///
-/// #[no_mangle]
+/// #[unsafe(no_mangle)]
 /// extern "C" fn get_state_ptr() -> *mut u8 {
 ///     unsafe {
 ///         let ret: *mut u8;
@@ -48,7 +48,7 @@ fn main() {
 ///     }
 /// }
 ///
-/// #[no_mangle]
+/// #[unsafe(no_mangle)]
 /// extern "C" fn set_state_ptr(val: *mut u8) {
 ///     unsafe {
 ///         std::arch::asm!(

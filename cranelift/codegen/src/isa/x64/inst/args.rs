@@ -505,7 +505,7 @@ impl PrettyPrint for Amode {
                 pretty_print_reg(index.to_reg(), 8),
                 1 << shift
             ),
-            Amode::RipRelative { ref target } => format!("label{}(%rip)", target.get()),
+            Amode::RipRelative { target } => format!("label{}(%rip)", target.get()),
         }
     }
 }
