@@ -88,16 +88,16 @@
 ;;
 ;; wasm[0]::function[8]::maybe_inbounds_v2:
 ;;       push_frame
-;;       xconst8 x7, 0
+;;       xzero x7
 ;;       xconst32 x8, 131072
 ;;       xadd64_uoverflow_trap x7, x7, x8
 ;;       xload64le_offset8 x8, x0, 104
-;;       br_if_xult64 x8, x7, 0x14    // target = 0x27
-;;   1a: xload64le_offset8 x8, x0, 96
+;;       br_if_xult64 x8, x7, 0x14    // target = 0x26
+;;   19: xload64le_offset8 x8, x0, 96
 ;;       xload32le_offset32 x0, x8, 131068
 ;;       pop_frame
 ;;       ret
-;;   27: trap
+;;   26: trap
 ;;
 ;; wasm[0]::function[9]::never_inbounds:
 ;;       push_frame

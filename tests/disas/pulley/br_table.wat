@@ -21,15 +21,15 @@
 ;; wasm[0]::function[0]:
 ;;       push_frame
 ;;       br_table32 x2, 3
-;;       0x11    // target = 0x18
+;;       0x10    // target = 0x17
 ;;       0x8    // target = 0x13
-;;       0xe    // target = 0x1d
-;;   13: xconst8 x0, 1
+;;       0xd    // target = 0x1c
+;;   13: xone x0
 ;;       pop_frame
 ;;       ret
-;;   18: xconst8 x0, 2
-;;   1b: pop_frame
-;;   1c: ret
-;;   1d: xconst8 x0, 0
-;;   20: pop_frame
-;;   21: ret
+;;   17: xconst8 x0, 2
+;;   1a: pop_frame
+;;   1b: ret
+;;   1c: xzero x0
+;;   1e: pop_frame
+;;   1f: ret
