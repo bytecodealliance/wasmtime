@@ -973,6 +973,14 @@ impl Interpreter<'_> {
         self.state[XReg::sp].set_ptr(sp);
     }
 
+    /// Calculates the "g32" address given the inputs to the addressing mode.
+    fn g32_addr<T>(&self, base: XReg, addr: XReg, offset: u8) -> *mut T {
+        let addr = self.state[base].get_ptr::<T>() as usize
+            + self.state[addr].get_u32() as usize
+            + usize::from(offset);
+        addr as *mut T
+    }
+
     unsafe fn load<T>(&self, ptr: XReg, offset: i32) -> T {
         unsafe {
             self.state[ptr]
@@ -982,11 +990,25 @@ impl Interpreter<'_> {
         }
     }
 
+    /// The name "g32" here means that the guest pointer, the wasm address, is
+    /// always a 32-bit value. Arithmetic is done at the size of the
+    /// host-pointer-width.
+    unsafe fn load_g32<T>(&self, base: XReg, addr: XReg, offset: u8) -> T {
+        unsafe { self.g32_addr::<T>(base, addr, offset).read_unaligned() }
+    }
+
     unsafe fn store<T>(&self, ptr: XReg, offset: i32, val: T) {
         self.state[ptr]
             .get_ptr::<T>()
             .byte_offset(offset as isize)
             .write_unaligned(val)
+    }
+
+    /// Same as `load_g32` but for stores
+    unsafe fn store_g32<T>(&self, base: XReg, addr: XReg, offset: u8, val: T) {
+        unsafe {
+            self.g32_addr::<T>(base, addr, offset).write_unaligned(val);
+        }
     }
 
     fn check_xnn_from_fnn<I: Encode>(&mut self, val: f64, lo: f64, hi: f64) -> ControlFlow<Done> {
@@ -2396,24 +2418,142 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
-    fn xbc32_bound64_trap(&mut self, addr: XReg, bound: XReg, off: u8) -> ControlFlow<Done> {
-        let bound = self.state[bound].get_u64();
-        let addr = u64::from(self.state[addr].get_u32());
-        if addr > bound.wrapping_sub(u64::from(off)) {
-            self.done_trap::<crate::XBc32Bound64Trap>()
+    fn xbc32_bound_trap(
+        &mut self,
+        addr: XReg,
+        bound_ptr: XReg,
+        bound_off: u8,
+        size: u8,
+    ) -> ControlFlow<Done> {
+        let bound = unsafe { self.load::<usize>(bound_ptr, bound_off.into()) };
+        let addr = self.state[addr].get_u32() as usize;
+        if addr > bound.wrapping_sub(usize::from(size)) {
+            self.done_trap::<crate::XBc32BoundTrap>()
         } else {
             ControlFlow::Continue(())
         }
     }
 
-    fn xbc32_bound32_trap(&mut self, addr: XReg, bound: XReg, off: u8) -> ControlFlow<Done> {
-        let bound = self.state[bound].get_u32();
-        let addr = self.state[addr].get_u32();
-        if addr > bound.wrapping_sub(u32::from(off)) {
-            self.done_trap::<crate::XBc32Bound32Trap>()
-        } else {
-            ControlFlow::Continue(())
+    fn xload8_u32_g32(
+        &mut self,
+        dst: XReg,
+        base: XReg,
+        addr: XReg,
+        offset: u8,
+    ) -> ControlFlow<Done> {
+        let result = unsafe { self.load_g32::<u8>(base, addr, offset) };
+        self.state[dst].set_u32(result.into());
+        ControlFlow::Continue(())
+    }
+
+    fn xload8_s32_g32(
+        &mut self,
+        dst: XReg,
+        base: XReg,
+        addr: XReg,
+        offset: u8,
+    ) -> ControlFlow<Done> {
+        let result = unsafe { self.load_g32::<i8>(base, addr, offset) };
+        self.state[dst].set_i32(result.into());
+        ControlFlow::Continue(())
+    }
+
+    fn xload16le_u32_g32(
+        &mut self,
+        dst: XReg,
+        base: XReg,
+        addr: XReg,
+        offset: u8,
+    ) -> ControlFlow<Done> {
+        let result = unsafe { self.load_g32::<u16>(base, addr, offset) };
+        self.state[dst].set_u32(u16::from_le(result).into());
+        ControlFlow::Continue(())
+    }
+
+    fn xload16le_s32_g32(
+        &mut self,
+        dst: XReg,
+        base: XReg,
+        addr: XReg,
+        offset: u8,
+    ) -> ControlFlow<Done> {
+        let result = unsafe { self.load_g32::<i16>(base, addr, offset) };
+        self.state[dst].set_i32(i16::from_le(result).into());
+        ControlFlow::Continue(())
+    }
+
+    fn xload32le_g32(
+        &mut self,
+        dst: XReg,
+        base: XReg,
+        addr: XReg,
+        offset: u8,
+    ) -> ControlFlow<Done> {
+        let result = unsafe { self.load_g32::<i32>(base, addr, offset) };
+        self.state[dst].set_i32(i32::from_le(result));
+        ControlFlow::Continue(())
+    }
+
+    fn xload64le_g32(
+        &mut self,
+        dst: XReg,
+        base: XReg,
+        addr: XReg,
+        offset: u8,
+    ) -> ControlFlow<Done> {
+        let result = unsafe { self.load_g32::<i64>(base, addr, offset) };
+        self.state[dst].set_i64(i64::from_le(result));
+        ControlFlow::Continue(())
+    }
+
+    fn xstore8_g32(&mut self, base: XReg, addr: XReg, offset: u8, val: XReg) -> ControlFlow<Done> {
+        let val = self.state[val].get_u32() as u8;
+        unsafe {
+            self.store_g32(base, addr, offset, val);
         }
+        ControlFlow::Continue(())
+    }
+
+    fn xstore16le_g32(
+        &mut self,
+        base: XReg,
+        addr: XReg,
+        offset: u8,
+        val: XReg,
+    ) -> ControlFlow<Done> {
+        let val = self.state[val].get_u32() as u16;
+        unsafe {
+            self.store_g32(base, addr, offset, val.to_le());
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn xstore32le_g32(
+        &mut self,
+        base: XReg,
+        addr: XReg,
+        offset: u8,
+        val: XReg,
+    ) -> ControlFlow<Done> {
+        let val = self.state[val].get_u32();
+        unsafe {
+            self.store_g32(base, addr, offset, val.to_le());
+        }
+        ControlFlow::Continue(())
+    }
+
+    fn xstore64le_g32(
+        &mut self,
+        base: XReg,
+        addr: XReg,
+        offset: u8,
+        val: XReg,
+    ) -> ControlFlow<Done> {
+        let val = self.state[val].get_u64();
+        unsafe {
+            self.store_g32(base, addr, offset, val.to_le());
+        }
+        ControlFlow::Continue(())
     }
 }
 

@@ -29,12 +29,7 @@ impl EmitInfo {
     }
 
     fn endianness(&self, flags: MemFlags) -> Endianness {
-        let target_endianness = if self.isa_flags.big_endian() {
-            Endianness::Big
-        } else {
-            Endianness::Little
-        };
-        flags.endianness(target_endianness)
+        flags.endianness(self.isa_flags.endianness())
     }
 }
 

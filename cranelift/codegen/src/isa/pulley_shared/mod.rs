@@ -285,3 +285,13 @@ fn isa_constructor_64(
         PulleyBackend::<super::pulley64::Pulley64>::new_with_flags(triple, shared_flags, isa_flags);
     Ok(backend.wrapped())
 }
+
+impl PulleyFlags {
+    fn endianness(&self) -> ir::Endianness {
+        if self.big_endian() {
+            ir::Endianness::Big
+        } else {
+            ir::Endianness::Little
+        }
+    }
+}

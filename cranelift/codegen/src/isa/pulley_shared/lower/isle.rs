@@ -128,6 +128,14 @@ where
     fn u6_from_u8(&mut self, imm: u8) -> Option<U6> {
         U6::new(imm)
     }
+
+    fn endianness(&mut self, flags: MemFlags) -> Endianness {
+        flags.endianness(self.backend.isa_flags.endianness())
+    }
+
+    fn pointer_width(&mut self) -> PointerWidth {
+        P::pointer_width()
+    }
 }
 
 /// The main entry point for lowering with ISLE.
