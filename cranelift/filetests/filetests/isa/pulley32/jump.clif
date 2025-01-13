@@ -22,19 +22,19 @@ block3(v3: i8):
 ;   zext8 x5, x0
 ;   br_if32 x5, label2; jump label1
 ; block1:
-;   xconst8 x0, 0
+;   xzero x0
 ;   jump label3
 ; block2:
-;   xconst8 x0, 1
+;   xone x0
 ;   jump label3
 ; block3:
 ;   ret
 ;
 ; Disassembled:
 ; zext8 x5, x0
-; br_if32 x5, 0xe    // target = 0x11
-; xconst8 x0, 0
-; jump 0x8    // target = 0x14
-; xconst8 x0, 1
+; br_if32 x5, 0xd    // target = 0x10
+; xzero x0
+; jump 0x7    // target = 0x12
+; xone x0
 ; ret
 
