@@ -78,10 +78,10 @@ impl DiffEngine for WasmiEngine {
         Ok(Box::new(WasmiInstance { store, instance }))
     }
 
-    fn assert_error_match(&self, trap: &Trap, err: &Error) {
-        match self.trap_code(err) {
-            Some(code) => assert_eq!(wasmi_to_wasmtime_trap_code(code), *trap),
-            None => panic!("unexpected wasmi error {err:?}"),
+    fn assert_error_match(&self, lhs: &Error, rhs: &Trap) {
+        match self.trap_code(lhs) {
+            Some(code) => assert_eq!(wasmi_to_wasmtime_trap_code(code), *rhs),
+            None => panic!("unexpected wasmi error {lhs:?}"),
         }
     }
 

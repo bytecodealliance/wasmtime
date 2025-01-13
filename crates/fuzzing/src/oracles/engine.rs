@@ -50,7 +50,7 @@ pub trait DiffEngine {
 
     /// Tests that the wasmtime-originating `trap` matches the error this engine
     /// generated.
-    fn assert_error_match(&self, trap: &Trap, err: &Error);
+    fn assert_error_match(&self, err: &Error, trap: &Trap);
 
     /// Returns whether the error specified from this engine might be stack
     /// overflow.

@@ -429,13 +429,13 @@ pub fn differential(
         // execution by returning success.
         Ok(None) => return Ok(true),
     };
-    log::debug!(" -> results on {}: {:?}", lhs.name(), &lhs_results);
+    log::debug!(" -> lhs results on {}: {:?}", lhs.name(), &lhs_results);
 
     let rhs_results = rhs
         .evaluate(name, args, result_tys)
         // wasmtime should be able to invoke any signature, so unwrap this result
         .map(|results| results.unwrap());
-    log::debug!(" -> results on {}: {:?}", rhs.name(), &rhs_results);
+    log::debug!(" -> rhs results on {}: {:?}", rhs.name(), &rhs_results);
 
     // If Wasmtime hit its OOM condition, which is possible since it's set
     // somewhat low while fuzzing, then don't return an error but return
@@ -507,7 +507,7 @@ impl<T, U> DiffEqResult<T, U> {
             // Both sides failed. Check that the trap and state at the time of
             // failure is the same, when possible.
             (Err(lhs), Err(rhs)) => {
-                let err = match rhs.downcast::<Trap>() {
+                let rhs = match rhs.downcast::<Trap>() {
                     Ok(trap) => trap,
 
                     // For general, unknown errors, we can't rely on this being
@@ -527,16 +527,16 @@ impl<T, U> DiffEqResult<T, U> {
                 let poisoned =
                     // Allocations being too large for the GC are
                     // implementation-defined.
-                    err == Trap::AllocationTooLarge
+                    rhs == Trap::AllocationTooLarge
                     // Stack size, and therefore when overflow happens, is
                     // implementation-defined.
-                    || err == Trap::StackOverflow
+                    || rhs == Trap::StackOverflow
                     || lhs_engine.is_stack_overflow(&lhs);
                 if poisoned {
                     return DiffEqResult::Poisoned;
                 }
 
-                lhs_engine.assert_error_match(&err, &lhs);
+                lhs_engine.assert_error_match(&lhs, &rhs);
                 DiffEqResult::Failed
             }
             // A real bug is found if only one side fails.

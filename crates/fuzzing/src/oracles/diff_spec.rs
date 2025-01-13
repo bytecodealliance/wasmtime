@@ -44,7 +44,7 @@ impl DiffEngine for SpecInterpreter {
         Ok(Box::new(SpecInstance { instance }))
     }
 
-    fn assert_error_match(&self, trap: &Trap, err: &Error) {
+    fn assert_error_match(&self, err: &Error, trap: &Trap) {
         // TODO: implement this for the spec interpreter
         let _ = (trap, err);
     }
