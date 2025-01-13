@@ -1073,6 +1073,33 @@ impl Assembler {
         });
     }
 
+    pub fn lock_xadd(
+        &mut self,
+        addr: Address,
+        operand: Reg,
+        dst: WritableReg,
+        size: OperandSize,
+        flags: MemFlags,
+    ) {
+        assert!(addr.is_offset());
+        let mem = Self::to_synthetic_amode(
+            &addr,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            flags,
+        );
+
+        // let tmp = regs::scratch();
+        // self.emit(Inst::AtomicRmwSeq { ty: size.into(), op: AtomicRmwSeqOp::Add.into(), mem: dst, operand: operand.to_reg().into(), temp: writable!(tmp.into()), dst_old: writable!(operand.to_reg().into()) });
+        self.emit(Inst::LockXadd {
+            size: size.into(),
+            operand: operand.into(),
+            mem,
+            dst_old: dst.map(Into::into),
+        });
+    }
+
     pub fn cmp_ir(&mut self, src1: Reg, imm: i32, size: OperandSize) {
         let imm = RegMemImm::imm(imm as u32);
 
