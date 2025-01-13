@@ -549,7 +549,7 @@ where
         let builtin = self
             .env
             .builtins
-            .table_get_lazy_init_func_ref::<M::ABI, M::Ptr>();
+            .table_get_lazy_init_func_ref::<M::ABI, M::Ptr>()?;
 
         // Request the builtin's  result register and use it to hold the table
         // element value. We preemptively spill and request this register to
@@ -1018,7 +1018,7 @@ where
             return Ok(());
         }
 
-        let out_of_fuel = self.env.builtins.out_of_gas::<M::ABI, M::Ptr>();
+        let out_of_fuel = self.env.builtins.out_of_gas::<M::ABI, M::Ptr>()?;
         let fuel_reg = self.context.without::<Result<Reg>, M, _>(
             &out_of_fuel.sig().regs,
             self.masm,
@@ -1086,7 +1086,7 @@ where
         // The continuation branch if the current epoch hasn't reached the
         // configured deadline.
         let cont = self.masm.get_label()?;
-        let new_epoch = self.env.builtins.new_epoch::<M::ABI, M::Ptr>();
+        let new_epoch = self.env.builtins.new_epoch::<M::ABI, M::Ptr>()?;
 
         // Checks for runtime limits (e.g., fuel, epoch) are special since they
         // require inserting arbitrary function calls and control flow.

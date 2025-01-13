@@ -63,19 +63,19 @@ impl BlockSig {
 
     /// Return the ABI representation of the results of the block.
     /// This method will lazily initialize the results if not present.
-    pub fn results<M>(&mut self) -> &mut ABIResults
+    pub fn results<M>(&mut self) -> Result<&mut ABIResults>
     where
         M: MacroAssembler,
     {
         if self.ty.is_sig() {
             return match &mut self.ty {
-                BlockType::ABISig(sig) => &mut sig.results,
+                BlockType::ABISig(sig) => Ok(&mut sig.results),
                 _ => unreachable!(),
             };
         }
 
         if self.results.is_some() {
-            return self.results.as_mut().unwrap();
+            return Ok(self.results.as_mut().unwrap());
         }
 
         let results = match &self.ty {
@@ -89,19 +89,19 @@ impl BlockSig {
             BlockType::ABISig(_) => unreachable!(),
         };
 
-        self.results = Some(results);
-        self.results.as_mut().unwrap()
+        self.results = Some(results?);
+        Ok(self.results.as_mut().unwrap())
     }
 
     /// Construct an ABI result representation of the params of the block.
     /// This is needed for loops and for handling cases in which params flow as
     /// the block's results, i.e. in the presence of an empty then or else.
-    pub fn params<M>(&mut self) -> &mut ABIResults
+    pub fn params<M>(&mut self) -> Result<&mut ABIResults>
     where
         M: MacroAssembler,
     {
         if self.params.is_some() {
-            return self.params.as_mut().unwrap();
+            return Ok(self.params.as_mut().unwrap());
         }
 
         let params_as_results = match &self.ty {
@@ -118,8 +118,8 @@ impl BlockSig {
             BlockType::ABISig(_) => unreachable!(),
         };
 
-        self.params = Some(params_as_results);
-        self.params.as_mut().unwrap()
+        self.params = Some(params_as_results?);
+        Ok(self.params.as_mut().unwrap())
     }
 
     /// Returns the signature param count.
@@ -304,9 +304,9 @@ impl ControlStackFrame {
         self.calculate_stack_state(context, masm)?;
         // If the block has stack results, immediately resolve the return area
         // base.
-        if self.results::<M>().on_stack() {
+        if self.results::<M>()?.on_stack() {
             let results_base = self.stack_state().target_offset;
-            self.results::<M>().set_ret_area(RetArea::sp(results_base));
+            self.results::<M>()?.set_ret_area(RetArea::sp(results_base));
         }
 
         if self.is_if() || self.is_loop() {
@@ -324,13 +324,13 @@ impl ControlStackFrame {
             //   )
             //)
             let base_offset = self.stack_state().base_offset;
-            if self.params::<M>().on_stack() {
-                let offset = base_offset.as_u32() + self.params::<M>().size();
-                self.params::<M>()
+            if self.params::<M>()?.on_stack() {
+                let offset = base_offset.as_u32() + self.params::<M>()?.size();
+                self.params::<M>()?
                     .set_ret_area(RetArea::sp(SPOffset::from_u32(offset)));
             }
             Self::top_abi_results_impl(
-                self.params::<M>(),
+                self.params::<M>()?,
                 context,
                 masm,
                 |params: &ABIResults, _, _| Ok(params.ret_area().copied()),
@@ -361,7 +361,7 @@ impl ControlStackFrame {
             context.stack.len() >= param_count,
             CodeGenError::missing_values_in_stack()
         );
-        let results_size = self.results::<M>().size();
+        let results_size = self.results::<M>()?.size();
 
         // Save any live registers and locals.
         context.spill(masm)?;
@@ -445,7 +445,7 @@ impl ControlStackFrame {
                 // branch params, we exclude any result registers from being
                 // used as the branch test.
                 let top = context.without::<Result<TypedReg>, _, _>(
-                    self.params::<M>().regs(),
+                    self.params::<M>()?.regs(),
                     masm,
                     |cx, masm| cx.pop_to_reg(masm, None),
                 )??;
@@ -520,8 +520,8 @@ impl ControlStackFrame {
                 // resets the stack pointer so that it matches the expectations
                 // of the else branch: the stack pointer is expected to be at
                 // the base stack pointer, plus the params stack size in bytes.
-                let params_size = sig.params::<M>().size();
-                context.push_abi_results::<M, _>(sig.params::<M>(), masm, |params, _, _| {
+                let params_size = sig.params::<M>()?.size();
+                context.push_abi_results::<M, _>(sig.params::<M>()?, masm, |params, _, _| {
                     params.ret_area().copied()
                 })?;
                 masm.reset_stack_pointer(SPOffset::from_u32(
@@ -635,7 +635,7 @@ impl ControlStackFrame {
 
     /// Returns [`crate::abi::ABIResults`] of the control stack frame
     /// block.
-    pub fn results<M>(&mut self) -> &mut ABIResults
+    pub fn results<M>(&mut self) -> Result<&mut ABIResults>
     where
         M: MacroAssembler,
     {
@@ -648,7 +648,7 @@ impl ControlStackFrame {
     }
 
     /// Returns the block params interpreted as [crate::abi::ABIResults].
-    pub fn params<M>(&mut self) -> &mut ABIResults
+    pub fn params<M>(&mut self) -> Result<&mut ABIResults>
     where
         M: MacroAssembler,
     {
@@ -686,7 +686,7 @@ impl ControlStackFrame {
         M: MacroAssembler,
         F: FnMut(&ABIResults, &mut CodeGenContext<Emission>, &mut M) -> Result<Option<RetArea>>,
     {
-        Self::pop_abi_results_impl(self.results::<M>(), context, masm, calculate_ret_area)
+        Self::pop_abi_results_impl(self.results::<M>()?, context, masm, calculate_ret_area)
     }
 
     /// Shared implementation for poppping the ABI results.
@@ -753,7 +753,7 @@ impl ControlStackFrame {
     where
         M: MacroAssembler,
     {
-        context.push_abi_results(self.results::<M>(), masm, |results, _, _| {
+        context.push_abi_results(self.results::<M>()?, masm, |results, _, _| {
             results.ret_area().copied()
         })
     }
@@ -772,7 +772,7 @@ impl ControlStackFrame {
         M: MacroAssembler,
         F: FnMut(&ABIResults, &mut CodeGenContext<Emission>, &mut M) -> Result<Option<RetArea>>,
     {
-        Self::top_abi_results_impl::<M, _>(self.results::<M>(), context, masm, calculate_ret_area)
+        Self::top_abi_results_impl::<M, _>(self.results::<M>()?, context, masm, calculate_ret_area)
     }
 
     /// Internal implementation of [Self::top_abi_results].
