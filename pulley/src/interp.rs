@@ -973,6 +973,14 @@ impl Interpreter<'_> {
         self.state[XReg::sp].set_ptr(sp);
     }
 
+    /// Calculates the "g32" address given the inputs to the addressing mode.
+    fn g32_addr<T>(&self, base: XReg, addr: XReg, offset: u8) -> *mut T {
+        let addr = self.state[base].get_ptr::<T>() as usize
+            + self.state[addr].get_u32() as usize
+            + usize::from(offset);
+        addr as *mut T
+    }
+
     unsafe fn load<T>(&self, ptr: XReg, offset: i32) -> T {
         unsafe {
             self.state[ptr]
@@ -986,13 +994,7 @@ impl Interpreter<'_> {
     /// always a 32-bit value. Arithmetic is done at the size of the
     /// host-pointer-width.
     unsafe fn load_g32<T>(&self, base: XReg, addr: XReg, offset: u8) -> T {
-        unsafe {
-            self.state[base]
-                .get_ptr::<T>()
-                .byte_offset(self.state[addr].get_u32() as usize as isize)
-                .byte_offset(offset.into())
-                .read_unaligned()
-        }
+        unsafe { self.g32_addr::<T>(base, addr, offset).read_unaligned() }
     }
 
     unsafe fn store<T>(&self, ptr: XReg, offset: i32, val: T) {
@@ -1005,11 +1007,7 @@ impl Interpreter<'_> {
     /// Same as `load_g32` but for stores
     unsafe fn store_g32<T>(&self, base: XReg, addr: XReg, offset: u8, val: T) {
         unsafe {
-            self.state[base]
-                .get_ptr::<T>()
-                .byte_offset(self.state[addr].get_u32() as usize as isize)
-                .byte_offset(offset.into())
-                .write_unaligned(val)
+            self.g32_addr::<T>(base, addr, offset).write_unaligned(val);
         }
     }
 
