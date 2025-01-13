@@ -999,7 +999,7 @@ fn preview2_stdin() -> Result<()> {
         .stderr(Stdio::piped())
         .spawn()?;
     let mut stdin = child.stdin.take().unwrap();
-    let t = std::thread::spawn(move || {
+    std::thread::spawn(move || {
         stdin.write_all(b"hello").unwrap();
     });
     let output = child.wait_with_output()?;
