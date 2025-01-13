@@ -2148,7 +2148,7 @@ fn hex_integer_args() -> Result<()> {
         );
     }
     let stdout = String::from_utf8(output.stdout)?;
-    println!("stdout: {}", stdout);
+    println!("stdout: {stdout}");
     assert_eq!(stdout.trim(), "297"); // 42 + 255 = 297
     Ok(())
 }
