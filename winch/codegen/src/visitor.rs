@@ -2221,7 +2221,7 @@ where
             WasmValType::I32,
             OperandSize::S8,
             LoadKind::Simple,
-            MemOpKind::Normal,
+            MemOpKind::Atomic,
         )
     }
 
