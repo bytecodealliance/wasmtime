@@ -3,7 +3,8 @@ use crate::{
     codegen::BlockSig,
     isa::reg::{writable, Reg},
     masm::{
-        Imm, IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm, SPOffset, ShiftKind, TrapCode
+        Imm, IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm, SPOffset,
+        ShiftKind, TrapCode,
     },
     stack::TypedReg,
 };
