@@ -562,12 +562,11 @@ fn run_cwasm_from_stdin() -> Result<()> {
         .stderr(Stdio::piped())
         .spawn()?;
     let mut stdin = child.stdin.take().unwrap();
-    let t = std::thread::spawn(move || {
-        let _ = stdin.write_all(&input);
+    std::thread::spawn(move || {
+        stdin.write_all(&input).unwrap();
     });
     let output = child.wait_with_output()?;
     assert!(output.status.success());
-    t.join().unwrap();
     Ok(())
 }
 
@@ -2139,6 +2138,7 @@ fn hex_integer_args() -> Result<()> {
         ],
         None,
     )?;
+
     if !output.status.success() {
         bail!(
             "Failed to run wasmtime: {}\nstderr: {}",
