@@ -11,7 +11,7 @@ use std::{
 };
 use wasmtime::component::Linker;
 use wasmtime::{Engine, Store, StoreLimits};
-use wasmtime_wasi::{StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{IoView, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::bindings::http::types::Scheme;
 use wasmtime_wasi_http::bindings::ProxyPre;
 use wasmtime_wasi_http::io::TokioIo;
@@ -46,21 +46,18 @@ struct Host {
     wasi_keyvalue: Option<WasiKeyValueCtx>,
 }
 
-impl WasiView for Host {
+impl IoView for Host {
     fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
         &mut self.table
     }
-
+}
+impl WasiView for Host {
     fn ctx(&mut self) -> &mut WasiCtx {
         &mut self.ctx
     }
 }
 
 impl WasiHttpView for Host {
-    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        &mut self.table
-    }
-
     fn ctx(&mut self) -> &mut WasiHttpCtx {
         &mut self.http
     }
