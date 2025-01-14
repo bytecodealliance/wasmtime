@@ -3,10 +3,11 @@
 //!
 //! It's not safe for this binary to contain any other tests.
 
+#![cfg(not(miri))]
+
 use wasmtime::*;
 
 #[test]
-#[cfg_attr(miri, ignore)]
 fn test_unload_engine() {
     for _ in 0..3 {
         std::thread::spawn(|| {
