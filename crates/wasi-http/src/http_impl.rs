@@ -14,6 +14,7 @@ use bytes::Bytes;
 use http_body_util::{BodyExt, Empty};
 use hyper::Method;
 use wasmtime::component::Resource;
+use wasmtime_wasi::IoView;
 
 impl<T> outgoing_handler::Host for WasiHttpImpl<T>
 where

@@ -16,7 +16,7 @@ use std::str::FromStr;
 use wasmtime::component::{Resource, ResourceTable};
 use wasmtime_wasi::{
     bindings::io::streams::{InputStream, OutputStream},
-    Pollable, ResourceTableError,
+    IoView, Pollable, ResourceTableError,
 };
 
 impl<T> crate::bindings::http::types::Host for WasiHttpImpl<T>
