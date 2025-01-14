@@ -971,8 +971,14 @@ impl FunctionCompiler<'_> {
     ) -> Result<(WasmFunctionInfo, CompiledFunction), CompileError> {
         let context = &mut self.cx.codegen_context;
         let isa = &*self.compiler.isa;
-        let mut compiled_code =
-            compile_maybe_cached(context, isa, self.cx.incremental_cache_ctx.as_mut())?;
+
+        // Run compilation, but don't propagate the error just yet. This'll
+        // mutate `context` and the IR contained within (optionally) but it may
+        // fail if the backend has a bug in it. Use `context` after this
+        // finishes to optionally emit CLIF and then after that's done actually
+        // propagate the error if one happened.
+        let compilation_result =
+            compile_maybe_cached(context, isa, self.cx.incremental_cache_ctx.as_mut());
 
         if let Some(path) = &self.compiler.clif_dir {
             use std::io::Write;
@@ -983,6 +989,8 @@ impl FunctionCompiler<'_> {
             let mut output = std::fs::File::create(path).unwrap();
             write!(output, "{}", context.func.display()).unwrap();
         }
+
+        let mut compiled_code = compilation_result?;
 
         // Give wasm functions, user defined code, a "preferred" alignment
         // instead of the minimum alignment as this can help perf in niche
