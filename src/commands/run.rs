@@ -512,11 +512,12 @@ impl RunCommand {
         }
 
         // Skip the first argument (module path) and find the position after --invoke flag
-        let invoke_pos = self.module_and_args
+        let invoke_pos = self
+            .module_and_args
             .iter()
             .position(|arg| arg == "--invoke")
             .map(|pos| pos + 2) // Skip both --invoke and function name
-            .unwrap_or(1);  // Fallback to skipping just the module path
+            .unwrap_or(1); // Fallback to skipping just the module path
 
         let mut args = self.module_and_args.iter().skip(invoke_pos);
         let mut values = Vec::new();
@@ -593,11 +594,11 @@ impl RunCommand {
                     Val::AnyRef(Some(_)) => print!("<anyref>"),
                 }
             }
-        }
 
-        // Add a newline at the end unless --no-newline is specified
-        if !self.no_newline {
-            println!();
+            // Add a newline only if we printed results and --no-newline wasn't specified
+            if !self.no_newline {
+                print!("\n");
+            }
         }
         Ok(())
     }
