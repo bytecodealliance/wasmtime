@@ -583,8 +583,8 @@ impl RunCommand {
                 }
             }
 
-            // Добавляем перевод строки только для функций с возвращаемыми значениями
-            // и только если не указан флаг no_newline
+            // Add line feed only for functions with return values
+            // and only if no_newline flag is specified
             if !self.no_newline {
                 println!();
             }
