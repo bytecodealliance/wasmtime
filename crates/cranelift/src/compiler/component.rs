@@ -23,7 +23,7 @@ struct TrampolineCompiler<'a> {
     tunables: &'a Tunables,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Debug, Copy, Clone)]
 enum Abi {
     Wasm,
     Array,
@@ -746,7 +746,10 @@ impl ComponentCompiler for Compiler {
             c.translate(&component.trampolines[index]);
             c.builder.finalize();
 
-            Ok(Box::new(compiler.finish()?))
+            Ok(Box::new(compiler.finish(&format!(
+                "component_trampoline_{}_{abi:?}",
+                index.as_u32(),
+            ))?))
         };
         Ok(AllCallFunc {
             wasm_call: compile(Abi::Wasm)?,
