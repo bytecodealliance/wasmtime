@@ -27,10 +27,10 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
-;; @0040                               jump block1(v2, v2)
+;; @0040                               jump block1
 ;;
-;;                                 block1(v3: i64, v4: i64):
-;; @0040                               return v3, v4
+;;                                 block1:
+;; @0040                               return v2, v2
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i64, i64) -> i64, i64, i64 tail {
@@ -40,10 +40,10 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i64):
-;; @0049                               jump block1(v2, v3, v2)
+;; @0049                               jump block1
 ;;
-;;                                 block1(v4: i64, v5: i64, v6: i64):
-;; @0049                               return v4, v5, v6
+;;                                 block1:
+;; @0049                               return v2, v3, v2
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64, i64) -> i64 tail {

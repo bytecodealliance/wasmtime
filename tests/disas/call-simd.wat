@@ -45,8 +45,8 @@
 ;; @004f                               v6 = bitcast.i32x4 little v3
 ;; @004f                               v7 = iadd v5, v6
 ;; @0052                               v8 = bitcast.i8x16 little v7
-;; @0052                               jump block1(v8)
+;; @0052                               jump block1
 ;;
-;;                                 block1(v4: i8x16):
-;; @0052                               return v4
+;;                                 block1:
+;; @0052                               return v8
 ;; }

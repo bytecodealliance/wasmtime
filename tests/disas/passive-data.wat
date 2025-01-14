@@ -27,9 +27,8 @@
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
 ;; @003d                               v5 = iconst.i32 0
 ;; @003d                               v6 = iconst.i32 0
-;; @003d                               v7 = global_value.i64 gv3
 ;; @003d                               v8 = uextend.i64 v2
-;; @003d                               v9 = call fn0(v7, v5, v6, v8, v3, v4)  ; v5 = 0, v6 = 0
+;; @003d                               v9 = call fn0(v0, v5, v6, v8, v3, v4)  ; v5 = 0, v6 = 0
 ;; @0041                               jump block1
 ;;
 ;;                                 block1:
@@ -47,8 +46,7 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0044                               v2 = iconst.i32 0
-;; @0044                               v3 = global_value.i64 gv3
-;; @0044                               call fn0(v3, v2)  ; v2 = 0
+;; @0044                               call fn0(v0, v2)  ; v2 = 0
 ;; @0047                               jump block1
 ;;
 ;;                                 block1:

@@ -178,7 +178,11 @@ impl Test {
         let mut config = self.opts.config(None)?;
         config.target(&self.config.target)?;
         match self.config.test {
-            TestKind::Clif | TestKind::Optimize => {
+            TestKind::Clif => {
+                config.emit_clif(tempdir.path());
+                config.cranelift_opt_level(OptLevel::None);
+            }
+            TestKind::Optimize => {
                 config.emit_clif(tempdir.path());
             }
             TestKind::Compile => {}
@@ -204,6 +208,11 @@ impl Test {
                 {
                     let entry = entry.context("failed to iterate over tempdir")?;
                     let path = entry.path();
+                    if let Some(name) = path.file_name().and_then(|s| s.to_str()) {
+                        if !name.starts_with("wasm_func_") {
+                            continue;
+                        }
+                    }
                     let clif = std::fs::read_to_string(&path)
                         .with_context(|| format!("failed to read clif file {path:?}"))?;
                     clifs.push(clif);
@@ -243,6 +252,7 @@ impl Test {
             _ => unreachable!(),
         };
         flags.set("opt_level", opt_level)?;
+        flags.set("preserve_frame_pointers", "true")?;
         for (key, val) in self.opts.codegen.cranelift.iter() {
             let key = &key.replace("-", "_");
             let target_res = match val {
@@ -283,14 +293,7 @@ fn assert_output(
             for mut func in funcs {
                 match kind {
                     TestKind::Compile | TestKind::Winch => unreachable!(),
-                    TestKind::Optimize => {
-                        let mut ctx = cranelift_codegen::Context::for_function(func.clone());
-                        ctx.optimize(isa, &mut Default::default())
-                            .map_err(|e| codegen_error_to_anyhow_error(&ctx.func, e))?;
-                        ctx.func.dfg.resolve_all_aliases();
-                        writeln!(&mut actual, "{}", ctx.func.display()).unwrap();
-                    }
-                    TestKind::Clif => {
+                    TestKind::Optimize | TestKind::Clif => {
                         func.dfg.resolve_all_aliases();
                         writeln!(&mut actual, "{}", func.display()).unwrap();
                     }
@@ -525,12 +528,4 @@ fn assert_or_bless_output(path: &Path, wat: &str, actual: &str) -> Result<()> {
             .unified_diff()
             .header("expected", "actual")
     )
-}
-
-fn codegen_error_to_anyhow_error(
-    func: &cranelift_codegen::ir::Function,
-    err: cranelift_codegen::CodegenError,
-) -> anyhow::Error {
-    let s = cranelift_codegen::print_errors::pretty_error(func, err);
-    anyhow::anyhow!("{}", s)
 }

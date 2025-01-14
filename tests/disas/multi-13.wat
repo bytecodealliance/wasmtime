@@ -25,10 +25,10 @@
 ;; @0032                               jump block2(v7)  ; v7 = 3
 ;;
 ;;                                 block5:
-;; @0037                               jump block4(v3)
+;; @0037                               jump block4
 ;;
-;;                                 block4(v6: i32):
-;; @0038                               jump block2(v6)
+;;                                 block4:
+;; @0038                               jump block2(v3)
 ;;
 ;;                                 block2(v5: i32):
 ;; @0039                               jump block1(v5)

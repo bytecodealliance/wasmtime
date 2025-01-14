@@ -28,12 +28,12 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i32):
-;; @0040                               v4 = global_value.i64 gv4
+;; @0040                               v4 = load.i64 notrap aligned v0+104
 ;; @0040                               v5 = iconst.i64 4100
 ;; @0040                               v6 = isub v4, v5  ; v5 = 4100
 ;; @0040                               v7 = icmp ugt v2, v6
 ;; @0040                               trapnz v7, heap_oob
-;; @0040                               v8 = global_value.i64 gv5
+;; @0040                               v8 = load.i64 notrap aligned checked v0+96
 ;; @0040                               v9 = iadd v8, v2
 ;; @0040                               v10 = iconst.i64 4096
 ;; @0040                               v11 = iadd v9, v10  ; v10 = 4096
@@ -54,18 +54,18 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
-;; @0049                               v4 = global_value.i64 gv4
+;; @0049                               v4 = load.i64 notrap aligned v0+104
 ;; @0049                               v5 = iconst.i64 4100
 ;; @0049                               v6 = isub v4, v5  ; v5 = 4100
 ;; @0049                               v7 = icmp ugt v2, v6
 ;; @0049                               trapnz v7, heap_oob
-;; @0049                               v8 = global_value.i64 gv5
+;; @0049                               v8 = load.i64 notrap aligned checked v0+96
 ;; @0049                               v9 = iadd v8, v2
 ;; @0049                               v10 = iconst.i64 4096
 ;; @0049                               v11 = iadd v9, v10  ; v10 = 4096
 ;; @0049                               v12 = load.i32 little heap v11
-;; @004d                               jump block1(v12)
+;; @004d                               jump block1
 ;;
-;;                                 block1(v3: i32):
-;; @004d                               return v3
+;;                                 block1:
+;; @004d                               return v12
 ;; }

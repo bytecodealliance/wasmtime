@@ -32,7 +32,7 @@
 ;; @0040                               v5 = iconst.i64 0xffff_fffc
 ;; @0040                               v6 = icmp ugt v4, v5  ; v5 = 0xffff_fffc
 ;; @0040                               trapnz v6, heap_oob
-;; @0040                               v7 = global_value.i64 gv5
+;; @0040                               v7 = load.i64 notrap aligned readonly checked v0+96
 ;; @0040                               v8 = iadd v7, v4
 ;; @0040                               store little heap v3, v8
 ;; @0043                               jump block1
@@ -55,11 +55,11 @@
 ;; @0048                               v5 = iconst.i64 0xffff_fffc
 ;; @0048                               v6 = icmp ugt v4, v5  ; v5 = 0xffff_fffc
 ;; @0048                               trapnz v6, heap_oob
-;; @0048                               v7 = global_value.i64 gv5
+;; @0048                               v7 = load.i64 notrap aligned readonly checked v0+96
 ;; @0048                               v8 = iadd v7, v4
 ;; @0048                               v9 = load.i32 little heap v8
-;; @004b                               jump block1(v9)
+;; @004b                               jump block1
 ;;
-;;                                 block1(v3: i32):
-;; @004b                               return v3
+;;                                 block1:
+;; @004b                               return v9
 ;; }

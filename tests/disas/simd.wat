@@ -40,10 +40,10 @@
 ;; @004e                               v3 = iconst.i32 42
 ;; @0050                               v4 = splat.i32x4 v3  ; v3 = 42
 ;; @0052                               v5 = extractlane v4, 0
-;; @0055                               jump block1(v5)
+;; @0055                               jump block1
 ;;
-;;                                 block1(v2: i32):
-;; @0055                               return v2
+;;                                 block1:
+;; @0055                               return v5
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64) -> i32 tail {
@@ -59,10 +59,10 @@
 ;; @006d                               v5 = bitcast.i32x4 little v3  ; v3 = const0
 ;; @006d                               v6 = insertlane v5, v4, 1  ; v4 = 99
 ;; @0070                               v7 = extractlane v6, 1
-;; @0073                               jump block1(v7)
+;; @0073                               jump block1
 ;;
-;;                                 block1(v2: i32):
-;; @0073                               return v2
+;;                                 block1:
+;; @0073                               return v7
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64) -> i32 tail {
@@ -76,10 +76,10 @@
 ;; @0076                               v3 = vconst.i8x16 const0
 ;; @0088                               v4 = bitcast.i32x4 little v3  ; v3 = const0
 ;; @0088                               v5 = extractlane v4, 3
-;; @008b                               jump block1(v5)
+;; @008b                               jump block1
 ;;
-;;                                 block1(v2: i32):
-;; @008b                               return v2
+;;                                 block1:
+;; @008b                               return v5
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64) tail {
