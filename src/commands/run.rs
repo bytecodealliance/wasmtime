@@ -510,7 +510,15 @@ impl RunCommand {
                  is experimental and may break in the future"
             );
         }
-        let mut args = self.module_and_args.iter().skip(1);
+
+        // Skip the first argument (module path) and find the position after --invoke flag
+        let invoke_pos = self.module_and_args
+            .iter()
+            .position(|arg| arg == "--invoke")
+            .map(|pos| pos + 2) // Skip both --invoke and function name
+            .unwrap_or(1);  // Fallback to skipping just the module path
+
+        let mut args = self.module_and_args.iter().skip(invoke_pos);
         let mut values = Vec::new();
         for ty in ty.params() {
             let val = match args.next() {
@@ -545,6 +553,7 @@ impl RunCommand {
             });
         }
 
+        // Call the function with the parsed arguments
         let mut results = vec![Val::null_func_ref(); ty.results().len()];
         let invoke_res = func
             .call_async(&mut *store, &values, &mut results)
@@ -561,36 +570,34 @@ impl RunCommand {
             return Err(self.handle_core_dump(&mut *store, err));
         }
 
-        // If a function is called via --invoke, always print the result
-        if self.invoke.is_some() {
-            if !results.is_empty() {
-                eprintln!(
-                    "warning: using `--invoke` with a function that returns values \
-                     is experimental and may break in the future"
-                );
+        // Print results if any
+        if !results.is_empty() {
+            eprintln!(
+                "warning: using `--invoke` with a function that returns values \
+                 is experimental and may break in the future"
+            );
 
-                for result in results {
-                    match result {
-                        Val::I32(i) => print!("{i}"),
-                        Val::I64(i) => print!("{i}"),
-                        Val::F32(f) => print!("{}", f32::from_bits(f)),
-                        Val::F64(f) => print!("{}", f64::from_bits(f)),
-                        Val::V128(i) => print!("{}", i.as_u128()),
-                        Val::ExternRef(None) => print!("<null externref>"),
-                        Val::ExternRef(Some(_)) => print!("<externref>"),
-                        Val::FuncRef(None) => print!("<null funcref>"),
-                        Val::FuncRef(Some(_)) => print!("<funcref>"),
-                        Val::AnyRef(None) => print!("<null anyref>"),
-                        Val::AnyRef(Some(_)) => print!("<anyref>"),
-                    }
+            // Print each result value without a newline
+            for result in results {
+                match result {
+                    Val::I32(i) => print!("{i}"),
+                    Val::I64(i) => print!("{i}"),
+                    Val::F32(f) => print!("{}", f32::from_bits(f)),
+                    Val::F64(f) => print!("{}", f64::from_bits(f)),
+                    Val::V128(i) => print!("{}", i.as_u128()),
+                    Val::ExternRef(None) => print!("<null externref>"),
+                    Val::ExternRef(Some(_)) => print!("<externref>"),
+                    Val::FuncRef(None) => print!("<null funcref>"),
+                    Val::FuncRef(Some(_)) => print!("<funcref>"),
+                    Val::AnyRef(None) => print!("<null anyref>"),
+                    Val::AnyRef(Some(_)) => print!("<anyref>"),
                 }
             }
+        }
 
-            // For functions called via --invoke, always add a newline,
-            // unless the no_newline flag is specified
-            if !self.no_newline {
-                println!();
-            }
+        // Add a newline at the end unless --no-newline is specified
+        if !self.no_newline {
+            println!();
         }
         Ok(())
     }
