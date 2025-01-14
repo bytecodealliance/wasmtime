@@ -843,31 +843,31 @@ where
     /// Emit checks to ensure that the address at `memarg` is correctly aligned for `size`.
     fn emit_check_align(&mut self, memarg: &MemArg, size: OperandSize) -> Result<()> {
         if size.bytes() > 1 {
+            // Peek addr from top of the stack by popping and pushing.
             let addr = self.context.pop_to_reg(self.masm, None)?;
+            self.context.stack.push(addr.into());
+
             let tmp = scratch!(M);
-            let effective_addr = if memarg.offset != 0 {
+            self.masm.mov(writable!(tmp), RegImm::Reg(addr.reg), size)?;
+
+            if memarg.offset != 0 {
                 self.masm.add(
                     writable!(tmp),
-                    addr.reg,
+                    tmp,
                     RegImm::Imm(Imm::I64(memarg.offset)),
                     size,
                 )?;
-                tmp
-            } else {
-                addr.reg
-            };
+            }
 
             self.masm.and(
                 writable!(tmp),
-                effective_addr,
+                tmp,
                 RegImm::Imm(Imm::I32(size.bytes() - 1)),
                 size,
             )?;
 
             self.masm.cmp(tmp, RegImm::Imm(Imm::i64(0)), size)?;
             self.masm.trapif(IntCmpKind::Ne, TRAP_HEAP_MISALIGNED)?;
-
-            self.context.stack.push(addr.into());
         }
 
         Ok(())
