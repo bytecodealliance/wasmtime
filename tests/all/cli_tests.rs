@@ -2152,3 +2152,66 @@ fn hex_integer_args() -> Result<()> {
     assert_eq!(stdout.trim(), "297"); // 42 + 255 = 297
     Ok(())
 }
+
+#[test]
+fn numeric_args() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/numeric_args.wat")?;
+    let path = wasm.path().to_str().unwrap();
+
+    // Test i32 with hex and decimal
+    let output = run_wasmtime_for_output(
+        &[
+            "run", path, "--invoke", "sum_i32", "0x2A", // 42 in hex
+            "0xFF", // 255 in hex
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"297\n");
+    assert_eq!(output.stderr, b"");
+
+    // Test i64 with hex and decimal
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            path,
+            "--invoke",
+            "sum_i64",
+            "0xFFFFFFFF",  // 4294967295 in hex
+            "0x100000000", // 4294967296 in hex
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"8589934591\n");
+    assert_eq!(output.stderr, b"");
+
+    // Test f32 with decimal
+    let output =
+        run_wasmtime_for_output(&["run", path, "--invoke", "sum_f32", "3.14", "2.86"], None)?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"6\n");
+    assert_eq!(output.stderr, b"");
+
+    // Test f64 with decimal
+    let output = run_wasmtime_for_output(
+        &["run", path, "--invoke", "sum_f64", "123.456", "876.544"],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"1000\n");
+    assert_eq!(output.stderr, b"");
+
+    // Test invalid hex format
+    let output = run_wasmtime_for_output(
+        &[
+            "run", path, "--invoke", "sum_i32", "0xGG", // Invalid hex
+            "0xFF",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), false);
+    assert_ne!(output.stderr, b"");
+
+    Ok(())
+}
