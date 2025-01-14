@@ -995,15 +995,20 @@ async fn total_stacks_limit() -> Result<()> {
     let mut store1 = Store::new(&engine, ());
     let instance1 = linker.instantiate_async(&mut store1, &module).await?;
     let run1 = instance1.get_func(&mut store1, "run").unwrap();
-    let future1 = run1.call_async(store1, &[], &mut []);
+    let future1 = run1.call_async(&mut store1, &[], &mut []);
 
     let mut store2 = Store::new(&engine, ());
     let instance2 = linker.instantiate_async(&mut store2, &module).await?;
     let run2 = instance2.get_func(&mut store2, "run").unwrap();
-    let future2 = run2.call_async(store2, &[], &mut []);
+    let future2 = run2.call_async(&mut store2, &[], &mut []);
 
     future1.await?;
     future2.await?;
+
+    // Dispose one store via `Drop`, the other via `into_data`, and ensure that
+    // any lingering stacks make their way back to the pool.
+    drop(store1);
+    store2.into_data();
 
     Ok(())
 }

@@ -643,6 +643,8 @@ impl<T> Store<T> {
 
     /// Consumes this [`Store`], destroying it, and returns the underlying data.
     pub fn into_data(mut self) -> T {
+        self.inner.flush_fiber_stack();
+
         // This is an unsafe operation because we want to avoid having a runtime
         // check or boolean for whether the data is actually contained within a
         // `Store`. The data itself is stored as `ManuallyDrop` since we're
