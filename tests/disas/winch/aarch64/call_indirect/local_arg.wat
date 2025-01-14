@@ -31,7 +31,7 @@
 ;;       mov     x28, sp
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;; 
+;;
 ;; wasm[0]::function[1]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
@@ -72,7 +72,7 @@
 ;;       mov     x16, #0
 ;;       mov     w1, w16
 ;;       ldur    w2, [x28]
-;;       bl      #0x3a4
+;;       bl      #0x378
 ;;   e0: add     sp, sp, #4
 ;;       mov     x28, sp
 ;;       ldur    x9, [x28, #0x14]

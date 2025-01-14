@@ -78,7 +78,7 @@
 ;;       mov     x16, #0
 ;;       mov     w1, w16
 ;;       ldur    w2, [x28]
-;;       bl      #0x3b4
+;;       bl      #0x398
 ;;   c4: add     sp, sp, #4
 ;;       mov     x28, sp
 ;;       ldur    x9, [x28, #0x14]
@@ -144,7 +144,7 @@
 ;;       mov     x16, #0
 ;;       mov     w1, w16
 ;;       ldur    w2, [x28, #0xc]
-;;       bl      #0x3b4
+;;       bl      #0x398
 ;;  1cc: add     sp, sp, #0xc
 ;;       mov     x28, sp
 ;;       add     sp, sp, #4
