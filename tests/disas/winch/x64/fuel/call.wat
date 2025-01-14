@@ -24,7 +24,7 @@
 ;;       cmpq    $0, %rcx
 ;;       jl      0x4a
 ;;   3d: movq    %r14, %rdi
-;;       callq   0x20c
+;;       callq   0x1f1
 ;;       movq    8(%rsp), %r14
 ;;       movq    8(%r14), %rax
 ;;       movq    (%rax), %r11
@@ -66,7 +66,7 @@
 ;;       cmpq    $0, %rcx
 ;;       jl      0xea
 ;;   dd: movq    %r14, %rdi
-;;       callq   0x20c
+;;       callq   0x1f1
 ;;       movq    8(%rsp), %r14
 ;;       movq    8(%r14), %rax
 ;;       movq    (%rax), %r11

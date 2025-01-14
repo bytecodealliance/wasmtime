@@ -31,12 +31,9 @@
 ;; @0022                               v6 = load.i64 notrap aligned readonly v0+40
 ;; @0022                               v15 = iadd v6, v11
 ;; @0022                               v16 = load.i8x16 notrap aligned little v15
-;; @0028                               trapz v2, user16
-;; @0028                               trapz v14, user1
-;; @0028                               v29 = load.i8x16 notrap aligned little v15
 ;; @002e                               jump block1
 ;;
 ;;                                 block1:
-;; @002c                               v30 = bxor.i8x16 v16, v29
+;; @002c                               v30 = bxor.i8x16 v16, v16
 ;; @002e                               return v30
 ;; }
