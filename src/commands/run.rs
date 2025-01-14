@@ -571,9 +571,9 @@ impl RunCommand {
             return Err(self.handle_core_dump(&mut *store, err));
         }
 
-        // When using --invoke, we always want to print the results
-        if self.invoke.is_some() {
-            if !results.is_empty() {
+        // Print results if the function returns any values
+        if !results.is_empty() {
+            if self.invoke.is_some() {
                 eprintln!(
                     "warning: using `--invoke` with a function that returns values \
                      is experimental and may break in the future"
