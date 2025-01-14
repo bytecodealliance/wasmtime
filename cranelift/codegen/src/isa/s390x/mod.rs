@@ -15,6 +15,7 @@ use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
+use std::string::String;
 use target_lexicon::{Architecture, Triple};
 
 // New backend:
@@ -172,6 +173,10 @@ impl TargetIsa for S390xBackend {
         cs.set_skipdata(true)?;
 
         Ok(cs)
+    }
+
+    fn pretty_print_reg(&self, reg: Reg, _size: u8) -> String {
+        inst::regs::pretty_print_reg(reg)
     }
 
     fn has_native_fma(&self) -> bool {

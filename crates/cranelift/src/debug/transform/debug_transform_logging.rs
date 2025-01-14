@@ -1,10 +1,17 @@
-use crate::debug::Reader;
+use crate::{debug::Reader, translate::get_vmctx_value_label};
 use core::fmt;
+use cranelift_codegen::{ir::ValueLabel, isa::TargetIsa, LabelValueLoc, ValueLabelsRanges};
 use gimli::{
     write, AttributeValue, DebuggingInformationEntry, Dwarf, LittleEndian, Unit, UnitOffset,
     UnitSectionOffset,
 };
 
+macro_rules! dbi_log_enabled {
+    () => {
+        cfg!(any(feature = "trace-log", debug_assertions))
+            && ::log::log_enabled!(target: "debug-info-transform", ::log::Level::Trace)
+    };
+}
 macro_rules! dbi_log {
     ($($tt:tt)*) => {
         if cfg!(any(feature = "trace-log", debug_assertions)) {
@@ -13,6 +20,7 @@ macro_rules! dbi_log {
     };
 }
 pub(crate) use dbi_log;
+pub(crate) use dbi_log_enabled;
 
 pub struct CompileUnitSummary<'a> {
     unit: &'a Unit<Reader<'a>, usize>,
@@ -272,5 +280,81 @@ fn get_offset_value(offset: UnitSectionOffset) -> usize {
     match offset {
         UnitSectionOffset::DebugInfoOffset(offs) => offs.0,
         UnitSectionOffset::DebugTypesOffset(offs) => offs.0,
+    }
+}
+
+pub fn log_get_value_name(value: ValueLabel) -> ValueNameSummary {
+    ValueNameSummary { value }
+}
+
+pub struct ValueNameSummary {
+    value: ValueLabel,
+}
+
+impl fmt::Debug for ValueNameSummary {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.value == get_vmctx_value_label() {
+            f.pad("VMCTX")
+        } else {
+            f.pad(&format!("L#{}", self.value.as_u32()))
+        }
+    }
+}
+
+pub fn log_get_value_loc(loc: LabelValueLoc, isa: &dyn TargetIsa) -> ValueLocSummary {
+    ValueLocSummary { loc, isa }
+}
+
+pub struct ValueLocSummary<'a> {
+    loc: LabelValueLoc,
+    isa: &'a dyn TargetIsa,
+}
+
+impl<'a> fmt::Debug for ValueLocSummary<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let LabelValueLoc::Reg(reg) = self.loc {
+            let reg_name = self.isa.pretty_print_reg(reg, self.isa.pointer_bytes());
+            return write!(f, "{reg_name}");
+        }
+
+        write!(f, "{:?}", self.loc)
+    }
+}
+
+pub fn log_get_value_ranges<'a>(
+    ranges: Option<&'a ValueLabelsRanges>,
+    isa: &'a dyn TargetIsa,
+) -> ValueRangesSummary<'a> {
+    ValueRangesSummary { ranges, isa }
+}
+
+pub struct ValueRangesSummary<'a> {
+    ranges: Option<&'a ValueLabelsRanges>,
+    isa: &'a dyn TargetIsa,
+}
+
+impl<'a> fmt::Debug for ValueRangesSummary<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(ranges) = self.ranges {
+            // Sort the output first for nicer display.
+            let mut locals = Vec::new();
+            for value in ranges {
+                locals.push(*value.0);
+            }
+            locals.sort_by_key(|n| n.as_u32());
+
+            for i in 0..locals.len() {
+                let name = locals[i];
+                write!(f, "{:<6?}:", log_get_value_name(name))?;
+                for range in ranges.get(&name).unwrap() {
+                    write!(f, " {:?}", log_get_value_loc(range.loc, self.isa))?;
+                    write!(f, "@[{}..{})", range.start, range.end)?;
+                }
+                if i != locals.len() - 1 {
+                    writeln!(f)?;
+                }
+            }
+        }
+        Ok(())
     }
 }
