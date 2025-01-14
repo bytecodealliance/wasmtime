@@ -90,3 +90,54 @@ block3:
 ; nextln:     trapz.i32 v0, user1
 ; nextln:     return v3
 ; nextln: }
+
+function %g(i32) {
+block0(v0: i32):
+    ;; These should not dedupe because they are different instructions that trap
+    ;; on different conditions. This test exists to basically make sure that if
+    ;; we ever legalize `trapz` into `trapnz` or vice-versa that we remember to
+    ;; negate the condition of the instruction being legalized before passing
+    ;; that as the condition to the post-legalization instruction.
+    trapz v0, user1
+    trapnz v0, user1
+    return
+}
+
+; check:  function %g(i32) fast {
+; nextln: block0(v0: i32):
+; nextln:     trapz v0, user1
+; nextln:     trapnz v0, user1
+; nextln:     return
+; nextln: }
+
+function %h(i32, i32) {
+block0(v0: i32, v1: i32):
+    ;; These should not dedupe because they have different conditions.
+    trapz v0, user1
+    trapz v1, user1
+    return
+}
+
+; check:  function %h(i32, i32) fast {
+; nextln: block0(v0: i32, v1: i32):
+; nextln:     trapz v0, user1
+; nextln:     trapz v1, user1
+; nextln:     return
+; nextln: }
+
+function %i(i32) {
+block0(v0: i32):
+    ;; These should not dedupe because they have different trap codes. Arguably,
+    ;; they could be deduped so long as we preserve the first's trap code, since
+    ;; either we will get that trap, or else no trap.
+    trapz v0, user1
+    trapz v0, user2
+    return
+}
+
+; check:  function %i(i32) fast {
+; nextln: block0(v0: i32):
+; nextln:     trapz v0, user1
+; nextln:     trapz v0, user2
+; nextln:     return
+; nextln: }

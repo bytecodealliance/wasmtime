@@ -142,6 +142,11 @@ fn define_control_flow(
             Operand::new("code", &imm.trapcode),
         ])
         .can_trap()
+        // When one `trapz` dominates another `trapz` and they have identical
+        // conditions and trap codes, it is safe to deduplicate them (like GVN,
+        // although there is not actually any value being numbered). Either the
+        // first `trapz` raised a trap and execution halted, or it didn't and
+        // therefore the dominated `trapz` will not raise a trap either.
         .side_effects_idempotent(),
     );
 
@@ -160,6 +165,7 @@ fn define_control_flow(
             Operand::new("code", &imm.trapcode),
         ])
         .can_trap()
+        // See the above comment for `trapz` and idempotent side effects.
         .side_effects_idempotent(),
     );
 

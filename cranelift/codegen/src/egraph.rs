@@ -443,8 +443,10 @@ where
                             trace!(" -> merges result {} to {}", result, orig_result);
                         }
                         (None, None) => {
+                            // Hit in the GVN map, but the instruction doesn't
+                            // produce results, only side effects. Nothing else
+                            // to do here.
                             trace!(" -> merges with dominating instruction");
-                            // Nothing else to do here.
                         }
                         (_, _) => unreachable!(),
                     }
