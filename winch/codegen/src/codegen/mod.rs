@@ -1363,7 +1363,7 @@ where
         Ok(())
     }
 
-    pub(crate) fn atomic_rmw(
+    pub(crate) fn emit_atomic_rmw(
         &mut self,
         arg: &MemArg,
         op: RmwOp,

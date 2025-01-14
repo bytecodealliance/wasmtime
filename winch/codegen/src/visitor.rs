@@ -2306,7 +2306,7 @@ where
     }
 
     fn visit_i32_atomic_rmw8_add_u(&mut self, arg: MemArg) -> Self::Output {
-        self.atomic_rmw(
+        self.emit_atomic_rmw(
             &arg,
             RmwOp::Add,
             OperandSize::S8,
@@ -2315,7 +2315,7 @@ where
     }
 
     fn visit_i32_atomic_rmw16_add_u(&mut self, arg: MemArg) -> Self::Output {
-        self.atomic_rmw(
+        self.emit_atomic_rmw(
             &arg,
             RmwOp::Add,
             OperandSize::S16,
@@ -2324,11 +2324,11 @@ where
     }
 
     fn visit_i32_atomic_rmw_add(&mut self, arg: MemArg) -> Self::Output {
-        self.atomic_rmw(&arg, RmwOp::Add, OperandSize::S32, None)
+        self.emit_atomic_rmw(&arg, RmwOp::Add, OperandSize::S32, None)
     }
 
     fn visit_i64_atomic_rmw8_add_u(&mut self, arg: MemArg) -> Self::Output {
-        self.atomic_rmw(
+        self.emit_atomic_rmw(
             &arg,
             RmwOp::Add,
             OperandSize::S8,
@@ -2337,7 +2337,7 @@ where
     }
 
     fn visit_i64_atomic_rmw16_add_u(&mut self, arg: MemArg) -> Self::Output {
-        self.atomic_rmw(
+        self.emit_atomic_rmw(
             &arg,
             RmwOp::Add,
             OperandSize::S16,
@@ -2346,11 +2346,11 @@ where
     }
 
     fn visit_i64_atomic_rmw32_add_u(&mut self, arg: MemArg) -> Self::Output {
-        self.atomic_rmw(&arg, RmwOp::Add, OperandSize::S32, None)
+        self.emit_atomic_rmw(&arg, RmwOp::Add, OperandSize::S32, None)
     }
 
     fn visit_i64_atomic_rmw_add(&mut self, arg: MemArg) -> Self::Output {
-        self.atomic_rmw(&arg, RmwOp::Add, OperandSize::S64, None)
+        self.emit_atomic_rmw(&arg, RmwOp::Add, OperandSize::S64, None)
     }
 
     wasmparser::for_each_visit_operator!(def_unsupported);
