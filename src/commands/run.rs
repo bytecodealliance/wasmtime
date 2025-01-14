@@ -571,37 +571,28 @@ impl RunCommand {
             return Err(self.handle_core_dump(&mut *store, err));
         }
 
-        // Print results if the function returns any values
-        if !results.is_empty() {
-            if self.invoke.is_some() {
-                eprintln!(
-                    "warning: using `--invoke` with a function that returns values \
-                     is experimental and may break in the future"
-                );
-            }
-
-            // Print each result value without a newline
-            for result in results {
-                match result {
-                    Val::I32(i) => print!("{i}"),
-                    Val::I64(i) => print!("{i}"),
-                    Val::F32(f) => print!("{}", f32::from_bits(f)),
-                    Val::F64(f) => print!("{}", f64::from_bits(f)),
-                    Val::V128(i) => print!("{}", i.as_u128()),
-                    Val::ExternRef(None) => print!("<null externref>"),
-                    Val::ExternRef(Some(_)) => print!("<externref>"),
-                    Val::FuncRef(None) => print!("<null funcref>"),
-                    Val::FuncRef(Some(_)) => print!("<funcref>"),
-                    Val::AnyRef(None) => print!("<null anyref>"),
-                    Val::AnyRef(Some(_)) => print!("<anyref>"),
-                }
-            }
-
-            // Add a newline unless --no-newline is specified
-            if !self.no_newline {
-                print!("\n");
+        // Always print results for functions that return values
+        for result in results {
+            match result {
+                Val::I32(i) => print!("{i}"),
+                Val::I64(i) => print!("{i}"),
+                Val::F32(f) => print!("{}", f32::from_bits(f)),
+                Val::F64(f) => print!("{}", f64::from_bits(f)),
+                Val::V128(i) => print!("{}", i.as_u128()),
+                Val::ExternRef(None) => print!("<null externref>"),
+                Val::ExternRef(Some(_)) => print!("<externref>"),
+                Val::FuncRef(None) => print!("<null funcref>"),
+                Val::FuncRef(Some(_)) => print!("<funcref>"),
+                Val::AnyRef(None) => print!("<null anyref>"),
+                Val::AnyRef(Some(_)) => print!("<anyref>"),
             }
         }
+
+        // Add a newline unless --no-newline is specified
+        if !self.no_newline {
+            print!("\n");
+        }
+
         Ok(())
     }
 
