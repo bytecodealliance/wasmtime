@@ -108,7 +108,6 @@
 ;; @004a                               trapz v29, user1
 ;; @004a                               v30 = iadd.i64 v6, v26
 ;; @004a                               v31 = load.i64 notrap aligned v30
-;; @004a                               trapz v29, user1
 ;;                                     v74 = iconst.i64 1
 ;; @004a                               v32 = iadd v31, v74  ; v74 = 1
 ;; @004a                               store notrap aligned v32, v30
@@ -142,7 +141,6 @@
 ;; @004a                               jump block7
 ;;
 ;;                                 block6:
-;; @004a                               trapz.i8 v56, user1
 ;;                                     v84 = iadd.i64 v58, v76  ; v76 = -1
 ;; @004a                               store notrap aligned v84, v57
 ;; @004a                               jump block7

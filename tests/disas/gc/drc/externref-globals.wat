@@ -50,16 +50,9 @@
 ;; @0034                               v13 = load.i64 notrap aligned readonly v0+40
 ;; @0034                               v22 = iadd v13, v18
 ;; @0034                               v23 = load.i64 notrap aligned v22
-;;                                     v42 = load.i32 notrap v46
-;; @0034                               v29 = uextend.i64 v42
-;; @0034                               v31 = uadd_overflow_trap v29, v17, user1  ; v17 = 8
-;; @0034                               v33 = uadd_overflow_trap v31, v17, user1  ; v17 = 8
-;; @0034                               v34 = icmp ule v33, v15
-;; @0034                               trapz v34, user1
 ;;                                     v50 = iconst.i64 1
 ;; @0034                               v24 = iadd v23, v50  ; v50 = 1
-;; @0034                               v35 = iadd v13, v31
-;; @0034                               store notrap aligned v24, v35
+;; @0034                               store notrap aligned v24, v22
 ;;                                     v41 = load.i32 notrap v46
 ;; @0034                               store notrap aligned v41, v9
 ;;                                     v53 = iconst.i64 4
@@ -107,7 +100,6 @@
 ;; @003b                               v33 = load.i64 notrap aligned readonly v0+40
 ;; @003b                               v17 = iadd v33, v13
 ;; @003b                               v18 = load.i64 notrap aligned v17
-;; @003b                               trapz v16, user1
 ;;                                     v60 = iconst.i64 1
 ;; @003b                               v19 = iadd v18, v60  ; v60 = 1
 ;; @003b                               store notrap aligned v19, v17
@@ -142,7 +134,6 @@
 ;; @003b                               jump block7
 ;;
 ;;                                 block6:
-;; @003b                               trapz.i8 v41, user1
 ;;                                     v70 = iadd.i64 v43, v62  ; v62 = -1
 ;; @003b                               store notrap aligned v70, v42
 ;; @003b                               jump block7

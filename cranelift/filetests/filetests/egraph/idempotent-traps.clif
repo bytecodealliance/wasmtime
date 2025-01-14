@@ -1,0 +1,92 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+function %trapz(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    trapz v0, user1
+
+    ;; Duplicate `trapz` in the same block. Should be removed.
+    trapz v0, user1
+
+    brif v1, block1, block2
+
+block1:
+    ;; Duplicate `trapz` in a dominated block. Should be removed.
+    trapz v0, user1
+
+    return v2
+
+block2:
+    return v3
+}
+
+; check:  function %trapz(i32, i32, i32, i32) -> i32 fast {
+; nextln: block0(v0: i32, v1: i32, v2: i32, v3: i32):
+; nextln:     trapz v0, user1
+; nextln:     brif v1, block1, block2
+; check:  block1:
+; nextln:     return v2
+; check:  block2:
+; nextln:     return v3
+; nextln: }
+
+function %trapnz(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    trapnz v0, user1
+
+    ;; Duplicate `trapnz` in the same block. Should be removed.
+    trapnz v0, user1
+
+    brif v1, block1, block2
+
+block1:
+    ;; Duplicate `trapnz` in a dominated block. Should be removed.
+    trapnz v0, user1
+
+    return v2
+
+block2:
+    return v3
+}
+
+; check:  function %trapnz(i32, i32, i32, i32) -> i32 fast {
+; nextln: block0(v0: i32, v1: i32, v2: i32, v3: i32):
+; nextln:     trapnz v0, user1
+; nextln:     brif v1, block1, block2
+; check:  block1:
+; nextln:     return v2
+; check:  block2:
+; nextln:     return v3
+; nextln: }
+
+;; In this function, although both `trapz`s are identical, they should not get
+;; deduplicated because neither dominates the other.
+function %f(i32, i32, i32, i32) -> i32 {
+block0(v0: i32, v1: i32, v2: i32, v3: i32):
+    br_table v1, block1, [block2, block3]
+
+block1:
+    return v1
+
+block2:
+    trapz v0, user1
+    return v2
+
+block3:
+    trapz v0, user1
+    return v3
+}
+
+; check:  function %f(i32, i32, i32, i32) -> i32 fast {
+; nextln: block0(v0: i32, v1: i32, v2: i32, v3: i32):
+; nextln:     br_table v1, block1, [block2, block3]
+; check:  block1:
+; nextln:     return v1
+; check:  block2:
+; nextln:     trapz.i32 v0, user1
+; nextln:     return v2
+; check:  block3:
+; nextln:     trapz.i32 v0, user1
+; nextln:     return v3
+; nextln: }

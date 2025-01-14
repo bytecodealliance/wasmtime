@@ -141,7 +141,8 @@ fn define_control_flow(
             Operand::new("c", ScalarTruthy).with_doc("Controlling value to test"),
             Operand::new("code", &imm.trapcode),
         ])
-        .can_trap(),
+        .can_trap()
+        .side_effects_idempotent(),
     );
 
     ig.push(
@@ -158,7 +159,8 @@ fn define_control_flow(
             Operand::new("c", ScalarTruthy).with_doc("Controlling value to test"),
             Operand::new("code", &imm.trapcode),
         ])
-        .can_trap(),
+        .can_trap()
+        .side_effects_idempotent(),
     );
 
     ig.push(

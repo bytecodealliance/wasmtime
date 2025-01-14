@@ -52,7 +52,6 @@
 ;; @0023                               trapz v33, user1
 ;; @0023                               v34 = iadd.i64 v15, v30
 ;; @0023                               v35 = load.i64 notrap aligned v34
-;; @0023                               trapz v33, user1
 ;;                                     v53 = iconst.i64 1
 ;; @0023                               v36 = iadd v35, v53  ; v53 = 1
 ;; @0023                               store notrap aligned v36, v34

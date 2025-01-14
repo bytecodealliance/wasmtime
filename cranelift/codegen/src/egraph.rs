@@ -88,7 +88,7 @@ where
     pub(crate) func: &'opt mut Function,
     pub(crate) value_to_opt_value: &'opt mut SecondaryMap<Value, Value>,
     pub(crate) gvn_map: &'opt mut CtxHashMap<(Type, InstructionData), Value>,
-    pub(crate) effectful_gvn_map: &'opt mut ScopedHashMap<(Type, InstructionData), Value>,
+    pub(crate) effectful_gvn_map: &'opt mut ScopedHashMap<(Type, InstructionData), Option<Value>>,
     available_block: &'opt mut SecondaryMap<Value, Block>,
     pub(crate) eclasses: &'opt mut UnionFind<Value>,
     pub(crate) remat_values: &'opt mut FxHashSet<Value>,
@@ -416,7 +416,7 @@ where
         // of the instruction around because it's side-effecting, but
         // we may be able to reuse an earlier instance of it.
         if is_mergeable_for_egraph(self.func, inst) {
-            let result = self.func.dfg.inst_results(inst)[0];
+            let result = self.func.dfg.inst_results(inst).get(0).copied();
             trace!(" -> mergeable side-effecting op {}", inst);
 
             // Does this instruction already exist? If so, add entries to
@@ -436,14 +436,25 @@ where
             {
                 ScopedEntry::Occupied(o) => {
                     let orig_result = *o.get();
-                    // Hit in GVN map -- reuse value.
-                    self.value_to_opt_value[result] = orig_result;
-                    trace!(" -> merges result {} to {}", result, orig_result);
+                    match (result, orig_result) {
+                        (Some(result), Some(orig_result)) => {
+                            // Hit in GVN map -- reuse value.
+                            self.value_to_opt_value[result] = orig_result;
+                            trace!(" -> merges result {} to {}", result, orig_result);
+                        }
+                        (None, None) => {
+                            trace!(" -> merges with dominating instruction");
+                            // Nothing else to do here.
+                        }
+                        (_, _) => unreachable!(),
+                    }
                     true
                 }
                 ScopedEntry::Vacant(v) => {
                     // Otherwise, insert it into the value-map.
-                    self.value_to_opt_value[result] = result;
+                    if let Some(result) = result {
+                        self.value_to_opt_value[result] = result;
+                    }
                     v.insert(result);
                     trace!(" -> inserts as new (no GVN)");
                     false
@@ -570,6 +581,7 @@ impl<'a> EgraphPass<'a> {
         let mut cursor = FuncCursor::new(self.func);
         let mut value_to_opt_value: SecondaryMap<Value, Value> =
             SecondaryMap::with_default(Value::reserved_value());
+
         // Map from instruction to value for hash-consing of pure ops
         // into the egraph. This can be a standard (non-scoped)
         // hashmap because pure ops have no location: they are
@@ -580,26 +592,32 @@ impl<'a> EgraphPass<'a> {
         // instructions that are identical except for type.
         let mut gvn_map: CtxHashMap<(Type, InstructionData), Value> =
             CtxHashMap::with_capacity(cursor.func.dfg.num_values());
-        // Map from instruction to value for GVN'ing of effectful but
-        // idempotent ops, which remain in the side-effecting
-        // skeleton. This needs to be scoped because we cannot
-        // deduplicate one instruction to another that is in a
-        // non-dominating block.
+
+        // Map from instruction to an optional value for GVN'ing of effectful
+        // but idempotent ops, which remain in the side-effecting skeleton. This
+        // needs to be scoped because we cannot deduplicate one instruction to
+        // another that is in a non-dominating block.
         //
-        // Note that we can use a ScopedHashMap here without the
-        // "context" (as needed by CtxHashMap) because in practice the
-        // ops we want to GVN have all their args inline. Equality on
-        // the InstructionData itself is conservative: two insts whose
-        // struct contents compare shallowly equal are definitely
-        // identical, but identical insts in a deep-equality sense may
-        // not compare shallowly equal, due to list indirection. This
-        // is fine for GVN, because it is still sound to skip any
-        // given GVN opportunity (and keep the original instructions).
+        // If the instruction produces a value, then it is stored in the map and
+        // can be used to GVN the results of idempotently side-effectful
+        // instructions. If the instruction does not produce a value, and is
+        // only used for its effects, then the entry's value is `None`. In the
+        // latter case, we can still deduplicate the idempotent instructions,
+        // but there is no value to GVN.
         //
-        // As above, we keep the controlling typevar here as part of
-        // the key: effectful instructions may (as for pure
-        // instructions) be differentiated only on the type.
-        let mut effectful_gvn_map: ScopedHashMap<(Type, InstructionData), Value> =
+        // Note that we can use a ScopedHashMap here without the "context" (as
+        // needed by CtxHashMap) because in practice the ops we want to GVN have
+        // all their args inline. Equality on the InstructionData itself is
+        // conservative: two insts whose struct contents compare shallowly equal
+        // are definitely identical, but identical insts in a deep-equality
+        // sense may not compare shallowly equal, due to list indirection. This
+        // is fine for GVN, because it is still sound to skip any given GVN
+        // opportunity (and keep the original instructions).
+        //
+        // As above, we keep the controlling typevar here as part of the key:
+        // effectful instructions may (as for pure instructions) be
+        // differentiated only on the type.
+        let mut effectful_gvn_map: ScopedHashMap<(Type, InstructionData), Option<Value>> =
             ScopedHashMap::new();
 
         // We assign an "available block" to every value. Values tied to
@@ -611,6 +629,7 @@ impl<'a> EgraphPass<'a> {
         // eclass, enforced by optimize_pure_enode.
         let mut available_block: SecondaryMap<Value, Block> =
             SecondaryMap::with_default(Block::reserved_value());
+
         // This is an initial guess at the size we'll need, but we add
         // more values as we build simplified alternative expressions so
         // this is likely to realloc again later.

@@ -31,10 +31,8 @@
 ;; @0023                               v7 = load.i64 notrap aligned readonly v0+40
 ;; @0023                               v16 = iadd v7, v12
 ;; @0023                               v17 = load.f32 notrap aligned little v16
-;; @0029                               trapz v2, user16
 ;; @0029                               v24 = iconst.i64 20
 ;; @0029                               v25 = uadd_overflow_trap v10, v24, user1  ; v24 = 20
-;; @0029                               trapz v15, user1
 ;; @0029                               v29 = iadd v7, v25
 ;; @0029                               v30 = load.i8 notrap aligned little v29
 ;; @002d                               jump block1
