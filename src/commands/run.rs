@@ -571,12 +571,14 @@ impl RunCommand {
             return Err(self.handle_core_dump(&mut *store, err));
         }
 
-        // Print results if any
-        if !results.is_empty() {
-            eprintln!(
-                "warning: using `--invoke` with a function that returns values \
-                 is experimental and may break in the future"
-            );
+        // When using --invoke, we always want to print the results
+        if self.invoke.is_some() {
+            if !results.is_empty() {
+                eprintln!(
+                    "warning: using `--invoke` with a function that returns values \
+                     is experimental and may break in the future"
+                );
+            }
 
             // Print each result value without a newline
             for result in results {
@@ -595,7 +597,7 @@ impl RunCommand {
                 }
             }
 
-            // Add a newline only if we printed results and --no-newline wasn't specified
+            // Add a newline unless --no-newline is specified
             if !self.no_newline {
                 print!("\n");
             }
