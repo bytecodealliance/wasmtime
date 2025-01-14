@@ -62,7 +62,7 @@ V8 (TurboFan), and ~14% slower than WAVM (LLVM). Its compilation speed, in the
 same paper, is measured as approximately an order of magnitude faster than WAVM
 (LLVM). We continue to work to improve both measures.
 
-[Rust compiler backend]: https://github.com/bjorn3/rustc_codegen_cranelift
+[Rust compiler backend]: https://github.com/rust-lang/rustc_codegen_cranelift
 [security policy]: https://bytecodealliance.org/security
 [recent paper]: https://arxiv.org/abs/2011.13127
 
