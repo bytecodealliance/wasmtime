@@ -26,12 +26,12 @@
 ;; @0021                               v3 = iconst.i32 0
 ;; @0023                               v4 = iconst.i32 0
 ;; @0025                               v5 = uextend.i64 v3  ; v3 = 0
-;; @0025                               v6 = global_value.i64 gv5
+;; @0025                               v6 = load.i64 notrap aligned readonly checked v0+96
 ;; @0025                               v7 = iadd v6, v5
 ;; @0025                               store little heap v4, v7  ; v4 = 0
 ;; @0028                               v8 = iconst.i32 0
 ;; @002a                               v9 = uextend.i64 v8  ; v8 = 0
-;; @002a                               v10 = global_value.i64 gv5
+;; @002a                               v10 = load.i64 notrap aligned readonly checked v0+96
 ;; @002a                               v11 = iadd v10, v9
 ;; @002a                               v12 = load.i32 little heap v11
 ;; @002d                               brif v12, block2, block4
@@ -40,7 +40,7 @@
 ;; @002f                               v13 = iconst.i32 0
 ;; @0031                               v14 = iconst.i32 10
 ;; @0033                               v15 = uextend.i64 v13  ; v13 = 0
-;; @0033                               v16 = global_value.i64 gv5
+;; @0033                               v16 = load.i64 notrap aligned readonly checked v0+96
 ;; @0033                               v17 = iadd v16, v15
 ;; @0033                               store little heap v14, v17  ; v14 = 10
 ;; @0036                               jump block3
@@ -49,7 +49,7 @@
 ;; @0037                               v18 = iconst.i32 0
 ;; @0039                               v19 = iconst.i32 11
 ;; @003b                               v20 = uextend.i64 v18  ; v18 = 0
-;; @003b                               v21 = global_value.i64 gv5
+;; @003b                               v21 = load.i64 notrap aligned readonly checked v0+96
 ;; @003b                               v22 = iadd v21, v20
 ;; @003b                               store little heap v19, v22  ; v19 = 11
 ;; @003e                               jump block3

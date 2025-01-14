@@ -273,18 +273,10 @@ impl wasmtime_environ::Compiler for Compiler {
             &mut func_env,
         )?;
 
-        if let Some(path) = &self.clif_dir {
-            use std::io::Write;
-
-            let mut path = path.to_path_buf();
-            path.push(format!("wasm_func_{}", func_index.as_u32()));
-            path.set_extension("clif");
-
-            let mut output = std::fs::File::create(path).unwrap();
-            write!(output, "{}", context.func.display()).unwrap();
-        }
-
-        let (info, func) = compiler.finish_with_info(Some((&body, &self.tunables)))?;
+        let (info, func) = compiler.finish_with_info(
+            Some((&body, &self.tunables)),
+            &format!("wasm_func_{}", func_index.as_u32()),
+        )?;
 
         let timing = cranelift_codegen::timing::take_current();
         log::debug!("{:?} translated in {:?}", func_index, timing.total());
@@ -363,7 +355,10 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.ins().return_(&[true_return]);
         builder.finalize();
 
-        Ok(Box::new(compiler.finish()?))
+        Ok(Box::new(compiler.finish(&format!(
+            "array_to_wasm_{}",
+            func_index.as_u32(),
+        ))?))
     }
 
     fn compile_wasm_to_array_trampoline(
@@ -433,7 +428,9 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.ins().return_(&results);
         builder.finalize();
 
-        Ok(Box::new(compiler.finish()?))
+        Ok(Box::new(compiler.finish(&format!(
+            "wasm_to_array_trampoline_{wasm_func_ty}"
+        ))?))
     }
 
     fn append_code(
@@ -643,7 +640,9 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.ins().return_(&results);
         builder.finalize();
 
-        Ok(Box::new(compiler.finish()?))
+        Ok(Box::new(
+            compiler.finish(&format!("wasm_to_builtin_{}", index.name()))?,
+        ))
     }
 
     fn compiled_function_relocation_targets<'a>(
@@ -959,8 +958,8 @@ impl FunctionCompiler<'_> {
         (builder, block0)
     }
 
-    fn finish(self) -> Result<CompiledFunction, CompileError> {
-        let (info, func) = self.finish_with_info(None)?;
+    fn finish(self, clif_filename: &str) -> Result<CompiledFunction, CompileError> {
+        let (info, func) = self.finish_with_info(None, clif_filename)?;
         assert!(info.stack_maps.is_empty());
         Ok(func)
     }
@@ -968,11 +967,22 @@ impl FunctionCompiler<'_> {
     fn finish_with_info(
         mut self,
         body_and_tunables: Option<(&FunctionBody<'_>, &Tunables)>,
+        clif_filename: &str,
     ) -> Result<(WasmFunctionInfo, CompiledFunction), CompileError> {
         let context = &mut self.cx.codegen_context;
         let isa = &*self.compiler.isa;
         let mut compiled_code =
             compile_maybe_cached(context, isa, self.cx.incremental_cache_ctx.as_mut())?;
+
+        if let Some(path) = &self.compiler.clif_dir {
+            use std::io::Write;
+
+            let mut path = path.join(clif_filename);
+            path.set_extension("clif");
+
+            let mut output = std::fs::File::create(path).unwrap();
+            write!(output, "{}", context.func.display()).unwrap();
+        }
 
         // Give wasm functions, user defined code, a "preferred" alignment
         // instead of the minimum alignment as this can help perf in niche

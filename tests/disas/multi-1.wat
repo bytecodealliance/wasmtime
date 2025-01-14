@@ -15,11 +15,11 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i32):
 ;; @003a                               v10 = f64const 0x1.34a0000000000p10
-;; @0043                               jump block2(v3, v2, v10)  ; v10 = 0x1.34a0000000000p10
+;; @0043                               jump block2
 ;;
-;;                                 block2(v7: i32, v8: i64, v9: f64):
-;; @0044                               jump block1(v7, v8, v9)
+;;                                 block2:
+;; @0044                               jump block1
 ;;
-;;                                 block1(v4: i32, v5: i64, v6: f64):
-;; @0044                               return v4, v5, v6
+;;                                 block1:
+;; @0044                               return v3, v2, v10  ; v10 = 0x1.34a0000000000p10
 ;; }

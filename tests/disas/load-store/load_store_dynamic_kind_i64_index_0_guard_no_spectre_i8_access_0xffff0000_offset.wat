@@ -30,10 +30,10 @@
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i32):
 ;; @0040                               v4 = iconst.i64 0xffff_0001
 ;; @0040                               v5 = uadd_overflow_trap v2, v4, heap_oob  ; v4 = 0xffff_0001
-;; @0040                               v6 = global_value.i64 gv4
+;; @0040                               v6 = load.i64 notrap aligned v0+104
 ;; @0040                               v7 = icmp ugt v5, v6
 ;; @0040                               trapnz v7, heap_oob
-;; @0040                               v8 = global_value.i64 gv5
+;; @0040                               v8 = load.i64 notrap aligned checked v0+96
 ;; @0040                               v9 = iadd v8, v2
 ;; @0040                               v10 = iconst.i64 0xffff_0000
 ;; @0040                               v11 = iadd v9, v10  ; v10 = 0xffff_0000
@@ -56,16 +56,16 @@
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
 ;; @004c                               v4 = iconst.i64 0xffff_0001
 ;; @004c                               v5 = uadd_overflow_trap v2, v4, heap_oob  ; v4 = 0xffff_0001
-;; @004c                               v6 = global_value.i64 gv4
+;; @004c                               v6 = load.i64 notrap aligned v0+104
 ;; @004c                               v7 = icmp ugt v5, v6
 ;; @004c                               trapnz v7, heap_oob
-;; @004c                               v8 = global_value.i64 gv5
+;; @004c                               v8 = load.i64 notrap aligned checked v0+96
 ;; @004c                               v9 = iadd v8, v2
 ;; @004c                               v10 = iconst.i64 0xffff_0000
 ;; @004c                               v11 = iadd v9, v10  ; v10 = 0xffff_0000
 ;; @004c                               v12 = uload8.i32 little heap v11
-;; @0053                               jump block1(v12)
+;; @0053                               jump block1
 ;;
-;;                                 block1(v3: i32):
-;; @0053                               return v3
+;;                                 block1:
+;; @0053                               return v12
 ;; }

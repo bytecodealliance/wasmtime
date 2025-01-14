@@ -19,11 +19,11 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0032                               v4 = uextend.i64 v2
-;; @0032                               v5 = global_value.i64 gv5
+;; @0032                               v5 = load.i64 notrap aligned readonly checked v0+96
 ;; @0032                               v6 = iadd v5, v4
 ;; @0032                               v7 = uload16.i64 little heap v6
-;; @0035                               jump block1(v7)
+;; @0035                               jump block1
 ;;
-;;                                 block1(v3: i64):
-;; @0035                               return v3
+;;                                 block1:
+;; @0035                               return v7
 ;; }

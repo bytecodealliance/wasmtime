@@ -141,9 +141,9 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0095                               v4 = iconst.i32 1
-;; @0097                               jump block2(v4)  ; v4 = 1
+;; @0097                               jump block2
 ;;
-;;                                 block2(v2: i32):
+;;                                 block2:
 ;; @009c                               jump block1
 ;;
 ;;                                 block1:
