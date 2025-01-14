@@ -145,7 +145,7 @@ impl DiffEngine for V8Engine {
         verify_wasmtime("not possibly present in an error, just panic please");
     }
 
-    fn is_stack_overflow(&self, err: &Error) -> bool {
+    fn is_non_deterministic_error(&self, err: &Error) -> bool {
         err.to_string().contains("Maximum call stack size exceeded")
     }
 }

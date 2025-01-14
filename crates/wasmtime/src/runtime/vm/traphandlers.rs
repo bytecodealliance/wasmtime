@@ -33,6 +33,7 @@ pub use self::tls::{AsyncWasmCallState, PreviousAsyncWasmCallState};
 
 pub use traphandlers::SignalHandler;
 
+#[derive(Debug)]
 pub(crate) struct TrapRegisters {
     pub pc: usize,
     pub fp: usize,
@@ -668,8 +669,11 @@ impl CallThreadState {
         faulting_addr: Option<usize>,
         call_handler: impl Fn(&SignalHandler) -> bool,
     ) -> TrapTest {
+        log::trace!("testing if trap: {faulting_addr:?}, {regs:?}");
+
         // If we haven't even started to handle traps yet, bail out.
         if self.jmp_buf.get().is_null() {
+            log::trace!("not a trap: have not entered wasm");
             return TrapTest::NotWasm;
         }
 
@@ -680,25 +684,30 @@ impl CallThreadState {
         #[cfg(all(has_native_signals, not(miri)))]
         if let Some(handler) = self.signal_handler {
             if unsafe { call_handler(&*handler) } {
+                log::trace!("not a trap: handled by embedder");
                 return TrapTest::HandledByEmbedder;
             }
         }
 
         // If this fault wasn't in wasm code, then it's not our problem
         let Some((code, text_offset)) = lookup_code(regs.pc) else {
+            log::trace!("not a trap: PC not in loaded code memory range");
             return TrapTest::NotWasm;
         };
+        log::trace!("faulting PC's text section offset is {text_offset:#x}");
 
         // If the fault was at a location that was not marked as potentially
         // trapping, then that's a bug in Cranelift/Winch/etc. Don't try to
         // catch the trap and pretend this isn't wasm so the program likely
         // aborts.
         let Some(trap) = code.lookup_trap_code(text_offset) else {
+            log::trace!("not a trap: no trap code registered for text offset");
             return TrapTest::NotWasm;
         };
 
         // If all that passed then this is indeed a wasm trap, so return the
         // `jmp_buf` passed to `wasmtime_longjmp` to resume.
+        log::trace!("is a trap: {trap:?}");
         self.set_jit_trap(regs, faulting_addr, trap);
         TrapTest::Trap {
             #[cfg(has_host_compiler_backend)]
