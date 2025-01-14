@@ -10,7 +10,8 @@ use wasmtime_wasi::bindings::Command;
 use wasmtime_wasi::{
     add_to_linker_async,
     bindings::{clocks::wall_clock, filesystem::types as filesystem},
-    DirPerms, FilePerms, HostMonotonicClock, HostWallClock, WasiCtx, WasiCtxBuilder, WasiView,
+    DirPerms, FilePerms, HostMonotonicClock, HostWallClock, IoView, WasiCtx, WasiCtxBuilder,
+    WasiView,
 };
 
 struct CommandCtx {
@@ -18,10 +19,12 @@ struct CommandCtx {
     wasi: WasiCtx,
 }
 
-impl WasiView for CommandCtx {
+impl IoView for CommandCtx {
     fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
+}
+impl WasiView for CommandCtx {
     fn ctx(&mut self) -> &mut WasiCtx {
         &mut self.wasi
     }

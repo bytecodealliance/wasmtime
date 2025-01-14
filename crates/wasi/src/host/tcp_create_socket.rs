@@ -1,6 +1,6 @@
 use crate::bindings::{sockets::network::IpAddressFamily, sockets::tcp_create_socket};
 use crate::tcp::TcpSocket;
-use crate::{SocketResult, WasiImpl, WasiView};
+use crate::{IoView, SocketResult, WasiImpl, WasiView};
 use wasmtime::component::Resource;
 
 impl<T> tcp_create_socket::Host for WasiImpl<T>

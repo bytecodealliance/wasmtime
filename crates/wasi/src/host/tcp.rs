@@ -7,7 +7,7 @@ use crate::{
     },
     network::SocketAddressFamily,
 };
-use crate::{Pollable, SocketResult, WasiImpl, WasiView};
+use crate::{IoView, Pollable, SocketResult, WasiImpl, WasiView};
 use std::net::SocketAddr;
 use std::time::Duration;
 use wasmtime::component::Resource;

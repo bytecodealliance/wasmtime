@@ -2,7 +2,7 @@ use crate::{
     bindings::io::error,
     bindings::io::streams::{self, InputStream, OutputStream},
     poll::subscribe,
-    Pollable, StreamError, StreamResult, WasiImpl, WasiView,
+    IoView, Pollable, StreamError, StreamResult, WasiImpl, WasiView,
 };
 use wasmtime::component::Resource;
 

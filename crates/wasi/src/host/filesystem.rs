@@ -7,7 +7,7 @@ use crate::bindings::io::streams::{InputStream, OutputStream};
 use crate::filesystem::{
     Descriptor, Dir, File, FileInputStream, FileOutputStream, OpenMode, ReaddirIterator,
 };
-use crate::{DirPerms, FilePerms, FsError, FsResult, WasiImpl, WasiView};
+use crate::{DirPerms, FilePerms, FsError, FsResult, IoView, WasiImpl, WasiView};
 use anyhow::Context;
 use wasmtime::component::Resource;
 

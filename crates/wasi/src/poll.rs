@@ -1,4 +1,4 @@
-use crate::{bindings::io::poll, WasiImpl, WasiView};
+use crate::{bindings::io::poll, IoImpl, IoView};
 use anyhow::{anyhow, Result};
 use std::any::Any;
 use std::collections::HashMap;
@@ -42,11 +42,11 @@ pub struct Pollable {
 ///
 /// ```
 /// use tokio::time::{self, Duration, Instant};
-/// use wasmtime_wasi::{WasiView, Subscribe, subscribe, Pollable, async_trait};
+/// use wasmtime_wasi::{IoView, Subscribe, subscribe, Pollable, async_trait};
 /// use wasmtime::component::Resource;
 /// use wasmtime::Result;
 ///
-/// fn sleep(cx: &mut dyn WasiView, dur: Duration) -> Result<Resource<Pollable>> {
+/// fn sleep(cx: &mut dyn IoView, dur: Duration) -> Result<Resource<Pollable>> {
 ///     let end = Instant::now() + dur;
 ///     let sleep = MySleep { end };
 ///     let sleep_resource = cx.table().push(sleep)?;
@@ -116,9 +116,9 @@ where
     Ok(table.push_child(pollable, &resource)?)
 }
 
-impl<T> poll::Host for WasiImpl<T>
+impl<T> poll::Host for IoImpl<T>
 where
-    T: WasiView,
+    T: IoView,
 {
     async fn poll(&mut self, pollables: Vec<Resource<Pollable>>) -> Result<Vec<u32>> {
         type ReadylistIndex = u32;
@@ -177,9 +177,9 @@ where
     }
 }
 
-impl<T> crate::bindings::io::poll::HostPollable for WasiImpl<T>
+impl<T> crate::bindings::io::poll::HostPollable for IoImpl<T>
 where
-    T: WasiView,
+    T: IoView,
 {
     async fn block(&mut self, pollable: Resource<Pollable>) -> Result<()> {
         let table = self.table();
@@ -212,23 +212,23 @@ pub mod sync {
         bindings::io::poll as async_poll,
         bindings::sync::io::poll::{self, Pollable},
         runtime::in_tokio,
-        WasiImpl, WasiView,
+        IoImpl, IoView,
     };
     use anyhow::Result;
     use wasmtime::component::Resource;
 
-    impl<T> poll::Host for WasiImpl<T>
+    impl<T> poll::Host for IoImpl<T>
     where
-        T: WasiView,
+        T: IoView,
     {
         fn poll(&mut self, pollables: Vec<Resource<Pollable>>) -> Result<Vec<u32>> {
             in_tokio(async { async_poll::Host::poll(self, pollables).await })
         }
     }
 
-    impl<T> crate::bindings::sync::io::poll::HostPollable for WasiImpl<T>
+    impl<T> crate::bindings::sync::io::poll::HostPollable for IoImpl<T>
     where
-        T: WasiView,
+        T: IoView,
     {
         fn ready(&mut self, pollable: Resource<Pollable>) -> Result<bool> {
             in_tokio(async { async_poll::HostPollable::ready(self, pollable).await })

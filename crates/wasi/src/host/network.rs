@@ -3,7 +3,7 @@ use crate::bindings::sockets::network::{
     Ipv6SocketAddress,
 };
 use crate::network::{from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr};
-use crate::{SocketError, WasiImpl, WasiView};
+use crate::{IoView, SocketError, WasiImpl, WasiView};
 use anyhow::Error;
 use rustix::io::Errno;
 use std::io;

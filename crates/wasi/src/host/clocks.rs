@@ -5,7 +5,7 @@ use crate::bindings::{
     clocks::wall_clock::{self, Datetime},
 };
 use crate::poll::{subscribe, Subscribe};
-use crate::{Pollable, WasiImpl, WasiView};
+use crate::{IoView, Pollable, WasiImpl, WasiView};
 use cap_std::time::SystemTime;
 use std::time::Duration;
 use wasmtime::component::Resource;

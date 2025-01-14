@@ -73,7 +73,8 @@ use crate::bindings::{
     io::streams,
 };
 use crate::{
-    FsError, IsATTY, ResourceTable, StreamError, StreamResult, WasiCtx, WasiImpl, WasiView,
+    FsError, IoImpl, IoView, IsATTY, ResourceTable, StreamError, StreamResult, WasiCtx, WasiImpl,
+    WasiView,
 };
 use anyhow::{bail, Context};
 use std::collections::{BTreeMap, HashSet};
@@ -153,14 +154,16 @@ impl WasiP1Ctx {
     }
 
     fn as_wasi_impl(&mut self) -> WasiImpl<&mut Self> {
-        WasiImpl(self)
+        WasiImpl(IoImpl(self))
     }
 }
 
-impl WasiView for WasiP1Ctx {
+impl IoView for WasiP1Ctx {
     fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
+}
+impl WasiView for WasiP1Ctx {
     fn ctx(&mut self) -> &mut WasiCtx {
         &mut self.wasi
     }

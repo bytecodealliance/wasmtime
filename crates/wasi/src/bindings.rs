@@ -15,7 +15,7 @@
 //! done using the `with` option to [`bindgen!`]:
 //!
 //! ```rust
-//! use wasmtime_wasi::{WasiCtx, ResourceTable, WasiView};
+//! use wasmtime_wasi::{IoView, WasiCtx, ResourceTable, WasiView};
 //! use wasmtime::{Result, Engine, Config};
 //! use wasmtime::component::Linker;
 //!
@@ -53,8 +53,10 @@
 //!     }
 //! }
 //!
-//! impl WasiView for MyState {
+//! impl IoView for MyState {
 //!     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
+//! }
+//! impl WasiView for MyState {
 //!     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
 //! }
 //!
@@ -84,7 +86,7 @@
 /// done using the `with` option to `bindgen!`:
 ///
 /// ```rust
-/// use wasmtime_wasi::{WasiCtx, ResourceTable, WasiView};
+/// use wasmtime_wasi::{IoView, WasiCtx, ResourceTable, WasiView};
 /// use wasmtime::{Result, Engine};
 /// use wasmtime::component::Linker;
 ///
@@ -124,8 +126,10 @@
 ///     }
 /// }
 ///
-/// impl WasiView for MyState {
+/// impl IoView for MyState {
 ///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
+/// }
+/// impl WasiView for MyState {
 ///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
 /// }
 ///
@@ -201,7 +205,7 @@ pub mod sync {
     /// ```no_run
     /// use wasmtime::{Engine, Result, Store, Config};
     /// use wasmtime::component::{ResourceTable, Linker, Component};
-    /// use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
+    /// use wasmtime_wasi::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
     /// use wasmtime_wasi::bindings::sync::Command;
     ///
     /// // This example is an example shim of executing a component based on the
@@ -245,9 +249,11 @@ pub mod sync {
     ///     table: ResourceTable,
     /// }
     ///
+    /// impl IoView for MyState {
+    ///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
+    /// }
     /// impl WasiView for MyState {
     ///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
-    ///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
     /// }
     /// ```
     ///
@@ -264,7 +270,7 @@ pub mod sync {
     /// ```no_run
     /// use wasmtime::{Engine, Result, Store, Config};
     /// use wasmtime::component::{ResourceTable, Linker, Component};
-    /// use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
+    /// use wasmtime_wasi::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
     /// use wasmtime_wasi::bindings::sync::CommandPre;
     ///
     /// // This example is an example shim of executing a component based on the
@@ -309,9 +315,11 @@ pub mod sync {
     ///     table: ResourceTable,
     /// }
     ///
+    /// impl IoView for MyState {
+    ///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
+    /// }
     /// impl WasiView for MyState {
     ///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
-    ///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
     /// }
     /// ```
     ///
@@ -439,7 +447,7 @@ pub use self::async_io::LinkOptions;
 /// ```no_run
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{ResourceTable, Linker, Component};
-/// use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
 /// use wasmtime_wasi::bindings::Command;
 ///
 /// // This example is an example shim of executing a component based on the
@@ -486,9 +494,11 @@ pub use self::async_io::LinkOptions;
 ///     table: ResourceTable,
 /// }
 ///
+/// impl IoView for MyState {
+///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
+/// }
 /// impl WasiView for MyState {
 ///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
 /// }
 /// ```
 ///
@@ -505,7 +515,7 @@ pub use self::async_io::Command;
 /// ```no_run
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{ResourceTable, Linker, Component};
-/// use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
 /// use wasmtime_wasi::bindings::CommandPre;
 ///
 /// // This example is an example shim of executing a component based on the
@@ -553,9 +563,11 @@ pub use self::async_io::Command;
 ///     table: ResourceTable,
 /// }
 ///
+/// impl IoView for MyState {
+///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
+/// }
 /// impl WasiView for MyState {
 ///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
 /// }
 /// ```
 ///
