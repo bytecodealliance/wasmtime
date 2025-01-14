@@ -320,10 +320,10 @@ where
         match &style {
             FrameStyle::None => {}
             FrameStyle::PulleyBasicSetup { frame_size } => {
+                insts.push(RawInst::PushFrame.into());
                 insts.extend(Self::gen_sp_reg_adjust(
                     -i32::try_from(*frame_size).unwrap(),
                 ));
-                insts.push(RawInst::PushFrame.into());
             }
             FrameStyle::PulleySetupAndSaveClobbers {
                 frame_size,

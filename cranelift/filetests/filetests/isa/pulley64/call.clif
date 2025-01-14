@@ -383,3 +383,40 @@ block0:
 ; pop_frame_restore 64, 
 ; ret
 
+function %very_large_stack_frame(i32) -> i32 {
+    fn0 = colocated %g() -> i32
+    ss0 = explicit_slot 1000000
+
+block0(v0: i32):
+    v1 = call fn0()
+    v2 = iadd v0, v1
+    return v2
+}
+
+; VCode:
+;   push_frame
+;   stack_alloc32 1000016
+;   xstore64 sp+1000008, x20 // flags =  notrap aligned
+; block0:
+;   xmov x20, x0
+;   call CallInfo { dest: PulleyCall { name: TestCase(%g), args: [] }, uses: [], defs: [CallRetPair { vreg: Writable { reg: p0i }, preg: p0i }], clobbers: PRegSet { bits: [65534, 65535, 4294967295, 0] }, callee_conv: Fast, caller_conv: Fast, callee_pop_size: 0 }
+;   xmov x5, x20
+;   xadd32 x0, x5, x0
+;   x20 = xload64 sp+1000008 // flags = notrap aligned
+;   stack_free32 1000016
+;   pop_frame
+;   ret
+;
+; Disassembled:
+; push_frame
+; stack_alloc32 1000016
+; xstore64le_offset32 sp, 1000008, x20
+; xmov x20, x0
+; call 0x0    // target = 0x10
+; xmov x5, x20
+; xadd32 x0, x5, x0
+; xload64le_offset32 x20, sp, 1000008
+; stack_free32 1000016
+; pop_frame
+; ret
+
