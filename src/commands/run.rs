@@ -561,7 +561,7 @@ impl RunCommand {
             return Err(self.handle_core_dump(&mut *store, err));
         }
 
-        // Если функция вызвана через --invoke, всегда выводим результат
+        // If a function is called via --invoke, always print the result
         if self.invoke.is_some() {
             if !results.is_empty() {
                 eprintln!(
@@ -586,8 +586,8 @@ impl RunCommand {
                 }
             }
 
-            // Для функций, вызванных через --invoke, всегда добавляем перевод строки,
-            // если не указан флаг no_newline
+            // For functions called via --invoke, always add a newline,
+            // unless the no_newline flag is specified
             if !self.no_newline {
                 println!();
             }
