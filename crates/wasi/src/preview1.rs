@@ -156,6 +156,9 @@ impl WasiP1Ctx {
     fn as_wasi_impl(&mut self) -> WasiImpl<&mut Self> {
         WasiImpl(IoImpl(self))
     }
+    fn as_io_impl(&mut self) -> IoImpl<&mut Self> {
+        IoImpl(self)
+    }
 }
 
 impl IoView for WasiP1Ctx {
@@ -651,7 +654,7 @@ impl WasiP1Ctx {
                 drop(t);
                 let buf = first_non_empty_ciovec(memory, ciovs)?;
                 let n = BlockingMode::Blocking
-                    .write(memory, &mut self.as_wasi_impl(), stream, buf)
+                    .write(memory, &mut self.as_io_impl(), stream, buf)
                     .await?
                     .try_into()?;
                 Ok(n)
@@ -1326,12 +1329,12 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
             .ok_or(types::Errno::Badf)?;
         match desc {
             Descriptor::Stdin { stream, .. } => {
-                streams::HostInputStream::drop(&mut self.as_wasi_impl(), stream)
+                streams::HostInputStream::drop(&mut self.as_io_impl(), stream)
                     .await
                     .context("failed to call `drop` on `input-stream`")
             }
             Descriptor::Stdout { stream, .. } | Descriptor::Stderr { stream, .. } => {
-                streams::HostOutputStream::drop(&mut self.as_wasi_impl(), stream)
+                streams::HostOutputStream::drop(&mut self.as_io_impl(), stream)
                     .await
                     .context("failed to call `drop` on `output-stream`")
             }
@@ -1682,7 +1685,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 drop(t);
                 let buf = first_non_empty_iovec(memory, iovs)?;
                 let read = BlockingMode::Blocking
-                    .read(&mut self.as_wasi_impl(), stream, buf.len().try_into()?)
+                    .read(&mut self.as_io_impl(), stream, buf.len().try_into()?)
                     .await?;
                 if read.len() > buf.len().try_into()? {
                     return Err(types::Errno::Range.into());
@@ -1720,12 +1723,12 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                 let stream = self.as_wasi_impl().read_via_stream(fd, offset)?;
                 let read = blocking_mode
                     .read(
-                        &mut self.as_wasi_impl(),
+                        &mut self.as_io_impl(),
                         stream.borrowed(),
                         buf.len().try_into()?,
                     )
                     .await;
-                streams::HostInputStream::drop(&mut self.as_wasi_impl(), stream)
+                streams::HostInputStream::drop(&mut self.as_io_impl(), stream)
                     .await
                     .map_err(|e| types::Error::trap(e))?;
                 (buf, read?)
@@ -2370,7 +2373,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                             _ => return Err(types::Errno::Badf.into()),
                         }
                     };
-                    streams::HostInputStream::subscribe(&mut self.as_wasi_impl(), stream)
+                    streams::HostInputStream::subscribe(&mut self.as_io_impl(), stream)
                         .context("failed to call `subscribe` on `input-stream`")
                         .map_err(types::Error::trap)?
                 }
@@ -2404,7 +2407,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
                             _ => return Err(types::Errno::Badf.into()),
                         }
                     };
-                    streams::HostOutputStream::subscribe(&mut self.as_wasi_impl(), stream)
+                    streams::HostOutputStream::subscribe(&mut self.as_io_impl(), stream)
                         .context("failed to call `subscribe` on `output-stream`")
                         .map_err(types::Error::trap)?
                 }
@@ -2412,7 +2415,7 @@ impl wasi_snapshot_preview1::WasiSnapshotPreview1 for WasiP1Ctx {
             pollables.push(p);
         }
         let ready: HashSet<_> = self
-            .as_wasi_impl()
+            .as_io_impl()
             .poll(pollables)
             .await
             .context("failed to call `poll-oneoff`")

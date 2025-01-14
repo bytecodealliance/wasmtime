@@ -2,15 +2,15 @@ use crate::{
     bindings::io::error,
     bindings::io::streams::{self, InputStream, OutputStream},
     poll::subscribe,
-    IoView, Pollable, StreamError, StreamResult, WasiImpl, WasiView,
+    IoImpl, IoView, Pollable, StreamError, StreamResult,
 };
 use wasmtime::component::Resource;
 
-impl<T> error::Host for WasiImpl<T> where T: WasiView {}
+impl<T> error::Host for IoImpl<T> where T: IoView {}
 
-impl<T> streams::Host for WasiImpl<T>
+impl<T> streams::Host for IoImpl<T>
 where
-    T: WasiView,
+    T: IoView,
 {
     fn convert_stream_error(&mut self, err: StreamError) -> anyhow::Result<streams::StreamError> {
         match err {
@@ -23,9 +23,9 @@ where
     }
 }
 
-impl<T> error::HostError for WasiImpl<T>
+impl<T> error::HostError for IoImpl<T>
 where
-    T: WasiView,
+    T: IoView,
 {
     fn drop(&mut self, err: Resource<streams::Error>) -> anyhow::Result<()> {
         self.table().delete(err)?;
@@ -37,9 +37,9 @@ where
     }
 }
 
-impl<T> streams::HostOutputStream for WasiImpl<T>
+impl<T> streams::HostOutputStream for IoImpl<T>
 where
-    T: WasiView,
+    T: IoView,
 {
     async fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
         self.table().delete(stream)?.cancel().await;
@@ -170,9 +170,9 @@ where
     }
 }
 
-impl<T> streams::HostInputStream for WasiImpl<T>
+impl<T> streams::HostInputStream for IoImpl<T>
 where
-    T: WasiView,
+    T: IoView,
 {
     async fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
         self.table().delete(stream)?.cancel().await;
@@ -227,7 +227,7 @@ pub mod sync {
         bindings::sync::io::poll::Pollable,
         bindings::sync::io::streams::{self, InputStream, OutputStream},
         runtime::in_tokio,
-        StreamError, StreamResult, WasiImpl, WasiView,
+        IoImpl, IoView, StreamError, StreamResult,
     };
     use wasmtime::component::Resource;
 
@@ -240,9 +240,9 @@ pub mod sync {
         }
     }
 
-    impl<T> streams::Host for WasiImpl<T>
+    impl<T> streams::Host for IoImpl<T>
     where
-        T: WasiView,
+        T: IoView,
     {
         fn convert_stream_error(
             &mut self,
@@ -252,9 +252,9 @@ pub mod sync {
         }
     }
 
-    impl<T> streams::HostOutputStream for WasiImpl<T>
+    impl<T> streams::HostOutputStream for IoImpl<T>
     where
-        T: WasiView,
+        T: IoView,
     {
         fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
             in_tokio(async { AsyncHostOutputStream::drop(self, stream).await })
@@ -332,9 +332,9 @@ pub mod sync {
         }
     }
 
-    impl<T> streams::HostInputStream for WasiImpl<T>
+    impl<T> streams::HostInputStream for IoImpl<T>
     where
-        T: WasiView,
+        T: IoView,
     {
         fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
             in_tokio(async { AsyncHostInputStream::drop(self, stream).await })

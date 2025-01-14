@@ -308,9 +308,9 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
     crate::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
     crate::bindings::filesystem::types::add_to_linker_get_host(l, closure)?;
     crate::bindings::filesystem::preopens::add_to_linker_get_host(l, closure)?;
-    crate::bindings::io::error::add_to_linker_get_host(l, closure)?;
+    crate::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
     crate::bindings::io::poll::add_to_linker_get_host(l, io_closure)?;
-    crate::bindings::io::streams::add_to_linker_get_host(l, closure)?;
+    crate::bindings::io::streams::add_to_linker_get_host(l, io_closure)?;
     crate::bindings::random::random::add_to_linker_get_host(l, closure)?;
     crate::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
     crate::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;
@@ -409,9 +409,9 @@ pub fn add_to_linker_with_options_sync<T: WasiView>(
     crate::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
     crate::bindings::sync::filesystem::types::add_to_linker_get_host(l, closure)?;
     crate::bindings::filesystem::preopens::add_to_linker_get_host(l, closure)?;
-    crate::bindings::io::error::add_to_linker_get_host(l, closure)?;
+    crate::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
     crate::bindings::sync::io::poll::add_to_linker_get_host(l, io_closure)?;
-    crate::bindings::sync::io::streams::add_to_linker_get_host(l, closure)?;
+    crate::bindings::sync::io::streams::add_to_linker_get_host(l, io_closure)?;
     crate::bindings::random::random::add_to_linker_get_host(l, closure)?;
     crate::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
     crate::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;

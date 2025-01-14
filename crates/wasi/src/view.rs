@@ -74,18 +74,6 @@ impl<T: IoView> IoView for IoImpl<T> {
 #[repr(transparent)]
 pub struct WasiImpl<T>(pub IoImpl<T>);
 
-impl<T: IoView> std::ops::Deref for WasiImpl<T> {
-    type Target = IoImpl<T>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl<T: IoView> std::ops::DerefMut for WasiImpl<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-
 impl<T: IoView> IoView for WasiImpl<T> {
     fn table(&mut self) -> &mut ResourceTable {
         T::table(&mut self.0 .0)
