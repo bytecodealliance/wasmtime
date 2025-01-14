@@ -1,1049 +1,2241 @@
-//! The module that implements the `wasmtime run` command.
+#![cfg(not(miri))]
 
-#![cfg_attr(
-    not(feature = "component-model"),
-    allow(irrefutable_let_patterns, unreachable_patterns)
-)]
-
-use crate::common::{Profile, RunCommon, RunTarget};
-
-use anyhow::{anyhow, bail, Context as _, Error, Result};
-use clap::Parser;
-use std::ffi::OsString;
+use anyhow::{bail, Result};
+use std::fs::File;
+use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use std::thread;
-use wasi_common::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
-use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
-use wasmtime_wasi::WasiView;
+use std::process::{Command, ExitStatus, Output, Stdio};
+use tempfile::{NamedTempFile, TempDir};
 
-#[cfg(feature = "wasi-nn")]
-use wasmtime_wasi_nn::wit::WasiNnView;
-
-#[cfg(feature = "wasi-threads")]
-use wasmtime_wasi_threads::WasiThreadsCtx;
-
-#[cfg(feature = "wasi-config")]
-use wasmtime_wasi_config::{WasiConfig, WasiConfigVariables};
-#[cfg(feature = "wasi-http")]
-use wasmtime_wasi_http::{
-    WasiHttpCtx, DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS, DEFAULT_OUTGOING_BODY_CHUNK_SIZE,
-};
-#[cfg(feature = "wasi-keyvalue")]
-use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
-
-fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
-    let parts: Vec<&str> = s.splitn(2, '=').collect();
-    if parts.len() != 2 {
-        bail!("must contain exactly one equals character ('=')");
+// Run the wasmtime CLI with the provided args and return the `Output`.
+// If the `stdin` is `Some`, opens the file and redirects to the child's stdin.
+pub fn run_wasmtime_for_output(args: &[&str], stdin: Option<&Path>) -> Result<Output> {
+    let mut cmd = get_wasmtime_command()?;
+    cmd.args(args);
+    if let Some(file) = stdin {
+        cmd.stdin(File::open(file)?);
     }
-    Ok((parts[0].into(), parts[1].into()))
+    cmd.output().map_err(Into::into)
 }
 
-/// Runs a WebAssembly module
-#[derive(Parser)]
-pub struct RunCommand {
-    #[command(flatten)]
-    #[allow(missing_docs)]
-    pub run: RunCommon,
+/// Get the Wasmtime CLI as a [Command].
+pub fn get_wasmtime_command() -> Result<Command> {
+    // Figure out the Wasmtime binary from the current executable.
+    let bin = get_wasmtime_path()?;
+    let runner = std::env::vars()
+        .filter(|(k, _v)| k.starts_with("CARGO_TARGET") && k.ends_with("RUNNER"))
+        .next();
 
-    /// The name of the function to run
-    #[arg(long, value_name = "FUNCTION")]
-    pub invoke: Option<String>,
+    // If we're running tests with a "runner" then we might be doing something
+    // like cross-emulation, so spin up the emulator rather than the tests
+    // itself, which may not be natively executable.
+    let mut cmd = if let Some((_, runner)) = runner {
+        let mut parts = runner.split_whitespace();
+        let mut cmd = Command::new(parts.next().unwrap());
+        for arg in parts {
+            cmd.arg(arg);
+        }
+        cmd.arg(&bin);
+        cmd
+    } else {
+        Command::new(&bin)
+    };
 
-    /// Load the given WebAssembly module before the main module
-    #[arg(
-        long = "preload",
-        number_of_values = 1,
-        value_name = "NAME=MODULE_PATH",
-        value_parser = parse_preloads,
-    )]
-    pub preloads: Vec<(String, PathBuf)>,
+    // Ignore this if it's specified in the environment to allow tests to run in
+    // "default mode" by default.
+    cmd.env_remove("WASMTIME_NEW_CLI");
 
-    /// Override the value of `argv[0]`, typically the name of the executable of
-    /// the application being run.
-    ///
-    /// This can be useful to pass in situations where a CLI tool is being
-    /// executed that dispatches its functionality on the value of `argv[0]`
-    /// without needing to rename the original wasm binary.
-    #[arg(long)]
-    pub argv0: Option<String>,
-
-    /// The WebAssembly module to run and arguments to pass to it.
-    ///
-    /// Arguments passed to the wasm module will be configured as WASI CLI
-    /// arguments unless the `--invoke` CLI argument is passed in which case
-    /// arguments will be interpreted as arguments to the function specified.
-    #[arg(value_name = "WASM", trailing_var_arg = true, required = true)]
-    pub module_and_args: Vec<OsString>,
-
-    /// Don't add a newline at the end of the output
-    #[arg(long)]
-    pub no_newline: bool,
+    Ok(cmd)
 }
 
-enum CliLinker {
-    Core(wasmtime::Linker<Host>),
-    #[cfg(feature = "component-model")]
-    Component(wasmtime::component::Linker<Host>),
+fn get_wasmtime_path() -> Result<PathBuf> {
+    let mut path = std::env::current_exe()?;
+    path.pop(); // chop off the file name
+    path.pop(); // chop off `deps`
+    path.push("wasmtime");
+    Ok(path)
 }
 
-impl RunCommand {
-    /// Executes the command.
-    pub fn execute(mut self) -> Result<()> {
-        self.run.common.init_logging()?;
-
-        let mut config = self.run.common.config(None)?;
-        config.async_support(true);
-
-        if self.run.common.wasm.timeout.is_some() {
-            config.epoch_interruption(true);
-        }
-        match self.run.profile {
-            Some(Profile::Native(s)) => {
-                config.profiler(s);
-            }
-            Some(Profile::Guest { .. }) => {
-                // Further configured down below as well.
-                config.epoch_interruption(true);
-            }
-            None => {}
-        }
-
-        let engine = Engine::new(&config)?;
-
-        // Read the wasm module binary either as `*.wat` or a raw binary.
-        let main = self
-            .run
-            .load_module(&engine, self.module_and_args[0].as_ref())?;
-
-        // Validate coredump-on-trap argument
-        if let Some(path) = &self.run.common.debug.coredump {
-            if path.contains("%") {
-                bail!("the coredump-on-trap path does not support patterns yet.")
-            }
-        }
-
-        let mut linker = match &main {
-            RunTarget::Core(_) => CliLinker::Core(wasmtime::Linker::new(&engine)),
-            #[cfg(feature = "component-model")]
-            RunTarget::Component(_) => {
-                CliLinker::Component(wasmtime::component::Linker::new(&engine))
-            }
-        };
-        if let Some(enable) = self.run.common.wasm.unknown_exports_allow {
-            match &mut linker {
-                CliLinker::Core(l) => {
-                    l.allow_unknown_exports(enable);
-                }
-                #[cfg(feature = "component-model")]
-                CliLinker::Component(_) => {
-                    bail!("--allow-unknown-exports not supported with components");
-                }
-            }
-        }
-
-        let host = Host {
-            #[cfg(feature = "wasi-http")]
-            wasi_http_outgoing_body_buffer_chunks: self
-                .run
-                .common
-                .wasi
-                .http_outgoing_body_buffer_chunks,
-            #[cfg(feature = "wasi-http")]
-            wasi_http_outgoing_body_chunk_size: self.run.common.wasi.http_outgoing_body_chunk_size,
-            ..Default::default()
-        };
-
-        let mut store = Store::new(&engine, host);
-        self.populate_with_wasi(&mut linker, &mut store, &main)?;
-
-        store.data_mut().limits = self.run.store_limits();
-        store.limiter(|t| &mut t.limits);
-
-        // If fuel has been configured, we want to add the configured
-        // fuel amount to this store.
-        if let Some(fuel) = self.run.common.wasm.fuel {
-            store.set_fuel(fuel)?;
-        }
-
-        // Always run the module asynchronously to ensure that the module can be
-        // interrupted, even if it is blocking on I/O or a timeout or something.
-        let runtime = tokio::runtime::Builder::new_multi_thread()
-            .enable_time()
-            .enable_io()
-            .build()?;
-
-        let dur = self
-            .run
-            .common
-            .wasm
-            .timeout
-            .unwrap_or(std::time::Duration::MAX);
-        let result = runtime.block_on(async {
-            tokio::time::timeout(dur, async {
-                // Load the preload wasm modules.
-                let mut modules = Vec::new();
-                if let RunTarget::Core(m) = &main {
-                    modules.push((String::new(), m.clone()));
-                }
-                for (name, path) in self.preloads.iter() {
-                    // Read the wasm module binary either as `*.wat` or a raw binary
-                    let module = match self.run.load_module(&engine, path)? {
-                        RunTarget::Core(m) => m,
-                        #[cfg(feature = "component-model")]
-                        RunTarget::Component(_) => {
-                            bail!("components cannot be loaded with `--preload`")
-                        }
-                    };
-                    modules.push((name.clone(), module.clone()));
-
-                    // Add the module's functions to the linker.
-                    match &mut linker {
-                        #[cfg(feature = "cranelift")]
-                        CliLinker::Core(linker) => {
-                            linker
-                                .module_async(&mut store, name, &module)
-                                .await
-                                .context(format!(
-                                    "failed to process preload `{}` at `{}`",
-                                    name,
-                                    path.display()
-                                ))?;
-                        }
-                        #[cfg(not(feature = "cranelift"))]
-                        CliLinker::Core(_) => {
-                            bail!("support for --preload disabled at compile time");
-                        }
-                        #[cfg(feature = "component-model")]
-                        CliLinker::Component(_) => {
-                            bail!("--preload cannot be used with components");
-                        }
-                    }
-                }
-
-                self.load_main_module(&mut store, &mut linker, &main, modules)
-                    .await
-                    .with_context(|| {
-                        format!(
-                            "failed to run main module `{}`",
-                            self.module_and_args[0].to_string_lossy()
-                        )
-                    })
-            })
-            .await
-        });
-
-        // Load the main wasm module.
-        match result.unwrap_or_else(|elapsed| {
-            Err(anyhow::Error::from(wasmtime::Trap::Interrupt))
-                .with_context(|| format!("timed out after {elapsed}"))
-        }) {
-            Ok(()) => (),
-            Err(e) => {
-                // Exit the process if Wasmtime understands the error;
-                // otherwise, fall back on Rust's default error printing/return
-                // code.
-                if store.data().preview1_ctx.is_some() {
-                    return Err(wasi_common::maybe_exit_on_error(e));
-                } else if store.data().preview2_ctx.is_some() {
-                    if let Some(exit) = e.downcast_ref::<wasmtime_wasi::I32Exit>() {
-                        std::process::exit(exit.0);
-                    }
-                }
-                if e.is::<wasmtime::Trap>() {
-                    eprintln!("Error: {e:?}");
-                    cfg_if::cfg_if! {
-                        if #[cfg(unix)] {
-                            std::process::exit(rustix::process::EXIT_SIGNALED_SIGABRT);
-                        } else if #[cfg(windows)] {
-                            // https://docs.microsoft.com/en-us/cpp/c-runtime-library/reference/abort?view=vs-2019
-                            std::process::exit(3);
-                        }
-                    }
-                }
-                return Err(e);
-            }
-        }
-
-        Ok(())
+// Run the wasmtime CLI with the provided args and, if it succeeds, return
+// the standard output in a `String`.
+pub fn run_wasmtime(args: &[&str]) -> Result<String> {
+    let output = run_wasmtime_for_output(args, None)?;
+    if !output.status.success() {
+        bail!(
+            "Failed to execute wasmtime with: {:?}\n{}",
+            args,
+            String::from_utf8_lossy(&output.stderr)
+        );
     }
-
-    fn compute_argv(&self) -> Result<Vec<String>> {
-        let mut result = Vec::new();
-
-        for (i, arg) in self.module_and_args.iter().enumerate() {
-            // For argv[0], which is the program name. Only include the base
-            // name of the main wasm module, to avoid leaking path information.
-            let arg = if i == 0 {
-                match &self.argv0 {
-                    Some(s) => s.as_ref(),
-                    None => Path::new(arg).components().next_back().unwrap().as_os_str(),
-                }
-            } else {
-                arg.as_ref()
-            };
-            result.push(
-                arg.to_str()
-                    .ok_or_else(|| anyhow!("failed to convert {arg:?} to utf-8"))?
-                    .to_string(),
-            );
-        }
-
-        Ok(result)
-    }
-
-    fn setup_epoch_handler(
-        &self,
-        store: &mut Store<Host>,
-        modules: Vec<(String, Module)>,
-    ) -> Result<Box<dyn FnOnce(&mut Store<Host>)>> {
-        if let Some(Profile::Guest { path, interval }) = &self.run.profile {
-            #[cfg(feature = "profiling")]
-            return Ok(self.setup_guest_profiler(store, modules, path, *interval));
-            #[cfg(not(feature = "profiling"))]
-            {
-                let _ = (modules, path, interval);
-                bail!("support for profiling disabled at compile time");
-            }
-        }
-
-        if let Some(timeout) = self.run.common.wasm.timeout {
-            store.set_epoch_deadline(1);
-            let engine = store.engine().clone();
-            thread::spawn(move || {
-                thread::sleep(timeout);
-                engine.increment_epoch();
-            });
-        }
-
-        Ok(Box::new(|_store| {}))
-    }
-
-    #[cfg(feature = "profiling")]
-    fn setup_guest_profiler(
-        &self,
-        store: &mut Store<Host>,
-        modules: Vec<(String, Module)>,
-        path: &str,
-        interval: std::time::Duration,
-    ) -> Box<dyn FnOnce(&mut Store<Host>)> {
-        use wasmtime::{AsContext, GuestProfiler, StoreContext, StoreContextMut, UpdateDeadline};
-
-        let module_name = self.module_and_args[0].to_str().unwrap_or("<main module>");
-        store.data_mut().guest_profiler =
-            Some(Arc::new(GuestProfiler::new(module_name, interval, modules)));
-
-        fn sample(
-            mut store: StoreContextMut<Host>,
-            f: impl FnOnce(&mut GuestProfiler, StoreContext<Host>),
-        ) {
-            let mut profiler = store.data_mut().guest_profiler.take().unwrap();
-            f(
-                Arc::get_mut(&mut profiler).expect("profiling doesn't support threads yet"),
-                store.as_context(),
-            );
-            store.data_mut().guest_profiler = Some(profiler);
-        }
-
-        store.call_hook(|store, kind| {
-            sample(store, |profiler, store| profiler.call_hook(store, kind));
-            Ok(())
-        });
-
-        if let Some(timeout) = self.run.common.wasm.timeout {
-            let mut timeout = (timeout.as_secs_f64() / interval.as_secs_f64()).ceil() as u64;
-            assert!(timeout > 0);
-            store.epoch_deadline_callback(move |store| {
-                sample(store, |profiler, store| {
-                    profiler.sample(store, std::time::Duration::ZERO)
-                });
-                timeout -= 1;
-                if timeout == 0 {
-                    bail!("timeout exceeded");
-                }
-                Ok(UpdateDeadline::Continue(1))
-            });
-        } else {
-            store.epoch_deadline_callback(move |store| {
-                sample(store, |profiler, store| {
-                    profiler.sample(store, std::time::Duration::ZERO)
-                });
-                Ok(UpdateDeadline::Continue(1))
-            });
-        }
-
-        store.set_epoch_deadline(1);
-        let engine = store.engine().clone();
-        thread::spawn(move || loop {
-            thread::sleep(interval);
-            engine.increment_epoch();
-        });
-
-        let path = path.to_string();
-        return Box::new(move |store| {
-            let profiler = Arc::try_unwrap(store.data_mut().guest_profiler.take().unwrap())
-                .expect("profiling doesn't support threads yet");
-            if let Err(e) = std::fs::File::create(&path)
-                .map_err(anyhow::Error::new)
-                .and_then(|output| profiler.finish(std::io::BufWriter::new(output)))
-            {
-                eprintln!("failed writing profile at {path}: {e:#}");
-            } else {
-                eprintln!();
-                eprintln!("Profile written to: {path}");
-                eprintln!("View this profile at https://profiler.firefox.com/.");
-            }
-        });
-    }
-
-    async fn load_main_module(
-        &self,
-        store: &mut Store<Host>,
-        linker: &mut CliLinker,
-        module: &RunTarget,
-        modules: Vec<(String, Module)>,
-    ) -> Result<()> {
-        // The main module might be allowed to have unknown imports, which
-        // should be defined as traps:
-        if self.run.common.wasm.unknown_imports_trap == Some(true) {
-            match linker {
-                CliLinker::Core(linker) => {
-                    linker.define_unknown_imports_as_traps(module.unwrap_core())?;
-                }
-                #[cfg(feature = "component-model")]
-                CliLinker::Component(linker) => {
-                    linker.define_unknown_imports_as_traps(module.unwrap_component())?;
-                }
-            }
-        }
-
-        // ...or as default values.
-        if self.run.common.wasm.unknown_imports_default == Some(true) {
-            match linker {
-                CliLinker::Core(linker) => {
-                    linker.define_unknown_imports_as_default_values(module.unwrap_core())?;
-                }
-                _ => bail!("cannot use `--default-values-unknown-imports` with components"),
-            }
-        }
-
-        let finish_epoch_handler = self.setup_epoch_handler(store, modules)?;
-
-        let result = match linker {
-            CliLinker::Core(linker) => {
-                let module = module.unwrap_core();
-                let instance = linker
-                    .instantiate_async(&mut *store, &module)
-                    .await
-                    .context(format!(
-                        "failed to instantiate {:?}",
-                        self.module_and_args[0]
-                    ))?;
-
-                // If `_initialize` is present, meaning a reactor, then invoke
-                // the function.
-                if let Some(func) = instance.get_func(&mut *store, "_initialize") {
-                    func.typed::<(), ()>(&store)?
-                        .call_async(&mut *store, ())
-                        .await?;
-                }
-
-                // Look for the specific function provided or otherwise look for
-                // "" or "_start" exports to run as a "main" function.
-                let func = if let Some(name) = &self.invoke {
-                    Some(
-                        instance
-                            .get_func(&mut *store, name)
-                            .ok_or_else(|| anyhow!("no func export named `{}` found", name))?,
-                    )
-                } else {
-                    instance
-                        .get_func(&mut *store, "")
-                        .or_else(|| instance.get_func(&mut *store, "_start"))
-                };
-
-                match func {
-                    Some(func) => self.invoke_func(store, func).await,
-                    None => Ok(()),
-                }
-            }
-            #[cfg(feature = "component-model")]
-            CliLinker::Component(linker) => {
-                if self.invoke.is_some() {
-                    bail!("using `--invoke` with components is not supported");
-                }
-
-                let component = module.unwrap_component();
-
-                let command = wasmtime_wasi::bindings::Command::instantiate_async(
-                    &mut *store,
-                    component,
-                    linker,
-                )
-                .await?;
-                let result = command
-                    .wasi_cli_run()
-                    .call_run(&mut *store)
-                    .await
-                    .context("failed to invoke `run` function")
-                    .map_err(|e| self.handle_core_dump(&mut *store, e));
-
-                // Translate the `Result<(),()>` produced by wasm into a feigned
-                // explicit exit here with status 1 if `Err(())` is returned.
-                result.and_then(|wasm_result| match wasm_result {
-                    Ok(()) => Ok(()),
-                    Err(()) => Err(wasmtime_wasi::I32Exit(1).into()),
-                })
-            }
-        };
-        finish_epoch_handler(store);
-
-        result
-    }
-
-    async fn invoke_func(&self, store: &mut Store<Host>, func: Func) -> Result<()> {
-        let ty = func.ty(&store);
-        if ty.params().len() > 0 {
-            eprintln!(
-                "warning: using `--invoke` with a function that takes arguments \
-                 is experimental and may break in the future"
-            );
-        }
-
-        // Skip the first argument (module path) and find the position after --invoke flag
-        let invoke_pos = self
-            .module_and_args
-            .iter()
-            .position(|arg| arg == "--invoke")
-            .map(|pos| pos + 2) // Skip both --invoke and function name
-            .unwrap_or(1); // Fallback to skipping just the module path
-
-        let mut args = self.module_and_args.iter().skip(invoke_pos);
-        let mut values = Vec::new();
-        for ty in ty.params() {
-            let val = match args.next() {
-                Some(s) => s,
-                None => {
-                    if let Some(name) = &self.invoke {
-                        bail!("not enough arguments for `{}`", name)
-                    } else {
-                        bail!("not enough arguments for command default")
-                    }
-                }
-            };
-            let val = val
-                .to_str()
-                .ok_or_else(|| anyhow!("argument is not valid utf-8: {val:?}"))?;
-            values.push(match ty {
-                ValType::I32 => {
-                    if val.starts_with("0x") || val.starts_with("0X") {
-                        Val::I32(i32::from_str_radix(&val[2..], 16)?)
-                    } else {
-                        Val::I32(val.parse()?)
-                    }
-                }
-                ValType::I64 => Val::I64(if val.starts_with("0x") || val.starts_with("0X") {
-                    i64::from_str_radix(&val[2..], 16)?
-                } else {
-                    val.parse()?
-                }),
-                ValType::F32 => Val::F32(val.parse::<f32>()?.to_bits()),
-                ValType::F64 => Val::F64(val.parse::<f64>()?.to_bits()),
-                t => bail!("unsupported argument type {:?}", t),
-            });
-        }
-
-        // Call the function with the parsed arguments
-        let mut results = vec![Val::null_func_ref(); ty.results().len()];
-        let invoke_res = func
-            .call_async(&mut *store, &values, &mut results)
-            .await
-            .with_context(|| {
-                if let Some(name) = &self.invoke {
-                    format!("failed to invoke `{name}`")
-                } else {
-                    format!("failed to invoke command default")
-                }
-            });
-
-        if let Err(err) = invoke_res {
-            return Err(self.handle_core_dump(&mut *store, err));
-        }
-
-        // Always print results for functions that return values
-        for result in results {
-            match result {
-                Val::I32(i) => print!("{i}"),
-                Val::I64(i) => print!("{i}"),
-                Val::F32(f) => print!("{}", f32::from_bits(f)),
-                Val::F64(f) => print!("{}", f64::from_bits(f)),
-                Val::V128(i) => print!("{}", i.as_u128()),
-                Val::ExternRef(None) => print!("<null externref>"),
-                Val::ExternRef(Some(_)) => print!("<externref>"),
-                Val::FuncRef(None) => print!("<null funcref>"),
-                Val::FuncRef(Some(_)) => print!("<funcref>"),
-                Val::AnyRef(None) => print!("<null anyref>"),
-                Val::AnyRef(Some(_)) => print!("<anyref>"),
-            }
-        }
-
-        // Add a newline unless --no-newline is specified
-        if !self.no_newline {
-            print!("\n");
-        }
-
-        Ok(())
-    }
-
-    #[cfg(feature = "coredump")]
-    fn handle_core_dump(&self, store: &mut Store<Host>, err: Error) -> Error {
-        let coredump_path = match &self.run.common.debug.coredump {
-            Some(path) => path,
-            None => return err,
-        };
-        if !err.is::<wasmtime::Trap>() {
-            return err;
-        }
-        let source_name = self.module_and_args[0]
-            .to_str()
-            .unwrap_or_else(|| "unknown");
-
-        if let Err(coredump_err) = write_core_dump(store, &err, &source_name, coredump_path) {
-            eprintln!("warning: coredump failed to generate: {coredump_err}");
-            err
-        } else {
-            err.context(format!("core dumped at {coredump_path}"))
-        }
-    }
-
-    #[cfg(not(feature = "coredump"))]
-    fn handle_core_dump(&self, _store: &mut Store<Host>, err: Error) -> Error {
-        err
-    }
-
-    /// Populates the given `Linker` with WASI APIs.
-    fn populate_with_wasi(
-        &self,
-        linker: &mut CliLinker,
-        store: &mut Store<Host>,
-        module: &RunTarget,
-    ) -> Result<()> {
-        let mut cli = self.run.common.wasi.cli;
-
-        // Accept -Scommon as a deprecated alias for -Scli.
-        if let Some(common) = self.run.common.wasi.common {
-            if cli.is_some() {
-                bail!(
-                    "The -Scommon option should not be use with -Scli as it is a deprecated alias"
-                );
-            } else {
-                // In the future, we may add a warning here to tell users to use
-                // `-S cli` instead of `-S common`.
-                cli = Some(common);
-            }
-        }
-
-        if cli != Some(false) {
-            match linker {
-                CliLinker::Core(linker) => {
-                    match (self.run.common.wasi.preview2, self.run.common.wasi.threads) {
-                        // If preview2 is explicitly disabled, or if threads
-                        // are enabled, then use the historical preview1
-                        // implementation.
-                        (Some(false), _) | (None, Some(true)) => {
-                            wasi_common::tokio::add_to_linker(linker, |host| {
-                                host.preview1_ctx.as_mut().unwrap()
-                            })?;
-                            self.set_preview1_ctx(store)?;
-                        }
-                        // If preview2 was explicitly requested, always use it.
-                        // Otherwise use it so long as threads are disabled.
-                        //
-                        // Note that for now `preview0` is currently
-                        // default-enabled but this may turn into
-                        // default-disabled in the future.
-                        (Some(true), _) | (None, Some(false) | None) => {
-                            if self.run.common.wasi.preview0 != Some(false) {
-                                wasmtime_wasi::preview0::add_to_linker_async(linker, |t| {
-                                    t.preview2_ctx()
-                                })?;
-                            }
-                            wasmtime_wasi::preview1::add_to_linker_async(linker, |t| {
-                                t.preview2_ctx()
-                            })?;
-                            self.set_preview2_ctx(store)?;
-                        }
-                    }
-                }
-                #[cfg(feature = "component-model")]
-                CliLinker::Component(linker) => {
-                    let link_options = self.run.compute_wasi_features();
-                    wasmtime_wasi::add_to_linker_with_options_async(linker, &link_options)?;
-                    self.set_preview2_ctx(store)?;
-                }
-            }
-        }
-
-        if self.run.common.wasi.nn == Some(true) {
-            #[cfg(not(feature = "wasi-nn"))]
-            {
-                bail!("Cannot enable wasi-nn when the binary is not compiled with this feature.");
-            }
-            #[cfg(all(feature = "wasi-nn", feature = "component-model"))]
-            {
-                let (backends, registry) = self.collect_preloaded_nn_graphs()?;
-                match linker {
-                    CliLinker::Core(linker) => {
-                        wasmtime_wasi_nn::witx::add_to_linker(linker, |host| {
-                            Arc::get_mut(host.wasi_nn_witx.as_mut().unwrap())
-                                .expect("wasi-nn is not implemented with multi-threading support")
-                        })?;
-                        store.data_mut().wasi_nn_witx = Some(Arc::new(
-                            wasmtime_wasi_nn::witx::WasiNnCtx::new(backends, registry),
-                        ));
-                    }
-                    #[cfg(feature = "component-model")]
-                    CliLinker::Component(linker) => {
-                        wasmtime_wasi_nn::wit::add_to_linker(linker, |h: &mut Host| {
-                            let preview2_ctx =
-                                h.preview2_ctx.as_mut().expect("wasip2 is not configured");
-                            let preview2_ctx = Arc::get_mut(preview2_ctx)
-                                .expect("wasmtime_wasi is not compatible with threads")
-                                .get_mut()
-                                .unwrap();
-                            let nn_ctx = Arc::get_mut(h.wasi_nn_wit.as_mut().unwrap())
-                                .expect("wasi-nn is not implemented with multi-threading support");
-                            WasiNnView::new(preview2_ctx.table(), nn_ctx)
-                        })?;
-                        store.data_mut().wasi_nn_wit = Some(Arc::new(
-                            wasmtime_wasi_nn::wit::WasiNnCtx::new(backends, registry),
-                        ));
-                    }
-                }
-            }
-        }
-
-        if self.run.common.wasi.config == Some(true) {
-            #[cfg(not(feature = "wasi-config"))]
-            {
-                bail!(
-                    "Cannot enable wasi-config when the binary is not compiled with this feature."
-                );
-            }
-            #[cfg(all(feature = "wasi-config", feature = "component-model"))]
-            {
-                match linker {
-                    CliLinker::Core(_) => {
-                        bail!("Cannot enable wasi-config for core wasm modules");
-                    }
-                    CliLinker::Component(linker) => {
-                        let vars = WasiConfigVariables::from_iter(
-                            self.run
-                                .common
-                                .wasi
-                                .config_var
-                                .iter()
-                                .map(|v| (v.key.clone(), v.value.clone())),
-                        );
-
-                        wasmtime_wasi_config::add_to_linker(linker, |h| {
-                            WasiConfig::new(Arc::get_mut(h.wasi_config.as_mut().unwrap()).unwrap())
-                        })?;
-                        store.data_mut().wasi_config = Some(Arc::new(vars));
-                    }
-                }
-            }
-        }
-
-        if self.run.common.wasi.keyvalue == Some(true) {
-            #[cfg(not(feature = "wasi-keyvalue"))]
-            {
-                bail!("Cannot enable wasi-keyvalue when the binary is not compiled with this feature.");
-            }
-            #[cfg(all(feature = "wasi-keyvalue", feature = "component-model"))]
-            {
-                match linker {
-                    CliLinker::Core(_) => {
-                        bail!("Cannot enable wasi-keyvalue for core wasm modules");
-                    }
-                    CliLinker::Component(linker) => {
-                        let ctx = WasiKeyValueCtxBuilder::new()
-                            .in_memory_data(
-                                self.run
-                                    .common
-                                    .wasi
-                                    .keyvalue_in_memory_data
-                                    .iter()
-                                    .map(|v| (v.key.clone(), v.value.clone())),
-                            )
-                            .build();
-
-                        wasmtime_wasi_keyvalue::add_to_linker(linker, |h| {
-                            let preview2_ctx =
-                                h.preview2_ctx.as_mut().expect("wasip2 is not configured");
-                            let preview2_ctx =
-                                Arc::get_mut(preview2_ctx).unwrap().get_mut().unwrap();
-                            WasiKeyValue::new(
-                                Arc::get_mut(h.wasi_keyvalue.as_mut().unwrap()).unwrap(),
-                                preview2_ctx.table(),
-                            )
-                        })?;
-                        store.data_mut().wasi_keyvalue = Some(Arc::new(ctx));
-                    }
-                }
-            }
-        }
-
-        if self.run.common.wasi.threads == Some(true) {
-            #[cfg(not(feature = "wasi-threads"))]
-            {
-                // Silence the unused warning for `module` as it is only used in the
-                // conditionally-compiled wasi-threads.
-                let _ = &module;
-
-                bail!(
-                    "Cannot enable wasi-threads when the binary is not compiled with this feature."
-                );
-            }
-            #[cfg(feature = "wasi-threads")]
-            {
-                let linker = match linker {
-                    CliLinker::Core(linker) => linker,
-                    _ => bail!("wasi-threads does not support components yet"),
-                };
-                let module = module.unwrap_core();
-                wasmtime_wasi_threads::add_to_linker(linker, store, &module, |host| {
-                    host.wasi_threads.as_ref().unwrap()
-                })?;
-                store.data_mut().wasi_threads = Some(Arc::new(WasiThreadsCtx::new(
-                    module.clone(),
-                    Arc::new(linker.clone()),
-                )?));
-            }
-        }
-
-        if self.run.common.wasi.http == Some(true) {
-            #[cfg(not(all(feature = "wasi-http", feature = "component-model")))]
-            {
-                bail!("Cannot enable wasi-http when the binary is not compiled with this feature.");
-            }
-            #[cfg(all(feature = "wasi-http", feature = "component-model"))]
-            {
-                match linker {
-                    CliLinker::Core(_) => {
-                        bail!("Cannot enable wasi-http for core wasm modules");
-                    }
-                    CliLinker::Component(linker) => {
-                        wasmtime_wasi_http::add_only_http_to_linker_sync(linker)?;
-                    }
-                }
-
-                store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx::new()));
-            }
-        }
-
-        Ok(())
-    }
-
-    fn set_preview1_ctx(&self, store: &mut Store<Host>) -> Result<()> {
-        let mut builder = WasiCtxBuilder::new();
-        builder.inherit_stdio().args(&self.compute_argv()?)?;
-
-        if self.run.common.wasi.inherit_env == Some(true) {
-            for (k, v) in std::env::vars() {
-                builder.env(&k, &v)?;
-            }
-        }
-        for (key, value) in self.run.vars.iter() {
-            let value = match value {
-                Some(value) => value.clone(),
-                None => match std::env::var_os(key) {
-                    Some(val) => val
-                        .into_string()
-                        .map_err(|_| anyhow!("environment variable `{key}` not valid utf-8"))?,
-                    None => {
-                        // leave the env var un-set in the guest
-                        continue;
-                    }
-                },
-            };
-            builder.env(key, &value)?;
-        }
-
-        let mut num_fd: usize = 3;
-
-        if self.run.common.wasi.listenfd == Some(true) {
-            num_fd = ctx_set_listenfd(num_fd, &mut builder)?;
-        }
-
-        for listener in self.run.compute_preopen_sockets()? {
-            let listener = TcpListener::from_std(listener);
-            builder.preopened_socket(num_fd as _, listener)?;
-            num_fd += 1;
-        }
-
-        for (host, guest) in self.run.dirs.iter() {
-            let dir = Dir::open_ambient_dir(host, ambient_authority())
-                .with_context(|| format!("failed to open directory '{host}'"))?;
-            builder.preopened_dir(dir, guest)?;
-        }
-
-        store.data_mut().preview1_ctx = Some(builder.build());
-        Ok(())
-    }
-
-    fn set_preview2_ctx(&self, store: &mut Store<Host>) -> Result<()> {
-        let mut builder = wasmtime_wasi::WasiCtxBuilder::new();
-        builder.inherit_stdio().args(&self.compute_argv()?);
-        self.run.configure_wasip2(&mut builder)?;
-        let ctx = builder.build_p1();
-        store.data_mut().preview2_ctx = Some(Arc::new(Mutex::new(ctx)));
-        Ok(())
-    }
-
-    #[cfg(feature = "wasi-nn")]
-    fn collect_preloaded_nn_graphs(
-        &self,
-    ) -> Result<(Vec<wasmtime_wasi_nn::Backend>, wasmtime_wasi_nn::Registry)> {
-        let graphs = self
-            .run
-            .common
-            .wasi
-            .nn_graph
-            .iter()
-            .map(|g| (g.format.clone(), g.dir.clone()))
-            .collect::<Vec<_>>();
-        wasmtime_wasi_nn::preload(&graphs)
-    }
+    Ok(String::from_utf8(output.stdout).unwrap())
 }
 
-#[derive(Default, Clone)]
-struct Host {
-    preview1_ctx: Option<wasi_common::WasiCtx>,
-
-    // The Mutex is only needed to satisfy the Sync constraint but we never
-    // actually perform any locking on it as we use Mutex::get_mut for every
-    // access.
-    preview2_ctx: Option<Arc<Mutex<wasmtime_wasi::preview1::WasiP1Ctx>>>,
-
-    #[cfg(feature = "wasi-nn")]
-    wasi_nn_wit: Option<Arc<wasmtime_wasi_nn::wit::WasiNnCtx>>,
-    #[cfg(feature = "wasi-nn")]
-    wasi_nn_witx: Option<Arc<wasmtime_wasi_nn::witx::WasiNnCtx>>,
-
-    #[cfg(feature = "wasi-threads")]
-    wasi_threads: Option<Arc<WasiThreadsCtx<Host>>>,
-    #[cfg(feature = "wasi-http")]
-    wasi_http: Option<Arc<WasiHttpCtx>>,
-    #[cfg(feature = "wasi-http")]
-    wasi_http_outgoing_body_buffer_chunks: Option<usize>,
-    #[cfg(feature = "wasi-http")]
-    wasi_http_outgoing_body_chunk_size: Option<usize>,
-    limits: StoreLimits,
-    #[cfg(feature = "profiling")]
-    guest_profiler: Option<Arc<wasmtime::GuestProfiler>>,
-
-    #[cfg(feature = "wasi-config")]
-    wasi_config: Option<Arc<WasiConfigVariables>>,
-    #[cfg(feature = "wasi-keyvalue")]
-    wasi_keyvalue: Option<Arc<WasiKeyValueCtx>>,
+fn build_wasm(wat_path: impl AsRef<Path>) -> Result<NamedTempFile> {
+    let mut wasm_file = NamedTempFile::new()?;
+    let wasm = wat::parse_file(wat_path)?;
+    wasm_file.write(&wasm)?;
+    Ok(wasm_file)
 }
 
-impl Host {
-    fn preview2_ctx(&mut self) -> &mut wasmtime_wasi::preview1::WasiP1Ctx {
-        let ctx = self
-            .preview2_ctx
-            .as_mut()
-            .expect("wasip2 is not configured");
-        Arc::get_mut(ctx)
-            .expect("wasmtime_wasi is not compatible with threads")
-            .get_mut()
-            .unwrap()
-    }
+// Very basic use case: compile binary wasm file and run specific function with arguments.
+#[test]
+fn run_wasmtime_simple() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/simple.wat")?;
+    run_wasmtime(&[
+        "run",
+        "--invoke",
+        "simple",
+        "-Ccache=n",
+        wasm.path().to_str().unwrap(),
+        "4",
+    ])?;
+    Ok(())
 }
 
-impl WasiView for Host {
-    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        self.preview2_ctx().table()
-    }
-
-    fn ctx(&mut self) -> &mut wasmtime_wasi::WasiCtx {
-        self.preview2_ctx().ctx()
-    }
+// Wasmtime shall fail when not enough arguments were provided.
+#[test]
+fn run_wasmtime_simple_fail_no_args() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/simple.wat")?;
+    assert!(
+        run_wasmtime(&[
+            "run",
+            "-Ccache=n",
+            "--invoke",
+            "simple",
+            wasm.path().to_str().unwrap(),
+        ])
+        .is_err(),
+        "shall fail"
+    );
+    Ok(())
 }
 
-#[cfg(feature = "wasi-http")]
-impl wasmtime_wasi_http::types::WasiHttpView for Host {
-    fn ctx(&mut self) -> &mut WasiHttpCtx {
-        let ctx = self.wasi_http.as_mut().unwrap();
-        Arc::get_mut(ctx).expect("wasmtime_wasi is not compatible with threads")
-    }
-
-    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        self.preview2_ctx().table()
-    }
-
-    fn outgoing_body_buffer_chunks(&mut self) -> usize {
-        self.wasi_http_outgoing_body_buffer_chunks
-            .unwrap_or_else(|| DEFAULT_OUTGOING_BODY_BUFFER_CHUNKS)
-    }
-
-    fn outgoing_body_chunk_size(&mut self) -> usize {
-        self.wasi_http_outgoing_body_chunk_size
-            .unwrap_or_else(|| DEFAULT_OUTGOING_BODY_CHUNK_SIZE)
-    }
+#[test]
+fn run_coredump_smoketest() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/coredump_smoketest.wat")?;
+    let coredump_file = NamedTempFile::new()?;
+    let coredump_arg = format!("-Dcoredump={}", coredump_file.path().display());
+    let err = run_wasmtime(&[
+        "run",
+        "--invoke",
+        "a",
+        "-Ccache=n",
+        &coredump_arg,
+        wasm.path().to_str().unwrap(),
+    ])
+    .unwrap_err();
+    assert!(err.to_string().contains(&format!(
+        "core dumped at {}",
+        coredump_file.path().display()
+    )));
+    Ok(())
 }
 
-#[cfg(not(unix))]
-fn ctx_set_listenfd(num_fd: usize, _builder: &mut WasiCtxBuilder) -> Result<usize> {
-    Ok(num_fd)
+// Running simple wat
+#[test]
+fn run_wasmtime_simple_wat() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/simple.wat")?;
+    run_wasmtime(&[
+        "run",
+        "--invoke",
+        "simple",
+        "-Ccache=n",
+        wasm.path().to_str().unwrap(),
+        "4",
+    ])?;
+    assert_eq!(
+        run_wasmtime(&[
+            "run",
+            "--invoke",
+            "get_f32",
+            "-Ccache=n",
+            wasm.path().to_str().unwrap(),
+        ])?,
+        "100\n"
+    );
+    assert_eq!(
+        run_wasmtime(&[
+            "run",
+            "--invoke",
+            "get_f64",
+            "-Ccache=n",
+            wasm.path().to_str().unwrap(),
+        ])?,
+        "100\n"
+    );
+    Ok(())
+}
+
+// Running a wat that traps.
+#[test]
+fn run_wasmtime_unreachable_wat() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/unreachable.wat")?;
+    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "-Ccache=n"], None)?;
+
+    assert_ne!(output.stderr, b"");
+    assert_eq!(output.stdout, b"");
+
+    assert_trap_code(&output.status);
+    Ok(())
+}
+
+fn assert_trap_code(status: &ExitStatus) {
+    let code = status
+        .code()
+        .expect("wasmtime process should exit normally");
+
+    // Test for the specific error code Wasmtime uses to indicate a trap return.
+    #[cfg(unix)]
+    assert_eq!(code, 128 + libc::SIGABRT);
+    #[cfg(windows)]
+    assert_eq!(code, 3);
+}
+
+// Run a simple WASI hello world, snapshot0 edition.
+#[test]
+fn hello_wasi_snapshot0() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot0.wat")?;
+    for preview2 in ["-Spreview2=n", "-Spreview2=y"] {
+        let stdout = run_wasmtime(&["-Ccache=n", preview2, wasm.path().to_str().unwrap()])?;
+        assert_eq!(stdout, "Hello, world!\n");
+    }
+    Ok(())
+}
+
+// Run a simple WASI hello world, snapshot1 edition.
+#[test]
+fn hello_wasi_snapshot1() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot1.wat")?;
+    let stdout = run_wasmtime(&["-Ccache=n", wasm.path().to_str().unwrap()])?;
+    assert_eq!(stdout, "Hello, world!\n");
+    Ok(())
+}
+
+#[test]
+fn timeout_in_start() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/iloop-start.wat")?;
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "-Wtimeout=1ms",
+            "-Ccache=n",
+            wasm.path().to_str().unwrap(),
+        ],
+        None,
+    )?;
+    assert!(!output.status.success());
+    assert_eq!(output.stdout, b"");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("wasm trap: interrupt"),
+        "bad stderr: {stderr}"
+    );
+    Ok(())
+}
+
+#[test]
+fn timeout_in_invoke() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/iloop-invoke.wat")?;
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "-Wtimeout=1ms",
+            "-Ccache=n",
+            wasm.path().to_str().unwrap(),
+        ],
+        None,
+    )?;
+    assert!(!output.status.success());
+    assert_eq!(output.stdout, b"");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("wasm trap: interrupt"),
+        "bad stderr: {stderr}"
+    );
+    Ok(())
+}
+
+// Exit with a valid non-zero exit code, snapshot0 edition.
+#[test]
+fn exit2_wasi_snapshot0() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/exit2_wasi_snapshot0.wat")?;
+
+    for preview2 in ["-Spreview2=n", "-Spreview2=y"] {
+        let output = run_wasmtime_for_output(
+            &["-Ccache=n", preview2, wasm.path().to_str().unwrap()],
+            None,
+        )?;
+        assert_eq!(output.status.code().unwrap(), 2);
+    }
+    Ok(())
+}
+
+// Exit with a valid non-zero exit code, snapshot1 edition.
+#[test]
+fn exit2_wasi_snapshot1() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/exit2_wasi_snapshot1.wat")?;
+    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
+    assert_eq!(output.status.code().unwrap(), 2);
+    Ok(())
+}
+
+// Exit with a valid non-zero exit code, snapshot0 edition.
+#[test]
+fn exit125_wasi_snapshot0() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/exit125_wasi_snapshot0.wat")?;
+    for preview2 in ["-Spreview2=n", "-Spreview2=y"] {
+        let output = run_wasmtime_for_output(
+            &["-Ccache=n", preview2, wasm.path().to_str().unwrap()],
+            None,
+        )?;
+        dbg!(&output);
+        assert_eq!(output.status.code().unwrap(), 125);
+    }
+    Ok(())
+}
+
+// Exit with a valid non-zero exit code, snapshot1 edition.
+#[test]
+fn exit125_wasi_snapshot1() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/exit125_wasi_snapshot1.wat")?;
+    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
+    assert_eq!(output.status.code().unwrap(), 125);
+    Ok(())
+}
+
+// Exit with an invalid non-zero exit code, snapshot0 edition.
+#[test]
+fn exit126_wasi_snapshot0() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/exit126_wasi_snapshot0.wat")?;
+
+    for preview2 in ["-Spreview2=n", "-Spreview2=y"] {
+        let output = run_wasmtime_for_output(
+            &["-Ccache=n", preview2, wasm.path().to_str().unwrap()],
+            None,
+        )?;
+        assert_eq!(output.status.code().unwrap(), 1);
+        assert!(output.stdout.is_empty());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
+    }
+    Ok(())
+}
+
+// Exit with an invalid non-zero exit code, snapshot1 edition.
+#[test]
+fn exit126_wasi_snapshot1() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/exit126_wasi_snapshot1.wat")?;
+    let output = run_wasmtime_for_output(&[wasm.path().to_str().unwrap(), "-Ccache=n"], None)?;
+    assert_eq!(output.status.code().unwrap(), 1);
+    assert!(output.stdout.is_empty());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid exit status"));
+    Ok(())
+}
+
+// Run a minimal command program.
+#[test]
+fn minimal_command() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/minimal-command.wat")?;
+    let stdout = run_wasmtime(&["-Ccache=n", wasm.path().to_str().unwrap()])?;
+    assert_eq!(stdout, "");
+    Ok(())
+}
+
+// Run a minimal reactor program.
+#[test]
+fn minimal_reactor() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/minimal-reactor.wat")?;
+    let stdout = run_wasmtime(&["-Ccache=n", wasm.path().to_str().unwrap()])?;
+    assert_eq!(stdout, "");
+    Ok(())
+}
+
+// Attempt to call invoke on a command.
+#[test]
+fn command_invoke() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/minimal-command.wat")?;
+    run_wasmtime(&[
+        "run",
+        "--invoke",
+        "_start",
+        "-Ccache=n",
+        wasm.path().to_str().unwrap(),
+    ])?;
+    Ok(())
+}
+
+// Attempt to call invoke on a command.
+#[test]
+fn reactor_invoke() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/minimal-reactor.wat")?;
+    run_wasmtime(&[
+        "run",
+        "--invoke",
+        "_initialize",
+        "-Ccache=n",
+        wasm.path().to_str().unwrap(),
+    ])?;
+    Ok(())
+}
+
+// Run the greeter test, which runs a preloaded reactor and a command.
+#[test]
+fn greeter() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/greeter_command.wat")?;
+    let stdout = run_wasmtime(&[
+        "run",
+        "-Ccache=n",
+        "--preload",
+        "reactor=tests/all/cli_tests/greeter_reactor.wat",
+        wasm.path().to_str().unwrap(),
+    ])?;
+    assert_eq!(
+        stdout,
+        "Hello _initialize\nHello _start\nHello greet\nHello done\n"
+    );
+    Ok(())
+}
+
+// Run the greeter test, but this time preload a command.
+#[test]
+fn greeter_preload_command() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/greeter_reactor.wat")?;
+    let stdout = run_wasmtime(&[
+        "run",
+        "-Ccache=n",
+        "--preload",
+        "reactor=tests/all/cli_tests/hello_wasi_snapshot1.wat",
+        wasm.path().to_str().unwrap(),
+    ])?;
+    assert_eq!(stdout, "Hello _initialize\n");
+    Ok(())
+}
+
+// Run the greeter test, which runs a preloaded reactor and a command.
+#[test]
+fn greeter_preload_callable_command() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/greeter_command.wat")?;
+    let stdout = run_wasmtime(&[
+        "run",
+        "-Ccache=n",
+        "--preload",
+        "reactor=tests/all/cli_tests/greeter_callable_command.wat",
+        wasm.path().to_str().unwrap(),
+    ])?;
+    assert_eq!(stdout, "Hello _start\nHello callable greet\nHello done\n");
+    Ok(())
+}
+
+// Ensure successful WASI exit call with FPR saving frames on stack for Windows x64
+// See https://github.com/bytecodealliance/wasmtime/issues/1967
+#[test]
+fn exit_with_saved_fprs() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/exit_with_saved_fprs.wat")?;
+    let output = run_wasmtime_for_output(&["-Ccache=n", wasm.path().to_str().unwrap()], None)?;
+    assert_eq!(output.status.code().unwrap(), 0);
+    assert!(output.stdout.is_empty());
+    Ok(())
+}
+
+#[test]
+fn run_cwasm() -> Result<()> {
+    let td = TempDir::new()?;
+    let cwasm = td.path().join("foo.cwasm");
+    let stdout = run_wasmtime(&[
+        "compile",
+        "tests/all/cli_tests/simple.wat",
+        "-o",
+        cwasm.to_str().unwrap(),
+    ])?;
+    assert_eq!(stdout, "");
+    let stdout = run_wasmtime(&["run", "--allow-precompiled", cwasm.to_str().unwrap()])?;
+    assert_eq!(stdout, "");
+    Ok(())
 }
 
 #[cfg(unix)]
-fn ctx_set_listenfd(mut num_fd: usize, builder: &mut WasiCtxBuilder) -> Result<usize> {
-    use listenfd::ListenFd;
-
-    for env in ["LISTEN_FDS", "LISTEN_FDNAMES"] {
-        if let Ok(val) = std::env::var(env) {
-            builder.env(env, &val)?;
-        }
+#[test]
+fn hello_wasi_snapshot0_from_stdin() -> Result<()> {
+    // Run a simple WASI hello world, snapshot0 edition.
+    // The module is piped from standard input.
+    let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot0.wat")?;
+    for preview2 in ["-Spreview2=n", "-Spreview2=y"] {
+        let stdout = {
+            let path = wasm.path();
+            let args: &[&str] = &["-Ccache=n", preview2, "-"];
+            let output = run_wasmtime_for_output(args, Some(path))?;
+            if !output.status.success() {
+                bail!(
+                    "Failed to execute wasmtime with: {:?}\n{}",
+                    args,
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+            Ok::<_, anyhow::Error>(String::from_utf8(output.stdout).unwrap())
+        }?;
+        assert_eq!(stdout, "Hello, world!\n");
     }
-
-    let mut listenfd = ListenFd::from_env();
-
-    for i in 0..listenfd.len() {
-        if let Some(stdlistener) = listenfd.take_tcp_listener(i)? {
-            let _ = stdlistener.set_nonblocking(true)?;
-            let listener = TcpListener::from_std(stdlistener);
-            builder.preopened_socket((3 + i) as _, listener)?;
-            num_fd = 3 + i;
-        }
-    }
-
-    Ok(num_fd)
+    Ok(())
 }
 
-#[cfg(feature = "coredump")]
-fn write_core_dump(
-    store: &mut Store<Host>,
-    err: &anyhow::Error,
-    name: &str,
-    path: &str,
-) -> Result<()> {
-    use std::fs::File;
-    use std::io::Write;
+#[test]
+fn specify_env() -> Result<()> {
+    // By default no env is inherited
+    let output = get_wasmtime_command()?
+        .args(&["run", "tests/all/cli_tests/print_env.wat"])
+        .env("THIS_WILL_NOT", "show up in the output")
+        .output()?;
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
 
-    let core_dump = err
-        .downcast_ref::<wasmtime::WasmCoreDump>()
-        .expect("should have been configured to capture core dumps");
+    // Specify a single env var
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            "--env",
+            "FOO=bar",
+            "tests/all/cli_tests/print_env.wat",
+        ])
+        .output()?;
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "FOO=bar\n");
 
-    let core_dump = core_dump.serialize(store, name);
+    // Inherit a single env var
+    let output = get_wasmtime_command()?
+        .args(&["run", "--env", "FOO", "tests/all/cli_tests/print_env.wat"])
+        .env("FOO", "bar")
+        .output()?;
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "FOO=bar\n");
 
-    let mut core_dump_file =
-        File::create(path).context(format!("failed to create file at `{path}`"))?;
-    core_dump_file
-        .write_all(&core_dump)
-        .with_context(|| format!("failed to write core dump file at `{path}`"))?;
+    // Inherit a nonexistent env var
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            "--env",
+            "SURELY_THIS_ENV_VAR_DOES_NOT_EXIST_ANYWHERE_RIGHT",
+            "tests/all/cli_tests/print_env.wat",
+        ])
+        .output()?;
+    assert!(output.status.success());
+
+    // Inherit all env vars
+    let output = get_wasmtime_command()?
+        .args(&["run", "-Sinherit-env", "tests/all/cli_tests/print_env.wat"])
+        .env("FOO", "bar")
+        .output()?;
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("FOO=bar"), "bad output: {stdout}");
+
+    Ok(())
+}
+
+#[cfg(unix)]
+#[test]
+fn run_cwasm_from_stdin() -> Result<()> {
+    use std::process::Stdio;
+
+    let td = TempDir::new()?;
+    let cwasm = td.path().join("foo.cwasm");
+    let stdout = run_wasmtime(&[
+        "compile",
+        "tests/all/cli_tests/simple.wat",
+        "-o",
+        cwasm.to_str().unwrap(),
+    ])?;
+    assert_eq!(stdout, "");
+
+    // If stdin is literally the file itself then that should work
+    let args: &[&str] = &["run", "--allow-precompiled", "-"];
+    let output = get_wasmtime_command()?
+        .args(args)
+        .stdin(File::open(&cwasm)?)
+        .output()?;
+    assert!(output.status.success(), "a file as stdin should work");
+
+    // If stdin is a pipe, that should also work
+    let input = std::fs::read(&cwasm)?;
+    let mut child = get_wasmtime_command()?
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    std::thread::spawn(move || {
+        stdin.write_all(&input).unwrap();
+    });
+    let output = child.wait_with_output()?;
+    assert!(output.status.success());
+    Ok(())
+}
+
+#[cfg(feature = "wasi-threads")]
+#[test]
+fn run_threads() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/threads.wat")?;
+    let stdout = run_wasmtime(&[
+        "run",
+        "-Wthreads",
+        "-Sthreads",
+        "-Ccache=n",
+        wasm.path().to_str().unwrap(),
+    ])?;
+
+    assert!(
+        stdout
+            == "Called _start\n\
+    Running wasi_thread_start\n\
+    Running wasi_thread_start\n\
+    Running wasi_thread_start\n\
+    Done\n"
+    );
+    Ok(())
+}
+
+#[cfg(feature = "wasi-threads")]
+#[test]
+fn run_simple_with_wasi_threads() -> Result<()> {
+    // We expect to be able to run Wasm modules that do not have correct
+    // wasi-thread entry points or imported shared memory as long as no threads
+    // are spawned.
+    let wasm = build_wasm("tests/all/cli_tests/simple.wat")?;
+    let stdout = run_wasmtime(&[
+        "run",
+        "-Wthreads",
+        "-Sthreads",
+        "-Ccache=n",
+        "--invoke",
+        "simple",
+        wasm.path().to_str().unwrap(),
+        "4",
+    ])?;
+    assert_eq!(stdout, "4\n");
+    Ok(())
+}
+
+#[test]
+fn wasm_flags() -> Result<()> {
+    // Any argument after the wasm module should be interpreted as for the
+    // command itself
+    let stdout = run_wasmtime(&[
+        "run",
+        "--",
+        "tests/all/cli_tests/print-arguments.wat",
+        "--argument",
+        "-for",
+        "the",
+        "command",
+    ])?;
+    assert_eq!(
+        stdout,
+        "\
+            print-arguments.wat\n\
+            --argument\n\
+            -for\n\
+            the\n\
+            command\n\
+        "
+    );
+    let stdout = run_wasmtime(&["run", "--", "tests/all/cli_tests/print-arguments.wat", "-"])?;
+    assert_eq!(
+        stdout,
+        "\
+            print-arguments.wat\n\
+            -\n\
+        "
+    );
+    let stdout = run_wasmtime(&["run", "--", "tests/all/cli_tests/print-arguments.wat", "--"])?;
+    assert_eq!(
+        stdout,
+        "\
+            print-arguments.wat\n\
+            --\n\
+        "
+    );
+    let stdout = run_wasmtime(&[
+        "run",
+        "--",
+        "tests/all/cli_tests/print-arguments.wat",
+        "--",
+        "--",
+        "-a",
+        "b",
+    ])?;
+    assert_eq!(
+        stdout,
+        "\
+            print-arguments.wat\n\
+            --\n\
+            --\n\
+            -a\n\
+            b\n\
+        "
+    );
+    Ok(())
+}
+
+#[test]
+fn name_same_as_builtin_command() -> Result<()> {
+    // a bare subcommand shouldn't run successfully
+    let output = get_wasmtime_command()?
+        .current_dir("tests/all/cli_tests")
+        .arg("run")
+        .output()?;
+    assert!(!output.status.success());
+
+    // a `--` prefix should let everything else get interpreted as a wasm
+    // module and arguments, even if the module has a name like `run`
+    let output = get_wasmtime_command()?
+        .current_dir("tests/all/cli_tests")
+        .arg("--")
+        .arg("run")
+        .output()?;
+    assert!(output.status.success(), "expected success got {output:#?}");
+
+    // Passing options before the subcommand should work and doesn't require
+    // `--` to disambiguate
+    let output = get_wasmtime_command()?
+        .current_dir("tests/all/cli_tests")
+        .arg("-Ccache=n")
+        .arg("run")
+        .output()?;
+    assert!(output.status.success(), "expected success got {output:#?}");
+    Ok(())
+}
+
+#[test]
+#[cfg(unix)]
+fn run_just_stdin_argument() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .arg("-")
+        .stdin(File::open("tests/all/cli_tests/simple.wat")?)
+        .output()?;
+    assert!(output.status.success());
+    Ok(())
+}
+
+#[test]
+fn wasm_flags_without_subcommand() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .current_dir("tests/all/cli_tests/")
+        .arg("print-arguments.wat")
+        .arg("-foo")
+        .arg("bar")
+        .output()?;
+    assert!(output.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stdout),
+        "\
+            print-arguments.wat\n\
+            -foo\n\
+            bar\n\
+        "
+    );
+    Ok(())
+}
+
+#[test]
+fn wasi_misaligned_pointer() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .arg("./tests/all/cli_tests/wasi_misaligned_pointer.wat")
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("Pointer not aligned"),
+        "bad stderr: {stderr}",
+    );
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn hello_with_preview2() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/hello_wasi_snapshot1.wat")?;
+    let stdout = run_wasmtime(&["-Ccache=n", "-Spreview2", wasm.path().to_str().unwrap()])?;
+    assert_eq!(stdout, "Hello, world!\n");
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn component_missing_feature() -> Result<()> {
+    let path = "tests/all/cli_tests/empty-component.wat";
+    let wasm = build_wasm(path)?;
+    let output = get_wasmtime_command()?
+        .arg("-Ccache=n")
+        .arg("-Wcomponent-model=n")
+        .arg(wasm.path())
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("cannot execute a component without `--wasm component-model`"),
+        "bad stderr: {stderr}"
+    );
+
+    // also tests with raw *.wat input
+    let output = get_wasmtime_command()?
+        .arg("-Ccache=n")
+        .arg("-Wcomponent-model=n")
+        .arg(path)
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("cannot execute a component without `--wasm component-model`"),
+        "bad stderr: {stderr}"
+    );
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn component_enabled_by_default() -> Result<()> {
+    let path = "tests/all/cli_tests/component-basic.wat";
+    let wasm = build_wasm(path)?;
+    let output = get_wasmtime_command()?
+        .arg("-Ccache=n")
+        .arg(wasm.path())
+        .output()?;
+    assert!(output.status.success());
+
+    // also tests with raw *.wat input
+    let output = get_wasmtime_command()?
+        .arg("-Ccache=n")
+        .arg(path)
+        .output()?;
+    assert!(output.status.success());
+
+    Ok(())
+}
+
+// If the text format is invalid then the filename should be mentioned in the
+// error message.
+#[test]
+fn bad_text_syntax() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .arg("-Ccache=n")
+        .arg("tests/all/cli_tests/bad-syntax.wat")
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("--> tests/all/cli_tests/bad-syntax.wat"),
+        "bad stderr: {stderr}"
+    );
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn run_basic_component() -> Result<()> {
+    let path = "tests/all/cli_tests/component-basic.wat";
+    let wasm = build_wasm(path)?;
+
+    // Run both the `*.wasm` binary and the text format
+    run_wasmtime(&[
+        "-Ccache=n",
+        "-Wcomponent-model",
+        wasm.path().to_str().unwrap(),
+    ])?;
+    run_wasmtime(&["-Ccache=n", "-Wcomponent-model", path])?;
+
+    Ok(())
+}
+
+#[test]
+#[cfg_attr(not(feature = "component-model"), ignore)]
+fn run_precompiled_component() -> Result<()> {
+    let td = TempDir::new()?;
+    let cwasm = td.path().join("component-basic.cwasm");
+    let stdout = run_wasmtime(&[
+        "compile",
+        "tests/all/cli_tests/component-basic.wat",
+        "-o",
+        cwasm.to_str().unwrap(),
+        "-Wcomponent-model",
+    ])?;
+    assert_eq!(stdout, "");
+    let stdout = run_wasmtime(&[
+        "run",
+        "-Wcomponent-model",
+        "--allow-precompiled",
+        cwasm.to_str().unwrap(),
+    ])?;
+    assert_eq!(stdout, "");
+
+    Ok(())
+}
+
+#[test]
+fn memory_growth_failure() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            "-Wmemory64",
+            "-Wtrap-on-grow-failure",
+            "tests/all/cli_tests/memory-grow-failure.wat",
+        ])
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("forcing a memory growth failure to be a trap"),
+        "bad stderr: {stderr}"
+    );
+    Ok(())
+}
+
+#[test]
+fn table_growth_failure() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            "-Wtrap-on-grow-failure",
+            "tests/all/cli_tests/table-grow-failure.wat",
+        ])
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("forcing trap when growing table"),
+        "bad stderr: {stderr}"
+    );
+    Ok(())
+}
+
+#[test]
+fn table_growth_failure2() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            "-Wtrap-on-grow-failure",
+            "tests/all/cli_tests/table-grow-failure2.wat",
+        ])
+        .output()?;
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("forcing trap when growing table to 4294967296 elements"),
+        "bad stderr: {stderr}"
+    );
+    Ok(())
+}
+
+#[test]
+fn option_group_help() -> Result<()> {
+    run_wasmtime(&["run", "-Whelp"])?;
+    run_wasmtime(&["run", "-O", "help"])?;
+    run_wasmtime(&["run", "--codegen", "help"])?;
+    run_wasmtime(&["run", "--debug=help"])?;
+    run_wasmtime(&["run", "-Shelp"])?;
+    run_wasmtime(&["run", "-Whelp-long"])?;
+    Ok(())
+}
+
+#[test]
+fn option_group_comma_separated() -> Result<()> {
+    run_wasmtime(&[
+        "run",
+        "-Wrelaxed-simd,simd",
+        "tests/all/cli_tests/simple.wat",
+    ])?;
+    Ok(())
+}
+
+#[test]
+fn option_group_boolean_parsing() -> Result<()> {
+    run_wasmtime(&["run", "-Wrelaxed-simd", "tests/all/cli_tests/simple.wat"])?;
+    run_wasmtime(&["run", "-Wrelaxed-simd=n", "tests/all/cli_tests/simple.wat"])?;
+    run_wasmtime(&["run", "-Wrelaxed-simd=y", "tests/all/cli_tests/simple.wat"])?;
+    run_wasmtime(&["run", "-Wrelaxed-simd=no", "tests/all/cli_tests/simple.wat"])?;
+    run_wasmtime(&[
+        "run",
+        "-Wrelaxed-simd=yes",
+        "tests/all/cli_tests/simple.wat",
+    ])?;
+    run_wasmtime(&[
+        "run",
+        "-Wrelaxed-simd=true",
+        "tests/all/cli_tests/simple.wat",
+    ])?;
+    run_wasmtime(&[
+        "run",
+        "-Wrelaxed-simd=false",
+        "tests/all/cli_tests/simple.wat",
+    ])?;
+    Ok(())
+}
+
+#[test]
+fn preview2_stdin() -> Result<()> {
+    let test = "tests/all/cli_tests/count-stdin.wat";
+    let cmd = || -> Result<_> {
+        let mut cmd = get_wasmtime_command()?;
+        cmd.arg("--invoke=count").arg("-Spreview2").arg(test);
+        Ok(cmd)
+    };
+
+    // read empty pipe is ok
+    let output = cmd()?.output()?;
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "0\n");
+
+    // read itself is ok
+    let file = File::open(test)?;
+    let size = file.metadata()?.len();
+    let output = cmd()?.stdin(File::open(test)?).output()?;
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), format!("{size}\n"));
+
+    // read piped input ok is ok
+    let mut child = cmd()?
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let mut stdin = child.stdin.take().unwrap();
+    std::thread::spawn(move || {
+        stdin.write_all(b"hello").unwrap();
+    });
+    let output = child.wait_with_output()?;
+    assert!(output.status.success());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "5\n");
+
+    let count_up_to = |n: usize| -> Result<_> {
+        let mut child = get_wasmtime_command()?
+            .arg("--invoke=count-up-to")
+            .arg("-Spreview2")
+            .arg(test)
+            .arg(n.to_string())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()?;
+        let mut stdin = child.stdin.take().unwrap();
+        let t = std::thread::spawn(move || {
+            let mut written = 0;
+            let bytes = [0; 64 * 1024];
+            loop {
+                written += match stdin.write(&bytes) {
+                    Ok(n) => n,
+                    Err(_) => break written,
+                };
+            }
+        });
+        let output = child.wait_with_output()?;
+        assert!(output.status.success());
+        let written = t.join().unwrap();
+        let read = String::from_utf8_lossy(&output.stdout)
+            .trim()
+            .parse::<usize>()
+            .unwrap();
+        // The test reads in 1000 byte chunks so make sure that it doesn't read
+        // more than 1000 bytes than requested.
+        assert!(read < n + 1000, "test read too much {read}");
+        Ok(written)
+    };
+
+    // wasmtime shouldn't eat information that the guest never actually tried to
+    // read.
+    //
+    // NB: this may be a bit flaky. Exactly how much we wrote in the above
+    // helper thread depends on how much the OS buffers for us. For now give
+    // some some slop and assume that OSes are unlikely to buffer more than
+    // that.
+    let slop = 256 * 1024;
+    for amt in [0, 100, 100_000] {
+        let written = count_up_to(amt)?;
+        assert!(written < slop + amt, "wrote too much {written}");
+    }
+    Ok(())
+}
+
+#[test]
+fn float_args() -> Result<()> {
+    let result = run_wasmtime(&[
+        "--invoke",
+        "echo_f32",
+        "tests/all/cli_tests/simple.wat",
+        "1.0",
+    ])?;
+    assert_eq!(result, "1\n");
+    let result = run_wasmtime(&[
+        "--invoke",
+        "echo_f64",
+        "tests/all/cli_tests/simple.wat",
+        "1.1",
+    ])?;
+    assert_eq!(result, "1.1\n");
+    Ok(())
+}
+
+#[test]
+fn mpk_without_pooling() -> Result<()> {
+    let output = get_wasmtime_command()?
+        .args(&[
+            "run",
+            "-O",
+            "memory-protection-keys=y",
+            "--invoke",
+            "echo_f32",
+            "tests/all/cli_tests/simple.wat",
+            "1.0",
+        ])
+        .env("WASMTIME_NEW_CLI", "1")
+        .output()?;
+    assert!(!output.status.success());
+    Ok(())
+}
+
+// Very basic use case: compile binary wasm file and run specific function with arguments.
+#[test]
+fn increase_stack_size() -> Result<()> {
+    run_wasmtime(&[
+        "run",
+        "--invoke",
+        "simple",
+        &format!("-Wmax-wasm-stack={}", 5 << 20),
+        "-Ccache=n",
+        "tests/all/cli_tests/simple.wat",
+        "4",
+    ])?;
+    Ok(())
+}
+
+mod test_programs {
+    use super::{get_wasmtime_command, run_wasmtime};
+    use anyhow::{bail, Context, Result};
+    use http_body_util::BodyExt;
+    use hyper::header::HeaderValue;
+    use std::io::{BufRead, BufReader, Read, Write};
+    use std::net::SocketAddr;
+    use std::process::{Child, Command, Stdio};
+    use test_programs_artifacts::*;
+    use tokio::net::TcpStream;
+
+    macro_rules! assert_test_exists {
+        ($name:ident) => {
+            #[allow(unused_imports)]
+            use self::$name as _;
+        };
+    }
+    foreach_cli!(assert_test_exists);
+
+    #[test]
+    fn cli_hello_stdout() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            CLI_HELLO_STDOUT_COMPONENT,
+            "gussie",
+            "sparky",
+            "willa",
+        ])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_args() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            CLI_ARGS_COMPONENT,
+            "hello",
+            "this",
+            "",
+            "is an argument",
+            "with 🚩 emoji",
+        ])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_stdin_empty() -> Result<()> {
+        let mut child = get_wasmtime_command()?
+            .args(&["run", "-Wcomponent-model", CLI_STDIN_EMPTY_COMPONENT])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .stdin(Stdio::piped())
+            .spawn()?;
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(b"not to be read")
+            .unwrap();
+        let output = child.wait_with_output()?;
+        println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.status.success());
+        Ok(())
+    }
+
+    #[test]
+    fn cli_stdin() -> Result<()> {
+        let mut child = get_wasmtime_command()?
+            .args(&["run", "-Wcomponent-model", CLI_STDIN_COMPONENT])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .stdin(Stdio::piped())
+            .spawn()?;
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(b"So rested he by the Tumtum tree")
+            .unwrap();
+        let output = child.wait_with_output()?;
+        println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.status.success());
+        Ok(())
+    }
+
+    #[test]
+    fn cli_splice_stdin() -> Result<()> {
+        let mut child = get_wasmtime_command()?
+            .args(&["run", "-Wcomponent-model", CLI_SPLICE_STDIN_COMPONENT])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .stdin(Stdio::piped())
+            .spawn()?;
+        let msg = "So rested he by the Tumtum tree";
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(msg.as_bytes())
+            .unwrap();
+        let output = child.wait_with_output()?;
+        assert!(output.status.success());
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if !stderr.is_empty() {
+            eprintln!("{stderr}");
+        }
+
+        assert_eq!(
+            format!(
+                "before splice\n{msg}\ncompleted splicing {} bytes\n",
+                msg.as_bytes().len()
+            ),
+            stdout
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn cli_env() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            "--env=frabjous=day",
+            "--env=callooh=callay",
+            CLI_ENV_COMPONENT,
+        ])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_file_read() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+
+        std::fs::write(dir.path().join("bar.txt"), b"And stood awhile in thought")?;
+
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            &format!("--dir={}::/", dir.path().to_str().unwrap()),
+            CLI_FILE_READ_COMPONENT,
+        ])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_file_append() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+
+        std::fs::File::create(dir.path().join("bar.txt"))?
+            .write_all(b"'Twas brillig, and the slithy toves.\n")?;
+
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            &format!("--dir={}::/", dir.path().to_str().unwrap()),
+            CLI_FILE_APPEND_COMPONENT,
+        ])?;
+
+        let contents = std::fs::read(dir.path().join("bar.txt"))?;
+        assert_eq!(
+            std::str::from_utf8(&contents).unwrap(),
+            "'Twas brillig, and the slithy toves.\n\
+                   Did gyre and gimble in the wabe;\n\
+                   All mimsy were the borogoves,\n\
+                   And the mome raths outgrabe.\n"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn cli_file_dir_sync() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+
+        std::fs::File::create(dir.path().join("bar.txt"))?
+            .write_all(b"'Twas brillig, and the slithy toves.\n")?;
+
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            &format!("--dir={}::/", dir.path().to_str().unwrap()),
+            CLI_FILE_DIR_SYNC_COMPONENT,
+        ])?;
+
+        Ok(())
+    }
+
+    #[test]
+    fn cli_exit_success() -> Result<()> {
+        run_wasmtime(&["run", "-Wcomponent-model", CLI_EXIT_SUCCESS_COMPONENT])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_exit_default() -> Result<()> {
+        run_wasmtime(&["run", "-Wcomponent-model", CLI_EXIT_DEFAULT_COMPONENT])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_exit_failure() -> Result<()> {
+        let output = get_wasmtime_command()?
+            .args(&["run", "-Wcomponent-model", CLI_EXIT_FAILURE_COMPONENT])
+            .output()?;
+        assert!(!output.status.success());
+        assert_eq!(output.status.code(), Some(1));
+        Ok(())
+    }
+
+    #[test]
+    fn cli_exit_with_code() -> Result<()> {
+        let output = get_wasmtime_command()?
+            .args(&[
+                "run",
+                "-Wcomponent-model",
+                "-Scli-exit-with-code",
+                CLI_EXIT_WITH_CODE_COMPONENT,
+            ])
+            .output()?;
+        assert!(!output.status.success());
+        assert_eq!(output.status.code(), Some(42));
+        Ok(())
+    }
+
+    #[test]
+    fn cli_exit_panic() -> Result<()> {
+        let output = get_wasmtime_command()?
+            .args(&["run", "-Wcomponent-model", CLI_EXIT_PANIC_COMPONENT])
+            .output()?;
+        assert!(!output.status.success());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(stderr.contains("Curiouser and curiouser!"));
+        Ok(())
+    }
+
+    #[test]
+    fn cli_directory_list() -> Result<()> {
+        let dir = tempfile::tempdir()?;
+
+        std::fs::File::create(dir.path().join("foo.txt"))?;
+        std::fs::File::create(dir.path().join("bar.txt"))?;
+        std::fs::File::create(dir.path().join("baz.txt"))?;
+        std::fs::create_dir(dir.path().join("sub"))?;
+        std::fs::File::create(dir.path().join("sub").join("wow.txt"))?;
+        std::fs::File::create(dir.path().join("sub").join("yay.txt"))?;
+
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            &format!("--dir={}::/", dir.path().to_str().unwrap()),
+            CLI_DIRECTORY_LIST_COMPONENT,
+        ])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_default_clocks() -> Result<()> {
+        run_wasmtime(&["run", "-Wcomponent-model", CLI_DEFAULT_CLOCKS_COMPONENT])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_export_cabi_realloc() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "-Wcomponent-model",
+            CLI_EXPORT_CABI_REALLOC_COMPONENT,
+        ])?;
+        Ok(())
+    }
+
+    #[test]
+    fn run_wasi_http_component() -> Result<()> {
+        let output = super::run_wasmtime_for_output(
+            &[
+                "-Ccache=no",
+                "-Wcomponent-model",
+                "-Scli,http,preview2",
+                HTTP_OUTBOUND_REQUEST_RESPONSE_BUILD_COMPONENT,
+            ],
+            None,
+        )?;
+        println!("{}", String::from_utf8_lossy(&output.stderr));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        println!("{stdout}");
+        assert!(stdout.starts_with("Called _start\n"));
+        assert!(stdout.ends_with("Done\n"));
+        assert!(output.status.success());
+        Ok(())
+    }
+
+    // Test to ensure that prints in the guest aren't buffered on the host by
+    // accident. The test here will print something without a newline and then
+    // wait for input on stdin, and the test here is to ensure that the
+    // character shows up here even as the guest is waiting on input via stdin.
+    #[test]
+    fn cli_stdio_write_flushes() -> Result<()> {
+        fn run(args: &[&str]) -> Result<()> {
+            println!("running {args:?}");
+            let mut child = get_wasmtime_command()?
+                .args(args)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .spawn()?;
+            let mut stdout = child.stdout.take().unwrap();
+            let mut buf = [0; 10];
+            match stdout.read(&mut buf) {
+                Ok(2) => assert_eq!(&buf[..2], b"> "),
+                e => panic!("unexpected read result {e:?}"),
+            }
+            drop(stdout);
+            drop(child.stdin.take().unwrap());
+            let status = child.wait()?;
+            assert!(status.success());
+            Ok(())
+        }
+
+        run(&["run", "-Spreview2=n", CLI_STDIO_WRITE_FLUSHES])?;
+        run(&["run", "-Spreview2=y", CLI_STDIO_WRITE_FLUSHES])?;
+        run(&[
+            "run",
+            "-Wcomponent-model",
+            CLI_STDIO_WRITE_FLUSHES_COMPONENT,
+        ])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_no_tcp() -> Result<()> {
+        let output = super::run_wasmtime_for_output(
+            &[
+                "-Wcomponent-model",
+                // Turn on network but turn off TCP
+                "-Sinherit-network,tcp=no",
+                CLI_NO_TCP_COMPONENT,
+            ],
+            None,
+        )?;
+        println!("{}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.status.success());
+        Ok(())
+    }
+
+    #[test]
+    fn cli_no_udp() -> Result<()> {
+        let output = super::run_wasmtime_for_output(
+            &[
+                "-Wcomponent-model",
+                // Turn on network but turn off UDP
+                "-Sinherit-network,udp=no",
+                CLI_NO_UDP_COMPONENT,
+            ],
+            None,
+        )?;
+        println!("{}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.status.success());
+        Ok(())
+    }
+
+    #[test]
+    fn cli_no_ip_name_lookup() -> Result<()> {
+        let output = super::run_wasmtime_for_output(
+            &[
+                "-Wcomponent-model",
+                // Turn on network but ensure name lookup is disabled
+                "-Sinherit-network,allow-ip-name-lookup=no",
+                CLI_NO_IP_NAME_LOOKUP_COMPONENT,
+            ],
+            None,
+        )?;
+        println!("{}", String::from_utf8_lossy(&output.stderr));
+        assert!(output.status.success());
+        Ok(())
+    }
+
+    #[test]
+    fn cli_sleep() -> Result<()> {
+        run_wasmtime(&["run", CLI_SLEEP])?;
+        run_wasmtime(&["run", CLI_SLEEP_COMPONENT])?;
+        Ok(())
+    }
+
+    #[test]
+    fn cli_sleep_forever() -> Result<()> {
+        for timeout in [
+            // Tests still pass when we race with going to sleep.
+            "-Wtimeout=1ns",
+            // Tests pass when we wait till the Wasm has (likely) gone to sleep.
+            "-Wtimeout=250ms",
+        ] {
+            let e = run_wasmtime(&["run", timeout, CLI_SLEEP_FOREVER]).unwrap_err();
+            let e = e.to_string();
+            println!("Got error: {e}");
+            assert!(e.contains("interrupt"));
+
+            let e = run_wasmtime(&["run", timeout, CLI_SLEEP_FOREVER_COMPONENT]).unwrap_err();
+            let e = e.to_string();
+            println!("Got error: {e}");
+            assert!(e.contains("interrupt"));
+        }
+
+        Ok(())
+    }
+
+    /// Helper structure to manage an invocation of `wasmtime serve`
+    struct WasmtimeServe {
+        child: Option<Child>,
+        addr: SocketAddr,
+    }
+
+    impl WasmtimeServe {
+        /// Creates a new server which will serve the wasm component pointed to
+        /// by `wasm`.
+        ///
+        /// A `configure` callback is provided to specify how `wasmtime serve`
+        /// will be invoked and configure arguments such as headers.
+        fn new(wasm: &str, configure: impl FnOnce(&mut Command)) -> Result<WasmtimeServe> {
+            // Spawn `wasmtime serve` on port 0 which will randomly assign it a
+            // port.
+            let mut cmd = super::get_wasmtime_command()?;
+            cmd.arg("serve").arg("--addr=127.0.0.1:0").arg(wasm);
+            configure(&mut cmd);
+            Self::spawn(&mut cmd)
+        }
+
+        fn spawn(cmd: &mut Command) -> Result<WasmtimeServe> {
+            cmd.stdin(Stdio::null());
+            cmd.stdout(Stdio::piped());
+            cmd.stderr(Stdio::piped());
+            let mut child = cmd.spawn()?;
+
+            // Read the first line of stderr which will say which address it's
+            // listening on.
+            //
+            // NB: this intentionally discards any extra buffered data in the
+            // `BufReader` once the newline is found. The server shouldn't print
+            // anything interesting other than the address so once we get a line
+            // all remaining output is left to be captured by future requests
+            // send to the server.
+            let mut line = String::new();
+            let mut reader = BufReader::new(child.stderr.take().unwrap());
+            reader.read_line(&mut line)?;
+
+            match line.find("127.0.0.1").and_then(|addr_start| {
+                let addr = &line[addr_start..];
+                let addr_end = addr.find("/")?;
+                addr[..addr_end].parse().ok()
+            }) {
+                Some(addr) => {
+                    assert!(reader.buffer().is_empty());
+                    child.stderr = Some(reader.into_inner());
+                    Ok(WasmtimeServe {
+                        child: Some(child),
+                        addr,
+                    })
+                }
+                None => {
+                    child.kill()?;
+                    child.wait()?;
+                    reader.read_to_string(&mut line)?;
+                    bail!("failed to start child: {line}")
+                }
+            }
+        }
+
+        /// Completes this server gracefully by printing the output on failure.
+        fn finish(mut self) -> Result<(String, String)> {
+            let mut child = self.child.take().unwrap();
+
+            // If the child process has already exited then collect the output
+            // and test if it succeeded. Otherwise it's still running so kill it
+            // and then reap it. Assume that if it's still running then the test
+            // has otherwise passed so no need to print the output.
+            let known_failure = if child.try_wait()?.is_some() {
+                false
+            } else {
+                child.kill()?;
+                true
+            };
+            let output = child.wait_with_output()?;
+            if !known_failure && !output.status.success() {
+                bail!("child failed {output:?}");
+            }
+
+            Ok((
+                String::from_utf8_lossy(&output.stdout).into_owned(),
+                String::from_utf8_lossy(&output.stderr).into_owned(),
+            ))
+        }
+
+        /// Send a request to this server and wait for the response.
+        async fn send_request(&self, req: http::Request<String>) -> Result<http::Response<String>> {
+            let (mut send, conn_task) = self.start_requests().await?;
+
+            let response = send
+                .send_request(req)
+                .await
+                .context("error sending request")?;
+            drop(send);
+            let (parts, body) = response.into_parts();
+
+            let body = body.collect().await.context("failed to read body")?;
+            assert!(body.trailers().is_none());
+            let body = std::str::from_utf8(&body.to_bytes())?.to_string();
+
+            conn_task.await??;
+
+            Ok(http::Response::from_parts(parts, body))
+        }
+
+        async fn start_requests(
+            &self,
+        ) -> Result<(
+            hyper::client::conn::http1::SendRequest<String>,
+            tokio::task::JoinHandle<hyper::Result<()>>,
+        )> {
+            let tcp = TcpStream::connect(&self.addr)
+                .await
+                .context("failed to connect")?;
+            let tcp = wasmtime_wasi_http::io::TokioIo::new(tcp);
+            let (send, conn) = hyper::client::conn::http1::handshake(tcp)
+                .await
+                .context("failed http handshake")?;
+            Ok((send, tokio::task::spawn(conn)))
+        }
+    }
+
+    // Don't leave child processes running by accident so kill the child process
+    // if our server goes away.
+    impl Drop for WasmtimeServe {
+        fn drop(&mut self) {
+            let mut child = match self.child.take() {
+                Some(child) => child,
+                None => return,
+            };
+            if child.kill().is_err() {
+                return;
+            }
+            let output = match child.wait_with_output() {
+                Ok(output) => output,
+                Err(_) => return,
+            };
+
+            println!("server status: {}", output.status);
+            if !output.stdout.is_empty() {
+                println!(
+                    "server stdout:\n{}",
+                    String::from_utf8_lossy(&output.stdout)
+                );
+            }
+            if !output.stderr.is_empty() {
+                println!(
+                    "server stderr:\n{}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn cli_serve_echo_env() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
+            cmd.arg("--env=FOO=bar");
+            cmd.arg("--env=BAR");
+            cmd.arg("-Scli");
+            cmd.env_remove("BAR");
+        })?;
+
+        let foo_env = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .header("env", "FOO")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(foo_env.status().is_success());
+        assert!(foo_env.body().is_empty());
+        let headers = foo_env.headers();
+        assert_eq!(headers.get("env"), Some(&HeaderValue::from_static("bar")));
+
+        let bar_env = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .header("env", "BAR")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(bar_env.status().is_success());
+        assert!(bar_env.body().is_empty());
+        let headers = bar_env.headers();
+        assert_eq!(headers.get("env"), None);
+
+        server.finish()?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cli_serve_outgoing_body_config() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+            cmd.arg("-Shttp-outgoing-body-buffer-chunks=2");
+            cmd.arg("-Shttp-outgoing-body-chunk-size=1024");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .header("env", "FOO")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(resp.status().is_success());
+
+        server.finish()?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore] // TODO: printing stderr in the child and killing the child at the
+              // end of this test race so the stderr may be present or not. Need
+              // to implement a more graceful shutdown routine for `wasmtime
+              // serve`.
+    async fn cli_serve_respect_pooling_options() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_ECHO_ENV_COMPONENT, |cmd| {
+            cmd.arg("-Opooling-total-memories=0").arg("-Scli");
+        })?;
+
+        let result = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .header("env", "FOO")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await;
+        assert!(result.is_err());
+        let (_, stderr) = server.finish()?;
+        assert!(
+            stderr.contains("maximum concurrent memory limit of 0 reached"),
+            "bad stderr: {stderr}",
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn cli_large_env() -> Result<()> {
+        for wasm in [CLI_LARGE_ENV, CLI_LARGE_ENV_COMPONENT] {
+            println!("run {wasm:?}");
+            let mut cmd = get_wasmtime_command()?;
+            cmd.arg("run").arg("-Sinherit-env").arg(wasm);
+
+            let debug_cmd = format!("{cmd:?}");
+            for i in 0..512 {
+                let var = format!("KEY{i}");
+                let val = (0..1024).map(|_| 'x').collect::<String>();
+                cmd.env(&var, &val);
+            }
+            let output = cmd.output()?;
+            if !output.status.success() {
+                bail!(
+                    "Failed to execute wasmtime with: {debug_cmd}\n{}",
+                    String::from_utf8_lossy(&output.stderr)
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cli_serve_only_one_process_allowed() -> Result<()> {
+        let wasm = CLI_SERVE_ECHO_ENV_COMPONENT;
+        let server = WasmtimeServe::new(wasm, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        let err = WasmtimeServe::spawn(
+            super::get_wasmtime_command()?
+                .arg("serve")
+                .arg("-Scli")
+                .arg(format!("--addr={}", server.addr))
+                .arg(wasm),
+        )
+        .err()
+        .expect("server spawn should have failed but it succeeded");
+        drop(server);
+
+        let err = format!("{err:?}");
+        println!("{err}");
+        assert!(err.contains("os error"));
+        Ok(())
+    }
+
+    // Technically this test is a little racy. This binds port 0 to acquire a
+    // random port, issues a single request to this port, but then kills this
+    // server while the request is still processing. The port is then rebound
+    // in the next process while it technically could be stolen by another
+    // process.
+    #[tokio::test]
+    async fn cli_serve_quick_rebind_allowed() -> Result<()> {
+        let wasm = CLI_SERVE_ECHO_ENV_COMPONENT;
+        let server = WasmtimeServe::new(wasm, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+        let addr = server.addr;
+
+        // Start up a `send` and `conn_task` which represents a connection to
+        // this server.
+        let (mut send, conn_task) = server.start_requests().await?;
+        let _ = send
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .header("env", "FOO")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await;
+
+        // ... once a response has been received (or at least the status
+        // code/headers) then kill the server. THis is done while `conn_task`
+        // and `send` are still alive so we're guaranteed that the other side
+        // got a request (we got a response) and our connection is still open.
+        //
+        // This forces the address/port into the `TIME_WAIT` state. The rebind
+        // below in the next process will fail if `SO_REUSEADDR` isn't set.
+        drop(server);
+        drop(send);
+        let _ = conn_task.await;
+
+        // If this is successfully bound then we'll create `WasmtimeServe`
+        // which reads off the first line of output to know which address was
+        // bound.
+        let _server2 = WasmtimeServe::spawn(
+            super::get_wasmtime_command()?
+                .arg("serve")
+                .arg("-Scli")
+                .arg(format!("--addr={addr}"))
+                .arg(wasm),
+        )?;
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cli_serve_with_print() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_WITH_PRINT_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        for _ in 0..2 {
+            let resp = server
+                .send_request(
+                    hyper::Request::builder()
+                        .uri("http://localhost/")
+                        .body(String::new())
+                        .context("failed to make request")?,
+                )
+                .await?;
+            assert!(resp.status().is_success());
+        }
+
+        let (out, err) = server.finish()?;
+        assert_eq!(
+            out,
+            "\
+stdout [0] :: this is half a print to stdout
+stdout [0] :: \n\
+stdout [0] :: after empty
+stdout [1] :: this is half a print to stdout
+stdout [1] :: \n\
+stdout [1] :: after empty
+"
+        );
+        assert_eq!(
+            err,
+            "\
+stderr [0] :: this is half a print to stderr
+stderr [0] :: \n\
+stderr [0] :: after empty
+stderr [1] :: this is half a print to stderr
+stderr [1] :: \n\
+stderr [1] :: after empty
+"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cli_serve_with_print_no_prefix() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_WITH_PRINT_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+            cmd.arg("--no-logging-prefix");
+        })?;
+
+        for _ in 0..2 {
+            let resp = server
+                .send_request(
+                    hyper::Request::builder()
+                        .uri("http://localhost/")
+                        .body(String::new())
+                        .context("failed to make request")?,
+                )
+                .await?;
+            assert!(resp.status().is_success());
+        }
+
+        let (out, err) = server.finish()?;
+        assert_eq!(
+            out,
+            "\
+this is half a print to stdout
+\n\
+after empty
+this is half a print to stdout
+\n\
+after empty
+"
+        );
+        assert_eq!(
+            err,
+            "\
+this is half a print to stderr
+\n\
+after empty
+this is half a print to stderr
+\n\
+after empty
+"
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cli_serve_authority_and_scheme() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_AUTHORITY_AND_SCHEME_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("/")
+                    .header("Host", "localhost")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert!(resp.status().is_success());
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .method("CONNECT")
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+        assert!(resp.status().is_success());
+
+        Ok(())
+    }
+
+    #[test]
+    fn cli_argv0() -> Result<()> {
+        run_wasmtime(&["run", "--argv0=a", CLI_ARGV0, "a"])?;
+        run_wasmtime(&["run", "--argv0=b", CLI_ARGV0_COMPONENT, "b"])?;
+        run_wasmtime(&["run", "--argv0=foo.wasm", CLI_ARGV0, "foo.wasm"])?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cli_serve_config() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_CONFIG_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+            cmd.arg("-Sconfig");
+            cmd.arg("-Sconfig-var=hello=world");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(resp.status().is_success());
+        assert_eq!(resp.body(), "world");
+        Ok(())
+    }
+
+    #[test]
+    fn cli_config() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "-Sconfig",
+            "-Sconfig-var=hello=world",
+            CONFIG_GET_COMPONENT,
+        ])?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cli_serve_keyvalue() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_KEYVALUE_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+            cmd.arg("-Skeyvalue");
+            cmd.arg("-Skeyvalue-in-memory-data=hello=world");
+        })?;
+
+        let resp = server
+            .send_request(
+                hyper::Request::builder()
+                    .uri("http://localhost/")
+                    .body(String::new())
+                    .context("failed to make request")?,
+            )
+            .await?;
+
+        assert!(resp.status().is_success());
+        assert_eq!(resp.body(), "world");
+        Ok(())
+    }
+
+    #[test]
+    fn cli_keyvalue() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "-Skeyvalue",
+            "-Skeyvalue-in-memory-data=atomics_key=5",
+            KEYVALUE_MAIN_COMPONENT,
+        ])?;
+        Ok(())
+    }
+}
+
+#[test]
+fn settings_command() -> Result<()> {
+    let output = run_wasmtime(&["settings"])?;
+    assert!(output.contains("Cranelift settings for target"));
+    Ok(())
+}
+
+#[cfg(target_arch = "x86_64")]
+#[test]
+fn profile_with_vtune() -> Result<()> {
+    if !is_vtune_available() {
+        println!("> `vtune` is not available on the system path; skipping test");
+        return Ok(());
+    }
+
+    let mut bin = Command::new("vtune");
+    bin.args(&[
+        // Configure VTune...
+        "-verbose",
+        "-collect",
+        "hotspots",
+        "-user-data-dir",
+        &std::env::temp_dir().to_string_lossy(),
+        // ...then run Wasmtime with profiling enabled:
+        &get_wasmtime_path()?.to_string_lossy(),
+        "--profile=vtune",
+        "tests/all/cli_tests/simple.wat",
+    ]);
+
+    println!("> executing: {bin:?}");
+    let output = bin.output()?;
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    println!("> stdout:\n{stdout}");
+    assert!(stdout.contains("CPU Time"));
+    println!("> stderr:\n{stderr}");
+    assert!(!stderr.contains("Error"));
+    Ok(())
+}
+
+#[cfg(target_arch = "x86_64")]
+fn is_vtune_available() -> bool {
+    Command::new("vtune").arg("-version").output().is_ok()
+}
+
+#[test]
+fn unreachable_without_wasi() -> Result<()> {
+    let output = run_wasmtime_for_output(
+        &[
+            "-Scli=n",
+            "-Ccache=n",
+            "tests/all/cli_tests/unreachable.wat",
+        ],
+        None,
+    )?;
+
+    assert_ne!(output.stderr, b"");
+    assert_eq!(output.stdout, b"");
+    assert_trap_code(&output.status);
+    Ok(())
+}
+
+#[test]
+fn hex_integer_args() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/hex_args.wat")?;
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            wasm.path().to_str().unwrap(),
+            "--invoke",
+            "sum",
+            "0x2A", // 42 in hex
+            "0xFF", // 255 in hex
+        ],
+        None,
+    )?;
+
+    if !output.status.success() {
+        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        bail!(
+            "Failed to run wasmtime: {}\nstderr: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let stdout = String::from_utf8(output.stdout)?;
+    println!("stdout: {stdout}");
+    assert_eq!(stdout.trim(), "297"); // 42 + 255 = 297
+    Ok(())
+}
+
+#[test]
+fn numeric_args() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/numeric_args.wat")?;
+    let path = wasm.path().to_str().unwrap();
+
+    // Test i32 with hex and decimal
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            path,
+            "--invoke",
+            "sum_i32",
+            "0x2A",  // 42 in hex
+            "0xFF",  // 255 in hex
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"297\n");
+    assert_eq!(output.stderr, b"");
+
+    // Test i64 with hex and decimal
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            path,
+            "--invoke",
+            "sum_i64",
+            "0xFFFFFFFF",  // 4294967295 in hex
+            "0x100000000", // 4294967296 in hex
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"8589934591\n");
+    assert_eq!(output.stderr, b"");
+
+    // Test f32 with decimal
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            path,
+            "--invoke",
+            "sum_f32",
+            "3.14",
+            "2.86",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"6\n");
+    assert_eq!(output.stderr, b"");
+
+    // Test f64 with decimal
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            path,
+            "--invoke",
+            "sum_f64",
+            "123.456",
+            "876.544",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"1000\n");
+    assert_eq!(output.stderr, b"");
+
+    // Test invalid hex format
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            path,
+            "--invoke",
+            "sum_i32",
+            "0xGG",  // Invalid hex
+            "0xFF",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), false);
+    assert_ne!(output.stderr, b"");
+
     Ok(())
 }
