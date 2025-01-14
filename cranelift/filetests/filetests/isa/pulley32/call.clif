@@ -173,7 +173,7 @@ block0:
 ; xmov x12, x15
 ; xmov x13, x15
 ; xmov x14, x15
-; call4 x15, x15, x15, x15, 0x0    // target = 0x44
+; call4 x15, x15, x15, x15, 0x0    // target = 0x40
 ; pop_frame_restore 48, 
 ; ret
 
@@ -256,7 +256,7 @@ block0:
 ; Disassembled:
 ; push_frame_save 112, x17, x18, x20, x21, x22, x23, x29
 ; xmov x12, sp
-; call1 x12, 0x0    // target = 0xc
+; call1 x12, 0x0    // target = 0x8
 ; xmov x20, x13
 ; xmov x22, x11
 ; xload64le_offset8 x29, sp, 0

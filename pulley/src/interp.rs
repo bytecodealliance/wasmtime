@@ -1903,11 +1903,11 @@ impl OpVisitor for Interpreter<'_> {
     }
 
     #[inline]
-    fn push_frame_save(&mut self, amt: u32, regs: RegSet<XReg>) -> ControlFlow<Done> {
+    fn push_frame_save(&mut self, amt: u16, regs: UpperRegSet<XReg>) -> ControlFlow<Done> {
         // Decrement the stack pointer `amt` bytes plus 2 pointers more for
         // fp/lr.
         let ptr_size = size_of::<usize>();
-        let full_amt = usize::try_from(amt).unwrap() + 2 * ptr_size;
+        let full_amt = usize::from(amt) + 2 * ptr_size;
         let new_sp = self.state[XReg::sp].get_ptr::<u8>().wrapping_sub(full_amt);
         self.set_sp::<crate::PushFrameSave>(new_sp)?;
 
@@ -1932,11 +1932,11 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
-    fn pop_frame_restore(&mut self, amt: u32, regs: RegSet<XReg>) -> ControlFlow<Done> {
+    fn pop_frame_restore(&mut self, amt: u16, regs: UpperRegSet<XReg>) -> ControlFlow<Done> {
         // Restore all registers in `regs`, followed by the normal `pop_frame`
         // opcode below to restore fp/lr.
         unsafe {
-            let mut offset = amt as i32;
+            let mut offset = i32::from(amt);
             for reg in regs {
                 offset -= 8;
                 let val = self.load(XReg::sp, offset);
@@ -2639,58 +2639,6 @@ impl ExtendedOpVisitor for Interpreter<'_> {
         let b = self.state[operands.src2].get_u64();
         let result = ((u128::from(a) * u128::from(b)) >> 64) as u64;
         self.state[operands.dst].set_u64(result);
-        ControlFlow::Continue(())
-    }
-
-    fn xpush32(&mut self, src: XReg) -> ControlFlow<Done> {
-        self.push::<crate::XPush32, _>(self.state[src].get_u32())?;
-        ControlFlow::Continue(())
-    }
-
-    fn xpush32_many(&mut self, srcs: RegSet<XReg>) -> ControlFlow<Done> {
-        for src in srcs {
-            self.push::<crate::XPush32Many, _>(self.state[src].get_u32())?;
-        }
-        ControlFlow::Continue(())
-    }
-
-    fn xpush64(&mut self, src: XReg) -> ControlFlow<Done> {
-        self.push::<crate::XPush64, _>(self.state[src].get_u64())?;
-        ControlFlow::Continue(())
-    }
-
-    fn xpush64_many(&mut self, srcs: RegSet<XReg>) -> ControlFlow<Done> {
-        for src in srcs {
-            self.push::<crate::XPush64Many, _>(self.state[src].get_u64())?;
-        }
-        ControlFlow::Continue(())
-    }
-
-    fn xpop32(&mut self, dst: XReg) -> ControlFlow<Done> {
-        let val = self.pop();
-        self.state[dst].set_u32(val);
-        ControlFlow::Continue(())
-    }
-
-    fn xpop32_many(&mut self, dsts: RegSet<XReg>) -> ControlFlow<Done> {
-        for dst in dsts.into_iter().rev() {
-            let val = self.pop();
-            self.state[dst].set_u32(val);
-        }
-        ControlFlow::Continue(())
-    }
-
-    fn xpop64(&mut self, dst: XReg) -> ControlFlow<Done> {
-        let val = self.pop();
-        self.state[dst].set_u64(val);
-        ControlFlow::Continue(())
-    }
-
-    fn xpop64_many(&mut self, dsts: RegSet<XReg>) -> ControlFlow<Done> {
-        for dst in dsts.into_iter().rev() {
-            let val = self.pop();
-            self.state[dst].set_u64(val);
-        }
         ControlFlow::Continue(())
     }
 

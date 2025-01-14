@@ -191,8 +191,8 @@ impl<D: Reg, S1: Reg> Encode for BinaryOperands<D, S1, U6> {
     }
 }
 
-impl<R: Reg + Encode> Encode for RegSet<R> {
-    const WIDTH: u8 = 4;
+impl<R: Reg + Encode> Encode for UpperRegSet<R> {
+    const WIDTH: u8 = 2;
 
     fn encode<E>(&self, sink: &mut E)
     where
