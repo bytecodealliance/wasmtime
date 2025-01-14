@@ -26,13 +26,15 @@ impl WasmtimeEngine {
     ) -> arbitrary::Result<Self> {
         let mut new_config = u.arbitrary::<WasmtimeConfig>()?;
         new_config.compiler_strategy = compiler_strategy;
-        new_config.update_module_config(&mut config.module_config.config, u)?;
+        new_config.update_module_config(&mut config.module_config, u)?;
         new_config.make_compatible_with(&config.wasmtime);
 
         let config = generators::Config {
             wasmtime: new_config,
             module_config: config.module_config.clone(),
         };
+        log::debug!("Created new Wasmtime differential engine with config: {config:?}");
+
         Ok(Self { config })
     }
 }
@@ -118,11 +120,10 @@ impl WasmtimeInstance {
 
         globals
             .into_iter()
-            .map(|(name, global)| {
-                (
-                    name,
-                    global.ty(&self.store).content().clone().try_into().unwrap(),
-                )
+            .filter_map(|(name, global)| {
+                DiffValueType::try_from(global.ty(&self.store).content().clone())
+                    .map(|ty| (name, ty))
+                    .ok()
             })
             .collect()
     }

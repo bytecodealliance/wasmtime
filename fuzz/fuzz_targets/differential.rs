@@ -1,6 +1,6 @@
 #![no_main]
 
-use libfuzzer_sys::arbitrary::{Result, Unstructured};
+use libfuzzer_sys::arbitrary::{self, Result, Unstructured};
 use libfuzzer_sys::fuzz_target;
 use std::sync::atomic::AtomicUsize;
 use std::sync::atomic::Ordering::SeqCst;
@@ -80,12 +80,15 @@ fn execute_one(data: &[u8]) -> Result<()> {
             return Ok(());
         }
     };
+
+    log::trace!("Building LHS engine");
     let mut lhs = match engine::build(&mut u, lhs, &mut config)? {
         Some(engine) => engine,
         // The chosen engine does not have support compiled into the fuzzer,
         // discard this test case.
         None => return Ok(()),
     };
+    log::debug!("lhs engine: {}", lhs.name());
 
     // Using the now-legalized module configuration generate the Wasm module;
     // this is specified by either the ALLOWED_MODULES environment variable or a
@@ -118,11 +121,11 @@ fn execute_one(data: &[u8]) -> Result<()> {
     log_wasm(&wasm);
 
     // Instantiate the generated wasm file in the chosen differential engine.
-    log::debug!("lhs engine: {}", lhs.name());
     let lhs_instance = lhs.instantiate(&wasm);
     STATS.bump_engine(lhs.name());
 
     // Always use Wasmtime as the second engine to instantiate within.
+    log::debug!("Building RHS Wasmtime");
     let rhs_store = config.to_store();
     let rhs_module = wasmtime::Module::new(rhs_store.engine(), &wasm).unwrap();
     let rhs_instance = WasmtimeInstance::new(rhs_store, rhs_module);
@@ -141,14 +144,38 @@ fn execute_one(data: &[u8]) -> Result<()> {
     'outer: for (name, signature) in rhs_instance.exported_functions() {
         let mut invocations = 0;
         loop {
-            let arguments = signature
+            let arguments = match signature
                 .params()
-                .map(|t| DiffValue::arbitrary_of_type(&mut u, t.try_into().unwrap()))
-                .collect::<Result<Vec<_>>>()?;
-            let result_tys = signature
+                .map(|ty| {
+                    let ty = ty
+                        .try_into()
+                        .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+                    DiffValue::arbitrary_of_type(&mut u, ty)
+                })
+                .collect::<Result<Vec<_>>>()
+            {
+                Ok(args) => args,
+                // This function signature isn't compatible with differential
+                // fuzzing yet, try the next exported function in the meantime.
+                Err(_) => continue 'outer,
+            };
+
+            let result_tys = match signature
                 .results()
-                .map(|t| DiffValueType::try_from(t).unwrap())
-                .collect::<Vec<_>>();
+                .map(|ty| {
+                    let ty: wasmtime::ValType = ty
+                        .try_into()
+                        .map_err(|_| arbitrary::Error::IncorrectFormat)?;
+                    DiffValueType::try_from(ty).map_err(|_| arbitrary::Error::IncorrectFormat)
+                })
+                .collect::<Result<Vec<_>>>()
+            {
+                Ok(tys) => tys,
+                // This function signature isn't compatible with differential
+                // fuzzing yet, try the next exported function in the meantime.
+                Err(_) => continue 'outer,
+            };
+
             let ok = differential(
                 lhs_instance.as_mut(),
                 lhs.as_ref(),
