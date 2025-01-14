@@ -526,19 +526,13 @@ impl RunCommand {
             let val = val
                 .to_str()
                 .ok_or_else(|| anyhow!("argument is not valid utf-8: {val:?}"))?;
-            eprintln!("Debug: Processing argument: {val}");
             values.push(match ty {
                 ValType::I32 => {
-                    let parsed = if val.starts_with("0x") || val.starts_with("0X") {
-                        let hex_val = i32::from_str_radix(&val[2..], 16)?;
-                        eprintln!("Debug: Parsed hex value: {hex_val}");
-                        hex_val
+                    if val.starts_with("0x") || val.starts_with("0X") {
+                        Val::I32(i32::from_str_radix(&val[2..], 16)?)
                     } else {
-                        let dec_val = val.parse()?;
-                        eprintln!("Debug: Parsed decimal value: {dec_val}");
-                        dec_val
-                    };
-                    Val::I32(parsed)
+                        Val::I32(val.parse()?)
+                    }
                 }
                 ValType::I64 => Val::I64(if val.starts_with("0x") || val.starts_with("0X") {
                     i64::from_str_radix(&val[2..], 16)?
@@ -572,29 +566,28 @@ impl RunCommand {
                 "warning: using `--invoke` with a function that returns values \
                  is experimental and may break in the future"
             );
-        }
 
-        for result in results {
-            match result {
-                Val::I32(i) => {
-                    eprintln!("Debug: Result value: {i}");
-                    print!("{i}");
+            for result in results {
+                match result {
+                    Val::I32(i) => print!("{i}"),
+                    Val::I64(i) => print!("{i}"),
+                    Val::F32(f) => print!("{}", f32::from_bits(f)),
+                    Val::F64(f) => print!("{}", f64::from_bits(f)),
+                    Val::V128(i) => print!("{}", i.as_u128()),
+                    Val::ExternRef(None) => print!("<null externref>"),
+                    Val::ExternRef(Some(_)) => print!("<externref>"),
+                    Val::FuncRef(None) => print!("<null funcref>"),
+                    Val::FuncRef(Some(_)) => print!("<funcref>"),
+                    Val::AnyRef(None) => print!("<null anyref>"),
+                    Val::AnyRef(Some(_)) => print!("<anyref>"),
                 }
-                Val::I64(i) => print!("{i}"),
-                Val::F32(f) => print!("{}", f32::from_bits(f)),
-                Val::F64(f) => print!("{}", f64::from_bits(f)),
-                Val::V128(i) => print!("{}", i.as_u128()),
-                Val::ExternRef(None) => print!("<null externref>"),
-                Val::ExternRef(Some(_)) => print!("<externref>"),
-                Val::FuncRef(None) => print!("<null funcref>"),
-                Val::FuncRef(Some(_)) => print!("<funcref>"),
-                Val::AnyRef(None) => print!("<null anyref>"),
-                Val::AnyRef(Some(_)) => print!("<anyref>"),
             }
-        }
 
-        if !self.no_newline {
-            println!();
+            // Добавляем перевод строки только для функций с возвращаемыми значениями
+            // и только если не указан флаг no_newline
+            if !self.no_newline {
+                println!();
+            }
         }
         Ok(())
     }
