@@ -1,3 +1,14 @@
+## 28.0.1
+
+Released 2025-01-14.
+
+### Fixed
+
+* Fixed deallocating async stacks when using `Store::into_data`.
+  [#10009](https://github.com/bytecodealliance/wasmtime/pull/10009)
+
+--------------------------------------------------------------------------------
+
 ## 28.0.0
 
 Released 2024-12-20.
