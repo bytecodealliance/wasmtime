@@ -581,21 +581,71 @@ impl RunCommand {
                 Val::I32(i) => {
                     eprintln!("Debug: Result value: {i}");
                     print!("{i}");
+                    if self.add_newline {
+                        println!();
+                    }
                 }
-                Val::I64(i) => print!("{i}"),
-                Val::F32(f) => print!("{}", f32::from_bits(f)),
-                Val::F64(f) => print!("{}", f64::from_bits(f)),
-                Val::V128(i) => print!("{}", i.as_u128()),
-                Val::ExternRef(None) => print!("<null externref>"),
-                Val::ExternRef(Some(_)) => print!("<externref>"),
-                Val::FuncRef(None) => print!("<null funcref>"),
-                Val::FuncRef(Some(_)) => print!("<funcref>"),
-                Val::AnyRef(None) => print!("<null anyref>"),
-                Val::AnyRef(Some(_)) => print!("<anyref>"),
+                Val::I64(i) => {
+                    print!("{i}");
+                    if self.add_newline {
+                        println!();
+                    }
+                }
+                Val::F32(f) => {
+                    print!("{}", f32::from_bits(f));
+                    if self.add_newline {
+                        println!();
+                    }
+                }
+                Val::F64(f) => {
+                    print!("{}", f64::from_bits(f));
+                    if self.add_newline {
+                        println!();
+                    }
+                }
+                Val::V128(i) => {
+                    print!("{}", i.as_u128());
+                    if self.add_newline {
+                        println!();
+                    }
+                }
+                Val::ExternRef(None) => {
+                    print!("<null externref>");
+                    if self.add_newline {
+                        println!();
+                    }
+                }
+                Val::ExternRef(Some(_)) => {
+                    print!("<externref>");
+                    if self.add_newline {
+                        println!();
+                    }
+                }
+                Val::FuncRef(None) => {
+                    print!("<null funcref>");
+                    if self.add_newline {
+                        println!();
+                    }
+                }
+                Val::FuncRef(Some(_)) => {
+                    print!("<funcref>");
+                    if self.add_newline {
+                        println!();
+                    }
+                }
+                Val::AnyRef(None) => {
+                    print!("<null anyref>");
+                    if self.add_newline {
+                        println!();
+                    }
+                }
+                Val::AnyRef(Some(_)) => {
+                    print!("<anyref>");
+                    if self.add_newline {
+                        println!();
+                    }
+                }
             }
-        }
-        if self.add_newline {
-            println!();
         }
         Ok(())
     }
