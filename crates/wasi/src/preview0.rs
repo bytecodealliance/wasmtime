@@ -7,7 +7,7 @@ use crate::preview0::types::Error;
 use crate::preview1::types as snapshot1_types;
 use crate::preview1::wasi_snapshot_preview1::WasiSnapshotPreview1 as Snapshot1;
 use crate::preview1::WasiP1Ctx;
-use crate::{WasiExecutor, WasiSyncExecutor};
+use crate::runtime::{WasiExecutor, WasiSyncExecutor};
 use wiggle::{GuestError, GuestMemory, GuestPtr};
 
 pub fn add_to_linker_async<T: Send, E: WasiExecutor>(

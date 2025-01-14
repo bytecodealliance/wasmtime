@@ -69,6 +69,7 @@ where
         Ok(())
     }
 
+    // FIXME: make this async fn
     fn finish_connect(
         &mut self,
         this: Resource<tcp::TcpSocket>,
@@ -76,7 +77,7 @@ where
         let table = self.table();
         let socket = table.get_mut(&this)?;
 
-        let (input, output) = socket.finish_connect()?;
+        let (input, output) = socket.finish_connect::<T::Executor>()?;
 
         let input_stream = self.table().push_child(input, &this)?;
         let output_stream = self.table().push_child(output, &this)?;
@@ -110,7 +111,7 @@ where
         let table = self.table();
         let socket = table.get_mut(&this)?;
 
-        let (tcp_socket, input, output) = socket.accept()?;
+        let (tcp_socket, input, output) = socket.accept::<T::Executor>()?;
 
         let tcp_socket = self.table().push(tcp_socket)?;
         let input_stream = self.table().push_child(input, &tcp_socket)?;
@@ -297,7 +298,7 @@ where
             ShutdownType::Send => std::net::Shutdown::Write,
             ShutdownType::Both => std::net::Shutdown::Both,
         };
-        socket.shutdown(how)
+        socket.shutdown::<T::Executor>(how)
     }
 
     fn drop(&mut self, this: Resource<tcp::TcpSocket>) -> Result<(), anyhow::Error> {

@@ -7,7 +7,8 @@ use crate::bindings::io::streams::{InputStream, OutputStream};
 use crate::filesystem::{
     Descriptor, Dir, File, FileInputStream, FileOutputStream, OpenMode, ReaddirIterator,
 };
-use crate::{DirPerms, FilePerms, FsError, FsResult, WasiExecutor, WasiImpl, WasiView};
+use crate::runtime::WasiExecutor;
+use crate::{DirPerms, FilePerms, FsError, FsResult, WasiImpl, WasiView};
 use anyhow::Context;
 use wasmtime::component::Resource;
 
@@ -80,7 +81,7 @@ where
         };
 
         let f = self.table().get(&fd)?.file()?;
-        f.run_blocking(move |f| f.advise(offset, len, advice))
+        f.run_blocking::<T::Executor, _, _>(move |f| f.advise(offset, len, advice))
             .await?;
         Ok(())
     }
@@ -90,7 +91,7 @@ where
 
         match descriptor {
             Descriptor::File(f) => {
-                match f.run_blocking(|f| f.sync_data()).await {
+                match f.run_blocking::<T::Executor, _, _>(|f| f.sync_data()).await {
                     Ok(()) => Ok(()),
                     // On windows, `sync_data` uses `FileFlushBuffers` which fails with
                     // `ERROR_ACCESS_DENIED` if the file is not upen for writing. Ignore
@@ -106,8 +107,10 @@ where
                 }
             }
             Descriptor::Dir(d) => {
-                d.run_blocking(|d| Ok(d.open(std::path::Component::CurDir)?.sync_data()?))
-                    .await
+                d.run_blocking::<T::Executor, _, _>(|d| {
+                    Ok(d.open(std::path::Component::CurDir)?.sync_data()?)
+                })
+                .await
             }
         }
     }
@@ -136,7 +139,9 @@ where
         let descriptor = self.table().get(&fd)?;
         match descriptor {
             Descriptor::File(f) => {
-                let flags = f.run_blocking(|f| f.get_fd_flags()).await?;
+                let flags = f
+                    .run_blocking::<T::Executor, _, _>(|f| f.get_fd_flags())
+                    .await?;
                 let mut flags = get_from_fdflags(flags);
                 if f.open_mode.contains(OpenMode::READ) {
                     flags |= DescriptorFlags::READ;
@@ -147,7 +152,9 @@ where
                 Ok(flags)
             }
             Descriptor::Dir(d) => {
-                let flags = d.run_blocking(|d| d.get_fd_flags()).await?;
+                let flags = d
+                    .run_blocking::<T::Executor, _, _>(|d| d.get_fd_flags())
+                    .await?;
                 let mut flags = get_from_fdflags(flags);
                 if d.open_mode.contains(OpenMode::READ) {
                     flags |= DescriptorFlags::READ;
@@ -168,7 +175,9 @@ where
 
         match descriptor {
             Descriptor::File(f) => {
-                let meta = f.run_blocking(|f| f.metadata()).await?;
+                let meta = f
+                    .run_blocking::<T::Executor, _, _>(|f| f.metadata())
+                    .await?;
                 Ok(descriptortype_from(meta.file_type()))
             }
             Descriptor::Dir(_) => Ok(types::DescriptorType::Directory),
@@ -184,7 +193,8 @@ where
         if !f.perms.contains(FilePerms::WRITE) {
             Err(ErrorCode::NotPermitted)?;
         }
-        f.run_blocking(move |f| f.set_len(size)).await?;
+        f.run_blocking::<T::Executor, _, _>(move |f| f.set_len(size))
+            .await?;
         Ok(())
     }
 
@@ -204,7 +214,8 @@ where
                 }
                 let atim = systemtimespec_from(atim)?;
                 let mtim = systemtimespec_from(mtim)?;
-                f.run_blocking(|f| f.set_times(atim, mtim)).await?;
+                f.run_blocking::<T::Executor, _, _>(|f| f.set_times(atim, mtim))
+                    .await?;
                 Ok(())
             }
             Descriptor::Dir(d) => {
@@ -213,7 +224,8 @@ where
                 }
                 let atim = systemtimespec_from(atim)?;
                 let mtim = systemtimespec_from(mtim)?;
-                d.run_blocking(|d| d.set_times(atim, mtim)).await?;
+                d.run_blocking::<T::Executor, _, _>(|d| d.set_times(atim, mtim))
+                    .await?;
                 Ok(())
             }
         }
@@ -236,7 +248,7 @@ where
         }
 
         let (mut buffer, r) = f
-            .run_blocking(move |f| {
+            .run_blocking::<T::Executor, _, _>(move |f| {
                 let mut buffer = vec![0; len.try_into().unwrap_or(usize::MAX)];
                 let r = f.read_vectored_at(&mut [IoSliceMut::new(&mut buffer)], offset);
                 (buffer, r)
@@ -273,7 +285,9 @@ where
         }
 
         let bytes_written = f
-            .run_blocking(move |f| f.write_vectored_at(&[IoSlice::new(&buf)], offset))
+            .run_blocking::<T::Executor, _, _>(move |f| {
+                f.write_vectored_at(&[IoSlice::new(&buf)], offset)
+            })
             .await?;
 
         Ok(types::Filesize::try_from(bytes_written).expect("usize fits in Filesize"))
@@ -300,7 +314,7 @@ where
         }
 
         let entries = d
-            .run_blocking(|d| {
+            .run_blocking::<T::Executor, _, _>(|d| {
                 // Both `entries` and `metadata` perform syscalls, which is why they are done
                 // within this `block` call, rather than delay calculating the metadata
                 // for entries when they're demanded later in the iterator chain.
@@ -349,7 +363,7 @@ where
 
         match descriptor {
             Descriptor::File(f) => {
-                match f.run_blocking(|f| f.sync_all()).await {
+                match f.run_blocking::<T::Executor, _, _>(|f| f.sync_all()).await {
                     Ok(()) => Ok(()),
                     // On windows, `sync_data` uses `FileFlushBuffers` which fails with
                     // `ERROR_ACCESS_DENIED` if the file is not upen for writing. Ignore
@@ -365,8 +379,10 @@ where
                 }
             }
             Descriptor::Dir(d) => {
-                d.run_blocking(|d| Ok(d.open(std::path::Component::CurDir)?.sync_all()?))
-                    .await
+                d.run_blocking::<T::Executor, _, _>(|d| {
+                    Ok(d.open(std::path::Component::CurDir)?.sync_all()?)
+                })
+                .await
             }
         }
     }
@@ -381,7 +397,8 @@ where
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        d.run_blocking(move |d| d.create_dir(&path)).await?;
+        d.run_blocking::<T::Executor, _, _>(move |d| d.create_dir(&path))
+            .await?;
         Ok(())
     }
 
@@ -390,12 +407,16 @@ where
         match descriptor {
             Descriptor::File(f) => {
                 // No permissions check on stat: if opened, allowed to stat it
-                let meta = f.run_blocking(|f| f.metadata()).await?;
+                let meta = f
+                    .run_blocking::<T::Executor, _, _>(|f| f.metadata())
+                    .await?;
                 Ok(descriptorstat_from(meta))
             }
             Descriptor::Dir(d) => {
                 // No permissions check on stat: if opened, allowed to stat it
-                let meta = d.run_blocking(|d| d.dir_metadata()).await?;
+                let meta = d
+                    .run_blocking::<T::Executor, _, _>(|d| d.dir_metadata())
+                    .await?;
                 Ok(descriptorstat_from(meta))
             }
         }
@@ -414,9 +435,11 @@ where
         }
 
         let meta = if symlink_follow(path_flags) {
-            d.run_blocking(move |d| d.metadata(&path)).await?
+            d.run_blocking::<T::Executor, _, _>(move |d| d.metadata(&path))
+                .await?
         } else {
-            d.run_blocking(move |d| d.symlink_metadata(&path)).await?
+            d.run_blocking::<T::Executor, _, _>(move |d| d.symlink_metadata(&path))
+                .await?
         };
         Ok(descriptorstat_from(meta))
     }
@@ -439,7 +462,7 @@ where
         let atim = systemtimespec_from(atim)?;
         let mtim = systemtimespec_from(mtim)?;
         if symlink_follow(path_flags) {
-            d.run_blocking(move |d| {
+            d.run_blocking::<T::Executor, _, _>(move |d| {
                 d.set_times(
                     &path,
                     atim.map(cap_fs_ext::SystemTimeSpec::from_std),
@@ -448,7 +471,7 @@ where
             })
             .await?;
         } else {
-            d.run_blocking(move |d| {
+            d.run_blocking::<T::Executor, _, _>(move |d| {
                 d.set_symlink_times(
                     &path,
                     atim.map(cap_fs_ext::SystemTimeSpec::from_std),
@@ -483,7 +506,9 @@ where
         }
         let new_dir_handle = std::sync::Arc::clone(&new_dir.dir);
         old_dir
-            .run_blocking(move |d| d.hard_link(&old_path, &new_dir_handle, &new_path))
+            .run_blocking::<T::Executor, _, _>(move |d| {
+                d.hard_link(&old_path, &new_dir_handle, &new_path)
+            })
             .await?;
         Ok(())
     }
@@ -500,7 +525,6 @@ where
         use system_interface::fs::{FdFlags, GetSetFdFlags};
         use types::{DescriptorFlags, OpenFlags};
 
-        let allow_blocking_current_thread = self.ctx().allow_blocking_current_thread;
         let table = self.table();
         let d = table.get(&fd)?.dir()?;
         if !d.perms.contains(DirPerms::READ) {
@@ -593,7 +617,7 @@ where
         }
 
         let opened = d
-            .run_blocking::<_, std::io::Result<OpenResult>>(move |d| {
+            .run_blocking::<T::Executor, _, std::io::Result<OpenResult>>(move |d| {
                 let mut opened = d.open_with(&path, &opts)?;
                 if opened.metadata()?.is_dir() {
                     Ok(OpenResult::Dir(cap_std::fs::Dir::from_std_file(
@@ -617,15 +641,11 @@ where
                 d.perms,
                 d.file_perms,
                 open_mode,
-                allow_blocking_current_thread,
             )))?),
 
-            OpenResult::File(file) => Ok(table.push(Descriptor::File(File::new(
-                file,
-                d.file_perms,
-                open_mode,
-                allow_blocking_current_thread,
-            )))?),
+            OpenResult::File(file) => {
+                Ok(table.push(Descriptor::File(File::new(file, d.file_perms, open_mode)))?)
+            }
 
             OpenResult::NotDir => Err(ErrorCode::NotDirectory.into()),
         }
@@ -654,7 +674,9 @@ where
         if !d.perms.contains(DirPerms::READ) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        let link = d.run_blocking(move |d| d.read_link(&path)).await?;
+        let link = d
+            .run_blocking::<T::Executor, _, _>(move |d| d.read_link(&path))
+            .await?;
         Ok(link
             .into_os_string()
             .into_string()
@@ -671,7 +693,10 @@ where
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        Ok(d.run_blocking(move |d| d.remove_dir(&path)).await?)
+        Ok(
+            d.run_blocking::<T::Executor, _, _>(move |d| d.remove_dir(&path))
+                .await?,
+        )
     }
 
     async fn rename_at(
@@ -692,7 +717,9 @@ where
         }
         let new_dir_handle = std::sync::Arc::clone(&new_dir.dir);
         Ok(old_dir
-            .run_blocking(move |d| d.rename(&old_path, &new_dir_handle, &new_path))
+            .run_blocking::<T::Executor, _, _>(move |d| {
+                d.rename(&old_path, &new_dir_handle, &new_path)
+            })
             .await?)
     }
 
@@ -711,8 +738,10 @@ where
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        Ok(d.run_blocking(move |d| d.symlink(&src_path, &dest_path))
-            .await?)
+        Ok(
+            d.run_blocking::<T::Executor, _, _>(move |d| d.symlink(&src_path, &dest_path))
+                .await?,
+        )
     }
 
     async fn unlink_file_at(
@@ -727,8 +756,10 @@ where
         if !d.perms.contains(DirPerms::MUTATE) {
             return Err(ErrorCode::NotPermitted.into());
         }
-        Ok(d.run_blocking(move |d| d.remove_file_or_symlink(&path))
-            .await?)
+        Ok(
+            d.run_blocking::<T::Executor, _, _>(move |d| d.remove_file_or_symlink(&path))
+                .await?,
+        )
     }
 
     fn read_via_stream(
@@ -744,7 +775,7 @@ where
         }
 
         // Create a stream view for it.
-        let reader: InputStream = Box::new(FileInputStream::new(f, offset));
+        let reader: InputStream = Box::new(FileInputStream::<T::Executor>::new(f, offset));
 
         // Insert the stream view into the table. Trap if the table is full.
         let index = self.table().push(reader)?;
@@ -765,7 +796,7 @@ where
         }
 
         // Create a stream view for it.
-        let writer = FileOutputStream::write_at(f, offset);
+        let writer = FileOutputStream::<T::Executor>::write_at(f, offset);
         let writer: OutputStream = Box::new(writer);
 
         // Insert the stream view into the table. Trap if the table is full.
@@ -786,7 +817,7 @@ where
         }
 
         // Create a stream view for it.
-        let appender = FileOutputStream::append(f);
+        let appender = FileOutputStream::<T::Executor>::append(f);
         let appender: OutputStream = Box::new(appender);
 
         // Insert the stream view into the table. Trap if the table is full.
@@ -802,9 +833,9 @@ where
     ) -> anyhow::Result<bool> {
         use cap_fs_ext::MetadataExt;
         let descriptor_a = self.table().get(&a)?;
-        let meta_a = get_descriptor_metadata(descriptor_a).await?;
+        let meta_a = get_descriptor_metadata::<T::Executor>(descriptor_a).await?;
         let descriptor_b = self.table().get(&b)?;
-        let meta_b = get_descriptor_metadata(descriptor_b).await?;
+        let meta_b = get_descriptor_metadata::<T::Executor>(descriptor_b).await?;
         if meta_a.dev() == meta_b.dev() && meta_a.ino() == meta_b.ino() {
             // MetadataHashValue does not derive eq, so use a pair of
             // comparisons to check equality:
@@ -827,7 +858,7 @@ where
         fd: Resource<types::Descriptor>,
     ) -> FsResult<types::MetadataHashValue> {
         let descriptor_a = self.table().get(&fd)?;
-        let meta = get_descriptor_metadata(descriptor_a).await?;
+        let meta = get_descriptor_metadata::<T::Executor>(descriptor_a).await?;
         Ok(calculate_metadata_hash(&meta))
     }
     async fn metadata_hash_at(
@@ -840,7 +871,7 @@ where
         let d = table.get(&fd)?.dir()?;
         // No permissions check on metadata: if dir opened, allowed to stat it
         let meta = d
-            .run_blocking(move |d| {
+            .run_blocking::<T::Executor, _, _>(move |d| {
                 if symlink_follow(path_flags) {
                     d.metadata(path)
                 } else {
@@ -871,15 +902,17 @@ where
     }
 }
 
-async fn get_descriptor_metadata(fd: &types::Descriptor) -> FsResult<cap_std::fs::Metadata> {
+async fn get_descriptor_metadata<E: WasiExecutor>(
+    fd: &types::Descriptor,
+) -> FsResult<cap_std::fs::Metadata> {
     match fd {
         Descriptor::File(f) => {
             // No permissions check on metadata: if opened, allowed to stat it
-            Ok(f.run_blocking(|f| f.metadata()).await?)
+            Ok(f.run_blocking::<E, _, _>(|f| f.metadata()).await?)
         }
         Descriptor::Dir(d) => {
             // No permissions check on metadata: if opened, allowed to stat it
-            Ok(d.run_blocking(|d| d.dir_metadata()).await?)
+            Ok(d.run_blocking::<E, _, _>(|d| d.dir_metadata()).await?)
         }
     }
 }

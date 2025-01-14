@@ -1,8 +1,7 @@
 use crate::bindings::filesystem::types;
-use crate::runtime::{spawn_blocking, AbortOnDropJoinHandle};
+use crate::runtime::{AbortOnDropJoinHandle, WasiExecutor};
 use crate::{
     HostInputStream, HostOutputStream, StreamError, StreamResult, Subscribe, TrappableError,
-    WasiExecutor,
 };
 use anyhow::anyhow;
 use bytes::{Bytes, BytesMut};
@@ -96,22 +95,14 @@ pub struct File {
     /// doesn't presently provide a cross-platform equivalent of reading the
     /// oflags back out using fcntl.
     pub open_mode: OpenMode,
-
-    allow_blocking_current_thread: bool,
 }
 
 impl File {
-    pub fn new(
-        file: cap_std::fs::File,
-        perms: FilePerms,
-        open_mode: OpenMode,
-        allow_blocking_current_thread: bool,
-    ) -> Self {
+    pub fn new(file: cap_std::fs::File, perms: FilePerms, open_mode: OpenMode) -> Self {
         Self {
             file: Arc::new(file),
             perms,
             open_mode,
-            allow_blocking_current_thread,
         }
     }
 
@@ -126,38 +117,24 @@ impl File {
     ///
     /// Intentionally blocking the executor thread might seem unorthodox, but is
     /// not actually a problem for specific workloads. See:
-    /// - [`crate::WasiCtxBuilder::allow_blocking_current_thread`]
     /// - [Poor performance of wasmtime file I/O maybe because tokio](https://github.com/bytecodealliance/wasmtime/issues/7973)
     /// - [Implement opt-in for enabling WASI to block the current thread](https://github.com/bytecodealliance/wasmtime/pull/8190)
-    pub(crate) async fn run_blocking<F, R>(&self, body: F) -> R
+    pub(crate) async fn run_blocking<E: WasiExecutor, F, R>(&self, body: F) -> R
     where
         F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
         R: Send + 'static,
     {
-        match self.as_blocking_file() {
-            Some(file) => body(file),
-            None => self.spawn_blocking(body).await,
-        }
+        let file = self.file.clone();
+        E::run_blocking(move || body(&file)).await
     }
 
-    pub(crate) fn spawn_blocking<F, R>(&self, body: F) -> AbortOnDropJoinHandle<R>
+    pub(crate) fn spawn_blocking<E: WasiExecutor, F, R>(&self, body: F) -> AbortOnDropJoinHandle<R>
     where
         F: FnOnce(&cap_std::fs::File) -> R + Send + 'static,
         R: Send + 'static,
     {
         let f = self.file.clone();
-        spawn_blocking(move || body(&f))
-    }
-
-    /// Returns `Some` when the current thread is allowed to block in filesystem
-    /// operations, and otherwise returns `None` to indicate that
-    /// `spawn_blocking` must be used.
-    pub(crate) fn as_blocking_file(&self) -> Option<&cap_std::fs::File> {
-        if self.allow_blocking_current_thread {
-            Some(&self.file)
-        } else {
-            None
-        }
+        E::spawn_blocking(move || body(&f))
     }
 }
 
@@ -201,8 +178,6 @@ pub struct Dir {
     /// doesn't presently provide a cross-platform equivalent of reading the
     /// oflags back out using fcntl.
     pub open_mode: OpenMode,
-
-    allow_blocking_current_thread: bool,
 }
 
 impl Dir {
@@ -211,19 +186,17 @@ impl Dir {
         perms: DirPerms,
         file_perms: FilePerms,
         open_mode: OpenMode,
-        allow_blocking_current_thread: bool,
     ) -> Self {
         Dir {
             dir: Arc::new(dir),
             perms,
             file_perms,
             open_mode,
-            allow_blocking_current_thread,
         }
     }
     /// Execute the blocking `body` function.
     ///
-    /// Depending on how the WasiCtx was configured, the body may either be:
+    /// Depending on the WasiCtx's Executor type parameter, the body may either be:
     /// - Executed directly on the current thread. In this case the `async`
     ///   signature of this method is effectively a lie and the returned
     ///   Future will always be immediately Ready. Or:
@@ -232,27 +205,23 @@ impl Dir {
     ///
     /// Intentionally blocking the executor thread might seem unorthodox, but is
     /// not actually a problem for specific workloads. See:
-    /// - [`crate::WasiCtxBuilder::allow_blocking_current_thread`]
     /// - [Poor performance of wasmtime file I/O maybe because tokio](https://github.com/bytecodealliance/wasmtime/issues/7973)
     /// - [Implement opt-in for enabling WASI to block the current thread](https://github.com/bytecodealliance/wasmtime/pull/8190)
-    pub(crate) async fn run_blocking<F, R>(&self, body: F) -> R
+    pub(crate) async fn run_blocking<E: WasiExecutor, F, R>(&self, body: F) -> R
     where
         F: FnOnce(&cap_std::fs::Dir) -> R + Send + 'static,
         R: Send + 'static,
     {
-        if self.allow_blocking_current_thread {
-            body(&self.dir)
-        } else {
-            let d = self.dir.clone();
-            spawn_blocking(move || body(&d)).await
-        }
+        let d = self.dir.clone();
+        E::run_blocking(move || body(&d)).await
     }
 }
 
-pub struct FileInputStream {
+pub struct FileInputStream<E> {
     file: File,
     position: u64,
     state: ReadState,
+    _executor: std::marker::PhantomData<E>,
 }
 enum ReadState {
     Idle,
@@ -261,16 +230,17 @@ enum ReadState {
     Error(io::Error),
     Closed,
 }
-impl FileInputStream {
+impl<E> FileInputStream<E> {
     pub fn new(file: &File, position: u64) -> Self {
         Self {
             file: file.clone(),
             position,
             state: ReadState::Idle,
+            _executor: std::marker::PhantomData,
         }
     }
 }
-impl FileInputStream {
+impl<E> FileInputStream<E> {
     fn blocking_read(file: &cap_std::fs::File, offset: u64, size: usize) -> ReadState {
         use system_interface::fs::FileIoExt;
 
@@ -301,7 +271,7 @@ impl FileInputStream {
     }
 }
 #[async_trait::async_trait]
-impl HostInputStream for FileInputStream {
+impl<E: WasiExecutor> HostInputStream for FileInputStream<E> {
     fn read(&mut self, size: usize) -> StreamResult<Bytes> {
         match &mut self.state {
             ReadState::Idle => {
@@ -312,7 +282,7 @@ impl HostInputStream for FileInputStream {
                 let p = self.position;
                 self.state = ReadState::Waiting(
                     self.file
-                        .spawn_blocking(move |f| Self::blocking_read(f, p, size)),
+                        .spawn_blocking::<E, _, _>(move |f| Self::blocking_read(f, p, size)),
                 );
                 Ok(Bytes::new())
             }
@@ -343,7 +313,7 @@ impl HostInputStream for FileInputStream {
             let p = self.position;
             self.state = self
                 .file
-                .run_blocking(move |f| Self::blocking_read(f, p, size))
+                .run_blocking::<E, _, _>(move |f| Self::blocking_read(f, p, size))
                 .await;
         }
 
@@ -369,7 +339,7 @@ impl HostInputStream for FileInputStream {
     }
 }
 #[async_trait::async_trait]
-impl Subscribe for FileInputStream {
+impl<E: WasiExecutor> Subscribe for FileInputStream<E> {
     async fn ready(&mut self) {
         if let ReadState::Idle = self.state {
             // The guest hasn't initiated any read, but is nonetheless waiting
@@ -377,10 +347,10 @@ impl Subscribe for FileInputStream {
 
             const DEFAULT_READ_SIZE: usize = 4096;
             let p = self.position;
-            self.state = ReadState::Waiting(
-                self.file
-                    .spawn_blocking(move |f| Self::blocking_read(f, p, DEFAULT_READ_SIZE)),
-            );
+            self.state =
+                ReadState::Waiting(self.file.spawn_blocking::<E, _, _>(move |f| {
+                    Self::blocking_read(f, p, DEFAULT_READ_SIZE)
+                }));
         }
 
         self.wait_ready().await
@@ -393,10 +363,11 @@ pub(crate) enum FileOutputMode {
     Append,
 }
 
-pub(crate) struct FileOutputStream {
+pub(crate) struct FileOutputStream<E> {
     file: File,
     mode: FileOutputMode,
     state: OutputState,
+    _executor: std::marker::PhantomData<E>,
 }
 
 enum OutputState {
@@ -409,12 +380,13 @@ enum OutputState {
     Closed,
 }
 
-impl FileOutputStream {
+impl<E> FileOutputStream<E> {
     pub fn write_at(file: &File, position: u64) -> Self {
         Self {
             file: file.clone(),
             mode: FileOutputMode::Position(position),
             state: OutputState::Ready,
+            _executor: std::marker::PhantomData,
         }
     }
 
@@ -423,6 +395,7 @@ impl FileOutputStream {
             file: file.clone(),
             mode: FileOutputMode::Append,
             state: OutputState::Ready,
+            _executor: std::marker::PhantomData,
         }
     }
 
@@ -468,7 +441,7 @@ impl FileOutputStream {
 const FILE_WRITE_CAPACITY: usize = 1024 * 1024;
 
 #[async_trait::async_trait]
-impl HostOutputStream for FileOutputStream {
+impl<E: WasiExecutor> HostOutputStream for FileOutputStream<E> {
     fn write(&mut self, buf: Bytes) -> Result<(), StreamError> {
         match self.state {
             OutputState::Ready => {}
@@ -484,7 +457,7 @@ impl HostOutputStream for FileOutputStream {
         let m = self.mode;
         self.state = OutputState::Waiting(
             self.file
-                .spawn_blocking(move |f| Self::blocking_write(f, buf, m)),
+                .spawn_blocking::<E, _, _>(move |f| Self::blocking_write(f, buf, m)),
         );
         Ok(())
     }
@@ -506,7 +479,7 @@ impl HostOutputStream for FileOutputStream {
         let m = self.mode;
         match self
             .file
-            .run_blocking(move |f| Self::blocking_write(f, buf, m))
+            .run_blocking::<E, _, _>(move |f| Self::blocking_write(f, buf, m))
             .await
         {
             Ok(nwritten) => {
@@ -567,7 +540,7 @@ impl HostOutputStream for FileOutputStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for FileOutputStream {
+impl<E: WasiExecutor> Subscribe for FileOutputStream<E> {
     async fn ready(&mut self) {
         if let OutputState::Waiting(task) = &mut self.state {
             self.state = match task.await {

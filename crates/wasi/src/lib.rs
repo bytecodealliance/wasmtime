@@ -208,7 +208,7 @@ mod udp;
 mod write_stream;
 
 pub use self::clocks::{HostMonotonicClock, HostWallClock};
-pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiExecutor, WasiImpl, WasiSyncExecutor, WasiView};
+pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiImpl, WasiView};
 pub use self::error::{I32Exit, TrappableError};
 pub use self::filesystem::{DirPerms, FileInputStream, FilePerms, FsError, FsResult};
 pub use self::network::{Network, SocketAddrUse, SocketError, SocketResult};
@@ -386,7 +386,7 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
 pub fn add_to_linker_sync<T>(linker: &mut wasmtime::component::Linker<T>) -> anyhow::Result<()>
 where
     T: WasiView,
-    <T as WasiView>::Executor: WasiSyncExecutor,
+    <T as WasiView>::Executor: runtime::WasiSyncExecutor,
 {
     let options = crate::bindings::sync::LinkOptions::default();
     add_to_linker_with_options_sync(linker, &options)
@@ -399,7 +399,7 @@ pub fn add_to_linker_with_options_sync<T>(
 ) -> anyhow::Result<()>
 where
     T: WasiView,
-    <T as WasiView>::Executor: WasiSyncExecutor,
+    <T as WasiView>::Executor: runtime::WasiSyncExecutor,
 {
     let l = linker;
     let closure = type_annotate::<T, _>(|t| WasiImpl(t));

@@ -5,7 +5,9 @@ use crate::{
     },
     filesystem::{Dir, OpenMode},
     network::{SocketAddrCheck, SocketAddrUse},
-    pipe, random, stdio,
+    pipe, random,
+    runtime::WasiExecutor,
+    stdio,
     stdio::{StdinStream, StdoutStream},
     DirPerms, FilePerms,
 };
@@ -52,7 +54,6 @@ pub struct WasiCtxBuilder {
     wall_clock: Box<dyn HostWallClock + Send>,
     monotonic_clock: Box<dyn HostMonotonicClock + Send>,
     allowed_network_uses: AllowedNetworkUses,
-    allow_blocking_current_thread: bool,
     built: bool,
 }
 
@@ -101,7 +102,6 @@ impl WasiCtxBuilder {
             wall_clock: wall_clock(),
             monotonic_clock: monotonic_clock(),
             allowed_network_uses: AllowedNetworkUses::default(),
-            allow_blocking_current_thread: false,
             built: false,
         }
     }
@@ -173,37 +173,6 @@ impl WasiCtxBuilder {
     /// one-instance-per-process.
     pub fn inherit_stdio(&mut self) -> &mut Self {
         self.inherit_stdin().inherit_stdout().inherit_stderr()
-    }
-
-    /// Configures whether or not blocking operations made through this
-    /// `WasiCtx` are allowed to block the current thread.
-    ///
-    /// WASI is currently implemented on top of the Rust
-    /// [Tokio](https://tokio.rs/) library. While most WASI APIs are
-    /// non-blocking some are instead blocking from the perspective of
-    /// WebAssembly. For example opening a file is a blocking operation with
-    /// respect to WebAssembly but it's implemented as an asynchronous operation
-    /// on the host. This is currently done with Tokio's
-    /// [`spawn_blocking`](https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html).
-    ///
-    /// When WebAssembly is used in a synchronous context, for example when
-    /// [`Config::async_support`] is disabled, then this asynchronous operation
-    /// is quickly turned back into a synchronous operation with a `block_on` in
-    /// Rust. This switching back-and-forth between a blocking a non-blocking
-    /// context can have overhead, and this option exists to help alleviate this
-    /// overhead.
-    ///
-    /// This option indicates that for WASI functions that are blocking from the
-    /// perspective of WebAssembly it's ok to block the native thread as well.
-    /// This means that this back-and-forth between async and sync won't happen
-    /// and instead blocking operations are performed on-thread (such as opening
-    /// a file). This can improve the performance of WASI operations when async
-    /// support is disabled.
-    ///
-    /// [`Config::async_support`]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.async_support
-    pub fn allow_blocking_current_thread(&mut self, enable: bool) -> &mut Self {
-        self.allow_blocking_current_thread = enable;
-        self
     }
 
     /// Appends multiple environment variables at once for this builder.
@@ -340,13 +309,7 @@ impl WasiCtxBuilder {
             open_mode |= OpenMode::WRITE;
         }
         self.preopens.push((
-            Dir::new(
-                dir,
-                dir_perms,
-                file_perms,
-                open_mode,
-                self.allow_blocking_current_thread,
-            ),
+            Dir::new(dir, dir_perms, file_perms, open_mode),
             guest_path.as_ref().to_owned(),
         ));
         Ok(self)
@@ -480,7 +443,6 @@ impl WasiCtxBuilder {
             wall_clock,
             monotonic_clock,
             allowed_network_uses,
-            allow_blocking_current_thread,
             built: _,
         } = mem::replace(self, Self::new());
         self.built = true;
@@ -499,7 +461,6 @@ impl WasiCtxBuilder {
             wall_clock,
             monotonic_clock,
             allowed_network_uses,
-            allow_blocking_current_thread,
             _executor: std::marker::PhantomData,
         }
     }
@@ -633,47 +594,6 @@ impl<T: WasiView> WasiView for WasiImpl<T> {
     }
 }
 
-pub trait WasiExecutor: Send + Sync + 'static {
-    fn run_blocking<F, R>(body: F) -> impl std::future::Future<Output = R> + Send
-    where
-        F: FnOnce() -> R + Send + 'static,
-        R: Send + 'static;
-}
-pub trait WasiSyncExecutor: WasiExecutor {
-    fn block_on<F>(f: F) -> F::Output
-    where
-        F: Future;
-}
-
-pub struct Tokio;
-impl WasiExecutor for Tokio {
-    async fn run_blocking<F, R>(body: F) -> R
-    where
-        F: FnOnce() -> R + Send + 'static,
-        R: Send + 'static,
-    {
-        todo!()
-    }
-}
-pub struct Standalone;
-impl WasiExecutor for Standalone {
-    async fn run_blocking<F, R>(body: F) -> R
-    where
-        F: FnOnce() -> R + Send + 'static,
-        R: Send + 'static,
-    {
-        todo!()
-    }
-}
-impl WasiSyncExecutor for Standalone {
-    fn block_on<F>(f: F) -> F::Output
-    where
-        F: Future,
-    {
-        todo!()
-    }
-}
-
 /// Per-[`Store`] state which holds state necessary to implement WASI from this
 /// crate.
 ///
@@ -700,7 +620,6 @@ pub struct WasiCtx<E> {
     pub(crate) stderr: Box<dyn StdoutStream>,
     pub(crate) socket_addr_check: SocketAddrCheck,
     pub(crate) allowed_network_uses: AllowedNetworkUses,
-    pub(crate) allow_blocking_current_thread: bool,
     pub(crate) _executor: std::marker::PhantomData<E>,
 }
 

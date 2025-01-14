@@ -2,7 +2,7 @@ use crate::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
 use crate::bindings::sockets::network::{ErrorCode, IpAddress, Network};
 use crate::host::network::util;
 use crate::poll::{subscribe, Pollable, Subscribe};
-use crate::runtime::{spawn_blocking, AbortOnDropJoinHandle};
+use crate::runtime::{AbortOnDropJoinHandle, WasiExecutor};
 use crate::{SocketError, WasiImpl, WasiView};
 use anyhow::Result;
 use std::mem;
@@ -22,6 +22,7 @@ pub enum ResolveAddressStream {
 impl<T> Host for WasiImpl<T>
 where
     T: WasiView,
+    T::Executor: WasiExecutor,
 {
     fn resolve_addresses(
         &mut self,
@@ -36,7 +37,7 @@ where
             return Err(ErrorCode::PermanentResolverFailure.into());
         }
 
-        let task = spawn_blocking(move || blocking_resolve(&host));
+        let task = <T as WasiView>::Executor::spawn_blocking(move || blocking_resolve(&host));
         let resource = self.table().push(ResolveAddressStream::Waiting(task))?;
         Ok(resource)
     }

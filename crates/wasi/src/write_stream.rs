@@ -1,3 +1,4 @@
+use crate::runtime::WasiExecutor;
 use crate::{HostOutputStream, StreamError, Subscribe};
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -145,14 +146,14 @@ pub struct AsyncWriteStream {
 impl AsyncWriteStream {
     /// Create a [`AsyncWriteStream`]. In order to use the [`HostOutputStream`] impl
     /// provided by this struct, the argument must impl [`tokio::io::AsyncWrite`].
-    pub fn new<T: tokio::io::AsyncWrite + Send + Unpin + 'static>(
+    pub fn new<T: tokio::io::AsyncWrite + Send + Unpin + 'static, E: WasiExecutor>(
         write_budget: usize,
         writer: T,
     ) -> Self {
         let worker = Arc::new(Worker::new(write_budget));
 
         let w = Arc::clone(&worker);
-        let join_handle = crate::runtime::spawn(async move { w.work(writer).await });
+        let join_handle = E::spawn(async move { w.work(writer).await });
 
         AsyncWriteStream {
             worker,

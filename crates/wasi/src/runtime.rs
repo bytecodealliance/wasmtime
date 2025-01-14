@@ -19,10 +19,141 @@
 //! Each of these facilities should be used by dependencies of wasmtime-wasi
 //! which when implementing component bindings.
 
+mod task;
+
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::LazyLock;
 use std::task::{Context, Poll};
+
+pub use task::AbortOnDropJoinHandle;
+
+pub trait WasiExecutor: Send + Sync + 'static {
+    /// Configures whether or not blocking operations made through this
+    /// `WasiExecutor` are allowed to block the current thread.
+    ///
+    /// Both `WasiExecutor` impls are is currently built on top of the Rust
+    /// [Tokio](https://tokio.rs/) library. While most WASI APIs are
+    /// non-blocking, some are instead blocking from the perspective of
+    /// WebAssembly. For example opening a file is a blocking operation with
+    /// respect to WebAssembly but it's implemented as an asynchronous operation
+    /// on the host. This is currently done with Tokio's
+    /// [`spawn_blocking`](https://docs.rs/tokio/latest/tokio/task/fn.spawn_blocking.html).
+    ///
+    /// When WebAssembly is used in a synchronous context, for example when
+    /// [`Config::async_support`] is disabled, then this asynchronous operation
+    /// is quickly turned back into a synchronous operation with a `block_on` in
+    /// Rust (specifically the `WasiSyncExecutor::block_on`, which is a proxy
+    /// for tokio's in the provided `Standalone` impl). This switching
+    /// back-and-forth between a blocking a non-blocking context can have
+    /// overhead, and this option exists to help alleviate this overhead.
+    ///
+    /// This option indicates that for WASI functions that are blocking from the
+    /// perspective of WebAssembly it's ok to block the native thread as well.
+    /// This means that this back-and-forth between async and sync won't happen
+    /// and instead blocking operations are performed on-thread (such as opening
+    /// a file). This can improve the performance of WASI operations when async
+    /// support is disabled.
+    ///
+    /// [`Config::async_support`]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html#method.async_support
+    fn run_blocking<F, R>(body: F) -> impl std::future::Future<Output = R> + Send
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static;
+
+    fn spawn<F>(f: F) -> AbortOnDropJoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static;
+
+    fn spawn_blocking<F, R>(f: F) -> AbortOnDropJoinHandle<R>
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static;
+}
+
+pub trait WasiSyncExecutor: WasiExecutor {
+    fn block_on<F>(f: F) -> F::Output
+    where
+        F: Future;
+}
+
+pub struct Tokio;
+impl WasiExecutor for Tokio {
+    async fn run_blocking<F, R>(body: F) -> R
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        Self::spawn_blocking(move || body()).await
+    }
+
+    fn spawn<F>(f: F) -> AbortOnDropJoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        let j = tokio::task::spawn(f);
+        AbortOnDropJoinHandle::from(j)
+    }
+
+    fn spawn_blocking<F, R>(f: F) -> AbortOnDropJoinHandle<R>
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        let j = tokio::task::spawn_blocking(f);
+        AbortOnDropJoinHandle::from(j)
+    }
+}
+pub struct Standalone;
+impl WasiExecutor for Standalone {
+    /// Execute the blocking `body` function.
+    ///
+    /// This implementation runs the blocking `body` directly on the current
+    /// thread. In this case the `async` signature of this method is
+    /// effectively a lie and the returned Future will always be immediately
+    /// Ready.
+    ///
+    /// Intentionally blocking the executor thread might seem unorthodox, but
+    /// is not actually a problem for specific workloads. See:
+    /// - [`crate::WasiExecutor::run_blocking`]
+    /// - [Poor performance of wasmtime file I/O maybe because tokio](https://github.com/bytecodealliance/wasmtime/issues/7973)
+    /// - [Implement opt-in for enabling WASI to block the current thread](https://github.com/bytecodealliance/wasmtime/pull/8190)
+    async fn run_blocking<F, R>(body: F) -> R
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        body()
+    }
+
+    fn spawn<F>(f: F) -> AbortOnDropJoinHandle<F::Output>
+    where
+        F: Future + Send + 'static,
+        F::Output: Send + 'static,
+    {
+        let j = with_ambient_tokio_runtime(|| tokio::task::spawn(f));
+        AbortOnDropJoinHandle::from(j)
+    }
+
+    fn spawn_blocking<F, R>(f: F) -> AbortOnDropJoinHandle<R>
+    where
+        F: FnOnce() -> R + Send + 'static,
+        R: Send + 'static,
+    {
+        let j = with_ambient_tokio_runtime(|| tokio::task::spawn_blocking(f));
+        AbortOnDropJoinHandle::from(j)
+    }
+}
+impl WasiSyncExecutor for Standalone {
+    fn block_on<F>(f: F) -> F::Output
+    where
+        F: Future,
+    {
+        in_tokio(f)
+    }
+}
 
 pub(crate) static RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| {
     tokio::runtime::Builder::new_multi_thread()
@@ -31,75 +162,6 @@ pub(crate) static RUNTIME: LazyLock<tokio::runtime::Runtime> = LazyLock::new(|| 
         .build()
         .unwrap()
 });
-
-/// Exactly like a [`tokio::task::JoinHandle`], except that it aborts the task when
-/// the handle is dropped.
-///
-/// This behavior makes it easier to tie a worker task to the lifetime of a Resource
-/// by keeping this handle owned by the Resource.
-#[derive(Debug)]
-pub struct AbortOnDropJoinHandle<T>(tokio::task::JoinHandle<T>);
-impl<T> AbortOnDropJoinHandle<T> {
-    /// Abort the task and wait for it to finish. Optionally returns the result
-    /// of the task if it ran to completion prior to being aborted.
-    pub(crate) async fn cancel(mut self) -> Option<T> {
-        self.0.abort();
-
-        match (&mut self.0).await {
-            Ok(value) => Some(value),
-            Err(err) if err.is_cancelled() => None,
-            Err(err) => std::panic::resume_unwind(err.into_panic()),
-        }
-    }
-}
-impl<T> Drop for AbortOnDropJoinHandle<T> {
-    fn drop(&mut self) {
-        self.0.abort()
-    }
-}
-impl<T> std::ops::Deref for AbortOnDropJoinHandle<T> {
-    type Target = tokio::task::JoinHandle<T>;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl<T> std::ops::DerefMut for AbortOnDropJoinHandle<T> {
-    fn deref_mut(&mut self) -> &mut tokio::task::JoinHandle<T> {
-        &mut self.0
-    }
-}
-impl<T> From<tokio::task::JoinHandle<T>> for AbortOnDropJoinHandle<T> {
-    fn from(jh: tokio::task::JoinHandle<T>) -> Self {
-        AbortOnDropJoinHandle(jh)
-    }
-}
-impl<T> Future for AbortOnDropJoinHandle<T> {
-    type Output = T;
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        match Pin::new(&mut self.as_mut().0).poll(cx) {
-            Poll::Pending => Poll::Pending,
-            Poll::Ready(r) => Poll::Ready(r.expect("child task panicked")),
-        }
-    }
-}
-
-pub fn spawn<F>(f: F) -> AbortOnDropJoinHandle<F::Output>
-where
-    F: Future + Send + 'static,
-    F::Output: Send + 'static,
-{
-    let j = with_ambient_tokio_runtime(|| tokio::task::spawn(f));
-    AbortOnDropJoinHandle(j)
-}
-
-pub fn spawn_blocking<F, R>(f: F) -> AbortOnDropJoinHandle<R>
-where
-    F: FnOnce() -> R + Send + 'static,
-    R: Send + 'static,
-{
-    let j = with_ambient_tokio_runtime(|| tokio::task::spawn_blocking(f));
-    AbortOnDropJoinHandle(j)
-}
 
 pub fn in_tokio<F: Future>(f: F) -> F::Output {
     match tokio::runtime::Handle::try_current() {

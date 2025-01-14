@@ -1,7 +1,7 @@
 use crate::bindings::sockets::tcp::ErrorCode;
 use crate::host::network;
 use crate::network::SocketAddressFamily;
-use crate::runtime::{with_ambient_tokio_runtime, AbortOnDropJoinHandle};
+use crate::runtime::{with_ambient_tokio_runtime, AbortOnDropJoinHandle, WasiExecutor};
 use crate::{
     HostInputStream, HostOutputStream, InputStream, OutputStream, SocketError, SocketResult,
     StreamError, Subscribe,
@@ -263,11 +263,12 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn finish_connect(&mut self) -> SocketResult<(InputStream, OutputStream)> {
+    pub fn finish_connect<E: WasiExecutor>(&mut self) -> SocketResult<(InputStream, OutputStream)> {
         let previous_state = std::mem::replace(&mut self.tcp_state, TcpState::Closed);
         let result = match previous_state {
             TcpState::ConnectReady(result) => result,
             TcpState::Connecting(mut future) => {
+                // FIXME: this function needs to become async!
                 let mut cx = std::task::Context::from_waker(futures::task::noop_waker_ref());
                 match with_ambient_tokio_runtime(|| future.as_mut().poll(&mut cx)) {
                     Poll::Ready(result) => result,
@@ -294,7 +295,7 @@ impl TcpSocket {
                     writer: writer.clone(),
                 };
                 let input: InputStream = Box::new(TcpReadStream(reader));
-                let output: OutputStream = Box::new(TcpWriteStream(writer));
+                let output: OutputStream = Box::new(TcpWriteStream::<E>::new(writer));
                 Ok((input, output))
             }
             Err(err) => {
@@ -360,7 +361,8 @@ impl TcpSocket {
         }
     }
 
-    pub fn accept(&mut self) -> SocketResult<(Self, InputStream, OutputStream)> {
+    // FIXME: make this async fn as well
+    pub fn accept<E: WasiExecutor>(&mut self) -> SocketResult<(Self, InputStream, OutputStream)> {
         let TcpState::Listening {
             listener,
             pending_accept,
@@ -369,6 +371,7 @@ impl TcpSocket {
             return Err(ErrorCode::InvalidState.into());
         };
 
+        // FIXME: await on this properly
         let result = match pending_accept.take() {
             Some(result) => result,
             None => {
@@ -446,7 +449,7 @@ impl TcpSocket {
         let writer = Arc::new(Mutex::new(TcpWriter::new(client.clone())));
 
         let input: InputStream = Box::new(TcpReadStream(reader.clone()));
-        let output: OutputStream = Box::new(TcpWriteStream(writer.clone()));
+        let output: OutputStream = Box::new(TcpWriteStream::<E>::new(writer.clone()));
         let tcp_socket = TcpSocket::from_state(
             TcpState::Connected {
                 stream: client,
@@ -638,7 +641,7 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn shutdown(&self, how: Shutdown) -> SocketResult<()> {
+    pub fn shutdown<E: WasiExecutor>(&self, how: Shutdown) -> SocketResult<()> {
         let TcpState::Connected { reader, writer, .. } = &self.tcp_state else {
             return Err(ErrorCode::InvalidState.into());
         };
@@ -648,7 +651,7 @@ impl TcpSocket {
         }
 
         if let Shutdown::Both | Shutdown::Write = how {
-            try_lock_for_socket(writer)?.shutdown();
+            try_lock_for_socket(writer)?.shutdown::<E>();
         }
 
         Ok(())
@@ -800,11 +803,11 @@ impl TcpWriter {
 
     /// Write `bytes` in a background task, remembering the task handle for use in a future call to
     /// `write_ready`
-    fn background_write(&mut self, mut bytes: bytes::Bytes) {
+    fn background_write<E: WasiExecutor>(&mut self, mut bytes: bytes::Bytes) {
         assert!(matches!(self.state, WriteState::Ready));
 
         let stream = self.stream.clone();
-        self.state = WriteState::Writing(crate::runtime::spawn(async move {
+        self.state = WriteState::Writing(E::spawn(async move {
             // Note: we are not using the AsyncWrite impl here, and instead using the TcpStream
             // primitive try_write, which goes directly to attempt a write with mio. This has
             // two advantages: 1. this operation takes a &TcpStream instead of a &mut TcpStream
@@ -825,7 +828,7 @@ impl TcpWriter {
         }));
     }
 
-    fn write(&mut self, mut bytes: bytes::Bytes) -> Result<(), StreamError> {
+    fn write<E: WasiExecutor>(&mut self, mut bytes: bytes::Bytes) -> Result<(), StreamError> {
         match self.state {
             WriteState::Ready => {}
             WriteState::Closed => return Err(StreamError::Closed),
@@ -844,7 +847,7 @@ impl TcpWriter {
                 Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => {
                     // As `try_write` indicated that it would have blocked, we'll perform the write
                     // in the background to allow us to return immediately.
-                    self.background_write(bytes);
+                    self.background_write::<E>(bytes);
 
                     return Ok(());
                 }
@@ -899,7 +902,7 @@ impl TcpWriter {
         Ok(SOCKET_READY_SIZE)
     }
 
-    fn shutdown(&mut self) {
+    fn shutdown<E: WasiExecutor>(&mut self) {
         self.state = match mem::replace(&mut self.state, WriteState::Closed) {
             // No write in progress, immediately shut down:
             WriteState::Ready => {
@@ -910,7 +913,7 @@ impl TcpWriter {
             // Schedule the shutdown after the current write has finished:
             WriteState::Writing(write) => {
                 let stream = self.stream.clone();
-                WriteState::Closing(crate::runtime::spawn(async move {
+                WriteState::Closing(E::spawn(async move {
                     let result = write.await;
                     native_shutdown(&stream, Shutdown::Write);
                     result
@@ -951,31 +954,43 @@ impl TcpWriter {
     }
 }
 
-struct TcpWriteStream(Arc<Mutex<TcpWriter>>);
+struct TcpWriteStream<E> {
+    writer: Arc<Mutex<TcpWriter>>,
+    _executor: std::marker::PhantomData<E>,
+}
 
-#[async_trait::async_trait]
-impl HostOutputStream for TcpWriteStream {
-    fn write(&mut self, bytes: bytes::Bytes) -> Result<(), StreamError> {
-        try_lock_for_stream(&self.0)?.write(bytes)
-    }
-
-    fn flush(&mut self) -> Result<(), StreamError> {
-        try_lock_for_stream(&self.0)?.flush()
-    }
-
-    fn check_write(&mut self) -> Result<usize, StreamError> {
-        try_lock_for_stream(&self.0)?.check_write()
-    }
-
-    async fn cancel(&mut self) {
-        self.0.lock().await.cancel().await
+impl<E> TcpWriteStream<E> {
+    pub fn new(writer: Arc<Mutex<TcpWriter>>) -> Self {
+        Self {
+            writer,
+            _executor: std::marker::PhantomData,
+        }
     }
 }
 
 #[async_trait::async_trait]
-impl Subscribe for TcpWriteStream {
+impl<E: WasiExecutor> HostOutputStream for TcpWriteStream<E> {
+    fn write(&mut self, bytes: bytes::Bytes) -> Result<(), StreamError> {
+        try_lock_for_stream(&self.writer)?.write::<E>(bytes)
+    }
+
+    fn flush(&mut self) -> Result<(), StreamError> {
+        try_lock_for_stream(&self.writer)?.flush()
+    }
+
+    fn check_write(&mut self) -> Result<usize, StreamError> {
+        try_lock_for_stream(&self.writer)?.check_write()
+    }
+
+    async fn cancel(&mut self) {
+        self.writer.lock().await.cancel().await
+    }
+}
+
+#[async_trait::async_trait]
+impl<E: WasiExecutor> Subscribe for TcpWriteStream<E> {
     async fn ready(&mut self) {
-        self.0.lock().await.ready().await
+        self.writer.lock().await.ready().await
     }
 }
 

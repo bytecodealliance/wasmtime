@@ -8,6 +8,7 @@
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
 use crate::poll::Subscribe;
+use crate::runtime::WasiExecutor;
 use crate::{HostInputStream, HostOutputStream, StreamError};
 use anyhow::anyhow;
 use bytes::Bytes;
@@ -119,9 +120,11 @@ pub struct AsyncReadStream {
 impl AsyncReadStream {
     /// Create a [`AsyncReadStream`]. In order to use the [`HostInputStream`] impl
     /// provided by this struct, the argument must impl [`tokio::io::AsyncRead`].
-    pub fn new<T: tokio::io::AsyncRead + Send + Unpin + 'static>(mut reader: T) -> Self {
+    pub fn new<T: tokio::io::AsyncRead + Send + Unpin + 'static, E: WasiExecutor>(
+        mut reader: T,
+    ) -> Self {
         let (sender, receiver) = mpsc::channel(1);
-        let join_handle = crate::runtime::spawn(async move {
+        let join_handle = E::spawn(async move {
             loop {
                 use tokio::io::AsyncReadExt;
                 let mut buf = bytes::BytesMut::with_capacity(4096);
@@ -281,6 +284,7 @@ impl Subscribe for ClosedOutputStream {
 #[cfg(test)]
 mod test {
     use super::*;
+    use crate::runtime::Tokio;
     use std::time::Duration;
     use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 
@@ -322,7 +326,7 @@ mod test {
 
     #[test_log::test(tokio::test(flavor = "multi_thread"))]
     async fn empty_read_stream() {
-        let mut reader = AsyncReadStream::new(tokio::io::empty());
+        let mut reader = AsyncReadStream::new::<_, Tokio>(tokio::io::empty());
 
         // In a multi-threaded context, the value of state is not deterministic -- the spawned
         // reader task may run on a different thread.
@@ -342,7 +346,7 @@ mod test {
 
     #[test_log::test(tokio::test(flavor = "multi_thread"))]
     async fn infinite_read_stream() {
-        let mut reader = AsyncReadStream::new(tokio::io::repeat(0));
+        let mut reader = AsyncReadStream::new::<_, Tokio>(tokio::io::repeat(0));
 
         let bs = reader.read(10).unwrap();
         if bs.is_empty() {
@@ -470,7 +474,7 @@ mod test {
     // behavior at some point, but this test shows the behavior as it is implemented:
     async fn backpressure_read_stream() {
         let (r, mut w) = simplex(16 * 1024); // Make sure this buffer isn't a bottleneck
-        let mut reader = AsyncReadStream::new(r);
+        let mut reader = AsyncReadStream::new::<_, Tokio>(r);
 
         let writer_task = tokio::task::spawn(async move {
             // Write twice as much as we can buffer up in an AsyncReadStream:
