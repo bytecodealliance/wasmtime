@@ -648,12 +648,7 @@ where
         &mut self,
         memarg: &MemArg,
         access_size: OperandSize,
-        check_align: bool,
     ) -> Result<Option<Reg>> {
-        if check_align {
-            self.check_align(memarg, access_size)?;
-        }
-
         let ptr_size: OperandSize = self.env.ptr_type().try_into()?;
         let enable_spectre_mitigation = self.env.heap_access_spectre_mitigation();
         let add_offset_and_access_size = |offset: ImmOffset, access_size: OperandSize| {
@@ -846,22 +841,25 @@ where
     }
 
     /// Emit checks to ensure that the address at `memarg` is correctly aligned for `size`.
-    fn check_align(&mut self, memarg: &MemArg, size: OperandSize) -> Result<()> {
+    fn emit_check_align(&mut self, memarg: &MemArg, size: OperandSize) -> Result<()> {
         if size.bytes() > 1 {
-            let addr = *self.context.stack.peek().unwrap();
-            let tmp = self.context.any_gpr(self.masm)?;
-            self.context.move_val_to_reg(&addr, tmp, self.masm)?;
-            if memarg.offset != 0 {
+            let addr = self.context.pop_to_reg(self.masm, None)?;
+            let tmp = scratch!(M);
+            let effective_addr = if memarg.offset != 0 {
                 self.masm.add(
                     writable!(tmp),
-                    tmp,
+                    addr.reg,
                     RegImm::Imm(Imm::I64(memarg.offset)),
                     size,
                 )?;
+                tmp
+            } else {
+                addr.reg
             };
+
             self.masm.and(
                 writable!(tmp),
-                tmp,
+                effective_addr,
                 RegImm::Imm(Imm::I32(size.bytes() - 1)),
                 size,
             )?;
@@ -869,10 +867,19 @@ where
             self.masm.cmp(tmp, RegImm::Imm(Imm::i64(0)), size)?;
             self.masm.trapif(IntCmpKind::Ne, TRAP_HEAP_MISALIGNED)?;
 
-            self.context.free_reg(tmp);
+            self.context.stack.push(addr.into());
         }
 
         Ok(())
+    }
+
+    pub fn emit_compute_heap_address_align_checked(
+        &mut self,
+        memarg: &MemArg,
+        access_size: OperandSize,
+    ) -> Result<Option<Reg>> {
+        self.emit_check_align(memarg, access_size)?;
+        self.emit_compute_heap_address(memarg, access_size)
     }
 
     /// Emit a WebAssembly load.
@@ -883,8 +890,13 @@ where
         kind: LoadKind,
         op_kind: MemOpKind,
     ) -> Result<()> {
-        if let Some(addr) = self.emit_compute_heap_address(&arg, kind.derive_operand_size())? {
-            let dst = match target_type {
+        let maybe_addr = match op_kind {
+            MemOpKind::Atomic => self.emit_compute_heap_address_align_checked(&arg, kind.derive_operand_size())?,
+            MemOpKind::Normal => self.emit_compute_heap_address(&arg, kind.derive_operand_size())?,
+        };
+
+        if let Some(addr) = maybe_addr {
+            let dst = match target_ty {
                 WasmValType::I32 | WasmValType::I64 => self.context.any_gpr(self.masm)?,
                 WasmValType::F32 | WasmValType::F64 => self.context.any_fpr(self.masm)?,
                 WasmValType::V128 => self.context.reg_for_type(target_type, self.masm)?,
@@ -910,8 +922,13 @@ where
         op_kind: MemOpKind,
     ) -> Result<()> {
         let src = self.context.pop_to_reg(self.masm, None)?;
-        let addr = self.emit_compute_heap_address(&arg, size, op_kind.is_atomic())?;
-        if let Some(addr) = addr {
+
+        let maybe_addr = match op_kind {
+            MemOpKind::Atomic => self.emit_compute_heap_address_align_checked(&arg, size)?,
+            MemOpKind::Normal => self.emit_compute_heap_address(&arg, size)?,
+        };
+
+        if let Some(addr) = maybe_addr {
             self.masm.wasm_store(
                 src.reg.into(),
                 self.masm.address_at_reg(addr, 0)?,
