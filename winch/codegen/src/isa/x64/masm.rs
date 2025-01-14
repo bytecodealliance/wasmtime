@@ -1334,7 +1334,7 @@ impl Masm for MacroAssembler {
                 self.asm.neg(operand.to_reg(), operand, size);
                 self.asm
                     .lock_xadd(addr, operand.to_reg(), operand, size, flags);
-            },
+            }
         }
 
         match extend {
