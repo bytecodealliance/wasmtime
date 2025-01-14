@@ -551,8 +551,6 @@ impl RunCommand {
             });
         }
 
-        // Invoke the function and then afterwards print all the results that came
-        // out, if there are any.
         let mut results = vec![Val::null_func_ref(); ty.results().len()];
         let invoke_res = func
             .call_async(&mut *store, &values, &mut results)
@@ -574,29 +572,29 @@ impl RunCommand {
                 "warning: using `--invoke` with a function that returns values \
                  is experimental and may break in the future"
             );
+        }
 
-            for result in results {
-                match result {
-                    Val::I32(i) => {
-                        eprintln!("Debug: Result value: {i}");
-                        print!("{i}");
-                    }
-                    Val::I64(i) => print!("{i}"),
-                    Val::F32(f) => print!("{}", f32::from_bits(f)),
-                    Val::F64(f) => print!("{}", f64::from_bits(f)),
-                    Val::V128(i) => print!("{}", i.as_u128()),
-                    Val::ExternRef(None) => print!("<null externref>"),
-                    Val::ExternRef(Some(_)) => print!("<externref>"),
-                    Val::FuncRef(None) => print!("<null funcref>"),
-                    Val::FuncRef(Some(_)) => print!("<funcref>"),
-                    Val::AnyRef(None) => print!("<null anyref>"),
-                    Val::AnyRef(Some(_)) => print!("<anyref>"),
+        for result in results {
+            match result {
+                Val::I32(i) => {
+                    eprintln!("Debug: Result value: {i}");
+                    print!("{i}");
                 }
+                Val::I64(i) => print!("{i}"),
+                Val::F32(f) => print!("{}", f32::from_bits(f)),
+                Val::F64(f) => print!("{}", f64::from_bits(f)),
+                Val::V128(i) => print!("{}", i.as_u128()),
+                Val::ExternRef(None) => print!("<null externref>"),
+                Val::ExternRef(Some(_)) => print!("<externref>"),
+                Val::FuncRef(None) => print!("<null funcref>"),
+                Val::FuncRef(Some(_)) => print!("<funcref>"),
+                Val::AnyRef(None) => print!("<null anyref>"),
+                Val::AnyRef(Some(_)) => print!("<anyref>"),
             }
+        }
 
-            if !self.no_newline {
-                println!();
-            }
+        if !self.no_newline {
+            println!();
         }
         Ok(())
     }
