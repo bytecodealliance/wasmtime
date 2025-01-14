@@ -844,23 +844,23 @@ where
     pub fn emit_wasm_load(
         &mut self,
         arg: &MemArg,
-        ty: WasmValType,
-        size: OperandSize,
+        target_type: WasmValType,
         kind: LoadKind,
         op_kind: MemOpKind,
     ) -> Result<()> {
-        if let Some(addr) = self.emit_compute_heap_address(&arg, size)? {
-            let dst = match ty {
+        if let Some(addr) = self.emit_compute_heap_address(&arg, kind.derive_operand_size())? {
+            let dst = match target_type {
                 WasmValType::I32 | WasmValType::I64 => self.context.any_gpr(self.masm)?,
                 WasmValType::F32 | WasmValType::F64 => self.context.any_fpr(self.masm)?,
-                WasmValType::V128 => self.context.reg_for_type(ty, self.masm)?,
+                WasmValType::V128 => self.context.reg_for_type(target_type, self.masm)?,
                 _ => bail!(CodeGenError::unsupported_wasm_type()),
             };
 
             let src = self.masm.address_at_reg(addr, 0)?;
-            self.masm
-                .wasm_load(src, writable!(dst), size, kind, op_kind)?;
-            self.context.stack.push(TypedReg::new(ty, dst).into());
+            self.masm.wasm_load(src, writable!(dst), kind, op_kind)?;
+            self.context
+                .stack
+                .push(TypedReg::new(target_type, dst).into());
             self.context.free_reg(addr);
         }
 

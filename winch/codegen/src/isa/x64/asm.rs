@@ -145,13 +145,11 @@ impl From<ShiftKind> for CraneliftShiftKind {
 impl From<ExtendKind> for ExtMode {
     fn from(value: ExtendKind) -> Self {
         match value {
-            ExtendKind::I64ExtendI32S | ExtendKind::I64ExtendI32U | ExtendKind::I64Extend32S => {
-                ExtMode::LQ
-            }
-            ExtendKind::I32Extend8S => ExtMode::BL,
-            ExtendKind::I32Extend16S => ExtMode::WL,
-            ExtendKind::I64Extend8S => ExtMode::BQ,
-            ExtendKind::I64Extend16S => ExtMode::WQ,
+            ExtendKind::I64Extend32U | ExtendKind::I64Extend32S => ExtMode::LQ,
+            ExtendKind::I32Extend8S | ExtendKind::I32Extend8U => ExtMode::BL,
+            ExtendKind::I32Extend16S | ExtendKind::I32Extend16U => ExtMode::WL,
+            ExtendKind::I64Extend8S | ExtendKind::I64Extend8U => ExtMode::BQ,
+            ExtendKind::I64Extend16S | ExtendKind::I64Extend16U => ExtMode::WQ,
         }
     }
 }

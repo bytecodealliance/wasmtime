@@ -189,47 +189,61 @@ pub(crate) enum ShiftKind {
 /// lowering to machine code.
 #[derive(Copy, Clone)]
 pub(crate) enum ExtendKind {
-    /// Sign extends i32 to i64.
-    I64ExtendI32S,
-    /// Zero extends i32 to i64.
-    I64ExtendI32U,
-    // Sign extends the 8 least significant bits to 32 bits.
+    /// 8 to 32 bit signed extend.
     I32Extend8S,
-    // Sign extends the 16 least significant bits to 32 bits.
+    /// 8 to 32 bit unsigned extend.
+    I32Extend8U,
+
+    /// 16 to 32 bit signed extend.
     I32Extend16S,
-    /// Sign extends the 8 least significant bits to 64 bits.
+    /// 16 to 32 bit unsigned extend.
+    I32Extend16U,
+
+    /// 8 to 64 bit signed extend.
     I64Extend8S,
-    /// Sign extends the 16 least significant bits to 64 bits.
+    /// 8 to 64 bit unsigned extend.
+    I64Extend8U,
+
+    /// 16 to 64 bit signed extend.
     I64Extend16S,
-    /// Sign extends the 32 least significant bits to 64 bits.
+    /// 16 to 64 bit unsigned extend.
+    I64Extend16U,
+
+    /// 32 to 64 bit signed extend.
     I64Extend32S,
+    /// 32 to 64 bit unsigned extend.
+    I64Extend32U,
 }
 
 impl ExtendKind {
     pub fn signed(&self) -> bool {
-        if let Self::I64ExtendI32U = self {
-            false
-        } else {
-            true
+        match self {
+            Self::I32Extend8S
+            | Self::I32Extend16S
+            | Self::I64Extend8S
+            | Self::I64Extend16S
+            | Self::I64Extend32S => true,
+            _ => false,
         }
     }
 
     pub fn from_bits(&self) -> u8 {
         match self {
-            Self::I64ExtendI32S | Self::I64ExtendI32U | Self::I64Extend32S => 32,
-            Self::I32Extend8S | Self::I64Extend8S => 8,
-            Self::I32Extend16S | Self::I64Extend16S => 16,
+            Self::I64Extend32S | Self::I64Extend32U => 32,
+            Self::I32Extend8S | Self::I32Extend8U | Self::I64Extend8S | Self::I64Extend8U => 8,
+            Self::I32Extend16S | Self::I64Extend16S | Self::I32Extend16U | Self::I64Extend16U => 16,
         }
     }
 
     pub fn to_bits(&self) -> u8 {
         match self {
-            Self::I64ExtendI32S
-            | Self::I64ExtendI32U
+            Self::I64Extend32S
+            | Self::I64Extend32U
             | Self::I64Extend8S
+            | Self::I64Extend8U
             | Self::I64Extend16S
-            | Self::I64Extend32S => 64,
-            Self::I32Extend8S | Self::I32Extend16S => 32,
+            | Self::I64Extend16U => 64,
+            Self::I32Extend8S | Self::I32Extend8U | Self::I32Extend16U | Self::I32Extend16S => 32,
         }
     }
 }
@@ -252,16 +266,75 @@ pub(crate) enum VectorExtendKind {
     V128Extend32x2U,
 }
 
+/// Kinds of splat supported by WebAssembly.
+pub(crate) enum SplatKind {
+    // 8 bit.
+    S8,
+    // 16 bit.
+    S16,
+    // 32 bit.
+    S32,
+    // 64 bit.
+    S64,
+}
+
 /// Kinds of behavior supported by Wasm loads.
 pub(crate) enum LoadKind {
-    /// Do not extend or splat.
-    Simple,
+    /// Load the entire bytes of the operand size without any modifications.
+    Operand(OperandSize),
     /// Duplicate value into vector lanes.
-    Splat,
+    Splat(SplatKind),
     /// Scalar (non-vector) extend.
     ScalarExtend(ExtendKind),
     /// Vector extend.
     VectorExtend(VectorExtendKind),
+}
+
+impl LoadKind {
+    /// Returns the [`OperandSize`] used in the load operation.
+    pub(crate) fn derive_operand_size(&self) -> OperandSize {
+        match self {
+            Self::ScalarExtend(scalar) => Self::operand_size_for_scalar(scalar),
+            Self::VectorExtend(vector) => Self::operand_size_for_vector(vector),
+            Self::Splat(kind) => Self::operand_size_for_splat(kind),
+            Self::Operand(op) => *op,
+        }
+    }
+
+    fn operand_size_for_vector(vector: &VectorExtendKind) -> OperandSize {
+        match vector {
+            VectorExtendKind::V128Extend8x8S | VectorExtendKind::V128Extend8x8U => OperandSize::S8,
+            VectorExtendKind::V128Extend16x4S | VectorExtendKind::V128Extend16x4U => {
+                OperandSize::S16
+            }
+            VectorExtendKind::V128Extend32x2S | VectorExtendKind::V128Extend32x2U => {
+                OperandSize::S32
+            }
+        }
+    }
+
+    fn operand_size_for_scalar(extend_kind: &ExtendKind) -> OperandSize {
+        match extend_kind {
+            ExtendKind::I32Extend8S
+            | ExtendKind::I32Extend8U
+            | ExtendKind::I64Extend8S
+            | ExtendKind::I64Extend8U => OperandSize::S8,
+            ExtendKind::I32Extend16S
+            | ExtendKind::I32Extend16U
+            | ExtendKind::I64Extend16U
+            | ExtendKind::I64Extend16S => OperandSize::S16,
+            ExtendKind::I64Extend32U | ExtendKind::I64Extend32S => OperandSize::S32,
+        }
+    }
+
+    fn operand_size_for_splat(kind: &SplatKind) -> OperandSize {
+        match kind {
+            SplatKind::S8 => OperandSize::S8,
+            SplatKind::S16 => OperandSize::S16,
+            SplatKind::S32 => OperandSize::S32,
+            SplatKind::S64 => OperandSize::S64,
+        }
+    }
 }
 
 /// Operand size, in bits.
@@ -683,7 +756,6 @@ pub(crate) trait MacroAssembler {
         &mut self,
         src: Self::Address,
         dst: WritableReg,
-        size: OperandSize,
         kind: LoadKind,
         op_kind: MemOpKind,
     ) -> Result<()>;
