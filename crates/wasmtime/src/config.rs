@@ -259,7 +259,7 @@ impl Config {
             #[cfg(feature = "async")]
             async_stack_size: 2 << 20,
             #[cfg(feature = "async")]
-            async_stack_zeroing: true,
+            async_stack_zeroing: false,
             #[cfg(feature = "async")]
             stack_creator: None,
             async_support: false,
