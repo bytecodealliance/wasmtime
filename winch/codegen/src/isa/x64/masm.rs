@@ -1302,12 +1302,7 @@ impl Masm for MacroAssembler {
                 match extend {
                     // It is only necessary to zero-extend when the operand is less than 32bits.
                     // x64 automatically zero-extend 32bits to 64bit.
-                    Some(
-                        extend @ (ExtendKind::I32Extend8S
-                        | ExtendKind::I64Extend8S
-                        | ExtendKind::I64Extend16S
-                        | ExtendKind::I32Extend16S),
-                    ) => {
+                    Some(extend) => {
                         self.asm.movzx_rr(operand.to_reg(), operand, extend);
                     }
                     _ => (),
