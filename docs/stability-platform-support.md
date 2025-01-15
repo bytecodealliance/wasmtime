@@ -7,17 +7,10 @@ information about what's supported in Wasmtime on a per-matrix-combination
 basis.
 
 Wasmtime strives to support hardware that anyone wants to run WebAssembly on.
-Maintainers of Wasmtime support a number of "major" platforms themselves but
-porting work may be required to support platforms that maintainers are not
-themselves familiar with. Out-of-the box Wasmtime supports:
-
-* Linux x86\_64, aarch64, s390x, and riscv64
-* macOS x86\_64, aarch64
-* Windows x86\_64
-
-Other platforms such as Android, iOS, and the BSD family of OSes are not
-built-in yet. PRs for porting are welcome and maintainers are happy to add more
-entries to the CI matrix for these platforms.
+Wasmtime is intended to work out-of-the-box on most platforms by having
+platform-specific defaults for the runtime. For example the native Cranelift
+backend is enabled by default if supported, but otherwise the Pulley
+interpreter backend is used if it's not supported.
 
 ## Compiler Support
 
@@ -45,11 +38,40 @@ Cranelift.
 
 ## Interpreter support
 
-At this time `wasmtime` does not have a mode in which it simply interprets
-WebAssembly code. It is desired to add support for an interpreter, however, and
-this will have minimal system dependencies. It is planned that the system will
-need to support some form of dynamic memory allocation, but other than that not
-much else will be needed.
+The `wasmtime` crate provides an implementation of a WebAssembly interpreter
+named "Pulley" which is a portable implementation of executing WebAssembly
+code. Pulley uses a custom bytecode which is created from input WebAssembly
+similarly to how native architectures are supported. Pulley's bytecode is
+created via a Cranelift backend for Pulley, so compile times for the interpreter
+are expected to be similar to natively compiled code.
+
+The main advantage of Pulley is that the bytecode can be executed on any
+platform with the same pointer-width and endianness. For example to execute
+Pulley on a 32-bit ARM platform you'd use the target `pulley32`. Similarly if
+you wanted to run Pulley on x86\_64 you'd use the target `pulley64` for
+Wasmtime.
+
+Pulley's platform requirements are no greater than that of Wasmtime itself,
+meaning that the goal is that if you can compile Wasmtime for a Rust target then
+Pulley can run on that target.
+
+Finally, note that while Pulley is optimized to be an efficient interpreter it
+will never be as fast as native Cranelift backends. A performance penalty should
+be expected when using Pulley.
+
+## OS Support
+
+Wasmtime with Pulley should work out-of-the-box on any Rust target, but for
+optimal runtime performance of WebAssembly OS integration is required. In the
+same way that Pulley is slower than a native Cranelift backend Wasmtime will be
+slower on Rust targets it has no OS support for. Wasmtime will for example use
+virtual memory when possible to implement WebAssembly linear memories to
+efficiently allocate/grow/deallocate.
+
+OS support at this time primarily includes Windows, macOS, and Linux. Other
+OSes such as iOS, Android, and Illumos are supported but less well tested.
+PRs to the Wasmtime repository are welcome for new OSes for better native
+platform support of a runtime environment.
 
 ## Support for `#![no_std]`
 
@@ -60,6 +82,7 @@ Cargo features are:
 * `runtime`
 * `gc`
 * `component-model`
+* `pulley`
 
 This notably does not include the `default` feature which means that when
 depending on Wasmtime you'll need to specify `default-features = false`. This
@@ -79,3 +102,8 @@ Wasmtime's runtime will use the symbols defined in this file meaning that if
 they're not defined then a link-time error will be generated. Embedders are
 required to implement these functions in accordance with their documentation to
 enable Wasmtime to run on custom platforms.
+
+Note that many functions in this header file are gated behind off-by-default
+`#ifdef` directives indicating that Wasmtime doesn't require them by default.
+The `wasmtime` crate features `custom-{virtual-memory,native-signals}` can be
+used to enable usage of these APIs if desired.

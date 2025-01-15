@@ -1,27 +1,52 @@
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
+    // NB: duplicating a workaround in the wasmtime-fiber build script.
+    println!("cargo:rustc-check-cfg=cfg(asan)");
+    if cfg_is("sanitize", "address") {
+        println!("cargo:rustc-cfg=asan");
+    }
+
+    let unix = cfg("unix");
+    let windows = cfg("windows");
+    let miri = cfg("miri");
+    let supported_platform = unix || windows;
+
+    let has_native_signals =
+        !miri && (supported_platform || cfg!(feature = "custom-native-signals"));
+    let has_virtual_memory = supported_platform || cfg!(feature = "custom-virtual-memory");
+
+    println!("cargo:rustc-check-cfg=cfg(has_native_signals, has_virtual_memory)");
+    if has_native_signals {
+        println!("cargo:rustc-cfg=has_native_signals");
+    }
+    if has_virtual_memory {
+        println!("cargo:rustc-cfg=has_virtual_memory");
+    }
+
     #[cfg(feature = "runtime")]
     build_c_helpers();
+}
+
+fn cfg(key: &str) -> bool {
+    std::env::var(&format!("CARGO_CFG_{}", key.to_uppercase())).is_ok()
+}
+
+fn cfg_is(key: &str, val: &str) -> bool {
+    std::env::var(&format!("CARGO_CFG_{}", key.to_uppercase()))
+        .ok()
+        .as_deref()
+        == Some(val)
 }
 
 #[cfg(feature = "runtime")]
 fn build_c_helpers() {
     use wasmtime_versioned_export_macros::versioned_suffix;
 
-    // NB: duplicating a workaround in the wasmtime-fiber build script.
-    println!("cargo:rustc-check-cfg=cfg(asan)");
-    match std::env::var("CARGO_CFG_SANITIZE") {
-        Ok(s) if s == "address" => {
-            println!("cargo:rustc-cfg=asan");
-        }
-        _ => {}
-    }
-
     // If this platform is neither unix nor windows then there's no default need
     // for a C helper library since `helpers.c` is tailored for just these
     // platforms currently.
-    if std::env::var("CARGO_CFG_UNIX").is_err() && std::env::var("CARGO_CFG_WINDOWS").is_err() {
+    if !cfg("unix") && !cfg("windows") {
         return;
     }
 
@@ -38,9 +63,7 @@ fn build_c_helpers() {
 
     // On MinGW targets work around a bug in the MinGW compiler described at
     // https://github.com/bytecodealliance/wasmtime/pull/9688#issuecomment-2573367719
-    if std::env::var("CARGO_CFG_WINDOWS").is_ok()
-        && std::env::var("CARGO_CFG_TARGET_ENV").ok().as_deref() == Some("gnu")
-    {
+    if cfg("windows") && cfg_is("target_env", "gnu") {
         build.define("__USE_MINGW_SETJMP_NON_SEH", None);
     }
 

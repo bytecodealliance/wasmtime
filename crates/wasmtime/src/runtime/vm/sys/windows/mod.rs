@@ -2,7 +2,7 @@
 
 use std::cell::Cell;
 
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 pub mod mmap;
 pub mod traphandlers;
 pub mod vm;

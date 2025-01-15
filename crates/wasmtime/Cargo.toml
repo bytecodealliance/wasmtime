@@ -138,7 +138,6 @@ default = [
   'component-model',
   'threads',
   'std',
-  'signals-based-traps',
 ]
 
 # An on-by-default feature enabling runtime compilation of WebAssembly modules
@@ -193,7 +192,6 @@ async = [
 pooling-allocator = [
   "runtime",
   "std",                 # not ported to no_std yet
-  "signals-based-traps", # pooling allocation always uses mmap at this time
 ]
 
 # Enables support for all architectures in Cranelift, allowing
@@ -250,6 +248,7 @@ runtime = [
   "dep:rustix",
   "rustix/mm",
   "pulley-interpreter?/interp",
+  "dep:wasmtime-jit-icache-coherence",
 ]
 
 # Enable support for garbage collection-related things.
@@ -273,7 +272,6 @@ gc = [
   "wasmtime-environ/gc",
   "wasmtime-cranelift?/gc",
   "wasmtime-winch?/gc",
-  "signals-based-traps",    # not ported to non-mmap schemes yet
 ]
 
 # Enable the deferred reference counting garbage collector.
@@ -297,7 +295,6 @@ threads = [
   "wasmtime-cranelift?/threads",
   "wasmtime-winch?/threads",
   "std",
-  "signals-based-traps",
 ]
 
 # Controls whether backtraces will attempt to parse DWARF information in
@@ -319,13 +316,6 @@ std = [
   'wasmtime-fiber?/std',
   'pulley-interpreter?/std',
   'wasmtime-math/std',
-  # technically this isn't necessary but once you have the standard library you
-  # probably want things to go fast in which case you've probably got signal
-  # handlers and such so implicitly enable this. This also helps reduce the
-  # verbosity of others depending on `wasmtime` with `default-features = false`
-  # where frequently `std` is enabled and this feature will typically want to be
-  # enabled by default as well.
-  'signals-based-traps',
 ]
 
 # Enables support for the `Store::call_hook` API which enables injecting custom
@@ -357,14 +347,17 @@ reexport-wasmparser = []
 # provides a human-readable text format for component values.
 wave = ["dep:wasm-wave"]
 
-# Gates compile-time support for host signals-based-traps.
+# For platforms that Wasmtime does not have support for Wasmtime will disable
+# the use of virtual memory by default, for example allocating linear memories
+# with `malloc` instead. This feature can be used, for these platforms, to
+# instead use a C API defined in `wasmtime-platform.h` instead.
 #
-# Traps based on signals, such as SIGSEGV, are useful for accelerating
-# WebAssembly by removing explicit checks and letting the hardware deliver
-# signals instead. This feature is enabled by default and gates a number
-# of implementations within Wasmtime that may rely on virtual memory, for
-# example. Embedded systems or smaller systems may wish to disable this feature
-# to reduce the runtime requirements of Wasmtime.
-signals-based-traps = [
-  "dep:wasmtime-jit-icache-coherence",
-]
+# For some more information see
+# https://docs.wasmtime.dev/stability-platform-support.html#support-for-no_std
+#
+# This feature is not necessary for supported platforms like Unix and Windows as
+# virtual memory is always enabled there.
+custom-virtual-memory = []
+
+# Same as `custom-virtual-memory` above, but for custom signal-handling APIs.
+custom-native-signals = []

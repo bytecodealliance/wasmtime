@@ -1,4 +1,4 @@
-//! Trap handling support when `feature = "signals-based-traps"` is enabled.
+//! Trap handling support when `has_native_signals` is enabled.
 //!
 //! This module is conditionally included in the above `traphandlers` module and
 //! contains support and shared routines for working with signals-based traps.
