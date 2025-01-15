@@ -60,7 +60,11 @@ enum FiberStackStorage {
 }
 
 impl FiberStack {
-    pub fn new(size: usize) -> io::Result<Self> {
+    pub fn new(size: usize, zeroed: bool) -> io::Result<Self> {
+        // The anonymous `mmap`s we use for `FiberStackStorage` are alawys
+        // zeroed.
+        let _ = zeroed;
+
         // See comments in `mod asan` below for why asan has a different stack
         // allocation strategy.
         if cfg!(asan) {

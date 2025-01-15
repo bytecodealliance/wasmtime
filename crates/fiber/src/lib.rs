@@ -47,8 +47,8 @@ pub type Result<T, E = imp::Error> = core::result::Result<T, E>;
 
 impl FiberStack {
     /// Creates a new fiber stack of the given size.
-    pub fn new(size: usize) -> Result<Self> {
-        Ok(Self(imp::FiberStack::new(size)?))
+    pub fn new(size: usize, zeroed: bool) -> Result<Self> {
+        Ok(Self(imp::FiberStack::new(size, zeroed)?))
     }
 
     /// Creates a new fiber stack of the given size.
@@ -108,7 +108,7 @@ pub unsafe trait RuntimeFiberStackCreator: Send + Sync {
     ///
     /// This is useful to plugin previously allocated memory instead of mmap'ing a new stack for
     /// every instance.
-    fn new_stack(&self, size: usize) -> Result<Box<dyn RuntimeFiberStack>, Error>;
+    fn new_stack(&self, size: usize, zeroed: bool) -> Result<Box<dyn RuntimeFiberStack>, Error>;
 }
 
 /// A fiber stack backed by custom memory.
