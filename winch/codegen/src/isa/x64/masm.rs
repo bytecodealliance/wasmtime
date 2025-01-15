@@ -1337,11 +1337,8 @@ impl Masm for MacroAssembler {
             }
         }
 
-        match extend {
-            Some(extend) => {
-                self.asm.movzx_rr(operand.to_reg(), operand, extend);
-            }
-            _ => (),
+        if let Some(extend) = extend {
+            self.asm.movzx_rr(operand.to_reg(), operand, extend);
         }
         Ok(())
     }
