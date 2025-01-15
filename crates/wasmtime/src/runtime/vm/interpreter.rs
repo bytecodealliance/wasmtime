@@ -19,15 +19,21 @@ pub struct Interpreter {
 impl Interpreter {
     /// Creates a new interpreter ready to interpret code.
     pub fn new(engine: &Engine) -> Interpreter {
-        Interpreter {
+        let ret = Interpreter {
             pulley: Box::new(Vm::with_stack(vec![0; engine.config().max_wasm_stack])),
-        }
+        };
+        engine.profiler().register_interpreter(&ret);
+        ret
     }
 
     /// Returns the `InterpreterRef` structure which can be used to actually
     /// execute interpreted code.
     pub fn as_interpreter_ref(&mut self) -> InterpreterRef<'_> {
         InterpreterRef(&mut self.pulley)
+    }
+
+    pub fn pulley(&self) -> &Vm {
+        &self.pulley
     }
 }
 

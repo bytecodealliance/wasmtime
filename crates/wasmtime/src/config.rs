@@ -2272,6 +2272,7 @@ impl Config {
             ProfilingStrategy::JitDump => profiling_agent::new_jitdump()?,
             ProfilingStrategy::VTune => profiling_agent::new_vtune()?,
             ProfilingStrategy::None => profiling_agent::new_null(),
+            ProfilingStrategy::Pulley => profiling_agent::new_pulley()?,
         })
     }
 
@@ -2799,6 +2800,11 @@ pub enum ProfilingStrategy {
 
     /// Collect profiling info using the "ittapi", used with `VTune` on Linux.
     VTune,
+
+    /// Support for profiling Pulley, Wasmtime's interpreter. Note that enabling
+    /// this at runtime requires enabling the `profile-pulley` Cargo feature at
+    /// compile time.
+    Pulley,
 }
 
 /// Select how wasm backtrace detailed information is handled.

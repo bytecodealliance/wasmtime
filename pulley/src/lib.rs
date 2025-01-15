@@ -1364,6 +1364,12 @@ pub mod disas;
 pub mod encode;
 #[cfg(feature = "interp")]
 pub mod interp;
+#[cfg(feature = "profile")]
+pub mod profile;
+#[cfg(all(not(feature = "profile"), feature = "interp"))]
+mod profile_disabled;
+#[cfg(all(not(feature = "profile"), feature = "interp"))]
+use profile_disabled as profile;
 
 pub mod regs;
 pub use regs::*;

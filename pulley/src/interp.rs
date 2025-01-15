@@ -3,6 +3,7 @@
 use crate::decode::*;
 use crate::encode::Encode;
 use crate::imms::*;
+use crate::profile::{ExecutingPc, ExecutingPcRef};
 use crate::regs::*;
 use alloc::string::ToString;
 use alloc::{vec, vec::Vec};
@@ -24,6 +25,7 @@ const DEFAULT_STACK_SIZE: usize = 1 << 20; // 1 MiB
 /// A virtual machine for interpreting Pulley bytecode.
 pub struct Vm {
     state: MachineState,
+    executing_pc: ExecutingPc,
 }
 
 impl Default for Vm {
@@ -42,6 +44,7 @@ impl Vm {
     pub fn with_stack(stack: Vec<u8>) -> Self {
         Self {
             state: MachineState::with_stack(stack),
+            executing_pc: ExecutingPc::default(),
         }
     }
 
@@ -147,6 +150,7 @@ impl Vm {
         let interpreter = Interpreter {
             state: &mut self.state,
             pc: UnsafeBytecodeStream::new(pc),
+            executing_pc: self.executing_pc.as_ref(),
         };
         let done = interpreter.run();
         self.state.done_decode(done)
@@ -209,6 +213,17 @@ impl Vm {
     /// Sets the current `lr` register value.
     pub unsafe fn set_lr(&mut self, lr: *mut u8) {
         self.state.lr = lr;
+    }
+
+    /// Gets a handle to the currently executing program counter for this
+    /// interpreter which can be read from other threads.
+    //
+    // Note that despite this field still existing with `not(feature =
+    // "profile")` it's hidden from the public API in that scenario as it has no
+    // methods anyway.
+    #[cfg(feature = "profile")]
+    pub fn executing_pc(&self) -> &ExecutingPc {
+        &self.executing_pc
     }
 }
 
@@ -909,6 +924,7 @@ pub use done::{DoneReason, TrapKind};
 struct Interpreter<'a> {
     state: &'a mut MachineState,
     pc: UnsafeBytecodeStream,
+    executing_pc: ExecutingPcRef<'a>,
 }
 
 impl Interpreter<'_> {
@@ -1043,6 +1059,11 @@ impl Interpreter<'_> {
     fn set_i128(&mut self, lo: XReg, hi: XReg, val: i128) {
         self.state[lo].set_u64(val as u64);
         self.state[hi].set_u64((val >> 64) as u64);
+    }
+
+    fn record_executing_pc_for_profiling(&mut self) {
+        // Note that this is a no-op if `feature = "profile"` is disabled.
+        self.executing_pc.record(self.pc.as_ptr().as_ptr() as usize);
     }
 }
 
