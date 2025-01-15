@@ -210,9 +210,13 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
 
     for strategy in &test_config.strategies {
         let strategy_name = format!("{strategy:?}");
-        // Winch currently only offers support for x64.
+        // Winch currently only offers support for x64, and it requires
+        // signals-based-traps which MIRI disables so disable winch tests on MIRI
         let target = if *strategy == Compiler::Winch {
-            quote! { #[cfg(target_arch = "x86_64")] }
+            quote! {
+                #[cfg(target_arch = "x86_64")]
+                #[cfg_attr(miri, ignore)]
+            }
         } else {
             quote! {}
         };

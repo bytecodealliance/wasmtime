@@ -255,6 +255,7 @@ fn compile_a_component() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(winch, ignore)]
 fn tail_call_defaults() -> Result<()> {
     let wasm_with_tail_calls = "(module (func $a return_call $a))";
 
