@@ -4430,6 +4430,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "wasmtime",
+ "wasmtime-wasi-io",
  "wiggle",
  "windows-sys 0.59.0",
 ]
@@ -4469,6 +4470,17 @@ dependencies = [
  "wasmtime",
  "wasmtime-wasi",
  "webpki-roots",
+]
+
+[[package]]
+name = "wasmtime-wasi-io"
+version = "30.0.0"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "futures",
+ "wasmtime",
 ]
 
 [[package]]
