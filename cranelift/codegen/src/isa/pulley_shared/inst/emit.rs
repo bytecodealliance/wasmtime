@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::ir::{self, Endianness};
+use crate::isa;
 use crate::isa::pulley_shared::abi::PulleyMachineDeps;
 use crate::isa::pulley_shared::PointerWidth;
 use core::marker::PhantomData;
@@ -10,19 +11,19 @@ use pulley_interpreter::encode as enc;
 use pulley_interpreter::regs::BinaryOperands;
 
 pub struct EmitInfo {
-    #[allow(dead_code)] // Will get used as we fill out this backend.
+    call_conv: isa::CallConv,
     shared_flags: settings::Flags,
-
-    #[allow(dead_code)] // Will get used as we fill out this backend.
     isa_flags: crate::isa::pulley_shared::settings::Flags,
 }
 
 impl EmitInfo {
     pub(crate) fn new(
+        call_conv: isa::CallConv,
         shared_flags: settings::Flags,
         isa_flags: crate::isa::pulley_shared::settings::Flags,
     ) -> Self {
         Self {
+            call_conv,
             shared_flags,
             isa_flags,
         }
@@ -644,45 +645,16 @@ fn return_call_emit_impl<T, P>(
 ) where
     P: PulleyTargetKind,
 {
-    let sp_to_fp_offset = {
-        let frame_layout = state.frame_layout();
-        i64::from(
-            frame_layout.clobber_size
-                + frame_layout.fixed_frame_storage_size
-                + frame_layout.outgoing_args_size,
-        )
-    };
+    let epilogue = <PulleyMachineDeps<P>>::gen_epilogue_frame_restore(
+        emit_info.call_conv,
+        &emit_info.shared_flags,
+        &emit_info.isa_flags,
+        &state.frame_layout,
+    );
 
-    // Restore all clobbered registers before leaving the function.
-    let mut clobber_offset = sp_to_fp_offset - 8;
-    for reg in state.frame_layout().clobbered_callee_saves.clone() {
-        let rreg = reg.to_reg();
-        let ty = match rreg.class() {
-            RegClass::Int => I64,
-            RegClass::Float => F64,
-            RegClass::Vector => unimplemented!("Vector Clobber Restores"),
-        };
-
-        <InstAndKind<P>>::from(Inst::gen_load(
-            reg.map(Reg::from),
-            Amode::SpOffset {
-                offset: clobber_offset.try_into().unwrap(),
-            },
-            ty,
-            MemFlags::trusted(),
-        ))
-        .emit(sink, emit_info, state);
-
-        clobber_offset -= 8
+    for inst in epilogue {
+        inst.emit(sink, emit_info, state);
     }
-
-    // Restore the link register and frame pointer using a `pop_frame`
-    // instruction. This will move `sp` to the current frame pointer and then
-    // restore the old lr/fp, so this restores all of sp/fp/lr in one
-    // instruction.
-    let setup_area_size = i64::from(state.frame_layout().setup_area_size);
-    assert!(setup_area_size > 0, "must have frame pointers enabled");
-    <InstAndKind<P>>::from(RawInst::PopFrame).emit(sink, emit_info, state);
 
     // Now that `sp` is restored to what it was on function entry it may need to
     // be adjusted if the stack arguments of our own function differ from the
