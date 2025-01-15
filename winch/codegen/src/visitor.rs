@@ -299,6 +299,13 @@ macro_rules! def_unsupported {
     (emit I64AtomicRmw16SubU $($rest:tt)*) => {};
     (emit I64AtomicRmw32SubU $($rest:tt)*) => {};
     (emit I64AtomicRmwSub $($rest:tt)*) => {};
+    (emit I32AtomicRmw8XchgU $($rest:tt)*) => {};
+    (emit I32AtomicRmw16XchgU $($rest:tt)*) => {};
+    (emit I32AtomicRmwXchg $($rest:tt)*) => {};
+    (emit I64AtomicRmw8XchgU $($rest:tt)*) => {};
+    (emit I64AtomicRmw16XchgU $($rest:tt)*) => {};
+    (emit I64AtomicRmw32XchgU $($rest:tt)*) => {};
+    (emit I64AtomicRmwXchg $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -2350,14 +2357,6 @@ where
         self.emit_atomic_rmw(&arg, RmwOp::Add, OperandSize::S64, None)
     }
 
-    fn visit_i32_atomic_rmw_sub(&mut self, arg: MemArg) -> Self::Output {
-        self.emit_atomic_rmw(&arg, RmwOp::Sub, OperandSize::S32, None)
-    }
-
-    fn visit_i64_atomic_rmw_sub(&mut self, arg: MemArg) -> Self::Output {
-        self.emit_atomic_rmw(&arg, RmwOp::Sub, OperandSize::S64, None)
-    }
-
     fn visit_i32_atomic_rmw8_sub_u(&mut self, arg: MemArg) -> Self::Output {
         self.emit_atomic_rmw(
             &arg,
@@ -2374,6 +2373,10 @@ where
             OperandSize::S16,
             Some(ExtendKind::I32Extend16U),
         )
+    }
+
+    fn visit_i32_atomic_rmw_sub(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(&arg, RmwOp::Sub, OperandSize::S32, None)
     }
 
     fn visit_i64_atomic_rmw8_sub_u(&mut self, arg: MemArg) -> Self::Output {
@@ -2401,6 +2404,63 @@ where
             OperandSize::S32,
             Some(ExtendKind::I64Extend32U),
         )
+    }
+
+    fn visit_i64_atomic_rmw_sub(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(&arg, RmwOp::Sub, OperandSize::S64, None)
+    }
+
+    fn visit_i32_atomic_rmw8_xchg_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Xchg,
+            OperandSize::S8,
+            Some(ExtendKind::I32Extend8U),
+        )
+    }
+
+    fn visit_i32_atomic_rmw16_xchg_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Xchg,
+            OperandSize::S16,
+            Some(ExtendKind::I32Extend16U),
+        )
+    }
+
+    fn visit_i32_atomic_rmw_xchg(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(&arg, RmwOp::Xchg, OperandSize::S32, None)
+    }
+
+    fn visit_i64_atomic_rmw8_xchg_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Xchg,
+            OperandSize::S8,
+            Some(ExtendKind::I64Extend8U),
+        )
+    }
+
+    fn visit_i64_atomic_rmw16_xchg_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Xchg,
+            OperandSize::S16,
+            Some(ExtendKind::I64Extend16U),
+        )
+    }
+
+    fn visit_i64_atomic_rmw32_xchg_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Xchg,
+            OperandSize::S32,
+            Some(ExtendKind::I64Extend32U),
+        )
+    }
+
+    fn visit_i64_atomic_rmw_xchg(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(&arg, RmwOp::Xchg, OperandSize::S64, None)
     }
 
     wasmparser::for_each_visit_operator!(def_unsupported);

@@ -1410,6 +1410,9 @@ impl Masm for MacroAssembler {
                 self.asm
                     .lock_xadd(addr, operand.to_reg(), operand, size, flags);
             }
+            RmwOp::Xchg => {
+                self.asm.xchg(addr, operand.to_reg(), operand, size, flags);
+            }
         }
 
         if let Some(extend) = extend {
