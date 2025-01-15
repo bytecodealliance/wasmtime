@@ -3,7 +3,8 @@ use crate::{
     codegen::BlockSig,
     isa::reg::{writable, Reg},
     masm::{
-        ExtendKind, Imm, IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm, RmwOp, SPOffset, ShiftKind, TrapCode, UNTRUSTED_FLAGS
+        ExtendKind, Imm, IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm,
+        RmwOp, SPOffset, ShiftKind, TrapCode, UNTRUSTED_FLAGS,
     },
     stack::TypedReg,
 };
@@ -1371,7 +1372,7 @@ where
         extend: Option<ExtendKind>,
     ) -> Result<()> {
         let operand = self.context.pop_to_reg(self.masm, None).unwrap();
-        if let Some(addr) = self.emit_compute_heap_address(arg, size)? {
+        if let Some(addr) = self.emit_compute_heap_address_align_checked(arg, size)? {
             let src = self.masm.address_at_reg(addr, 0)?;
             self.masm.atomic_rmw(
                 src,

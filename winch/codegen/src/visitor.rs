@@ -9,7 +9,9 @@ use crate::codegen::{
     control_index, Callee, CodeGen, CodeGenError, ControlStackFrame, Emission, FnCall,
 };
 use crate::masm::{
-    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler, MemMoveDirection, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, TruncKind, VectorExtendKind
+    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler, MemMoveDirection,
+    MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode, SPOffset, ShiftKind,
+    SplatKind, TruncKind, VectorExtendKind,
 };
 
 use crate::reg::{writable, Reg};
@@ -2310,7 +2312,7 @@ where
             &arg,
             RmwOp::Add,
             OperandSize::S8,
-            Some(ExtendKind::I32Extend8S),
+            Some(ExtendKind::I32Extend8U),
         )
     }
 
@@ -2319,7 +2321,7 @@ where
             &arg,
             RmwOp::Add,
             OperandSize::S16,
-            Some(ExtendKind::I32Extend16S),
+            Some(ExtendKind::I32Extend16U),
         )
     }
 
@@ -2332,7 +2334,7 @@ where
             &arg,
             RmwOp::Add,
             OperandSize::S8,
-            Some(ExtendKind::I64Extend8S),
+            Some(ExtendKind::I64Extend8U),
         )
     }
 
@@ -2341,7 +2343,7 @@ where
             &arg,
             RmwOp::Add,
             OperandSize::S16,
-            Some(ExtendKind::I64Extend16S),
+            Some(ExtendKind::I64Extend16U),
         )
     }
 
