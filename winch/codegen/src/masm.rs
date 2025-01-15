@@ -272,6 +272,7 @@ pub(crate) enum VectorExtendKind {
 }
 
 /// Kinds of splat supported by WebAssembly.
+#[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub(crate) enum SplatKind {
     // 8 bit.
     S8,
@@ -476,6 +477,17 @@ impl Imm {
             Self::I32(_) | Self::F32(_) => OperandSize::S32,
             Self::I64(_) | Self::F64(_) => OperandSize::S64,
             Self::V128(_) => OperandSize::S128,
+        }
+    }
+
+    /// Get a little endian representation of the immediate.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        match self {
+            Imm::I32(n) => n.to_le_bytes().to_vec(),
+            Imm::I64(n) => n.to_le_bytes().to_vec(),
+            Imm::F32(n) => n.to_le_bytes().to_vec(),
+            Imm::F64(n) => n.to_le_bytes().to_vec(),
+            Imm::V128(n) => n.to_le_bytes().to_vec(),
         }
     }
 }
@@ -1256,6 +1268,14 @@ pub(crate) trait MacroAssembler {
     /// instruction (e.g. x64) so full access to `CodeGenContext` is provided.
     fn mul_wide(&mut self, context: &mut CodeGenContext<Emission>, kind: MulWideKind)
         -> Result<()>;
+
+    /// Takes the int in a `src` operand and replicates it across lanes of
+    /// `size` in a destination result.
+    fn splat_int(&mut self, context: &mut CodeGenContext<Emission>, size: SplatKind) -> Result<()>;
+
+    /// Takes the `src` operand and replicates it across lanes of `size` in
+    /// `dst`.
+    fn splat(&mut self, dst: WritableReg, src: RegImm, size: SplatKind) -> Result<()>;
 
     /// Performs a shuffle between two 128-bit vectors into a 128-bit result
     /// using lanes as a mask to select which indexes to copy.

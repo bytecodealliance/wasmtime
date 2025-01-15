@@ -14,7 +14,7 @@ use crate::{
     masm::{
         CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind,
         MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp,
-        RoundingMode, SPOffset, ShiftKind, StackSlot, TrapCode, TruncKind,
+        RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, TrapCode, TruncKind,
     },
     stack::TypedReg,
 };
@@ -892,6 +892,18 @@ impl Masm for MacroAssembler {
     ) -> Result<()> {
         let _ = (context, kind);
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn splat_int(
+        &mut self,
+        _context: &mut CodeGenContext<Emission>,
+        _size: SplatKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn splat(&mut self, _dst: WritableReg, _src: RegImm, _size: SplatKind) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
     }
 
     fn shuffle(&mut self, _dst: WritableReg, _lhs: Reg, _rhs: Reg, _lanes: [u8; 16]) -> Result<()> {

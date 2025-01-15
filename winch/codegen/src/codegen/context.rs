@@ -393,22 +393,16 @@ impl<'a> CodeGenContext<'a, Emission> {
         F: FnMut(&mut M, Reg, RegImm, OperandSize) -> Result<TypedReg>,
         M: MacroAssembler,
     {
-        let top = self.stack.peek().expect("value at stack top");
-
-        if top.is_i32_const() {
-            let val = self
-                .stack
-                .pop_i32_const()
-                .expect("i32 const value at stack top");
-            let typed_reg = self.pop_to_reg(masm, None)?;
-            let dst = emit(masm, typed_reg.reg, RegImm::i32(val), OperandSize::S32)?;
-            self.stack.push(dst.into());
-        } else {
-            self.binop(masm, OperandSize::S32, |masm, dst, src, size| {
+        match self.pop_i32_const() {
+            Some(val) => {
+                let typed_reg = self.pop_to_reg(masm, None)?;
+                let dst = emit(masm, typed_reg.reg, RegImm::i32(val), OperandSize::S32)?;
+                self.stack.push(dst.into());
+            }
+            None => self.binop(masm, OperandSize::S32, |masm, dst, src, size| {
                 emit(masm, dst, src.into(), size)
-            })?;
+            })?,
         }
-
         Ok(())
     }
 
@@ -420,22 +414,47 @@ impl<'a> CodeGenContext<'a, Emission> {
         F: FnOnce(&mut M, Reg, RegImm, OperandSize) -> Result<TypedReg>,
         M: MacroAssembler,
     {
+        match self.pop_i64_const() {
+            Some(val) => {
+                let typed_reg = self.pop_to_reg(masm, None)?;
+                let dst = emit(masm, typed_reg.reg, RegImm::i64(val), OperandSize::S64)?;
+                self.stack.push(dst.into());
+            }
+            None => self.binop(masm, OperandSize::S64, |masm, dst, src, size| {
+                emit(masm, dst, src.into(), size)
+            })?,
+        }
+        Ok(())
+    }
+
+    /// Returns the i32 const on top of the stack or None if there isn't one.
+    pub fn pop_i32_const(&mut self) -> Option<i32> {
         let top = self.stack.peek().expect("value at stack top");
+
+        if top.is_i32_const() {
+            let val = self
+                .stack
+                .pop_i32_const()
+                .expect("i32 const value at stack top");
+            Some(val)
+        } else {
+            None
+        }
+    }
+
+    /// Returns the i64 const on top of the stack or None if there isn't one.
+    pub fn pop_i64_const(&mut self) -> Option<i64> {
+        let top = self.stack.peek().expect("value at stack top");
+
         if top.is_i64_const() {
             let val = self
                 .stack
                 .pop_i64_const()
                 .expect("i64 const value at stack top");
-            let typed_reg = self.pop_to_reg(masm, None)?;
-            let dst = emit(masm, typed_reg.reg, RegImm::i64(val), OperandSize::S64)?;
-            self.stack.push(dst.into());
+            Some(val)
         } else {
-            self.binop(masm, OperandSize::S64, |masm, dst, src, size| {
-                emit(masm, dst, src.into(), size)
-            })?;
-        };
-
-        Ok(())
+            None
+        }
     }
 
     /// Prepares arguments for emitting a convert operation.

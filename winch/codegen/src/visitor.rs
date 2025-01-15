@@ -271,6 +271,12 @@ macro_rules! def_unsupported {
     (emit V128Load16Splat $($rest:tt)*) => {};
     (emit V128Load32Splat $($rest:tt)*) => {};
     (emit V128Load64Splat $($rest:tt)*) => {};
+    (emit I8x16Splat $($rest:tt)*) => {};
+    (emit I16x8Splat $($rest:tt)*) => {};
+    (emit I32x4Splat $($rest:tt)*) => {};
+    (emit I64x2Splat $($rest:tt)*) => {};
+    (emit F32x4Splat $($rest:tt)*) => {};
+    (emit F64x2Splat $($rest:tt)*) => {};
     (emit I32AtomicStore8 $($rest:tt)*) => {};
     (emit I32AtomicStore16 $($rest:tt)*) => {};
     (emit I32AtomicStore $($rest:tt)*) => {};
@@ -2470,6 +2476,38 @@ where
             LoadKind::Splat(SplatKind::S64),
             MemOpKind::Normal,
         )
+    }
+
+    fn visit_i8x16_splat(&mut self) -> Self::Output {
+        self.masm.splat_int(&mut self.context, SplatKind::S8)
+    }
+
+    fn visit_i16x8_splat(&mut self) -> Self::Output {
+        self.masm.splat_int(&mut self.context, SplatKind::S16)
+    }
+
+    fn visit_i32x4_splat(&mut self) -> Self::Output {
+        self.masm.splat_int(&mut self.context, SplatKind::S32)
+    }
+
+    fn visit_i64x2_splat(&mut self) -> Self::Output {
+        self.masm.splat_int(&mut self.context, SplatKind::S64)
+    }
+
+    fn visit_f32x4_splat(&mut self) -> Self::Output {
+        self.context
+            .unop(self.masm, OperandSize::S32, &mut |masm, reg, _size| {
+                masm.splat(writable!(reg), RegImm::reg(reg), SplatKind::S32)?;
+                Ok(TypedReg::v128(reg))
+            })
+    }
+
+    fn visit_f64x2_splat(&mut self) -> Self::Output {
+        self.context
+            .unop(self.masm, OperandSize::S64, &mut |masm, reg, _size| {
+                masm.splat(writable!(reg), RegImm::reg(reg), SplatKind::S64)?;
+                Ok(TypedReg::v128(reg))
+            })
     }
 
     fn visit_i8x16_shuffle(&mut self, lanes: [u8; 16]) -> Self::Output {

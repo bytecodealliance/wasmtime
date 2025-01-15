@@ -502,6 +502,7 @@ impl WastTest {
             if !(std::is_x86_feature_detected!("avx") && std::is_x86_feature_detected!("avx2")) {
                 let unsupported = [
                     "misc_testsuite/winch/_simd_lane.wast",
+                    "misc_testsuite/winch/_simd_splat.wast",
                     "spec_testsuite/simd_align.wast",
                 ];
 
