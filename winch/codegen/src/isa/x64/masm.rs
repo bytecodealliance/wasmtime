@@ -33,7 +33,7 @@ use cranelift_codegen::{
     isa::{
         unwind::UnwindInst,
         x64::{
-            args::{ExtMode, CC},
+            args::{ExtMode, FenceKind, CC},
             settings as x64_settings,
         },
     },
@@ -217,8 +217,27 @@ impl Masm for MacroAssembler {
         self.store_impl(src, dst, size, TRUSTED_FLAGS)
     }
 
-    fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize) -> Result<()> {
-        self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS)
+    fn wasm_store(
+        &mut self,
+        src: Reg,
+        dst: Self::Address,
+        size: OperandSize,
+        op_kind: MemOpKind,
+    ) -> Result<()> {
+        match op_kind {
+            MemOpKind::Atomic => {
+                if size == OperandSize::S128 {
+                    // TODO: we don't support 128-bit atomic store yet.
+                    bail!(CodeGenError::unexpected_operand_size());
+                }
+                // To stay consistent with cranelift, we emit a normal store followed by a mfence,
+                // although, we could probably just emit a xchg.
+                self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS)?;
+                self.asm.fence(FenceKind::MFence);
+                Ok(())
+            }
+            MemOpKind::Normal => self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS),
+        }
     }
 
     fn pop(&mut self, dst: WritableReg, size: OperandSize) -> Result<()> {

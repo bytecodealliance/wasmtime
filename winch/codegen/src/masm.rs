@@ -739,7 +739,13 @@ pub(crate) trait MacroAssembler {
     /// regards to the endianness depending on the target ISA. For this reason,
     /// [Self::wasm_store], should be explicitly used when emitting WebAssembly
     /// stores.
-    fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize) -> Result<()>;
+    fn wasm_store(
+        &mut self,
+        src: Reg,
+        dst: Self::Address,
+        size: OperandSize,
+        op_kind: MemOpKind,
+    ) -> Result<()>;
 
     /// Perform a zero-extended stack load.
     fn load(&mut self, src: Self::Address, dst: WritableReg, size: OperandSize) -> Result<()>;

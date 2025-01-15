@@ -3,8 +3,8 @@ use crate::{
     codegen::BlockSig,
     isa::reg::{writable, Reg},
     masm::{
-        IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm, SPOffset, ShiftKind,
-        TrapCode,
+        Imm, IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm, SPOffset,
+        ShiftKind, TrapCode,
     },
     stack::TypedReg,
 };
@@ -19,7 +19,7 @@ use wasmparser::{
     BinaryReader, FuncValidator, MemArg, Operator, ValidatorResources, VisitOperator,
     VisitSimdOperator,
 };
-use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_TABLE_OUT_OF_BOUNDS};
+use wasmtime_cranelift::{TRAP_BAD_SIGNATURE, TRAP_HEAP_MISALIGNED, TRAP_TABLE_OUT_OF_BOUNDS};
 use wasmtime_environ::{
     GlobalIndex, MemoryIndex, PtrSize, TableIndex, Tunables, TypeIndex, WasmHeapType, WasmValType,
     FUNCREF_MASK,
@@ -840,6 +840,51 @@ where
         Ok(addr)
     }
 
+    /// Emit checks to ensure that the address at `memarg` is correctly aligned for `size`.
+    fn emit_check_align(&mut self, memarg: &MemArg, size: OperandSize) -> Result<()> {
+        if size.bytes() > 1 {
+            // Peek addr from top of the stack by popping and pushing.
+            let addr = *self
+                .context
+                .stack
+                .peek()
+                .ok_or_else(|| CodeGenError::missing_values_in_stack())?;
+            let tmp = self.context.any_gpr(self.masm)?;
+            self.context.move_val_to_reg(&addr, tmp, self.masm)?;
+
+            if memarg.offset != 0 {
+                self.masm.add(
+                    writable!(tmp),
+                    tmp,
+                    RegImm::Imm(Imm::I64(memarg.offset)),
+                    size,
+                )?;
+            }
+
+            self.masm.and(
+                writable!(tmp),
+                tmp,
+                RegImm::Imm(Imm::I32(size.bytes() - 1)),
+                size,
+            )?;
+
+            self.masm.cmp(tmp, RegImm::Imm(Imm::i64(0)), size)?;
+            self.masm.trapif(IntCmpKind::Ne, TRAP_HEAP_MISALIGNED)?;
+            self.context.free_reg(tmp);
+        }
+
+        Ok(())
+    }
+
+    pub fn emit_compute_heap_address_align_checked(
+        &mut self,
+        memarg: &MemArg,
+        access_size: OperandSize,
+    ) -> Result<Option<Reg>> {
+        self.emit_check_align(memarg, access_size)?;
+        self.emit_compute_heap_address(memarg, access_size)
+    }
+
     /// Emit a WebAssembly load.
     pub fn emit_wasm_load(
         &mut self,
@@ -848,7 +893,16 @@ where
         kind: LoadKind,
         op_kind: MemOpKind,
     ) -> Result<()> {
-        if let Some(addr) = self.emit_compute_heap_address(&arg, kind.derive_operand_size())? {
+        let maybe_addr = match op_kind {
+            MemOpKind::Atomic => {
+                self.emit_compute_heap_address_align_checked(&arg, kind.derive_operand_size())?
+            }
+            MemOpKind::Normal => {
+                self.emit_compute_heap_address(&arg, kind.derive_operand_size())?
+            }
+        };
+
+        if let Some(addr) = maybe_addr {
             let dst = match target_type {
                 WasmValType::I32 | WasmValType::I64 => self.context.any_gpr(self.masm)?,
                 WasmValType::F32 | WasmValType::F64 => self.context.any_fpr(self.masm)?,
@@ -868,12 +922,26 @@ where
     }
 
     /// Emit a WebAssembly store.
-    pub fn emit_wasm_store(&mut self, arg: &MemArg, size: OperandSize) -> Result<()> {
+    pub fn emit_wasm_store(
+        &mut self,
+        arg: &MemArg,
+        size: OperandSize,
+        op_kind: MemOpKind,
+    ) -> Result<()> {
         let src = self.context.pop_to_reg(self.masm, None)?;
-        let addr = self.emit_compute_heap_address(&arg, size)?;
-        if let Some(addr) = addr {
-            self.masm
-                .wasm_store(src.reg.into(), self.masm.address_at_reg(addr, 0)?, size)?;
+
+        let maybe_addr = match op_kind {
+            MemOpKind::Atomic => self.emit_compute_heap_address_align_checked(&arg, size)?,
+            MemOpKind::Normal => self.emit_compute_heap_address(&arg, size)?,
+        };
+
+        if let Some(addr) = maybe_addr {
+            self.masm.wasm_store(
+                src.reg.into(),
+                self.masm.address_at_reg(addr, 0)?,
+                size,
+                op_kind,
+            )?;
 
             self.context.free_reg(addr);
         }
