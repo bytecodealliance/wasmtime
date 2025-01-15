@@ -54,11 +54,15 @@ fn wasi_testsuite() -> Result<()> {
         &[],
         WASI_COMMON_IGNORE_LIST,
     )?;
-    run_all(
-        "tests/wasi_testsuite/wasi-threads",
-        &["-Sthreads", "-Wthreads"],
-        &[],
-    )?;
+
+    // Only run threaded tests on platforms that support threads.
+    if crate::threads::engine().is_some() {
+        run_all(
+            "tests/wasi_testsuite/wasi-threads",
+            &["-Sthreads", "-Wthreads"],
+            &[],
+        )?;
+    }
     Ok(())
 }
 

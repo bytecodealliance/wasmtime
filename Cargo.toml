@@ -124,6 +124,7 @@ wasmtime-test-macros = { path = "crates/test-macros" }
 pulley-interpreter = { workspace = true, features = ["disas"] }
 wasmtime-wast-util = { path = 'crates/wast-util' }
 wasm-encoder = { workspace = true }
+cranelift-native = { workspace = true }
 
 [target.'cfg(windows)'.dev-dependencies]
 windows-sys = { workspace = true, features = ["Win32_System_Memory"] }

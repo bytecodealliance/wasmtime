@@ -621,6 +621,10 @@ mod test {
 
     #[test]
     fn nop() {
+        // Skip this test when cranelift doesn't support the native platform.
+        if cranelift_native::builder().is_err() {
+            return;
+        }
         let code = String::from(
             "
             test run
@@ -655,6 +659,10 @@ mod test {
 
     #[test]
     fn trampolines() {
+        // Skip this test when cranelift doesn't support the native platform.
+        if cranelift_native::builder().is_err() {
+            return;
+        }
         let function = parse(
             "
             function %test(f32, i8, i64x2, i8) -> f32x4, i64 {

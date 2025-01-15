@@ -23,7 +23,7 @@ wasmtime-jit-debug = { workspace = true, features = ["gdb_jit_int", "perf_jitdum
 wasmtime-jit-icache-coherence = { workspace = true, optional = true }
 wasmtime-cache = { workspace = true, optional = true }
 wasmtime-fiber = { workspace = true, optional = true }
-wasmtime-cranelift = { workspace = true, optional = true }
+wasmtime-cranelift = { workspace = true, optional = true, features = ['pulley'] }
 wasmtime-winch = { workspace = true, optional = true }
 wasmtime-component-macro = { workspace = true, optional = true }
 wasmtime-component-util = { workspace = true, optional = true }
@@ -31,7 +31,7 @@ wasmtime-slab = { workspace = true, optional = true }
 wasmtime-versioned-export-macros = { workspace = true }
 wasmtime-wmemcheck = { workspace = true, optional = true }
 wasmtime-math = { workspace = true }
-pulley-interpreter = { workspace = true, optional = true }
+pulley-interpreter = { workspace = true }
 target-lexicon = { workspace = true }
 wasmparser = { workspace = true }
 wasm-encoder = { workspace = true, optional = true }
@@ -156,7 +156,12 @@ winch = ["dep:wasmtime-winch", "std"]
 # targets will be available. When paired with the `runtime` feature, the Pulley
 # interpreter will be built into the runtime and you can interpret WebAssembly
 # modules that have been compiled to Pulley bytecode.
-pulley = ["dep:pulley-interpreter", "wasmtime-cranelift?/pulley"]
+pulley = [
+  # Note that this is intentionally empty. This feature is dynamically activated
+  # in `build.rs` as well when the host platform does not have Cranelift support
+  # for example. That means that dependencies for pulley need to be already
+  # activated anyway.
+]
 
 # Enables support for incremental compilation cache to be enabled in `Config`.
 incremental-cache = ["wasmtime-cranelift?/incremental-cache", "std"]
@@ -247,7 +252,7 @@ runtime = [
   "dep:psm",
   "dep:rustix",
   "rustix/mm",
-  "pulley-interpreter?/interp",
+  "pulley-interpreter/interp",
   "dep:wasmtime-jit-icache-coherence",
 ]
 
@@ -314,7 +319,7 @@ std = [
   'object/std',
   'once_cell',
   'wasmtime-fiber?/std',
-  'pulley-interpreter?/std',
+  'pulley-interpreter/std',
   'wasmtime-math/std',
 ]
 

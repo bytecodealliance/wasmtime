@@ -80,6 +80,13 @@ fn dummy_waker() -> Waker {
     }
 }
 
+#[derive(PartialEq, Copy, Clone)]
+enum StackOverflow {
+    No,
+    Host,
+    Wasm,
+}
+
 fn main() {
     if cfg!(miri) {
         return;
@@ -112,8 +119,8 @@ fn main() {
         );
     }
 
-    let tests: &[(&str, fn(), bool)] = &[
-        ("normal segfault", || segfault(), false),
+    let tests: &[(&str, fn(), StackOverflow)] = &[
+        ("normal segfault", || segfault(), StackOverflow::No),
         (
             "make instance then segfault",
             || {
@@ -123,7 +130,7 @@ fn main() {
                 let _instance = Instance::new(&mut store, &module, &[]).unwrap();
                 segfault();
             },
-            false,
+            StackOverflow::No,
         ),
         (
             "make instance then overrun the stack",
@@ -134,7 +141,7 @@ fn main() {
                 let _instance = Instance::new(&mut store, &module, &[]).unwrap();
                 overrun_the_stack();
             },
-            true,
+            StackOverflow::Host,
         ),
         (
             "segfault in a host function",
@@ -146,7 +153,7 @@ fn main() {
                 Instance::new(&mut store, &module, &[segfault.into()]).unwrap();
                 unreachable!();
             },
-            false,
+            StackOverflow::No,
         ),
         (
             "hit async stack guard page",
@@ -165,17 +172,17 @@ fn main() {
                 run_future(f.call_async(&mut store, &[], &mut [])).unwrap();
                 unreachable!();
             },
-            true,
+            StackOverflow::Host,
         ),
         (
             "overrun 8k with misconfigured host",
             || overrun_with_big_module(8 << 10),
-            true,
+            StackOverflow::Wasm,
         ),
         (
             "overrun 32k with misconfigured host",
             || overrun_with_big_module(32 << 10),
-            true,
+            StackOverflow::Wasm,
         ),
         #[cfg(not(any(target_arch = "riscv64")))]
         // Due to `InstanceAllocationStrategy::pooling()` trying to alloc more than 6000G memory space.
@@ -186,7 +193,13 @@ fn main() {
             || {
                 let mut config = Config::default();
                 config.async_support(true);
-                config.allocation_strategy(InstanceAllocationStrategy::pooling());
+                let mut cfg = PoolingAllocationConfig::default();
+                cfg.total_memories(1);
+                cfg.max_memory_size(1 << 16);
+                cfg.total_tables(1);
+                cfg.table_elements(10);
+                cfg.total_stacks(1);
+                config.allocation_strategy(cfg);
                 let engine = Engine::new(&config).unwrap();
                 let mut store = Store::new(&engine, ());
                 let f = Func::wrap_async(&mut store, |_, _: ()| {
@@ -199,7 +212,7 @@ fn main() {
                 run_future(f.call_async(&mut store, &[], &mut [])).unwrap();
                 unreachable!();
             },
-            true,
+            StackOverflow::Host,
         ),
     ];
     match env::var(VAR_NAME) {
@@ -224,7 +237,7 @@ fn main() {
     }
 }
 
-fn run_test(name: &str, stack_overflow: bool) {
+fn run_test(name: &str, stack_overflow: StackOverflow) {
     let me = env::current_exe().unwrap();
     let mut cmd = Command::new(me);
     cmd.env(VAR_NAME, name);
@@ -245,23 +258,34 @@ fn run_test(name: &str, stack_overflow: bool) {
         desc.push_str(&stderr.replace("\n", "\n    "));
     }
 
-    if stack_overflow {
-        if is_stack_overflow(&output.status, &stderr) {
-            assert!(
-                stdout.trim().ends_with(CONFIRM),
-                "failed to find confirmation in test `{name}`\n{desc}"
-            );
-        } else {
-            panic!("\n\nexpected a stack overflow on `{name}`\n{desc}\n\n");
+    match stack_overflow {
+        // If the host stack overflows then the result should always indicate a
+        // stack overflow. If the guest stack overflows then that won't actually
+        // trigger an overflow when Cranelift doesn't have native support
+        // because Pulley is used in that case.
+        StackOverflow::Host | StackOverflow::Wasm => {
+            let native_stack_overflow = is_stack_overflow(&output.status, &stderr);
+            let expect_native_overflow =
+                stack_overflow == StackOverflow::Host || cranelift_native::builder().is_ok();
+
+            if native_stack_overflow == expect_native_overflow {
+                assert!(
+                    stdout.trim().ends_with(CONFIRM),
+                    "failed to find confirmation in test `{name}`\n{desc}"
+                );
+            } else {
+                panic!("\n\nexpected a stack overflow on `{name}`\n{desc}\n\n");
+            }
         }
-    } else {
-        if is_segfault(&output.status) {
-            assert!(
-                stdout.trim().ends_with(CONFIRM) && stderr.is_empty(),
-                "failed to find confirmation in test `{name}`\n{desc}"
-            );
-        } else {
-            panic!("\n\nexpected a segfault on `{name}`\n{desc}\n\n");
+        StackOverflow::No => {
+            if is_segfault(&output.status) {
+                assert!(
+                    stdout.trim().ends_with(CONFIRM) && stderr.is_empty(),
+                    "failed to find confirmation in test `{name}`\n{desc}"
+                );
+            } else {
+                panic!("\n\nexpected a segfault on `{name}`\n{desc}\n\n");
+            }
         }
     }
 }

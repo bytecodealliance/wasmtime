@@ -131,6 +131,9 @@ mod test {
 
     #[test]
     fn nop() {
+        if cranelift_native::builder().is_err() {
+            return;
+        }
         let code = String::from(
             "
             function %test() -> i8 {

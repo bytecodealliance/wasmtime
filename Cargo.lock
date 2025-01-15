@@ -4105,6 +4105,7 @@ dependencies = [
  "component-test-util",
  "cranelift-codegen",
  "cranelift-filetests",
+ "cranelift-native",
  "cranelift-reader",
  "criterion",
  "env_logger 0.11.5",

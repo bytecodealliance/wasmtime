@@ -1285,10 +1285,16 @@ mod tests {
         use super::ValueLabelRangesBuilder;
         use crate::debug::ModuleMemoryOffset;
 
+        // Ignore this test if cranelift doesn't support the native platform.
+        if cranelift_native::builder().is_err() {
+            return;
+        }
+
         let isa = lookup(triple!("x86_64"))
             .expect("expect x86_64 ISA")
             .finish(Flags::new(cranelift_codegen::settings::builder()))
             .expect("Creating ISA");
+
         let addr_tr = create_mock_address_transform();
         let (value_ranges, value_labels) = create_mock_value_ranges();
         let fi = FunctionFrameInfo {
