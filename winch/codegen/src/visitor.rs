@@ -10,7 +10,7 @@ use crate::codegen::{
 };
 use crate::masm::{
     DivKind, ExtendKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler, MemMoveDirection,
-    MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RoundingMode, SPOffset, ShiftKind,
+    MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode, SPOffset, ShiftKind,
     SplatKind, TruncKind, VectorExtendKind,
 };
 
@@ -278,6 +278,13 @@ macro_rules! def_unsupported {
     (emit I64AtomicStore16 $($rest:tt)*) => {};
     (emit I64AtomicStore32 $($rest:tt)*) => {};
     (emit I64AtomicStore $($rest:tt)*) => {};
+    (emit I32AtomicRmw8AddU $($rest:tt)*) => {};
+    (emit I32AtomicRmw16AddU $($rest:tt)*) => {};
+    (emit I32AtomicRmwAdd $($rest:tt)*) => {};
+    (emit I64AtomicRmw8AddU $($rest:tt)*) => {};
+    (emit I64AtomicRmw16AddU $($rest:tt)*) => {};
+    (emit I64AtomicRmw32AddU $($rest:tt)*) => {};
+    (emit I64AtomicRmwAdd $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -2298,6 +2305,54 @@ where
 
     fn visit_i64_atomic_store32(&mut self, memarg: MemArg) -> Self::Output {
         self.emit_wasm_store(&memarg, OperandSize::S32, MemOpKind::Atomic)
+    }
+
+    fn visit_i32_atomic_rmw8_add_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Add,
+            OperandSize::S8,
+            Some(ExtendKind::I32Extend8U),
+        )
+    }
+
+    fn visit_i32_atomic_rmw16_add_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Add,
+            OperandSize::S16,
+            Some(ExtendKind::I32Extend16U),
+        )
+    }
+
+    fn visit_i32_atomic_rmw_add(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(&arg, RmwOp::Add, OperandSize::S32, None)
+    }
+
+    fn visit_i64_atomic_rmw8_add_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Add,
+            OperandSize::S8,
+            Some(ExtendKind::I64Extend8U),
+        )
+    }
+
+    fn visit_i64_atomic_rmw16_add_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Add,
+            OperandSize::S16,
+            Some(ExtendKind::I64Extend16U),
+        )
+    }
+
+    fn visit_i64_atomic_rmw32_add_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(&arg, RmwOp::Add, OperandSize::S32, None)
+    }
+
+    fn visit_i64_atomic_rmw_add(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(&arg, RmwOp::Add, OperandSize::S64, None)
     }
 
     wasmparser::for_each_visit_operator!(def_unsupported);
