@@ -371,8 +371,6 @@ jobs:
               -p wasmtime --no-default-features --features threads
               -p wasmtime --no-default-features --features runtime,threads
               -p wasmtime --no-default-features --features cranelift,threads
-              -p wasmtime --no-default-features --features runtime,signals-based-traps
-              -p wasmtime --no-default-features --features runtime,gc,component-model,signals-based-traps
               -p wasmtime --features incremental-cache
               -p wasmtime --all-features
 
@@ -541,8 +539,6 @@ jobs:
           test: >
             cargo check -p wasmtime --no-default-features --features runtime,component-model &&
             cargo check -p wasmtime --no-default-features --features runtime,gc,component-model &&
-            cargo check -p wasmtime --no-default-features --features runtime,gc,component-model,signals-based-traps &&
-            cargo check -p wasmtime --no-default-features --features runtime,gc,component-model,signals-based-traps &&
             cargo check -p cranelift-control --no-default-features &&
             cargo check -p pulley-interpreter --features encode,decode,disas,interp
         # Use `cross` for illumos to have a C compiler/linker available.

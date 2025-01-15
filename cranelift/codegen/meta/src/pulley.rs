@@ -69,9 +69,9 @@ impl Inst<'_> {
                     Operand::Binop { dst, src1, src2 }
                 }
                 (name, ty) if name.starts_with("dst") => Operand::Writable { name, ty },
-                (name, "RegSet < XReg >") => Operand::Normal {
+                (name, "UpperRegSet < XReg >") => Operand::Normal {
                     name,
-                    ty: "XRegSet",
+                    ty: "UpperXRegSet",
                 },
                 (name, ty) => Operand::Normal { name, ty },
             })
@@ -126,7 +126,7 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
                         format_string.push_str(",");
                     }
 
-                    if ty == "XRegSet" {
+                    if ty == "UpperXRegSet" {
                         format_string.push_str(" {");
                         format_string.push_str(name);
                         format_string.push_str(":?}");
@@ -192,7 +192,7 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
                 // register allocation.
                 Operand::Normal {
                     name: _,
-                    ty: "XRegSet",
+                    ty: "UpperXRegSet",
                 } if *name == "PushFrameSave" || *name == "PopFrameRestore" => {}
 
                 Operand::Normal { name, ty } => {

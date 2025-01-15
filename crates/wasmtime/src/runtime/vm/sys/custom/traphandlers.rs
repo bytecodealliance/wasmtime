@@ -20,10 +20,10 @@ pub unsafe fn wasmtime_setjmp(
     capi::wasmtime_setjmp(jmp_buf, callback, payload, callee.cast())
 }
 
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_native_signals)]
 pub struct TrapHandler;
 
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_native_signals)]
 impl TrapHandler {
     pub unsafe fn new(_macos_use_mach_ports: bool) -> TrapHandler {
         capi::wasmtime_init_traps(handle_trap);
@@ -33,7 +33,7 @@ impl TrapHandler {
     pub fn validate_config(&self, _macos_use_mach_ports: bool) {}
 }
 
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_native_signals)]
 extern "C" fn handle_trap(pc: usize, fp: usize, has_faulting_addr: bool, faulting_addr: usize) {
     use crate::runtime::vm::traphandlers::{tls, TrapRegisters, TrapTest};
 

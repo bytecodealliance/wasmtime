@@ -75,10 +75,9 @@ pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
 /// result.
 pub fn is_mergeable_for_egraph(func: &Function, inst: Inst) -> bool {
     let op = func.dfg.insts[inst].opcode();
-    // We can only merge one-result operators due to the way that GVN
+    // We can only merge zero- and one-result operators due to the way that GVN
     // is structured in the egraph implementation.
-    let has_one_result = func.dfg.inst_results(inst).len() == 1;
-    has_one_result
+    func.dfg.inst_results(inst).len() <= 1
         // Loads/stores are handled by alias analysis and not
         // otherwise mergeable.
         && !op.can_load()

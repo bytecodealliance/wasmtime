@@ -33,7 +33,7 @@ use cranelift_codegen::{
     isa::{
         unwind::UnwindInst,
         x64::{
-            args::{ExtMode, CC},
+            args::{ExtMode, FenceKind, CC},
             settings as x64_settings,
         },
     },
@@ -217,8 +217,27 @@ impl Masm for MacroAssembler {
         self.store_impl(src, dst, size, TRUSTED_FLAGS)
     }
 
-    fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize) -> Result<()> {
-        self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS)
+    fn wasm_store(
+        &mut self,
+        src: Reg,
+        dst: Self::Address,
+        size: OperandSize,
+        op_kind: MemOpKind,
+    ) -> Result<()> {
+        match op_kind {
+            MemOpKind::Atomic => {
+                if size == OperandSize::S128 {
+                    // TODO: we don't support 128-bit atomic store yet.
+                    bail!(CodeGenError::unexpected_operand_size());
+                }
+                // To stay consistent with cranelift, we emit a normal store followed by a mfence,
+                // although, we could probably just emit a xchg.
+                self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS)?;
+                self.asm.fence(FenceKind::MFence);
+                Ok(())
+            }
+            MemOpKind::Normal => self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS),
+        }
     }
 
     fn pop(&mut self, dst: WritableReg, size: OperandSize) -> Result<()> {
@@ -280,56 +299,64 @@ impl Masm for MacroAssembler {
         &mut self,
         src: Self::Address,
         dst: WritableReg,
-        size: OperandSize,
         kind: LoadKind,
         op_kind: MemOpKind,
     ) -> Result<()> {
-        if op_kind == MemOpKind::Atomic && size == OperandSize::S128 {
-            // TODO: handle 128bits atomic loads
-            bail!(CodeGenError::unexpected_operand_size())
-        }
+        let size = kind.derive_operand_size();
 
         match kind {
             // The guarantees of the x86-64 memory model ensure that `SeqCst`
             // loads are equivalent to normal loads.
-            LoadKind::ScalarExtend(ext) => self.asm.movsx_mr(&src, dst, ext, UNTRUSTED_FLAGS),
-            LoadKind::Simple => self.load_impl::<Self>(src, dst, size, UNTRUSTED_FLAGS)?,
-            LoadKind::VectorExtend(ext) => match op_kind {
-                MemOpKind::Normal => {
-                    if self.flags.has_avx() {
-                        self.asm.xmm_vpmov_mr(&src, dst, ext, UNTRUSTED_FLAGS)
-                    } else {
-                        bail!(CodeGenError::UnimplementedForNoAvx)
-                    }
+            LoadKind::ScalarExtend(ext) => {
+                if op_kind == MemOpKind::Atomic && size == OperandSize::S128 {
+                    bail!(CodeGenError::unexpected_operand_size());
                 }
-                MemOpKind::Atomic => bail!(CodeGenError::unimplemented_masm_instruction()),
-            },
-            LoadKind::Splat => {
-                match op_kind {
-                    MemOpKind::Normal => {
-                        if self.flags.has_avx() {
-                            if size == OperandSize::S64 {
-                                self.asm
-                                    .xmm_mov_mr(&src, dst, OperandSize::S64, UNTRUSTED_FLAGS);
-                                // Results in the first 4 bytes and second 4 bytes being
-                                // swapped and then the swapped bytes being copied.
-                                // [d0, d1, d2, d3, d4, d5, d6, d7, ...] yields
-                                // [d4, d5, d6, d7, d0, d1, d2, d3, d4, d5, d6, d7, d0, d1, d2, d3].
-                                self.asm.xmm_vpshuf_rr(
-                                    dst.to_reg(),
-                                    dst,
-                                    0b0100_0100,
-                                    OperandSize::S64,
-                                );
-                            } else {
-                                self.asm
-                                    .xmm_vpbroadcast_mr(&src, dst, size, UNTRUSTED_FLAGS);
-                            }
-                        } else {
-                            bail!(CodeGenError::UnimplementedForNoAvx)
-                        }
-                    }
-                    MemOpKind::Atomic => bail!(CodeGenError::unimplemented_masm_instruction()),
+
+                if ext.signed() {
+                    self.asm.movsx_mr(&src, dst, ext, UNTRUSTED_FLAGS);
+                } else {
+                    self.load_impl::<Self>(src, dst, size, UNTRUSTED_FLAGS)?
+                }
+            }
+            LoadKind::Operand(_) => {
+                if op_kind == MemOpKind::Atomic && size == OperandSize::S128 {
+                    bail!(CodeGenError::unexpected_operand_size());
+                }
+
+                self.load_impl::<Self>(src, dst, size, UNTRUSTED_FLAGS)?;
+            }
+            LoadKind::VectorExtend(ext) => {
+                if op_kind == MemOpKind::Atomic {
+                    bail!(CodeGenError::unimplemented_masm_instruction());
+                }
+
+                if !self.flags.has_avx() {
+                    bail!(CodeGenError::UnimplementedForNoAvx)
+                }
+
+                self.asm.xmm_vpmov_mr(&src, dst, ext, UNTRUSTED_FLAGS)
+            }
+            LoadKind::Splat(_) => {
+                if op_kind == MemOpKind::Atomic {
+                    bail!(CodeGenError::unimplemented_masm_instruction());
+                }
+
+                if !self.flags.has_avx() {
+                    bail!(CodeGenError::UnimplementedForNoAvx)
+                }
+
+                if size == OperandSize::S64 {
+                    self.asm
+                        .xmm_mov_mr(&src, dst, OperandSize::S64, UNTRUSTED_FLAGS);
+                    // Results in the first 4 bytes and second 4 bytes being
+                    // swapped and then the swapped bytes being copied.
+                    // [d0, d1, d2, d3, d4, d5, d6, d7, ...] yields
+                    // [d4, d5, d6, d7, d0, d1, d2, d3, d4, d5, d6, d7, d0, d1, d2, d3].
+                    self.asm
+                        .xmm_vpshuf_rr(dst.to_reg(), dst, 0b0100_0100, OperandSize::S64);
+                } else {
+                    self.asm
+                        .xmm_vpbroadcast_mr(&src, dst, size, UNTRUSTED_FLAGS);
                 }
             }
         }
@@ -1012,7 +1039,7 @@ impl Masm for MacroAssembler {
     }
 
     fn extend(&mut self, dst: WritableReg, src: Reg, kind: ExtendKind) -> Result<()> {
-        if let ExtendKind::I64ExtendI32U = kind {
+        if !kind.signed() {
             self.asm.movzx_rr(src, dst, kind);
         } else {
             self.asm.movsx_rr(src, dst, kind);
@@ -1095,7 +1122,7 @@ impl Masm for MacroAssembler {
     ) -> Result<()> {
         // Need to convert unsigned uint32 to uint64 for conversion instruction sequence.
         if let OperandSize::S32 = src_size {
-            self.extend(writable!(src), src, ExtendKind::I64ExtendI32U)?;
+            self.extend(writable!(src), src, ExtendKind::I64Extend32U)?;
         }
 
         self.asm

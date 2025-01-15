@@ -30,28 +30,28 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-#if defined(WASMTIME_SIGNALS_BASED_TRAPS)
+#if defined(WASMTIME_VIRTUAL_MEMORY)
 /**
  * Indicates that the memory region should be readable.
  */
 #define WASMTIME_PROT_READ (1 << 0)
 #endif
 
-#if defined(WASMTIME_SIGNALS_BASED_TRAPS)
+#if defined(WASMTIME_VIRTUAL_MEMORY)
 /**
  * Indicates that the memory region should be writable.
  */
 #define WASMTIME_PROT_WRITE (1 << 1)
 #endif
 
-#if defined(WASMTIME_SIGNALS_BASED_TRAPS)
+#if defined(WASMTIME_VIRTUAL_MEMORY)
 /**
  * Indicates that the memory region should be executable.
  */
 #define WASMTIME_PROT_EXEC (1 << 2)
 #endif
 
-#if defined(WASMTIME_SIGNALS_BASED_TRAPS)
+#if defined(WASMTIME_VIRTUAL_MEMORY)
 /**
  * Abstract pointer type used in the `wasmtime_memory_image_*` APIs which
  * is defined by the embedder.
@@ -59,7 +59,7 @@
 typedef struct wasmtime_memory_image wasmtime_memory_image;
 #endif
 
-#if defined(WASMTIME_SIGNALS_BASED_TRAPS)
+#if defined(WASMTIME_NATIVE_SIGNALS)
 /**
  * Handler function for traps in Wasmtime passed to `wasmtime_init_traps`.
  *
@@ -96,7 +96,7 @@ typedef void (*wasmtime_trap_handler_t)(uintptr_t ip,
 extern "C" {
 #endif // __cplusplus
 
-#if defined(WASMTIME_SIGNALS_BASED_TRAPS)
+#if defined(WASMTIME_VIRTUAL_MEMORY)
 /**
  * Creates a new virtual memory mapping of the `size` specified with
  * protection bits specified in `prot_flags`.
@@ -112,7 +112,7 @@ extern "C" {
 extern int32_t wasmtime_mmap_new(uintptr_t size, uint32_t prot_flags, uint8_t **ret);
 #endif
 
-#if defined(WASMTIME_SIGNALS_BASED_TRAPS)
+#if defined(WASMTIME_VIRTUAL_MEMORY)
 /**
  * Remaps the virtual memory starting at `addr` going for `size` bytes to
  * the protections specified with a new blank mapping.
@@ -128,7 +128,7 @@ extern int32_t wasmtime_mmap_new(uintptr_t size, uint32_t prot_flags, uint8_t **
 extern int32_t wasmtime_mmap_remap(uint8_t *addr, uintptr_t size, uint32_t prot_flags);
 #endif
 
-#if defined(WASMTIME_SIGNALS_BASED_TRAPS)
+#if defined(WASMTIME_VIRTUAL_MEMORY)
 /**
  * Unmaps memory at the specified `ptr` for `size` bytes.
  *
@@ -142,7 +142,7 @@ extern int32_t wasmtime_mmap_remap(uint8_t *addr, uintptr_t size, uint32_t prot_
 extern int32_t wasmtime_munmap(uint8_t *ptr, uintptr_t size);
 #endif
 
-#if defined(WASMTIME_SIGNALS_BASED_TRAPS)
+#if defined(WASMTIME_VIRTUAL_MEMORY)
 /**
  * Configures the protections associated with a region of virtual memory
  * starting at `ptr` and going to `size`.
@@ -154,7 +154,7 @@ extern int32_t wasmtime_munmap(uint8_t *ptr, uintptr_t size);
 extern int32_t wasmtime_mprotect(uint8_t *ptr, uintptr_t size, uint32_t prot_flags);
 #endif
 
-#if defined(WASMTIME_SIGNALS_BASED_TRAPS)
+#if defined(WASMTIME_VIRTUAL_MEMORY)
 /**
  * Returns the page size, in bytes, of the current system.
  */
@@ -195,7 +195,7 @@ extern bool wasmtime_setjmp(const uint8_t **jmp_buf,
  */
 extern void wasmtime_longjmp(const uint8_t *jmp_buf);
 
-#if defined(WASMTIME_SIGNALS_BASED_TRAPS)
+#if defined(WASMTIME_NATIVE_SIGNALS)
 /**
  * Initializes trap-handling logic for this platform.
  *
@@ -213,7 +213,7 @@ extern void wasmtime_longjmp(const uint8_t *jmp_buf);
 extern int32_t wasmtime_init_traps(wasmtime_trap_handler_t handler);
 #endif
 
-#if defined(WASMTIME_SIGNALS_BASED_TRAPS)
+#if defined(WASMTIME_VIRTUAL_MEMORY)
 /**
  * Attempts to create a new in-memory image of the `ptr`/`len` combo which
  * can be mapped to virtual addresses in the future.
@@ -240,7 +240,7 @@ extern int32_t wasmtime_memory_image_new(const uint8_t *ptr,
                                          struct wasmtime_memory_image **ret);
 #endif
 
-#if defined(WASMTIME_SIGNALS_BASED_TRAPS)
+#if defined(WASMTIME_VIRTUAL_MEMORY)
 /**
  * Maps the `image` provided to the virtual address at `addr` and `len`.
  *
@@ -262,7 +262,7 @@ extern int32_t wasmtime_memory_image_map_at(struct wasmtime_memory_image *image,
                                             uintptr_t len);
 #endif
 
-#if defined(WASMTIME_SIGNALS_BASED_TRAPS)
+#if defined(WASMTIME_VIRTUAL_MEMORY)
 /**
  * Deallocates the provided `wasmtime_memory_image`.
  *

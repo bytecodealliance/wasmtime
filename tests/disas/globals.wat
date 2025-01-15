@@ -21,10 +21,9 @@
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0027                               v2 = iconst.i32 0
 ;; @0029                               v3 = iconst.i32 0
-;; @002b                               v4 = global_value.i64 gv3
-;; @002b                               v5 = load.i32 notrap aligned table v4+112
+;; @002b                               v5 = load.i32 notrap aligned table v0+112
 ;; @002d                               v6 = uextend.i64 v3  ; v3 = 0
-;; @002d                               v7 = global_value.i64 gv5
+;; @002d                               v7 = load.i64 notrap aligned readonly checked v0+96
 ;; @002d                               v8 = iadd v7, v6
 ;; @002d                               store little heap v5, v8
 ;; @0030                               jump block1

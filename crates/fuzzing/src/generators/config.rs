@@ -587,7 +587,6 @@ impl WasmtimeConfig {
             }
 
             CompilerStrategy::CraneliftPulley => {
-                config.simd_enabled = false;
                 config.threads_enabled = false;
             }
         }

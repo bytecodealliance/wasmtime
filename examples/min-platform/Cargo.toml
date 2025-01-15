@@ -15,4 +15,4 @@ object = { workspace = true, features = ['std'] }
 wasmtime = { workspace = true, features = ['cranelift', 'wat'] }
 
 [features]
-signals-based-traps = []
+custom = []

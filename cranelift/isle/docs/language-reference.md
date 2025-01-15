@@ -1472,7 +1472,7 @@ The grammar accepted by the parser is as follows:
 
 <ident> ::= <ident-start> <ident-cont>*
 <const-ident> ::= "$" <ident-cont>*
-<ident-start> ::= <any non-whitespace character other than "-", "0".."9", "(", ")" or ";">
+<ident-start> ::= <any non-whitespace character other than "-", "0".."9", "(", ")", ";", "#" or "$">
 <ident-cont>  ::= <any non-whitespace character other than "(", ")", ";" or "@">
 
 <type-body> ::= "(" "primitive" <ident> ")"
@@ -1527,13 +1527,14 @@ The grammar accepted by the parser is as follows:
 ```
 
 ## Reference: ISLE Language Grammar verification extensions
+
 ```bnf
 <def> += "(" "spec" <spec> ")"
        | "(" "model" <model> ")"
        | "(" "form" <form> ")"
        | "(" "instantiate" <instantiation> ")"
 
-<spec> ::= "(" <ident> <ident>* <provide> [ <require> ] ")"
+<spec> ::= "(" <ident> <ident>* ")" <provide> [ <require> ]
 <provide> ::= "(" "provide" <spec-expr>* ")"
 <require> ::= "(" "require" <spec-expr>* ")"
 
@@ -1543,13 +1544,13 @@ The grammar accepted by the parser is as follows:
 <model-ty> ::= "Bool"
              | "Int"
              | "Unit"
-             | "(" "bv" <int> ")"
+             | "(" "bv" [ <int> ] ")"
 
-<model-variant> ::= "(" <ident> [ <spec-expr> ]  ")"
+<model-variant> ::= "(" <ident> [ <spec-expr> ] ")"
 
 <form> ::= <ident> <signature>*
 
-<instantiation> ::= <ident> "(" <signature>* ")"
+<instantiation> ::= <ident> <signature>*
                   | <ident> <ident>
 
 <spec-expr> ::= <int>
@@ -1561,6 +1562,9 @@ The grammar accepted by the parser is as follows:
               | "(" <ident> ")"
               | "(" ")"
 
+<spec-bv> ::= "#b" [ "+" | "-" ] ("0".."1")+
+            | "#x" [ "+" | "-" ] ("0".."9" | "A".."F" | "a".."f")+
+
 <spec-pair> ::= "(" <spec-expr> <spec-expr> ")"
 
 <spec-op> ::= "and" | "not" | "or" | "=>"
@@ -1568,7 +1572,7 @@ The grammar accepted by the parser is as follows:
             | "bvnot" | "bvand" | "bvor" | "bvxor"
             | "bvneg" | "bvadd" | "bvsub" | "bvmul"
             | "bvudiv" | "bvurem" | "bvsdiv" | "bvsrem"
-            | "bvshl" | "bvlshr| | "bvashr"
+            | "bvshl" | "bvlshr" | "bvashr"
             | "bvsaddo" | "subs"
             | "bvule" | "bvult" | "bvugt" | "bvuge"
             | "bvsle" | "bvslt" | "bvsgt" | "bvsge"

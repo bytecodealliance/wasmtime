@@ -901,6 +901,7 @@ impl Ref {
         }
         Ok(match (self, ty.heap_type()) {
             (Ref::Extern(_), HeapType::Extern) => true,
+            (Ref::Extern(None), HeapType::NoExtern) => true,
             (Ref::Extern(_), _) => false,
 
             (Ref::Func(_), HeapType::Func) => true,
@@ -916,7 +917,7 @@ impl Ref {
                 #[cfg_attr(not(feature = "gc"), allow(unreachable_patterns))]
                 Some(s) => s._matches_ty(store, _ty)?,
             },
-            (Ref::Any(Some(_)), HeapType::Eq) => todo!("eqref"),
+            (Ref::Any(Some(a)), HeapType::Eq) => a._is_eqref(store)?,
             (Ref::Any(Some(a)), HeapType::Array) => a._is_array(store)?,
             (Ref::Any(Some(a)), HeapType::ConcreteArray(_ty)) => match a._as_array(store)? {
                 None => false,
@@ -930,7 +931,8 @@ impl Ref {
                 | HeapType::ConcreteStruct(_)
                 | HeapType::Struct
                 | HeapType::ConcreteArray(_)
-                | HeapType::Array,
+                | HeapType::Array
+                | HeapType::Eq,
             ) => true,
             (Ref::Any(_), _) => false,
         })

@@ -33,7 +33,7 @@ type BoxCallIndirectHostInfo = Box<CallInfo<ExternalName>>;
 type BoxReturnCallInfo = Box<ReturnCallInfo<ExternalName>>;
 type BoxReturnCallIndInfo = Box<ReturnCallInfo<XReg>>;
 type BoxExternalName = Box<ExternalName>;
-type XRegSet = pulley_interpreter::RegSet<pulley_interpreter::XReg>;
+type UpperXRegSet = pulley_interpreter::UpperRegSet<pulley_interpreter::XReg>;
 
 #[expect(
     unused_imports,
@@ -127,6 +127,14 @@ where
 
     fn u6_from_u8(&mut self, imm: u8) -> Option<U6> {
         U6::new(imm)
+    }
+
+    fn endianness(&mut self, flags: MemFlags) -> Endianness {
+        flags.endianness(self.backend.isa_flags.endianness())
+    }
+
+    fn pointer_width(&mut self) -> PointerWidth {
+        P::pointer_width()
     }
 }
 

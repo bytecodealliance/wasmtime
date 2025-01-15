@@ -52,25 +52,12 @@
 ;; @0024                               trapz v39, user1
 ;; @0024                               v40 = iadd v8, v36
 ;; @0024                               v41 = load.i64 notrap aligned little v40
-;; @002b                               trapz v2, user16
-;; @002b                               trapz v16, user1
-;; @002b                               v53 = load.i32 notrap aligned v17
-;; @002b                               v54 = icmp ult v4, v53
+;; @002b                               v54 = icmp ult v4, v18
 ;; @002b                               trapz v54, user17
-;; @002b                               v56 = uextend.i64 v53
-;;                                     v99 = ishl v56, v79  ; v79 = 3
-;; @002b                               v58 = ushr v99, v77  ; v77 = 32
-;; @002b                               trapnz v58, user1
-;;                                     v106 = ishl v53, v89  ; v89 = 3
-;; @002b                               v61 = uadd_overflow_trap v106, v25, user1  ; v25 = 24
-;;                                     v113 = ishl v4, v89  ; v89 = 3
-;; @002b                               v64 = iadd v113, v25  ; v25 = 24
+;;                                     v99 = ishl v4, v89  ; v89 = 3
+;; @002b                               v64 = iadd v99, v25  ; v25 = 24
 ;; @002b                               v70 = uextend.i64 v64
 ;; @002b                               v71 = uadd_overflow_trap v11, v70, user1
-;; @002b                               v72 = uextend.i64 v61
-;; @002b                               v73 = uadd_overflow_trap v11, v72, user1
-;; @002b                               v74 = icmp ule v73, v10
-;; @002b                               trapz v74, user1
 ;; @002b                               v75 = iadd v8, v71
 ;; @002b                               v76 = load.i64 notrap aligned little v75
 ;; @002e                               jump block1

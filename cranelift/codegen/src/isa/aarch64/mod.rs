@@ -15,6 +15,7 @@ use crate::settings as shared_settings;
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
+use std::string::String;
 use target_lexicon::{Aarch64Architecture, Architecture, OperatingSystem, Triple};
 
 // New backend:
@@ -212,6 +213,10 @@ impl TargetIsa for AArch64Backend {
         // and continue to the next instruction.
         cs.set_skipdata(true)?;
         Ok(cs)
+    }
+
+    fn pretty_print_reg(&self, reg: Reg, _size: u8) -> String {
+        inst::regs::pretty_print_reg(reg)
     }
 
     fn has_native_fma(&self) -> bool {

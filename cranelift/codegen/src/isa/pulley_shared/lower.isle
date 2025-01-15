@@ -121,30 +121,25 @@
 
 ;; Special-cases for bounds-checks-related traps emitted for wasm loads/stores.
 ;; Each of these translates to a single "xbc" (x-register bounds check)
-;; instruction
-(rule 1 (lower (trapnz (icmp (IntCC.UnsignedGreaterThan)
-                          a
-                          b @ (value_type $I32))
-                       code))
-  (side_effect (pulley_xbc32_bound32_trap a b 0 code)))
+;; instruction.
+;;
+;; Note that there are two cases here, one for 32-bit hosts and one for 64-bit
+;; hosts. They lower to the same `xbc32_bound_trap` instruction which has
+;; different semantics on 32/64-bit but uses the 32-bit address as an argument
+;; on both platforms.
+(rule 1 (lower (trapnz (icmp (IntCC.UnsignedGreaterThan) a @ (value_type $I32) (isub b (u8_from_iconst size))) code))
+  (if-let (PointerWidth.PointerWidth32) (pointer_width))
+  (if-let load (sinkable_load b))
+  (side_effect (emit_xbc32 a load size code)))
 
-(rule 1 (lower (trapnz (icmp (IntCC.UnsignedGreaterThan)
-                          (uextend a @ (value_type $I32))
-                          b @ (value_type $I64))
-                       code))
-  (side_effect (pulley_xbc32_bound64_trap a b 0 code)))
+(rule 1 (lower (trapnz (icmp (IntCC.UnsignedGreaterThan) (uextend a @ (value_type $I32)) (isub b (u8_from_iconst size))) code))
+  (if-let (PointerWidth.PointerWidth64) (pointer_width))
+  (if-let load (sinkable_load b))
+  (side_effect (emit_xbc32 a load size code)))
 
-(rule 2 (lower (trapnz (icmp (IntCC.UnsignedGreaterThan)
-                          a
-                          (isub b @ (value_type $I32) (u8_from_iconst c)))
-                       code))
-  (side_effect (pulley_xbc32_bound32_trap a b c code)))
-
-(rule 2 (lower (trapnz (icmp (IntCC.UnsignedGreaterThan)
-                          (uextend a @ (value_type $I32))
-                          (isub b @ (value_type $I64) (u8_from_iconst c)))
-                       code))
-  (side_effect (pulley_xbc32_bound64_trap a b c code)))
+(decl emit_xbc32 (Value SunkLoad u8 TrapCode) SideEffectNoResult)
+(rule (emit_xbc32 a (SunkLoad.Load _ bound_addr bound_off) size code)
+  (pulley_xbc32_bound_trap a bound_addr bound_off size code))
 
 ;;;; Rules for `get_stack_pointer` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -874,14 +869,8 @@
 
 ;;;; Rules for `load` and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(decl amode (Value Offset32) Amode)
-(rule (amode addr (offset32 offset)) (Amode.RegOffset addr offset))
-(rule 1 (amode (iadd addr (i32_from_iconst b)) (offset32 offset))
-  (if-let new_offset (s32_add_fallible b offset))
-  (Amode.RegOffset addr new_offset))
-
 (rule (lower (has_type (ty_int (fits_in_64 ty)) (load flags addr offset)))
-  (pulley_xload (amode addr offset) ty flags (ExtKind.None)))
+  (gen_xload addr offset flags ty (ExtKind.None)))
 
 (rule 1 (lower (has_type (ty_scalar_float ty) (load flags addr offset)))
   (pulley_fload (amode addr offset) ty flags))
@@ -893,40 +882,40 @@
     (value_regs lo hi)))
 
 (rule 0 (lower (has_type (ty_int (fits_in_32 _)) (uload8 flags addr offset)))
-  (pulley_xload (amode addr offset) $I8 flags (ExtKind.Zero32)))
+  (gen_xload addr offset flags $I8 (ExtKind.Zero32)))
 
 (rule 0 (lower (has_type (ty_int (fits_in_32 _)) (uload16 flags addr offset)))
-  (pulley_xload (amode addr offset) $I16 flags (ExtKind.Zero32)))
+  (gen_xload addr offset flags $I16 (ExtKind.Zero32)))
 
 (rule 0 (lower (has_type (ty_int (fits_in_32 _)) (uload32 flags addr offset)))
-  (pulley_xload (amode addr offset) $I32 flags (ExtKind.None)))
+  (gen_xload addr offset flags $I32 (ExtKind.None)))
 
 (rule 1 (lower (has_type $I64 (uload8 flags addr offset)))
-  (pulley_xload (amode addr offset) $I8 flags (ExtKind.Zero64)))
+  (gen_xload addr offset flags $I8 (ExtKind.Zero64)))
 
 (rule 1 (lower (has_type $I64 (uload16 flags addr offset)))
-  (pulley_xload (amode addr offset) $I16 flags (ExtKind.Zero64)))
+  (gen_xload addr offset flags $I16 (ExtKind.Zero64)))
 
 (rule 1 (lower (has_type $I64 (uload32 flags addr offset)))
-  (pulley_xload (amode addr offset) $I32 flags (ExtKind.Zero64)))
+  (gen_xload addr offset flags $I32 (ExtKind.Zero64)))
 
 (rule 0 (lower (has_type (ty_int (fits_in_32 _)) (sload8 flags addr offset)))
-  (pulley_xload (amode addr offset) $I8 flags (ExtKind.Sign32)))
+  (gen_xload addr offset flags $I8 (ExtKind.Sign32)))
 
 (rule 0 (lower (has_type (ty_int (fits_in_32 _)) (sload16 flags addr offset)))
-  (pulley_xload (amode addr offset) $I16 flags (ExtKind.Sign32)))
+  (gen_xload addr offset flags $I16 (ExtKind.Sign32)))
 
 (rule 0 (lower (has_type (ty_int (fits_in_32 _)) (sload32 flags addr offset)))
-  (pulley_xload (amode addr offset) $I32 flags (ExtKind.None)))
+  (gen_xload addr offset flags $I32 (ExtKind.None)))
 
 (rule 1 (lower (has_type $I64 (sload8 flags addr offset)))
-  (pulley_xload (amode addr offset) $I8 flags (ExtKind.Sign64)))
+  (gen_xload addr offset flags $I8 (ExtKind.Sign64)))
 
 (rule 1 (lower (has_type $I64 (sload16 flags addr offset)))
-  (pulley_xload (amode addr offset) $I16 flags (ExtKind.Sign64)))
+  (gen_xload addr offset flags $I16 (ExtKind.Sign64)))
 
 (rule 1 (lower (has_type $I64 (sload32 flags addr offset)))
-  (pulley_xload (amode addr offset) $I32 flags (ExtKind.Sign64)))
+  (gen_xload addr offset flags $I32 (ExtKind.Sign64)))
 
 (rule 2 (lower (has_type (ty_vec128 ty) (load flags addr offset)))
   (pulley_vload (amode addr offset) ty flags (VExtKind.None)))
@@ -949,25 +938,140 @@
 (rule (lower (has_type ty (uload32x2 flags addr offset)))
   (pulley_vload (amode addr offset) ty flags (VExtKind.U32x2)))
 
+;; Helper to generate an `xload*` instruction, of which there are many. This
+;; falls back to the pseudo-instruction `XLoad` which has code in `emit.rs` to
+;; emit lots of forms but it additionally supports more specific pattern-matched
+;; versions too.
+(decl gen_xload (Value Offset32 MemFlags Type ExtKind) XReg)
+
+;; base case: use `pulley_xload` pseudo-inst
+(rule 0 (gen_xload addr offset flags ty ext)
+  (pulley_xload (amode addr offset) ty flags ext))
+
+;; special-case: 32-bit wasm addressing using "g32"
+(rule 1 (gen_xload addr offset flags ty ext)
+  (if-let (Endianness.Little) (endianness flags))
+  (if-let kind (xload_g32_kind ty ext))
+  (if-let (AmodeSpecial.G32 a b offset8) (amode_special addr offset))
+  (emit_xload_g32 kind a (zext32 b) offset8))
+
+(decl emit_xload_g32 (XLoadG32 XReg XReg u8) XReg)
+(rule (emit_xload_g32 (XLoadG32.U8) base addr offset) (pulley_xload8_u32_g32 base addr offset))
+(rule (emit_xload_g32 (XLoadG32.S8) base addr offset) (pulley_xload8_s32_g32 base addr offset))
+(rule (emit_xload_g32 (XLoadG32.U16) base addr offset) (pulley_xload16le_u32_g32 base addr offset))
+(rule (emit_xload_g32 (XLoadG32.S16) base addr offset) (pulley_xload16le_s32_g32 base addr offset))
+(rule (emit_xload_g32 (XLoadG32.U32) base addr offset) (pulley_xload32le_g32 base addr offset))
+(rule (emit_xload_g32 (XLoadG32.U64) base addr offset) (pulley_xload64le_g32 base addr offset))
+
+;; Helper and type to determine a "g32" load kind from the size of the value
+;; being loaded and the extension that is desired. Note that this doesn't
+;; match the full matrix of sizes and extensions, hence the `partial` part of
+;; this constructor.
+;;
+;; Notably extensions up to 64-bits large are not supported here as it's assumed
+;; they're comparatively rare. If necessary though they could always be added
+;; to Pulley.
+(type XLoadG32 (enum U8 S8 U16 S16 U32 U64))
+(decl pure partial xload_g32_kind (Type ExtKind) XLoadG32)
+(rule (xload_g32_kind $I8 (ExtKind.None)) (XLoadG32.U8))
+(rule (xload_g32_kind $I8 (ExtKind.Zero32)) (XLoadG32.U8))
+(rule (xload_g32_kind $I8 (ExtKind.Sign32)) (XLoadG32.S8))
+(rule (xload_g32_kind $I16 (ExtKind.None)) (XLoadG32.U16))
+(rule (xload_g32_kind $I16 (ExtKind.Zero32)) (XLoadG32.U16))
+(rule (xload_g32_kind $I16 (ExtKind.Sign32)) (XLoadG32.S16))
+(rule (xload_g32_kind $I32 (ExtKind.None)) (XLoadG32.U32))
+(rule (xload_g32_kind $I32 (ExtKind.Zero32)) (XLoadG32.U32))
+(rule (xload_g32_kind $I32 (ExtKind.Sign32)) (XLoadG32.U32))
+(rule (xload_g32_kind $I64 _) (XLoadG32.U64))
+
+(decl amode (Value Offset32) Amode)
+(rule (amode addr offset)
+  (if-let (ValueOffset.Both a o) (amode_base addr offset))
+  (Amode.RegOffset a o))
+
+;; Helper to convert a `(Value Offset32)` to `(Value i32)` while peeling off
+;; constant addition within the first `Value` into the static offset, if
+;; possible.
+;;
+;; Note that ideally this wouldn't be necessary and we could rely on the egraph
+;; pass to do this but that's not implemented at this time.
+(type ValueOffset (enum (Both (value Value) (offset i32))))
+(decl pure amode_base (Value Offset32) ValueOffset)
+(rule (amode_base addr (offset32 offset)) (ValueOffset.Both addr offset))
+(rule 1 (amode_base (iadd addr (i32_from_iconst b)) (offset32 offset))
+  (if-let new_offset (s32_add_fallible b offset))
+  (ValueOffset.Both addr new_offset))
+
+;; Representation and helper for representing "special" addressing modes
+;; supported in Pulley. For now there's only one special addressing mode of
+;; "g32" which represents that a 32-bit wasm-guest is being executed. In
+;; this mode a 32-bit address is added to the host-size-address for the load.
+;; Note that on 32-bit platforms there are no zero-extensions and on 64-bit
+;; platforms there will be a zero-extension. Here this `amode_special`
+;; constructor is only used for address-typed values so we know that the input
+;; `Value` is either $I32 or $I64 depending on the host.
+;;
+;; The patterns below match `base + zext(addr) + $offset` where `$offset` comes
+;; from both the input `Offset32` plus the extraction of a constant add that
+;; `amode_base` does. The `base + zext(addr)` is matched in either order to
+;; produce the "g32" addressing mode.
+(type AmodeSpecial (enum
+  ;; Note that users of this addressing mode must use the `zext32` on the
+  ;; `addr` value here to appropriately ensure it has all 32-bits defined.
+  (G32 (base Value) (addr Value) (offset u8))
+))
+(decl pure partial amode_special (Value Offset32) AmodeSpecial)
+(rule 0 (amode_special addr_orig offset)
+  (if-let
+    (ValueOffset.Both (iadd base (maybe_uextend addr @ (value_type (fits_in_32 _)))) offset32)
+    (amode_base addr_orig offset))
+  (if-let offset8 (u8_try_from_i32 offset32))
+  (AmodeSpecial.G32 base addr offset8))
+(rule 1 (amode_special addr_orig offset)
+  (if-let
+    (ValueOffset.Both (iadd (maybe_uextend addr @ (value_type (fits_in_32 _))) base) offset32)
+    (amode_base addr_orig offset))
+  (if-let offset8 (u8_try_from_i32 offset32))
+  (AmodeSpecial.G32 base addr offset8))
+
 ;;;; Rules for `store` and friends ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (store flags src @ (value_type (ty_int (fits_in_64 ty))) addr offset))
-  (side_effect (pulley_xstore (amode addr offset) src ty flags)))
+  (side_effect (gen_xstore src addr offset flags ty)))
 
 (rule 1 (lower (store flags src @ (value_type (ty_scalar_float ty)) addr offset))
   (side_effect (pulley_fstore (amode addr offset) src ty flags)))
 
 (rule (lower (istore8 flags src addr offset))
-  (side_effect (pulley_xstore (amode addr offset) src $I8 flags)))
+  (side_effect (gen_xstore src addr offset flags $I8)))
 
 (rule (lower (istore16 flags src addr offset))
-  (side_effect (pulley_xstore (amode addr offset) src $I16 flags)))
+  (side_effect (gen_xstore src addr offset flags $I16)))
 
 (rule (lower (istore32 flags src addr offset))
-  (side_effect (pulley_xstore (amode addr offset) src $I32 flags)))
+  (side_effect (gen_xstore src addr offset flags $I32)))
 
 (rule 2 (lower (store flags src @ (value_type (ty_vec128 ty)) addr offset))
   (side_effect (pulley_vstore (amode addr offset) src ty flags)))
+
+;; Equivalent of `gen_xload` but for stores.
+(decl gen_xstore (Value Value Offset32 MemFlags Type) SideEffectNoResult)
+
+;; Base case: a normal store.
+(rule (gen_xstore src addr offset flags ty)
+  (pulley_xstore (amode addr offset) src ty flags))
+
+;; Special case: the "g32" 32-bit wasm guest addressing mode.
+(rule 1 (gen_xstore val addr offset flags ty)
+  (if-let (Endianness.Little) (endianness flags))
+  (if-let (AmodeSpecial.G32 a b offset8) (amode_special addr offset))
+  (emit_xstore_g32 ty a (zext32 b) offset8 val))
+
+(decl emit_xstore_g32 (Type XReg XReg u8 XReg) SideEffectNoResult)
+(rule (emit_xstore_g32 $I8 base addr offset val) (pulley_xstore8_g32 base addr offset val))
+(rule (emit_xstore_g32 $I16 base addr offset val) (pulley_xstore16le_g32 base addr offset val))
+(rule (emit_xstore_g32 $I32 base addr offset val) (pulley_xstore32le_g32 base addr offset val))
+(rule (emit_xstore_g32 $I64 base addr offset val) (pulley_xstore64le_g32 base addr offset val))
 
 ;;;; Rules for `stack_addr` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1040,6 +1144,9 @@
 
 (rule 1 (lower (has_type $F64 (select c a b)))
   (pulley_fselect64 (emit_cond (lower_cond c)) a b))
+
+(rule 2 (lower (has_type (ty_vec128 _) (select c a b)))
+  (pulley_vselect (emit_cond (lower_cond c)) a b))
 
 ;; Helper to emit a conditional into a register itself.
 (decl emit_cond (Cond) XReg)
@@ -1212,6 +1319,18 @@
 
 (rule (lower (has_type $I64 (fcvt_to_sint_sat val @ (value_type $F64))))
   (pulley_x64_from_f64_s_sat val))
+
+(rule (lower (has_type $I32X4 (fcvt_to_sint_sat val @ (value_type $F32X4))))
+  (pulley_vi32x4_from_f32x4_s val))
+
+(rule (lower (has_type $I32X4 (fcvt_to_uint_sat val @ (value_type $F32X4))))
+  (pulley_vi32x4_from_f32x4_u val))
+
+(rule (lower (has_type $I64X2 (fcvt_to_sint_sat val @ (value_type $F64X2))))
+  (pulley_vi64x2_from_f64x2_s val))
+
+(rule (lower (has_type $I64X2 (fcvt_to_uint_sat val @ (value_type $F64X2))))
+  (pulley_vi64x2_from_f64x2_u val))
 
 ;;;; Rules for `fdemote` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -1429,11 +1548,16 @@
 
 (rule (lower (snarrow a @ (value_type $I16X8) b)) (pulley_vnarrow16x8_s a b))
 (rule (lower (snarrow a @ (value_type $I32X4) b)) (pulley_vnarrow32x4_s a b))
+(rule (lower (snarrow a @ (value_type $I64X2) b)) (pulley_vnarrow64x2_s a b))
 
 ;;;; Rules for `unarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule (lower (unarrow a @ (value_type $I16X8) b)) (pulley_vnarrow16x8_u a b))
 (rule (lower (unarrow a @ (value_type $I32X4) b)) (pulley_vnarrow32x4_u a b))
+
+;;;; Rules for `uunarrow` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+(rule (lower (uunarrow a @ (value_type $I64X2) b)) (pulley_vunarrow64x2_u a b))
 
 ;;;; Rules for `fvpromote_low` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

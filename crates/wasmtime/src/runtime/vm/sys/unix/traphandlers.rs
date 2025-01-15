@@ -16,7 +16,7 @@ unsafe extern "C" {
 }
 
 cfg_if::cfg_if! {
-    if #[cfg(not(feature = "signals-based-traps"))] {
+    if #[cfg(not(has_native_signals))] {
         // If signals-based traps are disabled statically then there's no
         // platform signal handler and no per-thread init, so stub these both
         // out.

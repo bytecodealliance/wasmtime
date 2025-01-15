@@ -21,14 +21,14 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i64, v4: i64):
-;; @0037                               brif v2, block2, block4(v4, v3)
+;; @0037                               brif v2, block2, block4
 ;;
 ;;                                 block2:
 ;; @0039                               v9 = iadd.i64 v4, v3
 ;; @003a                               v10 = iconst.i64 1
 ;; @003c                               jump block3(v9, v10)  ; v10 = 1
 ;;
-;;                                 block4(v11: i64, v12: i64):
+;;                                 block4:
 ;; @003d                               v13 = isub.i64 v4, v3
 ;; @003e                               v14 = iconst.i64 2
 ;; @0040                               jump block3(v13, v14)  ; v14 = 2

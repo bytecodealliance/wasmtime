@@ -31,9 +31,9 @@
 ;; @0040                               v4 = uextend.i64 v2
 ;; @0040                               v5 = iconst.i64 0xffff_0004
 ;; @0040                               v6 = uadd_overflow_trap v4, v5, heap_oob  ; v5 = 0xffff_0004
-;; @0040                               v7 = global_value.i64 gv4
+;; @0040                               v7 = load.i64 notrap aligned v0+104
 ;; @0040                               v8 = icmp ugt v6, v7
-;; @0040                               v9 = global_value.i64 gv5
+;; @0040                               v9 = load.i64 notrap aligned checked v0+96
 ;; @0040                               v10 = iadd v9, v4
 ;; @0040                               v11 = iconst.i64 0xffff_0000
 ;; @0040                               v12 = iadd v10, v11  ; v11 = 0xffff_0000
@@ -59,17 +59,17 @@
 ;; @004c                               v4 = uextend.i64 v2
 ;; @004c                               v5 = iconst.i64 0xffff_0004
 ;; @004c                               v6 = uadd_overflow_trap v4, v5, heap_oob  ; v5 = 0xffff_0004
-;; @004c                               v7 = global_value.i64 gv4
+;; @004c                               v7 = load.i64 notrap aligned v0+104
 ;; @004c                               v8 = icmp ugt v6, v7
-;; @004c                               v9 = global_value.i64 gv5
+;; @004c                               v9 = load.i64 notrap aligned checked v0+96
 ;; @004c                               v10 = iadd v9, v4
 ;; @004c                               v11 = iconst.i64 0xffff_0000
 ;; @004c                               v12 = iadd v10, v11  ; v11 = 0xffff_0000
 ;; @004c                               v13 = iconst.i64 0
 ;; @004c                               v14 = select_spectre_guard v8, v13, v12  ; v13 = 0
 ;; @004c                               v15 = load.i32 little heap v14
-;; @0053                               jump block1(v15)
+;; @0053                               jump block1
 ;;
-;;                                 block1(v3: i32):
-;; @0053                               return v3
+;;                                 block1:
+;; @0053                               return v15
 ;; }

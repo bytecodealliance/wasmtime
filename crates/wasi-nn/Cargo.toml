@@ -61,7 +61,7 @@ cap-std = { workspace = true }
 libtest-mimic = { workspace = true }
 test-programs-artifacts = { workspace = true }
 wasmtime-wasi = { workspace = true, features = ["preview1"] }
-wasmtime = { workspace = true, features = ["cranelift", 'signals-based-traps'] }
+wasmtime = { workspace = true, features = ["cranelift"] }
 tracing-subscriber = { workspace = true }
 
 [features]

@@ -32,7 +32,6 @@ io-lifetimes = { workspace = true }
 fs-set-times = { workspace = true }
 bitflags = { workspace = true }
 async-trait = { workspace = true }
-trait-variant = {workspace = true}
 system-interface = { workspace = true}
 futures = { workspace = true }
 url = { workspace = true }
@@ -43,7 +42,7 @@ test-log = { workspace = true }
 tracing-subscriber = { workspace = true }
 test-programs-artifacts = { workspace = true }
 tempfile = { workspace = true }
-wasmtime = { workspace = true, features = ['cranelift', 'incremental-cache', 'signals-based-traps'] }
+wasmtime = { workspace = true, features = ['cranelift', 'incremental-cache'] }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { workspace = true, features = ["event", "fs", "net"] }

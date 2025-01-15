@@ -19,6 +19,7 @@ use crate::{Final, MachBufferFinalized};
 use alloc::{boxed::Box, vec::Vec};
 use core::fmt;
 use cranelift_control::ControlPlane;
+use std::string::String;
 use target_lexicon::Triple;
 
 mod abi;
@@ -156,6 +157,10 @@ impl TargetIsa for X64Backend {
             .syntax(arch::x86::ArchSyntax::Att)
             .detail(true)
             .build()
+    }
+
+    fn pretty_print_reg(&self, reg: Reg, size: u8) -> String {
+        inst::regs::pretty_print_reg(reg, size)
     }
 
     fn has_native_fma(&self) -> bool {

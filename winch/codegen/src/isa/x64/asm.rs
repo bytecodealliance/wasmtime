@@ -17,8 +17,8 @@ use cranelift_codegen::{
         x64::{
             args::{
                 self, AluRmiROpcode, Amode, AvxOpcode, CmpOpcode, DivSignedness, ExtMode,
-                FromWritableReg, Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem, RegMemImm,
-                ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr,
+                FenceKind, FromWritableReg, Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem,
+                RegMemImm, ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr,
                 WritableXmm, Xmm, XmmMem, XmmMemAligned, XmmMemImm, CC,
             },
             encoding::rex::{encode_modrm, RexFlags},
@@ -145,13 +145,11 @@ impl From<ShiftKind> for CraneliftShiftKind {
 impl From<ExtendKind> for ExtMode {
     fn from(value: ExtendKind) -> Self {
         match value {
-            ExtendKind::I64ExtendI32S | ExtendKind::I64ExtendI32U | ExtendKind::I64Extend32S => {
-                ExtMode::LQ
-            }
-            ExtendKind::I32Extend8S => ExtMode::BL,
-            ExtendKind::I32Extend16S => ExtMode::WL,
-            ExtendKind::I64Extend8S => ExtMode::BQ,
-            ExtendKind::I64Extend16S => ExtMode::WQ,
+            ExtendKind::I64Extend32U | ExtendKind::I64Extend32S => ExtMode::LQ,
+            ExtendKind::I32Extend8S | ExtendKind::I32Extend8U => ExtMode::BL,
+            ExtendKind::I32Extend16S | ExtendKind::I32Extend16U => ExtMode::WL,
+            ExtendKind::I64Extend8S | ExtendKind::I64Extend8U => ExtMode::BQ,
+            ExtendKind::I64Extend16S | ExtendKind::I64Extend16U => ExtMode::WQ,
         }
     }
 }
@@ -1513,6 +1511,10 @@ impl Assembler {
             src2: XmmMemImm::unwrap_new(src2.into()),
             dst: dst.to_reg().into(),
         })
+    }
+
+    pub fn fence(&mut self, kind: FenceKind) {
+        self.emit(Inst::Fence { kind });
     }
 }
 

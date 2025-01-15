@@ -18,14 +18,14 @@ pub trait StoreExt {
     /// Configures a custom signal handler to execute.
     ///
     /// TODO: needs more documentation.
-    #[cfg(feature = "signals-based-traps")]
+    #[cfg(has_native_signals)]
     unsafe fn set_signal_handler<H>(&mut self, handler: H)
     where
         H: 'static + Fn(*mut EXCEPTION_POINTERS) -> bool + Send + Sync;
 }
 
 impl<T> StoreExt for Store<T> {
-    #[cfg(feature = "signals-based-traps")]
+    #[cfg(has_native_signals)]
     unsafe fn set_signal_handler<H>(&mut self, handler: H)
     where
         H: 'static + Fn(*mut EXCEPTION_POINTERS) -> bool + Send + Sync,

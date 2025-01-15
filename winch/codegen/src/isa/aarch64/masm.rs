@@ -175,9 +175,20 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn wasm_store(&mut self, src: Reg, dst: Self::Address, size: OperandSize) -> Result<()> {
-        self.asm.str(src, dst, size);
-        Ok(())
+    fn wasm_store(
+        &mut self,
+        src: Reg,
+        dst: Self::Address,
+        size: OperandSize,
+        op_kind: MemOpKind,
+    ) -> Result<()> {
+        match op_kind {
+            MemOpKind::Atomic => Err(anyhow!(CodeGenError::unimplemented_masm_instruction())),
+            MemOpKind::Normal => {
+                self.asm.str(src, dst, size);
+                Ok(())
+            }
+        }
     }
 
     fn call(
@@ -214,14 +225,14 @@ impl Masm for MacroAssembler {
         &mut self,
         src: Self::Address,
         dst: WritableReg,
-        size: OperandSize,
         kind: LoadKind,
         op_kind: MemOpKind,
     ) -> Result<()> {
+        let size = kind.derive_operand_size();
         match op_kind {
             MemOpKind::Normal => match kind {
-                LoadKind::Simple => self.asm.uload(src, dst, size),
-                LoadKind::Splat => bail!(CodeGenError::UnimplementedWasmLoadKind),
+                LoadKind::Operand(_) => self.asm.uload(src, dst, size),
+                LoadKind::Splat(_) => bail!(CodeGenError::UnimplementedWasmLoadKind),
                 LoadKind::ScalarExtend(extend_kind) => {
                     if extend_kind.signed() {
                         self.asm.sload(src, dst, size)

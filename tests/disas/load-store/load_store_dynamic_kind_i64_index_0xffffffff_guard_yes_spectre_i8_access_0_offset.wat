@@ -28,9 +28,9 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i32):
-;; @0040                               v4 = global_value.i64 gv4
+;; @0040                               v4 = load.i64 notrap aligned v0+104
 ;; @0040                               v5 = icmp uge v2, v4
-;; @0040                               v6 = global_value.i64 gv5
+;; @0040                               v6 = load.i64 notrap aligned checked v0+96
 ;; @0040                               v7 = iadd v6, v2
 ;; @0040                               v8 = iconst.i64 0
 ;; @0040                               v9 = select_spectre_guard v5, v8, v7  ; v8 = 0
@@ -51,15 +51,15 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
-;; @0048                               v4 = global_value.i64 gv4
+;; @0048                               v4 = load.i64 notrap aligned v0+104
 ;; @0048                               v5 = icmp uge v2, v4
-;; @0048                               v6 = global_value.i64 gv5
+;; @0048                               v6 = load.i64 notrap aligned checked v0+96
 ;; @0048                               v7 = iadd v6, v2
 ;; @0048                               v8 = iconst.i64 0
 ;; @0048                               v9 = select_spectre_guard v5, v8, v7  ; v8 = 0
 ;; @0048                               v10 = uload8.i32 little heap v9
-;; @004b                               jump block1(v10)
+;; @004b                               jump block1
 ;;
-;;                                 block1(v3: i32):
-;; @004b                               return v3
+;;                                 block1:
+;; @004b                               return v10
 ;; }

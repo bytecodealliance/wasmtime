@@ -46,7 +46,6 @@
 use crate::dominator_tree::DominatorTree;
 pub use crate::isa::call_conv::CallConv;
 
-use crate::flowgraph;
 use crate::ir::{self, Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::{systemv::RegisterMappingError, UnwindInfoKind};
@@ -55,10 +54,12 @@ use crate::settings;
 use crate::settings::Configurable;
 use crate::settings::SetResult;
 use crate::CodegenResult;
+use crate::{flowgraph, Reg};
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::fmt;
 use core::fmt::{Debug, Formatter};
 use cranelift_control::ControlPlane;
+use std::string::String;
 use target_lexicon::{triple, Architecture, PointerWidth, Triple};
 
 // This module is made public here for benchmarking purposes. No guarantees are
@@ -372,6 +373,10 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     fn to_capstone(&self) -> Result<capstone::Capstone, capstone::Error> {
         Err(capstone::Error::UnsupportedArch)
     }
+
+    /// Return the string representation of "reg" accessed as "size" bytes.
+    /// The returned string will match the usual disassemly view of "reg".
+    fn pretty_print_reg(&self, reg: Reg, size: u8) -> String;
 
     /// Returns whether this ISA has a native fused-multiply-and-add instruction
     /// for floats.

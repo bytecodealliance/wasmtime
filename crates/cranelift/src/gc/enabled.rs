@@ -115,7 +115,7 @@ fn read_field_at_addr(
             WasmValType::I64 => builder.ins().load(ir::types::I64, flags, addr, 0),
             WasmValType::F32 => builder.ins().load(ir::types::F32, flags, addr, 0),
             WasmValType::F64 => builder.ins().load(ir::types::F64, flags, addr, 0),
-            WasmValType::V128 => builder.ins().load(ir::types::I128, flags, addr, 0),
+            WasmValType::V128 => builder.ins().load(ir::types::I8X16, flags, addr, 0),
             WasmValType::Ref(r) => match r.heap_type.top() {
                 WasmHeapTopType::Any | WasmHeapTopType::Extern => gc_compiler(func_env)?
                     .translate_read_gc_reference(func_env, builder, r, addr, flags)?,
@@ -266,7 +266,10 @@ fn default_value(
             WasmValType::I64 => cursor.ins().iconst(ir::types::I64, 0),
             WasmValType::F32 => cursor.ins().f32const(0.0),
             WasmValType::F64 => cursor.ins().f64const(0.0),
-            WasmValType::V128 => cursor.ins().iconst(ir::types::I128, 0),
+            WasmValType::V128 => {
+                let c = cursor.func.dfg.constants.insert(vec![0; 16].into());
+                cursor.ins().vconst(ir::types::I8X16, c)
+            }
             WasmValType::Ref(r) => {
                 assert!(r.nullable);
                 let (ty, needs_stack_map) = func_env.reference_type(r.heap_type);

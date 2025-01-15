@@ -37,8 +37,8 @@
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @002b                               v3 = iconst.i32 1
-;; @002d                               jump block1(v3)  ; v3 = 1
+;; @002d                               jump block1
 ;;
-;;                                 block1(v2: i32):
-;; @002d                               return v2
+;;                                 block1:
+;; @002d                               return v3  ; v3 = 1
 ;; }

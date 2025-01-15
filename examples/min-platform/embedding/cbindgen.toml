@@ -27,4 +27,5 @@ header = """
 """
 
 [defines]
-'feature = signals-based-traps' = 'WASMTIME_SIGNALS_BASED_TRAPS'
+has_virtual_memory = 'WASMTIME_VIRTUAL_MEMORY'
+has_native_signals = 'WASMTIME_NATIVE_SIGNALS'

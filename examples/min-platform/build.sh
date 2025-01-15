@@ -22,8 +22,8 @@ EMBEDDING_DIR=$HOST_DIR/embedding
 set -ex
 
 if [ "$WASMTIME_SIGNALS_BASED_TRAPS" = "1" ]; then
-  cflags="$cflags -DWASMTIME_SIGNALS_BASED_TRAPS"
-  features="$features,signals-based-traps"
+  cflags="$cflags -DWASMTIME_VIRTUAL_MEMORY -DWASMTIME_NATIVE_SIGNALS"
+  features="$features,custom"
 fi
 
 # First compile the C implementation of the platform symbols that will be

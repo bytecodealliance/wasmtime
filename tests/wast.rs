@@ -159,14 +159,11 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
         // Don't use 4gb address space reservations when not hogging memory, and
         // also don't reserve lots of memory after dynamic memories for growth
         // (makes growth slower).
-        #[cfg(feature = "signals-based-traps")]
-        {
-            cfg.memory_reservation(2 * u64::from(wasmtime_environ::Memory::DEFAULT_PAGE_SIZE));
-            cfg.memory_reservation_for_growth(0);
+        cfg.memory_reservation(2 * u64::from(wasmtime_environ::Memory::DEFAULT_PAGE_SIZE));
+        cfg.memory_reservation_for_growth(0);
 
-            let small_guard = 64 * 1024;
-            cfg.memory_guard_size(small_guard);
-        }
+        let small_guard = 64 * 1024;
+        cfg.memory_guard_size(small_guard);
     }
 
     let _pooling_lock = if config.pooling {
@@ -174,10 +171,6 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
         // but we don't want to configure the pooling allocator to allow that
         // (that's a ton of memory to reserve), so we skip those tests.
         if test_hogs_memory {
-            return Ok(());
-        }
-
-        if !cfg!(feature = "signals-based-traps") {
             return Ok(());
         }
 
@@ -192,7 +185,6 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
         // force the usage of static memories without guards to reduce the VM
         // impact.
         let max_memory_size = limits::MEMORY_SIZE;
-        #[cfg(feature = "signals-based-traps")]
         if multi_memory {
             cfg.memory_reservation(max_memory_size as u64);
             cfg.memory_reservation_for_growth(0);

@@ -384,29 +384,6 @@ impl WastTest {
             return true;
         }
 
-        // Pulley supports a mishmash of proposals at this time as it's in an
-        // interim state. It doesn't support all of the MVP but it supports
-        // enough to pass some GC tests for example. This means that
-        // `Compiler::should_fail` is pretty liberal (the check above). To
-        // handle this there's an extra check here for an exhaustive list of
-        // unsupported tests on Pulley. This list will get burned down as
-        // features in Pulley are implemented.
-        if config.compiler == Compiler::CraneliftPulley {
-            let unsupported = [
-                "misc_testsuite/simd/v128-select.wast",
-                "spec_testsuite/proposals/relaxed-simd/i32x4_relaxed_trunc.wast",
-                "spec_testsuite/proposals/memory64/i32x4_relaxed_trunc.wast",
-                "spec_testsuite/simd_i32x4_trunc_sat_f32x4.wast",
-                "spec_testsuite/simd_i32x4_trunc_sat_f64x2.wast",
-                "spec_testsuite/simd_load.wast",
-                "spec_testsuite/simd_splat.wast",
-            ];
-
-            if unsupported.iter().any(|part| self.path.ends_with(part)) {
-                return true;
-            }
-        }
-
         // Disable spec tests for proposals that Winch does not implement yet.
         if config.compiler == Compiler::Winch {
             let unsupported = [
@@ -511,15 +488,9 @@ impl WastTest {
                 "spec_testsuite/simd_store8_lane.wast",
                 // thread related failures
                 "proposals/threads/atomic.wast",
-                "misc_testsuite/threads/MP_wait.wast",
-                "misc_testsuite/threads/load-store-alignment.wast",
-                "misc_testsuite/threads/MP_atomic.wast",
-                "misc_testsuite/threads/SB_atomic.wast",
                 "misc_testsuite/threads/wait_notify.wast",
-                "misc_testsuite/threads/LB_atomic.wast",
                 "misc_testsuite/threads/atomics_wait_address.wast",
                 "misc_testsuite/threads/atomics_notify.wast",
-                "misc_testsuite/threads/load-store-alignment.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {

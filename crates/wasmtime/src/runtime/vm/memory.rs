@@ -76,7 +76,7 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 use crate::runtime::vm::{HostAlignedByteCount, MmapOffset};
 use crate::runtime::vm::{MemoryImage, MemoryImageSlot, SendSyncPtr, VMStore, WaitResult};
 use alloc::sync::Arc;
@@ -84,9 +84,9 @@ use core::time::Duration;
 use core::{ops::Range, ptr::NonNull};
 use wasmtime_environ::{Trap, Tunables};
 
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 mod mmap;
-#[cfg(feature = "signals-based-traps")]
+#[cfg(has_virtual_memory)]
 pub use self::mmap::MmapMemory;
 
 mod malloc;
@@ -129,7 +129,7 @@ impl RuntimeMemoryCreator for DefaultMemoryCreator {
         minimum: usize,
         maximum: Option<usize>,
     ) -> Result<Box<dyn RuntimeLinearMemory>> {
-        #[cfg(feature = "signals-based-traps")]
+        #[cfg(has_virtual_memory)]
         if tunables.signals_based_traps
             || tunables.memory_guard_size > 0
             || tunables.memory_reservation > 0
@@ -187,7 +187,7 @@ pub enum MemoryBase {
     Raw(SendSyncPtr<u8>),
 
     /// An mmap along with an offset into it.
-    #[cfg(feature = "signals-based-traps")]
+    #[cfg(has_virtual_memory)]
     Mmap(MmapOffset),
 }
 
@@ -203,7 +203,7 @@ impl MemoryBase {
     pub fn as_mut_ptr(&self) -> *mut u8 {
         match self {
             Self::Raw(ptr) => ptr.as_ptr(),
-            #[cfg(feature = "signals-based-traps")]
+            #[cfg(has_virtual_memory)]
             Self::Mmap(mmap_offset) => mmap_offset.as_mut_ptr(),
         }
     }
@@ -508,7 +508,7 @@ impl LocalMemory {
         // If a memory image was specified, try to create the MemoryImageSlot on
         // top of our mmap.
         let memory_image = match memory_image {
-            #[cfg(feature = "signals-based-traps")]
+            #[cfg(has_virtual_memory)]
             Some(image) => {
                 // We currently don't support memory_image if
                 // `RuntimeLinearMemory::byte_size` is not a multiple of the host page
@@ -554,7 +554,7 @@ impl LocalMemory {
                     None
                 }
             }
-            #[cfg(not(feature = "signals-based-traps"))]
+            #[cfg(not(has_virtual_memory))]
             Some(_) => unreachable!(),
             None => None,
         };
