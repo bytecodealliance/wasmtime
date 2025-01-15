@@ -1260,32 +1260,32 @@ impl Masm for MacroAssembler {
     }
 
     fn shuffle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, lanes: [u8; 16]) -> Result<()> {
-        if self.flags.has_avx() {
-            // Use `vpshufb` with `lanes` to set the lanes in `lhs` and `rhs`
-            // separately to either the selected index or 0.
-            // Then use `vpor` to combine `lhs` and `rhs` into `dst`.
-            // Setting the most significant bit in the mask's lane to 1 will
-            // result in corresponding lane in the destination register being
-            // set to 0. 0x80 sets the most significant bit to 1.
-            let mut mask_lhs: [u8; 16] = [0x80; 16];
-            let mut mask_rhs: [u8; 16] = [0x80; 16];
-            for i in 0..lanes.len() {
-                if lanes[i] < 16 {
-                    mask_lhs[i] = lanes[i];
-                } else {
-                    mask_rhs[i] = lanes[i] - 16;
-                }
-            }
-            let mask_lhs = self.asm.add_constant(&mask_lhs);
-            let mask_rhs = self.asm.add_constant(&mask_rhs);
-
-            self.asm.xmm_vpshufb_rrm(dst, lhs, &mask_lhs);
-            let scratch = writable!(regs::scratch_xmm());
-            self.asm.xmm_vpshufb_rrm(scratch, rhs, &mask_rhs);
-            self.asm.vpor(dst, dst.to_reg(), scratch.to_reg());
-        } else {
+        if !self.flags.has_avx() {
             bail!(CodeGenError::UnimplementedForNoAvx)
         }
+
+        // Use `vpshufb` with `lanes` to set the lanes in `lhs` and `rhs`
+        // separately to either the selected index or 0.
+        // Then use `vpor` to combine `lhs` and `rhs` into `dst`.
+        // Setting the most significant bit in the mask's lane to 1 will
+        // result in corresponding lane in the destination register being
+        // set to 0. 0x80 sets the most significant bit to 1.
+        let mut mask_lhs: [u8; 16] = [0x80; 16];
+        let mut mask_rhs: [u8; 16] = [0x80; 16];
+        for i in 0..lanes.len() {
+            if lanes[i] < 16 {
+                mask_lhs[i] = lanes[i];
+            } else {
+                mask_rhs[i] = lanes[i] - 16;
+            }
+        }
+        let mask_lhs = self.asm.add_constant(&mask_lhs);
+        let mask_rhs = self.asm.add_constant(&mask_rhs);
+
+        self.asm.xmm_vpshufb_rrm(dst, lhs, &mask_lhs);
+        let scratch = writable!(regs::scratch_xmm());
+        self.asm.xmm_vpshufb_rrm(scratch, rhs, &mask_rhs);
+        self.asm.vpor(dst, dst.to_reg(), scratch.to_reg());
         Ok(())
     }
 }
