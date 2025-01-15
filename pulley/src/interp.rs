@@ -987,9 +987,9 @@ impl Interpreter<'_> {
 
     /// Calculates the "g32" address given the inputs to the addressing mode.
     fn g32_addr<T>(&self, base: XReg, addr: XReg, offset: u8) -> *mut T {
-        let addr = self.state[base].get_ptr::<T>() as usize
-            + self.state[addr].get_u32() as usize
-            + usize::from(offset);
+        let addr = (self.state[base].get_ptr::<T>() as usize)
+            .wrapping_add(self.state[addr].get_u32() as usize)
+            .wrapping_add(usize::from(offset));
         addr as *mut T
     }
 
