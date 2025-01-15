@@ -18,11 +18,11 @@
 ;;       movq    %rsi, (%rsp)
 ;;       movq    $0x2a, %rax
 ;;       movl    $0, %ecx
-;;       movl    %ecx, %r11d
-;;       andw    $1, %r11w
-;;       cmpw    $0, %r11w
+;;       andw    $1, %cx
+;;       cmpw    $0, %cx
 ;;       jne     0x63
-;;   4b: movq    0x58(%r14), %r11
+;;   46: movl    $0, %ecx
+;;       movq    0x58(%r14), %r11
 ;;       movq    (%r11), %rdx
 ;;       addq    %rcx, %rdx
 ;;       movw    %ax, (%rdx)

@@ -844,11 +844,13 @@ where
     fn emit_check_align(&mut self, memarg: &MemArg, size: OperandSize) -> Result<()> {
         if size.bytes() > 1 {
             // Peek addr from top of the stack by popping and pushing.
-            let addr = self.context.pop_to_reg(self.masm, None)?;
-            self.context.stack.push(addr.into());
-
-            let tmp = scratch!(M);
-            self.masm.mov(writable!(tmp), RegImm::Reg(addr.reg), size)?;
+            let addr = *self
+                .context
+                .stack
+                .peek()
+                .ok_or_else(|| CodeGenError::missing_values_in_stack())?;
+            let tmp = self.context.any_gpr(self.masm)?;
+            self.context.move_val_to_reg(&addr, tmp, self.masm)?;
 
             if memarg.offset != 0 {
                 self.masm.add(
@@ -868,6 +870,7 @@ where
 
             self.masm.cmp(tmp, RegImm::Imm(Imm::i64(0)), size)?;
             self.masm.trapif(IntCmpKind::Ne, TRAP_HEAP_MISALIGNED)?;
+            self.context.free_reg(tmp);
         }
 
         Ok(())
@@ -891,12 +894,16 @@ where
         op_kind: MemOpKind,
     ) -> Result<()> {
         let maybe_addr = match op_kind {
-            MemOpKind::Atomic => self.emit_compute_heap_address_align_checked(&arg, kind.derive_operand_size())?,
-            MemOpKind::Normal => self.emit_compute_heap_address(&arg, kind.derive_operand_size())?,
+            MemOpKind::Atomic => {
+                self.emit_compute_heap_address_align_checked(&arg, kind.derive_operand_size())?
+            }
+            MemOpKind::Normal => {
+                self.emit_compute_heap_address(&arg, kind.derive_operand_size())?
+            }
         };
 
         if let Some(addr) = maybe_addr {
-            let dst = match target_ty {
+            let dst = match target_type {
                 WasmValType::I32 | WasmValType::I64 => self.context.any_gpr(self.masm)?,
                 WasmValType::F32 | WasmValType::F64 => self.context.any_fpr(self.masm)?,
                 WasmValType::V128 => self.context.reg_for_type(target_type, self.masm)?,
