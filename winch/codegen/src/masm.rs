@@ -52,6 +52,11 @@ pub(crate) enum MulWideKind {
     Unsigned,
 }
 
+/// Type of operation for a read-modify-write instruction.
+pub(crate) enum RmwOp {
+    Add,
+}
+
 /// The direction to perform the memory move.
 #[derive(Debug, Clone, Eq, PartialEq)]
 pub(crate) enum MemMoveDirection {
@@ -1255,4 +1260,17 @@ pub(crate) trait MacroAssembler {
     /// Performs a shuffle between two 128-bit vectors into a 128-bit result
     /// using lanes as a mask to select which indexes to copy.
     fn shuffle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, lanes: [u8; 16]) -> Result<()>;
+
+    /// Performs the RMW `op` operation on the passed `addr`.
+    ///
+    /// The value *before* the operation was performed is written back to the `operand` register.
+    fn atomic_rmw(
+        &mut self,
+        addr: Self::Address,
+        operand: WritableReg,
+        size: OperandSize,
+        op: RmwOp,
+        flags: MemFlags,
+        extend: Option<ExtendKind>,
+    ) -> Result<()>;
 }

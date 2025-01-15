@@ -13,15 +13,15 @@ use crate::{
     },
     masm::{
         CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind,
-        MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RoundingMode,
-        SPOffset, ShiftKind, StackSlot, TrapCode, TruncKind,
+        MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp,
+        RoundingMode, SPOffset, ShiftKind, StackSlot, TrapCode, TruncKind,
     },
     stack::TypedReg,
 };
 use anyhow::{anyhow, bail, Result};
 use cranelift_codegen::{
     binemit::CodeOffset,
-    ir::{RelSourceLoc, SourceLoc},
+    ir::{MemFlags, RelSourceLoc, SourceLoc},
     isa::aarch64::inst::{Cond, VectorSize},
     settings, Final, MachBufferFinalized, MachLabel,
 };
@@ -896,6 +896,18 @@ impl Masm for MacroAssembler {
 
     fn shuffle(&mut self, _dst: WritableReg, _lhs: Reg, _rhs: Reg, _lanes: [u8; 16]) -> Result<()> {
         bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn atomic_rmw(
+        &mut self,
+        _addr: Self::Address,
+        _operand: WritableReg,
+        _size: OperandSize,
+        _op: RmwOp,
+        _flags: MemFlags,
+        _extend: Option<ExtendKind>,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 }
 
