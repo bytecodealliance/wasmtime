@@ -289,8 +289,8 @@ where
     wasmtime_wasi::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
     wasmtime_wasi::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
     wasmtime_wasi::bindings::io::poll::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi::bindings::io::error::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::io::streams::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
+    wasmtime_wasi::bindings::io::streams::add_to_linker_get_host(l, io_closure)?;
     wasmtime_wasi::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
     wasmtime_wasi::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
     wasmtime_wasi::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
@@ -388,8 +388,8 @@ where
     wasmtime_wasi::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
     wasmtime_wasi::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
     wasmtime_wasi::bindings::sync::io::poll::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi::bindings::sync::io::streams::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::io::error::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::bindings::sync::io::streams::add_to_linker_get_host(l, io_closure)?;
+    wasmtime_wasi::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
     wasmtime_wasi::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
     wasmtime_wasi::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
     wasmtime_wasi::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
