@@ -62,8 +62,14 @@ where
     ) -> CodegenResult<(u32, Option<usize>)> {
         // NB: make sure this method stays in sync with
         // `cranelift_pulley::interp::Vm::call`.
+        //
+        // In general we use the first half of all register banks as argument
+        // passing registers because, well, why not for now. Currently the only
+        // exception is x15 which is reserved as a single caller-saved register
+        // not used for arguments. This is used in `ReturnCallIndirect` to hold
+        // the location of where we're jumping to.
 
-        let x_end = 15;
+        let x_end = 14;
         let f_end = 15;
         let v_end = 15;
 

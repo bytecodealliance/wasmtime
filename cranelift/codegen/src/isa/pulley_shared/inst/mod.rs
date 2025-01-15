@@ -200,7 +200,17 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
         }
         Inst::ReturnIndirectCall { info } => {
-            collector.reg_use(&mut info.dest);
+            // Use a fixed location of where to store the value to
+            // return-call-to. Using a fixed location prevents this register
+            // from being allocated to a callee-saved register which will get
+            // clobbered during the register restores just before the
+            // return-call.
+            //
+            // Also note that `x15` is specifically the last caller-saved
+            // register and, at this time, the only non-argument caller-saved
+            // register. This register allocation constraint is why it's not an
+            // argument register.
+            collector.reg_fixed_use(&mut info.dest, regs::x15());
 
             for CallArgPair { vreg, preg } in &mut info.uses {
                 collector.reg_fixed_use(vreg, *preg);
