@@ -285,6 +285,7 @@ macro_rules! def_unsupported {
     (emit I64AtomicRmw16AddU $($rest:tt)*) => {};
     (emit I64AtomicRmw32AddU $($rest:tt)*) => {};
     (emit I64AtomicRmwAdd $($rest:tt)*) => {};
+    (emit I8x16Shuffle $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -2469,6 +2470,16 @@ where
             LoadKind::Splat(SplatKind::S64),
             MemOpKind::Normal,
         )
+    }
+
+    fn visit_i8x16_shuffle(&mut self, lanes: [u8; 16]) -> Self::Output {
+        let rhs = self.context.pop_to_reg(self.masm, None)?;
+        let lhs = self.context.pop_to_reg(self.masm, None)?;
+        self.masm
+            .shuffle(writable!(lhs.into()), lhs.into(), rhs.into(), lanes)?;
+        self.context.stack.push(TypedReg::v128(lhs.into()).into());
+        self.context.free_reg(rhs);
+        Ok(())
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);

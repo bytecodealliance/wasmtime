@@ -1257,6 +1257,10 @@ pub(crate) trait MacroAssembler {
     fn mul_wide(&mut self, context: &mut CodeGenContext<Emission>, kind: MulWideKind)
         -> Result<()>;
 
+    /// Performs a shuffle between two 128-bit vectors into a 128-bit result
+    /// using lanes as a mask to select which indexes to copy.
+    fn shuffle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, lanes: [u8; 16]) -> Result<()>;
+
     /// Performs the RMW `op` operation on the passed `addr`.
     ///
     /// The value *before* the operation was performed is written back to the `operand` register.

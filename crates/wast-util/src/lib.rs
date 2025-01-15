@@ -500,7 +500,10 @@ impl WastTest {
             // SIMD on Winch requires AVX instructions.
             #[cfg(target_arch = "x86_64")]
             if !(std::is_x86_feature_detected!("avx") && std::is_x86_feature_detected!("avx2")) {
-                let unsupported = ["spec_testsuite/simd_align.wast"];
+                let unsupported = [
+                    "misc_testsuite/winch/_simd_lane.wast",
+                    "spec_testsuite/simd_align.wast",
+                ];
 
                 if unsupported.iter().any(|part| self.path.ends_with(part)) {
                     return true;
