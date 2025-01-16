@@ -11,7 +11,7 @@ use crate::codegen::{
 use crate::masm::{
     DivKind, ExtendKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler, MemMoveDirection,
     MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode, SPOffset, ShiftKind,
-    SplatKind, TruncKind, VectorExtendKind,
+    SplatKind, SplatLoadKind, TruncKind, VectorExtendKind,
 };
 
 use crate::reg::{writable, Reg};
@@ -2446,7 +2446,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::Splat(SplatKind::I8x16),
+            LoadKind::Splat(SplatLoadKind::S8),
             MemOpKind::Normal,
         )
     }
@@ -2455,7 +2455,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::Splat(SplatKind::I16x8),
+            LoadKind::Splat(SplatLoadKind::S16),
             MemOpKind::Normal,
         )
     }
@@ -2464,7 +2464,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::Splat(SplatKind::I32x4),
+            LoadKind::Splat(SplatLoadKind::S32),
             MemOpKind::Normal,
         )
     }
@@ -2473,7 +2473,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::Splat(SplatKind::I64x2),
+            LoadKind::Splat(SplatLoadKind::S64),
             MemOpKind::Normal,
         )
     }

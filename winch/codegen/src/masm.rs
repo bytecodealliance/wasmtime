@@ -271,20 +271,32 @@ pub(crate) enum VectorExtendKind {
     V128Extend32x2U,
 }
 
+/// Kinds of splat loads supported by WebAssembly.
+pub(crate) enum SplatLoadKind {
+    /// 8 bits.
+    S8,
+    /// 16 bits.
+    S16,
+    /// 32 bits.
+    S32,
+    /// 64 bits.
+    S64,
+}
+
 /// Kinds of splat supported by WebAssembly.
 #[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub(crate) enum SplatKind {
-    // 8 bit integer.
+    /// 8 bit integer.
     I8x16,
-    // 16 bit integer.
+    /// 16 bit integer.
     I16x8,
-    // 32 bit integer.
+    /// 32 bit integer.
     I32x4,
-    // 64 bit integer.
+    /// 64 bit integer.
     I64x2,
-    // 32 bit float.
+    /// 32 bit float.
     F32x4,
-    // 64 bit float.
+    /// 64 bit float.
     F64x2,
 }
 
@@ -305,7 +317,7 @@ pub(crate) enum LoadKind {
     /// Load the entire bytes of the operand size without any modifications.
     Operand(OperandSize),
     /// Duplicate value into vector lanes.
-    Splat(SplatKind),
+    Splat(SplatLoadKind),
     /// Scalar (non-vector) extend.
     ScalarExtend(ExtendKind),
     /// Vector extend.
@@ -349,12 +361,12 @@ impl LoadKind {
         }
     }
 
-    fn operand_size_for_splat(kind: &SplatKind) -> OperandSize {
+    fn operand_size_for_splat(kind: &SplatLoadKind) -> OperandSize {
         match kind {
-            SplatKind::I8x16 => OperandSize::S8,
-            SplatKind::I16x8 => OperandSize::S16,
-            SplatKind::I32x4 | SplatKind::F32x4 => OperandSize::S32,
-            SplatKind::I64x2 | SplatKind::F64x2 => OperandSize::S64,
+            SplatLoadKind::S8 => OperandSize::S8,
+            SplatLoadKind::S16 => OperandSize::S16,
+            SplatLoadKind::S32 => OperandSize::S32,
+            SplatLoadKind::S64 => OperandSize::S64,
         }
     }
 }
