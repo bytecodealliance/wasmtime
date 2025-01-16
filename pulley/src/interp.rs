@@ -59,8 +59,8 @@ impl Vm {
     }
 
     /// Consumer this VM and return its stack storage.
-    pub fn into_stack(self) -> Vec<u8> {
-        self.state.stack
+    pub fn into_stack(mut self) -> Vec<u8> {
+        mem::take(&mut self.state.stack)
     }
 
     /// Call a bytecode function.
@@ -224,6 +224,12 @@ impl Vm {
     #[cfg(feature = "profile")]
     pub fn executing_pc(&self) -> &ExecutingPc {
         &self.executing_pc
+    }
+}
+
+impl Drop for Vm {
+    fn drop(&mut self) {
+        self.executing_pc.set_done();
     }
 }
 

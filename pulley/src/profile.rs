@@ -6,7 +6,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use std::fs::{File, OpenOptions};
 use std::io::{BufWriter, Write};
-use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering::Relaxed};
 use std::sync::Arc;
 use std::vec::Vec;
 
@@ -37,17 +37,23 @@ const ID_SAMPLES: u8 = 2;
 ///
 /// Stores an `Arc` internally that is safe to clone/read from other threads.
 #[derive(Default, Clone)]
-pub struct ExecutingPc(Arc<AtomicUsize>);
+pub struct ExecutingPc(Arc<ExecutingPcState>);
+
+#[derive(Default)]
+struct ExecutingPcState {
+    current_pc: AtomicUsize,
+    done: AtomicBool,
+}
 
 impl ExecutingPc {
     pub(crate) fn as_ref(&self) -> ExecutingPcRef<'_> {
-        ExecutingPcRef(&self.0)
+        ExecutingPcRef(&self.0.current_pc)
     }
 
     /// Loads the currently executing program counter, if the interpreter is
     /// running.
     pub fn get(&self) -> Option<usize> {
-        match self.0.load(Relaxed) {
+        match self.0.current_pc.load(Relaxed) {
             0 => None,
             n => Some(n),
         }
@@ -56,11 +62,11 @@ impl ExecutingPc {
     /// Returns whether the interpreter has been destroyed and will no longer
     /// execute any code.
     pub fn is_done(&self) -> bool {
-        // TODO: this doesn't work with `Clone` above in general and only works
-        // given the strict pattern of how everything is integrated today.
-        // Should probably integrate an `AtomicBool` or something like that and
-        // hook into `Drop for Vm` or something like that.
-        Arc::strong_count(&self.0) == 1
+        self.0.done.load(Relaxed)
+    }
+
+    pub(crate) fn set_done(&self) {
+        self.0.done.store(true, Relaxed)
     }
 }
 

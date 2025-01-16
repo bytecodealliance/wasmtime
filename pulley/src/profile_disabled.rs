@@ -12,6 +12,8 @@ impl ExecutingPc {
             _marker: marker::PhantomData,
         }
     }
+
+    pub(crate) fn set_done(&self) {}
 }
 
 #[derive(Copy, Clone)]
