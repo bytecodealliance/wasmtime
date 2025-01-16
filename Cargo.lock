@@ -2512,11 +2512,13 @@ version = "30.0.0"
 dependencies = [
  "anyhow",
  "arbitrary",
+ "clap",
  "cranelift-bitset",
  "env_logger 0.11.5",
  "log",
  "object",
  "sptr",
+ "termcolor",
  "wasmtime-math",
 ]
 

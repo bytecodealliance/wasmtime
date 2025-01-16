@@ -29,9 +29,14 @@
 use super::*;
 use crate::decode::{unwrap_uninhabited, ExtendedOpVisitor};
 use crate::opcode::Opcode;
+use crate::profile::ExecutingPcRef;
 use crate::ExtendedOpcode;
 
-type Handler = fn(Interpreter<'_>) -> Done;
+/// ABI signature of each opcode handler.
+///
+/// Note that this "explodes" the internals of `Interpreter` to individual
+/// arguments to help get them all into registers.
+type Handler = fn(&mut MachineState, UnsafeBytecodeStream, ExecutingPcRef<'_>) -> Done;
 
 /// The extra indirection through a macro is necessary to avoid a compiler error
 /// when compiling without `#![feature(explicit_tail_calls)]` enabled (via
@@ -59,20 +64,47 @@ macro_rules! tail_call {
 }
 
 impl Interpreter<'_> {
-    pub fn run(mut self) -> Done {
-        // Perform a dynamic dispatch through a function pointer indexed by
-        // opcode.
-        let opcode = unwrap_uninhabited(Opcode::decode(self.bytecode()));
-        let handler = OPCODE_HANDLER_TABLE[opcode as usize];
-        tail_call!(handler(self));
+    pub fn run(self) -> Done {
+        dispatch(self.state, self.pc, self.executing_pc)
     }
 }
 
+fn debug<'a>(
+    state: &'a mut MachineState,
+    pc: UnsafeBytecodeStream,
+    executing_pc: ExecutingPcRef<'a>,
+) -> debug::Debug<'a> {
+    debug::Debug(Interpreter {
+        state,
+        pc,
+        executing_pc,
+    })
+}
+
+fn dispatch(
+    state: &mut MachineState,
+    pc: UnsafeBytecodeStream,
+    executing_pc: ExecutingPcRef<'_>,
+) -> Done {
+    // Perform a dynamic dispatch through a function pointer indexed by
+    // opcode.
+    let mut debug = debug(state, pc, executing_pc);
+    debug.before_visit();
+    let opcode = unwrap_uninhabited(Opcode::decode(debug.bytecode()));
+    let handler = OPCODE_HANDLER_TABLE[opcode as usize];
+    tail_call!(handler(debug.0.state, debug.0.pc, debug.0.executing_pc));
+}
+
 /// Same as `Interpreter::run`, except for extended opcodes.
-fn run_extended(mut i: Interpreter<'_>) -> Done {
+fn run_extended(
+    state: &mut MachineState,
+    pc: UnsafeBytecodeStream,
+    pc_ref: ExecutingPcRef<'_>,
+) -> Done {
+    let mut i = debug(state, pc, pc_ref);
     let opcode = unwrap_uninhabited(ExtendedOpcode::decode(i.bytecode()));
     let handler = EXTENDED_OPCODE_HANDLER_TABLE[opcode as usize];
-    tail_call!(handler(i));
+    tail_call!(handler(i.0.state, i.0.pc, i.0.executing_pc));
 }
 
 static OPCODE_HANDLER_TABLE: [Handler; Opcode::MAX as usize + 1] = {
@@ -132,16 +164,23 @@ macro_rules! define_opcode_handler {
             ),*
         } )?;
     )*) => {$(
-        fn $snake_name(mut i: Interpreter<'_>) -> Done {
+        fn $snake_name(
+            state: &mut MachineState,
+            pc: UnsafeBytecodeStream,
+            executing_pc: ExecutingPcRef<'_>,
+        ) -> Done {
+            let mut debug = debug(state, pc, executing_pc);
             $(
                 let ($($field,)*) = unwrap_uninhabited(
-                    crate::decode::operands::$snake_name(i.bytecode())
+                    crate::decode::operands::$snake_name(debug.0.bytecode())
                 );
             )?
-            let _ = &mut i;
-            let mut debug = debug::Debug(i);
-            match debug.$snake_name($($($field),*)?) {
-                ControlFlow::Continue(()) => tail_call!(debug.0.run()),
+            let result = debug.$snake_name($($($field),*)?);
+            debug.after_visit();
+            match result {
+                ControlFlow::Continue(()) => {
+                    tail_call!(dispatch(debug.0.state, debug.0.pc, debug.0.executing_pc))
+                }
                 ControlFlow::Break(done) => done,
             }
         }
