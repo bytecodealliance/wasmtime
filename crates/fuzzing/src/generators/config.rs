@@ -246,7 +246,8 @@ impl Config {
         log::debug!("creating wasmtime config with {:#?}", self.wasmtime);
 
         let mut cfg = wasmtime::Config::new();
-        cfg.wasm_bulk_memory(true)
+        cfg.parallel_compilation(false)
+            .wasm_bulk_memory(true)
             .wasm_reference_types(self.module_config.config.reference_types_enabled)
             .wasm_multi_value(self.module_config.config.multi_value_enabled)
             .wasm_multi_memory(self.module_config.config.max_memories > 1)

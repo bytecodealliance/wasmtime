@@ -27,9 +27,5 @@ pub fn init_fuzzing() {
 
     INIT.call_once(|| {
         let _ = env_logger::try_init();
-
-        let _ = rayon::ThreadPoolBuilder::new()
-            .num_threads(1)
-            .build_global();
-    })
+    });
 }
