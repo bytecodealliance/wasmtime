@@ -88,6 +88,7 @@ const PUBLIC_CRATES: &[&str] = &[
     // these are actually public crates which we cannot break the API of in
     // patch releases.
     "wasmtime",
+    "wasmtime-wasi-io",
     "wasmtime-wasi",
     "wasmtime-wasi-nn",
     "wasmtime-wasi-config",
