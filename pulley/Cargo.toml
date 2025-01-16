@@ -42,3 +42,7 @@ all-features = true
 [[example]]
 name = "objdump"
 required-features = ["disas"]
+
+[[example]]
+name = "profiler-html"
+required-features = ["profile"]
