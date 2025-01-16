@@ -30,7 +30,6 @@ pub struct PoolingAllocationConfig {
     pub decommit_batch_size: usize,
     pub max_unused_warm_slots: u32,
 
-    pub async_stack_zeroing: bool,
     pub async_stack_keep_resident: usize,
 
     pub memory_protection_keys: MpkEnabled,
@@ -65,7 +64,6 @@ impl PoolingAllocationConfig {
         cfg.decommit_batch_size(self.decommit_batch_size);
         cfg.max_unused_warm_slots(self.max_unused_warm_slots);
 
-        cfg.async_stack_zeroing(self.async_stack_zeroing);
         cfg.async_stack_keep_resident(self.async_stack_keep_resident);
 
         cfg.memory_protection_keys(self.memory_protection_keys);
@@ -112,7 +110,6 @@ impl<'a> Arbitrary<'a> for PoolingAllocationConfig {
             decommit_batch_size: u.int_in_range(1..=1000)?,
             max_unused_warm_slots: u.int_in_range(0..=total_memories + 10)?,
 
-            async_stack_zeroing: u.arbitrary()?,
             async_stack_keep_resident: u.int_in_range(0..=1 << 20)?,
 
             memory_protection_keys: *u.choose(&[MpkEnabled::Auto, MpkEnabled::Disable])?,

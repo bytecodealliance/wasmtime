@@ -14,7 +14,10 @@ pub type Error = io::Error;
 pub struct FiberStack(usize);
 
 impl FiberStack {
-    pub fn new(size: usize) -> io::Result<Self> {
+    pub fn new(size: usize, zeroed: bool) -> io::Result<Self> {
+        // We don't support fiber stack zeroing on windows.
+        let _ = zeroed;
+
         Ok(Self(size))
     }
 

@@ -32,18 +32,26 @@ pub struct OnDemandInstanceAllocator {
     stack_creator: Option<Arc<dyn RuntimeFiberStackCreator>>,
     #[cfg(feature = "async")]
     stack_size: usize,
+    #[cfg(feature = "async")]
+    stack_zeroing: bool,
 }
 
 impl OnDemandInstanceAllocator {
     /// Creates a new on-demand instance allocator.
-    pub fn new(mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>, stack_size: usize) -> Self {
-        let _ = stack_size; // suppress warnings when async feature is disabled.
+    pub fn new(
+        mem_creator: Option<Arc<dyn RuntimeMemoryCreator>>,
+        stack_size: usize,
+        stack_zeroing: bool,
+    ) -> Self {
+        let _ = (stack_size, stack_zeroing); // suppress warnings when async feature is disabled.
         Self {
             mem_creator,
             #[cfg(feature = "async")]
             stack_creator: None,
             #[cfg(feature = "async")]
             stack_size,
+            #[cfg(feature = "async")]
+            stack_zeroing,
         }
     }
 
@@ -62,6 +70,8 @@ impl Default for OnDemandInstanceAllocator {
             stack_creator: None,
             #[cfg(feature = "async")]
             stack_size: 0,
+            #[cfg(feature = "async")]
+            stack_zeroing: false,
         }
     }
 }
@@ -165,10 +175,10 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
         }
         let stack = match &self.stack_creator {
             Some(stack_creator) => {
-                let stack = stack_creator.new_stack(self.stack_size)?;
+                let stack = stack_creator.new_stack(self.stack_size, self.stack_zeroing)?;
                 wasmtime_fiber::FiberStack::from_custom(stack)
             }
-            None => wasmtime_fiber::FiberStack::new(self.stack_size),
+            None => wasmtime_fiber::FiberStack::new(self.stack_size, self.stack_zeroing),
         }?;
         Ok(stack)
     }

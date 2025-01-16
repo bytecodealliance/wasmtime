@@ -275,7 +275,8 @@ impl Config {
             ))
             .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
             .generate_address_map(self.wasmtime.generate_address_map)
-            .signals_based_traps(self.wasmtime.signals_based_traps);
+            .signals_based_traps(self.wasmtime.signals_based_traps)
+            .async_stack_zeroing(self.wasmtime.async_stack_zeroing);
 
         if !self.module_config.config.simd_enabled {
             cfg.wasm_relaxed_simd(false);
@@ -508,6 +509,7 @@ pub struct WasmtimeConfig {
     memory_init_cow: bool,
     memory_guaranteed_dense_image_size: u64,
     use_precompiled_cwasm: bool,
+    async_stack_zeroing: bool,
     /// Configuration for the instance allocation strategy to use.
     pub strategy: InstanceAllocationStrategy,
     codegen: CodegenSettings,

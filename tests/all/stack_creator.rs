@@ -98,7 +98,10 @@ impl Drop for CustomStackCreator {
     }
 }
 unsafe impl StackCreator for CustomStackCreator {
-    fn new_stack(&self, size: usize) -> Result<Box<dyn StackMemory>> {
+    fn new_stack(&self, size: usize, zeroed: bool) -> Result<Box<dyn StackMemory>> {
+        if zeroed {
+            bail!("CustomStackCreator does not support stack zeroing");
+        }
         if size != self.size {
             bail!("must use the size we allocated for this stack memory creator");
         }
