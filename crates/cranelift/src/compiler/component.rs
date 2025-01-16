@@ -868,7 +868,7 @@ impl ComponentCompiler for Compiler {
                     &c.offsets.ptr,
                     limits,
                     &self.tunables,
-                    &*self.isa
+                    &*self.isa,
                 );
             }
 
