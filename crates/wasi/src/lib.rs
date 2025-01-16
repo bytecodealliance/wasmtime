@@ -354,10 +354,7 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
     options: &crate::bindings::LinkOptions,
 ) -> anyhow::Result<()> {
     let l = linker;
-    let io_closure = io_type_annotate::<T, _>(|t| IoImpl(t));
-    wasmtime_wasi_io::bindings::wasi::io::error::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi_io::bindings::wasi::io::poll::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi_io::bindings::wasi::io::streams::add_to_linker_get_host(l, io_closure)?;
+    wasmtime_wasi_io::add_to_linker(l)?;
 
     let closure = type_annotate::<T, _>(|t| WasiImpl(IoImpl(t)));
 

@@ -2,6 +2,39 @@ use crate::ctx::WasiCtx;
 use wasmtime::component::ResourceTable;
 pub use wasmtime_wasi_io::{IoImpl, IoView};
 
+/// A trait which provides access to the [`WasiCtx`] inside the embedder's `T`
+/// of [`Store<T>`][`Store`].
+///
+/// This crate's WASI Host implementations depend on the contents of
+/// [`WasiCtx`]. The `T` type [`Store<T>`][`Store`] is defined in each
+/// embedding of Wasmtime. These implementations are connected to the
+/// [`Linker<T>`][`Linker`] by the [`add_to_linker_sync`] and
+/// [`add_to_linker_async`] functions.
+///
+/// The [`WasiView`] trait implies the [`IoView`] trait, so each `T` must
+/// also contain a [`ResourceTable`] and impl `IoView`.
+///
+/// # Example
+///
+/// ```
+/// use wasmtime_wasi::{WasiCtx, ResourceTable, WasiView, IoView, WasiCtxBuilder};
+///
+/// struct MyState {
+///     ctx: WasiCtx,
+///     table: ResourceTable,
+/// }
+///
+/// impl IoView for MyState {
+///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
+/// }
+/// impl WasiView for MyState {
+///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
+/// }
+/// ```
+/// [`Store`]: wasmtime::Store
+/// [`Linker`]: wasmtime::component::Linker
+/// [`ResourceTable`]: wasmtime::component::ResourceTable
+///
 pub trait WasiView: IoView {
     /// Yields mutable access to the configuration used for this context.
     ///
