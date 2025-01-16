@@ -1,16 +1,103 @@
-use crate::bindings::wasi::io::{error, streams};
-use crate::poll::{subscribe, Pollable};
+use crate::bindings::wasi::io::{error, poll, streams};
+use crate::poll::{subscribe, MakeFuture, Pollable, PollableFuture};
 use crate::streams::{InputStream, OutputStream, StreamError, StreamResult};
 use crate::view::{IoImpl, IoView};
+use anyhow::{anyhow, Result};
+use std::collections::HashMap;
+use std::future::Future;
+use std::pin::Pin;
+use std::task::{Context, Poll};
 use wasmtime::component::Resource;
 
-impl<T> error::Host for IoImpl<T> where T: IoView {}
+impl<T: IoView> poll::Host for IoImpl<T> {
+    async fn poll(&mut self, pollables: Vec<Resource<Pollable>>) -> Result<Vec<u32>> {
+        type ReadylistIndex = u32;
 
-impl<T> streams::Host for IoImpl<T>
-where
-    T: IoView,
-{
-    fn convert_stream_error(&mut self, err: StreamError) -> anyhow::Result<streams::StreamError> {
+        if pollables.is_empty() {
+            return Err(anyhow!("empty poll list"));
+        }
+
+        let table = self.table();
+
+        let mut table_futures: HashMap<u32, (MakeFuture, Vec<ReadylistIndex>)> = HashMap::new();
+
+        for (ix, p) in pollables.iter().enumerate() {
+            let ix: u32 = ix.try_into()?;
+
+            let pollable = table.get(p)?;
+            let (_, list) = table_futures
+                .entry(pollable.index)
+                .or_insert((pollable.make_future, Vec::new()));
+            list.push(ix);
+        }
+
+        let mut futures: Vec<(PollableFuture<'_>, Vec<ReadylistIndex>)> = Vec::new();
+        for (entry, (make_future, readylist_indices)) in table.iter_entries(table_futures) {
+            let entry = entry?;
+            futures.push((make_future(entry), readylist_indices));
+        }
+
+        struct PollList<'a> {
+            futures: Vec<(PollableFuture<'a>, Vec<ReadylistIndex>)>,
+        }
+        impl<'a> Future for PollList<'a> {
+            type Output = Vec<u32>;
+
+            fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
+                let mut any_ready = false;
+                let mut results = Vec::new();
+                for (fut, readylist_indicies) in self.futures.iter_mut() {
+                    match fut.as_mut().poll(cx) {
+                        Poll::Ready(()) => {
+                            results.extend_from_slice(readylist_indicies);
+                            any_ready = true;
+                        }
+                        Poll::Pending => {}
+                    }
+                }
+                if any_ready {
+                    Poll::Ready(results)
+                } else {
+                    Poll::Pending
+                }
+            }
+        }
+
+        Ok(PollList { futures }.await)
+    }
+}
+
+impl<T: IoView> crate::bindings::wasi::io::poll::HostPollable for IoImpl<T> {
+    async fn block(&mut self, pollable: Resource<Pollable>) -> Result<()> {
+        let table = self.table();
+        let pollable = table.get(&pollable)?;
+        let ready = (pollable.make_future)(table.get_any_mut(pollable.index)?);
+        ready.await;
+        Ok(())
+    }
+    async fn ready(&mut self, pollable: Resource<Pollable>) -> Result<bool> {
+        let table = self.table();
+        let pollable = table.get(&pollable)?;
+        let ready = (pollable.make_future)(table.get_any_mut(pollable.index)?);
+        futures::pin_mut!(ready);
+        Ok(matches!(
+            futures::future::poll_immediate(ready).await,
+            Some(())
+        ))
+    }
+    fn drop(&mut self, pollable: Resource<Pollable>) -> Result<()> {
+        let pollable = self.table().delete(pollable)?;
+        if let Some(delete) = pollable.remove_index_on_delete {
+            delete(self.table(), pollable.index)?;
+        }
+        Ok(())
+    }
+}
+
+impl<T: IoView> error::Host for IoImpl<T> {}
+
+impl<T: IoView> streams::Host for IoImpl<T> {
+    fn convert_stream_error(&mut self, err: StreamError) -> Result<streams::StreamError> {
         match err {
             StreamError::Closed => Ok(streams::StreamError::Closed),
             StreamError::LastOperationFailed(e) => Ok(streams::StreamError::LastOperationFailed(
@@ -21,25 +108,19 @@ where
     }
 }
 
-impl<T> error::HostError for IoImpl<T>
-where
-    T: IoView,
-{
-    fn drop(&mut self, err: Resource<streams::Error>) -> anyhow::Result<()> {
+impl<T: IoView> error::HostError for IoImpl<T> {
+    fn drop(&mut self, err: Resource<streams::Error>) -> Result<()> {
         self.table().delete(err)?;
         Ok(())
     }
 
-    fn to_debug_string(&mut self, err: Resource<streams::Error>) -> anyhow::Result<String> {
+    fn to_debug_string(&mut self, err: Resource<streams::Error>) -> Result<String> {
         Ok(format!("{:?}", self.table().get(&err)?))
     }
 }
 
-impl<T> streams::HostOutputStream for IoImpl<T>
-where
-    T: IoView,
-{
-    async fn drop(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<()> {
+impl<T: IoView> streams::HostOutputStream for IoImpl<T> {
+    async fn drop(&mut self, stream: Resource<OutputStream>) -> Result<()> {
         self.table().delete(stream)?.cancel().await;
         Ok(())
     }
@@ -54,7 +135,7 @@ where
         Ok(())
     }
 
-    fn subscribe(&mut self, stream: Resource<OutputStream>) -> anyhow::Result<Resource<Pollable>> {
+    fn subscribe(&mut self, stream: Resource<OutputStream>) -> Result<Resource<Pollable>> {
         subscribe(self.table(), stream)
     }
 
@@ -168,11 +249,8 @@ where
     }
 }
 
-impl<T> streams::HostInputStream for IoImpl<T>
-where
-    T: IoView,
-{
-    async fn drop(&mut self, stream: Resource<InputStream>) -> anyhow::Result<()> {
+impl<T: IoView> streams::HostInputStream for IoImpl<T> {
+    async fn drop(&mut self, stream: Resource<InputStream>) -> Result<()> {
         self.table().delete(stream)?.cancel().await;
         Ok(())
     }
@@ -211,7 +289,7 @@ where
         Ok(written.try_into().expect("usize always fits in u64"))
     }
 
-    fn subscribe(&mut self, stream: Resource<InputStream>) -> anyhow::Result<Resource<Pollable>> {
+    fn subscribe(&mut self, stream: Resource<InputStream>) -> Result<Resource<Pollable>> {
         crate::poll::subscribe(self.table(), stream)
     }
 }

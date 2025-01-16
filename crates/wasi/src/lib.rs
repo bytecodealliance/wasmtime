@@ -275,10 +275,10 @@ pub use wasmtime::component::{ResourceTable, ResourceTableError};
 pub use wasmtime_wasi_io::poll::{
     subscribe, ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe,
 };
-pub use wasmtime_wasi_io::stream::{
+pub use wasmtime_wasi_io::streams::{
     HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError, StreamResult,
 };
-pub use wasmtime_wasi_io::{IoImp, IoView};
+pub use wasmtime_wasi_io::{IoImpl, IoView};
 
 /// Add all WASI interfaces from this crate into the `linker` provided.
 ///
