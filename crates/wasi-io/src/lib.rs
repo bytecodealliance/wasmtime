@@ -133,10 +133,6 @@ impl<T: IoView> IoView for IoImpl<T> {
 ///     wasmtime_wasi_io::add_to_linker_async(&mut linker)?;
 ///     // ... add any further functionality to `linker` if desired ...
 ///
-///     let mut builder = WasiCtxBuilder::new();
-///
-///     // ... configure `builder` more to add env vars, args, etc ...
-///
 ///     let mut store = Store::new(
 ///         &engine,
 ///         MyState {
