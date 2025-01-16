@@ -55,6 +55,7 @@ pub(crate) enum MulWideKind {
 /// Type of operation for a read-modify-write instruction.
 pub(crate) enum RmwOp {
     Add,
+    Sub,
 }
 
 /// The direction to perform the memory move.
