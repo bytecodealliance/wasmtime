@@ -64,6 +64,7 @@ impl ExecutingPc {
     }
 }
 
+#[derive(Copy, Clone)]
 #[repr(transparent)]
 pub(crate) struct ExecutingPcRef<'a>(&'a AtomicUsize);
 

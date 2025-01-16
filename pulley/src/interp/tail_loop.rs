@@ -65,13 +65,7 @@ macro_rules! tail_call {
 
 impl Interpreter<'_> {
     pub fn run(self) -> Done {
-        // Perform a dynamic dispatch through a function pointer indexed by
-        // opcode.
-        let mut debug = debug::Debug(self);
-        debug.before_visit();
-        let opcode = unwrap_uninhabited(Opcode::decode(debug.bytecode()));
-        let handler = OPCODE_HANDLER_TABLE[opcode as usize];
-        tail_call!(handler(debug.0.state, debug.0.pc, debug.0.executing_pc));
+        dispatch(self.state, self.pc, self.executing_pc)
     }
 }
 
@@ -85,6 +79,20 @@ fn debug<'a>(
         pc,
         executing_pc,
     })
+}
+
+fn dispatch(
+    state: &mut MachineState,
+    pc: UnsafeBytecodeStream,
+    executing_pc: ExecutingPcRef<'_>,
+) -> Done {
+    // Perform a dynamic dispatch through a function pointer indexed by
+    // opcode.
+    let mut debug = debug(state, pc, executing_pc);
+    debug.before_visit();
+    let opcode = unwrap_uninhabited(Opcode::decode(debug.bytecode()));
+    let handler = OPCODE_HANDLER_TABLE[opcode as usize];
+    tail_call!(handler(state, pc, executing_pc));
 }
 
 /// Same as `Interpreter::run`, except for extended opcodes.
@@ -170,7 +178,7 @@ macro_rules! define_opcode_handler {
             let result = debug.$snake_name($($($field),*)?);
             debug.after_visit();
             match result {
-                ControlFlow::Continue(()) => tail_call!(debug.0.run()),
+                ControlFlow::Continue(()) => tail_call!(dispatch(state, pc, executing_pc)),
                 ControlFlow::Break(done) => done,
             }
         }
