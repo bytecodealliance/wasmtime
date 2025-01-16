@@ -509,6 +509,9 @@ impl Imm {
     }
 
     /// Get a little endian representation of the immediate.
+    ///
+    /// This method heap allocates and is intended to be used when adding
+    /// values to the constant pool.
     pub fn to_bytes(&self) -> Vec<u8> {
         match self {
             Imm::I32(n) => n.to_le_bytes().to_vec(),
