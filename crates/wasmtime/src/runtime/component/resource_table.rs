@@ -29,8 +29,7 @@ impl fmt::Display for ResourceTableError {
     }
 }
 
-#[cfg(feature = "std")]
-impl std::error::Error for ResourceTableError {}
+impl core::error::Error for ResourceTableError {}
 
 /// The `ResourceTable` type maps a `Resource<T>` to its `T`.
 #[derive(Debug)]
