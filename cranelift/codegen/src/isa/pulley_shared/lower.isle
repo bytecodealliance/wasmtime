@@ -1258,28 +1258,28 @@
 
 ;;;; Rules for `fcvt_from_{u,s}int` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
-(rule (lower (has_type $F32 (fcvt_from_uint val @ (value_type $I32))))
-  (pulley_f32_from_x32_u val))
+(rule 0 (lower (has_type $F32 (fcvt_from_uint val @ (value_type (fits_in_32 _)))))
+  (pulley_f32_from_x32_u (zext32 val)))
 
-(rule (lower (has_type $F32 (fcvt_from_uint val @ (value_type $I64))))
+(rule 1 (lower (has_type $F32 (fcvt_from_uint val @ (value_type $I64))))
   (pulley_f32_from_x64_u val))
 
-(rule (lower (has_type $F64 (fcvt_from_uint val @ (value_type $I32))))
-  (pulley_f64_from_x32_u val))
+(rule 0 (lower (has_type $F64 (fcvt_from_uint val @ (value_type (fits_in_32 _)))))
+  (pulley_f64_from_x32_u (zext32 val)))
 
-(rule (lower (has_type $F64 (fcvt_from_uint val @ (value_type $I64))))
+(rule 1 (lower (has_type $F64 (fcvt_from_uint val @ (value_type $I64))))
   (pulley_f64_from_x64_u val))
 
-(rule (lower (has_type $F32 (fcvt_from_sint val @ (value_type $I32))))
-  (pulley_f32_from_x32_s val))
+(rule 0 (lower (has_type $F32 (fcvt_from_sint val @ (value_type (fits_in_32 _)))))
+  (pulley_f32_from_x32_s (sext32 val)))
 
-(rule (lower (has_type $F32 (fcvt_from_sint val @ (value_type $I64))))
+(rule 1 (lower (has_type $F32 (fcvt_from_sint val @ (value_type $I64))))
   (pulley_f32_from_x64_s val))
 
-(rule (lower (has_type $F64 (fcvt_from_sint val @ (value_type $I32))))
-  (pulley_f64_from_x32_s val))
+(rule 0 (lower (has_type $F64 (fcvt_from_sint val @ (value_type (fits_in_32 _)))))
+  (pulley_f64_from_x32_s (sext32 val)))
 
-(rule (lower (has_type $F64 (fcvt_from_sint val @ (value_type $I64))))
+(rule 1 (lower (has_type $F64 (fcvt_from_sint val @ (value_type $I64))))
   (pulley_f64_from_x64_s val))
 
 (rule (lower (has_type $F32X4 (fcvt_from_sint val @ (value_type $I32X4))))

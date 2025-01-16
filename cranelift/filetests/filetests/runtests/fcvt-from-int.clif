@@ -1,0 +1,179 @@
+test interpret
+test run
+target aarch64
+target x86_64
+target s390x
+target riscv64
+target riscv64 has_c has_zcb
+target pulley32
+target pulley32be
+target pulley64
+target pulley64be
+
+function %i8_to_f32(i8) -> f32 {
+block0(v0: i8):
+    v1 = fcvt_from_sint.f32 v0
+    return v1
+}
+
+; run: %i8_to_f32(0) == 0.0
+; run: %i8_to_f32(1) == 0x1.0
+; run: %i8_to_f32(-1) == -0x1.0
+
+
+function %u8_to_f32(i8) -> f32 {
+block0(v0: i8):
+    v1 = fcvt_from_uint.f32 v0
+    return v1
+}
+
+; run: %u8_to_f32(0) == 0.0
+; run: %u8_to_f32(1) == 0x1.0
+; run: %u8_to_f32(-1) == 0x1.fep7
+
+function %i16_to_f32(i16) -> f32 {
+block0(v0: i16):
+    v1 = fcvt_from_sint.f32 v0
+    return v1
+}
+
+; run: %i16_to_f32(0) == 0.0
+; run: %i16_to_f32(1) == 0x1.0
+; run: %i16_to_f32(-1) == -0x1.0
+
+
+function %u16_to_f32(i16) -> f32 {
+block0(v0: i16):
+    v1 = fcvt_from_uint.f32 v0
+    return v1
+}
+
+; run: %u16_to_f32(0) == 0.0
+; run: %u16_to_f32(1) == 0x1.0
+; run: %u16_to_f32(-1) == 0x1.fffep15
+
+function %i32_to_f32(i32) -> f32 {
+block0(v0: i32):
+    v1 = fcvt_from_sint.f32 v0
+    return v1
+}
+
+; run: %i32_to_f32(0) == 0.0
+; run: %i32_to_f32(1) == 0x1.0
+; run: %i32_to_f32(-1) == -0x1.0
+
+
+function %u32_to_f32(i32) -> f32 {
+block0(v0: i32):
+    v1 = fcvt_from_uint.f32 v0
+    return v1
+}
+
+; run: %u32_to_f32(0) == 0.0
+; run: %u32_to_f32(1) == 0x1.0
+; run: %u32_to_f32(-1) == 0x1.0p32
+
+function %i64_to_f32(i64) -> f32 {
+block0(v0: i64):
+    v1 = fcvt_from_sint.f32 v0
+    return v1
+}
+
+; run: %i64_to_f32(0) == 0.0
+; run: %i64_to_f32(1) == 0x1.0
+; run: %i64_to_f32(-1) == -0x1.0
+
+
+function %u64_to_f32(i64) -> f32 {
+block0(v0: i64):
+    v1 = fcvt_from_uint.f32 v0
+    return v1
+}
+
+; run: %u64_to_f32(0) == 0.0
+; run: %u64_to_f32(1) == 0x1.0
+; run: %u64_to_f32(-1) == 0x1.0p64
+
+function %i8_to_f64(i8) -> f64 {
+block0(v0: i8):
+    v1 = fcvt_from_sint.f64 v0
+    return v1
+}
+
+; run: %i8_to_f64(0) == 0.0
+; run: %i8_to_f64(1) == 0x1.0
+; run: %i8_to_f64(-1) == -0x1.0
+
+
+function %u8_to_f64(i8) -> f64 {
+block0(v0: i8):
+    v1 = fcvt_from_uint.f64 v0
+    return v1
+}
+
+; run: %u8_to_f64(0) == 0.0
+; run: %u8_to_f64(1) == 0x1.0
+; run: %u8_to_f64(-1) == 0x1.fep7
+
+function %i16_to_f64(i16) -> f64 {
+block0(v0: i16):
+    v1 = fcvt_from_sint.f64 v0
+    return v1
+}
+
+; run: %i16_to_f64(0) == 0.0
+; run: %i16_to_f64(1) == 0x1.0
+; run: %i16_to_f64(-1) == -0x1.0
+
+
+function %u16_to_f64(i16) -> f64 {
+block0(v0: i16):
+    v1 = fcvt_from_uint.f64 v0
+    return v1
+}
+
+; run: %u16_to_f64(0) == 0.0
+; run: %u16_to_f64(1) == 0x1.0
+; run: %u16_to_f64(-1) == 0x1.fffep15
+
+function %i32_to_f64(i32) -> f64 {
+block0(v0: i32):
+    v1 = fcvt_from_sint.f64 v0
+    return v1
+}
+
+; run: %i32_to_f64(0) == 0.0
+; run: %i32_to_f64(1) == 0x1.0
+; run: %i32_to_f64(-1) == -0x1.0
+
+
+function %u32_to_f64(i32) -> f64 {
+block0(v0: i32):
+    v1 = fcvt_from_uint.f64 v0
+    return v1
+}
+
+; run: %u32_to_f64(0) == 0.0
+; run: %u32_to_f64(1) == 0x1.0
+; run: %u32_to_f64(-1) == 0x1.fffffffep31
+
+function %i64_to_f64(i64) -> f64 {
+block0(v0: i64):
+    v1 = fcvt_from_sint.f64 v0
+    return v1
+}
+
+; run: %i64_to_f64(0) == 0.0
+; run: %i64_to_f64(1) == 0x1.0
+; run: %i64_to_f64(-1) == -0x1.0
+
+
+function %u64_to_f64(i64) -> f64 {
+block0(v0: i64):
+    v1 = fcvt_from_uint.f64 v0
+    return v1
+}
+
+; run: %u64_to_f64(0) == 0.0
+; run: %u64_to_f64(1) == 0x1.0
+; run: %u64_to_f64(-1) == 0x1.0p64
