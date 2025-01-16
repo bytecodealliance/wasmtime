@@ -1,6 +1,6 @@
 mod io;
 pub mod poll;
-pub mod stream;
+pub mod streams;
 mod view;
 
 pub use view::{IoImpl, IoView};
@@ -11,8 +11,8 @@ pub mod bindings {
         trappable_imports: true,
         with: {
             "wasi:io/poll/pollable": crate::poll::Pollable,
-            "wasi:io/streams/input-stream": crate::stream::InputStream,
-            "wasi:io/streams/output-stream": crate::stream::OutputStream,
+            "wasi:io/streams/input-stream": crate::streams::InputStream,
+            "wasi:io/streams/output-stream": crate::streams::OutputStream,
             "wasi:io/error/error": crate::stream::Error,
         },
         async: {

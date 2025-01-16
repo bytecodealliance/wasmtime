@@ -28,9 +28,6 @@
 //! * [`wasi:clocks/wall-clock`]
 //! * [`wasi:filesystem/preopens`]
 //! * [`wasi:filesystem/types`]
-//! * [`wasi:io/error`]
-//! * [`wasi:io/poll`]
-//! * [`wasi:io/streams`]
 //! * [`wasi:random/insecure-seed`]
 //! * [`wasi:random/insecure`]
 //! * [`wasi:random/random`]
@@ -43,8 +40,19 @@
 //! * [`wasi:sockets/udp`]
 //!
 //! All traits are implemented in terms of a [`WasiView`] trait which provides
-//! basic access to [`WasiCtx`], configuration for WASI, and [`ResourceTable`],
-//! the state for all host-defined component model resources.
+//! access to [`WasiCtx`], which defines the configuration for WASI.
+//! The [`WasiView`] trait imples [`IoView`], which provides access to a common
+//! [`ResourceTable`], which owns all host-defined component model resources.
+//!
+//! The [`wasmtime-wasi-io`] crate contains implementations of the
+//! following interfaces, and this crate reuses those implementations:
+//!
+//! * [`wasi:io/error`]
+//! * [`wasi:io/poll`]
+//! * [`wasi:io/streams`]
+//!
+//! These traits are implemented in terms of a [`IoView`] trait, which only
+//! provides access to a common [`ResourceTable`].
 //!
 //! # Generated Bindings
 //!
@@ -58,8 +66,12 @@
 //!
 //! This crate's implementation of WASI is done in terms of an implementation of
 //! [`WasiView`]. This trait provides a "view" into WASI-related state that is
-//! contained within a [`Store<T>`](wasmtime::Store). All implementations of
-//! traits look like:
+//! contained within a [`Store<T>`](wasmtime::Store). [`WasiView`] implies the
+//! [`IoView`] trait, which provides access to common [`ResourceTable`] which
+//! owns all host-implemented component model resources.
+//!
+//! For all of the generated bindings in this crate (Host traits),
+//! implementations are provided looking like:
 //!
 //! ```
 //! # use wasmtime_wasi::WasiImpl;
@@ -73,21 +85,50 @@
 //! The [`add_to_linker_sync`] and [`add_to_linker_async`] function then require
 //! that `T: WasiView` with [`Linker<T>`](wasmtime::component::Linker).
 //!
-//! To implement the [`WasiView`] trait you will first select a `T` to put in
-//! `Store<T>`. Next you'll implement the [`WasiView`] trait for `T`. Somewhere
-//! within `T` you'll store:
+//! To implement the [`WasiView`] and [`IoView`] trait you will first select a
+//! `T` to put in `Store<T>` (typically, by defining your own struct).
+//! Somewhere within `T` you'll store:
 //!
-//! * [`WasiCtx`] - created through [`WasiCtxBuilder`].
 //! * [`ResourceTable`] - created through default constructors.
+//! * [`WasiCtx`] - created through [`WasiCtxBuilder`].
 //!
-//! These two fields are then accessed through the methods of [`WasiView`].
+//! You'll then write implementations of the [`IoView`] and [`WasiView`]
+//! traits to access those items in your `T`. For example:
+//! ```
+//! use wasmtime::component::ResourceTable;
+//! use wasmtime_wasi::{WasiCtx, IoView, WasiView};
+//! struct MyCtx {
+//!     table: ResourceTable,
+//!     wasi: WasiCtx,
+//! }
+//! impl IoView for MyCtx {
+//!     fn table(&mut self) -> &mut ResourceTable {
+//!         &mut self.table
+//!     }
+//! }
+//! impl WasiView for MyCtx {
+//!     fn ctx(&mut self) -> &mut WasiCtx {
+//!         &mut self.wasi
+//!     }
+//! }
+//!
+//! ```
 //!
 //! # Async and Sync
 //!
-//! Many WASI functions are not blocking from WebAssembly's point of view, but
-//! for those that do they're provided in two flavors: asynchronous and
-//! synchronous. Which version you will use depends on how
-//! [`Config::async_support`][async] is set.
+//! As of WASI0.2, WASI functions are not blocking from WebAssembly's point of
+//! view: a WebAssembly call into these functions returns when they are
+//! complete.
+//!
+//! This crate provides an implementation of those functions in the host,
+//! where for some functions, it is appropriate to implement them using
+//! async Rust and the Tokio executor, so that the host implementation can be
+//! nonblocking when Wasmtime's [`Config::async_support`][async] is set.
+//! Synchronous wrappers are provided for all async implementations, which
+//! creates a private Tokio executor.
+//!
+//! Users can choose between these modes of implementation using variants
+//! of the add_to_linker functions:
 //!
 //! * For non-async users (the default of `Config`), use [`add_to_linker_sync`].
 //! * For async users, use [`add_to_linker_async`].
@@ -133,8 +174,8 @@
 //!
 //! Usage of this crate is done through a few steps to get everything hooked up:
 //!
-//! 1. First implement [`WasiView`] for your type which is the `T` in
-//!    `Store<T>`.
+//! 1. First implement [`IoView`] and [`WasiView`] for your type which is the
+//!    `T` in `Store<T>`.
 //! 2. Add WASI interfaces to a `wasmtime::component::Linker<T>`. This is either
 //!    done through top-level functions like [`add_to_linker_sync`] or through
 //!    individual `add_to_linker` functions in generated bindings throughout
@@ -151,6 +192,7 @@
 //! [`wasmtime::component::bindgen!`]: https://docs.rs/wasmtime/latest/wasmtime/component/macro.bindgen.html
 //! [`tokio`]: https://crates.io/crates/tokio
 //! [`cap-std`]: https://crates.io/crates/cap-std
+//! [`wasmtime-wasi-io`]: https://crates.io/crates/wasmtime-wasi-io
 //! [`wasi:cli/environment`]: bindings::cli::environment::Host
 //! [`wasi:cli/exit`]: bindings::cli::exit::Host
 //! [`wasi:cli/stderr`]: bindings::cli::stderr::Host
@@ -165,9 +207,9 @@
 //! [`wasi:clocks/wall-clock`]: bindings::clocks::wall_clock::Host
 //! [`wasi:filesystem/preopens`]: bindings::filesystem::preopens::Host
 //! [`wasi:filesystem/types`]: bindings::filesystem::types::Host
-//! [`wasi:io/error`]: bindings::io::error::Host
-//! [`wasi:io/poll`]: bindings::io::poll::Host
-//! [`wasi:io/streams`]: bindings::io::streams::Host
+//! [`wasi:io/error`]: wasmtime_wasi_io::bindings::wasi::io::error::Host
+//! [`wasi:io/poll`]: wasmtime_wasi_io::bindings::wasi::io::poll::Host
+//! [`wasi:io/streams`]: wasmtime_wasi_io::bindings::wasi::io::streams::Host
 //! [`wasi:random/insecure-seed`]: bindings::random::insecure_seed::Host
 //! [`wasi:random/insecure`]: bindings::random::insecure::Host
 //! [`wasi:random/random`]: bindings::random::random::Host
@@ -218,7 +260,7 @@ pub use self::stdio::{
     stderr, stdin, stdout, AsyncStdinStream, AsyncStdoutStream, IsATTY, OutputFile, Stderr, Stdin,
     StdinStream, Stdout, StdoutStream,
 };
-pub use self::view::{IoImpl, IoView, WasiImpl, WasiView};
+pub use self::view::{WasiImpl, WasiView};
 #[doc(no_inline)]
 pub use async_trait::async_trait;
 #[doc(no_inline)]
@@ -227,12 +269,16 @@ pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
 #[doc(no_inline)]
 pub use wasmtime::component::{ResourceTable, ResourceTableError};
+// These contents of wasmtime-wasi-io are re-exported by this crate for compatibility:
+// they were originally defined in this crate before being factored out, and many
+// users of this crate depend on them at these names.
 pub use wasmtime_wasi_io::poll::{
     subscribe, ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe,
 };
 pub use wasmtime_wasi_io::stream::{
     HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError, StreamResult,
 };
+pub use wasmtime_wasi_io::{IoImp, IoView};
 
 /// Add all WASI interfaces from this crate into the `linker` provided.
 ///
