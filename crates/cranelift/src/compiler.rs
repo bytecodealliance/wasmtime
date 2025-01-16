@@ -395,7 +395,14 @@ impl wasmtime_environ::Compiler for Compiler {
             caller_vmctx,
             i32::from(ptr.vmcontext_runtime_limits()),
         );
-        save_last_wasm_exit_fp_and_pc(&mut builder, pointer_type, &ptr, limits, &self.tunables, isa);
+        save_last_wasm_exit_fp_and_pc(
+            &mut builder,
+            pointer_type,
+            &ptr,
+            limits,
+            &self.tunables,
+            isa,
+        );
 
         // Spill all wasm arguments to the stack in `ValRaw` slots.
         let (args_base, args_len) =

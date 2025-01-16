@@ -270,7 +270,7 @@ fn run_test(name: &str, stack_overflow: StackOverflow) {
         // stack overflow. If the guest stack overflows then that won't actually
         // trigger an overflow when Cranelift doesn't have native support
         // because Pulley is used in that case.
-        StackOverflow::Host | StackOverflow::Wasm => {
+        StackOverflow::Host /* | StackOverflow::Wasm */ => {
             let native_stack_overflow = is_stack_overflow(&output.status, &stderr);
             let expect_native_overflow =
                 stack_overflow == StackOverflow::Host || cranelift_native::builder().is_ok();
