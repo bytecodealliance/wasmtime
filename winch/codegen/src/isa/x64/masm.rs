@@ -348,12 +348,12 @@ impl Masm for MacroAssembler {
                 if size == OperandSize::S64 {
                     self.asm
                         .xmm_mov_mr(&src, dst, OperandSize::S64, UNTRUSTED_FLAGS);
-                    // Results in the first 4 bytes and second 4 bytes being
-                    // swapped and then the swapped bytes being copied.
-                    // [d0, d1, d2, d3, d4, d5, d6, d7, ...] yields
-                    // [d4, d5, d6, d7, d0, d1, d2, d3, d4, d5, d6, d7, d0, d1, d2, d3].
-                    self.asm
-                        .xmm_vpshuf_rr(dst.to_reg(), dst, 0b0100_0100, OperandSize::S64);
+                    self.asm.xmm_vpshuf_rr(
+                        dst.to_reg(),
+                        dst,
+                        Self::vpshuf_mask_for_64_bit_splats(),
+                        OperandSize::S64,
+                    );
                 } else {
                     self.asm
                         .xmm_vpbroadcast_mr(&src, dst, size, UNTRUSTED_FLAGS);
@@ -1324,11 +1324,7 @@ impl Masm for MacroAssembler {
             if !self.flags.has_avx() {
                 bail!(CodeGenError::UnimplementedForNoAvx);
             }
-            // Results in the first 4 bytes and second 4 bytes being
-            // swapped and then the swapped bytes being copied.
-            // [d0, d1, d2, d3, d4, d5, d6, d7, ...] yields
-            // [d4, d5, d6, d7, d0, d1, d2, d3, d4, d5, d6, d7, d0, d1, d2, d3].
-            let mask = 0b0100_0100;
+            let mask = Self::vpshuf_mask_for_64_bit_splats();
             match src {
                 RegImm::Reg(src) => self.asm.xmm_vpshuf_rr(src, dst, mask, OperandSize::S64),
                 RegImm::Imm(imm) => {
@@ -1566,5 +1562,14 @@ impl MacroAssembler {
         } else {
             Ok(())
         }
+    }
+
+    /// The mask to use when performing a `vpshuf` operation for a 64-bit splat.
+    fn vpshuf_mask_for_64_bit_splats() -> u8 {
+        // Results in the first 4 bytes and second 4 bytes being
+        // swapped and then the swapped bytes being copied.
+        // [d0, d1, d2, d3, d4, d5, d6, d7, ...] yields
+        // [d4, d5, d6, d7, d0, d1, d2, d3, d4, d5, d6, d7, d0, d1, d2, d3].
+        0b0100_0100
     }
 }
