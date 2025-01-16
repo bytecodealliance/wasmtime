@@ -1,7 +1,6 @@
 use crate::network::SocketAddrUse;
 use crate::{
     bindings::{
-        io::streams::{InputStream, OutputStream},
         sockets::network::{IpAddressFamily, IpSocketAddress, Network},
         sockets::tcp::{self, ShutdownType},
     },
@@ -11,7 +10,11 @@ use crate::{SocketResult, WasiImpl, WasiView};
 use std::net::SocketAddr;
 use std::time::Duration;
 use wasmtime::component::Resource;
-use wasmtime_wasi_io::{poll::Pollable, IoView};
+use wasmtime_wasi_io::{
+    poll::Pollable,
+    stream::{InputStream, OutputStream},
+    IoView,
+};
 
 impl<T> tcp::Host for WasiImpl<T> where T: WasiView {}
 

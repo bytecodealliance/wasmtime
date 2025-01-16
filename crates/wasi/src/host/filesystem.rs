@@ -3,13 +3,13 @@ use crate::bindings::filesystem::preopens;
 use crate::bindings::filesystem::types::{
     self, ErrorCode, HostDescriptor, HostDirectoryEntryStream,
 };
-use crate::bindings::io::streams::{InputStream, OutputStream};
 use crate::filesystem::{
     Descriptor, Dir, File, FileInputStream, FileOutputStream, OpenMode, ReaddirIterator,
 };
 use crate::{DirPerms, FilePerms, FsError, FsResult, IoView, WasiImpl, WasiView};
 use anyhow::Context;
 use wasmtime::component::Resource;
+use wasmtime_wasi_io::stream::{InputStream, OutputStream};
 
 mod sync;
 

@@ -2,7 +2,6 @@ use crate::bindings::cli::{
     stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr, terminal_stdin,
     terminal_stdout,
 };
-use crate::bindings::io::streams;
 use crate::pipe;
 use crate::{
     HostInputStream, HostOutputStream, IoView, StreamError, StreamResult, Subscribe, WasiImpl,
@@ -13,6 +12,7 @@ use std::io::IsTerminal;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use wasmtime::component::Resource;
+use wasmtime_wasi_io::stream;
 
 /// A trait used to represent the standard input to a guest program.
 ///
@@ -414,7 +414,7 @@ impl<T> stdin::Host for WasiImpl<T>
 where
     T: WasiView,
 {
-    fn get_stdin(&mut self) -> Result<Resource<streams::InputStream>, anyhow::Error> {
+    fn get_stdin(&mut self) -> Result<Resource<stream::InputStream>, anyhow::Error> {
         let stream = self.ctx().stdin.stream();
         Ok(self.table().push(stream)?)
     }
@@ -424,7 +424,7 @@ impl<T> stdout::Host for WasiImpl<T>
 where
     T: WasiView,
 {
-    fn get_stdout(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
+    fn get_stdout(&mut self) -> Result<Resource<stream::OutputStream>, anyhow::Error> {
         let stream = self.ctx().stdout.stream();
         Ok(self.table().push(stream)?)
     }
@@ -434,7 +434,7 @@ impl<T> stderr::Host for WasiImpl<T>
 where
     T: WasiView,
 {
-    fn get_stderr(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
+    fn get_stderr(&mut self) -> Result<Resource<stream::OutputStream>, anyhow::Error> {
         let stream = self.ctx().stderr.stream();
         Ok(self.table().push(stream)?)
     }

@@ -160,12 +160,11 @@ pub mod sync {
             },
             trappable_imports: true,
             with: {
-                // These interfaces come from the outer module, as it's
-                // sync/async agnostic.
+                // These interfaces contain only synchronous methods, so they
+                // can be aliased directly
                 "wasi:clocks": crate::bindings::clocks,
                 "wasi:random": crate::bindings::random,
                 "wasi:cli": crate::bindings::cli,
-                "wasi:io/error": ::wasmtime_wasi_io::bindings::wasi::io::error,
                 "wasi:filesystem/preopens": crate::bindings::filesystem::preopens,
                 "wasi:sockets/network": crate::bindings::sockets::network,
 
@@ -174,13 +173,19 @@ pub mod sync {
                 // way everything has the same type.
                 "wasi:filesystem/types/descriptor": super::super::filesystem::types::Descriptor,
                 "wasi:filesystem/types/directory-entry-stream": super::super::filesystem::types::DirectoryEntryStream,
-                "wasi:io/poll/pollable": wasmtime_wasi_io::poll::Pollable,
-                "wasi:io/streams/input-stream": wasmtime_wasi_io::stream::InputStream,
-                "wasi:io/streams/output-stream": wasmtime_wasi_io::stream::OutputStream,
                 "wasi:sockets/tcp/tcp-socket": super::super::sockets::tcp::TcpSocket,
                 "wasi:sockets/udp/incoming-datagram-stream": super::super::sockets::udp::IncomingDatagramStream,
                 "wasi:sockets/udp/outgoing-datagram-stream": super::super::sockets::udp::OutgoingDatagramStream,
                 "wasi:sockets/udp/udp-socket": super::super::sockets::udp::UdpSocket,
+
+                // Error host trait from wasmtime-wasi-io is synchronous, so we can alias it
+                "wasi:io/error": wasmtime_wasi_io::bindings::wasi::io::error,
+                // Configure the resource types from wasmtime-wasi-io, though
+                // this bindgen will make a new synchronous Host traits
+                "wasi:io/poll/pollable": wasmtime_wasi_io::poll::Pollable,
+                "wasi:io/streams/input-stream": wasmtime_wasi_io::stream::InputStream,
+                "wasi:io/streams/output-stream": wasmtime_wasi_io::stream::OutputStream,
+
             },
             require_store_data_send: true,
         });
@@ -405,9 +410,15 @@ mod async_io {
             "wasi:sockets/network/error-code" => crate::SocketError,
         },
         with: {
-            // Configure all resources to be concrete types defined in this crate,
-            // so that way we get to use nice typed helper methods with
-            // `ResourceTable`.
+            // All interfaces in the wasi:io package should be aliased to
+            // the wasmtime-wasi-io generated code. Note that this will also
+            // map the resource types to those defined in that crate as well.
+            "wasi:io/poll": wasmtime_wasi_io::bindings::wasi::io::poll,
+            "wasi:io/streams": wasmtime_wasi_io::bindings::wasi::io::streams,
+            "wasi:io/error": wasmtime_wasi_io::bindings::wasi::io::error,
+
+            // Configure all other resources to be concrete types defined in
+            // this crate
             "wasi:sockets/network/network": crate::network::Network,
             "wasi:sockets/tcp/tcp-socket": crate::tcp::TcpSocket,
             "wasi:sockets/udp/udp-socket": crate::udp::UdpSocket,
@@ -416,10 +427,6 @@ mod async_io {
             "wasi:sockets/ip-name-lookup/resolve-address-stream": crate::ip_name_lookup::ResolveAddressStream,
             "wasi:filesystem/types/directory-entry-stream": crate::filesystem::ReaddirIterator,
             "wasi:filesystem/types/descriptor": crate::filesystem::Descriptor,
-            "wasi:io/streams/input-stream": wasmtime_wasi_io::stream::InputStream,
-            "wasi:io/streams/output-stream": wasmtime_wasi_io::stream::OutputStream,
-            "wasi:io/error/error": wasmtime_wasi_io::stream::Error,
-            "wasi:io/poll/pollable": wasmtime_wasi_io::poll::Pollable,
             "wasi:cli/terminal-input/terminal-input": crate::stdio::TerminalInput,
             "wasi:cli/terminal-output/terminal-output": crate::stdio::TerminalOutput,
         },
