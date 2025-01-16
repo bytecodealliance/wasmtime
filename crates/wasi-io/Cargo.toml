@@ -15,12 +15,16 @@ workspace = true
 
 [dependencies]
 wasmtime = { workspace = true, features = ["component-model", "async", "runtime"] }
-anyhow = { workspace = true, default-features = false }
-bytes = { workspace = true, default-features = false }
+anyhow = { workspace = true }
+bytes = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 
 [features]
-default = [ "std"]
-std = []
+default = [ "std" ]
+std = [
+    "bytes/std",
+    "anyhow/std",
+    "wasmtime/std",
+]
 

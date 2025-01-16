@@ -1,5 +1,6 @@
 //! # Wasmtime's WASI Implementation
 //!
+//!
 //! This crate provides a Wasmtime host implementation of WASI 0.2 (aka WASIp2
 //! aka Preview 2) and WASI 0.1 (aka WASIp1 aka Preview 1). WASI is implemented
 //! with the Rust crates [`tokio`] and [`cap-std`] primarily, meaning that
@@ -202,7 +203,6 @@ pub mod preview1;
 mod random;
 pub mod runtime;
 mod stdio;
-mod stream;
 mod tcp;
 mod udp;
 mod view;
@@ -213,14 +213,10 @@ pub use self::ctx::{WasiCtx, WasiCtxBuilder};
 pub use self::error::{I32Exit, TrappableError};
 pub use self::filesystem::{DirPerms, FileInputStream, FilePerms, FsError, FsResult};
 pub use self::network::{Network, SocketAddrUse, SocketError, SocketResult};
-pub use self::poll::{subscribe, ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe};
 pub use self::random::{thread_rng, Deterministic};
 pub use self::stdio::{
     stderr, stdin, stdout, AsyncStdinStream, AsyncStdoutStream, IsATTY, OutputFile, Stderr, Stdin,
     StdinStream, Stdout, StdoutStream,
-};
-pub use self::stream::{
-    HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError, StreamResult,
 };
 pub use self::view::{IoImpl, IoView, WasiImpl, WasiView};
 #[doc(no_inline)]
@@ -231,6 +227,12 @@ pub use cap_fs_ext::SystemTimeSpec;
 pub use cap_rand::RngCore;
 #[doc(no_inline)]
 pub use wasmtime::component::{ResourceTable, ResourceTableError};
+pub use wasmtime_wasi_io::poll::{
+    subscribe, ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe,
+};
+pub use wasmtime_wasi_io::stream::{
+    HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError, StreamResult,
+};
 
 /// Add all WASI interfaces from this crate into the `linker` provided.
 ///

@@ -1,22 +1,21 @@
-use crate::ctx::WasiCtx;
-pub use wasmtime_wasi_io::{IoImpl, IoView};
+use wasmtime::component::ResourceTable;
 
-pub trait WasiView: IoView {
-    /// Yields mutable access to the configuration used for this context.
+pub trait IoView: Send {
+    /// Yields mutable access to the internal resource management that this
+    /// context contains.
     ///
-    /// The returned type is created through [`WasiCtxBuilder`].
-    fn ctx(&mut self) -> &mut WasiCtx;
+    /// Embedders can add custom resources to this table as well to give
+    /// resources to wasm as well.
+    fn table(&mut self) -> &mut ResourceTable;
 }
-
-impl<T: ?Sized + WasiView> WasiView for &mut T {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        T::ctx(self)
+impl<T: ?Sized + IoView> IoView for &mut T {
+    fn table(&mut self) -> &mut ResourceTable {
+        T::table(self)
     }
 }
-
-impl<T: ?Sized + WasiView> WasiView for Box<T> {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        T::ctx(self)
+impl<T: ?Sized + IoView> IoView for Box<T> {
+    fn table(&mut self) -> &mut ResourceTable {
+        T::table(self)
     }
 }
 
@@ -33,15 +32,9 @@ impl<T: ?Sized + WasiView> WasiView for Box<T> {
 /// module](crate::bindings). In this situation you'll want to create a value of
 /// this type in the closures added to a `Linker`.
 #[repr(transparent)]
-pub struct WasiImpl<T>(pub IoImpl<T>);
-
-impl<T: IoView> IoView for WasiImpl<T> {
+pub struct IoImpl<T>(pub T);
+impl<T: IoView> IoView for IoImpl<T> {
     fn table(&mut self) -> &mut ResourceTable {
-        T::table(&mut self.0 .0)
-    }
-}
-impl<T: WasiView> WasiView for WasiImpl<T> {
-    fn ctx(&mut self) -> &mut WasiCtx {
-        T::ctx(&mut self.0 .0)
+        T::table(&mut self.0)
     }
 }
