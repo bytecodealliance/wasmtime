@@ -281,6 +281,14 @@ impl Config {
             ret.cranelift_opt_level(OptLevel::Speed);
         }
 
+        // When running under MIRI try to optimize for compile time of wasm code
+        // itself as much as possible. Disable optimizations by default and use
+        // the fastest regalloc available to us.
+        if cfg!(miri) {
+            ret.cranelift_opt_level(OptLevel::None);
+            ret.cranelift_regalloc_algorithm(RegallocAlgorithm::SinglePass);
+        }
+
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
 
         ret

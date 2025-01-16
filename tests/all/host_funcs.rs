@@ -83,6 +83,7 @@ fn drop_func() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn drop_delayed() -> Result<()> {
     static HITS: AtomicUsize = AtomicUsize::new(0);
 
