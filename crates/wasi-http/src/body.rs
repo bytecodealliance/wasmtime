@@ -11,9 +11,10 @@ use std::mem;
 use std::task::{Context, Poll};
 use std::{pin::Pin, sync::Arc, time::Duration};
 use tokio::sync::{mpsc, oneshot};
-use wasmtime_wasi::{
-    runtime::{poll_noop, AbortOnDropJoinHandle},
-    HostInputStream, HostOutputStream, StreamError, Subscribe,
+use wasmtime_wasi::runtime::{poll_noop, AbortOnDropJoinHandle};
+use wasmtime_wasi_io::{
+    poll::Subscribe,
+    stream::{HostInputStream, HostOutputStream, StreamError},
 };
 
 /// Common type for incoming bodies.
