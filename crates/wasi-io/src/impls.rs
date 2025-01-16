@@ -3,7 +3,7 @@ use crate::poll::{subscribe, MakeFuture, Pollable, PollableFuture};
 use crate::streams::{InputStream, OutputStream, StreamError, StreamResult};
 use crate::view::{IoImpl, IoView};
 use anyhow::{anyhow, Result};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::future::Future;
 use std::pin::Pin;
 use std::task::{Context, Poll};
@@ -19,7 +19,7 @@ impl<T: IoView> poll::Host for IoImpl<T> {
 
         let table = self.table();
 
-        let mut table_futures: HashMap<u32, (MakeFuture, Vec<ReadylistIndex>)> = HashMap::new();
+        let mut table_futures: BTreeMap<u32, (MakeFuture, Vec<ReadylistIndex>)> = BTreeMap::new();
 
         for (ix, p) in pollables.iter().enumerate() {
             let ix: u32 = ix.try_into()?;
