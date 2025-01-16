@@ -218,6 +218,8 @@ jobs:
             echo run-dwarf=true >> $GITHUB_OUTPUT
           elif grep -q 'prtest:platform-checks' commits.log; then
             echo platform-checks=true >> $GITHUB_OUTPUT
+          elif grep -q 'prtest:miri' commits.log; then
+            echo test-miri=true >> $GITHUB_OUTPUT
           fi
           if grep -q crates.c-api names.log; then
             echo test-capi=true >> $GITHUB_OUTPUT
@@ -1035,12 +1037,15 @@ jobs:
           - "wasmtime-cli"
           - "wasmtime-environ --all-features"
           - "pulley-interpreter --all-features"
+        include:
+          - script: ./ci/miri-provenance-test.sh
     needs: determine
     if: needs.determine.outputs.test-miri && github.repository == 'bytecodealliance/wasmtime'
     name: Miri
     runs-on: ubuntu-latest
     env:
       CARGO_NEXTEST_VERSION: 0.9.67
+      MIRIFLAGS: -Zmiri-permissive-provenance
     steps:
     - uses: actions/checkout@v4
       with:
@@ -1057,8 +1062,9 @@ jobs:
     - run: cargo install --root ${{ runner.tool_cache }}/cargo-nextest --version ${{ env.CARGO_NEXTEST_VERSION }} cargo-nextest --locked
     - run: |
         cargo miri nextest run -j4 --no-fail-fast -p ${{ matrix.crate }}
-      env:
-        MIRIFLAGS: -Zmiri-strict-provenance
+      if: ${{ matrix.crate }}
+    - run: ${{ matrix.script }}
+      if: ${{ matrix.script }}
 
     # common logic to cancel the entire run if this job fails
     - uses: ./.github/actions/cancel-on-failure

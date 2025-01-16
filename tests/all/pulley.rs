@@ -1,5 +1,5 @@
 use anyhow::Result;
-use wasmtime::{Config, Engine, Module};
+use wasmtime::{Config, Engine, Func, FuncType, Instance, Module, Store, Val, ValType};
 use wasmtime_environ::TripleExt;
 
 fn pulley_target() -> String {
@@ -70,5 +70,65 @@ fn can_run_on_cli() -> Result<()> {
         &pulley_target(),
         "tests/all/cli_tests/empty-module.wat",
     ])?;
+    Ok(())
+}
+
+/// This is a one-size-fits-all test to test out pointer provenance in Pulley.
+///
+/// The goal of this test is to exercise an actual wasm module being run in
+/// Pulley in MIRI to ensure that it's not undefined behavior. The main reason
+/// we don't do this for the entire test suite is that Cranelift compilation in
+/// MIRI is excessively slow to the point that it's not tenable to run. Thus
+/// the way this test is run is a little nonstandard.
+///
+/// * The test here is ignored on MIRI by default. That means this runs on
+///   native platforms otherwise though.
+///
+/// * A script `./ci/miri-provenance-test.sh` is provided to execute just this
+///   one test. That will precompile the wasm module in question here using
+///   native code, leaving a `*.cwasm` in place.
+///
+/// Thus in native code this compiles the module here just-in-time. On MIRI
+/// this test must be run through the above script and this will deserialize
+/// the file from disk. In the end we skip Cranelift on MIRI while still getting
+/// to execute some wasm.
+///
+/// This test then has a wasm module with a number of "interesting" constructs
+/// and instructions. The goal is to kind of do a dry run of interesting
+/// shapes/sizes of what you can do with core wasm and ensure MIRI gives us a
+/// clean bill of health.
+#[test]
+#[cfg_attr(miri, ignore)]
+fn pulley_provenance_test() -> Result<()> {
+    let mut config = pulley_config();
+    config.memory_reservation(1 << 20);
+    config.memory_guard_size(0);
+    config.signals_based_traps(false);
+    let engine = Engine::new(&config)?;
+    let module = if cfg!(miri) {
+        unsafe { Module::deserialize_file(&engine, "./tests/all/pulley_provenance_test.cwasm")? }
+    } else {
+        Module::from_file(&engine, "./tests/all/pulley_provenance_test.wat")?
+    };
+    let mut store = Store::new(&engine, ());
+    let host_wrap = Func::wrap(&mut store, || (1_i32, 2_i32, 3_i32));
+    let host_new_ty = FuncType::new(
+        store.engine(),
+        vec![],
+        vec![ValType::I32, ValType::I32, ValType::I32],
+    );
+    let host_new = Func::new(&mut store, host_new_ty, |_, _params, results| {
+        results[0] = Val::I32(1);
+        results[1] = Val::I32(2);
+        results[2] = Val::I32(3);
+        Ok(())
+    });
+    let instance = Instance::new(&mut store, &module, &[host_wrap.into(), host_new.into()])?;
+
+    let func = instance
+        .get_typed_func::<(), (i32, i32, i32)>(&mut store, "call-wasm")
+        .unwrap();
+    let results = func.call(&mut store, ())?;
+    assert_eq!(results, (1, 2, 3));
     Ok(())
 }

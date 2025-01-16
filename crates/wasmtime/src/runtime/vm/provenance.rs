@@ -43,6 +43,8 @@
 
 use crate::vm::SendSyncPtr;
 use core::fmt;
+use core::marker;
+use core::num::NonZeroUsize;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicU64, AtomicUsize};
 use wasmtime_environ::VMSharedTypeIndex;
@@ -84,7 +86,10 @@ use wasmtime_environ::VMSharedTypeIndex;
 /// necessary when sharing data structures with compiled code. Prefer to use
 /// `NonNull` or `SendSyncPtr` where possible.
 #[repr(transparent)]
-pub struct VmPtr<T>(SendSyncPtr<T>);
+pub struct VmPtr<T> {
+    ptr: NonZeroUsize,
+    _marker: marker::PhantomData<SendSyncPtr<T>>,
+}
 
 impl<T> VmPtr<T> {
     /// View this pointer as a [`SendSyncPtr<T>`].
@@ -97,17 +102,22 @@ impl<T> VmPtr<T> {
     /// Later on this type will be handed back to Wasmtime or read from its
     /// location at-rest in which case provenance will be "re-acquired".
     pub fn as_send_sync(&self) -> SendSyncPtr<T> {
-        self.0
+        SendSyncPtr::from(self.as_non_null())
     }
 
     /// Similar to `as_send_sync`, but returns a `NonNull<T>`.
     pub fn as_non_null(&self) -> NonNull<T> {
-        self.0.as_non_null()
+        #[cfg(has_provenance_apis)]
+        let ptr = core::ptr::with_exposed_provenance_mut(self.ptr.get());
+        #[cfg(not(has_provenance_apis))]
+        let ptr = self.ptr.get() as *mut T;
+
+        unsafe { NonNull::new_unchecked(ptr) }
     }
 
     /// Similar to `as_send_sync`, but returns a `*mut T`.
     pub fn as_ptr(&self) -> *mut T {
-        self.0.as_ptr()
+        self.as_non_null().as_ptr()
     }
 }
 
@@ -130,14 +140,20 @@ impl<T> fmt::Debug for VmPtr<T> {
 // Constructor from `NonNull<T>`
 impl<T> From<NonNull<T>> for VmPtr<T> {
     fn from(ptr: NonNull<T>) -> VmPtr<T> {
-        VmPtr::from(SendSyncPtr::from(ptr))
+        VmPtr {
+            #[cfg(has_provenance_apis)]
+            ptr: unsafe { NonZeroUsize::new_unchecked(ptr.as_ptr().expose_provenance()) },
+            #[cfg(not(has_provenance_apis))]
+            ptr: unsafe { NonZeroUsize::new_unchecked(ptr.as_ptr() as usize) },
+            _marker: marker::PhantomData,
+        }
     }
 }
 
 // Constructor from `SendSyncPtr<T>`
 impl<T> From<SendSyncPtr<T>> for VmPtr<T> {
     fn from(ptr: SendSyncPtr<T>) -> VmPtr<T> {
-        VmPtr(ptr)
+        ptr.as_non_null().into()
     }
 }
 

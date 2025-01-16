@@ -12,7 +12,6 @@ use core::mem;
 use core::ops::ControlFlow;
 use core::ops::{Index, IndexMut};
 use core::ptr::NonNull;
-use sptr::Strict;
 use wasmtime_math::WasmFloat;
 mod debug;
 #[cfg(all(not(pulley_tail_calls), not(pulley_assume_llvm_makes_tail_calls)))]
@@ -404,7 +403,18 @@ union XRegUnion {
     u32: u32,
     i64: i64,
     u64: u64,
-    ptr: *mut u8,
+
+    // Note that this is intentionally `usize` and not an actual pointer like
+    // `*mut u8`. The reason for this is that provenance is required in Rust for
+    // pointers but Cranelift has no pointer type and thus no concept of
+    // provenance. That means that at-rest it's not known whether the value has
+    // provenance or not and basically means that Pulley is required to use
+    // "permissive provenance" in Rust as opposed to strict provenance.
+    //
+    // That's more-or-less a long-winded way of saying that storage of a pointer
+    // in this value is done with `.expose_provenance()` and reading a pointer
+    // uses `with_exposed_provenance_mut(..)`.
+    ptr: usize,
 }
 
 impl Default for XRegVal {
@@ -467,7 +477,11 @@ impl XRegVal {
 
     pub fn get_ptr<T>(&self) -> *mut T {
         let ptr = unsafe { self.0.ptr };
-        Strict::map_addr(ptr, |p| usize::from_le(p)).cast()
+        let ptr = usize::from_le(ptr);
+        #[cfg(has_provenance_apis)]
+        return core::ptr::with_exposed_provenance_mut(ptr);
+        #[cfg(not(has_provenance_apis))]
+        return ptr as *mut T;
     }
 
     pub fn set_i32(&mut self, x: i32) {
@@ -487,7 +501,11 @@ impl XRegVal {
     }
 
     pub fn set_ptr<T>(&mut self, ptr: *mut T) {
-        self.0.ptr = Strict::map_addr(ptr, |p| p.to_le()).cast();
+        #[cfg(has_provenance_apis)]
+        let ptr = ptr.expose_provenance();
+        #[cfg(not(has_provenance_apis))]
+        let ptr = ptr as usize;
+        self.0.ptr = ptr.to_le();
     }
 }
 
