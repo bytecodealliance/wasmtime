@@ -1,7 +1,7 @@
 use crate::bindings::wasi::io::{error, poll, streams};
 use crate::poll::{subscribe, MakeFuture, Pollable, PollableFuture};
 use crate::streams::{InputStream, OutputStream, StreamError, StreamResult};
-use crate::view::{IoImpl, IoView};
+use crate::{IoImpl, IoView};
 use anyhow::{anyhow, Result};
 use std::collections::BTreeMap;
 use std::future::Future;
