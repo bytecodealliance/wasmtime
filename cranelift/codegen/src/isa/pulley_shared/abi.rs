@@ -360,16 +360,6 @@ where
         _call_conv: isa::CallConv,
         _flags: &settings::Flags,
         _isa_flags: &PulleyFlags,
-        _frame_layout: &FrameLayout,
-    ) -> SmallInstVec<Self::I> {
-        // Note that this is intentionally empty as `gen_return` does
-        // everything.
-        SmallVec::new()
-    }
-
-    fn gen_return(
-        _call_conv: isa::CallConv,
-        _isa_flags: &PulleyFlags,
         frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
         let mut insts = SmallVec::new();
@@ -411,20 +401,24 @@ where
             }
         }
 
+        insts
+    }
+
+    fn gen_return(
+        _call_conv: isa::CallConv,
+        _isa_flags: &PulleyFlags,
+        frame_layout: &FrameLayout,
+    ) -> SmallInstVec<Self::I> {
+        let mut insts = SmallVec::new();
+
         // Handle final stack adjustments for the tail-call ABI.
         if frame_layout.tail_args_size > 0 {
             insts.extend(Self::gen_sp_reg_adjust(
                 frame_layout.tail_args_size.try_into().unwrap(),
             ));
         }
-
-        // And finally, return.
-        //
-        // FIXME: if `frame_layout.tail_args_size` is zero this instruction
-        // should get folded into the macro-instructions above. No need to have
-        // all functions do `pop_frame; ret`, that could be `pop_frame_and_ret`.
-        // Should benchmark whether this is worth it though.
         insts.push(RawInst::Ret {}.into());
+
         insts
     }
 

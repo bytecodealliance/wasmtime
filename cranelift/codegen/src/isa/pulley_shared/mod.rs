@@ -124,7 +124,11 @@ where
         domtree: &DominatorTree,
         ctrl_plane: &mut ControlPlane,
     ) -> CodegenResult<(VCode<inst::InstAndKind<P>>, regalloc2::Output)> {
-        let emit_info = EmitInfo::new(self.flags.clone(), self.isa_flags.clone());
+        let emit_info = EmitInfo::new(
+            func.signature.call_conv,
+            self.flags.clone(),
+            self.isa_flags.clone(),
+        );
         let sigs = SigSet::new::<abi::PulleyMachineDeps<P>>(func, &self.flags)?;
         let abi = abi::PulleyCallee::new(func, self, &self.isa_flags, &sigs)?;
         machinst::compile::<Self>(func, domtree, self, abi, emit_info, sigs, ctrl_plane)
