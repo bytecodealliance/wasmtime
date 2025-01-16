@@ -205,10 +205,11 @@ mod stdio;
 mod stream;
 mod tcp;
 mod udp;
+mod view;
 mod write_stream;
 
 pub use self::clocks::{HostMonotonicClock, HostWallClock};
-pub use self::ctx::{WasiCtx, WasiCtxBuilder, WasiImpl, WasiView};
+pub use self::ctx::{WasiCtx, WasiCtxBuilder};
 pub use self::error::{I32Exit, TrappableError};
 pub use self::filesystem::{DirPerms, FileInputStream, FilePerms, FsError, FsResult};
 pub use self::network::{Network, SocketAddrUse, SocketError, SocketResult};
@@ -221,6 +222,7 @@ pub use self::stdio::{
 pub use self::stream::{
     HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError, StreamResult,
 };
+pub use self::view::{IoImpl, IoView, WasiImpl, WasiView};
 #[doc(no_inline)]
 pub use async_trait::async_trait;
 #[doc(no_inline)]
@@ -248,7 +250,7 @@ pub use wasmtime::component::{ResourceTable, ResourceTableError};
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{ResourceTable, Linker};
-/// use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
 ///
 /// fn main() -> Result<()> {
 ///     let mut config = Config::new();
@@ -281,9 +283,11 @@ pub use wasmtime::component::{ResourceTable, ResourceTableError};
 ///     table: ResourceTable,
 /// }
 ///
+/// impl IoView for MyState {
+///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
+/// }
 /// impl WasiView for MyState {
 ///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
 /// }
 /// ```
 pub fn add_to_linker_async<T: WasiView>(linker: &mut Linker<T>) -> anyhow::Result<()> {
@@ -297,15 +301,16 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
     options: &crate::bindings::LinkOptions,
 ) -> anyhow::Result<()> {
     let l = linker;
-    let closure = type_annotate::<T, _>(|t| WasiImpl(t));
+    let io_closure = io_type_annotate::<T, _>(|t| IoImpl(t));
+    let closure = type_annotate::<T, _>(|t| WasiImpl(IoImpl(t)));
 
     crate::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
     crate::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
     crate::bindings::filesystem::types::add_to_linker_get_host(l, closure)?;
     crate::bindings::filesystem::preopens::add_to_linker_get_host(l, closure)?;
-    crate::bindings::io::error::add_to_linker_get_host(l, closure)?;
-    crate::bindings::io::poll::add_to_linker_get_host(l, closure)?;
-    crate::bindings::io::streams::add_to_linker_get_host(l, closure)?;
+    crate::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
+    crate::bindings::io::poll::add_to_linker_get_host(l, io_closure)?;
+    crate::bindings::io::streams::add_to_linker_get_host(l, io_closure)?;
     crate::bindings::random::random::add_to_linker_get_host(l, closure)?;
     crate::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
     crate::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;
@@ -347,7 +352,7 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
 /// ```
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{ResourceTable, Linker};
-/// use wasmtime_wasi::{WasiCtx, WasiView, WasiCtxBuilder};
+/// use wasmtime_wasi::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
 ///
 /// fn main() -> Result<()> {
 ///     let engine = Engine::default();
@@ -377,10 +382,11 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
 ///     ctx: WasiCtx,
 ///     table: ResourceTable,
 /// }
-///
+/// impl IoView for MyState {
+///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
+/// }
 /// impl WasiView for MyState {
 ///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
 /// }
 /// ```
 pub fn add_to_linker_sync<T: WasiView>(
@@ -396,15 +402,16 @@ pub fn add_to_linker_with_options_sync<T: WasiView>(
     options: &crate::bindings::sync::LinkOptions,
 ) -> anyhow::Result<()> {
     let l = linker;
-    let closure = type_annotate::<T, _>(|t| WasiImpl(t));
+    let io_closure = io_type_annotate::<T, _>(|t| IoImpl(t));
+    let closure = type_annotate::<T, _>(|t| WasiImpl(IoImpl(t)));
 
     crate::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
     crate::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
     crate::bindings::sync::filesystem::types::add_to_linker_get_host(l, closure)?;
     crate::bindings::filesystem::preopens::add_to_linker_get_host(l, closure)?;
-    crate::bindings::io::error::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sync::io::poll::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sync::io::streams::add_to_linker_get_host(l, closure)?;
+    crate::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
+    crate::bindings::sync::io::poll::add_to_linker_get_host(l, io_closure)?;
+    crate::bindings::sync::io::streams::add_to_linker_get_host(l, io_closure)?;
     crate::bindings::random::random::add_to_linker_get_host(l, closure)?;
     crate::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
     crate::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;
@@ -430,6 +437,12 @@ pub fn add_to_linker_with_options_sync<T: WasiView>(
 
 // NB: workaround some rustc inference - a future refactoring may make this
 // obsolete.
+fn io_type_annotate<T: IoView, F>(val: F) -> F
+where
+    F: Fn(&mut T) -> IoImpl<&mut T>,
+{
+    val
+}
 fn type_annotate<T: WasiView, F>(val: F) -> F
 where
     F: Fn(&mut T) -> WasiImpl<&mut T>,

@@ -10,20 +10,23 @@ You can execute this example with:
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::*;
 use wasmtime_wasi::bindings::Command;
-use wasmtime_wasi::{WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{IoView, WasiCtx, WasiCtxBuilder, WasiView};
 
 pub struct ComponentRunStates {
-    // These two are required basically as a standard way to enable the impl of WasiView
+    // These two are required basically as a standard way to enable the impl of IoView and
+    // WasiView.
     // impl of WasiView is required by [`wasmtime_wasi::add_to_linker_sync`]
     pub wasi_ctx: WasiCtx,
     pub resource_table: ResourceTable,
     // You can add other custom host states if needed
 }
 
-impl WasiView for ComponentRunStates {
+impl IoView for ComponentRunStates {
     fn table(&mut self) -> &mut ResourceTable {
         &mut self.resource_table
     }
+}
+impl WasiView for ComponentRunStates {
     fn ctx(&mut self) -> &mut WasiCtx {
         &mut self.wasi_ctx
     }

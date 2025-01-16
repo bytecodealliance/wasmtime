@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use wasi_common::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
-use wasmtime_wasi::WasiView;
+use wasmtime_wasi::{IoView, WasiView};
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::wit::WasiNnView;
@@ -945,11 +945,12 @@ impl Host {
     }
 }
 
-impl WasiView for Host {
+impl IoView for Host {
     fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
         self.preview2_ctx().table()
     }
-
+}
+impl WasiView for Host {
     fn ctx(&mut self) -> &mut wasmtime_wasi::WasiCtx {
         self.preview2_ctx().ctx()
     }
@@ -960,10 +961,6 @@ impl wasmtime_wasi_http::types::WasiHttpView for Host {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
         let ctx = self.wasi_http.as_mut().unwrap();
         Arc::get_mut(ctx).expect("wasmtime_wasi is not compatible with threads")
-    }
-
-    fn table(&mut self) -> &mut wasmtime::component::ResourceTable {
-        self.preview2_ctx().table()
     }
 
     fn outgoing_body_buffer_chunks(&mut self) -> usize {

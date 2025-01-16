@@ -11,7 +11,7 @@ use wasmtime::{
     component::{Component, Linker, ResourceTable},
     Config, Engine, Store,
 };
-use wasmtime_wasi::{self, pipe::MemoryOutputPipe, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{self, pipe::MemoryOutputPipe, IoView, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_http::{
     bindings::http::types::{ErrorCode, Scheme},
     body::HyperOutgoingBody,
@@ -38,10 +38,12 @@ struct Ctx {
     rejected_authority: Option<String>,
 }
 
-impl WasiView for Ctx {
+impl IoView for Ctx {
     fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
+}
+impl WasiView for Ctx {
     fn ctx(&mut self) -> &mut WasiCtx {
         &mut self.wasi
     }
@@ -50,10 +52,6 @@ impl WasiView for Ctx {
 impl WasiHttpView for Ctx {
     fn ctx(&mut self) -> &mut WasiHttpCtx {
         &mut self.http
-    }
-
-    fn table(&mut self) -> &mut ResourceTable {
-        &mut self.table
     }
 
     fn send_request(

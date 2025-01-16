@@ -8,7 +8,7 @@ use crate::{
     udp::{IncomingDatagramStream, OutgoingDatagramStream, SendState, UdpState},
     Subscribe,
 };
-use crate::{Pollable, SocketError, SocketResult, WasiImpl, WasiView};
+use crate::{IoView, Pollable, SocketError, SocketResult, WasiImpl, WasiView};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use io_lifetimes::AsSocketlike;

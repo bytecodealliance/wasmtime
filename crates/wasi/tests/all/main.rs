@@ -6,7 +6,7 @@ use wasmtime::{
 };
 use wasmtime_wasi::preview1::WasiP1Ctx;
 use wasmtime_wasi::{
-    pipe::MemoryOutputPipe, DirPerms, FilePerms, WasiCtx, WasiCtxBuilder, WasiView,
+    pipe::MemoryOutputPipe, DirPerms, FilePerms, IoView, WasiCtx, WasiCtxBuilder, WasiView,
 };
 
 struct Ctx {
@@ -15,10 +15,12 @@ struct Ctx {
     wasi: WasiP1Ctx,
 }
 
-impl WasiView for Ctx {
+impl IoView for Ctx {
     fn table(&mut self) -> &mut ResourceTable {
         self.wasi.table()
     }
+}
+impl WasiView for Ctx {
     fn ctx(&mut self) -> &mut WasiCtx {
         self.wasi.ctx()
     }

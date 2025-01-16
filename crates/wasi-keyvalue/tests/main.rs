@@ -4,7 +4,7 @@ use wasmtime::{
     component::{Component, Linker, ResourceTable},
     Store,
 };
-use wasmtime_wasi::{bindings::Command, WasiCtx, WasiCtxBuilder, WasiView};
+use wasmtime_wasi::{bindings::Command, IoView, WasiCtx, WasiCtxBuilder, WasiView};
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 
 struct Ctx {
@@ -13,11 +13,12 @@ struct Ctx {
     wasi_keyvalue_ctx: WasiKeyValueCtx,
 }
 
-impl WasiView for Ctx {
+impl IoView for Ctx {
     fn table(&mut self) -> &mut ResourceTable {
         &mut self.table
     }
-
+}
+impl WasiView for Ctx {
     fn ctx(&mut self) -> &mut WasiCtx {
         &mut self.wasi_ctx
     }
