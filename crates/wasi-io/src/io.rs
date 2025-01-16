@@ -1,6 +1,6 @@
 use crate::bindings::wasi::io::{error, streams};
 use crate::poll::{subscribe, Pollable};
-use crate::stream::{InputStream, OutputStream, StreamError, StreamResult};
+use crate::streams::{InputStream, OutputStream, StreamError, StreamResult};
 use crate::view::{IoImpl, IoView};
 use wasmtime::component::Resource;
 
