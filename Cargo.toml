@@ -231,7 +231,7 @@ wasmtime-jit-debug = { path = "crates/jit-debug", version = "=30.0.0" }
 wasmtime-wast = { path = "crates/wast", version = "=30.0.0" }
 wasmtime-wasi = { path = "crates/wasi", version = "30.0.0", default-features = false }
 wasmtime-wasi-io = { path = "crates/wasi-io", version = "30.0.0", default-features = false }
-wasmtime-wasi-http = { path = "crates/wasi-http", version = "=30.0.0", default-features = false }
+wasmtime-wasi-http = { path = "crates/wasi-http", version = "30.0.0", default-features = false }
 wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "30.0.0" }
 wasmtime-wasi-config = { path = "crates/wasi-config", version = "30.0.0" }
 wasmtime-wasi-keyvalue = { path = "crates/wasi-keyvalue", version = "30.0.0" }
