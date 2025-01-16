@@ -20,6 +20,7 @@ use wasmtime::*;
 
 const VAR_NAME: &str = "__TEST_TO_RUN";
 const CONFIRM: &str = "well at least we ran up to the crash";
+const STACK_OVERFLOW_CODE: i32 = 61; // arbitrarily chosen
 
 fn segfault() -> ! {
     unsafe {
@@ -171,11 +172,6 @@ fn main() {
             },
             StackOverflow::HostAsyncStack,
         ),
-        // FIXME: With the new changes, we catch the segfault and interpret it
-        // as a Wasm trap, which causes the Wasmtime process to exit with a
-        // panic instead of a signal termination, which causes these tests to
-        // fail.
-        /*
         (
             "overrun 8k with misconfigured host",
             || overrun_with_big_module(8 << 10),
@@ -186,7 +182,6 @@ fn main() {
             || overrun_with_big_module(32 << 10),
             StackOverflow::Wasm,
         ),
-        */
         #[cfg(not(any(target_arch = "riscv64")))]
         // Due to `InstanceAllocationStrategy::pooling()` trying to alloc more than 6000G memory space.
         // https://gitlab.com/qemu-project/qemu/-/issues/1214
@@ -328,6 +323,12 @@ fn is_segfault(status: &ExitStatus) -> bool {
 fn is_stack_overflow(status: &ExitStatus, stderr: &str) -> bool {
     use std::os::unix::prelude::*;
 
+    // If the test exited with a special exit code, that indicates that it had
+    // a stack overflow but caught it as a Wasm trap.
+    if status.code() == Some(STACK_OVERFLOW_CODE) {
+        return true;
+    }
+
     // The exit status should always be SIGABRT, not SIGSEGV. Something, be it
     // the standard library or Wasmtime, should catch the original SIGSEGV or
     // SIGBUS and abort instead.
@@ -356,7 +357,6 @@ fn is_stack_overflow(status: &ExitStatus, _stderr: &str) -> bool {
     }
 }
 
-/*
 fn overrun_with_big_module(approx_stack: usize) {
     // Each call to `$get` produces ten 8-byte values which need to be saved
     // onto the stack, so divide `approx_stack` by 80 to get
@@ -393,11 +393,22 @@ fn overrun_with_big_module(approx_stack: usize) {
         .stack_size(2 << 20)
         .spawn(move || {
             println!("{CONFIRM}");
-            f.call(&mut store, ()).unwrap();
+            match f.call(&mut store, ()) {
+                Ok(()) => {}
+                Err(err) => {
+                    // If Wasmtime happens to have caught the stack overflow,
+                    // exit with a special code to tell the test.
+                    if let Some(trap) = err.downcast_ref::<wasmtime::Trap>() {
+                        if let Trap::StackOverflow = trap {
+                            std::process::exit(STACK_OVERFLOW_CODE);
+                        }
+                    }
+                    Err(err).unwrap()
+                }
+            }
         })
         .unwrap()
         .join()
         .unwrap();
     unreachable!();
 }
-*/
