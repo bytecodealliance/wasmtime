@@ -146,7 +146,8 @@
 /// ```
 pub mod sync {
     mod generated {
-        use crate::{FsError, SocketError, StreamError};
+        use crate::{FsError, SocketError};
+        use wasmtime_wasi_io::stream::StreamError;
 
         wasmtime::component::bindgen!({
             path: "wit",
@@ -164,7 +165,7 @@ pub mod sync {
                 "wasi:clocks": crate::bindings::clocks,
                 "wasi:random": crate::bindings::random,
                 "wasi:cli": crate::bindings::cli,
-                "wasi:io/error": crate::bindings::io::error,
+                "wasi:io/error": ::wasmtime_wasi_io::bindings::wasi::io::error,
                 "wasi:filesystem/preopens": crate::bindings::filesystem::preopens,
                 "wasi:sockets/network": crate::bindings::sockets::network,
 
@@ -173,9 +174,9 @@ pub mod sync {
                 // way everything has the same type.
                 "wasi:filesystem/types/descriptor": super::super::filesystem::types::Descriptor,
                 "wasi:filesystem/types/directory-entry-stream": super::super::filesystem::types::DirectoryEntryStream,
-                "wasi:io/poll/pollable": super::super::io::poll::Pollable,
-                "wasi:io/streams/input-stream": super::super::io::streams::InputStream,
-                "wasi:io/streams/output-stream": super::super::io::streams::OutputStream,
+                "wasi:io/poll/pollable": wasmtime_wasi_io::poll::Pollable,
+                "wasi:io/streams/input-stream": wasmtime_wasi_io::stream::InputStream,
+                "wasi:io/streams/output-stream": wasmtime_wasi_io::stream::OutputStream,
                 "wasi:sockets/tcp/tcp-socket": super::super::sockets::tcp::TcpSocket,
                 "wasi:sockets/udp/incoming-datagram-stream": super::super::sockets::udp::IncomingDatagramStream,
                 "wasi:sockets/udp/outgoing-datagram-stream": super::super::sockets::udp::OutgoingDatagramStream,
@@ -399,7 +400,7 @@ mod async_io {
             ],
         },
         trappable_error_type: {
-            "wasi:io/streams/stream-error" => crate::StreamError,
+            "wasi:io/streams/stream-error" => wasmtime_wasi_io::stream::StreamError,
             "wasi:filesystem/types/error-code" => crate::FsError,
             "wasi:sockets/network/error-code" => crate::SocketError,
         },
@@ -415,10 +416,10 @@ mod async_io {
             "wasi:sockets/ip-name-lookup/resolve-address-stream": crate::ip_name_lookup::ResolveAddressStream,
             "wasi:filesystem/types/directory-entry-stream": crate::filesystem::ReaddirIterator,
             "wasi:filesystem/types/descriptor": crate::filesystem::Descriptor,
-            "wasi:io/streams/input-stream": crate::stream::InputStream,
-            "wasi:io/streams/output-stream": crate::stream::OutputStream,
-            "wasi:io/error/error": crate::stream::Error,
-            "wasi:io/poll/pollable": crate::poll::Pollable,
+            "wasi:io/streams/input-stream": wasmtime_wasi_io::stream::InputStream,
+            "wasi:io/streams/output-stream": wasmtime_wasi_io::stream::OutputStream,
+            "wasi:io/error/error": wasmtime_wasi_io::stream::Error,
+            "wasi:io/poll/pollable": wasmtime_wasi_io::poll::Pollable,
             "wasi:cli/terminal-input/terminal-input": crate::stdio::TerminalInput,
             "wasi:cli/terminal-output/terminal-output": crate::stdio::TerminalOutput,
         },

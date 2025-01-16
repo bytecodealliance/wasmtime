@@ -1,3 +1,4 @@
+mod io;
 pub mod poll;
 pub mod stream;
 mod view;
@@ -12,6 +13,7 @@ pub mod bindings {
             "wasi:io/poll/pollable": crate::poll::Pollable,
             "wasi:io/streams/input-stream": crate::stream::InputStream,
             "wasi:io/streams/output-stream": crate::stream::OutputStream,
+            "wasi:io/error/error": crate::stream::Error,
         },
         async: {
             only_imports: [

@@ -23,14 +23,16 @@
 //! This module is one that's likely to change over time though as new systems
 //! are encountered along with preexisting bugs.
 
-use crate::poll::Subscribe;
 use crate::stdio::StdinStream;
-use crate::{HostInputStream, StreamError};
 use bytes::{Bytes, BytesMut};
 use std::io::{IsTerminal, Read};
 use std::mem;
 use std::sync::{Condvar, Mutex, OnceLock};
 use tokio::sync::Notify;
+use wasmtime_wasi_io::{
+    poll::Subscribe,
+    stream::{HostInputStream, StreamError},
+};
 
 #[derive(Default)]
 struct GlobalStdin {

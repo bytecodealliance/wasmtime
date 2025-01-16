@@ -7,10 +7,11 @@ use crate::{
     },
     network::SocketAddressFamily,
 };
-use crate::{IoView, Pollable, SocketResult, WasiImpl, WasiView};
+use crate::{SocketResult, WasiImpl, WasiView};
 use std::net::SocketAddr;
 use std::time::Duration;
 use wasmtime::component::Resource;
+use wasmtime_wasi_io::{poll::Pollable, IoView};
 
 impl<T> tcp::Host for WasiImpl<T> where T: WasiView {}
 
@@ -281,7 +282,7 @@ where
     }
 
     fn subscribe(&mut self, this: Resource<tcp::TcpSocket>) -> anyhow::Result<Resource<Pollable>> {
-        crate::poll::subscribe(self.table(), this)
+        wasmtime_wasi_io::poll::subscribe(self.table(), this)
     }
 
     fn shutdown(

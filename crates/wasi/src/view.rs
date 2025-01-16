@@ -1,4 +1,5 @@
 use crate::ctx::WasiCtx;
+use wasmtime::component::ResourceTable;
 pub use wasmtime_wasi_io::{IoImpl, IoView};
 
 pub trait WasiView: IoView {

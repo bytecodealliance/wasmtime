@@ -8,7 +8,7 @@ use crate::{
     udp::{IncomingDatagramStream, OutgoingDatagramStream, SendState, UdpState},
     Subscribe,
 };
-use crate::{IoView, Pollable, SocketError, SocketResult, WasiImpl, WasiView};
+use crate::{IoView, SocketError, SocketResult, WasiImpl, WasiView};
 use anyhow::anyhow;
 use async_trait::async_trait;
 use io_lifetimes::AsSocketlike;
@@ -16,6 +16,7 @@ use rustix::io::Errno;
 use std::net::SocketAddr;
 use tokio::io::Interest;
 use wasmtime::component::Resource;
+use wasmtime_wasi_io::poll::Pollable;
 
 /// Theoretical maximum byte size of a UDP datagram, the real limit is lower,
 /// but we do not account for e.g. the transport layer here for simplicity.
@@ -288,7 +289,7 @@ where
     }
 
     fn subscribe(&mut self, this: Resource<udp::UdpSocket>) -> anyhow::Result<Resource<Pollable>> {
-        crate::poll::subscribe(self.table(), this)
+        wasmtime_wasi_io::poll::subscribe(self.table(), this)
     }
 
     fn drop(&mut self, this: Resource<udp::UdpSocket>) -> Result<(), anyhow::Error> {
@@ -371,7 +372,7 @@ where
         &mut self,
         this: Resource<udp::IncomingDatagramStream>,
     ) -> anyhow::Result<Resource<Pollable>> {
-        crate::poll::subscribe(self.table(), this)
+        wasmtime_wasi_io::poll::subscribe(self.table(), this)
     }
 
     fn drop(&mut self, this: Resource<udp::IncomingDatagramStream>) -> Result<(), anyhow::Error> {
@@ -510,7 +511,7 @@ where
         &mut self,
         this: Resource<udp::OutgoingDatagramStream>,
     ) -> anyhow::Result<Resource<Pollable>> {
-        crate::poll::subscribe(self.table(), this)
+        wasmtime_wasi_io::poll::subscribe(self.table(), this)
     }
 
     fn drop(&mut self, this: Resource<udp::OutgoingDatagramStream>) -> Result<(), anyhow::Error> {

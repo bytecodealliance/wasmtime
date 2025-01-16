@@ -7,12 +7,14 @@
 //! Some convenience constructors are included for common backing types like `Vec<u8>` and `String`,
 //! but the virtual pipes can be instantiated with any `Read` or `Write` type.
 //!
-use crate::poll::Subscribe;
-use crate::{HostInputStream, HostOutputStream, StreamError};
 use anyhow::anyhow;
 use bytes::Bytes;
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
+use wasmtime_wasi_io::{
+    poll::Subscribe,
+    stream::{HostInputStream, HostOutputStream, StreamError},
+};
 
 pub use crate::write_stream::AsyncWriteStream;
 

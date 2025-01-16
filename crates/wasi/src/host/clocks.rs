@@ -4,11 +4,11 @@ use crate::bindings::{
     clocks::monotonic_clock::{self, Duration as WasiDuration, Instant},
     clocks::wall_clock::{self, Datetime},
 };
-use crate::poll::{subscribe, Subscribe};
 use crate::{IoView, Pollable, WasiImpl, WasiView};
 use cap_std::time::SystemTime;
 use std::time::Duration;
 use wasmtime::component::Resource;
+use wasmtime_wasi_io::poll::{subscribe, Subscribe};
 
 impl TryFrom<SystemTime> for Datetime {
     type Error = anyhow::Error;
