@@ -397,6 +397,7 @@ unsafe impl StackMemory for CHostStackMemory {
 pub type wasmtime_new_stack_memory_callback_t = extern "C" fn(
     env: *mut std::ffi::c_void,
     size: usize,
+    zeroed: bool,
     stack_ret: &mut wasmtime_stack_memory_t,
 ) -> Option<Box<wasmtime_error_t>>;
 
@@ -414,7 +415,7 @@ struct CHostStackCreator {
 unsafe impl Send for CHostStackCreator {}
 unsafe impl Sync for CHostStackCreator {}
 unsafe impl StackCreator for CHostStackCreator {
-    fn new_stack(&self, size: usize) -> Result<Box<dyn wasmtime::StackMemory>> {
+    fn new_stack(&self, size: usize, zeroed: bool) -> Result<Box<dyn wasmtime::StackMemory>> {
         extern "C" fn panic_callback(_env: *mut std::ffi::c_void, _out_len: &mut usize) -> *mut u8 {
             panic!("a callback must be set");
         }
@@ -424,7 +425,7 @@ unsafe impl StackCreator for CHostStackCreator {
             finalizer: None,
         };
         let cb = self.new_stack;
-        let result = cb(self.foreign.data, size, &mut out);
+        let result = cb(self.foreign.data, size, zeroed, &mut out);
         match result {
             Some(error) => Err((*error).into()),
             None => Ok(Box::new(CHostStackMemory {

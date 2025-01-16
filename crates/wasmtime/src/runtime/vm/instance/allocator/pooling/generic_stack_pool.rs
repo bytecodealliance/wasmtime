@@ -18,6 +18,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 #[derive(Debug)]
 pub struct StackPool {
     stack_size: usize,
+    stack_zeroing: bool,
     live_stacks: AtomicU64,
     stack_limit: u64,
 }
@@ -26,6 +27,7 @@ impl StackPool {
     pub fn new(config: &PoolingInstanceAllocatorConfig) -> Result<Self> {
         Ok(StackPool {
             stack_size: config.stack_size,
+            stack_zeroing: config.async_stack_zeroing,
             live_stacks: AtomicU64::new(0),
             stack_limit: config.limits.total_stacks.into(),
         })
@@ -51,7 +53,7 @@ impl StackPool {
             .into());
         }
 
-        match wasmtime_fiber::FiberStack::new(self.stack_size) {
+        match wasmtime_fiber::FiberStack::new(self.stack_size, self.stack_zeroing) {
             Ok(stack) => Ok(stack),
             Err(e) => {
                 self.live_stacks.fetch_sub(1, Ordering::AcqRel);

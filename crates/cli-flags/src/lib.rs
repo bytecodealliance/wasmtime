@@ -131,10 +131,6 @@ wasmtime_option_group! {
         /// pooling allocator. (default: 100)
         pub pooling_max_unused_warm_slots: Option<u32>,
 
-        /// Configures whether or not stacks used for async futures are reset to
-        /// zero after usage. (default: false)
-        pub pooling_async_stack_zeroing: Option<bool>,
-
         /// How much memory, in bytes, to keep resident for async stacks allocated
         /// with the pooling allocator. (default: 0)
         pub pooling_async_stack_keep_resident: Option<usize>,
@@ -276,6 +272,9 @@ wasmtime_option_group! {
         /// difference between the two is how much stack the host has to execute
         /// on.
         pub async_stack_size: Option<usize>,
+        /// Configures whether or not stacks used for async futures are zeroed
+        /// before (re)use as a defense-in-depth mechanism. (default: false)
+        pub async_stack_zeroing: Option<bool>,
         /// Allow unknown exports when running commands.
         pub unknown_exports_allow: Option<bool>,
         /// Allow the main module to import unknown functions, using an
@@ -760,11 +759,6 @@ impl CommonOptions {
                         cfg.max_unused_warm_slots(max);
                     }
                     match_feature! {
-                        ["async" : self.opts.pooling_async_stack_zeroing]
-                        enable => cfg.async_stack_zeroing(enable),
-                        _ => err,
-                    }
-                    match_feature! {
                         ["async" : self.opts.pooling_async_stack_keep_resident]
                         size => cfg.async_stack_keep_resident(size),
                         _ => err,
@@ -829,6 +823,11 @@ impl CommonOptions {
         match_feature! {
             ["async" : self.wasm.async_stack_size]
             size => config.async_stack_size(size),
+            _ => err,
+        }
+        match_feature! {
+            ["async" : self.wasm.async_stack_zeroing]
+            enable => config.async_stack_zeroing(enable),
             _ => err,
         }
 

@@ -1404,15 +1404,16 @@ impl Masm for MacroAssembler {
             RmwOp::Add => {
                 self.asm
                     .lock_xadd(addr, operand.to_reg(), operand, size, flags);
-                match extend {
-                    // It is only necessary to zero-extend when the operand is less than 32bits.
-                    // x64 automatically zero-extend 32bits to 64bit.
-                    Some(extend) => {
-                        self.asm.movzx_rr(operand.to_reg(), operand, extend);
-                    }
-                    _ => (),
-                }
             }
+            RmwOp::Sub => {
+                self.asm.neg(operand.to_reg(), operand, size);
+                self.asm
+                    .lock_xadd(addr, operand.to_reg(), operand, size, flags);
+            }
+        }
+
+        if let Some(extend) = extend {
+            self.asm.movzx_rr(operand.to_reg(), operand, extend);
         }
         Ok(())
     }

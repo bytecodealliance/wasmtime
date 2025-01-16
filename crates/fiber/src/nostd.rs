@@ -62,10 +62,14 @@ fn align_ptr(ptr: *mut u8, len: usize, align: usize) -> (*mut u8, usize) {
 }
 
 impl FiberStack {
-    pub fn new(size: usize) -> Result<Self> {
+    pub fn new(size: usize, zeroed: bool) -> Result<Self> {
         // Round up the size to at least one page.
         let size = core::cmp::max(4096, size);
-        let mut storage = vec![0; size];
+        let mut storage = Vec::new();
+        storage.reserve_exact(size);
+        if zeroed {
+            storage.resize(size, 0);
+        }
         let (base, len) = align_ptr(storage.as_mut_ptr(), size, STACK_ALIGN);
         Ok(FiberStack {
             storage,

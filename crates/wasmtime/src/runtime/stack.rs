@@ -20,18 +20,21 @@ pub unsafe trait StackCreator: Send + Sync {
     ///
     /// The `size` parameter is the expected size of the stack without any guard pages.
     ///
+    /// The `zeroed` parameter is whether the stack's memory should be zeroed,
+    /// as a defense-in-depth measure.
+    ///
     /// Note there should be at least one guard page of protected memory at the bottom
     /// of the stack to catch potential stack overflow scenarios. Additionally, stacks should be
     /// page aligned and zero filled.
-    fn new_stack(&self, size: usize) -> Result<Box<dyn StackMemory>, Error>;
+    fn new_stack(&self, size: usize, zeroed: bool) -> Result<Box<dyn StackMemory>, Error>;
 }
 
 #[derive(Clone)]
 pub(crate) struct StackCreatorProxy(pub Arc<dyn StackCreator>);
 
 unsafe impl RuntimeFiberStackCreator for StackCreatorProxy {
-    fn new_stack(&self, size: usize) -> Result<Box<dyn RuntimeFiberStack>, Error> {
-        let stack = self.0.new_stack(size)?;
+    fn new_stack(&self, size: usize, zeroed: bool) -> Result<Box<dyn RuntimeFiberStack>, Error> {
+        let stack = self.0.new_stack(size, zeroed)?;
         Ok(Box::new(FiberStackProxy(stack)) as Box<dyn RuntimeFiberStack>)
     }
 }

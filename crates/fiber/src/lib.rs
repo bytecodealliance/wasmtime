@@ -47,8 +47,8 @@ pub type Result<T, E = imp::Error> = core::result::Result<T, E>;
 
 impl FiberStack {
     /// Creates a new fiber stack of the given size.
-    pub fn new(size: usize) -> Result<Self> {
-        Ok(Self(imp::FiberStack::new(size)?))
+    pub fn new(size: usize, zeroed: bool) -> Result<Self> {
+        Ok(Self(imp::FiberStack::new(size, zeroed)?))
     }
 
     /// Creates a new fiber stack of the given size.
@@ -108,7 +108,7 @@ pub unsafe trait RuntimeFiberStackCreator: Send + Sync {
     ///
     /// This is useful to plugin previously allocated memory instead of mmap'ing a new stack for
     /// every instance.
-    fn new_stack(&self, size: usize) -> Result<Box<dyn RuntimeFiberStack>, Error>;
+    fn new_stack(&self, size: usize, zeroed: bool) -> Result<Box<dyn RuntimeFiberStack>, Error>;
 }
 
 /// A fiber stack backed by custom memory.
@@ -276,11 +276,11 @@ mod tests {
 
     #[test]
     fn small_stacks() {
-        Fiber::<(), (), ()>::new(FiberStack::new(0).unwrap(), |_, _| {})
+        Fiber::<(), (), ()>::new(FiberStack::new(0, false).unwrap(), |_, _| {})
             .unwrap()
             .resume(())
             .unwrap();
-        Fiber::<(), (), ()>::new(FiberStack::new(1).unwrap(), |_, _| {})
+        Fiber::<(), (), ()>::new(FiberStack::new(1, false).unwrap(), |_, _| {})
             .unwrap()
             .resume(())
             .unwrap();
@@ -290,10 +290,11 @@ mod tests {
     fn smoke() {
         let hit = Rc::new(Cell::new(false));
         let hit2 = hit.clone();
-        let fiber = Fiber::<(), (), ()>::new(FiberStack::new(1024 * 1024).unwrap(), move |_, _| {
-            hit2.set(true);
-        })
-        .unwrap();
+        let fiber =
+            Fiber::<(), (), ()>::new(FiberStack::new(1024 * 1024, false).unwrap(), move |_, _| {
+                hit2.set(true);
+            })
+            .unwrap();
         assert!(!hit.get());
         fiber.resume(()).unwrap();
         assert!(hit.get());
@@ -303,12 +304,13 @@ mod tests {
     fn suspend_and_resume() {
         let hit = Rc::new(Cell::new(false));
         let hit2 = hit.clone();
-        let fiber = Fiber::<(), (), ()>::new(FiberStack::new(1024 * 1024).unwrap(), move |_, s| {
-            s.suspend(());
-            hit2.set(true);
-            s.suspend(());
-        })
-        .unwrap();
+        let fiber =
+            Fiber::<(), (), ()>::new(FiberStack::new(1024 * 1024, false).unwrap(), move |_, s| {
+                s.suspend(());
+                hit2.set(true);
+                s.suspend(());
+            })
+            .unwrap();
         assert!(!hit.get());
         assert!(fiber.resume(()).is_err());
         assert!(!hit.get());
@@ -345,15 +347,17 @@ mod tests {
         }
 
         fn run_test() {
-            let fiber =
-                Fiber::<(), (), ()>::new(FiberStack::new(1024 * 1024).unwrap(), move |(), s| {
+            let fiber = Fiber::<(), (), ()>::new(
+                FiberStack::new(1024 * 1024, false).unwrap(),
+                move |(), s| {
                     assert_contains_host();
                     s.suspend(());
                     assert_contains_host();
                     s.suspend(());
                     assert_contains_host();
-                })
-                .unwrap();
+                },
+            )
+            .unwrap();
             assert!(fiber.resume(()).is_err());
             assert!(fiber.resume(()).is_err());
             assert!(fiber.resume(()).is_ok());
@@ -369,12 +373,14 @@ mod tests {
 
         let a = Rc::new(Cell::new(false));
         let b = SetOnDrop(a.clone());
-        let fiber =
-            Fiber::<(), (), ()>::new(FiberStack::new(1024 * 1024).unwrap(), move |(), _s| {
+        let fiber = Fiber::<(), (), ()>::new(
+            FiberStack::new(1024 * 1024, false).unwrap(),
+            move |(), _s| {
                 let _ = &b;
                 panic!();
-            })
-            .unwrap();
+            },
+        )
+        .unwrap();
         assert!(panic::catch_unwind(AssertUnwindSafe(|| fiber.resume(()))).is_err());
         assert!(a.get());
 
@@ -389,11 +395,14 @@ mod tests {
 
     #[test]
     fn suspend_and_resume_values() {
-        let fiber = Fiber::new(FiberStack::new(1024 * 1024).unwrap(), move |first, s| {
-            assert_eq!(first, 2.0);
-            assert_eq!(s.suspend(4), 3.0);
-            "hello".to_string()
-        })
+        let fiber = Fiber::new(
+            FiberStack::new(1024 * 1024, false).unwrap(),
+            move |first, s| {
+                assert_eq!(first, 2.0);
+                assert_eq!(s.suspend(4), 3.0);
+                "hello".to_string()
+            },
+        )
         .unwrap();
         assert_eq!(fiber.resume(2.0), Err(4));
         assert_eq!(fiber.resume(3.0), Ok("hello".to_string()));

@@ -329,13 +329,13 @@ impl<'a> CodeGenContext<'a, Emission> {
     /// Prepares arguments for emitting a unary operation.
     ///
     /// The `emit` function returns the `TypedReg` to put on the value stack.
-    pub fn unop<F, M>(&mut self, masm: &mut M, size: OperandSize, emit: &mut F) -> Result<()>
+    pub fn unop<F, M>(&mut self, masm: &mut M, emit: &mut F) -> Result<()>
     where
-        F: FnMut(&mut M, Reg, OperandSize) -> Result<TypedReg>,
+        F: FnMut(&mut M, Reg) -> Result<TypedReg>,
         M: MacroAssembler,
     {
         let typed_reg = self.pop_to_reg(masm, None)?;
-        let dst = emit(masm, typed_reg.reg, size)?;
+        let dst = emit(masm, typed_reg.reg)?;
         self.stack.push(dst.into());
 
         Ok(())

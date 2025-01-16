@@ -87,16 +87,22 @@ For explanations of what each tier means see below.
 
 | Category             | Description                       | Missing Tier 2 Requirements |
 |----------------------|-----------------------------------|-----------------------------|
-| Target               | `aarch64-pc-windows-msvc`         | CI testing, unwinding, full-time maintainer |
+| Target               | `aarch64-apple-ios`               | CI testing, full-time maintainer |
+| Target               | `aarch64-linux-android`           | CI testing, full-time maintainer |
+| Target               | `aarch64-pc-windows-msvc`         | CI testing, full-time maintainer |
+| Target               | `aarch64-unknown-linux-musl` [^4] | CI testing, full-time maintainer |
+| Target               | `armv7-unknown-linux-gnueabihf`   | full-time maintainer |
+| Target               | `i686-pc-windows-msvc`            | CI testing, full-time maintainer |
+| Target               | `i686-unknown-linux-gnu`          | full-time maintainer |
 | Target               | `riscv64gc-unknown-linux-gnu`     | full-time maintainer        |
 | Target               | `wasm32-wasip1` [^3]              | Supported but not tested    |
-| Target               | `aarch64-linux-android`           | CI testing, full-time maintainer |
 | Target               | `x86_64-linux-android`            | CI testing, full-time maintainer |
-| Target               | `x86_64-unknown-linux-musl` [^4]  | CI testing, full-time maintainer |
-| Target               | `x86_64-unknown-illumos`          | CI testing, full-time maintainer |
 | Target               | `x86_64-unknown-freebsd`          | CI testing, full-time maintainer |
+| Target               | `x86_64-unknown-illumos`          | CI testing, full-time maintainer |
+| Target               | `x86_64-unknown-linux-musl` [^4]  | CI testing, full-time maintainer |
 | Compiler Backend     | Winch on x86\_64                  | WebAssembly proposals (`simd`, `relaxed-simd`, `tail-call`, `reference-types`, `threads`)     |
 | Compiler Backend     | Winch on aarch64                  | Complete implementation     |
+| Execution Backend    | Pulley                            | fuzzing                     |
 | WebAssembly Proposal | [`gc`]                            | Complete implementation     |
 | WASI Proposal        | [`wasi-nn`]                       | More expansive CI testing   |
 | WASI Proposal        | [`wasi-threads`]                  | More CI, unstable proposal  |
@@ -142,14 +148,14 @@ features; rather design discussion and PRs are welcome for many of the below
 features to figure out how best to implement them and at least move them to Tier
 3 above.
 
-* Target: ARM 32-bit
 * Target: [AArch64 FreeBSD](https://github.com/bytecodealliance/wasmtime/issues/5499)
 * Target: [NetBSD/OpenBSD](https://github.com/bytecodealliance/wasmtime/issues/6962)
-* Target: [i686 (32-bit Intel targets)](https://github.com/bytecodealliance/wasmtime/issues/1980)
-* Target: MIPS
-* Target: SPARC
-* Target: PowerPC
-* Target: RISC-V 32-bit
+* Cranelift Target: [i686 (32-bit Intel targets)](https://github.com/bytecodealliance/wasmtime/issues/1980)
+* Cranelift Target: ARM 32-bit
+* Cranelift Target: MIPS
+* Cranelift Target: SPARC
+* Cranelift Target: PowerPC
+* Cranelift Target: RISC-V 32-bit
 * WebAssembly Proposals: see [documentation here](./stability-wasm-proposals.md)
 * [WASI proposal: `proxy-wasm`](https://github.com/proxy-wasm/spec)
 * [WASI proposal: `wasi-blob-store`](https://github.com/WebAssembly/wasi-blob-store)

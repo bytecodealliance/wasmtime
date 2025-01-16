@@ -152,7 +152,7 @@ pub union wasmtime_val_union {
 
 const _: () = {
     assert!(std::mem::size_of::<wasmtime_val_union>() == 16);
-    assert!(std::mem::align_of::<wasmtime_val_union>() == 8);
+    assert!(std::mem::align_of::<wasmtime_val_union>() == std::mem::align_of::<u64>());
 };
 
 // The raw pointers are actually optional boxes.

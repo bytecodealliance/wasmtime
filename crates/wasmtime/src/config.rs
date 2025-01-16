@@ -155,6 +155,8 @@ pub struct Config {
     #[cfg(feature = "async")]
     pub(crate) async_stack_size: usize,
     #[cfg(feature = "async")]
+    pub(crate) async_stack_zeroing: bool,
+    #[cfg(feature = "async")]
     pub(crate) stack_creator: Option<Arc<dyn RuntimeFiberStackCreator>>,
     pub(crate) async_support: bool,
     pub(crate) module_version: ModuleVersionStrategy,
@@ -256,6 +258,8 @@ impl Config {
             disabled_features: WasmFeatures::empty(),
             #[cfg(feature = "async")]
             async_stack_size: 2 << 20,
+            #[cfg(feature = "async")]
+            async_stack_zeroing: false,
             #[cfg(feature = "async")]
             stack_creator: None,
             async_support: false,
@@ -725,6 +729,40 @@ impl Config {
     #[cfg(feature = "async")]
     pub fn async_stack_size(&mut self, size: usize) -> &mut Self {
         self.async_stack_size = size;
+        self
+    }
+
+    /// Configures whether or not stacks used for async futures are zeroed
+    /// before (re)use.
+    ///
+    /// When the [`async_support`](Config::async_support) method is enabled for
+    /// Wasmtime and the [`call_async`] variant of calling WebAssembly is used
+    /// then Wasmtime will create a separate runtime execution stack for each
+    /// future produced by [`call_async`]. By default upon allocation, depending
+    /// on the platform, these stacks might be filled with uninitialized
+    /// memory. This is safe and correct because, modulo bugs in Wasmtime,
+    /// compiled Wasm code will never read from a stack slot before it
+    /// initializes the stack slot.
+    ///
+    /// However, as a defense-in-depth mechanism, you may configure Wasmtime to
+    /// ensure that these stacks are zeroed before they are used. Notably, if
+    /// you are using the pooling allocator, stacks can be pooled and reused
+    /// across different Wasm guests; ensuring that stacks are zeroed can
+    /// prevent data leakage between Wasm guests even in the face of potential
+    /// read-of-stack-slot-before-initialization bugs in Wasmtime's compiler.
+    ///
+    /// Stack zeroing can be a costly operation in highly concurrent
+    /// environments due to modifications of the virtual address space requiring
+    /// process-wide synchronization. It can also be costly in `no-std`
+    /// environments that must manually zero memory, and cannot rely on an OS
+    /// and virtual memory to provide zeroed pages.
+    ///
+    /// This option defaults to `false`.
+    ///
+    /// [`call_async`]: crate::TypedFunc::call_async
+    #[cfg(feature = "async")]
+    pub fn async_stack_zeroing(&mut self, enable: bool) -> &mut Self {
+        self.async_stack_zeroing = enable;
         self
     }
 
@@ -2159,10 +2197,10 @@ impl Config {
         tunables: &Tunables,
     ) -> Result<Box<dyn InstanceAllocator + Send + Sync>> {
         #[cfg(feature = "async")]
-        let stack_size = self.async_stack_size;
+        let (stack_size, stack_zeroing) = (self.async_stack_size, self.async_stack_zeroing);
 
         #[cfg(not(feature = "async"))]
-        let stack_size = 0;
+        let (stack_size, stack_zeroing) = (0, false);
 
         let _ = tunables;
 
@@ -2172,6 +2210,7 @@ impl Config {
                 let mut allocator = Box::new(OnDemandInstanceAllocator::new(
                     self.mem_creator.clone(),
                     stack_size,
+                    stack_zeroing,
                 ));
                 #[cfg(feature = "async")]
                 if let Some(stack_creator) = &self.stack_creator {
@@ -2183,6 +2222,7 @@ impl Config {
             InstanceAllocationStrategy::Pooling(config) => {
                 let mut config = config.config;
                 config.stack_size = stack_size;
+                config.async_stack_zeroing = stack_zeroing;
                 Ok(Box::new(crate::runtime::vm::PoolingInstanceAllocator::new(
                     &config, tunables,
                 )?))
@@ -2949,31 +2989,6 @@ impl PoolingAllocationConfig {
     /// Defaults to `1`.
     pub fn decommit_batch_size(&mut self, batch_size: usize) -> &mut Self {
         self.config.decommit_batch_size = batch_size;
-        self
-    }
-
-    /// Configures whether or not stacks used for async futures are reset to
-    /// zero after usage.
-    ///
-    /// When the [`async_support`](Config::async_support) method is enabled for
-    /// Wasmtime and the [`call_async`] variant
-    /// of calling WebAssembly is used then Wasmtime will create a separate
-    /// runtime execution stack for each future produced by [`call_async`].
-    /// During the deallocation process Wasmtime won't by default reset the
-    /// contents of the stack back to zero.
-    ///
-    /// When this option is enabled it can be seen as a defense-in-depth
-    /// mechanism to reset a stack back to zero. This is not required for
-    /// correctness and can be a costly operation in highly concurrent
-    /// environments due to modifications of the virtual address space requiring
-    /// process-wide synchronization.
-    ///
-    /// This option defaults to `false`.
-    ///
-    /// [`call_async`]: crate::TypedFunc::call_async
-    #[cfg(feature = "async")]
-    pub fn async_stack_zeroing(&mut self, enable: bool) -> &mut Self {
-        self.config.async_stack_zeroing = enable;
         self
     }
 

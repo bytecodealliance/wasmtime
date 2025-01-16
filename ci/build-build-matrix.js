@@ -92,6 +92,24 @@ const array = [
     "target": "aarch64-pc-windows-msvc",
     "env": { "RUSTFLAGS": "-Ctarget-feature=+crt-static" },
   },
+  {
+    "build": "i686-linux",
+    "os": ubuntu,
+    "target": "i686-unknown-linux-gnu",
+    "env": { "DOCKER_IMAGE": "./ci/docker/i686-linux/Dockerfile" },
+  },
+  {
+    "build": "armv7-linux",
+    "os": ubuntu,
+    "target": "armv7-unknown-linux-gnueabihf",
+    "env": { "DOCKER_IMAGE": "./ci/docker/armv7-linux/Dockerfile" },
+  },
+  {
+    "build": "i686-windows",
+    "os": windows,
+    "target": "i686-pc-windows-msvc",
+    "env": { "RUSTFLAGS": "-Ctarget-feature=+crt-static" },
+  },
 ];
 
 const builds = [];
