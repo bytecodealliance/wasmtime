@@ -171,7 +171,7 @@ impl Vm {
         // NB: make sure this method stays in sync with
         // `PulleyMachineDeps::compute_arg_locs`!
 
-        let mut x_rets = (0..16).map(|x| XReg::new_unchecked(x));
+        let mut x_rets = (0..15).map(|x| XReg::new_unchecked(x));
         let mut f_rets = (0..16).map(|f| FReg::new_unchecked(f));
         let mut v_rets = (0..16).map(|v| VReg::new_unchecked(v));
 
