@@ -401,22 +401,25 @@ where
             }
         }
 
-        // Handle final stack adjustments for the tail-call ABI.
-        if frame_layout.tail_args_size > 0 {
-            insts.extend(Self::gen_sp_reg_adjust(
-                frame_layout.tail_args_size.try_into().unwrap(),
-            ));
-        }
-
         insts
     }
 
     fn gen_return(
         _call_conv: isa::CallConv,
         _isa_flags: &PulleyFlags,
-        _frame_layout: &FrameLayout,
+        frame_layout: &FrameLayout,
     ) -> SmallInstVec<Self::I> {
-        smallvec![RawInst::Ret {}.into()]
+        let mut insts = SmallVec::new();
+
+        // Handle final stack adjustments for the tail-call ABI.
+        if frame_layout.tail_args_size > 0 {
+            insts.extend(Self::gen_sp_reg_adjust(
+                frame_layout.tail_args_size.try_into().unwrap(),
+            ));
+        }
+        insts.push(RawInst::Ret {}.into());
+
+        insts
     }
 
     fn gen_probestack(_insts: &mut SmallInstVec<Self::I>, _frame_size: u32) {
