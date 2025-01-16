@@ -52,7 +52,12 @@
 //! * [`wasi:io/streams`]
 //!
 //! These traits are implemented in terms of a [`IoView`] trait, which only
-//! provides access to a common [`ResourceTable`].
+//! provides access to a common [`ResourceTable`]. All aspects of
+//! `wasmtime-wasi-io` that are used by this crate are re-exported. Unless you
+//! are implementing other host functionality that needs to interact with the
+//! WASI scheduler and don't want to use other functionality provided by
+//! `wasmtime-wasi`, you don't need to take a direct dependency on
+//! `wasmtime-wasi-io`.
 //!
 //! # Generated Bindings
 //!
