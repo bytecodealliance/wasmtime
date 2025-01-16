@@ -12,7 +12,7 @@ use std::time::Duration;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::{
     poll::Pollable,
-    stream::{InputStream, OutputStream},
+    streams::{InputStream, OutputStream},
     IoView,
 };
 

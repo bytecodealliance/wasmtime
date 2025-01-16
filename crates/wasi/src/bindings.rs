@@ -147,7 +147,7 @@
 pub mod sync {
     mod generated {
         use crate::{FsError, SocketError};
-        use wasmtime_wasi_io::stream::StreamError;
+        use wasmtime_wasi_io::streams::StreamError;
 
         wasmtime::component::bindgen!({
             path: "wit",
@@ -183,8 +183,8 @@ pub mod sync {
                 // Configure the resource types from wasmtime-wasi-io, though
                 // this bindgen will make a new synchronous Host traits
                 "wasi:io/poll/pollable": wasmtime_wasi_io::poll::Pollable,
-                "wasi:io/streams/input-stream": wasmtime_wasi_io::stream::InputStream,
-                "wasi:io/streams/output-stream": wasmtime_wasi_io::stream::OutputStream,
+                "wasi:io/streams/input-stream": wasmtime_wasi_io::streams::InputStream,
+                "wasi:io/streams/output-stream": wasmtime_wasi_io::streams::OutputStream,
 
             },
             require_store_data_send: true,
@@ -405,7 +405,7 @@ mod async_io {
             ],
         },
         trappable_error_type: {
-            "wasi:io/streams/stream-error" => wasmtime_wasi_io::stream::StreamError,
+            "wasi:io/streams/stream-error" => wasmtime_wasi_io::streams::StreamError,
             "wasi:filesystem/types/error-code" => crate::FsError,
             "wasi:sockets/network/error-code" => crate::SocketError,
         },

@@ -65,6 +65,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wiggle",
     "wasi-common",
     // other misc wasmtime crates
+    "wasmtime-wasi-io",
     "wasmtime-wasi",
     "wasmtime-wasi-http",
     "wasmtime-wasi-nn",

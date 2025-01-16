@@ -13,7 +13,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use wasmtime_wasi_io::{
     poll::Subscribe,
-    stream::{HostInputStream, HostOutputStream, StreamError},
+    streams::{HostInputStream, HostOutputStream, StreamError},
 };
 
 pub use crate::write_stream::AsyncWriteStream;

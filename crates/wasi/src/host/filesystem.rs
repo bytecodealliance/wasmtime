@@ -9,7 +9,7 @@ use crate::filesystem::{
 use crate::{DirPerms, FilePerms, FsError, FsResult, IoView, WasiImpl, WasiView};
 use anyhow::Context;
 use wasmtime::component::Resource;
-use wasmtime_wasi_io::stream::{InputStream, OutputStream};
+use wasmtime_wasi_io::streams::{InputStream, OutputStream};
 
 mod sync;
 

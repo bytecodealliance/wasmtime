@@ -31,7 +31,7 @@ use std::sync::{Condvar, Mutex, OnceLock};
 use tokio::sync::Notify;
 use wasmtime_wasi_io::{
     poll::Subscribe,
-    stream::{HostInputStream, StreamError},
+    streams::{HostInputStream, StreamError},
 };
 
 #[derive(Default)]

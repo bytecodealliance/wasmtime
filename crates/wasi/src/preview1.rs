@@ -83,7 +83,7 @@ use system_interface::fs::FileIoExt;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::{
     bindings::wasi::io::streams,
-    stream::{StreamError, StreamResult},
+    streams::{StreamError, StreamResult},
     IoImpl, IoView,
 };
 use wiggle::tracing::instrument;
