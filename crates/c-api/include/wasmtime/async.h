@@ -332,7 +332,7 @@ typedef struct {
  * https://docs.wasmtime.dev/api/wasmtime/trait.StackCreator.html#tymethod.new_stack
  */
 typedef wasmtime_error_t *(*wasmtime_new_stack_memory_callback_t)(
-    void *env, size_t size, wasmtime_stack_memory_t *stack_ret);
+    void *env, size_t size, bool zeroed, wasmtime_stack_memory_t *stack_ret);
 
 /**
  * A representation of custom stack creator.
