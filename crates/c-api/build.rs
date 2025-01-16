@@ -8,6 +8,7 @@ const FEATURES: &[&str] = &[
     "CACHE",
     "PARALLEL_COMPILATION",
     "WASI",
+    "WASI_THREADS",
     "LOGGING",
     "DISABLE_LOGGING",
     "COREDUMP",

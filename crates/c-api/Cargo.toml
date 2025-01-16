@@ -34,6 +34,7 @@ wat = { workspace = true, optional = true }
 cap-std = { workspace = true, optional = true }
 tokio = { workspace = true, optional = true, features = ["fs"] }
 wasmtime-wasi = { workspace = true, optional = true, features = ["preview1"] }
+wasmtime-wasi-threads = { workspace = true, optional = true }
 
 # Optional dependencies for the `async` feature
 futures = { workspace = true, optional = true }
@@ -57,5 +58,6 @@ gc-null = ["wasmtime/gc-null"]
 cranelift = ['wasmtime/cranelift']
 winch = ['wasmtime/winch']
 debug-builtins = ['wasmtime/debug-builtins']
+wasi-threads = ['wasmtime-wasi-threads']
 # ... if you add a line above this be sure to change the other locations
 # marked WASMTIME_FEATURE_LIST

@@ -6,7 +6,11 @@ use crate::{
 use std::ffi::c_void;
 use std::mem::MaybeUninit;
 use std::str;
+use std::sync::Arc;
 use wasmtime::{Func, Instance, Linker};
+
+#[cfg(feature = "wasi-threads")]
+use wasmtime_wasi_threads::WasiThreadsCtx;
 
 #[repr(C)]
 pub struct wasmtime_linker_t {
@@ -117,6 +121,26 @@ pub extern "C" fn wasmtime_linker_define_wasi(
         }),
         |_linker| (),
     )
+}
+
+#[cfg(feature = "wasi-threads")]
+#[unsafe(no_mangle)]
+pub extern "C" fn wasmtime_linker_define_wasi_threads(
+    linker: &mut wasmtime_linker_t,
+    store: WasmtimeStoreContextMut<'_>,
+    module: &wasmtime_module_t,
+) -> Option<Box<wasmtime_error_t>> {
+    handle_result(|| {
+        let linker = &mut linker.linker;
+        store.data_mut().wasi_threads = Some(Arc::new(WasiThreadsCtx::new(
+            &module.module.clone(),
+            Arc::new(linker.clone()),
+        )?));
+        wasmtime_wasi_threads::add_to_linker(linker, store, &module.module, |host| {
+            host.wasi_threads.as_ref().unwrap()
+        })?;
+        Ok(())
+    })
 }
 
 #[unsafe(no_mangle)]

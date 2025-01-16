@@ -4056,6 +4056,7 @@ dependencies = [
  "wasmtime",
  "wasmtime-c-api-macros",
  "wasmtime-wasi",
+ "wasmtime-wasi-threads",
  "wat",
 ]
 
