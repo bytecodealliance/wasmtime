@@ -274,24 +274,28 @@ pub(crate) enum VectorExtendKind {
 /// Kinds of splat supported by WebAssembly.
 #[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub(crate) enum SplatKind {
-    // 8 bit.
-    S8,
-    // 16 bit.
-    S16,
-    // 32 bit.
-    S32,
-    // 64 bit.
-    S64,
+    // 8 bit integer.
+    I8x16,
+    // 16 bit integer.
+    I16x8,
+    // 32 bit integer.
+    I32x4,
+    // 64 bit integer.
+    I64x2,
+    // 32 bit float.
+    F32x4,
+    // 64 bit float.
+    F64x2,
 }
 
 impl SplatKind {
     /// The lane size to use for different kinds of splats.
     pub(crate) fn lane_size(&self) -> OperandSize {
         match self {
-            SplatKind::S8 => OperandSize::S8,
-            SplatKind::S16 => OperandSize::S16,
-            SplatKind::S32 => OperandSize::S32,
-            SplatKind::S64 => OperandSize::S64,
+            SplatKind::I8x16 => OperandSize::S8,
+            SplatKind::I16x8 => OperandSize::S16,
+            SplatKind::I32x4 | SplatKind::F32x4 => OperandSize::S32,
+            SplatKind::I64x2 | SplatKind::F64x2 => OperandSize::S64,
         }
     }
 }
@@ -347,10 +351,10 @@ impl LoadKind {
 
     fn operand_size_for_splat(kind: &SplatKind) -> OperandSize {
         match kind {
-            SplatKind::S8 => OperandSize::S8,
-            SplatKind::S16 => OperandSize::S16,
-            SplatKind::S32 => OperandSize::S32,
-            SplatKind::S64 => OperandSize::S64,
+            SplatKind::I8x16 => OperandSize::S8,
+            SplatKind::I16x8 => OperandSize::S16,
+            SplatKind::I32x4 | SplatKind::F32x4 => OperandSize::S32,
+            SplatKind::I64x2 | SplatKind::F64x2 => OperandSize::S64,
         }
     }
 }
@@ -1281,13 +1285,9 @@ pub(crate) trait MacroAssembler {
     fn mul_wide(&mut self, context: &mut CodeGenContext<Emission>, kind: MulWideKind)
         -> Result<()>;
 
-    /// Takes the int in a `src` operand and replicates it across lanes of
+    /// Takes the value in a src operand and replicates it across lanes of
     /// `size` in a destination result.
-    fn splat_int(&mut self, context: &mut CodeGenContext<Emission>, size: SplatKind) -> Result<()>;
-
-    /// Takes the `src` operand and replicates it across lanes of `size` in
-    /// `dst`.
-    fn splat(&mut self, dst: WritableReg, src: RegImm, size: SplatKind) -> Result<()>;
+    fn splat(&mut self, context: &mut CodeGenContext<Emission>, size: SplatKind) -> Result<()>;
 
     /// Performs a shuffle between two 128-bit vectors into a 128-bit result
     /// using lanes as a mask to select which indexes to copy.

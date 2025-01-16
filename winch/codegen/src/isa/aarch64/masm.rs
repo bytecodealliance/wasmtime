@@ -894,15 +894,7 @@ impl Masm for MacroAssembler {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
-    fn splat_int(
-        &mut self,
-        _context: &mut CodeGenContext<Emission>,
-        _size: SplatKind,
-    ) -> Result<()> {
-        bail!(CodeGenError::unimplemented_masm_instruction())
-    }
-
-    fn splat(&mut self, _dst: WritableReg, _src: RegImm, _size: SplatKind) -> Result<()> {
+    fn splat(&mut self, _context: &mut CodeGenContext<Emission>, _size: SplatKind) -> Result<()> {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
 

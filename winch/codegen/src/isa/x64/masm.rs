@@ -1286,41 +1286,48 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn splat_int(&mut self, context: &mut CodeGenContext<Emission>, size: SplatKind) -> Result<()> {
-        let dst = writable!(context.any_fpr(self)?);
-        let src = match size {
-            SplatKind::S8 | SplatKind::S16 | SplatKind::S32 => {
-                context.pop_i32_const().map(RegImm::i32)
+    fn splat(&mut self, context: &mut CodeGenContext<Emission>, size: SplatKind) -> Result<()> {
+        // Get the source and destination operands set up first.
+        let (src, dst) = match size {
+            // Floats can use the same register for `src` and `dst`.
+            SplatKind::F32x4 | SplatKind::F64x2 => {
+                let reg = context.pop_to_reg(self, None)?.reg;
+                (RegImm::reg(reg), writable!(reg))
             }
-            SplatKind::S64 => context.pop_i64_const().map(RegImm::i64),
-        }
-        .map_or_else(
-            || -> Result<RegImm> {
-                let reg = context.pop_to_reg(self, None)?;
-                self.reinterpret_int_as_float(
-                    dst,
-                    reg.reg,
-                    match size {
-                        SplatKind::S8 | SplatKind::S16 | SplatKind::S32 => OperandSize::S32,
-                        SplatKind::S64 => OperandSize::S64,
+            // For ints, we need to load the operand into a vector register if
+            // it's not a constant.
+            SplatKind::I8x16 | SplatKind::I16x8 | SplatKind::I32x4 | SplatKind::I64x2 => {
+                let dst = writable!(context.any_fpr(self)?);
+                let src = if size == SplatKind::I64x2 {
+                    context.pop_i64_const().map(RegImm::i64)
+                } else {
+                    context.pop_i32_const().map(RegImm::i32)
+                }
+                .map_or_else(
+                    || -> Result<RegImm> {
+                        let reg = context.pop_to_reg(self, None)?.reg;
+                        self.reinterpret_int_as_float(
+                            dst,
+                            reg,
+                            match size {
+                                SplatKind::I8x16 | SplatKind::I16x8 | SplatKind::I32x4 => {
+                                    OperandSize::S32
+                                }
+                                SplatKind::I64x2 => OperandSize::S64,
+                                SplatKind::F32x4 | SplatKind::F64x2 => unreachable!(),
+                            },
+                        )?;
+                        context.free_reg(reg);
+                        Ok(RegImm::Reg(dst.to_reg()))
                     },
+                    Ok,
                 )?;
-                context.free_reg(reg);
-                Ok(RegImm::reg(dst.to_reg()))
-            },
-            Ok,
-        )?;
+                (src, dst)
+            }
+        };
 
-        self.splat(dst, src, size)?;
-
-        context
-            .stack
-            .push(Val::reg(dst.to_reg(), WasmValType::V128));
-        Ok(())
-    }
-
-    fn splat(&mut self, dst: WritableReg, src: RegImm, size: SplatKind) -> Result<()> {
-        if size == SplatKind::S64 {
+        // Perform the splat on the operands.
+        if size == SplatKind::I64x2 || size == SplatKind::F64x2 {
             if !self.flags.has_avx() {
                 bail!(CodeGenError::UnimplementedForNoAvx);
             }
@@ -1347,6 +1354,10 @@ impl Masm for MacroAssembler {
                 }
             }
         }
+
+        context
+            .stack
+            .push(Val::reg(dst.to_reg(), WasmValType::V128));
         Ok(())
     }
 

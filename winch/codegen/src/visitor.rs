@@ -2446,7 +2446,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::Splat(SplatKind::S8),
+            LoadKind::Splat(SplatKind::I8x16),
             MemOpKind::Normal,
         )
     }
@@ -2455,7 +2455,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::Splat(SplatKind::S16),
+            LoadKind::Splat(SplatKind::I16x8),
             MemOpKind::Normal,
         )
     }
@@ -2464,7 +2464,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::Splat(SplatKind::S32),
+            LoadKind::Splat(SplatKind::I32x4),
             MemOpKind::Normal,
         )
     }
@@ -2473,41 +2473,33 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::Splat(SplatKind::S64),
+            LoadKind::Splat(SplatKind::I64x2),
             MemOpKind::Normal,
         )
     }
 
     fn visit_i8x16_splat(&mut self) -> Self::Output {
-        self.masm.splat_int(&mut self.context, SplatKind::S8)
+        self.masm.splat(&mut self.context, SplatKind::I8x16)
     }
 
     fn visit_i16x8_splat(&mut self) -> Self::Output {
-        self.masm.splat_int(&mut self.context, SplatKind::S16)
+        self.masm.splat(&mut self.context, SplatKind::I16x8)
     }
 
     fn visit_i32x4_splat(&mut self) -> Self::Output {
-        self.masm.splat_int(&mut self.context, SplatKind::S32)
+        self.masm.splat(&mut self.context, SplatKind::I32x4)
     }
 
     fn visit_i64x2_splat(&mut self) -> Self::Output {
-        self.masm.splat_int(&mut self.context, SplatKind::S64)
+        self.masm.splat(&mut self.context, SplatKind::I64x2)
     }
 
     fn visit_f32x4_splat(&mut self) -> Self::Output {
-        self.context
-            .unop(self.masm, OperandSize::S32, &mut |masm, reg, _size| {
-                masm.splat(writable!(reg), RegImm::reg(reg), SplatKind::S32)?;
-                Ok(TypedReg::v128(reg))
-            })
+        self.masm.splat(&mut self.context, SplatKind::F32x4)
     }
 
     fn visit_f64x2_splat(&mut self) -> Self::Output {
-        self.context
-            .unop(self.masm, OperandSize::S64, &mut |masm, reg, _size| {
-                masm.splat(writable!(reg), RegImm::reg(reg), SplatKind::S64)?;
-                Ok(TypedReg::v128(reg))
-            })
+        self.masm.splat(&mut self.context, SplatKind::F64x2)
     }
 
     fn visit_i8x16_shuffle(&mut self, lanes: [u8; 16]) -> Self::Output {
