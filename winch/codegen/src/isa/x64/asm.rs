@@ -536,7 +536,56 @@ impl Assembler {
         });
     }
 
-    /// Shuffle of bytes in vector.
+    /// Value in `src` is broadcast into lanes of `size` in `dst`.
+    pub fn xmm_vpbroadcast_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
+        assert!(src.is_float() && dst.to_reg().is_float());
+
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpbroadcastb,
+            OperandSize::S16 => AvxOpcode::Vpbroadcastw,
+            OperandSize::S32 => AvxOpcode::Vpbroadcastd,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmUnaryRmRVex {
+            op,
+            src: XmmMem::unwrap_new(src.into()),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Memory to register shuffle of bytes in vector.
+    pub fn xmm_vpshuf_mr(
+        &mut self,
+        src: &Address,
+        dst: WritableReg,
+        mask: u8,
+        size: OperandSize,
+        flags: MemFlags,
+    ) {
+        assert!(dst.to_reg().is_float());
+
+        let op = match size {
+            OperandSize::S64 => AvxOpcode::Vpshufd,
+            _ => unimplemented!(),
+        };
+
+        let src = Self::to_synthetic_amode(
+            src,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            flags,
+        );
+        self.emit(Inst::XmmUnaryRmRImmVex {
+            op,
+            src: XmmMem::unwrap_new(RegMem::Mem { addr: src }),
+            dst: dst.to_reg().into(),
+            imm: mask,
+        });
+    }
+
+    /// Register to register shuffle of bytes in vector.
     pub fn xmm_vpshuf_rr(&mut self, src: Reg, dst: WritableReg, mask: u8, size: OperandSize) {
         assert!(src.is_float() && dst.to_reg().is_float());
 

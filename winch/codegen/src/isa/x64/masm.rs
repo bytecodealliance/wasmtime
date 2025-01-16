@@ -8,8 +8,8 @@ use anyhow::{anyhow, bail, Result};
 
 use crate::masm::{
     DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind, MacroAssembler as Masm,
-    MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode, ShiftKind, TrapCode,
-    TruncKind, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
+    MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode, ShiftKind,
+    SplatKind, TrapCode, TruncKind, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
@@ -348,12 +348,12 @@ impl Masm for MacroAssembler {
                 if size == OperandSize::S64 {
                     self.asm
                         .xmm_mov_mr(&src, dst, OperandSize::S64, UNTRUSTED_FLAGS);
-                    // Results in the first 4 bytes and second 4 bytes being
-                    // swapped and then the swapped bytes being copied.
-                    // [d0, d1, d2, d3, d4, d5, d6, d7, ...] yields
-                    // [d4, d5, d6, d7, d0, d1, d2, d3, d4, d5, d6, d7, d0, d1, d2, d3].
-                    self.asm
-                        .xmm_vpshuf_rr(dst.to_reg(), dst, 0b0100_0100, OperandSize::S64);
+                    self.asm.xmm_vpshuf_rr(
+                        dst.to_reg(),
+                        dst,
+                        Self::vpshuf_mask_for_64_bit_splats(),
+                        OperandSize::S64,
+                    );
                 } else {
                     self.asm
                         .xmm_vpbroadcast_mr(&src, dst, size, UNTRUSTED_FLAGS);
@@ -1286,6 +1286,81 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
+    fn splat(&mut self, context: &mut CodeGenContext<Emission>, size: SplatKind) -> Result<()> {
+        // Get the source and destination operands set up first.
+        let (src, dst) = match size {
+            // Floats can use the same register for `src` and `dst`.
+            SplatKind::F32x4 | SplatKind::F64x2 => {
+                let reg = context.pop_to_reg(self, None)?.reg;
+                (RegImm::reg(reg), writable!(reg))
+            }
+            // For ints, we need to load the operand into a vector register if
+            // it's not a constant.
+            SplatKind::I8x16 | SplatKind::I16x8 | SplatKind::I32x4 | SplatKind::I64x2 => {
+                let dst = writable!(context.any_fpr(self)?);
+                let src = if size == SplatKind::I64x2 {
+                    context.pop_i64_const().map(RegImm::i64)
+                } else {
+                    context.pop_i32_const().map(RegImm::i32)
+                }
+                .map_or_else(
+                    || -> Result<RegImm> {
+                        let reg = context.pop_to_reg(self, None)?.reg;
+                        self.reinterpret_int_as_float(
+                            dst,
+                            reg,
+                            match size {
+                                SplatKind::I8x16 | SplatKind::I16x8 | SplatKind::I32x4 => {
+                                    OperandSize::S32
+                                }
+                                SplatKind::I64x2 => OperandSize::S64,
+                                SplatKind::F32x4 | SplatKind::F64x2 => unreachable!(),
+                            },
+                        )?;
+                        context.free_reg(reg);
+                        Ok(RegImm::Reg(dst.to_reg()))
+                    },
+                    Ok,
+                )?;
+                (src, dst)
+            }
+        };
+
+        // Perform the splat on the operands.
+        if size == SplatKind::I64x2 || size == SplatKind::F64x2 {
+            if !self.flags.has_avx() {
+                bail!(CodeGenError::UnimplementedForNoAvx);
+            }
+            let mask = Self::vpshuf_mask_for_64_bit_splats();
+            match src {
+                RegImm::Reg(src) => self.asm.xmm_vpshuf_rr(src, dst, mask, OperandSize::S64),
+                RegImm::Imm(imm) => {
+                    let src = self.asm.add_constant(&imm.to_bytes());
+                    self.asm
+                        .xmm_vpshuf_mr(&src, dst, mask, OperandSize::S64, MemFlags::trusted());
+                }
+            }
+        } else {
+            if !self.flags.has_avx2() {
+                bail!(CodeGenError::UnimplementedForNoAvx2);
+            }
+
+            match src {
+                RegImm::Reg(src) => self.asm.xmm_vpbroadcast_rr(src, dst, size.lane_size()),
+                RegImm::Imm(imm) => {
+                    let src = self.asm.add_constant(&imm.to_bytes());
+                    self.asm
+                        .xmm_vpbroadcast_mr(&src, dst, size.lane_size(), MemFlags::trusted());
+                }
+            }
+        }
+
+        context
+            .stack
+            .push(Val::reg(dst.to_reg(), WasmValType::V128));
+        Ok(())
+    }
+
     fn shuffle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, lanes: [u8; 16]) -> Result<()> {
         if !self.flags.has_avx() {
             bail!(CodeGenError::UnimplementedForNoAvx)
@@ -1499,5 +1574,14 @@ impl MacroAssembler {
         } else {
             Ok(())
         }
+    }
+
+    /// The mask to use when performing a `vpshuf` operation for a 64-bit splat.
+    fn vpshuf_mask_for_64_bit_splats() -> u8 {
+        // Results in the first 4 bytes and second 4 bytes being
+        // swapped and then the swapped bytes being copied.
+        // [d0, d1, d2, d3, d4, d5, d6, d7, ...] yields
+        // [d4, d5, d6, d7, d0, d1, d2, d3, d4, d5, d6, d7, d0, d1, d2, d3].
+        0b0100_0100
     }
 }

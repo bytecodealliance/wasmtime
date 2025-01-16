@@ -11,7 +11,7 @@ use crate::codegen::{
 use crate::masm::{
     DivKind, ExtendKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler, MemMoveDirection,
     MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode, SPOffset, ShiftKind,
-    SplatKind, TruncKind, VectorExtendKind,
+    SplatKind, SplatLoadKind, TruncKind, VectorExtendKind,
 };
 
 use crate::reg::{writable, Reg};
@@ -271,6 +271,12 @@ macro_rules! def_unsupported {
     (emit V128Load16Splat $($rest:tt)*) => {};
     (emit V128Load32Splat $($rest:tt)*) => {};
     (emit V128Load64Splat $($rest:tt)*) => {};
+    (emit I8x16Splat $($rest:tt)*) => {};
+    (emit I16x8Splat $($rest:tt)*) => {};
+    (emit I32x4Splat $($rest:tt)*) => {};
+    (emit I64x2Splat $($rest:tt)*) => {};
+    (emit F32x4Splat $($rest:tt)*) => {};
+    (emit F64x2Splat $($rest:tt)*) => {};
     (emit I32AtomicStore8 $($rest:tt)*) => {};
     (emit I32AtomicStore16 $($rest:tt)*) => {};
     (emit I32AtomicStore $($rest:tt)*) => {};
@@ -2481,7 +2487,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::Splat(SplatKind::S8),
+            LoadKind::Splat(SplatLoadKind::S8),
             MemOpKind::Normal,
         )
     }
@@ -2490,7 +2496,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::Splat(SplatKind::S16),
+            LoadKind::Splat(SplatLoadKind::S16),
             MemOpKind::Normal,
         )
     }
@@ -2499,7 +2505,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::Splat(SplatKind::S32),
+            LoadKind::Splat(SplatLoadKind::S32),
             MemOpKind::Normal,
         )
     }
@@ -2508,9 +2514,33 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::Splat(SplatKind::S64),
+            LoadKind::Splat(SplatLoadKind::S64),
             MemOpKind::Normal,
         )
+    }
+
+    fn visit_i8x16_splat(&mut self) -> Self::Output {
+        self.masm.splat(&mut self.context, SplatKind::I8x16)
+    }
+
+    fn visit_i16x8_splat(&mut self) -> Self::Output {
+        self.masm.splat(&mut self.context, SplatKind::I16x8)
+    }
+
+    fn visit_i32x4_splat(&mut self) -> Self::Output {
+        self.masm.splat(&mut self.context, SplatKind::I32x4)
+    }
+
+    fn visit_i64x2_splat(&mut self) -> Self::Output {
+        self.masm.splat(&mut self.context, SplatKind::I64x2)
+    }
+
+    fn visit_f32x4_splat(&mut self) -> Self::Output {
+        self.masm.splat(&mut self.context, SplatKind::F32x4)
+    }
+
+    fn visit_f64x2_splat(&mut self) -> Self::Output {
+        self.masm.splat(&mut self.context, SplatKind::F64x2)
     }
 
     fn visit_i8x16_shuffle(&mut self, lanes: [u8; 16]) -> Self::Output {

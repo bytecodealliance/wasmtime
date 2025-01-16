@@ -272,16 +272,45 @@ pub(crate) enum VectorExtendKind {
     V128Extend32x2U,
 }
 
-/// Kinds of splat supported by WebAssembly.
-pub(crate) enum SplatKind {
-    // 8 bit.
+/// Kinds of splat loads supported by WebAssembly.
+pub(crate) enum SplatLoadKind {
+    /// 8 bits.
     S8,
-    // 16 bit.
+    /// 16 bits.
     S16,
-    // 32 bit.
+    /// 32 bits.
     S32,
-    // 64 bit.
+    /// 64 bits.
     S64,
+}
+
+/// Kinds of splat supported by WebAssembly.
+#[derive(Copy, Debug, Clone, Eq, PartialEq)]
+pub(crate) enum SplatKind {
+    /// 8 bit integer.
+    I8x16,
+    /// 16 bit integer.
+    I16x8,
+    /// 32 bit integer.
+    I32x4,
+    /// 64 bit integer.
+    I64x2,
+    /// 32 bit float.
+    F32x4,
+    /// 64 bit float.
+    F64x2,
+}
+
+impl SplatKind {
+    /// The lane size to use for different kinds of splats.
+    pub(crate) fn lane_size(&self) -> OperandSize {
+        match self {
+            SplatKind::I8x16 => OperandSize::S8,
+            SplatKind::I16x8 => OperandSize::S16,
+            SplatKind::I32x4 | SplatKind::F32x4 => OperandSize::S32,
+            SplatKind::I64x2 | SplatKind::F64x2 => OperandSize::S64,
+        }
+    }
 }
 
 /// Kinds of behavior supported by Wasm loads.
@@ -289,7 +318,7 @@ pub(crate) enum LoadKind {
     /// Load the entire bytes of the operand size without any modifications.
     Operand(OperandSize),
     /// Duplicate value into vector lanes.
-    Splat(SplatKind),
+    Splat(SplatLoadKind),
     /// Scalar (non-vector) extend.
     ScalarExtend(ExtendKind),
     /// Vector extend.
@@ -333,12 +362,12 @@ impl LoadKind {
         }
     }
 
-    fn operand_size_for_splat(kind: &SplatKind) -> OperandSize {
+    fn operand_size_for_splat(kind: &SplatLoadKind) -> OperandSize {
         match kind {
-            SplatKind::S8 => OperandSize::S8,
-            SplatKind::S16 => OperandSize::S16,
-            SplatKind::S32 => OperandSize::S32,
-            SplatKind::S64 => OperandSize::S64,
+            SplatLoadKind::S8 => OperandSize::S8,
+            SplatLoadKind::S16 => OperandSize::S16,
+            SplatLoadKind::S32 => OperandSize::S32,
+            SplatLoadKind::S64 => OperandSize::S64,
         }
     }
 }
@@ -477,6 +506,20 @@ impl Imm {
             Self::I32(_) | Self::F32(_) => OperandSize::S32,
             Self::I64(_) | Self::F64(_) => OperandSize::S64,
             Self::V128(_) => OperandSize::S128,
+        }
+    }
+
+    /// Get a little endian representation of the immediate.
+    ///
+    /// This method heap allocates and is intended to be used when adding
+    /// values to the constant pool.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        match self {
+            Imm::I32(n) => n.to_le_bytes().to_vec(),
+            Imm::I64(n) => n.to_le_bytes().to_vec(),
+            Imm::F32(n) => n.to_le_bytes().to_vec(),
+            Imm::F64(n) => n.to_le_bytes().to_vec(),
+            Imm::V128(n) => n.to_le_bytes().to_vec(),
         }
     }
 }
@@ -1257,6 +1300,10 @@ pub(crate) trait MacroAssembler {
     /// instruction (e.g. x64) so full access to `CodeGenContext` is provided.
     fn mul_wide(&mut self, context: &mut CodeGenContext<Emission>, kind: MulWideKind)
         -> Result<()>;
+
+    /// Takes the value in a src operand and replicates it across lanes of
+    /// `size` in a destination result.
+    fn splat(&mut self, context: &mut CodeGenContext<Emission>, size: SplatKind) -> Result<()>;
 
     /// Performs a shuffle between two 128-bit vectors into a 128-bit result
     /// using lanes as a mask to select which indexes to copy.
