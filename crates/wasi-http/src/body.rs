@@ -14,7 +14,7 @@ use tokio::sync::{mpsc, oneshot};
 use wasmtime_wasi::runtime::{poll_noop, AbortOnDropJoinHandle};
 use wasmtime_wasi_io::{
     poll::Subscribe,
-    stream::{HostInputStream, HostOutputStream, StreamError},
+    streams::{HostInputStream, HostOutputStream, StreamError},
 };
 
 /// Common type for incoming bodies.

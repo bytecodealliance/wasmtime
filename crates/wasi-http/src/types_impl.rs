@@ -16,7 +16,7 @@ use std::str::FromStr;
 use wasmtime::component::{Resource, ResourceTable, ResourceTableError};
 use wasmtime_wasi_io::{
     poll::Pollable,
-    stream::{InputStream, OutputStream},
+    streams::{InputStream, OutputStream},
     IoView,
 };
 
