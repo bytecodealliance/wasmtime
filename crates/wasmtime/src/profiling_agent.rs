@@ -66,6 +66,7 @@ cfg_if::cfg_if! {
 pub trait ProfilingAgent: Send + Sync + 'static {
     fn register_function(&self, name: &str, code: &[u8]);
 
+    #[cfg(feature = "pulley")]
     fn register_interpreter(&self, interp: &crate::vm::Interpreter) {
         let _ = interp;
     }

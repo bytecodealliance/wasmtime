@@ -37,7 +37,6 @@ use crate::profiling_agent::ProfilingAgent;
 use crate::vm::Interpreter;
 use pulley_interpreter::profile::{ExecutingPc, Recorder, Samples};
 use std::mem;
-use std::sync::atomic::{AtomicUsize, Ordering::Relaxed};
 use std::sync::mpsc;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread::{self, JoinHandle};
