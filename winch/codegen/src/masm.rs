@@ -252,6 +252,35 @@ impl ExtendKind {
             Self::I32Extend8S | Self::I32Extend8U | Self::I32Extend16U | Self::I32Extend16S => 32,
         }
     }
+
+    pub(crate) fn src_operand_size(&self) -> OperandSize {
+        match self {
+            ExtendKind::I32Extend8S
+            | ExtendKind::I32Extend8U
+            | ExtendKind::I64Extend8S
+            | ExtendKind::I64Extend8U => OperandSize::S8,
+            ExtendKind::I32Extend16S
+            | ExtendKind::I32Extend16U
+            | ExtendKind::I64Extend16U
+            | ExtendKind::I64Extend16S => OperandSize::S16,
+            ExtendKind::I64Extend32U | ExtendKind::I64Extend32S => OperandSize::S32,
+        }
+    }
+
+    pub(crate) fn dst_operand_size(&self) -> OperandSize {
+        match self {
+            ExtendKind::I32Extend8S
+            | ExtendKind::I32Extend8U
+            | ExtendKind::I32Extend16S
+            | ExtendKind::I32Extend16U
+            | ExtendKind::I64Extend8S => OperandSize::S32,
+            ExtendKind::I64Extend8U
+            | ExtendKind::I64Extend16S
+            | ExtendKind::I64Extend16U
+            | ExtendKind::I64Extend32S
+            | ExtendKind::I64Extend32U => OperandSize::S64,
+        }
+    }
 }
 
 /// Kinds of vector extends in WebAssembly. Each MacroAssembler implementation
@@ -320,17 +349,7 @@ impl LoadKind {
     }
 
     fn operand_size_for_scalar(extend_kind: &ExtendKind) -> OperandSize {
-        match extend_kind {
-            ExtendKind::I32Extend8S
-            | ExtendKind::I32Extend8U
-            | ExtendKind::I64Extend8S
-            | ExtendKind::I64Extend8U => OperandSize::S8,
-            ExtendKind::I32Extend16S
-            | ExtendKind::I32Extend16U
-            | ExtendKind::I64Extend16U
-            | ExtendKind::I64Extend16S => OperandSize::S16,
-            ExtendKind::I64Extend32U | ExtendKind::I64Extend32S => OperandSize::S32,
-        }
+        extend_kind.src_operand_size()
     }
 
     fn operand_size_for_splat(kind: &SplatKind) -> OperandSize {

@@ -1338,8 +1338,14 @@ impl Masm for MacroAssembler {
         }
 
         if let Some(extend) = extend {
-            self.asm.movzx_rr(operand.to_reg(), operand, extend);
+            // We don't need to zero-extend from 32 to 64bits.
+            if !(extend.src_operand_size() == OperandSize::S32
+                && extend.dst_operand_size() == OperandSize::S64)
+            {
+                self.asm.movzx_rr(operand.to_reg(), operand, extend);
+            }
         }
+
         Ok(())
     }
 }
