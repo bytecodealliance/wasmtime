@@ -4,7 +4,7 @@ use crate::{
     isa::{reg::Reg, CallingConvention},
     masm::{
         DivKind, ExtendKind, IntCmpKind, MulWideKind, OperandSize, RemKind, RoundingMode,
-        ShiftKind, SplatKind, VectorExtendKind,
+        ShiftKind, VectorExtendKind,
     },
 };
 use cranelift_codegen::{
@@ -164,18 +164,6 @@ impl From<OperandSize> for Option<ExtMode> {
             S8 => Some(ExtMode::BQ),
             S16 => Some(ExtMode::WQ),
             S32 => Some(ExtMode::LQ),
-        }
-    }
-}
-
-impl SplatKind {
-    /// Get the operand size for `vpbroadcast`.
-    pub(super) fn vpbroadcast_operand_size(&self) -> OperandSize {
-        match self {
-            SplatKind::S8 => OperandSize::S8,
-            SplatKind::S16 => OperandSize::S16,
-            SplatKind::S32 => OperandSize::S32,
-            SplatKind::S64 => OperandSize::S64,
         }
     }
 }

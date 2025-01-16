@@ -284,6 +284,18 @@ pub(crate) enum SplatKind {
     S64,
 }
 
+impl SplatKind {
+    /// The lane size to use for different kinds of splats.
+    pub(crate) fn lane_size(&self) -> OperandSize {
+        match self {
+            SplatKind::S8 => OperandSize::S8,
+            SplatKind::S16 => OperandSize::S16,
+            SplatKind::S32 => OperandSize::S32,
+            SplatKind::S64 => OperandSize::S64,
+        }
+    }
+}
+
 /// Kinds of behavior supported by Wasm loads.
 pub(crate) enum LoadKind {
     /// Load the entire bytes of the operand size without any modifications.

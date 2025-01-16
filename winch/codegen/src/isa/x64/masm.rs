@@ -1343,18 +1343,11 @@ impl Masm for MacroAssembler {
             }
 
             match src {
-                RegImm::Reg(src) => {
-                    self.asm
-                        .xmm_vpbroadcast_rr(src, dst, size.vpbroadcast_operand_size())
-                }
+                RegImm::Reg(src) => self.asm.xmm_vpbroadcast_rr(src, dst, size.lane_size()),
                 RegImm::Imm(imm) => {
                     let src = self.asm.add_constant(&imm.to_bytes());
-                    self.asm.xmm_vpbroadcast_mr(
-                        &src,
-                        dst,
-                        size.vpbroadcast_operand_size(),
-                        MemFlags::trusted(),
-                    );
+                    self.asm
+                        .xmm_vpbroadcast_mr(&src, dst, size.lane_size(), MemFlags::trusted());
                 }
             }
         }
