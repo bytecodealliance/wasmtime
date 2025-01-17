@@ -110,14 +110,14 @@ pub struct ComponentInstance {
 // Needs benchmarking one way or another though to figure out what the best
 // balance is here.
 pub type VMLoweringCallee = extern "C" fn(
-    vmctx: VmPtr<VMOpaqueContext>,
-    data: VmPtr<u8>,
+    vmctx: NonNull<VMOpaqueContext>,
+    data: NonNull<u8>,
     ty: u32,
-    flags: VmPtr<VMGlobalDefinition>,
-    opt_memory: VmPtr<VMMemoryDefinition>,
-    opt_realloc: VmPtr<VMFuncRef>,
+    flags: NonNull<VMGlobalDefinition>,
+    opt_memory: *mut VMMemoryDefinition,
+    opt_realloc: *mut VMFuncRef,
     string_encoding: u8,
-    args_and_results: VmPtr<mem::MaybeUninit<ValRaw>>,
+    args_and_results: NonNull<mem::MaybeUninit<ValRaw>>,
     nargs_and_results: usize,
 ) -> bool;
 
@@ -792,9 +792,8 @@ impl VMComponentContext {
     /// Helper function to cast between context types using a debug assertion to
     /// protect against some mistakes.
     #[inline]
-    pub unsafe fn from_opaque(opaque: VmPtr<VMOpaqueContext>) -> NonNull<VMComponentContext> {
+    pub unsafe fn from_opaque(opaque: NonNull<VMOpaqueContext>) -> NonNull<VMComponentContext> {
         // See comments in `VMContext::from_opaque` for this debug assert
-        let opaque = opaque.as_non_null();
         debug_assert_eq!(opaque.as_ref().magic, VMCOMPONENT_MAGIC);
         opaque.cast()
     }

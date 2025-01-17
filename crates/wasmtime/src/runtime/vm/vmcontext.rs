@@ -43,9 +43,9 @@ use wasmtime_environ::{
 /// * `true` if this call succeeded.
 /// * `false` if this call failed and a trap was recorded in TLS.
 pub type VMArrayCallNative = unsafe extern "C" fn(
-    VmPtr<VMOpaqueContext>,
-    VmPtr<VMOpaqueContext>,
-    VmPtr<ValRaw>,
+    NonNull<VMOpaqueContext>,
+    NonNull<VMOpaqueContext>,
+    NonNull<ValRaw>,
     usize,
 ) -> bool;
 
@@ -790,9 +790,9 @@ impl VMFuncRef {
         }
         .native;
         native(
-            self.vmctx.into(),
-            caller.into(),
-            args_and_results.cast().into(),
+            self.vmctx.as_non_null(),
+            caller,
+            args_and_results.cast(),
             args_and_results.len(),
         )
     }
@@ -1036,7 +1036,7 @@ impl VMContext {
     /// Helper function to cast between context types using a debug assertion to
     /// protect against some mistakes.
     #[inline]
-    pub unsafe fn from_opaque(opaque: VmPtr<VMOpaqueContext>) -> NonNull<VMContext> {
+    pub unsafe fn from_opaque(opaque: NonNull<VMOpaqueContext>) -> NonNull<VMContext> {
         // Note that in general the offset of the "magic" field is stored in
         // `VMOffsets::vmctx_magic`. Given though that this is a sanity check
         // about converting this pointer to another type we ideally don't want
@@ -1052,7 +1052,6 @@ impl VMContext {
         // bugs, meaning we don't actually read the magic and act differently
         // at runtime depending what it is, so this is a debug assertion as
         // opposed to a regular assertion.
-        let opaque = opaque.as_non_null();
         debug_assert_eq!(opaque.as_ref().magic, VMCONTEXT_MAGIC);
         opaque.cast()
     }

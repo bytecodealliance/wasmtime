@@ -1,6 +1,6 @@
 use crate::prelude::*;
 use crate::runtime::vm::vmcontext::VMArrayCallNative;
-use crate::runtime::vm::{tls, TrapRegisters, TrapTest, VMContext, VMOpaqueContext, VmPtr};
+use crate::runtime::vm::{tls, TrapRegisters, TrapTest, VMContext, VMOpaqueContext};
 use crate::{Engine, ValRaw};
 use core::ptr::NonNull;
 use pulley_interpreter::interp::{DoneReason, RegType, TrapKind, Val, Vm, XRegVal};
@@ -321,7 +321,7 @@ impl InterpreterRef<'_> {
             (@get vmctx $reg:ident) => (self.0[$reg].get_ptr());
             (@get pointer $reg:ident) => (self.0[$reg].get_ptr());
             (@get ptr $reg:ident) => (self.0[$reg].get_ptr());
-            (@get vmptr $reg:ident) => (VmPtr::from(NonNull::new(self.0[$reg].get_ptr()).unwrap()));
+            (@get nonnull $reg:ident) => (NonNull::new(self.0[$reg].get_ptr()).unwrap());
             (@get ptr_u8 $reg:ident) => (self.0[$reg].get_ptr());
             (@get ptr_u16 $reg:ident) => (self.0[$reg].get_ptr());
             (@get ptr_size $reg:ident) => (self.0[$reg].get_ptr());
@@ -353,7 +353,7 @@ impl InterpreterRef<'_> {
         //
 
         if id == const { HostCall::ArrayCall.index() } {
-            call!(@host VMArrayCallNative(vmptr, vmptr, vmptr, size) -> bool);
+            call!(@host VMArrayCallNative(nonnull, nonnull, nonnull, size) -> bool);
         }
 
         macro_rules! core {
@@ -379,7 +379,7 @@ impl InterpreterRef<'_> {
             use wasmtime_environ::component::ComponentBuiltinFunctionIndex;
 
             if id == const { HostCall::ComponentLowerImport.index() } {
-                call!(@host VMLoweringCallee(vmptr, vmptr, u32, vmptr, vmptr, vmptr, u8, vmptr, size) -> bool);
+                call!(@host VMLoweringCallee(nonnull, nonnull, u32, nonnull, ptr, ptr, u8, nonnull, size) -> bool);
             }
 
             macro_rules! component {

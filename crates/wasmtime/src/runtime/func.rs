@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use crate::runtime::vm::{
     ExportFunction, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext,
-    VMFuncRef, VMFunctionImport, VMOpaqueContext, VmPtr,
+    VMFuncRef, VMFunctionImport, VMOpaqueContext,
 };
 use crate::runtime::Uninhabited;
 use crate::store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored};
@@ -1326,7 +1326,7 @@ impl Func {
                     // Assert that this is a array-call function, since those
                     // are the only ones that could be missing a `wasm_call`
                     // trampoline.
-                    let _ = VMArrayCallHostFuncContext::from_opaque(f.as_ref().vmctx);
+                    let _ = VMArrayCallHostFuncContext::from_opaque(f.as_ref().vmctx.as_non_null());
 
                     let sig = self.type_index(store.store_data());
                     module.wasm_to_array_trampoline(sig).expect(
@@ -2294,9 +2294,9 @@ impl HostContext {
     }
 
     unsafe extern "C" fn array_call_trampoline<T, F, P, R>(
-        callee_vmctx: VmPtr<VMOpaqueContext>,
-        caller_vmctx: VmPtr<VMOpaqueContext>,
-        args: VmPtr<ValRaw>,
+        callee_vmctx: NonNull<VMOpaqueContext>,
+        caller_vmctx: NonNull<VMOpaqueContext>,
+        args: NonNull<ValRaw>,
         args_len: usize,
     ) -> bool
     where
@@ -2311,10 +2311,8 @@ impl HostContext {
         // should be part of this closure, and the long-jmp-ing
         // happens after the closure in handling the result.
         let run = move |mut caller: Caller<'_, T>| {
-            let mut args = NonNull::slice_from_raw_parts(
-                args.as_non_null().cast::<MaybeUninit<ValRaw>>(),
-                args_len,
-            );
+            let mut args =
+                NonNull::slice_from_raw_parts(args.cast::<MaybeUninit<ValRaw>>(), args_len);
             let vmctx = VMArrayCallHostFuncContext::from_opaque(callee_vmctx);
             let state = vmctx.as_ref().host_state();
 

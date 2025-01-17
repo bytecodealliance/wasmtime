@@ -6,9 +6,7 @@ use crate::prelude::*;
 use crate::runtime::vm::component::{
     ComponentInstance, InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
 };
-use crate::runtime::vm::{
-    VMFuncRef, VMGlobalDefinition, VMMemoryDefinition, VMOpaqueContext, VmPtr,
-};
+use crate::runtime::vm::{VMFuncRef, VMGlobalDefinition, VMMemoryDefinition, VMOpaqueContext};
 use crate::{AsContextMut, CallHook, StoreContextMut, ValRaw};
 use alloc::sync::Arc;
 use core::any::Any;
@@ -41,14 +39,14 @@ impl HostFunc {
     }
 
     extern "C" fn entrypoint<T, F, P, R>(
-        cx: VmPtr<VMOpaqueContext>,
-        data: VmPtr<u8>,
+        cx: NonNull<VMOpaqueContext>,
+        data: NonNull<u8>,
         ty: u32,
-        flags: VmPtr<VMGlobalDefinition>,
-        memory: VmPtr<VMMemoryDefinition>,
-        realloc: VmPtr<VMFuncRef>,
+        flags: NonNull<VMGlobalDefinition>,
+        memory: *mut VMMemoryDefinition,
+        realloc: *mut VMFuncRef,
         string_encoding: u8,
-        storage: VmPtr<MaybeUninit<ValRaw>>,
+        storage: NonNull<MaybeUninit<ValRaw>>,
         storage_len: usize,
     ) -> bool
     where
@@ -64,11 +62,11 @@ impl HostFunc {
                     types,
                     store,
                     TypeFuncIndex::from_u32(ty),
-                    InstanceFlags::from_raw(flags.as_non_null()),
-                    memory.as_ptr(),
-                    realloc.as_ptr(),
+                    InstanceFlags::from_raw(flags),
+                    memory,
+                    realloc,
                     StringEncoding::from_u8(string_encoding).unwrap(),
-                    NonNull::slice_from_raw_parts(storage.as_non_null(), storage_len).as_mut(),
+                    NonNull::slice_from_raw_parts(storage, storage_len).as_mut(),
                     |store, args| (*data)(store, args),
                 )
             })
@@ -292,7 +290,7 @@ fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<us
 }
 
 unsafe fn call_host_and_handle_result<T>(
-    cx: VmPtr<VMOpaqueContext>,
+    cx: NonNull<VMOpaqueContext>,
     func: impl FnOnce(
         *mut ComponentInstance,
         &Arc<ComponentTypes>,
@@ -424,14 +422,14 @@ fn validate_inbounds_dynamic(abi: &CanonicalAbiInfo, memory: &[u8], ptr: &ValRaw
 }
 
 extern "C" fn dynamic_entrypoint<T, F>(
-    cx: VmPtr<VMOpaqueContext>,
-    data: VmPtr<u8>,
+    cx: NonNull<VMOpaqueContext>,
+    data: NonNull<u8>,
     ty: u32,
-    flags: VmPtr<VMGlobalDefinition>,
-    memory: VmPtr<VMMemoryDefinition>,
-    realloc: VmPtr<VMFuncRef>,
+    flags: NonNull<VMGlobalDefinition>,
+    memory: *mut VMMemoryDefinition,
+    realloc: *mut VMFuncRef,
     string_encoding: u8,
-    storage: VmPtr<MaybeUninit<ValRaw>>,
+    storage: NonNull<MaybeUninit<ValRaw>>,
     storage_len: usize,
 ) -> bool
 where
@@ -445,11 +443,11 @@ where
                 types,
                 store,
                 TypeFuncIndex::from_u32(ty),
-                InstanceFlags::from_raw(flags.as_non_null()),
-                memory.as_ptr(),
-                realloc.as_ptr(),
+                InstanceFlags::from_raw(flags),
+                memory,
+                realloc,
                 StringEncoding::from_u8(string_encoding).unwrap(),
-                NonNull::slice_from_raw_parts(storage.as_non_null(), storage_len).as_mut(),
+                NonNull::slice_from_raw_parts(storage, storage_len).as_mut(),
                 |store, params, results| (*data)(store, params, results),
             )
         })

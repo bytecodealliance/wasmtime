@@ -1,7 +1,7 @@
 //! Support for a calling of an imported function.
 
 use crate::prelude::*;
-use crate::runtime::vm::{StoreBox, VMArrayCallHostFuncContext, VMContext, VMOpaqueContext, VmPtr};
+use crate::runtime::vm::{StoreBox, VMArrayCallHostFuncContext, VMContext, VMOpaqueContext};
 use crate::type_registry::RegisteredType;
 use crate::{FuncType, ValRaw};
 use core::ptr::NonNull;
@@ -22,9 +22,9 @@ struct TrampolineState<F> {
 ///
 /// Also shepherds panics and traps across Wasm.
 unsafe extern "C" fn array_call_shim<F>(
-    vmctx: VmPtr<VMOpaqueContext>,
-    caller_vmctx: VmPtr<VMOpaqueContext>,
-    values_vec: VmPtr<ValRaw>,
+    vmctx: NonNull<VMOpaqueContext>,
+    caller_vmctx: NonNull<VMOpaqueContext>,
+    values_vec: NonNull<ValRaw>,
     values_vec_len: usize,
 ) -> bool
 where
@@ -40,8 +40,7 @@ where
         let state = vmctx.as_ref().host_state();
         debug_assert!(state.is::<TrampolineState<F>>());
         let state = &*(state as *const _ as *const TrampolineState<F>);
-        let mut values_vec =
-            NonNull::slice_from_raw_parts(values_vec.as_non_null(), values_vec_len);
+        let mut values_vec = NonNull::slice_from_raw_parts(values_vec, values_vec_len);
         (state.func)(VMContext::from_opaque(caller_vmctx), values_vec.as_mut())
     })
 }

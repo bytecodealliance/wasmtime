@@ -4,7 +4,7 @@
 
 use super::{VMArrayCallNative, VMOpaqueContext};
 use crate::prelude::*;
-use crate::runtime::vm::{StoreBox, VMFuncRef, VmPtr};
+use crate::runtime::vm::{StoreBox, VMFuncRef};
 use core::any::Any;
 use core::ptr::NonNull;
 use wasmtime_environ::{VMSharedTypeIndex, VM_ARRAY_CALL_HOST_FUNC_MAGIC};
@@ -68,9 +68,8 @@ impl VMArrayCallHostFuncContext {
     /// protect against some mistakes.
     #[inline]
     pub unsafe fn from_opaque(
-        opaque: VmPtr<VMOpaqueContext>,
+        opaque: NonNull<VMOpaqueContext>,
     ) -> NonNull<VMArrayCallHostFuncContext> {
-        let opaque = opaque.as_non_null();
         // See comments in `VMContext::from_opaque` for this debug assert
         debug_assert_eq!(opaque.as_ref().magic, VM_ARRAY_CALL_HOST_FUNC_MAGIC);
         opaque.cast()
