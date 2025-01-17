@@ -29,6 +29,7 @@ mod imports;
 mod instance;
 mod memory;
 mod mmap_vec;
+mod provenance;
 mod send_sync_ptr;
 mod send_sync_unsafe_cell;
 mod store_box;
@@ -77,6 +78,7 @@ pub use crate::runtime::vm::memory::{
 };
 pub use crate::runtime::vm::mmap_vec::MmapVec;
 pub use crate::runtime::vm::mpk::MpkEnabled;
+pub use crate::runtime::vm::provenance::*;
 pub use crate::runtime::vm::store_box::*;
 #[cfg(feature = "std")]
 pub use crate::runtime::vm::sys::mmap::open_file_for_mmap;

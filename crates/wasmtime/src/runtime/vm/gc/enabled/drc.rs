@@ -667,9 +667,9 @@ unsafe impl GcHeap for DrcHeap {
         })
     }
 
-    unsafe fn vmctx_gc_heap_data(&self) -> *mut u8 {
-        let ptr = &*self.activations_table as *const VMGcRefActivationsTable;
-        ptr.cast_mut().cast::<u8>()
+    unsafe fn vmctx_gc_heap_data(&self) -> NonNull<u8> {
+        let ptr: NonNull<VMGcRefActivationsTable> = NonNull::from(&*self.activations_table);
+        ptr.cast()
     }
 
     #[cfg(feature = "pooling-allocator")]

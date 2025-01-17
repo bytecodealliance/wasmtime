@@ -1,4 +1,6 @@
 use crate::prelude::*;
+use crate::runtime::vm::SendSyncPtr;
+use core::ptr::NonNull;
 
 /// A `Box<T>` lookalike for memory that's stored in a `Store<T>`
 ///
@@ -8,30 +10,28 @@ use crate::prelude::*;
 /// around without invalidating pointers to the contents within the box. The
 /// standard `Box<T>` type does not implement this for example and moving that
 /// will invalidate derived pointers.
-pub struct StoreBox<T: ?Sized>(*mut T);
-
-unsafe impl<T: Send + ?Sized> Send for StoreBox<T> {}
-unsafe impl<T: Sync + ?Sized> Sync for StoreBox<T> {}
+pub struct StoreBox<T: ?Sized>(SendSyncPtr<T>);
 
 impl<T> StoreBox<T> {
     /// Allocates space on the heap to store `val` and returns a pointer to it
     /// living on the heap.
     pub fn new(val: T) -> StoreBox<T> {
-        StoreBox(Box::into_raw(Box::new(val)))
+        let ptr = Box::into_raw(Box::new(val));
+        StoreBox(SendSyncPtr::from(NonNull::new(ptr).unwrap()))
     }
 }
 
 impl<T: ?Sized> StoreBox<T> {
     /// Returns the underlying pointer to `T` which is owned by the store.
-    pub fn get(&self) -> *mut T {
-        self.0
+    pub fn get(&self) -> NonNull<T> {
+        self.0.as_non_null()
     }
 }
 
 impl<T: ?Sized> Drop for StoreBox<T> {
     fn drop(&mut self) {
         unsafe {
-            drop(Box::from_raw(self.0));
+            drop(Box::from_raw(self.0.as_ptr()));
         }
     }
 }

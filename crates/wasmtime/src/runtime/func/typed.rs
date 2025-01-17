@@ -217,6 +217,7 @@ where
             let storage: *mut Storage<_, _> = storage;
             let storage = storage.cast::<ValRaw>();
             let storage = core::ptr::slice_from_raw_parts_mut(storage, storage_len);
+            let storage = NonNull::new(storage).unwrap();
             func_ref
                 .as_ref()
                 .array_call(vm, VMOpaqueContext::from_vmcontext(caller), storage)

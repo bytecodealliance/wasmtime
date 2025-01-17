@@ -108,7 +108,7 @@ impl Global {
         unsafe {
             let store = store.as_context_mut();
             let mut store = AutoAssertNoGc::new(store.0);
-            let definition = &*store[self.0].definition;
+            let definition = store[self.0].definition.as_ref();
             match self._ty(&store).content() {
                 ValType::I32 => Val::from(*definition.as_i32()),
                 ValType::I64 => Val::from(*definition.as_i64()),
@@ -181,7 +181,7 @@ impl Global {
         val.ensure_matches_ty(&store, global_ty.content())
             .context("type mismatch: attempt to set global to value of wrong type")?;
         unsafe {
-            let definition = &mut *store[self.0].definition;
+            let definition = store[self.0].definition.as_mut();
             match val {
                 Val::I32(i) => *definition.as_i32_mut() = i,
                 Val::I64(i) => *definition.as_i64_mut() = i,
@@ -222,7 +222,7 @@ impl Global {
                 return;
             }
 
-            if let Some(gc_ref) = unsafe { (*store[self.0].definition).as_gc_ref() } {
+            if let Some(gc_ref) = unsafe { store[self.0].definition.as_ref().as_gc_ref() } {
                 let gc_ref = NonNull::from(gc_ref);
                 let gc_ref = SendSyncPtr::new(gc_ref);
                 unsafe {
@@ -240,9 +240,10 @@ impl Global {
             .global
             .wasm_ty
             .canonicalize_for_runtime_usage(&mut |module_index| {
-                crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |instance| {
-                    instance.engine_type_index(module_index)
-                })
+                crate::runtime::vm::Instance::from_vmctx(
+                    wasmtime_export.vmctx.unwrap(),
+                    |instance| instance.engine_type_index(module_index),
+                )
             });
 
         Global(store.store_data_mut().insert(wasmtime_export))
@@ -254,7 +255,7 @@ impl Global {
 
     pub(crate) fn vmimport(&self, store: &StoreOpaque) -> crate::runtime::vm::VMGlobalImport {
         crate::runtime::vm::VMGlobalImport {
-            from: store[self.0].definition,
+            from: store[self.0].definition.into(),
         }
     }
 
@@ -264,7 +265,7 @@ impl Global {
     /// `StoreData` multiple times and becomes multiple `wasmtime::Global`s,
     /// this hash key will be consistent across all of these globals.
     pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq + use<> {
-        store[self.0].definition as usize
+        store[self.0].definition.as_ptr() as usize
     }
 }
 

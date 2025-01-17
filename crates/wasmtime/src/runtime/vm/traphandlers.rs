@@ -354,7 +354,7 @@ pub unsafe fn catch_traps<T, F>(
     mut closure: F,
 ) -> Result<(), Box<Trap>>
 where
-    F: FnMut(*mut VMContext, Option<InterpreterRef<'_>>) -> bool,
+    F: FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
 {
     let caller = store.0.default_caller();
     let result = CallThreadState::new(store.0, caller).with(|cx| match store.0.interpreter() {
@@ -377,9 +377,9 @@ where
         None => traphandlers::wasmtime_setjmp(
             cx.jmp_buf.as_ptr(),
             {
-                extern "C" fn call_closure<F>(payload: *mut u8, caller: *mut VMContext) -> bool
+                extern "C" fn call_closure<F>(payload: *mut u8, caller: NonNull<VMContext>) -> bool
                 where
-                    F: FnMut(*mut VMContext, Option<InterpreterRef<'_>>) -> bool,
+                    F: FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
                 {
                     unsafe { (*(payload as *mut F))(caller, None) }
                 }
@@ -420,7 +420,7 @@ mod call_thread_state {
         #[cfg(feature = "coredump")]
         pub(super) capture_coredump: bool,
 
-        pub(crate) limits: *const VMRuntimeLimits,
+        pub(crate) limits: NonNull<VMRuntimeLimits>,
         pub(crate) unwinder: &'static dyn Unwind,
 
         pub(super) prev: Cell<tls::Ptr>,
@@ -447,9 +447,10 @@ mod call_thread_state {
             debug_assert!(self.unwind.replace(None).is_none());
 
             unsafe {
-                *(*self.limits).last_wasm_exit_fp.get() = self.old_last_wasm_exit_fp.get();
-                *(*self.limits).last_wasm_exit_pc.get() = self.old_last_wasm_exit_pc.get();
-                *(*self.limits).last_wasm_entry_fp.get() = self.old_last_wasm_entry_fp.get();
+                let limits = self.limits.as_ref();
+                *limits.last_wasm_exit_fp.get() = self.old_last_wasm_exit_fp.get();
+                *limits.last_wasm_exit_pc.get() = self.old_last_wasm_exit_pc.get();
+                *limits.last_wasm_entry_fp.get() = self.old_last_wasm_entry_fp.get();
             }
         }
     }
@@ -458,8 +459,13 @@ mod call_thread_state {
         pub const JMP_BUF_INTERPRETER_SENTINEL: *mut u8 = 1 as *mut u8;
 
         #[inline]
-        pub(super) fn new(store: &mut StoreOpaque, caller: *mut VMContext) -> CallThreadState {
-            let limits = unsafe { *Instance::from_vmctx(caller, |i| i.runtime_limits()) };
+        pub(super) fn new(store: &mut StoreOpaque, caller: NonNull<VMContext>) -> CallThreadState {
+            let limits = unsafe {
+                Instance::from_vmctx(caller, |i| i.runtime_limits())
+                    .read()
+                    .unwrap()
+                    .as_non_null()
+            };
 
             // Don't try to plumb #[cfg] everywhere for this field, just pretend
             // we're using it on miri/windows to silence compiler warnings.
@@ -478,9 +484,15 @@ mod call_thread_state {
                 #[cfg(all(has_native_signals, unix))]
                 async_guard_range: store.async_guard_range(),
                 prev: Cell::new(ptr::null()),
-                old_last_wasm_exit_fp: Cell::new(unsafe { *(*limits).last_wasm_exit_fp.get() }),
-                old_last_wasm_exit_pc: Cell::new(unsafe { *(*limits).last_wasm_exit_pc.get() }),
-                old_last_wasm_entry_fp: Cell::new(unsafe { *(*limits).last_wasm_entry_fp.get() }),
+                old_last_wasm_exit_fp: Cell::new(unsafe {
+                    *limits.as_ref().last_wasm_exit_fp.get()
+                }),
+                old_last_wasm_exit_pc: Cell::new(unsafe {
+                    *limits.as_ref().last_wasm_exit_pc.get()
+                }),
+                old_last_wasm_entry_fp: Cell::new(unsafe {
+                    *limits.as_ref().last_wasm_entry_fp.get()
+                }),
             }
         }
 
@@ -580,8 +592,8 @@ impl CallThreadState {
                 (None, None)
             }
             UnwindReason::Trap(_) => (
-                self.capture_backtrace(self.limits, None),
-                self.capture_coredump(self.limits, None),
+                self.capture_backtrace(self.limits.as_ptr(), None),
+                self.capture_coredump(self.limits.as_ptr(), None),
             ),
         };
         self.unwind.set(Some((reason, backtrace, coredump)));
@@ -696,8 +708,8 @@ impl CallThreadState {
         faulting_addr: Option<usize>,
         trap: wasmtime_environ::Trap,
     ) {
-        let backtrace = self.capture_backtrace(self.limits, Some((pc, fp)));
-        let coredump = self.capture_coredump(self.limits, Some((pc, fp)));
+        let backtrace = self.capture_backtrace(self.limits.as_ptr(), Some((pc, fp)));
+        let coredump = self.capture_coredump(self.limits.as_ptr(), Some((pc, fp)));
         self.unwind.set(Some((
             UnwindReason::Trap(TrapReason::Jit {
                 pc,

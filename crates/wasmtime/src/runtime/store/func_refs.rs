@@ -77,7 +77,9 @@ impl FuncRefs {
                 // that is the only kind that can have holes.
                 let _ = VMArrayCallHostFuncContext::from_opaque(func_ref.vmctx);
 
-                func_ref.wasm_call = modules.wasm_to_array_trampoline(func_ref.type_index);
+                func_ref.wasm_call = modules
+                    .wasm_to_array_trampoline(func_ref.type_index)
+                    .map(|f| f.into());
                 func_ref.wasm_call.is_none()
             }
         });

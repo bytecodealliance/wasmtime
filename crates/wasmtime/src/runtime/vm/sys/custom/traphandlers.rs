@@ -9,15 +9,15 @@ pub type SignalHandler = Box<dyn Fn() + Send + Sync>;
 
 pub unsafe fn wasmtime_setjmp(
     jmp_buf: *mut *const u8,
-    callback: extern "C" fn(*mut u8, *mut VMContext) -> bool,
+    callback: extern "C" fn(*mut u8, NonNull<VMContext>) -> bool,
     payload: *mut u8,
-    callee: *mut VMContext,
+    callee: NonNull<VMContext>,
 ) -> bool {
     let callback = mem::transmute::<
-        extern "C" fn(*mut u8, *mut VMContext) -> bool,
+        extern "C" fn(*mut u8, NonNull<VMContext>) -> bool,
         extern "C" fn(*mut u8, *mut u8) -> bool,
     >(callback);
-    capi::wasmtime_setjmp(jmp_buf, callback, payload, callee.cast())
+    capi::wasmtime_setjmp(jmp_buf, callback, payload, callee.as_ptr().cast())
 }
 
 #[cfg(has_native_signals)]

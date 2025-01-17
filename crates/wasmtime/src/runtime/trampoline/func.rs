@@ -1,9 +1,10 @@
 //! Support for a calling of an imported function.
 
 use crate::prelude::*;
-use crate::runtime::vm::{StoreBox, VMArrayCallHostFuncContext, VMContext, VMOpaqueContext};
+use crate::runtime::vm::{StoreBox, VMArrayCallHostFuncContext, VMContext, VMOpaqueContext, VmPtr};
 use crate::type_registry::RegisteredType;
 use crate::{FuncType, ValRaw};
+use core::ptr::NonNull;
 
 struct TrampolineState<F> {
     func: F,
@@ -21,13 +22,13 @@ struct TrampolineState<F> {
 ///
 /// Also shepherds panics and traps across Wasm.
 unsafe extern "C" fn array_call_shim<F>(
-    vmctx: *mut VMOpaqueContext,
-    caller_vmctx: *mut VMOpaqueContext,
-    values_vec: *mut ValRaw,
+    vmctx: VmPtr<VMOpaqueContext>,
+    caller_vmctx: VmPtr<VMOpaqueContext>,
+    values_vec: VmPtr<ValRaw>,
     values_vec_len: usize,
 ) -> bool
 where
-    F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<()> + 'static,
+    F: Fn(NonNull<VMContext>, &mut [ValRaw]) -> Result<()> + 'static,
 {
     // Be sure to catch Rust panics to manually shepherd them across the wasm
     // boundary, and then otherwise delegate as normal.
@@ -36,11 +37,12 @@ where
         // Double-check ourselves in debug mode, but we control
         // the `Any` here so an unsafe downcast should also
         // work.
-        let state = (*vmctx).host_state();
+        let state = vmctx.as_ref().host_state();
         debug_assert!(state.is::<TrampolineState<F>>());
         let state = &*(state as *const _ as *const TrampolineState<F>);
-        let values_vec = core::slice::from_raw_parts_mut(values_vec, values_vec_len);
-        (state.func)(VMContext::from_opaque(caller_vmctx), values_vec)
+        let mut values_vec =
+            NonNull::slice_from_raw_parts(values_vec.as_non_null(), values_vec_len);
+        (state.func)(VMContext::from_opaque(caller_vmctx), values_vec.as_mut())
     })
 }
 
@@ -49,7 +51,7 @@ pub fn create_array_call_function<F>(
     func: F,
 ) -> Result<StoreBox<VMArrayCallHostFuncContext>>
 where
-    F: Fn(*mut VMContext, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
+    F: Fn(NonNull<VMContext>, &mut [ValRaw]) -> Result<()> + Send + Sync + 'static,
 {
     let array_call = array_call_shim::<F>;
 

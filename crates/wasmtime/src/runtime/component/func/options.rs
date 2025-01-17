@@ -138,7 +138,7 @@ impl Options {
         // is an optional configuration in canonical ABI options.
         unsafe {
             let memory = self.memory.unwrap().as_ref();
-            core::slice::from_raw_parts(memory.base, memory.current_length())
+            core::slice::from_raw_parts(memory.base.as_ptr(), memory.current_length())
         }
     }
 
@@ -149,7 +149,7 @@ impl Options {
         // See comments in `memory` about the unsafety
         unsafe {
             let memory = self.memory.unwrap().as_ref();
-            core::slice::from_raw_parts_mut(memory.base, memory.current_length())
+            core::slice::from_raw_parts_mut(memory.base.as_ptr(), memory.current_length())
         }
     }
 

@@ -740,25 +740,29 @@ impl Table {
         match self {
             Table::Static(StaticTable::Func(StaticFuncTable { data, size, .. })) => {
                 VMTableDefinition {
-                    base: data.as_ptr().cast(),
+                    base: data.cast().into(),
                     current_elements: *size,
                 }
             }
             Table::Static(StaticTable::GcRef(StaticGcRefTable { data, size })) => {
                 VMTableDefinition {
-                    base: data.as_ptr().cast(),
+                    base: data.cast().into(),
                     current_elements: *size,
                 }
             }
             Table::Dynamic(DynamicTable::Func(DynamicFuncTable { elements, .. })) => {
                 VMTableDefinition {
-                    base: elements.as_mut_ptr().cast(),
+                    base: NonNull::<[FuncTableElem]>::from(&mut elements[..])
+                        .cast()
+                        .into(),
                     current_elements: elements.len(),
                 }
             }
             Table::Dynamic(DynamicTable::GcRef(DynamicGcRefTable { elements, .. })) => {
                 VMTableDefinition {
-                    base: elements.as_mut_ptr().cast(),
+                    base: NonNull::<[Option<VMGcRef>]>::from(&mut elements[..])
+                        .cast()
+                        .into(),
                     current_elements: elements.len(),
                 }
             }

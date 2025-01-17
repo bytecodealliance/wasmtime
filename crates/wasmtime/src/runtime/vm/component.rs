@@ -9,7 +9,7 @@
 use crate::prelude::*;
 use crate::runtime::vm::{
     SendSyncPtr, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
-    VMOpaqueContext, VMStore, VMStoreRawPtr, VMWasmCallFunction, ValRaw,
+    VMOpaqueContext, VMStore, VMStoreRawPtr, VMWasmCallFunction, ValRaw, VmPtr,
 };
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
@@ -110,14 +110,14 @@ pub struct ComponentInstance {
 // Needs benchmarking one way or another though to figure out what the best
 // balance is here.
 pub type VMLoweringCallee = extern "C" fn(
-    vmctx: *mut VMOpaqueContext,
-    data: *mut u8,
+    vmctx: VmPtr<VMOpaqueContext>,
+    data: VmPtr<u8>,
     ty: u32,
-    flags: *mut u8,
-    opt_memory: *mut VMMemoryDefinition,
-    opt_realloc: *mut VMFuncRef,
+    flags: VmPtr<VMGlobalDefinition>,
+    opt_memory: VmPtr<VMMemoryDefinition>,
+    opt_realloc: VmPtr<VMFuncRef>,
     string_encoding: u8,
-    args_and_results: *mut mem::MaybeUninit<ValRaw>,
+    args_and_results: VmPtr<mem::MaybeUninit<ValRaw>>,
     nargs_and_results: usize,
 ) -> bool;
 
@@ -161,13 +161,13 @@ impl ComponentInstance {
     /// pointer and it cannot be proven statically that it's safe to get a
     /// mutable reference at this time to the instance from `vmctx`.
     pub unsafe fn from_vmctx<R>(
-        vmctx: *mut VMComponentContext,
+        vmctx: NonNull<VMComponentContext>,
         f: impl FnOnce(&mut ComponentInstance) -> R,
     ) -> R {
-        let ptr = vmctx
+        let mut ptr = vmctx
             .byte_sub(mem::size_of::<ComponentInstance>())
             .cast::<ComponentInstance>();
-        f(&mut *ptr)
+        f(ptr.as_mut())
     }
 
     /// Returns the layout corresponding to what would be an allocation of a
@@ -231,19 +231,22 @@ impl ComponentInstance {
         (*ptr.as_ptr()).initialize_vmctx();
     }
 
-    fn vmctx(&self) -> *mut VMComponentContext {
+    fn vmctx(&self) -> NonNull<VMComponentContext> {
         let addr = &raw const self.vmctx;
-        Strict::with_addr(self.vmctx_self_reference.as_ptr(), Strict::addr(addr))
+        let ret = Strict::with_addr(self.vmctx_self_reference.as_ptr(), Strict::addr(addr));
+        NonNull::new(ret).unwrap()
     }
 
     unsafe fn vmctx_plus_offset<T>(&self, offset: u32) -> *const T {
         self.vmctx()
+            .as_ptr()
             .byte_add(usize::try_from(offset).unwrap())
             .cast()
     }
 
     unsafe fn vmctx_plus_offset_mut<T>(&mut self, offset: u32) -> *mut T {
         self.vmctx()
+            .as_ptr()
             .byte_add(usize::try_from(offset).unwrap())
             .cast()
     }
@@ -329,10 +332,10 @@ impl ComponentInstance {
             let offset = self.offsets.trampoline_func_ref(idx);
             let ret = self.vmctx_plus_offset::<VMFuncRef>(offset);
             debug_assert!(
-                mem::transmute::<Option<NonNull<VMWasmCallFunction>>, usize>((*ret).wasm_call)
+                mem::transmute::<Option<VmPtr<VMWasmCallFunction>>, usize>((*ret).wasm_call)
                     != INVALID_PTR
             );
-            debug_assert!((*ret).vmctx as usize != INVALID_PTR);
+            debug_assert!((*ret).vmctx.as_ptr() as usize != INVALID_PTR);
             NonNull::new(ret.cast_mut()).unwrap()
         }
     }
@@ -345,11 +348,16 @@ impl ComponentInstance {
     ///
     /// Note that it should be a property of the component model that the `ptr`
     /// here is never needed prior to it being configured here in the instance.
-    pub fn set_runtime_memory(&mut self, idx: RuntimeMemoryIndex, ptr: *mut VMMemoryDefinition) {
+    pub fn set_runtime_memory(
+        &mut self,
+        idx: RuntimeMemoryIndex,
+        ptr: NonNull<VMMemoryDefinition>,
+    ) {
         unsafe {
-            debug_assert!(!ptr.is_null());
-            let storage = self.vmctx_plus_offset_mut(self.offsets.runtime_memory(idx));
-            debug_assert!(*storage as usize == INVALID_PTR);
+            let storage = self.vmctx_plus_offset_mut::<NonNull<VMMemoryDefinition>>(
+                self.offsets.runtime_memory(idx),
+            );
+            debug_assert!((*storage).as_ptr() as usize == INVALID_PTR);
             *storage = ptr;
         }
     }
@@ -403,10 +411,10 @@ impl ComponentInstance {
             debug_assert!(*self.vmctx_plus_offset::<usize>(offset) == INVALID_PTR);
             let vmctx = VMOpaqueContext::from_vmcomponent(self.vmctx());
             *self.vmctx_plus_offset_mut(offset) = VMFuncRef {
-                wasm_call: Some(wasm_call),
-                array_call,
+                wasm_call: Some(wasm_call.into()),
+                array_call: array_call.into(),
                 type_index,
-                vmctx,
+                vmctx: vmctx.into(),
             };
         }
     }
@@ -449,7 +457,7 @@ impl ComponentInstance {
             let i = RuntimeComponentInstanceIndex::from_u32(i);
             let mut def = VMGlobalDefinition::new();
             *def.as_i32_mut() = FLAG_MAY_ENTER | FLAG_MAY_LEAVE;
-            *self.instance_flags(i).as_raw() = def;
+            self.instance_flags(i).as_raw().write(def);
         }
 
         // In debug mode set non-null bad values to all "pointer looking" bits
@@ -707,7 +715,11 @@ impl OwnedComponentInstance {
     }
 
     /// See `ComponentInstance::set_runtime_memory`
-    pub fn set_runtime_memory(&mut self, idx: RuntimeMemoryIndex, ptr: *mut VMMemoryDefinition) {
+    pub fn set_runtime_memory(
+        &mut self,
+        idx: RuntimeMemoryIndex,
+        ptr: NonNull<VMMemoryDefinition>,
+    ) {
         unsafe { self.instance_mut().set_runtime_memory(idx, ptr) }
     }
 
@@ -780,9 +792,10 @@ impl VMComponentContext {
     /// Helper function to cast between context types using a debug assertion to
     /// protect against some mistakes.
     #[inline]
-    pub unsafe fn from_opaque(opaque: *mut VMOpaqueContext) -> *mut VMComponentContext {
+    pub unsafe fn from_opaque(opaque: VmPtr<VMOpaqueContext>) -> NonNull<VMComponentContext> {
         // See comments in `VMContext::from_opaque` for this debug assert
-        debug_assert_eq!((*opaque).magic, VMCOMPONENT_MAGIC);
+        let opaque = opaque.as_non_null();
+        debug_assert_eq!(opaque.as_ref().magic, VMCOMPONENT_MAGIC);
         opaque.cast()
     }
 }
@@ -790,7 +803,7 @@ impl VMComponentContext {
 impl VMOpaqueContext {
     /// Helper function to clearly indicate the cast desired
     #[inline]
-    pub fn from_vmcomponent(ptr: *mut VMComponentContext) -> *mut VMOpaqueContext {
+    pub fn from_vmcomponent(ptr: NonNull<VMComponentContext>) -> NonNull<VMOpaqueContext> {
         ptr.cast()
     }
 }
@@ -808,55 +821,55 @@ impl InstanceFlags {
     ///
     /// This is a raw pointer argument which needs to be valid for the lifetime
     /// that `InstanceFlags` is used.
-    pub unsafe fn from_raw(ptr: *mut u8) -> InstanceFlags {
-        InstanceFlags(SendSyncPtr::new(NonNull::new(ptr.cast()).unwrap()))
+    pub unsafe fn from_raw(ptr: NonNull<VMGlobalDefinition>) -> InstanceFlags {
+        InstanceFlags(SendSyncPtr::from(ptr))
     }
 
     #[inline]
     pub unsafe fn may_leave(&self) -> bool {
-        *(*self.as_raw()).as_i32() & FLAG_MAY_LEAVE != 0
+        *self.as_raw().as_ref().as_i32() & FLAG_MAY_LEAVE != 0
     }
 
     #[inline]
     pub unsafe fn set_may_leave(&mut self, val: bool) {
         if val {
-            *(*self.as_raw()).as_i32_mut() |= FLAG_MAY_LEAVE;
+            *self.as_raw().as_mut().as_i32_mut() |= FLAG_MAY_LEAVE;
         } else {
-            *(*self.as_raw()).as_i32_mut() &= !FLAG_MAY_LEAVE;
+            *self.as_raw().as_mut().as_i32_mut() &= !FLAG_MAY_LEAVE;
         }
     }
 
     #[inline]
     pub unsafe fn may_enter(&self) -> bool {
-        *(*self.as_raw()).as_i32() & FLAG_MAY_ENTER != 0
+        *self.as_raw().as_ref().as_i32() & FLAG_MAY_ENTER != 0
     }
 
     #[inline]
     pub unsafe fn set_may_enter(&mut self, val: bool) {
         if val {
-            *(*self.as_raw()).as_i32_mut() |= FLAG_MAY_ENTER;
+            *self.as_raw().as_mut().as_i32_mut() |= FLAG_MAY_ENTER;
         } else {
-            *(*self.as_raw()).as_i32_mut() &= !FLAG_MAY_ENTER;
+            *self.as_raw().as_mut().as_i32_mut() &= !FLAG_MAY_ENTER;
         }
     }
 
     #[inline]
     pub unsafe fn needs_post_return(&self) -> bool {
-        *(*self.as_raw()).as_i32() & FLAG_NEEDS_POST_RETURN != 0
+        *self.as_raw().as_ref().as_i32() & FLAG_NEEDS_POST_RETURN != 0
     }
 
     #[inline]
     pub unsafe fn set_needs_post_return(&mut self, val: bool) {
         if val {
-            *(*self.as_raw()).as_i32_mut() |= FLAG_NEEDS_POST_RETURN;
+            *self.as_raw().as_mut().as_i32_mut() |= FLAG_NEEDS_POST_RETURN;
         } else {
-            *(*self.as_raw()).as_i32_mut() &= !FLAG_NEEDS_POST_RETURN;
+            *self.as_raw().as_mut().as_i32_mut() &= !FLAG_NEEDS_POST_RETURN;
         }
     }
 
     #[inline]
-    pub fn as_raw(&self) -> *mut VMGlobalDefinition {
-        self.0.as_ptr()
+    pub fn as_raw(&self) -> NonNull<VMGlobalDefinition> {
+        self.0.as_non_null()
     }
 }
 

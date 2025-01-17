@@ -516,7 +516,7 @@ impl Component {
             .info
             .resource_drop_wasm_to_array_trampoline
             .as_ref()
-            .map(|i| self.func(i).cast());
+            .map(|i| self.func(i).cast().into());
         VMFuncRef {
             wasm_call,
             ..*dtor.func_ref()

@@ -735,7 +735,7 @@ fn initialize_memories(
             unsafe {
                 let src = self.context.instance.wasm_data(init.data.clone());
                 let offset = usize::try_from(init.offset).unwrap();
-                let dst = memory.base.add(offset);
+                let dst = memory.base.as_ptr().add(offset);
 
                 assert!(offset + src.len() <= memory.current_length());
 
@@ -812,10 +812,7 @@ fn initialize_globals(
         // This write is safe because we know we have the correct module for
         // this instance and its vmctx due to the assert above.
         unsafe {
-            ptr::write(
-                to,
-                VMGlobalDefinition::from_val_raw(&mut store, wasm_ty, raw)?,
-            )
+            to.write(VMGlobalDefinition::from_val_raw(&mut store, wasm_ty, raw)?);
         };
     }
     Ok(())

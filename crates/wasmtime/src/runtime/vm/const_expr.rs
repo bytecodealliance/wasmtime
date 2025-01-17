@@ -33,11 +33,7 @@ impl<'a> ConstEvalContext<'a> {
 
     fn global_get(&mut self, store: &mut AutoAssertNoGc<'_>, index: GlobalIndex) -> Result<ValRaw> {
         unsafe {
-            let global = self
-                .instance
-                .defined_or_imported_global_ptr(index)
-                .as_ref()
-                .unwrap();
+            let global = self.instance.defined_or_imported_global_ptr(index).as_ref();
             global.to_val_raw(store, self.instance.env_module().globals[index].wasm_ty)
         }
     }

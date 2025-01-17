@@ -376,7 +376,7 @@ impl InstanceData {
             CoreDef::InstanceFlags(idx) => {
                 crate::runtime::vm::Export::Global(crate::runtime::vm::ExportGlobal {
                     definition: self.state.instance_flags(*idx).as_raw(),
-                    vmctx: ptr::null_mut(),
+                    vmctx: None,
                     global: Global {
                         wasm_ty: WasmValType::I32,
                         mutability: true,

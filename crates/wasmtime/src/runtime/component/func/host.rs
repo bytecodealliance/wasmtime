@@ -6,7 +6,9 @@ use crate::prelude::*;
 use crate::runtime::vm::component::{
     ComponentInstance, InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
 };
-use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition, VMOpaqueContext};
+use crate::runtime::vm::{
+    VMFuncRef, VMGlobalDefinition, VMMemoryDefinition, VMOpaqueContext, VmPtr,
+};
 use crate::{AsContextMut, CallHook, StoreContextMut, ValRaw};
 use alloc::sync::Arc;
 use core::any::Any;
@@ -39,14 +41,14 @@ impl HostFunc {
     }
 
     extern "C" fn entrypoint<T, F, P, R>(
-        cx: *mut VMOpaqueContext,
-        data: *mut u8,
+        cx: VmPtr<VMOpaqueContext>,
+        data: VmPtr<u8>,
         ty: u32,
-        flags: *mut u8,
-        memory: *mut VMMemoryDefinition,
-        realloc: *mut VMFuncRef,
+        flags: VmPtr<VMGlobalDefinition>,
+        memory: VmPtr<VMMemoryDefinition>,
+        realloc: VmPtr<VMFuncRef>,
         string_encoding: u8,
-        storage: *mut MaybeUninit<ValRaw>,
+        storage: VmPtr<MaybeUninit<ValRaw>>,
         storage_len: usize,
     ) -> bool
     where
@@ -54,7 +56,7 @@ impl HostFunc {
         P: ComponentNamedList + Lift + 'static,
         R: ComponentNamedList + Lower + 'static,
     {
-        let data = data as *const F;
+        let data = data.as_ptr() as *const F;
         unsafe {
             call_host_and_handle_result::<T>(cx, |instance, types, store| {
                 call_host::<_, _, _, _>(
@@ -62,11 +64,11 @@ impl HostFunc {
                     types,
                     store,
                     TypeFuncIndex::from_u32(ty),
-                    InstanceFlags::from_raw(flags),
-                    memory,
-                    realloc,
+                    InstanceFlags::from_raw(flags.as_non_null()),
+                    memory.as_ptr(),
+                    realloc.as_ptr(),
                     StringEncoding::from_u8(string_encoding).unwrap(),
-                    core::slice::from_raw_parts_mut(storage, storage_len),
+                    NonNull::slice_from_raw_parts(storage.as_non_null(), storage_len).as_mut(),
                     |store, args| (*data)(store, args),
                 )
             })
@@ -290,7 +292,7 @@ fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<us
 }
 
 unsafe fn call_host_and_handle_result<T>(
-    cx: *mut VMOpaqueContext,
+    cx: VmPtr<VMOpaqueContext>,
     func: impl FnOnce(
         *mut ComponentInstance,
         &Arc<ComponentTypes>,
@@ -298,7 +300,7 @@ unsafe fn call_host_and_handle_result<T>(
     ) -> Result<()>,
 ) -> bool {
     let cx = VMComponentContext::from_opaque(cx);
-    let instance = (*cx).instance();
+    let instance = cx.as_ref().instance();
     let types = (*instance).component_types();
     let raw_store = (*instance).store();
     let mut store = StoreContextMut(&mut *raw_store.cast());
@@ -422,20 +424,20 @@ fn validate_inbounds_dynamic(abi: &CanonicalAbiInfo, memory: &[u8], ptr: &ValRaw
 }
 
 extern "C" fn dynamic_entrypoint<T, F>(
-    cx: *mut VMOpaqueContext,
-    data: *mut u8,
+    cx: VmPtr<VMOpaqueContext>,
+    data: VmPtr<u8>,
     ty: u32,
-    flags: *mut u8,
-    memory: *mut VMMemoryDefinition,
-    realloc: *mut VMFuncRef,
+    flags: VmPtr<VMGlobalDefinition>,
+    memory: VmPtr<VMMemoryDefinition>,
+    realloc: VmPtr<VMFuncRef>,
     string_encoding: u8,
-    storage: *mut MaybeUninit<ValRaw>,
+    storage: VmPtr<MaybeUninit<ValRaw>>,
     storage_len: usize,
 ) -> bool
 where
     F: Fn(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
 {
-    let data = data as *const F;
+    let data = data.as_ptr() as *const F;
     unsafe {
         call_host_and_handle_result(cx, |instance, types, store| {
             call_host_dynamic::<T, _>(
@@ -443,11 +445,11 @@ where
                 types,
                 store,
                 TypeFuncIndex::from_u32(ty),
-                InstanceFlags::from_raw(flags),
-                memory,
-                realloc,
+                InstanceFlags::from_raw(flags.as_non_null()),
+                memory.as_ptr(),
+                realloc.as_ptr(),
                 StringEncoding::from_u8(string_encoding).unwrap(),
-                core::slice::from_raw_parts_mut(storage, storage_len),
+                NonNull::slice_from_raw_parts(storage.as_non_null(), storage_len).as_mut(),
                 |store, params, results| (*data)(store, params, results),
             )
         })

@@ -3,6 +3,7 @@ use crate::runtime::vm::traphandlers::{tls, TrapRegisters, TrapTest};
 use crate::runtime::vm::VMContext;
 use std::ffi::c_void;
 use std::io;
+use std::ptr::NonNull;
 use windows_sys::Win32::Foundation::*;
 use windows_sys::Win32::System::Diagnostics::Debug::*;
 use windows_sys::Win32::System::Kernel::*;
@@ -13,9 +14,9 @@ unsafe extern "C" {
     #[allow(improper_ctypes)]
     pub fn wasmtime_setjmp(
         jmp_buf: *mut *const u8,
-        callback: extern "C" fn(*mut u8, *mut VMContext) -> bool,
+        callback: extern "C" fn(*mut u8, NonNull<VMContext>) -> bool,
         payload: *mut u8,
-        callee: *mut VMContext,
+        callee: NonNull<VMContext>,
     ) -> bool;
 
     #[wasmtime_versioned_export_macros::versioned_link]

@@ -141,7 +141,7 @@ impl Table {
                 vmctx, definition, ..
             } = store[self.0];
             crate::runtime::vm::Instance::from_vmctx(vmctx, |handle| {
-                let idx = handle.table_index(&*definition);
+                let idx = handle.table_index(definition.as_ref());
                 handle.get_defined_table_with_lazy_init(idx, lazy_init_range)
             })
         }
@@ -229,7 +229,7 @@ impl Table {
     pub(crate) fn internal_size(&self, store: &StoreOpaque) -> u64 {
         // unwrap here should be ok because the runtime should always guarantee
         // that we can fit the number of elements in a 64-bit integer.
-        unsafe { u64::try_from((*store[self.0].definition).current_elements).unwrap() }
+        unsafe { u64::try_from(store[self.0].definition.as_ref().current_elements).unwrap() }
     }
 
     /// Grows the size of this table by `delta` more elements, initialization
@@ -262,7 +262,7 @@ impl Table {
             match (*table).grow(delta, init, store)? {
                 Some(size) => {
                     let vm = (*table).vmtable();
-                    *store[self.0].definition = vm;
+                    store[self.0].definition.write(vm);
                     // unwrap here should be ok because the runtime should always guarantee
                     // that we can fit the table size in a 64-bit integer.
                     Ok(u64::try_from(size).unwrap())
@@ -421,8 +421,8 @@ impl Table {
     pub(crate) fn vmimport(&self, store: &StoreOpaque) -> crate::runtime::vm::VMTableImport {
         let export = &store[self.0];
         crate::runtime::vm::VMTableImport {
-            from: export.definition,
-            vmctx: export.vmctx,
+            from: export.definition.into(),
+            vmctx: export.vmctx.into(),
         }
     }
 
@@ -433,7 +433,7 @@ impl Table {
     /// this hash key will be consistent across all of these tables.
     #[allow(dead_code)] // Not used yet, but added for consistency.
     pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq + use<'_> {
-        store[self.0].definition as usize
+        store[self.0].definition.as_ptr() as usize
     }
 }
 
