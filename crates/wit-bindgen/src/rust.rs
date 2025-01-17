@@ -115,13 +115,12 @@ pub trait RustGenerator<'a> {
                     | TypeDefKind::Enum(_)
                     | TypeDefKind::Tuple(_)
                     | TypeDefKind::Handle(_)
-                    | TypeDefKind::Resource
-                    | TypeDefKind::ErrorContext => true,
+                    | TypeDefKind::Resource => true,
                     TypeDefKind::Type(Type::Id(t)) => {
                         needs_generics(resolve, &resolve.types[*t].kind)
                     }
                     TypeDefKind::Type(Type::String) => true,
-                    TypeDefKind::Type(_) => false,
+                    TypeDefKind::Type(_) | TypeDefKind::ErrorContext => false,
                     TypeDefKind::Unknown => unreachable!(),
                 }
             }
@@ -166,10 +165,19 @@ pub trait RustGenerator<'a> {
             TypeDefKind::Enum(_) => {
                 panic!("unsupported anonymous type reference: enum")
             }
-            TypeDefKind::Future(_) => todo!(),
-            TypeDefKind::Stream(_) => todo!(),
-            TypeDefKind::ErrorContext => todo!(),
-
+            TypeDefKind::Future(ty) => {
+                self.push_str("wasmtime::component::FutureReader<");
+                self.print_optional_ty(ty.as_ref(), TypeMode::Owned);
+                self.push_str(">");
+            }
+            TypeDefKind::Stream(ty) => {
+                self.push_str("wasmtime::component::StreamReader<");
+                self.print_optional_ty(ty.as_ref(), TypeMode::Owned);
+                self.push_str(">");
+            }
+            TypeDefKind::ErrorContext => {
+                self.push_str("wasmtime::component::ErrorContext");
+            }
             TypeDefKind::Handle(handle) => {
                 self.print_handle(handle);
             }
@@ -214,6 +222,25 @@ pub trait RustGenerator<'a> {
                 self.push_str(">");
             }
         }
+    }
+
+    fn print_stream(&mut self, ty: Option<&Type>) {
+        let wt = self.wasmtime_path();
+        self.push_str(&format!("{wt}::component::StreamReader<"));
+        self.print_optional_ty(ty, TypeMode::Owned);
+        self.push_str(">");
+    }
+
+    fn print_future(&mut self, ty: Option<&Type>) {
+        let wt = self.wasmtime_path();
+        self.push_str(&format!("{wt}::component::FutureReader<"));
+        self.print_optional_ty(ty, TypeMode::Owned);
+        self.push_str(">");
+    }
+
+    fn print_error_context(&mut self) {
+        let wt = self.wasmtime_path();
+        self.push_str(&format!("{wt}::component::ErrorContext"));
     }
 
     fn print_handle(&mut self, handle: &Handle) {

@@ -101,6 +101,8 @@
 #![allow(rustdoc::redundant_explicit_links)]
 
 mod component;
+#[cfg(feature = "component-model-async")]
+pub(crate) mod concurrent;
 mod func;
 mod instance;
 mod linker;
@@ -112,6 +114,8 @@ mod store;
 pub mod types;
 mod values;
 pub use self::component::{Component, ComponentExportIndex};
+#[cfg(feature = "component-model-async")]
+pub use self::concurrent::{ErrorContext, FutureReader, Promise, PromisesUnordered, StreamReader};
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };

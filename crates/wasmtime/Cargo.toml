@@ -62,6 +62,7 @@ semver = { workspace = true, optional = true }
 smallvec = { workspace = true, optional = true }
 hashbrown = { workspace = true, features = ["default-hasher"] }
 bitflags = { workspace = true }
+futures = { workspace = true, features = ["alloc"], optional = true }
 
 [target.'cfg(target_os = "windows")'.dependencies.windows-sys]
 workspace = true
@@ -371,3 +372,13 @@ custom-native-signals = []
 # performance hit, even when not profiling, so it's disabled by default at
 # compile time.
 profile-pulley = ['pulley', 'profiling', 'pulley-interpreter/profile']
+
+# Enables support for the Component Model Async ABI, along with `future`,
+# `stream`, and `error-context` types.
+component-model-async = [
+  "async",
+  "component-model",
+  "std",
+  "wasmtime-component-macro?/component-model-async",
+  "dep:futures"
+]
