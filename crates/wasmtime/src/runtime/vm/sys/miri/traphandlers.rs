@@ -11,6 +11,7 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::VMContext;
+use core::ptr::NonNull;
 
 pub fn wasmtime_setjmp(
     _jmp_buf: *mut *const u8,
