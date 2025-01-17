@@ -566,7 +566,7 @@ impl Assembler {
         assert!(dst.to_reg().is_float());
 
         let op = match size {
-            OperandSize::S64 => AvxOpcode::Vpshufd,
+            OperandSize::S32 => AvxOpcode::Vpshufd,
             _ => unimplemented!(),
         };
 
@@ -591,7 +591,7 @@ impl Assembler {
 
         let op = match size {
             OperandSize::S16 => AvxOpcode::Vpshuflw,
-            OperandSize::S32 | OperandSize::S64 => AvxOpcode::Vpshufd,
+            OperandSize::S32 => AvxOpcode::Vpshufd,
             _ => unimplemented!(),
         };
 
