@@ -203,6 +203,29 @@ impl DerefMut for dyn VMStore + '_ {
     }
 }
 
+/// A newtype wrapper around `NonNull<dyn VMStore>` intended to be a
+/// self-pointer back to the `Store<T>` within raw data structures like
+/// `VMContext`.
+///
+/// This type exists to manually, and unsafely, implement `Send` and `Sync`.
+/// The `VMStore` trait doesn't require `Send` or `Sync` which means this isn't
+/// naturally either trait (e.g. with `SendSyncPtr` instead). Note that this
+/// means that `Instance` is, for example, mistakenly considered
+/// unconditionally `Send` and `Sync`. This is hopefully ok for now though
+/// because from a user perspective the only type that matters is `Store<T>`.
+/// That type is `Send + Sync` if `T: Send + Sync` already so the internal
+/// storage of `Instance` shouldn't matter as the final result is the same.
+/// Note though that this means we need to be extra vigilant about cross-thread
+/// usage of `Instance` and `ComponentInstance` for example.
+#[derive(Copy, Clone)]
+#[repr(transparent)]
+struct VMStoreRawPtr(NonNull<dyn VMStore>);
+
+// SAFETY: this is the purpose of `VMStoreRawPtr`, see docs above about safe
+// usage.
+unsafe impl Send for VMStoreRawPtr {}
+unsafe impl Sync for VMStoreRawPtr {}
+
 /// Functionality required by this crate for a particular module. This
 /// is chiefly needed for lazy initialization of various bits of
 /// instance state.

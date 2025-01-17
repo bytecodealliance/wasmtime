@@ -85,7 +85,7 @@ pub struct InstanceAllocationRequest<'a> {
 /// InstanceAllocationRequest, rather than on a &mut InstanceAllocationRequest
 /// itself, because several use-sites require a split mut borrow on the
 /// InstanceAllocationRequest.
-pub struct StorePtr(Option<*mut dyn VMStore>);
+pub struct StorePtr(Option<NonNull<dyn VMStore>>);
 
 impl StorePtr {
     /// A pointer to no Store.
@@ -94,12 +94,12 @@ impl StorePtr {
     }
 
     /// A pointer to a Store.
-    pub fn new(ptr: *mut dyn VMStore) -> Self {
+    pub fn new(ptr: NonNull<dyn VMStore>) -> Self {
         Self(Some(ptr))
     }
 
     /// The raw contents of this struct
-    pub fn as_raw(&self) -> Option<*mut dyn VMStore> {
+    pub fn as_raw(&self) -> Option<NonNull<dyn VMStore>> {
         self.0
     }
 
@@ -107,10 +107,8 @@ impl StorePtr {
     ///
     /// Safety: must not be used outside the original lifetime of the borrow.
     pub(crate) unsafe fn get(&mut self) -> Option<&mut dyn VMStore> {
-        match self.0 {
-            Some(ptr) => Some(&mut *ptr),
-            None => None,
-        }
+        let ptr = self.0?.as_mut();
+        Some(ptr)
     }
 }
 

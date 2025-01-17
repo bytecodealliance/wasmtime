@@ -103,6 +103,7 @@ use core::num::NonZeroU64;
 use core::ops::{Deref, DerefMut, Range};
 use core::pin::Pin;
 use core::ptr;
+use core::ptr::NonNull;
 use core::task::{Context, Poll};
 use wasmtime_environ::TripleExt;
 
@@ -628,9 +629,9 @@ impl<T> Store<T> {
             // maintain throughout Wasmtime.
             unsafe {
                 let traitobj = mem::transmute::<
-                    *mut (dyn crate::runtime::vm::VMStore + '_),
-                    *mut (dyn crate::runtime::vm::VMStore + 'static),
-                >(&mut *inner);
+                    NonNull<dyn crate::runtime::vm::VMStore + '_>,
+                    NonNull<dyn crate::runtime::vm::VMStore + 'static>,
+                >(NonNull::from(&mut *inner));
                 instance.set_store(traitobj);
                 instance
             }
@@ -1933,7 +1934,7 @@ impl StoreOpaque {
     }
 
     #[inline]
-    pub fn traitobj(&self) -> *mut dyn crate::runtime::vm::VMStore {
+    pub fn traitobj(&self) -> NonNull<dyn crate::runtime::vm::VMStore> {
         self.default_caller.traitobj(self)
     }
 

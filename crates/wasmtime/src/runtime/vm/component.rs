@@ -9,7 +9,7 @@
 use crate::prelude::*;
 use crate::runtime::vm::{
     SendSyncPtr, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
-    VMOpaqueContext, VMStore, VMWasmCallFunction, ValRaw,
+    VMOpaqueContext, VMStore, VMStoreRawPtr, VMWasmCallFunction, ValRaw,
 };
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
@@ -65,6 +65,9 @@ pub struct ComponentInstance {
     /// can't be in this crate because `ResourceType` isn't here. Not using `dyn
     /// Any` is left as an exercise for a future refactoring.
     resource_types: Arc<dyn Any + Send + Sync>,
+
+    /// Self-pointer back to `Store<T>` and its functions.
+    store: VMStoreRawPtr,
 
     /// A zero-sized field which represents the end of the struct for the actual
     /// `VMComponentContext` to be allocated behind.
@@ -193,7 +196,7 @@ impl ComponentInstance {
         offsets: VMComponentOffsets<HostPtr>,
         runtime_info: Arc<dyn ComponentRuntimeInfo>,
         resource_types: Arc<dyn Any + Send + Sync>,
-        store: *mut dyn VMStore,
+        store: NonNull<dyn VMStore>,
     ) {
         assert!(alloc_size >= Self::alloc_layout(&offsets).size());
 
@@ -218,13 +221,14 @@ impl ComponentInstance {
                 component_resource_tables,
                 runtime_info,
                 resource_types,
+                store: VMStoreRawPtr(store),
                 vmctx: VMComponentContext {
                     _marker: marker::PhantomPinned,
                 },
             },
         );
 
-        (*ptr.as_ptr()).initialize_vmctx(store);
+        (*ptr.as_ptr()).initialize_vmctx();
     }
 
     fn vmctx(&self) -> *mut VMComponentContext {
@@ -258,11 +262,7 @@ impl ComponentInstance {
 
     /// Returns the store that this component was created with.
     pub fn store(&self) -> *mut dyn VMStore {
-        unsafe {
-            let ret = *self.vmctx_plus_offset::<*mut dyn VMStore>(self.offsets.store());
-            assert!(!ret.is_null());
-            ret
-        }
+        self.store.0.as_ptr()
     }
 
     /// Returns the runtime memory definition corresponding to the index of the
@@ -439,11 +439,11 @@ impl ComponentInstance {
         }
     }
 
-    unsafe fn initialize_vmctx(&mut self, store: *mut dyn VMStore) {
+    unsafe fn initialize_vmctx(&mut self) {
         *self.vmctx_plus_offset_mut(self.offsets.magic()) = VMCOMPONENT_MAGIC;
         *self.vmctx_plus_offset_mut(self.offsets.builtins()) = &libcalls::VMComponentBuiltins::INIT;
-        *self.vmctx_plus_offset_mut(self.offsets.store()) = store;
-        *self.vmctx_plus_offset_mut(self.offsets.limits()) = (*store).vmruntime_limits();
+        *self.vmctx_plus_offset_mut(self.offsets.limits()) =
+            self.store.0.as_ref().vmruntime_limits();
 
         for i in 0..self.offsets.num_runtime_component_instances {
             let i = RuntimeComponentInstanceIndex::from_u32(i);
@@ -662,7 +662,7 @@ impl OwnedComponentInstance {
     pub fn new(
         runtime_info: Arc<dyn ComponentRuntimeInfo>,
         resource_types: Arc<dyn Any + Send + Sync>,
-        store: *mut dyn VMStore,
+        store: NonNull<dyn VMStore>,
     ) -> OwnedComponentInstance {
         let component = runtime_info.component();
         let offsets = VMComponentOffsets::new(HostPtr, component);
