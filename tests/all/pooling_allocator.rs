@@ -639,16 +639,16 @@ fn instance_too_large() -> Result<()> {
         instance allocation for this module requires 336 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 71.43% - 240 bytes - instance state management
- * 26.19% - 88 bytes - static vmctx data
+ * 76.19% - 256 bytes - instance state management
+ * 21.43% - 72 bytes - static vmctx data
 "
     } else {
         "\
         instance allocation for this module requires 240 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 60.00% - 144 bytes - instance state management
- * 36.67% - 88 bytes - static vmctx data
+ * 66.67% - 160 bytes - instance state management
+ * 30.00% - 72 bytes - static vmctx data
 "
     };
     match Module::new(&engine, "(module)") {
@@ -667,7 +667,7 @@ configured maximum of 16 bytes; breakdown of allocation requirement:
 instance allocation for this module requires 1936 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 12.40% - 240 bytes - instance state management
+ * 13.22% - 256 bytes - instance state management
  * 82.64% - 1600 bytes - defined globals
 "
     } else {
@@ -675,7 +675,7 @@ configured maximum of 16 bytes; breakdown of allocation requirement:
 instance allocation for this module requires 1840 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
- * 7.83% - 144 bytes - instance state management
+ * 8.70% - 160 bytes - instance state management
  * 86.96% - 1600 bytes - defined globals
 "
     };
@@ -881,7 +881,7 @@ fn component_instance_size_limit() -> Result<()> {
         Ok(_) => panic!("should have hit limit"),
         Err(e) => assert_eq!(
             e.to_string(),
-            "instance allocation for this component requires 64 bytes of `VMComponentContext` space \
+            "instance allocation for this component requires 48 bytes of `VMComponentContext` space \
              which exceeds the configured maximum of 1 bytes"
         ),
     }
