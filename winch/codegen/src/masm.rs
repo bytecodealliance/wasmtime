@@ -56,6 +56,7 @@ pub(crate) enum MulWideKind {
 pub(crate) enum RmwOp {
     Add,
     Sub,
+    Xchg,
 }
 
 /// The direction to perform the memory move.
