@@ -278,9 +278,7 @@ pub use wasmtime::component::{ResourceTable, ResourceTableError};
 // These contents of wasmtime-wasi-io are re-exported by this crate for compatibility:
 // they were originally defined in this crate before being factored out, and many
 // users of this crate depend on them at these names.
-pub use wasmtime_wasi_io::poll::{
-    subscribe, ClosureFuture, DynFuture, DynPollable, MakeFuture, Pollable,
-};
+pub use wasmtime_wasi_io::poll::{subscribe, DynFuture, DynPollable, MakeFuture, Pollable};
 pub use wasmtime_wasi_io::streams::{
     DynInputStream, DynOutputStream, InputStream, OutputStream, StreamError, StreamResult,
 };

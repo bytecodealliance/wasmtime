@@ -6,7 +6,6 @@ use wasmtime::component::{Resource, ResourceTable};
 
 pub type DynFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
 pub type MakeFuture = for<'a> fn(&'a mut dyn Any) -> DynFuture<'a>;
-pub type ClosureFuture = Box<dyn Fn() -> DynFuture<'static> + Send + 'static>;
 
 /// The host representation of the `wasi:io/poll.pollable` resource.
 ///
