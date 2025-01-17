@@ -352,7 +352,7 @@ impl Masm for MacroAssembler {
                         dst.to_reg(),
                         dst,
                         Self::vpshuf_mask_for_64_bit_splats(),
-                        OperandSize::S64,
+                        OperandSize::S32,
                     );
                 } else {
                     self.asm
@@ -1333,11 +1333,11 @@ impl Masm for MacroAssembler {
             }
             let mask = Self::vpshuf_mask_for_64_bit_splats();
             match src {
-                RegImm::Reg(src) => self.asm.xmm_vpshuf_rr(src, dst, mask, OperandSize::S64),
+                RegImm::Reg(src) => self.asm.xmm_vpshuf_rr(src, dst, mask, OperandSize::S32),
                 RegImm::Imm(imm) => {
                     let src = self.asm.add_constant(&imm.to_bytes());
                     self.asm
-                        .xmm_vpshuf_mr(&src, dst, mask, OperandSize::S64, MemFlags::trusted());
+                        .xmm_vpshuf_mr(&src, dst, mask, OperandSize::S32, MemFlags::trusted());
                 }
             }
         } else {
@@ -1589,6 +1589,6 @@ impl MacroAssembler {
         // swapped and then the swapped bytes being copied.
         // [d0, d1, d2, d3, d4, d5, d6, d7, ...] yields
         // [d4, d5, d6, d7, d0, d1, d2, d3, d4, d5, d6, d7, d0, d1, d2, d3].
-        0b0100_0100
+        0b01_00_01_00
     }
 }
