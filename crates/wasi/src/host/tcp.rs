@@ -11,8 +11,8 @@ use std::net::SocketAddr;
 use std::time::Duration;
 use wasmtime::component::Resource;
 use wasmtime_wasi_io::{
-    poll::Pollable,
-    streams::{InputStream, OutputStream},
+    poll::DynPollable,
+    streams::{DynInputStream, DynOutputStream},
     IoView,
 };
 
@@ -76,7 +76,7 @@ where
     fn finish_connect(
         &mut self,
         this: Resource<tcp::TcpSocket>,
-    ) -> SocketResult<(Resource<InputStream>, Resource<OutputStream>)> {
+    ) -> SocketResult<(Resource<DynInputStream>, Resource<DynOutputStream>)> {
         let table = self.table();
         let socket = table.get_mut(&this)?;
 
@@ -107,8 +107,8 @@ where
         this: Resource<tcp::TcpSocket>,
     ) -> SocketResult<(
         Resource<tcp::TcpSocket>,
-        Resource<InputStream>,
-        Resource<OutputStream>,
+        Resource<DynInputStream>,
+        Resource<DynOutputStream>,
     )> {
         self.ctx().allowed_network_uses.check_allowed_tcp()?;
         let table = self.table();
@@ -284,7 +284,10 @@ where
         socket.set_send_buffer_size(value)
     }
 
-    fn subscribe(&mut self, this: Resource<tcp::TcpSocket>) -> anyhow::Result<Resource<Pollable>> {
+    fn subscribe(
+        &mut self,
+        this: Resource<tcp::TcpSocket>,
+    ) -> anyhow::Result<Resource<DynPollable>> {
         wasmtime_wasi_io::poll::subscribe(self.table(), this)
     }
 

@@ -168,7 +168,7 @@ async fn api_reactor() -> Result<()> {
     // Note, this works because of the add_to_linker invocations using the
     // `host` crate for `streams`, not because of `with` in the bindgen macro.
     let writepipe = wasmtime_wasi::pipe::MemoryOutputPipe::new(4096);
-    let stream: wasmtime_wasi::OutputStream = Box::new(writepipe.clone());
+    let stream: wasmtime_wasi::DynOutputStream = Box::new(writepipe.clone());
     let table_ix = store.data_mut().table().push(stream)?;
     let r = reactor.call_write_strings_to(&mut store, table_ix).await?;
     assert_eq!(r, Ok(()));

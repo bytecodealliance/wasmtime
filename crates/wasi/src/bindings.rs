@@ -182,9 +182,9 @@ pub mod sync {
                 "wasi:io/error": wasmtime_wasi_io::bindings::wasi::io::error,
                 // Configure the resource types from wasmtime-wasi-io, though
                 // this bindgen will make a new synchronous Host traits
-                "wasi:io/poll/pollable": wasmtime_wasi_io::poll::Pollable,
-                "wasi:io/streams/input-stream": wasmtime_wasi_io::streams::InputStream,
-                "wasi:io/streams/output-stream": wasmtime_wasi_io::streams::OutputStream,
+                "wasi:io/poll/pollable": wasmtime_wasi_io::poll::DynPollable,
+                "wasi:io/streams/input-stream": wasmtime_wasi_io::streams::DynInputStream,
+                "wasi:io/streams/output-stream": wasmtime_wasi_io::streams::DynOutputStream,
 
             },
             require_store_data_send: true,

@@ -30,8 +30,8 @@ use std::mem;
 use std::sync::{Condvar, Mutex, OnceLock};
 use tokio::sync::Notify;
 use wasmtime_wasi_io::{
-    poll::Subscribe,
-    streams::{HostInputStream, StreamError},
+    poll::Pollable,
+    streams::{InputStream, StreamError},
 };
 
 #[derive(Default)]
@@ -98,7 +98,7 @@ fn create() -> GlobalStdin {
     GlobalStdin::default()
 }
 
-/// Only public interface is the [`HostInputStream`] impl.
+/// Only public interface is the [`InputStream`] impl.
 #[derive(Clone)]
 pub struct Stdin;
 
@@ -111,7 +111,7 @@ pub fn stdin() -> Stdin {
 }
 
 impl StdinStream for Stdin {
-    fn stream(&self) -> Box<dyn HostInputStream> {
+    fn stream(&self) -> Box<dyn InputStream> {
         Box::new(Stdin)
     }
 
@@ -121,7 +121,7 @@ impl StdinStream for Stdin {
 }
 
 #[async_trait::async_trait]
-impl HostInputStream for Stdin {
+impl InputStream for Stdin {
     fn read(&mut self, size: usize) -> Result<Bytes, StreamError> {
         let g = GlobalStdin::get();
         let mut locked = g.state.lock().unwrap();
@@ -154,7 +154,7 @@ impl HostInputStream for Stdin {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for Stdin {
+impl Pollable for Stdin {
     async fn ready(&mut self) {
         let g = GlobalStdin::get();
 

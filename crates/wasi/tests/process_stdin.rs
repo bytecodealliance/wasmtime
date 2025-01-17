@@ -1,6 +1,6 @@
 use std::io::{BufRead, Write};
 use std::process::Command;
-use wasmtime_wasi::{HostInputStream, Subscribe};
+use wasmtime_wasi::{InputStream, Pollable};
 
 const VAR_NAME: &str = "__CHILD_PROCESS";
 

@@ -4,8 +4,7 @@ use crate::bindings::cli::{
 };
 use crate::pipe;
 use crate::{
-    HostInputStream, HostOutputStream, IoView, StreamError, StreamResult, Subscribe, WasiImpl,
-    WasiView,
+    InputStream, IoView, OutputStream, Pollable, StreamError, StreamResult, WasiImpl, WasiView,
 };
 use bytes::Bytes;
 use std::io::IsTerminal;
@@ -33,14 +32,14 @@ pub trait StdinStream: Send {
     /// all become ready for reading. Subsequently if one is read from it may
     /// mean that all the others are no longer ready for reading. This is
     /// basically a consequence of the way the WIT APIs are designed today.
-    fn stream(&self) -> Box<dyn HostInputStream>;
+    fn stream(&self) -> Box<dyn InputStream>;
 
     /// Returns whether this stream is backed by a TTY.
     fn isatty(&self) -> bool;
 }
 
 impl StdinStream for pipe::MemoryInputPipe {
-    fn stream(&self) -> Box<dyn HostInputStream> {
+    fn stream(&self) -> Box<dyn InputStream> {
         Box::new(self.clone())
     }
 
@@ -50,7 +49,7 @@ impl StdinStream for pipe::MemoryInputPipe {
 }
 
 impl StdinStream for pipe::ClosedInputStream {
-    fn stream(&self) -> Box<dyn HostInputStream> {
+    fn stream(&self) -> Box<dyn InputStream> {
         Box::new(*self)
     }
 
@@ -62,9 +61,9 @@ impl StdinStream for pipe::ClosedInputStream {
 /// An impl of [`StdinStream`] built on top of [`crate::pipe::AsyncReadStream`].
 //
 // Note the usage of `tokio::sync::Mutex` here as opposed to a
-// `std::sync::Mutex`. This is intentionally done to implement the `Subscribe`
+// `std::sync::Mutex`. This is intentionally done to implement the `Pollable`
 // variant of this trait. Note that in doing so we're left with the quandry of
-// how to implement methods of `HostInputStream` since those methods are not
+// how to implement methods of `InputStream` since those methods are not
 // `async`. They're currently implemented with `try_lock`, which then raises the
 // question of what to do on contention. Currently traps are returned.
 //
@@ -82,11 +81,11 @@ impl StdinStream for pipe::ClosedInputStream {
 // bindings themselves. It's possible for the host to take this and work with it
 // on its own task, but that's niche enough it's not designed for.
 //
-// Overall that means that the guest is either calling `Subscribe` or it's
-// calling `HostInputStream` methods. This means that there should never be
-// contention between the two at this time. This may all change in the future
-// with WASI 0.3, but perhaps we'll have a better story for stdio at that time
-// (see the doc block on the `HostOutputStream` impl below)
+// Overall that means that the guest is either calling `Pollable` or
+// `InputStream` methods. This means that there should never be contention
+// between the two at this time. This may all change in the future with WASI
+// 0.3, but perhaps we'll have a better story for stdio at that time (see the
+// doc block on the `OutputStream` impl below)
 pub struct AsyncStdinStream(Arc<Mutex<crate::pipe::AsyncReadStream>>);
 
 impl AsyncStdinStream {
@@ -96,7 +95,7 @@ impl AsyncStdinStream {
 }
 
 impl StdinStream for AsyncStdinStream {
-    fn stream(&self) -> Box<dyn HostInputStream> {
+    fn stream(&self) -> Box<dyn InputStream> {
         Box::new(Self(self.0.clone()))
     }
     fn isatty(&self) -> bool {
@@ -105,7 +104,7 @@ impl StdinStream for AsyncStdinStream {
 }
 
 #[async_trait::async_trait]
-impl HostInputStream for AsyncStdinStream {
+impl InputStream for AsyncStdinStream {
     fn read(&mut self, size: usize) -> Result<bytes::Bytes, StreamError> {
         match self.0.try_lock() {
             Ok(mut stream) => stream.read(size),
@@ -130,7 +129,7 @@ impl HostInputStream for AsyncStdinStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for AsyncStdinStream {
+impl Pollable for AsyncStdinStream {
     async fn ready(&mut self) {
         self.0.lock().await.ready().await
     }
@@ -153,14 +152,14 @@ pub trait StdoutStream: Send {
     /// obtain.
     ///
     /// Implementations must be able to handle this
-    fn stream(&self) -> Box<dyn HostOutputStream>;
+    fn stream(&self) -> Box<dyn OutputStream>;
 
     /// Returns whether this stream is backed by a TTY.
     fn isatty(&self) -> bool;
 }
 
 impl StdoutStream for pipe::MemoryOutputPipe {
-    fn stream(&self) -> Box<dyn HostOutputStream> {
+    fn stream(&self) -> Box<dyn OutputStream> {
         Box::new(self.clone())
     }
 
@@ -170,7 +169,7 @@ impl StdoutStream for pipe::MemoryOutputPipe {
 }
 
 impl StdoutStream for pipe::SinkOutputStream {
-    fn stream(&self) -> Box<dyn HostOutputStream> {
+    fn stream(&self) -> Box<dyn OutputStream> {
         Box::new(*self)
     }
 
@@ -180,7 +179,7 @@ impl StdoutStream for pipe::SinkOutputStream {
 }
 
 impl StdoutStream for pipe::ClosedOutputStream {
-    fn stream(&self) -> Box<dyn HostOutputStream> {
+    fn stream(&self) -> Box<dyn OutputStream> {
         Box::new(*self)
     }
 
@@ -205,7 +204,7 @@ impl OutputFile {
 }
 
 impl StdoutStream for OutputFile {
-    fn stream(&self) -> Box<dyn HostOutputStream> {
+    fn stream(&self) -> Box<dyn OutputStream> {
         Box::new(OutputFileStream {
             file: Arc::clone(&self.file),
         })
@@ -221,11 +220,11 @@ struct OutputFileStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for OutputFileStream {
+impl Pollable for OutputFileStream {
     async fn ready(&mut self) {}
 }
 
-impl HostOutputStream for OutputFileStream {
+impl OutputStream for OutputFileStream {
     fn write(&mut self, bytes: Bytes) -> StreamResult<()> {
         use std::io::Write;
         self.file
@@ -260,8 +259,8 @@ pub fn stdout() -> Stdout {
 }
 
 impl StdoutStream for Stdout {
-    fn stream(&self) -> Box<dyn HostOutputStream> {
-        Box::new(OutputStream::Stdout)
+    fn stream(&self) -> Box<dyn OutputStream> {
+        Box::new(StdioOutputStream::Stdout)
     }
 
     fn isatty(&self) -> bool {
@@ -284,8 +283,8 @@ pub fn stderr() -> Stderr {
 }
 
 impl StdoutStream for Stderr {
-    fn stream(&self) -> Box<dyn HostOutputStream> {
-        Box::new(OutputStream::Stderr)
+    fn stream(&self) -> Box<dyn OutputStream> {
+        Box::new(StdioOutputStream::Stderr)
     }
 
     fn isatty(&self) -> bool {
@@ -293,17 +292,17 @@ impl StdoutStream for Stderr {
     }
 }
 
-enum OutputStream {
+enum StdioOutputStream {
     Stdout,
     Stderr,
 }
 
-impl HostOutputStream for OutputStream {
+impl OutputStream for StdioOutputStream {
     fn write(&mut self, bytes: Bytes) -> StreamResult<()> {
         use std::io::Write;
         match self {
-            OutputStream::Stdout => std::io::stdout().write_all(&bytes),
-            OutputStream::Stderr => std::io::stderr().write_all(&bytes),
+            StdioOutputStream::Stdout => std::io::stdout().write_all(&bytes),
+            StdioOutputStream::Stderr => std::io::stderr().write_all(&bytes),
         }
         .map_err(|e| StreamError::LastOperationFailed(anyhow::anyhow!(e)))
     }
@@ -311,8 +310,8 @@ impl HostOutputStream for OutputStream {
     fn flush(&mut self) -> StreamResult<()> {
         use std::io::Write;
         match self {
-            OutputStream::Stdout => std::io::stdout().flush(),
-            OutputStream::Stderr => std::io::stderr().flush(),
+            StdioOutputStream::Stdout => std::io::stdout().flush(),
+            StdioOutputStream::Stderr => std::io::stderr().flush(),
         }
         .map_err(|e| StreamError::LastOperationFailed(anyhow::anyhow!(e)))
     }
@@ -323,16 +322,16 @@ impl HostOutputStream for OutputStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for OutputStream {
+impl Pollable for StdioOutputStream {
     async fn ready(&mut self) {}
 }
 
 /// A wrapper of [`crate::pipe::AsyncWriteStream`] that implements
-/// [`StdoutStream`]. Note that the [`HostOutputStream`] impl for this is not
+/// [`StdoutStream`]. Note that the [`OutputStream`] impl for this is not
 /// correct when used for interleaved async IO.
 //
 // Note that the use of `tokio::sync::Mutex` here is intentional, in addition to
-// the `try_lock()` calls below in the implementation of `HostOutputStream`. For
+// the `try_lock()` calls below in the implementation of `OutputStream`. For
 // more information see the documentation on `AsyncStdinStream`.
 pub struct AsyncStdoutStream(Arc<Mutex<crate::pipe::AsyncWriteStream>>);
 
@@ -343,7 +342,7 @@ impl AsyncStdoutStream {
 }
 
 impl StdoutStream for AsyncStdoutStream {
-    fn stream(&self) -> Box<dyn HostOutputStream> {
+    fn stream(&self) -> Box<dyn OutputStream> {
         Box::new(Self(self.0.clone()))
     }
     fn isatty(&self) -> bool {
@@ -367,7 +366,7 @@ impl StdoutStream for AsyncStdoutStream {
 // If that expectation doesn't turn out to be true, and you find yourself at
 // this comment to correct it: sorry about that.
 #[async_trait::async_trait]
-impl HostOutputStream for AsyncStdoutStream {
+impl OutputStream for AsyncStdoutStream {
     fn check_write(&mut self) -> Result<usize, StreamError> {
         match self.0.try_lock() {
             Ok(mut stream) => stream.check_write(),
@@ -398,7 +397,7 @@ impl HostOutputStream for AsyncStdoutStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for AsyncStdoutStream {
+impl Pollable for AsyncStdoutStream {
     async fn ready(&mut self) {
         self.0.lock().await.ready().await
     }
@@ -414,7 +413,7 @@ impl<T> stdin::Host for WasiImpl<T>
 where
     T: WasiView,
 {
-    fn get_stdin(&mut self) -> Result<Resource<streams::InputStream>, anyhow::Error> {
+    fn get_stdin(&mut self) -> Result<Resource<streams::DynInputStream>, anyhow::Error> {
         let stream = self.ctx().stdin.stream();
         Ok(self.table().push(stream)?)
     }
@@ -424,7 +423,7 @@ impl<T> stdout::Host for WasiImpl<T>
 where
     T: WasiView,
 {
-    fn get_stdout(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
+    fn get_stdout(&mut self) -> Result<Resource<streams::DynOutputStream>, anyhow::Error> {
         let stream = self.ctx().stdout.stream();
         Ok(self.table().push(stream)?)
     }
@@ -434,7 +433,7 @@ impl<T> stderr::Host for WasiImpl<T>
 where
     T: WasiView,
 {
-    fn get_stderr(&mut self) -> Result<Resource<streams::OutputStream>, anyhow::Error> {
+    fn get_stderr(&mut self) -> Result<Resource<streams::DynOutputStream>, anyhow::Error> {
         let stream = self.ctx().stderr.stream();
         Ok(self.table().push(stream)?)
     }
@@ -507,7 +506,7 @@ where
 mod test {
     use crate::stdio::StdoutStream;
     use crate::write_stream::AsyncWriteStream;
-    use crate::{AsyncStdoutStream, HostOutputStream};
+    use crate::{AsyncStdoutStream, OutputStream};
     use anyhow::Result;
     use bytes::Bytes;
     use tokio::io::AsyncReadExt;
@@ -515,7 +514,7 @@ mod test {
     #[test]
     fn memory_stdin_stream() {
         // A StdinStream has the property that there are multiple
-        // HostInputStreams created, using the stream() method which are each
+        // InputStreams created, using the stream() method which are each
         // views on the same shared state underneath. Consuming input on one
         // stream results in consuming that input on all streams.
         //
@@ -544,7 +543,7 @@ mod test {
     #[tokio::test]
     async fn async_stdin_stream() {
         // A StdinStream has the property that there are multiple
-        // HostInputStreams created, using the stream() method which are each
+        // InputStreams created, using the stream() method which are each
         // views on the same shared state underneath. Consuming input on one
         // stream results in consuming that input on all streams.
         //
@@ -599,10 +598,7 @@ mod test {
         task.await.unwrap();
     }
 
-    async fn blocking_write_and_flush(
-        s: &mut dyn HostOutputStream,
-        mut bytes: Bytes,
-    ) -> Result<()> {
+    async fn blocking_write_and_flush(s: &mut dyn OutputStream, mut bytes: Bytes) -> Result<()> {
         while !bytes.is_empty() {
             let permit = s.write_ready().await?;
             let len = bytes.len().min(permit);

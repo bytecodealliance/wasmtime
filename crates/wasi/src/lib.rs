@@ -154,13 +154,14 @@
 //! allows it). There are a few important traits, however, that are specific to
 //! this crate.
 //!
-//! * [`HostInputStream`] and [`HostOutputStream`] - these are the host traits
+//! * [`InputStream`] and [`OutputStream`] - these are the host traits
 //!   behind the WASI `input-stream` and `output-stream` types in the
 //!   `wasi:io/streams` interface. These enable embedders to build their own
-//!   custom stream and insert them into a [`ResourceTable`] to be used from
+//!   custom stream and insert them into a [`ResourceTable`] (as a boxed trait
+//!   object, see [`DynInputStream`] and [`DynOutputStream`]) to be used from
 //!   wasm.
 //!
-//! * [`Subscribe`] - this trait enables building arbitrary logic to get hooked
+//! * [`Pollable`] - this trait enables building arbitrary logic to get hooked
 //!   into a `pollable` resource from `wasi:io/poll`. A pollable resource is
 //!   created through the [`subscribe`] function.
 //!
@@ -278,10 +279,10 @@ pub use wasmtime::component::{ResourceTable, ResourceTableError};
 // they were originally defined in this crate before being factored out, and many
 // users of this crate depend on them at these names.
 pub use wasmtime_wasi_io::poll::{
-    subscribe, ClosureFuture, MakeFuture, Pollable, PollableFuture, Subscribe,
+    subscribe, ClosureFuture, DynFuture, DynPollable, MakeFuture, Pollable,
 };
 pub use wasmtime_wasi_io::streams::{
-    HostInputStream, HostOutputStream, InputStream, OutputStream, StreamError, StreamResult,
+    DynInputStream, DynOutputStream, InputStream, OutputStream, StreamError, StreamResult,
 };
 pub use wasmtime_wasi_io::{IoImpl, IoView};
 

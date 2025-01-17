@@ -1,11 +1,11 @@
-use crate::poll::Subscribe;
+use crate::poll::Pollable;
 use anyhow::Result;
 use bytes::Bytes;
 
 /// Host trait for implementing the `wasi:io/streams.input-stream` resource: A
 /// bytestream which can be read from.
 #[async_trait::async_trait]
-pub trait HostInputStream: Subscribe {
+pub trait InputStream: Pollable {
     /// Reads up to `size` bytes, returning a buffer holding these bytes on
     /// success.
     ///
@@ -97,7 +97,7 @@ impl From<wasmtime::component::ResourceTableError> for StreamError {
 /// Host trait for implementing the `wasi:io/streams.output-stream` resource:
 /// A bytestream which can be written to.
 #[async_trait::async_trait]
-pub trait HostOutputStream: Subscribe {
+pub trait OutputStream: Pollable {
     /// Write bytes after obtaining a permit to write those bytes
     ///
     /// Prior to calling [`write`](Self::write) the caller must call
@@ -247,19 +247,19 @@ pub trait HostOutputStream: Subscribe {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for Box<dyn HostOutputStream> {
+impl Pollable for Box<dyn OutputStream> {
     async fn ready(&mut self) {
         (**self).ready().await
     }
 }
 
 #[async_trait::async_trait]
-impl Subscribe for Box<dyn HostInputStream> {
+impl Pollable for Box<dyn InputStream> {
     async fn ready(&mut self) {
         (**self).ready().await
     }
 }
 
-pub type InputStream = Box<dyn HostInputStream>;
+pub type DynInputStream = Box<dyn InputStream>;
 
-pub type OutputStream = Box<dyn HostOutputStream>;
+pub type DynOutputStream = Box<dyn OutputStream>;

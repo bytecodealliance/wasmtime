@@ -6,7 +6,7 @@ use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use wasmtime_wasi_io::poll::Subscribe;
+use wasmtime_wasi_io::poll::Pollable;
 
 use super::network::{SocketAddrCheck, SocketAddressFamily};
 
@@ -49,7 +49,7 @@ pub struct UdpSocket {
 }
 
 #[async_trait]
-impl Subscribe for UdpSocket {
+impl Pollable for UdpSocket {
     async fn ready(&mut self) {
         // None of the socket-level operations block natively
     }

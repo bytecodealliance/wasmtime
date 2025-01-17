@@ -4,11 +4,11 @@ use crate::bindings::{
     clocks::monotonic_clock::{self, Duration as WasiDuration, Instant},
     clocks::wall_clock::{self, Datetime},
 };
-use crate::{IoView, Pollable, WasiImpl, WasiView};
+use crate::{DynPollable, IoView, WasiImpl, WasiView};
 use cap_std::time::SystemTime;
 use std::time::Duration;
 use wasmtime::component::Resource;
-use wasmtime_wasi_io::poll::{subscribe, Subscribe};
+use wasmtime_wasi_io::poll::{subscribe, Pollable};
 
 impl TryFrom<SystemTime> for Datetime {
     type Error = anyhow::Error;
@@ -48,7 +48,7 @@ where
 fn subscribe_to_duration(
     table: &mut wasmtime::component::ResourceTable,
     duration: tokio::time::Duration,
-) -> anyhow::Result<Resource<Pollable>> {
+) -> anyhow::Result<Resource<DynPollable>> {
     let sleep = if duration.is_zero() {
         table.push(Deadline::Past)?
     } else if let Some(deadline) = tokio::time::Instant::now().checked_add(duration) {
@@ -76,7 +76,7 @@ where
         Ok(self.ctx().monotonic_clock.resolution())
     }
 
-    fn subscribe_instant(&mut self, when: Instant) -> anyhow::Result<Resource<Pollable>> {
+    fn subscribe_instant(&mut self, when: Instant) -> anyhow::Result<Resource<DynPollable>> {
         let clock_now = self.ctx().monotonic_clock.now();
         let duration = if when > clock_now {
             Duration::from_nanos(when - clock_now)
@@ -86,7 +86,10 @@ where
         subscribe_to_duration(&mut self.table(), duration)
     }
 
-    fn subscribe_duration(&mut self, duration: WasiDuration) -> anyhow::Result<Resource<Pollable>> {
+    fn subscribe_duration(
+        &mut self,
+        duration: WasiDuration,
+    ) -> anyhow::Result<Resource<DynPollable>> {
         subscribe_to_duration(&mut self.table(), Duration::from_nanos(duration))
     }
 }
@@ -98,7 +101,7 @@ enum Deadline {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for Deadline {
+impl Pollable for Deadline {
     async fn ready(&mut self) {
         match self {
             Deadline::Past => {}

@@ -4,23 +4,23 @@ use std::future::Future;
 use std::pin::Pin;
 use wasmtime::component::{Resource, ResourceTable};
 
-pub type PollableFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
-pub type MakeFuture = for<'a> fn(&'a mut dyn Any) -> PollableFuture<'a>;
-pub type ClosureFuture = Box<dyn Fn() -> PollableFuture<'static> + Send + 'static>;
+pub type DynFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;
+pub type MakeFuture = for<'a> fn(&'a mut dyn Any) -> DynFuture<'a>;
+pub type ClosureFuture = Box<dyn Fn() -> DynFuture<'static> + Send + 'static>;
 
-/// A host representation of the `wasi:io/poll.pollable` resource.
+/// The host representation of the `wasi:io/poll.pollable` resource.
 ///
 /// A pollable is not the same thing as a Rust Future: the same pollable may be used to
 /// repeatedly check for readiness of a given condition, e.g. if a stream is readable
 /// or writable. So, rather than containing a Future, which can only become Ready once, a
-/// Pollable contains a way to create a Future in each call to `poll`.
-pub struct Pollable {
+/// `DynPollable` contains a way to create a Future in each call to `poll`.
+pub struct DynPollable {
     pub(crate) index: u32,
     pub(crate) make_future: MakeFuture,
     pub(crate) remove_index_on_delete: Option<fn(&mut ResourceTable, u32) -> Result<()>>,
 }
 
-/// A trait used internally within a [`Pollable`] to create a `pollable`
+/// The trait used to implement [`DynPollable`] to create a `pollable`
 /// resource in `wasi:io/poll`.
 ///
 /// This trait is the internal implementation detail of any pollable resource in
@@ -42,11 +42,11 @@ pub struct Pollable {
 /// # mod tokio { pub mod time { pub use std::time::{Duration, Instant}; pub async fn sleep_until(_:
 /// Instant) {} } }
 /// use tokio::time::{self, Duration, Instant};
-/// use wasmtime_wasi_io::{IoView, poll::{Subscribe, subscribe, Pollable}, async_trait};
+/// use wasmtime_wasi_io::{IoView, poll::{Pollable, subscribe, DynPollable}, async_trait};
 /// use wasmtime::component::Resource;
 /// use wasmtime::Result;
 ///
-/// fn sleep(cx: &mut dyn IoView, dur: Duration) -> Result<Resource<Pollable>> {
+/// fn sleep(cx: &mut dyn IoView, dur: Duration) -> Result<Resource<DynPollable>> {
 ///     let end = Instant::now() + dur;
 ///     let sleep = MySleep { end };
 ///     let sleep_resource = cx.table().push(sleep)?;
@@ -58,14 +58,14 @@ pub struct Pollable {
 /// }
 ///
 /// #[async_trait]
-/// impl Subscribe for MySleep {
+/// impl Pollable for MySleep {
 ///     async fn ready(&mut self) {
 ///         tokio::time::sleep_until(self.end).await;
 ///     }
 /// }
 /// ```
 #[async_trait::async_trait]
-pub trait Subscribe: Send + 'static {
+pub trait Pollable: Send + 'static {
     /// An asynchronous function which resolves when this object's readiness
     /// operation is ready.
     ///
@@ -88,18 +88,21 @@ pub trait Subscribe: Send + 'static {
 /// resource is deleted. Otherwise the returned resource is considered a "child"
 /// of the given `resource` which means that the given resource cannot be
 /// deleted while the `pollable` is still alive.
-pub fn subscribe<T>(table: &mut ResourceTable, resource: Resource<T>) -> Result<Resource<Pollable>>
+pub fn subscribe<T>(
+    table: &mut ResourceTable,
+    resource: Resource<T>,
+) -> Result<Resource<DynPollable>>
 where
-    T: Subscribe,
+    T: Pollable,
 {
-    fn make_future<'a, T>(stream: &'a mut dyn Any) -> PollableFuture<'a>
+    fn make_future<'a, T>(stream: &'a mut dyn Any) -> DynFuture<'a>
     where
-        T: Subscribe,
+        T: Pollable,
     {
         stream.downcast_mut::<T>().unwrap().ready()
     }
 
-    let pollable = Pollable {
+    let pollable = DynPollable {
         index: resource.rep(),
         remove_index_on_delete: if resource.owned() {
             Some(|table, idx| {
