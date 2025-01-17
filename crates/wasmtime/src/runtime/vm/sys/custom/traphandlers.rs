@@ -1,6 +1,7 @@
 use crate::prelude::*;
 use crate::runtime::vm::VMContext;
 use core::mem;
+use core::ptr::NonNull;
 
 pub use crate::runtime::vm::sys::capi::{self, wasmtime_longjmp};
 
