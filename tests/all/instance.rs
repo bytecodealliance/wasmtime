@@ -1,6 +1,7 @@
 use wasmtime::*;
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn wrong_import_numbers() -> Result<()> {
     let mut store = Store::<()>::default();
     let module = Module::new(store.engine(), r#"(module (import "" "" (func)))"#)?;

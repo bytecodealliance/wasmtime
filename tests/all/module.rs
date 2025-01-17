@@ -300,6 +300,7 @@ fn tail_call_defaults() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn cross_engine_module_exports() -> Result<()> {
     let a_engine = Engine::default();
     let b_engine = Engine::default();

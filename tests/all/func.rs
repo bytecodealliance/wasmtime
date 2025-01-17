@@ -473,6 +473,7 @@ fn dtor_runs() {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn dtor_delayed() -> Result<()> {
     static HITS: AtomicUsize = AtomicUsize::new(0);
 
