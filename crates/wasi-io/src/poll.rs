@@ -70,7 +70,7 @@ pub trait Pollable: Send + 'static {
     ///
     /// This function is invoked as part of `poll` in `wasi:io/poll`. The
     /// meaning of when this function Returns depends on what object this
-    /// [`Subscribe`] is attached to. When the returned future resolves then the
+    /// [`Pollable`] is attached to. When the returned future resolves then the
     /// corresponding call to `wasi:io/poll` will return.
     ///
     /// Note that this method does not return an error. Returning an error
@@ -80,7 +80,7 @@ pub trait Pollable: Send + 'static {
     async fn ready(&mut self);
 }
 
-/// Creates a `pollable` resource which is subscribed to the provided
+/// Creates a `wasi:io/poll/pollable` resource which is subscribed to the provided
 /// `resource`.
 ///
 /// If `resource` is an owned resource then it will be deleted when the returned

@@ -8,8 +8,9 @@ pub use wasmtime_wasi_io::{IoImpl, IoView};
 /// This crate's WASI Host implementations depend on the contents of
 /// [`WasiCtx`]. The `T` type [`Store<T>`][`Store`] is defined in each
 /// embedding of Wasmtime. These implementations are connected to the
-/// [`Linker<T>`][`Linker`] by the [`add_to_linker_sync`] and
-/// [`add_to_linker_async`] functions.
+/// [`Linker<T>`][`Linker`] by the
+/// [`add_to_linker_sync`](crate::add_to_linker_sync) and
+/// [`add_to_linker_async`](crate::add_to_linker_async) functions.
 ///
 /// The [`WasiView`] trait implies the [`IoView`] trait, so each `T` must
 /// also contain a [`ResourceTable`] and impl `IoView`.
@@ -36,9 +37,8 @@ pub use wasmtime_wasi_io::{IoImpl, IoView};
 /// [`ResourceTable`]: wasmtime::component::ResourceTable
 ///
 pub trait WasiView: IoView {
-    /// Yields mutable access to the configuration used for this context.
-    ///
-    /// The returned type is created through [`WasiCtxBuilder`].
+    /// Yields mutable access to the [`WasiCtx`] configuration used for this
+    /// context.
     fn ctx(&mut self) -> &mut WasiCtx;
 }
 

@@ -110,7 +110,7 @@ impl Pollable for MemoryOutputPipe {
     async fn ready(&mut self) {}
 }
 
-/// Provides a [`HostInputStream`] impl from a [`tokio::io::AsyncRead`] impl
+/// Provides a [`InputStream`] impl from a [`tokio::io::AsyncRead`] impl
 pub struct AsyncReadStream {
     closed: bool,
     buffer: Option<Result<Bytes, StreamError>>,
@@ -119,7 +119,7 @@ pub struct AsyncReadStream {
 }
 
 impl AsyncReadStream {
-    /// Create a [`AsyncReadStream`]. In order to use the [`HostInputStream`] impl
+    /// Create a [`AsyncReadStream`]. In order to use the [`InputStream`] impl
     /// provided by this struct, the argument must impl [`tokio::io::AsyncRead`].
     pub fn new<T: tokio::io::AsyncRead + Send + Unpin + 'static>(mut reader: T) -> Self {
         let (sender, receiver) = mpsc::channel(1);
