@@ -20,6 +20,14 @@ mod match_loop;
 #[cfg(any(pulley_tail_calls, pulley_assume_llvm_makes_tail_calls))]
 mod tail_loop;
 
+// Polyfill `std::simd::i8x16` until it's stable.
+#[cfg(target_arch = "x86_64")]
+#[allow(non_camel_case_types)]
+type i8x16 = core::arch::x86_64::__m128i;
+#[cfg(not(target_arch = "x86_64"))]
+#[allow(non_camel_case_types)]
+struct i8x16(());
+
 const DEFAULT_STACK_SIZE: usize = 1 << 20; // 1 MiB
 
 /// A virtual machine for interpreting Pulley bytecode.
@@ -198,6 +206,11 @@ impl Vm {
     /// Returns the current `fp` register value.
     pub fn fp(&self) -> *mut u8 {
         self.state.fp
+    }
+
+    /// Returns the current `sp` register value.
+    pub fn sp(&self) -> *mut u8 {
+        self.state.sp
     }
 
     /// Returns the current `lr` register value.
@@ -465,6 +478,20 @@ impl XRegVal {
         u64::from_le(x)
     }
 
+    pub fn get_f32(&self) -> f32 {
+        let x = unsafe { self.0.u32 };
+        f32::from_bits(u32::from_le(x))
+    }
+
+    pub fn get_f64(&self) -> f64 {
+        let x = unsafe { self.0.u64 };
+        f64::from_bits(u64::from_le(x))
+    }
+
+    pub fn get_i8x16(&self) -> i8x16 {
+        todo!()
+    }
+
     pub fn get_ptr<T>(&self) -> *mut T {
         let ptr = unsafe { self.0.ptr };
         Strict::map_addr(ptr, |p| usize::from_le(p)).cast()
@@ -484,6 +511,18 @@ impl XRegVal {
 
     pub fn set_u64(&mut self, x: u64) {
         self.0.u64 = x.to_le();
+    }
+
+    pub fn set_f32(&mut self, x: f32) {
+        self.0.u32 = x.to_bits().to_le();
+    }
+
+    pub fn set_f64(&mut self, x: f64) {
+        self.0.u64 = x.to_bits().to_le();
+    }
+
+    pub fn set_i8x16(&mut self, _x: i8x16) {
+        todo!()
     }
 
     pub fn set_ptr<T>(&mut self, ptr: *mut T) {
@@ -548,12 +587,20 @@ impl FRegVal {
         f64::from_le_bytes(val.to_ne_bytes())
     }
 
+    pub fn get_i8x16(&self) -> i8x16 {
+        todo!("how does pulley do simd?")
+    }
+
     pub fn set_f32(&mut self, val: f32) {
         self.0.f32 = u32::from_ne_bytes(val.to_le_bytes());
     }
 
     pub fn set_f64(&mut self, val: f64) {
         self.0.f64 = u64::from_ne_bytes(val.to_le_bytes());
+    }
+
+    pub fn set_i8x16(&self, _val: i8x16) {
+        todo!("how does pulley do simd?")
     }
 }
 
@@ -722,6 +769,7 @@ pub struct MachineState {
     f_regs: [FRegVal; FReg::RANGE.end as usize],
     v_regs: [VRegVal; VReg::RANGE.end as usize],
     fp: *mut u8,
+    sp: *mut u8,
     lr: *mut u8,
     stack: Vec<u8>,
     done_reason: Option<DoneReason<()>>,
@@ -739,6 +787,7 @@ impl fmt::Debug for MachineState {
             stack: _,
             done_reason: _,
             fp: _,
+            sp: _,
             lr: _,
         } = self;
 
@@ -820,6 +869,7 @@ impl MachineState {
             stack,
             done_reason: None,
             fp: HOST_RETURN_ADDR,
+            sp: HOST_RETURN_ADDR,
             lr: HOST_RETURN_ADDR,
         };
 
