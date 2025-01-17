@@ -12,7 +12,7 @@ use crate::store::{StoreOpaque, Stored};
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
 use core::marker;
-use core::ptr::{self, NonNull};
+use core::ptr::NonNull;
 use wasmtime_environ::{component::*, EngineOrModuleTypeIndex};
 use wasmtime_environ::{EntityIndex, EntityType, Global, PrimaryMap, WasmValType};
 

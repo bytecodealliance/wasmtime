@@ -43,8 +43,6 @@
 
 use crate::vm::SendSyncPtr;
 use core::fmt;
-use core::marker;
-use core::num::NonZeroUsize;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicU64, AtomicUsize};
 use wasmtime_environ::VMSharedTypeIndex;

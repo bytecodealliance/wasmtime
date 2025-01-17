@@ -6,7 +6,7 @@ use super::{VMArrayCallNative, VMOpaqueContext};
 use crate::prelude::*;
 use crate::runtime::vm::{StoreBox, VMFuncRef, VmPtr};
 use core::any::Any;
-use core::ptr::{self, NonNull};
+use core::ptr::NonNull;
 use wasmtime_environ::{VMSharedTypeIndex, VM_ARRAY_CALL_HOST_FUNC_MAGIC};
 
 /// The `VM*Context` for array-call host functions.

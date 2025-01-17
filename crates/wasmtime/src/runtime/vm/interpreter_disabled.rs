@@ -40,9 +40,9 @@ impl InterpreterRef<'_> {
     pub unsafe fn call(
         self,
         _bytecode: NonNull<u8>,
-        _callee: *mut VMOpaqueContext,
-        _caller: *mut VMOpaqueContext,
-        _args_and_results: *mut [ValRaw],
+        _callee: NonNull<VMOpaqueContext>,
+        _caller: NonNull<VMOpaqueContext>,
+        _args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         match self.empty {}
     }
