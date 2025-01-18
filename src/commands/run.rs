@@ -466,10 +466,6 @@ impl RunCommand {
             }
             #[cfg(feature = "component-model")]
             CliLinker::Component(linker) => {
-                if self.invoke.is_some() {
-                    bail!("using `--invoke` with components is not supported");
-                }
-
                 let component = module.unwrap_component();
 
                 let command = wasmtime_wasi::bindings::Command::instantiate_async(
@@ -478,19 +474,26 @@ impl RunCommand {
                     linker,
                 )
                 .await?;
-                let result = command
-                    .wasi_cli_run()
-                    .call_run(&mut *store)
-                    .await
-                    .context("failed to invoke `run` function")
-                    .map_err(|e| self.handle_core_dump(&mut *store, e));
 
-                // Translate the `Result<(),()>` produced by wasm into a feigned
-                // explicit exit here with status 1 if `Err(())` is returned.
-                result.and_then(|wasm_result| match wasm_result {
-                    Ok(()) => Ok(()),
-                    Err(()) => Err(wasmtime_wasi::I32Exit(1).into()),
-                })
+                if let Some(invoke) = &self.invoke {
+                    let untyped_call =
+                        wasmtime::component::wasm_wave::untyped::UntypedFuncCall::parse(&invoke)?;
+                    todo!("lookup '{}' in component", untyped_call.name());
+                } else {
+                    let result = command
+                        .wasi_cli_run()
+                        .call_run(&mut *store)
+                        .await
+                        .context("failed to invoke `run` function")
+                        .map_err(|e| self.handle_core_dump(&mut *store, e));
+
+                    // Translate the `Result<(),()>` produced by wasm into a feigned
+                    // explicit exit here with status 1 if `Err(())` is returned.
+                    result.and_then(|wasm_result| match wasm_result {
+                        Ok(()) => Ok(()),
+                        Err(()) => Err(wasmtime_wasi::I32Exit(1).into()),
+                    })
+                }
             }
         };
         finish_epoch_handler(store);

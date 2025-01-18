@@ -1139,14 +1139,7 @@ mod test_programs {
 
     #[test]
     fn cli_hello_stdout() -> Result<()> {
-        run_wasmtime(&[
-            "run",
-            "-Wcomponent-model",
-            CLI_HELLO_STDOUT_COMPONENT,
-            "gussie",
-            "sparky",
-            "willa",
-        ])?;
+        run_wasmtime(&["run", "-Wcomponent-model", CLI_HELLO_STDOUT_COMPONENT])?;
         Ok(())
     }
 
@@ -2069,6 +2062,23 @@ after empty
             KEYVALUE_MAIN_COMPONENT,
         ])?;
         Ok(())
+    }
+
+    mod invoke {
+        use super::*;
+
+        #[test]
+        fn cli_hello_stdout() -> Result<()> {
+            println!("{CLI_HELLO_STDOUT_COMPONENT}");
+            run_wasmtime(&[
+                "run",
+                "-Wcomponent-model",
+                CLI_HELLO_STDOUT_COMPONENT,
+                "--invoke",
+                "run()",
+            ])?;
+            Ok(())
+        }
     }
 }
 
