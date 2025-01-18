@@ -651,14 +651,13 @@ impl Component {
     /// skip string lookups at runtime and instead use a more efficient
     /// index-based lookup.
     ///
-    /// This method takes a few arguments:
+    /// This method takes two arguments:
     ///
-    /// * `engine` - the engine that was used to compile this component.
     /// * `instance` - an optional "parent instance" for the export being looked
     ///   up. If this is `None` then the export is looked up on the root of the
     ///   component itself, and otherwise the export is looked up on the
     ///   `instance` specified. Note that `instance` must have come from a
-    ///   previous invocation of this method.
+    ///   previous invocation of this method, or from `Component::exports`.
     /// * `name` - the name of the export that's being looked up.
     ///
     /// If the export is located then two values are returned: a
@@ -729,6 +728,118 @@ impl Component {
                 index,
             },
         ))
+    }
+
+    /// Iterates over the exports of a component, yielding each exported
+    /// item's name, type, and export index.
+    ///
+    /// Returns `Some(impl Iterator...)` when the `instance` argument points
+    /// to a valid instance in the component, and `None` otherwise.
+    ///
+    /// The argument `instance` is an optional "parent instance" to iterate
+    /// over the exports of. If this is `None` then the exports iterated over
+    /// are from the root of the component itself, and otherwise the exports
+    /// iterated over are from the `instance` specified. Note that `instance`
+    /// must have come from a previous invocation of this method, or from
+    /// `Component::export_index`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use wasmtime::Engine;
+    /// use wasmtime::component::Component;
+    /// use wasmtime::component::types::ComponentItem;
+    ///
+    /// # fn main() -> wasmtime::Result<()> {
+    /// let engine = Engine::default();
+    /// let component = Component::new(
+    ///     &engine,
+    ///     r#"
+    ///         (component
+    ///             (core module $m
+    ///                 (func (export "f"))
+    ///                 (func (export "g"))
+    ///             )
+    ///             (core instance $i (instantiate $m))
+    ///             (func (export "f")
+    ///                 (canon lift (core func $i "f")))
+    ///             (func (export "g")
+    ///                 (canon lift (core func $i "g")))
+    ///             (component $c
+    ///                 (core module $m
+    ///                     (func (export "h"))
+    ///                 )
+    ///                 (core instance $i (instantiate $m))
+    ///                 (func (export "h")
+    ///                     (canon lift (core func $i "h")))
+    ///             )
+    ///             (instance (export "i") (instantiate $c))
+    ///         )
+    ///     "#,
+    /// )?;
+    ///
+    /// // Get all items exported by the component root:
+    /// let exports = component
+    ///     .exports(None)
+    ///     .expect("root")
+    ///     .collect::<Vec<_>>();
+    /// assert_eq!(exports.len(), 3);
+    /// assert_eq!(exports[0].0, "f");
+    /// assert!(matches!(exports[0].1, ComponentItem::ComponentFunc(_)));
+    /// assert_eq!(exports[1].0, "g");
+    /// assert_eq!(exports[2].0, "i");
+    /// assert!(matches!(exports[2].1, ComponentItem::ComponentInstance(_)));
+    /// let i = exports[2].2;
+    /// let i_exports = component
+    ///     .exports(Some(&i))
+    ///     .expect("export instance `i` looked up above")
+    ///     .collect::<Vec<_>>();
+    /// assert_eq!(i_exports.len(), 1);
+    /// assert_eq!(i_exports[0].0, "h");
+    /// assert!(matches!(i_exports[0].1, ComponentItem::ComponentFunc(_)));
+    ///
+    /// // ...
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    pub fn exports<'a>(
+        &'a self,
+        instance: Option<&'_ ComponentExportIndex>,
+    ) -> Option<impl Iterator<Item = (&'a str, types::ComponentItem, ComponentExportIndex)> + use<'a>>
+    {
+        let info = self.env_component();
+        let exports = match instance {
+            Some(idx) => {
+                if idx.id != self.inner.id {
+                    return None;
+                }
+                match &info.export_items[idx.index] {
+                    Export::Instance { exports, .. } => exports,
+                    _ => return None,
+                }
+            }
+            None => &info.exports,
+        };
+        Some(exports.raw_iter().map(|(name, index)| {
+            let index = *index;
+            let ty = match info.export_items[index] {
+                Export::Instance { ty, .. } => TypeDef::ComponentInstance(ty),
+                Export::LiftedFunction { ty, .. } => TypeDef::ComponentFunc(ty),
+                Export::ModuleStatic { ty, .. } | Export::ModuleImport { ty, .. } => {
+                    TypeDef::Module(ty)
+                }
+                Export::Type(ty) => ty,
+            };
+            let item = self.with_uninstantiated_instance_type(|instance| {
+                types::ComponentItem::from(&self.inner.engine, &ty, instance)
+            });
+            let export = ComponentExportIndex {
+                id: self.inner.id,
+                index,
+            };
+            (name.as_str(), item, export)
+        }))
     }
 
     pub(crate) fn lookup_export_index(
