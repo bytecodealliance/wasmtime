@@ -99,6 +99,10 @@ impl Config {
                 }
             }
         }
+
+        // These instructions are explicitly not expected to be exactly the same
+        // across engines. Don't fuzz them.
+        config.relaxed_simd_enabled = false;
     }
 
     /// Uses this configuration and the supplied source of data to generate
