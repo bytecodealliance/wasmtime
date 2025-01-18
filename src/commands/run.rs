@@ -478,6 +478,10 @@ impl RunCommand {
                 if let Some(invoke) = &self.invoke {
                     let untyped_call =
                         wasmtime::component::wasm_wave::untyped::UntypedFuncCall::parse(&invoke)?;
+                    println!(
+                        "component exports: {:?}",
+                        component.exports_rec(None).unwrap().collect::<Vec<_>>()
+                    );
                     todo!("lookup '{}' in component", untyped_call.name());
                 } else {
                     let result = command

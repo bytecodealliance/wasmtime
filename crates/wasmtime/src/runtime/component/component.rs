@@ -798,7 +798,6 @@ impl Component {
     /// assert_eq!(i_exports[0].0, "h");
     /// assert!(matches!(i_exports[0].1, ComponentItem::ComponentFunc(_)));
     ///
-    /// // ...
     /// # Ok(())
     /// # }
     /// ```
@@ -840,6 +839,92 @@ impl Component {
             };
             (name.as_str(), item, export)
         }))
+    }
+
+    /// Like `exports` but recursive: for each ComponentInstance yielded, so
+    /// will all of its contents.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use wasmtime::Engine;
+    /// use wasmtime::component::Component;
+    /// use wasmtime::component::types::ComponentItem;
+    ///
+    /// # fn main() -> wasmtime::Result<()> {
+    /// let engine = Engine::default();
+    /// let component = Component::new(
+    ///     &engine,
+    ///     r#"
+    ///         (component
+    ///             (core module $m
+    ///                 (func (export "f"))
+    ///                 (func (export "g"))
+    ///             )
+    ///             (core instance $i (instantiate $m))
+    ///             (func (export "f")
+    ///                 (canon lift (core func $i "f")))
+    ///             (func (export "g")
+    ///                 (canon lift (core func $i "g")))
+    ///             (component $c
+    ///                 (core module $m
+    ///                     (func (export "h"))
+    ///                 )
+    ///                 (core instance $i (instantiate $m))
+    ///                 (func (export "h")
+    ///                     (canon lift (core func $i "h")))
+    ///             )
+    ///             (instance (export "i") (instantiate $c))
+    ///         )
+    ///     "#,
+    /// )?;
+    ///
+    /// // Get all items exported by the component root:
+    /// let exports = component
+    ///     .exports_rec(None)
+    ///     .expect("root")
+    ///     .collect::<Vec<_>>();
+    /// assert_eq!(exports.len(), 4);
+    /// assert_eq!(exports[0].0, "f");
+    /// assert!(matches!(exports[0].1, ComponentItem::ComponentFunc(_)));
+    /// assert_eq!(exports[1].0, "g");
+    /// assert_eq!(exports[2].0, "i");
+    /// assert!(matches!(exports[2].1, ComponentItem::ComponentInstance(_)));
+    /// assert_eq!(exports[3].0, "i/h");
+    /// assert!(matches!(exports[3].1, ComponentItem::ComponentFunc(_)));
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// FIXME: want a fully qualified name datatype here instead of String, so
+    /// we can mechanically check the suffix rather than parsing the string.
+    pub fn exports_rec<'a>(
+        &'a self,
+        instance: Option<&'_ ComponentExportIndex>,
+    ) -> Option<impl Iterator<Item = (String, types::ComponentItem, ComponentExportIndex)> + use<'a>>
+    {
+        self.exports(instance).map(|i| {
+            i.flat_map(|(name, item, index)| {
+                let name = name.to_owned();
+                let base = std::iter::once((name.clone(), item.clone(), index.clone()));
+                match item {
+                    types::ComponentItem::ComponentInstance(_) => Box::new(
+                        base.chain(
+                            self.exports_rec(Some(&index))
+                                .unwrap()
+                                .map(move |(n, item, index)| (format!("{name}/{n}"), item, index)),
+                        ),
+                    )
+                        as Box<
+                            dyn Iterator<
+                                    Item = (String, types::ComponentItem, ComponentExportIndex),
+                                > + 'a,
+                        >,
+                    _ => Box::new(base),
+                }
+            })
+        })
     }
 
     pub(crate) fn lookup_export_index(
