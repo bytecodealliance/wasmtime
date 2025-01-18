@@ -885,43 +885,47 @@ impl Component {
     ///     .expect("root")
     ///     .collect::<Vec<_>>();
     /// assert_eq!(exports.len(), 4);
-    /// assert_eq!(exports[0].0, "f");
+    /// assert_eq!(exports[0].0, ["f"]);
     /// assert!(matches!(exports[0].1, ComponentItem::ComponentFunc(_)));
-    /// assert_eq!(exports[1].0, "g");
-    /// assert_eq!(exports[2].0, "i");
+    /// assert_eq!(exports[1].0, ["g"]);
+    /// assert_eq!(exports[2].0, ["i"]);
     /// assert!(matches!(exports[2].1, ComponentItem::ComponentInstance(_)));
-    /// assert_eq!(exports[3].0, "i/h");
+    /// assert_eq!(exports[3].0, ["i", "h"]);
     /// assert!(matches!(exports[3].1, ComponentItem::ComponentFunc(_)));
     ///
     /// # Ok(())
     /// # }
     /// ```
-    ///
-    /// FIXME: want a fully qualified name datatype here instead of String, so
-    /// we can mechanically check the suffix rather than parsing the string.
     pub fn exports_rec<'a>(
         &'a self,
         instance: Option<&'_ ComponentExportIndex>,
-    ) -> Option<impl Iterator<Item = (String, types::ComponentItem, ComponentExportIndex)> + use<'a>>
-    {
+    ) -> Option<
+        impl Iterator<Item = (Vec<String>, types::ComponentItem, ComponentExportIndex)> + use<'a>,
+    > {
         self.exports(instance).map(|i| {
             i.flat_map(|(name, item, index)| {
-                let name = name.to_owned();
+                let name = vec![name.to_owned()];
                 let base = std::iter::once((name.clone(), item.clone(), index.clone()));
                 match item {
-                    types::ComponentItem::ComponentInstance(_) => Box::new(
-                        base.chain(
-                            self.exports_rec(Some(&index))
-                                .unwrap()
-                                .map(move |(n, item, index)| (format!("{name}/{n}"), item, index)),
-                        ),
-                    )
+                    types::ComponentItem::ComponentInstance(_) => {
+                        Box::new(base.chain(self.exports_rec(Some(&index)).unwrap().map(
+                            move |(mut suffix, item, index)| {
+                                let mut name = name.clone();
+                                name.append(&mut suffix);
+                                (name, item, index)
+                            },
+                        )))
+                    }
+                    _ => Box::new(base)
                         as Box<
                             dyn Iterator<
-                                    Item = (String, types::ComponentItem, ComponentExportIndex),
+                                    Item = (
+                                        Vec<String>,
+                                        types::ComponentItem,
+                                        ComponentExportIndex,
+                                    ),
                                 > + 'a,
                         >,
-                    _ => Box::new(base),
                 }
             })
         })
