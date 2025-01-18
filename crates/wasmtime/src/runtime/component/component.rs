@@ -602,6 +602,7 @@ impl Component {
                 GlobalInitializer::LowerImport { .. }
                 | GlobalInitializer::ExtractMemory(_)
                 | GlobalInitializer::ExtractRealloc(_)
+                | GlobalInitializer::ExtractCallback(_)
                 | GlobalInitializer::ExtractPostReturn(_)
                 | GlobalInitializer::Resource(_) => {}
             }

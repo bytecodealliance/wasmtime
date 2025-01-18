@@ -135,6 +135,9 @@ pub(super) fn run(
     }
     inliner.result.exports = export_map;
     inliner.result.num_resource_tables = types.num_resource_tables();
+    inliner.result.num_future_tables = types.num_future_tables();
+    inliner.result.num_stream_tables = types.num_stream_tables();
+    inliner.result.num_error_context_tables = types.num_error_context_tables();
 
     Ok(inliner.result)
 }
@@ -667,6 +670,288 @@ impl<'a> Inliner<'a> {
                     .push((*ty, dfg::Trampoline::ResourceDrop(id)));
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
+            TaskBackpressure { func } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::TaskBackpressure {
+                        instance: frame.instance,
+                    },
+                ));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            TaskReturn { func } => {
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::TaskReturn));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            TaskWait {
+                func,
+                async_,
+                memory,
+            } => {
+                let (memory, _) = self.memory(frame, types, *memory);
+                let memory = self.result.memories.push(memory);
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::TaskWait {
+                        instance: frame.instance,
+                        async_: *async_,
+                        memory,
+                    },
+                ));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            TaskPoll {
+                func,
+                async_,
+                memory,
+            } => {
+                let (memory, _) = self.memory(frame, types, *memory);
+                let memory = self.result.memories.push(memory);
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::TaskPoll {
+                        instance: frame.instance,
+                        async_: *async_,
+                        memory,
+                    },
+                ));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            TaskYield { func, async_ } => {
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::TaskYield { async_: *async_ }));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            SubtaskDrop { func } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::SubtaskDrop {
+                        instance: frame.instance,
+                    },
+                ));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            StreamNew { ty, func } => {
+                let InterfaceType::Stream(ty) =
+                    types.defined_type(frame.translation.types_ref(), *ty)?
+                else {
+                    unreachable!()
+                };
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::StreamNew { ty }));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            StreamRead { ty, func, options } => {
+                let InterfaceType::Stream(ty) =
+                    types.defined_type(frame.translation.types_ref(), *ty)?
+                else {
+                    unreachable!()
+                };
+                let options = self.adapter_options(frame, types, options);
+                let options = self.canonical_options(options);
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::StreamRead { ty, options }));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            StreamWrite { ty, func, options } => {
+                let InterfaceType::Stream(ty) =
+                    types.defined_type(frame.translation.types_ref(), *ty)?
+                else {
+                    unreachable!()
+                };
+                let options = self.adapter_options(frame, types, options);
+                let options = self.canonical_options(options);
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::StreamWrite { ty, options }));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            StreamCancelRead { ty, func, async_ } => {
+                let InterfaceType::Stream(ty) =
+                    types.defined_type(frame.translation.types_ref(), *ty)?
+                else {
+                    unreachable!()
+                };
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::StreamCancelRead {
+                        ty,
+                        async_: *async_,
+                    },
+                ));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            StreamCancelWrite { ty, func, async_ } => {
+                let InterfaceType::Stream(ty) =
+                    types.defined_type(frame.translation.types_ref(), *ty)?
+                else {
+                    unreachable!()
+                };
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::StreamCancelWrite {
+                        ty,
+                        async_: *async_,
+                    },
+                ));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            StreamCloseReadable { ty, func } => {
+                let InterfaceType::Stream(ty) =
+                    types.defined_type(frame.translation.types_ref(), *ty)?
+                else {
+                    unreachable!()
+                };
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::StreamCloseReadable { ty }));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            StreamCloseWritable { ty, func } => {
+                let InterfaceType::Stream(ty) =
+                    types.defined_type(frame.translation.types_ref(), *ty)?
+                else {
+                    unreachable!()
+                };
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::StreamCloseWritable { ty }));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            FutureNew { ty, func } => {
+                let InterfaceType::Future(ty) =
+                    types.defined_type(frame.translation.types_ref(), *ty)?
+                else {
+                    unreachable!()
+                };
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::FutureNew { ty }));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            FutureRead { ty, func, options } => {
+                let InterfaceType::Future(ty) =
+                    types.defined_type(frame.translation.types_ref(), *ty)?
+                else {
+                    unreachable!()
+                };
+                let options = self.adapter_options(frame, types, options);
+                let options = self.canonical_options(options);
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::FutureRead { ty, options }));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            FutureWrite { ty, func, options } => {
+                let InterfaceType::Future(ty) =
+                    types.defined_type(frame.translation.types_ref(), *ty)?
+                else {
+                    unreachable!()
+                };
+                let options = self.adapter_options(frame, types, options);
+                let options = self.canonical_options(options);
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::FutureWrite { ty, options }));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            FutureCancelRead { ty, func, async_ } => {
+                let InterfaceType::Future(ty) =
+                    types.defined_type(frame.translation.types_ref(), *ty)?
+                else {
+                    unreachable!()
+                };
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::FutureCancelRead {
+                        ty,
+                        async_: *async_,
+                    },
+                ));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            FutureCancelWrite { ty, func, async_ } => {
+                let InterfaceType::Future(ty) =
+                    types.defined_type(frame.translation.types_ref(), *ty)?
+                else {
+                    unreachable!()
+                };
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::FutureCancelWrite {
+                        ty,
+                        async_: *async_,
+                    },
+                ));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            FutureCloseReadable { ty, func } => {
+                let InterfaceType::Future(ty) =
+                    types.defined_type(frame.translation.types_ref(), *ty)?
+                else {
+                    unreachable!()
+                };
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::FutureCloseReadable { ty }));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            FutureCloseWritable { ty, func } => {
+                let InterfaceType::Future(ty) =
+                    types.defined_type(frame.translation.types_ref(), *ty)?
+                else {
+                    unreachable!()
+                };
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::FutureCloseWritable { ty }));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            ErrorContextNew { func, options } => {
+                let ty = types.error_context_table_type()?;
+                let options = self.adapter_options(frame, types, options);
+                let options = self.canonical_options(options);
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::ErrorContextNew { ty, options }));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            ErrorContextDebugMessage { func, options } => {
+                let ty = types.error_context_table_type()?;
+                let options = self.adapter_options(frame, types, options);
+                let options = self.canonical_options(options);
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::ErrorContextDebugMessage { ty, options },
+                ));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            ErrorContextDrop { func } => {
+                let ty = types.error_context_table_type()?;
+                let index = self
+                    .result
+                    .trampolines
+                    .push((*func, dfg::Trampoline::ErrorContextDrop { ty }));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
 
             ModuleStatic(idx, ty) => {
                 frame.modules.push(ModuleDef::Static(*idx, *ty));
@@ -948,6 +1233,41 @@ impl<'a> Inliner<'a> {
         }
     }
 
+    fn memory(
+        &mut self,
+        frame: &InlinerFrame<'a>,
+        types: &ComponentTypesBuilder,
+        memory: MemoryIndex,
+    ) -> (dfg::CoreExport<MemoryIndex>, bool) {
+        let memory = frame.memories[memory].clone().map_index(|i| match i {
+            EntityIndex::Memory(i) => i,
+            _ => unreachable!(),
+        });
+        let memory64 = match &self.runtime_instances[memory.instance] {
+            InstanceModule::Static(idx) => match &memory.item {
+                ExportItem::Index(i) => {
+                    let ty = &self.nested_modules[*idx].module.memories[*i];
+                    match ty.idx_type {
+                        IndexType::I32 => false,
+                        IndexType::I64 => true,
+                    }
+                }
+                ExportItem::Name(_) => unreachable!(),
+            },
+            InstanceModule::Import(ty) => match &memory.item {
+                ExportItem::Name(name) => match types[*ty].exports[name] {
+                    EntityType::Memory(m) => match m.idx_type {
+                        IndexType::I32 => false,
+                        IndexType::I64 => true,
+                    },
+                    _ => unreachable!(),
+                },
+                ExportItem::Index(_) => unreachable!(),
+            },
+        };
+        (memory, memory64)
+    }
+
     /// Translates a `LocalCanonicalOptions` which indexes into the `frame`
     /// specified into a runtime representation.
     fn adapter_options(
@@ -956,38 +1276,15 @@ impl<'a> Inliner<'a> {
         types: &ComponentTypesBuilder,
         options: &LocalCanonicalOptions,
     ) -> AdapterOptions {
-        let memory = options.memory.map(|i| {
-            frame.memories[i].clone().map_index(|i| match i {
-                EntityIndex::Memory(i) => i,
-                _ => unreachable!(),
+        let (memory, memory64) = options
+            .memory
+            .map(|i| {
+                let (memory, memory64) = self.memory(frame, types, i);
+                (Some(memory), memory64)
             })
-        });
-        let memory64 = match &memory {
-            Some(memory) => match &self.runtime_instances[memory.instance] {
-                InstanceModule::Static(idx) => match &memory.item {
-                    ExportItem::Index(i) => {
-                        let ty = &self.nested_modules[*idx].module.memories[*i];
-                        match ty.idx_type {
-                            IndexType::I32 => false,
-                            IndexType::I64 => true,
-                        }
-                    }
-                    ExportItem::Name(_) => unreachable!(),
-                },
-                InstanceModule::Import(ty) => match &memory.item {
-                    ExportItem::Name(name) => match types[*ty].exports[name] {
-                        EntityType::Memory(m) => match m.idx_type {
-                            IndexType::I32 => false,
-                            IndexType::I64 => true,
-                        },
-                        _ => unreachable!(),
-                    },
-                    ExportItem::Index(_) => unreachable!(),
-                },
-            },
-            None => false,
-        };
+            .unwrap_or((None, false));
         let realloc = options.realloc.map(|i| frame.funcs[i].clone());
+        let callback = options.callback.map(|i| frame.funcs[i].clone());
         let post_return = options.post_return.map(|i| frame.funcs[i].clone());
         AdapterOptions {
             instance: frame.instance,
@@ -995,7 +1292,9 @@ impl<'a> Inliner<'a> {
             memory,
             memory64,
             realloc,
+            callback,
             post_return,
+            async_: options.async_,
         }
     }
 
@@ -1008,6 +1307,7 @@ impl<'a> Inliner<'a> {
             .memory
             .map(|export| self.result.memories.push(export));
         let realloc = options.realloc.map(|def| self.result.reallocs.push(def));
+        let callback = options.callback.map(|def| self.result.callbacks.push(def));
         let post_return = options
             .post_return
             .map(|def| self.result.post_returns.push(def));
@@ -1016,7 +1316,9 @@ impl<'a> Inliner<'a> {
             string_encoding: options.string_encoding,
             memory,
             realloc,
+            callback,
             post_return,
+            async_: options.async_,
         }
     }
 

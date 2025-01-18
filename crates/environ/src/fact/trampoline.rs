@@ -80,6 +80,19 @@ struct Compiler<'a, 'b> {
 }
 
 pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
+    match (adapter.lower.options.async_, adapter.lift.options.async_) {
+        (false, false) => {}
+        (true, true) => {
+            todo!()
+        }
+        (false, true) => {
+            todo!()
+        }
+        (true, false) => {
+            todo!()
+        }
+    }
+
     let lower_sig = module.types.signature(&adapter.lower, Context::Lower);
     let lift_sig = module.types.signature(&adapter.lift, Context::Lift);
     let ty = module
@@ -588,6 +601,12 @@ impl Compiler<'_, '_> {
 
             // TODO(#6696) - something nonzero, is 1 right?
             InterfaceType::Own(_) | InterfaceType::Borrow(_) => 1,
+
+            InterfaceType::Future(_)
+            | InterfaceType::Stream(_)
+            | InterfaceType::ErrorContext(_) => {
+                todo!()
+            }
         };
 
         match self.fuel.checked_sub(cost) {
@@ -622,6 +641,11 @@ impl Compiler<'_, '_> {
                     InterfaceType::Result(t) => self.translate_result(*t, src, dst_ty, dst),
                     InterfaceType::Own(t) => self.translate_own(*t, src, dst_ty, dst),
                     InterfaceType::Borrow(t) => self.translate_borrow(*t, src, dst_ty, dst),
+                    InterfaceType::Future(_)
+                    | InterfaceType::Stream(_)
+                    | InterfaceType::ErrorContext(_) => {
+                        todo!()
+                    }
                 }
             }
 

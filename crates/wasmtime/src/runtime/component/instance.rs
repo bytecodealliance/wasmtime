@@ -607,6 +607,11 @@ impl<'a> Instantiator<'a> {
                     self.extract_realloc(store.0, realloc)
                 }
 
+                GlobalInitializer::ExtractCallback(callback) => {
+                    _ = callback;
+                    todo!()
+                }
+
                 GlobalInitializer::ExtractPostReturn(post_return) => {
                     self.extract_post_return(store.0, post_return)
                 }

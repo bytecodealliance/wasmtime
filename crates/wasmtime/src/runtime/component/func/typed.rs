@@ -2484,6 +2484,9 @@ pub fn desc(ty: &InterfaceType) -> &'static str {
         InterfaceType::Enum(_) => "enum",
         InterfaceType::Own(_) => "owned resource",
         InterfaceType::Borrow(_) => "borrowed resource",
+        InterfaceType::Future(_) => "future",
+        InterfaceType::Stream(_) => "stream",
+        InterfaceType::ErrorContext(_) => "error-context",
     }
 }
 
