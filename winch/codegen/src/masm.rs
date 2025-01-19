@@ -57,6 +57,9 @@ pub(crate) enum RmwOp {
     Add,
     Sub,
     Xchg,
+    And,
+    Or,
+    Xor,
 }
 
 /// The direction to perform the memory move.

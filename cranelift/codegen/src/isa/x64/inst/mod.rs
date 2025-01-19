@@ -30,6 +30,7 @@ use args::*;
 // Instructions (top level): definition
 
 // `Inst` is defined inside ISLE as `MInst`. We publicly re-export it here.
+pub use super::lower::isle::generated_code::AtomicRmwSeqOp;
 pub use super::lower::isle::generated_code::MInst as Inst;
 
 /// Out-of-line data for return-calls, to keep the size of `Inst` down.
