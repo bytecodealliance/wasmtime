@@ -1929,22 +1929,27 @@ where
 
     fn visit_global_get(&mut self, global_index: u32) -> Self::Output {
         let index = GlobalIndex::from_u32(global_index);
-        let (ty, addr) = self.emit_get_global_addr(index)?;
+        let (ty, base, offset) = self.emit_get_global_addr(index)?;
+        let addr = self.masm.address_at_reg(base, offset)?;
         let dst = self.context.reg_for_type(ty, self.masm)?;
         self.masm.load(addr, writable!(dst), ty.try_into()?)?;
         self.context.stack.push(Val::reg(dst, ty));
+
+        self.context.free_reg(base);
 
         Ok(())
     }
 
     fn visit_global_set(&mut self, global_index: u32) -> Self::Output {
         let index = GlobalIndex::from_u32(global_index);
-        let (ty, addr) = self.emit_get_global_addr(index)?;
+        let (ty, base, offset) = self.emit_get_global_addr(index)?;
+        let addr = self.masm.address_at_reg(base, offset)?;
 
         let typed_reg = self.context.pop_to_reg(self.masm, None)?;
-        self.context.free_reg(typed_reg.reg);
         self.masm
             .store(typed_reg.reg.into(), addr, ty.try_into()?)?;
+        self.context.free_reg(typed_reg.reg);
+        self.context.free_reg(base);
 
         Ok(())
     }
