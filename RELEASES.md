@@ -1,6 +1,6 @@
 ## 29.0.0
 
-Unreleased.
+Released 2025-01-20.
 
 ### Added
 
