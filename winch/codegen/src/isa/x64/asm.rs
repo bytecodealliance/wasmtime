@@ -6,10 +6,12 @@ use crate::{
         DivKind, ExtendKind, IntCmpKind, MulWideKind, OperandSize, RemKind, RoundingMode,
         ShiftKind, VectorExtendKind,
     },
+    reg::writable,
+    x64::regs::scratch,
 };
 use cranelift_codegen::{
     ir::{
-        types, ConstantPool, ExternalName, LibCall, MemFlags, SourceLoc, TrapCode,
+        types, ConstantPool, ExternalName, LibCall, MemFlags, SourceLoc, TrapCode, Type,
         UserExternalNameRef,
     },
     isa::{
@@ -22,7 +24,7 @@ use cranelift_codegen::{
                 WritableXmm, Xmm, XmmMem, XmmMemAligned, XmmMemImm, CC,
             },
             encoding::rex::{encode_modrm, RexFlags},
-            settings as x64_settings, EmitInfo, EmitState, Inst,
+            settings as x64_settings, AtomicRmwSeqOp, EmitInfo, EmitState, Inst,
         },
     },
     settings, CallInfo, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState,
@@ -1144,6 +1146,33 @@ impl Assembler {
             operand: operand.into(),
             mem,
             dst_old: dst.map(Into::into),
+        });
+    }
+
+    pub fn atomic_rmw_seq(
+        &mut self,
+        addr: Address,
+        operand: Reg,
+        dst: WritableReg,
+        size: OperandSize,
+        flags: MemFlags,
+        op: AtomicRmwSeqOp,
+    ) {
+        assert!(addr.is_offset());
+        let mem = Self::to_synthetic_amode(
+            &addr,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            flags,
+        );
+        self.emit(Inst::AtomicRmwSeq {
+            ty: Type::int_with_byte_size(size.bytes() as _).unwrap(),
+            mem,
+            operand: operand.into(),
+            temp: writable!(scratch().into()),
+            dst_old: dst.map(Into::into),
+            op,
         });
     }
 

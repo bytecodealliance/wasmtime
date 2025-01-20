@@ -34,7 +34,7 @@ use cranelift_codegen::{
         unwind::UnwindInst,
         x64::{
             args::{ExtMode, FenceKind, CC},
-            settings as x64_settings,
+            settings as x64_settings, AtomicRmwSeqOp,
         },
     },
     settings, Final, MachBufferFinalized, MachLabel,
@@ -1412,6 +1412,19 @@ impl Masm for MacroAssembler {
             }
             RmwOp::Xchg => {
                 self.asm.xchg(addr, operand.to_reg(), operand, size, flags);
+            }
+            RmwOp::And | RmwOp::Or | RmwOp::Xor => {
+                let op = match op {
+                    RmwOp::And => AtomicRmwSeqOp::And,
+                    RmwOp::Or => AtomicRmwSeqOp::Or,
+                    RmwOp::Xor => AtomicRmwSeqOp::Xor,
+                    _ => unreachable!(
+                        "invalid op for atomic_rmw_seq, should be one of `or`, `and` or `xor`"
+                    ),
+                };
+
+                self.asm
+                    .atomic_rmw_seq(addr, operand.to_reg(), operand, size, flags, op);
             }
         }
 
