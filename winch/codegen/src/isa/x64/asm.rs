@@ -1196,6 +1196,32 @@ impl Assembler {
             dst_old: dst.map(Into::into),
         });
     }
+    pub fn cmpxchg(
+        &mut self,
+        addr: Address,
+        expected: Reg,
+        replacement: Reg,
+        dst: WritableReg,
+        size: OperandSize,
+        flags: MemFlags,
+    ) {
+        assert!(addr.is_offset());
+        let mem = Self::to_synthetic_amode(
+            &addr,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            flags,
+        );
+
+        self.emit(Inst::LockCmpxchg {
+            ty: Type::int_with_byte_size(size.bytes() as _).unwrap(),
+            replacement: replacement.into(),
+            expected: expected.into(),
+            mem,
+            dst_old: dst.map(Into::into),
+        })
+    }
 
     pub fn cmp_ir(&mut self, src1: Reg, imm: i32, size: OperandSize) {
         let imm = RegMemImm::imm(imm as u32);

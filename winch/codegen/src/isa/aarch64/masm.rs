@@ -928,6 +928,17 @@ impl Masm for MacroAssembler {
     ) -> Result<()> {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
+
+    fn atomic_cas(
+        &mut self,
+        _context: &mut CodeGenContext<Emission>,
+        _addr: Self::Address,
+        _size: OperandSize,
+        _flags: MemFlags,
+        _extend: Option<Extend<Zero>>,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
 }
 
 impl MacroAssembler {

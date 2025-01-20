@@ -1384,6 +1384,39 @@ where
 
         Ok(())
     }
+
+    pub(crate) fn emit_atomic_cmpxchg(
+        &mut self,
+        arg: &MemArg,
+        size: OperandSize,
+        extend: Option<Extend<Zero>>,
+    ) -> Result<()> {
+        // Emission for this instruction is a bit trickier. The address for the CAS is the 3rd from
+        // the top of the stack, and we must emit instruction to compute the actual address with
+        // `emit_compute_heap_address_align_checked`, while we still have access to self. However,
+        // some ISAs have requirements with regard to the registers used for some arguments, so we
+        // need to pass the context to the masm. To solve this issue, we pop the two first
+        // arguments from the stack, compute the address, push back the arguments, and hand over
+        // the control to masm. The implementer of `atomic_cas` can expect to find `expected` and
+        // `replacement` at the top the context's stack.
+
+        // pop the args
+        let replacement = self.context.pop_to_reg(self.masm, None)?;
+        let expected = self.context.pop_to_reg(self.masm, None)?;
+
+        if let Some(addr) = self.emit_compute_heap_address_align_checked(arg, size)? {
+            // push back the args
+            self.context.stack.push(expected.into());
+            self.context.stack.push(replacement.into());
+
+            let src = self.masm.address_at_reg(addr, 0)?;
+            self.masm
+                .atomic_cas(&mut self.context, src, size, UNTRUSTED_FLAGS, extend)?;
+
+            self.context.free_reg(addr);
+        }
+        Ok(())
+    }
 }
 
 /// Returns the index of the [`ControlStackFrame`] for the given

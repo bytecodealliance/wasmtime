@@ -1539,6 +1539,47 @@ impl Masm for MacroAssembler {
 
         Ok(())
     }
+
+    fn atomic_cas(
+        &mut self,
+        context: &mut CodeGenContext<Emission>,
+        addr: Self::Address,
+        size: OperandSize,
+        flags: MemFlags,
+        extend: Option<Extend<Zero>>,
+    ) -> Result<()> {
+        // `cmpxchg` expects `expected` to be in the `*a*` register.
+        // reserve rax for the expected argument.
+        let rax = context.reg(regs::rax(), self)?;
+
+        let replacement = context.pop_to_reg(self, None)?;
+
+        // mark `rax` as allocatable again.
+        context.free_reg(rax);
+        let expected = context.pop_to_reg(self, Some(regs::rax()))?;
+
+        self.asm.cmpxchg(
+            addr,
+            expected.reg,
+            replacement.reg,
+            writable!(expected.reg),
+            size,
+            flags,
+        );
+
+        if let Some(extend) = extend {
+            // We don't need to zero-extend from 32 to 64bits.
+            if !(extend.from_bits() == 32 && extend.to_bits() == 64) {
+                self.asm
+                    .movzx_rr(expected.reg.into(), writable!(expected.reg.into()), extend);
+            }
+        }
+
+        context.stack.push(expected.into());
+        context.free_reg(replacement);
+
+        Ok(())
+    }
 }
 
 impl MacroAssembler {
