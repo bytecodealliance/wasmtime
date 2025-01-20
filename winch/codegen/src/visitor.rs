@@ -9,9 +9,9 @@ use crate::codegen::{
     control_index, Callee, CodeGen, CodeGenError, ControlStackFrame, Emission, FnCall,
 };
 use crate::masm::{
-    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler, MemMoveDirection,
-    MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode, SPOffset, ShiftKind,
-    SplatKind, SplatLoadKind, TruncKind, VectorExtendKind,
+    DivKind, ExtendKind, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler,
+    MemMoveDirection, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode,
+    SPOffset, ShiftKind, SplatKind, SplatLoadKind, TruncKind, VectorExtendKind,
 };
 
 use crate::reg::{writable, Reg};
@@ -306,6 +306,14 @@ macro_rules! def_unsupported {
     (emit I64AtomicRmw16XchgU $($rest:tt)*) => {};
     (emit I64AtomicRmw32XchgU $($rest:tt)*) => {};
     (emit I64AtomicRmwXchg $($rest:tt)*) => {};
+    (emit I8x16ExtractLaneS $($rest:tt)*) => {};
+    (emit I8x16ExtractLaneU $($rest:tt)*) => {};
+    (emit I16x8ExtractLaneS $($rest:tt)*) => {};
+    (emit I16x8ExtractLaneU $($rest:tt)*) => {};
+    (emit I32x4ExtractLane $($rest:tt)*) => {};
+    (emit I64x2ExtractLane $($rest:tt)*) => {};
+    (emit F32x4ExtractLane $($rest:tt)*) => {};
+    (emit F64x2ExtractLane $($rest:tt)*) => {};
     (emit I32AtomicRmw8AndU $($rest:tt)*) => {};
     (emit I32AtomicRmw16AndU $($rest:tt)*) => {};
     (emit I32AtomicRmwAnd $($rest:tt)*) => {};
@@ -2790,6 +2798,66 @@ where
         self.context.stack.push(TypedReg::v128(lhs.into()).into());
         self.context.free_reg(rhs);
         Ok(())
+    }
+
+    fn visit_i8x16_extract_lane_s(&mut self, lane: u8) -> Self::Output {
+        self.context.extract_lane_op(
+            self.masm,
+            ExtractLaneKind::I8x16S,
+            |masm, src, dst, kind| masm.extract_lane(src, dst, lane, kind),
+        )
+    }
+
+    fn visit_i8x16_extract_lane_u(&mut self, lane: u8) -> Self::Output {
+        self.context.extract_lane_op(
+            self.masm,
+            ExtractLaneKind::I8x16U,
+            |masm, src, dst, kind| masm.extract_lane(src, dst, lane, kind),
+        )
+    }
+
+    fn visit_i16x8_extract_lane_s(&mut self, lane: u8) -> Self::Output {
+        self.context.extract_lane_op(
+            self.masm,
+            ExtractLaneKind::I16x8S,
+            |masm, src, dst, kind| masm.extract_lane(src, dst, lane, kind),
+        )
+    }
+
+    fn visit_i16x8_extract_lane_u(&mut self, lane: u8) -> Self::Output {
+        self.context.extract_lane_op(
+            self.masm,
+            ExtractLaneKind::I16x8U,
+            |masm, src, dst, kind| masm.extract_lane(src, dst, lane, kind),
+        )
+    }
+
+    fn visit_i32x4_extract_lane(&mut self, lane: u8) -> Self::Output {
+        self.context
+            .extract_lane_op(self.masm, ExtractLaneKind::I32x4, |masm, src, dst, kind| {
+                masm.extract_lane(src, dst, lane, kind)
+            })
+    }
+
+    fn visit_i64x2_extract_lane(&mut self, lane: u8) -> Self::Output {
+        self.context
+            .extract_lane_op(self.masm, ExtractLaneKind::I64x2, |masm, src, dst, kind| {
+                masm.extract_lane(src, dst, lane, kind)
+            })
+    }
+
+    fn visit_f32x4_extract_lane(&mut self, lane: u8) -> Self::Output {
+        self.context
+            .extract_lane_op(self.masm, ExtractLaneKind::F32x4, |masm, src, dst, kind| {
+                masm.extract_lane(src, dst, lane, kind)
+            })
+    }
+
+    fn visit_f64x2_extract_lane(&mut self, lane: u8) -> Self::Output {
+        self.context
+            .extract_lane_op(self.masm, ExtractLaneKind::F64x2, |masm, src, dst, kind| {
+                masm.extract_lane(src, dst, lane, kind)
+            })
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);

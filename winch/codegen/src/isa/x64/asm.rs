@@ -1644,6 +1644,24 @@ impl Assembler {
     pub fn fence(&mut self, kind: FenceKind) {
         self.emit(Inst::Fence { kind });
     }
+
+    /// Extract a value from `src` into `dst` (zero extended) determined by `lane`.
+    pub fn xmm_vpextr_rr(&mut self, dst: WritableReg, src: Reg, lane: u8, size: OperandSize) {
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpextrb,
+            OperandSize::S16 => AvxOpcode::Vpextrw,
+            OperandSize::S32 => AvxOpcode::Vpextrd,
+            OperandSize::S64 => AvxOpcode::Vpextrq,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmToGprImmVex {
+            op,
+            src: src.into(),
+            dst: dst.to_reg().into(),
+            imm: lane,
+        });
+    }
 }
 
 /// Captures the region in a MachBuffer where an add-with-immediate instruction would be emitted,
