@@ -2070,13 +2070,16 @@ after empty
         #[test]
         fn cli_hello_stdout() -> Result<()> {
             println!("{CLI_HELLO_STDOUT_COMPONENT}");
-            run_wasmtime(&[
+            let output = run_wasmtime(&[
                 "run",
                 "-Wcomponent-model",
-                CLI_HELLO_STDOUT_COMPONENT,
                 "--invoke",
                 "run()",
+                CLI_HELLO_STDOUT_COMPONENT,
             ])?;
+            // First this component prints "hello, world", then the invoke
+            // result is printed as "ok".
+            assert_eq!(output, "hello, world\nok\n");
             Ok(())
         }
     }
