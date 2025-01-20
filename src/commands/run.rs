@@ -515,7 +515,8 @@ impl RunCommand {
         };
 
         let invoke = self.invoke.as_ref().unwrap();
-        let untyped_call = UntypedFuncCall::parse(invoke)?;
+        let untyped_call = UntypedFuncCall::parse(invoke)
+            .with_context(|| format!("parsing invoke \"{invoke}\""))?;
         let name = untyped_call.name();
         let matches = component
             .exports_rec(None)
@@ -530,7 +531,9 @@ impl RunCommand {
         let (params, result_len, export) = match &matches[0] {
             (_names, ComponentItem::ComponentFunc(func), export) => {
                 let param_types = WasmFunc::params(func).collect::<Vec<_>>();
-                let params = untyped_call.to_wasm_params(&param_types)?;
+                let params = untyped_call.to_wasm_params(&param_types).with_context(|| {
+                    format!("while interpreting parameters in invoke \"{invoke}\"")
+                })?;
                 (params, func.results().len(), export)
             }
             (names, ty, _) => {
