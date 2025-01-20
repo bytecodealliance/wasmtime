@@ -4,7 +4,7 @@ use crate::{
     isa::{reg::Reg, CallingConvention},
     masm::{
         DivKind, ExtendKind, IntCmpKind, MulWideKind, OperandSize, RemKind, RoundingMode,
-        ShiftKind, VectorExtendKind,
+        ShiftKind, SignedExtend, UnsignedExtend, VectorExtendKind,
     },
     reg::writable,
     x64::regs::scratch,
@@ -147,11 +147,20 @@ impl From<ShiftKind> for CraneliftShiftKind {
 impl From<ExtendKind> for ExtMode {
     fn from(value: ExtendKind) -> Self {
         match value {
-            ExtendKind::I64Extend32U | ExtendKind::I64Extend32S => ExtMode::LQ,
-            ExtendKind::I32Extend8S | ExtendKind::I32Extend8U => ExtMode::BL,
-            ExtendKind::I32Extend16S | ExtendKind::I32Extend16U => ExtMode::WL,
-            ExtendKind::I64Extend8S | ExtendKind::I64Extend8U => ExtMode::BQ,
-            ExtendKind::I64Extend16S | ExtendKind::I64Extend16U => ExtMode::WQ,
+            ExtendKind::Signed(s) => match s {
+                SignedExtend::I32Extend8S => ExtMode::BL,
+                SignedExtend::I32Extend16S => ExtMode::WL,
+                SignedExtend::I64Extend8S => ExtMode::BQ,
+                SignedExtend::I64Extend16S => ExtMode::WQ,
+                SignedExtend::I64Extend32S => ExtMode::LQ,
+            },
+            ExtendKind::Unsigned(u) => match u {
+                UnsignedExtend::I32Extend8U => ExtMode::BL,
+                UnsignedExtend::I32Extend16U => ExtMode::WL,
+                UnsignedExtend::I64Extend8U => ExtMode::BQ,
+                UnsignedExtend::I64Extend16U => ExtMode::WQ,
+                UnsignedExtend::I64Extend32U => ExtMode::LQ,
+            },
         }
     }
 }

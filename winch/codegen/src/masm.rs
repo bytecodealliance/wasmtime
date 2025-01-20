@@ -199,61 +199,91 @@ pub(crate) enum ShiftKind {
 /// lowering to machine code.
 #[derive(Copy, Clone)]
 pub(crate) enum ExtendKind {
-    /// 8 to 32 bit signed extend.
-    I32Extend8S,
+    Signed(SignedExtend),
+    Unsigned(UnsignedExtend),
+}
+
+#[derive(Copy, Clone)]
+pub(crate) enum UnsignedExtend {
     /// 8 to 32 bit unsigned extend.
     I32Extend8U,
-
-    /// 16 to 32 bit signed extend.
-    I32Extend16S,
     /// 16 to 32 bit unsigned extend.
     I32Extend16U,
-
-    /// 8 to 64 bit signed extend.
-    I64Extend8S,
     /// 8 to 64 bit unsigned extend.
     I64Extend8U,
-
-    /// 16 to 64 bit signed extend.
-    I64Extend16S,
     /// 16 to 64 bit unsigned extend.
     I64Extend16U,
-
-    /// 32 to 64 bit signed extend.
-    I64Extend32S,
     /// 32 to 64 bit unsigned extend.
     I64Extend32U,
+}
+
+impl UnsignedExtend {
+    pub fn from_bits(&self) -> u8 {
+        match self {
+            Self::I32Extend8U | Self::I64Extend8U => 8,
+            Self::I32Extend16U | Self::I64Extend16U => 16,
+            Self::I64Extend32U => 32,
+        }
+    }
+
+    pub fn to_bits(&self) -> u8 {
+        match self {
+            Self::I32Extend8U | Self::I32Extend16U => 32,
+            Self::I64Extend8U | Self::I64Extend32U | Self::I64Extend16U => 64,
+        }
+    }
+}
+
+#[derive(Copy, Clone)]
+pub(crate) enum SignedExtend {
+    /// 8 to 32 bit signed extend.
+    I32Extend8S,
+    /// 16 to 32 bit signed extend.
+    I32Extend16S,
+    /// 8 to 64 bit signed extend.
+    I64Extend8S,
+    /// 16 to 64 bit signed extend.
+    I64Extend16S,
+    /// 32 to 64 bit signed extend.
+    I64Extend32S,
+}
+
+impl SignedExtend {
+    pub fn from_bits(&self) -> u8 {
+        match self {
+            Self::I32Extend8S | Self::I64Extend8S => 8,
+            Self::I32Extend16S | Self::I64Extend16S => 16,
+            Self::I64Extend32S => 32,
+        }
+    }
+
+    pub fn to_bits(&self) -> u8 {
+        match self {
+            Self::I32Extend8S | Self::I32Extend16S => 32,
+            Self::I64Extend8S | Self::I64Extend32S | Self::I64Extend16S => 64,
+        }
+    }
 }
 
 impl ExtendKind {
     pub fn signed(&self) -> bool {
         match self {
-            Self::I32Extend8S
-            | Self::I32Extend16S
-            | Self::I64Extend8S
-            | Self::I64Extend16S
-            | Self::I64Extend32S => true,
+            Self::Signed(_) => true,
             _ => false,
         }
     }
 
     pub fn from_bits(&self) -> u8 {
         match self {
-            Self::I64Extend32S | Self::I64Extend32U => 32,
-            Self::I32Extend8S | Self::I32Extend8U | Self::I64Extend8S | Self::I64Extend8U => 8,
-            Self::I32Extend16S | Self::I64Extend16S | Self::I32Extend16U | Self::I64Extend16U => 16,
+            Self::Signed(s) => s.from_bits(),
+            Self::Unsigned(u) => u.from_bits(),
         }
     }
 
     pub fn to_bits(&self) -> u8 {
         match self {
-            Self::I64Extend32S
-            | Self::I64Extend32U
-            | Self::I64Extend8S
-            | Self::I64Extend8U
-            | Self::I64Extend16S
-            | Self::I64Extend16U => 64,
-            Self::I32Extend8S | Self::I32Extend8U | Self::I32Extend16U | Self::I32Extend16S => 32,
+            Self::Signed(s) => s.to_bits(),
+            Self::Unsigned(u) => u.to_bits(),
         }
     }
 }
@@ -353,8 +383,8 @@ impl ExtractLaneKind {
 impl From<ExtractLaneKind> for ExtendKind {
     fn from(value: ExtractLaneKind) -> Self {
         match value {
-            ExtractLaneKind::I8x16S => Self::I32Extend8S,
-            ExtractLaneKind::I16x8S => Self::I32Extend16S,
+            ExtractLaneKind::I8x16S => Self::Signed(SignedExtend::I32Extend8S),
+            ExtractLaneKind::I16x8S => Self::Signed(SignedExtend::I32Extend16S),
             _ => unimplemented!(),
         }
     }
@@ -397,15 +427,16 @@ impl LoadKind {
 
     fn operand_size_for_scalar(extend_kind: &ExtendKind) -> OperandSize {
         match extend_kind {
-            ExtendKind::I32Extend8S
-            | ExtendKind::I32Extend8U
-            | ExtendKind::I64Extend8S
-            | ExtendKind::I64Extend8U => OperandSize::S8,
-            ExtendKind::I32Extend16S
-            | ExtendKind::I32Extend16U
-            | ExtendKind::I64Extend16U
-            | ExtendKind::I64Extend16S => OperandSize::S16,
-            ExtendKind::I64Extend32U | ExtendKind::I64Extend32S => OperandSize::S32,
+            ExtendKind::Signed(s) => match s {
+                SignedExtend::I64Extend8S | SignedExtend::I32Extend8S => OperandSize::S8,
+                SignedExtend::I64Extend16S | SignedExtend::I32Extend16S => OperandSize::S16,
+                SignedExtend::I64Extend32S => OperandSize::S32,
+            },
+            ExtendKind::Unsigned(u) => match u {
+                UnsignedExtend::I64Extend8U | UnsignedExtend::I32Extend8U => OperandSize::S8,
+                UnsignedExtend::I64Extend16U | UnsignedExtend::I32Extend16U => OperandSize::S16,
+                UnsignedExtend::I64Extend32U => OperandSize::S32,
+            },
         }
     }
 
@@ -1366,7 +1397,7 @@ pub(crate) trait MacroAssembler {
         size: OperandSize,
         op: RmwOp,
         flags: MemFlags,
-        extend: Option<ExtendKind>,
+        extend: Option<UnsignedExtend>,
     ) -> Result<()>;
 
     /// Extracts the scalar value from `src` in `lane` to `dst`.
