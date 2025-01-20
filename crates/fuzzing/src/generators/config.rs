@@ -386,7 +386,9 @@ impl Config {
             }
         }
 
-        if self.wasmtime.compiler_strategy == CompilerStrategy::Winch {
+        if self.wasmtime.compiler_strategy == CompilerStrategy::Winch
+            && self.module_config.config.simd_enabled
+        {
             // Keep AVX and AVX2 matching host support. Otherwise SIMD fuzzing
             // breaks because there is no support for SIMD without AVX and AVX2.
             unsafe {
