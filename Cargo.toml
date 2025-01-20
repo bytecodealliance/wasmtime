@@ -494,6 +494,7 @@ compile = ["cranelift"]
 run = [
   "dep:wasmtime-wasi",
   "wasmtime/runtime",
+  "wasmtime/wave",
   "dep:listenfd",
   "dep:wasi-common",
   "dep:tokio",
