@@ -386,6 +386,19 @@ impl Config {
             }
         }
 
+        if self.wasmtime.compiler_strategy == CompilerStrategy::Winch {
+            // Keep AVX and AVX2 matching host support. Otherwise SIMD fuzzing
+            // breaks because there is no support for SIMD without AVX and AVX2.
+            unsafe {
+                if std::is_x86_feature_detected!("avx") {
+                    cfg.cranelift_flag_enable("has_avx");
+                }
+                if std::is_x86_feature_detected!("avx2") {
+                    cfg.cranelift_flag_enable("has_avx2");
+                }
+            }
+        }
+
         return cfg;
     }
 
