@@ -467,45 +467,8 @@ impl RunCommand {
             #[cfg(feature = "component-model")]
             CliLinker::Component(linker) => {
                 let component = module.unwrap_component();
-
-                if let Some(invoke) = &self.invoke {
-                    let untyped_call =
-                        wasmtime::component::wasm_wave::untyped::UntypedFuncCall::parse(&invoke)?;
-                    let name = untyped_call.name();
-                    let matches = component
-                        .exports_rec(None)
-                        .expect("at root")
-                        .filter(|(names, _, _)| {
-                            names.last().expect("always at least one name") == name
-                        })
-                        .collect::<Vec<_>>();
-                    match matches.len()  {
-                        0 => bail!("No export named `{name}` in component."),
-                        1 => {}
-                        _ => bail!("Multiple exports named `{name}`: {matches:?}. FIXME: support some way to disambiguate names"),
-                    };
-                    use wasmtime::component::types::ComponentItem;
-                    use wasmtime::component::wasm_wave::wasm::{DisplayFuncResults, WasmFunc};
-                    use wasmtime::component::Val;
-                    let (params, result_len, export) = match &matches[0] {
-                        (_names, ComponentItem::ComponentFunc(func), export) => {
-                            let param_types = WasmFunc::params(func).collect::<Vec<_>>();
-                            let params = untyped_call.to_wasm_params(&param_types)?;
-                            (params, func.results().len(), export)
-                        }
-                        (names, ty, _) => {
-                            bail!("Cannot invoke export {names:?}: expected ComponentFunc, got type {ty:?}");
-                        }
-                    };
-
-                    let instance = linker.instantiate_async(&mut *store, component).await?;
-                    let func = instance
-                        .get_func(&mut *store, export)
-                        .expect("found export index");
-                    let mut results = vec![Val::Bool(false); result_len];
-                    func.call_async(&mut *store, &params, &mut results).await?;
-                    println!("{}", DisplayFuncResults(&results));
-                    Ok(())
+                if self.invoke.is_some() {
+                    self.invoke_component(&mut *store, component, linker).await
                 } else {
                     let command = wasmtime_wasi::bindings::Command::instantiate_async(
                         &mut *store,
@@ -533,6 +496,60 @@ impl RunCommand {
         finish_epoch_handler(store);
 
         result
+    }
+
+    #[cfg(feature = "component-model")]
+    async fn invoke_component(
+        &self,
+        store: &mut Store<Host>,
+        component: &wasmtime::component::Component,
+        linker: &mut wasmtime::component::Linker<Host>,
+    ) -> Result<()> {
+        use wasmtime::component::{
+            types::ComponentItem,
+            wasm_wave::{
+                untyped::UntypedFuncCall,
+                wasm::{DisplayFuncResults, WasmFunc},
+            },
+            Val,
+        };
+
+        let invoke = self.invoke.as_ref().unwrap();
+        let untyped_call = UntypedFuncCall::parse(invoke)?;
+        let name = untyped_call.name();
+        let matches = component
+            .exports_rec(None)
+            .expect("at root")
+            .filter(|(names, _, _)| names.last().expect("always at least one name") == name)
+            .collect::<Vec<_>>();
+        match matches.len()  {
+                        0 => bail!("No export named `{name}` in component."),
+                        1 => {}
+                        _ => bail!("Multiple exports named `{name}`: {matches:?}. FIXME: support some way to disambiguate names"),
+                    };
+        let (params, result_len, export) = match &matches[0] {
+            (_names, ComponentItem::ComponentFunc(func), export) => {
+                let param_types = WasmFunc::params(func).collect::<Vec<_>>();
+                let params = untyped_call.to_wasm_params(&param_types)?;
+                (params, func.results().len(), export)
+            }
+            (names, ty, _) => {
+                bail!("Cannot invoke export {names:?}: expected ComponentFunc, got type {ty:?}");
+            }
+        };
+
+        let instance = linker.instantiate_async(&mut *store, component).await?;
+
+        let func = instance
+            .get_func(&mut *store, export)
+            .expect("found export index");
+
+        let mut results = vec![Val::Bool(false); result_len];
+        func.call_async(&mut *store, &params, &mut results).await?;
+
+        println!("{}", DisplayFuncResults(&results));
+
+        Ok(())
     }
 
     async fn invoke_func(&self, store: &mut Store<Host>, func: Func) -> Result<()> {
