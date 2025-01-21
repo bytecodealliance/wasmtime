@@ -524,22 +524,17 @@ where
     }
 
     /// Loads the address of the given global.
-    pub fn emit_get_global_addr(
-        &mut self,
-        index: GlobalIndex,
-    ) -> Result<(WasmValType, M::Address)> {
+    pub fn emit_get_global_addr(&mut self, index: GlobalIndex) -> Result<(WasmValType, Reg, u32)> {
         let data = self.env.resolve_global(index);
 
-        let addr = if data.imported {
+        if data.imported {
             let global_base = self.masm.address_at_reg(vmctx!(M), data.offset)?;
-            let scratch = scratch!(M);
-            self.masm.load_ptr(global_base, writable!(scratch))?;
-            self.masm.address_at_reg(scratch, 0)?
+            let dst = self.context.any_gpr(self.masm)?;
+            self.masm.load_ptr(global_base, writable!(dst))?;
+            Ok((data.ty, dst, 0))
         } else {
-            self.masm.address_at_reg(vmctx!(M), data.offset)?
-        };
-
-        Ok((data.ty, addr))
+            Ok((data.ty, vmctx!(M), data.offset))
+        }
     }
 
     pub fn emit_lazy_init_funcref(&mut self, table_index: TableIndex) -> Result<()> {
