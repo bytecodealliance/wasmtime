@@ -685,6 +685,9 @@ pub fn wast_test(mut fuzz_config: generators::Config, test: generators::WastTest
                 .codegen_flag("has_avx2")
                 .is_some_and(|value| value == "false"))
     {
+        log::warn!(
+            "Skipping Wast test because Winch doesn't support SIMD tests with AVX or AVX2 disabled"
+        );
         return;
     }
 
