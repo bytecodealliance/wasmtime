@@ -1324,6 +1324,13 @@ user-id = 1
 user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
+[[publisher.wasi]]
+version = "0.14.0+wasi-0.2.3"
+when = "2025-01-10"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.wasi-common]]
 version = "28.0.0"
 when = "2024-12-20"
