@@ -217,6 +217,12 @@ pub(crate) enum UnsignedExtend {
     I64Extend32U,
 }
 
+impl From<UnsignedExtend> for ExtendKind {
+    fn from(value: UnsignedExtend) -> Self {
+        ExtendKind::Unsigned(value)
+    }
+}
+
 impl UnsignedExtend {
     pub fn from_bits(&self) -> u8 {
         match self {
@@ -246,6 +252,12 @@ pub(crate) enum SignedExtend {
     I64Extend16S,
     /// 32 to 64 bit signed extend.
     I64Extend32S,
+}
+
+impl From<SignedExtend> for ExtendKind {
+    fn from(value: SignedExtend) -> Self {
+        ExtendKind::Signed(value)
+    }
 }
 
 impl SignedExtend {
