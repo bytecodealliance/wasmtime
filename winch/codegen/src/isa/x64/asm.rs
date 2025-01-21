@@ -3,8 +3,8 @@
 use crate::{
     isa::{reg::Reg, CallingConvention},
     masm::{
-        DivKind, ExtendKind, IntCmpKind, MulWideKind, OperandSize, RemKind, RoundingMode,
-        ShiftKind, SignedExtend, UnsignedExtend, VectorExtendKind,
+        DivKind, Extend, ExtendKind, ExtendType, IntCmpKind, MulWideKind, OperandSize, RemKind,
+        RoundingMode, ShiftKind, Signed, VectorExtendKind, Zero,
     },
     reg::writable,
     x64::regs::scratch,
@@ -144,37 +144,24 @@ impl From<ShiftKind> for CraneliftShiftKind {
     }
 }
 
-impl From<ExtendKind> for ExtMode {
-    fn from(value: ExtendKind) -> Self {
+impl<T: ExtendType> From<Extend<T>> for ExtMode {
+    fn from(value: Extend<T>) -> Self {
         match value {
-            ExtendKind::Signed(s) => match s {
-                SignedExtend::I32Extend8S => ExtMode::BL,
-                SignedExtend::I32Extend16S => ExtMode::WL,
-                SignedExtend::I64Extend8S => ExtMode::BQ,
-                SignedExtend::I64Extend16S => ExtMode::WQ,
-                SignedExtend::I64Extend32S => ExtMode::LQ,
-            },
-            ExtendKind::Unsigned(u) => match u {
-                UnsignedExtend::I32Extend8U => ExtMode::BL,
-                UnsignedExtend::I32Extend16U => ExtMode::WL,
-                UnsignedExtend::I64Extend8U => ExtMode::BQ,
-                UnsignedExtend::I64Extend16U => ExtMode::WQ,
-                UnsignedExtend::I64Extend32U => ExtMode::LQ,
-            },
+            Extend::I32Extend8 => ExtMode::BL,
+            Extend::I32Extend16 => ExtMode::WL,
+            Extend::I64Extend8 => ExtMode::BQ,
+            Extend::I64Extend16 => ExtMode::WQ,
+            Extend::I64Extend32 => ExtMode::LQ,
+            Extend::__Kind(_) => unreachable!(),
         }
     }
 }
 
-impl From<OperandSize> for Option<ExtMode> {
-    // Helper for cases in which it's known that the widening must be
-    // to quadword.
-    fn from(value: OperandSize) -> Self {
-        use OperandSize::*;
+impl From<ExtendKind> for ExtMode {
+    fn from(value: ExtendKind) -> Self {
         match value {
-            S128 | S64 => None,
-            S8 => Some(ExtMode::BQ),
-            S16 => Some(ExtMode::WQ),
-            S32 => Some(ExtMode::LQ),
+            ExtendKind::Signed(s) => s.into(),
+            ExtendKind::Unsigned(u) => u.into(),
         }
     }
 }
@@ -350,7 +337,7 @@ impl Assembler {
         &mut self,
         addr: &Address,
         dst: WritableReg,
-        ext: Option<ExtMode>,
+        ext: Option<Extend<Zero>>,
         memflags: MemFlags,
     ) {
         let src = Self::to_synthetic_amode(
@@ -364,7 +351,7 @@ impl Assembler {
         if let Some(ext) = ext {
             let reg_mem = RegMem::mem(src);
             self.emit(Inst::MovzxRmR {
-                ext_mode: ext,
+                ext_mode: ext.into(),
                 src: GprMem::unwrap_new(reg_mem),
                 dst: dst.map(Into::into),
             });
@@ -381,7 +368,7 @@ impl Assembler {
         &mut self,
         addr: &Address,
         dst: WritableReg,
-        ext: impl Into<ExtMode>,
+        ext: Extend<Signed>,
         memflags: MemFlags,
     ) {
         let src = Self::to_synthetic_amode(
@@ -401,7 +388,7 @@ impl Assembler {
     }
 
     /// Register-to-register move with zero extension.
-    pub fn movzx_rr(&mut self, src: Reg, dst: WritableReg, kind: ExtendKind) {
+    pub fn movzx_rr(&mut self, src: Reg, dst: WritableReg, kind: Extend<Zero>) {
         self.emit(Inst::MovzxRmR {
             ext_mode: kind.into(),
             src: src.into(),
@@ -410,7 +397,7 @@ impl Assembler {
     }
 
     /// Register-to-register move with sign extension.
-    pub fn movsx_rr(&mut self, src: Reg, dst: WritableReg, kind: ExtendKind) {
+    pub fn movsx_rr(&mut self, src: Reg, dst: WritableReg, kind: Extend<Signed>) {
         self.emit(Inst::MovsxRmR {
             ext_mode: kind.into(),
             src: src.into(),

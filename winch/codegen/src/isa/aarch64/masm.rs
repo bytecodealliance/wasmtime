@@ -12,10 +12,10 @@ use crate::{
         CallingConvention,
     },
     masm::{
-        CalleeKind, DivKind, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I, IntCmpKind,
-        LoadKind, MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind,
-        RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, TrapCode, TruncKind,
-        UnsignedExtend,
+        CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I,
+        IntCmpKind, LoadKind, MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm,
+        RemKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, TrapCode,
+        TruncKind, Zero,
     },
     stack::TypedReg,
 };
@@ -914,7 +914,7 @@ impl Masm for MacroAssembler {
         _size: OperandSize,
         _op: RmwOp,
         _flags: MemFlags,
-        _extend: Option<UnsignedExtend>,
+        _extend: Option<Extend<Zero>>,
     ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }

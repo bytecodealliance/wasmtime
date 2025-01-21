@@ -9,9 +9,9 @@ use crate::codegen::{
     control_index, Callee, CodeGen, CodeGenError, ControlStackFrame, Emission, FnCall,
 };
 use crate::masm::{
-    DivKind, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler, MemMoveDirection,
-    MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode, SPOffset, ShiftKind,
-    SignedExtend, SplatKind, SplatLoadKind, TruncKind, UnsignedExtend, VectorExtendKind,
+    DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler,
+    MemMoveDirection, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode,
+    SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, TruncKind, VectorExtendKind, Zero,
 };
 
 use crate::reg::{writable, Reg};
@@ -1250,49 +1250,49 @@ where
 
     fn visit_i64_extend_i32_s(&mut self) -> Self::Output {
         self.context.unop(self.masm, &mut |masm, reg| {
-            masm.extend(writable!(reg), reg, SignedExtend::I64Extend32S.into())?;
+            masm.extend(writable!(reg), reg, Extend::<Signed>::I64Extend32.into())?;
             Ok(TypedReg::i64(reg))
         })
     }
 
     fn visit_i64_extend_i32_u(&mut self) -> Self::Output {
         self.context.unop(self.masm, &mut |masm, reg| {
-            masm.extend(writable!(reg), reg, UnsignedExtend::I64Extend32U.into())?;
+            masm.extend(writable!(reg), reg, Extend::<Zero>::I64Extend32.into())?;
             Ok(TypedReg::i64(reg))
         })
     }
 
     fn visit_i32_extend8_s(&mut self) -> Self::Output {
         self.context.unop(self.masm, &mut |masm, reg| {
-            masm.extend(writable!(reg), reg, SignedExtend::I32Extend8S.into())?;
+            masm.extend(writable!(reg), reg, Extend::<Signed>::I32Extend8.into())?;
             Ok(TypedReg::i32(reg))
         })
     }
 
     fn visit_i32_extend16_s(&mut self) -> Self::Output {
         self.context.unop(self.masm, &mut |masm, reg| {
-            masm.extend(writable!(reg), reg, SignedExtend::I32Extend16S.into())?;
+            masm.extend(writable!(reg), reg, Extend::<Signed>::I32Extend16.into())?;
             Ok(TypedReg::i32(reg))
         })
     }
 
     fn visit_i64_extend8_s(&mut self) -> Self::Output {
         self.context.unop(self.masm, &mut |masm, reg| {
-            masm.extend(writable!(reg), reg, SignedExtend::I64Extend8S.into())?;
+            masm.extend(writable!(reg), reg, Extend::<Signed>::I64Extend8.into())?;
             Ok(TypedReg::i64(reg))
         })
     }
 
     fn visit_i64_extend16_s(&mut self) -> Self::Output {
         self.context.unop(self.masm, &mut |masm, reg| {
-            masm.extend(writable!(reg), reg, SignedExtend::I64Extend16S.into())?;
+            masm.extend(writable!(reg), reg, Extend::<Signed>::I64Extend16.into())?;
             Ok(TypedReg::i64(reg))
         })
     }
 
     fn visit_i64_extend32_s(&mut self) -> Self::Output {
         self.context.unop(self.masm, &mut |masm, reg| {
-            masm.extend(writable!(reg), reg, SignedExtend::I64Extend32S.into())?;
+            masm.extend(writable!(reg), reg, Extend::<Signed>::I64Extend32.into())?;
             Ok(TypedReg::i64(reg))
         })
     }
@@ -1997,7 +1997,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
-            LoadKind::ScalarExtend(SignedExtend::I32Extend8S.into()),
+            LoadKind::ScalarExtend(Extend::<Signed>::I32Extend8.into()),
             MemOpKind::Normal,
         )
     }
@@ -2006,7 +2006,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
-            LoadKind::ScalarExtend(UnsignedExtend::I32Extend8U.into()),
+            LoadKind::ScalarExtend(Extend::<Zero>::I32Extend8.into()),
             MemOpKind::Normal,
         )
     }
@@ -2015,7 +2015,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
-            LoadKind::ScalarExtend(SignedExtend::I32Extend16S.into()),
+            LoadKind::ScalarExtend(Extend::<Signed>::I32Extend16.into()),
             MemOpKind::Normal,
         )
     }
@@ -2024,7 +2024,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
-            LoadKind::ScalarExtend(UnsignedExtend::I32Extend16U.into()),
+            LoadKind::ScalarExtend(Extend::<Zero>::I32Extend16.into()),
             MemOpKind::Normal,
         )
     }
@@ -2045,7 +2045,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(SignedExtend::I64Extend8S.into()),
+            LoadKind::ScalarExtend(Extend::<Signed>::I64Extend8.into()),
             MemOpKind::Normal,
         )
     }
@@ -2054,7 +2054,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(UnsignedExtend::I64Extend8U.into()),
+            LoadKind::ScalarExtend(Extend::<Zero>::I64Extend8.into()),
             MemOpKind::Normal,
         )
     }
@@ -2063,7 +2063,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(UnsignedExtend::I64Extend16U.into()),
+            LoadKind::ScalarExtend(Extend::<Zero>::I64Extend16.into()),
             MemOpKind::Normal,
         )
     }
@@ -2072,7 +2072,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(SignedExtend::I64Extend16S.into()),
+            LoadKind::ScalarExtend(Extend::<Signed>::I64Extend16.into()),
             MemOpKind::Normal,
         )
     }
@@ -2081,7 +2081,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(UnsignedExtend::I64Extend32U.into()),
+            LoadKind::ScalarExtend(Extend::<Zero>::I64Extend32.into()),
             MemOpKind::Normal,
         )
     }
@@ -2090,7 +2090,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(SignedExtend::I64Extend32S.into()),
+            LoadKind::ScalarExtend(Extend::<Signed>::I64Extend32.into()),
             MemOpKind::Normal,
         )
     }
@@ -2252,7 +2252,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
-            LoadKind::ScalarExtend(UnsignedExtend::I32Extend8U.into()),
+            LoadKind::ScalarExtend(Extend::<Zero>::I32Extend8.into()),
             MemOpKind::Atomic,
         )
     }
@@ -2261,7 +2261,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
-            LoadKind::ScalarExtend(UnsignedExtend::I32Extend16U.into()),
+            LoadKind::ScalarExtend(Extend::<Zero>::I32Extend16.into()),
             MemOpKind::Atomic,
         )
     }
@@ -2279,7 +2279,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(UnsignedExtend::I64Extend8U.into()),
+            LoadKind::ScalarExtend(Extend::<Zero>::I64Extend8.into()),
             MemOpKind::Atomic,
         )
     }
@@ -2288,7 +2288,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(UnsignedExtend::I64Extend16U.into()),
+            LoadKind::ScalarExtend(Extend::<Zero>::I64Extend16.into()),
             MemOpKind::Atomic,
         )
     }
@@ -2297,7 +2297,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(UnsignedExtend::I64Extend32U.into()),
+            LoadKind::ScalarExtend(Extend::<Zero>::I64Extend32.into()),
             MemOpKind::Atomic,
         )
     }
@@ -2344,7 +2344,7 @@ where
             &arg,
             RmwOp::Add,
             OperandSize::S8,
-            Some(UnsignedExtend::I32Extend8U),
+            Some(Extend::<Zero>::I32Extend8),
         )
     }
 
@@ -2353,7 +2353,7 @@ where
             &arg,
             RmwOp::Add,
             OperandSize::S16,
-            Some(UnsignedExtend::I32Extend16U),
+            Some(Extend::<Zero>::I32Extend16),
         )
     }
 
@@ -2366,7 +2366,7 @@ where
             &arg,
             RmwOp::Add,
             OperandSize::S8,
-            Some(UnsignedExtend::I64Extend8U),
+            Some(Extend::<Zero>::I64Extend8),
         )
     }
 
@@ -2375,7 +2375,7 @@ where
             &arg,
             RmwOp::Add,
             OperandSize::S16,
-            Some(UnsignedExtend::I64Extend16U),
+            Some(Extend::<Zero>::I64Extend16),
         )
     }
 
@@ -2384,7 +2384,7 @@ where
             &arg,
             RmwOp::Add,
             OperandSize::S32,
-            Some(UnsignedExtend::I64Extend32U),
+            Some(Extend::<Zero>::I64Extend32),
         )
     }
 
@@ -2397,7 +2397,7 @@ where
             &arg,
             RmwOp::Sub,
             OperandSize::S8,
-            Some(UnsignedExtend::I32Extend8U),
+            Some(Extend::<Zero>::I32Extend8),
         )
     }
     fn visit_i32_atomic_rmw16_sub_u(&mut self, arg: MemArg) -> Self::Output {
@@ -2405,7 +2405,7 @@ where
             &arg,
             RmwOp::Sub,
             OperandSize::S16,
-            Some(UnsignedExtend::I32Extend16U),
+            Some(Extend::<Zero>::I32Extend16),
         )
     }
 
@@ -2418,7 +2418,7 @@ where
             &arg,
             RmwOp::Sub,
             OperandSize::S8,
-            Some(UnsignedExtend::I64Extend8U),
+            Some(Extend::<Zero>::I64Extend8),
         )
     }
 
@@ -2427,7 +2427,7 @@ where
             &arg,
             RmwOp::Sub,
             OperandSize::S16,
-            Some(UnsignedExtend::I64Extend16U),
+            Some(Extend::<Zero>::I64Extend16),
         )
     }
 
@@ -2436,7 +2436,7 @@ where
             &arg,
             RmwOp::Sub,
             OperandSize::S32,
-            Some(UnsignedExtend::I64Extend32U),
+            Some(Extend::<Zero>::I64Extend32),
         )
     }
 
@@ -2449,7 +2449,7 @@ where
             &arg,
             RmwOp::Xchg,
             OperandSize::S8,
-            Some(UnsignedExtend::I32Extend8U),
+            Some(Extend::<Zero>::I32Extend8),
         )
     }
 
@@ -2458,7 +2458,7 @@ where
             &arg,
             RmwOp::Xchg,
             OperandSize::S16,
-            Some(UnsignedExtend::I32Extend16U),
+            Some(Extend::<Zero>::I32Extend16),
         )
     }
 
@@ -2471,7 +2471,7 @@ where
             &arg,
             RmwOp::Xchg,
             OperandSize::S8,
-            Some(UnsignedExtend::I64Extend8U),
+            Some(Extend::<Zero>::I64Extend8),
         )
     }
 
@@ -2480,7 +2480,7 @@ where
             &arg,
             RmwOp::Xchg,
             OperandSize::S16,
-            Some(UnsignedExtend::I64Extend16U),
+            Some(Extend::<Zero>::I64Extend16),
         )
     }
 
@@ -2489,7 +2489,7 @@ where
             &arg,
             RmwOp::Xchg,
             OperandSize::S32,
-            Some(UnsignedExtend::I64Extend32U),
+            Some(Extend::<Zero>::I64Extend32),
         )
     }
 
@@ -2502,7 +2502,7 @@ where
             &arg,
             RmwOp::And,
             OperandSize::S8,
-            Some(UnsignedExtend::I32Extend8U),
+            Some(Extend::<Zero>::I32Extend8),
         )
     }
 
@@ -2511,7 +2511,7 @@ where
             &arg,
             RmwOp::And,
             OperandSize::S16,
-            Some(UnsignedExtend::I32Extend16U),
+            Some(Extend::<Zero>::I32Extend16),
         )
     }
 
@@ -2524,7 +2524,7 @@ where
             &arg,
             RmwOp::And,
             OperandSize::S8,
-            Some(UnsignedExtend::I64Extend8U),
+            Some(Extend::<Zero>::I64Extend8),
         )
     }
 
@@ -2533,7 +2533,7 @@ where
             &arg,
             RmwOp::And,
             OperandSize::S16,
-            Some(UnsignedExtend::I64Extend16U),
+            Some(Extend::<Zero>::I64Extend16),
         )
     }
 
@@ -2542,7 +2542,7 @@ where
             &arg,
             RmwOp::And,
             OperandSize::S32,
-            Some(UnsignedExtend::I64Extend32U),
+            Some(Extend::<Zero>::I64Extend32),
         )
     }
 
@@ -2555,7 +2555,7 @@ where
             &arg,
             RmwOp::Or,
             OperandSize::S8,
-            Some(UnsignedExtend::I32Extend8U),
+            Some(Extend::<Zero>::I32Extend8),
         )
     }
 
@@ -2564,7 +2564,7 @@ where
             &arg,
             RmwOp::Or,
             OperandSize::S16,
-            Some(UnsignedExtend::I32Extend16U),
+            Some(Extend::<Zero>::I32Extend16),
         )
     }
 
@@ -2577,7 +2577,7 @@ where
             &arg,
             RmwOp::Or,
             OperandSize::S8,
-            Some(UnsignedExtend::I64Extend8U),
+            Some(Extend::<Zero>::I64Extend8),
         )
     }
 
@@ -2586,7 +2586,7 @@ where
             &arg,
             RmwOp::Or,
             OperandSize::S16,
-            Some(UnsignedExtend::I64Extend16U),
+            Some(Extend::<Zero>::I64Extend16),
         )
     }
 
@@ -2595,7 +2595,7 @@ where
             &arg,
             RmwOp::Or,
             OperandSize::S32,
-            Some(UnsignedExtend::I64Extend32U),
+            Some(Extend::<Zero>::I64Extend32),
         )
     }
 
@@ -2608,7 +2608,7 @@ where
             &arg,
             RmwOp::Xor,
             OperandSize::S8,
-            Some(UnsignedExtend::I32Extend8U),
+            Some(Extend::<Zero>::I32Extend8),
         )
     }
 
@@ -2617,7 +2617,7 @@ where
             &arg,
             RmwOp::Xor,
             OperandSize::S16,
-            Some(UnsignedExtend::I32Extend16U),
+            Some(Extend::<Zero>::I32Extend16),
         )
     }
 
@@ -2630,7 +2630,7 @@ where
             &arg,
             RmwOp::Xor,
             OperandSize::S8,
-            Some(UnsignedExtend::I64Extend8U),
+            Some(Extend::<Zero>::I64Extend8),
         )
     }
 
@@ -2639,7 +2639,7 @@ where
             &arg,
             RmwOp::Xor,
             OperandSize::S16,
-            Some(UnsignedExtend::I64Extend16U),
+            Some(Extend::<Zero>::I64Extend16),
         )
     }
 
@@ -2648,7 +2648,7 @@ where
             &arg,
             RmwOp::Xor,
             OperandSize::S32,
-            Some(UnsignedExtend::I64Extend32U),
+            Some(Extend::<Zero>::I64Extend32),
         )
     }
 

@@ -3,8 +3,8 @@ use crate::{
     codegen::BlockSig,
     isa::reg::{writable, Reg},
     masm::{
-        Imm, IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm, RmwOp, SPOffset,
-        ShiftKind, TrapCode, UnsignedExtend, UNTRUSTED_FLAGS,
+        Extend, Imm, IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm, RmwOp,
+        SPOffset, ShiftKind, TrapCode, Zero, UNTRUSTED_FLAGS,
     },
     stack::TypedReg,
 };
@@ -1368,7 +1368,7 @@ where
         arg: &MemArg,
         op: RmwOp,
         size: OperandSize,
-        extend: Option<UnsignedExtend>,
+        extend: Option<Extend<Zero>>,
     ) -> Result<()> {
         // We need to pop-push the operand to compute the address before passing control over to
         // masm, because some architectures may have specific requirements for the registers used
