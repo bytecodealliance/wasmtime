@@ -21,4 +21,4 @@ futures = { workspace = true, default-features = false, features = ['alloc'] }
 url = { workspace = true }
 sha2 = "0.10.2"
 base64 = "0.21.0"
-wasip2 = { version = "0.14.0", package = 'wasi' }
+wasip2 = { version = "0.13.0", package = 'wasi' }
