@@ -1504,7 +1504,7 @@ checksum = "c85e1d9ab2eadba7e5040d4e09cbd6d072b76a557ad64e797c2cb9d4da21d7e4"
 dependencies = [
  "cfg-if",
  "libc",
- "wasi",
+ "wasi 0.11.0+wasi-snapshot-preview1",
 ]
 
 [[package]]
@@ -2135,7 +2135,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4a650543ca06a924e8b371db273b2756685faae30f8487da1b56505a8f78b0c"
 dependencies = [
  "libc",
- "wasi",
+ "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.48.0",
 ]
 
@@ -3196,7 +3196,8 @@ dependencies = [
  "libc",
  "sha2",
  "url",
- "wasi",
+ "wasi 0.11.0+wasi-snapshot-preview1",
+ "wasi 0.13.3+wasi-0.2.2",
  "wasi-nn",
  "wit-bindgen",
 ]
@@ -3663,6 +3664,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9c8d87e72b64a3b4db28d11ce29237c246188f4f51057d65a7eab63b7987e423"
 
 [[package]]
+name = "wasi"
+version = "0.13.3+wasi-0.2.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "26816d2e1a4a36a2940b96c5296ce403917633dff8f3440e9b236ed6f6bacad2"
+dependencies = [
+ "wit-bindgen-rt 0.33.0",
+]
+
+[[package]]
 name = "wasi-common"
 version = "29.0.0"
 dependencies = [
@@ -3708,7 +3718,7 @@ dependencies = [
  "bitflags 2.6.0",
  "byte-array-literals",
  "object",
- "wasi",
+ "wasi 0.11.0+wasi-snapshot-preview1",
  "wasm-encoder 0.221.2",
  "wit-bindgen-rust-macro",
 ]
@@ -4969,7 +4979,7 @@ version = "0.35.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c966692b6d8c4bb3c1aee3313e0930f44457a5763cfffb666f814506124e4691"
 dependencies = [
- "wit-bindgen-rt",
+ "wit-bindgen-rt 0.35.0",
  "wit-bindgen-rust-macro",
 ]
 
@@ -4982,6 +4992,15 @@ dependencies = [
  "anyhow",
  "heck 0.5.0",
  "wit-parser 0.220.0",
+]
+
+[[package]]
+name = "wit-bindgen-rt"
+version = "0.33.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3268f3d866458b787f390cf61f4bbb563b922d091359f9608842999eaee3943c"
+dependencies = [
+ "bitflags 2.6.0",
 ]
 
 [[package]]
