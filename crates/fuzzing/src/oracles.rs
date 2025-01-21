@@ -21,7 +21,7 @@ mod stacks;
 
 use self::diff_wasmtime::WasmtimeInstance;
 use self::engine::{DiffEngine, DiffInstance};
-use crate::generators::{self, DiffValue, DiffValueType};
+use crate::generators::{self, CompilerStrategy, DiffValue, DiffValueType};
 use crate::single_module_fuzzer::KnownValid;
 use arbitrary::Arbitrary;
 pub use stacks::check_stacks;
@@ -669,6 +669,22 @@ pub fn wast_test(mut fuzz_config: generators::Config, test: generators::WastTest
     // test is supposed to pass.
     let wast_config = fuzz_config.make_wast_test_compliant(test);
     if test.should_fail(&wast_config) {
+        return;
+    }
+
+    // Winch requires AVX and AVX2 for SIMD tests to pass so don't run the test
+    // if either isn't enabled.
+    if fuzz_config.wasmtime.compiler_strategy == CompilerStrategy::Winch
+        && test.config.simd()
+        && (fuzz_config
+            .wasmtime
+            .codegen_flag("has_avx")
+            .is_some_and(|value| value == "false")
+            || fuzz_config
+                .wasmtime
+                .codegen_flag("has_avx2")
+                .is_some_and(|value| value == "false"))
+    {
         return;
     }
 

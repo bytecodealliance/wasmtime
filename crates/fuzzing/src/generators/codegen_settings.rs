@@ -31,6 +31,15 @@ impl CodegenSettings {
             }
         }
     }
+
+    /// Returns the flags used for codegen.
+    pub(crate) fn flags(&self) -> &[(String, String)] {
+        if let Self::Target { flags, .. } = self {
+            flags
+        } else {
+            &[]
+        }
+    }
 }
 
 impl<'a> Arbitrary<'a> for CodegenSettings {

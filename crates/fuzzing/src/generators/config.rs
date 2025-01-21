@@ -386,21 +386,6 @@ impl Config {
             }
         }
 
-        if self.wasmtime.compiler_strategy == CompilerStrategy::Winch
-            && self.module_config.config.simd_enabled
-        {
-            // Keep AVX and AVX2 matching host support. Otherwise SIMD fuzzing
-            // breaks because there is no support for SIMD without AVX and AVX2.
-            unsafe {
-                if std::is_x86_feature_detected!("avx") {
-                    cfg.cranelift_flag_enable("has_avx");
-                }
-                if std::is_x86_feature_detected!("avx2") {
-                    cfg.cranelift_flag_enable("has_avx2");
-                }
-            }
-        }
-
         return cfg;
     }
 
@@ -698,6 +683,17 @@ impl WasmtimeConfig {
         self.make_internally_consistent();
 
         Ok(())
+    }
+
+    /// Returns the codegen flag value, if any, for `name`.
+    pub(crate) fn codegen_flag(&self, name: &str) -> Option<&str> {
+        self.codegen.flags().iter().find_map(|(n, value)| {
+            if n == name {
+                Some(value.as_str())
+            } else {
+                None
+            }
+        })
     }
 
     /// Helper to switch `MemoryConfig::CustomUnaligned` to
