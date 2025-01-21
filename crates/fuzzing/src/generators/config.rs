@@ -567,11 +567,20 @@ impl WasmtimeConfig {
         match self.compiler_strategy {
             CompilerStrategy::CraneliftNative => {}
 
-            // Winch doesn't support the same set of wasm proposal as Cranelift
-            // at this time, so if winch is selected be sure to disable wasm
-            // proposals in `Config` to ensure that Winch can compile the
-            // module that wasm-smith generates.
             CompilerStrategy::Winch => {
+                // Winch is not complete on non-x64 targets, so just abandon this test
+                // case. We don't want to force Cranelift because we change what module
+                // config features are enabled based on the compiler strategy, and we
+                // don't want to make the same fuzz input DNA generate different test
+                // cases on different targets.
+                if cfg!(not(target_arch = "x86_64")) {
+                    return Err(arbitrary::Error::IncorrectFormat);
+                }
+
+                // Winch doesn't support the same set of wasm proposal as Cranelift
+                // at this time, so if winch is selected be sure to disable wasm
+                // proposals in `Config` to ensure that Winch can compile the
+                // module that wasm-smith generates.
                 config.simd_enabled = false;
                 config.relaxed_simd_enabled = false;
                 config.gc_enabled = false;
