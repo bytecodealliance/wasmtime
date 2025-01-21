@@ -909,8 +909,8 @@ impl Masm for MacroAssembler {
 
     fn atomic_rmw(
         &mut self,
+        _context: &mut CodeGenContext<Emission>,
         _addr: Self::Address,
-        _operand: WritableReg,
         _size: OperandSize,
         _op: RmwOp,
         _flags: MemFlags,

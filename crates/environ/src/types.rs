@@ -221,6 +221,17 @@ impl WasmValType {
             | WasmValType::V128 => *self,
         }
     }
+
+    /// Attempt to build a `WasmValType` with the passed number of bits.
+    ///
+    /// Panics if the number of bits doesn't map to a WASM int type.
+    pub fn int_from_bits(bits: u8) -> Self {
+        match bits {
+            32 => Self::I32,
+            64 => Self::I64,
+            size => panic!("invaid int bits for WasmValType: {size}"),
+        }
+    }
 }
 
 /// WebAssembly reference type -- equivalent of `wasmparser`'s RefType

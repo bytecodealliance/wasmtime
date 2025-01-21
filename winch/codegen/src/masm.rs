@@ -1407,8 +1407,8 @@ pub(crate) trait MacroAssembler {
     /// The value *before* the operation was performed is written back to the `operand` register.
     fn atomic_rmw(
         &mut self,
+        context: &mut CodeGenContext<Emission>,
         addr: Self::Address,
-        operand: WritableReg,
         size: OperandSize,
         op: RmwOp,
         flags: MemFlags,
