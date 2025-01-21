@@ -489,6 +489,14 @@ start = "2022-11-21"
 end = "2025-07-30"
 notes = "The Bytecode Alliance is the author of this crate."
 
+[[wildcard-audits.wasmtime-math]]
+who = "Saúl Cabrera <saulecabrera@gmail.com>"
+criteria = "safe-to-deploy"
+user-id = 73222 # wasmtime-publish
+start = "2025-01-20"
+end = "2026-01-21"
+notes = "The Bytecode Alliance is the author of this crate."
+
 [[wildcard-audits.wasmtime-runtime]]
 who = "Bobby Holley <bobbyholley@gmail.com>"
 criteria = "safe-to-deploy"

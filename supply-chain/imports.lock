@@ -385,6 +385,10 @@ audited_as = "27.0.0"
 version = "30.0.0"
 audited_as = "28.0.0"
 
+[[unpublished.wasmtime-math]]
+version = "30.0.0"
+audited_as = "29.0.0"
+
 [[unpublished.wasmtime-slab]]
 version = "28.0.0"
 audited_as = "26.0.1"
@@ -1484,6 +1488,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-jit-icache-coherence]]
 version = "28.0.0"
 when = "2024-12-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-math]]
+version = "29.0.0"
+when = "2025-01-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
