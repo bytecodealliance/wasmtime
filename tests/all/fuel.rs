@@ -259,7 +259,7 @@ fn get_fuel_clamps_at_zero(config: &mut Config) -> Result<()> {
     Ok(())
 }
 
-#[wasmtime_test(strategies(not(Cranelift)))]
+#[wasmtime_test(strategies(only(Winch)))]
 #[cfg_attr(miri, ignore)]
 fn ensure_stack_alignment(config: &mut Config) -> Result<()> {
     config.consume_fuel(true);
