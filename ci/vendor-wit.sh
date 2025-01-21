@@ -19,18 +19,18 @@ make_vendor() {
   mkdir -p $path
 
   for package in $packages; do
-    IFS='@' read -r repo tag <<< "$package"
-    mkdir -p $path/$package
+    IFS='@' read -r repo tag subdir <<< "$package"
+    mkdir -p "$path/$package"
     cached_extracted_dir="$cache_dir/$repo-$tag"
 
     if [[ ! -d $cached_extracted_dir ]]; then
       mkdir -p $cached_extracted_dir
       curl -sL https://github.com/WebAssembly/wasi-$repo/archive/$tag.tar.gz | \
         tar xzf - --strip-components=1 -C $cached_extracted_dir
-      rm -rf $cached_extracted_dir/wit/deps*
+      rm -rf $cached_extracted_dir/${subdir:-"wit"}/deps*
     fi
 
-    cp -r $cached_extracted_dir/wit/* $path/$package
+    cp -r $cached_extracted_dir/${subdir:-"wit"}/* $path/$package
   done
 }
 
