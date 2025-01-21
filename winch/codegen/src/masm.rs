@@ -240,7 +240,7 @@ impl From<Extend<Zero>> for ExtendKind {
 }
 
 impl<T: ExtendType> Extend<T> {
-    pub fn src_size(&self) -> OperandSize {
+    pub fn from_size(&self) -> OperandSize {
         match self {
             Extend::I32Extend8 | Extend::I64Extend8 => OperandSize::S8,
             Extend::I32Extend16 | Extend::I64Extend16 => OperandSize::S16,
@@ -249,7 +249,7 @@ impl<T: ExtendType> Extend<T> {
         }
     }
 
-    pub fn dst_size(&self) -> OperandSize {
+    pub fn to_size(&self) -> OperandSize {
         match self {
             Extend::I32Extend8 | Extend::I32Extend16 => OperandSize::S32,
             Extend::I64Extend8 | Extend::I64Extend16 | Extend::I64Extend32 => OperandSize::S64,
@@ -258,11 +258,11 @@ impl<T: ExtendType> Extend<T> {
     }
 
     pub fn from_bits(&self) -> u8 {
-        self.src_size().num_bits()
+        self.from_size().num_bits()
     }
 
     pub fn to_bits(&self) -> u8 {
-        self.dst_size().num_bits()
+        self.to_size().num_bits()
     }
 }
 
@@ -434,8 +434,8 @@ impl LoadKind {
 
     fn operand_size_for_scalar(extend_kind: &ExtendKind) -> OperandSize {
         match extend_kind {
-            ExtendKind::Signed(s) => s.src_size(),
-            ExtendKind::Unsigned(u) => u.src_size(),
+            ExtendKind::Signed(s) => s.from_size(),
+            ExtendKind::Unsigned(u) => u.from_size(),
         }
     }
 
