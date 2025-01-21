@@ -404,6 +404,7 @@ impl ImportAlloc {
             ImportAlloc::GetPreopenPath { cur, nth, alloc } => {
                 if align == 1 {
                     let real_alloc = *nth == *cur;
+                    *cur += 1;
                     if real_alloc {
                         alloc.alloc(align, size)
                     } else {

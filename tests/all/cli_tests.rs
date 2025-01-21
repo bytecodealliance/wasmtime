@@ -2059,6 +2059,18 @@ after empty
         ])?;
         Ok(())
     }
+
+    #[test]
+    fn cli_multiple_preopens() -> Result<()> {
+        run_wasmtime(&[
+            "run",
+            "--dir=/::/a",
+            "--dir=/::/b",
+            "--dir=/::/c",
+            CLI_MULTIPLE_PREOPENS_COMPONENT,
+        ])?;
+        Ok(())
+    }
 }
 
 #[test]
