@@ -9,7 +9,8 @@ use anyhow::{anyhow, bail, Result};
 use crate::masm::{
     DivKind, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind,
     MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp,
-    RoundingMode, ShiftKind, SplatKind, TrapCode, TruncKind, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
+    RoundingMode, ShiftKind, SplatKind, TrapCode, TruncKind, UnsignedExtend, TRUSTED_FLAGS,
+    UNTRUSTED_FLAGS,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
@@ -1122,7 +1123,11 @@ impl Masm for MacroAssembler {
     ) -> Result<()> {
         // Need to convert unsigned uint32 to uint64 for conversion instruction sequence.
         if let OperandSize::S32 = src_size {
-            self.extend(writable!(src), src, ExtendKind::I64Extend32U)?;
+            self.extend(
+                writable!(src),
+                src,
+                ExtendKind::Unsigned(UnsignedExtend::I64Extend32U),
+            )?;
         }
 
         self.asm
@@ -1417,7 +1422,7 @@ impl Masm for MacroAssembler {
         size: OperandSize,
         op: RmwOp,
         flags: MemFlags,
-        extend: Option<ExtendKind>,
+        extend: Option<UnsignedExtend>,
     ) -> Result<()> {
         match op {
             RmwOp::Add => {
@@ -1450,7 +1455,7 @@ impl Masm for MacroAssembler {
         if let Some(extend) = extend {
             // We don't need to zero-extend from 32 to 64bits.
             if !(extend.from_bits() == 32 && extend.to_bits() == 64) {
-                self.asm.movzx_rr(operand.to_reg(), operand, extend);
+                self.asm.movzx_rr(operand.to_reg(), operand, extend.into());
             }
         }
 
