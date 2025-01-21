@@ -168,14 +168,6 @@
   )
 )
 
-(decl pure partial amode_add (Amode i32) Amode)
-(rule (amode_add (Amode.RegOffset base offset) amt)
-  (if-let new_offset (s32_add_fallible offset amt))
-  (Amode.RegOffset base amt))
-(rule (amode_add (Amode.SpOffset offset) amt)
-  (if-let new_offset (s32_add_fallible offset amt))
-  (Amode.SpOffset amt))
-
 (type ExtKind (enum None Sign32 Sign64 Zero32 Zero64))
 
 (type VExtKind (enum None S8x8 U8x8 S16x4 U16x4 S32x2 U32x2))
