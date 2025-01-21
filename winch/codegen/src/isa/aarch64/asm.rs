@@ -2,8 +2,8 @@
 use super::{address::Address, regs};
 use crate::aarch64::regs::zero;
 use crate::masm::{
-    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, RemKind, RoundingMode, ShiftKind, SignedExtend,
-    TruncKind,
+    DivKind, Extend, ExtendKind, FloatCmpKind, IntCmpKind, RemKind, RoundingMode, ShiftKind,
+    Signed, TruncKind,
 };
 use crate::CallingConvention;
 use crate::{
@@ -444,12 +444,12 @@ impl Assembler {
             self.extend(
                 divisor,
                 writable!(divisor),
-                ExtendKind::Signed(SignedExtend::I64Extend32S),
+                ExtendKind::Signed(Extend::<Signed>::I64Extend32),
             );
             self.extend(
                 dividend,
                 writable!(dividend),
-                ExtendKind::Signed(SignedExtend::I64Extend32S),
+                ExtendKind::Signed(Extend::<Signed>::I64Extend32),
             );
             OperandSize::S64
         } else {
@@ -483,12 +483,12 @@ impl Assembler {
             self.extend(
                 divisor,
                 writable!(divisor),
-                ExtendKind::Signed(SignedExtend::I64Extend32S),
+                ExtendKind::Signed(Extend::<Signed>::I64Extend32),
             );
             self.extend(
                 dividend,
                 writable!(dividend),
-                ExtendKind::Signed(SignedExtend::I64Extend32S),
+                ExtendKind::Signed(Extend::<Signed>::I64Extend32),
             );
             OperandSize::S64
         } else {

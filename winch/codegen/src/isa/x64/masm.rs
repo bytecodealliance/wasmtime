@@ -7,10 +7,9 @@ use super::{
 use anyhow::{anyhow, bail, Result};
 
 use crate::masm::{
-    DivKind, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind,
+    DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind,
     MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp,
-    RoundingMode, ShiftKind, SplatKind, TrapCode, TruncKind, UnsignedExtend, TRUSTED_FLAGS,
-    UNTRUSTED_FLAGS,
+    RoundingMode, ShiftKind, SplatKind, TrapCode, TruncKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
@@ -249,7 +248,7 @@ impl Masm for MacroAssembler {
                 self.asm.movzx_mr(
                     &addr,
                     dst,
-                    size.unsigned_extend_to(OperandSize::S64),
+                    size.extend_to::<Zero>(OperandSize::S64),
                     TRUSTED_FLAGS,
                 );
                 self.free_stack(size.bytes())?;
@@ -1138,7 +1137,7 @@ impl Masm for MacroAssembler {
             self.extend(
                 writable!(src),
                 src,
-                ExtendKind::Unsigned(UnsignedExtend::I64Extend32U),
+                ExtendKind::Unsigned(Extend::I64Extend32),
             )?;
         }
 
@@ -1434,7 +1433,7 @@ impl Masm for MacroAssembler {
         size: OperandSize,
         op: RmwOp,
         flags: MemFlags,
-        extend: Option<UnsignedExtend>,
+        extend: Option<Extend<Zero>>,
     ) -> Result<()> {
         match op {
             RmwOp::Add => {
@@ -1591,7 +1590,7 @@ impl MacroAssembler {
         M: Masm,
     {
         if dst.to_reg().is_int() {
-            let ext = size.unsigned_extend_to(OperandSize::S64);
+            let ext = size.extend_to::<Zero>(OperandSize::S64);
             self.asm.movzx_mr(&src, dst, ext, flags);
         } else {
             self.asm.xmm_mov_mr(&src, dst, size, flags);

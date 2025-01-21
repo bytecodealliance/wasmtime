@@ -3,8 +3,8 @@
 use crate::{
     isa::{reg::Reg, CallingConvention},
     masm::{
-        DivKind, ExtendKind, IntCmpKind, MulWideKind, OperandSize, RemKind, RoundingMode,
-        ShiftKind, SignedExtend, UnsignedExtend, VectorExtendKind,
+        DivKind, Extend, ExtendKind, ExtendType, IntCmpKind, MulWideKind, OperandSize, RemKind,
+        RoundingMode, ShiftKind, Signed, VectorExtendKind, Zero,
     },
     reg::writable,
     x64::regs::scratch,
@@ -144,26 +144,15 @@ impl From<ShiftKind> for CraneliftShiftKind {
     }
 }
 
-impl From<UnsignedExtend> for ExtMode {
-    fn from(value: UnsignedExtend) -> Self {
+impl<T: ExtendType> From<Extend<T>> for ExtMode {
+    fn from(value: Extend<T>) -> Self {
         match value {
-            UnsignedExtend::I32Extend8U => ExtMode::BL,
-            UnsignedExtend::I32Extend16U => ExtMode::WL,
-            UnsignedExtend::I64Extend8U => ExtMode::BQ,
-            UnsignedExtend::I64Extend16U => ExtMode::WQ,
-            UnsignedExtend::I64Extend32U => ExtMode::LQ,
-        }
-    }
-}
-
-impl From<SignedExtend> for ExtMode {
-    fn from(value: SignedExtend) -> Self {
-        match value {
-            SignedExtend::I32Extend8S => ExtMode::BL,
-            SignedExtend::I32Extend16S => ExtMode::WL,
-            SignedExtend::I64Extend8S => ExtMode::BQ,
-            SignedExtend::I64Extend16S => ExtMode::WQ,
-            SignedExtend::I64Extend32S => ExtMode::LQ,
+            Extend::I32Extend8 => ExtMode::BL,
+            Extend::I32Extend16 => ExtMode::WL,
+            Extend::I64Extend8 => ExtMode::BQ,
+            Extend::I64Extend16 => ExtMode::WQ,
+            Extend::I64Extend32 => ExtMode::LQ,
+            Extend::__Kind(_) => unreachable!(),
         }
     }
 }
@@ -348,7 +337,7 @@ impl Assembler {
         &mut self,
         addr: &Address,
         dst: WritableReg,
-        ext: Option<UnsignedExtend>,
+        ext: Option<Extend<Zero>>,
         memflags: MemFlags,
     ) {
         let src = Self::to_synthetic_amode(
@@ -379,7 +368,7 @@ impl Assembler {
         &mut self,
         addr: &Address,
         dst: WritableReg,
-        ext: SignedExtend,
+        ext: Extend<Signed>,
         memflags: MemFlags,
     ) {
         let src = Self::to_synthetic_amode(
@@ -399,7 +388,7 @@ impl Assembler {
     }
 
     /// Register-to-register move with zero extension.
-    pub fn movzx_rr(&mut self, src: Reg, dst: WritableReg, kind: UnsignedExtend) {
+    pub fn movzx_rr(&mut self, src: Reg, dst: WritableReg, kind: Extend<Zero>) {
         self.emit(Inst::MovzxRmR {
             ext_mode: kind.into(),
             src: src.into(),
@@ -408,7 +397,7 @@ impl Assembler {
     }
 
     /// Register-to-register move with sign extension.
-    pub fn movsx_rr(&mut self, src: Reg, dst: WritableReg, kind: SignedExtend) {
+    pub fn movsx_rr(&mut self, src: Reg, dst: WritableReg, kind: Extend<Signed>) {
         self.emit(Inst::MovsxRmR {
             ext_mode: kind.into(),
             src: src.into(),
