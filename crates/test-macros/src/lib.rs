@@ -15,6 +15,15 @@
 //! }
 //! ```
 //!
+//! To use just one specific compiler strategy:
+//!
+//! ```rust
+//! #[wasmtime_test(strategies(only(Winch)))]
+//! fn my_test(config: &mut Config) -> Result<()> {
+//!     Ok(())
+//! }
+//! ```
+//!
 //! To explicitly indicate that a wasm features is needed
 //! ```
 //! #[wasmtime_test(wasm_features(gc))]
@@ -59,6 +68,21 @@ impl TestConfig {
                         Ok(())
                     } else if meta.path.is_ident("CraneliftPulley") {
                         self.strategies.retain(|s| *s != Compiler::CraneliftPulley);
+                        Ok(())
+                    } else {
+                        Err(meta.error("Unknown strategy"))
+                    }
+                })
+            } else if meta.path.is_ident("only") {
+                meta.parse_nested_meta(|meta| {
+                    if meta.path.is_ident("Winch") {
+                        self.strategies.retain(|s| *s == Compiler::Winch);
+                        Ok(())
+                    } else if meta.path.is_ident("CraneliftNative") {
+                        self.strategies.retain(|s| *s == Compiler::CraneliftNative);
+                        Ok(())
+                    } else if meta.path.is_ident("CraneliftPulley") {
+                        self.strategies.retain(|s| *s == Compiler::CraneliftPulley);
                         Ok(())
                     } else {
                         Err(meta.error("Unknown strategy"))
@@ -200,7 +224,7 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
     let mut tests = if test_config.strategies == [Compiler::Winch] {
         vec![quote! {
             // This prevents dead code warning when the macro is invoked as:
-            //     #[wasmtime_test(strategies(not(CraneliftNative))]
+            //     #[wasmtime_test(strategies(only(Winch))]
             // Given that Winch only fully supports x86_64.
             #[allow(dead_code)]
             #func

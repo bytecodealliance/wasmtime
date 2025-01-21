@@ -1,7 +1,7 @@
 use wasmtime::*;
 use wasmtime_test_macros::wasmtime_test;
 
-#[wasmtime_test(strategies(not(CraneliftNative)))]
+#[wasmtime_test(strategies(only(Winch)))]
 #[cfg_attr(miri, ignore)]
 fn ensure_compatibility_between_winch_and_table_lazy_init(config: &mut Config) -> Result<()> {
     config.table_lazy_init(false);
@@ -21,7 +21,7 @@ fn ensure_compatibility_between_winch_and_table_lazy_init(config: &mut Config) -
     Ok(())
 }
 
-#[wasmtime_test(strategies(not(CraneliftNative)))]
+#[wasmtime_test(strategies(only(Winch)))]
 #[cfg_attr(miri, ignore)]
 fn ensure_compatibility_between_winch_and_signals_based_traps(config: &mut Config) -> Result<()> {
     config.signals_based_traps(false);
@@ -43,7 +43,7 @@ fn ensure_compatibility_between_winch_and_signals_based_traps(config: &mut Confi
     Ok(())
 }
 
-#[wasmtime_test(strategies(not(CraneliftNative)))]
+#[wasmtime_test(strategies(only(Winch)))]
 #[cfg_attr(miri, ignore)]
 fn ensure_compatibility_between_winch_and_generate_native_debuginfo(
     config: &mut Config,
