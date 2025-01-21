@@ -9,10 +9,9 @@ use crate::codegen::{
     control_index, Callee, CodeGen, CodeGenError, ControlStackFrame, Emission, FnCall,
 };
 use crate::masm::{
-    DivKind, ExtendKind, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler,
-    MemMoveDirection, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode,
-    SPOffset, ShiftKind, SignedExtend, SplatKind, SplatLoadKind, TruncKind, UnsignedExtend,
-    VectorExtendKind,
+    DivKind, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler, MemMoveDirection,
+    MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode, SPOffset, ShiftKind,
+    SignedExtend, SplatKind, SplatLoadKind, TruncKind, UnsignedExtend, VectorExtendKind,
 };
 
 use crate::reg::{writable, Reg};
