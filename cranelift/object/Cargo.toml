@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-object"
-version = "0.116.0"
+version = "0.116.1"
 authors = ["The Cranelift Project Developers"]
 description = "Emit Cranelift output to native object files with `object`"
 repository = "https://github.com/bytecodealliance/wasmtime"
