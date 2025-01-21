@@ -1356,6 +1356,9 @@ pub(crate) trait MacroAssembler {
     /// using lanes as a mask to select which indexes to copy.
     fn shuffle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, lanes: [u8; 16]) -> Result<()>;
 
+    /// Performs a swizzle between two 128-bit vectors into a 128-bit result.
+    fn swizzle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg) -> Result<()>;
+
     /// Performs the RMW `op` operation on the passed `addr`.
     ///
     /// The value *before* the operation was performed is written back to the `operand` register.

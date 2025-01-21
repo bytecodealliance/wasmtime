@@ -1391,6 +1391,25 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
+    fn swizzle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg) -> Result<()> {
+        if !self.flags.has_avx() {
+            bail!(CodeGenError::UnimplementedForNoAvx)
+        }
+
+        // Clamp rhs to [0, 15 (i.e., 0xF)] and substitute 0 for anything
+        // outside that range.
+        // Each lane is a signed byte so the maximum value is 0x7F. Adding
+        // 0x70 to any value higher than 0xF will saturate resulting in a value
+        // of 0xFF (i.e., 0).
+        let clamp = self.asm.add_constant(&[0x70; 16]);
+        self.asm.xmm_vpaddusb_rrm(writable!(rhs), rhs, &clamp);
+
+        // Don't need to subtract 0x70 since `vpshufb` uses the least
+        // significant 4 bits which are the same after adding 0x70.
+        self.asm.xmm_vpshufb_rrr(dst, lhs, rhs);
+        Ok(())
+    }
+
     fn atomic_rmw(
         &mut self,
         addr: Self::Address,

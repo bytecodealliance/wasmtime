@@ -902,6 +902,10 @@ impl Masm for MacroAssembler {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
 
+    fn swizzle(&mut self, _dst: WritableReg, _lhs: Reg, _rhs: Reg) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
     fn atomic_rmw(
         &mut self,
         _addr: Self::Address,

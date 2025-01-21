@@ -292,6 +292,7 @@ macro_rules! def_unsupported {
     (emit I64AtomicRmw32AddU $($rest:tt)*) => {};
     (emit I64AtomicRmwAdd $($rest:tt)*) => {};
     (emit I8x16Shuffle $($rest:tt)*) => {};
+    (emit I8x16Swizzle $($rest:tt)*) => {};
     (emit I32AtomicRmw8SubU $($rest:tt)*) => {};
     (emit I32AtomicRmw16SubU $($rest:tt)*) => {};
     (emit I32AtomicRmwSub $($rest:tt)*) => {};
@@ -2795,6 +2796,16 @@ where
         let lhs = self.context.pop_to_reg(self.masm, None)?;
         self.masm
             .shuffle(writable!(lhs.into()), lhs.into(), rhs.into(), lanes)?;
+        self.context.stack.push(TypedReg::v128(lhs.into()).into());
+        self.context.free_reg(rhs);
+        Ok(())
+    }
+
+    fn visit_i8x16_swizzle(&mut self) -> Self::Output {
+        let rhs = self.context.pop_to_reg(self.masm, None)?;
+        let lhs = self.context.pop_to_reg(self.masm, None)?;
+        self.masm
+            .swizzle(writable!(lhs.into()), lhs.into(), rhs.into())?;
         self.context.stack.push(TypedReg::v128(lhs.into()).into());
         self.context.free_reg(rhs);
         Ok(())
