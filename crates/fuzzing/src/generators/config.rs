@@ -574,6 +574,9 @@ impl WasmtimeConfig {
                 // don't want to make the same fuzz input DNA generate different test
                 // cases on different targets.
                 if cfg!(not(target_arch = "x86_64")) {
+                    log::warn!(
+                        "want to compile with Winch but host architecture does not support it"
+                    );
                     return Err(arbitrary::Error::IncorrectFormat);
                 }
 
