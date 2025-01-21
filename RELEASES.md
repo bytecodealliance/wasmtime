@@ -1,3 +1,15 @@
+## 29.0.1
+
+Released 2025-01-21.
+
+### Fixed
+
+* Fix a missing increment in WASIp1-to-WASIp2 adapter which affected WASI
+  configurations that have multiple preopened directories.
+  [#10064](https://github.com/bytecodealliance/wasmtime/pull/10064)
+
+--------------------------------------------------------------------------------
+
 ## 29.0.0
 
 Released 2025-01-20.
