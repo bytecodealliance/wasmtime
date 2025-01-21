@@ -54,7 +54,7 @@ impl TestConfig {
                     if meta.path.is_ident("Winch") {
                         self.strategies.retain(|s| *s != Compiler::Winch);
                         Ok(())
-                    } else if meta.path.is_ident("Cranelift") {
+                    } else if meta.path.is_ident("CraneliftNative") {
                         self.strategies.retain(|s| *s != Compiler::CraneliftNative);
                         Ok(())
                     } else {
@@ -193,7 +193,7 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
     let mut tests = if test_config.strategies == [Compiler::Winch] {
         vec![quote! {
             // This prevents dead code warning when the macro is invoked as:
-            //     #[wasmtime_test(strategies(not(Cranelift))]
+            //     #[wasmtime_test(strategies(not(CraneliftNative))]
             // Given that Winch only fully supports x86_64.
             #[allow(dead_code)]
             #func
