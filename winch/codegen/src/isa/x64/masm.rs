@@ -34,7 +34,7 @@ use cranelift_codegen::{
     isa::{
         unwind::UnwindInst,
         x64::{
-            args::{ExtMode, FenceKind, CC},
+            args::{FenceKind, CC},
             settings as x64_settings, AtomicRmwSeqOp,
         },
     },
@@ -246,7 +246,12 @@ impl Masm for MacroAssembler {
         let _ = match (dst.to_reg().class(), size) {
             (RegClass::Int, OperandSize::S32) => {
                 let addr = self.address_from_sp(current_sp)?;
-                self.asm.movzx_mr(&addr, dst, size.into(), TRUSTED_FLAGS);
+                self.asm.movzx_mr(
+                    &addr,
+                    dst,
+                    size.unsigned_extend_to(OperandSize::S64),
+                    TRUSTED_FLAGS,
+                );
                 self.free_stack(size.bytes())?;
             }
             (RegClass::Int, OperandSize::S64) => {
@@ -313,10 +318,13 @@ impl Masm for MacroAssembler {
                     bail!(CodeGenError::unexpected_operand_size());
                 }
 
-                if ext.signed() {
-                    self.asm.movsx_mr(&src, dst, ext, UNTRUSTED_FLAGS);
-                } else {
-                    self.load_impl::<Self>(src, dst, size, UNTRUSTED_FLAGS)?
+                match ext {
+                    ExtendKind::Signed(ext) => {
+                        self.asm.movsx_mr(&src, dst, ext, UNTRUSTED_FLAGS);
+                    }
+                    ExtendKind::Unsigned(_) => {
+                        self.load_impl::<Self>(src, dst, size, UNTRUSTED_FLAGS)?
+                    }
                 }
             }
             LoadKind::Operand(_) => {
@@ -1040,11 +1048,15 @@ impl Masm for MacroAssembler {
     }
 
     fn extend(&mut self, dst: WritableReg, src: Reg, kind: ExtendKind) -> Result<()> {
-        if !kind.signed() {
-            self.asm.movzx_rr(src, dst, kind);
-        } else {
-            self.asm.movsx_rr(src, dst, kind);
+        match kind {
+            ExtendKind::Signed(ext) => {
+                self.asm.movsx_rr(src, dst, ext);
+            }
+            ExtendKind::Unsigned(ext) => {
+                self.asm.movzx_rr(src, dst, ext);
+            }
         }
+
         Ok(())
     }
 
@@ -1579,16 +1591,8 @@ impl MacroAssembler {
         M: Masm,
     {
         if dst.to_reg().is_int() {
-            let access_bits = size.num_bits() as u16;
-
-            let ext_mode = match access_bits {
-                8 => Some(ExtMode::BQ),
-                16 => Some(ExtMode::WQ),
-                32 => Some(ExtMode::LQ),
-                _ => None,
-            };
-
-            self.asm.movzx_mr(&src, dst, ext_mode, flags);
+            let ext = size.unsigned_extend_to(OperandSize::S64);
+            self.asm.movzx_mr(&src, dst, ext, flags);
         } else {
             self.asm.xmm_mov_mr(&src, dst, size, flags);
         }

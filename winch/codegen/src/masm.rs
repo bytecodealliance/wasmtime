@@ -392,11 +392,11 @@ impl ExtractLaneKind {
     }
 }
 
-impl From<ExtractLaneKind> for ExtendKind {
+impl From<ExtractLaneKind> for SignedExtend {
     fn from(value: ExtractLaneKind) -> Self {
         match value {
-            ExtractLaneKind::I8x16S => Self::Signed(SignedExtend::I32Extend8S),
-            ExtractLaneKind::I16x8S => Self::Signed(SignedExtend::I32Extend16S),
+            ExtractLaneKind::I8x16S => SignedExtend::I32Extend8S,
+            ExtractLaneKind::I16x8S => SignedExtend::I32Extend16S,
             _ => unimplemented!(),
         }
     }
@@ -519,6 +519,23 @@ impl OperandSize {
             8 => S64,
             16 => S128,
             _ => panic!("Invalid bytes {bytes} for OperandSize"),
+        }
+    }
+
+    pub fn unsigned_extend_to(&self, to: Self) -> Option<UnsignedExtend> {
+        match to {
+            OperandSize::S32 => match self {
+                OperandSize::S8 => Some(UnsignedExtend::I32Extend8U),
+                OperandSize::S16 => Some(UnsignedExtend::I32Extend16U),
+                _ => None,
+            },
+            OperandSize::S64 => match self {
+                OperandSize::S8 => Some(UnsignedExtend::I64Extend8U),
+                OperandSize::S16 => Some(UnsignedExtend::I64Extend16U),
+                OperandSize::S32 => Some(UnsignedExtend::I64Extend32U),
+                _ => None,
+            },
+            _ => None,
         }
     }
 }
