@@ -1417,25 +1417,32 @@ impl Masm for MacroAssembler {
 
     fn atomic_rmw(
         &mut self,
+        context: &mut CodeGenContext<Emission>,
         addr: Self::Address,
-        operand: WritableReg,
         size: OperandSize,
         op: RmwOp,
         flags: MemFlags,
         extend: Option<UnsignedExtend>,
     ) -> Result<()> {
-        match op {
+        let res = match op {
             RmwOp::Add => {
+                let operand = context.pop_to_reg(self, None)?;
                 self.asm
-                    .lock_xadd(addr, operand.to_reg(), operand, size, flags);
+                    .lock_xadd(addr, operand.reg, writable!(operand.reg), size, flags);
+                operand.reg
             }
             RmwOp::Sub => {
-                self.asm.neg(operand.to_reg(), operand, size);
+                let operand = context.pop_to_reg(self, None)?;
+                self.asm.neg(operand.reg, writable!(operand.reg), size);
                 self.asm
-                    .lock_xadd(addr, operand.to_reg(), operand, size, flags);
+                    .lock_xadd(addr, operand.reg, writable!(operand.reg), size, flags);
+                operand.reg
             }
             RmwOp::Xchg => {
-                self.asm.xchg(addr, operand.to_reg(), operand, size, flags);
+                let operand = context.pop_to_reg(self, None)?;
+                self.asm
+                    .xchg(addr, operand.reg, writable!(operand.reg), size, flags);
+                operand.reg
             }
             RmwOp::And | RmwOp::Or | RmwOp::Xor => {
                 let op = match op {
@@ -1446,18 +1453,30 @@ impl Masm for MacroAssembler {
                         "invalid op for atomic_rmw_seq, should be one of `or`, `and` or `xor`"
                     ),
                 };
+                let dst = context.reg(regs::rax(), self)?;
+                let operand = context.pop_to_reg(self, None)?;
 
                 self.asm
-                    .atomic_rmw_seq(addr, operand.to_reg(), operand, size, flags, op);
-            }
-        }
+                    .atomic_rmw_seq(addr, operand.reg, writable!(dst), size, flags, op);
 
-        if let Some(extend) = extend {
-            // We don't need to zero-extend from 32 to 64bits.
-            if !(extend.from_bits() == 32 && extend.to_bits() == 64) {
-                self.asm.movzx_rr(operand.to_reg(), operand, extend.into());
+                context.free_reg(operand.reg);
+                dst
             }
-        }
+        };
+
+        let dst_ty = match extend {
+            Some(ext) => {
+                // We don't need to zero-extend from 32 to 64bits.
+                if !(ext.from_bits() == 32 && ext.to_bits() == 64) {
+                    self.asm.movzx_rr(res, writable!(res), ext.into());
+                }
+
+                WasmValType::int_from_bits(ext.to_bits())
+            }
+            None => WasmValType::int_from_bits(size.num_bits()),
+        };
+
+        context.stack.push(TypedReg::new(dst_ty, res).into());
 
         Ok(())
     }

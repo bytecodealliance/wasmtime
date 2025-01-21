@@ -1370,18 +1370,15 @@ where
         size: OperandSize,
         extend: Option<UnsignedExtend>,
     ) -> Result<()> {
-        let operand = self.context.pop_to_reg(self.masm, None).unwrap();
+        // We need to pop-push the operand to compute the address before passing control over to
+        // masm, because some architectures may have specific requirements for the registers used
+        // in some atomic operations.
+        let operand = self.context.pop_to_reg(self.masm, None)?;
         if let Some(addr) = self.emit_compute_heap_address_align_checked(arg, size)? {
             let src = self.masm.address_at_reg(addr, 0)?;
-            self.masm.atomic_rmw(
-                src,
-                writable!(operand.reg),
-                size,
-                op,
-                UNTRUSTED_FLAGS,
-                extend,
-            )?;
             self.context.stack.push(operand.into());
+            self.masm
+                .atomic_rmw(&mut self.context, src, size, op, UNTRUSTED_FLAGS, extend)?;
             self.context.free_reg(addr);
         }
 
