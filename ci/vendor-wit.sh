@@ -20,7 +20,7 @@ make_vendor() {
 
   for package in $packages; do
     IFS='@' read -r repo tag <<< "$package"
-    mkdir -p $path/$repo
+    mkdir -p $path/$package
     cached_extracted_dir="$cache_dir/$repo-$tag"
 
     if [[ ! -d $cached_extracted_dir ]]; then
@@ -30,7 +30,7 @@ make_vendor() {
       rm -rf $cached_extracted_dir/wit/deps*
     fi
 
-    cp -r $cached_extracted_dir/wit/* $path/$repo
+    cp -r $cached_extracted_dir/wit/* $path/$package
   done
 }
 
