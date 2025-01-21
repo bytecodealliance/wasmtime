@@ -685,6 +685,17 @@ impl WasmtimeConfig {
         Ok(())
     }
 
+    /// Returns the codegen flag value, if any, for `name`.
+    pub(crate) fn codegen_flag(&self, name: &str) -> Option<&str> {
+        self.codegen.flags().iter().find_map(|(n, value)| {
+            if n == name {
+                Some(value.as_str())
+            } else {
+                None
+            }
+        })
+    }
+
     /// Helper to switch `MemoryConfig::CustomUnaligned` to
     /// `MemoryConfig::Normal`
     fn avoid_custom_unaligned_memory(&mut self, u: &mut Unstructured<'_>) -> arbitrary::Result<()> {
