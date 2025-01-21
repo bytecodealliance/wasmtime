@@ -1,7 +1,7 @@
 //! IBM Z 64-bit Instruction Set Architecture.
 
 use crate::dominator_tree::DominatorTree;
-use crate::ir::{Function, Type};
+use crate::ir::{self, Function, Type};
 use crate::isa::s390x::settings as s390x_settings;
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv::RegisterMappingError;
@@ -197,6 +197,17 @@ impl TargetIsa for S390xBackend {
 
     fn has_x86_pmaddubsw_lowering(&self) -> bool {
         false
+    }
+
+    fn default_argument_extension(&self) -> ir::ArgumentExtension {
+        // This is copied/carried over from a historical piece of code in
+        // Wasmtime:
+        //
+        // https://github.com/bytecodealliance/wasmtime/blob/a018a5a9addb77d5998021a0150192aa955c71bf/crates/cranelift/src/lib.rs#L366-L374
+        //
+        // Whether or not it is still applicable here is unsure, but it's left
+        // the same as-is for now to reduce the likelihood of problems arising.
+        ir::ArgumentExtension::Uext
     }
 }
 

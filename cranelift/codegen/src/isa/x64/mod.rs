@@ -4,7 +4,7 @@ pub use self::inst::{args, AtomicRmwSeqOp, EmitInfo, EmitState, Inst};
 
 use super::{OwnedTargetIsa, TargetIsa};
 use crate::dominator_tree::DominatorTree;
-use crate::ir::{types, Function, Type};
+use crate::ir::{self, types, Function, Type};
 #[cfg(feature = "unwind")]
 use crate::isa::unwind::systemv;
 use crate::isa::x64::settings as x64_settings;
@@ -185,6 +185,17 @@ impl TargetIsa for X64Backend {
 
     fn has_x86_pmaddubsw_lowering(&self) -> bool {
         self.x64_flags.use_ssse3()
+    }
+
+    fn default_argument_extension(&self) -> ir::ArgumentExtension {
+        // This is copied/carried over from a historical piece of code in
+        // Wasmtime:
+        //
+        // https://github.com/bytecodealliance/wasmtime/blob/a018a5a9addb77d5998021a0150192aa955c71bf/crates/cranelift/src/lib.rs#L366-L374
+        //
+        // Whether or not it is still applicable here is unsure, but it's left
+        // the same as-is for now to reduce the likelihood of problems arising.
+        ir::ArgumentExtension::Uext
     }
 }
 

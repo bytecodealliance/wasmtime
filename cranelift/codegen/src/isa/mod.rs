@@ -400,6 +400,16 @@ pub trait TargetIsa: fmt::Display + Send + Sync {
     /// Returns whether the CLIF `x86_pmaddubsw` instruction is implemented for
     /// this ISA.
     fn has_x86_pmaddubsw_lowering(&self) -> bool;
+
+    /// Returns the mode of extension used for integer arguments smaller than
+    /// the pointer width in function signatures.
+    ///
+    /// Some platform ABIs require that smaller-than-pointer-width values are
+    /// either zero or sign-extended to the full register width. This value is
+    /// propagated to the `AbiParam` value created for signatures. Note that not
+    /// all ABIs for all platforms require extension of any form, so this is
+    /// generally only necessary for the `default_call_conv`.
+    fn default_argument_extension(&self) -> ir::ArgumentExtension;
 }
 
 /// Function alignment specifications as required by an ISA, returned by

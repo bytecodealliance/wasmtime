@@ -343,6 +343,7 @@ struct BuiltinFunctionSignatures {
 
     host_call_conv: CallConv,
     wasm_call_conv: CallConv,
+    argument_extension: ir::ArgumentExtension,
 }
 
 impl BuiltinFunctionSignatures {
@@ -351,6 +352,7 @@ impl BuiltinFunctionSignatures {
             pointer_type: compiler.isa().pointer_type(),
             host_call_conv: CallConv::triple_default(compiler.isa().triple()),
             wasm_call_conv: wasm_call_conv(compiler.isa(), compiler.tunables()),
+            argument_extension: compiler.isa().default_argument_extension(),
         }
     }
 
@@ -363,16 +365,7 @@ impl BuiltinFunctionSignatures {
     }
 
     fn i32(&self) -> AbiParam {
-        // Some platform ABIs require i32 values to be zero- or sign-
-        // extended to the full register width.  We need to indicate
-        // this here by using the appropriate .uext or .sext attribute.
-        // The attribute can be added unconditionally; platforms whose
-        // ABI does not require such extensions will simply ignore it.
-        // Note that currently all i32 arguments or return values used
-        // by builtin functions are unsigned, so we always use .uext.
-        // If that ever changes, we will have to add a second type
-        // marker here.
-        AbiParam::new(ir::types::I32).uext()
+        AbiParam::new(ir::types::I32)
     }
 
     fn i64(&self) -> AbiParam {
@@ -418,6 +411,16 @@ impl BuiltinFunctionSignatures {
     fn host_signature(&self, builtin: BuiltinFunctionIndex) -> Signature {
         let mut sig = self.wasm_signature(builtin);
         sig.call_conv = self.host_call_conv;
+
+        // Once we're declaring the signature of a host function we must
+        // respect the default ABI of the platform which is where argument
+        // extension of params/results may come into play.
+        for arg in sig.params.iter_mut().chain(sig.returns.iter_mut()) {
+            if arg.value_type.is_int() {
+                arg.extension = self.argument_extension;
+            }
+        }
+
         sig
     }
 }
