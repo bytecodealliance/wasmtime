@@ -336,6 +336,13 @@ macro_rules! def_unsupported {
     (emit I64AtomicRmw16XorU $($rest:tt)*) => {};
     (emit I64AtomicRmw32XorU $($rest:tt)*) => {};
     (emit I64AtomicRmwXor $($rest:tt)*) => {};
+    (emit I32AtomicRmw8CmpxchgU $($rest:tt)*) => {};
+    (emit I32AtomicRmw16CmpxchgU $($rest:tt)*) => {};
+    (emit I32AtomicRmwCmpxchg $($rest:tt)*) => {};
+    (emit I64AtomicRmw8CmpxchgU $($rest:tt)*) => {};
+    (emit I64AtomicRmw16CmpxchgU $($rest:tt)*) => {};
+    (emit I64AtomicRmw32CmpxchgU $($rest:tt)*) => {};
+    (emit I64AtomicRmwCmpxchg $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -2654,6 +2661,34 @@ where
 
     fn visit_i64_atomic_rmw_xor(&mut self, arg: MemArg) -> Self::Output {
         self.emit_atomic_rmw(&arg, RmwOp::Xor, OperandSize::S64, None)
+    }
+
+    fn visit_i32_atomic_rmw8_cmpxchg_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_cmpxchg(&arg, OperandSize::S8, Some(Extend::I32Extend8))
+    }
+
+    fn visit_i32_atomic_rmw16_cmpxchg_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_cmpxchg(&arg, OperandSize::S16, Some(Extend::I32Extend16))
+    }
+
+    fn visit_i32_atomic_rmw_cmpxchg(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_cmpxchg(&arg, OperandSize::S32, None)
+    }
+
+    fn visit_i64_atomic_rmw8_cmpxchg_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_cmpxchg(&arg, OperandSize::S8, Some(Extend::I64Extend8))
+    }
+
+    fn visit_i64_atomic_rmw16_cmpxchg_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_cmpxchg(&arg, OperandSize::S16, Some(Extend::I64Extend16))
+    }
+
+    fn visit_i64_atomic_rmw32_cmpxchg_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_cmpxchg(&arg, OperandSize::S32, Some(Extend::I64Extend32))
+    }
+
+    fn visit_i64_atomic_rmw_cmpxchg(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_cmpxchg(&arg, OperandSize::S64, None)
     }
 
     wasmparser::for_each_visit_operator!(def_unsupported);

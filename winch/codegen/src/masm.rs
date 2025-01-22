@@ -1427,4 +1427,20 @@ pub(crate) trait MacroAssembler {
         lane: u8,
         kind: ExtractLaneKind,
     ) -> Result<()>;
+
+    /// Perform an atomic CAS (compare-and-swap) operation with the value at `addr`, and `expected`
+    /// and `replacement` (at the top of the context's stack).
+    ///
+    /// This method takes the `CodeGenContext` as an arguments to accommodate architectures that
+    /// expect parameters in specific registers. The context stack contains the `replacement`,
+    /// and `expected` values in that order. The implementer is expected to push the value at
+    /// `addr` before the update to the context's stack before returning.
+    fn atomic_cas(
+        &mut self,
+        context: &mut CodeGenContext<Emission>,
+        addr: Self::Address,
+        size: OperandSize,
+        flags: MemFlags,
+        extend: Option<Extend<Zero>>,
+    ) -> Result<()>;
 }
