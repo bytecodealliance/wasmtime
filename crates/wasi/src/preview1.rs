@@ -673,14 +673,16 @@ enum FdWrite {
 /// Adds asynchronous versions of all WASIp1 functions to the
 /// [`wasmtime::Linker`] provided.
 ///
-/// This method will add WASIp1 functions to `linker`. The `f` closure provided
-/// is used to project from the `T` state that `Linker` is associated with to a
-/// [`WasiP1Ctx`]. If `T` is `WasiP1Ctx` itself then this is the identity
-/// closure, but otherwise it must project out the field where `WasiP1Ctx` is
-/// stored within `T`.
+/// This method will add WASIp1 functions to `linker`. Access to [`WasiP1Ctx`]
+/// is provided with `f` by projecting from the store-local state of `T` to
+/// [`WasiP1Ctx`]. The closure `f` is invoked every time a WASIp1 function is
+/// called to get access to [`WASIp1`] from `T`. The returned [`WasiP1Ctx`] is
+/// used to implement I/O and controls what each function will return.
 ///
-/// The state provided by `f` is used to implement all WASIp1 functions and
-/// provides configuration to know what to return.
+/// It's recommended that [`WasiP1Ctx`] is stored as a field in `T` or that `T =
+/// WasiP1Ctx` itself. The closure `f` should be a small projection (e.g. `&mut
+/// arg.field`) or something otherwise "small" as it will be executed every time
+/// a WASI call is made.
 ///
 /// Note that this function is intended for use with
 /// [`Config::async_support(true)`]. If you're looking for a synchronous version
@@ -745,14 +747,16 @@ pub fn add_to_linker_async<T: Send>(
 /// Adds synchronous versions of all WASIp1 functions to the
 /// [`wasmtime::Linker`] provided.
 ///
-/// This method will add WASIp1 functions to `linker`. The `f` closure provided
-/// is used to project from the `T` state that `Linker` is associated with to a
-/// [`WasiP1Ctx`]. If `T` is `WasiP1Ctx` itself then this is the identity
-/// closure, but otherwise it must project out the field where `WasiP1Ctx` is
-/// stored within `T`.
+/// This method will add WASIp1 functions to `linker`. Access to [`WasiP1Ctx`]
+/// is provided with `f` by projecting from the store-local state of `T` to
+/// [`WasiP1Ctx`]. The closure `f` is invoked every time a WASIp1 function is
+/// called to get access to [`WASIp1`] from `T`. The returned [`WasiP1Ctx`] is
+/// used to implement I/O and controls what each function will return.
 ///
-/// The state provided by `f` is used to implement all WASIp1 functions and
-/// provides configuration to know what to return.
+/// It's recommended that [`WasiP1Ctx`] is stored as a field in `T` or that `T =
+/// WasiP1Ctx` itself. The closure `f` should be a small projection (e.g. `&mut
+/// arg.field`) or something otherwise "small" as it will be executed every time
+/// a WASI call is made.
 ///
 /// Note that this function is intended for use with
 /// [`Config::async_support(false)`]. If you're looking for a synchronous version
