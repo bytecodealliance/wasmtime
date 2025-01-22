@@ -1,6 +1,6 @@
-use crate::bindings::filesystem::types as async_filesystem;
-use crate::bindings::sync::filesystem::types as sync_filesystem;
-use crate::bindings::sync::io::streams;
+use crate::p2::bindings::filesystem::types as async_filesystem;
+use crate::p2::bindings::sync::filesystem::types as sync_filesystem;
+use crate::p2::bindings::sync::io::streams;
 use crate::runtime::in_tokio;
 use crate::{FsError, FsResult, WasiImpl, WasiView};
 use wasmtime::component::Resource;

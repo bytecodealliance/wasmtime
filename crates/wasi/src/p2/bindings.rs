@@ -37,7 +37,7 @@
 //!     ",
 //!     path: "src/p2/wit",
 //!     with: {
-//!         "wasi": wasmtime_wasi::bindings,
+//!         "wasi": wasmtime_wasi::p2::bindings,
 //!     },
 //!     async: true,
 //! });
@@ -76,7 +76,7 @@
 
 /// Synchronous-generated bindings for WASI interfaces.
 ///
-/// This is the same as the top-level [`bindings`](crate::bindings) module of
+/// This is the same as the top-level [`bindings`](crate::p2::bindings) module of
 /// this crate except that it's for synchronous calls.
 ///
 /// # Examples
@@ -108,7 +108,7 @@
 ///     ",
 ///     path: "src/p2/wit",
 ///     with: {
-///         "wasi": wasmtime_wasi::bindings::sync,
+///         "wasi": wasmtime_wasi::p2::bindings::sync,
 ///     },
 ///     // This is required for bindings using `wasmtime-wasi` and it otherwise
 ///     // isn't the default for non-async bindings.
@@ -161,12 +161,12 @@ pub mod sync {
             with: {
                 // These interfaces come from the outer module, as it's
                 // sync/async agnostic.
-                "wasi:clocks": crate::bindings::clocks,
-                "wasi:random": crate::bindings::random,
-                "wasi:cli": crate::bindings::cli,
-                "wasi:io/error": crate::bindings::io::error,
-                "wasi:filesystem/preopens": crate::bindings::filesystem::preopens,
-                "wasi:sockets/network": crate::bindings::sockets::network,
+                "wasi:clocks": crate::p2::bindings::clocks,
+                "wasi:random": crate::p2::bindings::random,
+                "wasi:cli": crate::p2::bindings::cli,
+                "wasi:io/error": crate::p2::bindings::io::error,
+                "wasi:filesystem/preopens": crate::p2::bindings::filesystem::preopens,
+                "wasi:sockets/network": crate::p2::bindings::sockets::network,
 
                 // Configure the resource types of the bound interfaces here
                 // to be the same as the async versions of the resources, that
@@ -206,7 +206,7 @@ pub mod sync {
     /// use wasmtime::{Engine, Result, Store, Config};
     /// use wasmtime::component::{ResourceTable, Linker, Component};
     /// use wasmtime_wasi::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
-    /// use wasmtime_wasi::bindings::sync::Command;
+    /// use wasmtime_wasi::p2::bindings::sync::Command;
     ///
     /// // This example is an example shim of executing a component based on the
     /// // command line arguments provided to this program.
@@ -271,7 +271,7 @@ pub mod sync {
     /// use wasmtime::{Engine, Result, Store, Config};
     /// use wasmtime::component::{ResourceTable, Linker, Component};
     /// use wasmtime_wasi::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
-    /// use wasmtime_wasi::bindings::sync::CommandPre;
+    /// use wasmtime_wasi::p2::bindings::sync::CommandPre;
     ///
     /// // This example is an example shim of executing a component based on the
     /// // command line arguments provided to this program.
@@ -448,7 +448,7 @@ pub use self::async_io::LinkOptions;
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{ResourceTable, Linker, Component};
 /// use wasmtime_wasi::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
-/// use wasmtime_wasi::bindings::Command;
+/// use wasmtime_wasi::p2::bindings::Command;
 ///
 /// // This example is an example shim of executing a component based on the
 /// // command line arguments provided to this program.
@@ -516,7 +516,7 @@ pub use self::async_io::Command;
 /// use wasmtime::{Engine, Result, Store, Config};
 /// use wasmtime::component::{ResourceTable, Linker, Component};
 /// use wasmtime_wasi::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
-/// use wasmtime_wasi::bindings::CommandPre;
+/// use wasmtime_wasi::p2::bindings::CommandPre;
 ///
 /// // This example is an example shim of executing a component based on the
 /// // command line arguments provided to this program.

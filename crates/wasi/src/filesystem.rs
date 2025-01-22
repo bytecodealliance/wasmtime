@@ -1,4 +1,4 @@
-use crate::bindings::filesystem::types;
+use crate::p2::bindings::filesystem::types;
 use crate::runtime::{spawn_blocking, AbortOnDropJoinHandle};
 use crate::{
     HostInputStream, HostOutputStream, StreamError, StreamResult, Subscribe, TrappableError,

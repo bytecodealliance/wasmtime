@@ -1,6 +1,6 @@
 #![allow(unused_variables)]
 
-use crate::bindings::{
+use crate::p2::bindings::{
     clocks::monotonic_clock::{self, Duration as WasiDuration, Instant},
     clocks::wall_clock::{self, Datetime},
 };

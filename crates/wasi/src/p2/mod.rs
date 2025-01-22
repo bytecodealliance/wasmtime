@@ -66,46 +66,46 @@ pub(crate) mod host;
 /// }
 /// ```
 pub fn add_to_linker_async<T: WasiView>(linker: &mut Linker<T>) -> anyhow::Result<()> {
-    let options = crate::bindings::LinkOptions::default();
+    let options = crate::p2::bindings::LinkOptions::default();
     add_to_linker_with_options_async(linker, &options)
 }
 
 /// Similar to [`add_to_linker_async`], but with the ability to enable unstable features.
 pub fn add_to_linker_with_options_async<T: WasiView>(
     linker: &mut Linker<T>,
-    options: &crate::bindings::LinkOptions,
+    options: &crate::p2::bindings::LinkOptions,
 ) -> anyhow::Result<()> {
     let l = linker;
     let io_closure = io_type_annotate::<T, _>(|t| IoImpl(t));
     let closure = type_annotate::<T, _>(|t| WasiImpl(IoImpl(t)));
 
-    crate::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
-    crate::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
-    crate::bindings::filesystem::types::add_to_linker_get_host(l, closure)?;
-    crate::bindings::filesystem::preopens::add_to_linker_get_host(l, closure)?;
-    crate::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
-    crate::bindings::io::poll::add_to_linker_get_host(l, io_closure)?;
-    crate::bindings::io::streams::add_to_linker_get_host(l, io_closure)?;
-    crate::bindings::random::random::add_to_linker_get_host(l, closure)?;
-    crate::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
-    crate::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::exit::add_to_linker_get_host(l, &options.into(), closure)?;
-    crate::bindings::cli::environment::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_input::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_output::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_stdin::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_stdout::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_stderr::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::tcp::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::tcp_create_socket::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::udp::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::udp_create_socket::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::instance_network::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::network::add_to_linker_get_host(l, &options.into(), closure)?;
-    crate::bindings::sockets::ip_name_lookup::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::filesystem::types::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::filesystem::preopens::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
+    crate::p2::bindings::io::poll::add_to_linker_get_host(l, io_closure)?;
+    crate::p2::bindings::io::streams::add_to_linker_get_host(l, io_closure)?;
+    crate::p2::bindings::random::random::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::exit::add_to_linker_get_host(l, &options.into(), closure)?;
+    crate::p2::bindings::cli::environment::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::terminal_input::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::terminal_output::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::terminal_stdin::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::terminal_stdout::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::terminal_stderr::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::sockets::tcp::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::sockets::tcp_create_socket::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::sockets::udp::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::sockets::udp_create_socket::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::sockets::instance_network::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::sockets::network::add_to_linker_get_host(l, &options.into(), closure)?;
+    crate::p2::bindings::sockets::ip_name_lookup::add_to_linker_get_host(l, closure)?;
     Ok(())
 }
 
@@ -167,45 +167,45 @@ pub fn add_to_linker_with_options_async<T: WasiView>(
 pub fn add_to_linker_sync<T: WasiView>(
     linker: &mut wasmtime::component::Linker<T>,
 ) -> anyhow::Result<()> {
-    let options = crate::bindings::sync::LinkOptions::default();
+    let options = crate::p2::bindings::sync::LinkOptions::default();
     add_to_linker_with_options_sync(linker, &options)
 }
 
 /// Similar to [`add_to_linker_sync`], but with the ability to enable unstable features.
 pub fn add_to_linker_with_options_sync<T: WasiView>(
     linker: &mut wasmtime::component::Linker<T>,
-    options: &crate::bindings::sync::LinkOptions,
+    options: &crate::p2::bindings::sync::LinkOptions,
 ) -> anyhow::Result<()> {
     let l = linker;
     let io_closure = io_type_annotate::<T, _>(|t| IoImpl(t));
     let closure = type_annotate::<T, _>(|t| WasiImpl(IoImpl(t)));
 
-    crate::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
-    crate::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sync::filesystem::types::add_to_linker_get_host(l, closure)?;
-    crate::bindings::filesystem::preopens::add_to_linker_get_host(l, closure)?;
-    crate::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
-    crate::bindings::sync::io::poll::add_to_linker_get_host(l, io_closure)?;
-    crate::bindings::sync::io::streams::add_to_linker_get_host(l, io_closure)?;
-    crate::bindings::random::random::add_to_linker_get_host(l, closure)?;
-    crate::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
-    crate::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::exit::add_to_linker_get_host(l, &options.into(), closure)?;
-    crate::bindings::cli::environment::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_input::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_output::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_stdin::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_stdout::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_stderr::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sync::sockets::tcp::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::tcp_create_socket::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sync::sockets::udp::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::udp_create_socket::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::instance_network::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::network::add_to_linker_get_host(l, &options.into(), closure)?;
-    crate::bindings::sockets::ip_name_lookup::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::sync::filesystem::types::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::filesystem::preopens::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
+    crate::p2::bindings::sync::io::poll::add_to_linker_get_host(l, io_closure)?;
+    crate::p2::bindings::sync::io::streams::add_to_linker_get_host(l, io_closure)?;
+    crate::p2::bindings::random::random::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::exit::add_to_linker_get_host(l, &options.into(), closure)?;
+    crate::p2::bindings::cli::environment::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::terminal_input::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::terminal_output::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::terminal_stdin::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::terminal_stdout::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::cli::terminal_stderr::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::sync::sockets::tcp::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::sockets::tcp_create_socket::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::sync::sockets::udp::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::sockets::udp_create_socket::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::sockets::instance_network::add_to_linker_get_host(l, closure)?;
+    crate::p2::bindings::sockets::network::add_to_linker_get_host(l, &options.into(), closure)?;
+    crate::p2::bindings::sockets::ip_name_lookup::add_to_linker_get_host(l, closure)?;
     Ok(())
 }

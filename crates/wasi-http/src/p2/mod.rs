@@ -78,15 +78,15 @@ where
 {
     let io_closure = type_annotate_io::<T, _>(|t| wasmtime_wasi::IoImpl(t));
     let closure = type_annotate_wasi::<T, _>(|t| wasmtime_wasi::WasiImpl(wasmtime_wasi::IoImpl(t)));
-    wasmtime_wasi::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::io::poll::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi::bindings::io::streams::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::random::random::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::io::poll::add_to_linker_get_host(l, io_closure)?;
+    wasmtime_wasi::p2::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
+    wasmtime_wasi::p2::bindings::io::streams::add_to_linker_get_host(l, io_closure)?;
+    wasmtime_wasi::p2::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::random::random::add_to_linker_get_host(l, closure)?;
 
     add_only_http_to_linker_async(l)
 }
@@ -156,15 +156,15 @@ where
     let io_closure = type_annotate_io::<T, _>(|t| wasmtime_wasi::IoImpl(t));
     let closure = type_annotate_wasi::<T, _>(|t| wasmtime_wasi::WasiImpl(wasmtime_wasi::IoImpl(t)));
 
-    wasmtime_wasi::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::sync::io::poll::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi::bindings::sync::io::streams::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::random::random::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::sync::io::poll::add_to_linker_get_host(l, io_closure)?;
+    wasmtime_wasi::p2::bindings::sync::io::streams::add_to_linker_get_host(l, io_closure)?;
+    wasmtime_wasi::p2::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
+    wasmtime_wasi::p2::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::p2::bindings::random::random::add_to_linker_get_host(l, closure)?;
 
     add_only_http_to_linker_sync(l)?;
 

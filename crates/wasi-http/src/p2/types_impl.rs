@@ -19,7 +19,7 @@ use wasmtime_wasi::{
     IoView, Pollable, ResourceTableError,
 };
 
-impl<T> crate::bindings::http::types::Host for WasiHttpImpl<T>
+impl<T> crate::p2::bindings::http::types::Host for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -101,7 +101,7 @@ fn get_fields_mut<'a>(
     }
 }
 
-impl<T> crate::bindings::http::types::HostFields for WasiHttpImpl<T>
+impl<T> crate::p2::bindings::http::types::HostFields for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -291,7 +291,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostIncomingRequest for WasiHttpImpl<T>
+impl<T> crate::p2::bindings::http::types::HostIncomingRequest for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -365,7 +365,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostOutgoingRequest for WasiHttpImpl<T>
+impl<T> crate::p2::bindings::http::types::HostOutgoingRequest for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -557,7 +557,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostResponseOutparam for WasiHttpImpl<T>
+impl<T> crate::p2::bindings::http::types::HostResponseOutparam for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -583,7 +583,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostIncomingResponse for WasiHttpImpl<T>
+impl<T> crate::p2::bindings::http::types::HostIncomingResponse for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -647,7 +647,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostFutureTrailers for WasiHttpImpl<T>
+impl<T> crate::p2::bindings::http::types::HostFutureTrailers for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -697,7 +697,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostIncomingBody for WasiHttpImpl<T>
+impl<T> crate::p2::bindings::http::types::HostIncomingBody for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -731,7 +731,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostOutgoingResponse for WasiHttpImpl<T>
+impl<T> crate::p2::bindings::http::types::HostOutgoingResponse for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -826,7 +826,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostFutureIncomingResponse for WasiHttpImpl<T>
+impl<T> crate::p2::bindings::http::types::HostFutureIncomingResponse for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -888,7 +888,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostOutgoingBody for WasiHttpImpl<T>
+impl<T> crate::p2::bindings::http::types::HostOutgoingBody for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {
@@ -928,7 +928,7 @@ where
     }
 }
 
-impl<T> crate::bindings::http::types::HostRequestOptions for WasiHttpImpl<T>
+impl<T> crate::p2::bindings::http::types::HostRequestOptions for WasiHttpImpl<T>
 where
     T: WasiHttpView,
 {

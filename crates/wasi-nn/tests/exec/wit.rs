@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use std::path::Path;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::{Config, Engine, Store};
-use wasmtime_wasi::bindings::sync::Command;
+use wasmtime_wasi::p2::bindings::sync::Command;
 use wasmtime_wasi::{DirPerms, FilePerms, WasiCtx, WasiCtxBuilder};
 use wasmtime_wasi_nn::wit::WasiNnView;
 use wasmtime_wasi_nn::{wit::WasiNnCtx, Backend, InMemoryRegistry};

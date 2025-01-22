@@ -19,7 +19,7 @@ mod generated {
         require_store_data_send: true,
         with: {
             // Upstream package dependencies
-            "wasi:io": wasmtime_wasi::bindings::io,
+            "wasi:io": wasmtime_wasi::p2::bindings::io,
 
             // Configure all WIT http resources to be defined types in this
             // crate to use the `ResourceTable` helper methods.
@@ -61,8 +61,8 @@ pub mod sync {
             async: false,
             with: {
                 "wasi:http": crate::p2::bindings::http, // http is in this crate
-                "wasi:io": wasmtime_wasi::bindings::sync::io, // io is sync
-                "wasi": wasmtime_wasi::bindings, // everything else
+                "wasi:io": wasmtime_wasi::p2::bindings::sync::io, // io is sync
+                "wasi": wasmtime_wasi::p2::bindings, // everything else
             },
             require_store_data_send: true,
         });

@@ -63,7 +63,7 @@
 //! }
 //! ```
 
-use crate::bindings::{
+use crate::p2::bindings::{
     cli::{
         stderr::Host as _, stdin::Host as _, stdout::Host as _, terminal_input, terminal_output,
         terminal_stderr::Host as _, terminal_stdin::Host as _, terminal_stdout::Host as _,
@@ -89,10 +89,10 @@ use wiggle::tracing::instrument;
 use wiggle::{GuestError, GuestMemory, GuestPtr, GuestType};
 
 // Bring all WASI traits in scope that this implementation builds on.
-use crate::bindings::cli::environment::Host as _;
-use crate::bindings::filesystem::types::HostDescriptor as _;
-use crate::bindings::io::poll::Host as _;
-use crate::bindings::random::random::Host as _;
+use crate::p2::bindings::cli::environment::Host as _;
+use crate::p2::bindings::filesystem::types::HostDescriptor as _;
+use crate::p2::bindings::io::poll::Host as _;
+use crate::p2::bindings::random::random::Host as _;
 
 /// Structure containing state for WASIp1.
 ///

@@ -6,7 +6,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::Store;
-use wasmtime_wasi::bindings::Command;
+use wasmtime_wasi::p2::bindings::Command;
 use wasmtime_wasi::{
     add_to_linker_async,
     bindings::{clocks::wall_clock, filesystem::types as filesystem},
@@ -134,7 +134,7 @@ wasmtime::component::bindgen!({
     world: "test-reactor",
     path: "src/p2/wit",
     async: true,
-    with: { "wasi": wasmtime_wasi::bindings },
+    with: { "wasi": wasmtime_wasi::p2::bindings },
     ownership: Borrowing {
         duplicate_if_necessary: false
     }

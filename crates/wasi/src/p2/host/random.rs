@@ -1,4 +1,4 @@
-use crate::bindings::random::{insecure, insecure_seed, random};
+use crate::p2::bindings::random::{insecure, insecure_seed, random};
 use crate::{WasiImpl, WasiView};
 use cap_rand::{distributions::Standard, Rng};
 

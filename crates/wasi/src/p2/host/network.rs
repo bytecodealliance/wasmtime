@@ -1,8 +1,8 @@
-use crate::bindings::sockets::network::{
+use crate::network::{from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr};
+use crate::p2::bindings::sockets::network::{
     self, ErrorCode, IpAddress, IpAddressFamily, IpSocketAddress, Ipv4SocketAddress,
     Ipv6SocketAddress,
 };
-use crate::network::{from_ipv4_addr, from_ipv6_addr, to_ipv4_addr, to_ipv6_addr};
 use crate::{IoView, SocketError, WasiImpl, WasiView};
 use anyhow::Error;
 use rustix::io::Errno;
@@ -28,7 +28,7 @@ where
     }
 }
 
-impl<T> crate::bindings::sockets::network::HostNetwork for WasiImpl<T>
+impl<T> crate::p2::bindings::sockets::network::HostNetwork for WasiImpl<T>
 where
     T: WasiView,
 {

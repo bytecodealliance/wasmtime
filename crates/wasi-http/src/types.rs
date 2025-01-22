@@ -375,7 +375,7 @@ pub async fn default_send_request_handler(
     let (mut sender, worker) = if use_tls {
         #[cfg(any(target_arch = "riscv64", target_arch = "s390x"))]
         {
-            return Err(crate::bindings::http::types::ErrorCode::InternalError(
+            return Err(crate::p2::bindings::http::types::ErrorCode::InternalError(
                 Some("unsupported architecture for SSL".to_string()),
             ));
         }

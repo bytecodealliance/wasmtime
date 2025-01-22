@@ -1,4 +1,4 @@
-use crate::bindings::{sockets::network::IpAddressFamily, sockets::tcp_create_socket};
+use crate::p2::bindings::{sockets::network::IpAddressFamily, sockets::tcp_create_socket};
 use crate::tcp::TcpSocket;
 use crate::{IoView, SocketResult, WasiImpl, WasiView};
 use wasmtime::component::Resource;
