@@ -123,23 +123,41 @@
 ;; Each of these translates to a single "xbc" (x-register bounds check)
 ;; instruction.
 ;;
-;; Note that there are two cases here, one for 32-bit hosts and one for 64-bit
-;; hosts. They lower to the same `xbc32_bound_trap` instruction which has
-;; different semantics on 32/64-bit but uses the 32-bit address as an argument
-;; on both platforms.
+;; Currently there's a 2x2 matrix here. One axis is 32-bit hosts and 64-bit
+;; hosts while the other axis is `a < b` vs `a > b`. These all bottom out
+;; in the `emit_xbc32` helper below.
 (rule 1 (lower (trapnz (icmp (IntCC.UnsignedGreaterThan) a @ (value_type $I32) (isub b (u8_from_iconst size))) code))
   (if-let (PointerWidth.PointerWidth32) (pointer_width))
-  (if-let load (sinkable_load b))
-  (side_effect (emit_xbc32 a load size code)))
+  (side_effect (emit_xbc32 a b size code)))
+
+(rule 1 (lower (trapnz (icmp (IntCC.UnsignedLessThan) (isub b (u8_from_iconst size)) a @ (value_type $I32)) code))
+  (if-let (PointerWidth.PointerWidth32) (pointer_width))
+  (side_effect (emit_xbc32 a b size code)))
 
 (rule 1 (lower (trapnz (icmp (IntCC.UnsignedGreaterThan) (uextend a @ (value_type $I32)) (isub b (u8_from_iconst size))) code))
   (if-let (PointerWidth.PointerWidth64) (pointer_width))
-  (if-let load (sinkable_load b))
-  (side_effect (emit_xbc32 a load size code)))
+  (side_effect (emit_xbc32 a b size code)))
 
-(decl emit_xbc32 (Value SunkLoad u8 TrapCode) SideEffectNoResult)
-(rule (emit_xbc32 a (SunkLoad.Load _ bound_addr bound_off) size code)
-  (pulley_xbc32_bound_trap a bound_addr bound_off size code))
+(rule 1 (lower (trapnz (icmp (IntCC.UnsignedLessThan) (isub b (u8_from_iconst size)) (uextend a @ (value_type $I32))) code))
+  (if-let (PointerWidth.PointerWidth64) (pointer_width))
+  (side_effect (emit_xbc32 a b size code)))
+
+;; Helper to emit a bounds check which traps if the first value is greater than
+;; the second value minus the immediate size provided here.
+;;
+;; This helper will see if the second value is a sinkable load in which case
+;; it can fold the load directly into the "xbc" instruction. Otherwise a
+;; simpler "xbc" instruction is used.
+(decl emit_xbc32 (Value Value u8 TrapCode) SideEffectNoResult)
+(rule 0 (emit_xbc32 a bound size code)
+  (pulley_xbc32_bound_trap a bound size code))
+(rule 1 (emit_xbc32 a bound size code)
+  (if-let load (sinkable_load bound))
+  (emit_xbc32_sunk a load size code))
+
+(decl emit_xbc32_sunk (Value SunkLoad u8 TrapCode) SideEffectNoResult)
+(rule (emit_xbc32_sunk a (SunkLoad.Load _ bound_addr bound_off) size code)
+  (pulley_xbc32_boundne_trap a bound_addr bound_off size code))
 
 ;;;; Rules for `get_stack_pointer` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

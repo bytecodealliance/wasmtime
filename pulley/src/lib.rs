@@ -617,8 +617,17 @@ macro_rules! for_each_op {
             /// `dst = low32(cond) ? if_nonzero : if_zero`
             xselect64 = XSelect64 { dst: XReg, cond: XReg, if_nonzero: XReg, if_zero: XReg };
 
-            /// `trapif(addr > *(bound_ptr + bound_off) - size)` (unsigned)
+            /// `trapif(addr > bound_ptr - size)` (unsigned)
             xbc32_bound_trap = XBc32BoundTrap {
+                addr: XReg,
+                bound: XReg,
+                size: u8
+            };
+            /// `trapif(addr > *(bound_ptr + bound_off) - size)` (unsigned)
+            ///
+            /// Note that the `bound_ptr + bound_off` load loads a
+            /// host-native-endian pointer-sized value.
+            xbc32_boundne_trap = XBc32BoundNeTrap {
                 addr: XReg,
                 bound_ptr: XReg,
                 bound_off: u8,

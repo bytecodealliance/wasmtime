@@ -64,7 +64,7 @@
 ;;
 ;; wasm[0]::function[1]::load16:
 ;;       push_frame
-;;       xbc32_bound_trap x2, x0, 52, 2
+;;       xbc32_boundne_trap x2, x0, 52, 2
 ;;       xload32le_offset8 x5, x0, 48
 ;;       xload16le_u32_g32 x0, x2, x5, 0
 ;;       pop_frame
@@ -72,7 +72,7 @@
 ;;
 ;; wasm[0]::function[2]::load32:
 ;;       push_frame
-;;       xbc32_bound_trap x2, x0, 52, 4
+;;       xbc32_boundne_trap x2, x0, 52, 4
 ;;       xload32le_offset8 x5, x0, 48
 ;;       xload32le_g32 x0, x2, x5, 0
 ;;       pop_frame
@@ -80,7 +80,7 @@
 ;;
 ;; wasm[0]::function[3]::load64:
 ;;       push_frame
-;;       xbc32_bound_trap x2, x0, 52, 8
+;;       xbc32_boundne_trap x2, x0, 52, 8
 ;;       xload32le_offset8 x5, x0, 48
 ;;       xload64le_g32 x0, x2, x5, 0
 ;;       pop_frame
@@ -98,7 +98,7 @@
 ;;
 ;; wasm[0]::function[5]::store16:
 ;;       push_frame
-;;       xbc32_bound_trap x2, x0, 52, 2
+;;       xbc32_boundne_trap x2, x0, 52, 2
 ;;       xload32le_offset8 x5, x0, 48
 ;;       xstore16le_g32 x2, x5, 0, x3
 ;;       pop_frame
@@ -106,7 +106,7 @@
 ;;
 ;; wasm[0]::function[6]::store32:
 ;;       push_frame
-;;       xbc32_bound_trap x2, x0, 52, 4
+;;       xbc32_boundne_trap x2, x0, 52, 4
 ;;       xload32le_offset8 x5, x0, 48
 ;;       xstore32le_g32 x2, x5, 0, x3
 ;;       pop_frame
@@ -114,7 +114,7 @@
 ;;
 ;; wasm[0]::function[7]::store64:
 ;;       push_frame
-;;       xbc32_bound_trap x2, x0, 52, 8
+;;       xbc32_boundne_trap x2, x0, 52, 8
 ;;       xload32le_offset8 x5, x0, 48
 ;;       xstore64le_g32 x2, x5, 0, x3
 ;;       pop_frame
@@ -122,7 +122,7 @@
 ;;
 ;; wasm[0]::function[8]::load8_offset:
 ;;       push_frame
-;;       xbc32_bound_trap x2, x0, 52, 33
+;;       xbc32_boundne_trap x2, x0, 52, 33
 ;;       xload32le_offset8 x5, x0, 48
 ;;       xload8_u32_g32 x0, x2, x5, 32
 ;;       pop_frame
@@ -130,7 +130,7 @@
 ;;
 ;; wasm[0]::function[9]::load16_offset:
 ;;       push_frame
-;;       xbc32_bound_trap x2, x0, 52, 34
+;;       xbc32_boundne_trap x2, x0, 52, 34
 ;;       xload32le_offset8 x5, x0, 48
 ;;       xload16le_u32_g32 x0, x2, x5, 32
 ;;       pop_frame
@@ -138,7 +138,7 @@
 ;;
 ;; wasm[0]::function[10]::load32_offset:
 ;;       push_frame
-;;       xbc32_bound_trap x2, x0, 52, 36
+;;       xbc32_boundne_trap x2, x0, 52, 36
 ;;       xload32le_offset8 x5, x0, 48
 ;;       xload32le_g32 x0, x2, x5, 32
 ;;       pop_frame
@@ -146,7 +146,7 @@
 ;;
 ;; wasm[0]::function[11]::load64_offset:
 ;;       push_frame
-;;       xbc32_bound_trap x2, x0, 52, 40
+;;       xbc32_boundne_trap x2, x0, 52, 40
 ;;       xload32le_offset8 x5, x0, 48
 ;;       xload64le_g32 x0, x2, x5, 32
 ;;       pop_frame
@@ -154,7 +154,7 @@
 ;;
 ;; wasm[0]::function[12]::store8_offset:
 ;;       push_frame
-;;       xbc32_bound_trap x2, x0, 52, 9
+;;       xbc32_boundne_trap x2, x0, 52, 9
 ;;       xload32le_offset8 x5, x0, 48
 ;;       xstore8_g32 x2, x5, 8, x3
 ;;       pop_frame
@@ -162,7 +162,7 @@
 ;;
 ;; wasm[0]::function[13]::store16_offset:
 ;;       push_frame
-;;       xbc32_bound_trap x2, x0, 52, 10
+;;       xbc32_boundne_trap x2, x0, 52, 10
 ;;       xload32le_offset8 x5, x0, 48
 ;;       xstore16le_g32 x2, x5, 8, x3
 ;;       pop_frame
@@ -170,7 +170,7 @@
 ;;
 ;; wasm[0]::function[14]::store32_offset:
 ;;       push_frame
-;;       xbc32_bound_trap x2, x0, 52, 12
+;;       xbc32_boundne_trap x2, x0, 52, 12
 ;;       xload32le_offset8 x5, x0, 48
 ;;       xstore32le_g32 x2, x5, 8, x3
 ;;       pop_frame
@@ -178,7 +178,7 @@
 ;;
 ;; wasm[0]::function[15]::store64_offset:
 ;;       push_frame
-;;       xbc32_bound_trap x2, x0, 52, 16
+;;       xbc32_boundne_trap x2, x0, 52, 16
 ;;       xload32le_offset8 x5, x0, 48
 ;;       xstore64le_g32 x2, x5, 8, x3
 ;;       pop_frame

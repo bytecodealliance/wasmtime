@@ -178,14 +178,26 @@
 (extern constructor endianness endianness)
 (type Endianness extern (enum Little Big))
 
+(decl pure is_native_endianness (Endianness) bool)
+(extern constructor is_native_endianness is_native_endianness)
+
 ;; Partial constructor and type representing a "sinkable load" which can be
 ;; moved into another instruction. Note that `SinkableLoad` should not be used
 ;; as-is and should instead be converted to a `SunkLoad`.
+;;
+;; To be a sinkable load the load must pass:
+;;
+;; * The `is_sinkable_inst` shared amongst backends test must be `true`
+;; * The load must be in "native endianness"
+;; * The static offset must fit in an unsigned 8-bit integer.
+;;
+;; If the last two requirements here are too restrictive then multiple helpers
+;; might be needed in the future.
 (type SinkableLoad (enum (Load (inst Inst) (ty Type) (addr Value) (offset u8))))
 (decl pure partial sinkable_load (Value) SinkableLoad)
 (rule (sinkable_load value @ (value_type ty))
   (if-let inst @ (load flags addr (offset32 offset)) (is_sinkable_inst value))
-  (if-let (Endianness.Little) (endianness flags))
+  (if-let true (is_native_endianness (endianness flags)))
   (if-let offset8 (u8_try_from_i32 offset))
   (SinkableLoad.Load inst ty addr offset8))
 

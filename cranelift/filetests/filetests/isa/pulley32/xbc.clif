@@ -1,0 +1,104 @@
+test compile precise-output
+target pulley32
+
+function %simple(i32, i32) {
+block0(v0: i32, v1: i32):
+    v2 = load.i32 v0+16
+    v3 = iconst.i32 24
+    v4 = isub v2, v3
+    v5 = icmp ugt v1, v4
+    trapnz v5, user1
+    return
+}
+
+; VCode:
+; block0:
+;   xbc32_boundne_trap x1, x0, 16, 24 // trap=TrapCode(1)
+;   ret
+;
+; Disassembled:
+; xbc32_boundne_trap x1, x0, 16, 24
+; ret
+
+function %swapped_args(i32, i32) {
+block0(v0: i32, v1: i32):
+    v2 = load.i32 v0+16
+    v3 = iconst.i32 24
+    v4 = isub v2, v3
+    v5 = icmp ult v4, v1
+    trapnz v5, user1
+    return
+}
+
+; VCode:
+; block0:
+;   xbc32_boundne_trap x1, x0, 16, 24 // trap=TrapCode(1)
+;   ret
+;
+; Disassembled:
+; xbc32_boundne_trap x1, x0, 16, 24
+; ret
+
+function %twice(i32, i32, i32) {
+block0(v0: i32, v1: i32, v2: i32):
+    ;; load the bound & calculate what to check against
+    v3 = load.i32 v0+16
+    v4 = iconst.i32 24
+    v5 = isub v3, v4
+
+    ;; check v1
+    v6 = icmp ugt v1, v5
+    trapnz v6, user1
+
+    ;; check v2
+    v7 = icmp ugt v2, v5
+    trapnz v7, user1
+
+    return
+}
+
+; VCode:
+; block0:
+;   x4 = xload32 x0+16 // flags =
+;   xbc32_bound_trap x1, x4, 24 // trap=TrapCode(1)
+;   xbc32_bound_trap x2, x4, 24 // trap=TrapCode(1)
+;   ret
+;
+; Disassembled:
+; xload32le_offset8 x4, x0, 16
+; xbc32_bound_trap x1, x4, 24
+; xbc32_bound_trap x2, x4, 24
+; ret
+
+
+function %twice_swapped(i32, i32, i32) {
+block0(v0: i32, v1: i32, v2: i32):
+    ;; load the bound & calculate what to check against
+    v3 = load.i32 v0+16
+    v4 = iconst.i32 24
+    v5 = isub v3, v4
+
+    ;; check v1
+    v6 = icmp ult v5, v1
+    trapnz v6, user1
+
+    ;; check v2
+    v7 = icmp ult v5, v1
+    trapnz v7, user1
+
+    return
+}
+
+; VCode:
+; block0:
+;   x3 = xload32 x0+16 // flags =
+;   xbc32_bound_trap x1, x3, 24 // trap=TrapCode(1)
+;   xbc32_bound_trap x1, x3, 24 // trap=TrapCode(1)
+;   ret
+;
+; Disassembled:
+; xload32le_offset8 x3, x0, 16
+; xbc32_bound_trap x1, x3, 24
+; xbc32_bound_trap x1, x3, 24
+; ret
+
