@@ -195,27 +195,27 @@
 (rule 1 (lower (has_type $I64 (iadd a b))) (pulley_xadd64 a b))
 
 ;; Fold constants into the instruction if possible
-(rule 2 (lower (has_type (ty_int (fits_in_32 _)) (iadd a (u32_from_iconst b))))
+(rule 10 (lower (has_type (ty_int (fits_in_32 _)) (iadd a (u32_from_iconst b))))
   (pulley_xadd32_u32 a b))
-(rule 3 (lower (has_type (ty_int (fits_in_32 _)) (iadd a (u8_from_iconst b))))
+(rule 11 (lower (has_type (ty_int (fits_in_32 _)) (iadd a (u8_from_iconst b))))
   (pulley_xadd32_u8 a b))
-(rule 4 (lower (has_type $I64 (iadd a (u32_from_iconst b))))
+(rule 12 (lower (has_type $I64 (iadd a (u32_from_iconst b))))
   (pulley_xadd64_u32 a b))
-(rule 5 (lower (has_type $I64 (iadd a (u8_from_iconst b))))
+(rule 13 (lower (has_type $I64 (iadd a (u8_from_iconst b))))
   (pulley_xadd64_u8 a b))
 
 ;; If the rhs is a constant and the negated version can fit within a smaller
 ;; constant then switch this to a subtraction with the negated constant.
-(rule 6 (lower (has_type (ty_int (fits_in_32 _)) (iadd a b)))
+(rule 14 (lower (has_type (ty_int (fits_in_32 _)) (iadd a b)))
   (if-let c (u32_from_negated_iconst b))
   (pulley_xsub32_u32 a c))
-(rule 7 (lower (has_type $I64 (iadd a b)))
+(rule 15 (lower (has_type $I64 (iadd a b)))
   (if-let c (u32_from_negated_iconst b))
   (pulley_xsub64_u32 a c))
-(rule 8 (lower (has_type (ty_int (fits_in_32 _)) (iadd a b)))
+(rule 16 (lower (has_type (ty_int (fits_in_32 _)) (iadd a b)))
   (if-let c (u8_from_negated_iconst b))
   (pulley_xsub32_u8 a c))
-(rule 9 (lower (has_type $I64 (iadd a b)))
+(rule 17 (lower (has_type $I64 (iadd a b)))
   (if-let c (u8_from_negated_iconst b))
   (pulley_xsub64_u8 a c))
 
@@ -257,6 +257,13 @@
 (rule 1 (lower (has_type $I8X16 (uadd_sat a b))) (pulley_vaddu8x16_sat a b))
 (rule 1 (lower (has_type $I16X8 (sadd_sat a b))) (pulley_vaddi16x8_sat a b))
 (rule 1 (lower (has_type $I16X8 (uadd_sat a b))) (pulley_vaddu16x8_sat a b))
+
+;; Specialized lowerings for multiply-and-add
+
+(rule 2 (lower (has_type $I32 (iadd (imul a b) c))) (pulley_xmadd32 a b c))
+(rule 3 (lower (has_type $I32 (iadd c (imul a b)))) (pulley_xmadd32 a b c))
+(rule 2 (lower (has_type $I64 (iadd (imul a b) c))) (pulley_xmadd64 a b c))
+(rule 3 (lower (has_type $I64 (iadd c (imul a b)))) (pulley_xmadd64 a b c))
 
 ;;;; Rules for `iadd_pairwise` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

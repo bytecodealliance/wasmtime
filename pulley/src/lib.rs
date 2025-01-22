@@ -276,6 +276,11 @@ macro_rules! for_each_op {
             /// Same as `xadd64` but `src2` is a zero-extended 32-bit immediate.
             xadd64_u32 = Xadd64U32 { dst: XReg, src1: XReg, src2: u32 };
 
+            /// `low32(dst) = low32(src1) * low32(src2) + low32(src3)`
+            xmadd32 = Xmadd32 { dst: XReg, src1: XReg, src2: XReg, src3: XReg };
+            /// `dst = src1 * src2 + src3`
+            xmadd64 = Xmadd64 { dst: XReg, src1: XReg, src2: XReg, src3: XReg };
+
             /// 32-bit wrapping subtraction: `low32(dst) = low32(src1) - low32(src2)`.
             ///
             /// The upper 32-bits of `dst` are unmodified.
