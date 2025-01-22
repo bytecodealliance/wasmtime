@@ -1,7 +1,7 @@
 This example project demonstrates using the `wasi-nn` API to perform PyTorch based inference. It consists of Rust code that is built using the `wasm32-wasip1` target.
 
 To run this example: 
-1. Ensure you set appropriate Libtorch enviornment variables according to [tch-rs instructions]( https://github.com/LaurentMazare/tch-rs?tab=readme-ov-file#libtorch-manual-install). 
+1. Ensure you set appropriate Libtorch environment variables according to [tch-rs instructions]( https://github.com/LaurentMazare/tch-rs?tab=readme-ov-file#libtorch-manual-install). 
     - Requires the C++ PyTorch library (libtorch) in version *v2.4.0* to be available on
 your system. 
     - `export LIBTORCH=/path/to/libtorch`
