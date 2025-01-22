@@ -622,7 +622,7 @@ macro_rules! for_each_op {
             ///
             /// Note that the `bound_ptr + bound_off` load loads a
             /// host-native-endian pointer-sized value.
-            xbc32_boundne_trap = XBc32BoundLeTrap {
+            xbc32_boundne_trap = XBc32BoundNeTrap {
                 addr: XReg,
                 bound_ptr: XReg,
                 bound_off: u8,

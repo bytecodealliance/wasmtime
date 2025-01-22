@@ -2479,7 +2479,7 @@ impl OpVisitor for Interpreter<'_> {
         let bound = unsafe { self.load::<usize>(bound_ptr, bound_off.into()) };
         let addr = self.state[addr].get_u32() as usize;
         if addr > bound.wrapping_sub(usize::from(size)) {
-            self.done_trap::<crate::XBc32BoundTrap>()
+            self.done_trap::<crate::XBc32BoundNeTrap>()
         } else {
             ControlFlow::Continue(())
         }
