@@ -1,6 +1,6 @@
 //! Implementation of the `wasi:http/types` interface's various body types.
 
-use crate::{bindings::http::types, types::FieldMap};
+use crate::{p2::bindings::http::types, types::FieldMap};
 use anyhow::anyhow;
 use bytes::Bytes;
 use http_body::{Body, Frame};

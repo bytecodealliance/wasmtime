@@ -67,17 +67,11 @@
 
 #![deny(missing_docs)]
 
-use anyhow::Result;
 use std::collections::HashMap;
 
-mod gen_ {
-    wasmtime::component::bindgen!({
-        path: "wit",
-        world: "wasi:config/imports",
-        trappable_imports: true,
-    });
-}
-use self::gen_::wasi::config::store as generated;
+pub mod p2;
+#[doc(inline)]
+pub use p2::*;
 
 /// Capture the state necessary for use in the `wasi-config` API implementation.
 #[derive(Default)]
@@ -122,28 +116,4 @@ impl<'a> WasiConfig<'a> {
     pub fn new(vars: &'a WasiConfigVariables) -> Self {
         Self { vars }
     }
-}
-
-impl generated::Host for WasiConfig<'_> {
-    fn get(&mut self, key: String) -> Result<Result<Option<String>, generated::Error>> {
-        Ok(Ok(self.vars.0.get(&key).map(|s| s.to_owned())))
-    }
-
-    fn get_all(&mut self) -> Result<Result<Vec<(String, String)>, generated::Error>> {
-        Ok(Ok(self
-            .vars
-            .0
-            .iter()
-            .map(|(k, v)| (k.to_string(), v.to_string()))
-            .collect()))
-    }
-}
-
-/// Add all the `wasi-config` world's interfaces to a [`wasmtime::component::Linker`].
-pub fn add_to_linker<T>(
-    l: &mut wasmtime::component::Linker<T>,
-    f: impl Fn(&mut T) -> WasiConfig<'_> + Send + Sync + Copy + 'static,
-) -> Result<()> {
-    generated::add_to_linker_get_host(l, f)?;
-    Ok(())
 }

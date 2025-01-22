@@ -1,4 +1,4 @@
-use crate::bindings::http::types::ErrorCode;
+use crate::p2::bindings::http::types::ErrorCode;
 use std::error::Error;
 use std::fmt;
 use wasmtime_wasi::ResourceTableError;
@@ -59,7 +59,7 @@ impl fmt::Display for HttpError {
 impl Error for HttpError {}
 
 pub(crate) fn dns_error(rcode: String, info_code: u16) -> ErrorCode {
-    ErrorCode::DnsError(crate::bindings::http::types::DnsErrorPayload {
+    ErrorCode::DnsError(crate::p2::bindings::http::types::DnsErrorPayload {
         rcode: Some(rcode),
         info_code: Some(info_code),
     })

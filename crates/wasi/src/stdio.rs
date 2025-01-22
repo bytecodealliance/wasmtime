@@ -1,8 +1,8 @@
-use crate::bindings::cli::{
+use crate::p2::bindings::cli::{
     stderr, stdin, stdout, terminal_input, terminal_output, terminal_stderr, terminal_stdin,
     terminal_stdout,
 };
-use crate::bindings::io::streams;
+use crate::p2::bindings::io::streams;
 use crate::pipe;
 use crate::{
     HostInputStream, HostOutputStream, IoView, StreamError, StreamResult, Subscribe, WasiImpl,

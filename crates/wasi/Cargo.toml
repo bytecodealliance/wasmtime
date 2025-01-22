@@ -57,6 +57,8 @@ default = [ "preview1"]
 preview1 = [
     "dep:wiggle",
 ]
+# Enables experimental, unstable and incomplete support for wasip3
+p3 = []
 
 [[test]]
 name = "process_stdin"

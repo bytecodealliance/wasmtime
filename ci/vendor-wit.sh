@@ -19,24 +19,24 @@ make_vendor() {
   mkdir -p $path
 
   for package in $packages; do
-    IFS='@' read -r repo tag <<< "$package"
-    mkdir -p $path/$repo
+    IFS='@' read -r repo tag subdir <<< "$package"
+    mkdir -p "$path/$package"
     cached_extracted_dir="$cache_dir/$repo-$tag"
 
     if [[ ! -d $cached_extracted_dir ]]; then
       mkdir -p $cached_extracted_dir
       curl -sL https://github.com/WebAssembly/wasi-$repo/archive/$tag.tar.gz | \
         tar xzf - --strip-components=1 -C $cached_extracted_dir
-      rm -rf $cached_extracted_dir/wit/deps*
+      rm -rf $cached_extracted_dir/${subdir:-"wit"}/deps*
     fi
 
-    cp -r $cached_extracted_dir/wit/* $path/$repo
+    cp -r $cached_extracted_dir/${subdir:-"wit"}/* $path/$package
   done
 }
 
 cache_dir=$(mktemp -d)
 
-make_vendor "wasi" "
+make_vendor "wasi/src/p2" "
   cli@v0.2.3
   clocks@v0.2.3
   filesystem@v0.2.3
@@ -45,7 +45,12 @@ make_vendor "wasi" "
   sockets@v0.2.3
 "
 
-make_vendor "wasi-http" "
+make_vendor "wasi/src/p3" "
+  clocks@3850f9d@wit-0.3.0-draft
+  random@3e99124@wit-0.3.0-draft
+"
+
+make_vendor "wasi-http/src/p2" "
   cli@v0.2.3
   clocks@v0.2.3
   filesystem@v0.2.3
@@ -55,9 +60,9 @@ make_vendor "wasi-http" "
   http@v0.2.3
 "
 
-make_vendor "wasi-config" "config@f4d699b"
+make_vendor "wasi-config/src/p2" "config@f4d699b"
 
-make_vendor "wasi-keyvalue" "keyvalue@219ea36"
+make_vendor "wasi-keyvalue/src/p2" "keyvalue@219ea36"
 
 rm -rf $cache_dir
 

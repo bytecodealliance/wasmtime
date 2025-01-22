@@ -1,6 +1,6 @@
-use crate::bindings::sockets::tcp::ErrorCode;
 use crate::host::network;
 use crate::network::SocketAddressFamily;
+use crate::p2::bindings::sockets::tcp::ErrorCode;
 use crate::runtime::{with_ambient_tokio_runtime, AbortOnDropJoinHandle};
 use crate::{
     HostInputStream, HostOutputStream, InputStream, OutputStream, SocketError, SocketResult,
@@ -146,7 +146,7 @@ impl TcpSocket {
     }
 
     fn as_std_view(&self) -> SocketResult<SocketlikeView<'_, std::net::TcpStream>> {
-        use crate::bindings::sockets::network::ErrorCode;
+        use crate::p2::bindings::sockets::network::ErrorCode;
 
         match &self.tcp_state {
             TcpState::Default(socket) | TcpState::Bound(socket) => {
