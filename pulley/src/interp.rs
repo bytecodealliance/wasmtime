@@ -1520,6 +1520,22 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
+    fn xmadd32(&mut self, dst: XReg, src1: XReg, src2: XReg, src3: XReg) -> ControlFlow<Done> {
+        let a = self.state[src1].get_u32();
+        let b = self.state[src2].get_u32();
+        let c = self.state[src3].get_u32();
+        self.state[dst].set_u32(a.wrapping_mul(b).wrapping_add(c));
+        ControlFlow::Continue(())
+    }
+
+    fn xmadd64(&mut self, dst: XReg, src1: XReg, src2: XReg, src3: XReg) -> ControlFlow<Done> {
+        let a = self.state[src1].get_u64();
+        let b = self.state[src2].get_u64();
+        let c = self.state[src3].get_u64();
+        self.state[dst].set_u64(a.wrapping_mul(b).wrapping_add(c));
+        ControlFlow::Continue(())
+    }
+
     fn xsub32(&mut self, operands: BinaryOperands<XReg>) -> ControlFlow<Done> {
         let a = self.state[operands.src1].get_u32();
         let b = self.state[operands.src2].get_u32();
