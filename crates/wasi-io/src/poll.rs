@@ -1,7 +1,8 @@
+use alloc::boxed::Box;
 use anyhow::Result;
-use std::any::Any;
-use std::future::Future;
-use std::pin::Pin;
+use core::any::Any;
+use core::future::Future;
+use core::pin::Pin;
 use wasmtime::component::{Resource, ResourceTable};
 
 pub type DynFuture<'a> = Pin<Box<dyn Future<Output = ()> + Send + 'a>>;

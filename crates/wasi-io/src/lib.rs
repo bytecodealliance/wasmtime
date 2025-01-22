@@ -13,8 +13,14 @@
 //! and write to streams.
 //!
 //! This crate is designed to have no unnecessary dependencies and, in
-//! particular, compile without `std`.
+//! particular, to be #![no_std].
+
+#![no_std]
+
 extern crate alloc;
+#[cfg(feature = "std")]
+#[macro_use]
+extern crate std;
 
 pub mod bindings;
 mod impls;
@@ -24,6 +30,7 @@ pub mod streams;
 #[doc(no_inline)]
 pub use async_trait::async_trait;
 
+use alloc::boxed::Box;
 use wasmtime::component::ResourceTable;
 
 /// A trait which provides access to the [`ResourceTable`] inside the

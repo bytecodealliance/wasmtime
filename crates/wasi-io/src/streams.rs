@@ -1,4 +1,5 @@
 use crate::poll::Pollable;
+use alloc::boxed::Box;
 use anyhow::Result;
 use bytes::Bytes;
 
@@ -69,8 +70,8 @@ impl StreamError {
     }
 }
 
-impl std::fmt::Display for StreamError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl alloc::fmt::Display for StreamError {
+    fn fmt(&self, f: &mut alloc::fmt::Formatter<'_>) -> alloc::fmt::Result {
         match self {
             StreamError::Closed => write!(f, "closed"),
             StreamError::LastOperationFailed(e) => write!(f, "last operation failed: {e}"),
@@ -79,8 +80,8 @@ impl std::fmt::Display for StreamError {
     }
 }
 
-impl std::error::Error for StreamError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+impl core::error::Error for StreamError {
+    fn source(&self) -> Option<&(dyn core::error::Error + 'static)> {
         match self {
             StreamError::Closed => None,
             StreamError::LastOperationFailed(e) | StreamError::Trap(e) => e.source(),

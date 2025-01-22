@@ -3,6 +3,8 @@ use crate::poll::{subscribe, DynFuture, DynPollable, MakeFuture};
 use crate::streams::{DynInputStream, DynOutputStream, StreamError, StreamResult};
 use crate::{IoImpl, IoView};
 use alloc::collections::BTreeMap;
+use alloc::string::String;
+use alloc::vec::Vec;
 use anyhow::{anyhow, Result};
 use core::future::Future;
 use core::pin::Pin;
@@ -115,7 +117,7 @@ impl<T: IoView> error::HostError for IoImpl<T> {
     }
 
     fn to_debug_string(&mut self, err: Resource<streams::Error>) -> Result<String> {
-        Ok(format!("{:?}", self.table().get(&err)?))
+        Ok(alloc::format!("{:?}", self.table().get(&err)?))
     }
 }
 
