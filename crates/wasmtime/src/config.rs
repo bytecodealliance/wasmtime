@@ -524,6 +524,12 @@ impl Config {
     /// - When targeting Windows, since the Windows ABI requires it.
     /// - By default.
     ///
+    /// Note that systems loading many modules may wish to disable this
+    /// configuration option instead of leaving it on-by-default. Some platforms
+    /// exhibit quadratic behavior when registering/unregistering unwinding
+    /// information which can greatly slow down the module loading/unloading
+    /// process.
+    ///
     /// [`WasmBacktrace`]: crate::WasmBacktrace
     pub fn native_unwind_info(&mut self, enable: bool) -> &mut Self {
         self.native_unwind_info = Some(enable);
