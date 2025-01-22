@@ -1380,50 +1380,32 @@ user-login = "alexcrichton"
 user-name = "Alex Crichton"
 
 [[publisher.wasm-encoder]]
-version = "0.220.0"
-when = "2024-11-12"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-encoder]]
-version = "0.223.0"
-when = "2025-01-08"
+version = "0.224.0"
+when = "2025-01-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasm-metadata]]
-version = "0.220.0"
-when = "2024-11-12"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasm-metadata]]
-version = "0.223.0"
-when = "2025-01-08"
+version = "0.224.0"
+when = "2025-01-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasm-wave]]
-version = "0.223.0"
-when = "2025-01-08"
+version = "0.224.0"
+when = "2025-01-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmparser]]
-version = "0.220.0"
-when = "2024-11-12"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wasmparser]]
-version = "0.223.0"
-when = "2025-01-08"
+version = "0.224.0"
+when = "2025-01-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wasmprinter]]
-version = "0.223.0"
-when = "2025-01-08"
+version = "0.224.0"
+when = "2025-01-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1578,14 +1560,14 @@ user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wast]]
-version = "223.0.0"
-when = "2025-01-08"
+version = "224.0.0"
+when = "2025-01-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wat]]
-version = "1.223.0"
-when = "2025-01-08"
+version = "1.224.0"
+when = "2025-01-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1810,14 +1792,14 @@ user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
 [[publisher.wit-bindgen]]
-version = "0.37.0"
-when = "2025-01-10"
+version = "0.38.0"
+when = "2025-01-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-core]]
-version = "0.37.0"
-when = "2025-01-10"
+version = "0.38.0"
+when = "2025-01-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1827,39 +1809,33 @@ when = "2025-01-10"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.wit-bindgen-rt]]
+version = "0.38.0"
+when = "2025-01-22"
+user-id = 73222
+user-login = "wasmtime-publish"
+
 [[publisher.wit-bindgen-rust]]
-version = "0.37.0"
-when = "2025-01-10"
+version = "0.38.0"
+when = "2025-01-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-bindgen-rust-macro]]
-version = "0.37.0"
-when = "2025-01-10"
+version = "0.38.0"
+when = "2025-01-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-component]]
-version = "0.220.0"
-when = "2024-11-12"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-component]]
-version = "0.223.0"
-when = "2025-01-08"
+version = "0.224.0"
+when = "2025-01-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 
 [[publisher.wit-parser]]
-version = "0.220.0"
-when = "2024-11-12"
-user-id = 73222
-user-login = "wasmtime-publish"
-
-[[publisher.wit-parser]]
-version = "0.223.0"
-when = "2025-01-08"
+version = "0.224.0"
+when = "2025-01-22"
 user-id = 73222
 user-login = "wasmtime-publish"
 

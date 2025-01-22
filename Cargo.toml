@@ -294,20 +294,20 @@ io-lifetimes = { version = "2.0.3", default-features = false }
 io-extras = "0.18.1"
 rustix = "0.38.43"
 # wit-bindgen:
-wit-bindgen = { version = "0.37.0", default-features = false }
-wit-bindgen-rust-macro = { version = "0.37.0", default-features = false }
+wit-bindgen = { version = "0.38.0", default-features = false }
+wit-bindgen-rust-macro = { version = "0.38.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.223.0", default-features = false, features = ['simd'] }
-wat = "1.223.0"
-wast = "223.0.0"
-wasmprinter = "0.223.0"
-wasm-encoder = "0.223.0"
-wasm-smith = "0.223.0"
-wasm-mutate = "0.223.0"
-wit-parser = "0.223.0"
-wit-component = "0.223.0"
-wasm-wave = "0.223.0"
+wasmparser = { version = "0.224.0", default-features = false, features = ['simd'] }
+wat = "1.224.0"
+wast = "224.0.0"
+wasmprinter = "0.224.0"
+wasm-encoder = "0.224.0"
+wasm-smith = "0.224.0"
+wasm-mutate = "0.224.0"
+wit-parser = "0.224.0"
+wit-component = "0.224.0"
+wasm-wave = "0.224.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------

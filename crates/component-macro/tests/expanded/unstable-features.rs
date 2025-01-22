@@ -62,7 +62,7 @@ impl LinkOptions {
     }
 }
 pub enum Baz {}
-pub trait HostBaz {
+pub trait HostBaz: Sized {
     fn foo(&mut self, self_: wasmtime::component::Resource<Baz>) -> ();
     fn drop(&mut self, rep: wasmtime::component::Resource<Baz>) -> wasmtime::Result<()>;
 }
@@ -190,10 +190,11 @@ pub trait TheWorldImports: HostBaz {
 }
 pub trait TheWorldImportsGetHost<
     T,
->: Fn(T) -> <Self as TheWorldImportsGetHost<T>>::Host + Send + Sync + Copy + 'static {
+    D,
+>: Fn(T) -> <Self as TheWorldImportsGetHost<T, D>>::Host + Send + Sync + Copy + 'static {
     type Host: TheWorldImports;
 }
-impl<F, T, O> TheWorldImportsGetHost<T> for F
+impl<F, T, D, O> TheWorldImportsGetHost<T, D> for F
 where
     F: Fn(T) -> O + Send + Sync + Copy + 'static,
     O: TheWorldImports,
@@ -268,10 +269,13 @@ const _: () = {
             let indices = TheWorldIndices::new_instance(&mut store, instance)?;
             indices.load(store, instance)
         }
-        pub fn add_to_linker_imports_get_host<T>(
+        pub fn add_to_linker_imports_get_host<
+            T,
+            G: for<'a> TheWorldImportsGetHost<&'a mut T, T, Host: TheWorldImports>,
+        >(
             linker: &mut wasmtime::component::Linker<T>,
             options: &LinkOptions,
-            host_getter: impl for<'a> TheWorldImportsGetHost<&'a mut T>,
+            host_getter: G,
         ) -> wasmtime::Result<()> {
             let mut linker = linker.root();
             if options.experimental_world {
@@ -384,7 +388,7 @@ pub mod foo {
                 }
             }
             pub enum Bar {}
-            pub trait HostBar {
+            pub trait HostBar: Sized {
                 fn foo(&mut self, self_: wasmtime::component::Resource<Bar>) -> ();
                 fn drop(
                     &mut self,
@@ -402,25 +406,29 @@ pub mod foo {
                     HostBar::drop(*self, rep)
                 }
             }
-            pub trait Host: HostBar {
+            pub trait Host: HostBar + Sized {
                 fn foo(&mut self) -> ();
             }
             pub trait GetHost<
                 T,
-            >: Fn(T) -> <Self as GetHost<T>>::Host + Send + Sync + Copy + 'static {
+                D,
+            >: Fn(T) -> <Self as GetHost<T, D>>::Host + Send + Sync + Copy + 'static {
                 type Host: Host;
             }
-            impl<F, T, O> GetHost<T> for F
+            impl<F, T, D, O> GetHost<T, D> for F
             where
                 F: Fn(T) -> O + Send + Sync + Copy + 'static,
                 O: Host,
             {
                 type Host = O;
             }
-            pub fn add_to_linker_get_host<T>(
+            pub fn add_to_linker_get_host<
+                T,
+                G: for<'a> GetHost<&'a mut T, T, Host: Host>,
+            >(
                 linker: &mut wasmtime::component::Linker<T>,
                 options: &LinkOptions,
-                host_getter: impl for<'a> GetHost<&'a mut T>,
+                host_getter: G,
             ) -> wasmtime::Result<()> {
                 if options.experimental_interface {
                     let mut inst = linker.instance("foo:foo/the-interface")?;

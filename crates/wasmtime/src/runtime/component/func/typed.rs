@@ -17,6 +17,9 @@ use wasmtime_environ::component::{
     MAX_FLAT_RESULTS,
 };
 
+#[cfg(feature = "component-model-async")]
+use crate::component::concurrent::Promise;
+
 /// A statically-typed version of [`Func`] which takes `Params` as input and
 /// returns `Return`.
 ///
@@ -188,6 +191,31 @@ where
         store
             .on_fiber(|store| self.call_impl(store, params))
             .await?
+    }
+
+    /// Start concurrent call to this function.
+    ///
+    /// Unlike [`Self::call`] and [`Self::call_async`] (both of which require
+    /// exclusive access to the store until the completion of the call), calls
+    /// made using this method may run concurrently with other calls to the same
+    /// instance.
+    #[cfg(feature = "component-model-async")]
+    pub async fn call_concurrent<T: Send>(
+        self,
+        mut store: impl AsContextMut<Data = T>,
+        params: Params,
+    ) -> Result<Promise<Return>>
+    where
+        Params: Send + Sync + 'static,
+        Return: Send + Sync + 'static,
+    {
+        let store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `call_concurrent` when async support is not enabled on the config"
+        );
+        _ = params;
+        todo!()
     }
 
     fn call_impl(&self, mut store: impl AsContextMut, params: Params) -> Result<Return> {

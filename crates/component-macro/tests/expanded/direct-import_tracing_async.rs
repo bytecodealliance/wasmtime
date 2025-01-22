@@ -101,10 +101,11 @@ pub trait FooImports: Send {
 }
 pub trait FooImportsGetHost<
     T,
->: Fn(T) -> <Self as FooImportsGetHost<T>>::Host + Send + Sync + Copy + 'static {
+    D,
+>: Fn(T) -> <Self as FooImportsGetHost<T, D>>::Host + Send + Sync + Copy + 'static {
     type Host: FooImports;
 }
-impl<F, T, O> FooImportsGetHost<T> for F
+impl<F, T, D, O> FooImportsGetHost<T, D> for F
 where
     F: Fn(T) -> O + Send + Sync + Copy + 'static,
     O: FooImports,
@@ -182,9 +183,12 @@ const _: () = {
             let indices = FooIndices::new_instance(&mut store, instance)?;
             indices.load(store, instance)
         }
-        pub fn add_to_linker_imports_get_host<T>(
+        pub fn add_to_linker_imports_get_host<
+            T,
+            G: for<'a> FooImportsGetHost<&'a mut T, T, Host: FooImports>,
+        >(
             linker: &mut wasmtime::component::Linker<T>,
-            host_getter: impl for<'a> FooImportsGetHost<&'a mut T>,
+            host_getter: G,
         ) -> wasmtime::Result<()>
         where
             T: Send,
