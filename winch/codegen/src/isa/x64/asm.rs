@@ -1537,7 +1537,7 @@ impl Assembler {
 
     /// Emits a conditional jump to the given label.
     pub fn jmp_if(&mut self, cc: impl Into<CC>, taken: MachLabel) {
-        self.emit(Inst::JmpIf {
+        self.emit(Inst::WinchJmpIf {
             cc: cc.into(),
             taken,
         });

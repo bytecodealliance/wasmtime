@@ -578,17 +578,16 @@
        ;; Jump to a known target: jmp simm32.
        (JmpKnown (dst MachLabel))
 
-       ;; One-way conditional branch: jcond cond target.
+       ;; Low-level one-way conditional branch: jcond cond target.
        ;;
-       ;; This instruction is useful when we have conditional jumps depending on
-       ;; more than two conditions, see for instance the lowering of Brif
-       ;; with Fcmp inputs.
-       ;;
-       ;; A note of caution: in contexts where the branch target is another
-       ;; block, this has to be the same successor as the one specified in the
-       ;; terminator branch of the current block.  Otherwise, this might confuse
-       ;; register allocation by creating new invisible edges.
-       (JmpIf (cc CC)
+       ;; This instruction is useful only for lower-level code
+       ;; generators that use the Cranelift instruction backend as an
+       ;; assembler library. The instruction is thus named after its
+       ;; primary user, Winch. This instruction *should not* be used
+       ;; by Cranelift proper and placed into VCode: it does not
+       ;; adhere to the basic-block invariant, namely that branches
+       ;; always end a block (with no fallthrough).
+       (WinchJmpIf (cc CC)
               (taken MachLabel))
 
        ;; Two-way conditional branch: jcond cond target target.
@@ -598,6 +597,17 @@
        (JmpCond (cc CC)
                 (taken MachLabel)
                 (not_taken MachLabel))
+
+       ;; Two-way conditional branch with a combination of conditions:
+       ;;
+       ;;   j(cc1 or cc2) target1 target2
+       ;;
+       ;; Emitted as a compound sequence of three branches -- `jcc1
+       ;; target1`, `jcc2 target1`, `jmp target2`.
+       (JmpCondOr (cc1 CC)
+                  (cc2 CC)
+                  (taken MachLabel)
+                  (not_taken MachLabel))
 
        ;; Jump-table sequence, as one compound instruction (see note in lower.rs
        ;; for rationale).
@@ -5030,14 +5040,15 @@
 (rule (jmp_known target)
       (SideEffectNoResult.Inst (MInst.JmpKnown target)))
 
-(decl jmp_if (CC MachLabel) ConsumesFlags)
-(rule (jmp_if cc taken)
-      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.JmpIf cc taken)))
-
 ;; Conditional jump based on the condition code.
 (decl jmp_cond (CC MachLabel MachLabel) ConsumesFlags)
 (rule (jmp_cond cc taken not_taken)
       (ConsumesFlags.ConsumesFlagsSideEffect (MInst.JmpCond cc taken not_taken)))
+
+;; Conditional jump based on the OR of two condition codes.
+(decl jmp_cond_or (CC CC MachLabel MachLabel) ConsumesFlags)
+(rule (jmp_cond_or cc1 cc2 taken not_taken)
+      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.JmpCondOr cc1 cc2 taken not_taken)))
 
 ;; Conditional jump based on the result of an icmp.
 (decl jmp_cond_icmp (IcmpCondResult MachLabel MachLabel) SideEffectNoResult)
@@ -5050,14 +5061,12 @@
       (with_flags_side_effect producer (jmp_cond cc taken not_taken)))
 (rule (jmp_cond_fcmp (FcmpCondResult.AndCondition producer cc1 cc2) taken not_taken)
       (with_flags_side_effect producer
-                              (consumes_flags_concat
-                                (jmp_if (cc_invert cc1) not_taken)
-                                (jmp_cond (cc_invert cc2) not_taken taken))))
+                              ;; DeMorgan's rule: to get cc1 AND cc2, we do NOT (NOT cc1 OR NOT cc2).
+                              ;; The outer NOT comes from flipping `not_taken` and `taken`.
+                              (jmp_cond_or (cc_invert cc1) (cc_invert cc2) not_taken taken)))
 (rule (jmp_cond_fcmp (FcmpCondResult.OrCondition producer cc1 cc2) taken not_taken)
       (with_flags_side_effect producer
-                              (consumes_flags_concat
-                                (jmp_if cc1 taken)
-                                (jmp_cond cc2 taken not_taken))))
+                              (jmp_cond_or cc1 cc2 taken not_taken)))
 
 ;; Emit the compound instruction that does:
 ;;
