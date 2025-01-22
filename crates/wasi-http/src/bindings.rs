@@ -19,7 +19,7 @@ mod generated {
         require_store_data_send: true,
         with: {
             // Upstream package dependencies
-            "wasi:io": wasmtime_wasi_io::bindings::wasi::io,
+            "wasi:io": wasmtime_wasi::bindings::io,
 
             // Configure all WIT http resources to be defined types in this
             // crate to use the `ResourceTable` helper methods.

@@ -27,7 +27,6 @@ http-body = { workspace = true }
 http-body-util = { workspace = true }
 tracing = { workspace = true }
 wasmtime-wasi = { workspace = true }
-wasmtime-wasi-io = { workspace = true }
 wasmtime = { workspace = true, features = ['component-model'] }
 
 # The `ring` crate, used to implement TLS, does not build on riscv64 or s390x

@@ -14,11 +14,7 @@ use anyhow::Context;
 use std::any::Any;
 use std::str::FromStr;
 use wasmtime::component::{Resource, ResourceTable, ResourceTableError};
-use wasmtime_wasi_io::{
-    poll::DynPollable,
-    streams::{DynInputStream, DynOutputStream},
-    IoView,
-};
+use wasmtime_wasi::{DynInputStream, DynOutputStream, DynPollable, IoView};
 
 impl<T> crate::bindings::http::types::Host for WasiHttpImpl<T>
 where
@@ -664,7 +660,7 @@ where
         &mut self,
         index: Resource<HostFutureTrailers>,
     ) -> wasmtime::Result<Resource<DynPollable>> {
-        wasmtime_wasi_io::poll::subscribe(self.table(), index)
+        wasmtime_wasi::subscribe(self.table(), index)
     }
 
     fn get(
@@ -885,7 +881,7 @@ where
         &mut self,
         id: Resource<HostFutureIncomingResponse>,
     ) -> wasmtime::Result<Resource<DynPollable>> {
-        wasmtime_wasi_io::poll::subscribe(self.table(), id)
+        wasmtime_wasi::subscribe(self.table(), id)
     }
 }
 
