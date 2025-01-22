@@ -1429,65 +1429,74 @@ impl Masm for MacroAssembler {
     fn atomic_rmw(
         &mut self,
         context: &mut CodeGenContext<Emission>,
-        addr: Self::Address,
+        compute_addr: impl FnOnce(&mut Self, &mut CodeGenContext<Emission>) -> Result<Option<Reg>>,
         size: OperandSize,
         op: RmwOp,
         flags: MemFlags,
         extend: Option<Extend<Zero>>,
     ) -> Result<()> {
-        let res = match op {
-            RmwOp::Add => {
-                let operand = context.pop_to_reg(self, None)?;
-                self.asm
-                    .lock_xadd(addr, operand.reg, writable!(operand.reg), size, flags);
-                operand.reg
-            }
-            RmwOp::Sub => {
-                let operand = context.pop_to_reg(self, None)?;
-                self.asm.neg(operand.reg, writable!(operand.reg), size);
-                self.asm
-                    .lock_xadd(addr, operand.reg, writable!(operand.reg), size, flags);
-                operand.reg
-            }
-            RmwOp::Xchg => {
-                let operand = context.pop_to_reg(self, None)?;
-                self.asm
-                    .xchg(addr, operand.reg, writable!(operand.reg), size, flags);
-                operand.reg
-            }
-            RmwOp::And | RmwOp::Or | RmwOp::Xor => {
-                let op = match op {
-                    RmwOp::And => AtomicRmwSeqOp::And,
-                    RmwOp::Or => AtomicRmwSeqOp::Or,
-                    RmwOp::Xor => AtomicRmwSeqOp::Xor,
-                    _ => unreachable!(
-                        "invalid op for atomic_rmw_seq, should be one of `or`, `and` or `xor`"
-                    ),
-                };
-                let dst = context.reg(regs::rax(), self)?;
-                let operand = context.pop_to_reg(self, None)?;
+        // `atomic_rmw_seq` requires the rax register, reserve it now
+        if matches!(op, RmwOp::And | RmwOp::Or | RmwOp::Xor) {
+            context.reg(regs::rax(), self)?;
+        }
 
-                self.asm
-                    .atomic_rmw_seq(addr, operand.reg, writable!(dst), size, flags, op);
+        let operand = context.pop_to_reg(self, None)?;
 
-                context.free_reg(operand.reg);
-                dst
-            }
-        };
-
-        let dst_ty = match extend {
-            Some(ext) => {
-                // We don't need to zero-extend from 32 to 64bits.
-                if !(ext.from_bits() == 32 && ext.to_bits() == 64) {
-                    self.asm.movzx_rr(res, writable!(res), ext.into());
+        if let Some(addr) = compute_addr(self, context)? {
+            let src = self.address_at_reg(addr, 0)?;
+            let res = match op {
+                RmwOp::Add => {
+                    self.asm
+                        .lock_xadd(src, operand.reg, writable!(operand.reg), size, flags);
+                    operand.reg
                 }
+                RmwOp::Sub => {
+                    self.asm.neg(operand.reg, writable!(operand.reg), size);
+                    self.asm
+                        .lock_xadd(src, operand.reg, writable!(operand.reg), size, flags);
+                    operand.reg
+                }
+                RmwOp::Xchg => {
+                    self.asm
+                        .xchg(src, operand.reg, writable!(operand.reg), size, flags);
+                    operand.reg
+                }
+                RmwOp::And | RmwOp::Or | RmwOp::Xor => {
+                    let op = match op {
+                        RmwOp::And => AtomicRmwSeqOp::And,
+                        RmwOp::Or => AtomicRmwSeqOp::Or,
+                        RmwOp::Xor => AtomicRmwSeqOp::Xor,
+                        _ => unreachable!(
+                            "invalid op for atomic_rmw_seq, should be one of `or`, `and` or `xor`"
+                        ),
+                    };
 
-                WasmValType::int_from_bits(ext.to_bits())
-            }
-            None => WasmValType::int_from_bits(size.num_bits()),
-        };
+                    // we have already reserved rax is already reserved
+                    let dst = regs::rax();
 
-        context.stack.push(TypedReg::new(dst_ty, res).into());
+                    self.asm
+                        .atomic_rmw_seq(src, operand.reg, writable!(dst), size, flags, op);
+
+                    context.free_reg(operand.reg);
+                    dst
+                }
+            };
+
+            let dst_ty = match extend {
+                Some(ext) => {
+                    // We don't need to zero-extend from 32 to 64bits.
+                    if !(ext.from_bits() == 32 && ext.to_bits() == 64) {
+                        self.asm.movzx_rr(res, writable!(res), ext.into());
+                    }
+
+                    WasmValType::int_from_bits(ext.to_bits())
+                }
+                None => WasmValType::int_from_bits(size.num_bits()),
+            };
+
+            context.stack.push(TypedReg::new(dst_ty, res).into());
+            context.free_reg(addr);
+        }
 
         Ok(())
     }
@@ -1543,7 +1552,7 @@ impl Masm for MacroAssembler {
     fn atomic_cas(
         &mut self,
         context: &mut CodeGenContext<Emission>,
-        addr: Self::Address,
+        compute_addr: impl FnOnce(&mut Self, &mut CodeGenContext<Emission>) -> Result<Option<Reg>>,
         size: OperandSize,
         flags: MemFlags,
         extend: Option<Extend<Zero>>,
@@ -1551,32 +1560,35 @@ impl Masm for MacroAssembler {
         // `cmpxchg` expects `expected` to be in the `*a*` register.
         // reserve rax for the expected argument.
         let rax = context.reg(regs::rax(), self)?;
+        if let Some(addr) = compute_addr(self, context)? {
+            let replacement = context.pop_to_reg(self, None)?;
+            let src = self.address_at_reg(addr, 0)?;
 
-        let replacement = context.pop_to_reg(self, None)?;
+            // mark `rax` as allocatable again.
+            context.free_reg(rax);
+            let expected = context.pop_to_reg(self, Some(regs::rax()))?;
 
-        // mark `rax` as allocatable again.
-        context.free_reg(rax);
-        let expected = context.pop_to_reg(self, Some(regs::rax()))?;
+            self.asm.cmpxchg(
+                src,
+                expected.reg,
+                replacement.reg,
+                writable!(expected.reg),
+                size,
+                flags,
+            );
 
-        self.asm.cmpxchg(
-            addr,
-            expected.reg,
-            replacement.reg,
-            writable!(expected.reg),
-            size,
-            flags,
-        );
-
-        if let Some(extend) = extend {
-            // We don't need to zero-extend from 32 to 64bits.
-            if !(extend.from_bits() == 32 && extend.to_bits() == 64) {
-                self.asm
-                    .movzx_rr(expected.reg.into(), writable!(expected.reg.into()), extend);
+            if let Some(extend) = extend {
+                // We don't need to zero-extend from 32 to 64bits.
+                if !(extend.from_bits() == 32 && extend.to_bits() == 64) {
+                    self.asm
+                        .movzx_rr(expected.reg.into(), writable!(expected.reg.into()), extend);
+                }
             }
-        }
 
-        context.stack.push(expected.into());
-        context.free_reg(replacement);
+            context.stack.push(expected.into());
+            context.free_reg(replacement);
+            context.free_reg(addr);
+        }
 
         Ok(())
     }

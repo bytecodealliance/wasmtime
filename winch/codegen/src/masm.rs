@@ -1412,7 +1412,7 @@ pub(crate) trait MacroAssembler {
     fn atomic_rmw(
         &mut self,
         context: &mut CodeGenContext<Emission>,
-        addr: Self::Address,
+        compute_addr: impl FnOnce(&mut Self, &mut CodeGenContext<Emission>) -> Result<Option<Reg>>,
         size: OperandSize,
         op: RmwOp,
         flags: MemFlags,
@@ -1438,7 +1438,7 @@ pub(crate) trait MacroAssembler {
     fn atomic_cas(
         &mut self,
         context: &mut CodeGenContext<Emission>,
-        addr: Self::Address,
+        compute_addr: impl FnOnce(&mut Self, &mut CodeGenContext<Emission>) -> Result<Option<Reg>>,
         size: OperandSize,
         flags: MemFlags,
         extend: Option<Extend<Zero>>,

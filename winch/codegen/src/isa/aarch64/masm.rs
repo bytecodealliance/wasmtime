@@ -910,7 +910,7 @@ impl Masm for MacroAssembler {
     fn atomic_rmw(
         &mut self,
         _context: &mut CodeGenContext<Emission>,
-        _addr: Self::Address,
+        _compute_addr: impl FnOnce(&mut Self, &mut CodeGenContext<Emission>) -> Result<Option<Reg>>,
         _size: OperandSize,
         _op: RmwOp,
         _flags: MemFlags,
@@ -932,7 +932,7 @@ impl Masm for MacroAssembler {
     fn atomic_cas(
         &mut self,
         _context: &mut CodeGenContext<Emission>,
-        _addr: Self::Address,
+        _compute_addr: impl FnOnce(&mut Self, &mut CodeGenContext<Emission>) -> Result<Option<Reg>>,
         _size: OperandSize,
         _flags: MemFlags,
         _extend: Option<Extend<Zero>>,
