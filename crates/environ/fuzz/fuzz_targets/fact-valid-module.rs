@@ -168,6 +168,10 @@ fn target(data: &[u8]) -> arbitrary::Result<()> {
                         realloc: Some(dummy_def()),
                         // Lowering never allows `post-return`
                         post_return: None,
+                        // Lowering never allows `callback`
+                        callback: None,
+                        // TODO: support async lowers
+                        async_: false,
                     },
                     lift_options: AdapterOptions {
                         instance: RuntimeComponentInstanceIndex::from_u32(1),
@@ -180,6 +184,9 @@ fn target(data: &[u8]) -> arbitrary::Result<()> {
                         } else {
                             None
                         },
+                        // TODO: support async lowers
+                        callback: None,
+                        async_: false,
                     },
                     func: dummy_def(),
                 });
