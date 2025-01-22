@@ -18,7 +18,7 @@ use std::time::Duration;
 use tokio::net::TcpStream;
 use tokio::time::timeout;
 use wasmtime::component::{Resource, ResourceTable};
-use wasmtime_wasi::{runtime::AbortOnDropJoinHandle, IoImpl, IoView, Subscribe};
+use wasmtime_wasi::{runtime::AbortOnDropJoinHandle, IoImpl, IoView, Pollable};
 
 /// Capture the state necessary for use in the wasi-http API implementation.
 #[derive(Debug)]
@@ -715,7 +715,7 @@ impl HostFutureIncomingResponse {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for HostFutureIncomingResponse {
+impl Pollable for HostFutureIncomingResponse {
     async fn ready(&mut self) {
         if let Self::Pending(handle) = self {
             *self = Self::Ready(handle.await);

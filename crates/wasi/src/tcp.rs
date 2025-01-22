@@ -3,8 +3,8 @@ use crate::host::network;
 use crate::network::SocketAddressFamily;
 use crate::runtime::{with_ambient_tokio_runtime, AbortOnDropJoinHandle};
 use crate::{
-    HostInputStream, HostOutputStream, InputStream, OutputStream, SocketError, SocketResult,
-    StreamError, Subscribe,
+    DynInputStream, DynOutputStream, InputStream, OutputStream, Pollable, SocketError,
+    SocketResult, StreamError,
 };
 use anyhow::Result;
 use cap_net_ext::AddressFamily;
@@ -263,7 +263,7 @@ impl TcpSocket {
         Ok(())
     }
 
-    pub fn finish_connect(&mut self) -> SocketResult<(InputStream, OutputStream)> {
+    pub fn finish_connect(&mut self) -> SocketResult<(DynInputStream, DynOutputStream)> {
         let previous_state = std::mem::replace(&mut self.tcp_state, TcpState::Closed);
         let result = match previous_state {
             TcpState::ConnectReady(result) => result,
@@ -293,8 +293,8 @@ impl TcpSocket {
                     reader: reader.clone(),
                     writer: writer.clone(),
                 };
-                let input: InputStream = Box::new(TcpReadStream(reader));
-                let output: OutputStream = Box::new(TcpWriteStream(writer));
+                let input: DynInputStream = Box::new(TcpReadStream(reader));
+                let output: DynOutputStream = Box::new(TcpWriteStream(writer));
                 Ok((input, output))
             }
             Err(err) => {
@@ -360,7 +360,7 @@ impl TcpSocket {
         }
     }
 
-    pub fn accept(&mut self) -> SocketResult<(Self, InputStream, OutputStream)> {
+    pub fn accept(&mut self) -> SocketResult<(Self, DynInputStream, DynOutputStream)> {
         let TcpState::Listening {
             listener,
             pending_accept,
@@ -445,8 +445,8 @@ impl TcpSocket {
         let reader = Arc::new(Mutex::new(TcpReader::new(client.clone())));
         let writer = Arc::new(Mutex::new(TcpWriter::new(client.clone())));
 
-        let input: InputStream = Box::new(TcpReadStream(reader.clone()));
-        let output: OutputStream = Box::new(TcpWriteStream(writer.clone()));
+        let input: DynInputStream = Box::new(TcpReadStream(reader.clone()));
+        let output: DynOutputStream = Box::new(TcpWriteStream(writer.clone()));
         let tcp_socket = TcpSocket::from_state(
             TcpState::Connected {
                 stream: client,
@@ -656,7 +656,7 @@ impl TcpSocket {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for TcpSocket {
+impl Pollable for TcpSocket {
     async fn ready(&mut self) {
         match &mut self.tcp_state {
             TcpState::Default(..)
@@ -748,14 +748,14 @@ impl TcpReader {
 struct TcpReadStream(Arc<Mutex<TcpReader>>);
 
 #[async_trait::async_trait]
-impl HostInputStream for TcpReadStream {
+impl InputStream for TcpReadStream {
     fn read(&mut self, size: usize) -> Result<bytes::Bytes, StreamError> {
         try_lock_for_stream(&self.0)?.read(size)
     }
 }
 
 #[async_trait::async_trait]
-impl Subscribe for TcpReadStream {
+impl Pollable for TcpReadStream {
     async fn ready(&mut self) {
         self.0.lock().await.ready().await
     }
@@ -954,7 +954,7 @@ impl TcpWriter {
 struct TcpWriteStream(Arc<Mutex<TcpWriter>>);
 
 #[async_trait::async_trait]
-impl HostOutputStream for TcpWriteStream {
+impl OutputStream for TcpWriteStream {
     fn write(&mut self, bytes: bytes::Bytes) -> Result<(), StreamError> {
         try_lock_for_stream(&self.0)?.write(bytes)
     }
@@ -973,7 +973,7 @@ impl HostOutputStream for TcpWriteStream {
 }
 
 #[async_trait::async_trait]
-impl Subscribe for TcpWriteStream {
+impl Pollable for TcpWriteStream {
     async fn ready(&mut self) {
         self.0.lock().await.ready().await
     }

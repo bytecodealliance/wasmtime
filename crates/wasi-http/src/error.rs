@@ -1,7 +1,7 @@
 use crate::bindings::http::types::ErrorCode;
 use std::error::Error;
 use std::fmt;
-use wasmtime_wasi::ResourceTableError;
+use wasmtime::component::ResourceTableError;
 
 /// A [`Result`] type where the error type defaults to [`HttpError`].
 pub type HttpResult<T, E = HttpError> = Result<T, E>;

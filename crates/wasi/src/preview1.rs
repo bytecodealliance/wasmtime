@@ -70,12 +70,8 @@ use crate::bindings::{
     },
     clocks::{monotonic_clock, wall_clock},
     filesystem::{preopens::Host as _, types as filesystem},
-    io::streams,
 };
-use crate::{
-    FsError, IoImpl, IoView, IsATTY, ResourceTable, StreamError, StreamResult, WasiCtx, WasiImpl,
-    WasiView,
-};
+use crate::{FsError, IsATTY, ResourceTable, WasiCtx, WasiImpl, WasiView};
 use anyhow::{bail, Context};
 use std::collections::{BTreeMap, HashSet};
 use std::mem::{self, size_of, size_of_val};
@@ -85,14 +81,19 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use system_interface::fs::FileIoExt;
 use wasmtime::component::Resource;
+use wasmtime_wasi_io::{
+    bindings::wasi::io::streams,
+    streams::{StreamError, StreamResult},
+    IoImpl, IoView,
+};
 use wiggle::tracing::instrument;
 use wiggle::{GuestError, GuestMemory, GuestPtr, GuestType};
 
 // Bring all WASI traits in scope that this implementation builds on.
 use crate::bindings::cli::environment::Host as _;
 use crate::bindings::filesystem::types::HostDescriptor as _;
-use crate::bindings::io::poll::Host as _;
 use crate::bindings::random::random::Host as _;
+use wasmtime_wasi_io::bindings::wasi::io::poll::Host as _;
 
 /// Structure containing state for WASIp1.
 ///

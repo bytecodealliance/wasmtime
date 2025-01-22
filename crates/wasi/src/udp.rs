@@ -1,5 +1,4 @@
 use crate::host::network::util;
-use crate::poll::Subscribe;
 use crate::runtime::with_ambient_tokio_runtime;
 use async_trait::async_trait;
 use cap_net_ext::{AddressFamily, Blocking};
@@ -7,6 +6,7 @@ use io_lifetimes::raw::{FromRawSocketlike, IntoRawSocketlike};
 use std::io;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use wasmtime_wasi_io::poll::Pollable;
 
 use super::network::{SocketAddrCheck, SocketAddressFamily};
 
@@ -49,7 +49,7 @@ pub struct UdpSocket {
 }
 
 #[async_trait]
-impl Subscribe for UdpSocket {
+impl Pollable for UdpSocket {
     async fn ready(&mut self) {
         // None of the socket-level operations block natively
     }

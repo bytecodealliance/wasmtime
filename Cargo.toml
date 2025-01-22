@@ -230,7 +230,8 @@ wasmtime-fiber = { path = "crates/fiber", version = "=30.0.0" }
 wasmtime-jit-debug = { path = "crates/jit-debug", version = "=30.0.0" }
 wasmtime-wast = { path = "crates/wast", version = "=30.0.0" }
 wasmtime-wasi = { path = "crates/wasi", version = "30.0.0", default-features = false }
-wasmtime-wasi-http = { path = "crates/wasi-http", version = "=30.0.0", default-features = false }
+wasmtime-wasi-io = { path = "crates/wasi-io", version = "30.0.0", default-features = false }
+wasmtime-wasi-http = { path = "crates/wasi-http", version = "30.0.0", default-features = false }
 wasmtime-wasi-nn = { path = "crates/wasi-nn", version = "30.0.0" }
 wasmtime-wasi-config = { path = "crates/wasi-config", version = "30.0.0" }
 wasmtime-wasi-keyvalue = { path = "crates/wasi-keyvalue", version = "30.0.0" }
@@ -355,7 +356,7 @@ hyper = "1.0.1"
 http = "1.0.0"
 http-body = "1.0.0"
 http-body-util = "0.1.0"
-bytes = "1.4"
+bytes = { version = "1.4", default-features = false }
 futures = { version = "0.3.27", default-features = false }
 indexmap = { version = "2.0.0", default-features = false }
 pretty_env_logger = "0.5.0"

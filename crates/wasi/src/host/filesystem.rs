@@ -3,13 +3,13 @@ use crate::bindings::filesystem::preopens;
 use crate::bindings::filesystem::types::{
     self, ErrorCode, HostDescriptor, HostDirectoryEntryStream,
 };
-use crate::bindings::io::streams::{InputStream, OutputStream};
 use crate::filesystem::{
     Descriptor, Dir, File, FileInputStream, FileOutputStream, OpenMode, ReaddirIterator,
 };
 use crate::{DirPerms, FilePerms, FsError, FsResult, IoView, WasiImpl, WasiView};
 use anyhow::Context;
 use wasmtime::component::Resource;
+use wasmtime_wasi_io::streams::{DynInputStream, DynOutputStream};
 
 mod sync;
 
@@ -735,7 +735,7 @@ where
         &mut self,
         fd: Resource<types::Descriptor>,
         offset: types::Filesize,
-    ) -> FsResult<Resource<InputStream>> {
+    ) -> FsResult<Resource<DynInputStream>> {
         // Trap if fd lookup fails:
         let f = self.table().get(&fd)?.file()?;
 
@@ -744,7 +744,7 @@ where
         }
 
         // Create a stream view for it.
-        let reader: InputStream = Box::new(FileInputStream::new(f, offset));
+        let reader: DynInputStream = Box::new(FileInputStream::new(f, offset));
 
         // Insert the stream view into the table. Trap if the table is full.
         let index = self.table().push(reader)?;
@@ -756,7 +756,7 @@ where
         &mut self,
         fd: Resource<types::Descriptor>,
         offset: types::Filesize,
-    ) -> FsResult<Resource<OutputStream>> {
+    ) -> FsResult<Resource<DynOutputStream>> {
         // Trap if fd lookup fails:
         let f = self.table().get(&fd)?.file()?;
 
@@ -766,7 +766,7 @@ where
 
         // Create a stream view for it.
         let writer = FileOutputStream::write_at(f, offset);
-        let writer: OutputStream = Box::new(writer);
+        let writer: DynOutputStream = Box::new(writer);
 
         // Insert the stream view into the table. Trap if the table is full.
         let index = self.table().push(writer)?;
@@ -777,7 +777,7 @@ where
     fn append_via_stream(
         &mut self,
         fd: Resource<types::Descriptor>,
-    ) -> FsResult<Resource<OutputStream>> {
+    ) -> FsResult<Resource<DynOutputStream>> {
         // Trap if fd lookup fails:
         let f = self.table().get(&fd)?.file()?;
 
@@ -787,7 +787,7 @@ where
 
         // Create a stream view for it.
         let appender = FileOutputStream::append(f);
-        let appender: OutputStream = Box::new(appender);
+        let appender: DynOutputStream = Box::new(appender);
 
         // Insert the stream view into the table. Trap if the table is full.
         let index = self.table().push(appender)?;

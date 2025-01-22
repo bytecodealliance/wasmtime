@@ -1,7 +1,6 @@
 use crate::bindings::sockets::ip_name_lookup::{Host, HostResolveAddressStream};
 use crate::bindings::sockets::network::{ErrorCode, IpAddress, Network};
 use crate::host::network::util;
-use crate::poll::{subscribe, Pollable, Subscribe};
 use crate::runtime::{spawn_blocking, AbortOnDropJoinHandle};
 use crate::{IoView, SocketError, WasiImpl, WasiView};
 use anyhow::Result;
@@ -11,6 +10,7 @@ use std::pin::Pin;
 use std::str::FromStr;
 use std::vec;
 use wasmtime::component::Resource;
+use wasmtime_wasi_io::poll::{subscribe, DynPollable, Pollable};
 
 use super::network::{from_ipv4_addr, from_ipv6_addr};
 
@@ -73,7 +73,7 @@ where
     fn subscribe(
         &mut self,
         resource: Resource<ResolveAddressStream>,
-    ) -> Result<Resource<Pollable>> {
+    ) -> Result<Resource<DynPollable>> {
         subscribe(self.table(), resource)
     }
 
@@ -84,7 +84,7 @@ where
 }
 
 #[async_trait::async_trait]
-impl Subscribe for ResolveAddressStream {
+impl Pollable for ResolveAddressStream {
     async fn ready(&mut self) {
         if let ResolveAddressStream::Waiting(future) = self {
             *self = ResolveAddressStream::Done(future.await.map(|v| v.into_iter()));

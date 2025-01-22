@@ -285,12 +285,13 @@ where
     T: WasiHttpView + wasmtime_wasi::WasiView,
 {
     let io_closure = type_annotate_io::<T, _>(|t| wasmtime_wasi::IoImpl(t));
-    let closure = type_annotate_wasi::<T, _>(|t| wasmtime_wasi::WasiImpl(wasmtime_wasi::IoImpl(t)));
-    wasmtime_wasi::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
     wasmtime_wasi::bindings::io::poll::add_to_linker_get_host(l, io_closure)?;
     wasmtime_wasi::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
     wasmtime_wasi::bindings::io::streams::add_to_linker_get_host(l, io_closure)?;
+
+    let closure = type_annotate_wasi::<T, _>(|t| wasmtime_wasi::WasiImpl(wasmtime_wasi::IoImpl(t)));
+    wasmtime_wasi::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
+    wasmtime_wasi::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
     wasmtime_wasi::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
     wasmtime_wasi::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
     wasmtime_wasi::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
@@ -383,13 +384,17 @@ where
     T: WasiHttpView + wasmtime_wasi::WasiView,
 {
     let io_closure = type_annotate_io::<T, _>(|t| wasmtime_wasi::IoImpl(t));
+    // For the sync linker, use the definitions of poll and streams from the
+    // wasmtime_wasi::bindings::sync space because those are defined using in_tokio.
+    wasmtime_wasi::bindings::sync::io::poll::add_to_linker_get_host(l, io_closure)?;
+    wasmtime_wasi::bindings::sync::io::streams::add_to_linker_get_host(l, io_closure)?;
+    // The error interface in the wasmtime_wasi is synchronous
+    wasmtime_wasi::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
+
     let closure = type_annotate_wasi::<T, _>(|t| wasmtime_wasi::WasiImpl(wasmtime_wasi::IoImpl(t)));
 
     wasmtime_wasi::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
     wasmtime_wasi::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
-    wasmtime_wasi::bindings::sync::io::poll::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi::bindings::sync::io::streams::add_to_linker_get_host(l, io_closure)?;
-    wasmtime_wasi::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
     wasmtime_wasi::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
     wasmtime_wasi::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
     wasmtime_wasi::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
