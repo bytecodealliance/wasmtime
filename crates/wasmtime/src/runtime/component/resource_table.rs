@@ -1,6 +1,6 @@
 use super::Resource;
 use crate::prelude::*;
-use alloc::collections::BTreeSet;
+use alloc::collections::{BTreeMap, BTreeSet};
 use core::any::Any;
 use core::fmt;
 
@@ -288,7 +288,7 @@ impl ResourceTable {
     /// with the same lifetime as the mutable reference to the [ResourceTable].
     pub fn iter_entries<'a, T>(
         &'a mut self,
-        map: std::collections::BTreeMap<u32, T>,
+        map: BTreeMap<u32, T>,
     ) -> impl Iterator<Item = (Result<&'a mut dyn Any, ResourceTableError>, T)> {
         map.into_iter().map(move |(k, v)| {
             let item = self

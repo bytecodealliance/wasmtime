@@ -14,6 +14,7 @@
 //!
 //! This crate is designed to have no unnecessary dependencies and, in
 //! particular, compile without `std`.
+extern crate alloc;
 
 pub mod bindings;
 mod impls;

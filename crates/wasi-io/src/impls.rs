@@ -2,11 +2,11 @@ use crate::bindings::wasi::io::{error, poll, streams};
 use crate::poll::{subscribe, DynFuture, DynPollable, MakeFuture};
 use crate::streams::{DynInputStream, DynOutputStream, StreamError, StreamResult};
 use crate::{IoImpl, IoView};
+use alloc::collections::BTreeMap;
 use anyhow::{anyhow, Result};
-use std::collections::BTreeMap;
-use std::future::Future;
-use std::pin::Pin;
-use std::task::{Context, Poll};
+use core::future::Future;
+use core::pin::Pin;
+use core::task::{Context, Poll};
 use wasmtime::component::Resource;
 
 impl<T: IoView> poll::Host for IoImpl<T> {
