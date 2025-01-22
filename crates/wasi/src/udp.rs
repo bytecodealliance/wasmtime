@@ -1,4 +1,4 @@
-use crate::host::network::util;
+use crate::p2::host::network::util;
 use crate::poll::Subscribe;
 use crate::runtime::with_ambient_tokio_runtime;
 use async_trait::async_trait;

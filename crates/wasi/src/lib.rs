@@ -183,16 +183,13 @@
 #![cfg_attr(docsrs, feature(doc_auto_cfg))]
 #![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
-use wasmtime::component::Linker;
-
-pub mod bindings;
 mod clocks;
 mod ctx;
 mod error;
 mod filesystem;
-mod host;
 mod ip_name_lookup;
 mod network;
+pub mod p2;
 pub mod pipe;
 mod poll;
 #[cfg(feature = "preview1")]
@@ -229,211 +226,10 @@ pub use async_trait::async_trait;
 pub use cap_fs_ext::SystemTimeSpec;
 #[doc(no_inline)]
 pub use cap_rand::RngCore;
+#[doc(inline)]
+pub use p2::*;
 #[doc(no_inline)]
 pub use wasmtime::component::{ResourceTable, ResourceTableError};
-
-/// Add all WASI interfaces from this crate into the `linker` provided.
-///
-/// This function will add the `async` variant of all interfaces into the
-/// [`Linker`] provided. By `async` this means that this function is only
-/// compatible with [`Config::async_support(true)`][async]. For embeddings with
-/// async support disabled see [`add_to_linker_sync`] instead.
-///
-/// This function will add all interfaces implemented by this crate to the
-/// [`Linker`], which corresponds to the `wasi:cli/imports` world supported by
-/// this crate.
-///
-/// [async]: wasmtime::Config::async_support
-///
-/// # Example
-///
-/// ```
-/// use wasmtime::{Engine, Result, Store, Config};
-/// use wasmtime::component::{ResourceTable, Linker};
-/// use wasmtime_wasi::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
-///
-/// fn main() -> Result<()> {
-///     let mut config = Config::new();
-///     config.async_support(true);
-///     let engine = Engine::new(&config)?;
-///
-///     let mut linker = Linker::<MyState>::new(&engine);
-///     wasmtime_wasi::add_to_linker_async(&mut linker)?;
-///     // ... add any further functionality to `linker` if desired ...
-///
-///     let mut builder = WasiCtxBuilder::new();
-///
-///     // ... configure `builder` more to add env vars, args, etc ...
-///
-///     let mut store = Store::new(
-///         &engine,
-///         MyState {
-///             ctx: builder.build(),
-///             table: ResourceTable::new(),
-///         },
-///     );
-///
-///     // ... use `linker` to instantiate within `store` ...
-///
-///     Ok(())
-/// }
-///
-/// struct MyState {
-///     ctx: WasiCtx,
-///     table: ResourceTable,
-/// }
-///
-/// impl IoView for MyState {
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-/// }
-/// impl WasiView for MyState {
-///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
-/// }
-/// ```
-pub fn add_to_linker_async<T: WasiView>(linker: &mut Linker<T>) -> anyhow::Result<()> {
-    let options = crate::bindings::LinkOptions::default();
-    add_to_linker_with_options_async(linker, &options)
-}
-
-/// Similar to [`add_to_linker_async`], but with the ability to enable unstable features.
-pub fn add_to_linker_with_options_async<T: WasiView>(
-    linker: &mut Linker<T>,
-    options: &crate::bindings::LinkOptions,
-) -> anyhow::Result<()> {
-    let l = linker;
-    let io_closure = io_type_annotate::<T, _>(|t| IoImpl(t));
-    let closure = type_annotate::<T, _>(|t| WasiImpl(IoImpl(t)));
-
-    crate::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
-    crate::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
-    crate::bindings::filesystem::types::add_to_linker_get_host(l, closure)?;
-    crate::bindings::filesystem::preopens::add_to_linker_get_host(l, closure)?;
-    crate::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
-    crate::bindings::io::poll::add_to_linker_get_host(l, io_closure)?;
-    crate::bindings::io::streams::add_to_linker_get_host(l, io_closure)?;
-    crate::bindings::random::random::add_to_linker_get_host(l, closure)?;
-    crate::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
-    crate::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::exit::add_to_linker_get_host(l, &options.into(), closure)?;
-    crate::bindings::cli::environment::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_input::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_output::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_stdin::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_stdout::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_stderr::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::tcp::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::tcp_create_socket::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::udp::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::udp_create_socket::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::instance_network::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::network::add_to_linker_get_host(l, &options.into(), closure)?;
-    crate::bindings::sockets::ip_name_lookup::add_to_linker_get_host(l, closure)?;
-    Ok(())
-}
-
-/// Add all WASI interfaces from this crate into the `linker` provided.
-///
-/// This function will add the synchronous variant of all interfaces into the
-/// [`Linker`] provided. By synchronous this means that this function is only
-/// compatible with [`Config::async_support(false)`][async]. For embeddings
-/// with async support enabled see [`add_to_linker_async`] instead.
-///
-/// This function will add all interfaces implemented by this crate to the
-/// [`Linker`], which corresponds to the `wasi:cli/imports` world supported by
-/// this crate.
-///
-/// [async]: wasmtime::Config::async_support
-///
-/// # Example
-///
-/// ```
-/// use wasmtime::{Engine, Result, Store, Config};
-/// use wasmtime::component::{ResourceTable, Linker};
-/// use wasmtime_wasi::{IoView, WasiCtx, WasiView, WasiCtxBuilder};
-///
-/// fn main() -> Result<()> {
-///     let engine = Engine::default();
-///
-///     let mut linker = Linker::<MyState>::new(&engine);
-///     wasmtime_wasi::add_to_linker_sync(&mut linker)?;
-///     // ... add any further functionality to `linker` if desired ...
-///
-///     let mut builder = WasiCtxBuilder::new();
-///
-///     // ... configure `builder` more to add env vars, args, etc ...
-///
-///     let mut store = Store::new(
-///         &engine,
-///         MyState {
-///             ctx: builder.build(),
-///             table: ResourceTable::new(),
-///         },
-///     );
-///
-///     // ... use `linker` to instantiate within `store` ...
-///
-///     Ok(())
-/// }
-///
-/// struct MyState {
-///     ctx: WasiCtx,
-///     table: ResourceTable,
-/// }
-/// impl IoView for MyState {
-///     fn table(&mut self) -> &mut ResourceTable { &mut self.table }
-/// }
-/// impl WasiView for MyState {
-///     fn ctx(&mut self) -> &mut WasiCtx { &mut self.ctx }
-/// }
-/// ```
-pub fn add_to_linker_sync<T: WasiView>(
-    linker: &mut wasmtime::component::Linker<T>,
-) -> anyhow::Result<()> {
-    let options = crate::bindings::sync::LinkOptions::default();
-    add_to_linker_with_options_sync(linker, &options)
-}
-
-/// Similar to [`add_to_linker_sync`], but with the ability to enable unstable features.
-pub fn add_to_linker_with_options_sync<T: WasiView>(
-    linker: &mut wasmtime::component::Linker<T>,
-    options: &crate::bindings::sync::LinkOptions,
-) -> anyhow::Result<()> {
-    let l = linker;
-    let io_closure = io_type_annotate::<T, _>(|t| IoImpl(t));
-    let closure = type_annotate::<T, _>(|t| WasiImpl(IoImpl(t)));
-
-    crate::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
-    crate::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sync::filesystem::types::add_to_linker_get_host(l, closure)?;
-    crate::bindings::filesystem::preopens::add_to_linker_get_host(l, closure)?;
-    crate::bindings::io::error::add_to_linker_get_host(l, io_closure)?;
-    crate::bindings::sync::io::poll::add_to_linker_get_host(l, io_closure)?;
-    crate::bindings::sync::io::streams::add_to_linker_get_host(l, io_closure)?;
-    crate::bindings::random::random::add_to_linker_get_host(l, closure)?;
-    crate::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
-    crate::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::exit::add_to_linker_get_host(l, &options.into(), closure)?;
-    crate::bindings::cli::environment::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::stdin::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::stdout::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::stderr::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_input::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_output::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_stdin::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_stdout::add_to_linker_get_host(l, closure)?;
-    crate::bindings::cli::terminal_stderr::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sync::sockets::tcp::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::tcp_create_socket::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sync::sockets::udp::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::udp_create_socket::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::instance_network::add_to_linker_get_host(l, closure)?;
-    crate::bindings::sockets::network::add_to_linker_get_host(l, &options.into(), closure)?;
-    crate::bindings::sockets::ip_name_lookup::add_to_linker_get_host(l, closure)?;
-    Ok(())
-}
 
 // NB: workaround some rustc inference - a future refactoring may make this
 // obsolete.

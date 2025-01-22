@@ -52,7 +52,7 @@ use crate::descriptors::{Descriptor, Descriptors, StreamType, Streams};
 pub mod bindings {
     #[cfg(feature = "command")]
     wit_bindgen_rust_macro::generate!({
-        path: "../wasi/wit",
+        path: "../wasi/src/p2/wit",
         world: "wasi:cli/command",
         raw_strings,
         runtime_path: "crate::bindings::wit_bindgen_rt_shim",
@@ -69,7 +69,7 @@ pub mod bindings {
 
     #[cfg(feature = "reactor")]
     wit_bindgen_rust_macro::generate!({
-        path: "../wasi/wit",
+        path: "../wasi/src/p2/wit",
         world: "wasi:cli/imports",
         raw_strings,
         runtime_path: "crate::bindings::wit_bindgen_rt_shim",
@@ -86,7 +86,7 @@ pub mod bindings {
 
     #[cfg(feature = "proxy")]
     wit_bindgen_rust_macro::generate!({
-        path: "../wasi-http/wit",
+        path: "../wasi-http/src/p2/wit",
         inline: r#"
             package wasmtime:adapter;
 

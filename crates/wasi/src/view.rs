@@ -13,7 +13,7 @@ pub trait IoView: Send {
 pub trait WasiView: IoView {
     /// Yields mutable access to the configuration used for this context.
     ///
-    /// The returned type is created through [`WasiCtxBuilder`].
+    /// The returned type is created through [`WasiCtxBuilder`](crate::WasiCtxBuilder).
     fn ctx(&mut self) -> &mut WasiCtx;
 }
 

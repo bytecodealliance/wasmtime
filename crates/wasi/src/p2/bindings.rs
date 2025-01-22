@@ -35,7 +35,7 @@
 //!             my-custom-function: func();
 //!         }
 //!     ",
-//!     path: "wit",
+//!     path: "src/p2/wit",
 //!     with: {
 //!         "wasi": wasmtime_wasi::bindings,
 //!     },
@@ -106,7 +106,7 @@
 ///             my-custom-function: func();
 ///         }
 ///     ",
-///     path: "wit",
+///     path: "src/p2/wit",
 ///     with: {
 ///         "wasi": wasmtime_wasi::bindings::sync,
 ///     },
@@ -149,7 +149,7 @@ pub mod sync {
         use crate::{FsError, SocketError, StreamError};
 
         wasmtime::component::bindgen!({
-            path: "wit",
+            path: "src/p2/wit",
             world: "wasi:cli/command",
             tracing: true,
             trappable_error_type: {
@@ -333,7 +333,7 @@ pub mod sync {
 
 mod async_io {
     wasmtime::component::bindgen!({
-        path: "wit",
+        path: "src/p2/wit",
         world: "wasi:cli/command",
         tracing: true,
         trappable_imports: true,

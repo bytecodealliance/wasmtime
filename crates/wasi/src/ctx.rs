@@ -560,9 +560,9 @@ impl WasiCtxBuilder {
 /// Per-[`Store`] state which holds state necessary to implement WASI from this
 /// crate.
 ///
-/// This structure is created through [`WasiCtxBuilder`] and is stored within
+/// This structure is created through [`WasiCtxBuilder`](crate::WasiCtxBuilder) and is stored within
 /// the `T` of [`Store<T>`][`Store`]. Access to the structure is provided
-/// through the [`WasiView`] trait as an implementation on `T`.
+/// through the [`WasiView`](crate::WasiView) trait as an implementation on `T`.
 ///
 /// Note that this structure itself does not have any accessors, it's here for
 /// internal use within the `wasmtime-wasi` crate's implementation of

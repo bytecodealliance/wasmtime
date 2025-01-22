@@ -1,8 +1,8 @@
 //! Implementation for the `wasi:http/types` interface.
 
 use crate::{
-    bindings::http::types::{self, Headers, Method, Scheme, StatusCode, Trailers},
     body::{HostFutureTrailers, HostIncomingBody, HostOutgoingBody, StreamContext},
+    p2::bindings::http::types::{self, Headers, Method, Scheme, StatusCode, Trailers},
     types::{
         is_forbidden_header, remove_forbidden_headers, FieldMap, HostFields,
         HostFutureIncomingResponse, HostIncomingRequest, HostIncomingResponse, HostOutgoingRequest,
@@ -15,7 +15,7 @@ use std::any::Any;
 use std::str::FromStr;
 use wasmtime::component::{Resource, ResourceTable};
 use wasmtime_wasi::{
-    bindings::io::streams::{InputStream, OutputStream},
+    p2::bindings::io::streams::{InputStream, OutputStream},
     IoView, Pollable, ResourceTableError,
 };
 

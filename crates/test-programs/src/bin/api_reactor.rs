@@ -2,7 +2,7 @@ use std::sync::{Mutex, MutexGuard};
 
 wit_bindgen::generate!({
     world: "test-reactor",
-    path: "../wasi/wit",
+    path: "../wasi/src/p2/wit",
     generate_all,
 });
 

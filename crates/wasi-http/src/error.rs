@@ -1,4 +1,4 @@
-use crate::bindings::http::types::ErrorCode;
+use crate::p2::bindings::http::types::ErrorCode;
 use std::error::Error;
 use std::fmt;
 use wasmtime_wasi::ResourceTableError;
