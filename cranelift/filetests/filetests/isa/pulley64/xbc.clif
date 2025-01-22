@@ -1,0 +1,114 @@
+test compile precise-output
+target pulley64
+
+function %simple(i64, i32) {
+block0(v0: i64, v1: i32):
+    v2 = load.i64 v0+16
+    v3 = uextend.i64 v1
+    v4 = iconst.i64 24
+    v5 = isub v2, v4
+    v6 = icmp ugt v3, v5
+    trapnz v6, user1
+    return
+}
+
+; VCode:
+; block0:
+;   xbc32_boundne_trap x1, x0, 16, 24 // trap=TrapCode(1)
+;   ret
+;
+; Disassembled:
+; xbc32_boundne_trap x1, x0, 16, 24
+; ret
+
+function %swapped_args(i64, i32) {
+block0(v0: i64, v1: i32):
+    v2 = load.i64 v0+16
+    v3 = uextend.i64 v1
+    v4 = iconst.i64 24
+    v5 = isub v2, v4
+    v6 = icmp ult v5, v3
+    trapnz v6, user1
+    return
+}
+
+; VCode:
+; block0:
+;   xbc32_boundne_trap x1, x0, 16, 24 // trap=TrapCode(1)
+;   ret
+;
+; Disassembled:
+; xbc32_boundne_trap x1, x0, 16, 24
+; ret
+
+function %twice(i64, i32, i32) {
+block0(v0: i64, v1: i32, v2: i32):
+    ;; load the bound & calculate what to check against
+    v3 = load.i64 v0+16
+    v4 = iconst.i64 24
+    v5 = isub v3, v4
+
+    ;; check v1
+    v6 = uextend.i64 v1
+    v7 = icmp ugt v6, v5
+    trapnz v7, user1
+
+    ;; check v2
+    v8 = uextend.i64 v2
+    v9 = icmp ugt v8, v5
+    trapnz v9, user1
+
+    return
+}
+
+; VCode:
+; block0:
+;   x4 = xload64 x0+16 // flags =
+;   xbc32_bound_trap x1, x4, 24 // trap=TrapCode(1)
+;   xbc32_bound_trap x2, x4, 24 // trap=TrapCode(1)
+;   ret
+;
+; Disassembled:
+; xload64le_offset8 x4, x0, 16
+; xbc32_bound_trap x1, x4, 24
+; xbc32_bound_trap x2, x4, 24
+; ret
+
+function %twice_swapped(i64, i32, i32) {
+block0(v0: i64, v1: i32, v2: i32):
+    ;; load the bound & calculate what to check against
+    v3 = load.i64 v0+16
+    v4 = iconst.i64 24
+    v5 = isub v3, v4
+
+    ;; check v1
+    v6 = uextend.i64 v1
+    v7 = icmp ult v5, v6
+    trapnz v7, user1
+
+    ;; check v2
+    v8 = uextend.i64 v2
+    v9 = icmp ugt v5, v8
+    trapnz v9, user1
+
+    return
+}
+
+; VCode:
+; block0:
+;   x7 = xload64 x0+16 // flags =
+;   xsub64_u8 x6, x7, 24
+;   xbc32_bound_trap x1, x7, 24 // trap=TrapCode(1)
+;   zext32 x7, x2
+;   trap_if_xult64 x7, x6 // code = TrapCode(1)
+;   ret
+;
+; Disassembled:
+; xload64le_offset8 x7, x0, 16
+; xsub64_u8 x6, x7, 24
+; xbc32_bound_trap x1, x7, 24
+; zext32 x7, x2
+; br_if_xult64 x7, x6, 0x8    // target = 0x17
+; ret
+; trap
+

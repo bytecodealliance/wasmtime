@@ -2459,7 +2459,17 @@ impl OpVisitor for Interpreter<'_> {
         ControlFlow::Continue(())
     }
 
-    fn xbc32_bound_trap(
+    fn xbc32_bound_trap(&mut self, addr: XReg, bound: XReg, size: u8) -> ControlFlow<Done> {
+        let bound = self.state[bound].get_u64() as usize;
+        let addr = self.state[addr].get_u32() as usize;
+        if addr > bound.wrapping_sub(usize::from(size)) {
+            self.done_trap::<crate::XBc32BoundTrap>()
+        } else {
+            ControlFlow::Continue(())
+        }
+    }
+
+    fn xbc32_boundne_trap(
         &mut self,
         addr: XReg,
         bound_ptr: XReg,

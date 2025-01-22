@@ -133,6 +133,10 @@ where
         flags.endianness(self.backend.isa_flags.endianness())
     }
 
+    fn is_native_endianness(&mut self, endianness: &Endianness) -> bool {
+        *endianness == self.backend.isa_flags.endianness()
+    }
+
     fn pointer_width(&mut self) -> PointerWidth {
         P::pointer_width()
     }
