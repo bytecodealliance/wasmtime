@@ -18,11 +18,14 @@ cranelift-bitset = { workspace = true }
 log = { workspace = true }
 sptr = { workspace = true }
 wasmtime-math = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }
 object = { workspace = true, features = ['std'] }
 anyhow = { workspace = true, features = ['std'] }
+clap = { workspace = true }
+termcolor = "1.4.1"
 
 [features]
 std = ['wasmtime-math?/std']
@@ -31,6 +34,7 @@ encode = []
 decode = []
 disas = ["decode"]
 interp = ["decode", "encode", "dep:wasmtime-math"]
+profile = ['std', 'dep:anyhow']
 
 [package.metadata.docs.rs]
 all-features = true
@@ -38,3 +42,7 @@ all-features = true
 [[example]]
 name = "objdump"
 required-features = ["disas"]
+
+[[example]]
+name = "profiler-html"
+required-features = ["profile"]

@@ -3,6 +3,7 @@ use wasmtime::component::*;
 use wasmtime::{Module, Store};
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn instance_exports() -> Result<()> {
     let engine = super::engine();
     let component = r#"
@@ -124,6 +125,7 @@ fn export_new_get_old() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn export_missing_get_max() -> Result<()> {
     let engine = super::engine();
     let component = r#"

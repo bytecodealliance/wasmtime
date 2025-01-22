@@ -372,6 +372,7 @@ jobs:
               -p wasmtime --no-default-features --features runtime,threads
               -p wasmtime --no-default-features --features cranelift,threads
               -p wasmtime --features incremental-cache
+              -p wasmtime --features profile-pulley
               -p wasmtime --all-features
 
           - name: wasmtime-fiber

@@ -3,6 +3,7 @@
 use crate::decode::*;
 use crate::encode::Encode;
 use crate::imms::*;
+use crate::profile::{ExecutingPc, ExecutingPcRef};
 use crate::regs::*;
 use alloc::string::ToString;
 use alloc::{vec, vec::Vec};
@@ -24,6 +25,7 @@ const DEFAULT_STACK_SIZE: usize = 1 << 20; // 1 MiB
 /// A virtual machine for interpreting Pulley bytecode.
 pub struct Vm {
     state: MachineState,
+    executing_pc: ExecutingPc,
 }
 
 impl Default for Vm {
@@ -42,6 +44,7 @@ impl Vm {
     pub fn with_stack(stack: Vec<u8>) -> Self {
         Self {
             state: MachineState::with_stack(stack),
+            executing_pc: ExecutingPc::default(),
         }
     }
 
@@ -56,8 +59,8 @@ impl Vm {
     }
 
     /// Consumer this VM and return its stack storage.
-    pub fn into_stack(self) -> Vec<u8> {
-        self.state.stack
+    pub fn into_stack(mut self) -> Vec<u8> {
+        mem::take(&mut self.state.stack)
     }
 
     /// Call a bytecode function.
@@ -147,6 +150,7 @@ impl Vm {
         let interpreter = Interpreter {
             state: &mut self.state,
             pc: UnsafeBytecodeStream::new(pc),
+            executing_pc: self.executing_pc.as_ref(),
         };
         let done = interpreter.run();
         self.state.done_decode(done)
@@ -209,6 +213,23 @@ impl Vm {
     /// Sets the current `lr` register value.
     pub unsafe fn set_lr(&mut self, lr: *mut u8) {
         self.state.lr = lr;
+    }
+
+    /// Gets a handle to the currently executing program counter for this
+    /// interpreter which can be read from other threads.
+    //
+    // Note that despite this field still existing with `not(feature =
+    // "profile")` it's hidden from the public API in that scenario as it has no
+    // methods anyway.
+    #[cfg(feature = "profile")]
+    pub fn executing_pc(&self) -> &ExecutingPc {
+        &self.executing_pc
+    }
+}
+
+impl Drop for Vm {
+    fn drop(&mut self) {
+        self.executing_pc.set_done();
     }
 }
 
@@ -909,6 +930,7 @@ pub use done::{DoneReason, TrapKind};
 struct Interpreter<'a> {
     state: &'a mut MachineState,
     pc: UnsafeBytecodeStream,
+    executing_pc: ExecutingPcRef<'a>,
 }
 
 impl Interpreter<'_> {
@@ -1044,17 +1066,24 @@ impl Interpreter<'_> {
         self.state[lo].set_u64(val as u64);
         self.state[hi].set_u64((val >> 64) as u64);
     }
+
+    fn record_executing_pc_for_profiling(&mut self) {
+        // Note that this is a no-op if `feature = "profile"` is disabled.
+        self.executing_pc.record(self.pc.as_ptr().as_ptr() as usize);
+    }
 }
 
 #[test]
 fn simple_push_pop() {
     let mut state = MachineState::with_stack(vec![0; 16]);
+    let pc = ExecutingPc::default();
     unsafe {
         let mut bytecode = [0; 10];
         let mut i = Interpreter {
             state: &mut state,
             // this isn't actually read so just manufacture a dummy one
             pc: UnsafeBytecodeStream::new(NonNull::new(bytecode.as_mut_ptr().offset(4)).unwrap()),
+            executing_pc: pc.as_ref(),
         };
         assert!(i.push::<crate::Ret, _>(0_i32).is_continue());
         assert_eq!(i.pop::<i32>(), 0_i32);

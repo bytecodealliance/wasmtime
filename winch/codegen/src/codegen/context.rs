@@ -7,8 +7,8 @@ use crate::{
     codegen::{CodeGenError, CodeGenPhase, Emission, Prologue},
     frame::Frame,
     isa::reg::RegClass,
-    masm::{MacroAssembler, OperandSize, RegImm, SPOffset, ShiftKind, StackSlot},
-    reg::{writable, Reg},
+    masm::{ExtractLaneKind, MacroAssembler, OperandSize, RegImm, SPOffset, ShiftKind, StackSlot},
+    reg::{writable, Reg, WritableReg},
     regalloc::RegAlloc,
     stack::{Stack, TypedReg, Val},
 };
@@ -499,6 +499,56 @@ impl<'a> CodeGenContext<'a, Emission> {
             emit(masm, dst, src, tmp_gpr, dst_size)
         })?;
         self.free_reg(tmp_gpr);
+        Ok(())
+    }
+
+    /// Prepares arguments for emitting an extract lane operation.
+    pub fn extract_lane_op<F, M>(
+        &mut self,
+        masm: &mut M,
+        kind: ExtractLaneKind,
+        emit: F,
+    ) -> Result<()>
+    where
+        F: FnOnce(&mut M, Reg, WritableReg, ExtractLaneKind) -> Result<()>,
+        M: MacroAssembler,
+    {
+        let src = self.pop_to_reg(masm, None)?;
+        let dst = writable!(match kind {
+            ExtractLaneKind::I8x16S
+            | ExtractLaneKind::I8x16U
+            | ExtractLaneKind::I16x8S
+            | ExtractLaneKind::I16x8U
+            | ExtractLaneKind::I32x4
+            | ExtractLaneKind::I64x2 => self.any_gpr(masm)?,
+            ExtractLaneKind::F32x4 | ExtractLaneKind::F64x2 => src.reg,
+        });
+
+        emit(masm, src.reg, dst, kind)?;
+
+        match kind {
+            ExtractLaneKind::I8x16S
+            | ExtractLaneKind::I8x16U
+            | ExtractLaneKind::I16x8S
+            | ExtractLaneKind::I16x8U
+            | ExtractLaneKind::I32x4
+            | ExtractLaneKind::I64x2 => self.free_reg(src),
+            _ => (),
+        }
+
+        let dst = dst.to_reg();
+        let dst = match kind {
+            ExtractLaneKind::I8x16S
+            | ExtractLaneKind::I8x16U
+            | ExtractLaneKind::I16x8S
+            | ExtractLaneKind::I16x8U
+            | ExtractLaneKind::I32x4 => TypedReg::i32(dst),
+            ExtractLaneKind::I64x2 => TypedReg::i64(dst),
+            ExtractLaneKind::F32x4 => TypedReg::f32(dst),
+            ExtractLaneKind::F64x2 => TypedReg::f64(dst),
+        };
+
+        self.stack.push(Val::Reg(dst));
         Ok(())
     }
 

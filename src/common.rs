@@ -357,6 +357,7 @@ impl Profile {
             ["perfmap"] => Ok(Profile::Native(wasmtime::ProfilingStrategy::PerfMap)),
             ["jitdump"] => Ok(Profile::Native(wasmtime::ProfilingStrategy::JitDump)),
             ["vtune"] => Ok(Profile::Native(wasmtime::ProfilingStrategy::VTune)),
+            ["pulley"] => Ok(Profile::Native(wasmtime::ProfilingStrategy::Pulley)),
             ["guest"] => Ok(Profile::Guest {
                 path: "wasmtime-guest-profile.json".to_string(),
                 interval: Duration::from_millis(10),

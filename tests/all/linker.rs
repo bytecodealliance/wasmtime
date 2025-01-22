@@ -5,6 +5,7 @@ use std::sync::Arc;
 use wasmtime::*;
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn link_undefined() -> Result<()> {
     let mut store = Store::<()>::default();
     let linker = Linker::new(store.engine());
@@ -269,6 +270,7 @@ fn no_leak_with_imports() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn get_host_function() -> Result<()> {
     let engine = Engine::default();
     let module = Module::new(&engine, r#"(module (import "mod" "f1" (func)))"#)?;
@@ -331,6 +333,7 @@ fn alias_one() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn instance_pre() -> Result<()> {
     let engine = Engine::default();
     let mut linker = Linker::new(&engine);

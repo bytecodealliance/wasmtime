@@ -7,9 +7,9 @@ use super::{
 use anyhow::{anyhow, bail, Result};
 
 use crate::masm::{
-    DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind, MacroAssembler as Masm,
-    MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode, ShiftKind,
-    SplatKind, TrapCode, TruncKind, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
+    DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind,
+    MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp,
+    RoundingMode, ShiftKind, SplatKind, TrapCode, TruncKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
@@ -33,8 +33,8 @@ use cranelift_codegen::{
     isa::{
         unwind::UnwindInst,
         x64::{
-            args::{ExtMode, FenceKind, CC},
-            settings as x64_settings,
+            args::{FenceKind, CC},
+            settings as x64_settings, AtomicRmwSeqOp,
         },
     },
     settings, Final, MachBufferFinalized, MachLabel,
@@ -245,7 +245,12 @@ impl Masm for MacroAssembler {
         let _ = match (dst.to_reg().class(), size) {
             (RegClass::Int, OperandSize::S32) => {
                 let addr = self.address_from_sp(current_sp)?;
-                self.asm.movzx_mr(&addr, dst, size.into(), TRUSTED_FLAGS);
+                self.asm.movzx_mr(
+                    &addr,
+                    dst,
+                    size.extend_to::<Zero>(OperandSize::S64),
+                    TRUSTED_FLAGS,
+                );
                 self.free_stack(size.bytes())?;
             }
             (RegClass::Int, OperandSize::S64) => {
@@ -312,10 +317,13 @@ impl Masm for MacroAssembler {
                     bail!(CodeGenError::unexpected_operand_size());
                 }
 
-                if ext.signed() {
-                    self.asm.movsx_mr(&src, dst, ext, UNTRUSTED_FLAGS);
-                } else {
-                    self.load_impl::<Self>(src, dst, size, UNTRUSTED_FLAGS)?
+                match ext {
+                    ExtendKind::Signed(ext) => {
+                        self.asm.movsx_mr(&src, dst, ext, UNTRUSTED_FLAGS);
+                    }
+                    ExtendKind::Unsigned(_) => {
+                        self.load_impl::<Self>(src, dst, size, UNTRUSTED_FLAGS)?
+                    }
                 }
             }
             LoadKind::Operand(_) => {
@@ -352,7 +360,7 @@ impl Masm for MacroAssembler {
                         dst.to_reg(),
                         dst,
                         Self::vpshuf_mask_for_64_bit_splats(),
-                        OperandSize::S64,
+                        OperandSize::S32,
                     );
                 } else {
                     self.asm
@@ -1039,11 +1047,15 @@ impl Masm for MacroAssembler {
     }
 
     fn extend(&mut self, dst: WritableReg, src: Reg, kind: ExtendKind) -> Result<()> {
-        if !kind.signed() {
-            self.asm.movzx_rr(src, dst, kind);
-        } else {
-            self.asm.movsx_rr(src, dst, kind);
+        match kind {
+            ExtendKind::Signed(ext) => {
+                self.asm.movsx_rr(src, dst, ext);
+            }
+            ExtendKind::Unsigned(ext) => {
+                self.asm.movzx_rr(src, dst, ext);
+            }
         }
+
         Ok(())
     }
 
@@ -1122,7 +1134,11 @@ impl Masm for MacroAssembler {
     ) -> Result<()> {
         // Need to convert unsigned uint32 to uint64 for conversion instruction sequence.
         if let OperandSize::S32 = src_size {
-            self.extend(writable!(src), src, ExtendKind::I64Extend32U)?;
+            self.extend(
+                writable!(src),
+                src,
+                ExtendKind::Unsigned(Extend::I64Extend32),
+            )?;
         }
 
         self.asm
@@ -1333,11 +1349,11 @@ impl Masm for MacroAssembler {
             }
             let mask = Self::vpshuf_mask_for_64_bit_splats();
             match src {
-                RegImm::Reg(src) => self.asm.xmm_vpshuf_rr(src, dst, mask, OperandSize::S64),
+                RegImm::Reg(src) => self.asm.xmm_vpshuf_rr(src, dst, mask, OperandSize::S32),
                 RegImm::Imm(imm) => {
                     let src = self.asm.add_constant(&imm.to_bytes());
                     self.asm
-                        .xmm_vpshuf_mr(&src, dst, mask, OperandSize::S64, MemFlags::trusted());
+                        .xmm_vpshuf_mr(&src, dst, mask, OperandSize::S32, MemFlags::trusted());
                 }
             }
         } else {
@@ -1391,32 +1407,134 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
+    fn swizzle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg) -> Result<()> {
+        if !self.flags.has_avx() {
+            bail!(CodeGenError::UnimplementedForNoAvx)
+        }
+
+        // Clamp rhs to [0, 15 (i.e., 0xF)] and substitute 0 for anything
+        // outside that range.
+        // Each lane is a signed byte so the maximum value is 0x7F. Adding
+        // 0x70 to any value higher than 0xF will saturate resulting in a value
+        // of 0xFF (i.e., 0).
+        let clamp = self.asm.add_constant(&[0x70; 16]);
+        self.asm.xmm_vpaddusb_rrm(writable!(rhs), rhs, &clamp);
+
+        // Don't need to subtract 0x70 since `vpshufb` uses the least
+        // significant 4 bits which are the same after adding 0x70.
+        self.asm.xmm_vpshufb_rrr(dst, lhs, rhs);
+        Ok(())
+    }
+
     fn atomic_rmw(
         &mut self,
+        context: &mut CodeGenContext<Emission>,
         addr: Self::Address,
-        operand: WritableReg,
         size: OperandSize,
         op: RmwOp,
         flags: MemFlags,
-        extend: Option<ExtendKind>,
+        extend: Option<Extend<Zero>>,
     ) -> Result<()> {
-        match op {
+        let res = match op {
             RmwOp::Add => {
+                let operand = context.pop_to_reg(self, None)?;
                 self.asm
-                    .lock_xadd(addr, operand.to_reg(), operand, size, flags);
+                    .lock_xadd(addr, operand.reg, writable!(operand.reg), size, flags);
+                operand.reg
             }
             RmwOp::Sub => {
-                self.asm.neg(operand.to_reg(), operand, size);
+                let operand = context.pop_to_reg(self, None)?;
+                self.asm.neg(operand.reg, writable!(operand.reg), size);
                 self.asm
-                    .lock_xadd(addr, operand.to_reg(), operand, size, flags);
+                    .lock_xadd(addr, operand.reg, writable!(operand.reg), size, flags);
+                operand.reg
+            }
+            RmwOp::Xchg => {
+                let operand = context.pop_to_reg(self, None)?;
+                self.asm
+                    .xchg(addr, operand.reg, writable!(operand.reg), size, flags);
+                operand.reg
+            }
+            RmwOp::And | RmwOp::Or | RmwOp::Xor => {
+                let op = match op {
+                    RmwOp::And => AtomicRmwSeqOp::And,
+                    RmwOp::Or => AtomicRmwSeqOp::Or,
+                    RmwOp::Xor => AtomicRmwSeqOp::Xor,
+                    _ => unreachable!(
+                        "invalid op for atomic_rmw_seq, should be one of `or`, `and` or `xor`"
+                    ),
+                };
+                let dst = context.reg(regs::rax(), self)?;
+                let operand = context.pop_to_reg(self, None)?;
+
+                self.asm
+                    .atomic_rmw_seq(addr, operand.reg, writable!(dst), size, flags, op);
+
+                context.free_reg(operand.reg);
+                dst
+            }
+        };
+
+        let dst_ty = match extend {
+            Some(ext) => {
+                // We don't need to zero-extend from 32 to 64bits.
+                if !(ext.from_bits() == 32 && ext.to_bits() == 64) {
+                    self.asm.movzx_rr(res, writable!(res), ext.into());
+                }
+
+                WasmValType::int_from_bits(ext.to_bits())
+            }
+            None => WasmValType::int_from_bits(size.num_bits()),
+        };
+
+        context.stack.push(TypedReg::new(dst_ty, res).into());
+
+        Ok(())
+    }
+
+    fn extract_lane(
+        &mut self,
+        src: Reg,
+        dst: WritableReg,
+        lane: u8,
+        kind: ExtractLaneKind,
+    ) -> Result<()> {
+        if !self.flags.has_avx() {
+            bail!(CodeGenError::UnimplementedForNoAvx);
+        }
+
+        match kind {
+            ExtractLaneKind::I8x16S
+            | ExtractLaneKind::I8x16U
+            | ExtractLaneKind::I16x8S
+            | ExtractLaneKind::I16x8U
+            | ExtractLaneKind::I32x4
+            | ExtractLaneKind::I64x2 => self.asm.xmm_vpextr_rr(dst, src, lane, kind.lane_size()),
+            ExtractLaneKind::F32x4 | ExtractLaneKind::F64x2 if lane == 0 => {
+                // If the `src` and `dst` registers are the same, then the
+                // appropriate value is already in the correct position in
+                // the register.
+                assert!(src == dst.to_reg());
+            }
+            ExtractLaneKind::F32x4 => self.asm.xmm_vpshuf_rr(src, dst, lane, kind.lane_size()),
+            ExtractLaneKind::F64x2 => {
+                // `0b11_10` selects the high and low 32-bits of the second
+                // 64-bit, so `0b11_10_11_10` splats the 64-bit value across
+                // both lanes. Since we put an `f64` on the stack, we use
+                // the splatted value.
+                // Double-check `lane == 0` was handled in another branch.
+                assert!(lane == 1);
+                self.asm
+                    .xmm_vpshuf_rr(src, dst, 0b11_10_11_10, OperandSize::S32)
             }
         }
 
-        if let Some(extend) = extend {
-            // We don't need to zero-extend from 32 to 64bits.
-            if !(extend.from_bits() == 32 && extend.to_bits() == 64) {
-                self.asm.movzx_rr(operand.to_reg(), operand, extend);
+        // Sign-extend to 32-bits for sign extended kinds.
+        match kind {
+            ExtractLaneKind::I8x16S | ExtractLaneKind::I16x8S => {
+                self.asm.movsx_rr(dst.to_reg(), dst, kind.into())
             }
+            _ => (),
         }
 
         Ok(())
@@ -1491,16 +1609,8 @@ impl MacroAssembler {
         M: Masm,
     {
         if dst.to_reg().is_int() {
-            let access_bits = size.num_bits() as u16;
-
-            let ext_mode = match access_bits {
-                8 => Some(ExtMode::BQ),
-                16 => Some(ExtMode::WQ),
-                32 => Some(ExtMode::LQ),
-                _ => None,
-            };
-
-            self.asm.movzx_mr(&src, dst, ext_mode, flags);
+            let ext = size.extend_to::<Zero>(OperandSize::S64);
+            self.asm.movzx_mr(&src, dst, ext, flags);
         } else {
             self.asm.xmm_mov_mr(&src, dst, size, flags);
         }
@@ -1586,6 +1696,6 @@ impl MacroAssembler {
         // swapped and then the swapped bytes being copied.
         // [d0, d1, d2, d3, d4, d5, d6, d7, ...] yields
         // [d4, d5, d6, d7, d0, d1, d2, d3, d4, d5, d6, d7, d0, d1, d2, d3].
-        0b0100_0100
+        0b01_00_01_00
     }
 }

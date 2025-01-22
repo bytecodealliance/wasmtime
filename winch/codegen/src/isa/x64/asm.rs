@@ -3,13 +3,15 @@
 use crate::{
     isa::{reg::Reg, CallingConvention},
     masm::{
-        DivKind, ExtendKind, IntCmpKind, MulWideKind, OperandSize, RemKind, RoundingMode,
-        ShiftKind, VectorExtendKind,
+        DivKind, Extend, ExtendKind, ExtendType, IntCmpKind, MulWideKind, OperandSize, RemKind,
+        RoundingMode, ShiftKind, Signed, VectorExtendKind, Zero,
     },
+    reg::writable,
+    x64::regs::scratch,
 };
 use cranelift_codegen::{
     ir::{
-        types, ConstantPool, ExternalName, LibCall, MemFlags, SourceLoc, TrapCode,
+        types, ConstantPool, ExternalName, LibCall, MemFlags, SourceLoc, TrapCode, Type,
         UserExternalNameRef,
     },
     isa::{
@@ -22,7 +24,7 @@ use cranelift_codegen::{
                 WritableXmm, Xmm, XmmMem, XmmMemAligned, XmmMemImm, CC,
             },
             encoding::rex::{encode_modrm, RexFlags},
-            settings as x64_settings, EmitInfo, EmitState, Inst,
+            settings as x64_settings, AtomicRmwSeqOp, EmitInfo, EmitState, Inst,
         },
     },
     settings, CallInfo, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState,
@@ -142,28 +144,24 @@ impl From<ShiftKind> for CraneliftShiftKind {
     }
 }
 
-impl From<ExtendKind> for ExtMode {
-    fn from(value: ExtendKind) -> Self {
+impl<T: ExtendType> From<Extend<T>> for ExtMode {
+    fn from(value: Extend<T>) -> Self {
         match value {
-            ExtendKind::I64Extend32U | ExtendKind::I64Extend32S => ExtMode::LQ,
-            ExtendKind::I32Extend8S | ExtendKind::I32Extend8U => ExtMode::BL,
-            ExtendKind::I32Extend16S | ExtendKind::I32Extend16U => ExtMode::WL,
-            ExtendKind::I64Extend8S | ExtendKind::I64Extend8U => ExtMode::BQ,
-            ExtendKind::I64Extend16S | ExtendKind::I64Extend16U => ExtMode::WQ,
+            Extend::I32Extend8 => ExtMode::BL,
+            Extend::I32Extend16 => ExtMode::WL,
+            Extend::I64Extend8 => ExtMode::BQ,
+            Extend::I64Extend16 => ExtMode::WQ,
+            Extend::I64Extend32 => ExtMode::LQ,
+            Extend::__Kind(_) => unreachable!(),
         }
     }
 }
 
-impl From<OperandSize> for Option<ExtMode> {
-    // Helper for cases in which it's known that the widening must be
-    // to quadword.
-    fn from(value: OperandSize) -> Self {
-        use OperandSize::*;
+impl From<ExtendKind> for ExtMode {
+    fn from(value: ExtendKind) -> Self {
         match value {
-            S128 | S64 => None,
-            S8 => Some(ExtMode::BQ),
-            S16 => Some(ExtMode::WQ),
-            S32 => Some(ExtMode::LQ),
+            ExtendKind::Signed(s) => s.into(),
+            ExtendKind::Unsigned(u) => u.into(),
         }
     }
 }
@@ -339,7 +337,7 @@ impl Assembler {
         &mut self,
         addr: &Address,
         dst: WritableReg,
-        ext: Option<ExtMode>,
+        ext: Option<Extend<Zero>>,
         memflags: MemFlags,
     ) {
         let src = Self::to_synthetic_amode(
@@ -353,7 +351,7 @@ impl Assembler {
         if let Some(ext) = ext {
             let reg_mem = RegMem::mem(src);
             self.emit(Inst::MovzxRmR {
-                ext_mode: ext,
+                ext_mode: ext.into(),
                 src: GprMem::unwrap_new(reg_mem),
                 dst: dst.map(Into::into),
             });
@@ -370,7 +368,7 @@ impl Assembler {
         &mut self,
         addr: &Address,
         dst: WritableReg,
-        ext: impl Into<ExtMode>,
+        ext: Extend<Signed>,
         memflags: MemFlags,
     ) {
         let src = Self::to_synthetic_amode(
@@ -390,7 +388,7 @@ impl Assembler {
     }
 
     /// Register-to-register move with zero extension.
-    pub fn movzx_rr(&mut self, src: Reg, dst: WritableReg, kind: ExtendKind) {
+    pub fn movzx_rr(&mut self, src: Reg, dst: WritableReg, kind: Extend<Zero>) {
         self.emit(Inst::MovzxRmR {
             ext_mode: kind.into(),
             src: src.into(),
@@ -399,7 +397,7 @@ impl Assembler {
     }
 
     /// Register-to-register move with sign extension.
-    pub fn movsx_rr(&mut self, src: Reg, dst: WritableReg, kind: ExtendKind) {
+    pub fn movsx_rr(&mut self, src: Reg, dst: WritableReg, kind: Extend<Signed>) {
         self.emit(Inst::MovsxRmR {
             ext_mode: kind.into(),
             src: src.into(),
@@ -566,7 +564,7 @@ impl Assembler {
         assert!(dst.to_reg().is_float());
 
         let op = match size {
-            OperandSize::S64 => AvxOpcode::Vpshufd,
+            OperandSize::S32 => AvxOpcode::Vpshufd,
             _ => unimplemented!(),
         };
 
@@ -591,7 +589,7 @@ impl Assembler {
 
         let op = match size {
             OperandSize::S16 => AvxOpcode::Vpshuflw,
-            OperandSize::S64 => AvxOpcode::Vpshufd,
+            OperandSize::S32 => AvxOpcode::Vpshufd,
             _ => unimplemented!(),
         };
 
@@ -1147,6 +1145,58 @@ impl Assembler {
         });
     }
 
+    pub fn atomic_rmw_seq(
+        &mut self,
+        addr: Address,
+        operand: Reg,
+        dst: WritableReg,
+        size: OperandSize,
+        flags: MemFlags,
+        op: AtomicRmwSeqOp,
+    ) {
+        assert!(addr.is_offset());
+        let mem = Self::to_synthetic_amode(
+            &addr,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            flags,
+        );
+        self.emit(Inst::AtomicRmwSeq {
+            ty: Type::int_with_byte_size(size.bytes() as _).unwrap(),
+            mem,
+            operand: operand.into(),
+            temp: writable!(scratch().into()),
+            dst_old: dst.map(Into::into),
+            op,
+        });
+    }
+
+    pub fn xchg(
+        &mut self,
+        addr: Address,
+        operand: Reg,
+        dst: WritableReg,
+        size: OperandSize,
+        flags: MemFlags,
+    ) {
+        assert!(addr.is_offset());
+        let mem = Self::to_synthetic_amode(
+            &addr,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            flags,
+        );
+
+        self.emit(Inst::Xchg {
+            size: size.into(),
+            operand: operand.into(),
+            mem,
+            dst_old: dst.map(Into::into),
+        });
+    }
+
     pub fn cmp_ir(&mut self, src1: Reg, imm: i32, size: OperandSize) {
         let imm = RegMemImm::imm(imm as u32);
 
@@ -1577,6 +1627,17 @@ impl Assembler {
         });
     }
 
+    /// Shuffles bytes in `src` according to contents of `mask` and puts
+    /// result in `dst`.
+    pub fn xmm_vpshufb_rrr(&mut self, dst: WritableReg, src: Reg, mask: Reg) {
+        self.emit(Inst::XmmRmiRVex {
+            op: args::AvxOpcode::Vpshufb,
+            src1: src.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::reg(mask.into())),
+            dst: dst.to_reg().into(),
+        })
+    }
+
     /// Bitwise OR of `src1` and `src2`.
     pub fn vpor(&mut self, dst: WritableReg, src1: Reg, src2: Reg) {
         self.emit(Inst::XmmRmiRVex {
@@ -1587,8 +1648,47 @@ impl Assembler {
         })
     }
 
+    /// Add unsigned integers with unsigned saturation.
+    ///
+    /// Adds the src operands but when an individual byte result is larger than
+    /// an unsigned byte integer, 0xFF is written instead.
+    pub fn xmm_vpaddusb_rrm(&mut self, dst: WritableReg, src1: Reg, src2: &Address) {
+        let src2 = Self::to_synthetic_amode(
+            src2,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
+
+        self.emit(Inst::XmmRmiRVex {
+            op: args::AvxOpcode::Vpaddusb,
+            src1: src1.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::mem(src2)),
+            dst: dst.to_reg().into(),
+        })
+    }
+
     pub fn fence(&mut self, kind: FenceKind) {
         self.emit(Inst::Fence { kind });
+    }
+
+    /// Extract a value from `src` into `dst` (zero extended) determined by `lane`.
+    pub fn xmm_vpextr_rr(&mut self, dst: WritableReg, src: Reg, lane: u8, size: OperandSize) {
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpextrb,
+            OperandSize::S16 => AvxOpcode::Vpextrw,
+            OperandSize::S32 => AvxOpcode::Vpextrd,
+            OperandSize::S64 => AvxOpcode::Vpextrq,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmToGprImmVex {
+            op,
+            src: src.into(),
+            dst: dst.to_reg().into(),
+            imm: lane,
+        });
     }
 }
 

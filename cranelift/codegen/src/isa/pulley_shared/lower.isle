@@ -331,10 +331,35 @@
   (pulley_xmul64_s8 a b))
 
 ;; 128-bit (or wide) multiplication
-(rule (lower (has_type $I128 (imul (uextend a) (uextend b))))
+(rule 4 (lower (has_type $I128 (imul (uextend a) (uextend b))))
   (pulley_xwidemul64_u (zext64 a) (zext64 b)))
-(rule (lower (has_type $I128 (imul (sextend a) (sextend b))))
+(rule 4 (lower (has_type $I128 (imul (sextend a) (sextend b))))
   (pulley_xwidemul64_s (sext64 a) (sext64 b)))
+
+;; for I128
+(rule (lower (has_type $I128 (imul x y)))
+  (let
+    ((x_regs ValueRegs x)
+      (x_lo XReg (value_regs_get x_regs 0))
+      (x_hi XReg (value_regs_get x_regs 1))
+
+      ;; Get the high/low registers for `y`.
+      (y_regs ValueRegs y)
+      (y_lo XReg (value_regs_get y_regs 0))
+      (y_hi XReg (value_regs_get y_regs 1))
+
+      ;; 128bit mul formula:
+      ;;   dst_lo = x_lo * y_lo
+      ;;   dst_hi = mul_high(x_lo, y_lo) + (x_lo * y_hi) + (x_hi * y_lo)
+      (wide_regs ValueRegs (pulley_xwidemul64_u x_lo y_lo))
+      (wide_lo XReg (value_regs_get wide_regs 0))
+      (wide_hi XReg (value_regs_get wide_regs 1))
+      (tmp_hi1 XReg (pulley_xmul64 x_lo y_hi))
+      (tmp_hi2 XReg (pulley_xmul64 x_hi y_lo))
+      (tmp_add XReg (pulley_xadd64 wide_hi tmp_hi1))
+      (result_hi XReg (pulley_xadd64 tmp_add tmp_hi2))
+    )
+    (value_regs wide_lo result_hi)))
 
 ;; vector multiplication
 (rule (lower (has_type $I8X16 (imul a b))) (pulley_vmuli8x16 a b))
@@ -1054,6 +1079,29 @@
 (rule 2 (lower (store flags src @ (value_type (ty_vec128 ty)) addr offset))
   (side_effect (pulley_vstore (amode addr offset) src ty flags)))
 
+;; i128 stores
+
+(rule 3 (lower (store flags src @ (value_type $I128) addr offset))
+  (let
+    ((src_regs ValueRegs src)
+      (src_lo XReg (value_regs_get src_regs 0))
+      (src_hi XReg (value_regs_get src_regs 1))
+      (addrp0 XReg addr)
+      (addrp8 Amode (Amode.RegOffset addrp0 8)))
+  (side_effect (emit_store_i128 flags src_lo src_hi (Amode.RegOffset addrp0 0) addrp8))))
+
+;; Helper to handle big/little endian to determine which order the lo/hi
+;; halves of the i128 are stored.
+(decl emit_store_i128 (MemFlags XReg XReg Amode Amode) SideEffectNoResult)
+(rule 0 (emit_store_i128 flags lo hi addrp0 addrp8)
+  (if-let (Endianness.Little) (endianness flags))
+  (let ((_ InstOutput (side_effect (pulley_xstore addrp0 lo $I64 flags))))
+    (pulley_xstore addrp8 hi $I64 flags)))
+(rule 1 (emit_store_i128 flags lo hi addrp0 addrp8)
+  (if-let (Endianness.Big) (endianness flags))
+  (let ((_ InstOutput (side_effect (pulley_xstore addrp0 hi $I64 flags))))
+    (pulley_xstore addrp8 lo $I64 flags)))
+
 ;; Equivalent of `gen_xload` but for stores.
 (decl gen_xstore (Value Value Offset32 MemFlags Type) SideEffectNoResult)
 
@@ -1091,6 +1139,9 @@
 
 (rule 1 (lower (has_type $I64 (uextend val)))
   (zext64 val))
+
+(rule 1 (lower (has_type $I128 (uextend val)))
+  (value_regs (zext64 val) (pulley_xzero)))
 
 ;;;; Rules for `sextend` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

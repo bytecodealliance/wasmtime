@@ -12,9 +12,10 @@ use crate::{
         CallingConvention,
     },
     masm::{
-        CalleeKind, DivKind, ExtendKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind,
-        MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp,
-        RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, TrapCode, TruncKind,
+        CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I,
+        IntCmpKind, LoadKind, MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm,
+        RemKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, TrapCode,
+        TruncKind, Zero,
     },
     stack::TypedReg,
 };
@@ -902,16 +903,30 @@ impl Masm for MacroAssembler {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
 
+    fn swizzle(&mut self, _dst: WritableReg, _lhs: Reg, _rhs: Reg) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
     fn atomic_rmw(
         &mut self,
+        _context: &mut CodeGenContext<Emission>,
         _addr: Self::Address,
-        _operand: WritableReg,
         _size: OperandSize,
         _op: RmwOp,
         _flags: MemFlags,
-        _extend: Option<ExtendKind>,
+        _extend: Option<Extend<Zero>>,
     ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn extract_lane(
+        &mut self,
+        _src: Reg,
+        _dst: WritableReg,
+        _lane: u8,
+        _kind: ExtractLaneKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
     }
 }
 

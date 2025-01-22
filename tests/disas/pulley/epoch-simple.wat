@@ -15,4 +15,4 @@
 ;;   18: pop_frame
 ;;       ret
 ;;   1a: call 0x89    // target = 0xa3
-;;   1f: jump 0xfffffffffffffff9    // target = 0x18
+;;   1f: jump -0x7    // target = 0x18

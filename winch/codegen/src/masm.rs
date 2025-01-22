@@ -56,6 +56,10 @@ pub(crate) enum MulWideKind {
 pub(crate) enum RmwOp {
     Add,
     Sub,
+    Xchg,
+    And,
+    Or,
+    Xor,
 }
 
 /// The direction to perform the memory move.
@@ -195,61 +199,98 @@ pub(crate) enum ShiftKind {
 /// lowering to machine code.
 #[derive(Copy, Clone)]
 pub(crate) enum ExtendKind {
-    /// 8 to 32 bit signed extend.
-    I32Extend8S,
-    /// 8 to 32 bit unsigned extend.
-    I32Extend8U,
+    Signed(Extend<Signed>),
+    Unsigned(Extend<Zero>),
+}
 
-    /// 16 to 32 bit signed extend.
-    I32Extend16S,
-    /// 16 to 32 bit unsigned extend.
-    I32Extend16U,
+#[derive(Copy, Clone)]
+pub(crate) enum Signed {}
+#[derive(Copy, Clone)]
+pub(crate) enum Zero {}
 
-    /// 8 to 64 bit signed extend.
-    I64Extend8S,
-    /// 8 to 64 bit unsigned extend.
-    I64Extend8U,
+pub(crate) trait ExtendType {}
 
-    /// 16 to 64 bit signed extend.
-    I64Extend16S,
-    /// 16 to 64 bit unsigned extend.
-    I64Extend16U,
+impl ExtendType for Signed {}
+impl ExtendType for Zero {}
 
-    /// 32 to 64 bit signed extend.
-    I64Extend32S,
-    /// 32 to 64 bit unsigned extend.
-    I64Extend32U,
+#[derive(Copy, Clone)]
+pub(crate) enum Extend<T: ExtendType> {
+    /// 8 to 32 bit extend.
+    I32Extend8,
+    /// 16 to 32 bit extend.
+    I32Extend16,
+    /// 8 to 64 bit extend.
+    I64Extend8,
+    /// 16 to 64 bit extend.
+    I64Extend16,
+    /// 32 to 64 bit extend.
+    I64Extend32,
+
+    /// Variant to hold the kind of extend marker.
+    ///
+    /// This is `Signed` or `Zero`, that are empty enums, which means that this variant cannot be
+    /// constructed.
+    __Kind(T),
+}
+
+impl From<Extend<Zero>> for ExtendKind {
+    fn from(value: Extend<Zero>) -> Self {
+        ExtendKind::Unsigned(value)
+    }
+}
+
+impl<T: ExtendType> Extend<T> {
+    pub fn from_size(&self) -> OperandSize {
+        match self {
+            Extend::I32Extend8 | Extend::I64Extend8 => OperandSize::S8,
+            Extend::I32Extend16 | Extend::I64Extend16 => OperandSize::S16,
+            Extend::I64Extend32 => OperandSize::S32,
+            Extend::__Kind(_) => unreachable!(),
+        }
+    }
+
+    pub fn to_size(&self) -> OperandSize {
+        match self {
+            Extend::I32Extend8 | Extend::I32Extend16 => OperandSize::S32,
+            Extend::I64Extend8 | Extend::I64Extend16 | Extend::I64Extend32 => OperandSize::S64,
+            Extend::__Kind(_) => unreachable!(),
+        }
+    }
+
+    pub fn from_bits(&self) -> u8 {
+        self.from_size().num_bits()
+    }
+
+    pub fn to_bits(&self) -> u8 {
+        self.to_size().num_bits()
+    }
+}
+
+impl From<Extend<Signed>> for ExtendKind {
+    fn from(value: Extend<Signed>) -> Self {
+        ExtendKind::Signed(value)
+    }
 }
 
 impl ExtendKind {
     pub fn signed(&self) -> bool {
         match self {
-            Self::I32Extend8S
-            | Self::I32Extend16S
-            | Self::I64Extend8S
-            | Self::I64Extend16S
-            | Self::I64Extend32S => true,
+            Self::Signed(_) => true,
             _ => false,
         }
     }
 
     pub fn from_bits(&self) -> u8 {
         match self {
-            Self::I64Extend32S | Self::I64Extend32U => 32,
-            Self::I32Extend8S | Self::I32Extend8U | Self::I64Extend8S | Self::I64Extend8U => 8,
-            Self::I32Extend16S | Self::I64Extend16S | Self::I32Extend16U | Self::I64Extend16U => 16,
+            Self::Signed(s) => s.from_bits(),
+            Self::Unsigned(u) => u.from_bits(),
         }
     }
 
     pub fn to_bits(&self) -> u8 {
         match self {
-            Self::I64Extend32S
-            | Self::I64Extend32U
-            | Self::I64Extend8S
-            | Self::I64Extend8U
-            | Self::I64Extend16S
-            | Self::I64Extend16U => 64,
-            Self::I32Extend8S | Self::I32Extend8U | Self::I32Extend16U | Self::I32Extend16S => 32,
+            Self::Signed(s) => s.to_bits(),
+            Self::Unsigned(u) => u.to_bits(),
         }
     }
 }
@@ -313,6 +354,49 @@ impl SplatKind {
     }
 }
 
+/// Kinds of extract lane supported by WebAssembly.
+#[derive(Copy, Debug, Clone, Eq, PartialEq)]
+pub(crate) enum ExtractLaneKind {
+    /// 16 lanes of 8-bit integers sign extended to 32-bits.
+    I8x16S,
+    /// 16 lanes of 8-bit integers zero extended to 32-bits.
+    I8x16U,
+    /// 8 lanes of 16-bit integers sign extended to 32-bits.
+    I16x8S,
+    /// 8 lanes of 16-bit integers zero extended to 32-bits.
+    I16x8U,
+    /// 4 lanes of 32-bit integers.
+    I32x4,
+    /// 2 lanes of 64-bit integers.
+    I64x2,
+    /// 4 lanes of 32-bit floats.
+    F32x4,
+    /// 2 lanes of 64-bit floats.
+    F64x2,
+}
+
+impl ExtractLaneKind {
+    /// The lane size to use for different kinds of extract lane kinds.
+    pub(crate) fn lane_size(&self) -> OperandSize {
+        match self {
+            ExtractLaneKind::I8x16S | ExtractLaneKind::I8x16U => OperandSize::S8,
+            ExtractLaneKind::I16x8S | ExtractLaneKind::I16x8U => OperandSize::S16,
+            ExtractLaneKind::I32x4 | ExtractLaneKind::F32x4 => OperandSize::S32,
+            ExtractLaneKind::I64x2 | ExtractLaneKind::F64x2 => OperandSize::S64,
+        }
+    }
+}
+
+impl From<ExtractLaneKind> for Extend<Signed> {
+    fn from(value: ExtractLaneKind) -> Self {
+        match value {
+            ExtractLaneKind::I8x16S => Extend::I32Extend8,
+            ExtractLaneKind::I16x8S => Extend::I32Extend16,
+            _ => unimplemented!(),
+        }
+    }
+}
+
 /// Kinds of behavior supported by Wasm loads.
 pub(crate) enum LoadKind {
     /// Load the entire bytes of the operand size without any modifications.
@@ -350,15 +434,8 @@ impl LoadKind {
 
     fn operand_size_for_scalar(extend_kind: &ExtendKind) -> OperandSize {
         match extend_kind {
-            ExtendKind::I32Extend8S
-            | ExtendKind::I32Extend8U
-            | ExtendKind::I64Extend8S
-            | ExtendKind::I64Extend8U => OperandSize::S8,
-            ExtendKind::I32Extend16S
-            | ExtendKind::I32Extend16U
-            | ExtendKind::I64Extend16U
-            | ExtendKind::I64Extend16S => OperandSize::S16,
-            ExtendKind::I64Extend32U | ExtendKind::I64Extend32S => OperandSize::S32,
+            ExtendKind::Signed(s) => s.from_size(),
+            ExtendKind::Unsigned(u) => u.from_size(),
         }
     }
 
@@ -429,6 +506,23 @@ impl OperandSize {
             8 => S64,
             16 => S128,
             _ => panic!("Invalid bytes {bytes} for OperandSize"),
+        }
+    }
+
+    pub fn extend_to<T: ExtendType>(&self, to: Self) -> Option<Extend<T>> {
+        match to {
+            OperandSize::S32 => match self {
+                OperandSize::S8 => Some(Extend::I32Extend8),
+                OperandSize::S16 => Some(Extend::I32Extend16),
+                _ => None,
+            },
+            OperandSize::S64 => match self {
+                OperandSize::S8 => Some(Extend::I64Extend8),
+                OperandSize::S16 => Some(Extend::I64Extend16),
+                OperandSize::S32 => Some(Extend::I64Extend32),
+                _ => None,
+            },
+            _ => None,
         }
     }
 }
@@ -1309,16 +1403,28 @@ pub(crate) trait MacroAssembler {
     /// using lanes as a mask to select which indexes to copy.
     fn shuffle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, lanes: [u8; 16]) -> Result<()>;
 
+    /// Performs a swizzle between two 128-bit vectors into a 128-bit result.
+    fn swizzle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg) -> Result<()>;
+
     /// Performs the RMW `op` operation on the passed `addr`.
     ///
     /// The value *before* the operation was performed is written back to the `operand` register.
     fn atomic_rmw(
         &mut self,
+        context: &mut CodeGenContext<Emission>,
         addr: Self::Address,
-        operand: WritableReg,
         size: OperandSize,
         op: RmwOp,
         flags: MemFlags,
-        extend: Option<ExtendKind>,
+        extend: Option<Extend<Zero>>,
+    ) -> Result<()>;
+
+    /// Extracts the scalar value from `src` in `lane` to `dst`.
+    fn extract_lane(
+        &mut self,
+        src: Reg,
+        dst: WritableReg,
+        lane: u8,
+        kind: ExtractLaneKind,
     ) -> Result<()>;
 }

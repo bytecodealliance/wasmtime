@@ -366,3 +366,8 @@ custom-virtual-memory = []
 
 # Same as `custom-virtual-memory` above, but for custom signal-handling APIs.
 custom-native-signals = []
+
+# Off-by-default support to profile the Pulley interpreter. This has a
+# performance hit, even when not profiling, so it's disabled by default at
+# compile time.
+profile-pulley = ['pulley', 'profiling', 'pulley-interpreter/profile']

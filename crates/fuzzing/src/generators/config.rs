@@ -99,6 +99,10 @@ impl Config {
                 }
             }
         }
+
+        // These instructions are explicitly not expected to be exactly the same
+        // across engines. Don't fuzz them.
+        config.relaxed_simd_enabled = false;
     }
 
     /// Uses this configuration and the supplied source of data to generate
@@ -679,6 +683,17 @@ impl WasmtimeConfig {
         self.make_internally_consistent();
 
         Ok(())
+    }
+
+    /// Returns the codegen flag value, if any, for `name`.
+    pub(crate) fn codegen_flag(&self, name: &str) -> Option<&str> {
+        self.codegen.flags().iter().find_map(|(n, value)| {
+            if n == name {
+                Some(value.as_str())
+            } else {
+                None
+            }
+        })
     }
 
     /// Helper to switch `MemoryConfig::CustomUnaligned` to

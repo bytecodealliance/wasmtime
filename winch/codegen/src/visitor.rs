@@ -9,9 +9,9 @@ use crate::codegen::{
     control_index, Callee, CodeGen, CodeGenError, ControlStackFrame, Emission, FnCall,
 };
 use crate::masm::{
-    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler, MemMoveDirection,
-    MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode, SPOffset, ShiftKind,
-    SplatKind, SplatLoadKind, TruncKind, VectorExtendKind,
+    DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler,
+    MemMoveDirection, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode,
+    SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, TruncKind, VectorExtendKind, Zero,
 };
 
 use crate::reg::{writable, Reg};
@@ -292,6 +292,7 @@ macro_rules! def_unsupported {
     (emit I64AtomicRmw32AddU $($rest:tt)*) => {};
     (emit I64AtomicRmwAdd $($rest:tt)*) => {};
     (emit I8x16Shuffle $($rest:tt)*) => {};
+    (emit I8x16Swizzle $($rest:tt)*) => {};
     (emit I32AtomicRmw8SubU $($rest:tt)*) => {};
     (emit I32AtomicRmw16SubU $($rest:tt)*) => {};
     (emit I32AtomicRmwSub $($rest:tt)*) => {};
@@ -299,6 +300,42 @@ macro_rules! def_unsupported {
     (emit I64AtomicRmw16SubU $($rest:tt)*) => {};
     (emit I64AtomicRmw32SubU $($rest:tt)*) => {};
     (emit I64AtomicRmwSub $($rest:tt)*) => {};
+    (emit I32AtomicRmw8XchgU $($rest:tt)*) => {};
+    (emit I32AtomicRmw16XchgU $($rest:tt)*) => {};
+    (emit I32AtomicRmwXchg $($rest:tt)*) => {};
+    (emit I64AtomicRmw8XchgU $($rest:tt)*) => {};
+    (emit I64AtomicRmw16XchgU $($rest:tt)*) => {};
+    (emit I64AtomicRmw32XchgU $($rest:tt)*) => {};
+    (emit I64AtomicRmwXchg $($rest:tt)*) => {};
+    (emit I8x16ExtractLaneS $($rest:tt)*) => {};
+    (emit I8x16ExtractLaneU $($rest:tt)*) => {};
+    (emit I16x8ExtractLaneS $($rest:tt)*) => {};
+    (emit I16x8ExtractLaneU $($rest:tt)*) => {};
+    (emit I32x4ExtractLane $($rest:tt)*) => {};
+    (emit I64x2ExtractLane $($rest:tt)*) => {};
+    (emit F32x4ExtractLane $($rest:tt)*) => {};
+    (emit F64x2ExtractLane $($rest:tt)*) => {};
+    (emit I32AtomicRmw8AndU $($rest:tt)*) => {};
+    (emit I32AtomicRmw16AndU $($rest:tt)*) => {};
+    (emit I32AtomicRmwAnd $($rest:tt)*) => {};
+    (emit I64AtomicRmw8AndU $($rest:tt)*) => {};
+    (emit I64AtomicRmw16AndU $($rest:tt)*) => {};
+    (emit I64AtomicRmw32AndU $($rest:tt)*) => {};
+    (emit I64AtomicRmwAnd $($rest:tt)*) => {};
+    (emit I32AtomicRmw8OrU $($rest:tt)*) => {};
+    (emit I32AtomicRmw16OrU $($rest:tt)*) => {};
+    (emit I32AtomicRmwOr $($rest:tt)*) => {};
+    (emit I64AtomicRmw8OrU $($rest:tt)*) => {};
+    (emit I64AtomicRmw16OrU $($rest:tt)*) => {};
+    (emit I64AtomicRmw32OrU $($rest:tt)*) => {};
+    (emit I64AtomicRmwOr $($rest:tt)*) => {};
+    (emit I32AtomicRmw8XorU $($rest:tt)*) => {};
+    (emit I32AtomicRmw16XorU $($rest:tt)*) => {};
+    (emit I32AtomicRmwXor $($rest:tt)*) => {};
+    (emit I64AtomicRmw8XorU $($rest:tt)*) => {};
+    (emit I64AtomicRmw16XorU $($rest:tt)*) => {};
+    (emit I64AtomicRmw32XorU $($rest:tt)*) => {};
+    (emit I64AtomicRmwXor $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -1213,49 +1250,49 @@ where
 
     fn visit_i64_extend_i32_s(&mut self) -> Self::Output {
         self.context.unop(self.masm, &mut |masm, reg| {
-            masm.extend(writable!(reg), reg, ExtendKind::I64Extend32S)?;
+            masm.extend(writable!(reg), reg, Extend::<Signed>::I64Extend32.into())?;
             Ok(TypedReg::i64(reg))
         })
     }
 
     fn visit_i64_extend_i32_u(&mut self) -> Self::Output {
         self.context.unop(self.masm, &mut |masm, reg| {
-            masm.extend(writable!(reg), reg, ExtendKind::I64Extend32U)?;
+            masm.extend(writable!(reg), reg, Extend::<Zero>::I64Extend32.into())?;
             Ok(TypedReg::i64(reg))
         })
     }
 
     fn visit_i32_extend8_s(&mut self) -> Self::Output {
         self.context.unop(self.masm, &mut |masm, reg| {
-            masm.extend(writable!(reg), reg, ExtendKind::I32Extend8S)?;
+            masm.extend(writable!(reg), reg, Extend::<Signed>::I32Extend8.into())?;
             Ok(TypedReg::i32(reg))
         })
     }
 
     fn visit_i32_extend16_s(&mut self) -> Self::Output {
         self.context.unop(self.masm, &mut |masm, reg| {
-            masm.extend(writable!(reg), reg, ExtendKind::I32Extend16S)?;
+            masm.extend(writable!(reg), reg, Extend::<Signed>::I32Extend16.into())?;
             Ok(TypedReg::i32(reg))
         })
     }
 
     fn visit_i64_extend8_s(&mut self) -> Self::Output {
         self.context.unop(self.masm, &mut |masm, reg| {
-            masm.extend(writable!(reg), reg, ExtendKind::I64Extend8S)?;
+            masm.extend(writable!(reg), reg, Extend::<Signed>::I64Extend8.into())?;
             Ok(TypedReg::i64(reg))
         })
     }
 
     fn visit_i64_extend16_s(&mut self) -> Self::Output {
         self.context.unop(self.masm, &mut |masm, reg| {
-            masm.extend(writable!(reg), reg, ExtendKind::I64Extend16S)?;
+            masm.extend(writable!(reg), reg, Extend::<Signed>::I64Extend16.into())?;
             Ok(TypedReg::i64(reg))
         })
     }
 
     fn visit_i64_extend32_s(&mut self) -> Self::Output {
         self.context.unop(self.masm, &mut |masm, reg| {
-            masm.extend(writable!(reg), reg, ExtendKind::I64Extend32S)?;
+            masm.extend(writable!(reg), reg, Extend::<Signed>::I64Extend32.into())?;
             Ok(TypedReg::i64(reg))
         })
     }
@@ -1893,22 +1930,27 @@ where
 
     fn visit_global_get(&mut self, global_index: u32) -> Self::Output {
         let index = GlobalIndex::from_u32(global_index);
-        let (ty, addr) = self.emit_get_global_addr(index)?;
+        let (ty, base, offset) = self.emit_get_global_addr(index)?;
+        let addr = self.masm.address_at_reg(base, offset)?;
         let dst = self.context.reg_for_type(ty, self.masm)?;
         self.masm.load(addr, writable!(dst), ty.try_into()?)?;
         self.context.stack.push(Val::reg(dst, ty));
+
+        self.context.free_reg(base);
 
         Ok(())
     }
 
     fn visit_global_set(&mut self, global_index: u32) -> Self::Output {
         let index = GlobalIndex::from_u32(global_index);
-        let (ty, addr) = self.emit_get_global_addr(index)?;
+        let (ty, base, offset) = self.emit_get_global_addr(index)?;
+        let addr = self.masm.address_at_reg(base, offset)?;
 
         let typed_reg = self.context.pop_to_reg(self.masm, None)?;
-        self.context.free_reg(typed_reg.reg);
         self.masm
             .store(typed_reg.reg.into(), addr, ty.try_into()?)?;
+        self.context.free_reg(typed_reg.reg);
+        self.context.free_reg(base);
 
         Ok(())
     }
@@ -1955,7 +1997,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
-            LoadKind::ScalarExtend(ExtendKind::I32Extend8S),
+            LoadKind::ScalarExtend(Extend::<Signed>::I32Extend8.into()),
             MemOpKind::Normal,
         )
     }
@@ -1964,7 +2006,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
-            LoadKind::ScalarExtend(ExtendKind::I32Extend8U),
+            LoadKind::ScalarExtend(Extend::<Zero>::I32Extend8.into()),
             MemOpKind::Normal,
         )
     }
@@ -1973,7 +2015,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
-            LoadKind::ScalarExtend(ExtendKind::I32Extend16S),
+            LoadKind::ScalarExtend(Extend::<Signed>::I32Extend16.into()),
             MemOpKind::Normal,
         )
     }
@@ -1982,7 +2024,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
-            LoadKind::ScalarExtend(ExtendKind::I32Extend16U),
+            LoadKind::ScalarExtend(Extend::<Zero>::I32Extend16.into()),
             MemOpKind::Normal,
         )
     }
@@ -2003,7 +2045,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(ExtendKind::I64Extend8S),
+            LoadKind::ScalarExtend(Extend::<Signed>::I64Extend8.into()),
             MemOpKind::Normal,
         )
     }
@@ -2012,7 +2054,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(ExtendKind::I64Extend8U),
+            LoadKind::ScalarExtend(Extend::<Zero>::I64Extend8.into()),
             MemOpKind::Normal,
         )
     }
@@ -2021,7 +2063,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(ExtendKind::I64Extend16U),
+            LoadKind::ScalarExtend(Extend::<Zero>::I64Extend16.into()),
             MemOpKind::Normal,
         )
     }
@@ -2030,7 +2072,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(ExtendKind::I64Extend16S),
+            LoadKind::ScalarExtend(Extend::<Signed>::I64Extend16.into()),
             MemOpKind::Normal,
         )
     }
@@ -2039,7 +2081,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(ExtendKind::I64Extend32U),
+            LoadKind::ScalarExtend(Extend::<Zero>::I64Extend32.into()),
             MemOpKind::Normal,
         )
     }
@@ -2048,7 +2090,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(ExtendKind::I64Extend32S),
+            LoadKind::ScalarExtend(Extend::<Signed>::I64Extend32.into()),
             MemOpKind::Normal,
         )
     }
@@ -2210,7 +2252,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
-            LoadKind::ScalarExtend(ExtendKind::I32Extend8U),
+            LoadKind::ScalarExtend(Extend::<Zero>::I32Extend8.into()),
             MemOpKind::Atomic,
         )
     }
@@ -2219,7 +2261,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
-            LoadKind::ScalarExtend(ExtendKind::I32Extend16U),
+            LoadKind::ScalarExtend(Extend::<Zero>::I32Extend16.into()),
             MemOpKind::Atomic,
         )
     }
@@ -2237,7 +2279,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(ExtendKind::I64Extend8U),
+            LoadKind::ScalarExtend(Extend::<Zero>::I64Extend8.into()),
             MemOpKind::Atomic,
         )
     }
@@ -2246,7 +2288,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(ExtendKind::I64Extend16U),
+            LoadKind::ScalarExtend(Extend::<Zero>::I64Extend16.into()),
             MemOpKind::Atomic,
         )
     }
@@ -2255,7 +2297,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(ExtendKind::I64Extend32U),
+            LoadKind::ScalarExtend(Extend::<Zero>::I64Extend32.into()),
             MemOpKind::Atomic,
         )
     }
@@ -2302,7 +2344,7 @@ where
             &arg,
             RmwOp::Add,
             OperandSize::S8,
-            Some(ExtendKind::I32Extend8U),
+            Some(Extend::<Zero>::I32Extend8),
         )
     }
 
@@ -2311,7 +2353,7 @@ where
             &arg,
             RmwOp::Add,
             OperandSize::S16,
-            Some(ExtendKind::I32Extend16U),
+            Some(Extend::<Zero>::I32Extend16),
         )
     }
 
@@ -2324,7 +2366,7 @@ where
             &arg,
             RmwOp::Add,
             OperandSize::S8,
-            Some(ExtendKind::I64Extend8U),
+            Some(Extend::<Zero>::I64Extend8),
         )
     }
 
@@ -2333,7 +2375,7 @@ where
             &arg,
             RmwOp::Add,
             OperandSize::S16,
-            Some(ExtendKind::I64Extend16U),
+            Some(Extend::<Zero>::I64Extend16),
         )
     }
 
@@ -2342,7 +2384,7 @@ where
             &arg,
             RmwOp::Add,
             OperandSize::S32,
-            Some(ExtendKind::I64Extend32U),
+            Some(Extend::<Zero>::I64Extend32),
         )
     }
 
@@ -2350,30 +2392,25 @@ where
         self.emit_atomic_rmw(&arg, RmwOp::Add, OperandSize::S64, None)
     }
 
-    fn visit_i32_atomic_rmw_sub(&mut self, arg: MemArg) -> Self::Output {
-        self.emit_atomic_rmw(&arg, RmwOp::Sub, OperandSize::S32, None)
-    }
-
-    fn visit_i64_atomic_rmw_sub(&mut self, arg: MemArg) -> Self::Output {
-        self.emit_atomic_rmw(&arg, RmwOp::Sub, OperandSize::S64, None)
-    }
-
     fn visit_i32_atomic_rmw8_sub_u(&mut self, arg: MemArg) -> Self::Output {
         self.emit_atomic_rmw(
             &arg,
             RmwOp::Sub,
             OperandSize::S8,
-            Some(ExtendKind::I32Extend8U),
+            Some(Extend::<Zero>::I32Extend8),
         )
     }
-
     fn visit_i32_atomic_rmw16_sub_u(&mut self, arg: MemArg) -> Self::Output {
         self.emit_atomic_rmw(
             &arg,
             RmwOp::Sub,
             OperandSize::S16,
-            Some(ExtendKind::I32Extend16U),
+            Some(Extend::<Zero>::I32Extend16),
         )
+    }
+
+    fn visit_i32_atomic_rmw_sub(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(&arg, RmwOp::Sub, OperandSize::S32, None)
     }
 
     fn visit_i64_atomic_rmw8_sub_u(&mut self, arg: MemArg) -> Self::Output {
@@ -2381,7 +2418,7 @@ where
             &arg,
             RmwOp::Sub,
             OperandSize::S8,
-            Some(ExtendKind::I64Extend8U),
+            Some(Extend::<Zero>::I64Extend8),
         )
     }
 
@@ -2390,7 +2427,7 @@ where
             &arg,
             RmwOp::Sub,
             OperandSize::S16,
-            Some(ExtendKind::I64Extend16U),
+            Some(Extend::<Zero>::I64Extend16),
         )
     }
 
@@ -2399,8 +2436,224 @@ where
             &arg,
             RmwOp::Sub,
             OperandSize::S32,
-            Some(ExtendKind::I64Extend32U),
+            Some(Extend::<Zero>::I64Extend32),
         )
+    }
+
+    fn visit_i64_atomic_rmw_sub(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(&arg, RmwOp::Sub, OperandSize::S64, None)
+    }
+
+    fn visit_i32_atomic_rmw8_xchg_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Xchg,
+            OperandSize::S8,
+            Some(Extend::<Zero>::I32Extend8),
+        )
+    }
+
+    fn visit_i32_atomic_rmw16_xchg_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Xchg,
+            OperandSize::S16,
+            Some(Extend::<Zero>::I32Extend16),
+        )
+    }
+
+    fn visit_i32_atomic_rmw_xchg(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(&arg, RmwOp::Xchg, OperandSize::S32, None)
+    }
+
+    fn visit_i64_atomic_rmw8_xchg_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Xchg,
+            OperandSize::S8,
+            Some(Extend::<Zero>::I64Extend8),
+        )
+    }
+
+    fn visit_i64_atomic_rmw16_xchg_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Xchg,
+            OperandSize::S16,
+            Some(Extend::<Zero>::I64Extend16),
+        )
+    }
+
+    fn visit_i64_atomic_rmw32_xchg_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Xchg,
+            OperandSize::S32,
+            Some(Extend::<Zero>::I64Extend32),
+        )
+    }
+
+    fn visit_i64_atomic_rmw_xchg(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(&arg, RmwOp::Xchg, OperandSize::S64, None)
+    }
+
+    fn visit_i32_atomic_rmw8_and_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::And,
+            OperandSize::S8,
+            Some(Extend::<Zero>::I32Extend8),
+        )
+    }
+
+    fn visit_i32_atomic_rmw16_and_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::And,
+            OperandSize::S16,
+            Some(Extend::<Zero>::I32Extend16),
+        )
+    }
+
+    fn visit_i32_atomic_rmw_and(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(&arg, RmwOp::And, OperandSize::S32, None)
+    }
+
+    fn visit_i64_atomic_rmw8_and_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::And,
+            OperandSize::S8,
+            Some(Extend::<Zero>::I64Extend8),
+        )
+    }
+
+    fn visit_i64_atomic_rmw16_and_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::And,
+            OperandSize::S16,
+            Some(Extend::<Zero>::I64Extend16),
+        )
+    }
+
+    fn visit_i64_atomic_rmw32_and_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::And,
+            OperandSize::S32,
+            Some(Extend::<Zero>::I64Extend32),
+        )
+    }
+
+    fn visit_i64_atomic_rmw_and(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(&arg, RmwOp::And, OperandSize::S64, None)
+    }
+
+    fn visit_i32_atomic_rmw8_or_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Or,
+            OperandSize::S8,
+            Some(Extend::<Zero>::I32Extend8),
+        )
+    }
+
+    fn visit_i32_atomic_rmw16_or_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Or,
+            OperandSize::S16,
+            Some(Extend::<Zero>::I32Extend16),
+        )
+    }
+
+    fn visit_i32_atomic_rmw_or(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(&arg, RmwOp::Or, OperandSize::S32, None)
+    }
+
+    fn visit_i64_atomic_rmw8_or_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Or,
+            OperandSize::S8,
+            Some(Extend::<Zero>::I64Extend8),
+        )
+    }
+
+    fn visit_i64_atomic_rmw16_or_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Or,
+            OperandSize::S16,
+            Some(Extend::<Zero>::I64Extend16),
+        )
+    }
+
+    fn visit_i64_atomic_rmw32_or_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Or,
+            OperandSize::S32,
+            Some(Extend::<Zero>::I64Extend32),
+        )
+    }
+
+    fn visit_i64_atomic_rmw_or(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(&arg, RmwOp::Or, OperandSize::S64, None)
+    }
+
+    fn visit_i32_atomic_rmw8_xor_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Xor,
+            OperandSize::S8,
+            Some(Extend::<Zero>::I32Extend8),
+        )
+    }
+
+    fn visit_i32_atomic_rmw16_xor_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Xor,
+            OperandSize::S16,
+            Some(Extend::<Zero>::I32Extend16),
+        )
+    }
+
+    fn visit_i32_atomic_rmw_xor(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(&arg, RmwOp::Xor, OperandSize::S32, None)
+    }
+
+    fn visit_i64_atomic_rmw8_xor_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Xor,
+            OperandSize::S8,
+            Some(Extend::<Zero>::I64Extend8),
+        )
+    }
+
+    fn visit_i64_atomic_rmw16_xor_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Xor,
+            OperandSize::S16,
+            Some(Extend::<Zero>::I64Extend16),
+        )
+    }
+
+    fn visit_i64_atomic_rmw32_xor_u(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(
+            &arg,
+            RmwOp::Xor,
+            OperandSize::S32,
+            Some(Extend::<Zero>::I64Extend32),
+        )
+    }
+
+    fn visit_i64_atomic_rmw_xor(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_rmw(&arg, RmwOp::Xor, OperandSize::S64, None)
     }
 
     wasmparser::for_each_visit_operator!(def_unsupported);
@@ -2551,6 +2804,76 @@ where
         self.context.stack.push(TypedReg::v128(lhs.into()).into());
         self.context.free_reg(rhs);
         Ok(())
+    }
+
+    fn visit_i8x16_swizzle(&mut self) -> Self::Output {
+        let rhs = self.context.pop_to_reg(self.masm, None)?;
+        let lhs = self.context.pop_to_reg(self.masm, None)?;
+        self.masm
+            .swizzle(writable!(lhs.into()), lhs.into(), rhs.into())?;
+        self.context.stack.push(TypedReg::v128(lhs.into()).into());
+        self.context.free_reg(rhs);
+        Ok(())
+    }
+
+    fn visit_i8x16_extract_lane_s(&mut self, lane: u8) -> Self::Output {
+        self.context.extract_lane_op(
+            self.masm,
+            ExtractLaneKind::I8x16S,
+            |masm, src, dst, kind| masm.extract_lane(src, dst, lane, kind),
+        )
+    }
+
+    fn visit_i8x16_extract_lane_u(&mut self, lane: u8) -> Self::Output {
+        self.context.extract_lane_op(
+            self.masm,
+            ExtractLaneKind::I8x16U,
+            |masm, src, dst, kind| masm.extract_lane(src, dst, lane, kind),
+        )
+    }
+
+    fn visit_i16x8_extract_lane_s(&mut self, lane: u8) -> Self::Output {
+        self.context.extract_lane_op(
+            self.masm,
+            ExtractLaneKind::I16x8S,
+            |masm, src, dst, kind| masm.extract_lane(src, dst, lane, kind),
+        )
+    }
+
+    fn visit_i16x8_extract_lane_u(&mut self, lane: u8) -> Self::Output {
+        self.context.extract_lane_op(
+            self.masm,
+            ExtractLaneKind::I16x8U,
+            |masm, src, dst, kind| masm.extract_lane(src, dst, lane, kind),
+        )
+    }
+
+    fn visit_i32x4_extract_lane(&mut self, lane: u8) -> Self::Output {
+        self.context
+            .extract_lane_op(self.masm, ExtractLaneKind::I32x4, |masm, src, dst, kind| {
+                masm.extract_lane(src, dst, lane, kind)
+            })
+    }
+
+    fn visit_i64x2_extract_lane(&mut self, lane: u8) -> Self::Output {
+        self.context
+            .extract_lane_op(self.masm, ExtractLaneKind::I64x2, |masm, src, dst, kind| {
+                masm.extract_lane(src, dst, lane, kind)
+            })
+    }
+
+    fn visit_f32x4_extract_lane(&mut self, lane: u8) -> Self::Output {
+        self.context
+            .extract_lane_op(self.masm, ExtractLaneKind::F32x4, |masm, src, dst, kind| {
+                masm.extract_lane(src, dst, lane, kind)
+            })
+    }
+
+    fn visit_f64x2_extract_lane(&mut self, lane: u8) -> Self::Output {
+        self.context
+            .extract_lane_op(self.masm, ExtractLaneKind::F64x2, |masm, src, dst, kind| {
+                masm.extract_lane(src, dst, lane, kind)
+            })
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);

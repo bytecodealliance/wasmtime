@@ -3,8 +3,8 @@ use crate::{
     codegen::BlockSig,
     isa::reg::{writable, Reg},
     masm::{
-        ExtendKind, Imm, IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm,
-        RmwOp, SPOffset, ShiftKind, TrapCode, UNTRUSTED_FLAGS,
+        Extend, Imm, IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm, RmwOp,
+        SPOffset, ShiftKind, TrapCode, Zero, UNTRUSTED_FLAGS,
     },
     stack::TypedReg,
 };
@@ -524,22 +524,17 @@ where
     }
 
     /// Loads the address of the given global.
-    pub fn emit_get_global_addr(
-        &mut self,
-        index: GlobalIndex,
-    ) -> Result<(WasmValType, M::Address)> {
+    pub fn emit_get_global_addr(&mut self, index: GlobalIndex) -> Result<(WasmValType, Reg, u32)> {
         let data = self.env.resolve_global(index);
 
-        let addr = if data.imported {
+        if data.imported {
             let global_base = self.masm.address_at_reg(vmctx!(M), data.offset)?;
-            let scratch = scratch!(M);
-            self.masm.load_ptr(global_base, writable!(scratch))?;
-            self.masm.address_at_reg(scratch, 0)?
+            let dst = self.context.any_gpr(self.masm)?;
+            self.masm.load_ptr(global_base, writable!(dst))?;
+            Ok((data.ty, dst, 0))
         } else {
-            self.masm.address_at_reg(vmctx!(M), data.offset)?
-        };
-
-        Ok((data.ty, addr))
+            Ok((data.ty, vmctx!(M), data.offset))
+        }
     }
 
     pub fn emit_lazy_init_funcref(&mut self, table_index: TableIndex) -> Result<()> {
@@ -1373,26 +1368,17 @@ where
         arg: &MemArg,
         op: RmwOp,
         size: OperandSize,
-        extend: Option<ExtendKind>,
+        extend: Option<Extend<Zero>>,
     ) -> Result<()> {
-        // Only unsigned extends are supported for atomic operations.
-        match extend {
-            Some(kind) if kind.signed() => bail!(CodeGenError::unsupported_extend_kind()),
-            _ => (),
-        }
-
-        let operand = self.context.pop_to_reg(self.masm, None).unwrap();
+        // We need to pop-push the operand to compute the address before passing control over to
+        // masm, because some architectures may have specific requirements for the registers used
+        // in some atomic operations.
+        let operand = self.context.pop_to_reg(self.masm, None)?;
         if let Some(addr) = self.emit_compute_heap_address_align_checked(arg, size)? {
             let src = self.masm.address_at_reg(addr, 0)?;
-            self.masm.atomic_rmw(
-                src,
-                writable!(operand.reg),
-                size,
-                op,
-                UNTRUSTED_FLAGS,
-                extend,
-            )?;
             self.context.stack.push(operand.into());
+            self.masm
+                .atomic_rmw(&mut self.context, src, size, op, UNTRUSTED_FLAGS, extend)?;
             self.context.free_reg(addr);
         }
 

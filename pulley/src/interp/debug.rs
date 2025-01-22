@@ -84,6 +84,7 @@ impl<'a> OpVisitor for Debug<'a> {
     }
 
     fn before_visit(&mut self) {
+        self.0.record_executing_pc_for_profiling();
         if !DEBUG {
             return;
         }

@@ -2,7 +2,8 @@
 use super::{address::Address, regs};
 use crate::aarch64::regs::zero;
 use crate::masm::{
-    DivKind, ExtendKind, FloatCmpKind, IntCmpKind, RemKind, RoundingMode, ShiftKind, TruncKind,
+    DivKind, Extend, ExtendKind, FloatCmpKind, IntCmpKind, RemKind, RoundingMode, ShiftKind,
+    Signed, TruncKind,
 };
 use crate::CallingConvention;
 use crate::{
@@ -440,8 +441,16 @@ impl Assembler {
         // we therefore sign-extend the operand.
         // see: https://github.com/bytecodealliance/wasmtime/issues/9766
         let size = if size == OperandSize::S32 && kind == DivKind::Signed {
-            self.extend(divisor, writable!(divisor), ExtendKind::I64Extend32S);
-            self.extend(dividend, writable!(dividend), ExtendKind::I64Extend32S);
+            self.extend(
+                divisor,
+                writable!(divisor),
+                ExtendKind::Signed(Extend::<Signed>::I64Extend32),
+            );
+            self.extend(
+                dividend,
+                writable!(dividend),
+                ExtendKind::Signed(Extend::<Signed>::I64Extend32),
+            );
             OperandSize::S64
         } else {
             size
@@ -471,8 +480,16 @@ impl Assembler {
         // we therefore sign-extend the operand.
         // see: https://github.com/bytecodealliance/wasmtime/issues/9766
         let size = if size == OperandSize::S32 && kind.is_signed() {
-            self.extend(divisor, writable!(divisor), ExtendKind::I64Extend32S);
-            self.extend(dividend, writable!(dividend), ExtendKind::I64Extend32S);
+            self.extend(
+                divisor,
+                writable!(divisor),
+                ExtendKind::Signed(Extend::<Signed>::I64Extend32),
+            );
+            self.extend(
+                dividend,
+                writable!(dividend),
+                ExtendKind::Signed(Extend::<Signed>::I64Extend32),
+            );
             OperandSize::S64
         } else {
             size

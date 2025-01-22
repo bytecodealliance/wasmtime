@@ -279,6 +279,14 @@ impl Config {
         {
             ret.cranelift_debug_verifier(false);
             ret.cranelift_opt_level(OptLevel::Speed);
+
+            // When running under MIRI try to optimize for compile time of wasm
+            // code itself as much as possible. Disable optimizations by
+            // default and use the fastest regalloc available to us.
+            if cfg!(miri) {
+                ret.cranelift_opt_level(OptLevel::None);
+                ret.cranelift_regalloc_algorithm(RegallocAlgorithm::SinglePass);
+            }
         }
 
         ret.wasm_backtrace_details(WasmBacktraceDetails::Environment);
@@ -2272,6 +2280,7 @@ impl Config {
             ProfilingStrategy::JitDump => profiling_agent::new_jitdump()?,
             ProfilingStrategy::VTune => profiling_agent::new_vtune()?,
             ProfilingStrategy::None => profiling_agent::new_null(),
+            ProfilingStrategy::Pulley => profiling_agent::new_pulley()?,
         })
     }
 
@@ -2799,6 +2808,11 @@ pub enum ProfilingStrategy {
 
     /// Collect profiling info using the "ittapi", used with `VTune` on Linux.
     VTune,
+
+    /// Support for profiling Pulley, Wasmtime's interpreter. Note that enabling
+    /// this at runtime requires enabling the `profile-pulley` Cargo feature at
+    /// compile time.
+    Pulley,
 }
 
 /// Select how wasm backtrace detailed information is handled.
