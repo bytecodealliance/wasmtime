@@ -65,3 +65,8 @@ runs:
     - name: Install the WASI target
       shell: bash
       run: rustup target add wasm32-wasip1 wasm32-unknown-unknown
+
+    - name: Move Windows target directory
+      shell: bash
+      run: echo 'CARGO_TARGET_DIR=${{ runner.temp }}/target' >> "$GITHUB_ENV"
+      if: runner.os == 'Windows'
