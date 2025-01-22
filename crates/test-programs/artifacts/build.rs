@@ -71,6 +71,7 @@ fn build_and_generate_tests() {
             s if s.starts_with("http_") => "http",
             s if s.starts_with("preview1_") => "preview1",
             s if s.starts_with("preview2_") => "preview2",
+            s if s.starts_with("preview3_") => "preview3",
             s if s.starts_with("cli_") => "cli",
             s if s.starts_with("api_") => "api",
             s if s.starts_with("nn_") => "nn",

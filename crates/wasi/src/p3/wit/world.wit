@@ -1,0 +1,10 @@
+// We actually don't use this; it's just to let bindgen! find the corresponding world in wit/deps.
+
+package wasmtime:wasi;
+
+world bindings {
+  // TODO: Replace explicit includes by `wasi:cli/command@0.3.0` once released
+  //include wasi:cli/imports@0.3.0;
+
+  include wasi:random/imports@0.3.0;
+}

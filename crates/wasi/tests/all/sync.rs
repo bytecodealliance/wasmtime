@@ -1,7 +1,6 @@
 use super::*;
 use std::path::Path;
 use test_programs_artifacts::*;
-use wasmtime_wasi::add_to_linker_sync;
 use wasmtime_wasi::p2::bindings::sync::Command;
 
 fn run(path: &str, inherit_stdio: bool) -> Result<()> {
@@ -9,7 +8,9 @@ fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let name = path.file_stem().unwrap().to_str().unwrap();
     let engine = test_programs_artifacts::engine(|_| {});
     let mut linker = Linker::new(&engine);
-    add_to_linker_sync(&mut linker)?;
+    wasmtime_wasi::p2::add_to_linker_sync(&mut linker)?;
+    #[cfg(feature = "p3")]
+    wasmtime_wasi::p3::add_to_linker_sync(&mut linker)?;
 
     let component = Component::from_file(&engine, path)?;
 
@@ -31,6 +32,9 @@ fn run(path: &str, inherit_stdio: bool) -> Result<()> {
 
 foreach_preview1!(assert_test_exists);
 foreach_preview2!(assert_test_exists);
+
+#[cfg(feature = "p3")]
+foreach_preview3!(assert_test_exists);
 
 // Below here is mechanical: there should be one test for every binary in
 // wasi-tests.
@@ -332,4 +336,10 @@ fn preview2_adapter_badfd() {
 #[test_log::test]
 fn preview2_file_read_write() {
     run(PREVIEW2_FILE_READ_WRITE_COMPONENT, false).unwrap()
+}
+
+#[cfg(feature = "p3")]
+#[test_log::test]
+fn preview3_random() {
+    run(PREVIEW3_RANDOM_COMPONENT, false).unwrap()
 }

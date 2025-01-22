@@ -45,6 +45,10 @@ make_vendor "wasi/src/p2" "
   sockets@v0.2.3
 "
 
+make_vendor "wasi/src/p3" "
+  random@3e99124@wit-0.3.0-draft
+"
+
 make_vendor "wasi-http/src/p2" "
   cli@v0.2.3
   clocks@v0.2.3

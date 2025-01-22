@@ -190,6 +190,8 @@ mod filesystem;
 mod ip_name_lookup;
 mod network;
 pub mod p2;
+#[cfg(feature = "p3")]
+pub mod p3;
 pub mod pipe;
 mod poll;
 #[cfg(feature = "preview1")]

@@ -1,4 +1,4 @@
-use test_programs::wasi::random0_2_3 as random;
+use test_programs::wasi::random0_3_0 as random;
 
 fn main() {
     let mut bytes = [0_u8; 256];

@@ -1,7 +1,6 @@
 use super::*;
 use std::path::Path;
 use test_programs_artifacts::*;
-use wasmtime_wasi::add_to_linker_async;
 use wasmtime_wasi::p2::bindings::Command;
 
 async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
@@ -11,7 +10,10 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
         config.async_support(true);
     });
     let mut linker = Linker::new(&engine);
-    add_to_linker_async(&mut linker)?;
+    wasmtime_wasi::p2::add_to_linker_async(&mut linker)?;
+
+    #[cfg(feature = "p3")]
+    wasmtime_wasi::p3::add_to_linker_sync(&mut linker)?;
 
     let (mut store, _td) = store(&engine, name, |builder| {
         if inherit_stdio {
@@ -29,6 +31,9 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
 
 foreach_preview1!(assert_test_exists);
 foreach_preview2!(assert_test_exists);
+
+#[cfg(feature = "p3")]
+foreach_preview3!(assert_test_exists);
 
 // Below here is mechanical: there should be one test for every binary in
 // wasi-tests.
@@ -398,4 +403,10 @@ async fn preview2_file_read_write() {
     run(PREVIEW2_FILE_READ_WRITE_COMPONENT, false)
         .await
         .unwrap()
+}
+
+#[cfg(feature = "p3")]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview3_random() {
+    run(PREVIEW3_RANDOM_COMPONENT, false).await.unwrap()
 }
