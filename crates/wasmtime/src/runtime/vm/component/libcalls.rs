@@ -557,3 +557,33 @@ unsafe fn resource_exit_call(vmctx: *mut VMComponentContext) -> Result<()> {
 unsafe fn trap(_vmctx: *mut VMComponentContext, code: u8) -> Result<Infallible> {
     Err(wasmtime_environ::Trap::from_u8(code).unwrap().into())
 }
+
+unsafe fn future_transfer(
+    vmctx: *mut VMComponentContext,
+    src_idx: u32,
+    src_table: u32,
+    dst_table: u32,
+) -> Result<u32> {
+    _ = (vmctx, src_idx, src_table, dst_table);
+    todo!()
+}
+
+unsafe fn stream_transfer(
+    vmctx: *mut VMComponentContext,
+    src_idx: u32,
+    src_table: u32,
+    dst_table: u32,
+) -> Result<u32> {
+    _ = (vmctx, src_idx, src_table, dst_table);
+    todo!()
+}
+
+unsafe fn error_context_transfer(
+    vmctx: *mut VMComponentContext,
+    src_idx: u32,
+    src_table: u32,
+    dst_table: u32,
+) -> Result<u32> {
+    _ = (vmctx, src_idx, src_table, dst_table);
+    todo!()
+}

@@ -8,9 +8,9 @@
 //      flags: [VMGlobalDefinition; component.num_runtime_component_instances],
 //      trampoline_func_refs: [VMFuncRef; component.num_trampolines],
 //      lowerings: [VMLowering; component.num_lowerings],
-//      memories: [*mut VMMemoryDefinition; component.num_memories],
-//      reallocs: [*mut VMFuncRef; component.num_reallocs],
-//      post_returns: [*mut VMFuncRef; component.num_post_returns],
+//      memories: [*mut VMMemoryDefinition; component.num_runtime_memories],
+//      reallocs: [*mut VMFuncRef; component.num_runtime_reallocs],
+//      post_returns: [*mut VMFuncRef; component.num_runtime_post_returns],
 //      resource_destructors: [*mut VMFuncRef; component.num_resources],
 // }
 
@@ -47,6 +47,8 @@ pub struct VMComponentOffsets<P> {
     pub num_runtime_memories: u32,
     /// The number of reallocs which are recorded in this component for options.
     pub num_runtime_reallocs: u32,
+    /// The number of callbacks which are recorded in this component for options.
+    pub num_runtime_callbacks: u32,
     /// The number of post-returns which are recorded in this component for options.
     pub num_runtime_post_returns: u32,
     /// Number of component instances internally in the component (always at
@@ -67,6 +69,7 @@ pub struct VMComponentOffsets<P> {
     lowerings: u32,
     memories: u32,
     reallocs: u32,
+    callbacks: u32,
     post_returns: u32,
     resource_destructors: u32,
     size: u32,
@@ -87,6 +90,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             num_lowerings: component.num_lowerings,
             num_runtime_memories: component.num_runtime_memories.try_into().unwrap(),
             num_runtime_reallocs: component.num_runtime_reallocs.try_into().unwrap(),
+            num_runtime_callbacks: component.num_runtime_callbacks.try_into().unwrap(),
             num_runtime_post_returns: component.num_runtime_post_returns.try_into().unwrap(),
             num_runtime_component_instances: component
                 .num_runtime_component_instances
@@ -103,6 +107,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             lowerings: 0,
             memories: 0,
             reallocs: 0,
+            callbacks: 0,
             post_returns: 0,
             resource_destructors: 0,
             size: 0,
@@ -145,6 +150,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             size(lowerings) = cmul(ret.num_lowerings, ret.ptr.size() * 2),
             size(memories) = cmul(ret.num_runtime_memories, ret.ptr.size()),
             size(reallocs) = cmul(ret.num_runtime_reallocs, ret.ptr.size()),
+            size(callbacks) = cmul(ret.num_runtime_callbacks, ret.ptr.size()),
             size(post_returns) = cmul(ret.num_runtime_post_returns, ret.ptr.size()),
             size(resource_destructors) = cmul(ret.num_resources, ret.ptr.size()),
         }
@@ -278,6 +284,20 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     pub fn runtime_realloc(&self, index: RuntimeReallocIndex) -> u32 {
         assert!(index.as_u32() < self.num_runtime_reallocs);
         self.runtime_reallocs() + index.as_u32() * u32::from(self.ptr.size())
+    }
+
+    /// The offset of the base of the `runtime_callbacks` field
+    #[inline]
+    pub fn runtime_callbacks(&self) -> u32 {
+        self.callbacks
+    }
+
+    /// The offset of the `*mut VMFuncRef` for the runtime index
+    /// provided.
+    #[inline]
+    pub fn runtime_callback(&self, index: RuntimeCallbackIndex) -> u32 {
+        assert!(index.as_u32() < self.num_runtime_callbacks);
+        self.runtime_callbacks() + index.as_u32() * u32::from(self.ptr.size())
     }
 
     /// The offset of the base of the `runtime_post_returns` field

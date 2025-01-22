@@ -148,6 +148,10 @@ pub struct Component {
     /// `VMComponentContext`.
     pub num_runtime_reallocs: u32,
 
+    /// The number of runtime async callbacks (maximum `RuntimeCallbackIndex`)
+    /// needed to instantiate this component.
+    pub num_runtime_callbacks: u32,
+
     /// Same as `num_runtime_reallocs`, but for post-return functions.
     pub num_runtime_post_returns: u32,
 
@@ -158,13 +162,25 @@ pub struct Component {
     /// instantiate this component.
     pub num_lowerings: u32,
 
-    /// Maximal number of tables that required at runtime for resource-related
+    /// Maximal number of tables required at runtime for resource-related
     /// information in this component.
     pub num_resource_tables: usize,
 
     /// Total number of resources both imported and defined within this
     /// component.
     pub num_resources: u32,
+
+    /// Maximal number of tables required at runtime for future-related
+    /// information in this component.
+    pub num_future_tables: usize,
+
+    /// Maximal number of tables required at runtime for stream-related
+    /// information in this component.
+    pub num_stream_tables: usize,
+
+    /// Maximal number of tables required at runtime for error-context-related
+    /// information in this component.
+    pub num_error_context_tables: usize,
 
     /// Metadata about imported resources and where they are within the runtime
     /// imports array.
@@ -253,6 +269,10 @@ pub enum GlobalInitializer {
     ExtractRealloc(ExtractRealloc),
 
     /// Same as `ExtractMemory`, except it's extracting a function pointer to be
+    /// used as an async `callback` function.
+    ExtractCallback(ExtractCallback),
+
+    /// Same as `ExtractMemory`, except it's extracting a function pointer to be
     /// used as a `post-return` function.
     ExtractPostReturn(ExtractPostReturn),
 
@@ -278,6 +298,15 @@ pub struct ExtractRealloc {
     /// The index of the realloc being defined.
     pub index: RuntimeReallocIndex,
     /// Where this realloc is being extracted from.
+    pub def: CoreDef,
+}
+
+/// Same as `ExtractMemory` but for the `callback` canonical option.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct ExtractCallback {
+    /// The index of the callback being defined.
+    pub index: RuntimeCallbackIndex,
+    /// Where this callback is being extracted from.
     pub def: CoreDef,
 }
 
@@ -447,8 +476,14 @@ pub struct CanonicalOptions {
     /// The realloc function used by these options, if specified.
     pub realloc: Option<RuntimeReallocIndex>,
 
+    /// The async callback function used by these options, if specified.
+    pub callback: Option<RuntimeCallbackIndex>,
+
     /// The post-return function used by these options, if specified.
     pub post_return: Option<RuntimePostReturnIndex>,
+
+    /// Whether to use the async ABI for lifting or lowering.
+    pub async_: bool,
 }
 
 /// Possible encodings of strings within the component model.
@@ -644,6 +679,199 @@ pub enum Trampoline {
     /// Same as `ResourceNew`, but for the `resource.drop` intrinsic.
     ResourceDrop(TypeResourceTableIndex),
 
+    /// A `task.backpressure` intrinsic, which tells the host to enable or
+    /// disable backpressure for the caller's instance.
+    TaskBackpressure {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+    },
+
+    /// A `task.return` intrinsic, which returns a result to the caller of a
+    /// lifted export function.  This allows the callee to continue executing
+    /// after returning a result.
+    TaskReturn,
+
+    /// A `task.wait` intrinsic, which waits for at least one outstanding async
+    /// task/stream/future to make progress, returning the first such event.
+    TaskWait {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// If `true`, indicates the caller instance maybe reentered.
+        async_: bool,
+        /// Memory to use when storing the event.
+        memory: RuntimeMemoryIndex,
+    },
+
+    /// A `task.poll` intrinsic, which checks whether any outstanding async
+    /// task/stream/future has made progress.  Unlike `task.wait`, this does not
+    /// block and may return nothing if no such event has occurred.
+    TaskPoll {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+        /// If `true`, indicates the caller instance maybe reentered.
+        async_: bool,
+        /// Memory to use when storing the event.
+        memory: RuntimeMemoryIndex,
+    },
+
+    /// A `task.yield` intrinsic, which yields control to the host so that other
+    /// tasks are able to make progress, if any.
+    TaskYield {
+        /// If `true`, indicates the caller instance maybe reentered.
+        async_: bool,
+    },
+
+    /// A `subtask.drop` intrinsic to drop a specified task which has completed.
+    SubtaskDrop {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+    },
+
+    /// A `stream.new` intrinsic to create a new `stream` handle of the
+    /// specified type.
+    StreamNew {
+        /// The table index for the specific `stream` type and caller instance.
+        ty: TypeStreamTableIndex,
+    },
+
+    /// A `stream.read` intrinsic to read from a `stream` of the specified type.
+    StreamRead {
+        /// The table index for the specific `stream` type and caller instance.
+        ty: TypeStreamTableIndex,
+        /// Any options (e.g. string encoding) to use when storing values to
+        /// memory.
+        options: CanonicalOptions,
+    },
+
+    /// A `stream.write` intrinsic to write to a `stream` of the specified type.
+    StreamWrite {
+        /// The table index for the specific `stream` type and caller instance.
+        ty: TypeStreamTableIndex,
+        /// Any options (e.g. string encoding) to use when storing values to
+        /// memory.
+        options: CanonicalOptions,
+    },
+
+    /// A `stream.cancel-read` intrinsic to cancel an in-progress read from a
+    /// `stream` of the specified type.
+    StreamCancelRead {
+        /// The table index for the specific `stream` type and caller instance.
+        ty: TypeStreamTableIndex,
+        /// If `false`, block until cancellation completes rather than return
+        /// `BLOCKED`.
+        async_: bool,
+    },
+
+    /// A `stream.cancel-write` intrinsic to cancel an in-progress write from a
+    /// `stream` of the specified type.
+    StreamCancelWrite {
+        /// The table index for the specific `stream` type and caller instance.
+        ty: TypeStreamTableIndex,
+        /// If `false`, block until cancellation completes rather than return
+        /// `BLOCKED`.
+        async_: bool,
+    },
+
+    /// A `stream.close-readable` intrinsic to close the readable end of a
+    /// `stream` of the specified type.
+    StreamCloseReadable {
+        /// The table index for the specific `stream` type and caller instance.
+        ty: TypeStreamTableIndex,
+    },
+
+    /// A `stream.close-writable` intrinsic to close the writable end of a
+    /// `stream` of the specified type.
+    StreamCloseWritable {
+        /// The table index for the specific `stream` type and caller instance.
+        ty: TypeStreamTableIndex,
+    },
+
+    /// A `future.new` intrinsic to create a new `future` handle of the
+    /// specified type.
+    FutureNew {
+        /// The table index for the specific `future` type and caller instance.
+        ty: TypeFutureTableIndex,
+    },
+
+    /// A `future.read` intrinsic to read from a `future` of the specified type.
+    FutureRead {
+        /// The table index for the specific `future` type and caller instance.
+        ty: TypeFutureTableIndex,
+        /// Any options (e.g. string encoding) to use when storing values to
+        /// memory.
+        options: CanonicalOptions,
+    },
+
+    /// A `future.write` intrinsic to write to a `future` of the specified type.
+    FutureWrite {
+        /// The table index for the specific `future` type and caller instance.
+        ty: TypeFutureTableIndex,
+        /// Any options (e.g. string encoding) to use when storing values to
+        /// memory.
+        options: CanonicalOptions,
+    },
+
+    /// A `future.cancel-read` intrinsic to cancel an in-progress read from a
+    /// `future` of the specified type.
+    FutureCancelRead {
+        /// The table index for the specific `future` type and caller instance.
+        ty: TypeFutureTableIndex,
+        /// If `false`, block until cancellation completes rather than return
+        /// `BLOCKED`.
+        async_: bool,
+    },
+
+    /// A `future.cancel-write` intrinsic to cancel an in-progress write from a
+    /// `future` of the specified type.
+    FutureCancelWrite {
+        /// The table index for the specific `future` type and caller instance.
+        ty: TypeFutureTableIndex,
+        /// If `false`, block until cancellation completes rather than return
+        /// `BLOCKED`.
+        async_: bool,
+    },
+
+    /// A `future.close-readable` intrinsic to close the readable end of a
+    /// `future` of the specified type.
+    FutureCloseReadable {
+        /// The table index for the specific `future` type and caller instance.
+        ty: TypeFutureTableIndex,
+    },
+
+    /// A `future.close-writable` intrinsic to close the writable end of a
+    /// `future` of the specified type.
+    FutureCloseWritable {
+        /// The table index for the specific `future` type and caller instance.
+        ty: TypeFutureTableIndex,
+    },
+
+    /// A `error-context.new` intrinsic to create a new `error-context` with a
+    /// specified debug message.
+    ErrorContextNew {
+        /// The table index for the `error-context` type in the caller instance.
+        ty: TypeComponentLocalErrorContextTableIndex,
+        /// String encoding, memory, etc. to use when loading debug message.
+        options: CanonicalOptions,
+    },
+
+    /// A `error-context.debug-message` intrinsic to get the debug message for a
+    /// specified `error-context`.
+    ///
+    /// Note that the debug message might not necessarily match what was passed
+    /// to `error.new`.
+    ErrorContextDebugMessage {
+        /// The table index for the `error-context` type in the caller instance.
+        ty: TypeComponentLocalErrorContextTableIndex,
+        /// String encoding, memory, etc. to use when storing debug message.
+        options: CanonicalOptions,
+    },
+
+    /// A `error-context.drop` intrinsic to drop a specified `error-context`.
+    ErrorContextDrop {
+        /// The table index for the `error-context` type in the caller instance.
+        ty: TypeComponentLocalErrorContextTableIndex,
+    },
+
     /// An intrinsic used by FACT-generated modules which will transfer an owned
     /// resource from one table to another. Used in component-to-component
     /// adapter trampolines.
@@ -661,6 +889,49 @@ pub enum Trampoline {
 
     /// Same as `ResourceEnterCall` except for when exiting a call.
     ResourceExitCall,
+
+    /// An intrinsic used by FACT-generated modules to begin a call to an
+    /// async-lowered import function.
+    AsyncEnterCall,
+
+    /// An intrinsic used by FACT-generated modules to complete a call to an
+    /// async-lowered import function.
+    ///
+    /// Note that `AsyncEnterCall` and `AsyncExitCall` could theoretically be
+    /// combined into a single `AsyncCall` intrinsic, but we separate them to
+    /// allow the FACT-generated module to optionally call the callee directly
+    /// without an intermediate host stack frame.
+    AsyncExitCall {
+        /// The callee's callback, if any.
+        callback: Option<RuntimeCallbackIndex>,
+
+        /// The callee's post-return function, if any.
+        post_return: Option<RuntimePostReturnIndex>,
+    },
+
+    /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
+    /// ownership of a `future`.
+    ///
+    /// Transfering a `future` can either mean giving away the readable end
+    /// while retaining the writable end or only the former, depending on the
+    /// ownership status of the `future`.
+    FutureTransfer,
+
+    /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
+    /// ownership of a `stream`.
+    ///
+    /// Transfering a `stream` can either mean giving away the readable end
+    /// while retaining the writable end or only the former, depending on the
+    /// ownership status of the `stream`.
+    StreamTransfer,
+
+    /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
+    /// ownership of an `error-context`.
+    ///
+    /// Unlike futures, streams, and resource handles, `error-context` handles
+    /// are reference counted, meaning that sharing the handle with another
+    /// component does not invalidate the handle in the original component.
+    ErrorContextTransfer,
 }
 
 impl Trampoline {
@@ -684,10 +955,38 @@ impl Trampoline {
             ResourceNew(i) => format!("component-resource-new[{}]", i.as_u32()),
             ResourceRep(i) => format!("component-resource-rep[{}]", i.as_u32()),
             ResourceDrop(i) => format!("component-resource-drop[{}]", i.as_u32()),
+            TaskBackpressure { .. } => format!("task-backpressure"),
+            TaskReturn => format!("task-return"),
+            TaskWait { .. } => format!("task-wait"),
+            TaskPoll { .. } => format!("task-poll"),
+            TaskYield { .. } => format!("task-yield"),
+            SubtaskDrop { .. } => format!("subtask-drop"),
+            StreamNew { .. } => format!("stream-new"),
+            StreamRead { .. } => format!("stream-read"),
+            StreamWrite { .. } => format!("stream-write"),
+            StreamCancelRead { .. } => format!("stream-cancel-read"),
+            StreamCancelWrite { .. } => format!("stream-cancel-write"),
+            StreamCloseReadable { .. } => format!("stream-close-readable"),
+            StreamCloseWritable { .. } => format!("stream-close-writable"),
+            FutureNew { .. } => format!("future-new"),
+            FutureRead { .. } => format!("future-read"),
+            FutureWrite { .. } => format!("future-write"),
+            FutureCancelRead { .. } => format!("future-cancel-read"),
+            FutureCancelWrite { .. } => format!("future-cancel-write"),
+            FutureCloseReadable { .. } => format!("future-close-readable"),
+            FutureCloseWritable { .. } => format!("future-close-writable"),
+            ErrorContextNew { .. } => format!("error-context-new"),
+            ErrorContextDebugMessage { .. } => format!("error-context-debug-message"),
+            ErrorContextDrop { .. } => format!("error-context-drop"),
             ResourceTransferOwn => format!("component-resource-transfer-own"),
             ResourceTransferBorrow => format!("component-resource-transfer-borrow"),
             ResourceEnterCall => format!("component-resource-enter-call"),
             ResourceExitCall => format!("component-resource-exit-call"),
+            AsyncEnterCall => format!("component-async-enter-call"),
+            AsyncExitCall { .. } => format!("component-async-exit-call"),
+            FutureTransfer => format!("future-transfer"),
+            StreamTransfer => format!("stream-transfer"),
+            ErrorContextTransfer => format!("error-context-transfer"),
         }
     }
 }

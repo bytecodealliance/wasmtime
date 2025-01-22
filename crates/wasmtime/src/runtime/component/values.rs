@@ -198,6 +198,9 @@ impl Val {
 
                 Val::Flags(flags.into())
             }
+            InterfaceType::Future(_)
+            | InterfaceType::Stream(_)
+            | InterfaceType::ErrorContext(_) => todo!(),
         })
     }
 
@@ -319,6 +322,9 @@ impl Val {
                 }
                 Val::Flags(flags.into())
             }
+            InterfaceType::Future(_)
+            | InterfaceType::Stream(_)
+            | InterfaceType::ErrorContext(_) => todo!(),
         })
     }
 
@@ -429,6 +435,9 @@ impl Val {
                 Ok(())
             }
             (InterfaceType::Flags(_), _) => unexpected(ty, self),
+            (InterfaceType::Future(_), _)
+            | (InterfaceType::Stream(_), _)
+            | (InterfaceType::ErrorContext(_), _) => todo!(),
         }
     }
 
@@ -564,6 +573,9 @@ impl Val {
                 Ok(())
             }
             (InterfaceType::Flags(_), _) => unexpected(ty, self),
+            (InterfaceType::Future(_), _)
+            | (InterfaceType::Stream(_), _)
+            | (InterfaceType::ErrorContext(_), _) => todo!(),
         }
     }
 

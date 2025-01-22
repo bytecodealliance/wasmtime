@@ -122,6 +122,8 @@ struct Options {
     /// An optionally-specified function to be used to allocate space for
     /// types such as strings as they go into a module.
     realloc: Option<FuncIndex>,
+    callback: Option<FuncIndex>,
+    async_: bool,
 }
 
 enum Context {
@@ -248,7 +250,10 @@ impl<'a> Module<'a> {
             memory64,
             realloc,
             post_return: _, // handled above
+            callback,
+            async_,
         } = options;
+
         let flags = self.import_global(
             "flags",
             &format!("instance{}", instance.as_u32()),
@@ -287,6 +292,23 @@ impl<'a> Module<'a> {
                 func.clone(),
             )
         });
+        let callback = callback.as_ref().map(|func| {
+            let ptr = if *memory64 {
+                ValType::I64
+            } else {
+                ValType::I32
+            };
+            let ty = self.core_types.function(
+                &[ptr, ValType::I32, ValType::I32, ValType::I32],
+                &[ValType::I32],
+            );
+            self.import_func(
+                "callback",
+                &format!("f{}", self.imported_funcs.len()),
+                ty,
+                func.clone(),
+            )
+        });
 
         AdapterOptions {
             ty,
@@ -297,6 +319,8 @@ impl<'a> Module<'a> {
                 memory64: *memory64,
                 memory,
                 realloc,
+                callback,
+                async_: *async_,
             },
         }
     }
@@ -561,6 +585,27 @@ pub enum Import {
     /// Tears down a previous entry and handles checking borrow-related
     /// metadata.
     ResourceExitCall,
+    /// An intrinsic used by FACT-generated modules to begin a call to an
+    /// async-lowered import function.
+    AsyncEnterCall,
+    /// An intrinsic used by FACT-generated modules to complete a call to an
+    /// async-lowered import function.
+    AsyncExitCall {
+        /// The callee's callback function, if any.
+        callback: Option<CoreDef>,
+
+        /// The callee's post-return function, if any.
+        post_return: Option<CoreDef>,
+    },
+    /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
+    /// ownership of a `future`.
+    FutureTransfer,
+    /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
+    /// ownership of a `stream`.
+    StreamTransfer,
+    /// An intrinisic used by FACT-generated modules to (partially or entirely) transfer
+    /// ownership of an `error-context`.
+    ErrorContextTransfer,
 }
 
 impl Options {
