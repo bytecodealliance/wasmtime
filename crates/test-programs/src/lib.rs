@@ -15,9 +15,9 @@ wit_bindgen::generate!({
         }
     ",
     path: [
-        "../wasi-http/wit",
-        "../wasi-config/wit",
-        "../wasi-keyvalue/wit",
+        "../wasi-http/src/p2/wit",
+        "../wasi-config/src/p2/wit",
+        "../wasi-keyvalue/src/p2/wit",
     ],
     world: "wasmtime:test/test",
     features: ["cli-exit-with-code"],
@@ -26,7 +26,7 @@ wit_bindgen::generate!({
 
 pub mod proxy {
     wit_bindgen::generate!({
-        path: "../wasi-http/wit",
+        path: "../wasi-http/src/p2/wit",
         world: "wasi:http/proxy",
         default_bindings_module: "test_programs::proxy",
         pub_export_macro: true,

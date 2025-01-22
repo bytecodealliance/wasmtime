@@ -177,7 +177,7 @@ where
     }
 }
 
-impl<T> crate::bindings::io::poll::HostPollable for IoImpl<T>
+impl<T> crate::p2::bindings::io::poll::HostPollable for IoImpl<T>
 where
     T: IoView,
 {
@@ -226,7 +226,7 @@ pub mod sync {
         }
     }
 
-    impl<T> crate::bindings::sync::io::poll::HostPollable for IoImpl<T>
+    impl<T> crate::p2::bindings::sync::io::poll::HostPollable for IoImpl<T>
     where
         T: IoView,
     {

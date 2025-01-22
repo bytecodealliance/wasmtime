@@ -1,4 +1,4 @@
-use crate::bindings::sockets::network::{ErrorCode, Ipv4Address, Ipv6Address};
+use crate::p2::bindings::sockets::network::{ErrorCode, Ipv4Address, Ipv6Address};
 use crate::TrappableError;
 use std::future::Future;
 use std::net::SocketAddr;

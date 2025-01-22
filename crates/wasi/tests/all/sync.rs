@@ -2,7 +2,7 @@ use super::*;
 use std::path::Path;
 use test_programs_artifacts::*;
 use wasmtime_wasi::add_to_linker_sync;
-use wasmtime_wasi::bindings::sync::Command;
+use wasmtime_wasi::p2::bindings::sync::Command;
 
 fn run(path: &str, inherit_stdio: bool) -> Result<()> {
     let path = Path::new(path);

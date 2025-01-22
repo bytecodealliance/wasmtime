@@ -1,12 +1,12 @@
 //! Implementation of the `wasi:http/outgoing-handler` interface.
 
 use crate::{
-    bindings::http::{
+    error::internal_error,
+    http_request_error,
+    p2::bindings::http::{
         outgoing_handler,
         types::{self, Scheme},
     },
-    error::internal_error,
-    http_request_error,
     types::{HostFutureIncomingResponse, HostOutgoingRequest, OutgoingRequestConfig},
     WasiHttpImpl, WasiHttpView,
 };
