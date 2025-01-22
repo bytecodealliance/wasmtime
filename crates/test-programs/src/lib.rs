@@ -13,6 +13,7 @@ wit_bindgen::generate!({
             include wasi:config/imports@0.2.0-draft;
             include wasi:keyvalue/imports@0.2.0-draft;
 
+            include wasi:clocks/imports@0.3.0;
             include wasi:random/imports@0.3.0;
         }
     ",
@@ -24,6 +25,12 @@ wit_bindgen::generate!({
     ],
     world: "wasmtime:test/test",
     features: ["cli-exit-with-code"],
+    async: {
+         imports: [
+             "wasi:clocks/monotonic-clock@0.3.0#wait-for",
+             "wasi:clocks/monotonic-clock@0.3.0#wait-until",
+         ],
+    },
     generate_all,
 });
 
@@ -43,8 +50,8 @@ pub mod proxy {
             "wasi:cli/stdout@0.2.3": crate::wasi::cli::stdout,
             "wasi:cli/stderr@0.2.3": crate::wasi::cli::stderr,
             "wasi:cli/stdin@0.2.3": crate::wasi::cli::stdin,
-            "wasi:clocks/monotonic-clock@0.2.3": crate::wasi::clocks::monotonic_clock,
-            "wasi:clocks/wall-clock@0.2.3": crate::wasi::clocks::wall_clock,
+            "wasi:clocks/monotonic-clock@0.2.3": crate::wasi::clocks0_2_3::monotonic_clock,
+            "wasi:clocks/wall-clock@0.2.3": crate::wasi::clocks0_2_3::wall_clock,
         },
     });
 }

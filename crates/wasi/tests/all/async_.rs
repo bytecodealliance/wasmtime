@@ -407,6 +407,11 @@ async fn preview2_file_read_write() {
 
 #[cfg(feature = "p3")]
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
+async fn preview3_sleep() {
+    run(PREVIEW3_SLEEP_COMPONENT, false).await.unwrap()
+}
+#[cfg(feature = "p3")]
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview3_random() {
     run(PREVIEW3_RANDOM_COMPONENT, false).await.unwrap()
 }

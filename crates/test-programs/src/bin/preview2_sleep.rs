@@ -1,4 +1,4 @@
-use test_programs::wasi::clocks::monotonic_clock;
+use test_programs::wasi::clocks0_2_3::monotonic_clock;
 
 fn main() {
     sleep_10ms();

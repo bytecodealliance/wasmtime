@@ -1,4 +1,4 @@
-use crate::wasi::clocks::monotonic_clock;
+use crate::wasi::clocks0_2_3::monotonic_clock;
 use crate::wasi::io::poll::{self, Pollable};
 use crate::wasi::io::streams::{InputStream, OutputStream, StreamError};
 use crate::wasi::random0_2_3 as random;

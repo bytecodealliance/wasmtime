@@ -17,7 +17,7 @@ impl TryFrom<SystemTime> for Datetime {
         let duration =
             time.duration_since(SystemTime::from_std(std::time::SystemTime::UNIX_EPOCH))?;
 
-        Ok(Datetime {
+        Ok(Self {
             seconds: duration.as_secs(),
             nanoseconds: duration.subsec_nanos(),
         })

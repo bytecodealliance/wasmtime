@@ -78,6 +78,8 @@ pub fn add_to_linker_async<T: WasiView>(linker: &mut Linker<T>) -> anyhow::Resul
     let l = linker;
     let closure = type_annotate::<T, _>(|t| WasiImpl(IoImpl(t)));
 
+    crate::p3::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
+    crate::p3::bindings::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
     crate::p3::bindings::random::random::add_to_linker_get_host(l, closure)?;
     crate::p3::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
     crate::p3::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;
@@ -145,6 +147,8 @@ pub fn add_to_linker_sync<T: WasiView>(
     let l = linker;
     let closure = type_annotate::<T, _>(|t| WasiImpl(IoImpl(t)));
 
+    crate::p3::bindings::clocks::wall_clock::add_to_linker_get_host(l, closure)?;
+    crate::p3::bindings::sync::clocks::monotonic_clock::add_to_linker_get_host(l, closure)?;
     crate::p3::bindings::random::random::add_to_linker_get_host(l, closure)?;
     crate::p3::bindings::random::insecure::add_to_linker_get_host(l, closure)?;
     crate::p3::bindings::random::insecure_seed::add_to_linker_get_host(l, closure)?;

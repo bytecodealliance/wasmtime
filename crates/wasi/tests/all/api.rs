@@ -6,10 +6,9 @@ use std::sync::Mutex;
 use std::time::Duration;
 use wasmtime::component::{Component, Linker, ResourceTable};
 use wasmtime::Store;
-use wasmtime_wasi::p2::bindings::Command;
 use wasmtime_wasi::{
     add_to_linker_async,
-    bindings::{clocks::wall_clock, filesystem::types as filesystem},
+    p2::bindings::{clocks::wall_clock, filesystem::types as filesystem, Command},
     DirPerms, FilePerms, HostMonotonicClock, HostWallClock, IoView, WasiCtx, WasiCtxBuilder,
     WasiView,
 };

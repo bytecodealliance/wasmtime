@@ -6,5 +6,6 @@ world bindings {
   // TODO: Replace explicit includes by `wasi:cli/command@0.3.0` once released
   //include wasi:cli/imports@0.3.0;
 
+  include wasi:clocks/imports@0.3.0;
   include wasi:random/imports@0.3.0;
 }

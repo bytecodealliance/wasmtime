@@ -46,6 +46,7 @@ make_vendor "wasi/src/p2" "
 "
 
 make_vendor "wasi/src/p3" "
+  clocks@3850f9d@wit-0.3.0-draft
   random@3e99124@wit-0.3.0-draft
 "
 

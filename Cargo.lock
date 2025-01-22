@@ -3383,11 +3383,13 @@ dependencies = [
  "getrandom",
  "libc",
  "sha2",
+ "tokio",
  "url",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "wasi 0.14.0+wasi-0.2.3",
  "wasi-nn",
  "wit-bindgen",
+ "wit-bindgen-rt",
 ]
 
 [[package]]

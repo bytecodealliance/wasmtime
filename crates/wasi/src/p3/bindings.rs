@@ -24,9 +24,10 @@
 //!     inline: "
 //!         package example:wasi;
 //!
-//!         // An example of extending the `wasi:random/imports` world with a
+//!         // An example of extending the `wasi:cli/command` world with a
 //!         // custom host interface.
 //!         world my-world {
+//!             include wasi:clocks/imports@0.3.0;
 //!             include wasi:random/imports@0.3.0;
 //!
 //!             import custom-host;
@@ -96,9 +97,10 @@
 ///     inline: "
 ///         package example:wasi;
 ///
-///         // An example of extending the `wasi:random/imports` world with a
+///         // An example of extending the `wasi:cli/command` world with a
 ///         // custom host interface.
 ///         world my-world {
+///             include wasi:clocks/imports@0.3.0;
 ///             include wasi:random/imports@0.3.0;
 ///
 ///             import custom-host;
@@ -157,6 +159,7 @@ pub mod sync {
                 package inline:wasi;
 
                 world command {
+                    include wasi:clocks/imports@0.3.0;
                     include wasi:random/imports@0.3.0;
                 }
             ",
@@ -166,6 +169,7 @@ pub mod sync {
                 // These interfaces come from the outer module, as it's
                 // sync/async agnostic.
                 "wasi:random": crate::p3::bindings::random,
+                "wasi:clocks/wall-clock": crate::p3::bindings::clocks::wall_clock,
             },
             require_store_data_send: true,
         });
@@ -324,6 +328,7 @@ mod async_io {
             package inline:wasi;
 
             world command {
+                include wasi:clocks/imports@0.3.0;
                 include wasi:random/imports@0.3.0;
             }
         ",
@@ -338,6 +343,8 @@ mod async_io {
             // which in theory can be shared across interfaces, so this may
             // need fancier syntax in the future.
             only_imports: [
+                "wait-for",
+                "wait-until",
             ],
         },
     });
