@@ -932,8 +932,10 @@ impl Config {
     /// as the `v128` type and all of its operators being in a module. Note that
     /// this does not enable the [relaxed simd proposal].
     ///
-    /// **Note**: On x86_64 platforms the base CPU feature requirement for SIMD
-    /// is SSE2.
+    /// **Note**
+    ///
+    /// On x86_64 platforms the base CPU feature requirement for SIMD
+    /// is SSE2 for the Cranelift compiler and AVX for the Winch compiler.
     ///
     /// This is `true` by default.
     ///
