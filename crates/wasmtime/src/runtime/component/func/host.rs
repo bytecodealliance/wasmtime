@@ -6,7 +6,7 @@ use crate::prelude::*;
 use crate::runtime::vm::component::{
     ComponentInstance, InstanceFlags, VMComponentContext, VMLowering, VMLoweringCallee,
 };
-use crate::runtime::vm::{VMFuncRef, VMMemoryDefinition, VMOpaqueContext};
+use crate::runtime::vm::{VMFuncRef, VMGlobalDefinition, VMMemoryDefinition, VMOpaqueContext};
 use crate::{AsContextMut, CallHook, StoreContextMut, ValRaw};
 use alloc::sync::Arc;
 use core::any::Any;
@@ -39,14 +39,14 @@ impl HostFunc {
     }
 
     extern "C" fn entrypoint<T, F, P, R>(
-        cx: *mut VMOpaqueContext,
-        data: *mut u8,
+        cx: NonNull<VMOpaqueContext>,
+        data: NonNull<u8>,
         ty: u32,
-        flags: *mut u8,
+        flags: NonNull<VMGlobalDefinition>,
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMFuncRef,
         string_encoding: u8,
-        storage: *mut MaybeUninit<ValRaw>,
+        storage: NonNull<MaybeUninit<ValRaw>>,
         storage_len: usize,
     ) -> bool
     where
@@ -54,7 +54,7 @@ impl HostFunc {
         P: ComponentNamedList + Lift + 'static,
         R: ComponentNamedList + Lower + 'static,
     {
-        let data = data as *const F;
+        let data = data.as_ptr() as *const F;
         unsafe {
             call_host_and_handle_result::<T>(cx, |instance, types, store| {
                 call_host::<_, _, _, _>(
@@ -66,7 +66,7 @@ impl HostFunc {
                     memory,
                     realloc,
                     StringEncoding::from_u8(string_encoding).unwrap(),
-                    core::slice::from_raw_parts_mut(storage, storage_len),
+                    NonNull::slice_from_raw_parts(storage, storage_len).as_mut(),
                     |store, args| (*data)(store, args),
                 )
             })
@@ -290,7 +290,7 @@ fn validate_inbounds<T: ComponentType>(memory: &[u8], ptr: &ValRaw) -> Result<us
 }
 
 unsafe fn call_host_and_handle_result<T>(
-    cx: *mut VMOpaqueContext,
+    cx: NonNull<VMOpaqueContext>,
     func: impl FnOnce(
         *mut ComponentInstance,
         &Arc<ComponentTypes>,
@@ -298,7 +298,7 @@ unsafe fn call_host_and_handle_result<T>(
     ) -> Result<()>,
 ) -> bool {
     let cx = VMComponentContext::from_opaque(cx);
-    let instance = (*cx).instance();
+    let instance = cx.as_ref().instance();
     let types = (*instance).component_types();
     let raw_store = (*instance).store();
     let mut store = StoreContextMut(&mut *raw_store.cast());
@@ -422,20 +422,20 @@ fn validate_inbounds_dynamic(abi: &CanonicalAbiInfo, memory: &[u8], ptr: &ValRaw
 }
 
 extern "C" fn dynamic_entrypoint<T, F>(
-    cx: *mut VMOpaqueContext,
-    data: *mut u8,
+    cx: NonNull<VMOpaqueContext>,
+    data: NonNull<u8>,
     ty: u32,
-    flags: *mut u8,
+    flags: NonNull<VMGlobalDefinition>,
     memory: *mut VMMemoryDefinition,
     realloc: *mut VMFuncRef,
     string_encoding: u8,
-    storage: *mut MaybeUninit<ValRaw>,
+    storage: NonNull<MaybeUninit<ValRaw>>,
     storage_len: usize,
 ) -> bool
 where
     F: Fn(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()> + Send + Sync + 'static,
 {
-    let data = data as *const F;
+    let data = data.as_ptr() as *const F;
     unsafe {
         call_host_and_handle_result(cx, |instance, types, store| {
             call_host_dynamic::<T, _>(
@@ -447,7 +447,7 @@ where
                 memory,
                 realloc,
                 StringEncoding::from_u8(string_encoding).unwrap(),
-                core::slice::from_raw_parts_mut(storage, storage_len),
+                NonNull::slice_from_raw_parts(storage, storage_len).as_mut(),
                 |store, params, results| (*data)(store, params, results),
             )
         })

@@ -6,7 +6,7 @@ use super::{VMArrayCallNative, VMOpaqueContext};
 use crate::prelude::*;
 use crate::runtime::vm::{StoreBox, VMFuncRef};
 use core::any::Any;
-use core::ptr::{self, NonNull};
+use core::ptr::NonNull;
 use wasmtime_environ::{VMSharedTypeIndex, VM_ARRAY_CALL_HOST_FUNC_MAGIC};
 
 /// The `VM*Context` for array-call host functions.
@@ -38,16 +38,16 @@ impl VMArrayCallHostFuncContext {
         let ctx = StoreBox::new(VMArrayCallHostFuncContext {
             magic: wasmtime_environ::VM_ARRAY_CALL_HOST_FUNC_MAGIC,
             func_ref: VMFuncRef {
-                array_call: NonNull::new(host_func as *mut u8).unwrap().cast(),
+                array_call: NonNull::new(host_func as *mut u8).unwrap().cast().into(),
                 type_index,
                 wasm_call: None,
-                vmctx: ptr::null_mut(),
+                vmctx: NonNull::dangling().into(),
             },
             host_state,
         });
         let vmctx = VMOpaqueContext::from_vm_array_call_host_func_context(ctx.get());
         unsafe {
-            (*ctx.get()).func_ref.vmctx = vmctx;
+            ctx.get().as_mut().func_ref.vmctx = vmctx.into();
         }
         ctx
     }
@@ -67,9 +67,11 @@ impl VMArrayCallHostFuncContext {
     /// Helper function to cast between context types using a debug assertion to
     /// protect against some mistakes.
     #[inline]
-    pub unsafe fn from_opaque(opaque: *mut VMOpaqueContext) -> *mut VMArrayCallHostFuncContext {
+    pub unsafe fn from_opaque(
+        opaque: NonNull<VMOpaqueContext>,
+    ) -> NonNull<VMArrayCallHostFuncContext> {
         // See comments in `VMContext::from_opaque` for this debug assert
-        debug_assert_eq!((*opaque).magic, VM_ARRAY_CALL_HOST_FUNC_MAGIC);
+        debug_assert_eq!(opaque.as_ref().magic, VM_ARRAY_CALL_HOST_FUNC_MAGIC);
         opaque.cast()
     }
 }

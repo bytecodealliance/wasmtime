@@ -199,13 +199,19 @@ impl MemoryBase {
         Self::Raw(NonNull::new(ptr).expect("pointer is non-null").into())
     }
 
-    /// Returns the actual memory address in memory that is represented by this base.
-    pub fn as_mut_ptr(&self) -> *mut u8 {
+    /// Returns the actual memory address in memory that is represented by this
+    /// base.
+    pub fn as_non_null(&self) -> NonNull<u8> {
         match self {
-            Self::Raw(ptr) => ptr.as_ptr(),
+            Self::Raw(ptr) => ptr.as_non_null(),
             #[cfg(has_virtual_memory)]
-            Self::Mmap(mmap_offset) => mmap_offset.as_mut_ptr(),
+            Self::Mmap(mmap_offset) => mmap_offset.as_non_null(),
         }
+    }
+
+    /// Same as `as_non_null`, but different return type.
+    pub fn as_mut_ptr(&self) -> *mut u8 {
+        self.as_non_null().as_ptr()
     }
 }
 
@@ -689,7 +695,7 @@ impl LocalMemory {
 
     pub fn vmmemory(&mut self) -> VMMemoryDefinition {
         VMMemoryDefinition {
-            base: self.alloc.base().as_mut_ptr(),
+            base: self.alloc.base().as_non_null().into(),
             current_length: self.alloc.byte_size().into(),
         }
     }
@@ -747,5 +753,5 @@ pub fn validate_atomic_addr(
     }
 
     let addr = usize::try_from(addr).unwrap();
-    Ok(def.base.wrapping_add(addr))
+    Ok(def.base.as_ptr().wrapping_add(addr))
 }

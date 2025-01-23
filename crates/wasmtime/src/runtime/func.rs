@@ -1060,13 +1060,14 @@ impl Func {
         let mut store = store.as_context_mut();
         let data = &store.0.store_data()[self.0];
         let func_ref = data.export().func_ref;
+        let params_and_returns = NonNull::new(params_and_returns).unwrap_or(NonNull::from(&mut []));
         Self::call_unchecked_raw(&mut store, func_ref, params_and_returns)
     }
 
     pub(crate) unsafe fn call_unchecked_raw<T>(
         store: &mut StoreContextMut<'_, T>,
         func_ref: NonNull<VMFuncRef>,
-        params_and_returns: *mut [ValRaw],
+        params_and_returns: NonNull<[ValRaw]>,
     ) -> Result<()> {
         invoke_wasm_and_catch_traps(store, |caller, vm| {
             func_ref.as_ref().array_call(
@@ -1320,18 +1321,18 @@ impl Func {
             };
             VMFunctionImport {
                 wasm_call: if let Some(wasm_call) = f.as_ref().wasm_call {
-                    wasm_call
+                    wasm_call.into()
                 } else {
                     // Assert that this is a array-call function, since those
                     // are the only ones that could be missing a `wasm_call`
                     // trampoline.
-                    let _ = VMArrayCallHostFuncContext::from_opaque(f.as_ref().vmctx);
+                    let _ = VMArrayCallHostFuncContext::from_opaque(f.as_ref().vmctx.as_non_null());
 
                     let sig = self.type_index(store.store_data());
                     module.wasm_to_array_trampoline(sig).expect(
                         "if the wasm is importing a function of a given type, it must have the \
                          type's trampoline",
-                    )
+                    ).into()
                 },
                 array_call: f.as_ref().array_call,
                 vmctx: f.as_ref().vmctx,
@@ -1594,7 +1595,7 @@ impl Func {
 /// can pass to the called wasm function, if desired.
 pub(crate) fn invoke_wasm_and_catch_traps<T>(
     store: &mut StoreContextMut<'_, T>,
-    closure: impl FnMut(*mut VMContext, Option<InterpreterRef<'_>>) -> bool,
+    closure: impl FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
 ) -> Result<()> {
     unsafe {
         let exit = enter_wasm(store);
@@ -2026,7 +2027,7 @@ pub struct Caller<'a, T> {
 }
 
 impl<T> Caller<'_, T> {
-    unsafe fn with<F, R>(caller: *mut VMContext, f: F) -> R
+    unsafe fn with<F, R>(caller: NonNull<VMContext>, f: F) -> R
     where
         // The closure must be valid for any `Caller` it is given; it doesn't
         // get to choose the `Caller`'s lifetime.
@@ -2034,7 +2035,6 @@ impl<T> Caller<'_, T> {
         // And the return value must not borrow from the caller/store.
         R: 'static,
     {
-        debug_assert!(!caller.is_null());
         crate::runtime::vm::InstanceAndStore::from_vmctx(caller, |pair| {
             let (instance, mut store) = pair.unpack_context_mut::<T>();
 
@@ -2294,9 +2294,9 @@ impl HostContext {
     }
 
     unsafe extern "C" fn array_call_trampoline<T, F, P, R>(
-        callee_vmctx: *mut VMOpaqueContext,
-        caller_vmctx: *mut VMOpaqueContext,
-        args: *mut ValRaw,
+        callee_vmctx: NonNull<VMOpaqueContext>,
+        caller_vmctx: NonNull<VMOpaqueContext>,
+        args: NonNull<ValRaw>,
         args_len: usize,
     ) -> bool
     where
@@ -2311,10 +2311,10 @@ impl HostContext {
         // should be part of this closure, and the long-jmp-ing
         // happens after the closure in handling the result.
         let run = move |mut caller: Caller<'_, T>| {
-            let args =
-                core::slice::from_raw_parts_mut(args.cast::<MaybeUninit<ValRaw>>(), args_len);
+            let mut args =
+                NonNull::slice_from_raw_parts(args.cast::<MaybeUninit<ValRaw>>(), args_len);
             let vmctx = VMArrayCallHostFuncContext::from_opaque(callee_vmctx);
-            let state = (*vmctx).host_state();
+            let state = vmctx.as_ref().host_state();
 
             // Double-check ourselves in debug mode, but we control
             // the `Any` here so an unsafe downcast should also
@@ -2333,7 +2333,7 @@ impl HostContext {
                 } else {
                     unsafe { AutoAssertNoGc::disabled(caller.store.0) }
                 };
-                let params = P::load(&mut store, args);
+                let params = P::load(&mut store, args.as_mut());
                 let _ = &mut store;
                 drop(store);
 
@@ -2352,7 +2352,7 @@ impl HostContext {
                 } else {
                     unsafe { AutoAssertNoGc::disabled(caller.store.0) }
                 };
-                let ret = ret.store(&mut store, args)?;
+                let ret = ret.store(&mut store, args.as_mut())?;
                 Ok(ret)
             }
         };
@@ -2534,7 +2534,7 @@ impl HostFunc {
 
     pub(crate) fn func_ref(&self) -> &VMFuncRef {
         match &self.ctx {
-            HostContext::Array(ctx) => unsafe { (*ctx.get()).func_ref() },
+            HostContext::Array(ctx) => unsafe { ctx.get().as_ref().func_ref() },
         }
     }
 

@@ -1520,9 +1520,9 @@ impl StoreOpaque {
             // First enumerate all the host-created globals.
             for global in temp.host_globals.iter() {
                 let export = ExportGlobal {
-                    definition: &mut (*global.get()).global as *mut _,
-                    vmctx: core::ptr::null_mut(),
-                    global: (*global.get()).ty.to_wasm_type(),
+                    definition: NonNull::from(&mut global.get().as_mut().global),
+                    vmctx: None,
+                    global: global.get().as_ref().ty.to_wasm_type(),
                 };
                 let global = Global::from_wasmtime_global(export, temp.store);
                 f(temp.store, global);
@@ -1924,12 +1924,12 @@ impl StoreOpaque {
     }
 
     #[inline]
-    pub fn vmruntime_limits(&self) -> *mut VMRuntimeLimits {
-        &self.runtime_limits as *const VMRuntimeLimits as *mut VMRuntimeLimits
+    pub fn vmruntime_limits(&self) -> NonNull<VMRuntimeLimits> {
+        NonNull::from(&self.runtime_limits)
     }
 
     #[inline]
-    pub fn default_caller(&self) -> *mut VMContext {
+    pub fn default_caller(&self) -> NonNull<VMContext> {
         self.default_caller.vmctx()
     }
 
@@ -2753,7 +2753,7 @@ impl<T> StoreInner<T> {
         // Also, note that when this update is performed while Wasm is
         // on the stack, the Wasm will reload the new value once we
         // return into it.
-        let epoch_deadline = unsafe { (*self.vmruntime_limits()).epoch_deadline.get_mut() };
+        let epoch_deadline = unsafe { self.vmruntime_limits().as_mut().epoch_deadline.get_mut() };
         *epoch_deadline = self.engine().current_epoch() + delta;
     }
 
@@ -2785,7 +2785,7 @@ impl<T> StoreInner<T> {
         // Safety: this is safe because, as above, it is only invoked
         // from within `new_epoch` which is called from guest Wasm
         // code, which will have an exclusive borrow on the Store.
-        let epoch_deadline = unsafe { (*self.vmruntime_limits()).epoch_deadline.get_mut() };
+        let epoch_deadline = unsafe { self.vmruntime_limits().as_mut().epoch_deadline.get_mut() };
         *epoch_deadline
     }
 }

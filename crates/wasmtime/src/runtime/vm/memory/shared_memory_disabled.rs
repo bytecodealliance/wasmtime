@@ -4,6 +4,7 @@ use crate::prelude::*;
 use crate::runtime::vm::memory::LocalMemory;
 use crate::runtime::vm::{VMMemoryDefinition, VMStore, WaitResult};
 use core::ops::Range;
+use core::ptr::NonNull;
 use core::time::Duration;
 use wasmtime_environ::{Trap, Tunables};
 
@@ -23,7 +24,7 @@ impl SharedMemory {
         match self {}
     }
 
-    pub fn vmmemory_ptr(&self) -> *const VMMemoryDefinition {
+    pub fn vmmemory_ptr(&self) -> NonNull<VMMemoryDefinition> {
         match *self {}
     }
 

@@ -116,7 +116,7 @@ impl Backtrace {
             // trampoline did not get a chance to save the last Wasm PC and FP,
             // and we need to use the plumbed-through values instead.
             Some((pc, fp)) => {
-                assert!(core::ptr::eq(limits, state.limits));
+                assert!(core::ptr::eq(limits, state.limits.as_ptr()));
                 (pc, fp)
             }
             // Either there is no Wasm currently on the stack, or we exited Wasm
@@ -136,7 +136,7 @@ impl Backtrace {
         .chain(
             state
                 .iter()
-                .filter(|state| core::ptr::eq(limits, state.limits))
+                .filter(|state| core::ptr::eq(limits, state.limits.as_ptr()))
                 .map(|state| {
                     (
                         state.old_last_wasm_exit_pc(),

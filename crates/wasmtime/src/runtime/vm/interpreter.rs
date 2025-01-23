@@ -85,15 +85,15 @@ impl InterpreterRef<'_> {
     pub unsafe fn call(
         mut self,
         mut bytecode: NonNull<u8>,
-        callee: *mut VMOpaqueContext,
-        caller: *mut VMOpaqueContext,
-        args_and_results: *mut [ValRaw],
+        callee: NonNull<VMOpaqueContext>,
+        caller: NonNull<VMOpaqueContext>,
+        args_and_results: NonNull<[ValRaw]>,
     ) -> bool {
         // Initialize argument registers with the ABI arguments.
         let args = [
-            XRegVal::new_ptr(callee).into(),
-            XRegVal::new_ptr(caller).into(),
-            XRegVal::new_ptr(args_and_results.cast::<u8>()).into(),
+            XRegVal::new_ptr(callee.as_ptr()).into(),
+            XRegVal::new_ptr(caller.as_ptr()).into(),
+            XRegVal::new_ptr(args_and_results.cast::<u8>().as_ptr()).into(),
             XRegVal::new_u64(args_and_results.len() as u64).into(),
         ];
 
@@ -321,6 +321,7 @@ impl InterpreterRef<'_> {
             (@get vmctx $reg:ident) => (self.0[$reg].get_ptr());
             (@get pointer $reg:ident) => (self.0[$reg].get_ptr());
             (@get ptr $reg:ident) => (self.0[$reg].get_ptr());
+            (@get nonnull $reg:ident) => (NonNull::new(self.0[$reg].get_ptr()).unwrap());
             (@get ptr_u8 $reg:ident) => (self.0[$reg].get_ptr());
             (@get ptr_u16 $reg:ident) => (self.0[$reg].get_ptr());
             (@get ptr_size $reg:ident) => (self.0[$reg].get_ptr());
@@ -352,7 +353,7 @@ impl InterpreterRef<'_> {
         //
 
         if id == const { HostCall::ArrayCall.index() } {
-            call!(@host VMArrayCallNative(ptr, ptr, ptr, size) -> bool);
+            call!(@host VMArrayCallNative(nonnull, nonnull, nonnull, size) -> bool);
         }
 
         macro_rules! core {
@@ -378,7 +379,7 @@ impl InterpreterRef<'_> {
             use wasmtime_environ::component::ComponentBuiltinFunctionIndex;
 
             if id == const { HostCall::ComponentLowerImport.index() } {
-                call!(@host VMLoweringCallee(ptr, ptr, u32, ptr, ptr, ptr, u8, ptr, size) -> bool);
+                call!(@host VMLoweringCallee(nonnull, nonnull, u32, nonnull, ptr, ptr, u8, nonnull, size) -> bool);
             }
 
             macro_rules! component {

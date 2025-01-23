@@ -11,12 +11,13 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::VMContext;
+use core::ptr::NonNull;
 
 pub fn wasmtime_setjmp(
     _jmp_buf: *mut *const u8,
-    callback: extern "C" fn(*mut u8, *mut VMContext) -> bool,
+    callback: extern "C" fn(*mut u8, NonNull<VMContext>) -> bool,
     payload: *mut u8,
-    callee: *mut VMContext,
+    callee: NonNull<VMContext>,
 ) -> bool {
     callback(payload, callee)
 }
