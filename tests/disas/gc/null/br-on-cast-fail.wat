@@ -59,7 +59,7 @@
 ;; @002e                               v18 = load.i64 notrap aligned readonly v0+40
 ;; @002e                               v27 = iadd v18, v23
 ;; @002e                               v28 = load.i32 notrap aligned readonly v27
-;; @002e                               v15 = load.i64 notrap aligned readonly v0+80
+;; @002e                               v15 = load.i64 notrap aligned readonly v0+64
 ;; @002e                               v16 = load.i32 notrap aligned readonly v15
 ;; @002e                               v29 = icmp eq v28, v16
 ;; @002e                               v30 = uextend.i32 v29
@@ -77,14 +77,14 @@
 ;; @002e                               brif v34, block8, block2
 ;;
 ;;                                 block8:
-;; @0034                               v36 = load.i64 notrap aligned readonly v0+88
-;; @0034                               v37 = load.i64 notrap aligned readonly v0+104
+;; @0034                               v36 = load.i64 notrap aligned readonly v0+72
+;; @0034                               v37 = load.i64 notrap aligned readonly v0+88
 ;; @0034                               call_indirect sig1, v36(v37, v0)
 ;; @0036                               return
 ;;
 ;;                                 block2:
-;; @0038                               v39 = load.i64 notrap aligned readonly v0+112
-;; @0038                               v40 = load.i64 notrap aligned readonly v0+128
+;; @0038                               v39 = load.i64 notrap aligned readonly v0+96
+;; @0038                               v40 = load.i64 notrap aligned readonly v0+112
 ;; @0038                               call_indirect sig2, v39(v40, v0)
 ;; @003a                               return
 ;; }

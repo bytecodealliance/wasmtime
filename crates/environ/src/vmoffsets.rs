@@ -15,7 +15,6 @@
 //      gc_heap_base: *mut u8,
 //      gc_heap_bound: *mut u8,
 //      gc_heap_data: *mut T, // Collector-specific pointer
-//      store: *mut dyn Store,
 //      type_ids: *const VMSharedTypeIndex,
 //
 //      // Variable-width fields come after the fixed-width fields above. Place
@@ -278,16 +277,10 @@ pub trait PtrSize {
         self.vmctx_gc_heap_bound() + self.size()
     }
 
-    /// The offset of the `*const dyn Store` member.
-    #[inline]
-    fn vmctx_store(&self) -> u8 {
-        self.vmctx_gc_heap_data() + self.size()
-    }
-
     /// The offset of the `type_ids` array pointer.
     #[inline]
     fn vmctx_type_ids_array(&self) -> u8 {
-        self.vmctx_store() + 2 * self.size()
+        self.vmctx_gc_heap_data() + self.size()
     }
 
     /// The end of statically known offsets in `VMContext`.

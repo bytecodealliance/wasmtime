@@ -24,7 +24,7 @@
 ;;       cmpq    $0, %rdx
 ;;       jne     0x6d
 ;;   4d: movl    $0, %edx
-;;       movq    0x58(%r14), %r11
+;;       movq    0x48(%r14), %r11
 ;;       movq    (%r11), %rbx
 ;;       addq    %rdx, %rbx
 ;;       pushq   %rcx

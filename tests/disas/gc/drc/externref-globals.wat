@@ -23,8 +23,8 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;;                                     v45 = iconst.i64 96
-;; @0034                               v4 = iadd v0, v45  ; v45 = 96
+;;                                     v45 = iconst.i64 80
+;; @0034                               v4 = iadd v0, v45  ; v45 = 80
 ;; @0034                               v5 = load.i32 notrap aligned v4
 ;;                                     v46 = stack_addr.i64 ss0
 ;;                                     store notrap v5, v46
@@ -82,8 +82,8 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;;                                     v58 = iconst.i64 96
-;; @003b                               v4 = iadd v0, v58  ; v58 = 96
+;;                                     v58 = iconst.i64 80
+;; @003b                               v4 = iadd v0, v58  ; v58 = 80
 ;; @003b                               v5 = load.i32 notrap aligned v4
 ;;                                     v59 = iconst.i32 0
 ;; @003b                               v6 = icmp eq v2, v59  ; v59 = 0
@@ -106,7 +106,7 @@
 ;; @003b                               jump block3
 ;;
 ;;                                 block3:
-;;                                     v64 = iadd.i64 v0, v58  ; v58 = 96
+;;                                     v64 = iadd.i64 v0, v58  ; v58 = 80
 ;; @003b                               store.i32 notrap aligned v2, v64
 ;;                                     v65 = iconst.i32 0
 ;;                                     v66 = icmp.i32 eq v5, v65  ; v65 = 0

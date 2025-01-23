@@ -20,19 +20,19 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+88
-;;     gv5 = load.i64 notrap aligned gv3+96
+;;     gv4 = load.i64 notrap aligned gv3+72
+;;     gv5 = load.i64 notrap aligned gv3+80
 ;;     sig0 = (i64 vmctx, i32) -> i64 tail
 ;;     fn0 = colocated u1:26 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
 ;; @0051                               v3 = iconst.i32 0
-;; @0053                               v4 = load.i64 notrap aligned v0+96
+;; @0053                               v4 = load.i64 notrap aligned v0+80
 ;; @0053                               v5 = ireduce.i32 v4
 ;; @0053                               v6 = icmp uge v3, v5  ; v3 = 0
 ;; @0053                               v7 = uextend.i64 v3  ; v3 = 0
-;; @0053                               v8 = load.i64 notrap aligned v0+88
+;; @0053                               v8 = load.i64 notrap aligned v0+72
 ;;                                     v55 = iconst.i64 2
 ;; @0053                               v9 = ishl v7, v55  ; v55 = 2
 ;; @0053                               v10 = iadd v8, v9
@@ -112,18 +112,18 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+88
-;;     gv5 = load.i64 notrap aligned gv3+96
+;;     gv4 = load.i64 notrap aligned gv3+72
+;;     gv5 = load.i64 notrap aligned gv3+80
 ;;     sig0 = (i64 vmctx, i32) -> i64 tail
 ;;     fn0 = colocated u1:26 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
-;; @005a                               v4 = load.i64 notrap aligned v0+96
+;; @005a                               v4 = load.i64 notrap aligned v0+80
 ;; @005a                               v5 = ireduce.i32 v4
 ;; @005a                               v6 = icmp uge v2, v5
 ;; @005a                               v7 = uextend.i64 v2
-;; @005a                               v8 = load.i64 notrap aligned v0+88
+;; @005a                               v8 = load.i64 notrap aligned v0+72
 ;;                                     v55 = iconst.i64 2
 ;; @005a                               v9 = ishl v7, v55  ; v55 = 2
 ;; @005a                               v10 = iadd v8, v9

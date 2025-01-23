@@ -27,7 +27,7 @@
 ;;       cset    x12, hi
 ;;       uxtb    w11, w12
 ;;       cbnz    x11, #0x38
-;;   20: ldr     x12, [x2, #0x60]
+;;   20: ldr     x12, [x2, #0x50]
 ;;       add     x12, x12, w4, uxtw
 ;;       mov     x13, #0xffff0000
 ;;       strb    w5, [x12, x13]
@@ -44,7 +44,7 @@
 ;;       cset    x12, hi
 ;;       uxtb    w11, w12
 ;;       cbnz    x11, #0x78
-;;   60: ldr     x12, [x2, #0x60]
+;;   60: ldr     x12, [x2, #0x50]
 ;;       add     x12, x12, w4, uxtw
 ;;       mov     x13, #0xffff0000
 ;;       ldrb    w2, [x12, x13]

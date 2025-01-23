@@ -47,7 +47,7 @@
 ;; @001e                               v18 = load.i64 notrap aligned readonly v0+40
 ;; @001e                               v27 = iadd v18, v23
 ;; @001e                               v28 = load.i32 notrap aligned readonly v27
-;; @001e                               v15 = load.i64 notrap aligned readonly v0+80
+;; @001e                               v15 = load.i64 notrap aligned readonly v0+64
 ;; @001e                               v16 = load.i32 notrap aligned readonly v15
 ;; @001e                               v29 = icmp eq v28, v16
 ;; @001e                               v30 = uextend.i32 v29

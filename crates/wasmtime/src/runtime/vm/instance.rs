@@ -13,7 +13,7 @@ use crate::runtime::vm::vmcontext::{
 };
 use crate::runtime::vm::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, GcStore, Imports, ModuleRuntimeInfo,
-    SendSyncPtr, VMFunctionBody, VMGcRef, VMStore, WasmFault,
+    SendSyncPtr, VMFunctionBody, VMGcRef, VMStore, VMStoreRawPtr, WasmFault,
 };
 use crate::store::{StoreInner, StoreOpaque};
 use crate::{prelude::*, StoreContextMut};
@@ -162,13 +162,7 @@ impl InstanceAndStore {
     /// store).
     #[inline]
     fn store_ptr(&self) -> *mut dyn VMStore {
-        let ptr = unsafe {
-            *self
-                .instance
-                .vmctx_plus_offset::<*mut dyn VMStore>(self.instance.offsets().ptr.vmctx_store())
-        };
-        debug_assert!(!ptr.is_null());
-        ptr
+        self.instance.store.unwrap().0.as_ptr()
     }
 }
 
@@ -281,6 +275,12 @@ pub struct Instance {
     #[cfg(feature = "wmemcheck")]
     pub(crate) wmemcheck_state: Option<Wmemcheck>,
 
+    /// Self-pointer back to `Store<T>` and its functions. Not present for
+    /// the brief time that `Store<T>` is itself being created. Also not
+    /// present for some niche uses that are disconnected from stores (e.g.
+    /// cross-thread stuff used in `InstancePre`)
+    store: Option<VMStoreRawPtr>,
+
     /// Additional context used by compiled wasm code. This field is last, and
     /// represents a dynamically-sized array that extends beyond the nominal
     /// end of the struct (similar to a flexible array member).
@@ -341,6 +341,7 @@ impl Instance {
                         None
                     }
                 },
+                store: None,
             },
         );
 
@@ -584,19 +585,14 @@ impl Instance {
         unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_gc_heap_data()) }
     }
 
-    pub(crate) unsafe fn set_store(&mut self, store: Option<*mut dyn VMStore>) {
-        if let Some(store) = store {
-            *self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_store()) = store;
-            *self.runtime_limits() = (*store).vmruntime_limits();
-            *self.epoch_ptr() = (*store).engine().epoch_counter();
-            self.set_gc_heap((*store).gc_store_mut().ok());
+    pub(crate) unsafe fn set_store(&mut self, store: Option<NonNull<dyn VMStore>>) {
+        self.store = store.map(VMStoreRawPtr);
+        if let Some(mut store) = store {
+            let store = store.as_mut();
+            *self.runtime_limits() = store.vmruntime_limits();
+            *self.epoch_ptr() = store.engine().epoch_counter();
+            self.set_gc_heap(store.gc_store_mut().ok());
         } else {
-            assert_eq!(
-                mem::size_of::<*mut dyn VMStore>(),
-                mem::size_of::<[*mut (); 2]>()
-            );
-            *self.vmctx_plus_offset_mut::<[*mut (); 2]>(self.offsets().ptr.vmctx_store()) =
-                [ptr::null_mut(), ptr::null_mut()];
             *self.runtime_limits() = ptr::null_mut();
             *self.epoch_ptr() = ptr::null_mut();
             self.set_gc_heap(None);
@@ -1607,7 +1603,7 @@ impl InstanceHandle {
     /// This should only be used for initializing a vmctx's store pointer. It
     /// should never be used to access the store itself. Use `InstanceAndStore`
     /// for that instead.
-    pub fn traitobj(&self, store: &StoreOpaque) -> *mut dyn VMStore {
+    pub fn traitobj(&self, store: &StoreOpaque) -> NonNull<dyn VMStore> {
         // By requiring a store argument, we are ensuring that callers aren't
         // getting this trait object in order to access the store, since they
         // already have access. See `InstanceAndStore` and its documentation for
@@ -1615,20 +1611,14 @@ impl InstanceHandle {
         // to.
         let _ = store;
 
-        let ptr = unsafe {
-            *self
-                .instance()
-                .vmctx_plus_offset::<*mut dyn VMStore>(self.instance().offsets().ptr.vmctx_store())
-        };
-        debug_assert!(!ptr.is_null());
-        ptr
+        self.instance().store.unwrap().0
     }
 
     /// Configure the `*mut dyn Store` internal pointer after-the-fact.
     ///
     /// This is provided for the original `Store` itself to configure the first
     /// self-pointer after the original `Box` has been initialized.
-    pub unsafe fn set_store(&mut self, store: *mut dyn VMStore) {
+    pub unsafe fn set_store(&mut self, store: NonNull<dyn VMStore>) {
         self.instance_mut().set_store(Some(store));
     }
 

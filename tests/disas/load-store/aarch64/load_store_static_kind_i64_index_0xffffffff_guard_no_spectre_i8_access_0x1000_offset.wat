@@ -26,7 +26,7 @@
 ;;       cset    x10, hi
 ;;       uxtb    w9, w10
 ;;       cbnz    x9, #0x30
-;;   1c: ldr     x10, [x2, #0x60]
+;;   1c: ldr     x10, [x2, #0x50]
 ;;       add     x10, x10, #1, lsl #12
 ;;       strb    w5, [x10, x4]
 ;;       ldp     x29, x30, [sp], #0x10
@@ -41,7 +41,7 @@
 ;;       cset    x10, hi
 ;;       uxtb    w9, w10
 ;;       cbnz    x9, #0x70
-;;   5c: ldr     x10, [x2, #0x60]
+;;   5c: ldr     x10, [x2, #0x50]
 ;;       add     x9, x10, #1, lsl #12
 ;;       ldrb    w2, [x9, x4]
 ;;       ldp     x29, x30, [sp], #0x10

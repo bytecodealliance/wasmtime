@@ -21,20 +21,20 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+104
-;;     gv5 = load.i64 notrap aligned readonly checked gv3+96
+;;     gv4 = load.i64 notrap aligned gv3+88
+;;     gv5 = load.i64 notrap aligned readonly checked gv3+80
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0036                               v3 = iconst.i32 48
 ;; @0038                               v4 = iconst.i32 0
 ;; @003a                               v5 = uextend.i64 v4  ; v4 = 0
-;; @003a                               v6 = load.i64 notrap aligned readonly checked v0+96
+;; @003a                               v6 = load.i64 notrap aligned readonly checked v0+80
 ;; @003a                               v7 = iadd v6, v5
 ;; @003a                               v8 = load.i8x16 little heap v7
 ;; @003e                               v9 = iconst.i32 16
 ;; @0040                               v10 = uextend.i64 v9  ; v9 = 16
-;; @0040                               v11 = load.i64 notrap aligned readonly checked v0+96
+;; @0040                               v11 = load.i64 notrap aligned readonly checked v0+80
 ;; @0040                               v12 = iadd v11, v10
 ;; @0040                               v13 = load.i8x16 little heap v12
 ;; @0046                               brif v2, block2, block4
@@ -45,7 +45,7 @@
 ;; @0048                               v18 = iadd v16, v17
 ;; @004b                               v19 = iconst.i32 32
 ;; @004d                               v20 = uextend.i64 v19  ; v19 = 32
-;; @004d                               v21 = load.i64 notrap aligned readonly checked v0+96
+;; @004d                               v21 = load.i64 notrap aligned readonly checked v0+80
 ;; @004d                               v22 = iadd v21, v20
 ;; @004d                               v23 = load.i8x16 little heap v22
 ;; @0051                               v26 = bitcast.i8x16 little v18
@@ -57,7 +57,7 @@
 ;; @0052                               v29 = isub v27, v28
 ;; @0055                               v30 = iconst.i32 0
 ;; @0057                               v31 = uextend.i64 v30  ; v30 = 0
-;; @0057                               v32 = load.i64 notrap aligned readonly checked v0+96
+;; @0057                               v32 = load.i64 notrap aligned readonly checked v0+80
 ;; @0057                               v33 = iadd v32, v31
 ;; @0057                               v34 = load.i8x16 little heap v33
 ;; @005b                               v35 = bitcast.i8x16 little v29
@@ -68,7 +68,7 @@
 ;; @005c                               v37 = bitcast.i16x8 little v15
 ;; @005c                               v38 = imul v36, v37
 ;; @005f                               v39 = uextend.i64 v3  ; v3 = 48
-;; @005f                               v40 = load.i64 notrap aligned readonly checked v0+96
+;; @005f                               v40 = load.i64 notrap aligned readonly checked v0+80
 ;; @005f                               v41 = iadd v40, v39
 ;; @005f                               store little heap v38, v41
 ;; @0063                               jump block1

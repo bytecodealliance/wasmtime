@@ -31,7 +31,7 @@
 ;;
 ;;                                 block3:
 ;; @0020                               v12 = load.i32 notrap aligned readonly v2+16
-;; @0020                               v10 = load.i64 notrap aligned readonly v0+80
+;; @0020                               v10 = load.i64 notrap aligned readonly v0+64
 ;; @0020                               v11 = load.i32 notrap aligned readonly v10
 ;; @0020                               v13 = icmp eq v12, v11
 ;; @0020                               v14 = uextend.i32 v13

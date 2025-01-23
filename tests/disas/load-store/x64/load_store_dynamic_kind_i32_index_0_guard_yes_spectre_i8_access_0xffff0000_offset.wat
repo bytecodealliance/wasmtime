@@ -25,9 +25,9 @@
 ;;       movq    %r10, %rax
 ;;       addq    0x2f(%rip), %rax
 ;;       jb      0x3a
-;;   17: movq    0x68(%rdi), %r8
+;;   17: movq    0x58(%rdi), %r8
 ;;       xorq    %rdx, %rdx
-;;       addq    0x60(%rdi), %r10
+;;       addq    0x50(%rdi), %r10
 ;;       movl    $0xffff0000, %r9d
 ;;       addq    %r10, %r9
 ;;       cmpq    %r8, %rax
@@ -48,9 +48,9 @@
 ;;       movq    %r10, %rax
 ;;       addq    0x2f(%rip), %rax
 ;;       jb      0x9b
-;;   77: movq    0x68(%rdi), %rdx
+;;   77: movq    0x58(%rdi), %rdx
 ;;       xorq    %rcx, %rcx
-;;       addq    0x60(%rdi), %r10
+;;       addq    0x50(%rdi), %r10
 ;;       movl    $0xffff0000, %r8d
 ;;       addq    %r10, %r8
 ;;       cmpq    %rdx, %rax

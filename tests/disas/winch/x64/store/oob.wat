@@ -25,14 +25,14 @@
 ;;       movl    %edx, 0xc(%rsp)
 ;;       movl    0xc(%rsp), %eax
 ;;       movl    $0, %ecx
-;;       movq    0x68(%r14), %rdx
+;;       movq    0x58(%r14), %rdx
 ;;       movl    %ecx, %ebx
 ;;       movabsq $0x100000000, %r11
 ;;       addq    %r11, %rbx
 ;;       jb      0x88
 ;;   53: cmpq    %rdx, %rbx
 ;;       ja      0x8a
-;;   5c: movq    0x60(%r14), %rsi
+;;   5c: movq    0x50(%r14), %rsi
 ;;       addq    %rcx, %rsi
 ;;       movabsq $0xffffffff, %r11
 ;;       addq    %r11, %rsi

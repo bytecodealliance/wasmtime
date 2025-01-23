@@ -29,7 +29,7 @@
 ;;       stg     %r1, 0(%r15)
 ;;       lghi    %r6, 0
 ;;       lgr     %r7, %r4
-;;       ag      %r7, 0x60(%r2)
+;;       ag      %r7, 0x50(%r2)
 ;;       llilh   %r2, 0xffff
 ;;       agrk    %r3, %r7, %r2
 ;;       clgfi   %r4, 0xffff
@@ -49,7 +49,7 @@
 ;;       stg     %r1, 0(%r15)
 ;;       lghi    %r5, 0
 ;;       lgr     %r6, %r4
-;;       ag      %r6, 0x60(%r2)
+;;       ag      %r6, 0x50(%r2)
 ;;       llilh   %r7, 0xffff
 ;;       agrk    %r3, %r6, %r7
 ;;       clgfi   %r4, 0xffff

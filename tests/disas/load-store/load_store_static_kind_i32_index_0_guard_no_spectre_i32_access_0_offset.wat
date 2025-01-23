@@ -23,8 +23,8 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+104
-;;     gv5 = load.i64 notrap aligned readonly checked gv3+96
+;;     gv4 = load.i64 notrap aligned gv3+88
+;;     gv5 = load.i64 notrap aligned readonly checked gv3+80
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
@@ -32,7 +32,7 @@
 ;; @0040                               v5 = iconst.i64 0xffff_fffc
 ;; @0040                               v6 = icmp ugt v4, v5  ; v5 = 0xffff_fffc
 ;; @0040                               trapnz v6, heap_oob
-;; @0040                               v7 = load.i64 notrap aligned readonly checked v0+96
+;; @0040                               v7 = load.i64 notrap aligned readonly checked v0+80
 ;; @0040                               v8 = iadd v7, v4
 ;; @0040                               store little heap v3, v8
 ;; @0043                               jump block1
@@ -46,8 +46,8 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+104
-;;     gv5 = load.i64 notrap aligned readonly checked gv3+96
+;;     gv4 = load.i64 notrap aligned gv3+88
+;;     gv5 = load.i64 notrap aligned readonly checked gv3+80
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -55,7 +55,7 @@
 ;; @0048                               v5 = iconst.i64 0xffff_fffc
 ;; @0048                               v6 = icmp ugt v4, v5  ; v5 = 0xffff_fffc
 ;; @0048                               trapnz v6, heap_oob
-;; @0048                               v7 = load.i64 notrap aligned readonly checked v0+96
+;; @0048                               v7 = load.i64 notrap aligned readonly checked v0+80
 ;; @0048                               v8 = iadd v7, v4
 ;; @0048                               v9 = load.i32 little heap v8
 ;; @004b                               jump block1
