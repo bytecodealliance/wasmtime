@@ -93,7 +93,8 @@ impl Inst {
             | Inst::Hlt
             | Inst::Imm { .. }
             | Inst::JmpCond { .. }
-            | Inst::JmpIf { .. }
+            | Inst::JmpCondOr { .. }
+            | Inst::WinchJmpIf { .. }
             | Inst::JmpKnown { .. }
             | Inst::JmpTableSeq { .. }
             | Inst::JmpUnknown { .. }
@@ -1738,10 +1739,22 @@ impl PrettyPrint for Inst {
                 format!("{op} {dst}")
             }
 
-            Inst::JmpIf { cc, taken } => {
+            Inst::WinchJmpIf { cc, taken } => {
                 let taken = taken.to_string();
                 let op = ljustify2("j".to_string(), cc.to_string());
                 format!("{op} {taken}")
+            }
+
+            Inst::JmpCondOr {
+                cc1,
+                cc2,
+                taken,
+                not_taken,
+            } => {
+                let taken = taken.to_string();
+                let not_taken = not_taken.to_string();
+                let op = ljustify(format!("j{cc1},{cc2}"));
+                format!("{op} {taken}; j {not_taken}")
             }
 
             Inst::JmpCond {
@@ -2657,8 +2670,9 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
         }
 
         Inst::JmpKnown { .. }
-        | Inst::JmpIf { .. }
+        | Inst::WinchJmpIf { .. }
         | Inst::JmpCond { .. }
+        | Inst::JmpCondOr { .. }
         | Inst::Ret { .. }
         | Inst::Nop { .. }
         | Inst::TrapIf { .. }
@@ -2775,9 +2789,17 @@ impl MachInst for Inst {
             }
             &Self::JmpKnown { .. } => MachTerminator::Uncond,
             &Self::JmpCond { .. } => MachTerminator::Cond,
+            &Self::JmpCondOr { .. } => MachTerminator::Cond,
             &Self::JmpTableSeq { .. } => MachTerminator::Indirect,
             // All other cases are boring.
             _ => MachTerminator::None,
+        }
+    }
+
+    fn is_low_level_branch(&self) -> bool {
+        match self {
+            &Self::WinchJmpIf { .. } => true,
+            _ => false,
         }
     }
 

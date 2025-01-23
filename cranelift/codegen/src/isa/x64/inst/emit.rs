@@ -1622,7 +1622,8 @@ pub(crate) fn emit(
             inst.emit(sink, info, state);
 
             // jne  .loop_start
-            // TODO: Encoding the JmpIf as a short jump saves us 4 bytes here.
+            // TODO: Encoding the conditional jump as a short jump
+            // could save us us 4 bytes here.
             one_way_jmp(sink, CC::NZ, loop_start);
 
             // The regular prologue code is going to emit a `sub` after this, so we need to
@@ -1891,7 +1892,7 @@ pub(crate) fn emit(
             sink.put4(0x0);
         }
 
-        Inst::JmpIf { cc, taken } => {
+        Inst::WinchJmpIf { cc, taken } => {
             let cond_start = sink.cur_offset();
             let cond_disp_off = cond_start + 2;
 
@@ -1933,6 +1934,76 @@ pub(crate) fn emit(
 
             sink.put1(0xE9);
             // Placeholder for the label value.
+            sink.put4(0x0);
+        }
+
+        Inst::JmpCondOr {
+            cc1,
+            cc2,
+            taken,
+            not_taken,
+        } => {
+            // Emit:
+            //   jcc1 taken
+            //   jcc2 taken
+            //   jmp not_taken
+            //
+            // Note that we enroll both conditionals in the
+            // branch-chomping mechanism because MachBuffer
+            // simplification can continue upward as long as it keeps
+            // chomping branches. In the best case, if taken ==
+            // not_taken and that one block is the fallthrough block,
+            // all three branches can disappear.
+
+            // jcc1 taken
+            let cond_1_start = sink.cur_offset();
+            let cond_1_disp_off = cond_1_start + 2;
+            let cond_1_end = cond_1_start + 6;
+
+            sink.use_label_at_offset(cond_1_disp_off, *taken, LabelUse::JmpRel32);
+            let inverted: [u8; 6] = [
+                0x0F,
+                0x80 + (cc1.invert().get_enc()),
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+            ];
+            sink.add_cond_branch(cond_1_start, cond_1_end, *taken, &inverted[..]);
+
+            sink.put1(0x0F);
+            sink.put1(0x80 + cc1.get_enc());
+            sink.put4(0x0);
+
+            // jcc2 taken
+            let cond_2_start = sink.cur_offset();
+            let cond_2_disp_off = cond_2_start + 2;
+            let cond_2_end = cond_2_start + 6;
+
+            sink.use_label_at_offset(cond_2_disp_off, *taken, LabelUse::JmpRel32);
+            let inverted: [u8; 6] = [
+                0x0F,
+                0x80 + (cc2.invert().get_enc()),
+                0x00,
+                0x00,
+                0x00,
+                0x00,
+            ];
+            sink.add_cond_branch(cond_2_start, cond_2_end, *taken, &inverted[..]);
+
+            sink.put1(0x0F);
+            sink.put1(0x80 + cc2.get_enc());
+            sink.put4(0x0);
+
+            // jmp not_taken
+            let uncond_start = sink.cur_offset();
+            let uncond_disp_off = uncond_start + 1;
+            let uncond_end = uncond_start + 5;
+
+            sink.use_label_at_offset(uncond_disp_off, *not_taken, LabelUse::JmpRel32);
+            sink.add_uncond_branch(uncond_start, uncond_end, *not_taken);
+
+            sink.put1(0xE9);
             sink.put4(0x0);
         }
 

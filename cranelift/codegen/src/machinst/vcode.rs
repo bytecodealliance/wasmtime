@@ -357,6 +357,7 @@ impl<I: VCodeInst> VCodeBuilder<I> {
     /// Push an instruction for the current BB and current IR inst
     /// within the BB.
     pub fn push(&mut self, insn: I, loc: RelSourceLoc) {
+        assert!(!insn.is_low_level_branch()); // These are not meant to be in VCode.
         self.vcode.insts.push(insn);
         self.vcode.srclocs.push(loc);
     }

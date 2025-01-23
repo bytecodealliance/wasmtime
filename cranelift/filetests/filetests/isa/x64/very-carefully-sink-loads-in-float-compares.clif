@@ -186,8 +186,7 @@ block1(v8: i32):
 ; block0:
 ;   movss   0(%rdi), %xmm1
 ;   ucomiss %xmm1, %xmm0
-;   jp      label2
-;   jnz     label2; j label1
+;   jp,nz   label2; j label1
 ; block1:
 ;   movq    %rsi, %rax
 ;   jmp     label3
@@ -233,8 +232,7 @@ block1(v8: i32):
 ; block0:
 ;   movss   0(%rdi), %xmm1
 ;   ucomiss %xmm0, %xmm1
-;   jp      label2
-;   jnz     label2; j label1
+;   jp,nz   label2; j label1
 ; block1:
 ;   movq    %rsi, %rax
 ;   jmp     label3
@@ -282,8 +280,7 @@ block2(v7: i32):
 ; block0:
 ;   movss   0(%rdi), %xmm3
 ;   ucomiss %xmm3, %xmm0
-;   jp      label2
-;   jnz     label2; j label1
+;   jp,nz   label2; j label1
 ; block1:
 ;   movq    %rsi, %rax
 ;   jmp     label3
@@ -292,8 +289,7 @@ block2(v7: i32):
 ;   jmp     label3
 ; block3:
 ;   ucomiss %xmm3, %xmm0
-;   jp      label5
-;   jnz     label5; j label4
+;   jp,nz   label5; j label4
 ; block4:
 ;   jmp     label6
 ; block5:
@@ -346,8 +342,7 @@ block2(v7: i32):
 ; block0:
 ;   movss   0(%rdi), %xmm3
 ;   ucomiss %xmm0, %xmm3
-;   jp      label2
-;   jnz     label2; j label1
+;   jp,nz   label2; j label1
 ; block1:
 ;   movq    %rsi, %rax
 ;   jmp     label3
@@ -356,8 +351,7 @@ block2(v7: i32):
 ;   jmp     label3
 ; block3:
 ;   ucomiss %xmm0, %xmm3
-;   jp      label5
-;   jnz     label5; j label4
+;   jp,nz   label5; j label4
 ; block4:
 ;   jmp     label6
 ; block5:
@@ -413,8 +407,7 @@ block1(v7: i32):
 ;   cmovpl  %edx, %eax, %eax
 ;   cmovnzl %edx, %eax, %eax
 ;   ucomiss %xmm2, %xmm0
-;   jp      label2
-;   jnz     label2; j label1
+;   jp,nz   label2; j label1
 ; block1:
 ;   jmp     label3
 ; block2:
@@ -465,8 +458,7 @@ block1(v7: i32):
 ;   cmovpl  %edx, %eax, %eax
 ;   cmovnzl %edx, %eax, %eax
 ;   ucomiss %xmm0, %xmm2
-;   jp      label2
-;   jnz     label2; j label1
+;   jp,nz   label2; j label1
 ; block1:
 ;   jmp     label3
 ; block2:
