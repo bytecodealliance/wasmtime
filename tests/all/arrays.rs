@@ -1,15 +1,5 @@
+use super::gc_store;
 use wasmtime::*;
-
-fn gc_store() -> Result<Store<()>> {
-    let _ = env_logger::try_init();
-
-    let mut config = Config::new();
-    config.wasm_function_references(true);
-    config.wasm_gc(true);
-
-    let engine = Engine::new(&config)?;
-    Ok(Store::new(&engine, ()))
-}
 
 #[test]
 fn array_new_empty() -> Result<()> {
