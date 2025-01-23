@@ -942,21 +942,6 @@
       (cond Cond)
       (trap_code TrapCode))
 
-    ;; A one-way conditional branch, invisible to the CFG processing; used *only* as part of
-    ;; straight-line sequences in code to be emitted.
-    ;;
-    ;; In more detail:
-    ;; - This branch is lowered to a branch at the machine-code level, but does not end a basic
-    ;;   block, and does not create edges in the CFG seen by regalloc.
-    ;; - Thus, it is *only* valid to use as part of a single-in, single-out sequence that is
-    ;;   lowered from a single CLIF instruction. For example, certain arithmetic operations may
-    ;;   use these branches to handle certain conditions, such as overflows, traps, etc.
-    ;;
-    ;; See, e.g., the lowering of `trapif` (conditional trap) for an example.
-    (OneWayCondBr
-      (target MachLabel)
-      (cond Cond))
-
     ;; An indirect branch through a register, augmented with set of all
     ;; possible successors.
     (IndirectBr
@@ -974,7 +959,14 @@
     ;; Jump-table sequence, as one compound instruction (see note in lower.rs
     ;; for rationale).
     (JTSequence
+      ;; The index into the list of targets.
       (ridx Reg)
+      ;; The default target.
+      (default MachLabel)
+      ;; The condition for taking the default target, based on flags
+      ;; when this instruction executes.
+      (default_cond Cond)
+      ;; All other targets.
       (targets BoxVecMachLabel))
 
     ;; Stack probe loop sequence, as one compound instruction.
@@ -2702,16 +2694,10 @@
 (rule (cond_br taken not_taken cond)
       (ConsumesFlags.ConsumesFlagsSideEffect (MInst.CondBr taken not_taken cond)))
 
-;; Helper for emitting `MInst.OneWayCondBr` instructions.
-(decl oneway_cond_br (MachLabel Cond) ConsumesFlags)
-(rule (oneway_cond_br dest cond)
-      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.OneWayCondBr dest cond)))
-
 ;; Helper for emitting `MInst.JTSequence` instructions.
-(decl jt_sequence (Reg BoxVecMachLabel) SideEffectNoResult)
-(rule (jt_sequence ridx targets)
-      (SideEffectNoResult.Inst (MInst.JTSequence ridx targets)))
-
+(decl jt_sequence (Reg MachLabel Cond BoxVecMachLabel) ConsumesFlags)
+(rule (jt_sequence ridx default default_cond targets)
+      (ConsumesFlags.ConsumesFlagsSideEffect (MInst.JTSequence ridx default default_cond targets)))
 
 ;; Helpers for instruction sequences ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -3324,6 +3310,14 @@
 (decl bool (ProducesFlags Cond) ProducesBool)
 (rule (bool producer cond) (ProducesBool.ProducesBool producer cond))
 
+;; Get the producer from a ProducesBool.
+(decl bool_producer (ProducesBool) ProducesFlags)
+(rule (bool_producer (ProducesBool.ProducesBool producer _)) producer)
+
+;; Get the condition from a ProducesBool.
+(decl bool_cond (ProducesBool) Cond)
+(rule (bool_cond (ProducesBool.ProducesBool _ cond)) cond)
+
 ;; Invert boolean condition.
 (decl invert_bool (ProducesBool) ProducesBool)
 (rule (invert_bool (ProducesBool.ProducesBool producer cond))
@@ -3357,11 +3351,6 @@
 (decl cond_br_bool (ProducesBool MachLabel MachLabel) SideEffectNoResult)
 (rule (cond_br_bool (ProducesBool.ProducesBool producer cond) taken not_taken)
       (with_flags_side_effect producer (cond_br taken not_taken cond)))
-
-;; Emit a one-way conditional branch based on a boolean condition.
-(decl oneway_cond_br_bool (ProducesBool MachLabel) SideEffectNoResult)
-(rule (oneway_cond_br_bool (ProducesBool.ProducesBool producer cond) dest)
-      (with_flags_side_effect producer (oneway_cond_br dest cond)))
 
 ;; Emit a conditional trap based on a boolean condition.
 (decl trap_if_bool (ProducesBool TrapCode) SideEffectNoResult)
