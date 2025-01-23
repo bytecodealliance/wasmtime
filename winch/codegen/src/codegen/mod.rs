@@ -1427,22 +1427,23 @@ where
 
     /// Emit the sequence of instruction for a `memory.atomic.wait*`.
     pub fn emit_atomic_wait(&mut self, arg: &MemArg, kind: AtomicWaitKind) -> Result<()> {
-        // The `memory_atomic_wait*` expect the following arguments:
-        // - memory, as u32
-        // - addr, as u64
-        // - expected, as either u64 or u32
-        // - timeout, as u64
-        // At this point our stack only contains the count and the address, so we need to:
+        // The `memory_atomic_wait*` builtins expect the following arguments:
+        // - `memory`, as u32
+        // - `address`, as u64
+        // - `expected`, as either u64 or u32
+        // - `timeout`, as u64
+        // At this point our stack only contains the `timeout`, the `expected` and the address, so
+        // we need to:
         // - insert the memory as the first argument
-        // - compute the actual memory offset from the MemArg, if necessary.
-        // Note that the builtin function performs the alignement and bound checks for us, so we
+        // - compute the actual memory offset from the `MemArg`, if necessary.
+        // Note that the builtin function performs the alignment and bounds checks for us, so we
         // don't need to emit that.
 
         let timeout = self.context.pop_to_reg(self.masm, None)?;
         let expected = self.context.pop_to_reg(self.masm, None)?;
         let addr = self.context.pop_to_reg(self.masm, None)?;
 
-        // put the target memrory index in a register, and push it as the first argument.
+        // Put the target memory index in a register, and push it as the first argument.
         let mem = self.context.any_gpr(self.masm)?;
         self.masm.mov(
             writable!(mem),
@@ -1453,7 +1454,7 @@ where
             .stack
             .push(TypedReg::new(WasmValType::I32, mem).into());
 
-        // compute offset if necessary.
+        // compute the offset if necessary.
         self.masm.extend(
             writable!(addr.reg),
             addr.reg,
@@ -1491,13 +1492,13 @@ where
 
     pub fn emit_atomic_notify(&mut self, arg: &MemArg) -> Result<()> {
         // The memory `memory_atomic_notify` builtin expects the following arguments:
-        // - memory, as u32
-        // - addr, as u64
-        // - count: as u32
-        // At this point our stack only contains the count and the address, so we need to:
+        // - `memory`, as u32
+        // - `address`, as u64
+        // - `count`: as u32
+        // At this point our stack only contains the `count` and the `address`, so we need to:
         // - insert the memory as the first argument
-        // - compute the actual memory offset from the MemArg, if necessary.
-        // Note that the builtin function performs the alignement and bound checks for us, so we
+        // - compute the actual memory offset from the `MemArg`, if necessary.
+        // Note that the builtin function performs the alignment and bounds checks for us, so we
         // don't need to emit that.
 
         // pop the arguments from the stack.
