@@ -1753,7 +1753,7 @@ impl PrettyPrint for Inst {
             } => {
                 let taken = taken.to_string();
                 let not_taken = not_taken.to_string();
-                let op = ljustify(format!("j{},{}", cc1, cc2));
+                let op = ljustify(format!("j{cc1},{cc2}"));
                 format!("{op} {taken}; j {not_taken}")
             }
 
