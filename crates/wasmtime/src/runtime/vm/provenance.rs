@@ -51,8 +51,8 @@ use wasmtime_environ::VMSharedTypeIndex;
 /// outside of Rust.
 ///
 /// This is intended to be the fundamental data type used to share
-/// pointers-to-things with Cranelift-compiled code for example. An example of
-/// this is that the `VMMemoryDefinition` type, which compiled code reads to
+/// pointers-to-things with compiled wasm compiled code for example. An example
+/// of this is that the `VMMemoryDefinition` type, which compiled code reads to
 /// learn about linear memory, uses a `VmPtr<u8>` to represent the base pointer
 /// of linear memory.
 ///
@@ -83,11 +83,6 @@ use wasmtime_environ::VMSharedTypeIndex;
 /// In general usage of this type should be minimized to only where absolutely
 /// necessary when sharing data structures with compiled code. Prefer to use
 /// `NonNull` or `SendSyncPtr` where possible.
-///
-/// > **Note**: at this time this type was just introduced to Wasmtime. This
-/// > doesn't actually do anything with provenance just yet as the original
-/// > pointer used to create a `VmPtr<T>` is preserved even at-rest. That will
-/// > change in the near future as more refactorings are completed.
 #[repr(transparent)]
 pub struct VmPtr<T>(SendSyncPtr<T>);
 
@@ -147,13 +142,13 @@ impl<T> From<SendSyncPtr<T>> for VmPtr<T> {
 }
 
 /// A custom "marker trait" used to tag types that are safe to share with
-/// compiled code.
+/// compiled wasm code.
 ///
 /// The intention of this trait is to be used as a bound in a few core locations
 /// in Wasmtime, such as `Instance::vmctx_plus_offset_mut`, and otherwise not
 /// present very often. The purpose of this trait is to ensure that all types
 /// stored to be shared with compiled code have a known layout and are
-/// guaranteed to be "safe" to share with Cranelift.
+/// guaranteed to be "safe" to share with compiled wasm code.
 ///
 /// This is an `unsafe` trait as it's generally not safe to share anything with
 /// compiled code and it is used to invite extra scrutiny to manual `impl`s of
