@@ -32,16 +32,18 @@
 //! The machine stack throughout the function call is as follows:
 //! ┌──────────────────────────────────────────────────┐
 //! │                                                  │
-//! │                  1                               │
 //! │  Stack space created by any previous spills      │
 //! │  from the value stack; and which memory values   │
 //! │  are used as function arguments.                 │
 //! │                                                  │
 //! ├──────────────────────────────────────────────────┤ ---> The Wasm value stack at this point in time would look like:
-//! │                                                  │      [ Mem(offset) | Mem(offset) | Local(index) | Local(index) ]
-//! │                   2                              │
+//! │                                                  │      
 //! │   Stack space created by spilling locals and     |
 //! │   registers at the callsite.                     │
+//! │                                                  │
+//! ├─────────────────────────────────────────────────┬┤
+//! │                                                  │
+//! │   Return Area (Multi-value results)              │
 //! │                                                  │
 //! │                                                  │
 //! ├─────────────────────────────────────────────────┬┤ ---> The Wasm value stack at this point in time would look like:
