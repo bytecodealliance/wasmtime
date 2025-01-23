@@ -57,6 +57,13 @@ pub(crate) struct SourceLocation {
     pub current: (CodeOffset, RelSourceLoc),
 }
 
+/// Represents the `memory.atomic.wait*` kind.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum AtomicWaitKind {
+    Wait32,
+    Wait64,
+}
+
 /// The code generation abstraction.
 pub(crate) struct CodeGen<'a, 'translation: 'a, 'data: 'translation, M, P>
 where
@@ -1415,6 +1422,64 @@ where
 
             self.context.free_reg(addr);
         }
+        Ok(())
+    }
+
+    /// Emit the sequence of instruction for a `memory.atomic.wait*`.
+    pub fn emit_atomic_wait(&mut self, arg: &MemArg, kind: AtomicWaitKind) -> Result<()> {
+        // The `memory_atomic_wait*` expect the following arguments:
+        // - memory, as u32
+        // - addr, as u64
+        // - expected, as either u64 or u32
+        // - timeout, as u64
+        // At this point our stack only contains the count and the address, so we need to:
+        // - insert the memory as the first argument
+        // - compute the actual memory offset from the MemArg, if necessary.
+        // Note that the builtin function performs the alignement and bound checks for us, so we
+        // don't need to emit that.
+
+        let timeout = self.context.pop_to_reg(self.masm, None)?;
+        let expected = self.context.pop_to_reg(self.masm, None)?;
+        let addr = self.context.pop_to_reg(self.masm, None)?;
+
+        // put the target memrory index in a register, and push it as the first argument.
+        let mem = self.context.any_gpr(self.masm)?;
+        self.masm.mov(
+            writable!(mem),
+            RegImm::i32(arg.memory as i32),
+            OperandSize::S32,
+        )?;
+        self.context
+            .stack
+            .push(TypedReg::new(WasmValType::I32, mem).into());
+
+        // compute offset if necessary.
+        self.masm.extend(writable!(addr.reg), addr.reg, ExtendKind::Unsigned(Extend::I64Extend32))?;
+        if arg.offset != 0 {
+            self.masm.add(
+                writable!(addr.reg),
+                addr.reg,
+                RegImm::i64(arg.offset as i64),
+                OperandSize::S64,
+            )?;
+        }
+
+        self.context.stack.push(TypedReg::new(WasmValType::I64, addr.reg).into());
+        self.context.stack.push(expected.into());
+        self.context.stack.push(timeout.into());
+
+        let builtin = match kind {
+            AtomicWaitKind::Wait32 => self.env.builtins.memory_atomic_wait32::<M::ABI, M::Ptr>()?,
+            AtomicWaitKind::Wait64 => self.env.builtins.memory_atomic_wait64::<M::ABI, M::Ptr>()?,
+        };
+
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin.clone()),
+        )?;
+
         Ok(())
     }
 }

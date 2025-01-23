@@ -6,7 +6,8 @@
 
 use crate::abi::RetArea;
 use crate::codegen::{
-    control_index, Callee, CodeGen, CodeGenError, ControlStackFrame, Emission, FnCall,
+    control_index, AtomicWaitKind, Callee, CodeGen, CodeGenError, ControlStackFrame, Emission,
+    FnCall,
 };
 use crate::masm::{
     DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler,
@@ -343,6 +344,8 @@ macro_rules! def_unsupported {
     (emit I64AtomicRmw16CmpxchgU $($rest:tt)*) => {};
     (emit I64AtomicRmw32CmpxchgU $($rest:tt)*) => {};
     (emit I64AtomicRmwCmpxchg $($rest:tt)*) => {};
+    (emit MemoryAtomicWait32 $($rest:tt)*) => {};
+    (emit MemoryAtomicWait64 $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -2689,6 +2692,14 @@ where
 
     fn visit_i64_atomic_rmw_cmpxchg(&mut self, arg: MemArg) -> Self::Output {
         self.emit_atomic_cmpxchg(&arg, OperandSize::S64, None)
+    }
+
+    fn visit_memory_atomic_wait32(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_wait(&arg, AtomicWaitKind::Wait32)
+    }
+
+    fn visit_memory_atomic_wait64(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_wait(&arg, AtomicWaitKind::Wait64)
     }
 
     wasmparser::for_each_visit_operator!(def_unsupported);
