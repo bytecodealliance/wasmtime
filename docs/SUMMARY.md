@@ -41,6 +41,7 @@
     - [Cross-platform Profiling](./examples-profiling-guest.md)
   - [Checking Guests' Memory Accesses](./wmemcheck.md)
   - [Building a minimal embedding](./examples-minimal.md)
+  - [Using Pulley](./examples-pulley.md)
 - [Stability](stability.md)
   - [Release Process](./stability-release.md)
   - [Tiers of support](./stability-tiers.md)
