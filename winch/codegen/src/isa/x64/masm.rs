@@ -1548,6 +1548,10 @@ impl Masm for MacroAssembler {
         lane: u8,
         kind: ReplaceLaneKind,
     ) -> Result<()> {
+        if !self.flags.has_avx() {
+            bail!(CodeGenError::UnimplementedForNoAvx)
+        }
+
         match kind {
             ReplaceLaneKind::I8x16
             | ReplaceLaneKind::I16x8
