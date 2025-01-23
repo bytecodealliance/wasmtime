@@ -26,3 +26,4 @@ examples/.cache
 *.smt2
 cranelift/isle/veri/veri_engine/test_output
 crates/explorer/node_modules
+tests/all/pulley_provenance_test.cwasm

@@ -16,7 +16,6 @@ workspace = true
 arbitrary = { workspace = true, optional = true }
 cranelift-bitset = { workspace = true }
 log = { workspace = true }
-sptr = { workspace = true }
 wasmtime-math = { workspace = true, optional = true }
 anyhow = { workspace = true, optional = true }
 
