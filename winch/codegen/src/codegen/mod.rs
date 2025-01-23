@@ -3,8 +3,7 @@ use crate::{
     codegen::BlockSig,
     isa::reg::{writable, Reg},
     masm::{
-        Extend, Imm, IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm, RmwOp,
-        SPOffset, ShiftKind, TrapCode, Zero, UNTRUSTED_FLAGS,
+        Extend, ExtendKind, Imm, IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm, RmwOp, SPOffset, ShiftKind, TrapCode, Zero, UNTRUSTED_FLAGS
     },
     stack::TypedReg,
 };
@@ -1472,6 +1471,59 @@ where
             AtomicWaitKind::Wait32 => self.env.builtins.memory_atomic_wait32::<M::ABI, M::Ptr>()?,
             AtomicWaitKind::Wait64 => self.env.builtins.memory_atomic_wait64::<M::ABI, M::Ptr>()?,
         };
+
+        FnCall::emit::<M>(
+            &mut self.env,
+            self.masm,
+            &mut self.context,
+            Callee::Builtin(builtin.clone()),
+        )?;
+
+        Ok(())
+    }
+
+    pub fn emit_atomic_notify(&mut self, arg: &MemArg) -> Result<()> {
+        // The memory `memory_atomic_notify` builtin expects the following arguments:
+        // - memory, as u32
+        // - addr, as u64
+        // - count: as u32
+        // At this point our stack only contains the count and the address, so we need to:
+        // - insert the memory as the first argument
+        // - compute the actual memory offset from the MemArg, if necessary.
+        // Note that the builtin function performs the alignement and bound checks for us, so we
+        // don't need to emit that.
+
+        // pop the arguments from the stack.
+        let count = self.context.pop_to_reg(self.masm, None)?;
+        let addr = self.context.pop_to_reg(self.masm, None)?;
+
+        // put the target memrory index in a register, and push it as the first argument.
+        let mem = self.context.any_gpr(self.masm)?;
+        self.masm.mov(
+            writable!(mem),
+            RegImm::i32(arg.memory as i32),
+            OperandSize::S32,
+        )?;
+        self.context
+            .stack
+            .push(TypedReg::new(WasmValType::I32, mem).into());
+
+        // compute offset if necessary.
+        self.masm.extend(writable!(addr.reg), addr.reg, ExtendKind::Unsigned(Extend::I64Extend32))?;
+        if arg.offset != 0 {
+            self.masm.add(
+                writable!(addr.reg),
+                addr.reg,
+                RegImm::i64(arg.offset as i64),
+                OperandSize::S64,
+            )?;
+        }
+
+        // push remaining arguments.
+        self.context.stack.push(TypedReg::new(WasmValType::I64, addr.reg).into());
+        self.context.stack.push(count.into());
+
+        let builtin = self.env.builtins.memory_atomic_notify::<M::ABI, M::Ptr>()?;
 
         FnCall::emit::<M>(
             &mut self.env,

@@ -346,6 +346,7 @@ macro_rules! def_unsupported {
     (emit I64AtomicRmwCmpxchg $($rest:tt)*) => {};
     (emit MemoryAtomicWait32 $($rest:tt)*) => {};
     (emit MemoryAtomicWait64 $($rest:tt)*) => {};
+    (emit MemoryAtomicNotify $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -2700,6 +2701,10 @@ where
 
     fn visit_memory_atomic_wait64(&mut self, arg: MemArg) -> Self::Output {
         self.emit_atomic_wait(&arg, AtomicWaitKind::Wait64)
+    }
+
+    fn visit_memory_atomic_notify(&mut self, arg: MemArg) -> Self::Output {
+        self.emit_atomic_notify(&arg)
     }
 
     wasmparser::for_each_visit_operator!(def_unsupported);
