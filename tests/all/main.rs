@@ -106,3 +106,14 @@ pub(crate) fn small_pool_config() -> wasmtime::PoolingAllocationConfig {
 
     config
 }
+
+pub(crate) fn gc_store() -> wasmtime::Result<wasmtime::Store<()>> {
+    let _ = env_logger::try_init();
+
+    let mut config = wasmtime::Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+
+    let engine = wasmtime::Engine::new(&config)?;
+    Ok(wasmtime::Store::new(&engine, ()))
+}
