@@ -22,7 +22,7 @@
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly gv3+88
-;;     sig0 = (i64 vmctx, i32 uext) -> i64 tail
+;;     sig0 = (i64 vmctx, i32) -> i64 tail
 ;;     fn0 = colocated u1:26 sig0
 ;;     stack_limit = gv2
 ;;
@@ -112,7 +112,7 @@
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned readonly gv3+88
-;;     sig0 = (i64 vmctx, i32 uext) -> i64 tail
+;;     sig0 = (i64 vmctx, i32) -> i64 tail
 ;;     fn0 = colocated u1:26 sig0
 ;;     stack_limit = gv2
 ;;
