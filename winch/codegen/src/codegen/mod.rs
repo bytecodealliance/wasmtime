@@ -3,7 +3,8 @@ use crate::{
     codegen::BlockSig,
     isa::reg::{writable, Reg},
     masm::{
-        Extend, ExtendKind, Imm, IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm, RmwOp, SPOffset, ShiftKind, TrapCode, Zero, UNTRUSTED_FLAGS
+        Extend, ExtendKind, Imm, IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize,
+        RegImm, RmwOp, SPOffset, ShiftKind, TrapCode, Zero, UNTRUSTED_FLAGS,
     },
     stack::TypedReg,
 };
@@ -1453,7 +1454,11 @@ where
             .push(TypedReg::new(WasmValType::I32, mem).into());
 
         // compute offset if necessary.
-        self.masm.extend(writable!(addr.reg), addr.reg, ExtendKind::Unsigned(Extend::I64Extend32))?;
+        self.masm.extend(
+            writable!(addr.reg),
+            addr.reg,
+            ExtendKind::Unsigned(Extend::I64Extend32),
+        )?;
         if arg.offset != 0 {
             self.masm.add(
                 writable!(addr.reg),
@@ -1463,7 +1468,9 @@ where
             )?;
         }
 
-        self.context.stack.push(TypedReg::new(WasmValType::I64, addr.reg).into());
+        self.context
+            .stack
+            .push(TypedReg::new(WasmValType::I64, addr.reg).into());
         self.context.stack.push(expected.into());
         self.context.stack.push(timeout.into());
 
@@ -1509,7 +1516,11 @@ where
             .push(TypedReg::new(WasmValType::I32, mem).into());
 
         // compute offset if necessary.
-        self.masm.extend(writable!(addr.reg), addr.reg, ExtendKind::Unsigned(Extend::I64Extend32))?;
+        self.masm.extend(
+            writable!(addr.reg),
+            addr.reg,
+            ExtendKind::Unsigned(Extend::I64Extend32),
+        )?;
         if arg.offset != 0 {
             self.masm.add(
                 writable!(addr.reg),
@@ -1520,7 +1531,9 @@ where
         }
 
         // push remaining arguments.
-        self.context.stack.push(TypedReg::new(WasmValType::I64, addr.reg).into());
+        self.context
+            .stack
+            .push(TypedReg::new(WasmValType::I64, addr.reg).into());
         self.context.stack.push(count.into());
 
         let builtin = self.env.builtins.memory_atomic_notify::<M::ABI, M::Ptr>()?;
