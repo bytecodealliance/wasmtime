@@ -1032,12 +1032,11 @@ jobs:
   miri:
     strategy:
       matrix:
-        crate:
-          - "wasmtime --features pulley"
-          - "wasmtime-cli"
-          - "wasmtime-environ --all-features"
-          - "pulley-interpreter --all-features"
         include:
+          - crate: "wasmtime --features pulley"
+          - crate: "wasmtime-cli"
+          - crate: "wasmtime-environ --all-features"
+          - crate: "pulley-interpreter --all-features"
           - script: ./ci/miri-provenance-test.sh
     needs: determine
     if: needs.determine.outputs.test-miri && github.repository == 'bytecodealliance/wasmtime'
