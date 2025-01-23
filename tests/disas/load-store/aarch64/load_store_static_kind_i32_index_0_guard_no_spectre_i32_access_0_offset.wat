@@ -27,7 +27,7 @@
 ;;       cset    x10, hi
 ;;       uxtb    w9, w10
 ;;       cbnz    x9, #0x30
-;;   20: ldr     x10, [x2, #0x60]
+;;   20: ldr     x10, [x2, #0x50]
 ;;       str     w5, [x10, w4, uxtw]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
@@ -42,7 +42,7 @@
 ;;       cset    x10, hi
 ;;       uxtb    w9, w10
 ;;       cbnz    x9, #0x70
-;;   60: ldr     x10, [x2, #0x60]
+;;   60: ldr     x10, [x2, #0x50]
 ;;       ldr     w2, [x10, w4, uxtw]
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

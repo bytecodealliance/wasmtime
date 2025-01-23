@@ -23,7 +23,7 @@
 ;;       cmpl    $0, %ecx
 ;;       jne     0x5b
 ;;   42: movl    $0, %ecx
-;;       movq    0x58(%r14), %r11
+;;       movq    0x48(%r14), %r11
 ;;       movq    (%r11), %rdx
 ;;       addq    %rcx, %rdx
 ;;       xchgl   %eax, (%rdx)

@@ -12,15 +12,15 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+104
-;;     gv5 = load.i64 notrap aligned readonly checked gv3+96
+;;     gv4 = load.i64 notrap aligned gv3+88
+;;     gv5 = load.i64 notrap aligned readonly checked gv3+80
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
 ;; @0020                               v4 = iconst.i64 0xffff_fffc
 ;; @0020                               v5 = icmp ugt v2, v4  ; v4 = 0xffff_fffc
 ;; @0020                               v8 = iconst.i64 0
-;; @0020                               v6 = load.i64 notrap aligned readonly checked v0+96
+;; @0020                               v6 = load.i64 notrap aligned readonly checked v0+80
 ;; @0020                               v7 = iadd v6, v2
 ;; @0020                               v9 = select_spectre_guard v5, v8, v7  ; v8 = 0
 ;; @0020                               v10 = load.i32 little heap v9

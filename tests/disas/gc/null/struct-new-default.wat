@@ -38,7 +38,7 @@
 ;; @0021                               v25 = uextend.i64 v17
 ;; @0021                               v26 = iadd v21, v25
 ;; @0021                               store notrap aligned v52, v26  ; v52 = -1342177256
-;; @0021                               v30 = load.i64 notrap aligned readonly v0+80
+;; @0021                               v30 = load.i64 notrap aligned readonly v0+64
 ;; @0021                               v31 = load.i32 notrap aligned readonly v30
 ;; @0021                               store notrap aligned v31, v26+4
 ;; @0021                               store notrap aligned v18, v11

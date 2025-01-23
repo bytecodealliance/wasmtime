@@ -36,7 +36,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly gv3+88
+;;     gv4 = load.i64 notrap aligned readonly gv3+72
 ;;     sig0 = (i64 vmctx, i64) tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
 ;;     fn0 = colocated u1:9 sig1
@@ -46,7 +46,7 @@
 ;; @0031                               v3 = iconst.i32 2
 ;; @0031                               v4 = icmp uge v2, v3  ; v3 = 2
 ;; @0031                               v9 = iconst.i64 0
-;; @0031                               v6 = load.i64 notrap aligned readonly v0+88
+;; @0031                               v6 = load.i64 notrap aligned readonly v0+72
 ;; @0031                               v5 = uextend.i64 v2
 ;;                                     v26 = iconst.i64 3
 ;; @0031                               v7 = ishl v5, v26  ; v26 = 3
@@ -64,7 +64,7 @@
 ;;
 ;;                                 block3(v13: i64):
 ;; @0031                               v21 = load.i32 user6 aligned readonly v13+16
-;; @0031                               v19 = load.i64 notrap aligned readonly v0+80
+;; @0031                               v19 = load.i64 notrap aligned readonly v0+64
 ;; @0031                               v20 = load.i32 notrap aligned readonly v19
 ;; @0031                               v22 = icmp eq v21, v20
 ;; @0031                               trapz v22, user7

@@ -37,7 +37,7 @@
 ;; wasm[0]::function[0]:
 ;;       pushq   %rbp
 ;;       movq    %rsp, %rbp
-;;       movq    0x58(%rdi), %rcx
+;;       movq    0x48(%rdi), %rcx
 ;;       movq    8(%rcx), %rax
 ;;       shrq    $0x10, %rax
 ;;       movq    %rax, %rcx
@@ -47,7 +47,7 @@
 ;;       jbe     0x3b
 ;;   21: testl   %eax, %eax
 ;;       jle     0x3b
-;;   29: movq    0x58(%rdi), %rsi
+;;   29: movq    0x48(%rdi), %rsi
 ;;       movq    (%rsi), %rsi
 ;;       movl    %eax, %edi
 ;;       movl    (%rsi, %rdi), %r10d

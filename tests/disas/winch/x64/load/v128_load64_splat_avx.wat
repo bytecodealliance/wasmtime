@@ -20,7 +20,7 @@
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
 ;;       movl    $0, %eax
-;;       movq    0x60(%r14), %rcx
+;;       movq    0x50(%r14), %rcx
 ;;       addq    %rax, %rcx
 ;;       movsd   (%rcx), %xmm0
 ;;       vpshufd $0x44, %xmm0, %xmm0

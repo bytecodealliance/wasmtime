@@ -25,8 +25,8 @@
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64):
-;;                                     v94 = iconst.i64 112
-;; @008f                               v7 = iadd v0, v94  ; v94 = 112
+;;                                     v94 = iconst.i64 96
+;; @008f                               v7 = iadd v0, v94  ; v94 = 96
 ;; @008f                               v8 = load.i32 notrap aligned v7
 ;;                                     v95 = stack_addr.i64 ss0
 ;;                                     store notrap v8, v95
@@ -87,8 +87,8 @@
 ;; @008f                               jump block5
 ;;
 ;;                                 block5:
-;;                                     v104 = iconst.i64 128
-;; @0091                               v43 = iadd.i64 v0, v104  ; v104 = 128
+;;                                     v104 = iconst.i64 112
+;; @0091                               v43 = iadd.i64 v0, v104  ; v104 = 112
 ;; @0091                               v44 = load.i32 notrap aligned v43
 ;;                                     v105 = stack_addr.i64 ss1
 ;;                                     store notrap v44, v105
@@ -149,8 +149,8 @@
 ;; @0091                               jump block9
 ;;
 ;;                                 block9:
-;; @0093                               v79 = load.i64 notrap aligned table v0+144
-;; @0095                               v81 = load.i64 notrap aligned table v0+160
+;; @0093                               v79 = load.i64 notrap aligned table v0+128
+;; @0095                               v81 = load.i64 notrap aligned table v0+144
 ;;                                     v114 = stack_addr.i64 ss0
 ;;                                     v82 = load.i32 notrap v114
 ;;                                     v115 = stack_addr.i64 ss1

@@ -30,7 +30,7 @@
 ;;       llgfr   %r7, %r4
 ;;       clgfi   %r7, 0xffffefff
 ;;       jgh     0x34
-;;       ag      %r7, 0x60(%r2)
+;;       ag      %r7, 0x50(%r2)
 ;;       lghi    %r4, 0x1000
 ;;       stc     %r5, 0(%r4, %r7)
 ;;       lmg     %r14, %r15, 0x110(%r15)
@@ -48,7 +48,7 @@
 ;;       llgfr   %r7, %r4
 ;;       clgfi   %r7, 0xffffefff
 ;;       jgh     0x84
-;;       ag      %r7, 0x60(%r2)
+;;       ag      %r7, 0x50(%r2)
 ;;       lghi    %r4, 0x1000
 ;;       llc     %r2, 0(%r4, %r7)
 ;;       lmg     %r14, %r15, 0x110(%r15)

@@ -31,13 +31,13 @@
 ;;       stur    w3, [x28, #0xc]
 ;;       stur    x0, [x28]
 ;;       ldur    w0, [x28, #0xc]
-;;       ldur    x1, [x9, #0x68]
+;;       ldur    x1, [x9, #0x58]
 ;;       mov     w2, w0
 ;;       add     x2, x2, #4
 ;;       b.hs    #0x134
 ;;   3c: cmp     x2, x1, uxtx
 ;;       b.hi    #0x138
-;;   44: ldur    x3, [x9, #0x60]
+;;   44: ldur    x3, [x9, #0x50]
 ;;       add     x3, x3, x0, uxtx
 ;;       mov     x16, #0
 ;;       mov     x4, x16
@@ -45,13 +45,13 @@
 ;;       csel    x3, x4, x4, hi
 ;;       ldur    w0, [x3]
 ;;       ldur    w1, [x28, #0xc]
-;;       ldur    x2, [x9, #0x68]
+;;       ldur    x2, [x9, #0x58]
 ;;       mov     w3, w1
 ;;       add     x3, x3, #8
 ;;       b.hs    #0x13c
 ;;   74: cmp     x3, x2, uxtx
 ;;       b.hi    #0x140
-;;   7c: ldur    x4, [x9, #0x60]
+;;   7c: ldur    x4, [x9, #0x50]
 ;;       add     x4, x4, x1, uxtx
 ;;       add     x4, x4, #4
 ;;       mov     x16, #0
@@ -60,7 +60,7 @@
 ;;       csel    x4, x5, x5, hi
 ;;       ldur    w1, [x4]
 ;;       ldur    w2, [x28, #0xc]
-;;       ldur    x3, [x9, #0x68]
+;;       ldur    x3, [x9, #0x58]
 ;;       mov     w4, w2
 ;;       mov     w16, #3
 ;;       movk    w16, #0x10, lsl #16
@@ -68,7 +68,7 @@
 ;;       b.hs    #0x144
 ;;   b8: cmp     x4, x3, uxtx
 ;;       b.hi    #0x148
-;;   c0: ldur    x5, [x9, #0x60]
+;;   c0: ldur    x5, [x9, #0x50]
 ;;       add     x5, x5, x2, uxtx
 ;;       orr     x16, xzr, #0xfffff
 ;;       add     x5, x5, x16, uxtx

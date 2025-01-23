@@ -19,7 +19,7 @@
 ;;       movq    %rsi, (%rsp)
 ;;       movl    $0x2a, %eax
 ;;       movl    $0, %ecx
-;;       movq    0x58(%r14), %r11
+;;       movq    0x48(%r14), %r11
 ;;       movq    (%r11), %rdx
 ;;       addq    %rcx, %rdx
 ;;       lock xaddb %al, (%rdx)

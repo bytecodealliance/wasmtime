@@ -20,7 +20,7 @@
 ;;       movq    $0x539, %rax
 ;;       movq    $0x2a, %rcx
 ;;       movl    $0, %edx
-;;       movq    0x58(%r14), %r11
+;;       movq    0x48(%r14), %r11
 ;;       movq    (%r11), %rbx
 ;;       addq    %rdx, %rbx
 ;;       pushq   %rcx

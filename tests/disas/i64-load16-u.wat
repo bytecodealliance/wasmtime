@@ -13,13 +13,13 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+104
-;;     gv5 = load.i64 notrap aligned readonly checked gv3+96
+;;     gv4 = load.i64 notrap aligned gv3+88
+;;     gv5 = load.i64 notrap aligned readonly checked gv3+80
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0032                               v4 = uextend.i64 v2
-;; @0032                               v5 = load.i64 notrap aligned readonly checked v0+96
+;; @0032                               v5 = load.i64 notrap aligned readonly checked v0+80
 ;; @0032                               v6 = iadd v5, v4
 ;; @0032                               v7 = uload16.i64 little heap v6
 ;; @0035                               jump block1

@@ -23,15 +23,15 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+104
-;;     gv5 = load.i64 notrap aligned checked gv3+96
+;;     gv4 = load.i64 notrap aligned gv3+88
+;;     gv5 = load.i64 notrap aligned checked gv3+80
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64, v3: i32):
-;; @0040                               v4 = load.i64 notrap aligned v0+104
+;; @0040                               v4 = load.i64 notrap aligned v0+88
 ;; @0040                               v5 = icmp ugt v2, v4
 ;; @0040                               trapnz v5, heap_oob
-;; @0040                               v6 = load.i64 notrap aligned checked v0+96
+;; @0040                               v6 = load.i64 notrap aligned checked v0+80
 ;; @0040                               v7 = iadd v6, v2
 ;; @0040                               store little heap v3, v7
 ;; @0043                               jump block1
@@ -45,15 +45,15 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+104
-;;     gv5 = load.i64 notrap aligned checked gv3+96
+;;     gv4 = load.i64 notrap aligned gv3+88
+;;     gv5 = load.i64 notrap aligned checked gv3+80
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i64):
-;; @0048                               v4 = load.i64 notrap aligned v0+104
+;; @0048                               v4 = load.i64 notrap aligned v0+88
 ;; @0048                               v5 = icmp ugt v2, v4
 ;; @0048                               trapnz v5, heap_oob
-;; @0048                               v6 = load.i64 notrap aligned checked v0+96
+;; @0048                               v6 = load.i64 notrap aligned checked v0+80
 ;; @0048                               v7 = iadd v6, v2
 ;; @0048                               v8 = load.i32 little heap v7
 ;; @004b                               jump block1

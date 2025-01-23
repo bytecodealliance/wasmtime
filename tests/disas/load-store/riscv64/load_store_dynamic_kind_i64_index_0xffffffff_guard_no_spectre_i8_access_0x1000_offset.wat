@@ -23,10 +23,10 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       ld      a1, 0x68(a0)
+;;       ld      a1, 0x58(a0)
 ;;       bgeu    a1, a2, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a1, 0x60(a0)
+;;       ld      a1, 0x50(a0)
 ;;       add     a1, a1, a2
 ;;       lui     t6, 1
 ;;       add     t6, t6, a1
@@ -41,10 +41,10 @@
 ;;       sd      ra, 8(sp)
 ;;       sd      s0, 0(sp)
 ;;       mv      s0, sp
-;;       ld      a1, 0x68(a0)
+;;       ld      a1, 0x58(a0)
 ;;       bgeu    a1, a2, 8
 ;;       .byte   0x00, 0x00, 0x00, 0x00
-;;       ld      a1, 0x60(a0)
+;;       ld      a1, 0x50(a0)
 ;;       add     a1, a1, a2
 ;;       lui     t6, 1
 ;;       add     t6, t6, a1
