@@ -347,6 +347,7 @@ macro_rules! def_unsupported {
     (emit MemoryAtomicWait32 $($rest:tt)*) => {};
     (emit MemoryAtomicWait64 $($rest:tt)*) => {};
     (emit MemoryAtomicNotify $($rest:tt)*) => {};
+    (emit AtomicFence $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -2705,6 +2706,10 @@ where
 
     fn visit_memory_atomic_notify(&mut self, arg: MemArg) -> Self::Output {
         self.emit_atomic_notify(&arg)
+    }
+
+    fn visit_atomic_fence(&mut self) -> Self::Output {
+        self.masm.fence()
     }
 
     wasmparser::for_each_visit_operator!(def_unsupported);

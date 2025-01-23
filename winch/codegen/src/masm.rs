@@ -1443,4 +1443,7 @@ pub(crate) trait MacroAssembler {
         flags: MemFlags,
         extend: Option<Extend<Zero>>,
     ) -> Result<()>;
+
+    /// Emit a memory fence.
+    fn fence(&mut self) -> Result<()>;
 }
