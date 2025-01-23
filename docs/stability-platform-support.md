@@ -38,12 +38,12 @@ Cranelift.
 
 ## Interpreter support
 
-The `wasmtime` crate provides an implementation of a WebAssembly interpreter
-named "Pulley" which is a portable implementation of executing WebAssembly
-code. Pulley uses a custom bytecode which is created from input WebAssembly
-similarly to how native architectures are supported. Pulley's bytecode is
-created via a Cranelift backend for Pulley, so compile times for the interpreter
-are expected to be similar to natively compiled code.
+The `wasmtime` crate provides an implementation of a [WebAssembly interpreter
+named "Pulley"](./examples-pulley.md) which is a portable implementation of
+executing WebAssembly code. Pulley uses a custom bytecode which is created from
+input WebAssembly similarly to how native architectures are supported. Pulley's
+bytecode is created via a Cranelift backend for Pulley, so compile times for
+the interpreter are expected to be similar to natively compiled code.
 
 The main advantage of Pulley is that the bytecode can be executed on any
 platform with the same pointer-width and endianness. For example to execute
