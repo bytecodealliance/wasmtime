@@ -881,6 +881,52 @@ block2:
 ;   popq %rbp
 ;   retq
 
+function %brif_i8_fcmp_same_target(f32, f32) -> i32 {
+block0(v0: f32, v1: f32):
+  v2 = fcmp eq v0, v1
+  v3 = uextend.i32 v2
+  ;; This test should demonstrate branch-chomping work on the combo
+  ;; two-condition branch lowered from `fcmp`; in fact this case is
+  ;; even more interesting because critical-edge splitting will create
+  ;; edge blocks (block1 and block2 in lowered VCode below), since
+  ;; otherwise we have multiple outs from first block and multiple ins
+  ;; to second block; and then branch-chomping elides five (!)
+  ;; cascading branches in a row.
+  brif v3, block1, block1
+
+block1:
+  v4 = iconst.i32 1
+  return v4
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   ucomiss %xmm1, %xmm0
+;   jp,nz   label2; j label1
+; block1:
+;   jmp     label3
+; block2:
+;   jmp     label3
+; block3:
+;   movl    $1, %eax
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   ucomiss %xmm1, %xmm0
+; block2: ; offset 0x7
+;   movl $1, %eax
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
 function %br_table_i32(i32) -> i32 {
 block0(v0: i32):
   br_table v0, block4, [block1, block2, block2, block3]
