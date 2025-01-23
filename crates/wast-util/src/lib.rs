@@ -391,7 +391,6 @@ impl WastTest {
                 "component-model/modules.wast",
                 "extended-const/elem.wast",
                 "extended-const/global.wast",
-                // "memory64/threads.wast",
                 "misc_testsuite/externref-id-function.wast",
                 "misc_testsuite/externref-segment.wast",
                 "misc_testsuite/externref-segments.wast",
@@ -483,11 +482,6 @@ impl WastTest {
                 "spec_testsuite/simd_store32_lane.wast",
                 "spec_testsuite/simd_store64_lane.wast",
                 "spec_testsuite/simd_store8_lane.wast",
-                // thread related failures
-                // "proposals/threads/atomic.wast",
-                // "misc_testsuite/threads/wait_notify.wast",
-                // "misc_testsuite/threads/atomics_wait_address.wast",
-                // "misc_testsuite/threads/atomics_notify.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {
