@@ -160,7 +160,7 @@ inspected with `objdump -S`, but this doesn't work with Pulley. A small example
 in the `pulley_interpreter` crate suffices for doing this though. You can
 inspect compiled Pulley bytecode from the Wasmtime repository with:
 
-```
+```sh
 $ cargo run compile --target pulley64 foo.wat
 $ cargo run -p pulley-interpreter --all-features --example objdump foo.cwasm
 0x000000: <wasm[0]::function[20]>:
@@ -200,7 +200,7 @@ it has a performance hit for the interpreter. To collect a profile with the
 `wasmtime` CLI you'll have to build from source and enable the `profile-pulley`
 feature:
 
-```
+```sh
 $ cargo run --features profile-pulley --release run --profile pulley --target pulley64 foo.wat
 ```
 
@@ -211,7 +211,7 @@ Cargo feature enabled. The `--profile pulley` flag can then be passed to the
 The command will emit a `pulley-$pid.data` file which contains raw data about
 Pulley opcodes and samples taken. To view this file you can use:
 
-```
+```sh
 $ cargo run -p pulley-interpreter --example profiler-html --all-features ./pulley-$pid.data
 ```
 
