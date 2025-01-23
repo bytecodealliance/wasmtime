@@ -633,6 +633,17 @@ macro_rules! for_each_op {
                 bound_off: u8,
                 size: u8
             };
+            /// `trapif(addr >= bound_ptr)` (unsigned)
+            xbc32_strict_bound_trap = XBc32StrictBoundTrap {
+                addr: XReg,
+                bound: XReg
+            };
+            /// `trapif(addr >= *(bound_ptr + bound_off))` (unsigned)
+            xbc32_strict_boundne_trap = XBc32StrictBoundNeTrap {
+                addr: XReg,
+                bound_ptr: XReg,
+                bound_off: u8
+            };
         }
     };
 }
