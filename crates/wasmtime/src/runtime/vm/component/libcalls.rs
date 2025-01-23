@@ -569,7 +569,7 @@ unsafe fn trap(_vmctx: NonNull<VMComponentContext>, code: u8) -> Result<Infallib
 }
 
 unsafe fn future_transfer(
-    vmctx: *mut VMComponentContext,
+    vmctx: NonNull<VMComponentContext>,
     src_idx: u32,
     src_table: u32,
     dst_table: u32,
@@ -579,7 +579,7 @@ unsafe fn future_transfer(
 }
 
 unsafe fn stream_transfer(
-    vmctx: *mut VMComponentContext,
+    vmctx: NonNull<VMComponentContext>,
     src_idx: u32,
     src_table: u32,
     dst_table: u32,
@@ -589,7 +589,7 @@ unsafe fn stream_transfer(
 }
 
 unsafe fn error_context_transfer(
-    vmctx: *mut VMComponentContext,
+    vmctx: NonNull<VMComponentContext>,
     src_idx: u32,
     src_table: u32,
     dst_table: u32,
