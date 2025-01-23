@@ -3729,17 +3729,15 @@
 ;; list of branch targets per index value.
 (rule (lower_branch (br_table val_idx _) (jump_table_targets default targets))
       (let ((idx Reg (put_in_reg_zext64 val_idx))
-            ;; Bounds-check the index and branch to default.
-            ;; This is an internal branch that is not a terminator insn.
-            ;; Instead, the default target is listed a potential target
-            ;; in the final JTSequence, which is the block terminator.
+            ;; Bounds-check the index and create a ProducesBool that
+            ;; denotes the "default target" condition.
             (cond ProducesBool
               (bool (icmpu_uimm32 $I64 idx (jump_table_size targets))
-                    (intcc_as_cond (IntCC.UnsignedGreaterThanOrEqual))))
-            (_ Unit (emit_side_effect (oneway_cond_br_bool cond default))))
+                    (intcc_as_cond (IntCC.UnsignedGreaterThanOrEqual)))))
         ;; Scale the index by the element size, and then emit the
         ;; compound instruction that does:
         ;;
+        ;; [cond branch to default]
         ;; larl %r1, <jt-base>
         ;; agf %r1, 0(%r1, %rScaledIndex)
         ;; br %r1
@@ -3751,7 +3749,8 @@
         ;; PC-rel offset to the jumptable would be incorrect.
         ;; (The alternative is to introduce a relocation pass
         ;; for inlined jumptables, which is much worse, IMHO.)
-        (emit_side_effect (jt_sequence (lshl_imm $I64 idx 2) targets))))
+        (let ((shifted_idx Reg (lshl_imm $I64 idx 2)))
+          (emit_side_effect (jt_sequence_default_bool shifted_idx default cond targets)))))
 
 
 ;;;; Rules for `brif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

@@ -29,34 +29,33 @@ block5(v5: i32):
 ; VCode:
 ; block0:
 ;   llgfr %r3, %r2
+;   sllg %r4, %r3, 2
 ;   clgfi %r3, 3
-;   jghe label4
-;   sllg %r3, %r3, 2
-;   larl %r1, 14 ; agf %r1, 0(%r1, %r3) ; br %r1 ; jt_entries label2 label1
+;   jghe label4 ; larl %r1, 14 ; agf %r1, 0(%r1, %r4) ; br %r1 ; jt_entries label3 label2 label1
 ; block1:
-;   lhi %r5, 3
+;   lhi %r4, 3
 ;   jg label5
 ; block2:
-;   lhi %r5, 2
+;   lhi %r4, 2
 ;   jg label5
 ; block3:
-;   lhi %r5, 1
+;   lhi %r4, 1
 ;   jg label5
 ; block4:
-;   lhi %r5, 4
+;   lhi %r4, 4
 ;   jg label5
 ; block5:
-;   ar %r2, %r5
+;   ar %r2, %r4
 ;   br %r14
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
 ;   llgfr %r3, %r2
+;   sllg %r4, %r3, 2
 ;   clgfi %r3, 3
 ;   jghe 0x4e
-;   sllg %r3, %r3, 2
 ;   larl %r1, 0x24
-;   agf %r1, 0(%r3, %r1)
+;   agf %r1, 0(%r4, %r1)
 ;   br %r1
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x20
@@ -65,17 +64,17 @@ block5(v5: i32):
 ;   .byte 0x00, 0x00
 ;   .byte 0x00, 0x0c
 ; block1: ; offset 0x30
-;   lhi %r5, 3
+;   lhi %r4, 3
 ;   jg 0x52
 ; block2: ; offset 0x3a
-;   lhi %r5, 2
+;   lhi %r4, 2
 ;   jg 0x52
 ; block3: ; offset 0x44
-;   lhi %r5, 1
+;   lhi %r4, 1
 ;   jg 0x52
 ; block4: ; offset 0x4e
-;   lhi %r5, 4
+;   lhi %r4, 4
 ; block5: ; offset 0x52
-;   ar %r2, %r5
+;   ar %r2, %r4
 ;   br %r14
 
