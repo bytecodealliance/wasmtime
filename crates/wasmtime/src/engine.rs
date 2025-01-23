@@ -70,6 +70,14 @@ struct EngineInner {
     compatible_with_native_host: OnceLock<Result<(), String>>,
 }
 
+impl core::fmt::Debug for Engine {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_tuple("Engine")
+            .field(&Arc::as_ptr(&self.inner))
+            .finish()
+    }
+}
+
 impl Default for Engine {
     fn default() -> Engine {
         Engine::new(&Config::default()).unwrap()
