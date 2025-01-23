@@ -3733,9 +3733,7 @@
             ;; denotes the "default target" condition.
             (cond ProducesBool
               (bool (icmpu_uimm32 $I64 idx (jump_table_size targets))
-                    (intcc_as_cond (IntCC.UnsignedGreaterThanOrEqual))))
-            (default_cond_producer ProducesFlags (bool_producer cond))
-            (default_cond Cond (bool_cond cond)))
+                    (intcc_as_cond (IntCC.UnsignedGreaterThanOrEqual)))))
         ;; Scale the index by the element size, and then emit the
         ;; compound instruction that does:
         ;;
@@ -3752,9 +3750,7 @@
         ;; (The alternative is to introduce a relocation pass
         ;; for inlined jumptables, which is much worse, IMHO.)
         (let ((shifted_idx Reg (lshl_imm $I64 idx 2)))
-          (emit_side_effect (with_flags_side_effect
-                             default_cond_producer
-                             (jt_sequence shifted_idx default default_cond targets))))))
+          (emit_side_effect (jt_sequence_default_bool shifted_idx default cond targets)))))
 
 
 ;;;; Rules for `brif` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;

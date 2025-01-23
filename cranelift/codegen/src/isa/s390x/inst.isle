@@ -2699,6 +2699,14 @@
 (rule (jt_sequence ridx default default_cond targets)
       (ConsumesFlags.ConsumesFlagsSideEffect (MInst.JTSequence ridx default default_cond targets)))
 
+;; Emit a jump-table sequence based on a boolean condition for the
+;; default label.
+(decl jt_sequence_default_bool (Reg MachLabel ProducesBool BoxVecMachLabel) SideEffectNoResult)
+(rule (jt_sequence_default_bool ridx default (ProducesBool.ProducesBool default_producer default_cond) targets)
+      (with_flags_side_effect
+       default_producer
+       (jt_sequence ridx default default_cond targets)))
+
 ;; Helpers for instruction sequences ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Completed instruction sequence for use in MInst.Loop.
@@ -3309,14 +3317,6 @@
 (type ProducesBool (enum (ProducesBool (producer ProducesFlags) (cond Cond))))
 (decl bool (ProducesFlags Cond) ProducesBool)
 (rule (bool producer cond) (ProducesBool.ProducesBool producer cond))
-
-;; Get the producer from a ProducesBool.
-(decl bool_producer (ProducesBool) ProducesFlags)
-(rule (bool_producer (ProducesBool.ProducesBool producer _)) producer)
-
-;; Get the condition from a ProducesBool.
-(decl bool_cond (ProducesBool) Cond)
-(rule (bool_cond (ProducesBool.ProducesBool _ cond)) cond)
 
 ;; Invert boolean condition.
 (decl invert_bool (ProducesBool) ProducesBool)
