@@ -15,5 +15,5 @@ cargo run --no-default-features --features compile,pulley,wat,gc-drc,component-m
   -O signals-based-traps=n
 
 MIRIFLAGS="$MIRIFLAGS -Zmiri-disable-isolation -Zmiri-permissive-provenance" \
-  cargo +nightly miri test --test all -- \
+  cargo miri test --test all -- \
     --ignored pulley_provenance_test "$@"
