@@ -1,4 +1,4 @@
-#uUsing Pulley
+# Using Pulley
 
 On architectures such as x86\_64 or aarch64 Wasmtime will by default use the
 Cranelift compiler to translate WebAssembly to native machine code and execute
