@@ -92,10 +92,10 @@ impl HostFunc {
     }
 
     pub fn lowering(&self) -> VMLowering {
-        let data = &*self.func as *const (dyn Any + Send + Sync) as *mut u8;
+        let data = NonNull::from(&*self.func).cast();
         VMLowering {
             callee: self.entrypoint,
-            data,
+            data: data.into(),
         }
     }
 }
