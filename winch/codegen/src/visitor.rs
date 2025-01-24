@@ -356,6 +356,7 @@ macro_rules! def_unsupported {
     (emit MemoryAtomicNotify $($rest:tt)*) => {};
     (emit AtomicFence $($rest:tt)*) => {};
     (emit V128Not $($rest:tt)*) => {};
+    (emit V128And $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -2987,6 +2988,14 @@ where
             masm.not128v(writable!(reg))?;
             Ok(TypedReg::new(WasmValType::V128, reg))
         })
+    }
+
+    fn visit_v128_and(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S128, |masm, dst, src, _size| {
+                masm.and128v(dst, src, writable!(dst))?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);

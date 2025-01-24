@@ -1656,6 +1656,11 @@ impl Masm for MacroAssembler {
             .xmm_rmi_rvex(AvxOpcode::Vpxor, tmp, dst.to_reg(), dst);
         Ok(())
     }
+
+    fn and128v(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+        self.asm.xmm_rmi_rvex(AvxOpcode::Vpand, src1, src2, dst);
+        Ok(())
+    }
 }
 
 impl MacroAssembler {
