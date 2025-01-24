@@ -1,0 +1,210 @@
+package local:local;
+
+interface baz {
+  foo: func(s: string) -> string;
+}
+
+world round-trip {
+  import baz;
+  export baz;
+}
+
+interface many {
+  record stuff {
+    a: list<s32>,
+    b: bool,
+    c: u64
+  }
+
+  foo: func(a: string,
+            b: u32,
+            c: list<u8>,
+            d: tuple<u64, u64>,
+            e: stuff,
+            f: option<stuff>,
+            g: result<stuff>)
+    -> tuple<string,
+             u32,
+             list<u8>,
+             tuple<u64, u64>,
+             stuff,
+             option<stuff>,
+             result<stuff>>;
+}
+
+world round-trip-many {
+  import many;
+  export many;
+}
+
+world round-trip-direct {
+  import foo: func(s: string) -> string;
+  export foo: func(s: string) -> string;
+}
+
+interface ready {
+  set-ready: func(ready: bool);
+  when-ready: func();
+}
+
+interface continue {
+  set-continue: func(continue: bool);
+  get-continue: func() -> bool;
+}
+
+interface run {
+  run: func();
+}
+
+interface backpressure {
+  set-backpressure: func(enabled: bool);
+}
+
+interface transmit {
+  variant control {
+    read-stream(string),
+    read-future(string),
+    write-stream(string),
+    write-future(string),
+  }
+
+  exchange: func(control: stream<control>,
+                 caller-stream: stream<string>,
+                 caller-future1: future<string>,
+                 caller-future2: future<string>) -> tuple<stream<string>, future<string>, future<string>>;
+}
+
+interface post-return {
+  foo: func(s: string) -> string;
+  get-post-return-value: func() -> string;
+}
+
+interface borrowing-types {
+  resource x {
+    constructor();
+    foo: func();
+  }
+}
+
+interface borrowing {
+  use borrowing-types.{x};
+
+  foo: func(x: borrow<x>, misbehave: bool);
+}
+
+interface run-bool {
+  run: func(v: bool);
+}
+
+interface run-result {
+  run-fail: func() -> result<_, error-context>;
+  run-pass: func() -> result<_, error-context>;
+}
+
+interface run-stream {
+  produce-then-error: func(times: u32) -> stream;
+}
+
+interface unit-stream {
+  run: func(count: u32) -> stream;
+}
+
+world yield-caller {
+  import continue;
+  import ready;
+  import run;
+  export run;
+}
+
+world yield-callee {
+  import continue;
+  export run;
+}
+
+world yield-host {
+  import continue;
+  import ready;
+  export run;
+}
+
+world poll {
+  import ready;
+  export run;
+}
+
+world backpressure-caller {
+  import backpressure;
+  import run;
+  export run;
+}
+
+world backpressure-callee {
+  export backpressure;
+  export run;
+}
+
+world transmit-caller {
+  import transmit;
+  export run;
+}
+
+world transmit-callee {
+  export transmit;
+}
+
+world post-return-caller {
+  import post-return;
+  export run;
+}
+
+world post-return-callee {
+  export post-return;
+}
+
+world borrowing-caller {
+  import borrowing;
+  export run-bool;
+}
+
+world borrowing-callee {
+  export borrowing;
+  export run-bool;
+}
+
+world borrowing-host {
+  import borrowing-types;
+  export run-bool;
+}
+
+world error-context-usage {
+  export run;
+}
+
+world error-context-callee {
+  export run-result;
+  export run;
+}
+
+world error-context-caller {
+  import run-result;
+  export run;
+}
+
+world error-context-stream-callee {
+  export run-stream;
+  export run;
+}
+
+world error-context-stream-caller {
+  import run-stream;
+  export run;
+}
+
+world unit-stream-caller {
+  import unit-stream;
+  export run;
+}
+
+world unit-stream-callee {
+  export unit-stream;
+}

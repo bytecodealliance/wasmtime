@@ -259,6 +259,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b048fb63fd8b5923fc5aa7b340d8e156aec7ec02f0c78fa8a6ddc2613f6f71de"
 
 [[package]]
+name = "bitmaps"
+version = "2.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "031043d04099746d8db04daf1fa424b2bc8bd69d92b25962dcde24da39ab64a2"
+dependencies = [
+ "typenum",
+]
+
+[[package]]
 name = "block-buffer"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -610,6 +619,24 @@ name = "colorchoice"
 version = "1.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
+
+[[package]]
+name = "component-async-tests"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+ "flate2",
+ "futures",
+ "pretty_env_logger",
+ "tempfile",
+ "test-programs-artifacts",
+ "tokio",
+ "wasi-http-draft",
+ "wasm-compose",
+ "wasmparser",
+ "wasmtime",
+ "wasmtime-wasi",
+]
 
 [[package]]
 name = "component-fuzz-util"
@@ -1359,6 +1386,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "fixedbitset"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ce7134b9999ecaf8bcd65542e436736ef32ddca1b3e06094cb6ec5755203b80"
+
+[[package]]
 name = "flagset"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1911,6 +1944,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "im-rc"
+version = "15.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af1955a75fa080c677d3972822ec4bad316169ab1cfc6c257a942c2265dbe5fe"
+dependencies = [
+ "bitmaps",
+ "rand_core",
+ "rand_xoshiro",
+ "sized-chunks",
+ "typenum",
+ "version_check",
+]
+
+[[package]]
 name = "indexmap"
 version = "1.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2105,6 +2152,12 @@ name = "leb128"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
+
+[[package]]
+name = "leb128fmt"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2"
 
 [[package]]
 name = "libc"
@@ -2555,6 +2608,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3148f5046208a5d56bcfc03053e3ca6334e51da8dfb19b6cdc8b306fae3283e"
 
 [[package]]
+name = "petgraph"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b4c5cc86750666a3ed20bdaf5ca2a0344f9c67674cae0515bec2da16fbaa47db"
+dependencies = [
+ "fixedbitset",
+ "indexmap 2.7.0",
+]
+
+[[package]]
 name = "pin-project-lite"
 version = "0.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2733,6 +2796,15 @@ name = "rand_xorshift"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d25bf25ec5ae4a3f1b92f929810509a2f53d7dca2f50b794ff57e3face536c8f"
+dependencies = [
+ "rand_core",
+]
+
+[[package]]
+name = "rand_xoshiro"
+version = "0.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f97cdb2a36ed4183de61b2f824cc45c9f1037f28afe0a322e9fff4c108b5aaa"
 dependencies = [
  "rand_core",
 ]
@@ -3057,6 +3129,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_yaml"
+version = "0.9.34+deprecated"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6a8b1a1a2ebf674015cc02edccce75287f1a0130d394307b36743c2f5d504b47"
+dependencies = [
+ "indexmap 2.7.0",
+ "itoa",
+ "ryu",
+ "serde",
+ "unsafe-libyaml",
+]
+
+[[package]]
 name = "sha1"
 version = "0.10.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3128,6 +3213,16 @@ name = "similar"
 version = "2.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "62ac7f900db32bf3fd12e0117dd3dc4da74bc52ebaac97f39668446d89694803"
+
+[[package]]
+name = "sized-chunks"
+version = "0.6.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "16d69225bde7a69b235da73377861095455d298f2b970996eec25ddbb42b3d1e"
+dependencies = [
+ "bitmaps",
+ "typenum",
+]
 
 [[package]]
 name = "slab"
@@ -3379,15 +3474,18 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "base64 0.21.0",
+ "flate2",
  "futures",
  "getrandom",
  "libc",
+ "once_cell",
  "sha2",
  "url",
  "wasi 0.11.0+wasi-snapshot-preview1",
  "wasi 0.14.0+wasi-0.2.3",
  "wasi-nn",
  "wit-bindgen",
+ "wit-bindgen-rt 0.38.0",
 ]
 
 [[package]]
@@ -3396,6 +3494,7 @@ version = "0.0.0"
 dependencies = [
  "cargo_metadata",
  "heck 0.5.0",
+ "wasmparser",
  "wasmtime",
  "wit-component",
 ]
@@ -3693,6 +3792,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "957e51f3646910546462e67d5f7599b9e4fb8acdd304b087a6494730f9eebf04"
 
 [[package]]
+name = "unsafe-libyaml"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "673aac59facbab8a9007c7f6108d11f63b603f7cabff99fabf650fea5c32b861"
+
+[[package]]
 name = "untrusted"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3883,6 +3988,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasi-http-draft"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "futures",
+ "wasmtime",
+]
+
+[[package]]
 name = "wasi-nn"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3959,20 +4073,39 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6ee99da9c5ba11bd675621338ef6fa52296b76b83305e9b6e5c77d4c286d6d49"
 
 [[package]]
-name = "wasm-encoder"
+name = "wasm-compose"
 version = "0.224.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7249cf8cb0c6b9cb42bce90c0a5feb276fbf963fa385ff3d818ab3d90818ed6"
+checksum = "e82eabfa1d46657d1226cf814e7cfc9423715c089d03e86d69a64ad34afd299c"
 dependencies = [
- "leb128",
+ "anyhow",
+ "heck 0.4.1",
+ "im-rc",
+ "indexmap 2.7.0",
+ "log",
+ "petgraph",
+ "serde",
+ "serde_derive",
+ "serde_yaml",
+ "smallvec",
+ "wasm-encoder",
+ "wasmparser",
+ "wat",
+]
+
+[[package]]
+name = "wasm-encoder"
+version = "0.224.0"
+source = "git+https://github.com/bytecodealliance/wasm-tools#4e37f73e2690f562adbec9998e2af8b878958af4"
+dependencies = [
+ "leb128fmt",
  "wasmparser",
 ]
 
 [[package]]
 name = "wasm-metadata"
 version = "0.224.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79d13d93febc749413cb6f327e4fdba8c84e4d03bd69fcc4a220c66f113c8de1"
+source = "git+https://github.com/bytecodealliance/wasm-tools#4e37f73e2690f562adbec9998e2af8b878958af4"
 dependencies = [
  "anyhow",
  "indexmap 2.7.0",
@@ -3988,8 +4121,7 @@ dependencies = [
 [[package]]
 name = "wasm-mutate"
 version = "0.224.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d0ede8b5d000e2ea09926ae5c4783fa1503f779c3f5132a8c8b791121fe5a99"
+source = "git+https://github.com/bytecodealliance/wasm-tools#4e37f73e2690f562adbec9998e2af8b878958af4"
 dependencies = [
  "egg",
  "log",
@@ -4002,14 +4134,11 @@ dependencies = [
 [[package]]
 name = "wasm-smith"
 version = "0.224.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d1c7826d83ef9b83db810c0b8442093cf51e726bf1ed3a75448617c5718fcc79"
+source = "git+https://github.com/bytecodealliance/wasm-tools#4e37f73e2690f562adbec9998e2af8b878958af4"
 dependencies = [
  "anyhow",
  "arbitrary",
  "flagset",
- "indexmap 2.7.0",
- "leb128",
  "wasm-encoder",
 ]
 
@@ -4024,8 +4153,7 @@ dependencies = [
 [[package]]
 name = "wasm-wave"
 version = "0.224.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "598c5e8b9f70d086d121e47153c44e35a5528e766eb817e4bb9dcacb8804c1be"
+source = "git+https://github.com/bytecodealliance/wasm-tools#4e37f73e2690f562adbec9998e2af8b878958af4"
 dependencies = [
  "indexmap 2.7.0",
  "logos",
@@ -4080,8 +4208,7 @@ dependencies = [
 [[package]]
 name = "wasmparser"
 version = "0.224.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "65881a664fdd43646b647bb27bf186ab09c05bf56779d40aed4c6dce47d423f5"
+source = "git+https://github.com/bytecodealliance/wasm-tools#4e37f73e2690f562adbec9998e2af8b878958af4"
 dependencies = [
  "bitflags 2.6.0",
  "hashbrown 0.15.2",
@@ -4102,8 +4229,7 @@ dependencies = [
 [[package]]
 name = "wasmprinter"
 version = "0.224.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bc039e211f6c2137425726f0d76fdd9c439a442e5272bc3627a19274d0eb9686"
+source = "git+https://github.com/bytecodealliance/wasm-tools#4e37f73e2690f562adbec9998e2af8b878958af4"
 dependencies = [
  "anyhow",
  "termcolor",
@@ -4756,11 +4882,10 @@ dependencies = [
 [[package]]
 name = "wast"
 version = "224.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d722a51e62b669d17e5a9f6bc8ec210178b37d869114355aa46989686c5c6391"
+source = "git+https://github.com/bytecodealliance/wasm-tools#4e37f73e2690f562adbec9998e2af8b878958af4"
 dependencies = [
  "bumpalo",
- "leb128",
+ "leb128fmt",
  "memchr",
  "unicode-width 0.2.0",
  "wasm-encoder",
@@ -4769,8 +4894,7 @@ dependencies = [
 [[package]]
 name = "wat"
 version = "1.224.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71dece6a7dd5bcbcf8d256606c7fb3faa36286d46bf3f98185407719a5ceede2"
+source = "git+https://github.com/bytecodealliance/wasm-tools#4e37f73e2690f562adbec9998e2af8b878958af4"
 dependencies = [
  "wast 224.0.0",
 ]
@@ -5210,8 +5334,7 @@ dependencies = [
 [[package]]
 name = "wit-component"
 version = "0.224.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ad555ab4f4e676474df746d937823c7279c2d6dd36c3e97a61db893d4ef64ee5"
+source = "git+https://github.com/bytecodealliance/wasm-tools#4e37f73e2690f562adbec9998e2af8b878958af4"
 dependencies = [
  "anyhow",
  "bitflags 2.6.0",
@@ -5229,8 +5352,7 @@ dependencies = [
 [[package]]
 name = "wit-parser"
 version = "0.224.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "23e2925a7365d2c6709ae17bdbb5777ffd8154fd70906b413fc01b75f0dba59e"
+source = "git+https://github.com/bytecodealliance/wasm-tools#4e37f73e2690f562adbec9998e2af8b878958af4"
 dependencies = [
  "anyhow",
  "id-arena",

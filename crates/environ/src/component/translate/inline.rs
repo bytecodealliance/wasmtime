@@ -679,11 +679,16 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
-            TaskReturn { func } => {
+            TaskReturn { func, result } => {
+                let results = result
+                    .iter()
+                    .map(|ty| types.valtype(frame.translation.types_ref(), ty))
+                    .collect::<Result<_>>()?;
+                let results = types.new_tuple_type(results);
                 let index = self
                     .result
                     .trampolines
-                    .push((*func, dfg::Trampoline::TaskReturn));
+                    .push((*func, dfg::Trampoline::TaskReturn { results }));
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
             TaskWait {

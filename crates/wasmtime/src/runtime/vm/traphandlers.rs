@@ -362,39 +362,45 @@ where
     F: FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
 {
     let caller = store.0.default_caller();
-    let result = CallThreadState::new(store.0, caller).with(|cx| match store.0.executor() {
-        // In interpreted mode directly invoke the host closure since we won't
-        // be using host-based `setjmp`/`longjmp` as that's not going to save
-        // the context we want.
-        ExecutorRef::Interpreter(r) => {
-            cx.jmp_buf
-                .set(CallThreadState::JMP_BUF_INTERPRETER_SENTINEL);
-            closure(caller, Some(r))
-        }
+    let async_guard_range = store.async_guard_range();
+    let result = CallThreadState::new(store.0, async_guard_range, caller).with(|cx| {
+        match store.0.executor() {
+            // In interpreted mode directly invoke the host closure since we won't
+            // be using host-based `setjmp`/`longjmp` as that's not going to save
+            // the context we want.
+            ExecutorRef::Interpreter(r) => {
+                cx.jmp_buf
+                    .set(CallThreadState::JMP_BUF_INTERPRETER_SENTINEL);
+                closure(caller, Some(r))
+            }
 
-        // In native mode, however, defer to C to do the `setjmp` since Rust
-        // doesn't understand `setjmp`.
-        //
-        // Note that here we pass a function pointer to C to catch longjmp
-        // within, here it's `call_closure`, and that passes `None` for the
-        // interpreter since this branch is only ever taken if the interpreter
-        // isn't present.
-        #[cfg(has_host_compiler_backend)]
-        ExecutorRef::Native => traphandlers::wasmtime_setjmp(
-            cx.jmp_buf.as_ptr(),
-            {
-                extern "C" fn call_closure<F>(payload: *mut u8, caller: NonNull<VMContext>) -> bool
-                where
-                    F: FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
+            // In native mode, however, defer to C to do the `setjmp` since Rust
+            // doesn't understand `setjmp`.
+            //
+            // Note that here we pass a function pointer to C to catch longjmp
+            // within, here it's `call_closure`, and that passes `None` for the
+            // interpreter since this branch is only ever taken if the interpreter
+            // isn't present.
+            #[cfg(has_host_compiler_backend)]
+            ExecutorRef::Native => traphandlers::wasmtime_setjmp(
+                cx.jmp_buf.as_ptr(),
                 {
-                    unsafe { (*(payload as *mut F))(caller, None) }
-                }
+                    extern "C" fn call_closure<F>(
+                        payload: *mut u8,
+                        caller: NonNull<VMContext>,
+                    ) -> bool
+                    where
+                        F: FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
+                    {
+                        unsafe { (*(payload as *mut F))(caller, None) }
+                    }
 
-                call_closure::<F>
-            },
-            &mut closure as *mut F as *mut u8,
-            caller,
-        ),
+                    call_closure::<F>
+                },
+                &mut closure as *mut F as *mut u8,
+                caller,
+            ),
+        }
     });
 
     return match result {
@@ -465,7 +471,11 @@ mod call_thread_state {
         pub const JMP_BUF_INTERPRETER_SENTINEL: *mut u8 = 1 as *mut u8;
 
         #[inline]
-        pub(super) fn new(store: &mut StoreOpaque, caller: NonNull<VMContext>) -> CallThreadState {
+        pub(super) fn new(
+            store: &mut StoreOpaque,
+            async_guard_range: Range<*mut u8>,
+            caller: NonNull<VMContext>,
+        ) -> CallThreadState {
             let limits = unsafe {
                 Instance::from_vmctx(caller, |i| i.runtime_limits())
                     .read()
@@ -475,7 +485,7 @@ mod call_thread_state {
 
             // Don't try to plumb #[cfg] everywhere for this field, just pretend
             // we're using it on miri/windows to silence compiler warnings.
-            let _: Range<_> = store.async_guard_range();
+            let _: Range<_> = async_guard_range;
 
             CallThreadState {
                 unwind: Cell::new(None),
@@ -488,7 +498,7 @@ mod call_thread_state {
                 capture_coredump: store.engine().config().coredump_on_trap,
                 limits,
                 #[cfg(all(has_native_signals, unix))]
-                async_guard_range: store.async_guard_range(),
+                async_guard_range,
                 prev: Cell::new(ptr::null()),
                 old_last_wasm_exit_fp: Cell::new(unsafe {
                     *limits.as_ref().last_wasm_exit_fp.get()

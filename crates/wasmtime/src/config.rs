@@ -1112,8 +1112,6 @@ impl Config {
     /// lifting and lowering functions, as well as `stream`, `future`, and
     /// `error-context` types.
     ///
-    /// Please note that Wasmtime's support for this feature is _very_ incomplete.
-    ///
     /// [proposal]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Async.md
     #[cfg(feature = "component-model-async")]
     pub fn wasm_component_model_async(&mut self, enable: bool) -> &mut Self {

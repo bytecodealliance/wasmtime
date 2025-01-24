@@ -1,0 +1,23 @@
+[package]
+name = "component-async-tests"
+authors = ["The Wasmtime Project Developers"]
+license = "Apache-2.0 WITH LLVM-exception"
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dev-dependencies]
+anyhow = { workspace = true }
+flate2 = "1.0.30"
+futures = { workspace = true }
+pretty_env_logger = { workspace = true }
+tempfile = { workspace = true }
+test-programs-artifacts = { workspace = true }
+tokio = { workspace = true, features = ["fs", "process", "macros", "rt-multi-thread", "time"] }
+wasi-http-draft = { path = "http" }
+wasm-compose = { workspace = true }
+wasmparser = { workspace = true }
+wasmtime = { workspace = true, features = ["component-model-async"] }
+wasmtime-wasi = { workspace = true }
+

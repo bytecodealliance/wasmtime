@@ -50,7 +50,6 @@ pub struct ComponentTypesBuilder {
     future_tables: HashMap<TypeFutureTable, TypeFutureTableIndex>,
     stream_tables: HashMap<TypeStreamTable, TypeStreamTableIndex>,
     error_context_tables: HashMap<TypeErrorContextTable, TypeComponentLocalErrorContextTableIndex>,
-    task_returns: HashMap<TypeTaskReturn, TypeTaskReturnIndex>,
 
     component_types: ComponentTypes,
     module_types: ModuleTypesBuilder,
@@ -109,7 +108,6 @@ impl ComponentTypesBuilder {
             future_tables: HashMap::default(),
             stream_tables: HashMap::default(),
             error_context_tables: HashMap::default(),
-            task_returns: HashMap::default(),
             component_types: ComponentTypes::default(),
             type_info: TypeInformationCache::default(),
             resources: ResourcesBuilder::default(),
@@ -248,22 +246,10 @@ impl ComponentTypesBuilder {
             .collect::<Result<_>>()?;
         let params = self.new_tuple_type(params);
         let results = self.new_tuple_type(results);
-        let (task_return_type32, task_return_type64) =
-            if let Some(types) = self.flat_types(&InterfaceType::Tuple(results)) {
-                (types.memory32.to_vec(), types.memory64.to_vec())
-            } else {
-                (vec![FlatType::I32], vec![FlatType::I64])
-            };
         let ty = TypeFunc {
             param_names,
             params,
             results,
-            task_return_type32: self.add_task_return_type(TypeTaskReturn {
-                params: task_return_type32,
-            }),
-            task_return_type64: self.add_task_return_type(TypeTaskReturn {
-                params: task_return_type64,
-            }),
         };
         Ok(self.add_func_type(ty))
     }
@@ -443,7 +429,16 @@ impl ComponentTypesBuilder {
         Ok(ret)
     }
 
-    fn valtype(&mut self, types: TypesRef<'_>, ty: &ComponentValType) -> Result<InterfaceType> {
+    /// Retrieve Wasmtime's type representation of the `error-context` type.
+    pub fn error_context_type(&mut self) -> Result<TypeComponentLocalErrorContextTableIndex> {
+        self.error_context_table_type()
+    }
+
+    pub(crate) fn valtype(
+        &mut self,
+        types: TypesRef<'_>,
+        ty: &ComponentValType,
+    ) -> Result<InterfaceType> {
         assert_eq!(types.id(), self.module_types.validator_id());
         match ty {
             ComponentValType::Primitive(p) => Ok(p.into()),
@@ -509,7 +504,7 @@ impl ComponentTypesBuilder {
         Ok(self.new_tuple_type(types))
     }
 
-    fn new_tuple_type(&mut self, types: Box<[InterfaceType]>) -> TypeTupleIndex {
+    pub(crate) fn new_tuple_type(&mut self, types: Box<[InterfaceType]>) -> TypeTupleIndex {
         let abi = CanonicalAbiInfo::record(
             types
                 .iter()
@@ -697,21 +692,6 @@ impl ComponentTypesBuilder {
             &mut self.component_types.error_context_tables,
             ty,
         )
-    }
-
-    /// Interns a new task return type within this type information.
-    pub fn add_task_return_type(&mut self, ty: TypeTaskReturn) -> TypeTaskReturnIndex {
-        intern(
-            &mut self.task_returns,
-            &mut self.component_types.task_returns,
-            ty,
-        )
-    }
-
-    /// Gets a previously interned task return type within this type
-    /// information, if any.
-    pub fn get_task_return_type(&self, ty: &TypeTaskReturn) -> Option<TypeTaskReturnIndex> {
-        self.task_returns.get(ty).copied()
     }
 
     /// Returns the canonical ABI information about the specified type.

@@ -72,6 +72,17 @@ where
         self.elems.get_mut(k.index())
     }
 
+    /// Get the element at `k` if it exists, mutable version.
+    pub fn get_mut_or_insert_with(&mut self, k: K, f: impl FnOnce() -> V) -> &mut V {
+        if self.elems.get(k.index()).is_none() {
+            self.elems.insert(k.index(), f());
+        }
+
+        self.elems
+            .get_mut(k.index())
+            .expect("missing existing element")
+    }
+
     /// Is this map completely empty?
     pub fn is_empty(&self) -> bool {
         self.elems.is_empty()

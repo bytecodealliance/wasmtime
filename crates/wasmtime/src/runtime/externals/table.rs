@@ -93,14 +93,26 @@ impl Table {
     where
         T: Send,
     {
-        let mut store = store.as_context_mut();
+        let store = store.as_context_mut();
         assert!(
             store.0.async_support(),
             "cannot use `new_async` without enabling async support on the config"
         );
-        store
-            .on_fiber(|store| Table::_new(store.0, ty, init))
+        #[cfg(feature = "component-model-async")]
+        {
+            crate::component::concurrent::on_fiber(store, None, move |store| {
+                Table::_new(store.0, ty, init)
+            })
             .await?
+            .0
+        }
+        #[cfg(not(feature = "component-model-async"))]
+        {
+            let mut store = store;
+            store
+                .on_fiber(|store| Table::_new(store.0, ty, init))
+                .await?
+        }
     }
 
     fn _new(store: &mut StoreOpaque, ty: TableType, init: Ref) -> Result<Table> {
@@ -287,14 +299,26 @@ impl Table {
     where
         T: Send,
     {
-        let mut store = store.as_context_mut();
+        let store = store.as_context_mut();
         assert!(
             store.0.async_support(),
             "cannot use `grow_async` without enabling async support on the config"
         );
-        store
-            .on_fiber(|store| self.grow(store, delta, init))
+        #[cfg(feature = "component-model-async")]
+        {
+            crate::component::concurrent::on_fiber(store, None, move |store| {
+                self.grow(store, delta, init)
+            })
             .await?
+            .0
+        }
+        #[cfg(not(feature = "component-model-async"))]
+        {
+            let mut store = store;
+            store
+                .on_fiber(|store| self.grow(store, delta, init))
+                .await?
+        }
     }
 
     /// Copy `len` elements from `src_table[src_index..]` into

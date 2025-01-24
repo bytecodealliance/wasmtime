@@ -131,8 +131,9 @@ where
     ) -> Result<Results>
     where
         T: Send,
+        Results: Send + Sync + 'static,
     {
-        let mut store = store.as_context_mut();
+        let store = store.as_context_mut();
         assert!(
             store.0.async_support(),
             "must use `call` with non-async stores"
@@ -140,12 +141,25 @@ where
         if Self::need_gc_before_call_raw(store.0, &params) {
             store.0.gc_async().await;
         }
-        store
-            .on_fiber(|store| {
+        #[cfg(feature = "component-model-async")]
+        {
+            crate::component::concurrent::on_fiber(store, None, |store| {
                 let func = self.func.vm_func_ref(store.0);
                 unsafe { Self::call_raw(store, &self.ty, func, params) }
             })
             .await?
+            .0
+        }
+        #[cfg(not(feature = "component-model-async"))]
+        {
+            let mut store = store;
+            store
+                .on_fiber(|store| {
+                    let func = self.func.vm_func_ref(store.0);
+                    unsafe { Self::call_raw(store, &self.ty, func, params) }
+                })
+                .await?
+        }
     }
 
     #[inline]

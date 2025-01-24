@@ -556,16 +556,29 @@ impl Func {
         );
         assert!(ty.comes_from_same_engine(store.as_context().engine()));
         Func::new(store, ty, move |mut caller, params, results| {
-            let async_cx = caller
-                .store
-                .as_context_mut()
-                .0
-                .async_cx()
-                .expect("Attempt to spawn new action on dying fiber");
-            let future = func(caller, params, results);
-            match unsafe { async_cx.block_on(Pin::from(future)) } {
-                Ok(Ok(())) => Ok(()),
-                Ok(Err(trap)) | Err(trap) => Err(trap),
+            #[cfg(feature = "component-model-async")]
+            {
+                let async_cx =
+                    crate::component::concurrent::AsyncCx::new(&mut caller.store.as_context_mut());
+                let mut future = Pin::from(func(caller, params, results));
+                match unsafe { async_cx.block_on::<T, _>(future.as_mut(), None) } {
+                    Ok((Ok(()), _)) => Ok(()),
+                    Ok((Err(trap), _)) | Err(trap) => Err(trap),
+                }
+            }
+            #[cfg(not(feature = "component-model-async"))]
+            {
+                let async_cx = caller
+                    .store
+                    .as_context_mut()
+                    .0
+                    .async_cx()
+                    .expect("Attempt to spawn new action on dying fiber");
+                let future = func(caller, params, results);
+                match unsafe { async_cx.block_on(Pin::from(future)) } {
+                    Ok(Ok(())) => Ok(()),
+                    Ok(Err(trap)) | Err(trap) => Err(trap),
+                }
             }
         })
     }
@@ -875,17 +888,31 @@ impl Func {
             concat!("cannot use `wrap_async` without enabling async support on the config")
         );
         Func::wrap_inner(store, move |mut caller: Caller<'_, T>, args| {
-            let async_cx = caller
-                .store
-                .as_context_mut()
-                .0
-                .async_cx()
-                .expect("Attempt to start async function on dying fiber");
-            let future = func(caller, args);
+            #[cfg(feature = "component-model-async")]
+            {
+                let async_cx =
+                    crate::component::concurrent::AsyncCx::new(&mut caller.store.as_context_mut());
+                let mut future = Pin::from(func(caller, args));
 
-            match unsafe { async_cx.block_on(Pin::from(future)) } {
-                Ok(ret) => ret.into_fallible(),
-                Err(e) => R::fallible_from_error(e),
+                match unsafe { async_cx.block_on::<T, _>(future.as_mut(), None) } {
+                    Ok((ret, _)) => ret.into_fallible(),
+                    Err(e) => R::fallible_from_error(e),
+                }
+            }
+            #[cfg(not(feature = "component-model-async"))]
+            {
+                let async_cx = caller
+                    .store
+                    .as_context_mut()
+                    .0
+                    .async_cx()
+                    .expect("Attempt to start async function on dying fiber");
+                let future = func(caller, args);
+
+                match unsafe { async_cx.block_on(Pin::from(future)) } {
+                    Ok(ret) => ret.into_fallible(),
+                    Err(e) => R::fallible_from_error(e),
+                }
             }
         })
     }
@@ -1155,10 +1182,21 @@ impl Func {
         if need_gc {
             store.0.gc_async().await;
         }
-        let result = store
-            .on_fiber(|store| unsafe { self.call_impl_do_call(store, params, results) })
-            .await??;
-        Ok(result)
+        #[cfg(feature = "component-model-async")]
+        {
+            crate::component::concurrent::on_fiber(store, None, move |store| unsafe {
+                self.call_impl_do_call(store, params, results)
+            })
+            .await?
+            .0
+        }
+        #[cfg(not(feature = "component-model-async"))]
+        {
+            let result = store
+                .on_fiber(|store| unsafe { self.call_impl_do_call(store, params, results) })
+                .await??;
+            Ok(result)
+        }
     }
 
     /// Perform dynamic checks that the arguments given to us match
@@ -2350,6 +2388,7 @@ impl HostContext {
                 drop(store);
 
                 let r = func(caller.sub_caller(), params);
+
                 if let Err(trap) = caller.store.0.call_hook(CallHook::ReturningFromHost) {
                     break 'ret R::fallible_from_error(trap);
                 }

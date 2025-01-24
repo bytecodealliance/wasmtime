@@ -201,6 +201,11 @@ pub unsafe trait VMStore {
     /// Metadata required for resources for the component model.
     #[cfg(feature = "component-model")]
     fn component_calls(&mut self) -> &mut component::CallContexts;
+
+    #[cfg(feature = "component-model-async")]
+    fn component_async_store(
+        &mut self,
+    ) -> &mut dyn crate::runtime::component::VMComponentAsyncStore;
 }
 
 impl Deref for dyn VMStore + '_ {

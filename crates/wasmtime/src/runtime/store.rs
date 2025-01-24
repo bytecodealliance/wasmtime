@@ -76,6 +76,8 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
+#[cfg(feature = "component-model-async")]
+use crate::component::concurrent;
 use crate::instance::InstanceData;
 use crate::linker::Definition;
 use crate::module::RegisteredModuleId;
@@ -228,6 +230,8 @@ pub struct StoreInner<T> {
         Option<Box<dyn FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync>>,
     // for comments about `ManuallyDrop`, see `Store::into_data`
     data: ManuallyDrop<T>,
+    #[cfg(feature = "component-model-async")]
+    concurrent_state: concurrent::ConcurrentState<T>,
 }
 
 enum ResourceLimiterInner<T> {
@@ -576,6 +580,8 @@ impl<T> Store<T> {
             #[cfg(target_has_atomic = "64")]
             epoch_deadline_behavior: None,
             data: ManuallyDrop::new(data),
+            #[cfg(feature = "component-model-async")]
+            concurrent_state: Default::default(),
         });
 
         // Wasmtime uses the callee argument to host functions to learn about
@@ -985,6 +991,16 @@ impl<'a, T> StoreContextMut<'a, T> {
         self.0.data_mut()
     }
 
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn concurrent_state(&mut self) -> &mut concurrent::ConcurrentState<T> {
+        self.0.concurrent_state()
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn has_pkey(&self) -> bool {
+        self.0.pkey.is_some()
+    }
+
     /// Returns the underlying [`Engine`] this store is connected to.
     pub fn engine(&self) -> &Engine {
         self.0.engine()
@@ -1049,6 +1065,11 @@ impl<T> StoreInner<T> {
         &mut self.data
     }
 
+    #[cfg(feature = "component-model-async")]
+    fn concurrent_state(&mut self) -> &mut concurrent::ConcurrentState<T> {
+        &mut self.concurrent_state
+    }
+
     #[inline]
     pub fn call_hook(&mut self, s: CallHook) -> Result<()> {
         if self.inner.pkey.is_none() && self.call_hook.is_none() {
@@ -1088,14 +1109,33 @@ impl<T> StoreInner<T> {
 
             #[cfg(all(feature = "async", feature = "call-hook"))]
             CallHookInner::Async(handler) => unsafe {
-                self.inner
-                    .async_cx()
-                    .ok_or_else(|| anyhow!("couldn't grab async_cx for call hook"))?
-                    .block_on(
-                        handler
-                            .handle_call_event((&mut *self).as_context_mut(), s)
-                            .as_mut(),
-                    )?
+                #[cfg(feature = "component-model-async")]
+                {
+                    let async_cx = crate::component::concurrent::AsyncCx::try_new(
+                        &mut (&mut *self).as_context_mut(),
+                    )
+                    .ok_or_else(|| anyhow!("couldn't grab async_cx for call hook"))?;
+
+                    async_cx
+                        .block_on(
+                            handler
+                                .handle_call_event((&mut *self).as_context_mut(), s)
+                                .as_mut(),
+                            None::<StoreContextMut<'_, T>>,
+                        )?
+                        .0
+                }
+                #[cfg(not(feature = "component-model-async"))]
+                {
+                    self.inner
+                        .async_cx()
+                        .ok_or_else(|| anyhow!("couldn't grab async_cx for call hook"))?
+                        .block_on(
+                            handler
+                                .handle_call_event((&mut *self).as_context_mut(), s)
+                                .as_mut(),
+                        )?
+                }
             },
 
             CallHookInner::ForceTypeParameterToBeUsed { uninhabited, .. } => {
@@ -1865,11 +1905,6 @@ at https://bytecodealliance.org/security.
         self.num_component_instances += 1;
     }
 
-    #[cfg(not(feature = "async"))]
-    pub(crate) fn async_guard_range(&self) -> core::ops::Range<*mut u8> {
-        core::ptr::null_mut()..core::ptr::null_mut()
-    }
-
     pub(crate) fn executor(&mut self) -> ExecutorRef<'_> {
         match &mut self.executor {
             Executor::Interpreter(i) => ExecutorRef::Interpreter(i.as_interpreter_ref()),
@@ -1888,6 +1923,13 @@ at https://bytecodealliance.org/security.
 }
 
 unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
+    #[cfg(feature = "component-model-async")]
+    fn component_async_store(
+        &mut self,
+    ) -> &mut dyn crate::runtime::component::VMComponentAsyncStore {
+        self
+    }
+
     fn store_opaque(&self) -> &StoreOpaque {
         &self.inner
     }
@@ -1908,14 +1950,35 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
             }
             #[cfg(feature = "async")]
             Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                self.inner
-                    .async_cx()
-                    .expect("ResourceLimiterAsync requires async Store")
-                    .block_on(
-                        limiter(&mut self.data)
-                            .memory_growing(current, desired, maximum)
-                            .as_mut(),
-                    )?
+                #[cfg(feature = "component-model-async")]
+                {
+                    _ = limiter;
+                    let async_cx = crate::component::concurrent::AsyncCx::new(
+                        &mut (&mut *self).as_context_mut(),
+                    );
+                    let Some(ResourceLimiterInner::Async(ref mut limiter)) = self.limiter else {
+                        unreachable!();
+                    };
+                    async_cx
+                        .block_on::<T, _>(
+                            limiter(&mut self.data)
+                                .memory_growing(current, desired, maximum)
+                                .as_mut(),
+                            None,
+                        )?
+                        .0
+                }
+                #[cfg(not(feature = "component-model-async"))]
+                {
+                    self.inner
+                        .async_cx()
+                        .expect("ResourceLimiterAsync requires async Store")
+                        .block_on(
+                            limiter(&mut self.data)
+                                .memory_growing(current, desired, maximum)
+                                .as_mut(),
+                        )?
+                }
             },
             None => Ok(true),
         }
@@ -1946,7 +2009,7 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
         // Need to borrow async_cx before the mut borrow of the limiter.
         // self.async_cx() panicks when used with a non-async store, so
         // wrap this in an option.
-        #[cfg(feature = "async")]
+        #[cfg(all(feature = "async", not(feature = "component-model-async")))]
         let async_cx = if self.async_support()
             && matches!(self.limiter, Some(ResourceLimiterInner::Async(_)))
         {
@@ -1961,9 +2024,32 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
             }
             #[cfg(feature = "async")]
             Some(ResourceLimiterInner::Async(ref mut limiter)) => unsafe {
-                async_cx
-                    .expect("ResourceLimiterAsync requires async Store")
-                    .block_on(limiter(&mut self.data).table_growing(current, desired, maximum))?
+                #[cfg(feature = "component-model-async")]
+                {
+                    _ = limiter;
+                    let async_cx = crate::component::concurrent::AsyncCx::new(
+                        &mut (&mut *self).as_context_mut(),
+                    );
+                    let Some(ResourceLimiterInner::Async(ref mut limiter)) = self.limiter else {
+                        unreachable!();
+                    };
+                    async_cx
+                        .block_on::<T, _>(
+                            limiter(&mut self.data)
+                                .table_growing(current, desired, maximum)
+                                .as_mut(),
+                            None,
+                        )?
+                        .0
+                }
+                #[cfg(not(feature = "component-model-async"))]
+                {
+                    async_cx
+                        .expect("ResourceLimiterAsync requires async Store")
+                        .block_on(
+                            limiter(&mut self.data).table_growing(current, desired, maximum),
+                        )?
+                }
             },
             None => Ok(true),
         }
@@ -2178,6 +2264,13 @@ impl Drop for StoreOpaque {
             ManuallyDrop::drop(&mut self.store_data);
             ManuallyDrop::drop(&mut self.rooted_host_funcs);
         }
+    }
+}
+
+impl<T> StoreContextMut<'_, T> {
+    #[cfg(not(feature = "async"))]
+    pub(crate) fn async_guard_range(&self) -> core::ops::Range<*mut u8> {
+        core::ptr::null_mut()..core::ptr::null_mut()
     }
 }
 

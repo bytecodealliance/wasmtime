@@ -12,6 +12,7 @@ use crate::runtime::vm::{
     VMOpaqueContext, VMStore, VMStoreRawPtr, VMWasmCallFunction, ValRaw, VmPtr, VmSafe,
 };
 use alloc::alloc::Layout;
+use alloc::collections::BTreeMap;
 use alloc::sync::Arc;
 use core::any::Any;
 use core::marker;
@@ -27,10 +28,17 @@ use wasmtime_environ::{HostPtr, PrimaryMap, VMSharedTypeIndex};
                                            // 32-bit platforms
 const INVALID_PTR: usize = 0xdead_dead_beef_beef_u64 as usize;
 
+mod error_contexts;
 mod libcalls;
 mod resources;
+mod states;
 
+pub use self::error_contexts::{GlobalErrorContextRefCount, LocalErrorContextRefCount};
 pub use self::resources::{CallContexts, ResourceTable, ResourceTables};
+pub use self::states::StateTable;
+
+#[cfg(feature = "component-model-async")]
+pub use self::resources::CallContext;
 
 /// Runtime representation of a component instance and all state necessary for
 /// the instance itself.
@@ -57,6 +65,35 @@ pub struct ComponentInstance {
     /// This is paired with other information to create a `ResourceTables` which
     /// is how this field is manipulated.
     component_resource_tables: PrimaryMap<TypeResourceTableIndex, ResourceTable>,
+
+    component_waitable_tables: PrimaryMap<RuntimeComponentInstanceIndex, StateTable<WaitableState>>,
+
+    /// (Sub)Component specific error context tracking
+    ///
+    /// At the component level, only the number of references (`usize`) to a given error context is tracked,
+    /// with state related to the error context being held at the component model level, in concurrent
+    /// state.
+    ///
+    /// The state tables in the (sub)component local tracking must contain a pointer into the global
+    /// error context lookups in order to ensure that in contexts where only the local reference is present
+    /// the global state can still be maintained/updated.
+    component_error_context_tables:
+        PrimaryMap<TypeComponentLocalErrorContextTableIndex, StateTable<LocalErrorContextRefCount>>,
+
+    /// Reference counts for all component error contexts
+    ///
+    /// NOTE: it is possible the global ref count to be *greater* than the sum of
+    /// (sub)component ref counts as tracked by `component_error_context_tables`, for
+    /// example when the host holds one or more references to error contexts.
+    ///
+    /// The key of this primary map is often referred to as the "rep" (i.e. host-side
+    /// component-wide representation) of the index into concurrent state for a given
+    /// stored `ErrorContext`.
+    ///
+    /// Stated another way, `TypeComponentGlobalErrorContextTableIndex` is essentially the same
+    /// as a `TableId<ErrorContextState>`.
+    component_global_error_context_ref_counts:
+        BTreeMap<TypeComponentGlobalErrorContextTableIndex, GlobalErrorContextRefCount>,
 
     /// Storage for the type information about resources within this component
     /// instance.
@@ -86,6 +123,7 @@ pub struct ComponentInstance {
 ///   which this function pointer was registered.
 /// * `ty` - the type index, relative to the tables in `vmctx`, that is the
 ///   type of the function being called.
+/// * `caller_instance` - The (sub)component instance of the caller.
 /// * `flags` - the component flags for may_enter/leave corresponding to the
 ///   component instance that the lowering happened within.
 /// * `opt_memory` - this nullable pointer represents the memory configuration
@@ -106,7 +144,7 @@ pub struct ComponentInstance {
 /// or not. On failure this function records trap information in TLS which
 /// should be suitable for reading later.
 //
-// FIXME: 9 arguments is probably too many. The `data` through `string-encoding`
+// FIXME: 11 arguments is probably too many. The `data` through `string-encoding`
 // parameters should probably get packaged up into the `VMComponentContext`.
 // Needs benchmarking one way or another though to figure out what the best
 // balance is here.
@@ -114,6 +152,7 @@ pub type VMLoweringCallee = extern "C" fn(
     vmctx: NonNull<VMOpaqueContext>,
     data: NonNull<u8>,
     ty: u32,
+    caller_instance: u32,
     flags: NonNull<VMGlobalDefinition>,
     opt_memory: *mut VMMemoryDefinition,
     opt_realloc: *mut VMFuncRef,
@@ -154,6 +193,37 @@ unsafe impl VmSafe for VMLowering {}
 pub struct VMComponentContext {
     /// For more information about this see the equivalent field in `VMContext`
     _marker: marker::PhantomPinned,
+}
+
+/// Represents the state of a stream or future handle.
+#[derive(Debug, Eq, PartialEq)]
+pub enum StreamFutureState {
+    /// Both the read and write ends are owned by the same component instance.
+    Local,
+    /// Only the write end is owned by this component instance.
+    Write,
+    /// Only the read end is owned by this component instance.
+    Read,
+    /// A read or write is in progress.
+    Busy,
+}
+
+/// Represents the state of a waitable handle.
+#[derive(Debug)]
+pub enum WaitableState {
+    /// Represents a task handle.
+    Task,
+    /// Represents a stream handle.
+    Stream(TypeStreamTableIndex, StreamFutureState),
+    /// Represents a future handle.
+    Future(TypeFutureTableIndex, StreamFutureState),
+}
+
+/// Represents the state associated with an error context
+#[derive(Debug, PartialEq, Eq, PartialOrd)]
+pub struct ErrorContextState {
+    /// Debug message associated with the error context
+    pub(crate) debug_msg: String,
 }
 
 impl ComponentInstance {
@@ -205,11 +275,29 @@ impl ComponentInstance {
     ) {
         assert!(alloc_size >= Self::alloc_layout(&offsets).size());
 
-        let num_tables = runtime_info.component().num_resource_tables;
-        let mut component_resource_tables = PrimaryMap::with_capacity(num_tables);
-        for _ in 0..num_tables {
+        let num_resource_tables = runtime_info.component().num_resource_tables;
+        let mut component_resource_tables = PrimaryMap::with_capacity(num_resource_tables);
+        for _ in 0..num_resource_tables {
             component_resource_tables.push(ResourceTable::default());
         }
+
+        let num_waitable_tables = runtime_info.component().num_runtime_component_instances;
+        let mut component_waitable_tables =
+            PrimaryMap::with_capacity(usize::try_from(num_waitable_tables).unwrap());
+        for _ in 0..num_waitable_tables {
+            component_waitable_tables.push(StateTable::default());
+        }
+
+        let num_error_context_tables = runtime_info.component().num_error_context_tables;
+        let mut component_error_context_tables = PrimaryMap::<
+            TypeComponentLocalErrorContextTableIndex,
+            StateTable<LocalErrorContextRefCount>,
+        >::with_capacity(num_error_context_tables);
+        for _ in 0..num_error_context_tables {
+            component_error_context_tables.push(StateTable::default());
+        }
+
+        let component_global_error_context_ref_counts = BTreeMap::new();
 
         ptr::write(
             ptr.as_ptr(),
@@ -224,6 +312,9 @@ impl ComponentInstance {
                     .unwrap(),
                 ),
                 component_resource_tables,
+                component_waitable_tables,
+                component_error_context_tables,
+                component_global_error_context_ref_counts,
                 runtime_info,
                 resource_types,
                 store: VMStoreRawPtr(store),
@@ -293,6 +384,18 @@ impl ComponentInstance {
     pub fn runtime_realloc(&self, idx: RuntimeReallocIndex) -> NonNull<VMFuncRef> {
         unsafe {
             let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.runtime_realloc(idx));
+            debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
+            ret.as_non_null()
+        }
+    }
+
+    /// Returns the async callback pointer corresponding to the index provided.
+    ///
+    /// This can only be called after `idx` has been initialized at runtime
+    /// during the instantiation process of a component.
+    pub fn runtime_callback(&self, idx: RuntimeCallbackIndex) -> NonNull<VMFuncRef> {
+        unsafe {
+            let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.runtime_callback(idx));
             debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
             ret.as_non_null()
         }
@@ -479,7 +582,7 @@ impl ComponentInstance {
         }
 
         // In debug mode set non-null bad values to all "pointer looking" bits
-        // and pices related to lowering and such. This'll help detect any
+        // and pieces related to lowering and such. This'll help detect any
         // erroneous usage and enable debug assertions above as well to prevent
         // loading these before they're configured or setting them twice.
         if cfg!(debug_assertions) {
@@ -604,6 +707,33 @@ impl ComponentInstance {
         &mut self.component_resource_tables
     }
 
+    /// Retrieves the tables for tracking waitable handles and their states with respect
+    /// to the components which own them.
+    pub fn component_waitable_tables(
+        &mut self,
+    ) -> &mut PrimaryMap<RuntimeComponentInstanceIndex, StateTable<WaitableState>> {
+        &mut self.component_waitable_tables
+    }
+
+    /// Retrieves the tables for tracking error-context handles and their reference
+    /// counts with respect to the components which own them.
+    pub fn component_error_context_tables(
+        &mut self,
+    ) -> &mut PrimaryMap<
+        TypeComponentLocalErrorContextTableIndex,
+        StateTable<LocalErrorContextRefCount>,
+    > {
+        &mut self.component_error_context_tables
+    }
+
+    /// Retrieves the tables for tracking component-global error-context handles
+    /// and their reference counts with respect to the components which own them.
+    pub fn component_global_error_context_ref_counts(
+        &mut self,
+    ) -> &mut BTreeMap<TypeComponentGlobalErrorContextTableIndex, GlobalErrorContextRefCount> {
+        &mut self.component_global_error_context_ref_counts
+    }
+
     /// Returns the destructor and instance flags for the specified resource
     /// table type.
     ///
@@ -664,6 +794,139 @@ impl ComponentInstance {
     pub(crate) fn resource_exit_call(&mut self) -> Result<()> {
         self.resource_tables().exit_call()
     }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn future_transfer(
+        &mut self,
+        src_idx: u32,
+        src: TypeFutureTableIndex,
+        dst: TypeFutureTableIndex,
+    ) -> Result<u32> {
+        let src_instance = self.component_types()[src].instance;
+        let dst_instance = self.component_types()[dst].instance;
+        let [src_table, dst_table] = self
+            .component_waitable_tables
+            .get_many_mut([src_instance, dst_instance])
+            .unwrap();
+        let (rep, WaitableState::Future(src_ty, src_state)) =
+            src_table.get_mut_by_index(src_idx)?
+        else {
+            bail!("invalid future handle");
+        };
+        if *src_ty != src {
+            bail!("invalid future handle");
+        }
+        match src_state {
+            StreamFutureState::Local => {
+                *src_state = StreamFutureState::Write;
+                assert!(dst_table.get_mut_by_rep(rep).is_none());
+                dst_table.insert(rep, WaitableState::Future(dst, StreamFutureState::Read))
+            }
+            StreamFutureState::Read => {
+                src_table.remove_by_index(src_idx)?;
+                if let Some((dst_idx, dst_state)) = dst_table.get_mut_by_rep(rep) {
+                    let WaitableState::Future(dst_ty, dst_state) = dst_state else {
+                        unreachable!();
+                    };
+                    assert_eq!(*dst_ty, dst);
+                    assert_eq!(*dst_state, StreamFutureState::Write);
+                    *dst_state = StreamFutureState::Local;
+                    Ok(dst_idx)
+                } else {
+                    dst_table.insert(rep, WaitableState::Future(dst, StreamFutureState::Read))
+                }
+            }
+            StreamFutureState::Write => bail!("cannot transfer write end of future"),
+            StreamFutureState::Busy => bail!("cannot transfer busy future"),
+        }
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn stream_transfer(
+        &mut self,
+        src_idx: u32,
+        src: TypeStreamTableIndex,
+        dst: TypeStreamTableIndex,
+    ) -> Result<u32> {
+        let src_instance = self.component_types()[src].instance;
+        let dst_instance = self.component_types()[dst].instance;
+        let [src_table, dst_table] = self
+            .component_waitable_tables
+            .get_many_mut([src_instance, dst_instance])
+            .unwrap();
+        let (rep, WaitableState::Stream(src_ty, src_state)) =
+            src_table.get_mut_by_index(src_idx)?
+        else {
+            bail!("invalid stream handle");
+        };
+        if *src_ty != src {
+            bail!("invalid stream handle");
+        }
+        match src_state {
+            StreamFutureState::Local => {
+                *src_state = StreamFutureState::Write;
+                assert!(dst_table.get_mut_by_rep(rep).is_none());
+                dst_table.insert(rep, WaitableState::Stream(dst, StreamFutureState::Read))
+            }
+            StreamFutureState::Read => {
+                src_table.remove_by_index(src_idx)?;
+                if let Some((dst_idx, dst_state)) = dst_table.get_mut_by_rep(rep) {
+                    let WaitableState::Stream(dst_ty, dst_state) = dst_state else {
+                        unreachable!();
+                    };
+                    assert_eq!(*dst_ty, dst);
+                    assert_eq!(*dst_state, StreamFutureState::Write);
+                    *dst_state = StreamFutureState::Local;
+                    Ok(dst_idx)
+                } else {
+                    dst_table.insert(rep, WaitableState::Stream(dst, StreamFutureState::Read))
+                }
+            }
+            StreamFutureState::Write => bail!("cannot transfer write end of stream"),
+            StreamFutureState::Busy => bail!("cannot transfer busy stream"),
+        }
+    }
+
+    /// Transfer the state of a given error context from one component to another
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn error_context_transfer(
+        &mut self,
+        src_idx: u32,
+        src: TypeComponentLocalErrorContextTableIndex,
+        dst: TypeComponentLocalErrorContextTableIndex,
+    ) -> Result<u32> {
+        let (rep, _) = {
+            let rep = self
+                .component_error_context_tables
+                .get_mut(src)
+                .context("error context table index present in (sub)component lookup")?
+                .get_mut_by_index(src_idx)?;
+            rep
+        };
+        let dst = self
+            .component_error_context_tables
+            .get_mut(dst)
+            .context("error context table index present in (sub)component lookup")?;
+
+        // Update the component local for the destination
+        let updated_count = if let Some((dst_idx, count)) = dst.get_mut_by_rep(rep) {
+            (*count).0 += 1;
+            dst_idx
+        } else {
+            dst.insert(rep, LocalErrorContextRefCount(1))?
+        };
+
+        // Update the global (cross-subcomponent) count for error contexts
+        // as the new component has essentially created a new reference that will
+        // be dropped/handled independently
+        let global_ref_count = self
+            .component_global_error_context_ref_counts
+            .get_mut(&TypeComponentGlobalErrorContextTableIndex::from_u32(rep))
+            .context("global ref count present for existing (sub)component error context")?;
+        global_ref_count.0 += 1;
+
+        Ok(updated_count)
+    }
 }
 
 impl VMComponentContext {
@@ -684,7 +947,7 @@ impl VMComponentContext {
 /// This type can be dereferenced to `ComponentInstance` to access the
 /// underlying methods.
 pub struct OwnedComponentInstance {
-    ptr: SendSyncPtr<ComponentInstance>,
+    pub(crate) ptr: SendSyncPtr<ComponentInstance>,
 }
 
 impl OwnedComponentInstance {

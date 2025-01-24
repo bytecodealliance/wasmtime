@@ -17,9 +17,10 @@
 
 use crate::component::{
     CanonicalAbiInfo, ComponentTypesBuilder, FixedEncoding as FE, FlatType, InterfaceType,
-    StringEncoding, Transcode, TypeEnumIndex, TypeFlagsIndex, TypeListIndex, TypeOptionIndex,
-    TypeRecordIndex, TypeResourceTableIndex, TypeResultIndex, TypeTupleIndex, TypeVariantIndex,
-    VariantInfo, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
+    StringEncoding, Transcode, TypeComponentLocalErrorContextTableIndex, TypeEnumIndex,
+    TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
+    TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex,
+    TypeVariantIndex, VariantInfo, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, MAX_FLAT_PARAMS,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::Transcoder;
@@ -38,6 +39,8 @@ use wasmtime_component_util::{DiscriminantSize, FlagsSize};
 
 const MAX_STRING_BYTE_LENGTH: u32 = 1 << 31;
 const UTF16_TAG: u32 = 1 << 31;
+
+const EXIT_FLAG_ASYNC_CALLEE: i32 = 1 << 0;
 
 /// This value is arbitrarily chosen and should be fine to change at any time,
 /// it just seemed like a halfway reasonable starting point.
@@ -80,50 +83,163 @@ struct Compiler<'a, 'b> {
 }
 
 pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
+    fn compiler<'a, 'b>(
+        module: &'b mut Module<'a>,
+        adapter: &AdapterData,
+    ) -> (Compiler<'a, 'b>, Signature, Signature) {
+        let lower_sig = module.types.signature(&adapter.lower, Context::Lower);
+        let lift_sig = module.types.signature(&adapter.lift, Context::Lift);
+        let ty = module
+            .core_types
+            .function(&lower_sig.params, &lower_sig.results);
+        let result = module
+            .funcs
+            .push(Function::new(Some(adapter.name.clone()), ty));
+
+        // If this type signature contains any borrowed resources then invocations
+        // of enter/exit call for resource-related metadata tracking must be used.
+        // It shouldn't matter whether the lower/lift signature is used here as both
+        // should return the same answer.
+        let emit_resource_call = module.types.contains_borrow_resource(&adapter.lower);
+        assert_eq!(
+            emit_resource_call,
+            module.types.contains_borrow_resource(&adapter.lift)
+        );
+
+        (
+            Compiler::new(
+                module,
+                result,
+                lower_sig.params.len() as u32,
+                emit_resource_call,
+            ),
+            lower_sig,
+            lift_sig,
+        )
+    }
+
+    let async_start_adapter = |module: &mut Module| {
+        let sig = module
+            .types
+            .async_start_signature(&adapter.lower, &adapter.lift);
+        let ty = module.core_types.function(&sig.params, &sig.results);
+        let result = module.funcs.push(Function::new(
+            Some(format!("[async-start]{}", adapter.name)),
+            ty,
+        ));
+
+        Compiler::new(module, result, sig.params.len() as u32, false)
+            .compile_async_start_adapter(adapter, &sig);
+
+        result
+    };
+
+    let async_return_adapter = |module: &mut Module| {
+        let sig = module
+            .types
+            .async_return_signature(&adapter.lower, &adapter.lift);
+        let ty = module.core_types.function(&sig.params, &sig.results);
+        let result = module.funcs.push(Function::new(
+            Some(format!("[async-return]{}", adapter.name)),
+            ty,
+        ));
+
+        Compiler::new(module, result, sig.params.len() as u32, false)
+            .compile_async_return_adapter(adapter, &sig);
+
+        result
+    };
+
     match (adapter.lower.options.async_, adapter.lift.options.async_) {
-        (false, false) => {}
+        (false, false) => {
+            // We can adapt sync->sync case with only minimal use of intrinsics,
+            // e.g. resource enter and exit calls as needed.
+            let (compiler, lower_sig, lift_sig) = compiler(module, adapter);
+            compiler.compile_sync_to_sync_adapter(adapter, &lower_sig, &lift_sig)
+        }
         (true, true) => {
-            todo!()
+            // In the async->async case, we must compile a couple of helper functions:
+            //
+            // - `async-start`: copies the parameters from the caller to the callee
+            // - `async-return`: copies the result from the callee to the caller
+            //
+            // Unlike synchronous calls, the above operations are asynchronous
+            // and subject to backpressure.  If the callee is not yet ready to
+            // handle a new call, the `async-start` function will not be called
+            // immediately.  Instead, control will return to the caller,
+            // allowing it to do other work while waiting for this call to make
+            // progress.  Once the callee indicates it is ready, `async-start`
+            // will be called, and sometime later (possibly after various task
+            // switch events), when the callee has produced a result, it will
+            // call `async-return` via the `task.return` intrinsic, at which
+            // point a `STATUS_RETURNED` event will be delivered to the caller.
+            let start = async_start_adapter(module);
+            let return_ = async_return_adapter(module);
+            let (compiler, _, lift_sig) = compiler(module, adapter);
+            compiler.compile_async_to_async_adapter(
+                adapter,
+                start,
+                return_,
+                i32::try_from(lift_sig.params.len()).unwrap(),
+            );
         }
         (false, true) => {
-            todo!()
+            // Like the async->async case above, for the sync->async case we
+            // also need `async-start` and `async-return` helper functions to
+            // allow the callee to asynchronously "pull" the parameters and
+            // "push" the results when it is ready.
+            //
+            // However, since the caller is using the synchronous ABI, the
+            // parameters may have been passed via the stack rather than linear
+            // memory.  In that case, we pass them to the host to store in a
+            // task-local location temporarily in the case of backpressure.
+            // Similarly, the host will also temporarily store the results that
+            // the callee provides to `async-return` until it is ready to resume
+            // the caller.
+            let start = async_start_adapter(module);
+            let return_ = async_return_adapter(module);
+            let (compiler, lower_sig, lift_sig) = compiler(module, adapter);
+            compiler.compile_sync_to_async_adapter(
+                adapter,
+                start,
+                return_,
+                i32::try_from(lift_sig.params.len()).unwrap(),
+                &lower_sig,
+            );
         }
         (true, false) => {
-            todo!()
+            // As with the async->async and sync->async cases above, for the
+            // async->sync case we use `async-start` and `async-return` helper
+            // functions.  Here, those functions allow the host to enforce
+            // backpressure in the case where the callee instance already has
+            // another synchronous call in progress, in which case we can't
+            // start a new one until the current one (and any others already
+            // waiting in line behind it) has completed.
+            //
+            // In the case of backpressure, we'll return control to the caller
+            // immediately so it can do other work.  Later, once the callee is
+            // ready, the host will call the `async-start` function to retrieve
+            // the parameters and pass them to the callee.  At that point, the
+            // callee may block on a host call, at which point the host will
+            // suspend the fiber it is running on and allow the caller (or any
+            // other ready instance) to run concurrently with the blocked
+            // callee.  Once the callee finally returns, the host will call the
+            // `async-return` function to write the result to the caller's
+            // linear memory and deliver a `STATUS_RETURNED` event to the
+            // caller.
+            let lift_sig = module.types.signature(&adapter.lift, Context::Lift);
+            let start = async_start_adapter(module);
+            let return_ = async_return_adapter(module);
+            let (compiler, ..) = compiler(module, adapter);
+            compiler.compile_async_to_sync_adapter(
+                adapter,
+                start,
+                return_,
+                i32::try_from(lift_sig.params.len()).unwrap(),
+                i32::try_from(lift_sig.results.len()).unwrap(),
+            );
         }
     }
-
-    let lower_sig = module.types.signature(&adapter.lower, Context::Lower);
-    let lift_sig = module.types.signature(&adapter.lift, Context::Lift);
-    let ty = module
-        .core_types
-        .function(&lower_sig.params, &lower_sig.results);
-    let result = module
-        .funcs
-        .push(Function::new(Some(adapter.name.clone()), ty));
-
-    // If this type signature contains any borrowed resources then invocations
-    // of enter/exit call for resource-related metadata tracking must be used.
-    // It shouldn't matter whether the lower/lift signature is used here as both
-    // should return the same answer.
-    let emit_resource_call = module.types.contains_borrow_resource(&adapter.lower);
-    assert_eq!(
-        emit_resource_call,
-        module.types.contains_borrow_resource(&adapter.lift)
-    );
-
-    Compiler {
-        types: module.types,
-        module,
-        code: Vec::new(),
-        nlocals: lower_sig.params.len() as u32,
-        free_locals: HashMap::new(),
-        traps: Vec::new(),
-        result,
-        fuel: INITIAL_FUEL,
-        emit_resource_call,
-    }
-    .compile_adapter(adapter, &lower_sig, &lift_sig)
 }
 
 /// Compiles a helper function as specified by the `Helper` configuration.
@@ -256,8 +372,232 @@ struct Memory<'a> {
     offset: u32,
 }
 
-impl Compiler<'_, '_> {
-    fn compile_adapter(
+impl<'a, 'b> Compiler<'a, 'b> {
+    fn new(
+        module: &'b mut Module<'a>,
+        result: FunctionId,
+        nlocals: u32,
+        emit_resource_call: bool,
+    ) -> Self {
+        Self {
+            types: module.types,
+            module,
+            result,
+            code: Vec::new(),
+            nlocals,
+            free_locals: HashMap::new(),
+            traps: Vec::new(),
+            fuel: INITIAL_FUEL,
+            emit_resource_call,
+        }
+    }
+
+    fn compile_async_to_async_adapter(
+        mut self,
+        adapter: &AdapterData,
+        start: FunctionId,
+        return_: FunctionId,
+        param_count: i32,
+    ) {
+        let enter = self.module.import_async_enter_call();
+        let exit = self
+            .module
+            .import_async_exit_call(adapter.lift.options.callback, None);
+
+        self.flush_code();
+        self.module.funcs[self.result]
+            .body
+            .push(Body::RefFunc(start));
+        self.module.funcs[self.result]
+            .body
+            .push(Body::RefFunc(return_));
+        self.instruction(I32Const(
+            i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
+        ));
+        self.instruction(I32Const(
+            i32::try_from(self.types[adapter.lift.ty].results.as_u32()).unwrap(),
+        ));
+        self.instruction(LocalGet(0));
+        self.instruction(LocalGet(1));
+        self.instruction(Call(enter.as_u32()));
+
+        // TODO: As an optimization, consider checking the backpressure flag on the callee instance and, if it's
+        // unset _and_ the callee uses a callback, translate the params and call the callee function directly here
+        // (and make sure `exit` knows _not_ to call it in that case).
+
+        self.module.exports.push((
+            adapter.callee.as_u32(),
+            format!("[adapter-callee]{}", adapter.name),
+        ));
+
+        self.instruction(I32Const(
+            i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
+        ));
+        self.instruction(RefFunc(adapter.callee.as_u32()));
+        self.instruction(I32Const(
+            i32::try_from(adapter.lift.instance.as_u32()).unwrap(),
+        ));
+        self.instruction(I32Const(param_count));
+        self.instruction(I32Const(1)); // leave room for the guest context result
+        self.instruction(I32Const(EXIT_FLAG_ASYNC_CALLEE));
+        self.instruction(Call(exit.as_u32()));
+
+        self.finish()
+    }
+
+    fn compile_sync_to_async_adapter(
+        mut self,
+        adapter: &AdapterData,
+        start: FunctionId,
+        return_: FunctionId,
+        lift_param_count: i32,
+        lower_sig: &Signature,
+    ) {
+        let enter = self
+            .module
+            .import_sync_enter_call(&adapter.name, &lower_sig.params);
+        let exit = self.module.import_sync_exit_call(
+            &adapter.name,
+            adapter.lift.options.callback,
+            &lower_sig.results,
+        );
+
+        self.flush_code();
+        self.module.funcs[self.result]
+            .body
+            .push(Body::RefFunc(start));
+        self.module.funcs[self.result]
+            .body
+            .push(Body::RefFunc(return_));
+        self.instruction(I32Const(
+            i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
+        ));
+        self.instruction(I32Const(
+            i32::try_from(self.types[adapter.lift.ty].results.as_u32()).unwrap(),
+        ));
+        self.instruction(I32Const(
+            i32::try_from(
+                self.types
+                    .flatten_types(
+                        &adapter.lower.options,
+                        usize::MAX,
+                        self.types[self.types[adapter.lower.ty].results]
+                            .types
+                            .iter()
+                            .copied(),
+                    )
+                    .map(|v| v.len())
+                    .unwrap_or(usize::try_from(i32::MAX).unwrap()),
+            )
+            .unwrap(),
+        ));
+
+        for index in 0..lower_sig.params.len() {
+            self.instruction(LocalGet(u32::try_from(index).unwrap()));
+        }
+
+        self.instruction(Call(enter.as_u32()));
+
+        // TODO: As an optimization, consider checking the backpressure flag on the callee instance and, if it's
+        // unset _and_ the callee uses a callback, translate the params and call the callee function directly here
+        // (and make sure `exit` knows _not_ to call it in that case).
+
+        self.module.exports.push((
+            adapter.callee.as_u32(),
+            format!("[adapter-callee]{}", adapter.name),
+        ));
+        self.instruction(I32Const(
+            i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
+        ));
+        self.instruction(RefFunc(adapter.callee.as_u32()));
+        self.instruction(I32Const(
+            i32::try_from(adapter.lift.instance.as_u32()).unwrap(),
+        ));
+        self.instruction(I32Const(lift_param_count));
+        self.instruction(Call(exit.as_u32()));
+
+        self.finish()
+    }
+
+    fn compile_async_to_sync_adapter(
+        mut self,
+        adapter: &AdapterData,
+        start: FunctionId,
+        return_: FunctionId,
+        param_count: i32,
+        result_count: i32,
+    ) {
+        let enter = self.module.import_async_enter_call();
+        let exit = self
+            .module
+            .import_async_exit_call(None, adapter.lift.post_return);
+
+        self.flush_code();
+        self.module.funcs[self.result]
+            .body
+            .push(Body::RefFunc(start));
+        self.module.funcs[self.result]
+            .body
+            .push(Body::RefFunc(return_));
+        self.instruction(I32Const(
+            i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
+        ));
+        self.instruction(I32Const(
+            i32::try_from(self.types[adapter.lift.ty].results.as_u32()).unwrap(),
+        ));
+        self.instruction(LocalGet(0));
+        self.instruction(LocalGet(1));
+        self.instruction(Call(enter.as_u32()));
+        self.module.exports.push((
+            adapter.callee.as_u32(),
+            format!("[adapter-callee]{}", adapter.name),
+        ));
+        self.instruction(I32Const(
+            i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
+        ));
+        self.instruction(RefFunc(adapter.callee.as_u32()));
+        self.instruction(I32Const(
+            i32::try_from(adapter.lift.instance.as_u32()).unwrap(),
+        ));
+        self.instruction(I32Const(param_count));
+        self.instruction(I32Const(result_count));
+        self.instruction(I32Const(0));
+        self.instruction(Call(exit.as_u32()));
+
+        self.finish()
+    }
+
+    fn compile_async_start_adapter(mut self, adapter: &AdapterData, sig: &Signature) {
+        let param_locals = sig
+            .params
+            .iter()
+            .enumerate()
+            .map(|(i, ty)| (i as u32, *ty))
+            .collect::<Vec<_>>();
+
+        self.set_flag(adapter.lift.flags, FLAG_MAY_LEAVE, false);
+        self.translate_params(adapter, &param_locals);
+        self.set_flag(adapter.lift.flags, FLAG_MAY_LEAVE, true);
+
+        self.finish();
+    }
+
+    fn compile_async_return_adapter(mut self, adapter: &AdapterData, sig: &Signature) {
+        let param_locals = sig
+            .params
+            .iter()
+            .enumerate()
+            .map(|(i, ty)| (i as u32, *ty))
+            .collect::<Vec<_>>();
+
+        self.set_flag(adapter.lower.flags, FLAG_MAY_LEAVE, false);
+        self.translate_results(adapter, &param_locals, &param_locals);
+        self.set_flag(adapter.lower.flags, FLAG_MAY_LEAVE, true);
+
+        self.finish()
+    }
+
+    fn compile_sync_to_sync_adapter(
         mut self,
         adapter: &AdapterData,
         lower_sig: &Signature,
@@ -375,9 +715,12 @@ impl Compiler<'_, '_> {
         // TODO: handle subtyping
         assert_eq!(src_tys.len(), dst_tys.len());
 
-        let src_flat =
+        let src_flat = if adapter.lower.options.async_ {
+            None
+        } else {
             self.types
-                .flatten_types(lower_opts, MAX_FLAT_PARAMS, src_tys.iter().copied());
+                .flatten_types(lower_opts, MAX_FLAT_PARAMS, src_tys.iter().copied())
+        };
         let dst_flat =
             self.types
                 .flatten_types(lift_opts, MAX_FLAT_PARAMS, dst_tys.iter().copied());
@@ -404,14 +747,15 @@ impl Compiler<'_, '_> {
         let dst = if let Some(flat) = &dst_flat {
             Destination::Stack(flat, lift_opts)
         } else {
-            // If there are too many parameters then space is allocated in the
-            // destination module for the parameters via its `realloc` function.
             let abi = CanonicalAbiInfo::record(dst_tys.iter().map(|t| self.types.canonical_abi(t)));
             let (size, align) = if lift_opts.memory64 {
                 (abi.size64, abi.align64)
             } else {
                 (abi.size32, abi.align32)
             };
+
+            // If there are too many parameters then space is allocated in the
+            // destination module for the parameters via its `realloc` function.
             let size = MallocSize::Const(size);
             Destination::Memory(self.malloc(lift_opts, size, align))
         };
@@ -456,12 +800,12 @@ impl Compiler<'_, '_> {
         let lift_opts = &adapter.lift.options;
         let lower_opts = &adapter.lower.options;
 
-        let src_flat =
-            self.types
-                .flatten_types(lift_opts, MAX_FLAT_RESULTS, src_tys.iter().copied());
-        let dst_flat =
-            self.types
-                .flatten_types(lower_opts, MAX_FLAT_RESULTS, dst_tys.iter().copied());
+        let src_flat = self
+            .types
+            .flatten_lifting_types(lift_opts, src_tys.iter().copied());
+        let dst_flat = self
+            .types
+            .flatten_lowering_types(lower_opts, dst_tys.iter().copied());
 
         let src = if src_flat.is_some() {
             Source::Stack(Stack {
@@ -478,7 +822,14 @@ impl Compiler<'_, '_> {
                 .map(|t| self.types.align(lift_opts, t))
                 .max()
                 .unwrap_or(1);
-            assert_eq!(result_locals.len(), 1);
+            assert_eq!(
+                result_locals.len(),
+                if lower_opts.async_ || lift_opts.async_ {
+                    2
+                } else {
+                    1
+                }
+            );
             let (addr, ty) = result_locals[0];
             assert_eq!(ty, lift_opts.ptr());
             Source::Memory(self.memory_operand(lift_opts, TempLocal::new(addr, ty), align))
@@ -600,13 +951,11 @@ impl Compiler<'_, '_> {
             InterfaceType::Option(_) | InterfaceType::Result(_) => 2,
 
             // TODO(#6696) - something nonzero, is 1 right?
-            InterfaceType::Own(_) | InterfaceType::Borrow(_) => 1,
-
-            InterfaceType::Future(_)
+            InterfaceType::Own(_)
+            | InterfaceType::Borrow(_)
+            | InterfaceType::Future(_)
             | InterfaceType::Stream(_)
-            | InterfaceType::ErrorContext(_) => {
-                todo!()
-            }
+            | InterfaceType::ErrorContext(_) => 1,
         };
 
         match self.fuel.checked_sub(cost) {
@@ -641,10 +990,10 @@ impl Compiler<'_, '_> {
                     InterfaceType::Result(t) => self.translate_result(*t, src, dst_ty, dst),
                     InterfaceType::Own(t) => self.translate_own(*t, src, dst_ty, dst),
                     InterfaceType::Borrow(t) => self.translate_borrow(*t, src, dst_ty, dst),
-                    InterfaceType::Future(_)
-                    | InterfaceType::Stream(_)
-                    | InterfaceType::ErrorContext(_) => {
-                        todo!()
+                    InterfaceType::Future(t) => self.translate_future(*t, src, dst_ty, dst),
+                    InterfaceType::Stream(t) => self.translate_stream(*t, src, dst_ty, dst),
+                    InterfaceType::ErrorContext(t) => {
+                        self.translate_error_context(*t, src, dst_ty, dst)
                     }
                 }
             }
@@ -1149,13 +1498,13 @@ impl Compiler<'_, '_> {
     // the number of code units in the destination). There is no return
     // value from the transcode function since the encoding should always
     // work on the first pass.
-    fn string_copy<'a>(
+    fn string_copy<'c>(
         &mut self,
         src: &WasmString<'_>,
         src_enc: FE,
-        dst_opts: &'a Options,
+        dst_opts: &'c Options,
         dst_enc: FE,
-    ) -> WasmString<'a> {
+    ) -> WasmString<'c> {
         assert!(dst_enc.width() >= src_enc.width());
         self.validate_string_length(src, dst_enc);
 
@@ -1244,12 +1593,12 @@ impl Compiler<'_, '_> {
     // and dst ptr/len and return how many code units were consumed on both
     // sides. The amount of code units consumed in the source dictates which
     // branches are taken in this conversion.
-    fn string_deflate_to_utf8<'a>(
+    fn string_deflate_to_utf8<'c>(
         &mut self,
         src: &WasmString<'_>,
         src_enc: FE,
-        dst_opts: &'a Options,
-    ) -> WasmString<'a> {
+        dst_opts: &'c Options,
+    ) -> WasmString<'c> {
         self.validate_string_length(src, src_enc);
 
         // Optimistically assume that the code unit length of the source is
@@ -1425,11 +1774,11 @@ impl Compiler<'_, '_> {
     // destination should always be big enough to hold the result of the
     // transcode and so the result of the host function is how many code
     // units were written to the destination.
-    fn string_utf8_to_utf16<'a>(
+    fn string_utf8_to_utf16<'c>(
         &mut self,
         src: &WasmString<'_>,
-        dst_opts: &'a Options,
-    ) -> WasmString<'a> {
+        dst_opts: &'c Options,
+    ) -> WasmString<'c> {
         self.validate_string_length(src, FE::Utf16);
         self.convert_src_len_to_dst(src.len.idx, src.opts.ptr(), dst_opts.ptr());
         let dst_len = self.local_tee_new_tmp(dst_opts.ptr());
@@ -1494,11 +1843,11 @@ impl Compiler<'_, '_> {
     // string. If the upper bit is set then utf16 was used and the
     // conversion is done. If the upper bit is not set then latin1 was used
     // and a downsizing needs to happen.
-    fn string_compact_utf16_to_compact<'a>(
+    fn string_compact_utf16_to_compact<'c>(
         &mut self,
         src: &WasmString<'_>,
-        dst_opts: &'a Options,
-    ) -> WasmString<'a> {
+        dst_opts: &'c Options,
+    ) -> WasmString<'c> {
         self.validate_string_length(src, FE::Utf16);
         self.convert_src_len_to_dst(src.len.idx, src.opts.ptr(), dst_opts.ptr());
         let dst_len = self.local_tee_new_tmp(dst_opts.ptr());
@@ -1568,12 +1917,12 @@ impl Compiler<'_, '_> {
     // failure a larger buffer is allocated for utf16 and then utf16 is
     // encoded in-place into the buffer. After either latin1 or utf16 the
     // buffer is then resized to fit the final string allocation.
-    fn string_to_compact<'a>(
+    fn string_to_compact<'c>(
         &mut self,
         src: &WasmString<'_>,
         src_enc: FE,
-        dst_opts: &'a Options,
-    ) -> WasmString<'a> {
+        dst_opts: &'c Options,
+    ) -> WasmString<'c> {
         self.validate_string_length(src, src_enc);
         self.convert_src_len_to_dst(src.len.idx, src.opts.ptr(), dst_opts.ptr());
         let dst_len = self.local_tee_new_tmp(dst_opts.ptr());
@@ -2344,13 +2693,13 @@ impl Compiler<'_, '_> {
         );
     }
 
-    fn convert_variant<'a>(
+    fn convert_variant<'c>(
         &mut self,
         src: &Source<'_>,
         src_info: &VariantInfo,
         dst: &Destination,
         dst_info: &VariantInfo,
-        src_cases: impl ExactSizeIterator<Item = VariantCase<'a>>,
+        src_cases: impl ExactSizeIterator<Item = VariantCase<'c>>,
     ) {
         // The outermost block is special since it has the result type of the
         // translation here. That will depend on the `dst`.
@@ -2472,6 +2821,51 @@ impl Compiler<'_, '_> {
         }
     }
 
+    fn translate_future(
+        &mut self,
+        src_ty: TypeFutureTableIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let dst_ty = match dst_ty {
+            InterfaceType::Future(t) => *t,
+            _ => panic!("expected a `Future`"),
+        };
+        let transfer = self.module.import_future_transfer();
+        self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
+    }
+
+    fn translate_stream(
+        &mut self,
+        src_ty: TypeStreamTableIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let dst_ty = match dst_ty {
+            InterfaceType::Stream(t) => *t,
+            _ => panic!("expected a `Stream`"),
+        };
+        let transfer = self.module.import_stream_transfer();
+        self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
+    }
+
+    fn translate_error_context(
+        &mut self,
+        src_ty: TypeComponentLocalErrorContextTableIndex,
+        src: &Source<'_>,
+        dst_ty: &InterfaceType,
+        dst: &Destination,
+    ) {
+        let dst_ty = match dst_ty {
+            InterfaceType::ErrorContext(t) => *t,
+            _ => panic!("expected an `ErrorContext`"),
+        };
+        let transfer = self.module.import_error_context_transfer();
+        self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
+    }
+
     fn translate_own(
         &mut self,
         src_ty: TypeResourceTableIndex,
@@ -2484,7 +2878,7 @@ impl Compiler<'_, '_> {
             _ => panic!("expected an `Own`"),
         };
         let transfer = self.module.import_resource_transfer_own();
-        self.translate_resource(src_ty, src, dst_ty, dst, transfer);
+        self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
     }
 
     fn translate_borrow(
@@ -2500,7 +2894,7 @@ impl Compiler<'_, '_> {
         };
 
         let transfer = self.module.import_resource_transfer_borrow();
-        self.translate_resource(src_ty, src, dst_ty, dst, transfer);
+        self.translate_handle(src_ty.as_u32(), src, dst_ty.as_u32(), dst, transfer);
     }
 
     /// Translates the index `src`, which resides in the table `src_ty`, into
@@ -2510,11 +2904,11 @@ impl Compiler<'_, '_> {
     /// cranelift-generated trampoline to satisfy this import will call. The
     /// `transfer` function is an imported function which takes the src, src_ty,
     /// and dst_ty, and returns the dst index.
-    fn translate_resource(
+    fn translate_handle(
         &mut self,
-        src_ty: TypeResourceTableIndex,
+        src_ty: u32,
         src: &Source<'_>,
-        dst_ty: TypeResourceTableIndex,
+        dst_ty: u32,
         dst: &Destination,
         transfer: FuncIndex,
     ) {
@@ -2523,8 +2917,8 @@ impl Compiler<'_, '_> {
             Source::Memory(mem) => self.i32_load(mem),
             Source::Stack(stack) => self.stack_get(stack, ValType::I32),
         }
-        self.instruction(I32Const(src_ty.as_u32() as i32));
-        self.instruction(I32Const(dst_ty.as_u32() as i32));
+        self.instruction(I32Const(src_ty as i32));
+        self.instruction(I32Const(dst_ty as i32));
         self.instruction(Call(transfer.as_u32()));
         match dst {
             Destination::Memory(mem) => self.i32_store(mem),
@@ -2597,7 +2991,7 @@ impl Compiler<'_, '_> {
         self.instruction(End);
     }
 
-    fn malloc<'a>(&mut self, opts: &'a Options, size: MallocSize, align: u32) -> Memory<'a> {
+    fn malloc<'c>(&mut self, opts: &'c Options, size: MallocSize, align: u32) -> Memory<'c> {
         let realloc = opts.realloc.unwrap();
         self.ptr_uconst(opts, 0);
         self.ptr_uconst(opts, 0);
@@ -2611,7 +3005,7 @@ impl Compiler<'_, '_> {
         self.memory_operand(opts, addr, align)
     }
 
-    fn memory_operand<'a>(&mut self, opts: &'a Options, addr: TempLocal, align: u32) -> Memory<'a> {
+    fn memory_operand<'c>(&mut self, opts: &'c Options, addr: TempLocal, align: u32) -> Memory<'c> {
         let ret = Memory {
             addr,
             offset: 0,

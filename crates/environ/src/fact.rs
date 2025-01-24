@@ -21,7 +21,7 @@
 use crate::component::dfg::CoreDef;
 use crate::component::{
     Adapter, AdapterOptions as AdapterOptionsDfg, ComponentTypesBuilder, FlatType, InterfaceType,
-    StringEncoding, Transcode, TypeFuncIndex,
+    RuntimeComponentInstanceIndex, StringEncoding, Transcode, TypeFuncIndex,
 };
 use crate::fact::transcode::Transcoder;
 use crate::prelude::*;
@@ -64,6 +64,13 @@ pub struct Module<'a> {
     imported_resource_transfer_borrow: Option<FuncIndex>,
     imported_resource_enter_call: Option<FuncIndex>,
     imported_resource_exit_call: Option<FuncIndex>,
+    imported_async_enter_call: Option<FuncIndex>,
+    imported_async_exit_call: Option<FuncIndex>,
+    imported_future_transfer: Option<FuncIndex>,
+    imported_stream_transfer: Option<FuncIndex>,
+    imported_error_context_transfer: Option<FuncIndex>,
+    imported_sync_enter_call: HashMap<String, FuncIndex>,
+    imported_sync_exit_call: HashMap<String, FuncIndex>,
 
     // Current status of index spaces from the imports generated so far.
     imported_funcs: PrimaryMap<FuncIndex, Option<CoreDef>>,
@@ -73,6 +80,10 @@ pub struct Module<'a> {
     funcs: PrimaryMap<FunctionId, Function>,
     helper_funcs: HashMap<Helper, FunctionId>,
     helper_worklist: Vec<(FunctionId, Helper)>,
+
+    globals: Vec<ValType>,
+
+    exports: Vec<(u32, String)>,
 }
 
 struct AdapterData {
@@ -95,6 +106,7 @@ struct AdapterData {
 /// These options are typically unique per-adapter and generally aren't needed
 /// when translating recursive types within an adapter.
 struct AdapterOptions {
+    instance: RuntimeComponentInstanceIndex,
     /// The ascribed type of this adapter.
     ty: TypeFuncIndex,
     /// The global that represents the instance flags for where this adapter
@@ -189,6 +201,15 @@ impl<'a> Module<'a> {
             imported_resource_transfer_borrow: None,
             imported_resource_enter_call: None,
             imported_resource_exit_call: None,
+            imported_async_enter_call: None,
+            imported_async_exit_call: None,
+            imported_future_transfer: None,
+            imported_stream_transfer: None,
+            imported_error_context_transfer: None,
+            imported_sync_enter_call: HashMap::new(),
+            imported_sync_exit_call: HashMap::new(),
+            globals: Default::default(),
+            exports: Vec::new(),
         }
     }
 
@@ -311,6 +332,7 @@ impl<'a> Module<'a> {
         });
 
         AdapterOptions {
+            instance: *instance,
             ty,
             flags,
             post_return: None,
@@ -408,8 +430,29 @@ impl<'a> Module<'a> {
         import: Import,
         get: impl Fn(&mut Self) -> &mut Option<FuncIndex>,
     ) -> FuncIndex {
+        self.import_simple_get_and_set(
+            module,
+            name,
+            params,
+            results,
+            import,
+            |me| *get(me),
+            |me, v| *get(me) = Some(v),
+        )
+    }
+
+    fn import_simple_get_and_set(
+        &mut self,
+        module: &str,
+        name: &str,
+        params: &[ValType],
+        results: &[ValType],
+        import: Import,
+        get: impl Fn(&mut Self) -> Option<FuncIndex>,
+        set: impl Fn(&mut Self, FuncIndex),
+    ) -> FuncIndex {
         if let Some(idx) = get(self) {
-            return *idx;
+            return idx;
         }
         let ty = self.core_types.function(params, results);
         let ty = EntityType::Function(ty);
@@ -417,8 +460,142 @@ impl<'a> Module<'a> {
 
         self.imports.push(import);
         let idx = self.imported_funcs.push(None);
-        *get(self) = Some(idx);
+        set(self, idx);
         idx
+    }
+
+    fn import_sync_enter_call(&mut self, suffix: &str, params: &[ValType]) -> FuncIndex {
+        self.import_simple_get_and_set(
+            "sync",
+            &format!("[enter-call]{suffix}"),
+            &[
+                ValType::FUNCREF,
+                ValType::FUNCREF,
+                ValType::I32,
+                ValType::I32,
+                ValType::I32,
+            ]
+            .into_iter()
+            .chain(params.iter().copied())
+            .collect::<Vec<_>>(),
+            &[],
+            Import::SyncEnterCall,
+            |me| me.imported_sync_enter_call.get(suffix).copied(),
+            |me, v| {
+                assert!(me
+                    .imported_sync_enter_call
+                    .insert(suffix.to_owned(), v)
+                    .is_none())
+            },
+        )
+    }
+
+    fn import_sync_exit_call(
+        &mut self,
+        suffix: &str,
+        callback: Option<FuncIndex>,
+        results: &[ValType],
+    ) -> FuncIndex {
+        self.import_simple_get_and_set(
+            "sync",
+            &format!("[exit-call]{suffix}"),
+            &[ValType::I32, ValType::FUNCREF, ValType::I32, ValType::I32],
+            results,
+            Import::SyncExitCall {
+                callback: callback
+                    .map(|callback| self.imported_funcs.get(callback).unwrap().clone().unwrap()),
+            },
+            |me| me.imported_sync_exit_call.get(suffix).copied(),
+            |me, v| {
+                assert!(me
+                    .imported_sync_exit_call
+                    .insert(suffix.to_owned(), v)
+                    .is_none())
+            },
+        )
+    }
+
+    fn import_async_enter_call(&mut self) -> FuncIndex {
+        self.import_simple(
+            "async",
+            "enter-call",
+            &[
+                ValType::FUNCREF,
+                ValType::FUNCREF,
+                ValType::I32,
+                ValType::I32,
+                ValType::I32,
+                ValType::I32,
+            ],
+            &[],
+            Import::AsyncEnterCall,
+            |me| &mut me.imported_async_enter_call,
+        )
+    }
+
+    fn import_async_exit_call(
+        &mut self,
+        callback: Option<FuncIndex>,
+        post_return: Option<FuncIndex>,
+    ) -> FuncIndex {
+        self.import_simple(
+            "async",
+            "exit-call",
+            &[
+                ValType::I32,
+                ValType::FUNCREF,
+                ValType::I32,
+                ValType::I32,
+                ValType::I32,
+                ValType::I32,
+            ],
+            &[ValType::I32],
+            Import::AsyncExitCall {
+                callback: callback
+                    .map(|callback| self.imported_funcs.get(callback).unwrap().clone().unwrap()),
+                post_return: post_return.map(|post_return| {
+                    self.imported_funcs
+                        .get(post_return)
+                        .unwrap()
+                        .clone()
+                        .unwrap()
+                }),
+            },
+            |me| &mut me.imported_async_exit_call,
+        )
+    }
+
+    fn import_future_transfer(&mut self) -> FuncIndex {
+        self.import_simple(
+            "future",
+            "transfer",
+            &[ValType::I32; 3],
+            &[ValType::I32],
+            Import::FutureTransfer,
+            |me| &mut me.imported_future_transfer,
+        )
+    }
+
+    fn import_stream_transfer(&mut self) -> FuncIndex {
+        self.import_simple(
+            "stream",
+            "transfer",
+            &[ValType::I32; 3],
+            &[ValType::I32],
+            Import::StreamTransfer,
+            |me| &mut me.imported_stream_transfer,
+        )
+    }
+
+    fn import_error_context_transfer(&mut self) -> FuncIndex {
+        self.import_simple(
+            "error-context",
+            "transfer",
+            &[ValType::I32; 3],
+            &[ValType::I32],
+            Import::ErrorContextTransfer,
+            |me| &mut me.imported_error_context_transfer,
+        )
     }
 
     fn import_resource_transfer_own(&mut self) -> FuncIndex {
@@ -496,6 +673,9 @@ impl<'a> Module<'a> {
                 exports.export(name, ExportKind::Func, idx.as_u32());
             }
         }
+        for (idx, name) in &self.exports {
+            exports.export(name, ExportKind::Func, *idx);
+        }
 
         // With all functions numbered the fragments of the body of each
         // function can be assigned into one final adapter function.
@@ -528,6 +708,9 @@ impl<'a> Module<'a> {
                     Body::Call(id) => {
                         Instruction::Call(id_to_index[*id].as_u32()).encode(&mut body);
                     }
+                    Body::RefFunc(id) => {
+                        Instruction::RefFunc(id_to_index[*id].as_u32()).encode(&mut body);
+                    }
                 }
             }
             code.raw(&body);
@@ -536,10 +719,29 @@ impl<'a> Module<'a> {
 
         let traps = traps.finish();
 
+        let mut globals = GlobalSection::new();
+        for ty in &self.globals {
+            globals.global(
+                GlobalType {
+                    val_type: *ty,
+                    mutable: true,
+                    shared: false,
+                },
+                &match ty {
+                    ValType::I32 => ConstExpr::i32_const(0),
+                    ValType::I64 => ConstExpr::i64_const(0),
+                    ValType::F32 => ConstExpr::f32_const(0_f32),
+                    ValType::F64 => ConstExpr::f64_const(0_f64),
+                    _ => unreachable!(),
+                },
+            );
+        }
+
         let mut result = wasm_encoder::Module::new();
         result.section(&self.core_types.section);
         result.section(&self.core_imports);
         result.section(&funcs);
+        result.section(&globals);
         result.section(&exports);
         result.section(&code);
         if self.debug {
@@ -585,11 +787,20 @@ pub enum Import {
     /// Tears down a previous entry and handles checking borrow-related
     /// metadata.
     ResourceExitCall,
-    /// An intrinsic used by FACT-generated modules to begin a call to an
+    /// An intrinsic used by FACT-generated modules to begin a call involving a
+    /// sync-lowered import and async-lifted export.
+    SyncEnterCall,
+    /// An intrinsic used by FACT-generated modules to complete a call involving
+    /// a sync-lowered import and async-lifted export.
+    SyncExitCall {
+        /// The callee's callback function, if any.
+        callback: Option<CoreDef>,
+    },
+    /// An intrinsic used by FACT-generated modules to begin a call involving an
     /// async-lowered import function.
     AsyncEnterCall,
-    /// An intrinsic used by FACT-generated modules to complete a call to an
-    /// async-lowered import function.
+    /// An intrinsic used by FACT-generated modules to complete a call involving
+    /// an async-lowered import function.
     AsyncExitCall {
         /// The callee's callback function, if any.
         callback: Option<CoreDef>,
@@ -704,6 +915,7 @@ struct Function {
 enum Body {
     Raw(Vec<u8>, Vec<(usize, traps::Trap)>),
     Call(FunctionId),
+    RefFunc(FunctionId),
 }
 
 impl Function {

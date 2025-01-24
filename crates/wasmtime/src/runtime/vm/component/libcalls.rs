@@ -69,7 +69,7 @@ mod trampolines {
     macro_rules! shims {
         (
             $(
-                $( #[$attr:meta] )*
+                $( #[cfg($attr:meta)] )?
                 $name:ident( $( $pname:ident: $param:ident ),* ) $( -> $result:ident )?;
             )*
         ) => (
@@ -77,12 +77,19 @@ mod trampolines {
                 pub unsafe extern "C" fn $name(
                     $($pname : signature!(@ty $param),)*
                 ) $( -> signature!(@ty $result))? {
-                    $(shims!(@validate_param $pname $param);)*
+                    $(#[cfg($attr)])?
+                    {
+                        $(shims!(@validate_param $pname $param);)*
 
-                    let ret = crate::runtime::vm::traphandlers::catch_unwind_and_record_trap(|| {
-                        shims!(@invoke $name() $($pname)*)
-                    });
-                    shims!(@convert_ret ret $($pname: $param)*)
+                        let ret = crate::runtime::vm::traphandlers::catch_unwind_and_record_trap(|| {
+                            shims!(@invoke $name() $($pname)*)
+                        });
+                        shims!(@convert_ret ret $($pname: $param)*)
+                    }
+                    $(
+                        #[cfg(not($attr))]
+                        unreachable!();
+                    )?
                 }
             )*
         );
@@ -572,32 +579,630 @@ unsafe fn trap(_vmctx: NonNull<VMComponentContext>, code: u8) -> Result<Infallib
     Err(wasmtime_environ::Trap::from_u8(code).unwrap().into())
 }
 
+#[cfg(feature = "component-model-async")]
+unsafe fn task_backpressure(
+    vmctx: NonNull<VMComponentContext>,
+    caller_instance: u32,
+    enabled: u32,
+) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store())
+            .component_async_store()
+            .task_backpressure(
+                wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(
+                    caller_instance,
+                ),
+                enabled,
+            )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn task_return(
+    vmctx: NonNull<VMComponentContext>,
+    ty: u32,
+    storage: *mut u8,
+    storage_len: usize,
+) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store()).component_async_store().task_return(
+            instance,
+            wasmtime_environ::component::TypeTupleIndex::from_u32(ty),
+            storage.cast::<crate::ValRaw>(),
+            storage_len,
+        )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn task_wait(
+    vmctx: NonNull<VMComponentContext>,
+    caller_instance: u32,
+    async_: u8,
+    memory: *mut u8,
+    payload: u32,
+) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store()).component_async_store().task_wait(
+            instance,
+            wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
+            async_ != 0,
+            memory.cast::<crate::vm::VMMemoryDefinition>(),
+            payload,
+        )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn task_poll(
+    vmctx: NonNull<VMComponentContext>,
+    caller_instance: u32,
+    async_: u8,
+    memory: *mut u8,
+    payload: u32,
+) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store()).component_async_store().task_poll(
+            instance,
+            wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
+            async_ != 0,
+            memory.cast::<crate::vm::VMMemoryDefinition>(),
+            payload,
+        )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn task_yield(vmctx: NonNull<VMComponentContext>, async_: u8) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store())
+            .component_async_store()
+            .task_yield(instance, async_ != 0)
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn subtask_drop(
+    vmctx: NonNull<VMComponentContext>,
+    caller_instance: u32,
+    task_id: u32,
+) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store()).component_async_store().subtask_drop(
+            instance,
+            wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
+            task_id,
+        )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn sync_enter(
+    vmctx: NonNull<VMComponentContext>,
+    start: *mut u8,
+    return_: *mut u8,
+    caller_instance: u32,
+    task_return_type: u32,
+    result_count: u32,
+    storage: *mut u8,
+    storage_len: usize,
+) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store()).component_async_store().sync_enter(
+            start.cast::<crate::vm::VMFuncRef>(),
+            return_.cast::<crate::vm::VMFuncRef>(),
+            wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
+            wasmtime_environ::component::TypeTupleIndex::from_u32(task_return_type),
+            result_count,
+            storage.cast::<crate::ValRaw>(),
+            storage_len,
+        )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn sync_exit(
+    vmctx: NonNull<VMComponentContext>,
+    callback: *mut u8,
+    caller_instance: u32,
+    callee: *mut u8,
+    callee_instance: u32,
+    param_count: u32,
+    storage: *mut u8,
+    storage_len: usize,
+) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store()).component_async_store().sync_exit(
+            instance,
+            callback.cast::<crate::vm::VMFuncRef>(),
+            wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
+            callee.cast::<crate::vm::VMFuncRef>(),
+            wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(callee_instance),
+            param_count,
+            storage.cast::<std::mem::MaybeUninit<crate::ValRaw>>(),
+            storage_len,
+        )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn async_enter(
+    vmctx: NonNull<VMComponentContext>,
+    start: *mut u8,
+    return_: *mut u8,
+    caller_instance: u32,
+    task_return_type: u32,
+    params: u32,
+    results: u32,
+) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store()).component_async_store().async_enter(
+            start.cast::<crate::vm::VMFuncRef>(),
+            return_.cast::<crate::vm::VMFuncRef>(),
+            wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
+            wasmtime_environ::component::TypeTupleIndex::from_u32(task_return_type),
+            params,
+            results,
+        )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn async_exit(
+    vmctx: NonNull<VMComponentContext>,
+    callback: *mut u8,
+    post_return: *mut u8,
+    caller_instance: u32,
+    callee: *mut u8,
+    callee_instance: u32,
+    param_count: u32,
+    result_count: u32,
+    flags: u32,
+) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store()).component_async_store().async_exit(
+            instance,
+            callback.cast::<crate::vm::VMFuncRef>(),
+            post_return.cast::<crate::vm::VMFuncRef>(),
+            wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
+            callee.cast::<crate::vm::VMFuncRef>(),
+            wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(callee_instance),
+            param_count,
+            result_count,
+            flags,
+        )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
 unsafe fn future_transfer(
     vmctx: NonNull<VMComponentContext>,
     src_idx: u32,
     src_table: u32,
     dst_table: u32,
 ) -> Result<u32> {
-    _ = (vmctx, src_idx, src_table, dst_table);
-    todo!()
+    let src_table = wasmtime_environ::component::TypeFutureTableIndex::from_u32(src_table);
+    let dst_table = wasmtime_environ::component::TypeFutureTableIndex::from_u32(dst_table);
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        instance.future_transfer(src_idx, src_table, dst_table)
+    })
 }
 
+#[cfg(feature = "component-model-async")]
 unsafe fn stream_transfer(
     vmctx: NonNull<VMComponentContext>,
     src_idx: u32,
     src_table: u32,
     dst_table: u32,
 ) -> Result<u32> {
-    _ = (vmctx, src_idx, src_table, dst_table);
-    todo!()
+    let src_table = wasmtime_environ::component::TypeStreamTableIndex::from_u32(src_table);
+    let dst_table = wasmtime_environ::component::TypeStreamTableIndex::from_u32(dst_table);
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        instance.stream_transfer(src_idx, src_table, dst_table)
+    })
 }
 
+#[cfg(feature = "component-model-async")]
 unsafe fn error_context_transfer(
     vmctx: NonNull<VMComponentContext>,
     src_idx: u32,
     src_table: u32,
     dst_table: u32,
 ) -> Result<u32> {
-    _ = (vmctx, src_idx, src_table, dst_table);
-    todo!()
+    let src_table =
+        wasmtime_environ::component::TypeComponentLocalErrorContextTableIndex::from_u32(src_table);
+    let dst_table =
+        wasmtime_environ::component::TypeComponentLocalErrorContextTableIndex::from_u32(dst_table);
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        instance.error_context_transfer(src_idx, src_table, dst_table)
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn future_new(vmctx: NonNull<VMComponentContext>, ty: u32) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store()).component_async_store().future_new(
+            instance,
+            wasmtime_environ::component::TypeFutureTableIndex::from_u32(ty),
+        )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn future_write(
+    vmctx: NonNull<VMComponentContext>,
+    memory: *mut u8,
+    realloc: *mut u8,
+    string_encoding: u8,
+    ty: u32,
+    future: u32,
+    address: u32,
+) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store()).component_async_store().future_write(
+            instance,
+            memory.cast::<crate::vm::VMMemoryDefinition>(),
+            realloc.cast::<crate::vm::VMFuncRef>(),
+            string_encoding,
+            wasmtime_environ::component::TypeFutureTableIndex::from_u32(ty),
+            future,
+            address,
+        )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn future_read(
+    vmctx: NonNull<VMComponentContext>,
+    memory: *mut u8,
+    realloc: *mut u8,
+    string_encoding: u8,
+    ty: u32,
+    future: u32,
+    address: u32,
+) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store()).component_async_store().future_read(
+            instance,
+            memory.cast::<crate::vm::VMMemoryDefinition>(),
+            realloc.cast::<crate::vm::VMFuncRef>(),
+            string_encoding,
+            wasmtime_environ::component::TypeFutureTableIndex::from_u32(ty),
+            future,
+            address,
+        )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn future_cancel_write(
+    vmctx: NonNull<VMComponentContext>,
+    ty: u32,
+    async_: u8,
+    writer: u32,
+) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store())
+            .component_async_store()
+            .future_cancel_write(
+                instance,
+                wasmtime_environ::component::TypeFutureTableIndex::from_u32(ty),
+                async_ != 0,
+                writer,
+            )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn future_cancel_read(
+    vmctx: NonNull<VMComponentContext>,
+    ty: u32,
+    async_: u8,
+    reader: u32,
+) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store())
+            .component_async_store()
+            .future_cancel_read(
+                instance,
+                wasmtime_environ::component::TypeFutureTableIndex::from_u32(ty),
+                async_ != 0,
+                reader,
+            )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn future_close_writable(
+    vmctx: NonNull<VMComponentContext>,
+    ty: u32,
+    writer: u32,
+    error: u32,
+) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store())
+            .component_async_store()
+            .future_close_writable(
+                instance,
+                wasmtime_environ::component::TypeFutureTableIndex::from_u32(ty),
+                writer,
+                error,
+            )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn future_close_readable(
+    vmctx: NonNull<VMComponentContext>,
+    ty: u32,
+    reader: u32,
+) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store())
+            .component_async_store()
+            .future_close_readable(
+                instance,
+                wasmtime_environ::component::TypeFutureTableIndex::from_u32(ty),
+                reader,
+            )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn stream_new(vmctx: NonNull<VMComponentContext>, ty: u32) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store()).component_async_store().stream_new(
+            instance,
+            wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
+        )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn stream_write(
+    vmctx: NonNull<VMComponentContext>,
+    memory: *mut u8,
+    realloc: *mut u8,
+    string_encoding: u8,
+    ty: u32,
+    stream: u32,
+    address: u32,
+    count: u32,
+) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store()).component_async_store().stream_write(
+            instance,
+            memory.cast::<crate::vm::VMMemoryDefinition>(),
+            realloc.cast::<crate::vm::VMFuncRef>(),
+            string_encoding,
+            wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
+            stream,
+            address,
+            count,
+        )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn stream_read(
+    vmctx: NonNull<VMComponentContext>,
+    memory: *mut u8,
+    realloc: *mut u8,
+    string_encoding: u8,
+    ty: u32,
+    stream: u32,
+    address: u32,
+    count: u32,
+) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store()).component_async_store().stream_read(
+            instance,
+            memory.cast::<crate::vm::VMMemoryDefinition>(),
+            realloc.cast::<crate::vm::VMFuncRef>(),
+            string_encoding,
+            wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
+            stream,
+            address,
+            count,
+        )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn stream_cancel_write(
+    vmctx: NonNull<VMComponentContext>,
+    ty: u32,
+    async_: u8,
+    writer: u32,
+) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store())
+            .component_async_store()
+            .stream_cancel_write(
+                instance,
+                wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
+                async_ != 0,
+                writer,
+            )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn stream_cancel_read(
+    vmctx: NonNull<VMComponentContext>,
+    ty: u32,
+    async_: u8,
+    reader: u32,
+) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store())
+            .component_async_store()
+            .stream_cancel_read(
+                instance,
+                wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
+                async_ != 0,
+                reader,
+            )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn stream_close_writable(
+    vmctx: NonNull<VMComponentContext>,
+    ty: u32,
+    writer: u32,
+    error: u32,
+) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store())
+            .component_async_store()
+            .stream_close_writable(
+                instance,
+                wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
+                writer,
+                error,
+            )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn stream_close_readable(
+    vmctx: NonNull<VMComponentContext>,
+    ty: u32,
+    reader: u32,
+) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store())
+            .component_async_store()
+            .stream_close_readable(
+                instance,
+                wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
+                reader,
+            )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn flat_stream_write(
+    vmctx: NonNull<VMComponentContext>,
+    memory: *mut u8,
+    realloc: *mut u8,
+    ty: u32,
+    payload_size: u32,
+    payload_align: u32,
+    stream: u32,
+    address: u32,
+    count: u32,
+) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store())
+            .component_async_store()
+            .flat_stream_write(
+                instance,
+                memory.cast::<crate::vm::VMMemoryDefinition>(),
+                realloc.cast::<crate::vm::VMFuncRef>(),
+                wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
+                payload_size,
+                payload_align,
+                stream,
+                address,
+                count,
+            )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn flat_stream_read(
+    vmctx: NonNull<VMComponentContext>,
+    memory: *mut u8,
+    realloc: *mut u8,
+    ty: u32,
+    payload_size: u32,
+    payload_align: u32,
+    stream: u32,
+    address: u32,
+    count: u32,
+) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store())
+            .component_async_store()
+            .flat_stream_read(
+                instance,
+                memory.cast::<crate::vm::VMMemoryDefinition>(),
+                realloc.cast::<crate::vm::VMFuncRef>(),
+                wasmtime_environ::component::TypeStreamTableIndex::from_u32(ty),
+                payload_size,
+                payload_align,
+                stream,
+                address,
+                count,
+            )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn error_context_new(
+    vmctx: NonNull<VMComponentContext>,
+    memory: *mut u8,
+    realloc: *mut u8,
+    string_encoding: u8,
+    ty: u32,
+    debug_msg_address: u32,
+    debug_msg_len: u32,
+) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store())
+            .component_async_store()
+            .error_context_new(
+                instance,
+                memory.cast::<crate::vm::VMMemoryDefinition>(),
+                realloc.cast::<crate::vm::VMFuncRef>(),
+                string_encoding,
+                wasmtime_environ::component::TypeComponentLocalErrorContextTableIndex::from_u32(ty),
+                debug_msg_address,
+                debug_msg_len,
+            )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn error_context_debug_message(
+    vmctx: NonNull<VMComponentContext>,
+    memory: *mut u8,
+    realloc: *mut u8,
+    string_encoding: u8,
+    ty: u32,
+    err_ctx_handle: u32,
+    debug_msg_address: u32,
+) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store())
+            .component_async_store()
+            .error_context_debug_message(
+                instance,
+                memory.cast::<crate::vm::VMMemoryDefinition>(),
+                realloc.cast::<crate::vm::VMFuncRef>(),
+                string_encoding,
+                wasmtime_environ::component::TypeComponentLocalErrorContextTableIndex::from_u32(ty),
+                err_ctx_handle,
+                debug_msg_address,
+            )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn error_context_drop(
+    vmctx: NonNull<VMComponentContext>,
+    ty: u32,
+    err_ctx_handle: u32,
+) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store())
+            .component_async_store()
+            .error_context_drop(
+                instance,
+                wasmtime_environ::component::TypeComponentLocalErrorContextTableIndex::from_u32(ty),
+                err_ctx_handle,
+            )
+    })
 }

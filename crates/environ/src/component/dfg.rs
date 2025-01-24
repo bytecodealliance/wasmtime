@@ -286,7 +286,9 @@ pub enum Trampoline {
     TaskBackpressure {
         instance: RuntimeComponentInstanceIndex,
     },
-    TaskReturn,
+    TaskReturn {
+        results: TypeTupleIndex,
+    },
     TaskWait {
         instance: RuntimeComponentInstanceIndex,
         async_: bool,
@@ -368,6 +370,10 @@ pub enum Trampoline {
     ResourceTransferBorrow,
     ResourceEnterCall,
     ResourceExitCall,
+    SyncEnterCall,
+    SyncExitCall {
+        callback: Option<CallbackId>,
+    },
     AsyncEnterCall,
     AsyncExitCall {
         callback: Option<CallbackId>,
@@ -765,7 +771,9 @@ impl LinearizeDfg<'_> {
             Trampoline::TaskBackpressure { instance } => info::Trampoline::TaskBackpressure {
                 instance: *instance,
             },
-            Trampoline::TaskReturn => info::Trampoline::TaskReturn,
+            Trampoline::TaskReturn { results } => {
+                info::Trampoline::TaskReturn { results: *results }
+            }
             Trampoline::TaskWait {
                 instance,
                 async_,
@@ -849,6 +857,10 @@ impl LinearizeDfg<'_> {
             Trampoline::ResourceTransferBorrow => info::Trampoline::ResourceTransferBorrow,
             Trampoline::ResourceEnterCall => info::Trampoline::ResourceEnterCall,
             Trampoline::ResourceExitCall => info::Trampoline::ResourceExitCall,
+            Trampoline::SyncEnterCall => info::Trampoline::SyncEnterCall,
+            Trampoline::SyncExitCall { callback } => info::Trampoline::SyncExitCall {
+                callback: callback.map(|v| self.runtime_callback(v)),
+            },
             Trampoline::AsyncEnterCall => info::Trampoline::AsyncEnterCall,
             Trampoline::AsyncExitCall {
                 callback,
