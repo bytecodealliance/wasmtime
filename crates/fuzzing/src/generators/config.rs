@@ -139,6 +139,7 @@ impl Config {
             extended_const,
             wide_arithmetic,
             component_model_more_flags,
+            component_model_async,
             simd,
 
             hogs_memory: _,
@@ -151,6 +152,7 @@ impl Config {
         self.module_config.function_references_enabled =
             function_references.or(gc).unwrap_or(false);
         self.module_config.component_model_more_flags = component_model_more_flags.unwrap_or(false);
+        self.module_config.component_model_async = component_model_async.unwrap_or(false);
 
         // Enable/disable proposals that wasm-smith has knobs for which will be
         // read when creating `wasmtime::Config`.
@@ -266,6 +268,7 @@ impl Config {
             .wasm_wide_arithmetic(self.module_config.config.wide_arithmetic_enabled)
             .wasm_extended_const(self.module_config.config.extended_const_enabled)
             .wasm_component_model_more_flags(self.module_config.component_model_more_flags)
+            .wasm_component_model_async(self.module_config.component_model_async)
             .native_unwind_info(cfg!(target_os = "windows") || self.wasmtime.native_unwind_info)
             .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
             .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())

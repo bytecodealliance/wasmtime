@@ -20,4 +20,4 @@ wast = { workspace = true }
 log = { workspace = true }
 
 [features]
-component-model = ['wasmtime/component-model']
+component-model = ['wasmtime/component-model', 'wasmtime/component-model-async']

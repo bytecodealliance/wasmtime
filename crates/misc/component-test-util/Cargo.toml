@@ -11,7 +11,7 @@ publish = false
 env_logger = { workspace = true }
 anyhow = { workspace = true }
 arbitrary = { workspace = true, features = ["derive"] }
-wasmtime = { workspace = true, features = ["component-model", "async"] }
+wasmtime = { workspace = true, features = ["component-model", "async", "component-model-async"] }
 wasmtime-environ = { workspace = true }
 wasmtime-wast-util = { path = '../../wast-util' }
 target-lexicon = { workspace = true }

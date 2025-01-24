@@ -608,8 +608,7 @@ impl<'a> Instantiator<'a> {
                 }
 
                 GlobalInitializer::ExtractCallback(callback) => {
-                    _ = callback;
-                    todo!()
+                    self.extract_callback(store.0, callback)
                 }
 
                 GlobalInitializer::ExtractPostReturn(post_return) => {
@@ -657,6 +656,16 @@ impl<'a> Instantiator<'a> {
             _ => unreachable!(),
         };
         self.data.state.set_runtime_realloc(realloc.index, func_ref);
+    }
+
+    fn extract_callback(&mut self, store: &mut StoreOpaque, callback: &ExtractCallback) {
+        let func_ref = match self.data.lookup_def(store, &callback.def) {
+            crate::runtime::vm::Export::Function(f) => f.func_ref,
+            _ => unreachable!(),
+        };
+        self.data
+            .state
+            .set_runtime_callback(callback.index, func_ref);
     }
 
     fn extract_post_return(&mut self, store: &mut StoreOpaque, post_return: &ExtractPostReturn) {

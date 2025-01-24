@@ -375,6 +375,16 @@ impl ComponentInstance {
         }
     }
 
+    /// Same as `set_runtime_memory` but for async callback function pointers.
+    pub fn set_runtime_callback(&mut self, idx: RuntimeCallbackIndex, ptr: NonNull<VMFuncRef>) {
+        unsafe {
+            let storage =
+                self.vmctx_plus_offset_mut::<VmPtr<VMFuncRef>>(self.offsets.runtime_callback(idx));
+            debug_assert!((*storage).as_ptr() as usize == INVALID_PTR);
+            *storage = ptr.into();
+        }
+    }
+
     /// Same as `set_runtime_memory` but for post-return function pointers.
     pub fn set_runtime_post_return(
         &mut self,
@@ -491,6 +501,11 @@ impl ComponentInstance {
             for i in 0..self.offsets.num_runtime_reallocs {
                 let i = RuntimeReallocIndex::from_u32(i);
                 let offset = self.offsets.runtime_realloc(i);
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
+            }
+            for i in 0..self.offsets.num_runtime_callbacks {
+                let i = RuntimeCallbackIndex::from_u32(i);
+                let offset = self.offsets.runtime_callback(i);
                 *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
             for i in 0..self.offsets.num_runtime_post_returns {
@@ -732,6 +747,11 @@ impl OwnedComponentInstance {
     /// See `ComponentInstance::set_runtime_realloc`
     pub fn set_runtime_realloc(&mut self, idx: RuntimeReallocIndex, ptr: NonNull<VMFuncRef>) {
         unsafe { self.instance_mut().set_runtime_realloc(idx, ptr) }
+    }
+
+    /// See `ComponentInstance::set_runtime_callback`
+    pub fn set_runtime_callback(&mut self, idx: RuntimeCallbackIndex, ptr: NonNull<VMFuncRef>) {
+        unsafe { self.instance_mut().set_runtime_callback(idx, ptr) }
     }
 
     /// See `ComponentInstance::set_runtime_post_return`
