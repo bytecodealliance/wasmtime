@@ -123,9 +123,14 @@
 ;; Each of these translates to a single "xbc" (x-register bounds check)
 ;; instruction.
 ;;
-;; Currently there's a 2x2 matrix here. One axis is 32-bit hosts and 64-bit
-;; hosts while the other axis is `a < b` vs `a > b`. These all bottom out
-;; in the `emit_xbc32` helper below.
+;; Currently there's a 2x2x2 matrix here:
+;;
+;; * One axis is 32-bit hosts and 64-bit hosts
+;; * One axis is `a < b` vs `b > a` (e.g. flipped arguments, same meaning)
+;; * One axis is `a < b - N` vs `a <= b` - the condition for multi-byte memory
+;;   accesses vs single-byte  accesses
+;;
+;; These all bottom out in either `emit_xbc32` or `emit_xbc32_strict` below.
 (rule 1 (lower (trapnz (icmp (IntCC.UnsignedGreaterThan) a @ (value_type $I32) (isub b (u8_from_iconst size))) code))
   (if-let (PointerWidth.PointerWidth32) (pointer_width))
   (side_effect (emit_xbc32 a b size code)))
@@ -141,6 +146,23 @@
 (rule 1 (lower (trapnz (icmp (IntCC.UnsignedLessThan) (isub b (u8_from_iconst size)) (uextend a @ (value_type $I32))) code))
   (if-let (PointerWidth.PointerWidth64) (pointer_width))
   (side_effect (emit_xbc32 a b size code)))
+
+(rule 1 (lower (trapnz (icmp (IntCC.UnsignedGreaterThanOrEqual) a @ (value_type $I32) b) code))
+  (if-let (PointerWidth.PointerWidth32) (pointer_width))
+  (side_effect (emit_xbc32_strict a b code)))
+
+(rule 1 (lower (trapnz (icmp (IntCC.UnsignedGreaterThanOrEqual) (uextend a @ (value_type $I32)) b) code))
+  (if-let (PointerWidth.PointerWidth64) (pointer_width))
+  (side_effect (emit_xbc32_strict a b code)))
+
+(rule 1 (lower (trapnz (icmp (IntCC.UnsignedLessThanOrEqual) b a @ (value_type $I32)) code))
+  (if-let (PointerWidth.PointerWidth32) (pointer_width))
+  (side_effect (emit_xbc32_strict a b code)))
+
+(rule 1 (lower (trapnz (icmp (IntCC.UnsignedLessThanOrEqual) b (uextend a @ (value_type $I32))) code))
+  (if-let (PointerWidth.PointerWidth64) (pointer_width))
+  (side_effect (emit_xbc32_strict a b code)))
+
 
 ;; Helper to emit a bounds check which traps if the first value is greater than
 ;; the second value minus the immediate size provided here.
@@ -158,6 +180,17 @@
 (decl emit_xbc32_sunk (Value SunkLoad u8 TrapCode) SideEffectNoResult)
 (rule (emit_xbc32_sunk a (SunkLoad.Load _ bound_addr bound_off) size code)
   (pulley_xbc32_boundne_trap a bound_addr bound_off size code))
+
+(decl emit_xbc32_strict (Value Value TrapCode) SideEffectNoResult)
+(rule 0 (emit_xbc32_strict a bound code)
+  (pulley_xbc32_strict_bound_trap a bound code))
+(rule 1 (emit_xbc32_strict a bound code)
+  (if-let load (sinkable_load bound))
+  (emit_xbc32_strict_sunk a load code))
+
+(decl emit_xbc32_strict_sunk (Value SunkLoad TrapCode) SideEffectNoResult)
+(rule (emit_xbc32_strict_sunk a (SunkLoad.Load _ bound_addr bound_off) code)
+  (pulley_xbc32_strict_boundne_trap a bound_addr bound_off code))
 
 ;;;; Rules for `get_stack_pointer` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

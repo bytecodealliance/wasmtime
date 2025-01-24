@@ -2564,6 +2564,31 @@ impl OpVisitor for Interpreter<'_> {
         }
     }
 
+    fn xbc32_strict_bound_trap(&mut self, addr: XReg, bound: XReg) -> ControlFlow<Done> {
+        let bound = self.state[bound].get_u64() as usize;
+        let addr = self.state[addr].get_u32() as usize;
+        if addr >= bound {
+            self.done_trap::<crate::XBc32StrictBoundTrap>()
+        } else {
+            ControlFlow::Continue(())
+        }
+    }
+
+    fn xbc32_strict_boundne_trap(
+        &mut self,
+        addr: XReg,
+        bound_ptr: XReg,
+        bound_off: u8,
+    ) -> ControlFlow<Done> {
+        let bound = unsafe { self.load::<usize>(bound_ptr, bound_off.into()) };
+        let addr = self.state[addr].get_u32() as usize;
+        if addr >= bound {
+            self.done_trap::<crate::XBc32StrictBoundNeTrap>()
+        } else {
+            ControlFlow::Continue(())
+        }
+    }
+
     fn xload8_u32_g32(
         &mut self,
         dst: XReg,

@@ -112,3 +112,69 @@ block0(v0: i64, v1: i32, v2: i32):
 ; ret
 ; trap
 
+function %one_byte(i64, i32) {
+block0(v0: i64, v1: i32):
+    v2 = load.i64 v0+16
+    v3 = uextend.i64 v1
+    v6 = icmp uge v3, v2
+    trapnz v6, user1
+    return
+}
+
+; VCode:
+; block0:
+;   xbc32_strict_boundne_trap x1, x0, 16 // trap=TrapCode(1)
+;   ret
+;
+; Disassembled:
+; xbc32_strict_boundne_trap x1, x0, 16
+; ret
+
+
+function %one_byte_flip(i64, i32) {
+block0(v0: i64, v1: i32):
+    v2 = load.i64 v0+16
+    v3 = uextend.i64 v1
+    v6 = icmp ule v2, v3
+    trapnz v6, user1
+    return
+}
+
+; VCode:
+; block0:
+;   xbc32_strict_boundne_trap x1, x0, 16 // trap=TrapCode(1)
+;   ret
+;
+; Disassembled:
+; xbc32_strict_boundne_trap x1, x0, 16
+; ret
+
+
+function %one_byte_twice(i64, i32, i32) {
+block0(v0: i64, v1: i32, v2: i32):
+    v3 = load.i64 v0+16
+
+    v4 = uextend.i64 v1
+    v6 = icmp ule v3, v4
+    trapnz v6, user1
+
+    v5 = uextend.i64 v2
+    v7 = icmp uge v5, v3
+    trapnz v6, user1
+
+    return
+}
+
+; VCode:
+; block0:
+;   x4 = xload64 x0+16 // flags =
+;   xbc32_strict_bound_trap x1, x4 // trap=TrapCode(1)
+;   xbc32_strict_bound_trap x1, x4 // trap=TrapCode(1)
+;   ret
+;
+; Disassembled:
+; xload64le_offset8 x4, x0, 16
+; xbc32_strict_bound_trap x1, x4
+; xbc32_strict_bound_trap x1, x4
+; ret
+

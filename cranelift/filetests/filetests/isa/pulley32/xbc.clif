@@ -102,3 +102,63 @@ block0(v0: i32, v1: i32, v2: i32):
 ; xbc32_bound_trap x1, x3, 24
 ; ret
 
+function %one_byte(i32, i32) {
+block0(v0: i32, v1: i32):
+    v2 = load.i32 v0+16
+    v5 = icmp uge v1, v2
+    trapnz v5, user1
+    return
+}
+
+; VCode:
+; block0:
+;   xbc32_strict_boundne_trap x1, x0, 16 // trap=TrapCode(1)
+;   ret
+;
+; Disassembled:
+; xbc32_strict_boundne_trap x1, x0, 16
+; ret
+
+
+function %one_byte_flip(i32, i32) {
+block0(v0: i32, v1: i32):
+    v2 = load.i32 v0+16
+    v5 = icmp ule v2, v1
+    trapnz v5, user1
+    return
+}
+
+; VCode:
+; block0:
+;   xbc32_strict_boundne_trap x1, x0, 16 // trap=TrapCode(1)
+;   ret
+;
+; Disassembled:
+; xbc32_strict_boundne_trap x1, x0, 16
+; ret
+
+function %one_byte_twice(i32, i32, i32) {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = load.i32 v0+16
+
+    v5 = icmp uge v1, v3
+    trapnz v5, user1
+
+    v6 = icmp uge v2, v3
+    trapnz v6, user1
+    return
+}
+
+; VCode:
+; block0:
+;   x4 = xload32 x0+16 // flags =
+;   xbc32_strict_bound_trap x1, x4 // trap=TrapCode(1)
+;   xbc32_strict_bound_trap x2, x4 // trap=TrapCode(1)
+;   ret
+;
+; Disassembled:
+; xload32le_offset8 x4, x0, 16
+; xbc32_strict_bound_trap x1, x4
+; xbc32_strict_bound_trap x2, x4
+; ret
+
