@@ -202,6 +202,7 @@ struct WasmFeatures {
     custom_page_sizes: bool,
     component_model_more_flags: bool,
     component_model_multiple_returns: bool,
+    component_model_async: bool,
     gc_types: bool,
     wide_arithmetic: bool,
 }
@@ -253,7 +254,6 @@ impl Metadata<'_> {
         assert!(!shared_everything_threads);
         assert!(!legacy_exceptions);
         assert!(!stack_switching);
-        assert!(!component_model_async);
 
         Metadata {
             target: engine.compiler().triple().to_string(),
@@ -278,6 +278,7 @@ impl Metadata<'_> {
                 custom_page_sizes,
                 component_model_more_flags,
                 component_model_multiple_returns,
+                component_model_async,
                 gc_types,
                 wide_arithmetic,
             },
@@ -488,6 +489,7 @@ impl Metadata<'_> {
             custom_page_sizes,
             component_model_more_flags,
             component_model_multiple_returns,
+            component_model_async,
             gc_types,
             wide_arithmetic,
         } = self.features;
@@ -573,6 +575,11 @@ impl Metadata<'_> {
             component_model_multiple_returns,
             other.contains(F::COMPONENT_MODEL_MULTIPLE_RETURNS),
             "WebAssembly component model support for multiple returns",
+        )?;
+        Self::check_bool(
+            component_model_async,
+            other.contains(F::COMPONENT_MODEL_ASYNC),
+            "WebAssembly component model support for async lifts/lowers, futures, streams, and errors",
         )?;
         Self::check_cfg_bool(
             cfg!(feature = "gc"),
