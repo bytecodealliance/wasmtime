@@ -558,6 +558,16 @@ jobs:
           test: cargo build
           env:
             IPHONEOS_DEPLOYMENT_TARGET: 13.0
+        # Test that when Cranelift has no support for an architecture, even a
+        # 64-bit one, that Wasmtime still compiles. Note that this is also
+        # intended to test various fallbacks in the codebase where we have no
+        # support at all for a particular architecture. In theory if someone
+        # adds powerpc64 support to Wasmtime this should get switched to some
+        # other architecture.
+        - target: powerpc64le-unknown-linux-gnu
+          os: ubuntu-latest
+          test: cargo build
+          apt_packages: gcc-powerpc64le-linux-gnu
     env: ${{ matrix.env || fromJSON('{}') }}
     steps:
     - uses: actions/checkout@v4
@@ -570,6 +580,9 @@ jobs:
         curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
         cargo binstall --no-confirm cross
       if: ${{ matrix.cross }}
+    - name: Install apt packages
+      if: ${{ matrix.apt_packages }}
+      run: sudo apt-get install -y ${{ matrix.apt_packages }}
     - run: ${{ matrix.test }}
       env:
         CARGO_BUILD_TARGET: ${{ matrix.target }}

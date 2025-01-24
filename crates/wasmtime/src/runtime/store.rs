@@ -85,8 +85,7 @@ use crate::runtime::vm::mpk::{self, ProtectionKey, ProtectionMask};
 use crate::runtime::vm::{
     Backtrace, ExportGlobal, GcRootsList, GcStore, InstanceAllocationRequest, InstanceAllocator,
     InstanceHandle, Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator,
-    SignalHandler, StoreBox, StorePtr, Unwind, UnwindHost, UnwindPulley, VMContext, VMFuncRef,
-    VMGcRef, VMRuntimeLimits,
+    SignalHandler, StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMRuntimeLimits,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::type_registry::RegisteredType;
@@ -391,10 +390,28 @@ pub struct StoreOpaque {
     #[cfg(feature = "component-model")]
     host_resource_data: crate::component::HostResourceData,
 
-    /// State related to the Pulley interpreter if that's enabled and configured
-    /// for this store's `Engine`. This is `None` if pulley was disabled at
-    /// compile time or if it's not being used by the `Engine`.
-    interpreter: Option<Interpreter>,
+    /// State related to the executor of wasm code.
+    ///
+    /// For example if Pulley is enabled and configured then this will store a
+    /// Pulley interpreter.
+    executor: Executor,
+}
+
+/// Executor state within `StoreOpaque`.
+///
+/// Effectively stores Pulley interpreter state and handles conditional support
+/// for Cranelift at compile time.
+enum Executor {
+    Interpreter(Interpreter),
+    #[cfg(has_cranelift_host_backend)]
+    Native,
+}
+
+/// A borrowed reference to `Executor` above.
+pub(crate) enum ExecutorRef<'a> {
+    Interpreter(InterpreterRef<'a>),
+    #[cfg(has_cranelift_host_backend)]
+    Native,
 }
 
 #[cfg(feature = "async")]
@@ -583,10 +600,16 @@ impl<T> Store<T> {
                 component_calls: Default::default(),
                 #[cfg(feature = "component-model")]
                 host_resource_data: Default::default(),
-                interpreter: if cfg!(feature = "pulley") && engine.target().is_pulley() {
-                    Some(Interpreter::new(engine))
+                #[cfg(has_cranelift_host_backend)]
+                executor: if cfg!(feature = "pulley") && engine.target().is_pulley() {
+                    Executor::Interpreter(Interpreter::new(engine))
                 } else {
-                    None
+                    Executor::Native
+                },
+                #[cfg(not(has_cranelift_host_backend))]
+                executor: {
+                    debug_assert!(engine.target().is_pulley());
+                    Executor::Interpreter(Interpreter::new(engine))
                 },
             },
             limiter: None,
@@ -2148,16 +2171,19 @@ at https://bytecodealliance.org/security.
         }
     }
 
-    pub(crate) fn interpreter(&mut self) -> Option<InterpreterRef<'_>> {
-        let i = self.interpreter.as_mut()?;
-        Some(i.as_interpreter_ref())
+    pub(crate) fn executor(&mut self) -> ExecutorRef<'_> {
+        match &mut self.executor {
+            Executor::Interpreter(i) => ExecutorRef::Interpreter(i.as_interpreter_ref()),
+            #[cfg(has_cranelift_host_backend)]
+            Executor::Native => ExecutorRef::Native,
+        }
     }
 
     pub(crate) fn unwinder(&self) -> &'static dyn Unwind {
-        if self.interpreter.is_some() {
-            &UnwindPulley
-        } else {
-            &UnwindHost
+        match &self.executor {
+            Executor::Interpreter(_) => &crate::runtime::vm::UnwindPulley,
+            #[cfg(has_cranelift_host_backend)]
+            Executor::Native => &crate::runtime::vm::UnwindHost,
         }
     }
 }

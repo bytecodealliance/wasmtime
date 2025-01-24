@@ -223,6 +223,14 @@ impl Fiber {
     where
         F: FnOnce(A, &mut super::Suspend<A, B, C>) -> C,
     {
+        // On unsupported platforms `wasmtime_fiber_init` is a panicking shim so
+        // return an error saying the host architecture isn't supported instead.
+        if !SUPPORTED_ARCH {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "fibers not supported on this host architecture",
+            ));
+        }
         unsafe {
             let data = Box::into_raw(Box::new(func)).cast();
             wasmtime_fiber_init(stack.top().unwrap(), fiber_start::<F, A, B, C>, data);
@@ -344,6 +352,7 @@ mod asan {
         is_finishing: bool,
         prev: &mut PreviousStack,
     ) {
+        assert!(super::SUPPORTED_ARCH);
         let mut private_asan_pointer = std::ptr::null_mut();
 
         // If this fiber is finishing then NULL is passed to asan to let it know
@@ -475,6 +484,7 @@ mod asan_disabled {
         _is_finishing: bool,
         _prev: &mut PreviousStack,
     ) {
+        assert!(super::SUPPORTED_ARCH);
         super::wasmtime_fiber_switch(top_of_stack);
     }
 

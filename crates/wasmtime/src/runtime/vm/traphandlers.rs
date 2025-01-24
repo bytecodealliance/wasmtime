@@ -17,7 +17,7 @@ pub use self::signals::*;
 
 use crate::prelude::*;
 use crate::runtime::module::lookup_code;
-use crate::runtime::store::StoreOpaque;
+use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{Instance, InterpreterRef, VMContext, VMRuntimeLimits};
 use crate::{StoreContextMut, WasmBacktrace};
@@ -41,12 +41,14 @@ pub(crate) enum TrapTest {
     /// Not a wasm trap, need to delegate to whatever process handler is next.
     NotWasm,
     /// This trap was handled by the embedder via custom embedding APIs.
+    #[cfg(has_cranelift_host_backend)]
     #[cfg_attr(miri, expect(dead_code, reason = "using #[cfg] too unergonomic"))]
     HandledByEmbedder,
     /// This is a wasm trap, it needs to be handled.
     #[cfg_attr(miri, expect(dead_code, reason = "using #[cfg] too unergonomic"))]
     Trap {
         /// How to longjmp back to the original wasm frame.
+        #[cfg(has_cranelift_host_backend)]
         jmp_buf: *const u8,
     },
 }
@@ -75,6 +77,7 @@ fn lazy_per_thread_init() {
 /// Only safe to call when wasm code is on the stack, aka `catch_traps` must
 /// have been previously called. Additionally no Rust destructors can be on the
 /// stack. They will be skipped and not executed.
+#[cfg(has_cranelift_host_backend)]
 pub(super) unsafe fn raise_preexisting_trap() -> ! {
     tls::with(|info| info.unwrap().unwind())
 }
@@ -357,11 +360,11 @@ where
     F: FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
 {
     let caller = store.0.default_caller();
-    let result = CallThreadState::new(store.0, caller).with(|cx| match store.0.interpreter() {
+    let result = CallThreadState::new(store.0, caller).with(|cx| match store.0.executor() {
         // In interpreted mode directly invoke the host closure since we won't
         // be using host-based `setjmp`/`longjmp` as that's not going to save
         // the context we want.
-        Some(r) => {
+        ExecutorRef::Interpreter(r) => {
             cx.jmp_buf
                 .set(CallThreadState::JMP_BUF_INTERPRETER_SENTINEL);
             closure(caller, Some(r))
@@ -374,7 +377,8 @@ where
         // within, here it's `call_closure`, and that passes `None` for the
         // interpreter since this branch is only ever taken if the interpreter
         // isn't present.
-        None => traphandlers::wasmtime_setjmp(
+        #[cfg(has_cranelift_host_backend)]
+        ExecutorRef::Native => traphandlers::wasmtime_setjmp(
             cx.jmp_buf.as_ptr(),
             {
                 extern "C" fn call_closure<F>(payload: *mut u8, caller: NonNull<VMContext>) -> bool
@@ -609,6 +613,7 @@ impl CallThreadState {
     /// This function is not safe if the corresponding setjmp wasn't already
     /// called. Additionally this isn't safe as it will skip all Rust
     /// destructors on the stack, if there are any.
+    #[cfg(has_cranelift_host_backend)]
     unsafe fn unwind(&self) -> ! {
         debug_assert!(!self.jmp_buf.get().is_null());
         debug_assert!(self.jmp_buf.get() != CallThreadState::JMP_BUF_INTERPRETER_SENTINEL);
@@ -694,10 +699,12 @@ impl CallThreadState {
         // `jmp_buf` passed to `wasmtime_longjmp` to resume.
         self.set_jit_trap(regs, faulting_addr, trap);
         TrapTest::Trap {
+            #[cfg(has_cranelift_host_backend)]
             jmp_buf: self.take_jmp_buf(),
         }
     }
 
+    #[cfg(has_cranelift_host_backend)]
     pub(crate) fn take_jmp_buf(&self) -> *const u8 {
         self.jmp_buf.replace(ptr::null())
     }

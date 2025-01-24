@@ -1,7 +1,7 @@
 //! Memory management for executable code.
 
 use crate::prelude::*;
-use crate::runtime::vm::{libcalls, MmapVec, UnwindRegistration};
+use crate::runtime::vm::{libcalls, MmapVec};
 use crate::Engine;
 use alloc::sync::Arc;
 use core::ops::Range;
@@ -16,7 +16,8 @@ use wasmtime_environ::{lookup_trap_code, obj, Trap};
 /// executable permissions of the contained JIT code as necessary.
 pub struct CodeMemory {
     mmap: MmapVec,
-    unwind_registration: Option<UnwindRegistration>,
+    #[cfg(has_cranelift_host_backend)]
+    unwind_registration: Option<crate::runtime::vm::UnwindRegistration>,
     #[cfg(feature = "debug-builtins")]
     debug_registration: Option<crate::runtime::vm::GdbJitImageRegistration>,
     published: bool,
@@ -50,6 +51,7 @@ impl Drop for CodeMemory {
         }
 
         // Drop the registrations before `self.mmap` since they (implicitly) refer to it.
+        #[cfg(has_cranelift_host_backend)]
         let _ = self.unwind_registration.take();
         #[cfg(feature = "debug-builtins")]
         let _ = self.debug_registration.take();
@@ -175,7 +177,8 @@ impl CodeMemory {
                         relocations.push((offset, libcall));
                     }
                 }
-                UnwindRegistration::SECTION_NAME => unwind = range,
+                #[cfg(has_cranelift_host_backend)]
+                crate::runtime::vm::UnwindRegistration::SECTION_NAME => unwind = range,
                 obj::ELF_WASM_DATA => wasm_data = range,
                 obj::ELF_WASMTIME_ADDRMAP => address_map_data = range,
                 obj::ELF_WASMTIME_TRAPS => trap_data = range,
@@ -189,8 +192,13 @@ impl CodeMemory {
             }
         }
 
+        // require mutability even when this is turned off
+        #[cfg(not(has_cranelift_host_backend))]
+        let _ = &mut unwind;
+
         Ok(Self {
             mmap,
+            #[cfg(has_cranelift_host_backend)]
             unwind_registration: None,
             #[cfg(feature = "debug-builtins")]
             debug_registration: None,
@@ -419,13 +427,23 @@ impl CodeMemory {
         if self.unwind.len() == 0 {
             return Ok(());
         }
-        let text = self.text();
-        let unwind_info = &self.mmap[self.unwind.clone()];
-        let registration =
-            UnwindRegistration::new(text.as_ptr(), unwind_info.as_ptr(), unwind_info.len())
-                .context("failed to create unwind info registration")?;
-        self.unwind_registration = Some(registration);
-        Ok(())
+        #[cfg(has_cranelift_host_backend)]
+        {
+            let text = self.text();
+            let unwind_info = &self.mmap[self.unwind.clone()];
+            let registration = crate::runtime::vm::UnwindRegistration::new(
+                text.as_ptr(),
+                unwind_info.as_ptr(),
+                unwind_info.len(),
+            )
+            .context("failed to create unwind info registration")?;
+            self.unwind_registration = Some(registration);
+            return Ok(());
+        }
+        #[cfg(not(has_cranelift_host_backend))]
+        {
+            bail!("should not have unwind info for non-native backend")
+        }
     }
 
     #[cfg(feature = "debug-builtins")]

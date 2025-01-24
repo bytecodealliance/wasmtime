@@ -187,10 +187,11 @@ impl InterpreterRef<'_> {
                         }
 
                         // Not possible with our closure above returning `false`.
+                        #[cfg(has_cranelift_host_backend)]
                         TrapTest::HandledByEmbedder => unreachable!(),
 
                         // Trap was handled, yay! We don't use `jmp_buf`.
-                        TrapTest::Trap { jmp_buf: _ } => {}
+                        TrapTest::Trap { .. } => {}
                     }
                 }
             }

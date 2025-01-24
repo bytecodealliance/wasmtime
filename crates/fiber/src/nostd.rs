@@ -130,6 +130,11 @@ impl Fiber {
     where
         F: FnOnce(A, &mut super::Suspend<A, B, C>) -> C,
     {
+        // On unsupported platforms `wasmtime_fiber_init` is a panicking shim so
+        // return an error saying the host architecture isn't supported instead.
+        if !SUPPORTED_ARCH {
+            anyhow::bail!("fibers unsupported on this host architecture");
+        }
         unsafe {
             let data = Box::into_raw(Box::new(func)).cast();
             wasmtime_fiber_init(stack.top().unwrap(), fiber_start::<F, A, B, C>, data);
@@ -147,6 +152,7 @@ impl Fiber {
             let addr = stack.top().unwrap().cast::<usize>().offset(-1);
             addr.write(result as *const _ as usize);
 
+            assert!(SUPPORTED_ARCH);
             wasmtime_fiber_switch(stack.top().unwrap());
 
             // null this out to help catch use-after-free

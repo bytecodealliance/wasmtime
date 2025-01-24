@@ -1646,7 +1646,19 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
         return None;
     }
 
+    // When Cranelift has support for the host then we might be running native
+    // compiled code meaning we need to read the actual stack pointer. If
+    // Cranelift can't be used though then we're guaranteed to be running pulley
+    // in which case this stack poitner isn't actually used as Pulley has custom
+    // mechanisms for stack overflow.
+    #[cfg(has_cranelift_host_backend)]
     let stack_pointer = crate::runtime::vm::get_stack_pointer();
+    #[cfg(not(has_cranelift_host_backend))]
+    let stack_pointer = {
+        use wasmtime_environ::TripleExt;
+        debug_assert!(store.engine().target().is_pulley());
+        usize::MAX
+    };
 
     // Determine the stack pointer where, after which, any wasm code will
     // immediately trap. This is checked on the entry to all wasm functions.

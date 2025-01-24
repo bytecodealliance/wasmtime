@@ -1,6 +1,9 @@
+#[cfg(has_cranelift_host_backend)]
 use crate::vm::VMContext;
+#[cfg(has_cranelift_host_backend)]
 use core::ptr::NonNull;
 
+#[cfg(has_cranelift_host_backend)]
 #[link(name = "wasmtime-helpers")]
 unsafe extern "C" {
     #[wasmtime_versioned_export_macros::versioned_link]

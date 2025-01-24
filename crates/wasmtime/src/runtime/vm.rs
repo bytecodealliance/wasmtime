@@ -18,6 +18,7 @@ use wasmtime_environ::{
     VMSharedTypeIndex,
 };
 
+#[cfg(has_cranelift_host_backend)]
 mod arch;
 mod async_yield;
 #[cfg(feature = "component-model")]
@@ -42,7 +43,10 @@ mod vmcontext;
 #[cfg(feature = "threads")]
 mod parking_spot;
 
-#[cfg(feature = "debug-builtins")]
+// Note that `debug_builtins` here is disabled with a feature or a lack of a
+// native compilation backend because it's only here to assist in debugging
+// natively compiled code.
+#[cfg(all(has_cranelift_host_backend, feature = "debug-builtins"))]
 pub mod debug_builtins;
 pub mod libcalls;
 pub mod mpk;
@@ -57,6 +61,7 @@ pub(crate) use interpreter_disabled as interpreter;
 #[cfg(feature = "debug-builtins")]
 pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
+#[cfg(has_cranelift_host_backend)]
 pub use crate::runtime::vm::arch::get_stack_pointer;
 pub use crate::runtime::vm::async_yield::*;
 pub use crate::runtime::vm::export::*;
@@ -82,6 +87,7 @@ pub use crate::runtime::vm::provenance::*;
 pub use crate::runtime::vm::store_box::*;
 #[cfg(feature = "std")]
 pub use crate::runtime::vm::sys::mmap::open_file_for_mmap;
+#[cfg(has_cranelift_host_backend)]
 pub use crate::runtime::vm::sys::unwind::UnwindRegistration;
 pub use crate::runtime::vm::table::{Table, TableElement};
 pub use crate::runtime::vm::traphandlers::*;
