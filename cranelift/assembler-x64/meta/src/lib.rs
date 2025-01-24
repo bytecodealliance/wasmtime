@@ -5,7 +5,6 @@ pub mod dsl;
 mod generate;
 pub mod instructions;
 
-use std::io;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -47,16 +46,16 @@ fn generate<P: AsRef<Path>>(
     generator(fmt, &instructions::list());
     fmt.write(file).unwrap();
     if format_rust {
-        rustfmt(file).unwrap();
+        rustfmt(file);
     }
     file.to_path_buf()
 }
 
-/// Use the installed `rustfmt` binary to format the generated code.
-fn rustfmt(file: &Path) -> io::Result<()> {
-    let status = Command::new("rustfmt").arg(file).status()?;
+/// Use the installed `rustfmt` binary to format the generated code; if it
+/// fails, skip formatting with a warning.
+fn rustfmt(file: &Path) {
+    let status = Command::new("rustfmt").arg(file).status().unwrap();
     if !status.success() {
-        return Err(io::Error::new(io::ErrorKind::Other, format!("`rustfmt` exited with status {status}")));
+        eprintln!("`rustfmt` exited with a non-zero status; skipping formatting of generated files");
     }
-    Ok(())
 }
