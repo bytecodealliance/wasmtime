@@ -166,19 +166,6 @@ impl From<ExtendKind> for ExtMode {
     }
 }
 
-impl OperandSize {
-    /// The `vpinsr` opcode to use.
-    pub(self) fn vpinsr_opcode(&self) -> AvxOpcode {
-        match self {
-            OperandSize::S8 => AvxOpcode::Vpinsrb,
-            OperandSize::S16 => AvxOpcode::Vpinsrw,
-            OperandSize::S32 => AvxOpcode::Vpinsrd,
-            OperandSize::S64 => AvxOpcode::Vpinsrq,
-            _ => unimplemented!(),
-        }
-    }
-}
-
 /// Low level assembler implementation for x64.
 pub(crate) struct Assembler {
     /// The machine instruction buffer.
@@ -1749,7 +1736,7 @@ impl Assembler {
         );
 
         self.emit(Inst::XmmVexPinsr {
-            op: size.vpinsr_opcode(),
+            op: Self::vpinsr_opcode(size),
             src1: src1.into(),
             src2: GprMem::unwrap_new(RegMem::mem(src2)),
             dst: dst.to_reg().into(),
@@ -1768,7 +1755,7 @@ impl Assembler {
         size: OperandSize,
     ) {
         self.emit(Inst::XmmVexPinsr {
-            op: size.vpinsr_opcode(),
+            op: Self::vpinsr_opcode(size),
             src1: src1.into(),
             src2: src2.into(),
             dst: dst.to_reg().into(),
@@ -1864,6 +1851,17 @@ impl Assembler {
             src2: XmmMemImm::unwrap_new(src2.into()),
             dst: dst.to_reg().into(),
         });
+    }
+
+    /// The `vpinsr` opcode to use.
+    fn vpinsr_opcode(size: OperandSize) -> AvxOpcode {
+        match size {
+            OperandSize::S8 => AvxOpcode::Vpinsrb,
+            OperandSize::S16 => AvxOpcode::Vpinsrw,
+            OperandSize::S32 => AvxOpcode::Vpinsrd,
+            OperandSize::S64 => AvxOpcode::Vpinsrq,
+            _ => unimplemented!(),
+        }
     }
 }
 
