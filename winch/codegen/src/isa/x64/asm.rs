@@ -1716,6 +1716,153 @@ impl Assembler {
             imm: lane,
         });
     }
+
+    /// Copy value from `src2`, merge into `src1`, and put result in `dst` at
+    /// the location specified in `count`.
+    pub fn xmm_vpinsr_rrm(
+        &mut self,
+        dst: WritableReg,
+        src1: Reg,
+        src2: &Address,
+        count: u8,
+        size: OperandSize,
+    ) {
+        let src2 = Self::to_synthetic_amode(
+            src2,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
+
+        self.emit(Inst::XmmVexPinsr {
+            op: Self::vpinsr_opcode(size),
+            src1: src1.into(),
+            src2: GprMem::unwrap_new(RegMem::mem(src2)),
+            dst: dst.to_reg().into(),
+            imm: count,
+        });
+    }
+
+    /// Copy value from `src2`, merge into `src1`, and put result in `dst` at
+    /// the location specified in `count`.
+    pub fn xmm_vpinsr_rrr(
+        &mut self,
+        dst: WritableReg,
+        src1: Reg,
+        src2: Reg,
+        count: u8,
+        size: OperandSize,
+    ) {
+        self.emit(Inst::XmmVexPinsr {
+            op: Self::vpinsr_opcode(size),
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
+            imm: count,
+        });
+    }
+
+    /// Copy a 32-bit float in `src2`, merge into `src1`, and put result in `dst`.
+    pub fn xmm_vinsertps_rrm(&mut self, dst: WritableReg, src1: Reg, src2: &Address, imm: u8) {
+        let src2 = Self::to_synthetic_amode(
+            src2,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
+
+        self.emit(Inst::XmmRmRImmVex {
+            op: AvxOpcode::Vinsertps,
+            src1: src1.into(),
+            src2: XmmMem::unwrap_new(RegMem::mem(src2)),
+            dst: dst.to_reg().into(),
+            imm,
+        });
+    }
+
+    /// Copy a 32-bit float in `src2`, merge into `src1`, and put result in `dst`.
+    pub fn xmm_vinsertps_rrr(&mut self, dst: WritableReg, src1: Reg, src2: Reg, imm: u8) {
+        self.emit(Inst::XmmRmRImmVex {
+            op: AvxOpcode::Vinsertps,
+            src1: src1.into(),
+            src2: XmmMem::unwrap_new(RegMem::reg(src2.into())),
+            dst: dst.to_reg().into(),
+            imm,
+        });
+    }
+
+    /// Moves lower 64-bit float from `src2` into lower 64-bits of `dst` and the
+    /// upper 64-bits in `src1` into the upper 64-bits of `dst`.
+    pub fn xmm_vmovsd_rrr(&mut self, dst: WritableReg, src1: Reg, src2: Reg) {
+        self.emit(Inst::XmmRmiRVex {
+            op: AvxOpcode::Vmovsd,
+            src1: src1.into(),
+            src2: XmmMemImm::unwrap_new(src2.into()),
+            dst: dst.to_reg().into(),
+        })
+    }
+
+    /// Moves 64-bit float from `src` into lower 64-bits of `dst`.
+    pub fn xmm_vmovsd_rm(&mut self, dst: WritableReg, src: &Address) {
+        let src = Self::to_synthetic_amode(
+            src,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
+
+        self.emit(Inst::XmmUnaryRmRVex {
+            op: AvxOpcode::Vmovsd,
+            src: XmmMem::unwrap_new(RegMem::mem(src)),
+            dst: dst.to_reg().into(),
+        })
+    }
+
+    /// Moves two 32-bit floats from `src2` to the upper 64-bits of `dst`.
+    /// Copies two 32-bit floats from the lower 64-bits of `src1` to lower
+    /// 64-bits of `dst`.
+    pub fn xmm_vmovlhps_rrm(&mut self, dst: WritableReg, src1: Reg, src2: &Address) {
+        let src2 = Self::to_synthetic_amode(
+            src2,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
+
+        self.emit(Inst::XmmRmiRVex {
+            op: AvxOpcode::Vmovlhps,
+            src1: src1.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::mem(src2)),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Moves two 32-bit floats from the lower 64-bits of `src2` to the upper
+    /// 64-bits of `dst`. Copies two 32-bit floats from the lower 64-bits of
+    /// `src1` to lower 64-bits of `dst`.
+    pub fn xmm_vmovlhps_rrr(&mut self, dst: WritableReg, src1: Reg, src2: Reg) {
+        self.emit(Inst::XmmRmiRVex {
+            op: AvxOpcode::Vmovlhps,
+            src1: src1.into(),
+            src2: XmmMemImm::unwrap_new(src2.into()),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// The `vpinsr` opcode to use.
+    fn vpinsr_opcode(size: OperandSize) -> AvxOpcode {
+        match size {
+            OperandSize::S8 => AvxOpcode::Vpinsrb,
+            OperandSize::S16 => AvxOpcode::Vpinsrw,
+            OperandSize::S32 => AvxOpcode::Vpinsrd,
+            OperandSize::S64 => AvxOpcode::Vpinsrq,
+            _ => unimplemented!(),
+        }
+    }
 }
 
 /// Captures the region in a MachBuffer where an add-with-immediate instruction would be emitted,

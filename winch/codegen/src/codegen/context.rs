@@ -1,4 +1,5 @@
 use anyhow::{bail, ensure, Result};
+use wasmparser::{Ieee32, Ieee64};
 use wasmtime_environ::{VMOffsets, WasmHeapType, WasmValType};
 
 use super::ControlStackFrame;
@@ -7,7 +8,10 @@ use crate::{
     codegen::{CodeGenError, CodeGenPhase, Emission, Prologue},
     frame::Frame,
     isa::reg::RegClass,
-    masm::{ExtractLaneKind, MacroAssembler, OperandSize, RegImm, SPOffset, ShiftKind, StackSlot},
+    masm::{
+        ExtractLaneKind, MacroAssembler, OperandSize, RegImm, ReplaceLaneKind, SPOffset, ShiftKind,
+        StackSlot,
+    },
     reg::{writable, Reg, WritableReg},
     regalloc::RegAlloc,
     stack::{Stack, TypedReg, Val},
@@ -457,6 +461,36 @@ impl<'a> CodeGenContext<'a, Emission> {
         }
     }
 
+    /// Returns the f32 const on top of the stack or None if there isn't one.
+    pub fn pop_f32_const(&mut self) -> Option<Ieee32> {
+        let top = self.stack.peek().expect("value at stack top");
+
+        if top.is_f32_const() {
+            let val = self
+                .stack
+                .pop_f32_const()
+                .expect("f32 const value at stack top");
+            Some(val)
+        } else {
+            None
+        }
+    }
+
+    /// Returns the f64 const on top of the stack or None if there isn't one.
+    pub fn pop_f64_const(&mut self) -> Option<Ieee64> {
+        let top = self.stack.peek().expect("value at stack top");
+
+        if top.is_f64_const() {
+            let val = self
+                .stack
+                .pop_f64_const()
+                .expect("f64 const value at stack top");
+            Some(val)
+        } else {
+            None
+        }
+    }
+
     /// Prepares arguments for emitting a convert operation.
     pub fn convert_op<F, M>(&mut self, masm: &mut M, dst_ty: WasmValType, emit: F) -> Result<()>
     where
@@ -549,6 +583,42 @@ impl<'a> CodeGenContext<'a, Emission> {
         };
 
         self.stack.push(Val::Reg(dst));
+        Ok(())
+    }
+
+    /// Prepares arguments for emitting a replace lane operation.
+    pub fn replace_lane_op<F, M>(
+        &mut self,
+        masm: &mut M,
+        kind: ReplaceLaneKind,
+        emit: F,
+    ) -> Result<()>
+    where
+        F: FnOnce(&mut M, RegImm, WritableReg, ReplaceLaneKind) -> Result<()>,
+        M: MacroAssembler,
+    {
+        let src = match kind {
+            ReplaceLaneKind::I8x16 | ReplaceLaneKind::I16x8 | ReplaceLaneKind::I32x4 => {
+                self.pop_i32_const().map(RegImm::i32)
+            }
+            ReplaceLaneKind::I64x2 => self.pop_i64_const().map(RegImm::i64),
+            ReplaceLaneKind::F32x4 => self.pop_f32_const().map(|v| RegImm::f32(v.bits())),
+            ReplaceLaneKind::F64x2 => self.pop_f64_const().map(|v| RegImm::f64(v.bits())),
+        }
+        .map_or_else(
+            || Ok(RegImm::reg(self.pop_to_reg(masm, None)?.into())),
+            Ok::<_, anyhow::Error>,
+        )?;
+
+        let dst = self.pop_to_reg(masm, None)?;
+
+        emit(masm, src, writable!(dst.into()), kind)?;
+
+        if let RegImm::Reg(reg) = src {
+            self.free_reg(reg);
+        }
+        self.stack.push(dst.into());
+
         Ok(())
     }
 

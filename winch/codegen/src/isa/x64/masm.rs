@@ -8,8 +8,9 @@ use anyhow::{anyhow, bail, Result};
 
 use crate::masm::{
     DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind,
-    MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp,
-    RoundingMode, ShiftKind, SplatKind, TrapCode, TruncKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
+    MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind,
+    RmwOp, RoundingMode, ShiftKind, SplatKind, TrapCode, TruncKind, Zero, TRUSTED_FLAGS,
+    UNTRUSTED_FLAGS,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
@@ -1537,6 +1538,65 @@ impl Masm for MacroAssembler {
             _ => (),
         }
 
+        Ok(())
+    }
+
+    fn replace_lane(
+        &mut self,
+        src: RegImm,
+        dst: WritableReg,
+        lane: u8,
+        kind: ReplaceLaneKind,
+    ) -> Result<()> {
+        if !self.flags.has_avx() {
+            bail!(CodeGenError::UnimplementedForNoAvx)
+        }
+
+        match kind {
+            ReplaceLaneKind::I8x16
+            | ReplaceLaneKind::I16x8
+            | ReplaceLaneKind::I32x4
+            | ReplaceLaneKind::I64x2 => match src {
+                RegImm::Reg(reg) => {
+                    self.asm
+                        .xmm_vpinsr_rrr(dst, dst.to_reg(), reg, lane, kind.lane_size());
+                }
+                RegImm::Imm(imm) => {
+                    let address = self.asm.add_constant(&imm.to_bytes());
+                    self.asm
+                        .xmm_vpinsr_rrm(dst, dst.to_reg(), &address, lane, kind.lane_size());
+                }
+            },
+            ReplaceLaneKind::F32x4 => {
+                // Immediate for `vinsertps` uses first 3 bits to determine
+                // which elements of the destination to set to 0. The next 2
+                // bits specify which element of the destination will be
+                // overwritten.
+                let imm = lane << 4;
+                match src {
+                    RegImm::Reg(reg) => self.asm.xmm_vinsertps_rrr(dst, dst.to_reg(), reg, imm),
+                    RegImm::Imm(val) => {
+                        let address = self.asm.add_constant(&val.to_bytes());
+                        self.asm.xmm_vinsertps_rrm(dst, dst.to_reg(), &address, imm);
+                    }
+                }
+            }
+            ReplaceLaneKind::F64x2 => match src {
+                RegImm::Reg(reg) => match lane {
+                    0 => self.asm.xmm_vmovsd_rrr(dst, dst.to_reg(), reg),
+                    1 => self.asm.xmm_vmovlhps_rrr(dst, dst.to_reg(), reg),
+                    _ => unreachable!(),
+                },
+                RegImm::Imm(imm) => {
+                    let address = self.asm.add_constant(&imm.to_bytes());
+                    match lane {
+                        0 => self.asm.xmm_vmovsd_rm(dst, &address),
+                        1 => self.asm.xmm_vmovlhps_rrm(dst, dst.to_reg(), &address),
+                        _ => unreachable!(),
+                    }
+                }
+            },
+        }
         Ok(())
     }
 

@@ -10,8 +10,9 @@ use crate::codegen::{
 };
 use crate::masm::{
     DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler,
-    MemMoveDirection, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, RmwOp, RoundingMode,
-    SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, TruncKind, VectorExtendKind, Zero,
+    MemMoveDirection, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp,
+    RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, TruncKind,
+    VectorExtendKind, Zero,
 };
 
 use crate::reg::{writable, Reg};
@@ -336,6 +337,12 @@ macro_rules! def_unsupported {
     (emit I64AtomicRmw16XorU $($rest:tt)*) => {};
     (emit I64AtomicRmw32XorU $($rest:tt)*) => {};
     (emit I64AtomicRmwXor $($rest:tt)*) => {};
+    (emit I8x16ReplaceLane $($rest:tt)*) => {};
+    (emit I16x8ReplaceLane $($rest:tt)*) => {};
+    (emit I32x4ReplaceLane $($rest:tt)*) => {};
+    (emit I64x2ReplaceLane $($rest:tt)*) => {};
+    (emit F32x4ReplaceLane $($rest:tt)*) => {};
+    (emit F64x2ReplaceLane $($rest:tt)*) => {};
     (emit I32AtomicRmw8CmpxchgU $($rest:tt)*) => {};
     (emit I32AtomicRmw16CmpxchgU $($rest:tt)*) => {};
     (emit I32AtomicRmwCmpxchg $($rest:tt)*) => {};
@@ -2908,6 +2915,48 @@ where
         self.context
             .extract_lane_op(self.masm, ExtractLaneKind::F64x2, |masm, src, dst, kind| {
                 masm.extract_lane(src, dst, lane, kind)
+            })
+    }
+
+    fn visit_i8x16_replace_lane(&mut self, lane: u8) -> Self::Output {
+        self.context
+            .replace_lane_op(self.masm, ReplaceLaneKind::I8x16, |masm, src, dst, kind| {
+                masm.replace_lane(src, dst, lane, kind)
+            })
+    }
+
+    fn visit_i16x8_replace_lane(&mut self, lane: u8) -> Self::Output {
+        self.context
+            .replace_lane_op(self.masm, ReplaceLaneKind::I16x8, |masm, src, dst, kind| {
+                masm.replace_lane(src, dst, lane, kind)
+            })
+    }
+
+    fn visit_i32x4_replace_lane(&mut self, lane: u8) -> Self::Output {
+        self.context
+            .replace_lane_op(self.masm, ReplaceLaneKind::I32x4, |masm, src, dst, kind| {
+                masm.replace_lane(src, dst, lane, kind)
+            })
+    }
+
+    fn visit_i64x2_replace_lane(&mut self, lane: u8) -> Self::Output {
+        self.context
+            .replace_lane_op(self.masm, ReplaceLaneKind::I64x2, |masm, src, dst, kind| {
+                masm.replace_lane(src, dst, lane, kind)
+            })
+    }
+
+    fn visit_f32x4_replace_lane(&mut self, lane: u8) -> Self::Output {
+        self.context
+            .replace_lane_op(self.masm, ReplaceLaneKind::F32x4, |masm, src, dst, kind| {
+                masm.replace_lane(src, dst, lane, kind)
+            })
+    }
+
+    fn visit_f64x2_replace_lane(&mut self, lane: u8) -> Self::Output {
+        self.context
+            .replace_lane_op(self.masm, ReplaceLaneKind::F64x2, |masm, src, dst, kind| {
+                masm.replace_lane(src, dst, lane, kind)
             })
     }
 

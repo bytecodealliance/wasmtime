@@ -397,6 +397,36 @@ impl From<ExtractLaneKind> for Extend<Signed> {
     }
 }
 
+/// Kinds of replace lane supported by WebAssembly.
+pub(crate) enum ReplaceLaneKind {
+    /// 16 lanes of 8 bit integers.
+    I8x16,
+    /// 8 lanes of 16 bit integers.
+    I16x8,
+    /// 4 lanes of 32 bit integers.
+    I32x4,
+    /// 2 lanes of 64 bit integers.
+    I64x2,
+    /// 4 lanes of 32 bit floats.
+    F32x4,
+    /// 2 lanes of 64 bit floats.
+    F64x2,
+}
+
+impl ReplaceLaneKind {
+    /// The lane size to use for different kinds of replace lane kinds.
+    pub(crate) fn lane_size(&self) -> OperandSize {
+        match self {
+            ReplaceLaneKind::I8x16 => OperandSize::S8,
+            ReplaceLaneKind::I16x8 => OperandSize::S16,
+            ReplaceLaneKind::I32x4 => OperandSize::S32,
+            ReplaceLaneKind::I64x2 => OperandSize::S64,
+            ReplaceLaneKind::F32x4 => OperandSize::S32,
+            ReplaceLaneKind::F64x2 => OperandSize::S64,
+        }
+    }
+}
+
 /// Kinds of behavior supported by Wasm loads.
 pub(crate) enum LoadKind {
     /// Load the entire bytes of the operand size without any modifications.
@@ -1426,6 +1456,15 @@ pub(crate) trait MacroAssembler {
         dst: WritableReg,
         lane: u8,
         kind: ExtractLaneKind,
+    ) -> Result<()>;
+
+    /// Replaces the value in `lane` in `dst` with the value in `src`.
+    fn replace_lane(
+        &mut self,
+        src: RegImm,
+        dst: WritableReg,
+        lane: u8,
+        kind: ReplaceLaneKind,
     ) -> Result<()>;
 
     /// Perform an atomic CAS (compare-and-swap) operation with the value at `addr`, and `expected`

@@ -14,8 +14,8 @@ use crate::{
     masm::{
         CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I,
         IntCmpKind, LoadKind, MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm,
-        RemKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, TrapCode,
-        TruncKind, Zero,
+        RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot,
+        TrapCode, TruncKind, Zero,
     },
     stack::TypedReg,
 };
@@ -925,6 +925,16 @@ impl Masm for MacroAssembler {
         _dst: WritableReg,
         _lane: u8,
         _kind: ExtractLaneKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn replace_lane(
+        &mut self,
+        _src: RegImm,
+        _dst: WritableReg,
+        _lane: u8,
+        _kind: ReplaceLaneKind,
     ) -> Result<()> {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
