@@ -1480,4 +1480,10 @@ pub(crate) trait MacroAssembler {
     /// Perform a logical `and` operation on `src1` and `src1`, both 128bits vector values, writing
     /// the result to `dst`.
     fn and128v(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()>;
+
+    /// Perform a logical `and_not` operation on `src1` and `src1`, both 128bits vector values, writing
+    /// the result to `dst`.
+    /// 
+    /// `and_not` is not commutative: dst = !src1 & src2.
+    fn and_not128v(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()>;
 }
