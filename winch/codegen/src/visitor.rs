@@ -359,6 +359,7 @@ macro_rules! def_unsupported {
     (emit V128And $($rest:tt)*) => {};
     (emit V128AndNot $($rest:tt)*) => {};
     (emit V128Or $($rest:tt)*) => {};
+    (emit V128Xor $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -3014,6 +3015,15 @@ where
             .binop(self.masm, OperandSize::S128, |masm, dst, src, _size| {
                 // careful here: and_not is *not* commutative: dst = !src1 & src2
                 masm.or128v(src, dst, writable!(dst))?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_v128_xor(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S128, |masm, dst, src, _size| {
+                // careful here: and_not is *not* commutative: dst = !src1 & src2
+                masm.xor128v(src, dst, writable!(dst))?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
     }

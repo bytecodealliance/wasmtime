@@ -1490,4 +1490,8 @@ pub(crate) trait MacroAssembler {
     /// Perform a logical `or` operation on `src1` and `src1`, both 128bits vector values, writing
     /// the result to `dst`.
     fn or128v(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()>;
+
+    /// Perform a logical `xor` operation on `src1` and `src1`, both 128bits vector values, writing
+    /// the result to `dst`.
+    fn xor128v(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()>;
 }
