@@ -20,7 +20,7 @@ impl Interpreter {
     /// Creates a new interpreter ready to interpret code.
     pub fn new(engine: &Engine) -> Interpreter {
         let ret = Interpreter {
-            pulley: Box::new(Vm::with_stack(vec![0; engine.config().max_wasm_stack])),
+            pulley: Box::new(Vm::with_stack(engine.config().max_wasm_stack)),
         };
         engine.profiler().register_interpreter(&ret);
         ret
