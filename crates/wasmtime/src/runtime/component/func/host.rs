@@ -46,6 +46,7 @@ impl HostFunc {
         memory: *mut VMMemoryDefinition,
         realloc: *mut VMFuncRef,
         string_encoding: u8,
+        async_: u8,
         storage: NonNull<MaybeUninit<ValRaw>>,
         storage_len: usize,
     ) -> bool
@@ -66,6 +67,7 @@ impl HostFunc {
                     memory,
                     realloc,
                     StringEncoding::from_u8(string_encoding).unwrap(),
+                    async_ != 0,
                     NonNull::slice_from_raw_parts(storage, storage_len).as_mut(),
                     |store, args| (*data)(store, args),
                 )
@@ -142,6 +144,7 @@ unsafe fn call_host<T, Params, Return, F>(
     memory: *mut VMMemoryDefinition,
     realloc: *mut VMFuncRef,
     string_encoding: StringEncoding,
+    async_: bool,
     storage: &mut [MaybeUninit<ValRaw>],
     closure: F,
 ) -> Result<()>
@@ -150,6 +153,10 @@ where
     Return: Lower,
     F: FnOnce(StoreContextMut<'_, T>, Params) -> Result<Return>,
 {
+    if async_ {
+        todo!()
+    }
+
     /// Representation of arguments to this function when a return pointer is in
     /// use, namely the argument list is followed by a single value which is the
     /// return pointer.
@@ -320,12 +327,17 @@ unsafe fn call_host_dynamic<T, F>(
     memory: *mut VMMemoryDefinition,
     realloc: *mut VMFuncRef,
     string_encoding: StringEncoding,
+    async_: bool,
     storage: &mut [MaybeUninit<ValRaw>],
     closure: F,
 ) -> Result<()>
 where
     F: FnOnce(StoreContextMut<'_, T>, &[Val], &mut [Val]) -> Result<()>,
 {
+    if async_ {
+        todo!()
+    }
+
     let options = Options::new(
         store.0.id(),
         NonNull::new(memory),
@@ -429,6 +441,7 @@ extern "C" fn dynamic_entrypoint<T, F>(
     memory: *mut VMMemoryDefinition,
     realloc: *mut VMFuncRef,
     string_encoding: u8,
+    async_: u8,
     storage: NonNull<MaybeUninit<ValRaw>>,
     storage_len: usize,
 ) -> bool
@@ -447,6 +460,7 @@ where
                 memory,
                 realloc,
                 StringEncoding::from_u8(string_encoding).unwrap(),
+                async_ != 0,
                 NonNull::slice_from_raw_parts(storage, storage_len).as_mut(),
                 |store, params, results| (*data)(store, params, results),
             )

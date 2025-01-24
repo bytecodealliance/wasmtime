@@ -280,10 +280,6 @@ impl<'a> TrampolineCompiler<'a> {
             async_,
         } = *options;
 
-        if async_ {
-            todo!()
-        }
-
         // vmctx: *mut VMComponentContext
         host_sig.params.push(ir::AbiParam::new(pointer_type));
         callee_args.push(vmctx);
@@ -348,6 +344,14 @@ impl<'a> TrampolineCompiler<'a> {
             self.builder
                 .ins()
                 .iconst(ir::types::I8, i64::from(string_encoding as u8)),
+        );
+
+        // async_: bool
+        host_sig.params.push(ir::AbiParam::new(ir::types::I8));
+        callee_args.push(
+            self.builder
+                .ins()
+                .iconst(ir::types::I8, if async_ { 1 } else { 0 }),
         );
 
         // storage: *mut ValRaw

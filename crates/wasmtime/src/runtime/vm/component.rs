@@ -94,6 +94,7 @@ pub struct ComponentInstance {
 ///   option for the canonical ABI options.
 /// * `string_encoding` - this is the configured string encoding for the
 ///   canonical ABI this lowering corresponds to.
+/// * `async_` - whether the caller is using the async ABI.
 /// * `args_and_results` - pointer to stack-allocated space in the caller where
 ///   all the arguments are stored as well as where the results will be written
 ///   to. The size and initialized bytes of this depends on the core wasm type
@@ -117,6 +118,7 @@ pub type VMLoweringCallee = extern "C" fn(
     opt_memory: *mut VMMemoryDefinition,
     opt_realloc: *mut VMFuncRef,
     string_encoding: u8,
+    async_: u8,
     args_and_results: NonNull<mem::MaybeUninit<ValRaw>>,
     nargs_and_results: usize,
 ) -> bool;
