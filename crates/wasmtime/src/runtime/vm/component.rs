@@ -9,7 +9,7 @@
 use crate::prelude::*;
 use crate::runtime::vm::{
     SendSyncPtr, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
-    VMOpaqueContext, VMStore, VMStoreRawPtr, VMWasmCallFunction, ValRaw, VmPtr,
+    VMOpaqueContext, VMStore, VMStoreRawPtr, VMWasmCallFunction, ValRaw, VmPtr, VmSafe,
 };
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
@@ -130,8 +130,11 @@ pub struct VMLowering {
     /// invoked.
     pub callee: VMLoweringCallee,
     /// The host data pointer (think void* pointer) to get passed to `callee`.
-    pub data: *mut u8,
+    pub data: VmPtr<u8>,
 }
+
+// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+unsafe impl VmSafe for VMLowering {}
 
 /// This is a marker type to represent the underlying allocation of a
 /// `VMComponentContext`.
@@ -237,14 +240,14 @@ impl ComponentInstance {
         NonNull::new(ret).unwrap()
     }
 
-    unsafe fn vmctx_plus_offset<T>(&self, offset: u32) -> *const T {
+    unsafe fn vmctx_plus_offset<T: VmSafe>(&self, offset: u32) -> *const T {
         self.vmctx()
             .as_ptr()
             .byte_add(usize::try_from(offset).unwrap())
             .cast()
     }
 
-    unsafe fn vmctx_plus_offset_mut<T>(&mut self, offset: u32) -> *mut T {
+    unsafe fn vmctx_plus_offset_mut<T: VmSafe>(&mut self, offset: u32) -> *mut T {
         self.vmctx()
             .as_ptr()
             .byte_add(usize::try_from(offset).unwrap())
@@ -275,9 +278,9 @@ impl ComponentInstance {
     /// during the instantiation process of a component.
     pub fn runtime_memory(&self, idx: RuntimeMemoryIndex) -> *mut VMMemoryDefinition {
         unsafe {
-            let ret = *self.vmctx_plus_offset(self.offsets.runtime_memory(idx));
-            debug_assert!(ret as usize != INVALID_PTR);
-            ret
+            let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.runtime_memory(idx));
+            debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
+            ret.as_ptr()
         }
     }
 
@@ -287,9 +290,9 @@ impl ComponentInstance {
     /// during the instantiation process of a component.
     pub fn runtime_realloc(&self, idx: RuntimeReallocIndex) -> NonNull<VMFuncRef> {
         unsafe {
-            let ret = *self.vmctx_plus_offset::<NonNull<_>>(self.offsets.runtime_realloc(idx));
+            let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.runtime_realloc(idx));
             debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
-            ret
+            ret.as_non_null()
         }
     }
 
@@ -299,9 +302,9 @@ impl ComponentInstance {
     /// during the instantiation process of a component.
     pub fn runtime_post_return(&self, idx: RuntimePostReturnIndex) -> NonNull<VMFuncRef> {
         unsafe {
-            let ret = *self.vmctx_plus_offset::<NonNull<_>>(self.offsets.runtime_post_return(idx));
+            let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.runtime_post_return(idx));
             debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
-            ret
+            ret.as_non_null()
         }
     }
 
@@ -314,7 +317,7 @@ impl ComponentInstance {
         unsafe {
             let ret = *self.vmctx_plus_offset::<VMLowering>(self.offsets.lowering(idx));
             debug_assert!(ret.callee as usize != INVALID_PTR);
-            debug_assert!(ret.data as usize != INVALID_PTR);
+            debug_assert!(ret.data.as_ptr() as usize != INVALID_PTR);
             ret
         }
     }
@@ -354,20 +357,21 @@ impl ComponentInstance {
         ptr: NonNull<VMMemoryDefinition>,
     ) {
         unsafe {
-            let storage = self.vmctx_plus_offset_mut::<NonNull<VMMemoryDefinition>>(
+            let storage = self.vmctx_plus_offset_mut::<VmPtr<VMMemoryDefinition>>(
                 self.offsets.runtime_memory(idx),
             );
             debug_assert!((*storage).as_ptr() as usize == INVALID_PTR);
-            *storage = ptr;
+            *storage = ptr.into();
         }
     }
 
     /// Same as `set_runtime_memory` but for realloc function pointers.
     pub fn set_runtime_realloc(&mut self, idx: RuntimeReallocIndex, ptr: NonNull<VMFuncRef>) {
         unsafe {
-            let storage = self.vmctx_plus_offset_mut(self.offsets.runtime_realloc(idx));
-            debug_assert!(*storage as usize == INVALID_PTR);
-            *storage = ptr.as_ptr();
+            let storage =
+                self.vmctx_plus_offset_mut::<VmPtr<VMFuncRef>>(self.offsets.runtime_realloc(idx));
+            debug_assert!((*storage).as_ptr() as usize == INVALID_PTR);
+            *storage = ptr.into();
         }
     }
 
@@ -378,9 +382,10 @@ impl ComponentInstance {
         ptr: NonNull<VMFuncRef>,
     ) {
         unsafe {
-            let storage = self.vmctx_plus_offset_mut(self.offsets.runtime_post_return(idx));
-            debug_assert!(*storage as usize == INVALID_PTR);
-            *storage = ptr.as_ptr();
+            let storage = self
+                .vmctx_plus_offset_mut::<VmPtr<VMFuncRef>>(self.offsets.runtime_post_return(idx));
+            debug_assert!((*storage).as_ptr() as usize == INVALID_PTR);
+            *storage = ptr.into();
         }
     }
 
@@ -431,7 +436,7 @@ impl ComponentInstance {
         unsafe {
             let offset = self.offsets.resource_destructor(idx);
             debug_assert!(*self.vmctx_plus_offset::<usize>(offset) == INVALID_PTR);
-            *self.vmctx_plus_offset_mut(offset) = dtor;
+            *self.vmctx_plus_offset_mut(offset) = dtor.map(VmPtr::from);
         }
     }
 
@@ -443,15 +448,16 @@ impl ComponentInstance {
         unsafe {
             let offset = self.offsets.resource_destructor(idx);
             debug_assert!(*self.vmctx_plus_offset::<usize>(offset) != INVALID_PTR);
-            *self.vmctx_plus_offset(offset)
+            (*self.vmctx_plus_offset::<Option<VmPtr<VMFuncRef>>>(offset)).map(|p| p.as_non_null())
         }
     }
 
     unsafe fn initialize_vmctx(&mut self) {
         *self.vmctx_plus_offset_mut(self.offsets.magic()) = VMCOMPONENT_MAGIC;
-        *self.vmctx_plus_offset_mut(self.offsets.builtins()) = &libcalls::VMComponentBuiltins::INIT;
+        *self.vmctx_plus_offset_mut(self.offsets.builtins()) =
+            VmPtr::from(NonNull::from(&libcalls::VMComponentBuiltins::INIT));
         *self.vmctx_plus_offset_mut(self.offsets.limits()) =
-            self.store.0.as_ref().vmruntime_limits();
+            VmPtr::from(self.store.0.as_ref().vmruntime_limits());
 
         for i in 0..self.offsets.num_runtime_component_instances {
             let i = RuntimeComponentInstanceIndex::from_u32(i);

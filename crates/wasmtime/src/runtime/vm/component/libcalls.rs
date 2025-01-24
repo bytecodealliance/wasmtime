@@ -2,7 +2,7 @@
 
 use crate::prelude::*;
 use crate::runtime::vm::component::{ComponentInstance, VMComponentContext};
-use crate::runtime::vm::HostResultHasUnwindSentinel;
+use crate::runtime::vm::{HostResultHasUnwindSentinel, VmSafe};
 use core::cell::Cell;
 use core::convert::Infallible;
 use core::ptr::NonNull;
@@ -42,6 +42,10 @@ macro_rules! define_builtins {
                 ) $( -> signature!(@ty $result))?,
             )*
         }
+
+        // SAFETY: the above structure is repr(C) and only contains `VmSafe`
+        // fields.
+        unsafe impl VmSafe for VMComponentBuiltins {}
 
         impl VMComponentBuiltins {
             pub const INIT: VMComponentBuiltins = VMComponentBuiltins {
