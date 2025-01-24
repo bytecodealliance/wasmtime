@@ -269,7 +269,7 @@ block0(v0: i32, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   andl    %esi, $31, %esi
+;   andl $0x1f, %esi
 ;   bzhi    %edi, %esi, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -299,7 +299,7 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   andq    %rsi, $63, %rsi
+;   andq $0x3f, %rsi
 ;   bzhi    %rdi, %rsi, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -330,7 +330,7 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   andl    %esi, $31, %esi
+;   andl $0x1f, %esi
 ;   bzhi    20(%rdi), %esi, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
