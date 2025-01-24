@@ -9,6 +9,12 @@ use core::ptr::NonNull;
 use core::slice;
 use wasmtime_environ::component::TypeResourceTableIndex;
 
+#[cfg(feature = "component-model-async")]
+use {
+    crate::{vm::VMFuncRef, ValRaw},
+    wasmtime_environ::component::{RuntimeComponentInstanceIndex, TypeTaskReturnIndex},
+};
+
 const UTF16_TAG: usize = 1 << 31;
 
 macro_rules! signature {
@@ -570,6 +576,109 @@ unsafe fn resource_exit_call(vmctx: NonNull<VMComponentContext>) -> Result<()> {
 
 unsafe fn trap(_vmctx: NonNull<VMComponentContext>, code: u8) -> Result<Infallible> {
     Err(wasmtime_environ::Trap::from_u8(code).unwrap().into())
+}
+
+unsafe fn task_return(
+    vmctx: NonNull<VMComponentContext>,
+    ty: u32,
+    storage: *mut u8,
+    storage_len: usize,
+) -> Result<()> {
+    #[cfg(feature = "component-model-async")]
+    {
+        ComponentInstance::from_vmctx(vmctx, |instance| {
+            (*instance.store()).component_async_store().task_return(
+                TypeTaskReturnIndex::from_u32(ty),
+                storage.cast::<ValRaw>(),
+                storage_len,
+            )
+        })
+    }
+    #[cfg(not(feature = "component-model-async"))]
+    {
+        _ = (vmctx, ty, storage, storage_len);
+        unreachable!()
+    }
+}
+
+unsafe fn async_enter(
+    vmctx: NonNull<VMComponentContext>,
+    start: *mut u8,
+    return_: *mut u8,
+    caller_instance: u32,
+    task_return_type: u32,
+    params: u32,
+    results: u32,
+) -> Result<()> {
+    #[cfg(feature = "component-model-async")]
+    {
+        ComponentInstance::from_vmctx(vmctx, |instance| {
+            (*instance.store()).component_async_store().async_enter(
+                start.cast::<VMFuncRef>(),
+                return_.cast::<VMFuncRef>(),
+                RuntimeComponentInstanceIndex::from_u32(caller_instance),
+                TypeTaskReturnIndex::from_u32(task_return_type),
+                params,
+                results,
+            )
+        })
+    }
+    #[cfg(not(feature = "component-model-async"))]
+    {
+        _ = (
+            vmctx,
+            start,
+            return_,
+            caller_instance,
+            task_return_type,
+            params,
+            results,
+        );
+        unreachable!()
+    }
+}
+
+unsafe fn async_exit(
+    vmctx: NonNull<VMComponentContext>,
+    callback: *mut u8,
+    post_return: *mut u8,
+    caller_instance: u32,
+    callee: *mut u8,
+    callee_instance: u32,
+    param_count: u32,
+    result_count: u32,
+    flags: u32,
+) -> Result<u32> {
+    #[cfg(feature = "component-model-async")]
+    {
+        ComponentInstance::from_vmctx(vmctx, |instance| {
+            (*instance.store()).component_async_store().async_exit(
+                callback.cast::<VMFuncRef>(),
+                post_return.cast::<VMFuncRef>(),
+                RuntimeComponentInstanceIndex::from_u32(caller_instance),
+                callee.cast::<VMFuncRef>(),
+                RuntimeComponentInstanceIndex::from_u32(callee_instance),
+                param_count,
+                result_count,
+                flags,
+            )
+        })
+    }
+    #[cfg(not(feature = "component-model-async"))]
+    {
+        _ = (
+            vmctx,
+            callback,
+            post_return,
+            caller_instance,
+            callee,
+            callee_instance,
+            param_count,
+            result_count,
+            flags,
+        );
+        unreachable!()
+    }
 }
 
 unsafe fn future_transfer(

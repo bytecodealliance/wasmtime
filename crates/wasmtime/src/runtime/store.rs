@@ -2549,7 +2549,69 @@ impl AsyncCx {
     }
 }
 
+#[cfg(feature = "component-model-async")]
+unsafe impl<T> crate::runtime::vm::VMComponentAsyncStore for StoreInner<T> {
+    fn task_return(
+        &mut self,
+        ty: wasmtime_environ::component::TypeTaskReturnIndex,
+        storage: *mut ValRaw,
+        storage_len: usize,
+    ) -> Result<()> {
+        _ = (ty, storage, storage_len);
+        todo!()
+    }
+
+    fn async_enter(
+        &mut self,
+        start: *mut VMFuncRef,
+        return_: *mut VMFuncRef,
+        caller_instance: wasmtime_environ::component::RuntimeComponentInstanceIndex,
+        task_return_type: wasmtime_environ::component::TypeTaskReturnIndex,
+        params: u32,
+        results: u32,
+    ) -> Result<()> {
+        _ = (
+            start,
+            return_,
+            caller_instance,
+            task_return_type,
+            params,
+            results,
+        );
+        todo!()
+    }
+
+    fn async_exit(
+        &mut self,
+        callback: *mut VMFuncRef,
+        post_return: *mut VMFuncRef,
+        caller_instance: wasmtime_environ::component::RuntimeComponentInstanceIndex,
+        callee: *mut VMFuncRef,
+        callee_instance: wasmtime_environ::component::RuntimeComponentInstanceIndex,
+        param_count: u32,
+        result_count: u32,
+        flags: u32,
+    ) -> Result<u32> {
+        _ = (
+            callback,
+            post_return,
+            caller_instance,
+            callee,
+            callee_instance,
+            param_count,
+            result_count,
+            flags,
+        );
+        todo!()
+    }
+}
+
 unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
+    #[cfg(feature = "component-model-async")]
+    fn component_async_store(&mut self) -> &mut dyn crate::runtime::vm::VMComponentAsyncStore {
+        self
+    }
+
     fn store_opaque(&self) -> &StoreOpaque {
         &self.inner
     }
