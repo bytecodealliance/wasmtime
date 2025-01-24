@@ -125,10 +125,13 @@ fn pulley_provenance_test() -> Result<()> {
     });
     let instance = Instance::new(&mut store, &module, &[host_wrap.into(), host_new.into()])?;
 
-    let func = instance
-        .get_typed_func::<(), (i32, i32, i32)>(&mut store, "call-wasm")
-        .unwrap();
-    let results = func.call(&mut store, ())?;
-    assert_eq!(results, (1, 2, 3));
+    for func in ["call-wasm", "call-native-wrap", "call-native-new"] {
+        let func = instance
+            .get_typed_func::<(), (i32, i32, i32)>(&mut store, func)
+            .unwrap();
+        let results = func.call(&mut store, ())?;
+        assert_eq!(results, (1, 2, 3));
+    }
+
     Ok(())
 }
