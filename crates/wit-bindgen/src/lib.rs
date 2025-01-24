@@ -2132,11 +2132,9 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str("}\n");
                 self.push_str("}\n");
 
-                if cfg!(feature = "std") {
-                    self.push_str("impl std::error::Error for ");
-                    self.push_str(&name);
-                    self.push_str("{}\n");
-                }
+                self.push_str("impl core::error::Error for ");
+                self.push_str(&name);
+                self.push_str("{}\n");
             }
             self.assert_type(id, &name);
         }
@@ -2319,14 +2317,12 @@ impl<'a> InterfaceGenerator<'a> {
                 self.push_str("}\n");
                 self.push_str("}\n");
 
-                if cfg!(feature = "std") {
-                    self.push_str("impl");
-                    self.print_generics(lt);
-                    self.push_str(" std::error::Error for ");
-                    self.push_str(&name);
-                    self.print_generics(lt);
-                    self.push_str(" {}\n");
-                }
+                self.push_str("impl");
+                self.print_generics(lt);
+                self.push_str(" core::error::Error for ");
+                self.push_str(&name);
+                self.print_generics(lt);
+                self.push_str(" {}\n");
             }
 
             self.assert_type(id, &name);
@@ -2499,11 +2495,9 @@ impl<'a> InterfaceGenerator<'a> {
             self.push_str("}\n");
             self.push_str("}\n");
             self.push_str("\n");
-            if cfg!(feature = "std") {
-                self.push_str("impl std::error::Error for ");
-                self.push_str(&name);
-                self.push_str("{}\n");
-            }
+            self.push_str("impl core::error::Error for ");
+            self.push_str(&name);
+            self.push_str("{}\n");
         } else {
             self.print_rust_enum_debug(
                 id,
@@ -3144,7 +3138,7 @@ impl<'a> InterfaceGenerator<'a> {
                 uwriteln!(
                     self.src,
                     "        }}) as {box_fn}
-                         }}) as ::std::pin::Pin<Box<dyn ::std::future::Future<Output = {box_fn}> \
+                         }}) as ::core::pin::Pin<Box<dyn ::core::future::Future<Output = {box_fn}> \
                                + Send + Sync + 'static>>
                     "
                 );
@@ -3182,7 +3176,7 @@ impl<'a> InterfaceGenerator<'a> {
         self.push_str(" -> ");
 
         if let CallStyle::Concurrent = &style {
-            uwrite!(self.src, "impl ::std::future::Future<Output = impl FnOnce(wasmtime::StoreContextMut<'_, Self::{data}>) -> ");
+            uwrite!(self.src, "impl ::core::future::Future<Output = impl FnOnce(wasmtime::StoreContextMut<'_, Self::{data}>) -> ");
         }
 
         if !self.generator.opts.trappable_imports.can_trap(func) {
@@ -3588,13 +3582,13 @@ impl LinkOptionsBuilder {
         uwriteln!(
             src,
             "
-            impl std::convert::From<LinkOptions> for {path}::LinkOptions {{
+            impl core::convert::From<LinkOptions> for {path}::LinkOptions {{
                 fn from(src: LinkOptions) -> Self {{
                     (&src).into()
                 }}
             }}
 
-            impl std::convert::From<&LinkOptions> for {path}::LinkOptions {{
+            impl core::convert::From<&LinkOptions> for {path}::LinkOptions {{
                 fn from(src: &LinkOptions) -> Self {{
                     let mut dest = Self::default();
         "
