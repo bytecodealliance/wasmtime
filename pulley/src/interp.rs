@@ -1138,7 +1138,7 @@ impl Interpreter<'_> {
 
 #[test]
 fn simple_push_pop() {
-    let mut state = MachineState::with_stack(vec![0; 16]);
+    let mut state = MachineState::with_stack(16);
     let pc = ExecutingPc::default();
     unsafe {
         let mut bytecode = [0; 10];
