@@ -94,6 +94,18 @@ impl From<Reg> for Xmm {
     }
 }
 
+impl From<Reg> for XmmMem {
+    fn from(value: Reg) -> Self {
+        XmmMem::unwrap_new(value.into())
+    }
+}
+
+impl From<Reg> for XmmMemImm {
+    fn from(value: Reg) -> Self {
+        XmmMemImm::unwrap_new(value.into())
+    }
+}
+
 impl From<OperandSize> for args::OperandSize {
     fn from(size: OperandSize) -> Self {
         match size {
@@ -1862,6 +1874,14 @@ impl Assembler {
             OperandSize::S64 => AvxOpcode::Vpinsrq,
             _ => unimplemented!(),
         }
+    }
+    pub fn xmm_rmi_rvex(&mut self, op: AvxOpcode, src1: Reg, src2: Reg, dst: WritableReg) {
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.map(Into::into),
+        })
     }
 }
 

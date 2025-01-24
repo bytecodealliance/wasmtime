@@ -34,7 +34,7 @@ use cranelift_codegen::{
     isa::{
         unwind::UnwindInst,
         x64::{
-            args::{FenceKind, CC},
+            args::{AvxOpcode, FenceKind, CC},
             settings as x64_settings, AtomicRmwSeqOp,
         },
     },
@@ -1643,6 +1643,17 @@ impl Masm for MacroAssembler {
 
     fn fence(&mut self) -> Result<()> {
         self.asm.fence(FenceKind::MFence);
+        Ok(())
+    }
+
+    fn not128v(&mut self, dst: WritableReg) -> Result<()> {
+        let tmp = regs::scratch_xmm();
+        // First, we initialize `tmp` with all ones, by comparing it with itself.
+        self.asm
+            .xmm_rmi_rvex(AvxOpcode::Vpcmpeqd, tmp, tmp, writable!(tmp));
+        // then we `xor` tmp and `dst` together, yielding `!dst`.
+        self.asm
+            .xmm_rmi_rvex(AvxOpcode::Vpxor, tmp, dst.to_reg(), dst);
         Ok(())
     }
 }

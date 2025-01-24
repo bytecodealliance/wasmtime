@@ -355,6 +355,7 @@ macro_rules! def_unsupported {
     (emit MemoryAtomicWait64 $($rest:tt)*) => {};
     (emit MemoryAtomicNotify $($rest:tt)*) => {};
     (emit AtomicFence $($rest:tt)*) => {};
+    (emit V128Not $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -541,28 +542,28 @@ where
     }
 
     fn visit_f32_abs(&mut self) -> Self::Output {
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.float_abs(writable!(reg), OperandSize::S32)?;
             Ok(TypedReg::f32(reg))
         })
     }
 
     fn visit_f64_abs(&mut self) -> Self::Output {
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.float_abs(writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::f64(reg))
         })
     }
 
     fn visit_f32_neg(&mut self) -> Self::Output {
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.float_neg(writable!(reg), OperandSize::S32)?;
             Ok(TypedReg::f32(reg))
         })
     }
 
     fn visit_f64_neg(&mut self) -> Self::Output {
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.float_neg(writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::f64(reg))
         })
@@ -673,14 +674,14 @@ where
     }
 
     fn visit_f32_sqrt(&mut self) -> Self::Output {
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.float_sqrt(writable!(reg), reg, OperandSize::S32)?;
             Ok(TypedReg::f32(reg))
         })
     }
 
     fn visit_f64_sqrt(&mut self) -> Self::Output {
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.float_sqrt(writable!(reg), reg, OperandSize::S64)?;
             Ok(TypedReg::f64(reg))
         })
@@ -893,14 +894,14 @@ where
     }
 
     fn visit_f32_demote_f64(&mut self) -> Self::Output {
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.demote(writable!(reg), reg)?;
             Ok(TypedReg::f32(reg))
         })
     }
 
     fn visit_f64_promote_f32(&mut self) -> Self::Output {
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.promote(writable!(reg), reg)?;
             Ok(TypedReg::f64(reg))
         })
@@ -1087,7 +1088,7 @@ where
     fn visit_i32_eqz(&mut self) -> Self::Output {
         use OperandSize::*;
 
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.cmp_with_set(writable!(reg.into()), RegImm::i32(0), IntCmpKind::Eq, S32)?;
             Ok(TypedReg::i32(reg))
         })
@@ -1096,7 +1097,7 @@ where
     fn visit_i64_eqz(&mut self) -> Self::Output {
         use OperandSize::*;
 
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.cmp_with_set(writable!(reg.into()), RegImm::i64(0), IntCmpKind::Eq, S64)?;
             Ok(TypedReg::i32(reg)) // Return value for `i64.eqz` is an `i32`.
         })
@@ -1105,7 +1106,7 @@ where
     fn visit_i32_clz(&mut self) -> Self::Output {
         use OperandSize::*;
 
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.clz(writable!(reg), reg, S32)?;
             Ok(TypedReg::i32(reg))
         })
@@ -1114,7 +1115,7 @@ where
     fn visit_i64_clz(&mut self) -> Self::Output {
         use OperandSize::*;
 
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.clz(writable!(reg), reg, S64)?;
             Ok(TypedReg::i64(reg))
         })
@@ -1123,7 +1124,7 @@ where
     fn visit_i32_ctz(&mut self) -> Self::Output {
         use OperandSize::*;
 
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.ctz(writable!(reg), reg, S32)?;
             Ok(TypedReg::i32(reg))
         })
@@ -1132,7 +1133,7 @@ where
     fn visit_i64_ctz(&mut self) -> Self::Output {
         use OperandSize::*;
 
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.ctz(writable!(reg), reg, S64)?;
             Ok(TypedReg::i64(reg))
         })
@@ -1261,56 +1262,56 @@ where
     }
 
     fn visit_i32_wrap_i64(&mut self) -> Self::Output {
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.wrap(writable!(reg), reg)?;
             Ok(TypedReg::i32(reg))
         })
     }
 
     fn visit_i64_extend_i32_s(&mut self) -> Self::Output {
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.extend(writable!(reg), reg, Extend::<Signed>::I64Extend32.into())?;
             Ok(TypedReg::i64(reg))
         })
     }
 
     fn visit_i64_extend_i32_u(&mut self) -> Self::Output {
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.extend(writable!(reg), reg, Extend::<Zero>::I64Extend32.into())?;
             Ok(TypedReg::i64(reg))
         })
     }
 
     fn visit_i32_extend8_s(&mut self) -> Self::Output {
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.extend(writable!(reg), reg, Extend::<Signed>::I32Extend8.into())?;
             Ok(TypedReg::i32(reg))
         })
     }
 
     fn visit_i32_extend16_s(&mut self) -> Self::Output {
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.extend(writable!(reg), reg, Extend::<Signed>::I32Extend16.into())?;
             Ok(TypedReg::i32(reg))
         })
     }
 
     fn visit_i64_extend8_s(&mut self) -> Self::Output {
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.extend(writable!(reg), reg, Extend::<Signed>::I64Extend8.into())?;
             Ok(TypedReg::i64(reg))
         })
     }
 
     fn visit_i64_extend16_s(&mut self) -> Self::Output {
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.extend(writable!(reg), reg, Extend::<Signed>::I64Extend16.into())?;
             Ok(TypedReg::i64(reg))
         })
     }
 
     fn visit_i64_extend32_s(&mut self) -> Self::Output {
-        self.context.unop(self.masm, &mut |masm, reg| {
+        self.context.unop(self.masm, |masm, reg| {
             masm.extend(writable!(reg), reg, Extend::<Signed>::I64Extend32.into())?;
             Ok(TypedReg::i64(reg))
         })
@@ -2979,6 +2980,13 @@ where
             .replace_lane_op(self.masm, ReplaceLaneKind::F64x2, |masm, src, dst, kind| {
                 masm.replace_lane(src, dst, lane, kind)
             })
+    }
+
+    fn visit_v128_not(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, reg| {
+            masm.not128v(writable!(reg))?;
+            Ok(TypedReg::new(WasmValType::V128, reg))
+        })
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);

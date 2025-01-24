@@ -1473,4 +1473,7 @@ pub(crate) trait MacroAssembler {
 
     /// Emit a memory fence.
     fn fence(&mut self) -> Result<()>;
+
+    /// Perform a logical `not` operation on the 128bit vector value in `dst`.
+    fn not128v(&mut self, dst: WritableReg) -> Result<()>;
 }
