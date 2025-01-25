@@ -90,7 +90,8 @@ pub mod raw {
     // between doc comments and `cfg`s.
     #![allow(unused_doc_comments, unused_attributes)]
 
-    use crate::runtime::vm::{InstanceAndStore, VMContext, VmPtr};
+    use crate::runtime::vm::{InstanceAndStore, VMContext};
+    use core::ptr::NonNull;
 
     macro_rules! libcall {
         (
@@ -108,13 +109,13 @@ pub mod raw {
                 // with conversion of the return value in the face of traps.
                 #[allow(unused_variables, missing_docs)]
                 pub unsafe extern "C" fn $name(
-                    vmctx: VmPtr<VMContext>,
+                    vmctx: NonNull<VMContext>,
                     $( $pname : libcall!(@ty $param), )*
                 ) $(-> libcall!(@ty $result))? {
                     $(#[cfg($attr)])?
                     {
                         crate::runtime::vm::traphandlers::catch_unwind_and_record_trap(|| {
-                            InstanceAndStore::from_vmctx(vmctx.as_non_null(), |pair| {
+                            InstanceAndStore::from_vmctx(vmctx, |pair| {
                                 let (instance, store) = pair.unpack_mut();
                                 super::$name(store, instance, $($pname),*)
                             })
@@ -133,15 +134,15 @@ pub mod raw {
                 const _: () = {
                     #[used]
                     static I_AM_USED: unsafe extern "C" fn(
-                        VmPtr<VMContext>,
+                        NonNull<VMContext>,
                         $( $pname : libcall!(@ty $param), )*
                     ) $( -> libcall!(@ty $result))? = $name;
                 };
             )*
         };
 
-        (@ty i32) => (u32);
-        (@ty i64) => (u64);
+        (@ty u32) => (u32);
+        (@ty u64) => (u64);
         (@ty u8) => (u8);
         (@ty bool) => (bool);
         (@ty pointer) => (*mut u8);

@@ -12,7 +12,8 @@ cargo run --no-default-features --features compile,pulley,wat,gc-drc,component-m
   -o tests/all/pulley_provenance_test.cwasm \
   -O memory-reservation=$((1 << 20)) \
   -O memory-guard-size=0 \
-  -O signals-based-traps=n
+  -O signals-based-traps=n \
+  -W function-references
 
 MIRIFLAGS="$MIRIFLAGS -Zmiri-disable-isolation -Zmiri-permissive-provenance" \
   cargo miri test --test all -- \

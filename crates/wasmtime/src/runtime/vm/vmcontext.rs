@@ -857,15 +857,32 @@ macro_rules! define_builtin_array {
                     $name: crate::runtime::vm::libcalls::raw::$name,
                 )*
             };
+
+            /// Helper to call `expose_provenance()` on all contained pointers.
+            ///
+            /// This is required to be called at least once before entering wasm
+            /// to inform the compiler that these function pointers may all be
+            /// loaded/stored and used on the "other end" to reacquire
+            /// provenance in Pulley. Pulley models hostcalls with a host
+            /// pointer as the first parameter that's a function pointer under
+            /// the hood, and this call ensures that the use of the function
+            /// pointer is considered valid.
+            pub fn expose_provenance(&self) -> NonNull<Self>{
+                $(
+                    #[cfg(has_provenance_apis)]
+                    (self.$name as *mut u8).expose_provenance();
+                )*
+                NonNull::from(self)
+            }
         }
     };
 
-    (@ty i32) => (u32);
-    (@ty i64) => (u64);
+    (@ty u32) => (u32);
+    (@ty u64) => (u64);
     (@ty u8) => (u8);
     (@ty bool) => (bool);
     (@ty pointer) => (*mut u8);
-    (@ty vmctx) => (VmPtr<VMContext>);
+    (@ty vmctx) => (NonNull<VMContext>);
 }
 
 // SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.

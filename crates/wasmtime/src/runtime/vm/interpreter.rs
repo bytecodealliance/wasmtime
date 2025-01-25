@@ -251,7 +251,7 @@ impl InterpreterRef<'_> {
     )]
     unsafe fn call_indirect_host(&mut self, id: u8) {
         let id = u32::from(id);
-        let fnptr = self.0[XReg::x0].get_ptr::<u8>();
+        let fnptr = self.0[XReg::x0].get_ptr();
         let mut arg_reg = 1;
 
         /// Helper macro to invoke a builtin.
@@ -316,8 +316,7 @@ impl InterpreterRef<'_> {
             // type.
             (@get u8 $reg:ident) => (self.0[$reg].get_i32() as u8);
             (@get u32 $reg:ident) => (self.0[$reg].get_u32());
-            (@get i32 $reg:ident) => (self.0[$reg].get_i32());
-            (@get i64 $reg:ident) => (self.0[$reg].get_i64());
+            (@get u64 $reg:ident) => (self.0[$reg].get_u64());
             (@get vmctx $reg:ident) => (self.0[$reg].get_ptr());
             (@get pointer $reg:ident) => (self.0[$reg].get_ptr());
             (@get ptr $reg:ident) => (self.0[$reg].get_ptr());
@@ -330,9 +329,8 @@ impl InterpreterRef<'_> {
             // Conversion from a Rust value back into a macro-defined type,
             // stored in a pulley register.
             (@set bool $reg:ident $val:ident) => (self.0[$reg].set_i32(i32::from($val)));
-            (@set i32 $reg:ident $val:ident) => (self.0[$reg].set_i32($val));
+            (@set u32 $reg:ident $val:ident) => (self.0[$reg].set_u32($val));
             (@set u64 $reg:ident $val:ident) => (self.0[$reg].set_u64($val));
-            (@set i64 $reg:ident $val:ident) => (self.0[$reg].set_i64($val));
             (@set pointer $reg:ident $val:ident) => (self.0[$reg].set_ptr($val));
             (@set size $reg:ident $val:ident) => (self.0[$reg].set_ptr($val as *mut u8));
         }

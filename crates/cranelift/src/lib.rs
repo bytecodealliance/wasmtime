@@ -364,11 +364,11 @@ impl BuiltinFunctionSignatures {
         AbiParam::new(self.pointer_type)
     }
 
-    fn i32(&self) -> AbiParam {
+    fn u32(&self) -> AbiParam {
         AbiParam::new(ir::types::I32)
     }
 
-    fn i64(&self) -> AbiParam {
+    fn u64(&self) -> AbiParam {
         AbiParam::new(ir::types::I64)
     }
 
