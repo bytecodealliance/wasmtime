@@ -1884,6 +1884,14 @@ impl Assembler {
             dst: dst.map(Into::into),
         })
     }
+
+    pub fn xmm_vptest(&mut self, src1: Reg, src2: Reg) {
+        self.emit(Inst::XmmCmpRmRVex {
+            op: AvxOpcode::Vptest,
+            src1: src1.into(),
+            src2: src2.into(),
+        })
+    }
 }
 
 /// Captures the region in a MachBuffer where an add-with-immediate instruction would be emitted,

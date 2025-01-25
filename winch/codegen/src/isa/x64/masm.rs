@@ -1685,6 +1685,12 @@ impl Masm for MacroAssembler {
 
         Ok(())
     }
+
+    fn any_true128v(&mut self, src: Reg, dst: WritableReg) -> Result<()> {
+        self.asm.xmm_vptest(src, src);
+        self.asm.setcc(IntCmpKind::Ne, dst);
+        Ok(())
+    }
 }
 
 impl MacroAssembler {

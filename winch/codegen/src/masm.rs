@@ -1500,4 +1500,7 @@ pub(crate) trait MacroAssembler {
     ///
     /// This is equivalent to: `v128.or(v128.and(src1, mask), v128.and(src2, v128.not(mask)))`.
     fn bitselect128v(&mut self, src1: Reg, src2: Reg, mask: Reg, dst: WritableReg) -> Result<()>;
+
+    /// If any bit in `src` is 1, set `dst` to 1, or 0 otherwise.
+    fn any_true128v(&mut self, src: Reg, dst: WritableReg) -> Result<()>;
 }

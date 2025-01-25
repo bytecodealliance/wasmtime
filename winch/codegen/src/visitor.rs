@@ -361,6 +361,7 @@ macro_rules! def_unsupported {
     (emit V128Or $($rest:tt)*) => {};
     (emit V128Xor $($rest:tt)*) => {};
     (emit V128Bitselect $($rest:tt)*) => {};
+    (emit V128AnyTrue $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -3045,6 +3046,20 @@ where
         self.context.free_reg(op1);
         self.context.free_reg(op2);
         self.context.free_reg(mask);
+
+        Ok(())
+    }
+
+    fn visit_v128_any_true(&mut self) -> Self::Output {
+        let src = self.context.pop_to_reg(self.masm, None)?;
+        let dst = self.context.any_gpr(self.masm)?;
+
+        self.masm.any_true128v(src.reg, writable!(dst))?;
+
+        self.context
+            .stack
+            .push(TypedReg::new(WasmValType::I32, dst).into());
+        self.context.free_reg(src);
 
         Ok(())
     }
