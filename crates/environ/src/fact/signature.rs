@@ -110,6 +110,8 @@ impl ComponentTypesBuilder {
         let mut results_indirect = false;
         let results = match self.flatten_types(
             &options.options,
+            // Async functions return results by calling `task.return`, which
+            // accepts up to `MAX_FLAT_PARAMS` parameters via the stack.
             MAX_FLAT_PARAMS,
             self[ty.params].types.iter().copied(),
         ) {
@@ -128,20 +130,50 @@ impl ComponentTypesBuilder {
         }
     }
 
+    pub(super) fn flatten_lowering_types(
+        &self,
+        options: &Options,
+        tys: impl IntoIterator<Item = InterfaceType>,
+    ) -> Option<Vec<ValType>> {
+        if options.async_ {
+            // When lowering an async function, we always spill parameters to
+            // linear memory.
+            None
+        } else {
+            self.flatten_types(options, MAX_FLAT_RESULTS, tys)
+        }
+    }
+
+    pub(super) fn flatten_lifting_types(
+        &self,
+        options: &Options,
+        tys: impl IntoIterator<Item = InterfaceType>,
+    ) -> Option<Vec<ValType>> {
+        self.flatten_types(
+            options,
+            if options.async_ {
+                // Async functions return results by calling `task.return`,
+                // which accepts up to `MAX_FLAT_PARAMS` parameters via the
+                // stack.
+                MAX_FLAT_PARAMS
+            } else {
+                // Sync functions return results directly (at least until we add
+                // a `always-task-return` canonical option) and so are limited
+                // to returning up to `MAX_FLAT_RESULTS` results via the stack.
+                MAX_FLAT_RESULTS
+            },
+            tys,
+        )
+    }
+
     pub(super) fn async_return_signature(&self, options: &AdapterOptions) -> Signature {
         let ty = &self[options.ty];
         let ptr_ty = options.options.ptr();
 
         let mut params_indirect = false;
-        let mut params = match self.flatten_types(
-            &options.options,
-            if options.options.async_ {
-                MAX_FLAT_PARAMS
-            } else {
-                MAX_FLAT_RESULTS
-            },
-            self[ty.results].types.iter().copied(),
-        ) {
+        let mut params = match self
+            .flatten_lifting_types(&options.options, self[ty.results].types.iter().copied())
+        {
             Some(list) => list,
             None => {
                 params_indirect = true;

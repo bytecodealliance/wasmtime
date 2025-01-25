@@ -21,7 +21,6 @@ use crate::component::{
     TypeFlagsIndex, TypeFutureTableIndex, TypeListIndex, TypeOptionIndex, TypeRecordIndex,
     TypeResourceTableIndex, TypeResultIndex, TypeStreamTableIndex, TypeTupleIndex,
     TypeVariantIndex, VariantInfo, FLAG_MAY_ENTER, FLAG_MAY_LEAVE, MAX_FLAT_PARAMS,
-    MAX_FLAT_RESULTS,
 };
 use crate::fact::signature::Signature;
 use crate::fact::transcode::Transcoder;
@@ -817,25 +816,20 @@ impl Compiler<'_, '_> {
         let dst = if let Some(flat) = &dst_flat {
             Destination::Stack(flat, lift_opts)
         } else {
+            let abi = CanonicalAbiInfo::record(dst_tys.iter().map(|t| self.types.canonical_abi(t)));
+            let (size, align) = if lift_opts.memory64 {
+                (abi.size64, abi.align64)
+            } else {
+                (abi.size32, abi.align32)
+            };
+
             if lift_opts.async_ {
-                let align = dst_tys
-                    .iter()
-                    .map(|t| self.types.align(lift_opts, t))
-                    .max()
-                    .unwrap_or(1);
                 let (addr, ty) = *param_locals.last().expect("no retptr");
                 assert_eq!(ty, lift_opts.ptr());
                 Destination::Memory(self.memory_operand(lift_opts, TempLocal::new(addr, ty), align))
             } else {
                 // If there are too many parameters then space is allocated in the
                 // destination module for the parameters via its `realloc` function.
-                let abi =
-                    CanonicalAbiInfo::record(dst_tys.iter().map(|t| self.types.canonical_abi(t)));
-                let (size, align) = if lift_opts.memory64 {
-                    (abi.size64, abi.align64)
-                } else {
-                    (abi.size32, abi.align32)
-                };
                 let size = MallocSize::Const(size);
                 Destination::Memory(self.malloc(lift_opts, size, align))
             }
@@ -881,21 +875,12 @@ impl Compiler<'_, '_> {
         let lift_opts = &adapter.lift.options;
         let lower_opts = &adapter.lower.options;
 
-        let src_flat = self.types.flatten_types(
-            lift_opts,
-            if lift_opts.async_ {
-                MAX_FLAT_PARAMS
-            } else {
-                MAX_FLAT_RESULTS
-            },
-            src_tys.iter().copied(),
-        );
-        let dst_flat = if lower_opts.async_ {
-            None
-        } else {
-            self.types
-                .flatten_types(lower_opts, MAX_FLAT_RESULTS, dst_tys.iter().copied())
-        };
+        let src_flat = self
+            .types
+            .flatten_lifting_types(lift_opts, src_tys.iter().copied());
+        let dst_flat = self
+            .types
+            .flatten_lowering_types(lower_opts, dst_tys.iter().copied());
 
         let src = if src_flat.is_some() {
             Source::Stack(Stack {

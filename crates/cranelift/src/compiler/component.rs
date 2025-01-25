@@ -196,12 +196,12 @@ impl<'a> TrampolineCompiler<'a> {
             Trampoline::ResourceDrop(ty) => self.translate_resource_drop(*ty),
             Trampoline::ResourceTransferOwn => {
                 self.translate_resource_libcall(host::resource_transfer_own, |me, rets| {
-                    rets[0] = me.raise_if_i32_trapped(rets[0]);
+                    rets[0] = me.raise_if_negative_one(rets[0]);
                 })
             }
             Trampoline::ResourceTransferBorrow => {
                 self.translate_resource_libcall(host::resource_transfer_borrow, |me, rets| {
-                    rets[0] = me.raise_if_i32_trapped(rets[0]);
+                    rets[0] = me.raise_if_negative_one(rets[0]);
                 })
             }
             Trampoline::ResourceEnterCall => {
@@ -265,9 +265,11 @@ impl<'a> TrampolineCompiler<'a> {
         match self.abi {
             Abi::Wasm => {}
 
-            // These trampolines can only actually be called by Wasm, so
-            // let's assert that here.
             Abi::Array => {
+                // TODO: A guest could hypothetically export the `task.return`
+                // intrinsic it imported, allowing the host to call it.  We
+                // should either update the component model spec to disallow
+                // that or support it here.
                 self.builder.ins().trap(TRAP_INTERNAL_ASSERT);
                 return;
             }
@@ -393,7 +395,7 @@ impl<'a> TrampolineCompiler<'a> {
 
         if result == ir::types::I64 {
             let result = self.builder.func.dfg.inst_results(call)[0];
-            let result = self.raise_if_i32_trapped(result);
+            let result = self.raise_if_negative_one(result);
             self.abi_store_results(&[result]);
         } else {
             assert!(result == ir::types::I8);
@@ -609,7 +611,7 @@ impl<'a> TrampolineCompiler<'a> {
         );
         let call = self.call_libcall(vmctx, host::resource_new32, &host_args);
         let result = self.builder.func.dfg.inst_results(call)[0];
-        let result = self.raise_if_i32_trapped(result);
+        let result = self.raise_if_negative_one(result);
         self.abi_store_results(&[result]);
     }
 
@@ -638,7 +640,7 @@ impl<'a> TrampolineCompiler<'a> {
         );
         let call = self.call_libcall(vmctx, host::resource_rep32, &host_args);
         let result = self.builder.func.dfg.inst_results(call)[0];
-        let result = self.raise_if_i32_trapped(result);
+        let result = self.raise_if_negative_one(result);
         self.abi_store_results(&[result]);
     }
 
@@ -951,7 +953,7 @@ impl<'a> TrampolineCompiler<'a> {
         self.raise_if_host_trapped(succeeded);
     }
 
-    fn raise_if_i32_trapped(&mut self, ret: ir::Value) -> ir::Value {
+    fn raise_if_negative_one(&mut self, ret: ir::Value) -> ir::Value {
         let minus_one = self.builder.ins().iconst(ir::types::I64, -1);
         let succeeded = self.builder.ins().icmp(IntCC::NotEqual, ret, minus_one);
         self.raise_if_host_trapped(succeeded);

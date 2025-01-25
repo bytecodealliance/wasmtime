@@ -9,12 +9,6 @@ use core::ptr::NonNull;
 use core::slice;
 use wasmtime_environ::component::TypeResourceTableIndex;
 
-#[cfg(feature = "component-model-async")]
-use {
-    crate::{vm::VMFuncRef, ValRaw},
-    wasmtime_environ::component::{RuntimeComponentInstanceIndex, TypeTaskReturnIndex},
-};
-
 const UTF16_TAG: usize = 1 << 31;
 
 macro_rules! signature {
@@ -588,8 +582,8 @@ unsafe fn task_return(
     {
         ComponentInstance::from_vmctx(vmctx, |instance| {
             (*instance.store()).component_async_store().task_return(
-                TypeTaskReturnIndex::from_u32(ty),
-                storage.cast::<ValRaw>(),
+                wasmtime_environ::component::TypeTaskReturnIndex::from_u32(ty),
+                storage.cast::<crate::ValRaw>(),
                 storage_len,
             )
         })
@@ -614,10 +608,12 @@ unsafe fn async_enter(
     {
         ComponentInstance::from_vmctx(vmctx, |instance| {
             (*instance.store()).component_async_store().async_enter(
-                start.cast::<VMFuncRef>(),
-                return_.cast::<VMFuncRef>(),
-                RuntimeComponentInstanceIndex::from_u32(caller_instance),
-                TypeTaskReturnIndex::from_u32(task_return_type),
+                start.cast::<crate::vm::VMFuncRef>(),
+                return_.cast::<crate::vm::VMFuncRef>(),
+                wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(
+                    caller_instance,
+                ),
+                wasmtime_environ::component::TypeTaskReturnIndex::from_u32(task_return_type),
                 params,
                 results,
             )
@@ -653,11 +649,15 @@ unsafe fn async_exit(
     {
         ComponentInstance::from_vmctx(vmctx, |instance| {
             (*instance.store()).component_async_store().async_exit(
-                callback.cast::<VMFuncRef>(),
-                post_return.cast::<VMFuncRef>(),
-                RuntimeComponentInstanceIndex::from_u32(caller_instance),
-                callee.cast::<VMFuncRef>(),
-                RuntimeComponentInstanceIndex::from_u32(callee_instance),
+                callback.cast::<crate::vm::VMFuncRef>(),
+                post_return.cast::<crate::vm::VMFuncRef>(),
+                wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(
+                    caller_instance,
+                ),
+                callee.cast::<crate::vm::VMFuncRef>(),
+                wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(
+                    callee_instance,
+                ),
                 param_count,
                 result_count,
                 flags,

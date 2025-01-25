@@ -116,38 +116,6 @@ cfg_if::cfg_if! {
     }
 }
 
-#[cfg(feature = "component-model-async")]
-pub unsafe trait VMComponentAsyncStore {
-    fn task_return(
-        &mut self,
-        ty: wasmtime_environ::component::TypeTaskReturnIndex,
-        storage: *mut ValRaw,
-        storage_len: usize,
-    ) -> Result<()>;
-
-    fn async_enter(
-        &mut self,
-        start: *mut VMFuncRef,
-        return_: *mut VMFuncRef,
-        caller_instance: wasmtime_environ::component::RuntimeComponentInstanceIndex,
-        task_return_type: wasmtime_environ::component::TypeTaskReturnIndex,
-        params: u32,
-        results: u32,
-    ) -> Result<()>;
-
-    fn async_exit(
-        &mut self,
-        callback: *mut VMFuncRef,
-        post_return: *mut VMFuncRef,
-        caller_instance: wasmtime_environ::component::RuntimeComponentInstanceIndex,
-        callee: *mut VMFuncRef,
-        callee_instance: wasmtime_environ::component::RuntimeComponentInstanceIndex,
-        param_count: u32,
-        result_count: u32,
-        flags: u32,
-    ) -> Result<u32>;
-}
-
 /// Dynamic runtime functionality needed by this crate throughout the execution
 /// of a wasm instance.
 ///
@@ -223,7 +191,9 @@ pub unsafe trait VMStore {
     fn component_calls(&mut self) -> &mut component::CallContexts;
 
     #[cfg(feature = "component-model-async")]
-    fn component_async_store(&mut self) -> &mut dyn VMComponentAsyncStore;
+    fn component_async_store(
+        &mut self,
+    ) -> &mut dyn crate::runtime::component::VMComponentAsyncStore;
 }
 
 impl Deref for dyn VMStore + '_ {
