@@ -16,6 +16,9 @@ anyhow = { workspace = true }
 # format so `cranelift` and `wat` are enabled.
 wasmtime = { workspace = true, features = ['runtime'] }
 
+# Following deps are only required for wasi portion:
+wasmtime-wasi-io = { workspace = true, optional = true }
+
 # Memory allocator used in this example (not required, however)
 dlmalloc = "0.2.4"
 
@@ -25,4 +28,10 @@ test = false
 doctest = false
 
 [features]
+default = ["wasi"]
 custom = ['wasmtime/custom-virtual-memory', 'wasmtime/custom-native-signals']
+wasi = [
+    'wasmtime/component-model',
+    'wasmtime/async',
+    'dep:wasmtime-wasi-io',
+]

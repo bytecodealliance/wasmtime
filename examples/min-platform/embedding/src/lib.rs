@@ -10,6 +10,9 @@ use wasmtime::{Engine, Instance, Linker, Module, Store};
 mod allocator;
 mod panic;
 
+#[cfg(feature = "wasi")]
+mod wasi;
+
 /// Entrypoint of this embedding.
 ///
 /// This takes a number of parameters which are the precompiled module AOT

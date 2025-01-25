@@ -30,6 +30,9 @@ pub mod streams;
 #[doc(no_inline)]
 pub use async_trait::async_trait;
 
+#[doc(no_inline)]
+pub use ::bytes;
+
 use alloc::boxed::Box;
 use wasmtime::component::ResourceTable;
 
