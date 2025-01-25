@@ -1512,4 +1512,13 @@ pub(crate) trait MacroAssembler {
         lane: u8,
         size: OperandSize,
     ) -> Result<()>;
+
+    /// Store `size` bytes from `lane` of `src` to `addr`.
+    fn store_lane(
+        &mut self,
+        src: Reg,
+        addr: Self::Address,
+        lane: u8,
+        size: OperandSize,
+    ) -> Result<()>;
 }

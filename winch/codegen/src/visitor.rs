@@ -366,6 +366,10 @@ macro_rules! def_unsupported {
     (emit V128Load16Lane $($rest:tt)*) => {};
     (emit V128Load32Lane $($rest:tt)*) => {};
     (emit V128Load64Lane $($rest:tt)*) => {};
+    (emit V128Store8Lane $($rest:tt)*) => {};
+    (emit V128Store16Lane $($rest:tt)*) => {};
+    (emit V128Store32Lane $($rest:tt)*) => {};
+    (emit V128Store64Lane $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -3082,6 +3086,22 @@ where
 
     fn visit_v128_load64_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
         self.emit_load_lane(&arg, lane, OperandSize::S64)
+    }
+
+    fn visit_v128_store8_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
+        self.emit_store_lane(&arg, lane, OperandSize::S8)
+    }
+
+    fn visit_v128_store16_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
+        self.emit_store_lane(&arg, lane, OperandSize::S16)
+    }
+
+    fn visit_v128_store32_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
+        self.emit_store_lane(&arg, lane, OperandSize::S32)
+    }
+
+    fn visit_v128_store64_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
+        self.emit_store_lane(&arg, lane, OperandSize::S64)
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);

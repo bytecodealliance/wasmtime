@@ -1548,6 +1548,18 @@ where
 
         Ok(())
     }
+
+    pub fn emit_store_lane(&mut self, arg: &MemArg, lane: u8, size: OperandSize) -> Result<()> {
+        let src = self.context.pop_to_reg(self.masm, None)?;
+        if let Some(addr) = self.emit_compute_heap_address(&arg, size)? {
+            let dst = self.masm.address_at_reg(addr, 0)?;
+            self.masm.store_lane(src.reg, dst, lane, size)?;
+            self.context.free_reg(addr);
+            self.context.free_reg(src);
+        }
+
+        Ok(())
+    }
 }
 
 /// Returns the index of the [`ControlStackFrame`] for the given

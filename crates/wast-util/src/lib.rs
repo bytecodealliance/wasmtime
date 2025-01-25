@@ -427,7 +427,6 @@ impl WastTest {
                 "misc_testsuite/simd/cvt-from-uint.wast",
                 "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
                 "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
-                "multi-memory/simd_memory-multi.wast",
                 "spec_testsuite/simd_bit_shift.wast",
                 "spec_testsuite/simd_boolean.wast",
                 "spec_testsuite/simd_const.wast",
@@ -470,10 +469,6 @@ impl WastTest {
                 "spec_testsuite/simd_load.wast",
                 "spec_testsuite/simd_load_zero.wast",
                 "spec_testsuite/simd_splat.wast",
-                "spec_testsuite/simd_store16_lane.wast",
-                "spec_testsuite/simd_store32_lane.wast",
-                "spec_testsuite/simd_store64_lane.wast",
-                "spec_testsuite/simd_store8_lane.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {

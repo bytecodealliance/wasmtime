@@ -997,6 +997,16 @@ impl Masm for MacroAssembler {
     ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
+
+    fn store_lane(
+        &mut self,
+        _src: Reg,
+        _addr: Self::Address,
+        _lane: u8,
+        _size: OperandSize,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
 }
 
 impl MacroAssembler {

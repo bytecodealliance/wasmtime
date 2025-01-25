@@ -1699,7 +1699,18 @@ impl Masm for MacroAssembler {
     ) -> Result<()> {
         let byte_tmp = regs::scratch();
         self.load_impl(addr, writable!(byte_tmp), size, UNTRUSTED_FLAGS)?;
-        self.asm.vinsert(size, byte_tmp, dst.to_reg(), dst, lane);
+        self.asm.vinsert(size, byte_tmp, dst.to_reg(), dst, lane)?;
+        Ok(())
+    }
+
+    fn store_lane(
+        &mut self,
+        src: Reg,
+        addr: Self::Address,
+        lane: u8,
+        size: OperandSize,
+    ) -> Result<()> {
+        self.asm.vextract(&addr, src, lane, size, UNTRUSTED_FLAGS)?;
         Ok(())
     }
 }

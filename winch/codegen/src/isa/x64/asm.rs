@@ -1,6 +1,7 @@
 //! Assembler library implementation for x64.
 
 use crate::{
+    codegen::CodeGenError,
     isa::{reg::Reg, CallingConvention},
     masm::{
         DivKind, Extend, ExtendKind, ExtendType, IntCmpKind, MulWideKind, OperandSize, RemKind,
@@ -9,6 +10,7 @@ use crate::{
     reg::writable,
     x64::regs::scratch,
 };
+use anyhow::bail;
 use cranelift_codegen::{
     ir::{
         types, ConstantPool, ExternalName, LibCall, MemFlags, SourceLoc, TrapCode, Type,
@@ -1900,13 +1902,13 @@ impl Assembler {
         insert_into: Reg,
         dst: WritableReg,
         lane: u8,
-    ) {
+    ) -> anyhow::Result<()> {
         let op = match size {
             OperandSize::S8 => AvxOpcode::Vpinsrb,
             OperandSize::S16 => AvxOpcode::Vpinsrw,
             OperandSize::S32 => AvxOpcode::Vpinsrd,
             OperandSize::S64 => AvxOpcode::Vpinsrq,
-            _ => todo!(),
+            _ => bail!(CodeGenError::unexpected_operand_size()),
         };
 
         self.emit(Inst::XmmVexPinsr {
@@ -1916,6 +1918,43 @@ impl Assembler {
             dst: dst.map(Into::into),
             imm: lane,
         });
+
+        Ok(())
+    }
+
+    pub(crate) fn vextract(
+        &mut self,
+        addr: &Address,
+        src: Reg,
+        lane: u8,
+        size: OperandSize,
+        flags: MemFlags,
+    ) -> anyhow::Result<()> {
+        assert!(addr.is_offset());
+        let dst = Self::to_synthetic_amode(
+            addr,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            flags,
+        );
+
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpextrb,
+            OperandSize::S16 => AvxOpcode::Vpextrw,
+            OperandSize::S32 => AvxOpcode::Vpextrd,
+            OperandSize::S64 => AvxOpcode::Vpextrq,
+            _ => bail!(CodeGenError::unexpected_operand_size()),
+        };
+
+        self.emit(Inst::XmmMovRMImmVex {
+            op,
+            src: src.into(),
+            dst,
+            imm: lane,
+        });
+
+        Ok(())
     }
 }
 
