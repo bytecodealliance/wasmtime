@@ -312,7 +312,7 @@ pub mod foo {
                 fn roundtrip_flag1(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: Flag1,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Flag1 + Send + Sync + 'static,
@@ -322,7 +322,7 @@ pub mod foo {
                 fn roundtrip_flag2(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: Flag2,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Flag2 + Send + Sync + 'static,
@@ -332,7 +332,7 @@ pub mod foo {
                 fn roundtrip_flag4(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: Flag4,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Flag4 + Send + Sync + 'static,
@@ -342,7 +342,7 @@ pub mod foo {
                 fn roundtrip_flag8(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: Flag8,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Flag8 + Send + Sync + 'static,
@@ -352,7 +352,7 @@ pub mod foo {
                 fn roundtrip_flag16(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: Flag16,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Flag16 + Send + Sync + 'static,
@@ -362,7 +362,7 @@ pub mod foo {
                 fn roundtrip_flag32(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: Flag32,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Flag32 + Send + Sync + 'static,
@@ -372,7 +372,7 @@ pub mod foo {
                 fn roundtrip_flag64(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: Flag64,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Flag64 + Send + Sync + 'static,
@@ -424,9 +424,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<(Flag1,)> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -457,9 +457,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<(Flag2,)> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -490,9 +490,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<(Flag4,)> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -523,9 +523,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<(Flag8,)> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -556,9 +556,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<(Flag16,)> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -589,9 +589,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<(Flag32,)> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -622,9 +622,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<(Flag64,)> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -652,7 +652,7 @@ pub mod foo {
                 fn roundtrip_flag1(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: Flag1,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Flag1 + Send + Sync + 'static,
@@ -665,7 +665,7 @@ pub mod foo {
                 fn roundtrip_flag2(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: Flag2,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Flag2 + Send + Sync + 'static,
@@ -678,7 +678,7 @@ pub mod foo {
                 fn roundtrip_flag4(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: Flag4,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Flag4 + Send + Sync + 'static,
@@ -691,7 +691,7 @@ pub mod foo {
                 fn roundtrip_flag8(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: Flag8,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Flag8 + Send + Sync + 'static,
@@ -704,7 +704,7 @@ pub mod foo {
                 fn roundtrip_flag16(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: Flag16,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Flag16 + Send + Sync + 'static,
@@ -717,7 +717,7 @@ pub mod foo {
                 fn roundtrip_flag32(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: Flag32,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Flag32 + Send + Sync + 'static,
@@ -730,7 +730,7 @@ pub mod foo {
                 fn roundtrip_flag64(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: Flag64,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Flag64 + Send + Sync + 'static,

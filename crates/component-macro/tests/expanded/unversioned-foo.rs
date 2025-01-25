@@ -196,7 +196,7 @@ pub mod foo {
                     write!(f, "{:?}", self)
                 }
             }
-            impl std::error::Error for Error {}
+            impl core::error::Error for Error {}
             const _: () = {
                 assert!(12 == < Error as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < Error as wasmtime::component::ComponentType >::ALIGN32);

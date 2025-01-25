@@ -378,7 +378,7 @@ pub mod foo {
                 fn list_u8_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<u8>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -388,7 +388,7 @@ pub mod foo {
                 fn list_u16_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<u16>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -398,7 +398,7 @@ pub mod foo {
                 fn list_u32_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<u32>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -408,7 +408,7 @@ pub mod foo {
                 fn list_u64_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<u64>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -418,7 +418,7 @@ pub mod foo {
                 fn list_s8_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<i8>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -428,7 +428,7 @@ pub mod foo {
                 fn list_s16_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<i16>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -438,7 +438,7 @@ pub mod foo {
                 fn list_s32_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<i32>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -448,7 +448,7 @@ pub mod foo {
                 fn list_s64_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<i64>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -458,7 +458,7 @@ pub mod foo {
                 fn list_f32_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<f32>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -468,7 +468,7 @@ pub mod foo {
                 fn list_f64_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<f64>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -477,7 +477,7 @@ pub mod foo {
                     Self: Sized;
                 fn list_u8_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<u8> + Send + Sync + 'static,
@@ -486,7 +486,7 @@ pub mod foo {
                     Self: Sized;
                 fn list_u16_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -497,7 +497,7 @@ pub mod foo {
                     Self: Sized;
                 fn list_u32_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -508,7 +508,7 @@ pub mod foo {
                     Self: Sized;
                 fn list_u64_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -519,7 +519,7 @@ pub mod foo {
                     Self: Sized;
                 fn list_s8_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<i8> + Send + Sync + 'static,
@@ -528,7 +528,7 @@ pub mod foo {
                     Self: Sized;
                 fn list_s16_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -539,7 +539,7 @@ pub mod foo {
                     Self: Sized;
                 fn list_s32_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -550,7 +550,7 @@ pub mod foo {
                     Self: Sized;
                 fn list_s64_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -561,7 +561,7 @@ pub mod foo {
                     Self: Sized;
                 fn list_f32_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -572,7 +572,7 @@ pub mod foo {
                     Self: Sized;
                 fn list_f64_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -584,7 +584,7 @@ pub mod foo {
                 fn tuple_list(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<(u8, i8)>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -598,7 +598,7 @@ pub mod foo {
                     a: wasmtime::component::__internal::Vec<
                         wasmtime::component::__internal::String,
                     >,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -607,7 +607,7 @@ pub mod foo {
                     Self: Sized;
                 fn string_list_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -621,7 +621,7 @@ pub mod foo {
                     x: wasmtime::component::__internal::Vec<
                         (u8, wasmtime::component::__internal::String),
                     >,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -635,7 +635,7 @@ pub mod foo {
                     x: wasmtime::component::__internal::Vec<
                         wasmtime::component::__internal::String,
                     >,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -647,7 +647,7 @@ pub mod foo {
                 fn record_list(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<SomeRecord>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -659,7 +659,7 @@ pub mod foo {
                 fn record_list_reverse(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<OtherRecord>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -671,7 +671,7 @@ pub mod foo {
                 fn variant_list(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<SomeVariant>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -683,7 +683,7 @@ pub mod foo {
                 fn load_store_everything(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     a: LoadStoreAllSizes,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> LoadStoreAllSizes + Send + Sync + 'static,
@@ -735,9 +735,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<()> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -768,9 +768,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<()> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -801,9 +801,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<()> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -834,9 +834,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<()> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -867,9 +867,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<()> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -900,9 +900,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<()> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -933,9 +933,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<()> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -966,9 +966,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<()> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -999,9 +999,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<()> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1032,9 +1032,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<()> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1064,9 +1064,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1098,9 +1098,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1132,9 +1132,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1166,9 +1166,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1200,9 +1200,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1234,9 +1234,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1268,9 +1268,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1302,9 +1302,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1336,9 +1336,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1370,9 +1370,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1407,9 +1407,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1448,9 +1448,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<()> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1484,9 +1484,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1535,9 +1535,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1586,9 +1586,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1627,9 +1627,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1664,9 +1664,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1701,9 +1701,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1736,9 +1736,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<(LoadStoreAllSizes,)> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -1766,7 +1766,7 @@ pub mod foo {
                 fn list_u8_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<u8>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -1779,7 +1779,7 @@ pub mod foo {
                 fn list_u16_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<u16>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -1792,7 +1792,7 @@ pub mod foo {
                 fn list_u32_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<u32>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -1805,7 +1805,7 @@ pub mod foo {
                 fn list_u64_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<u64>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -1818,7 +1818,7 @@ pub mod foo {
                 fn list_s8_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<i8>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -1831,7 +1831,7 @@ pub mod foo {
                 fn list_s16_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<i16>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -1844,7 +1844,7 @@ pub mod foo {
                 fn list_s32_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<i32>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -1857,7 +1857,7 @@ pub mod foo {
                 fn list_s64_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<i64>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -1870,7 +1870,7 @@ pub mod foo {
                 fn list_f32_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<f32>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -1883,7 +1883,7 @@ pub mod foo {
                 fn list_f64_param(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<f64>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -1895,7 +1895,7 @@ pub mod foo {
                 }
                 fn list_u8_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<u8> + Send + Sync + 'static,
@@ -1907,7 +1907,7 @@ pub mod foo {
                 }
                 fn list_u16_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -1921,7 +1921,7 @@ pub mod foo {
                 }
                 fn list_u32_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -1935,7 +1935,7 @@ pub mod foo {
                 }
                 fn list_u64_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -1949,7 +1949,7 @@ pub mod foo {
                 }
                 fn list_s8_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<i8> + Send + Sync + 'static,
@@ -1961,7 +1961,7 @@ pub mod foo {
                 }
                 fn list_s16_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -1975,7 +1975,7 @@ pub mod foo {
                 }
                 fn list_s32_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -1989,7 +1989,7 @@ pub mod foo {
                 }
                 fn list_s64_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -2003,7 +2003,7 @@ pub mod foo {
                 }
                 fn list_f32_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -2017,7 +2017,7 @@ pub mod foo {
                 }
                 fn list_f64_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -2032,7 +2032,7 @@ pub mod foo {
                 fn tuple_list(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<(u8, i8)>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -2049,7 +2049,7 @@ pub mod foo {
                     a: wasmtime::component::__internal::Vec<
                         wasmtime::component::__internal::String,
                     >,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -2061,7 +2061,7 @@ pub mod foo {
                 }
                 fn string_list_ret(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -2078,7 +2078,7 @@ pub mod foo {
                     x: wasmtime::component::__internal::Vec<
                         (u8, wasmtime::component::__internal::String),
                     >,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -2095,7 +2095,7 @@ pub mod foo {
                     x: wasmtime::component::__internal::Vec<
                         wasmtime::component::__internal::String,
                     >,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -2110,7 +2110,7 @@ pub mod foo {
                 fn record_list(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<SomeRecord>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -2125,7 +2125,7 @@ pub mod foo {
                 fn record_list_reverse(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<OtherRecord>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -2140,7 +2140,7 @@ pub mod foo {
                 fn variant_list(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: wasmtime::component::__internal::Vec<SomeVariant>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> wasmtime::component::__internal::Vec<
@@ -2155,7 +2155,7 @@ pub mod foo {
                 fn load_store_everything(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     a: LoadStoreAllSizes,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> LoadStoreAllSizes + Send + Sync + 'static,

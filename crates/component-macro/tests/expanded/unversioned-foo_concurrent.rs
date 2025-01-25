@@ -203,7 +203,7 @@ pub mod foo {
                     write!(f, "{:?}", self)
                 }
             }
-            impl std::error::Error for Error {}
+            impl core::error::Error for Error {}
             const _: () = {
                 assert!(12 == < Error as wasmtime::component::ComponentType >::SIZE32);
                 assert!(4 == < Error as wasmtime::component::ComponentType >::ALIGN32);
@@ -212,7 +212,7 @@ pub mod foo {
                 type Data;
                 fn g(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Result<(), Error> + Send + Sync + 'static,
@@ -261,9 +261,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<(Result<(), Error>,)> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -290,7 +290,7 @@ pub mod foo {
                 type Data = _T::Data;
                 fn g(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Result<(), Error> + Send + Sync + 'static,
