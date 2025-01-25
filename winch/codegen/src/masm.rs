@@ -1494,4 +1494,10 @@ pub(crate) trait MacroAssembler {
     /// Perform a logical `xor` operation on `src1` and `src1`, both 128bits vector values, writing
     /// the result to `dst`.
     fn xor128v(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()>;
+
+    /// Given two 128bits vectors `src1` and `src2`, and a 128bits bitmask `mask`, selects bits
+    /// from `src1` when mask is 1, and from `src2` when mask is 0.
+    ///
+    /// This is equivalent to: `v128.or(v128.and(src1, mask), v128.and(src2, v128.not(mask)))`.
+    fn bitselect128v(&mut self, src1: Reg, src2: Reg, mask: Reg, dst: WritableReg) -> Result<()>;
 }

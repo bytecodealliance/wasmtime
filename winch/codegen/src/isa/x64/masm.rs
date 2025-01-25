@@ -1676,6 +1676,15 @@ impl Masm for MacroAssembler {
         self.asm.xmm_rmi_rvex(AvxOpcode::Vpxor, src1, src2, dst);
         Ok(())
     }
+
+    fn bitselect128v(&mut self, src1: Reg, src2: Reg, mask: Reg, dst: WritableReg) -> Result<()> {
+        let tmp = regs::scratch_xmm();
+        self.and128v(src1, mask, writable!(tmp))?;
+        self.and_not128v(mask, src2, dst)?;
+        self.or128v(dst.to_reg(), tmp, dst)?;
+
+        Ok(())
+    }
 }
 
 impl MacroAssembler {

@@ -431,7 +431,6 @@ impl WastTest {
                 "misc_testsuite/simd/load_splat_out_of_bounds.wast",
                 "multi-memory/simd_memory-multi.wast",
                 "spec_testsuite/simd_bit_shift.wast",
-                "spec_testsuite/simd_bitwise.wast",
                 "spec_testsuite/simd_boolean.wast",
                 "spec_testsuite/simd_const.wast",
                 "spec_testsuite/simd_conversions.wast",

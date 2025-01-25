@@ -1875,6 +1875,7 @@ impl Assembler {
             _ => unimplemented!(),
         }
     }
+
     pub fn xmm_rmi_rvex(&mut self, op: AvxOpcode, src1: Reg, src2: Reg, dst: WritableReg) {
         self.emit(Inst::XmmRmiRVex {
             op,

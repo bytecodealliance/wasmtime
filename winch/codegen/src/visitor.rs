@@ -360,6 +360,7 @@ macro_rules! def_unsupported {
     (emit V128AndNot $($rest:tt)*) => {};
     (emit V128Or $($rest:tt)*) => {};
     (emit V128Xor $($rest:tt)*) => {};
+    (emit V128Bitselect $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -3026,6 +3027,26 @@ where
                 masm.xor128v(src, dst, writable!(dst))?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
+    }
+
+    fn visit_v128_bitselect(&mut self) -> Self::Output {
+        let mask = self.context.pop_to_reg(self.masm, None)?;
+        let op2 = self.context.pop_to_reg(self.masm, None)?;
+        let op1 = self.context.pop_to_reg(self.masm, None)?;
+        let dst = self.context.any_fpr(self.masm)?;
+
+        // careful here: bitselect is *not* commutative.
+        self.masm
+            .bitselect128v(op1.reg, op2.reg, mask.reg, writable!(dst))?;
+
+        self.context
+            .stack
+            .push(TypedReg::new(WasmValType::V128, dst).into());
+        self.context.free_reg(op1);
+        self.context.free_reg(op2);
+        self.context.free_reg(mask);
+
+        Ok(())
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);

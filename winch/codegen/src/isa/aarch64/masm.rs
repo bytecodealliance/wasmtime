@@ -973,6 +973,16 @@ impl Masm for MacroAssembler {
     fn xor128v(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
+
+    fn bitselect128v(
+        &mut self,
+        _src1: Reg,
+        _src2: Reg,
+        _mask: Reg,
+        _dst: WritableReg,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
 }
 
 impl MacroAssembler {
