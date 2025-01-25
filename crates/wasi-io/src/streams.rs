@@ -24,8 +24,15 @@ pub trait InputStream: Pollable {
     /// Similar to `read`, except that it blocks until at least one byte can be
     /// read.
     async fn blocking_read(&mut self, size: usize) -> StreamResult<Bytes> {
-        self.ready().await;
-        self.read(size)
+        loop {
+            // This `ready` call may return early due to `io::ErrorKind::WouldBlock`.
+            self.ready().await;
+            let data = self.read(size)?;
+            if data.is_empty() {
+                continue;
+            }
+            return Ok(data);
+        }
     }
 
     /// Same as the `read` method except that bytes are skipped.
