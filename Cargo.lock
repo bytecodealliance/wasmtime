@@ -719,7 +719,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-assembler-x64"
-version = "0.1.0"
+version = "0.117.0"
 dependencies = [
  "arbitrary",
  "arbtest",
@@ -729,7 +729,7 @@ dependencies = [
 
 [[package]]
 name = "cranelift-assembler-x64-meta"
-version = "0.1.0"
+version = "0.117.0"
 
 [[package]]
 name = "cranelift-bforest"
