@@ -362,6 +362,10 @@ macro_rules! def_unsupported {
     (emit V128Xor $($rest:tt)*) => {};
     (emit V128Bitselect $($rest:tt)*) => {};
     (emit V128AnyTrue $($rest:tt)*) => {};
+    (emit V128Load8Lane $($rest:tt)*) => {};
+    (emit V128Load16Lane $($rest:tt)*) => {};
+    (emit V128Load32Lane $($rest:tt)*) => {};
+    (emit V128Load64Lane $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -3062,6 +3066,22 @@ where
         self.context.free_reg(src);
 
         Ok(())
+    }
+
+    fn visit_v128_load8_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
+        self.emit_load_lane(&arg, lane, OperandSize::S8)
+    }
+
+    fn visit_v128_load16_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
+        self.emit_load_lane(&arg, lane, OperandSize::S16)
+    }
+
+    fn visit_v128_load32_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
+        self.emit_load_lane(&arg, lane, OperandSize::S32)
+    }
+
+    fn visit_v128_load64_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
+        self.emit_load_lane(&arg, lane, OperandSize::S64)
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);

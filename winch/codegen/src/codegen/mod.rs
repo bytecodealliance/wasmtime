@@ -1536,6 +1536,18 @@ where
 
         Ok(())
     }
+
+    pub fn emit_load_lane(&mut self, arg: &MemArg, lane: u8, size: OperandSize) -> Result<()> {
+        let dst = self.context.pop_to_reg(self.masm, None)?;
+        if let Some(addr) = self.emit_compute_heap_address(&arg, size)? {
+            let src = self.masm.address_at_reg(addr, 0)?;
+            self.masm.load_lane(writable!(dst.reg), src, lane, size)?;
+            self.context.stack.push(dst.into());
+            self.context.free_reg(addr);
+        }
+
+        Ok(())
+    }
 }
 
 /// Returns the index of the [`ControlStackFrame`] for the given

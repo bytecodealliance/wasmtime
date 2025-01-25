@@ -1892,6 +1892,31 @@ impl Assembler {
             src2: src2.into(),
         })
     }
+
+    pub(crate) fn vinsert(
+        &mut self,
+        size: OperandSize,
+        to_insert: Reg,
+        insert_into: Reg,
+        dst: WritableReg,
+        lane: u8,
+    ) {
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpinsrb,
+            OperandSize::S16 => AvxOpcode::Vpinsrw,
+            OperandSize::S32 => AvxOpcode::Vpinsrd,
+            OperandSize::S64 => AvxOpcode::Vpinsrq,
+            _ => todo!(),
+        };
+
+        self.emit(Inst::XmmVexPinsr {
+            op,
+            src1: insert_into.into(),
+            src2: to_insert.into(),
+            dst: dst.map(Into::into),
+            imm: lane,
+        });
+    }
 }
 
 /// Captures the region in a MachBuffer where an add-with-immediate instruction would be emitted,

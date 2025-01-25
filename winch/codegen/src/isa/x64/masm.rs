@@ -298,7 +298,7 @@ impl Masm for MacroAssembler {
     }
 
     fn load(&mut self, src: Address, dst: WritableReg, size: OperandSize) -> Result<()> {
-        self.load_impl::<Self>(src, dst, size, TRUSTED_FLAGS)
+        self.load_impl(src, dst, size, TRUSTED_FLAGS)
     }
 
     fn wasm_load(
@@ -322,9 +322,7 @@ impl Masm for MacroAssembler {
                     ExtendKind::Signed(ext) => {
                         self.asm.movsx_mr(&src, dst, ext, UNTRUSTED_FLAGS);
                     }
-                    ExtendKind::Unsigned(_) => {
-                        self.load_impl::<Self>(src, dst, size, UNTRUSTED_FLAGS)?
-                    }
+                    ExtendKind::Unsigned(_) => self.load_impl(src, dst, size, UNTRUSTED_FLAGS)?,
                 }
             }
             LoadKind::Operand(_) => {
@@ -332,7 +330,7 @@ impl Masm for MacroAssembler {
                     bail!(CodeGenError::unexpected_operand_size());
                 }
 
-                self.load_impl::<Self>(src, dst, size, UNTRUSTED_FLAGS)?;
+                self.load_impl(src, dst, size, UNTRUSTED_FLAGS)?;
             }
             LoadKind::VectorExtend(ext) => {
                 if op_kind == MemOpKind::Atomic {
@@ -1691,6 +1689,19 @@ impl Masm for MacroAssembler {
         self.asm.setcc(IntCmpKind::Ne, dst);
         Ok(())
     }
+
+    fn load_lane(
+        &mut self,
+        dst: WritableReg,
+        addr: Self::Address,
+        lane: u8,
+        size: OperandSize,
+    ) -> Result<()> {
+        let byte_tmp = regs::scratch();
+        self.load_impl(addr, writable!(byte_tmp), size, UNTRUSTED_FLAGS)?;
+        self.asm.vinsert(size, byte_tmp, dst.to_reg(), dst, lane);
+        Ok(())
+    }
 }
 
 impl MacroAssembler {
@@ -1750,16 +1761,13 @@ impl MacroAssembler {
     }
 
     /// A common implementation for zero-extend stack loads.
-    fn load_impl<M>(
+    fn load_impl(
         &mut self,
         src: Address,
         dst: WritableReg,
         size: OperandSize,
         flags: MemFlags,
-    ) -> Result<()>
-    where
-        M: Masm,
-    {
+    ) -> Result<()> {
         if dst.to_reg().is_int() {
             let ext = size.extend_to::<Zero>(OperandSize::S64);
             self.asm.movzx_mr(&src, dst, ext, flags);

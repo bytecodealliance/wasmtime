@@ -987,6 +987,16 @@ impl Masm for MacroAssembler {
     fn any_true128v(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
+
+    fn load_lane(
+        &mut self,
+        _dst: WritableReg,
+        _addr: Self::Address,
+        _lane: u8,
+        _size: OperandSize,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
 }
 
 impl MacroAssembler {

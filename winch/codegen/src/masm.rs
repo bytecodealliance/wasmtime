@@ -1503,4 +1503,13 @@ pub(crate) trait MacroAssembler {
 
     /// If any bit in `src` is 1, set `dst` to 1, or 0 otherwise.
     fn any_true128v(&mut self, src: Reg, dst: WritableReg) -> Result<()>;
+
+    /// Load `size` bytes from `addr` into lane `lane` of `dst`.
+    fn load_lane(
+        &mut self,
+        dst: WritableReg,
+        addr: Self::Address,
+        lane: u8,
+        size: OperandSize,
+    ) -> Result<()>;
 }
