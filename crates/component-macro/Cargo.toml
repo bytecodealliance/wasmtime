@@ -41,5 +41,4 @@ similar = { workspace = true }
 
 [features]
 async = []
-std = ['wasmtime-wit-bindgen/std']
-component-model-async = ['std', 'async', 'wasmtime-wit-bindgen/component-model-async']
+component-model-async = ['async', 'wasmtime-wit-bindgen/component-model-async']

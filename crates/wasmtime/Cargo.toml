@@ -315,7 +315,6 @@ addr2line = ["dep:addr2line", "dep:gimli", "std"]
 # This will be automatically enabled if necessary.
 std = [
   'postcard/use-std',
-  'wasmtime-component-macro?/std',
   'wasmtime-environ/std',
   'object/std',
   'once_cell',
