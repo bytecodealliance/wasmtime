@@ -56,7 +56,7 @@ Wasmtime are:
 [Secure]: https://docs.wasmtime.dev/security.html
 [Configurable]: https://docs.rs/wasmtime/latest/wasmtime/struct.Config.html
 [WASI]: https://docs.rs/wasmtime-wasi/latest/wasmtime_wasi/
-[Standards Compliant]: https://docs.wasmtime.dev/stability-wasm-proposals-support.html
+[Standards Compliant]: https://docs.wasmtime.dev/stability-wasm-proposals.html
 
 ## Example
 
