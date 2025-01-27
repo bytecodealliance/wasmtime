@@ -1640,6 +1640,11 @@ impl Masm for MacroAssembler {
 
         Ok(())
     }
+
+    fn fence(&mut self) -> Result<()> {
+        self.asm.fence(FenceKind::MFence);
+        Ok(())
+    }
 }
 
 impl MacroAssembler {
