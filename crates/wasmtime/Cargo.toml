@@ -105,10 +105,16 @@ proptest = { workspace = true }
 rand = { workspace = true }
 tempfile = { workspace = true }
 wasi-common = { path = "../wasi-common", default-features = true }
+libtest-mimic = { workspace = true }
+cranelift-native = { workspace = true }
 
 [build-dependencies]
 cc = { workspace = true, optional = true }
 wasmtime-versioned-export-macros = { workspace = true, optional = true }
+
+[[test]]
+name = "host_segfault"
+harness = false
 
 # =============================================================================
 #

@@ -84,6 +84,7 @@ fn dummy_waker() -> Waker {
 enum StackOverflow {
     No,
     Host,
+    HostAsyncStack,
     Wasm,
 }
 
@@ -172,7 +173,7 @@ fn main() {
                 run_future(f.call_async(&mut store, &[], &mut [])).unwrap();
                 unreachable!();
             },
-            StackOverflow::Host,
+            StackOverflow::HostAsyncStack,
         ),
         (
             "overrun 8k with misconfigured host",
@@ -212,7 +213,7 @@ fn main() {
                 run_future(f.call_async(&mut store, &[], &mut [])).unwrap();
                 unreachable!();
             },
-            StackOverflow::Host,
+            StackOverflow::HostAsyncStack,
         ),
     ];
     match env::var(VAR_NAME) {
@@ -277,6 +278,27 @@ fn run_test(name: &str, stack_overflow: StackOverflow) {
                 panic!("\n\nexpected a stack overflow on `{name}`\n{desc}\n\n");
             }
         }
+
+        // When overflowing an async stack platforms that don't have signal
+        // handlers aren't able to print a message about stack overflow, so a
+        // normal segfault is expected. Otherwise though if a wasmtime-based
+        // signal handler is installed a message and SIGABRT is expected.
+        StackOverflow::HostAsyncStack => {
+            let native_stack_overflow = if cfg!(has_native_signals) {
+                is_stack_overflow(&output.status, &stderr)
+            } else {
+                is_segfault(&output.status)
+            };
+            assert!(
+                native_stack_overflow,
+                "expected a native stack overflow for `{name}`:\n{desc}"
+            );
+            assert!(
+                stdout.trim().ends_with(CONFIRM),
+                "failed to find confirmation in test `{name}`\n{desc}"
+            );
+        }
+
         StackOverflow::No => {
             if is_segfault(&output.status) {
                 assert!(
