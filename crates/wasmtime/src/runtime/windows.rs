@@ -9,8 +9,12 @@
 //! throughout the `wasmtime` crate with extra functionality that's only
 //! available on Windows.
 
+#[cfg(has_native_signals)]
 use crate::prelude::*;
-use crate::{AsContextMut, Store};
+#[cfg(has_native_signals)]
+use crate::AsContextMut;
+use crate::Store;
+#[cfg(has_native_signals)]
 use windows_sys::Win32::System::Diagnostics::Debug::EXCEPTION_POINTERS;
 
 /// Extensions for the [`Store`] type only available on Windows.

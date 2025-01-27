@@ -1,4 +1,6 @@
+#[cfg(has_host_compiler_backend)]
 use crate::runtime::vm::VMContext;
+#[cfg(has_host_compiler_backend)]
 use std::ptr::NonNull;
 
 #[cfg(has_host_compiler_backend)]
