@@ -802,7 +802,7 @@ fn initialize_globals(
         let wasm_ty = module.globals[module.global_index(index)].wasm_ty;
 
         #[cfg(feature = "wmemcheck")]
-        if index.as_bits() == 0 && wasm_ty == wasmtime_environ::WasmValType::I32 {
+        if index.as_u32() == 0 && wasm_ty == wasmtime_environ::WasmValType::I32 {
             if let Some(wmemcheck) = &mut context.instance.wmemcheck_state {
                 let size = usize::try_from(raw.get_i32()).unwrap();
                 wmemcheck.set_stack_size(size);

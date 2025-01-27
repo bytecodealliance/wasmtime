@@ -119,7 +119,7 @@ impl NullCompiler {
             Some(ty) => func_env.module_interned_to_shared_ty(&mut builder.cursor(), ty),
             None => builder.ins().iconst(
                 func_env.vmshared_type_index_ty(),
-                i64::from(VMSharedTypeIndex::reserved_value().as_bits()),
+                i64::from(VMSharedTypeIndex::reserved_value().as_u32()),
             ),
         };
         builder.ins().store(

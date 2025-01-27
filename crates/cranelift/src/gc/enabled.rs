@@ -139,7 +139,7 @@ fn read_field_at_addr(
                     };
                     let expected_ty = builder
                         .ins()
-                        .iconst(ir::types::I32, i64::from(expected_ty.as_bits()));
+                        .iconst(ir::types::I32, i64::from(expected_ty.as_u32()));
 
                     let vmctx = func_env.vmctx_val(&mut builder.cursor());
 

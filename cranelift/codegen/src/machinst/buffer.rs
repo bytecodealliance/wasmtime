@@ -392,11 +392,6 @@ impl MachLabel {
         MachLabel(bindex.index() as u32)
     }
 
-    /// Get the numeric label index.
-    pub fn get(self) -> u32 {
-        self.0
-    }
-
     /// Creates a string representing this label, for convenience.
     pub fn to_string(&self) -> String {
         format!("label{}", self.0)

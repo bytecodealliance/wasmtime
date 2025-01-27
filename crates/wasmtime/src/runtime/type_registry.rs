@@ -896,8 +896,8 @@ impl TypeRegistryInner {
         // This must have `range.len() == 1`, even though we know this type
         // doesn't have any intra-group type references, to satisfy
         // `register_rec_group`'s preconditions.
-        let range = ModuleInternedTypeIndex::from_bits(u32::MAX - 1)
-            ..ModuleInternedTypeIndex::from_bits(u32::MAX);
+        let range = ModuleInternedTypeIndex::from_u32(u32::MAX - 1)
+            ..ModuleInternedTypeIndex::from_u32(u32::MAX);
 
         self.register_rec_group(gc_runtime, &map, range, iter::once(ty))
     }
