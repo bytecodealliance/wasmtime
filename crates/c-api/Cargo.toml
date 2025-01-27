@@ -57,5 +57,6 @@ gc-null = ["wasmtime/gc-null"]
 cranelift = ['wasmtime/cranelift']
 winch = ['wasmtime/winch']
 debug-builtins = ['wasmtime/debug-builtins']
+wat = ['dep:wat', 'wasmtime/wat']
 # ... if you add a line above this be sure to change the other locations
 # marked WASMTIME_FEATURE_LIST

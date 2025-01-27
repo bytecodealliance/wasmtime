@@ -20,6 +20,7 @@ const FEATURES: &[&str] = &[
     "CRANELIFT",
     "WINCH",
     "DEBUG_BUILTINS",
+    "WAT",
 ];
 // ... if you add a line above this be sure to change the other locations
 // marked WASMTIME_FEATURE_LIST
