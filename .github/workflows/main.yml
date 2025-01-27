@@ -568,6 +568,8 @@ jobs:
           os: ubuntu-latest
           test: cargo build
           apt_packages: gcc-powerpc64le-linux-gnu
+          env:
+            CARGO_TARGET_POWERPC64LE_UNKNOWN_LINUX_GNU_LINKER: powerpc64le-linux-gnu-gcc
     env: ${{ matrix.env || fromJSON('{}') }}
     steps:
     - uses: actions/checkout@v4
