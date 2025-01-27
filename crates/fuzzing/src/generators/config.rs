@@ -322,9 +322,10 @@ impl Config {
             }
 
             if self.wasmtime.force_jump_veneers {
-                cfg.codegen
-                    .cranelift
-                    .push(("wasmtime_linkopt_force_jump_veneer".to_string(), None));
+                cfg.codegen.cranelift.push((
+                    "wasmtime_linkopt_force_jump_veneer".to_string(),
+                    Some("true".to_string()),
+                ));
             }
 
             if let Some(pad) = self.wasmtime.padding_between_functions {
