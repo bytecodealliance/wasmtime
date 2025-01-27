@@ -4,6 +4,7 @@
 //! It's not safe for this binary to contain any other tests.
 
 #![cfg(not(miri))]
+#![cfg(has_native_signals)]
 
 use wasmtime::*;
 
