@@ -1,12 +1,5 @@
-use crate::prelude::*;
-use crate::runtime::vm::traphandlers::{tls, TrapRegisters, TrapTest};
 use crate::runtime::vm::VMContext;
-use std::ffi::c_void;
-use std::io;
 use std::ptr::NonNull;
-use windows_sys::Win32::Foundation::*;
-use windows_sys::Win32::System::Diagnostics::Debug::*;
-use windows_sys::Win32::System::Kernel::*;
 
 #[cfg(has_host_compiler_backend)]
 #[link(name = "wasmtime-helpers")]
