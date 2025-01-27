@@ -5,7 +5,6 @@ use alloc::sync::Arc;
 use bitflags::Flags;
 use core::fmt;
 use core::str::FromStr;
-use serde_derive::{Deserialize, Serialize};
 #[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]
 use std::path::Path;
 use wasmparser::WasmFeatures;
