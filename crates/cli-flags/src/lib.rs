@@ -95,6 +95,7 @@ wasmtime_option_group! {
 
         /// Enable memory protection keys for the pooling allocator; this can
         /// optimize the size of memory slots.
+        #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
         pub pooling_memory_protection_keys: Option<wasmtime::MpkEnabled>,
 
         /// Sets an upper limit on how many memory protection keys (MPK) Wasmtime
