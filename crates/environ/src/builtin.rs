@@ -4,55 +4,55 @@ macro_rules! foreach_builtin_function {
     ($mac:ident) => {
         $mac! {
             // Returns an index for wasm's `memory.grow` builtin function.
-            memory32_grow(vmctx: vmctx, delta: i64, index: i32) -> pointer;
+            memory32_grow(vmctx: vmctx, delta: u64, index: u32) -> pointer;
             // Returns an index for wasm's `table.copy` when both tables are locally
             // defined.
-            table_copy(vmctx: vmctx, dst_index: i32, src_index: i32, dst: i64, src: i64, len: i64) -> bool;
+            table_copy(vmctx: vmctx, dst_index: u32, src_index: u32, dst: u64, src: u64, len: u64) -> bool;
             // Returns an index for wasm's `table.init`.
-            table_init(vmctx: vmctx, table: i32, elem: i32, dst: i64, src: i64, len: i64) -> bool;
+            table_init(vmctx: vmctx, table: u32, elem: u32, dst: u64, src: u64, len: u64) -> bool;
             // Returns an index for wasm's `elem.drop`.
-            elem_drop(vmctx: vmctx, elem: i32);
+            elem_drop(vmctx: vmctx, elem: u32);
             // Returns an index for wasm's `memory.copy`
-            memory_copy(vmctx: vmctx, dst_index: i32, dst: i64, src_index: i32, src: i64, len: i64) -> bool;
+            memory_copy(vmctx: vmctx, dst_index: u32, dst: u64, src_index: u32, src: u64, len: u64) -> bool;
             // Returns an index for wasm's `memory.fill` instruction.
-            memory_fill(vmctx: vmctx, memory: i32, dst: i64, val: i32, len: i64) -> bool;
+            memory_fill(vmctx: vmctx, memory: u32, dst: u64, val: u32, len: u64) -> bool;
             // Returns an index for wasm's `memory.init` instruction.
-            memory_init(vmctx: vmctx, memory: i32, data: i32, dst: i64, src: i32, len: i32) -> bool;
+            memory_init(vmctx: vmctx, memory: u32, data: u32, dst: u64, src: u32, len: u32) -> bool;
             // Returns a value for wasm's `ref.func` instruction.
-            ref_func(vmctx: vmctx, func: i32) -> pointer;
+            ref_func(vmctx: vmctx, func: u32) -> pointer;
             // Returns an index for wasm's `data.drop` instruction.
-            data_drop(vmctx: vmctx, data: i32);
+            data_drop(vmctx: vmctx, data: u32);
             // Returns a table entry after lazily initializing it.
-            table_get_lazy_init_func_ref(vmctx: vmctx, table: i32, index: i64) -> pointer;
+            table_get_lazy_init_func_ref(vmctx: vmctx, table: u32, index: u64) -> pointer;
             // Returns an index for Wasm's `table.grow` instruction for `funcref`s.
-            table_grow_func_ref(vmctx: vmctx, table: i32, delta: i64, init: pointer) -> pointer;
+            table_grow_func_ref(vmctx: vmctx, table: u32, delta: u64, init: pointer) -> pointer;
             // Returns an index for Wasm's `table.fill` instruction for `funcref`s.
-            table_fill_func_ref(vmctx: vmctx, table: i32, dst: i64, val: pointer, len: i64) -> bool;
+            table_fill_func_ref(vmctx: vmctx, table: u32, dst: u64, val: pointer, len: u64) -> bool;
             // Returns an index for wasm's `memory.atomic.notify` instruction.
             #[cfg(feature = "threads")]
-            memory_atomic_notify(vmctx: vmctx, memory: i32, addr: i64, count: i32) -> i64;
+            memory_atomic_notify(vmctx: vmctx, memory: u32, addr: u64, count: u32) -> u64;
             // Returns an index for wasm's `memory.atomic.wait32` instruction.
             #[cfg(feature = "threads")]
-            memory_atomic_wait32(vmctx: vmctx, memory: i32, addr: i64, expected: i32, timeout: i64) -> i64;
+            memory_atomic_wait32(vmctx: vmctx, memory: u32, addr: u64, expected: u32, timeout: u64) -> u64;
             // Returns an index for wasm's `memory.atomic.wait64` instruction.
             #[cfg(feature = "threads")]
-            memory_atomic_wait64(vmctx: vmctx, memory: i32, addr: i64, expected: i64, timeout: i64) -> i64;
+            memory_atomic_wait64(vmctx: vmctx, memory: u32, addr: u64, expected: u64, timeout: u64) -> u64;
             // Invoked when fuel has run out while executing a function.
             out_of_gas(vmctx: vmctx) -> bool;
             // Invoked when we reach a new epoch.
-            new_epoch(vmctx: vmctx) -> i64;
+            new_epoch(vmctx: vmctx) -> u64;
             // Invoked before malloc returns.
             #[cfg(feature = "wmemcheck")]
-            check_malloc(vmctx: vmctx, addr: i32, len: i32) -> bool;
+            check_malloc(vmctx: vmctx, addr: u32, len: u32) -> bool;
             // Invoked before the free returns.
             #[cfg(feature = "wmemcheck")]
-            check_free(vmctx: vmctx, addr: i32) -> bool;
+            check_free(vmctx: vmctx, addr: u32) -> bool;
             // Invoked before a load is executed.
             #[cfg(feature = "wmemcheck")]
-            check_load(vmctx: vmctx, num_bytes: i32, addr: i32, offset: i32) -> bool;
+            check_load(vmctx: vmctx, num_bytes: u32, addr: u32, offset: u32) -> bool;
             // Invoked before a store is executed.
             #[cfg(feature = "wmemcheck")]
-            check_store(vmctx: vmctx, num_bytes: i32, addr: i32, offset: i32) -> bool;
+            check_store(vmctx: vmctx, num_bytes: u32, addr: u32, offset: u32) -> bool;
             // Invoked after malloc is called.
             #[cfg(feature = "wmemcheck")]
             malloc_start(vmctx: vmctx);
@@ -61,34 +61,34 @@ macro_rules! foreach_builtin_function {
             free_start(vmctx: vmctx);
             // Invoked when wasm stack pointer is updated.
             #[cfg(feature = "wmemcheck")]
-            update_stack_pointer(vmctx: vmctx, value: i32);
+            update_stack_pointer(vmctx: vmctx, value: u32);
             // Invoked before memory.grow is called.
             #[cfg(feature = "wmemcheck")]
-            update_mem_size(vmctx: vmctx, num_bytes: i32);
+            update_mem_size(vmctx: vmctx, num_bytes: u32);
 
             // Drop a non-stack GC reference (eg an overwritten table entry)
             // once it will no longer be used again. (Note: `val` is not of type
             // `reference` because it needn't appear in any stack maps, as it
             // must not be live after this call.)
             #[cfg(feature = "gc-drc")]
-            drop_gc_ref(vmctx: vmctx, val: i32);
+            drop_gc_ref(vmctx: vmctx, val: u32);
 
             // Do a GC, treating the optional `root` as a GC root and returning
             // the updated `root` (so that, in the case of moving collectors,
             // callers have a valid version of `root` again).
             #[cfg(feature = "gc-drc")]
-            gc(vmctx: vmctx, root: i32) -> i64;
+            gc(vmctx: vmctx, root: u32) -> u64;
 
             // Allocate a new, uninitialized GC object and return a reference to
             // it.
             #[cfg(feature = "gc-drc")]
             gc_alloc_raw(
                 vmctx: vmctx,
-                kind: i32,
-                module_interned_type_index: i32,
-                size: i32,
-                align: i32
-            ) -> i64;
+                kind: u32,
+                module_interned_type_index: u32,
+                size: u32,
+                align: u32
+            ) -> u64;
 
             // Intern a `funcref` into the GC heap, returning its
             // `FuncRefTableId`.
@@ -98,7 +98,7 @@ macro_rules! foreach_builtin_function {
             intern_func_ref_for_gc_heap(
                 vmctx: vmctx,
                 func_ref: pointer
-            ) -> i64;
+            ) -> u64;
 
             // Get the raw `VMFuncRef` pointer associated with a
             // `FuncRefTableId` from an earlier `intern_func_ref_for_gc_heap`
@@ -120,63 +120,63 @@ macro_rules! foreach_builtin_function {
             #[cfg(feature = "gc")]
             get_interned_func_ref(
                 vmctx: vmctx,
-                func_ref_id: i32,
-                module_interned_type_index: i32
+                func_ref_id: u32,
+                module_interned_type_index: u32
             ) -> pointer;
 
             // Builtin implementation of the `array.new_data` instruction.
             #[cfg(feature = "gc")]
             array_new_data(
                 vmctx: vmctx,
-                array_interned_type_index: i32,
-                data_index: i32,
-                data_offset: i32,
-                len: i32
-            ) -> i64;
+                array_interned_type_index: u32,
+                data_index: u32,
+                data_offset: u32,
+                len: u32
+            ) -> u64;
 
             // Builtin implementation of the `array.new_elem` instruction.
             #[cfg(feature = "gc")]
             array_new_elem(
                 vmctx: vmctx,
-                array_interned_type_index: i32,
-                elem_index: i32,
-                elem_offset: i32,
-                len: i32
-            ) -> i64;
+                array_interned_type_index: u32,
+                elem_index: u32,
+                elem_offset: u32,
+                len: u32
+            ) -> u64;
 
             // Builtin implementation of the `array.copy` instruction.
             #[cfg(feature = "gc")]
             array_copy(
                 vmctx: vmctx,
-                dst_array: i32,
-                dst_index: i32,
-                src_array: i32,
-                src_index: i32,
-                len: i32
+                dst_array: u32,
+                dst_index: u32,
+                src_array: u32,
+                src_index: u32,
+                len: u32
             ) -> bool;
 
             // Builtin implementation of the `array.init_data` instruction.
             #[cfg(feature = "gc")]
             array_init_data(
                 vmctx: vmctx,
-                array_interned_type_index: i32,
-                array: i32,
-                dst_index: i32,
-                data_index: i32,
-                data_offset: i32,
-                len: i32
+                array_interned_type_index: u32,
+                array: u32,
+                dst_index: u32,
+                data_index: u32,
+                data_offset: u32,
+                len: u32
             ) -> bool;
 
             // Builtin implementation of the `array.init_elem` instruction.
             #[cfg(feature = "gc")]
             array_init_elem(
                 vmctx: vmctx,
-                array_interned_type_index: i32,
-                array: i32,
-                dst: i32,
-                elem_index: i32,
-                src: i32,
-                len: i32
+                array_interned_type_index: u32,
+                array: u32,
+                dst: u32,
+                elem_index: u32,
+                src: u32,
+                len: u32
             ) -> bool;
 
             // Returns whether `actual_engine_type` is a subtype of
@@ -184,17 +184,17 @@ macro_rules! foreach_builtin_function {
             #[cfg(feature = "gc")]
             is_subtype(
                 vmctx: vmctx,
-                actual_engine_type: i32,
-                expected_engine_type: i32
-            ) -> i32;
+                actual_engine_type: u32,
+                expected_engine_type: u32
+            ) -> u32;
 
             // Returns an index for Wasm's `table.grow` instruction for GC references.
             #[cfg(feature = "gc")]
-            table_grow_gc_ref(vmctx: vmctx, table: i32, delta: i64, init: i32) -> pointer;
+            table_grow_gc_ref(vmctx: vmctx, table: u32, delta: u64, init: u32) -> pointer;
 
             // Returns an index for Wasm's `table.fill` instruction for GC references.
             #[cfg(feature = "gc")]
-            table_fill_gc_ref(vmctx: vmctx, table: i32, dst: i64, val: i32, len: i64) -> bool;
+            table_fill_gc_ref(vmctx: vmctx, table: u32, dst: u64, val: u32, len: u64) -> bool;
 
             // Raises an unconditional trap with the specified code.
             //
@@ -351,26 +351,26 @@ impl BuiltinFunctionIndex {
 
             // Atomics-related functions return a negative value indicating trap
             // indicate a trap.
-            (@get memory_atomic_notify i64) => (TrapSentinel::Negative);
-            (@get memory_atomic_wait32 i64) => (TrapSentinel::Negative);
-            (@get memory_atomic_wait64 i64) => (TrapSentinel::Negative);
+            (@get memory_atomic_notify u64) => (TrapSentinel::Negative);
+            (@get memory_atomic_wait32 u64) => (TrapSentinel::Negative);
+            (@get memory_atomic_wait64 u64) => (TrapSentinel::Negative);
 
             // GC-related functions return a 64-bit value which is negative to
             // indicate a trap.
-            (@get gc i64) => (TrapSentinel::Negative);
-            (@get gc_alloc_raw i64) => (TrapSentinel::Negative);
-            (@get array_new_data i64) => (TrapSentinel::Negative);
-            (@get array_new_elem i64) => (TrapSentinel::Negative);
+            (@get gc u64) => (TrapSentinel::Negative);
+            (@get gc_alloc_raw u64) => (TrapSentinel::Negative);
+            (@get array_new_data u64) => (TrapSentinel::Negative);
+            (@get array_new_elem u64) => (TrapSentinel::Negative);
 
             // The final epoch represents a trap
-            (@get new_epoch i64) => (TrapSentinel::NegativeOne);
+            (@get new_epoch u64) => (TrapSentinel::NegativeOne);
 
             // These libcalls can't trap
             (@get ref_func pointer) => (return None);
             (@get table_get_lazy_init_func_ref pointer) => (return None);
             (@get get_interned_func_ref pointer) => (return None);
-            (@get intern_func_ref_for_gc_heap i64) => (return None);
-            (@get is_subtype i32) => (return None);
+            (@get intern_func_ref_for_gc_heap u64) => (return None);
+            (@get is_subtype u32) => (return None);
 
             // Bool-returning functions use `false` as an indicator of a trap.
             (@get $name:ident bool) => (TrapSentinel::Falsy);

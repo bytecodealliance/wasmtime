@@ -1361,7 +1361,8 @@ impl Instance {
         self.type_ids_array().write(types.cast().into());
 
         // Initialize the built-in functions
-        let ptr: NonNull<VMBuiltinFunctionsArray> = NonNull::from(&VMBuiltinFunctionsArray::INIT);
+        static BUILTINS: VMBuiltinFunctionsArray = VMBuiltinFunctionsArray::INIT;
+        let ptr = BUILTINS.expose_provenance();
         self.vmctx_plus_offset_mut(offsets.ptr.vmctx_builtin_functions())
             .write(VmPtr::from(ptr));
 

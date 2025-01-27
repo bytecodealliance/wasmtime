@@ -1,5 +1,5 @@
 use anyhow::Result;
-use wasmtime::{Config, Engine, Func, FuncType, Instance, Module, Store, Val, ValType};
+use wasmtime::{Config, Engine, Func, FuncType, Instance, Module, Store, Trap, Val, ValType};
 use wasmtime_environ::TripleExt;
 
 fn pulley_target() -> String {
@@ -101,6 +101,7 @@ fn can_run_on_cli() -> Result<()> {
 #[cfg_attr(miri, ignore)]
 fn pulley_provenance_test() -> Result<()> {
     let mut config = pulley_config();
+    config.wasm_function_references(true);
     config.memory_reservation(1 << 20);
     config.memory_guard_size(0);
     config.signals_based_traps(false);
@@ -125,13 +126,46 @@ fn pulley_provenance_test() -> Result<()> {
     });
     let instance = Instance::new(&mut store, &module, &[host_wrap.into(), host_new.into()])?;
 
-    for func in ["call-wasm", "call-native-wrap", "call-native-new"] {
+    for func in [
+        "call-wasm",
+        "call-native-wrap",
+        "call-native-new",
+        "return-call-wasm",
+        "call_indirect-wasm",
+    ] {
+        println!("testing func {func:?}");
         let func = instance
             .get_typed_func::<(), (i32, i32, i32)>(&mut store, func)
             .unwrap();
         let results = func.call(&mut store, ())?;
         assert_eq!(results, (1, 2, 3));
     }
+
+    let funcref = instance.get_func(&mut store, "call-wasm").unwrap();
+    for func in ["call_ref-wasm", "return_call_ref-wasm"] {
+        println!("testing func {func:?}");
+        let func = instance
+            .get_typed_func::<Func, (i32, i32, i32)>(&mut store, func)
+            .unwrap();
+        let results = func.call(&mut store, funcref)?;
+        assert_eq!(results, (1, 2, 3));
+    }
+
+    let trap = instance
+        .get_typed_func::<(), ()>(&mut store, "unreachable")
+        .unwrap()
+        .call(&mut store, ())
+        .unwrap_err()
+        .downcast::<Trap>()?;
+    assert_eq!(trap, Trap::UnreachableCodeReached);
+
+    let trap = instance
+        .get_typed_func::<(), i32>(&mut store, "divide-by-zero")
+        .unwrap()
+        .call(&mut store, ())
+        .unwrap_err()
+        .downcast::<Trap>()?;
+    assert_eq!(trap, Trap::IntegerDivisionByZero);
 
     Ok(())
 }
