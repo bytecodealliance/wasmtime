@@ -12,10 +12,7 @@ use crate::{
         CallingConvention,
     },
     masm::{
-        CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I,
-        IntCmpKind, LoadKind, MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm,
-        RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot,
-        TrapCode, TruncKind, Zero,
+        CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, StoreKind, TrapCode, TruncKind, Zero
     },
     stack::TypedReg,
 };
@@ -180,15 +177,15 @@ impl Masm for MacroAssembler {
         &mut self,
         src: Reg,
         dst: Self::Address,
-        size: OperandSize,
-        op_kind: MemOpKind,
+        kind: StoreKind,
     ) -> Result<()> {
-        match op_kind {
-            MemOpKind::Atomic => Err(anyhow!(CodeGenError::unimplemented_masm_instruction())),
-            MemOpKind::Normal => {
+        match kind {
+            StoreKind::Operand(size) => {
                 self.asm.str(src, dst, size);
                 Ok(())
-            }
+            },
+            StoreKind::Atomic(_size) => Err(anyhow!(CodeGenError::unimplemented_masm_instruction())),
+            StoreKind::VectorLane(_selector) => Err(anyhow!(CodeGenError::unimplemented_masm_instruction())),
         }
     }
 
@@ -227,27 +224,27 @@ impl Masm for MacroAssembler {
         src: Self::Address,
         dst: WritableReg,
         kind: LoadKind,
-        op_kind: MemOpKind,
     ) -> Result<()> {
         let size = kind.derive_operand_size();
-        match op_kind {
-            MemOpKind::Normal => match kind {
-                LoadKind::Operand(_) => self.asm.uload(src, dst, size),
-                LoadKind::Splat(_) => bail!(CodeGenError::UnimplementedWasmLoadKind),
-                LoadKind::ScalarExtend(extend_kind) => {
-                    if extend_kind.signed() {
-                        self.asm.sload(src, dst, size)
-                    } else {
-                        // unlike x64, unused bits are set to zero so we don't need to extend
-                        self.asm.uload(src, dst, size)
-                    }
+        match kind {
+            LoadKind::Operand(_) => self.asm.uload(src, dst, size),
+            LoadKind::Splat(_) => bail!(CodeGenError::UnimplementedWasmLoadKind),
+            LoadKind::ScalarExtend(extend_kind) => {
+                if extend_kind.signed() {
+                    self.asm.sload(src, dst, size)
+                } else {
+                    // unlike x64, unused bits are set to zero so we don't need to extend
+                    self.asm.uload(src, dst, size)
                 }
-                LoadKind::VectorExtend(_vector_extend_kind) => {
-                    bail!(CodeGenError::UnimplementedWasmLoadKind)
-                }
-            },
-            MemOpKind::Atomic => bail!(CodeGenError::unimplemented_masm_instruction()),
+            }
+            LoadKind::VectorExtend(_vector_extend_kind) => {
+                bail!(CodeGenError::UnimplementedWasmLoadKind)
+            }
+            LoadKind::VectorLane(_selector) => bail!(CodeGenError::unimplemented_masm_instruction()),
+            LoadKind::Atomic(_, _) => bail!(CodeGenError::unimplemented_masm_instruction()),
+
         }
+
         Ok(())
     }
 
@@ -985,26 +982,6 @@ impl Masm for MacroAssembler {
     }
 
     fn any_true128v(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
-    }
-
-    fn load_lane(
-        &mut self,
-        _dst: WritableReg,
-        _addr: Self::Address,
-        _lane: u8,
-        _size: OperandSize,
-    ) -> Result<()> {
-        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
-    }
-
-    fn store_lane(
-        &mut self,
-        _src: Reg,
-        _addr: Self::Address,
-        _lane: u8,
-        _size: OperandSize,
-    ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 }

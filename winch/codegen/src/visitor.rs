@@ -10,10 +10,7 @@ use crate::codegen::{
     FnCall,
 };
 use crate::masm::{
-    DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler,
-    MemMoveDirection, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp,
-    RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, TruncKind,
-    VectorExtendKind, Zero,
+    DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler, MemMoveDirection, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, StoreKind, TruncKind, VectorExtendKind, Zero
 };
 
 use crate::reg::{writable, Reg};
@@ -2023,7 +2020,6 @@ where
             &memarg,
             WasmValType::I32,
             LoadKind::Operand(OperandSize::S32),
-            MemOpKind::Normal,
         )
     }
 
@@ -2032,7 +2028,6 @@ where
             &memarg,
             WasmValType::I32,
             LoadKind::ScalarExtend(Extend::<Signed>::I32Extend8.into()),
-            MemOpKind::Normal,
         )
     }
 
@@ -2041,7 +2036,6 @@ where
             &memarg,
             WasmValType::I32,
             LoadKind::ScalarExtend(Extend::<Zero>::I32Extend8.into()),
-            MemOpKind::Normal,
         )
     }
 
@@ -2050,7 +2044,6 @@ where
             &memarg,
             WasmValType::I32,
             LoadKind::ScalarExtend(Extend::<Signed>::I32Extend16.into()),
-            MemOpKind::Normal,
         )
     }
 
@@ -2059,20 +2052,19 @@ where
             &memarg,
             WasmValType::I32,
             LoadKind::ScalarExtend(Extend::<Zero>::I32Extend16.into()),
-            MemOpKind::Normal,
         )
     }
 
     fn visit_i32_store(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S32, MemOpKind::Normal)
+        self.emit_wasm_store(&memarg, StoreKind::Operand(OperandSize::S32))
     }
 
     fn visit_i32_store8(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S8, MemOpKind::Normal)
+        self.emit_wasm_store(&memarg, StoreKind::Operand(OperandSize::S8))
     }
 
     fn visit_i32_store16(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S16, MemOpKind::Normal)
+        self.emit_wasm_store(&memarg, StoreKind::Operand(OperandSize::S16))
     }
 
     fn visit_i64_load8_s(&mut self, memarg: MemArg) -> Self::Output {
@@ -2080,7 +2072,6 @@ where
             &memarg,
             WasmValType::I64,
             LoadKind::ScalarExtend(Extend::<Signed>::I64Extend8.into()),
-            MemOpKind::Normal,
         )
     }
 
@@ -2089,7 +2080,6 @@ where
             &memarg,
             WasmValType::I64,
             LoadKind::ScalarExtend(Extend::<Zero>::I64Extend8.into()),
-            MemOpKind::Normal,
         )
     }
 
@@ -2098,7 +2088,6 @@ where
             &memarg,
             WasmValType::I64,
             LoadKind::ScalarExtend(Extend::<Zero>::I64Extend16.into()),
-            MemOpKind::Normal,
         )
     }
 
@@ -2107,7 +2096,6 @@ where
             &memarg,
             WasmValType::I64,
             LoadKind::ScalarExtend(Extend::<Signed>::I64Extend16.into()),
-            MemOpKind::Normal,
         )
     }
 
@@ -2116,7 +2104,6 @@ where
             &memarg,
             WasmValType::I64,
             LoadKind::ScalarExtend(Extend::<Zero>::I64Extend32.into()),
-            MemOpKind::Normal,
         )
     }
 
@@ -2125,7 +2112,6 @@ where
             &memarg,
             WasmValType::I64,
             LoadKind::ScalarExtend(Extend::<Signed>::I64Extend32.into()),
-            MemOpKind::Normal,
         )
     }
 
@@ -2134,24 +2120,23 @@ where
             &memarg,
             WasmValType::I64,
             LoadKind::Operand(OperandSize::S64),
-            MemOpKind::Normal,
         )
     }
 
     fn visit_i64_store(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S64, MemOpKind::Normal)
+        self.emit_wasm_store(&memarg, StoreKind::Operand(OperandSize::S64))
     }
 
     fn visit_i64_store8(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S8, MemOpKind::Normal)
+        self.emit_wasm_store(&memarg, StoreKind::Operand(OperandSize::S8))
     }
 
     fn visit_i64_store16(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S16, MemOpKind::Normal)
+        self.emit_wasm_store(&memarg, StoreKind::Operand(OperandSize::S16))
     }
 
     fn visit_i64_store32(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S32, MemOpKind::Normal)
+        self.emit_wasm_store(&memarg, StoreKind::Operand(OperandSize::S32))
     }
 
     fn visit_f32_load(&mut self, memarg: MemArg) -> Self::Output {
@@ -2159,12 +2144,11 @@ where
             &memarg,
             WasmValType::F32,
             LoadKind::Operand(OperandSize::S32),
-            MemOpKind::Normal,
         )
     }
 
     fn visit_f32_store(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S32, MemOpKind::Normal)
+        self.emit_wasm_store(&memarg, StoreKind::Operand(OperandSize::S32))
     }
 
     fn visit_f64_load(&mut self, memarg: MemArg) -> Self::Output {
@@ -2172,12 +2156,11 @@ where
             &memarg,
             WasmValType::F64,
             LoadKind::Operand(OperandSize::S64),
-            MemOpKind::Normal,
         )
     }
 
     fn visit_f64_store(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S64, MemOpKind::Normal)
+        self.emit_wasm_store(&memarg, StoreKind::Operand(OperandSize::S64))
     }
 
     fn visit_i32_trunc_sat_f32_s(&mut self) -> Self::Output {
@@ -2286,8 +2269,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
-            LoadKind::ScalarExtend(Extend::<Zero>::I32Extend8.into()),
-            MemOpKind::Atomic,
+            LoadKind::Atomic(OperandSize::S8, Some(Extend::<Zero>::I32Extend8.into())),
         )
     }
 
@@ -2295,8 +2277,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
-            LoadKind::ScalarExtend(Extend::<Zero>::I32Extend16.into()),
-            MemOpKind::Atomic,
+            LoadKind::Atomic(OperandSize::S16, Some(Extend::<Zero>::I32Extend16.into())),
         )
     }
 
@@ -2304,8 +2285,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I32,
-            LoadKind::Operand(OperandSize::S32),
-            MemOpKind::Atomic,
+            LoadKind::Atomic(OperandSize::S32, None),
         )
     }
 
@@ -2313,8 +2293,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(Extend::<Zero>::I64Extend8.into()),
-            MemOpKind::Atomic,
+            LoadKind::Atomic(OperandSize::S8, Some(Extend::<Zero>::I64Extend8.into())),
         )
     }
 
@@ -2322,8 +2301,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(Extend::<Zero>::I64Extend16.into()),
-            MemOpKind::Atomic,
+            LoadKind::Atomic(OperandSize::S16, Some(Extend::<Zero>::I64Extend16.into())),
         )
     }
 
@@ -2331,8 +2309,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::ScalarExtend(Extend::<Zero>::I64Extend32.into()),
-            MemOpKind::Atomic,
+            LoadKind::Atomic(OperandSize::S32, Some(Extend::<Zero>::I64Extend32.into())),
         )
     }
 
@@ -2340,37 +2317,36 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::I64,
-            LoadKind::Operand(OperandSize::S64),
-            MemOpKind::Atomic,
+            LoadKind::Atomic(OperandSize::S64, None),
         )
     }
 
     fn visit_i32_atomic_store(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S32, MemOpKind::Atomic)
+        self.emit_wasm_store(&memarg, StoreKind::Atomic(OperandSize::S32))
     }
 
     fn visit_i64_atomic_store(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S64, MemOpKind::Atomic)
+        self.emit_wasm_store(&memarg, StoreKind::Atomic(OperandSize::S64))
     }
 
     fn visit_i32_atomic_store8(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S8, MemOpKind::Atomic)
+        self.emit_wasm_store(&memarg, StoreKind::Atomic(OperandSize::S8))
     }
 
     fn visit_i32_atomic_store16(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S16, MemOpKind::Atomic)
+        self.emit_wasm_store(&memarg, StoreKind::Atomic(OperandSize::S16))
     }
 
     fn visit_i64_atomic_store8(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S8, MemOpKind::Atomic)
+        self.emit_wasm_store(&memarg, StoreKind::Atomic(OperandSize::S8))
     }
 
     fn visit_i64_atomic_store16(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S16, MemOpKind::Atomic)
+        self.emit_wasm_store(&memarg, StoreKind::Atomic(OperandSize::S16))
     }
 
     fn visit_i64_atomic_store32(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S32, MemOpKind::Atomic)
+        self.emit_wasm_store(&memarg, StoreKind::Atomic(OperandSize::S32))
     }
 
     fn visit_i32_atomic_rmw8_add_u(&mut self, arg: MemArg) -> Self::Output {
@@ -2752,12 +2728,11 @@ where
             &memarg,
             WasmValType::V128,
             LoadKind::Operand(OperandSize::S128),
-            MemOpKind::Normal,
         )
     }
 
     fn visit_v128_store(&mut self, memarg: MemArg) -> Self::Output {
-        self.emit_wasm_store(&memarg, OperandSize::S128, MemOpKind::Normal)
+        self.emit_wasm_store(&memarg, StoreKind::Operand(OperandSize::S128))
     }
 
     fn visit_v128_load8x8_s(&mut self, memarg: MemArg) -> Self::Output {
@@ -2765,7 +2740,6 @@ where
             &memarg,
             WasmValType::V128,
             LoadKind::VectorExtend(VectorExtendKind::V128Extend8x8S),
-            MemOpKind::Normal,
         )
     }
 
@@ -2774,7 +2748,6 @@ where
             &memarg,
             WasmValType::V128,
             LoadKind::VectorExtend(VectorExtendKind::V128Extend8x8U),
-            MemOpKind::Normal,
         )
     }
 
@@ -2783,7 +2756,6 @@ where
             &memarg,
             WasmValType::V128,
             LoadKind::VectorExtend(VectorExtendKind::V128Extend16x4S),
-            MemOpKind::Normal,
         )
     }
 
@@ -2792,7 +2764,6 @@ where
             &memarg,
             WasmValType::V128,
             LoadKind::VectorExtend(VectorExtendKind::V128Extend16x4U),
-            MemOpKind::Normal,
         )
     }
 
@@ -2801,7 +2772,6 @@ where
             &memarg,
             WasmValType::V128,
             LoadKind::VectorExtend(VectorExtendKind::V128Extend32x2S),
-            MemOpKind::Normal,
         )
     }
 
@@ -2810,7 +2780,6 @@ where
             &memarg,
             WasmValType::V128,
             LoadKind::VectorExtend(VectorExtendKind::V128Extend32x2U),
-            MemOpKind::Normal,
         )
     }
 
@@ -2819,7 +2788,6 @@ where
             &memarg,
             WasmValType::V128,
             LoadKind::Splat(SplatLoadKind::S8),
-            MemOpKind::Normal,
         )
     }
 
@@ -2828,7 +2796,6 @@ where
             &memarg,
             WasmValType::V128,
             LoadKind::Splat(SplatLoadKind::S16),
-            MemOpKind::Normal,
         )
     }
 
@@ -2837,7 +2804,6 @@ where
             &memarg,
             WasmValType::V128,
             LoadKind::Splat(SplatLoadKind::S32),
-            MemOpKind::Normal,
         )
     }
 
@@ -2846,7 +2812,6 @@ where
             &memarg,
             WasmValType::V128,
             LoadKind::Splat(SplatLoadKind::S64),
-            MemOpKind::Normal,
         )
     }
 
@@ -3073,35 +3038,35 @@ where
     }
 
     fn visit_v128_load8_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
-        self.emit_load_lane(&arg, lane, OperandSize::S8)
+        self.emit_wasm_load(&arg, WasmValType::V128, LoadKind::vector_lane(lane, OperandSize::S8))
     }
 
     fn visit_v128_load16_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
-        self.emit_load_lane(&arg, lane, OperandSize::S16)
+        self.emit_wasm_load(&arg, WasmValType::V128, LoadKind::vector_lane(lane, OperandSize::S16))
     }
 
     fn visit_v128_load32_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
-        self.emit_load_lane(&arg, lane, OperandSize::S32)
+        self.emit_wasm_load(&arg, WasmValType::V128, LoadKind::vector_lane(lane, OperandSize::S32))
     }
 
     fn visit_v128_load64_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
-        self.emit_load_lane(&arg, lane, OperandSize::S64)
+        self.emit_wasm_load(&arg, WasmValType::V128, LoadKind::vector_lane(lane, OperandSize::S64))
     }
 
     fn visit_v128_store8_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
-        self.emit_store_lane(&arg, lane, OperandSize::S8)
+        self.emit_wasm_store(&arg, StoreKind::vector_lane(lane, OperandSize::S8))
     }
 
     fn visit_v128_store16_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
-        self.emit_store_lane(&arg, lane, OperandSize::S16)
+        self.emit_wasm_store(&arg, StoreKind::vector_lane(lane, OperandSize::S16))
     }
 
     fn visit_v128_store32_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
-        self.emit_store_lane(&arg, lane, OperandSize::S32)
+        self.emit_wasm_store(&arg, StoreKind::vector_lane(lane, OperandSize::S32))
     }
 
     fn visit_v128_store64_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
-        self.emit_store_lane(&arg, lane, OperandSize::S64)
+        self.emit_wasm_store(&arg, StoreKind::vector_lane(lane, OperandSize::S64))
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);

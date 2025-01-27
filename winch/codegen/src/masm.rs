@@ -38,14 +38,6 @@ impl RemKind {
     }
 }
 
-#[derive(Copy, Clone, PartialEq, Eq)]
-pub(crate) enum MemOpKind {
-    /// An atomic memory operation with SeqCst memory ordering.
-    Atomic,
-    /// A memory operation with no memory ordering constraint.
-    Normal,
-}
-
 #[derive(Eq, PartialEq)]
 pub(crate) enum MulWideKind {
     Signed,
@@ -431,22 +423,46 @@ impl ReplaceLaneKind {
 pub(crate) enum LoadKind {
     /// Load the entire bytes of the operand size without any modifications.
     Operand(OperandSize),
+    /// Atomic load, with optional scalar extend.
+    Atomic(OperandSize, Option<ExtendKind>),
     /// Duplicate value into vector lanes.
     Splat(SplatLoadKind),
     /// Scalar (non-vector) extend.
     ScalarExtend(ExtendKind),
     /// Vector extend.
     VectorExtend(VectorExtendKind),
+    /// Load content into select lane.
+    VectorLane(LaneSelector),
 }
 
 impl LoadKind {
     /// Returns the [`OperandSize`] used in the load operation.
     pub(crate) fn derive_operand_size(&self) -> OperandSize {
         match self {
-            Self::ScalarExtend(scalar) => Self::operand_size_for_scalar(scalar),
-            Self::VectorExtend(_) => OperandSize::S64,
+            Self::ScalarExtend(extend) | Self::Atomic(_, Some(extend)) => {
+                Self::operand_size_for_scalar(extend)
+            }
+            Self::VectorExtend(vector) => Self::operand_size_for_vector(vector),
             Self::Splat(kind) => Self::operand_size_for_splat(kind),
-            Self::Operand(op) => *op,
+            Self::Operand(size)
+            | Self::Atomic(size, None)
+            | Self::VectorLane(LaneSelector { size, .. }) => *size,
+        }
+    }
+
+    pub fn vector_lane(lane: u8, size: OperandSize) -> Self {
+        Self::VectorLane(LaneSelector { lane, size })
+    }
+
+    fn operand_size_for_vector(vector: &VectorExtendKind) -> OperandSize {
+        match vector {
+            VectorExtendKind::V128Extend8x8S | VectorExtendKind::V128Extend8x8U => OperandSize::S8,
+            VectorExtendKind::V128Extend16x4S | VectorExtendKind::V128Extend16x4U => {
+                OperandSize::S16
+            }
+            VectorExtendKind::V128Extend32x2S | VectorExtendKind::V128Extend32x2U => {
+                OperandSize::S32
+            }
         }
     }
 
@@ -465,6 +481,31 @@ impl LoadKind {
             SplatLoadKind::S64 => OperandSize::S64,
         }
     }
+
+    pub(crate) fn is_atomic(&self) -> bool {
+        matches!(self, Self::Atomic(_, _))
+    }
+}
+
+/// Kinds of behavior supported by Wasm loads.
+pub enum StoreKind {
+    /// Store the entire bytes of the operand size without any modifications.
+    Operand(OperandSize),
+    /// Store the entire bytes of the operand size without any modifications, atomically.
+    Atomic(OperandSize),
+    /// Store the content of selected lane.
+    VectorLane(LaneSelector),
+}
+
+impl StoreKind {
+    pub fn vector_lane(lane: u8, size: OperandSize) -> Self {
+        Self::VectorLane(LaneSelector { lane, size })
+    }
+}
+
+pub struct LaneSelector {
+    pub lane: u8,
+    pub size: OperandSize,
 }
 
 /// Operand size, in bits.
@@ -900,13 +941,7 @@ pub(crate) trait MacroAssembler {
     /// regards to the endianness depending on the target ISA. For this reason,
     /// [Self::wasm_store], should be explicitly used when emitting WebAssembly
     /// stores.
-    fn wasm_store(
-        &mut self,
-        src: Reg,
-        dst: Self::Address,
-        size: OperandSize,
-        op_kind: MemOpKind,
-    ) -> Result<()>;
+    fn wasm_store(&mut self, src: Reg, dst: Self::Address, store_kind: StoreKind) -> Result<()>;
 
     /// Perform a zero-extended stack load.
     fn load(&mut self, src: Self::Address, dst: WritableReg, size: OperandSize) -> Result<()>;
@@ -919,13 +954,7 @@ pub(crate) trait MacroAssembler {
     /// regards to the endianness depending on the target ISA. For this reason,
     /// [Self::wasm_load], should be explicitly used when emitting WebAssembly
     /// loads.
-    fn wasm_load(
-        &mut self,
-        src: Self::Address,
-        dst: WritableReg,
-        kind: LoadKind,
-        op_kind: MemOpKind,
-    ) -> Result<()>;
+    fn wasm_load(&mut self, src: Self::Address, dst: WritableReg, kind: LoadKind) -> Result<()>;
 
     /// Alias for `MacroAssembler::load` with the operand size corresponding
     /// to the pointer size of the target.
@@ -1503,22 +1532,4 @@ pub(crate) trait MacroAssembler {
 
     /// If any bit in `src` is 1, set `dst` to 1, or 0 otherwise.
     fn any_true128v(&mut self, src: Reg, dst: WritableReg) -> Result<()>;
-
-    /// Load `size` bytes from `addr` into lane `lane` of `dst`.
-    fn load_lane(
-        &mut self,
-        dst: WritableReg,
-        addr: Self::Address,
-        lane: u8,
-        size: OperandSize,
-    ) -> Result<()>;
-
-    /// Store `size` bytes from `lane` of `src` to `addr`.
-    fn store_lane(
-        &mut self,
-        src: Reg,
-        addr: Self::Address,
-        lane: u8,
-        size: OperandSize,
-    ) -> Result<()>;
 }

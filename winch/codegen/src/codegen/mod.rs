@@ -3,8 +3,8 @@ use crate::{
     codegen::BlockSig,
     isa::reg::{writable, Reg},
     masm::{
-        Extend, Imm, IntCmpKind, LoadKind, MacroAssembler, MemOpKind, OperandSize, RegImm, RmwOp,
-        SPOffset, ShiftKind, TrapCode, Zero, UNTRUSTED_FLAGS,
+        Extend, Imm, IntCmpKind, LaneSelector, LoadKind, MacroAssembler, OperandSize,
+        RegImm, RmwOp, SPOffset, ShiftKind, StoreKind, TrapCode, Zero, UNTRUSTED_FLAGS,
     },
     stack::TypedReg,
 };
@@ -897,56 +897,67 @@ where
         arg: &MemArg,
         target_type: WasmValType,
         kind: LoadKind,
-        op_kind: MemOpKind,
     ) -> Result<()> {
-        let maybe_addr = match op_kind {
-            MemOpKind::Atomic => {
-                self.emit_compute_heap_address_align_checked(&arg, kind.derive_operand_size())?
-            }
-            MemOpKind::Normal => {
-                self.emit_compute_heap_address(&arg, kind.derive_operand_size())?
-            }
-        };
-
-        if let Some(addr) = maybe_addr {
-            let dst = match target_type {
-                WasmValType::I32 | WasmValType::I64 => self.context.any_gpr(self.masm)?,
-                WasmValType::F32 | WasmValType::F64 => self.context.any_fpr(self.masm)?,
-                WasmValType::V128 => self.context.reg_for_type(target_type, self.masm)?,
-                _ => bail!(CodeGenError::unsupported_wasm_type()),
-            };
-
-            let src = self.masm.address_at_reg(addr, 0)?;
-            self.masm.wasm_load(src, writable!(dst), kind, op_kind)?;
-            self.context
+        let emit_load = |this: &mut Self, dst, addr, kind| -> Result<()> {
+            let src = this.masm.address_at_reg(addr, 0)?;
+            this.masm.wasm_load(src, writable!(dst), kind)?;
+            this.context
                 .stack
                 .push(TypedReg::new(target_type, dst).into());
-            self.context.free_reg(addr);
+            this.context.free_reg(addr);
+            Ok(())
+        };
+
+        match kind {
+            LoadKind::VectorLane(_) => {
+                let dst = self.context.pop_to_reg(self.masm, None)?;
+                let addr = self.emit_compute_heap_address(&arg, kind.derive_operand_size())?;
+                if let Some(addr) = addr {
+                    emit_load(self, dst.reg, addr, kind)?;
+                }
+            },
+            _ => {
+                let maybe_addr = match kind {
+                    LoadKind::Atomic(_, _) => {
+                        self.emit_compute_heap_address_align_checked(&arg, kind.derive_operand_size())?
+                    }
+                    _ => {
+                        self.emit_compute_heap_address(&arg, kind.derive_operand_size())?
+                    }
+                };
+
+                if let Some(addr) = maybe_addr {
+                    let dst = match target_type {
+                        WasmValType::I32 | WasmValType::I64 => self.context.any_gpr(self.masm)?,
+                        WasmValType::F32 | WasmValType::F64 => self.context.any_fpr(self.masm)?,
+                        WasmValType::V128 => self.context.reg_for_type(target_type, self.masm)?,
+                        _ => bail!(CodeGenError::unsupported_wasm_type()),
+                    };
+
+                    emit_load(self, dst, addr, kind)?;
+                }
+            }
         }
 
         Ok(())
-    }
+    }            
 
     /// Emit a WebAssembly store.
-    pub fn emit_wasm_store(
-        &mut self,
-        arg: &MemArg,
-        size: OperandSize,
-        op_kind: MemOpKind,
-    ) -> Result<()> {
+    pub fn emit_wasm_store(&mut self, arg: &MemArg, kind: StoreKind) -> Result<()> {
         let src = self.context.pop_to_reg(self.masm, None)?;
 
-        let maybe_addr = match op_kind {
-            MemOpKind::Atomic => self.emit_compute_heap_address_align_checked(&arg, size)?,
-            MemOpKind::Normal => self.emit_compute_heap_address(&arg, size)?,
+        let maybe_addr = match kind {
+            StoreKind::Atomic(size) => self.emit_compute_heap_address_align_checked(&arg, size)?,
+            StoreKind::Operand(size) | StoreKind::VectorLane(LaneSelector { size, .. }) => {
+                self.emit_compute_heap_address(&arg, size)?
+            }
         };
 
         if let Some(addr) = maybe_addr {
             self.masm.wasm_store(
                 src.reg.into(),
                 self.masm.address_at_reg(addr, 0)?,
-                size,
-                op_kind,
+                kind,
             )?;
 
             self.context.free_reg(addr);
@@ -1533,30 +1544,6 @@ where
             &mut self.context,
             Callee::Builtin(builtin.clone()),
         )?;
-
-        Ok(())
-    }
-
-    pub fn emit_load_lane(&mut self, arg: &MemArg, lane: u8, size: OperandSize) -> Result<()> {
-        let dst = self.context.pop_to_reg(self.masm, None)?;
-        if let Some(addr) = self.emit_compute_heap_address(&arg, size)? {
-            let src = self.masm.address_at_reg(addr, 0)?;
-            self.masm.load_lane(writable!(dst.reg), src, lane, size)?;
-            self.context.stack.push(dst.into());
-            self.context.free_reg(addr);
-        }
-
-        Ok(())
-    }
-
-    pub fn emit_store_lane(&mut self, arg: &MemArg, lane: u8, size: OperandSize) -> Result<()> {
-        let src = self.context.pop_to_reg(self.masm, None)?;
-        if let Some(addr) = self.emit_compute_heap_address(&arg, size)? {
-            let dst = self.masm.address_at_reg(addr, 0)?;
-            self.masm.store_lane(src.reg, dst, lane, size)?;
-            self.context.free_reg(addr);
-            self.context.free_reg(src);
-        }
 
         Ok(())
     }
