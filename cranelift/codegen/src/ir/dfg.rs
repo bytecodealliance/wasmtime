@@ -749,16 +749,16 @@ impl From<ValueData> for ValueDataPacked {
     fn from(data: ValueData) -> Self {
         match data {
             ValueData::Inst { ty, num, inst } => {
-                Self::make(Self::TAG_INST, ty, num.into(), inst.as_u32())
+                Self::make(Self::TAG_INST, ty, num.into(), inst.as_bits())
             }
             ValueData::Param { ty, num, block } => {
-                Self::make(Self::TAG_PARAM, ty, num.into(), block.as_u32())
+                Self::make(Self::TAG_PARAM, ty, num.into(), block.as_bits())
             }
             ValueData::Alias { ty, original } => {
-                Self::make(Self::TAG_ALIAS, ty, 0, original.as_u32())
+                Self::make(Self::TAG_ALIAS, ty, 0, original.as_bits())
             }
             ValueData::Union { ty, x, y } => {
-                Self::make(Self::TAG_UNION, ty, x.as_u32(), y.as_u32())
+                Self::make(Self::TAG_UNION, ty, x.as_bits(), y.as_bits())
             }
         }
     }
@@ -779,21 +779,21 @@ impl From<ValueDataPacked> for ValueData {
             ValueDataPacked::TAG_INST => ValueData::Inst {
                 ty,
                 num: u16::try_from(x).expect("Inst result num should fit in u16"),
-                inst: Inst::from_u32(decode_narrow_field(y, ValueDataPacked::Y_BITS)),
+                inst: Inst::from_bits(decode_narrow_field(y, ValueDataPacked::Y_BITS)),
             },
             ValueDataPacked::TAG_PARAM => ValueData::Param {
                 ty,
                 num: u16::try_from(x).expect("Blockparam index should fit in u16"),
-                block: Block::from_u32(decode_narrow_field(y, ValueDataPacked::Y_BITS)),
+                block: Block::from_bits(decode_narrow_field(y, ValueDataPacked::Y_BITS)),
             },
             ValueDataPacked::TAG_ALIAS => ValueData::Alias {
                 ty,
-                original: Value::from_u32(decode_narrow_field(y, ValueDataPacked::Y_BITS)),
+                original: Value::from_bits(decode_narrow_field(y, ValueDataPacked::Y_BITS)),
             },
             ValueDataPacked::TAG_UNION => ValueData::Union {
                 ty,
-                x: Value::from_u32(decode_narrow_field(x, ValueDataPacked::X_BITS)),
-                y: Value::from_u32(decode_narrow_field(y, ValueDataPacked::Y_BITS)),
+                x: Value::from_bits(decode_narrow_field(x, ValueDataPacked::X_BITS)),
+                y: Value::from_bits(decode_narrow_field(y, ValueDataPacked::Y_BITS)),
             },
             _ => panic!("Invalid tag {} in ValueDataPacked 0x{:x}", tag, data.0),
         }

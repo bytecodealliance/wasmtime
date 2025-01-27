@@ -158,6 +158,26 @@ macro_rules! entity_impl {
             pub fn as_u32(self) -> u32 {
                 self.0
             }
+
+            /// Return the raw bit encoding for this instance.
+            ///
+            /// Warning: entity types maintain a sentinel at `u32::MAX` and this
+            /// method may return it.
+            #[allow(dead_code, reason = "macro-generated code")]
+            #[inline]
+            pub fn as_bits(self) -> u32 {
+                self.0
+            }
+
+            /// Create a new instance from the raw bit encoding.
+            ///
+            /// Warning: entity types maintain a sentinel at `u32::MAX` and this
+            /// method allows the user to create it.
+            #[allow(dead_code, reason = "macro-generated code")]
+            #[inline]
+            pub fn from_bits(x: u32) -> Self {
+                $entity(x)
+            }
         }
     };
 

@@ -569,7 +569,7 @@ unsafe fn get_interned_func_ref(
     let store = AutoAssertNoGc::new(store.store_opaque_mut());
 
     let func_ref_id = FuncRefTableId::from_raw(func_ref_id);
-    let module_interned_type_index = ModuleInternedTypeIndex::from_u32(module_interned_type_index);
+    let module_interned_type_index = ModuleInternedTypeIndex::from_bits(module_interned_type_index);
 
     let func_ref = if module_interned_type_index.is_reserved_value() {
         store
