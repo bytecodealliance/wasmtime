@@ -74,12 +74,12 @@ impl<_T: HostBaz + ?Sized> HostBaz for &mut _T {
         HostBaz::drop(*self, rep)
     }
 }
-impl std::convert::From<LinkOptions> for foo::foo::the_interface::LinkOptions {
+impl core::convert::From<LinkOptions> for foo::foo::the_interface::LinkOptions {
     fn from(src: LinkOptions) -> Self {
         (&src).into()
     }
 }
-impl std::convert::From<&LinkOptions> for foo::foo::the_interface::LinkOptions {
+impl core::convert::From<&LinkOptions> for foo::foo::the_interface::LinkOptions {
     fn from(src: &LinkOptions) -> Self {
         let mut dest = Self::default();
         dest.experimental_interface(src.experimental_interface);

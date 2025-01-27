@@ -233,7 +233,7 @@ pub mod foo {
                     write!(f, "{} (error {})", self.name(), * self as i32)
                 }
             }
-            impl std::error::Error for Error {}
+            impl core::error::Error for Error {}
             const _: () = {
                 assert!(1 == < Error as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Error as wasmtime::component::ComponentType >::ALIGN32);
@@ -242,7 +242,7 @@ pub mod foo {
                 type Data;
                 fn option_test(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Result<
@@ -301,9 +301,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -337,7 +337,7 @@ pub mod foo {
                 type Data = _T::Data;
                 fn option_test(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Result<
@@ -407,7 +407,7 @@ pub mod exports {
                         write!(f, "{} (error {})", self.name(), * self as i32)
                     }
                 }
-                impl std::error::Error for Error {}
+                impl core::error::Error for Error {}
                 const _: () = {
                     assert!(
                         1 == < Error as wasmtime::component::ComponentType >::SIZE32

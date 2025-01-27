@@ -233,7 +233,7 @@ pub mod foo {
                     write!(f, "{} (error {})", self.name(), * self as i32)
                 }
             }
-            impl std::error::Error for Error {}
+            impl core::error::Error for Error {}
             const _: () = {
                 assert!(1 == < Error as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Error as wasmtime::component::ComponentType >::ALIGN32);
@@ -366,7 +366,7 @@ pub mod exports {
                         write!(f, "{} (error {})", self.name(), * self as i32)
                     }
                 }
-                impl std::error::Error for Error {}
+                impl core::error::Error for Error {}
                 const _: () = {
                     assert!(
                         1 == < Error as wasmtime::component::ComponentType >::SIZE32

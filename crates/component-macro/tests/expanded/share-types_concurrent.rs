@@ -292,7 +292,7 @@ pub mod http_fetch {
         fn fetch_request(
             store: wasmtime::StoreContextMut<'_, Self::Data>,
             request: Request,
-        ) -> impl ::std::future::Future<
+        ) -> impl ::core::future::Future<
             Output = impl FnOnce(
                 wasmtime::StoreContextMut<'_, Self::Data>,
             ) -> Response + Send + Sync + 'static,
@@ -341,9 +341,9 @@ pub mod http_fetch {
                             ) -> wasmtime::Result<(Response,)> + Send + Sync,
                         >
                 })
-                    as ::std::pin::Pin<
+                    as ::core::pin::Pin<
                         Box<
-                            dyn ::std::future::Future<
+                            dyn ::core::future::Future<
                                 Output = Box<
                                     dyn FnOnce(
                                         wasmtime::StoreContextMut<'_, T>,
@@ -371,7 +371,7 @@ pub mod http_fetch {
         fn fetch_request(
             store: wasmtime::StoreContextMut<'_, Self::Data>,
             request: Request,
-        ) -> impl ::std::future::Future<
+        ) -> impl ::core::future::Future<
             Output = impl FnOnce(
                 wasmtime::StoreContextMut<'_, Self::Data>,
             ) -> Response + Send + Sync + 'static,

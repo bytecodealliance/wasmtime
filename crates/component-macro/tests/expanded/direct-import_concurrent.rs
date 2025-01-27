@@ -99,7 +99,7 @@ pub trait FooImports {
     type Data;
     fn foo(
         store: wasmtime::StoreContextMut<'_, Self::Data>,
-    ) -> impl ::std::future::Future<
+    ) -> impl ::core::future::Future<
         Output = impl FnOnce(
             wasmtime::StoreContextMut<'_, Self::Data>,
         ) -> () + Send + Sync + 'static,
@@ -124,7 +124,7 @@ impl<_T: FooImports> FooImports for &mut _T {
     type Data = _T::Data;
     fn foo(
         store: wasmtime::StoreContextMut<'_, Self::Data>,
-    ) -> impl ::std::future::Future<
+    ) -> impl ::core::future::Future<
         Output = impl FnOnce(
             wasmtime::StoreContextMut<'_, Self::Data>,
         ) -> () + Send + Sync + 'static,
@@ -230,9 +230,9 @@ const _: () = {
                                     ) -> wasmtime::Result<()> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,

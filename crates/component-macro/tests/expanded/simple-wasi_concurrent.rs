@@ -239,7 +239,7 @@ pub mod foo {
                     write!(f, "{} (error {})", self.name(), * self as i32)
                 }
             }
-            impl std::error::Error for Errno {}
+            impl core::error::Error for Errno {}
             const _: () = {
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::SIZE32);
                 assert!(1 == < Errno as wasmtime::component::ComponentType >::ALIGN32);
@@ -248,7 +248,7 @@ pub mod foo {
                 type Data;
                 fn create_directory_at(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Result<(), Errno> + Send + Sync + 'static,
@@ -257,7 +257,7 @@ pub mod foo {
                     Self: Sized;
                 fn stat(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Result<DescriptorStat, Errno> + Send + Sync + 'static,
@@ -306,9 +306,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<(Result<(), Errno>,)> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -338,9 +338,9 @@ pub mod foo {
                                         > + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -369,7 +369,7 @@ pub mod foo {
                 type Data = _T::Data;
                 fn create_directory_at(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Result<(), Errno> + Send + Sync + 'static,
@@ -381,7 +381,7 @@ pub mod foo {
                 }
                 fn stat(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> Result<DescriptorStat, Errno> + Send + Sync + 'static,

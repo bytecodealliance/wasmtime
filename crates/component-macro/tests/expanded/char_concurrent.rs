@@ -199,7 +199,7 @@ pub mod foo {
                 fn take_char(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: char,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -209,7 +209,7 @@ pub mod foo {
                 /// A function that returns a character
                 fn return_char(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> char + Send + Sync + 'static,
@@ -261,9 +261,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<()> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -291,9 +291,9 @@ pub mod foo {
                                     ) -> wasmtime::Result<(char,)> + Send + Sync,
                                 >
                         })
-                            as ::std::pin::Pin<
+                            as ::core::pin::Pin<
                                 Box<
-                                    dyn ::std::future::Future<
+                                    dyn ::core::future::Future<
                                         Output = Box<
                                             dyn FnOnce(
                                                 wasmtime::StoreContextMut<'_, T>,
@@ -322,7 +322,7 @@ pub mod foo {
                 fn take_char(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
                     x: char,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> () + Send + Sync + 'static,
@@ -335,7 +335,7 @@ pub mod foo {
                 /// A function that returns a character
                 fn return_char(
                     store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::std::future::Future<
+                ) -> impl ::core::future::Future<
                     Output = impl FnOnce(
                         wasmtime::StoreContextMut<'_, Self::Data>,
                     ) -> char + Send + Sync + 'static,
