@@ -1433,8 +1433,6 @@ where
     /// Emit the sequence of instruction for a `memory.atomic.wait*`.
     #[cfg(feature = "threads")]
     pub fn emit_atomic_wait(&mut self, arg: &MemArg, kind: AtomicWaitKind) -> Result<()> {
-        use crate::masm::ExtendKind;
-
         // The `memory_atomic_wait*` builtins expect the following arguments:
         // - `memory`, as u32
         // - `address`, as u64
@@ -1451,23 +1449,11 @@ where
         let expected = self.context.pop_to_reg(self.masm, None)?;
         let addr = self.context.pop_to_reg(self.masm, None)?;
 
-        // Put the target memory index in a register, and push it as the first argument.
-        let mem = self.context.any_gpr(self.masm)?;
-        self.masm.mov(
-            writable!(mem),
-            RegImm::i32(arg.memory as i32),
-            OperandSize::S32,
-        )?;
+        // Put the target memory index as the first argument.
         self.context
             .stack
-            .push(TypedReg::new(WasmValType::I32, mem).into());
+            .push(crate::stack::Val::I32(arg.memory as i32));
 
-        // compute the offset if necessary.
-        self.masm.extend(
-            writable!(addr.reg),
-            addr.reg,
-            ExtendKind::Unsigned(Extend::I64Extend32),
-        )?;
         if arg.offset != 0 {
             self.masm.add(
                 writable!(addr.reg),
@@ -1505,8 +1491,6 @@ where
 
     #[cfg(feature = "threads")]
     pub fn emit_atomic_notify(&mut self, arg: &MemArg) -> Result<()> {
-        use crate::masm::ExtendKind;
-
         // The memory `memory_atomic_notify` builtin expects the following arguments:
         // - `memory`, as u32
         // - `address`, as u64
@@ -1521,23 +1505,11 @@ where
         let count = self.context.pop_to_reg(self.masm, None)?;
         let addr = self.context.pop_to_reg(self.masm, None)?;
 
-        // put the target memrory index in a register, and push it as the first argument.
-        let mem = self.context.any_gpr(self.masm)?;
-        self.masm.mov(
-            writable!(mem),
-            RegImm::i32(arg.memory as i32),
-            OperandSize::S32,
-        )?;
+        // Put the target memory index as the first argument.
         self.context
             .stack
-            .push(TypedReg::new(WasmValType::I32, mem).into());
+            .push(crate::stack::Val::I32(arg.memory as i32));
 
-        // compute offset if necessary.
-        self.masm.extend(
-            writable!(addr.reg),
-            addr.reg,
-            ExtendKind::Unsigned(Extend::I64Extend32),
-        )?;
         if arg.offset != 0 {
             self.masm.add(
                 writable!(addr.reg),
