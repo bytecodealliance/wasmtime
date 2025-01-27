@@ -24,7 +24,10 @@ impl WastCommand {
         self.common.init_logging()?;
 
         let config = self.common.config(None)?;
-        let store = Store::new(&Engine::new(&config)?, ());
+        let mut store = Store::new(&Engine::new(&config)?, ());
+        if let Some(fuel) = self.common.wasm.fuel {
+            store.set_fuel(fuel)?;
+        }
         let mut wast_context = WastContext::new(store);
 
         wast_context
