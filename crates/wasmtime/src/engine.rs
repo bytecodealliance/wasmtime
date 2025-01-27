@@ -309,6 +309,15 @@ impl Engine {
                 self.check_compatible_with_isa_flag(key, value)?;
             }
         }
+
+        // Double-check that this configuration isn't requesting capabilities
+        // that this build of Wasmtime doesn't support.
+        if !cfg!(has_native_signals) && self.tunables().signals_based_traps {
+            return Err("signals-based-traps disabled at compile time -- cannot be enabled".into());
+        }
+        if !cfg!(has_virtual_memory) && self.tunables().memory_init_cow {
+            return Err("virtual memory disabled at compile time -- cannot enable CoW".into());
+        }
         Ok(())
     }
 

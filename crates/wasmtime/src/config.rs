@@ -2208,15 +2208,6 @@ impl Config {
             None
         };
 
-        // Double-check that this configuration isn't requesting capabilities
-        // that this build of Wasmtime doesn't support.
-        if !cfg!(has_native_signals) && tunables.signals_based_traps {
-            bail!("signals-based-traps disabled at compile time -- cannot be enabled");
-        }
-        if !cfg!(has_virtual_memory) && tunables.memory_init_cow {
-            bail!("virtual memory disabled at compile time -- cannot enable CoW");
-        }
-
         Ok((tunables, features))
     }
 
