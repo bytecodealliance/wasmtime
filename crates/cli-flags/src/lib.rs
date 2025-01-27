@@ -931,7 +931,7 @@ impl CommonOptions {
             ("component-model", component_model, wasm_component_model)
             ("component-model", component_model_more_flags, wasm_component_model_more_flags)
             ("component-model", component_model_multiple_returns, wasm_component_model_multiple_returns)
-            ("component-model", component_model_async, wasm_component_model_async)
+            ("component-model-async", component_model_async, wasm_component_model_async)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)

@@ -25,6 +25,7 @@ humantime = { workspace = true }
 async = ["wasmtime/async"]
 pooling-allocator = ["wasmtime/pooling-allocator"]
 component-model = ["wasmtime/component-model"]
+component-model-async = ["wasmtime/component-model-async"]
 cache = ["wasmtime/cache"]
 parallel-compilation = ["wasmtime/parallel-compilation", "dep:rayon"]
 logging = ["dep:file-per-thread-logger", "dep:tracing-subscriber"]

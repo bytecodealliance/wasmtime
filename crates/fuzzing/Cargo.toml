@@ -41,6 +41,7 @@ workspace = true
 features = [
   'async',
   'component-model',
+  'component-model-async',
   'cranelift',
   'gc',
   'gc-drc',
