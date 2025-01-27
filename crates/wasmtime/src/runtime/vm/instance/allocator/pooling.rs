@@ -49,9 +49,10 @@ use super::{
 use crate::prelude::*;
 use crate::runtime::vm::{
     instance::Instance,
-    mpk::{self, MpkEnabled, ProtectionKey, ProtectionMask},
+    mpk::{self, ProtectionKey, ProtectionMask},
     CompiledModuleId, Memory, Table,
 };
+use crate::MpkEnabled;
 use std::borrow::Cow;
 use std::fmt::Display;
 use std::sync::{Mutex, MutexGuard};

@@ -249,46 +249,44 @@ impl Config {
     /// Converts this to a `wasmtime::Config` object
     pub fn to_wasmtime(&self) -> wasmtime::Config {
         crate::init_fuzzing();
-        log::debug!("creating wasmtime config with {:#?}", self.wasmtime);
 
-        let mut cfg = wasmtime::Config::new();
-        cfg.parallel_compilation(false)
-            .wasm_bulk_memory(true)
-            .wasm_reference_types(self.module_config.config.reference_types_enabled)
-            .wasm_multi_value(self.module_config.config.multi_value_enabled)
-            .wasm_multi_memory(self.module_config.config.max_memories > 1)
-            .wasm_simd(self.module_config.config.simd_enabled)
-            .wasm_memory64(self.module_config.config.memory64_enabled)
-            .wasm_tail_call(self.module_config.config.tail_call_enabled)
-            .wasm_custom_page_sizes(self.module_config.config.custom_page_sizes_enabled)
-            .wasm_threads(self.module_config.config.threads_enabled)
-            .wasm_function_references(self.module_config.function_references_enabled)
-            .wasm_gc(self.module_config.config.gc_enabled)
-            .wasm_custom_page_sizes(self.module_config.config.custom_page_sizes_enabled)
-            .wasm_wide_arithmetic(self.module_config.config.wide_arithmetic_enabled)
-            .wasm_extended_const(self.module_config.config.extended_const_enabled)
-            .wasm_component_model_more_flags(self.module_config.component_model_more_flags)
-            .wasm_component_model_async(self.module_config.component_model_async)
-            .native_unwind_info(cfg!(target_os = "windows") || self.wasmtime.native_unwind_info)
-            .cranelift_nan_canonicalization(self.wasmtime.canonicalize_nans)
-            .cranelift_opt_level(self.wasmtime.opt_level.to_wasmtime())
-            .cranelift_regalloc_algorithm(self.wasmtime.regalloc_algorithm.to_wasmtime())
-            .consume_fuel(self.wasmtime.consume_fuel)
-            .epoch_interruption(self.wasmtime.epoch_interruption)
-            .memory_guaranteed_dense_image_size(std::cmp::min(
-                // Clamp this at 16MiB so we don't get huge in-memory
-                // images during fuzzing.
-                16 << 20,
-                self.wasmtime.memory_guaranteed_dense_image_size,
-            ))
-            .allocation_strategy(self.wasmtime.strategy.to_wasmtime())
-            .generate_address_map(self.wasmtime.generate_address_map)
-            .signals_based_traps(self.wasmtime.signals_based_traps)
-            .async_stack_zeroing(self.wasmtime.async_stack_zeroing);
-
+        let mut cfg = wasmtime_cli_flags::CommonOptions::default();
+        cfg.codegen.native_unwind_info =
+            Some(cfg!(target_os = "windows") || self.wasmtime.native_unwind_info);
+        cfg.codegen.parallel_compilation = Some(false);
+        cfg.debug.address_map = Some(self.wasmtime.generate_address_map);
+        cfg.opts.opt_level = Some(self.wasmtime.opt_level.to_wasmtime());
+        cfg.opts.regalloc_algorithm = Some(self.wasmtime.regalloc_algorithm.to_wasmtime());
+        cfg.opts.signals_based_traps = Some(self.wasmtime.signals_based_traps);
+        cfg.opts.memory_guaranteed_dense_image_size = Some(std::cmp::min(
+            // Clamp this at 16MiB so we don't get huge in-memory
+            // images during fuzzing.
+            16 << 20,
+            self.wasmtime.memory_guaranteed_dense_image_size,
+        ));
+        cfg.wasm.async_stack_zeroing = Some(self.wasmtime.async_stack_zeroing);
+        cfg.wasm.bulk_memory = Some(true);
+        cfg.wasm.component_model_async = Some(self.module_config.component_model_async);
+        cfg.wasm.component_model_more_flags = Some(self.module_config.component_model_more_flags);
+        cfg.wasm.custom_page_sizes = Some(self.module_config.config.custom_page_sizes_enabled);
+        cfg.wasm.epoch_interruption = Some(self.wasmtime.epoch_interruption);
+        cfg.wasm.extended_const = Some(self.module_config.config.extended_const_enabled);
+        cfg.wasm.fuel = self.wasmtime.consume_fuel.then(|| u64::MAX);
+        cfg.wasm.function_references = Some(self.module_config.function_references_enabled);
+        cfg.wasm.gc = Some(self.module_config.config.gc_enabled);
+        cfg.wasm.memory64 = Some(self.module_config.config.memory64_enabled);
+        cfg.wasm.multi_memory = Some(self.module_config.config.max_memories > 1);
+        cfg.wasm.multi_value = Some(self.module_config.config.multi_value_enabled);
+        cfg.wasm.nan_canonicalization = Some(self.wasmtime.canonicalize_nans);
+        cfg.wasm.reference_types = Some(self.module_config.config.reference_types_enabled);
+        cfg.wasm.simd = Some(self.module_config.config.simd_enabled);
+        cfg.wasm.tail_call = Some(self.module_config.config.tail_call_enabled);
+        cfg.wasm.threads = Some(self.module_config.config.threads_enabled);
+        cfg.wasm.wide_arithmetic = Some(self.module_config.config.wide_arithmetic_enabled);
         if !self.module_config.config.simd_enabled {
-            cfg.wasm_relaxed_simd(false);
+            cfg.wasm.relaxed_simd = Some(false);
         }
+        cfg.codegen.collector = Some(self.wasmtime.collector.to_wasmtime());
 
         let compiler_strategy = &self.wasmtime.compiler_strategy;
         let cranelift_strategy = match compiler_strategy {
@@ -296,7 +294,6 @@ impl Config {
             CompilerStrategy::Winch => false,
         };
         self.wasmtime.compiler_strategy.configure(&mut cfg);
-        cfg.collector(self.wasmtime.collector.to_wasmtime());
 
         self.wasmtime.codegen.configure(&mut cfg);
 
@@ -313,7 +310,7 @@ impl Config {
             // If the wasm-smith-generated module use nan canonicalization then we
             // don't need to enable it, but if it doesn't enable it already then we
             // enable this codegen option.
-            cfg.cranelift_nan_canonicalization(!self.module_config.config.canonicalize_nans);
+            cfg.wasm.nan_canonicalization = Some(!self.module_config.config.canonicalize_nans);
 
             // Enabling the verifier will at-least-double compilation time, which
             // with a 20-30x slowdown in fuzzing can cause issues related to
@@ -321,31 +318,30 @@ impl Config {
             // functions then disable the verifier when fuzzing to try to lessen the
             // impact of timeouts.
             if self.module_config.config.max_funcs > 10 {
-                cfg.cranelift_debug_verifier(false);
+                cfg.codegen.cranelift_debug_verifier = Some(false);
             }
 
             if self.wasmtime.force_jump_veneers {
-                unsafe {
-                    cfg.cranelift_flag_set("wasmtime_linkopt_force_jump_veneer", "true");
-                }
+                cfg.codegen.cranelift.push((
+                    "wasmtime_linkopt_force_jump_veneer".to_string(),
+                    Some("true".to_string()),
+                ));
             }
 
             if let Some(pad) = self.wasmtime.padding_between_functions {
-                unsafe {
-                    cfg.cranelift_flag_set(
-                        "wasmtime_linkopt_padding_between_functions",
-                        &pad.to_string(),
-                    );
-                }
+                cfg.codegen.cranelift.push((
+                    "wasmtime_linkopt_padding_between_functions".to_string(),
+                    Some(pad.to_string()),
+                ));
             }
 
-            cfg.cranelift_pcc(pcc);
+            cfg.codegen.pcc = Some(pcc);
 
             // Eager init is currently only supported on Cranelift, not Winch.
-            cfg.table_lazy_init(self.wasmtime.table_lazy_init);
+            cfg.opts.table_lazy_init = Some(self.wasmtime.table_lazy_init);
         }
 
-        self.wasmtime.async_config.configure(&mut cfg);
+        self.wasmtime.strategy.configure(&mut cfg);
 
         // Vary the memory configuration, but only if threads are not enabled.
         // When the threads proposal is enabled we might generate shared memory,
@@ -357,7 +353,7 @@ impl Config {
         // - shared memories are required to be aligned which means that the
         //   `CustomUnaligned` variant isn't actually safe to use with a shared
         //   memory.
-        if !self.module_config.config.threads_enabled {
+        let host_memory = if !self.module_config.config.threads_enabled {
             // If PCC is enabled, force other options to be compatible: PCC is currently only
             // supported when bounds checks are elided.
             let memory_config = if pcc {
@@ -376,17 +372,33 @@ impl Config {
 
             match &memory_config {
                 MemoryConfig::Normal(memory_config) => {
-                    memory_config.apply_to(&mut cfg);
+                    memory_config.configure(&mut cfg);
+                    None
                 }
                 MemoryConfig::CustomUnaligned => {
-                    cfg.with_host_memory(Arc::new(UnalignedMemoryCreator))
-                        .memory_reservation(0)
-                        .memory_guard_size(0)
-                        .memory_reservation_for_growth(0)
-                        .guard_before_linear_memory(false)
-                        .memory_init_cow(false);
+                    cfg.opts.memory_reservation = Some(0);
+                    cfg.opts.memory_guard_size = Some(0);
+                    cfg.opts.memory_reservation_for_growth = Some(0);
+                    cfg.opts.guard_before_linear_memory = Some(false);
+                    cfg.opts.memory_init_cow = Some(false);
+                    log::debug!("a custom unaligned host memory will be in use");
+                    Some(Arc::new(UnalignedMemoryCreator))
                 }
             }
+        } else {
+            None
+        };
+
+        log::debug!("creating wasmtime config with CLI options:\n{cfg}");
+        let mut cfg = cfg.config(None).expect("failed to create wasmtime::Config");
+
+        if let Some(host_memory) = host_memory {
+            cfg.with_host_memory(host_memory);
+        }
+
+        if self.wasmtime.async_config != AsyncConfig::Disabled {
+            log::debug!("async config in used {:?}", self.wasmtime.async_config);
+            self.wasmtime.async_config.configure(&mut cfg);
         }
 
         return cfg;
@@ -799,19 +811,17 @@ pub enum CompilerStrategy {
 
 impl CompilerStrategy {
     /// Configures `config` to use this compilation strategy
-    pub fn configure(&self, config: &mut wasmtime::Config) {
+    pub fn configure(&self, config: &mut wasmtime_cli_flags::CommonOptions) {
         match self {
             CompilerStrategy::CraneliftNative => {
-                config.strategy(wasmtime::Strategy::Cranelift);
+                config.codegen.compiler = Some(wasmtime::Strategy::Cranelift);
             }
             CompilerStrategy::Winch => {
-                config.strategy(wasmtime::Strategy::Winch);
+                config.codegen.compiler = Some(wasmtime::Strategy::Winch);
             }
             CompilerStrategy::CraneliftPulley => {
-                config
-                    .strategy(wasmtime::Strategy::Cranelift)
-                    .target("pulley64")
-                    .unwrap();
+                config.codegen.compiler = Some(wasmtime::Strategy::Cranelift);
+                config.target = Some("pulley64".to_string());
             }
         }
     }

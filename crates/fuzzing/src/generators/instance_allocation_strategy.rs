@@ -12,11 +12,12 @@ pub enum InstanceAllocationStrategy {
 
 impl InstanceAllocationStrategy {
     /// Convert this generated strategy a Wasmtime strategy.
-    pub fn to_wasmtime(&self) -> wasmtime::InstanceAllocationStrategy {
+    pub fn configure(&self, cfg: &mut wasmtime_cli_flags::CommonOptions) {
         match self {
-            InstanceAllocationStrategy::OnDemand => wasmtime::InstanceAllocationStrategy::OnDemand,
+            InstanceAllocationStrategy::OnDemand => {}
             InstanceAllocationStrategy::Pooling(pooling) => {
-                wasmtime::InstanceAllocationStrategy::Pooling(pooling.to_wasmtime())
+                cfg.opts.pooling_allocator = Some(true);
+                pooling.configure(cfg);
             }
         }
     }

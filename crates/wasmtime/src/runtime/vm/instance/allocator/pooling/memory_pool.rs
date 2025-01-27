@@ -57,11 +57,12 @@ use super::{
 use crate::prelude::*;
 use crate::runtime::vm::{
     mmap::AlignedLength, CompiledModuleId, InstanceAllocationRequest, InstanceLimits, Memory,
-    MemoryBase, MemoryImageSlot, Mmap, MmapOffset, MpkEnabled, PoolingInstanceAllocatorConfig,
+    MemoryBase, MemoryImageSlot, Mmap, MmapOffset, PoolingInstanceAllocatorConfig,
 };
 use crate::{
     runtime::vm::mpk::{self, ProtectionKey, ProtectionMask},
     vm::HostAlignedByteCount,
+    MpkEnabled,
 };
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};

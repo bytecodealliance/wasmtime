@@ -77,7 +77,6 @@ pub use crate::runtime::vm::memory::{
     Memory, MemoryBase, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory,
 };
 pub use crate::runtime::vm::mmap_vec::MmapVec;
-pub use crate::runtime::vm::mpk::MpkEnabled;
 pub use crate::runtime::vm::provenance::*;
 pub use crate::runtime::vm::store_box::*;
 #[cfg(feature = "std")]

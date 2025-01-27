@@ -18,15 +18,16 @@ pub enum CodegenSettings {
 
 impl CodegenSettings {
     /// Configure Wasmtime with these codegen settings.
-    pub fn configure(&self, config: &mut wasmtime::Config) {
+    pub fn configure(&self, config: &mut wasmtime_cli_flags::CommonOptions) {
         match self {
             CodegenSettings::Native => {}
             CodegenSettings::Target { target, flags } => {
-                config.target(target).unwrap();
+                config.target = Some(target.to_string());
                 for (key, value) in flags {
-                    unsafe {
-                        config.cranelift_flag_set(key, value);
-                    }
+                    config
+                        .codegen
+                        .cranelift
+                        .push((key.clone(), Some(value.clone())));
                 }
             }
         }
