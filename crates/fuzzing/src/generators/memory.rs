@@ -191,29 +191,19 @@ fn interesting_virtual_memory_size(
 }
 
 impl NormalMemoryConfig {
-    /// Apply this memory configuration to the given `wasmtime::Config`.
-    pub fn apply_to(&self, config: &mut wasmtime::Config) {
-        if let Some(n) = self.memory_reservation {
-            config.memory_reservation(n);
-        }
-        if let Some(n) = self.memory_guard_size {
-            config.memory_guard_size(n);
-        }
-        if let Some(n) = self.memory_reservation_for_growth {
-            config.memory_reservation_for_growth(n);
-        }
-
-        config
-            .guard_before_linear_memory(self.guard_before_linear_memory)
-            .memory_init_cow(self.memory_init_cow);
+    /// Apply this memory configuration to the given config.
+    pub fn configure(&self, cfg: &mut wasmtime_cli_flags::CommonOptions) {
+        cfg.opts.memory_reservation = self.memory_reservation;
+        cfg.opts.memory_guard_size = self.memory_guard_size;
+        cfg.opts.memory_reservation_for_growth = self.memory_reservation_for_growth;
+        cfg.opts.guard_before_linear_memory = Some(self.guard_before_linear_memory);
+        cfg.opts.memory_init_cow = Some(self.memory_init_cow);
 
         if let Some(enable) = self.cranelift_enable_heap_access_spectre_mitigations {
-            unsafe {
-                config.cranelift_flag_set(
-                    "enable_heap_access_spectre_mitigation",
-                    &enable.to_string(),
-                );
-            }
+            cfg.codegen.cranelift.push((
+                "enable_heap_access_spectre_mitigation".to_string(),
+                Some(enable.to_string()),
+            ));
         }
     }
 }

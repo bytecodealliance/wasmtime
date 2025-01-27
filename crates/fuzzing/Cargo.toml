@@ -26,8 +26,9 @@ target-lexicon = { workspace = true }
 tempfile = "3.3.0"
 wasmparser = { workspace = true }
 wasmprinter = { workspace = true }
-wasmtime = { workspace = true, features = ['default', 'winch', 'gc', 'memory-protection-keys', 'pulley'] }
+wasmtime-cli-flags = { workspace = true, features = ['gc', 'memory-protection-keys', 'pulley'] }
 wasmtime-wast = { workspace = true, features = ['component-model'] }
+wasmtime = { workspace = true, features = ['default', 'winch'] }
 wasm-encoder = { workspace = true }
 wasm-smith = { workspace = true }
 wasm-mutate = { workspace = true }

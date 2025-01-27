@@ -2,6 +2,7 @@
 
 use anyhow::Result;
 use clap::Parser;
+use std::fmt;
 use std::time::Duration;
 use wasmtime::Config;
 
@@ -85,7 +86,7 @@ wasmtime_option_group! {
 
         /// Enable memory protection keys for the pooling allocator; this can
         /// optimize the size of memory slots.
-        pub pooling_memory_protection_keys: Option<bool>,
+        pub pooling_memory_protection_keys: Option<wasmtime::MpkEnabled>,
 
         /// Sets an upper limit on how many memory protection keys (MPK) Wasmtime
         /// will use. (default: 16)
@@ -94,6 +95,10 @@ wasmtime_option_group! {
         /// Configure attempting to initialize linear memory via a
         /// copy-on-write mapping (default: yes)
         pub memory_init_cow: Option<bool>,
+
+        /// Threshold below which CoW images are guaranteed to be used and be
+        /// dense.
+        pub memory_guaranteed_dense_image_size: Option<u64>,
 
         /// The maximum number of WebAssembly instances which can be created
         /// with the pooling allocator.
@@ -342,6 +347,8 @@ wasmtime_option_group! {
         pub component_model_more_flags: Option<bool>,
         /// Component model support for more than one return value.
         pub component_model_multiple_returns: Option<bool>,
+        /// Component model support for async lifting/lowering.
+        pub component_model_async: Option<bool>,
         /// Configure support for the function-references proposal.
         pub function_references: Option<bool>,
         /// Configure support for the GC proposal.
@@ -516,6 +523,24 @@ macro_rules! match_feature {
 }
 
 impl CommonOptions {
+    /// Creates a blank new set of [`CommonOptions`] that can be configured.
+    pub fn new() -> CommonOptions {
+        CommonOptions {
+            opts_raw: Vec::new(),
+            codegen_raw: Vec::new(),
+            debug_raw: Vec::new(),
+            wasm_raw: Vec::new(),
+            wasi_raw: Vec::new(),
+            configured: true,
+            opts: Default::default(),
+            codegen: Default::default(),
+            debug: Default::default(),
+            wasm: Default::default(),
+            wasi: Default::default(),
+            target: None,
+        }
+    }
+
     fn configure(&mut self) {
         if self.configured {
             return;
@@ -708,6 +733,9 @@ impl CommonOptions {
         if let Some(enable) = self.opts.memory_init_cow {
             config.memory_init_cow(enable);
         }
+        if let Some(size) = self.opts.memory_guaranteed_dense_image_size {
+            config.memory_guaranteed_dense_image_size(size);
+        }
         if let Some(enable) = self.opts.signals_based_traps {
             config.signals_based_traps(enable);
         }
@@ -806,14 +834,14 @@ impl CommonOptions {
             true => err,
         }
 
-        if self.opts.pooling_memory_protection_keys.unwrap_or(false)
+        if self.opts.pooling_memory_protection_keys.is_some()
             && !self.opts.pooling_allocator.unwrap_or(false)
         {
             anyhow::bail!("memory protection keys require the pooling allocator");
         }
 
         if self.opts.pooling_max_memory_protection_keys.is_some()
-            && !self.opts.pooling_memory_protection_keys.unwrap_or(false)
+            && !self.opts.pooling_memory_protection_keys.is_some()
         {
             anyhow::bail!(
                 "max memory protection keys requires memory protection keys to be enabled"
@@ -907,11 +935,82 @@ impl CommonOptions {
             ("component-model", component_model, wasm_component_model)
             ("component-model", component_model_more_flags, wasm_component_model_more_flags)
             ("component-model", component_model_multiple_returns, wasm_component_model_multiple_returns)
+            ("component-model", component_model_async, wasm_component_model_async)
             ("threads", threads, wasm_threads)
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)
             ("gc", function_references, wasm_function_references)
         }
+        Ok(())
+    }
+}
+
+impl Default for CommonOptions {
+    fn default() -> CommonOptions {
+        CommonOptions::new()
+    }
+}
+
+impl fmt::Display for CommonOptions {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let CommonOptions {
+            codegen_raw,
+            codegen,
+            debug_raw,
+            debug,
+            opts_raw,
+            opts,
+            wasm_raw,
+            wasm,
+            wasi_raw,
+            wasi,
+            configured,
+            target,
+        } = self;
+        if let Some(target) = target {
+            write!(f, "--target {target} ")?;
+        }
+
+        let codegen_flags;
+        let opts_flags;
+        let wasi_flags;
+        let wasm_flags;
+        let debug_flags;
+
+        if *configured {
+            codegen_flags = codegen.to_options();
+            debug_flags = debug.to_options();
+            wasi_flags = wasi.to_options();
+            wasm_flags = wasm.to_options();
+            opts_flags = opts.to_options();
+        } else {
+            codegen_flags = codegen_raw
+                .iter()
+                .flat_map(|t| t.0.iter())
+                .cloned()
+                .collect();
+            debug_flags = debug_raw.iter().flat_map(|t| t.0.iter()).cloned().collect();
+            wasi_flags = wasi_raw.iter().flat_map(|t| t.0.iter()).cloned().collect();
+            wasm_flags = wasm_raw.iter().flat_map(|t| t.0.iter()).cloned().collect();
+            opts_flags = opts_raw.iter().flat_map(|t| t.0.iter()).cloned().collect();
+        }
+
+        for flag in codegen_flags {
+            write!(f, "-C{flag} ")?;
+        }
+        for flag in opts_flags {
+            write!(f, "-O{flag} ")?;
+        }
+        for flag in wasi_flags {
+            write!(f, "-S{flag} ")?;
+        }
+        for flag in wasm_flags {
+            write!(f, "-W{flag} ")?;
+        }
+        for flag in debug_flags {
+            write!(f, "-D{flag} ")?;
+        }
+
         Ok(())
     }
 }
