@@ -597,7 +597,6 @@ impl WasmtimeConfig {
                 config.simd_enabled = false;
                 config.relaxed_simd_enabled = false;
                 config.gc_enabled = false;
-                config.threads_enabled = false;
                 config.tail_call_enabled = false;
                 config.reference_types_enabled = false;
 
