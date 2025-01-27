@@ -444,21 +444,9 @@ impl LoadKind {
     pub(crate) fn derive_operand_size(&self) -> OperandSize {
         match self {
             Self::ScalarExtend(scalar) => Self::operand_size_for_scalar(scalar),
-            Self::VectorExtend(vector) => Self::operand_size_for_vector(vector),
+            Self::VectorExtend(_) => OperandSize::S64,
             Self::Splat(kind) => Self::operand_size_for_splat(kind),
             Self::Operand(op) => *op,
-        }
-    }
-
-    fn operand_size_for_vector(vector: &VectorExtendKind) -> OperandSize {
-        match vector {
-            VectorExtendKind::V128Extend8x8S | VectorExtendKind::V128Extend8x8U => OperandSize::S8,
-            VectorExtendKind::V128Extend16x4S | VectorExtendKind::V128Extend16x4U => {
-                OperandSize::S16
-            }
-            VectorExtendKind::V128Extend32x2S | VectorExtendKind::V128Extend32x2U => {
-                OperandSize::S32
-            }
         }
     }
 
