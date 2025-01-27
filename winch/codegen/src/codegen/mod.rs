@@ -3,8 +3,8 @@ use crate::{
     codegen::BlockSig,
     isa::reg::{writable, Reg},
     masm::{
-        Extend, Imm, IntCmpKind, LaneSelector, LoadKind, MacroAssembler, OperandSize,
-        RegImm, RmwOp, SPOffset, ShiftKind, StoreKind, TrapCode, Zero, UNTRUSTED_FLAGS,
+        Extend, Imm, IntCmpKind, LaneSelector, LoadKind, MacroAssembler, OperandSize, RegImm,
+        RmwOp, SPOffset, ShiftKind, StoreKind, TrapCode, Zero, UNTRUSTED_FLAGS,
     },
     stack::TypedReg,
 };
@@ -915,15 +915,14 @@ where
                 if let Some(addr) = addr {
                     emit_load(self, dst.reg, addr, kind)?;
                 }
-            },
+            }
             _ => {
                 let maybe_addr = match kind {
-                    LoadKind::Atomic(_, _) => {
-                        self.emit_compute_heap_address_align_checked(&arg, kind.derive_operand_size())?
-                    }
-                    _ => {
-                        self.emit_compute_heap_address(&arg, kind.derive_operand_size())?
-                    }
+                    LoadKind::Atomic(_, _) => self.emit_compute_heap_address_align_checked(
+                        &arg,
+                        kind.derive_operand_size(),
+                    )?,
+                    _ => self.emit_compute_heap_address(&arg, kind.derive_operand_size())?,
                 };
 
                 if let Some(addr) = maybe_addr {
@@ -940,7 +939,7 @@ where
         }
 
         Ok(())
-    }            
+    }
 
     /// Emit a WebAssembly store.
     pub fn emit_wasm_store(&mut self, arg: &MemArg, kind: StoreKind) -> Result<()> {
@@ -954,11 +953,8 @@ where
         };
 
         if let Some(addr) = maybe_addr {
-            self.masm.wasm_store(
-                src.reg.into(),
-                self.masm.address_at_reg(addr, 0)?,
-                kind,
-            )?;
+            self.masm
+                .wasm_store(src.reg.into(), self.masm.address_at_reg(addr, 0)?, kind)?;
 
             self.context.free_reg(addr);
         }

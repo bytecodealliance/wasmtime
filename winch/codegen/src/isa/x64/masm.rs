@@ -7,7 +7,10 @@ use super::{
 use anyhow::{anyhow, bail, Result};
 
 use crate::masm::{
-    DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I, IntCmpKind, LaneSelector, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, ShiftKind, SplatKind, StoreKind, TrapCode, TruncKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS
+    DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I, IntCmpKind, LaneSelector,
+    LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind,
+    RmwOp, RoundingMode, ShiftKind, SplatKind, StoreKind, TrapCode, TruncKind, Zero, TRUSTED_FLAGS,
+    UNTRUSTED_FLAGS,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
@@ -215,16 +218,11 @@ impl Masm for MacroAssembler {
         self.store_impl(src, dst, size, TRUSTED_FLAGS)
     }
 
-    fn wasm_store(
-        &mut self,
-        src: Reg,
-        dst: Self::Address,
-        kind: StoreKind,
-    ) -> Result<()> {
+    fn wasm_store(&mut self, src: Reg, dst: Self::Address, kind: StoreKind) -> Result<()> {
         match kind {
             StoreKind::Operand(size) => {
                 self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS)?;
-            },
+            }
             StoreKind::Atomic(size) => {
                 if size == OperandSize::S128 {
                     // TODO: we don't support 128-bit atomic store yet.
@@ -234,11 +232,11 @@ impl Masm for MacroAssembler {
                 // although, we could probably just emit a xchg.
                 self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS)?;
                 self.asm.fence(FenceKind::MFence);
-            },
+            }
             StoreKind::VectorLane(LaneSelector { lane, size }) => {
                 self.asm
                     .xmm_vpextr_rm(&dst, src, lane, size, UNTRUSTED_FLAGS)?;
-            },
+            }
         }
 
         Ok(())
@@ -304,26 +302,19 @@ impl Masm for MacroAssembler {
         self.load_impl(src, dst, size, TRUSTED_FLAGS)
     }
 
-    fn wasm_load(
-        &mut self,
-        src: Self::Address,
-        dst: WritableReg,
-        kind: LoadKind,
-    ) -> Result<()> {
+    fn wasm_load(&mut self, src: Self::Address, dst: WritableReg, kind: LoadKind) -> Result<()> {
         let size = kind.derive_operand_size();
 
         match kind {
-            LoadKind::ScalarExtend(ext) => {
-                match ext {
-                    ExtendKind::Signed(ext) => {
-                        self.asm.movsx_mr(&src, dst, ext, UNTRUSTED_FLAGS);
-                    }
-                    ExtendKind::Unsigned(_) => self.load_impl(src, dst, size, UNTRUSTED_FLAGS)?,
+            LoadKind::ScalarExtend(ext) => match ext {
+                ExtendKind::Signed(ext) => {
+                    self.asm.movsx_mr(&src, dst, ext, UNTRUSTED_FLAGS);
                 }
-            }
-            LoadKind::Operand(_) | LoadKind::Atomic(_, _)=> {
-            // The guarantees of the x86-64 memory model ensure that `SeqCst`
-            // loads are equivalent to normal loads.
+                ExtendKind::Unsigned(_) => self.load_impl(src, dst, size, UNTRUSTED_FLAGS)?,
+            },
+            LoadKind::Operand(_) | LoadKind::Atomic(_, _) => {
+                // The guarantees of the x86-64 memory model ensure that `SeqCst`
+                // loads are equivalent to normal loads.
                 if kind.is_atomic() && size == OperandSize::S128 {
                     bail!(CodeGenError::unexpected_operand_size());
                 }
@@ -356,7 +347,7 @@ impl Masm for MacroAssembler {
                 self.load_impl(src, writable!(byte_tmp), size, UNTRUSTED_FLAGS)?;
                 self.asm
                     .xmm_vpinsr_rrr(dst, dst.to_reg(), byte_tmp, lane, size);
-            },
+            }
         }
 
         Ok(())

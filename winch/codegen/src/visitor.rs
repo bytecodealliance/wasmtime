@@ -10,7 +10,10 @@ use crate::codegen::{
     FnCall,
 };
 use crate::masm::{
-    DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler, MemMoveDirection, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, StoreKind, TruncKind, VectorExtendKind, Zero
+    DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler,
+    MemMoveDirection, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp,
+    RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, StoreKind, TruncKind,
+    VectorExtendKind, Zero,
 };
 
 use crate::reg::{writable, Reg};
@@ -3038,19 +3041,35 @@ where
     }
 
     fn visit_v128_load8_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
-        self.emit_wasm_load(&arg, WasmValType::V128, LoadKind::vector_lane(lane, OperandSize::S8))
+        self.emit_wasm_load(
+            &arg,
+            WasmValType::V128,
+            LoadKind::vector_lane(lane, OperandSize::S8),
+        )
     }
 
     fn visit_v128_load16_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
-        self.emit_wasm_load(&arg, WasmValType::V128, LoadKind::vector_lane(lane, OperandSize::S16))
+        self.emit_wasm_load(
+            &arg,
+            WasmValType::V128,
+            LoadKind::vector_lane(lane, OperandSize::S16),
+        )
     }
 
     fn visit_v128_load32_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
-        self.emit_wasm_load(&arg, WasmValType::V128, LoadKind::vector_lane(lane, OperandSize::S32))
+        self.emit_wasm_load(
+            &arg,
+            WasmValType::V128,
+            LoadKind::vector_lane(lane, OperandSize::S32),
+        )
     }
 
     fn visit_v128_load64_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
-        self.emit_wasm_load(&arg, WasmValType::V128, LoadKind::vector_lane(lane, OperandSize::S64))
+        self.emit_wasm_load(
+            &arg,
+            WasmValType::V128,
+            LoadKind::vector_lane(lane, OperandSize::S64),
+        )
     }
 
     fn visit_v128_store8_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {

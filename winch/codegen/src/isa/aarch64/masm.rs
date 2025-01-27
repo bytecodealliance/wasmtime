@@ -12,7 +12,10 @@ use crate::{
         CallingConvention,
     },
     masm::{
-        CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, StoreKind, TrapCode, TruncKind, Zero
+        CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I,
+        IntCmpKind, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind,
+        ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, StoreKind,
+        TrapCode, TruncKind, Zero,
     },
     stack::TypedReg,
 };
@@ -173,19 +176,18 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn wasm_store(
-        &mut self,
-        src: Reg,
-        dst: Self::Address,
-        kind: StoreKind,
-    ) -> Result<()> {
+    fn wasm_store(&mut self, src: Reg, dst: Self::Address, kind: StoreKind) -> Result<()> {
         match kind {
             StoreKind::Operand(size) => {
                 self.asm.str(src, dst, size);
                 Ok(())
-            },
-            StoreKind::Atomic(_size) => Err(anyhow!(CodeGenError::unimplemented_masm_instruction())),
-            StoreKind::VectorLane(_selector) => Err(anyhow!(CodeGenError::unimplemented_masm_instruction())),
+            }
+            StoreKind::Atomic(_size) => {
+                Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+            }
+            StoreKind::VectorLane(_selector) => {
+                Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+            }
         }
     }
 
@@ -219,12 +221,7 @@ impl Masm for MacroAssembler {
         self.load(src, dst, self.ptr_size)
     }
 
-    fn wasm_load(
-        &mut self,
-        src: Self::Address,
-        dst: WritableReg,
-        kind: LoadKind,
-    ) -> Result<()> {
+    fn wasm_load(&mut self, src: Self::Address, dst: WritableReg, kind: LoadKind) -> Result<()> {
         let size = kind.derive_operand_size();
         match kind {
             LoadKind::Operand(_) => self.asm.uload(src, dst, size),
@@ -240,9 +237,10 @@ impl Masm for MacroAssembler {
             LoadKind::VectorExtend(_vector_extend_kind) => {
                 bail!(CodeGenError::UnimplementedWasmLoadKind)
             }
-            LoadKind::VectorLane(_selector) => bail!(CodeGenError::unimplemented_masm_instruction()),
+            LoadKind::VectorLane(_selector) => {
+                bail!(CodeGenError::unimplemented_masm_instruction())
+            }
             LoadKind::Atomic(_, _) => bail!(CodeGenError::unimplemented_masm_instruction()),
-
         }
 
         Ok(())
