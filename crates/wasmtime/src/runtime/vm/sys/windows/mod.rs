@@ -5,6 +5,8 @@ use std::cell::Cell;
 #[cfg(has_virtual_memory)]
 pub mod mmap;
 pub mod traphandlers;
+#[cfg(has_native_signals)]
+mod vectored_exceptions;
 pub mod vm;
 
 #[cfg(target_pointer_width = "32")]
