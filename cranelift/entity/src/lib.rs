@@ -160,6 +160,12 @@ macro_rules! entity_impl {
             }
 
             /// Return the raw bit encoding for this instance.
+            ///
+            /// __Warning__: the raw bit encoding is opaque and has no
+            /// guaranteed correspondence to the entity's index. It encodes the
+            /// entire state of this index value: either a valid index or an
+            /// invalid-index sentinel. The value returned by this method should
+            /// only be passed to `from_bits`.
             #[allow(dead_code, reason = "macro-generated code")]
             #[inline]
             pub fn as_bits(self) -> u32 {
@@ -167,6 +173,12 @@ macro_rules! entity_impl {
             }
 
             /// Create a new instance from the raw bit encoding.
+            ///
+            /// __Warning__: the raw bit encoding is opaque and has no
+            /// guaranteed correspondence to the entity's index. It encodes the
+            /// entire state of this index value: either a valid index or an
+            /// invalid-index sentinel. The value returned by this method should
+            /// only be given bits from `as_bits`.
             #[allow(dead_code, reason = "macro-generated code")]
             #[inline]
             pub fn from_bits(x: u32) -> Self {
