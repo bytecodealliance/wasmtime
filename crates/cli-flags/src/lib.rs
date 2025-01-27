@@ -811,11 +811,7 @@ impl CommonOptions {
                     }
                     match_feature! {
                         ["memory-protection-keys" : self.opts.pooling_memory_protection_keys]
-                        enable => cfg.memory_protection_keys(if enable {
-                            wasmtime::MpkEnabled::Enable
-                        } else {
-                            wasmtime::MpkEnabled::Disable
-                        }),
+                        enable => cfg.memory_protection_keys(enable),
                         _ => err,
                     }
                     match_feature! {
