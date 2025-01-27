@@ -31,8 +31,6 @@ use wasmtime_fiber::RuntimeFiberStackCreator;
 
 #[cfg(feature = "runtime")]
 pub use crate::runtime::code_memory::CustomCodeMemory;
-#[cfg(feature = "pooling-allocator")]
-pub use crate::runtime::vm::MpkEnabled;
 #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
 pub use wasmtime_environ::CacheStore;
 
@@ -2850,6 +2848,18 @@ pub enum WasmBacktraceDetails {
     /// Support for backtrace details is conditional on the
     /// `WASMTIME_BACKTRACE_DETAILS` environment variable.
     Environment,
+}
+
+/// Describe the tri-state configuration of memory protection keys (MPK).
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub enum MpkEnabled {
+    /// Use MPK if supported by the current system; fall back to guard regions
+    /// otherwise.
+    Auto,
+    /// Use MPK or fail if not supported.
+    Enable,
+    /// Do not use MPK.
+    Disable,
 }
 
 /// Configuration options used with [`InstanceAllocationStrategy::Pooling`] to
