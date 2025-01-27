@@ -2963,7 +2963,7 @@ where
 
     fn visit_v128_not(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
-            masm.not128v(writable!(reg))?;
+            masm.v128_not(writable!(reg))?;
             Ok(TypedReg::new(WasmValType::V128, reg))
         })
     }
@@ -2971,7 +2971,7 @@ where
     fn visit_v128_and(&mut self) -> Self::Output {
         self.context
             .binop(self.masm, OperandSize::S128, |masm, dst, src, _size| {
-                masm.and128v(dst, src, writable!(dst))?;
+                masm.v128_and(dst, src, writable!(dst))?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
     }
@@ -2980,7 +2980,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S128, |masm, dst, src, _size| {
                 // careful here: and_not is *not* commutative: dst = !src1 & src2
-                masm.and_not128v(src, dst, writable!(dst))?;
+                masm.v128_and_not(src, dst, writable!(dst))?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
     }
@@ -2989,7 +2989,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S128, |masm, dst, src, _size| {
                 // careful here: and_not is *not* commutative: dst = !src1 & src2
-                masm.or128v(src, dst, writable!(dst))?;
+                masm.v128_or(src, dst, writable!(dst))?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
     }
@@ -2998,7 +2998,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S128, |masm, dst, src, _size| {
                 // careful here: and_not is *not* commutative: dst = !src1 & src2
-                masm.xor128v(src, dst, writable!(dst))?;
+                masm.v128_xor(src, dst, writable!(dst))?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
     }
@@ -3011,7 +3011,7 @@ where
 
         // careful here: bitselect is *not* commutative.
         self.masm
-            .bitselect128v(op1.reg, op2.reg, mask.reg, writable!(dst))?;
+            .v128_bitselect(op1.reg, op2.reg, mask.reg, writable!(dst))?;
 
         self.context
             .stack
@@ -3027,7 +3027,7 @@ where
         let src = self.context.pop_to_reg(self.masm, None)?;
         let dst = self.context.any_gpr(self.masm)?;
 
-        self.masm.any_true128v(src.reg, writable!(dst))?;
+        self.masm.v128_any_true(src.reg, writable!(dst))?;
 
         self.context
             .stack

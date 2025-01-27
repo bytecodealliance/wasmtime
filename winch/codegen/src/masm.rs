@@ -1504,32 +1504,32 @@ pub(crate) trait MacroAssembler {
     fn fence(&mut self) -> Result<()>;
 
     /// Perform a logical `not` operation on the 128bits vector value in `dst`.
-    fn not128v(&mut self, dst: WritableReg) -> Result<()>;
+    fn v128_not(&mut self, dst: WritableReg) -> Result<()>;
 
     /// Perform a logical `and` operation on `src1` and `src1`, both 128bits vector values, writing
     /// the result to `dst`.
-    fn and128v(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()>;
+    fn v128_and(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()>;
 
     /// Perform a logical `and_not` operation on `src1` and `src1`, both 128bits vector values, writing
     /// the result to `dst`.
     ///
     /// `and_not` is not commutative: dst = !src1 & src2.
-    fn and_not128v(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()>;
+    fn v128_and_not(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()>;
 
     /// Perform a logical `or` operation on `src1` and `src1`, both 128bits vector values, writing
     /// the result to `dst`.
-    fn or128v(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()>;
+    fn v128_or(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()>;
 
     /// Perform a logical `xor` operation on `src1` and `src1`, both 128bits vector values, writing
     /// the result to `dst`.
-    fn xor128v(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()>;
+    fn v128_xor(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()>;
 
     /// Given two 128bits vectors `src1` and `src2`, and a 128bits bitmask `mask`, selects bits
     /// from `src1` when mask is 1, and from `src2` when mask is 0.
     ///
     /// This is equivalent to: `v128.or(v128.and(src1, mask), v128.and(src2, v128.not(mask)))`.
-    fn bitselect128v(&mut self, src1: Reg, src2: Reg, mask: Reg, dst: WritableReg) -> Result<()>;
+    fn v128_bitselect(&mut self, src1: Reg, src2: Reg, mask: Reg, dst: WritableReg) -> Result<()>;
 
     /// If any bit in `src` is 1, set `dst` to 1, or 0 otherwise.
-    fn any_true128v(&mut self, src: Reg, dst: WritableReg) -> Result<()>;
+    fn v128_any_true(&mut self, src: Reg, dst: WritableReg) -> Result<()>;
 }

@@ -1641,7 +1641,7 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn not128v(&mut self, dst: WritableReg) -> Result<()> {
+    fn v128_not(&mut self, dst: WritableReg) -> Result<()> {
         let tmp = regs::scratch_xmm();
         // First, we initialize `tmp` with all ones, by comparing it with itself.
         self.asm
@@ -1652,36 +1652,36 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn and128v(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+    fn v128_and(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
         self.asm.xmm_rmi_rvex(AvxOpcode::Vpand, src1, src2, dst);
         Ok(())
     }
 
-    fn and_not128v(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+    fn v128_and_not(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
         self.asm.xmm_rmi_rvex(AvxOpcode::Vpandn, src1, src2, dst);
         Ok(())
     }
 
-    fn or128v(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+    fn v128_or(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
         self.asm.xmm_rmi_rvex(AvxOpcode::Vpor, src1, src2, dst);
         Ok(())
     }
 
-    fn xor128v(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+    fn v128_xor(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
         self.asm.xmm_rmi_rvex(AvxOpcode::Vpxor, src1, src2, dst);
         Ok(())
     }
 
-    fn bitselect128v(&mut self, src1: Reg, src2: Reg, mask: Reg, dst: WritableReg) -> Result<()> {
+    fn v128_bitselect(&mut self, src1: Reg, src2: Reg, mask: Reg, dst: WritableReg) -> Result<()> {
         let tmp = regs::scratch_xmm();
-        self.and128v(src1, mask, writable!(tmp))?;
-        self.and_not128v(mask, src2, dst)?;
-        self.or128v(dst.to_reg(), tmp, dst)?;
+        self.v128_and(src1, mask, writable!(tmp))?;
+        self.v128_and_not(mask, src2, dst)?;
+        self.v128_or(dst.to_reg(), tmp, dst)?;
 
         Ok(())
     }
 
-    fn any_true128v(&mut self, src: Reg, dst: WritableReg) -> Result<()> {
+    fn v128_any_true(&mut self, src: Reg, dst: WritableReg) -> Result<()> {
         self.asm.xmm_vptest(src, src);
         self.asm.setcc(IntCmpKind::Ne, dst);
         Ok(())

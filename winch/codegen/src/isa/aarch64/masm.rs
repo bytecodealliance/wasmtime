@@ -947,7 +947,7 @@ impl Masm for MacroAssembler {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
-    fn not128v(&mut self, _dst: WritableReg) -> Result<()> {
+    fn v128_not(&mut self, _dst: WritableReg) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
@@ -955,23 +955,23 @@ impl Masm for MacroAssembler {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
-    fn and128v(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
+    fn v128_and(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
-    fn and_not128v(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
+    fn v128_and_not(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
-    fn or128v(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
+    fn v128_or(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
-    fn xor128v(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
+    fn v128_xor(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
-    fn bitselect128v(
+    fn v128_bitselect(
         &mut self,
         _src1: Reg,
         _src2: Reg,
@@ -981,7 +981,7 @@ impl Masm for MacroAssembler {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
-    fn any_true128v(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
+    fn v128_any_true(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 }
