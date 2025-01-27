@@ -22,7 +22,8 @@ fn main() {
     };
 
     let has_native_signals = !miri
-        && ((supported_os && has_host_compiler_backend) || cfg!(feature = "custom-native-signals"));
+        && (supported_os || cfg!(feature = "custom-native-signals"))
+        && has_host_compiler_backend;
     let has_virtual_memory = supported_os || cfg!(feature = "custom-virtual-memory");
 
     custom_cfg("has_native_signals", has_native_signals);
