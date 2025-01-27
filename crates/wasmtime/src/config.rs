@@ -2167,21 +2167,28 @@ impl Config {
 
         let mut tunables = Tunables::default_for_target(&self.compiler_target())?;
 
-        // If this platform doesn't have native signals then change some
-        // defaults to account for that. Note that VM guards are turned off here
-        // because that's primarily a feature of eliding bounds-checks.
-        if !cfg!(has_native_signals) {
-            tunables.signals_based_traps = cfg!(has_native_signals);
-            tunables.memory_guard_size = 0;
-        }
+        // If no target is explicitly specified then further refine `tunables`
+        // for the configuration of this host depending on what platform
+        // features were found available at compile time. This means that anyone
+        // cross-compiling for a customized host will need to further refine
+        // compilation options.
+        if self.target.is_none() {
+            // If this platform doesn't have native signals then change some
+            // defaults to account for that. Note that VM guards are turned off here
+            // because that's primarily a feature of eliding bounds-checks.
+            if !cfg!(has_native_signals) {
+                tunables.signals_based_traps = cfg!(has_native_signals);
+                tunables.memory_guard_size = 0;
+            }
 
-        // When virtual memory is not available use slightly different defaults
-        // for tunables to be more amenable to `MallocMemory`. Note that these
-        // can still be overridden by config options.
-        if !cfg!(has_virtual_memory) {
-            tunables.memory_reservation = 0;
-            tunables.memory_reservation_for_growth = 1 << 20; // 1MB
-            tunables.memory_init_cow = false;
+            // When virtual memory is not available use slightly different defaults
+            // for tunables to be more amenable to `MallocMemory`. Note that these
+            // can still be overridden by config options.
+            if !cfg!(has_virtual_memory) {
+                tunables.memory_reservation = 0;
+                tunables.memory_reservation_for_growth = 1 << 20; // 1MB
+                tunables.memory_init_cow = false;
+            }
         }
 
         self.tunables.configure(&mut tunables);
