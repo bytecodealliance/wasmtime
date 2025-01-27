@@ -16,7 +16,7 @@ use wasmtime_environ::{lookup_trap_code, obj, Trap};
 /// executable permissions of the contained JIT code as necessary.
 pub struct CodeMemory {
     mmap: MmapVec,
-    #[cfg(has_cranelift_host_backend)]
+    #[cfg(has_host_compiler_backend)]
     unwind_registration: Option<crate::runtime::vm::UnwindRegistration>,
     #[cfg(feature = "debug-builtins")]
     debug_registration: Option<crate::runtime::vm::GdbJitImageRegistration>,
@@ -51,7 +51,7 @@ impl Drop for CodeMemory {
         }
 
         // Drop the registrations before `self.mmap` since they (implicitly) refer to it.
-        #[cfg(has_cranelift_host_backend)]
+        #[cfg(has_host_compiler_backend)]
         let _ = self.unwind_registration.take();
         #[cfg(feature = "debug-builtins")]
         let _ = self.debug_registration.take();
@@ -177,7 +177,7 @@ impl CodeMemory {
                         relocations.push((offset, libcall));
                     }
                 }
-                #[cfg(has_cranelift_host_backend)]
+                #[cfg(has_host_compiler_backend)]
                 crate::runtime::vm::UnwindRegistration::SECTION_NAME => unwind = range,
                 obj::ELF_WASM_DATA => wasm_data = range,
                 obj::ELF_WASMTIME_ADDRMAP => address_map_data = range,
@@ -193,12 +193,12 @@ impl CodeMemory {
         }
 
         // require mutability even when this is turned off
-        #[cfg(not(has_cranelift_host_backend))]
+        #[cfg(not(has_host_compiler_backend))]
         let _ = &mut unwind;
 
         Ok(Self {
             mmap,
-            #[cfg(has_cranelift_host_backend)]
+            #[cfg(has_host_compiler_backend)]
             unwind_registration: None,
             #[cfg(feature = "debug-builtins")]
             debug_registration: None,
@@ -427,7 +427,7 @@ impl CodeMemory {
         if self.unwind.len() == 0 {
             return Ok(());
         }
-        #[cfg(has_cranelift_host_backend)]
+        #[cfg(has_host_compiler_backend)]
         {
             let text = self.text();
             let unwind_info = &self.mmap[self.unwind.clone()];
@@ -440,7 +440,7 @@ impl CodeMemory {
             self.unwind_registration = Some(registration);
             return Ok(());
         }
-        #[cfg(not(has_cranelift_host_backend))]
+        #[cfg(not(has_host_compiler_backend))]
         {
             bail!("should not have unwind info for non-native backend")
         }

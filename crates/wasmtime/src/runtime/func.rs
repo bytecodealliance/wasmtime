@@ -1651,9 +1651,9 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
     // Cranelift can't be used though then we're guaranteed to be running pulley
     // in which case this stack poitner isn't actually used as Pulley has custom
     // mechanisms for stack overflow.
-    #[cfg(has_cranelift_host_backend)]
+    #[cfg(has_host_compiler_backend)]
     let stack_pointer = crate::runtime::vm::get_stack_pointer();
-    #[cfg(not(has_cranelift_host_backend))]
+    #[cfg(not(has_host_compiler_backend))]
     let stack_pointer = {
         use wasmtime_environ::TripleExt;
         debug_assert!(store.engine().target().is_pulley());

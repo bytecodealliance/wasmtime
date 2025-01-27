@@ -403,14 +403,14 @@ pub struct StoreOpaque {
 /// for Cranelift at compile time.
 enum Executor {
     Interpreter(Interpreter),
-    #[cfg(has_cranelift_host_backend)]
+    #[cfg(has_host_compiler_backend)]
     Native,
 }
 
 /// A borrowed reference to `Executor` above.
 pub(crate) enum ExecutorRef<'a> {
     Interpreter(InterpreterRef<'a>),
-    #[cfg(has_cranelift_host_backend)]
+    #[cfg(has_host_compiler_backend)]
     Native,
 }
 
@@ -600,13 +600,13 @@ impl<T> Store<T> {
                 component_calls: Default::default(),
                 #[cfg(feature = "component-model")]
                 host_resource_data: Default::default(),
-                #[cfg(has_cranelift_host_backend)]
+                #[cfg(has_host_compiler_backend)]
                 executor: if cfg!(feature = "pulley") && engine.target().is_pulley() {
                     Executor::Interpreter(Interpreter::new(engine))
                 } else {
                     Executor::Native
                 },
-                #[cfg(not(has_cranelift_host_backend))]
+                #[cfg(not(has_host_compiler_backend))]
                 executor: {
                     debug_assert!(engine.target().is_pulley());
                     Executor::Interpreter(Interpreter::new(engine))
@@ -2174,7 +2174,7 @@ at https://bytecodealliance.org/security.
     pub(crate) fn executor(&mut self) -> ExecutorRef<'_> {
         match &mut self.executor {
             Executor::Interpreter(i) => ExecutorRef::Interpreter(i.as_interpreter_ref()),
-            #[cfg(has_cranelift_host_backend)]
+            #[cfg(has_host_compiler_backend)]
             Executor::Native => ExecutorRef::Native,
         }
     }
@@ -2182,7 +2182,7 @@ at https://bytecodealliance.org/security.
     pub(crate) fn unwinder(&self) -> &'static dyn Unwind {
         match &self.executor {
             Executor::Interpreter(_) => &crate::runtime::vm::UnwindPulley,
-            #[cfg(has_cranelift_host_backend)]
+            #[cfg(has_host_compiler_backend)]
             Executor::Native => &crate::runtime::vm::UnwindHost,
         }
     }

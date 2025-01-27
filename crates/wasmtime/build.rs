@@ -16,25 +16,23 @@ fn main() {
 
     // Determine if the current host architecture is supported by Cranelift
     // meaning that we might be executing native code.
-    let has_cranelift_host_backend = match std::env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str()
-    {
+    let has_host_compiler_backend = match std::env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str() {
         "x86_64" | "riscv64" | "s390x" | "aarch64" => true,
         _ => false,
     };
 
     let has_native_signals = !miri
-        && ((supported_os && has_cranelift_host_backend)
-            || cfg!(feature = "custom-native-signals"));
+        && ((supported_os && has_host_compiler_backend) || cfg!(feature = "custom-native-signals"));
     let has_virtual_memory = supported_os || cfg!(feature = "custom-virtual-memory");
 
     custom_cfg("has_native_signals", has_native_signals);
     custom_cfg("has_virtual_memory", has_virtual_memory);
-    custom_cfg("has_cranelift_host_backend", has_cranelift_host_backend);
+    custom_cfg("has_host_compiler_backend", has_host_compiler_backend);
 
     // If this OS isn't supported or if Cranelift doesn't support the host then
     // there's no need to build these helpers.
     #[cfg(feature = "runtime")]
-    if supported_os && has_cranelift_host_backend {
+    if supported_os && has_host_compiler_backend {
         build_c_helpers();
     }
 
@@ -47,8 +45,8 @@ fn main() {
     // to rustc. That means that conditional dependencies enabled in
     // `Cargo.toml` (or other features) by `pulley` aren't activated, which is
     // why the `pulley` feature of this crate depends on nothing else.
-    custom_cfg("default_target_pulley", !has_cranelift_host_backend);
-    if !has_cranelift_host_backend {
+    custom_cfg("default_target_pulley", !has_host_compiler_backend);
+    if !has_host_compiler_backend {
         println!("cargo:rustc-cfg=feature=\"pulley\"");
     }
 }
