@@ -1,9 +1,13 @@
 //! Contains the common Wasmtime command line interface (CLI) flags.
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
-use std::fmt;
-use std::time::Duration;
+use serde::Deserialize;
+use std::{
+    fmt, fs,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 use wasmtime::Config;
 
 pub mod opt;
@@ -38,12 +42,17 @@ fn init_file_per_thread_logger(prefix: &'static str) {
 }
 
 wasmtime_option_group! {
-    #[derive(PartialEq, Clone)]
+    #[derive(PartialEq, Clone, Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct OptimizeOptions {
         /// Optimization level of generated code (0-2, s; default: 2)
+        #[serde(default)]
+        #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
         pub opt_level: Option<wasmtime::OptLevel>,
 
         /// Register allocator algorithm choice.
+        #[serde(default)]
+        #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
         pub regalloc_algorithm: Option<wasmtime::RegallocAlgorithm>,
 
         /// Do not allow Wasm linear memories to move in the host process's
@@ -190,12 +199,15 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
-    #[derive(PartialEq, Clone)]
+    #[derive(PartialEq, Clone, Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct CodegenOptions {
         /// Either `cranelift` or `winch`.
         ///
         /// Currently only `cranelift` and `winch` are supported, but not all
         /// builds of Wasmtime have both built in.
+        #[serde(default)]
+        #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
         pub compiler: Option<wasmtime::Strategy>,
         /// Which garbage collector to use: `drc` or `null`.
         ///
@@ -206,6 +218,8 @@ wasmtime_option_group! {
         ///
         /// Note that not all builds of Wasmtime will have support for garbage
         /// collection included.
+        #[serde(default)]
+        #[serde(deserialize_with = "crate::opt::cli_parse_wrapper")]
         pub collector: Option<wasmtime::Collector>,
         /// Enable Cranelift's internal debug verifier (expensive)
         pub cranelift_debug_verifier: Option<bool>,
@@ -222,6 +236,7 @@ wasmtime_option_group! {
         pub native_unwind_info: Option<bool>,
 
         #[prefixed = "cranelift"]
+        #[serde(default)]
         /// Set a cranelift-specific option. Use `wasmtime settings` to see
         /// all.
         pub cranelift: Vec<(String, Option<String>)>,
@@ -233,7 +248,8 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
-    #[derive(PartialEq, Clone)]
+    #[derive(PartialEq, Clone, Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct DebugOptions {
         /// Enable generation of DWARF debug information in compiled code.
         pub debug_info: Option<bool>,
@@ -253,7 +269,8 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
-    #[derive(PartialEq, Clone)]
+    #[derive(PartialEq, Clone, Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct WasmOptions {
         /// Enable canonicalization of all NaN values.
         pub nan_canonicalization: Option<bool>,
@@ -367,7 +384,8 @@ wasmtime_option_group! {
 }
 
 wasmtime_option_group! {
-    #[derive(PartialEq, Clone)]
+    #[derive(PartialEq, Clone, Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct WasiOptions {
         /// Enable support for WASI CLI APIs, including filesystems, sockets, clocks, and random.
         pub cli: Option<bool>,
@@ -396,6 +414,7 @@ wasmtime_option_group! {
         /// systemd listen fd specification (UNIX only)
         pub listenfd: Option<bool>,
         /// Grant access to the given TCP listen socket
+        #[serde(default)]
         pub tcplisten: Vec<String>,
         /// Implement WASI Preview1 using new Preview2 implementation (true, default) or legacy
         /// implementation (false)
@@ -408,6 +427,7 @@ wasmtime_option_group! {
         /// an OpenVINO model named `bar`. Note that which model encodings are
         /// available is dependent on the backends implemented in the
         /// `wasmtime_wasi_nn` crate.
+        #[serde(skip)]
         pub nn_graph: Vec<WasiNnGraph>,
         /// Flag for WASI preview2 to inherit the host's network within the
         /// guest so it has full access to all addresses/ports/etc.
@@ -427,8 +447,10 @@ wasmtime_option_group! {
         /// This option can be further overwritten with `--env` flags.
         pub inherit_env: Option<bool>,
         /// Pass a wasi config variable to the program.
+        #[serde(skip)]
         pub config_var: Vec<KeyValuePair>,
         /// Preset data for the In-Memory provider of WASI key-value API.
+        #[serde(skip)]
         pub keyvalue_in_memory_data: Vec<KeyValuePair>,
     }
 
@@ -450,7 +472,8 @@ pub struct KeyValuePair {
 }
 
 /// Common options for commands that translate WebAssembly modules
-#[derive(Parser, Clone)]
+#[derive(Parser, Clone, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CommonOptions {
     // These options groups are used to parse `-O` and such options but aren't
     // the raw form consumed by the CLI. Instead they're pushed into the `pub`
@@ -462,43 +485,70 @@ pub struct CommonOptions {
     /// Optimization and tuning related options for wasm performance, `-O help` to
     /// see all.
     #[arg(short = 'O', long = "optimize", value_name = "KEY[=VAL[,..]]")]
+    #[serde(skip)]
     opts_raw: Vec<opt::CommaSeparated<Optimize>>,
 
     /// Codegen-related configuration options, `-C help` to see all.
     #[arg(short = 'C', long = "codegen", value_name = "KEY[=VAL[,..]]")]
+    #[serde(skip)]
     codegen_raw: Vec<opt::CommaSeparated<Codegen>>,
 
     /// Debug-related configuration options, `-D help` to see all.
     #[arg(short = 'D', long = "debug", value_name = "KEY[=VAL[,..]]")]
+    #[serde(skip)]
     debug_raw: Vec<opt::CommaSeparated<Debug>>,
 
     /// Options for configuring semantic execution of WebAssembly, `-W help` to see
     /// all.
     #[arg(short = 'W', long = "wasm", value_name = "KEY[=VAL[,..]]")]
+    #[serde(skip)]
     wasm_raw: Vec<opt::CommaSeparated<Wasm>>,
 
     /// Options for configuring WASI and its proposals, `-S help` to see all.
     #[arg(short = 'S', long = "wasi", value_name = "KEY[=VAL[,..]]")]
+    #[serde(skip)]
     wasi_raw: Vec<opt::CommaSeparated<Wasi>>,
 
     // These fields are filled in by the `configure` method below via the
     // options parsed from the CLI above. This is what the CLI should use.
     #[arg(skip)]
+    #[serde(skip)]
     configured: bool,
+
     #[arg(skip)]
+    #[serde(rename = "optimize", default)]
     pub opts: OptimizeOptions,
+
     #[arg(skip)]
+    #[serde(rename = "codegen", default)]
     pub codegen: CodegenOptions,
+
     #[arg(skip)]
+    #[serde(rename = "debug", default)]
     pub debug: DebugOptions,
+
     #[arg(skip)]
+    #[serde(rename = "wasm", default)]
     pub wasm: WasmOptions,
+
     #[arg(skip)]
+    #[serde(rename = "wasi", default)]
     pub wasi: WasiOptions,
 
     /// The target triple; default is the host triple
     #[arg(long, value_name = "TARGET")]
+    #[serde(skip)]
     pub target: Option<String>,
+
+    /// Use the specified TOML configuration file.
+    /// This TOML configuration file can provide same configuration options as the
+    /// `--optimize`, `--codgen`, `--debug`, `--wasm`, `--wasi` CLI options, with a couple exceptions.
+    ///
+    /// Additional options specified on the command line will take precedent over options loaded from
+    /// this TOML file.
+    #[arg(long = "config", value_name = "FILE")]
+    #[serde(skip)]
+    pub config: Option<PathBuf>,
 }
 
 macro_rules! match_feature {
@@ -538,23 +588,33 @@ impl CommonOptions {
             wasm: Default::default(),
             wasi: Default::default(),
             target: None,
+            config: None,
         }
     }
 
-    fn configure(&mut self) {
+    fn configure(&mut self) -> Result<()> {
         if self.configured {
-            return;
+            return Ok(());
         }
         self.configured = true;
+        if let Some(toml_config_path) = &self.config {
+            let toml_options = CommonOptions::from_file(toml_config_path)?;
+            self.opts = toml_options.opts;
+            self.codegen = toml_options.codegen;
+            self.debug = toml_options.debug;
+            self.wasm = toml_options.wasm;
+            self.wasi = toml_options.wasi;
+        }
         self.opts.configure_with(&self.opts_raw);
         self.codegen.configure_with(&self.codegen_raw);
         self.debug.configure_with(&self.debug_raw);
         self.wasm.configure_with(&self.wasm_raw);
         self.wasi.configure_with(&self.wasi_raw);
+        Ok(())
     }
 
     pub fn init_logging(&mut self) -> Result<()> {
-        self.configure();
+        self.configure()?;
         if self.debug.logging == Some(false) {
             return Ok(());
         }
@@ -587,7 +647,7 @@ impl CommonOptions {
     }
 
     pub fn config(&mut self, pooling_allocator_default: Option<bool>) -> Result<Config> {
-        self.configure();
+        self.configure()?;
         let mut config = Config::new();
 
         match_feature! {
@@ -939,6 +999,137 @@ impl CommonOptions {
         }
         Ok(())
     }
+
+    pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let path_ref = path.as_ref();
+        let file_contents = fs::read_to_string(path_ref)
+            .with_context(|| format!("failed to read config file: {path_ref:?}"))?;
+        toml::from_str::<CommonOptions>(&file_contents)
+            .with_context(|| format!("failed to parse TOML config file {path_ref:?}"))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use wasmtime::{OptLevel, RegallocAlgorithm};
+
+    use super::*;
+
+    #[test]
+    fn from_toml() {
+        // empty toml
+        let empty_toml = "";
+        let mut common_options: CommonOptions = toml::from_str(empty_toml).unwrap();
+        common_options.config(None).unwrap();
+
+        // basic toml
+        let basic_toml = r#"
+            [optimize]
+            [codegen]
+            [debug]
+            [wasm]
+            [wasi]
+        "#;
+        let mut common_options: CommonOptions = toml::from_str(basic_toml).unwrap();
+        common_options.config(None).unwrap();
+
+        // toml with custom deserialization to match CLI flag parsing
+        for (opt_value, expected) in [
+            ("0", Some(OptLevel::None)),
+            ("1", Some(OptLevel::Speed)),
+            ("2", Some(OptLevel::Speed)),
+            ("\"s\"", Some(OptLevel::SpeedAndSize)),
+            ("\"hello\"", None), // should fail
+            ("3", None),         // should fail
+        ] {
+            let toml = format!(
+                r#"
+                    [optimize]
+                    opt_level = {opt_value}
+                "#,
+            );
+            let parsed_opt_level = toml::from_str::<CommonOptions>(&toml)
+                .ok()
+                .and_then(|common_options| common_options.opts.opt_level);
+
+            assert_eq!(
+                parsed_opt_level, expected,
+                "Mismatch for input '{opt_value}'. Parsed: {parsed_opt_level:?}, Expected: {expected:?}"
+            );
+        }
+
+        // Regalloc algorithm
+        for (regalloc_value, expected) in [
+            ("\"backtracking\"", Some(RegallocAlgorithm::Backtracking)),
+            ("\"single-pass\"", Some(RegallocAlgorithm::SinglePass)),
+            ("\"hello\"", None), // should fail
+            ("3", None),         // should fail
+            ("true", None),      // should fail
+        ] {
+            let toml = format!(
+                r#"
+                    [optimize]
+                    regalloc_algorithm = {regalloc_value}
+                "#,
+            );
+            let parsed_regalloc_algorithm = toml::from_str::<CommonOptions>(&toml)
+                .ok()
+                .and_then(|common_options| common_options.opts.regalloc_algorithm);
+            assert_eq!(
+                parsed_regalloc_algorithm, expected,
+                "Mismatch for input '{regalloc_value}'. Parsed: {parsed_regalloc_algorithm:?}, Expected: {expected:?}"
+            );
+        }
+
+        // Strategy
+        for (strategy_value, expected) in [
+            ("\"cranelift\"", Some(wasmtime::Strategy::Cranelift)),
+            ("\"winch\"", Some(wasmtime::Strategy::Winch)),
+            ("\"hello\"", None), // should fail
+            ("5", None),         // should fail
+            ("true", None),      // should fail
+        ] {
+            let toml = format!(
+                r#"
+                    [codegen]
+                    compiler = {strategy_value}
+                "#,
+            );
+            let parsed_strategy = toml::from_str::<CommonOptions>(&toml)
+                .ok()
+                .and_then(|common_options| common_options.codegen.compiler);
+            assert_eq!(
+                parsed_strategy, expected,
+                "Mismatch for input '{strategy_value}'. Parsed: {parsed_strategy:?}, Expected: {expected:?}",
+            );
+        }
+
+        // Collector
+        for (collector_value, expected) in [
+            (
+                "\"drc\"",
+                Some(wasmtime::Collector::DeferredReferenceCounting),
+            ),
+            ("\"null\"", Some(wasmtime::Collector::Null)),
+            ("\"hello\"", None), // should fail
+            ("5", None),         // should fail
+            ("true", None),      // should fail
+        ] {
+            let toml = format!(
+                r#"
+                    [codegen]
+                    collector = {collector_value}
+                "#,
+            );
+            let parsed_collector = toml::from_str::<CommonOptions>(&toml)
+                .ok()
+                .and_then(|common_options| common_options.codegen.collector);
+            assert_eq!(
+                parsed_collector, expected,
+                "Mismatch for input '{collector_value}'. Parsed: {parsed_collector:?}, Expected: {expected:?}",
+            );
+        }
+    }
 }
 
 impl Default for CommonOptions {
@@ -962,9 +1153,13 @@ impl fmt::Display for CommonOptions {
             wasi,
             configured,
             target,
+            config,
         } = self;
         if let Some(target) = target {
             write!(f, "--target {target} ")?;
+        }
+        if let Some(config) = config {
+            write!(f, "--config {} ", config.display())?;
         }
 
         let codegen_flags;

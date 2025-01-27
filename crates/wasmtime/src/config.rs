@@ -2607,7 +2607,7 @@ impl fmt::Debug for Config {
 ///
 /// This is used as an argument to the [`Config::strategy`] method.
 #[non_exhaustive]
-#[derive(PartialEq, Eq, Clone, Debug, Copy)]
+#[derive(PartialEq, Eq, Clone, Debug, Copy, Deserialize)]
 pub enum Strategy {
     /// An indicator that the compilation strategy should be automatically
     /// selected.
@@ -2677,7 +2677,7 @@ impl Strategy {
 ///       additional objects. Reference counts are larger than mark bits and
 ///       free lists are larger than bump pointers, for example.
 #[non_exhaustive]
-#[derive(PartialEq, Eq, Clone, Debug, Copy)]
+#[derive(PartialEq, Eq, Clone, Debug, Copy, Deserialize)]
 pub enum Collector {
     /// An indicator that the garbage collector should be automatically
     /// selected.
@@ -2851,7 +2851,7 @@ pub enum WasmBacktraceDetails {
 }
 
 /// Describe the tri-state configuration of memory protection keys (MPK).
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Deserialize)]
 pub enum MpkEnabled {
     /// Use MPK if supported by the current system; fall back to guard regions
     /// otherwise.
