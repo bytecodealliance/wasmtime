@@ -1699,7 +1699,8 @@ impl Masm for MacroAssembler {
     ) -> Result<()> {
         let byte_tmp = regs::scratch();
         self.load_impl(addr, writable!(byte_tmp), size, UNTRUSTED_FLAGS)?;
-        self.asm.vinsert(size, byte_tmp, dst.to_reg(), dst, lane)?;
+        self.asm
+            .xmm_vpinsr_rrr(dst, dst.to_reg(), byte_tmp, lane, size);
         Ok(())
     }
 
@@ -1710,7 +1711,8 @@ impl Masm for MacroAssembler {
         lane: u8,
         size: OperandSize,
     ) -> Result<()> {
-        self.asm.vextract(&addr, src, lane, size, UNTRUSTED_FLAGS)?;
+        self.asm
+            .xmm_vpextr_rm(&addr, src, lane, size, UNTRUSTED_FLAGS)?;
         Ok(())
     }
 }

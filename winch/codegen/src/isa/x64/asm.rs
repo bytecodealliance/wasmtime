@@ -1,7 +1,6 @@
 //! Assembler library implementation for x64.
 
 use crate::{
-    codegen::CodeGenError,
     isa::{reg::Reg, CallingConvention},
     masm::{
         DivKind, Extend, ExtendKind, ExtendType, IntCmpKind, MulWideKind, OperandSize, RemKind,
@@ -10,7 +9,6 @@ use crate::{
     reg::writable,
     x64::regs::scratch,
 };
-use anyhow::bail;
 use cranelift_codegen::{
     ir::{
         types, ConstantPool, ExternalName, LibCall, MemFlags, SourceLoc, TrapCode, Type,
@@ -1715,16 +1713,8 @@ impl Assembler {
 
     /// Extract a value from `src` into `dst` (zero extended) determined by `lane`.
     pub fn xmm_vpextr_rr(&mut self, dst: WritableReg, src: Reg, lane: u8, size: OperandSize) {
-        let op = match size {
-            OperandSize::S8 => AvxOpcode::Vpextrb,
-            OperandSize::S16 => AvxOpcode::Vpextrw,
-            OperandSize::S32 => AvxOpcode::Vpextrd,
-            OperandSize::S64 => AvxOpcode::Vpextrq,
-            _ => unimplemented!(),
-        };
-
         self.emit(Inst::XmmToGprImmVex {
-            op,
+            op: Self::vpextr_opcode(size),
             src: src.into(),
             dst: dst.to_reg().into(),
             imm: lane,
@@ -1895,34 +1885,19 @@ impl Assembler {
         })
     }
 
-    pub(crate) fn vinsert(
-        &mut self,
-        size: OperandSize,
-        to_insert: Reg,
-        insert_into: Reg,
-        dst: WritableReg,
-        lane: u8,
-    ) -> anyhow::Result<()> {
-        let op = match size {
-            OperandSize::S8 => AvxOpcode::Vpinsrb,
-            OperandSize::S16 => AvxOpcode::Vpinsrw,
-            OperandSize::S32 => AvxOpcode::Vpinsrd,
-            OperandSize::S64 => AvxOpcode::Vpinsrq,
-            _ => bail!(CodeGenError::unexpected_operand_size()),
-        };
-
-        self.emit(Inst::XmmVexPinsr {
-            op,
-            src1: insert_into.into(),
-            src2: to_insert.into(),
-            dst: dst.map(Into::into),
-            imm: lane,
-        });
-
-        Ok(())
+    /// The `vpextr` opcode to use.
+    fn vpextr_opcode(size: OperandSize) -> AvxOpcode {
+        match size {
+            OperandSize::S8 => AvxOpcode::Vpextrb,
+            OperandSize::S16 => AvxOpcode::Vpextrw,
+            OperandSize::S32 => AvxOpcode::Vpextrd,
+            OperandSize::S64 => AvxOpcode::Vpextrq,
+            _ => unimplemented!(),
+        }
     }
 
-    pub(crate) fn vextract(
+    /// Extract a value from `src` into `addr` determined by `lane`.
+    pub(crate) fn xmm_vpextr_rm(
         &mut self,
         addr: &Address,
         src: Reg,
@@ -1939,16 +1914,8 @@ impl Assembler {
             flags,
         );
 
-        let op = match size {
-            OperandSize::S8 => AvxOpcode::Vpextrb,
-            OperandSize::S16 => AvxOpcode::Vpextrw,
-            OperandSize::S32 => AvxOpcode::Vpextrd,
-            OperandSize::S64 => AvxOpcode::Vpextrq,
-            _ => bail!(CodeGenError::unexpected_operand_size()),
-        };
-
         self.emit(Inst::XmmMovRMImmVex {
-            op,
+            op: Self::vpextr_opcode(size),
             src: src.into(),
             dst,
             imm: lane,
