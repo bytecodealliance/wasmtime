@@ -1645,4 +1645,8 @@ pub(crate) trait MacroAssembler {
 
     /// If any bit in `src` is 1, set `dst` to 1, or 0 otherwise.
     fn v128_any_true(&mut self, src: Reg, dst: WritableReg) -> Result<()>;
+
+    /// Perform a vector add between `src` and `dst`, placing the result in `dst`, where each lane
+    /// is interpreted to be `size` long.
+    fn v128_add(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
 }

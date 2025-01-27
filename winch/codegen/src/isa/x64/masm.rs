@@ -1882,6 +1882,21 @@ impl Masm for MacroAssembler {
         self.asm.setcc(IntCmpKind::Ne, dst);
         Ok(())
     }
+
+    fn v128_add(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpaddb,
+            OperandSize::S16 => AvxOpcode::Vpaddw,
+            OperandSize::S32 => AvxOpcode::Vpaddd,
+            OperandSize::S64 => AvxOpcode::Vpaddq,
+            OperandSize::S128 => bail!(CodeGenError::unexpected_operand_size()),
+        };
+
+        self.asm.xmm_rmi_rvex(op, src, dst.to_reg(), dst);
+        Ok(())
+    }
 }
 
 impl MacroAssembler {

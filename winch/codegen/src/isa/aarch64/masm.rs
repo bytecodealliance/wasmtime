@@ -1101,6 +1101,18 @@ impl Masm for MacroAssembler {
     fn v128_any_true(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
+
+    fn v128_add(
+        &mut self,
+        _lhs: Reg,
+        _rhs: Reg,
+        _dst: WritableReg,
+        _size: OperandSize,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
 }
 
 impl MacroAssembler {

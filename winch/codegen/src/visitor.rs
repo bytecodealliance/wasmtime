@@ -418,6 +418,10 @@ macro_rules! def_unsupported {
     (emit V128Store16Lane $($rest:tt)*) => {};
     (emit V128Store32Lane $($rest:tt)*) => {};
     (emit V128Store64Lane $($rest:tt)*) => {};
+    (emit I8x16Add $($rest:tt)*) => {};
+    (emit I16x8Add $($rest:tt)*) => {};
+    (emit I32x4Add $($rest:tt)*) => {};
+    (emit I64x2Add $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -3518,6 +3522,39 @@ where
 
     fn visit_v128_store64_lane(&mut self, arg: MemArg, lane: u8) -> Self::Output {
         self.emit_wasm_store(&arg, StoreKind::vector_lane(lane, OperandSize::S64))
+    }
+
+    fn visit_i8x16_add(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, size| {
+                masm.v128_add(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_i16x8_add(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
+                masm.v128_add(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_i32x4_add(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, size| {
+                masm.v128_add(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_i64x2_add(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S64, |masm, dst, src, size| {
+                masm.v128_add(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);
