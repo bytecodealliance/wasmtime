@@ -331,16 +331,11 @@ impl Masm for MacroAssembler {
                 self.load_impl(src, dst, size, UNTRUSTED_FLAGS)?;
             }
             LoadKind::VectorExtend(ext) => {
-                if !self.flags.has_avx() {
-                    bail!(CodeGenError::UnimplementedForNoAvx)
-                }
-
+                self.ensure_has_avx()?;
                 self.asm.xmm_vpmov_mr(&src, dst, ext, UNTRUSTED_FLAGS)
             }
             LoadKind::Splat(_) => {
-                if !self.flags.has_avx() {
-                    bail!(CodeGenError::UnimplementedForNoAvx)
-                }
+                self.ensure_has_avx()?;
 
                 if size == OperandSize::S64 {
                     self.asm
@@ -1340,9 +1335,7 @@ impl Masm for MacroAssembler {
 
         // Perform the splat on the operands.
         if size == SplatKind::I64x2 || size == SplatKind::F64x2 {
-            if !self.flags.has_avx() {
-                bail!(CodeGenError::UnimplementedForNoAvx);
-            }
+            self.ensure_has_avx()?;
             let mask = Self::vpshuf_mask_for_64_bit_splats();
             match src {
                 RegImm::Reg(src) => self.asm.xmm_vpshuf_rr(src, dst, mask, OperandSize::S32),
@@ -1353,9 +1346,7 @@ impl Masm for MacroAssembler {
                 }
             }
         } else {
-            if !self.flags.has_avx2() {
-                bail!(CodeGenError::UnimplementedForNoAvx2);
-            }
+            self.ensure_has_avx2()?;
 
             match src {
                 RegImm::Reg(src) => self.asm.xmm_vpbroadcast_rr(src, dst, size.lane_size()),
@@ -1374,9 +1365,7 @@ impl Masm for MacroAssembler {
     }
 
     fn shuffle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, lanes: [u8; 16]) -> Result<()> {
-        if !self.flags.has_avx() {
-            bail!(CodeGenError::UnimplementedForNoAvx)
-        }
+        self.ensure_has_avx()?;
 
         // Use `vpshufb` with `lanes` to set the lanes in `lhs` and `rhs`
         // separately to either the selected index or 0.
@@ -1404,9 +1393,7 @@ impl Masm for MacroAssembler {
     }
 
     fn swizzle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg) -> Result<()> {
-        if !self.flags.has_avx() {
-            bail!(CodeGenError::UnimplementedForNoAvx)
-        }
+        self.ensure_has_avx()?;
 
         // Clamp rhs to [0, 15 (i.e., 0xF)] and substitute 0 for anything
         // outside that range.
@@ -1495,9 +1482,7 @@ impl Masm for MacroAssembler {
         lane: u8,
         kind: ExtractLaneKind,
     ) -> Result<()> {
-        if !self.flags.has_avx() {
-            bail!(CodeGenError::UnimplementedForNoAvx);
-        }
+        self.ensure_has_avx()?;
 
         match kind {
             ExtractLaneKind::I8x16S
@@ -1543,9 +1528,7 @@ impl Masm for MacroAssembler {
         lane: u8,
         kind: ReplaceLaneKind,
     ) -> Result<()> {
-        if !self.flags.has_avx() {
-            bail!(CodeGenError::UnimplementedForNoAvx)
-        }
+        self.ensure_has_avx()?;
 
         match kind {
             ReplaceLaneKind::I8x16
@@ -1642,6 +1625,8 @@ impl Masm for MacroAssembler {
     }
 
     fn v128_not(&mut self, dst: WritableReg) -> Result<()> {
+        self.ensure_has_avx()?;
+
         let tmp = regs::scratch_xmm();
         // First, we initialize `tmp` with all ones, by comparing it with itself.
         self.asm
@@ -1653,26 +1638,31 @@ impl Masm for MacroAssembler {
     }
 
     fn v128_and(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+        self.ensure_has_avx()?;
         self.asm.xmm_rmi_rvex(AvxOpcode::Vpand, src1, src2, dst);
         Ok(())
     }
 
     fn v128_and_not(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+        self.ensure_has_avx()?;
         self.asm.xmm_rmi_rvex(AvxOpcode::Vpandn, src1, src2, dst);
         Ok(())
     }
 
     fn v128_or(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+        self.ensure_has_avx()?;
         self.asm.xmm_rmi_rvex(AvxOpcode::Vpor, src1, src2, dst);
         Ok(())
     }
 
     fn v128_xor(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+        self.ensure_has_avx()?;
         self.asm.xmm_rmi_rvex(AvxOpcode::Vpxor, src1, src2, dst);
         Ok(())
     }
 
     fn v128_bitselect(&mut self, src1: Reg, src2: Reg, mask: Reg, dst: WritableReg) -> Result<()> {
+        self.ensure_has_avx()?;
         let tmp = regs::scratch_xmm();
         self.v128_and(src1, mask, writable!(tmp))?;
         self.v128_and_not(mask, src2, dst)?;
@@ -1682,6 +1672,7 @@ impl Masm for MacroAssembler {
     }
 
     fn v128_any_true(&mut self, src: Reg, dst: WritableReg) -> Result<()> {
+        self.ensure_has_avx()?;
         self.asm.xmm_vptest(src, src);
         self.asm.setcc(IntCmpKind::Ne, dst);
         Ok(())
@@ -1715,6 +1706,16 @@ impl MacroAssembler {
         assert!(self.stack_max_use_add.is_none());
         let patch = PatchableAddToReg::new(reg, OperandSize::S64, self.asm.buffer_mut());
         self.stack_max_use_add.replace(patch);
+    }
+
+    fn ensure_has_avx(&self) -> Result<()> {
+        anyhow::ensure!(self.flags.has_avx(), CodeGenError::UnimplementedForNoAvx);
+        Ok(())
+    }
+
+    fn ensure_has_avx2(&self) -> Result<()> {
+        anyhow::ensure!(self.flags.has_avx2(), CodeGenError::UnimplementedForNoAvx2);
+        Ok(())
     }
 
     fn increment_sp(&mut self, bytes: u32) {
