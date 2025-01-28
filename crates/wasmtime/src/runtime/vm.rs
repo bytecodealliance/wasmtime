@@ -350,6 +350,7 @@ impl ModuleRuntimeInfo {
     /// A unique ID for this particular module. This can be used to
     /// allow for fastpaths to optimize a "re-instantiate the same
     /// module again" case.
+    #[cfg(feature = "pooling-allocator")]
     fn unique_id(&self) -> Option<CompiledModuleId> {
         match self {
             ModuleRuntimeInfo::Module(m) => Some(m.id()),

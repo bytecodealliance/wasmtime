@@ -39,9 +39,9 @@ cfg_if::cfg_if! {
         mod enabled;
         mod pkru;
         mod sys;
-        pub use enabled::{allow, current_mask, is_supported, keys, ProtectionKey, ProtectionMask};
+        pub use enabled::*;
     } else {
         mod disabled;
-        pub use disabled::{allow, current_mask, is_supported, keys, ProtectionKey, ProtectionMask};
+        pub use disabled::*;
     }
 }
