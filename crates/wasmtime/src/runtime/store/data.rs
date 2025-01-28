@@ -223,12 +223,13 @@ impl StoreId {
             // Note the usage of `Relaxed` ordering here which should be ok
             // since we're only looking for atomicity on this counter and this
             // otherwise isn't used to synchronize memory stored anywhere else.
-            static NEXT_ID: AtomicId = AtomicId::new(0);
+            static NEXT_ID: AtomicU64 = AtomicU64::new(0);
             let id = NEXT_ID.fetch_add(1, Relaxed);
             if id > OVERFLOW_THRESHOLD {
                 NEXT_ID.store(OVERFLOW_THRESHOLD, Relaxed);
                 panic!("store id allocator overflow");
             }
+            id
         };
 
         // When 64-bit atomics are not allowed use a `RwLock<u64>`. This is
@@ -249,7 +250,7 @@ impl StoreId {
             ret
         };
 
-        StoreId(NonZeroU64::new(u64::from(id) + 1).unwrap())
+        StoreId(NonZeroU64::new(id + 1).unwrap())
     }
 
     #[inline]
