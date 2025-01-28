@@ -144,28 +144,31 @@ fn pulley_provenance_test() -> Result<()> {
     let funcref = instance.get_func(&mut store, "call-wasm").unwrap();
     for func in ["call_ref-wasm", "return_call_ref-wasm"] {
         println!("testing func {func:?}");
-        let func = instance
-            .get_typed_func::<Func, (i32, i32, i32)>(&mut store, func)
-            .unwrap();
+        let func = instance.get_typed_func::<Func, (i32, i32, i32)>(&mut store, func)?;
         let results = func.call(&mut store, funcref)?;
         assert_eq!(results, (1, 2, 3));
     }
 
     let trap = instance
-        .get_typed_func::<(), ()>(&mut store, "unreachable")
-        .unwrap()
+        .get_typed_func::<(), ()>(&mut store, "unreachable")?
         .call(&mut store, ())
         .unwrap_err()
         .downcast::<Trap>()?;
     assert_eq!(trap, Trap::UnreachableCodeReached);
 
     let trap = instance
-        .get_typed_func::<(), i32>(&mut store, "divide-by-zero")
-        .unwrap()
+        .get_typed_func::<(), i32>(&mut store, "divide-by-zero")?
         .call(&mut store, ())
         .unwrap_err()
         .downcast::<Trap>()?;
     assert_eq!(trap, Trap::IntegerDivisionByZero);
+
+    instance
+        .get_typed_func::<(), ()>(&mut store, "memory-intrinsics")?
+        .call(&mut store, ())?;
+    instance
+        .get_typed_func::<(), ()>(&mut store, "table-intrinsics")?
+        .call(&mut store, ())?;
 
     Ok(())
 }
