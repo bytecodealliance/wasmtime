@@ -13,7 +13,9 @@
 //! and write to streams.
 //!
 //! This crate is designed to have no unnecessary dependencies and, in
-//! particular, to be #![no_std].
+//! particular, to be #![no_std]. For an example no_std embedding, see
+//! [`/examples/min-platform`](https://github.com/bytecodealliance/wasmtime/tree/main/examples/min-platform)
+//! at the root of the wasmtime repo.
 
 #![no_std]
 
