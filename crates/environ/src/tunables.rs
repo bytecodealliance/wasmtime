@@ -189,7 +189,7 @@ impl Tunables {
             debug_adapter_modules: false,
             relaxed_simd_deterministic: false,
             winch_callable: false,
-            signals_based_traps: true,
+            signals_based_traps: false,
             memory_init_cow: true,
         }
     }
@@ -203,6 +203,7 @@ impl Tunables {
             memory_reservation: 10 * (1 << 20),
             memory_guard_size: 0x1_0000,
             memory_reservation_for_growth: 1 << 20, // 1MB
+            signals_based_traps: true,
 
             ..Tunables::default_miri()
         }
@@ -229,6 +230,7 @@ impl Tunables {
             // to avoid memory movement.
             memory_reservation_for_growth: 2 << 30, // 2GB
 
+            signals_based_traps: true,
             ..Tunables::default_miri()
         }
     }
