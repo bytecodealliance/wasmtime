@@ -161,6 +161,7 @@ pub struct Config {
     pub(crate) memory_guaranteed_dense_image_size: u64,
     pub(crate) force_memory_init_memfd: bool,
     pub(crate) wmemcheck: bool,
+    #[cfg(feature = "coredump")]
     pub(crate) coredump_on_trap: bool,
     pub(crate) macos_use_mach_ports: bool,
     pub(crate) detect_host_feature: Option<fn(&str) -> Option<bool>>,
@@ -265,6 +266,7 @@ impl Config {
             memory_guaranteed_dense_image_size: 16 << 20,
             force_memory_init_memfd: false,
             wmemcheck: false,
+            #[cfg(feature = "coredump")]
             coredump_on_trap: false,
             macos_use_mach_ports: !cfg!(miri),
             #[cfg(feature = "std")]

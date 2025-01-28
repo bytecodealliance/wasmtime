@@ -85,6 +85,7 @@ impl ModuleRegistry {
     }
 
     /// Gets an iterator over all modules in the registry.
+    #[cfg(feature = "coredump")]
     pub fn all_modules(&self) -> impl Iterator<Item = &'_ Module> + '_ {
         self.loaded_code
             .values()
