@@ -292,7 +292,6 @@
         not(feature = "cranelift"),
         not(feature = "pooling-allocator"),
         not(feature = "runtime"),
-        not(feature = "component-model"),
         not(feature = "std"),
     ),
     allow(dead_code, unused_imports)
