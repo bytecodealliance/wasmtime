@@ -6,7 +6,7 @@ use crate::runtime::vm::{VMMemoryDefinition, VMStore, WaitResult};
 use core::ops::Range;
 use core::ptr::NonNull;
 use core::time::Duration;
-use wasmtime_environ::{Trap, Tunables};
+use wasmtime_environ::Trap;
 
 #[derive(Clone)]
 pub enum SharedMemory {}
@@ -63,14 +63,6 @@ impl SharedMemory {
     }
 
     pub(crate) fn byte_size(&self) -> usize {
-        match *self {}
-    }
-
-    pub(crate) fn grow_to(&mut self, _size: usize) -> Result<()> {
-        match *self {}
-    }
-
-    pub(crate) fn vmmemory(&mut self) -> VMMemoryDefinition {
         match *self {}
     }
 

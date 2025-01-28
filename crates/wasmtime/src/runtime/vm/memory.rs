@@ -78,11 +78,13 @@ use crate::prelude::*;
 use crate::runtime::vm::vmcontext::VMMemoryDefinition;
 #[cfg(has_virtual_memory)]
 use crate::runtime::vm::{HostAlignedByteCount, MmapOffset};
-use crate::runtime::vm::{MemoryImage, MemoryImageSlot, SendSyncPtr, VMStore, WaitResult};
+use crate::runtime::vm::{MemoryImage, MemoryImageSlot, SendSyncPtr, VMStore};
 use alloc::sync::Arc;
-use core::time::Duration;
 use core::{ops::Range, ptr::NonNull};
-use wasmtime_environ::{Trap, Tunables};
+use wasmtime_environ::Tunables;
+
+#[cfg(feature = "threads")]
+use wasmtime_environ::Trap;
 
 #[cfg(has_virtual_memory)]
 mod mmap;
@@ -434,6 +436,7 @@ impl Memory {
     }
 
     /// Implementation of `memory.atomic.notify` for all memories.
+    #[cfg(feature = "threads")]
     pub fn atomic_notify(&mut self, addr: u64, count: u32) -> Result<u32, Trap> {
         match self.as_shared_memory() {
             Some(m) => m.atomic_notify(addr, count),
@@ -445,12 +448,13 @@ impl Memory {
     }
 
     /// Implementation of `memory.atomic.wait32` for all memories.
+    #[cfg(feature = "threads")]
     pub fn atomic_wait32(
         &mut self,
         addr: u64,
         expected: u32,
-        timeout: Option<Duration>,
-    ) -> Result<WaitResult, Trap> {
+        timeout: Option<core::time::Duration>,
+    ) -> Result<crate::WaitResult, Trap> {
         match self.as_shared_memory() {
             Some(m) => m.atomic_wait32(addr, expected, timeout),
             None => {
@@ -461,12 +465,13 @@ impl Memory {
     }
 
     /// Implementation of `memory.atomic.wait64` for all memories.
+    #[cfg(feature = "threads")]
     pub fn atomic_wait64(
         &mut self,
         addr: u64,
         expected: u64,
-        timeout: Option<Duration>,
-    ) -> Result<WaitResult, Trap> {
+        timeout: Option<core::time::Duration>,
+    ) -> Result<crate::WaitResult, Trap> {
         match self.as_shared_memory() {
             Some(m) => m.atomic_wait64(addr, expected, timeout),
             None => {
@@ -736,6 +741,7 @@ impl LocalMemory {
 /// we are using static memories with virtual memory guard pages) this manual
 /// check is here so we don't segfault from Rust. For other configurations,
 /// these checks are required anyways.
+#[cfg(feature = "threads")]
 pub fn validate_atomic_addr(
     def: &VMMemoryDefinition,
     addr: u64,
