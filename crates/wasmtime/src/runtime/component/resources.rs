@@ -11,7 +11,7 @@ use core::fmt;
 use core::marker;
 use core::mem::MaybeUninit;
 use core::ptr::NonNull;
-use core::sync::atomic::{AtomicU64, Ordering::Relaxed};
+use core::sync::atomic::{AtomicU32, Ordering::Relaxed};
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, DefinedResourceIndex, InterfaceType, ResourceIndex,
     TypeResourceTableIndex,
@@ -248,12 +248,18 @@ pub struct Resource<T> {
 ///   borrow tracking associated with it. The low 32-bits of the value are
 ///   the table index and the upper 32-bits are the generation.
 ///
-/// Note that this is an `AtomicU64` but it's not intended to actually be
-/// used in conjunction with threads as generally a `Store<T>` lives on one
-/// thread at a time. The `AtomicU64` here is used to ensure that this type
-/// is `Send + Sync` when captured as a reference to make async programming
-/// more ergonomic.
-struct AtomicResourceState(AtomicU64);
+/// Note that this is two `AtomicU32` fields but it's not intended to actually
+/// be used in conjunction with threads as generally a `Store<T>` lives on one
+/// thread at a time. The pair of `AtomicU32` here is used to ensure that this
+/// type is `Send + Sync` when captured as a reference to make async
+/// programming more ergonomic.
+///
+/// Also note that two `AtomicU32` here are used instead of `AtomicU64` to be
+/// more portable to platforms without 64-bit atomics.
+struct AtomicResourceState {
+    index: AtomicU32,
+    generation: AtomicU32,
+}
 
 #[derive(Debug, PartialEq, Eq, Copy, Clone)]
 enum ResourceState {
@@ -264,39 +270,52 @@ enum ResourceState {
 }
 
 impl AtomicResourceState {
-    const BORROW: Self = Self(AtomicU64::new(ResourceState::BORROW));
-    const NOT_IN_TABLE: Self = Self(AtomicU64::new(ResourceState::NOT_IN_TABLE));
+    const BORROW: Self = AtomicResourceState::new(ResourceState::Borrow);
+    const NOT_IN_TABLE: Self = AtomicResourceState::new(ResourceState::NotInTable);
+
+    const fn new(state: ResourceState) -> AtomicResourceState {
+        let (index, generation) = state.encode();
+        Self {
+            index: AtomicU32::new(index),
+            generation: AtomicU32::new(generation),
+        }
+    }
 
     fn get(&self) -> ResourceState {
-        ResourceState::decode(self.0.load(Relaxed))
+        ResourceState::decode(self.index.load(Relaxed), self.generation.load(Relaxed))
     }
 
     fn swap(&self, state: ResourceState) -> ResourceState {
-        ResourceState::decode(self.0.swap(state.encode(), Relaxed))
+        let (index, generation) = state.encode();
+        let index_prev = self.index.load(Relaxed);
+        self.index.store(index, Relaxed);
+        let generation_prev = self.generation.load(Relaxed);
+        self.generation.store(generation, Relaxed);
+        ResourceState::decode(index_prev, generation_prev)
     }
 }
 
 impl ResourceState {
     // See comments on `state` above for info about these values.
-    const BORROW: u64 = u64::MAX;
-    const NOT_IN_TABLE: u64 = u64::MAX - 1;
-    const TAKEN: u64 = u64::MAX - 2;
+    const BORROW: u32 = u32::MAX;
+    const NOT_IN_TABLE: u32 = u32::MAX - 1;
+    const TAKEN: u32 = u32::MAX - 2;
 
-    fn decode(bits: u64) -> ResourceState {
-        match bits {
+    fn decode(idx: u32, generation: u32) -> ResourceState {
+        match generation {
             Self::BORROW => Self::Borrow,
             Self::NOT_IN_TABLE => Self::NotInTable,
             Self::TAKEN => Self::Taken,
-            other => Self::Index(HostResourceIndex(other)),
+            _ => Self::Index(HostResourceIndex::new(idx, generation)),
         }
     }
 
-    fn encode(&self) -> u64 {
+    const fn encode(&self) -> (u32, u32) {
         match self {
-            Self::Borrow => Self::BORROW,
-            Self::NotInTable => Self::NOT_IN_TABLE,
-            Self::Taken => Self::TAKEN,
-            Self::Index(index) => index.0,
+            Self::Borrow => (0, Self::BORROW),
+            Self::NotInTable => (0, Self::NOT_IN_TABLE),
+            Self::Taken => (0, Self::TAKEN),
+            Self::Index(index) => (index.index(), index.generation()),
         }
     }
 }
@@ -359,12 +378,12 @@ impl HostResourceIndex {
         HostResourceIndex(u64::from(idx) | (u64::from(generation) << 32))
     }
 
-    fn index(&self) -> u32 {
-        u32::try_from(self.0 & 0xffffffff).unwrap()
+    const fn index(&self) -> u32 {
+        (self.0 & 0xffffffff) as u32
     }
 
-    fn generation(&self) -> u32 {
-        u32::try_from(self.0 >> 32).unwrap()
+    const fn generation(&self) -> u32 {
+        (self.0 >> 32) as u32
     }
 }
 
