@@ -356,7 +356,7 @@ reexport-wasmparser = []
 
 # Enables instances of the traits defined in the wasm-wave crate, which
 # provides a human-readable text format for component values.
-wave = ["dep:wasm-wave"]
+wave = ["dep:wasm-wave", 'component-model']
 
 # For platforms that Wasmtime does not have support for Wasmtime will disable
 # the use of virtual memory by default, for example allocating linear memories
