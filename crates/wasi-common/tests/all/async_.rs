@@ -34,10 +34,9 @@ async fn run(path: &str, inherit_stdio: bool) -> Result<()> {
                 .stdout(Box::new(stdout.clone()))
                 .stderr(Box::new(stderr.clone()));
         }
-        builder.arg(name)?.arg(".")?;
+        builder.arg(name)?.arg("/dev")?;
         println!("preopen: {workspace:?}");
-        let preopen_dir =
-            cap_std::fs::Dir::open_ambient_dir(workspace.path(), cap_std::ambient_authority())?;
+        let preopen_dir = cap_std::fs::Dir::open_ambient_dir("/dev", cap_std::ambient_authority())?;
         builder.preopened_dir(preopen_dir, ".")?;
         for (var, val) in test_programs_artifacts::wasi_tests_environment() {
             builder.env(var, val)?;
@@ -291,4 +290,9 @@ async fn preview1_file_write() {
 #[test_log::test(tokio::test(flavor = "multi_thread"))]
 async fn preview1_path_open_lots() {
     run(PREVIEW1_PATH_OPEN_LOTS, true).await.unwrap()
+}
+#[test_log::test(tokio::test(flavor = "multi_thread"))]
+#[cfg_attr(not(unix), ignore)]
+async fn preview1_device_read() {
+    run(PREVIEW1_DEVICE_READ, true).await.unwrap()
 }
