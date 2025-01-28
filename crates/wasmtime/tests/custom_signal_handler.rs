@@ -3,6 +3,7 @@
 
 #![cfg(any(target_os = "linux", target_os = "macos"))]
 #![cfg(not(miri))]
+#![cfg(has_native_signals)]
 
 use rustix::mm::{mprotect, MprotectFlags};
 use std::sync::atomic::{AtomicBool, Ordering};

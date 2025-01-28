@@ -507,10 +507,6 @@ run = [
 completion = ["dep:clap_complete"]
 
 [[test]]
-name = "host_segfault"
-harness = false
-
-[[test]]
 name = "disas"
 harness = false
 

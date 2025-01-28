@@ -1,3 +1,4 @@
+use crate::TripleExt;
 use anyhow::{anyhow, bail, Result};
 use core::fmt;
 use serde_derive::{Deserialize, Serialize};
@@ -146,14 +147,22 @@ impl Tunables {
         if cfg!(miri) {
             return Ok(Tunables::default_miri());
         }
-        match target
+        let mut ret = match target
             .pointer_width()
             .map_err(|_| anyhow!("failed to retrieve target pointer width"))?
         {
-            PointerWidth::U32 => Ok(Tunables::default_u32()),
-            PointerWidth::U64 => Ok(Tunables::default_u64()),
+            PointerWidth::U32 => Tunables::default_u32(),
+            PointerWidth::U64 => Tunables::default_u64(),
             _ => bail!("unsupported target pointer width"),
+        };
+
+        // Pulley targets never use signals-based-traps and also can't benefit
+        // from guard pages, so disable them.
+        if target.is_pulley() {
+            ret.signals_based_traps = false;
+            ret.memory_guard_size = 0;
         }
+        Ok(ret)
     }
 
     /// Returns the default set of tunables for running under MIRI.
@@ -180,7 +189,7 @@ impl Tunables {
             debug_adapter_modules: false,
             relaxed_simd_deterministic: false,
             winch_callable: false,
-            signals_based_traps: true,
+            signals_based_traps: false,
             memory_init_cow: true,
         }
     }
@@ -194,6 +203,7 @@ impl Tunables {
             memory_reservation: 10 * (1 << 20),
             memory_guard_size: 0x1_0000,
             memory_reservation_for_growth: 1 << 20, // 1MB
+            signals_based_traps: true,
 
             ..Tunables::default_miri()
         }
@@ -220,6 +230,7 @@ impl Tunables {
             // to avoid memory movement.
             memory_reservation_for_growth: 2 << 30, // 2GB
 
+            signals_based_traps: true,
             ..Tunables::default_miri()
         }
     }

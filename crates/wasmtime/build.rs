@@ -7,51 +7,49 @@ fn main() {
     enable_features_based_on_rustc_version();
 
     // NB: duplicating a workaround in the wasmtime-fiber build script.
-    println!("cargo:rustc-check-cfg=cfg(asan)");
-    if cfg_is("sanitize", "address") {
-        println!("cargo:rustc-cfg=asan");
-    }
+    custom_cfg("asan", cfg_is("sanitize", "address"));
 
     let unix = cfg("unix");
     let windows = cfg("windows");
     let miri = cfg("miri");
-    let supported_platform = unix || windows;
+    let supported_os = unix || windows;
 
-    let has_native_signals =
-        !miri && (supported_platform || cfg!(feature = "custom-native-signals"));
-    let has_virtual_memory = supported_platform || cfg!(feature = "custom-virtual-memory");
+    // Determine if the current host architecture is supported by Cranelift
+    // meaning that we might be executing native code.
+    let has_host_compiler_backend = match std::env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str() {
+        "x86_64" | "riscv64" | "s390x" | "aarch64" => true,
+        _ => false,
+    };
 
-    println!("cargo:rustc-check-cfg=cfg(has_native_signals, has_virtual_memory)");
-    if has_native_signals {
-        println!("cargo:rustc-cfg=has_native_signals");
-    }
-    if has_virtual_memory {
-        println!("cargo:rustc-cfg=has_virtual_memory");
-    }
+    let has_native_signals = !miri
+        && (supported_os || cfg!(feature = "custom-native-signals"))
+        && has_host_compiler_backend;
+    let has_virtual_memory = supported_os || cfg!(feature = "custom-virtual-memory");
 
+    custom_cfg("has_native_signals", has_native_signals);
+    custom_cfg("has_virtual_memory", has_virtual_memory);
+    custom_cfg("has_host_compiler_backend", has_host_compiler_backend);
+
+    // If this OS isn't supported or if Cranelift doesn't support the host then
+    // there's no need to build these helpers.
     #[cfg(feature = "runtime")]
-    build_c_helpers();
-
-    // Determine whether Pulley will be enabled and used for this target.
-    match std::env::var("CARGO_CFG_TARGET_ARCH").unwrap().as_str() {
-        // These targets use Cranelift by default as they have backends in
-        // Cranelift. Pulley can still be used on an opt-in basis, but it's not
-        // otherwise explicitly enabled here.
-        "x86_64" | "riscv64" | "s390x" | "aarch64" => {}
-
-        // All other targets at this time use Pulley by default. That means
-        // that the pulley feature is "enabled" here and the default target is
-        // pulley. Note that by enabling the feature here it doesn't actually
-        // enable the Cargo feature, it just passes a cfg to rustc. That means
-        // that conditional dependencies enabled in `Cargo.toml` (or other
-        // features) by `pulley` aren't activated, which is why the `pulley`
-        // feature of this crate depends on nothing else.
-        _ => {
-            println!("cargo:rustc-cfg=feature=\"pulley\"");
-            println!("cargo:rustc-cfg=default_target_pulley");
-        }
+    if supported_os && has_host_compiler_backend {
+        build_c_helpers();
     }
-    println!("cargo:rustc-check-cfg=cfg(default_target_pulley)");
+
+    // Figure out what to do about Pulley.
+    //
+    // If the target platform does not have any Cranelift support then Pulley
+    // will be used by default. That means that the pulley feature is "enabled"
+    // here and the default target is pulley. Note that by enabling the feature
+    // here it doesn't actually enable the Cargo feature, it just passes a cfg
+    // to rustc. That means that conditional dependencies enabled in
+    // `Cargo.toml` (or other features) by `pulley` aren't activated, which is
+    // why the `pulley` feature of this crate depends on nothing else.
+    custom_cfg("default_target_pulley", !has_host_compiler_backend);
+    if !has_host_compiler_backend {
+        println!("cargo:rustc-cfg=feature=\"pulley\"");
+    }
 }
 
 fn cfg(key: &str) -> bool {
@@ -65,16 +63,16 @@ fn cfg_is(key: &str, val: &str) -> bool {
         == Some(val)
 }
 
+fn custom_cfg(key: &str, enabled: bool) {
+    println!("cargo:rustc-check-cfg=cfg({key})");
+    if enabled {
+        println!("cargo:rustc-cfg={key}");
+    }
+}
+
 #[cfg(feature = "runtime")]
 fn build_c_helpers() {
     use wasmtime_versioned_export_macros::versioned_suffix;
-
-    // If this platform is neither unix nor windows then there's no default need
-    // for a C helper library since `helpers.c` is tailored for just these
-    // platforms currently.
-    if !cfg("unix") && !cfg("windows") {
-        return;
-    }
 
     let mut build = cc::Build::new();
     build.warnings(true);
@@ -104,10 +102,7 @@ fn enable_features_based_on_rustc_version() {
     // in the future the MSRV of this crate will be beyond 1.84 in which case
     // this build script can be deleted.
     let minor = rustc_minor_version().unwrap_or(0);
-    if minor >= 84 {
-        println!("cargo:rustc-cfg=has_provenance_apis");
-    }
-    println!("cargo:rustc-check-cfg=cfg(has_provenance_apis)");
+    custom_cfg("has_provenance_apis", minor >= 84);
 }
 
 fn rustc_minor_version() -> Option<u32> {

@@ -1,5 +1,6 @@
 //! Support for low-level primitives of unwinding the stack.
 
+#[cfg(has_host_compiler_backend)]
 use crate::runtime::vm::arch;
 
 /// Implementation necessary to unwind the stack, used by `Backtrace`.
@@ -18,8 +19,10 @@ pub unsafe trait Unwind {
 
 /// A host-backed implementation of unwinding, using the native platform ABI
 /// that Cranelift has.
+#[cfg(has_host_compiler_backend)]
 pub struct UnwindHost;
 
+#[cfg(has_host_compiler_backend)]
 unsafe impl Unwind for UnwindHost {
     fn next_older_fp_from_fp_offset(&self) -> usize {
         arch::NEXT_OLDER_FP_FROM_FP_OFFSET
