@@ -290,7 +290,6 @@
         not(feature = "gc-drc"),
         not(feature = "gc-null"),
         not(feature = "cranelift"),
-        not(feature = "pooling-allocator"),
         not(feature = "runtime"),
         not(feature = "std"),
     ),

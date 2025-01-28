@@ -94,7 +94,9 @@ pub use self::mmap::MmapMemory;
 mod malloc;
 pub use self::malloc::MallocMemory;
 
+#[cfg(feature = "pooling-allocator")]
 mod static_;
+#[cfg(feature = "pooling-allocator")]
 use self::static_::StaticMemory;
 
 #[cfg(feature = "threads")]
@@ -244,6 +246,7 @@ impl Memory {
     }
 
     /// Create a new static (immovable) memory instance for the specified plan.
+    #[cfg(feature = "pooling-allocator")]
     pub fn new_static(
         ty: &wasmtime_environ::Memory,
         tunables: &Tunables,
@@ -732,6 +735,7 @@ impl LocalMemory {
         base..end
     }
 
+    #[cfg(feature = "pooling-allocator")]
     pub fn unwrap_static_image(self) -> MemoryImageSlot {
         self.memory_image.unwrap()
     }

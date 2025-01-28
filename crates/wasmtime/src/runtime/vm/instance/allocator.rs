@@ -74,6 +74,13 @@ pub struct InstanceAllocationRequest<'a> {
 
     /// Request that the instance's memories be protected by a specific
     /// protection key.
+    #[cfg_attr(
+        not(feature = "pooling-allocator"),
+        expect(
+            dead_code,
+            reason = "easier to keep this field than remove it, not perf-critical to remove"
+        )
+    )]
     pub pkey: Option<ProtectionKey>,
 
     /// Tunable configuration options the engine is using.
@@ -126,6 +133,7 @@ impl Default for MemoryAllocationIndex {
 
 impl MemoryAllocationIndex {
     /// Get the underlying index of this `MemoryAllocationIndex`.
+    #[cfg(feature = "pooling-allocator")]
     pub fn index(&self) -> usize {
         self.0 as usize
     }
@@ -145,6 +153,7 @@ impl Default for TableAllocationIndex {
 
 impl TableAllocationIndex {
     /// Get the underlying index of this `TableAllocationIndex`.
+    #[cfg(feature = "pooling-allocator")]
     pub fn index(&self) -> usize {
         self.0 as usize
     }

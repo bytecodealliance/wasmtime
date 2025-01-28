@@ -34,6 +34,7 @@ pub unsafe fn commit_pages(_addr: *mut u8, _len: usize) -> io::Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "pooling-allocator")]
 pub unsafe fn decommit_pages(addr: *mut u8, len: usize) -> io::Result<()> {
     if len == 0 {
         return Ok(());
