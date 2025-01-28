@@ -679,8 +679,8 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
-            TaskReturn { func, results } => {
-                let results = results
+            TaskReturn { func, result } => {
+                let results = result
                     .iter()
                     .map(|ty| types.valtype(frame.translation.types_ref(), ty))
                     .collect::<Result<_>>()?;

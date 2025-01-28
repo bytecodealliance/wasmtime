@@ -193,7 +193,7 @@ enum LocalInitializer<'data> {
     },
     TaskReturn {
         func: ModuleInternedTypeIndex,
-        results: Box<[ComponentValType]>,
+        result: Option<ComponentValType>,
     },
     TaskWait {
         func: ModuleInternedTypeIndex,
@@ -633,21 +633,18 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::TaskBackpressure { func: core_type }
                         }
-                        wasmparser::CanonicalFunction::TaskReturn { results } => {
-                            let results = results
-                                .iter()
-                                .map(|(_, ty)| match *ty {
-                                    wasmparser::ComponentValType::Primitive(ty) => {
-                                        ComponentValType::Primitive(ty)
-                                    }
-                                    wasmparser::ComponentValType::Type(ty) => {
-                                        ComponentValType::Type(types.component_defined_type_at(ty))
-                                    }
-                                })
-                                .collect();
+                        wasmparser::CanonicalFunction::TaskReturn { result } => {
+                            let result = result.map(|ty| match ty {
+                                wasmparser::ComponentValType::Primitive(ty) => {
+                                    ComponentValType::Primitive(ty)
+                                }
+                                wasmparser::ComponentValType::Type(ty) => {
+                                    ComponentValType::Type(types.component_defined_type_at(ty))
+                                }
+                            });
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::TaskReturn { func, results }
+                            LocalInitializer::TaskReturn { func, result }
                         }
                         wasmparser::CanonicalFunction::TaskWait { async_, memory } => {
                             let func = self.core_func_signature(core_func_index)?;
