@@ -2161,18 +2161,18 @@ fn config_cli_flag() -> Result<()> {
     cfg.write_all(
         br#"
         [optimize]
-        opt_level = 2
-        regalloc_algorithm = "single-pass"
-        signals_based_traps = false
+        opt-level = 2
+        regalloc-algorithm = "single-pass"
+        signals-based-traps = false
 
         [codegen]
         collector = "null"
 
         [debug]
-        debug_info = true
+        debug-info = true
 
         [wasm]
-        max_wasm_stack = 65536
+        max-wasm-stack = 65536
 
         [wasi]
         cli = true
@@ -2213,7 +2213,7 @@ fn config_cli_flag() -> Result<()> {
     cfg.write_all(
         br#"
         [optimize]
-        this_key_does_not_exist = true
+        this-key-does-not-exist = true
         "#,
     )?;
     let output = run_wasmtime(&[
@@ -2227,7 +2227,7 @@ fn config_cli_flag() -> Result<()> {
             .as_ref()
             .unwrap_err()
             .to_string()
-            .contains("unknown field `this_key_does_not_exist`"),
+            .contains("unknown field `this-key-does-not-exist`"),
         "'{output:?}' did not contain expected error message"
     );
 
