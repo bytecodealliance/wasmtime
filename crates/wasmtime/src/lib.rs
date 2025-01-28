@@ -294,7 +294,6 @@
         not(feature = "pooling-allocator"),
         not(feature = "runtime"),
         not(feature = "component-model"),
-        not(feature = "threads"),
         not(feature = "std"),
     ),
     allow(dead_code, unused_imports)
