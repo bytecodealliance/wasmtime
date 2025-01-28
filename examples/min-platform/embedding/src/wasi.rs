@@ -445,8 +445,11 @@ fn block_on<R>(clock: Clock, f: impl Future<Output = Result<R>> + Send + 'static
 
     // Drive the Future to completion in the following loop
     let r = 'outer: loop {
-        const POLLS_PER_CLOCK: usize = 200; // Arbitrary. Could be as little
-                                            // as 1. Doesn't hurt to kee[
+        // Arbitrary. Could be as little as 1. There's no fuel-based async
+        // yielding in this example so repeated polls is probably not making
+        // progress without "providing input" from the outside environment,
+        // below.
+        const POLLS_PER_CLOCK: usize = 200;
         for _ in 0..POLLS_PER_CLOCK {
             match f.as_mut().poll(&mut cx) {
                 Poll::Pending => {}
