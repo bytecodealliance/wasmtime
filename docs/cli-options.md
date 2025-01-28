@@ -126,3 +126,58 @@ display what Cranelift settings are inferred for the host:
 ```sh
 $ wasmtime settings
 ```
+
+# Additional options
+Many of the above subcommands also take additional options. For example,
+- run 
+- serve
+- compile
+- explore
+- wast
+
+are all subcommands which can take additional CLI options of the format 
+
+```sh
+Options:
+  -O, --optimize <KEY[=VAL[,..]]>
+          Optimization and tuning related options for wasm performance, `-O help` to see all
+
+  -C, --codegen <KEY[=VAL[,..]]>
+          Codegen-related configuration options, `-C help` to see all
+
+  -D, --debug <KEY[=VAL[,..]]>
+          Debug-related configuration options, `-D help` to see all
+
+  -W, --wasm <KEY[=VAL[,..]]>
+          Options for configuring semantic execution of WebAssembly, `-W help` to see all
+
+  -S, --wasi <KEY[=VAL[,..]]>
+          Options for configuring WASI and its proposals, `-S help` to see all
+```
+
+For example, adding `--optimize opt-level=0` to a `wasmtime compile` subcommand
+will turn off most optimizations for the generated code.
+
+## CLI options using TOML file 
+Most key-value options that can be provided using the `--optimize`, `--codegen`,
+`--debug`, `--wasm`, and `--wasi` flags can also be provided using a TOML
+file using the `--config <FILE>` cli flag, by putting the key-value inside a TOML
+table with the same name. 
+
+For example, with a TOML file like this
+```toml
+[optimize]
+opt_level = 0
+```
+the command
+```sh
+$ wasmtime compile --config config.toml
+``` 
+would be the same as 
+```sh
+$ wasmtime compile --optimize opt-level=0
+```
+assuming the TOML file is called `config.toml`. Of course you can put as many
+key-value pairs as you want in the TOML file.
+
+> Note: When specifying names in TOML, you must replaces dashes with underscores. In the example above, `opt-level` becomes `opt_level`.
