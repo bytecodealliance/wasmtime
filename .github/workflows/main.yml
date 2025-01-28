@@ -570,6 +570,10 @@ jobs:
           apt_packages: gcc-powerpc64le-linux-gnu
           env:
             CARGO_TARGET_POWERPC64LE_UNKNOWN_LINUX_GNU_LINKER: powerpc64le-linux-gnu-gcc
+        # A no_std target without 64-bit atomics
+        - target: riscv32imac-unknown-none-elf
+          os: ubuntu-latest
+          test: cargo check -p wasmtime --no-default-features --features runtime,gc,component-model
     env: ${{ matrix.env || fromJSON('{}') }}
     steps:
     - uses: actions/checkout@v4

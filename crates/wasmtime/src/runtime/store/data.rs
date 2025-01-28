@@ -5,7 +5,6 @@ use core::fmt;
 use core::marker;
 use core::num::NonZeroU64;
 use core::ops::{Index, IndexMut};
-use core::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
 // This is defined here, in a private submodule, so we can explicitly reexport
 // it only as `pub(crate)`. This avoids a ton of
@@ -210,24 +209,42 @@ impl StoreId {
     /// Allocates a new unique identifier for a store that has never before been
     /// used in this process.
     pub fn allocate() -> StoreId {
-        static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+        use core::sync::atomic::Ordering::Relaxed;
 
-        // Only allow 2^63 stores at which point we start panicking to prevent
-        // overflow.
+        // When 64-bit atomics are allowed then allow 2^63 stores at which point
+        // we start panicking to prevent overflow.
         //
         // If a store is created once per microsecond then this will last the
         // current process for 584,540 years before overflowing.
-        //
-        // Also note the usage of `Relaxed` ordering here which should be ok
+        #[cfg(target_has_atomic = "64")]
+        use core::sync::atomic::AtomicU64 as AtomicId;
+        #[cfg(target_has_atomic = "64")]
+        const OVERFLOW_THRESHOLD: u64 = 1 << 63;
+
+        // When 64-bit atomics are not allowed then for now use 32-bit atomics
+        // instead. That means that if a store is created once per microsecond
+        // then the process will last a little over an hour. That's not a lot
+        // but it's expected that these platforms probably aren't churning out
+        // stores. If such a situation happens the process will at least be torn
+        // down instead of possibly silently corrupting things. For now this is
+        // at least the least invasive way to add support for platforms without
+        // 64-bit atomics at this time.
+        #[cfg(not(target_has_atomic = "64"))]
+        use core::sync::atomic::AtomicU32 as AtomicId;
+        #[cfg(not(target_has_atomic = "64"))]
+        const OVERFLOW_THRESHOLD: u32 = u32::MAX - 100_000;
+
+        // Note the usage of `Relaxed` ordering here which should be ok
         // since we're only looking for atomicity on this counter and this
         // otherwise isn't used to synchronize memory stored anywhere else.
+        static NEXT_ID: AtomicId = AtomicId::new(0);
         let id = NEXT_ID.fetch_add(1, Relaxed);
-        if id & (1 << 63) != 0 {
-            NEXT_ID.store(1 << 63, Relaxed);
+        if id > OVERFLOW_THRESHOLD {
+            NEXT_ID.store(OVERFLOW_THRESHOLD, Relaxed);
             panic!("store id allocator overflow");
         }
 
-        StoreId(NonZeroU64::new(id + 1).unwrap())
+        StoreId(NonZeroU64::new(u64::from(id) + 1).unwrap())
     }
 
     #[inline]

@@ -22,6 +22,7 @@ use core::alloc::Layout;
 use core::any::Any;
 use core::ops::Range;
 use core::ptr::NonNull;
+#[cfg(target_has_atomic = "64")]
 use core::sync::atomic::AtomicU64;
 use core::{mem, ptr};
 use sptr::Strict;
@@ -571,6 +572,7 @@ impl Instance {
     }
 
     /// Return a pointer to the global epoch counter used by this instance.
+    #[cfg(target_has_atomic = "64")]
     pub fn epoch_ptr(&mut self) -> NonNull<Option<VmPtr<AtomicU64>>> {
         unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_epoch_ptr()) }
     }
@@ -596,11 +598,13 @@ impl Instance {
             let store = store.as_mut();
             self.runtime_limits()
                 .write(Some(store.vmruntime_limits().into()));
+            #[cfg(target_has_atomic = "64")]
             self.epoch_ptr()
                 .write(Some(NonNull::from(store.engine().epoch_counter()).into()));
             self.set_gc_heap(store.gc_store_mut().ok());
         } else {
             self.runtime_limits().write(None);
+            #[cfg(target_has_atomic = "64")]
             self.epoch_ptr().write(None);
             self.set_gc_heap(None);
         }

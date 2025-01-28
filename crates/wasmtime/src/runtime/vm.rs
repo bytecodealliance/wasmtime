@@ -178,6 +178,7 @@ pub unsafe trait VMStore {
     /// Callback invoked whenever an instance observes a new epoch
     /// number. Cannot fail; cooperative epoch-based yielding is
     /// completely semantically transparent. Returns the new deadline.
+    #[cfg(target_has_atomic = "64")]
     fn new_epoch(&mut self) -> Result<u64, Error>;
 
     /// Callback invoked whenever an instance needs to trigger a GC.

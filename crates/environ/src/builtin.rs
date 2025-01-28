@@ -40,6 +40,7 @@ macro_rules! foreach_builtin_function {
             // Invoked when fuel has run out while executing a function.
             out_of_gas(vmctx: vmctx) -> bool;
             // Invoked when we reach a new epoch.
+            #[cfg(target_has_atomic = "64")]
             new_epoch(vmctx: vmctx) -> u64;
             // Invoked before malloc returns.
             #[cfg(feature = "wmemcheck")]

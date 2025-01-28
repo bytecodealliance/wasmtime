@@ -1074,6 +1074,7 @@ fn out_of_gas(store: &mut dyn VMStore, _instance: &mut Instance) -> Result<()> {
 }
 
 // Hook for when an instance observes that the epoch has changed.
+#[cfg(target_has_atomic = "64")]
 fn new_epoch(store: &mut dyn VMStore, _instance: &mut Instance) -> Result<NextEpoch> {
     store.new_epoch().map(NextEpoch)
 }

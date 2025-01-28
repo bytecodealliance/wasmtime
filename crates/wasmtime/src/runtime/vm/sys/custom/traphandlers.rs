@@ -1,13 +1,14 @@
 use crate::prelude::*;
-use crate::runtime::vm::VMContext;
-use core::mem;
-use core::ptr::NonNull;
+#[cfg(has_host_compiler_backend)]
+use crate::{mem, ptr::NonNull, runtime::vm::VMContext};
 
+#[cfg(has_host_compiler_backend)]
 pub use crate::runtime::vm::sys::capi::{self, wasmtime_longjmp};
 
 #[allow(missing_docs)]
 pub type SignalHandler = Box<dyn Fn() + Send + Sync>;
 
+#[cfg(has_host_compiler_backend)]
 pub unsafe fn wasmtime_setjmp(
     jmp_buf: *mut *const u8,
     callback: extern "C" fn(*mut u8, NonNull<VMContext>) -> bool,

@@ -222,6 +222,7 @@ pub struct StoreInner<T> {
 
     limiter: Option<ResourceLimiterInner<T>>,
     call_hook: Option<CallHookInner<T>>,
+    #[cfg(target_has_atomic = "64")]
     epoch_deadline_behavior:
         Option<Box<dyn FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync>>,
     // for comments about `ManuallyDrop`, see `Store::into_data`
@@ -614,6 +615,7 @@ impl<T> Store<T> {
             },
             limiter: None,
             call_hook: None,
+            #[cfg(target_has_atomic = "64")]
             epoch_deadline_behavior: None,
             data: ManuallyDrop::new(data),
         });
@@ -995,6 +997,7 @@ impl<T> Store<T> {
     /// See documentation on
     /// [`Config::epoch_interruption()`](crate::Config::epoch_interruption)
     /// for an introduction to epoch-based interruption.
+    #[cfg(target_has_atomic = "64")]
     pub fn set_epoch_deadline(&mut self, ticks_beyond_current: u64) {
         self.inner.set_epoch_deadline(ticks_beyond_current);
     }
@@ -1025,6 +1028,7 @@ impl<T> Store<T> {
     /// See documentation on
     /// [`Config::epoch_interruption()`](crate::Config::epoch_interruption)
     /// for an introduction to epoch-based interruption.
+    #[cfg(target_has_atomic = "64")]
     pub fn epoch_deadline_trap(&mut self) {
         self.inner.epoch_deadline_trap();
     }
@@ -1056,6 +1060,7 @@ impl<T> Store<T> {
     /// See documentation on
     /// [`Config::epoch_interruption()`](crate::Config::epoch_interruption)
     /// for an introduction to epoch-based interruption.
+    #[cfg(target_has_atomic = "64")]
     pub fn epoch_deadline_callback(
         &mut self,
         callback: impl FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync + 'static,
@@ -1086,7 +1091,7 @@ impl<T> Store<T> {
     /// See documentation on
     /// [`Config::epoch_interruption()`](crate::Config::epoch_interruption)
     /// for an introduction to epoch-based interruption.
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "async", target_has_atomic = "64"))]
     pub fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
         self.inner.epoch_deadline_async_yield_and_update(delta);
     }
@@ -1184,6 +1189,7 @@ impl<'a, T> StoreContextMut<'a, T> {
     /// Sets the epoch deadline to a certain number of ticks in the future.
     ///
     /// For more information see [`Store::set_epoch_deadline`].
+    #[cfg(target_has_atomic = "64")]
     pub fn set_epoch_deadline(&mut self, ticks_beyond_current: u64) {
         self.0.set_epoch_deadline(ticks_beyond_current);
     }
@@ -1191,6 +1197,7 @@ impl<'a, T> StoreContextMut<'a, T> {
     /// Configures epoch-deadline expiration to trap.
     ///
     /// For more information see [`Store::epoch_deadline_trap`].
+    #[cfg(target_has_atomic = "64")]
     pub fn epoch_deadline_trap(&mut self) {
         self.0.epoch_deadline_trap();
     }
@@ -1200,7 +1207,7 @@ impl<'a, T> StoreContextMut<'a, T> {
     ///
     /// For more information see
     /// [`Store::epoch_deadline_async_yield_and_update`].
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "async", target_has_atomic = "64"))]
     pub fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
         self.0.epoch_deadline_async_yield_and_update(delta);
     }
@@ -1920,7 +1927,7 @@ impl StoreOpaque {
     ///
     /// This only works on async futures and stores, and assumes that we're
     /// executing on a fiber. This will yield execution back to the caller once.
-    #[cfg(feature = "async")]
+    #[cfg(all(feature = "async", target_has_atomic = "64"))]
     fn async_yield_impl(&mut self) -> Result<()> {
         use crate::runtime::vm::Yield;
 
@@ -2688,6 +2695,7 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
         Ok(())
     }
 
+    #[cfg(target_has_atomic = "64")]
     fn new_epoch(&mut self) -> Result<u64, anyhow::Error> {
         // Temporarily take the configured behavior to avoid mutably borrowing
         // multiple times.
@@ -2769,6 +2777,7 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
 }
 
 impl<T> StoreInner<T> {
+    #[cfg(target_has_atomic = "64")]
     pub(crate) fn set_epoch_deadline(&mut self, delta: u64) {
         // Set a new deadline based on the "epoch deadline delta".
         //
@@ -2783,10 +2792,12 @@ impl<T> StoreInner<T> {
         *epoch_deadline = self.engine().current_epoch() + delta;
     }
 
+    #[cfg(target_has_atomic = "64")]
     fn epoch_deadline_trap(&mut self) {
         self.epoch_deadline_behavior = None;
     }
 
+    #[cfg(target_has_atomic = "64")]
     fn epoch_deadline_callback(
         &mut self,
         callback: Box<dyn FnMut(StoreContextMut<T>) -> Result<UpdateDeadline> + Send + Sync>,

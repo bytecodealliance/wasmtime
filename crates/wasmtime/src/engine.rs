@@ -8,6 +8,7 @@ use crate::runtime::vm::GcRuntime;
 use crate::sync::OnceLock;
 use crate::Config;
 use alloc::sync::Arc;
+#[cfg(target_has_atomic = "64")]
 use core::sync::atomic::{AtomicU64, Ordering};
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};
@@ -61,7 +62,7 @@ struct EngineInner {
     profiler: Box<dyn crate::profiling_agent::ProfilingAgent>,
     #[cfg(feature = "runtime")]
     signatures: TypeRegistry,
-    #[cfg(feature = "runtime")]
+    #[cfg(all(feature = "runtime", target_has_atomic = "64"))]
     epoch: AtomicU64,
 
     /// One-time check of whether the compiler's settings, if present, are
@@ -130,7 +131,7 @@ impl Engine {
                 profiler: config.build_profiler()?,
                 #[cfg(feature = "runtime")]
                 signatures: TypeRegistry::new(),
-                #[cfg(feature = "runtime")]
+                #[cfg(all(feature = "runtime", target_has_atomic = "64"))]
                 epoch: AtomicU64::new(0),
                 #[cfg(any(feature = "cranelift", feature = "winch"))]
                 compatible_with_native_host: OnceLock::new(),
@@ -317,6 +318,9 @@ impl Engine {
         }
         if !cfg!(has_virtual_memory) && self.tunables().memory_init_cow {
             return Err("virtual memory disabled at compile time -- cannot enable CoW".into());
+        }
+        if !cfg!(target_has_atomic = "64") && self.tunables().epoch_interruption {
+            return Err("epochs currently require 64-bit atomics".into());
         }
         Ok(())
     }
@@ -692,10 +696,12 @@ impl Engine {
         self.config().custom_code_memory.as_ref()
     }
 
+    #[cfg(target_has_atomic = "64")]
     pub(crate) fn epoch_counter(&self) -> &AtomicU64 {
         &self.inner.epoch
     }
 
+    #[cfg(target_has_atomic = "64")]
     pub(crate) fn current_epoch(&self) -> u64 {
         self.epoch_counter().load(Ordering::Relaxed)
     }
@@ -725,6 +731,7 @@ impl Engine {
     /// This method is signal-safe: it does not make any syscalls, and
     /// performs only an atomic increment to the epoch value in
     /// memory.
+    #[cfg(target_has_atomic = "64")]
     pub fn increment_epoch(&self) {
         self.inner.epoch.fetch_add(1, Ordering::Relaxed);
     }
