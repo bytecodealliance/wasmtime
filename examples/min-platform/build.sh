@@ -26,6 +26,15 @@ if [ "$WASMTIME_SIGNALS_BASED_TRAPS" = "1" ]; then
   features="$features,custom"
 fi
 
+if [ "$MIN_PLATFORM_EXAMPLE_DISABLE_WASI" != "1" ]; then
+  features="$features,wasi"
+  cargo build \
+      --manifest-path=$REPO_DIR/examples/wasm/Cargo.toml \
+      --target wasm32-wasip2 \
+      --release
+  WASI_EXAMPLE_PATH=$REPO_DIR/target/wasm32-wasip2/release/wasi.wasm
+fi
+
 # First compile the C implementation of the platform symbols that will be
 # required by our embedding. This is the `embedding/wasmtime-platform.c` file.
 # The header file used is generated from Rust source code with the `cbindgen`
@@ -49,6 +58,7 @@ clang -shared -O2 -o "$HOST_DIR/libwasmtime-platform.so" "$EMBEDDING_DIR/wasmtim
 cargo build \
   --manifest-path $EMBEDDING_DIR/Cargo.toml \
   --target $target \
+  --no-default-features \
   --features "$features" \
   --release
 cc \
@@ -61,7 +71,8 @@ cc \
 
 # The final step here is running the host, in the current directory, which will
 # load the embedding and execute it.
-cargo run --manifest-path "$HOST_DIR/Cargo.toml" --release --features "$features" -- \
+cargo run --manifest-path "$HOST_DIR/Cargo.toml" --release --no-default-features --features "$features" -- \
   "$target" \
   "$HOST_DIR/libembedding.so" \
-  "$HOST_DIR/libwasmtime-platform.so"
+  "$HOST_DIR/libwasmtime-platform.so" \
+  $WASI_EXAMPLE_PATH
