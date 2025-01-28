@@ -65,5 +65,6 @@
   - [Maintainer Guidelines](./contributing-maintainer-guidelines.md)
     - [Code Review](./contributing-code-review.md)
     - [Release Process](./contributing-release-process.md)
+  - [Conditional Compilation](./contributing-conditional-compilation.md)
   - [Governance](./contributing-governance.md)
   - [Code of Conduct](./contributing-coc.md)
