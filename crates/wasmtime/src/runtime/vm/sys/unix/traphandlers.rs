@@ -25,7 +25,7 @@ cfg_if::cfg_if! {
 
         #[inline]
         pub fn lazy_per_thread_init() {}
-    } else if #[cfg(target_os = "macos")] {
+    } else if #[cfg(target_vendor = "apple")] {
         // On macOS a dynamic decision is made to use mach ports or signals at
         // process initialization time.
 
