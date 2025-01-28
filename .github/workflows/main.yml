@@ -936,7 +936,7 @@ jobs:
       with:
         submodules: true
     - uses: ./.github/actions/install-rust
-    - run: cargo install cbindgen --vers "^0.27" --locked
+    - run: cargo install cbindgen --vers "^0.28" --locked
     - run: rustup target add x86_64-unknown-none
     - run: rustup target add wasm32-wasip2
     - run: ./build.sh x86_64-unknown-none
