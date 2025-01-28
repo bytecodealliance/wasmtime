@@ -284,20 +284,20 @@
 // NB: this list is currently being burned down to remove all features listed
 // here to get warnings in all configurations of Wasmtime.
 #![cfg_attr(
-    not(any(
-        feature = "async",
-        feature = "cache",
-        feature = "gc",
-        feature = "gc-drc",
-        feature = "gc-null",
-        feature = "cranelift",
-        feature = "pooling-allocator",
-        feature = "coredump",
-        feature = "runtime",
-        feature = "component-model",
-        feature = "threads",
-        feature = "std",
-    )),
+    any(
+        not(feature = "async"),
+        not(feature = "cache"),
+        not(feature = "gc"),
+        not(feature = "gc-drc"),
+        not(feature = "gc-null"),
+        not(feature = "cranelift"),
+        not(feature = "pooling-allocator"),
+        not(feature = "coredump"),
+        not(feature = "runtime"),
+        not(feature = "component-model"),
+        not(feature = "threads"),
+        not(feature = "std"),
+    ),
     allow(dead_code, unused_imports)
 )]
 // Allow broken links when the default features is disabled because most of our
