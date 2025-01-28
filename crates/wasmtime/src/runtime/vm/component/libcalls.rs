@@ -582,7 +582,7 @@ unsafe fn task_return(
     {
         ComponentInstance::from_vmctx(vmctx, |instance| {
             (*instance.store()).component_async_store().task_return(
-                wasmtime_environ::component::TypeTaskReturnIndex::from_u32(ty),
+                wasmtime_environ::component::TypeTupleIndex::from_u32(ty),
                 storage.cast::<crate::ValRaw>(),
                 storage_len,
             )
@@ -613,7 +613,7 @@ unsafe fn async_enter(
                 wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(
                     caller_instance,
                 ),
-                wasmtime_environ::component::TypeTaskReturnIndex::from_u32(task_return_type),
+                wasmtime_environ::component::TypeTupleIndex::from_u32(task_return_type),
                 params,
                 results,
             )

@@ -98,7 +98,7 @@ impl<'a> TrampolineCompiler<'a> {
                 _ = instance;
                 todo!()
             }
-            Trampoline::TaskReturn => self.translate_task_return_call(),
+            Trampoline::TaskReturn { results } => self.translate_task_return_call(*results),
             Trampoline::TaskWait {
                 instance,
                 async_,
@@ -261,15 +261,14 @@ impl<'a> TrampolineCompiler<'a> {
         }
     }
 
-    fn translate_task_return_call(&mut self) {
+    fn translate_task_return_call(&mut self, results: TypeTupleIndex) {
         match self.abi {
             Abi::Wasm => {}
 
             Abi::Array => {
                 // TODO: A guest could hypothetically export the `task.return`
                 // intrinsic it imported, allowing the host to call it.  We
-                // should either update the component model spec to disallow
-                // that or support it here.
+                // need to support that here.
                 self.builder.ins().trap(TRAP_INTERNAL_ASSERT);
                 return;
             }
@@ -283,33 +282,10 @@ impl<'a> TrampolineCompiler<'a> {
         let (host_sig, index) = host::task_return(self.isa, &mut self.builder.func);
         let host_fn = self.load_libcall(vmctx, index);
 
-        let params = self.types[self.signature]
-            .unwrap_func()
-            .params()
-            .iter()
-            .map(|&v| {
-                Some(match v {
-                    WasmValType::I32 => FlatType::I32,
-                    WasmValType::I64 => FlatType::I64,
-                    WasmValType::F32 => FlatType::F32,
-                    WasmValType::F64 => FlatType::F64,
-                    _ => return None,
-                })
-            })
-            .collect::<Option<_>>();
-
-        let ty = self.builder.ins().iconst(
-            ir::types::I32,
-            i64::from(
-                params
-                    .and_then(|params| {
-                        self.types
-                            .get_task_return_type(&TypeTaskReturn { params })
-                            .map(|v| v.as_u32())
-                    })
-                    .unwrap_or(u32::MAX),
-            ),
-        );
+        let ty = self
+            .builder
+            .ins()
+            .iconst(ir::types::I32, i64::from(results.as_u32()));
 
         let call = self.compiler.call_indirect_host(
             &mut self.builder,

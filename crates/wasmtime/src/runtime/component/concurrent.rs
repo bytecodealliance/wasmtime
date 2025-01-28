@@ -3,7 +3,7 @@ use {
     anyhow::Result,
     futures::{stream::FuturesUnordered, FutureExt},
     std::{boxed::Box, future::Future, pin::Pin},
-    wasmtime_environ::component::{RuntimeComponentInstanceIndex, TypeTaskReturnIndex},
+    wasmtime_environ::component::{RuntimeComponentInstanceIndex, TypeTupleIndex},
 };
 
 pub use futures_and_streams::{ErrorContext, FutureReader, StreamReader};
@@ -80,7 +80,7 @@ pub unsafe trait VMComponentAsyncStore {
     /// The `task.return` intrinsic.
     fn task_return(
         &mut self,
-        ty: TypeTaskReturnIndex,
+        ty: TypeTupleIndex,
         storage: *mut ValRaw,
         storage_len: usize,
     ) -> Result<()>;
@@ -92,7 +92,7 @@ pub unsafe trait VMComponentAsyncStore {
         start: *mut VMFuncRef,
         return_: *mut VMFuncRef,
         caller_instance: RuntimeComponentInstanceIndex,
-        task_return_type: TypeTaskReturnIndex,
+        task_return_type: TypeTupleIndex,
         params: u32,
         results: u32,
     ) -> Result<()>;
@@ -115,7 +115,7 @@ pub unsafe trait VMComponentAsyncStore {
 unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
     fn task_return(
         &mut self,
-        ty: TypeTaskReturnIndex,
+        ty: TypeTupleIndex,
         storage: *mut ValRaw,
         storage_len: usize,
     ) -> Result<()> {
@@ -128,7 +128,7 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
         start: *mut VMFuncRef,
         return_: *mut VMFuncRef,
         caller_instance: RuntimeComponentInstanceIndex,
-        task_return_type: TypeTaskReturnIndex,
+        task_return_type: TypeTupleIndex,
         params: u32,
         results: u32,
     ) -> Result<()> {

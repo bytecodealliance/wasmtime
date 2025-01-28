@@ -402,15 +402,7 @@ impl Compiler<'_, '_> {
             i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
         ));
         self.instruction(I32Const(
-            i32::try_from({
-                let ty = &self.types[adapter.lift.ty];
-                if adapter.lift.options.memory64 {
-                    ty.task_return_type64.as_u32()
-                } else {
-                    ty.task_return_type32.as_u32()
-                }
-            })
-            .unwrap(),
+            i32::try_from(self.types[adapter.lift.ty].params.as_u32()).unwrap(),
         ));
         self.instruction(LocalGet(0));
         self.instruction(LocalGet(1));
@@ -465,15 +457,7 @@ impl Compiler<'_, '_> {
             i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
         ));
         self.instruction(I32Const(
-            i32::try_from({
-                let ty = &self.types[adapter.lift.ty];
-                if adapter.lift.options.memory64 {
-                    ty.task_return_type64.as_u32()
-                } else {
-                    ty.task_return_type32.as_u32()
-                }
-            })
-            .unwrap(),
+            i32::try_from(self.types[adapter.lift.ty].params.as_u32()).unwrap(),
         ));
 
         let results_local = if let Some(globals) = param_globals {
@@ -556,15 +540,7 @@ impl Compiler<'_, '_> {
             i32::try_from(adapter.lower.instance.as_u32()).unwrap(),
         ));
         self.instruction(I32Const(
-            i32::try_from({
-                let ty = &self.types[adapter.lift.ty];
-                if adapter.lift.options.memory64 {
-                    ty.task_return_type64.as_u32()
-                } else {
-                    ty.task_return_type32.as_u32()
-                }
-            })
-            .unwrap(),
+            i32::try_from(self.types[adapter.lift.ty].params.as_u32()).unwrap(),
         ));
         self.instruction(LocalGet(0));
         self.instruction(LocalGet(1));

@@ -10,8 +10,7 @@
       (import "" "task.return" (func $task-return (param i32)))
       (func (export "foo") (param i32) (call $task-return (local.get 0)))
     )
-    (core type $task-return (func (param i32)))
-    (core func $task-return (canon task.return $task-return))
+    (core func $task-return (canon task.return (result u32)))
     (core instance $i (instantiate $m
       (with "" (instance (export "task.return" (func $task-return))))
     ))
@@ -65,8 +64,7 @@
         i32.const 0
       )
     )
-    (core type $task-return (func (param i32)))
-    (core func $task-return (canon task.return $task-return))
+    (core func $task-return (canon task.return (result u32)))
     (core instance $i (instantiate $m
       (with "" (instance (export "task.return" (func $task-return))))
     ))
@@ -163,8 +161,7 @@
       (import "" "task.return" (func $task-return (param i32)))
       (func (export "foo") (param i32) (call $task-return (local.get 0)))
     )
-    (core type $task-return (func (param i32)))
-    (core func $task-return (canon task.return $task-return))
+    (core func $task-return (canon task.return (result u32)))
     (core instance $i (instantiate $m
       (with "" (instance (export "task.return" (func $task-return))))
     ))
@@ -212,8 +209,7 @@
         i32.const 0
       )
     )
-    (core type $task-return (func (param i32)))
-    (core func $task-return (canon task.return $task-return))
+    (core func $task-return (canon task.return (result u32)))
     (core instance $i (instantiate $m
       (with "" (instance (export "task.return" (func $task-return))))
     ))

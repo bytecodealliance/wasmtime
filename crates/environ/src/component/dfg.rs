@@ -286,7 +286,9 @@ pub enum Trampoline {
     TaskBackpressure {
         instance: RuntimeComponentInstanceIndex,
     },
-    TaskReturn,
+    TaskReturn {
+        results: TypeTupleIndex,
+    },
     TaskWait {
         instance: RuntimeComponentInstanceIndex,
         async_: bool,
@@ -765,7 +767,9 @@ impl LinearizeDfg<'_> {
             Trampoline::TaskBackpressure { instance } => info::Trampoline::TaskBackpressure {
                 instance: *instance,
             },
-            Trampoline::TaskReturn => info::Trampoline::TaskReturn,
+            Trampoline::TaskReturn { results } => {
+                info::Trampoline::TaskReturn { results: *results }
+            }
             Trampoline::TaskWait {
                 instance,
                 async_,
