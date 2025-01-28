@@ -938,6 +938,7 @@ jobs:
     - uses: ./.github/actions/install-rust
     - run: cargo install cbindgen --vers "^0.27" --locked
     - run: rustup target add x86_64-unknown-none
+    - run: rustup target add wasm32-wasip2
     - run: ./build.sh x86_64-unknown-none
       working-directory: ./examples/min-platform
 
@@ -954,6 +955,7 @@ jobs:
     - run: ./build.sh x86_64-unknown-none
       working-directory: ./examples/min-platform
       env:
+        WASMTIME_SIGNALS_BASED_TRAPS: 1
         MIN_PLATFORM_TEST_DISABLE_WASI: 1
 
     # Add the `wasmtime-platform.h` file as a release artifact
