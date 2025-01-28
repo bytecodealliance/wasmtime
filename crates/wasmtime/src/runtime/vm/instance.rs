@@ -1082,7 +1082,9 @@ impl Instance {
 
     /// Get a locally-defined memory.
     pub fn get_defined_memory(&mut self, index: DefinedMemoryIndex) -> *mut Memory {
-        &raw mut self.memories[index].1
+        // SAFETY: the `unsafe` here is projecting from `*mut (A, B)` to
+        // `*mut A`, which should be a safe operation to do.
+        unsafe { &raw mut (*self.memories.get_raw_mut(index).unwrap()).1 }
     }
 
     /// Do a `memory.copy`
@@ -1302,20 +1304,26 @@ impl Instance {
             }
         }
 
-        &raw mut self.tables[idx].1
+        // SAFETY: the `unsafe` here is projecting from `*mut (A, B)` to
+        // `*mut A`, which should be a safe operation to do.
+        unsafe { &raw mut (*self.tables.get_raw_mut(idx).unwrap()).1 }
     }
 
     /// Get a table by index regardless of whether it is locally-defined or an
     /// imported, foreign table.
     pub(crate) fn get_table(&mut self, table_index: TableIndex) -> *mut Table {
-        self.with_defined_table_index_and_instance(table_index, |idx, instance| {
-            &raw mut instance.tables[idx].1
+        self.with_defined_table_index_and_instance(table_index, |idx, instance| unsafe {
+            // SAFETY: the `unsafe` here is projecting from `*mut (A, B)` to
+            // `*mut A`, which should be a safe operation to do.
+            &raw mut (*instance.tables.get_raw_mut(idx).unwrap()).1
         })
     }
 
     /// Get a locally-defined table.
     pub(crate) fn get_defined_table(&mut self, index: DefinedTableIndex) -> *mut Table {
-        &raw mut self.tables[index].1
+        // SAFETY: the `unsafe` here is projecting from `*mut (A, B)` to
+        // `*mut A`, which should be a safe operation to do.
+        unsafe { &raw mut (*self.tables.get_raw_mut(index).unwrap()).1 }
     }
 
     pub(crate) fn with_defined_table_index_and_instance<R>(

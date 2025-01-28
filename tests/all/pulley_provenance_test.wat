@@ -49,4 +49,38 @@
     i32.const 100
     i32.const 0
     i32.div_s)
+
+  (memory 1)
+  (func (export "memory-intrinsics")
+    (drop (i32.load (i32.const 0)))
+    (i32.store (i32.const 0) (i32.const 0))
+    (drop (memory.grow (i32.const 1)))
+    (drop (i32.load (i32.const 0)))
+    (i32.store (i32.const 0) (i32.const 0))
+    (drop (memory.size))
+
+    (memory.copy (i32.const 0) (i32.const 1) (i32.const 10))
+    (memory.init $d (i32.const 0) (i32.const 1) (i32.const 3))
+    (memory.fill (i32.const 0) (i32.const 10) (i32.const 10))
+
+    (data.drop $d)
+  )
+  (data $d "abcd")
+
+  (table 1 funcref)
+  (func (export "table-intrinsics")
+    (drop (table.get (i32.const 0)))
+    (table.set (i32.const 0) (table.get (i32.const 0)))
+
+    (drop (table.grow (ref.null func) (i32.const 100)))
+
+    (drop (table.get (i32.const 1)))
+    (table.set (i32.const 1) (table.get (i32.const 1)))
+
+    (table.copy (i32.const 0) (i32.const 1) (i32.const 10))
+    (table.init $e (i32.const 0) (i32.const 1) (i32.const 3))
+    (table.fill (i32.const 0) (ref.func $empty) (i32.const 10))
+  )
+  (elem $e func $empty $empty $empty $empty)
+  (func $empty)
 )
