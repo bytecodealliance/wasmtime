@@ -486,6 +486,19 @@ impl WastTest {
                     "spec_testsuite/simd_align.wast",
                     "spec_testsuite/simd_load_extend.wast",
                     "spec_testsuite/simd_load_splat.wast",
+                    "spec_testsuite/simd_store16_lane.wast",
+                    "spec_testsuite/simd_store32_lane.wast",
+                    "spec_testsuite/simd_store64_lane.wast",
+                    "spec_testsuite/simd_store8_lane.wast",
+                    "spec_testsuite/simd_load16_lane.wast",
+                    "spec_testsuite/simd_load32_lane.wast",
+                    "spec_testsuite/simd_load64_lane.wast",
+                    "spec_testsuite/simd_load8_lane.wast",
+                    "spec_testsuite/simd_bitwise.wast",
+                    "misc_testsuite/simd/load_splat_out_of_bounds.wast",
+                    "misc_testsuite/simd/unaligned-load.wast",
+                    "multi-memory/simd_memory-multi.wast",
+                    "misc_testsuite/simd/issue4807.wast",
                 ];
 
                 if unsupported.iter().any(|part| self.path.ends_with(part)) {
