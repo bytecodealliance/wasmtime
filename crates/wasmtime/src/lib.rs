@@ -285,7 +285,6 @@
 // here to get warnings in all configurations of Wasmtime.
 #![cfg_attr(
     any(
-        not(feature = "async"),
         not(feature = "gc"),
         not(feature = "gc-drc"),
         not(feature = "gc-null"),

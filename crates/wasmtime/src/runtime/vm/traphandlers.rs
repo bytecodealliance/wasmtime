@@ -27,7 +27,9 @@ use core::ptr::{self, NonNull};
 
 pub use self::backtrace::Backtrace;
 pub use self::coredump::CoreDumpStack;
-pub use self::tls::{tls_eager_initialize, AsyncWasmCallState, PreviousAsyncWasmCallState};
+pub use self::tls::tls_eager_initialize;
+#[cfg(feature = "async")]
+pub use self::tls::{AsyncWasmCallState, PreviousAsyncWasmCallState};
 
 pub use traphandlers::SignalHandler;
 
@@ -736,8 +738,6 @@ impl CallThreadState {
 // the caller to the trap site.
 pub(crate) mod tls {
     use super::CallThreadState;
-    use core::mem;
-    use core::ops::Range;
 
     pub use raw::Ptr;
 
@@ -818,6 +818,7 @@ pub(crate) mod tls {
     /// Opaque state used to persist the state of the `CallThreadState`
     /// activations associated with a fiber stack that's used as part of an
     /// async wasm call.
+    #[cfg(feature = "async")]
     pub struct AsyncWasmCallState {
         // The head of a linked list of activations that are currently present
         // on an async call's fiber stack. This pointer points to the oldest
@@ -829,6 +830,7 @@ pub(crate) mod tls {
         state: raw::Ptr,
     }
 
+    #[cfg(feature = "async")]
     impl AsyncWasmCallState {
         /// Creates new state that initially starts as null.
         pub fn new() -> AsyncWasmCallState {
@@ -879,7 +881,7 @@ pub(crate) mod tls {
         /// This is used when exiting a future in Wasmtime to assert that the
         /// current CallThreadState pointer does not point within the stack
         /// we're leaving (e.g.  allocated for a fiber).
-        pub fn assert_current_state_not_in_range(range: Range<usize>) {
+        pub fn assert_current_state_not_in_range(range: core::ops::Range<usize>) {
             let p = raw::get() as usize;
             assert!(p < range.start || range.end < p);
         }
@@ -887,6 +889,7 @@ pub(crate) mod tls {
 
     /// Opaque state used to help control TLS state across stack switches for
     /// async support.
+    #[cfg(feature = "async")]
     pub struct PreviousAsyncWasmCallState {
         // The head of a linked list, similar to the TLS state. Note though that
         // this list is stored in reverse order to assist with `push` and `pop`
@@ -897,6 +900,7 @@ pub(crate) mod tls {
         state: raw::Ptr,
     }
 
+    #[cfg(feature = "async")]
     impl PreviousAsyncWasmCallState {
         /// Pops a fiber's linked list of activations and stores them in
         /// `AsyncWasmCallState`.
@@ -911,7 +915,7 @@ pub(crate) mod tls {
         /// fiber is being suspended.
         pub unsafe fn restore(self) -> AsyncWasmCallState {
             let thread_head = self.state;
-            mem::forget(self);
+            core::mem::forget(self);
             let mut ret = AsyncWasmCallState::new();
             loop {
                 // If the current TLS state is as we originally found it, then
@@ -935,6 +939,7 @@ pub(crate) mod tls {
         }
     }
 
+    #[cfg(feature = "async")]
     impl Drop for PreviousAsyncWasmCallState {
         fn drop(&mut self) {
             panic!("must be consumed with `restore`");
