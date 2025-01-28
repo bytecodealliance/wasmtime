@@ -442,7 +442,7 @@ impl LoadKind {
             Self::ScalarExtend(extend) | Self::Atomic(_, Some(extend)) => {
                 Self::operand_size_for_scalar(extend)
             }
-            Self::VectorExtend(vector) => Self::operand_size_for_vector(vector),
+            Self::VectorExtend(_) => OperandSize::S64,
             Self::Splat(kind) => Self::operand_size_for_splat(kind),
             Self::Operand(size)
             | Self::Atomic(size, None)
@@ -452,18 +452,6 @@ impl LoadKind {
 
     pub fn vector_lane(lane: u8, size: OperandSize) -> Self {
         Self::VectorLane(LaneSelector { lane, size })
-    }
-
-    fn operand_size_for_vector(vector: &VectorExtendKind) -> OperandSize {
-        match vector {
-            VectorExtendKind::V128Extend8x8S | VectorExtendKind::V128Extend8x8U => OperandSize::S8,
-            VectorExtendKind::V128Extend16x4S | VectorExtendKind::V128Extend16x4U => {
-                OperandSize::S16
-            }
-            VectorExtendKind::V128Extend32x2S | VectorExtendKind::V128Extend32x2U => {
-                OperandSize::S32
-            }
-        }
     }
 
     fn operand_size_for_scalar(extend_kind: &ExtendKind) -> OperandSize {
