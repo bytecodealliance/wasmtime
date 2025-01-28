@@ -101,7 +101,7 @@ fn my_function() -> NonNull<u8> {
 }
 ```
 
-**Repetetive Attributes**
+**Repetitive Attributes**
 
 Enabling a Cargo feature can add features to existing types which means it can
 lead to repetitive `#[cfg]` annotations such as:
