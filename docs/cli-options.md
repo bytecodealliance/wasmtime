@@ -167,7 +167,7 @@ table with the same name.
 For example, with a TOML file like this
 ```toml
 [optimize]
-opt_level = 0
+opt-level = 0
 ```
 the command
 ```sh
@@ -179,5 +179,3 @@ $ wasmtime compile --optimize opt-level=0
 ```
 assuming the TOML file is called `config.toml`. Of course you can put as many
 key-value pairs as you want in the TOML file.
-
-> Note: When specifying names in TOML, you must replaces dashes with underscores. In the example above, `opt-level` becomes `opt_level`.

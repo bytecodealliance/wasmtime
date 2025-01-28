@@ -43,7 +43,7 @@ fn init_file_per_thread_logger(prefix: &'static str) {
 
 wasmtime_option_group! {
     #[derive(PartialEq, Clone, Deserialize)]
-    #[serde(deny_unknown_fields)]
+    #[serde(rename_all = "kebab-case", deny_unknown_fields)]
     pub struct OptimizeOptions {
         /// Optimization level of generated code (0-2, s; default: 2)
         #[serde(default)]
@@ -202,7 +202,7 @@ wasmtime_option_group! {
 
 wasmtime_option_group! {
     #[derive(PartialEq, Clone, Deserialize)]
-    #[serde(deny_unknown_fields)]
+    #[serde(rename_all = "kebab-case", deny_unknown_fields)]
     pub struct CodegenOptions {
         /// Either `cranelift` or `winch`.
         ///
@@ -251,7 +251,7 @@ wasmtime_option_group! {
 
 wasmtime_option_group! {
     #[derive(PartialEq, Clone, Deserialize)]
-    #[serde(deny_unknown_fields)]
+    #[serde(rename_all = "kebab-case", deny_unknown_fields)]
     pub struct DebugOptions {
         /// Enable generation of DWARF debug information in compiled code.
         pub debug_info: Option<bool>,
@@ -272,7 +272,7 @@ wasmtime_option_group! {
 
 wasmtime_option_group! {
     #[derive(PartialEq, Clone, Deserialize)]
-    #[serde(deny_unknown_fields)]
+    #[serde(rename_all = "kebab-case", deny_unknown_fields)]
     pub struct WasmOptions {
         /// Enable canonicalization of all NaN values.
         pub nan_canonicalization: Option<bool>,
@@ -387,7 +387,7 @@ wasmtime_option_group! {
 
 wasmtime_option_group! {
     #[derive(PartialEq, Clone, Deserialize)]
-    #[serde(deny_unknown_fields)]
+    #[serde(rename_all = "kebab-case", deny_unknown_fields)]
     pub struct WasiOptions {
         /// Enable support for WASI CLI APIs, including filesystems, sockets, clocks, and random.
         pub cli: Option<bool>,
@@ -1047,7 +1047,7 @@ mod tests {
             let toml = format!(
                 r#"
                     [optimize]
-                    opt_level = {opt_value}
+                    opt-level = {opt_value}
                 "#,
             );
             let parsed_opt_level = toml::from_str::<CommonOptions>(&toml)
@@ -1071,7 +1071,7 @@ mod tests {
             let toml = format!(
                 r#"
                     [optimize]
-                    regalloc_algorithm = {regalloc_value}
+                    regalloc-algorithm = {regalloc_value}
                 "#,
             );
             let parsed_regalloc_algorithm = toml::from_str::<CommonOptions>(&toml)
