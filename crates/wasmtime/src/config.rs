@@ -5,7 +5,6 @@ use alloc::sync::Arc;
 use bitflags::Flags;
 use core::fmt;
 use core::str::FromStr;
-use serde_derive::{Deserialize, Serialize};
 #[cfg(any(feature = "cache", feature = "cranelift", feature = "winch"))]
 use std::path::Path;
 use wasmparser::WasmFeatures;
@@ -2607,7 +2606,7 @@ impl fmt::Debug for Config {
 ///
 /// This is used as an argument to the [`Config::strategy`] method.
 #[non_exhaustive]
-#[derive(PartialEq, Eq, Clone, Debug, Copy, Deserialize)]
+#[derive(PartialEq, Eq, Clone, Debug, Copy)]
 pub enum Strategy {
     /// An indicator that the compilation strategy should be automatically
     /// selected.
@@ -2677,7 +2676,7 @@ impl Strategy {
 ///       additional objects. Reference counts are larger than mark bits and
 ///       free lists are larger than bump pointers, for example.
 #[non_exhaustive]
-#[derive(PartialEq, Eq, Clone, Debug, Copy, Deserialize)]
+#[derive(PartialEq, Eq, Clone, Debug, Copy)]
 pub enum Collector {
     /// An indicator that the garbage collector should be automatically
     /// selected.
@@ -2777,7 +2776,7 @@ impl Collector {
 
 /// Possible optimization levels for the Cranelift codegen backend.
 #[non_exhaustive]
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum OptLevel {
     /// No optimizations performed, minimizes compilation time by disabling most
     /// optimizations.
@@ -2791,7 +2790,7 @@ pub enum OptLevel {
 
 /// Possible register allocator algorithms for the Cranelift codegen backend.
 #[non_exhaustive]
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum RegallocAlgorithm {
     /// Generates the fastest possible code, but may take longer.
     ///
@@ -2851,7 +2850,7 @@ pub enum WasmBacktraceDetails {
 }
 
 /// Describe the tri-state configuration of memory protection keys (MPK).
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Deserialize)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum MpkEnabled {
     /// Use MPK if supported by the current system; fall back to guard regions
     /// otherwise.
