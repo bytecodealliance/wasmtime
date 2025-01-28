@@ -37,24 +37,24 @@ float average(const float *array, size_t count)
 }
 ```
 
-Here is the same function compiled into Cranelift IR:
+Here is the same function compiled into Cranelift IR (with 64 bit pointers):
 
 ```
 test verifier
 
-function %average(i32, i32) -> f32 system_v {
+function %average(i64, i64) -> f32 system_v {
     ss0 = explicit_slot 8         ; Stack slot for `sum`.
 
-block1(v0: i32, v1: i32):
+block1(v0: i64, v1: i64):
     v2 = f64const 0x0.0
     stack_store v2, ss0
     brif v1, block2, block5                  ; Handle count == 0.
 
 block2:
-    v3 = iconst.i32 0
+    v3 = iconst.i64 0
     jump block3(v3)
 
-block3(v4: i32):
+block3(v4: i64):
     v5 = imul_imm v4, 4
     v6 = iadd v0, v5
     v7 = load.f32 v6              ; array[i]
