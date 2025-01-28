@@ -108,17 +108,7 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
         );
 
         (
-            Compiler {
-                types: module.types,
-                module,
-                code: Vec::new(),
-                nlocals: lower_sig.params.len() as u32,
-                free_locals: HashMap::new(),
-                traps: Vec::new(),
-                result,
-                fuel: INITIAL_FUEL,
-                emit_resource_call,
-            },
+            Compiler::new(module, result, lower_sig.params.len() as u32),
             lower_sig,
             lift_sig,
         )
@@ -132,18 +122,11 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             ty,
         ));
 
-        Compiler {
-            types: module.types,
-            module,
-            code: Vec::new(),
-            nlocals: sig.params.len() as u32,
-            free_locals: HashMap::new(),
-            traps: Vec::new(),
-            result,
-            fuel: INITIAL_FUEL,
-            emit_resource_call: false,
-        }
-        .compile_async_start_adapter(adapter, &sig, param_globals);
+        Compiler::new(module, result, sig.params.len() as u32).compile_async_start_adapter(
+            adapter,
+            &sig,
+            param_globals,
+        );
 
         result
     };
@@ -156,18 +139,11 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             ty,
         ));
 
-        Compiler {
-            types: module.types,
-            module,
-            code: Vec::new(),
-            nlocals: sig.params.len() as u32,
-            free_locals: HashMap::new(),
-            traps: Vec::new(),
-            result,
-            fuel: INITIAL_FUEL,
-            emit_resource_call: false,
-        }
-        .compile_async_return_adapter(adapter, &sig, result_globals);
+        Compiler::new(module, result, sig.params.len() as u32).compile_async_return_adapter(
+            adapter,
+            &sig,
+            result_globals,
+        );
 
         result
     };
@@ -378,7 +354,21 @@ struct Memory<'a> {
     offset: u32,
 }
 
-impl Compiler<'_, '_> {
+impl<'a, 'b> Compiler<'a, 'b> {
+    fn new(module: &'b mut Module<'a>, result: FunctionId, nlocals: u32) -> Self {
+        Self {
+            types: module.types,
+            module,
+            result,
+            code: Vec::new(),
+            nlocals,
+            free_locals: HashMap::new(),
+            traps: Vec::new(),
+            fuel: INITIAL_FUEL,
+            emit_resource_call: false,
+        }
+    }
+
     fn compile_async_to_async_adapter(
         mut self,
         adapter: &AdapterData,
@@ -1542,13 +1532,13 @@ impl Compiler<'_, '_> {
     // the number of code units in the destination). There is no return
     // value from the transcode function since the encoding should always
     // work on the first pass.
-    fn string_copy<'a>(
+    fn string_copy<'c>(
         &mut self,
         src: &WasmString<'_>,
         src_enc: FE,
-        dst_opts: &'a Options,
+        dst_opts: &'c Options,
         dst_enc: FE,
-    ) -> WasmString<'a> {
+    ) -> WasmString<'c> {
         assert!(dst_enc.width() >= src_enc.width());
         self.validate_string_length(src, dst_enc);
 
@@ -1637,12 +1627,12 @@ impl Compiler<'_, '_> {
     // and dst ptr/len and return how many code units were consumed on both
     // sides. The amount of code units consumed in the source dictates which
     // branches are taken in this conversion.
-    fn string_deflate_to_utf8<'a>(
+    fn string_deflate_to_utf8<'c>(
         &mut self,
         src: &WasmString<'_>,
         src_enc: FE,
-        dst_opts: &'a Options,
-    ) -> WasmString<'a> {
+        dst_opts: &'c Options,
+    ) -> WasmString<'c> {
         self.validate_string_length(src, src_enc);
 
         // Optimistically assume that the code unit length of the source is
@@ -1818,11 +1808,11 @@ impl Compiler<'_, '_> {
     // destination should always be big enough to hold the result of the
     // transcode and so the result of the host function is how many code
     // units were written to the destination.
-    fn string_utf8_to_utf16<'a>(
+    fn string_utf8_to_utf16<'c>(
         &mut self,
         src: &WasmString<'_>,
-        dst_opts: &'a Options,
-    ) -> WasmString<'a> {
+        dst_opts: &'c Options,
+    ) -> WasmString<'c> {
         self.validate_string_length(src, FE::Utf16);
         self.convert_src_len_to_dst(src.len.idx, src.opts.ptr(), dst_opts.ptr());
         let dst_len = self.local_tee_new_tmp(dst_opts.ptr());
@@ -1887,11 +1877,11 @@ impl Compiler<'_, '_> {
     // string. If the upper bit is set then utf16 was used and the
     // conversion is done. If the upper bit is not set then latin1 was used
     // and a downsizing needs to happen.
-    fn string_compact_utf16_to_compact<'a>(
+    fn string_compact_utf16_to_compact<'c>(
         &mut self,
         src: &WasmString<'_>,
-        dst_opts: &'a Options,
-    ) -> WasmString<'a> {
+        dst_opts: &'c Options,
+    ) -> WasmString<'c> {
         self.validate_string_length(src, FE::Utf16);
         self.convert_src_len_to_dst(src.len.idx, src.opts.ptr(), dst_opts.ptr());
         let dst_len = self.local_tee_new_tmp(dst_opts.ptr());
@@ -1961,12 +1951,12 @@ impl Compiler<'_, '_> {
     // failure a larger buffer is allocated for utf16 and then utf16 is
     // encoded in-place into the buffer. After either latin1 or utf16 the
     // buffer is then resized to fit the final string allocation.
-    fn string_to_compact<'a>(
+    fn string_to_compact<'c>(
         &mut self,
         src: &WasmString<'_>,
         src_enc: FE,
-        dst_opts: &'a Options,
-    ) -> WasmString<'a> {
+        dst_opts: &'c Options,
+    ) -> WasmString<'c> {
         self.validate_string_length(src, src_enc);
         self.convert_src_len_to_dst(src.len.idx, src.opts.ptr(), dst_opts.ptr());
         let dst_len = self.local_tee_new_tmp(dst_opts.ptr());
@@ -2737,13 +2727,13 @@ impl Compiler<'_, '_> {
         );
     }
 
-    fn convert_variant<'a>(
+    fn convert_variant<'c>(
         &mut self,
         src: &Source<'_>,
         src_info: &VariantInfo,
         dst: &Destination,
         dst_info: &VariantInfo,
-        src_cases: impl ExactSizeIterator<Item = VariantCase<'a>>,
+        src_cases: impl ExactSizeIterator<Item = VariantCase<'c>>,
     ) {
         // The outermost block is special since it has the result type of the
         // translation here. That will depend on the `dst`.
@@ -3035,7 +3025,7 @@ impl Compiler<'_, '_> {
         self.instruction(End);
     }
 
-    fn malloc<'a>(&mut self, opts: &'a Options, size: MallocSize, align: u32) -> Memory<'a> {
+    fn malloc<'c>(&mut self, opts: &'c Options, size: MallocSize, align: u32) -> Memory<'c> {
         let realloc = opts.realloc.unwrap();
         self.ptr_uconst(opts, 0);
         self.ptr_uconst(opts, 0);
@@ -3049,7 +3039,7 @@ impl Compiler<'_, '_> {
         self.memory_operand(opts, addr, align)
     }
 
-    fn memory_operand<'a>(&mut self, opts: &'a Options, addr: TempLocal, align: u32) -> Memory<'a> {
+    fn memory_operand<'c>(&mut self, opts: &'c Options, addr: TempLocal, align: u32) -> Memory<'c> {
         let ret = Memory {
             addr,
             offset: 0,
