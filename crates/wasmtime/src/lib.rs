@@ -286,7 +286,6 @@
 #![cfg_attr(
     any(
         not(feature = "async"),
-        not(feature = "cache"),
         not(feature = "gc"),
         not(feature = "gc-drc"),
         not(feature = "gc-null"),
