@@ -31,6 +31,7 @@ pub(crate) mod func;
 
 pub(crate) mod code;
 pub(crate) mod code_memory;
+#[cfg(feature = "debug-builtins")]
 pub(crate) mod debug;
 pub(crate) mod externals;
 pub(crate) mod gc;
