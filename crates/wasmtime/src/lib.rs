@@ -292,7 +292,6 @@
         not(feature = "gc-null"),
         not(feature = "cranelift"),
         not(feature = "pooling-allocator"),
-        not(feature = "coredump"),
         not(feature = "runtime"),
         not(feature = "component-model"),
         not(feature = "threads"),

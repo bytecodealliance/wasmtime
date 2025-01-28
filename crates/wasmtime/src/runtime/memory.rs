@@ -659,6 +659,7 @@ impl Memory {
     /// Even if the same underlying memory definition is added to the
     /// `StoreData` multiple times and becomes multiple `wasmtime::Memory`s,
     /// this hash key will be consistent across all of these memories.
+    #[cfg(feature = "coredump")]
     pub(crate) fn hash_key(&self, store: &StoreOpaque) -> impl core::hash::Hash + Eq + use<> {
         store[self.0].definition.as_ptr() as usize
     }

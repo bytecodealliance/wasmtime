@@ -605,6 +605,7 @@ impl Instance {
     /// Returns both exported and non-exported globals.
     ///
     /// Gives access to the full globals space.
+    #[cfg(feature = "coredump")]
     pub(crate) fn all_globals<'a>(
         &'a self,
         store: &'a mut StoreOpaque,
@@ -625,6 +626,7 @@ impl Instance {
     /// Returns both exported and non-exported memories.
     ///
     /// Gives access to the full memories space.
+    #[cfg(feature = "coredump")]
     pub(crate) fn all_memories<'a>(
         &'a self,
         store: &'a mut StoreOpaque,
