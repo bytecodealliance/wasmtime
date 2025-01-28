@@ -114,7 +114,7 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
         )
     }
 
-    let start_adapter = |module: &mut Module, param_globals| {
+    let async_start_adapter = |module: &mut Module, param_globals| {
         let sig = module.types.async_start_signature(&adapter.lift);
         let ty = module.core_types.function(&sig.params, &sig.results);
         let result = module.funcs.push(Function::new(
@@ -131,7 +131,7 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
         result
     };
 
-    let return_adapter = |module: &mut Module, result_globals| {
+    let async_return_adapter = |module: &mut Module, result_globals| {
         let sig = module.types.async_return_signature(&adapter.lift);
         let ty = module.core_types.function(&sig.params, &sig.results);
         let result = module.funcs.push(Function::new(
@@ -150,12 +150,29 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
 
     match (adapter.lower.options.async_, adapter.lift.options.async_) {
         (false, false) => {
+            // We can adapt sync->sync case with only minimal use of intrinsics,
+            // e.g. resource enter and exit calls as needed.
             let (compiler, lower_sig, lift_sig) = compiler(module, adapter);
             compiler.compile_sync_to_sync_adapter(adapter, &lower_sig, &lift_sig)
         }
         (true, true) => {
-            let start = start_adapter(module, None);
-            let return_ = return_adapter(module, None);
+            // In the async->async case, we must compile a couple of helper functions:
+            //
+            // - `async-start`: copies the parameters from the caller to the callee
+            // - `async-return`: copies the result from the callee to the caller
+            //
+            // Unlike synchronous calls, the above operations are asynchronous
+            // and subject to backpressure.  If the callee is not yet ready to
+            // handle a new call, the `async-start` function will not be called
+            // immediately.  Instead, control will return to the caller,
+            // allowing it to do other work while waiting for this call to make
+            // progress.  Once the callee indicates it is ready, `async-start`
+            // will be called, and sometime later (possibly after various task
+            // switch events), when the callee has produced a result, it will
+            // call `async-return` via the `task.return` intrinsic, at which
+            // point a `STATUS_RETURNED` event will be delivered to the caller.
+            let start = async_start_adapter(module, None);
+            let return_ = async_return_adapter(module, None);
             let (compiler, _, lift_sig) = compiler(module, adapter);
             compiler.compile_async_to_async_adapter(
                 adapter,
@@ -165,6 +182,18 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             );
         }
         (false, true) => {
+            // Like the async->async case above, for the sync->async case we
+            // also need `async-start` and `async-return` helper functions to
+            // allow the callee to asynchronously "pull" the parameters and
+            // "push" the results when it is ready.
+            //
+            // However, since the caller is using the synchronous ABI, the
+            // parameters may have been passed via the stack rather than linear
+            // memory.  In that case, we use global variables to store them such
+            // that they can be retrieved by the `async-start` function.
+            // Similarly, the `async-return` function may write its result to
+            // global variables from which the adapter function can read and
+            // return them via the stack to the caller.
             let lower_sig = module.types.signature(&adapter.lower, Context::Lower);
             let param_globals = if lower_sig.params_indirect {
                 None
@@ -196,8 +225,8 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
                 )
             };
 
-            let start = start_adapter(module, param_globals.as_deref());
-            let return_ = return_adapter(module, result_globals.as_deref());
+            let start = async_start_adapter(module, param_globals.as_deref());
+            let return_ = async_return_adapter(module, result_globals.as_deref());
             let (compiler, _, lift_sig) = compiler(module, adapter);
             compiler.compile_sync_to_async_adapter(
                 adapter,
@@ -209,9 +238,28 @@ pub(super) fn compile(module: &mut Module<'_>, adapter: &AdapterData) {
             );
         }
         (true, false) => {
+            // As with the async->async and sync->async cases above, for the
+            // async->sync case we use `async-start` and `async-return` helper
+            // functions.  Here, those functions allow the host to enforce
+            // backpressure in the case where the callee instance already has
+            // another synchronous call in progress, in which case we can't
+            // start a new one until the current one (and any others already
+            // waiting in line behind it) has completed.
+            //
+            // In the case of backpressure, we'll return control to the caller
+            // immediately so it can do other work.  Later, once the callee is
+            // ready, the host will call the `async-start` function to retrieve
+            // the parameters and pass them to the callee.  At that point, the
+            // callee may block on a host call, at which point the host will
+            // suspend the fiber it is running on and allow the caller (or any
+            // other ready instance) to run concurrently with the blocked
+            // callee.  Once the callee finally returns, the host will call the
+            // `async-return` function to write the result to the caller's
+            // linear memory and deliver a `STATUS_RETURNED` event to the
+            // caller.
             let lift_sig = module.types.signature(&adapter.lift, Context::Lift);
-            let start = start_adapter(module, None);
-            let return_ = return_adapter(module, None);
+            let start = async_start_adapter(module, None);
+            let return_ = async_return_adapter(module, None);
             let (compiler, ..) = compiler(module, adapter);
             compiler.compile_async_to_sync_adapter(
                 adapter,
