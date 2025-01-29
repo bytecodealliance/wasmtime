@@ -425,7 +425,6 @@ impl WastTest {
                 "misc_testsuite/simd/almost-extmul.wast",
                 "misc_testsuite/simd/canonicalize-nan.wast",
                 "misc_testsuite/simd/cvt-from-uint.wast",
-                "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
                 "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
                 "spec_testsuite/simd_bit_shift.wast",
                 "spec_testsuite/simd_boolean.wast",
@@ -473,6 +472,7 @@ impl WastTest {
             #[cfg(target_arch = "x86_64")]
             if !(std::is_x86_feature_detected!("avx") && std::is_x86_feature_detected!("avx2")) {
                 let unsupported = [
+                    "misc_testsuite/simd/issue6725-no-egraph-panic.wast",
                     "misc_testsuite/simd/replace-lane-preserve.wast",
                     "misc_testsuite/simd/spillslot-size-fuzzbug.wast",
                     "misc_testsuite/winch/_simd_lane.wast",
