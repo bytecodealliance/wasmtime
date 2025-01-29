@@ -1,6 +1,8 @@
 use crate::prelude::*;
 #[cfg(has_host_compiler_backend)]
-use crate::{mem, ptr::NonNull, runtime::vm::VMContext};
+use crate::runtime::vm::VMContext;
+#[cfg(has_host_compiler_backend)]
+use core::{mem, ptr::NonNull};
 
 #[cfg(has_host_compiler_backend)]
 pub use crate::runtime::vm::sys::capi::{self, wasmtime_longjmp};
