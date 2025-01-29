@@ -1894,7 +1894,22 @@ impl Masm for MacroAssembler {
             OperandSize::S128 => bail!(CodeGenError::unexpected_operand_size()),
         };
 
-        self.asm.xmm_rmi_rvex(op, src, dst.to_reg(), dst);
+        self.asm.xmm_rmi_rvex(op, lhs, rhs, dst);
+        Ok(())
+    }
+
+    fn v128_sub(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpsubb,
+            OperandSize::S16 => AvxOpcode::Vpsubw,
+            OperandSize::S32 => AvxOpcode::Vpsubd,
+            OperandSize::S64 => AvxOpcode::Vpsubq,
+            OperandSize::S128 => bail!(CodeGenError::unexpected_operand_size()),
+        };
+
+        self.asm.xmm_rmi_rvex(op, lhs, rhs, dst);
         Ok(())
     }
 }

@@ -1649,4 +1649,8 @@ pub(crate) trait MacroAssembler {
     /// Perform a vector add between `src` and `dst`, placing the result in `dst`, where each lane
     /// is interpreted to be `size` long.
     fn v128_add(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
+
+    /// Perform a vector sub between `src` and `dst`, placing the result in `dst`, where each lane
+    /// is interpreted to be `size` long.
+    fn v128_sub(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
 }

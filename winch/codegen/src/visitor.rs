@@ -422,6 +422,10 @@ macro_rules! def_unsupported {
     (emit I16x8Add $($rest:tt)*) => {};
     (emit I32x4Add $($rest:tt)*) => {};
     (emit I64x2Add $($rest:tt)*) => {};
+    (emit I8x16Sub $($rest:tt)*) => {};
+    (emit I16x8Sub $($rest:tt)*) => {};
+    (emit I32x4Sub $($rest:tt)*) => {};
+    (emit I64x2Sub $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -3555,6 +3559,37 @@ where
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
     }
+
+    fn visit_i8x16_sub(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, size| {
+                masm.v128_sub(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_i16x8_sub(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
+                masm.v128_sub(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_i32x4_sub(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, size| {
+                masm.v128_sub(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_i64x2_sub(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S64, |masm, dst, src, size| {
+                masm.v128_sub(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);
