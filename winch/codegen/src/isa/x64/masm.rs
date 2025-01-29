@@ -2198,6 +2198,13 @@ impl Masm for MacroAssembler {
 
         Ok(())
     }
+
+    fn v128_neg(&mut self, op: WritableReg, size: OperandSize) -> Result<()> {
+        let tmp = regs::scratch_xmm();
+        self.v128_xor(tmp, tmp, writable!(tmp))?;
+        self.v128_sub(tmp, op.to_reg(), op, size, HandleOverflowKind::None)?;
+        Ok(())
+    }
 }
 
 impl MacroAssembler {

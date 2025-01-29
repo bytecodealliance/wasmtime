@@ -1817,4 +1817,7 @@ pub(crate) trait MacroAssembler {
         context: &mut CodeGenContext<Emission>,
         lane_width: OperandSize,
     ) -> Result<()>;
+
+    /// Vectorized negate of the content of `op`, with lanes of size `size`.
+    fn v128_neg(&mut self, op: WritableReg, size: OperandSize) -> Result<()>;
 }

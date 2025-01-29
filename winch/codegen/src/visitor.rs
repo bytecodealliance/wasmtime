@@ -460,6 +460,10 @@ macro_rules! def_unsupported {
     (emit I16x8SubSatS $($rest:tt)*) => {};
     (emit I8x16SubSatU $($rest:tt)*) => {};
     (emit I16x8SubSatU $($rest:tt)*) => {};
+    (emit I8x16Neg $($rest:tt)*) => {};
+    (emit I16x8Neg $($rest:tt)*) => {};
+    (emit I32x4Neg $($rest:tt)*) => {};
+    (emit I64x2Neg $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -3906,6 +3910,34 @@ where
                 )?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
+    }
+
+    fn visit_i8x16_neg(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, op| {
+            masm.v128_neg(writable!(op), OperandSize::S8)?;
+            Ok(TypedReg::new(WasmValType::V128, op))
+        })
+    }
+
+    fn visit_i16x8_neg(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, op| {
+            masm.v128_neg(writable!(op), OperandSize::S16)?;
+            Ok(TypedReg::new(WasmValType::V128, op))
+        })
+    }
+
+    fn visit_i32x4_neg(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, op| {
+            masm.v128_neg(writable!(op), OperandSize::S32)?;
+            Ok(TypedReg::new(WasmValType::V128, op))
+        })
+    }
+
+    fn visit_i64x2_neg(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, op| {
+            masm.v128_neg(writable!(op), OperandSize::S64)?;
+            Ok(TypedReg::new(WasmValType::V128, op))
+        })
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);
