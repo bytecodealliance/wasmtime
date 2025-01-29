@@ -1915,18 +1915,38 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn v128_sub(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+    fn v128_sub(
+        &mut self,
+        lhs: Reg,
+        rhs: Reg,
+        dst: WritableReg,
+        size: OperandSize,
+        handle_overflow_kind: HandleOverflowKind,
+    ) -> Result<()> {
         self.ensure_has_avx()?;
 
-        let op = match size {
-            OperandSize::S8 => AvxOpcode::Vpsubb,
-            OperandSize::S16 => AvxOpcode::Vpsubw,
-            OperandSize::S32 => AvxOpcode::Vpsubd,
-            OperandSize::S64 => AvxOpcode::Vpsubq,
-            OperandSize::S128 => bail!(CodeGenError::unexpected_operand_size()),
+        let op = match handle_overflow_kind {
+            HandleOverflowKind::None => match size {
+                OperandSize::S8 => AvxOpcode::Vpsubb,
+                OperandSize::S16 => AvxOpcode::Vpsubw,
+                OperandSize::S32 => AvxOpcode::Vpsubd,
+                OperandSize::S64 => AvxOpcode::Vpsubq,
+                OperandSize::S128 => bail!(CodeGenError::unexpected_operand_size()),
+            },
+            HandleOverflowKind::SignedSaturating => match size {
+                OperandSize::S8 => AvxOpcode::Vpsubsb,
+                OperandSize::S16 => AvxOpcode::Vpsubsw,
+                _ => bail!(CodeGenError::unexpected_operand_size()),
+            },
+            HandleOverflowKind::UnsignedSaturating => match size {
+                OperandSize::S8 => AvxOpcode::Vpsubusb,
+                OperandSize::S16 => AvxOpcode::Vpsubusw,
+                _ => bail!(CodeGenError::unexpected_operand_size()),
+            },
         };
 
         self.asm.xmm_rmi_rvex(op, lhs, rhs, dst);
+
         Ok(())
     }
 

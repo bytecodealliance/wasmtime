@@ -430,6 +430,10 @@ macro_rules! def_unsupported {
     (emit I16x8AddSatS $($rest:tt)*) => {};
     (emit I8x16AddSatU $($rest:tt)*) => {};
     (emit I16x8AddSatU $($rest:tt)*) => {};
+    (emit I8x16SubSatS $($rest:tt)*) => {};
+    (emit I16x8SubSatS $($rest:tt)*) => {};
+    (emit I8x16SubSatU $($rest:tt)*) => {};
+    (emit I16x8SubSatU $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -3567,7 +3571,7 @@ where
     fn visit_i8x16_sub(&mut self) -> Self::Output {
         self.context
             .binop(self.masm, OperandSize::S8, |masm, dst, src, size| {
-                masm.v128_sub(dst, src, writable!(dst), size)?;
+                masm.v128_sub(dst, src, writable!(dst), size, HandleOverflowKind::None)?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
     }
@@ -3575,7 +3579,7 @@ where
     fn visit_i16x8_sub(&mut self) -> Self::Output {
         self.context
             .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
-                masm.v128_sub(dst, src, writable!(dst), size)?;
+                masm.v128_sub(dst, src, writable!(dst), size, HandleOverflowKind::None)?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
     }
@@ -3583,7 +3587,7 @@ where
     fn visit_i32x4_sub(&mut self) -> Self::Output {
         self.context
             .binop(self.masm, OperandSize::S32, |masm, dst, src, size| {
-                masm.v128_sub(dst, src, writable!(dst), size)?;
+                masm.v128_sub(dst, src, writable!(dst), size, HandleOverflowKind::None)?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
     }
@@ -3591,7 +3595,7 @@ where
     fn visit_i64x2_sub(&mut self) -> Self::Output {
         self.context
             .binop(self.masm, OperandSize::S64, |masm, dst, src, size| {
-                masm.v128_sub(dst, src, writable!(dst), size)?;
+                masm.v128_sub(dst, src, writable!(dst), size, HandleOverflowKind::None)?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
     }
@@ -3666,6 +3670,62 @@ where
         self.context
             .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
                 masm.v128_add(
+                    dst,
+                    src,
+                    writable!(dst),
+                    size,
+                    HandleOverflowKind::UnsignedSaturating,
+                )?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_i8x16_sub_sat_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, size| {
+                masm.v128_sub(
+                    dst,
+                    src,
+                    writable!(dst),
+                    size,
+                    HandleOverflowKind::SignedSaturating,
+                )?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_i16x8_sub_sat_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
+                masm.v128_sub(
+                    dst,
+                    src,
+                    writable!(dst),
+                    size,
+                    HandleOverflowKind::SignedSaturating,
+                )?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_i8x16_sub_sat_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, size| {
+                masm.v128_sub(
+                    dst,
+                    src,
+                    writable!(dst),
+                    size,
+                    HandleOverflowKind::UnsignedSaturating,
+                )?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_i16x8_sub_sat_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
+                masm.v128_sub(
                     dst,
                     src,
                     writable!(dst),

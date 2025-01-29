@@ -1669,7 +1669,14 @@ pub(crate) trait MacroAssembler {
 
     /// Perform a vector sub between `lhs` and `rhs`, placing the result in `dst`, where each lane
     /// is interpreted to be `size` long.
-    fn v128_sub(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
+    fn v128_sub(
+        &mut self,
+        lhs: Reg,
+        rhs: Reg,
+        dst: WritableReg,
+        size: OperandSize,
+        handle_overflow: HandleOverflowKind,
+    ) -> Result<()>;
 
     /// Perform a vector lane-wise mul between `lhs` and `rhs`, placing the result in `dst`, where each lane
     /// is interpreted to be `size` long.
