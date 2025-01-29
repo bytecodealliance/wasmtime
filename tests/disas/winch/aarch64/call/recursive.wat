@@ -29,8 +29,8 @@
 ;;       mov     x29, sp
 ;;       mov     x28, sp
 ;;       mov     x9, x0
-;;       sub     sp, sp, #0x18
-;;       mov     x28, sp
+;;       sub     x28, x28, #0x18
+;;       mov     sp, x28
 ;;       stur    x0, [x28, #0x10]
 ;;       stur    x1, [x28, #8]
 ;;       stur    w2, [x28, #4]
@@ -41,44 +41,40 @@
 ;;       b.eq    #0x44
 ;;       b       #0x3c
 ;;   3c: ldur    w0, [x28, #4]
-;;       b       #0xd4
+;;       b       #0xc4
 ;;   44: ldur    w0, [x28, #4]
 ;;       sub     w0, w0, #1
-;;       sub     sp, sp, #4
-;;       mov     x28, sp
+;;       sub     x28, x28, #4
+;;       mov     sp, x28
 ;;       stur    w0, [x28]
-;;       sub     sp, sp, #4
-;;       mov     x28, sp
+;;       sub     x28, x28, #4
+;;       mov     sp, x28
 ;;       mov     x0, x9
 ;;       mov     x1, x9
 ;;       ldur    w2, [x28, #4]
 ;;       bl      #0
-;;   70: add     sp, sp, #4
-;;       mov     x28, sp
-;;       add     sp, sp, #4
-;;       mov     x28, sp
+;;   70: add     x28, x28, #4
+;;       add     x28, x28, #4
 ;;       ldur    x9, [x28, #0x10]
 ;;       ldur    w1, [x28, #4]
 ;;       sub     w1, w1, #2
-;;       sub     sp, sp, #4
-;;       mov     x28, sp
+;;       sub     x28, x28, #4
+;;       mov     sp, x28
 ;;       stur    w0, [x28]
-;;       sub     sp, sp, #4
-;;       mov     x28, sp
+;;       sub     x28, x28, #4
+;;       mov     sp, x28
 ;;       stur    w1, [x28]
 ;;       mov     x0, x9
 ;;       mov     x1, x9
 ;;       ldur    w2, [x28]
 ;;       bl      #0
-;;   b4: add     sp, sp, #4
-;;       mov     x28, sp
+;;   ac: add     x28, x28, #4
 ;;       ldur    x9, [x28, #0x14]
 ;;       ldur    w1, [x28]
-;;       add     sp, sp, #4
-;;       mov     x28, sp
+;;       add     x28, x28, #4
 ;;       add     w1, w1, w0, uxtx
 ;;       mov     w0, w1
-;;       add     sp, sp, #0x18
-;;       mov     x28, sp
+;;       add     x28, x28, #0x18
+;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

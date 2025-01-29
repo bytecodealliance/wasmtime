@@ -54,8 +54,8 @@
 ;;       mov     x29, sp
 ;;       mov     x28, sp
 ;;       mov     x9, x0
-;;       sub     sp, sp, #0x28
-;;       mov     x28, sp
+;;       sub     x28, x28, #0x28
+;;       mov     sp, x28
 ;;       stur    x0, [x28, #0x20]
 ;;       stur    x1, [x28, #0x18]
 ;;       stur    w2, [x28, #0x14]
@@ -65,7 +65,7 @@
 ;;       stur    w6, [x28, #4]
 ;;       stur    w7, [x28]
 ;;       ldur    w0, [x28, #0x14]
-;;       add     sp, sp, #0x28
-;;       mov     x28, sp
+;;       add     x28, x28, #0x28
+;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

@@ -743,8 +743,8 @@
 ;;       mov     x29, sp
 ;;       mov     x28, sp
 ;;       mov     x9, x0
-;;       sub     sp, sp, #0x18
-;;       mov     x28, sp
+;;       sub     x28, x28, #0x18
+;;       mov     sp, x28
 ;;       stur    x0, [x28, #0x10]
 ;;       stur    x1, [x28, #8]
 ;;       stur    w2, [x28, #4]
@@ -25378,7 +25378,7 @@
 ;;       b       #0x180fc
 ;; 180f4: mov     x16, #1
 ;;       mov     w0, w16
-;;       add     sp, sp, #0x18
-;;       mov     x28, sp
+;;       add     x28, x28, #0x18
+;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

@@ -13,8 +13,8 @@
 ;;       mov     x29, sp
 ;;       mov     x28, sp
 ;;       mov     x9, x0
-;;       sub     sp, sp, #0x10
-;;       mov     x28, sp
+;;       sub     x28, x28, #0x10
+;;       mov     sp, x28
 ;;       stur    x0, [x28, #8]
 ;;       stur    x1, [x28]
 ;;       mov     x16, #0x999a
@@ -29,7 +29,7 @@
 ;;       fmov    d1, x16
 ;;       fmin    d1, d1, d0
 ;;       fmov    d0, d1
-;;       add     sp, sp, #0x10
-;;       mov     x28, sp
+;;       add     x28, x28, #0x10
+;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

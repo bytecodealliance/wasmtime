@@ -14,8 +14,8 @@
 ;;       mov     x29, sp
 ;;       mov     x28, sp
 ;;       mov     x9, x0
-;;       sub     sp, sp, #0x10
-;;       mov     x28, sp
+;;       sub     x28, x28, #0x10
+;;       mov     sp, x28
 ;;       stur    x0, [x28, #8]
 ;;       stur    x1, [x28]
 ;;       mov     x16, #-1
@@ -28,8 +28,8 @@
 ;;       b.vs    #0x5c
 ;;   40: sdiv    x1, x1, x0
 ;;       mov     x0, x1
-;;       add     sp, sp, #0x10
-;;       mov     x28, sp
+;;       add     x28, x28, #0x10
+;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;   58: .byte   0x1f, 0xc1, 0x00, 0x00
