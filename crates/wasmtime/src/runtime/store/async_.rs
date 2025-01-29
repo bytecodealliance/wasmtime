@@ -165,6 +165,7 @@ impl<T> Store<T> {
     /// See documentation on
     /// [`Config::epoch_interruption()`](crate::Config::epoch_interruption)
     /// for an introduction to epoch-based interruption.
+    #[cfg(target_has_atomic = "64")]
     pub fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
         self.inner.epoch_deadline_async_yield_and_update(delta);
     }
@@ -189,12 +190,14 @@ impl<'a, T> StoreContextMut<'a, T> {
     ///
     /// For more information see
     /// [`Store::epoch_deadline_async_yield_and_update`].
+    #[cfg(target_has_atomic = "64")]
     pub fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
         self.0.epoch_deadline_async_yield_and_update(delta);
     }
 }
 
 impl<T> StoreInner<T> {
+    #[cfg(target_has_atomic = "64")]
     fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
         assert!(
             self.async_support(),
@@ -223,7 +226,7 @@ impl StoreOpaque {
 
         // Take the GC roots out of `self` so we can borrow it mutably but still
         // call mutable methods on `self`.
-        let mut roots = std::mem::take(&mut self.gc_roots_list);
+        let mut roots = core::mem::take(&mut self.gc_roots_list);
 
         self.trace_roots_async(&mut roots).await;
         self.unwrap_gc_store_mut()
