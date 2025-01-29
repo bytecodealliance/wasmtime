@@ -2015,7 +2015,7 @@ impl MacroAssembler {
     fn ensure_has_avx512vl(&self) -> Result<()> {
         anyhow::ensure!(
             self.flags.has_avx512vl(),
-            CodeGenError::UnimplementedForNoAvx2
+            CodeGenError::UnimplementedForNoAvx512VL
         );
         Ok(())
     }
@@ -2023,7 +2023,7 @@ impl MacroAssembler {
     fn ensure_has_avx512dq(&self) -> Result<()> {
         anyhow::ensure!(
             self.flags.has_avx512dq(),
-            CodeGenError::UnimplementedForNoAvx2
+            CodeGenError::UnimplementedForNoAvx512DQ
         );
         Ok(())
     }
