@@ -7,10 +7,7 @@ use super::{
 use anyhow::{anyhow, bail, Result};
 
 use crate::masm::{
-    DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I, IntCmpKind, LaneSelector,
-    LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind,
-    RmwOp, RoundingMode, ShiftKind, SplatKind, StoreKind, TrapCode, TruncKind, VectorCompareKind,
-    VectorEqualityKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
+    DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, HandleOverflowKind, Imm as I, IntCmpKind, LaneSelector, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, ShiftKind, SplatKind, StoreKind, TrapCode, TruncKind, VectorCompareKind, VectorEqualityKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
@@ -1883,18 +1880,38 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn v128_add(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+    fn v128_add(
+        &mut self,
+        lhs: Reg,
+        rhs: Reg,
+        dst: WritableReg,
+        size: OperandSize,
+        handle_overflow_kind: HandleOverflowKind,
+    ) -> Result<()> {
         self.ensure_has_avx()?;
 
-        let op = match size {
-            OperandSize::S8 => AvxOpcode::Vpaddb,
-            OperandSize::S16 => AvxOpcode::Vpaddw,
-            OperandSize::S32 => AvxOpcode::Vpaddd,
-            OperandSize::S64 => AvxOpcode::Vpaddq,
-            OperandSize::S128 => bail!(CodeGenError::unexpected_operand_size()),
+        let op = match handle_overflow_kind {
+            HandleOverflowKind::None => match size {
+                OperandSize::S8 => AvxOpcode::Vpaddb,
+                OperandSize::S16 => AvxOpcode::Vpaddw,
+                OperandSize::S32 => AvxOpcode::Vpaddd,
+                OperandSize::S64 => AvxOpcode::Vpaddq,
+                OperandSize::S128 => bail!(CodeGenError::unexpected_operand_size()),
+            },
+            HandleOverflowKind::SignedSaturating => match size {
+                OperandSize::S8 => AvxOpcode::Vpaddsb,
+                OperandSize::S16 => AvxOpcode::Vpaddsw,
+                _ => bail!(CodeGenError::unexpected_operand_size()),
+            },
+            HandleOverflowKind::UnsignedSaturating => match size {
+                OperandSize::S8 => AvxOpcode::Vpaddusb,
+                OperandSize::S16 => AvxOpcode::Vpaddusw,
+                _ => bail!(CodeGenError::unexpected_operand_size()),
+            },
         };
 
         self.asm.xmm_rmi_rvex(op, lhs, rhs, dst);
+
         Ok(())
     }
 

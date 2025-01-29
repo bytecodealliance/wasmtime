@@ -225,6 +225,16 @@ pub(crate) enum Extend<T: ExtendType> {
     __Kind(T),
 }
 
+/// How to handle overflow.
+pub enum HandleOverflowKind {
+    /// Do nothing.
+    None,
+    /// Perform signed saturation.
+    SignedSaturating,
+    /// Perform unsigned saturation.
+    UnsignedSaturating,
+}
+
 impl From<Extend<Zero>> for ExtendKind {
     fn from(value: Extend<Zero>) -> Self {
         ExtendKind::Unsigned(value)
@@ -1648,7 +1658,14 @@ pub(crate) trait MacroAssembler {
 
     /// Perform a vector add between `lsh` and `rhs`, placing the result in `dst`, where each lane
     /// is interpreted to be `size` long.
-    fn v128_add(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
+    fn v128_add(
+        &mut self,
+        lhs: Reg,
+        rhs: Reg,
+        dst: WritableReg,
+        size: OperandSize,
+        handle_overflow: HandleOverflowKind,
+    ) -> Result<()>;
 
     /// Perform a vector sub between `lhs` and `rhs`, placing the result in `dst`, where each lane
     /// is interpreted to be `size` long.

@@ -1108,6 +1108,7 @@ impl Masm for MacroAssembler {
         _rhs: Reg,
         _dst: WritableReg,
         _size: OperandSize,
+        _handle_overflow: HandleOverflowKind,
     ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }

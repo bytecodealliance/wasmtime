@@ -10,10 +10,7 @@ use crate::codegen::{
     FnCall,
 };
 use crate::masm::{
-    DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler,
-    MemMoveDirection, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp,
-    RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, StoreKind, TruncKind,
-    V128LoadExtendKind, VectorCompareKind, VectorEqualityKind, Zero,
+    DivKind, Extend, ExtractLaneKind, FloatCmpKind, HandleOverflowKind, IntCmpKind, LoadKind, MacroAssembler, MemMoveDirection, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, StoreKind, TruncKind, V128LoadExtendKind, VectorCompareKind, VectorEqualityKind, Zero
 };
 
 use crate::reg::{writable, Reg};
@@ -429,6 +426,10 @@ macro_rules! def_unsupported {
     (emit I16x8Mul $($rest:tt)*) => {};
     (emit I32x4Mul $($rest:tt)*) => {};
     (emit I64x2Mul $($rest:tt)*) => {};
+    (emit I8x16AddSatS $($rest:tt)*) => {};
+    (emit I16x8AddSatS $($rest:tt)*) => {};
+    (emit I8x16AddSatU $($rest:tt)*) => {};
+    (emit I16x8AddSatU $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -3534,7 +3535,7 @@ where
     fn visit_i8x16_add(&mut self) -> Self::Output {
         self.context
             .binop(self.masm, OperandSize::S8, |masm, dst, src, size| {
-                masm.v128_add(dst, src, writable!(dst), size)?;
+                masm.v128_add(dst, src, writable!(dst), size, HandleOverflowKind::None)?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
     }
@@ -3542,7 +3543,7 @@ where
     fn visit_i16x8_add(&mut self) -> Self::Output {
         self.context
             .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
-                masm.v128_add(dst, src, writable!(dst), size)?;
+                masm.v128_add(dst, src, writable!(dst), size, HandleOverflowKind::None)?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
     }
@@ -3550,7 +3551,7 @@ where
     fn visit_i32x4_add(&mut self) -> Self::Output {
         self.context
             .binop(self.masm, OperandSize::S32, |masm, dst, src, size| {
-                masm.v128_add(dst, src, writable!(dst), size)?;
+                masm.v128_add(dst, src, writable!(dst), size, HandleOverflowKind::None)?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
     }
@@ -3558,7 +3559,7 @@ where
     fn visit_i64x2_add(&mut self) -> Self::Output {
         self.context
             .binop(self.masm, OperandSize::S64, |masm, dst, src, size| {
-                masm.v128_add(dst, src, writable!(dst), size)?;
+                masm.v128_add(dst, src, writable!(dst), size, HandleOverflowKind::None)?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
     }
@@ -3615,6 +3616,62 @@ where
         self.context
             .binop(self.masm, OperandSize::S64, |masm, dst, src, size| {
                 masm.v128_mul(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_i8x16_add_sat_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, size| {
+                masm.v128_add(
+                    dst,
+                    src,
+                    writable!(dst),
+                    size,
+                    HandleOverflowKind::SignedSaturating,
+                )?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_i16x8_add_sat_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
+                masm.v128_add(
+                    dst,
+                    src,
+                    writable!(dst),
+                    size,
+                    HandleOverflowKind::SignedSaturating,
+                )?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_i8x16_add_sat_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, size| {
+                masm.v128_add(
+                    dst,
+                    src,
+                    writable!(dst),
+                    size,
+                    HandleOverflowKind::UnsignedSaturating,
+                )?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_i16x8_add_sat_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
+                masm.v128_add(
+                    dst,
+                    src,
+                    writable!(dst),
+                    size,
+                    HandleOverflowKind::UnsignedSaturating,
+                )?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
     }
