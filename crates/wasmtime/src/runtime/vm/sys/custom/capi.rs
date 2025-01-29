@@ -116,6 +116,7 @@ unsafe extern "C" {
     ///
     /// Returns false if `wasmtime_longjmp` was used to return to this function.
     /// Returns true if `wasmtime_longjmp` was not called and `callback` returned.
+    #[cfg(has_host_compiler_backend)]
     pub fn wasmtime_setjmp(
         jmp_buf: *mut *const u8,
         callback: extern "C" fn(*mut u8, *mut u8) -> bool,
@@ -133,6 +134,7 @@ unsafe extern "C" {
     ///
     /// This function may be invoked from the `wasmtime_trap_handler_t`
     /// configured by `wasmtime_init_traps`.
+    #[cfg(has_host_compiler_backend)]
     pub fn wasmtime_longjmp(jmp_buf: *const u8) -> !;
 
     /// Initializes trap-handling logic for this platform.

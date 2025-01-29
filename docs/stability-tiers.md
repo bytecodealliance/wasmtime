@@ -94,12 +94,15 @@ For explanations of what each tier means see below.
 | Target               | `armv7-unknown-linux-gnueabihf`   | full-time maintainer |
 | Target               | `i686-pc-windows-msvc`            | CI testing, full-time maintainer |
 | Target               | `i686-unknown-linux-gnu`          | full-time maintainer |
+| Target               | `powerpc64le-unknown-linux-gnu`   | CI testing, full-time maintainer |
+| Target               | `riscv32imac-unknown-none-elf`[^5]| CI testing, full-time maintainer |
 | Target               | `riscv64gc-unknown-linux-gnu`     | full-time maintainer        |
 | Target               | `wasm32-wasip1` [^3]              | Supported but not tested    |
 | Target               | `x86_64-linux-android`            | CI testing, full-time maintainer |
 | Target               | `x86_64-unknown-freebsd`          | CI testing, full-time maintainer |
 | Target               | `x86_64-unknown-illumos`          | CI testing, full-time maintainer |
 | Target               | `x86_64-unknown-linux-musl` [^4]  | CI testing, full-time maintainer |
+| Target               | `x86_64-unknown-none` [^5]        | CI testing, full-time maintainer |
 | Compiler Backend     | Winch on x86\_64                  | WebAssembly proposals (`simd`, `relaxed-simd`, `tail-call`, `reference-types`, `threads`)     |
 | Compiler Backend     | Winch on aarch64                  | Complete implementation     |
 | Execution Backend    | Pulley                            | fuzzing                     |
@@ -138,6 +141,12 @@ Wasmtime-compiled-to-wasm can itself compile wasm but cannot execute wasm.
 linked, meaning that they are not suitable for "run on any linux distribution"
 style use cases. Wasmtime does not have static binary artifacts at this time and
 that will require building from source.
+
+[^5]: Rust targets that are `#![no_std]` don't support the entire feature set of
+Wasmtime. For example the `threads` Cargo feature requires the standard library.
+For more information see the [`no_std` documentation][nostd].
+
+[nostd]: ./stability-platform-support.md
 
 #### Unsupported features and platforms
 

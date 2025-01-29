@@ -46,7 +46,7 @@ use core::fmt;
 use core::marker;
 use core::num::NonZeroUsize;
 use core::ptr::NonNull;
-use core::sync::atomic::{AtomicU64, AtomicUsize};
+use core::sync::atomic::AtomicUsize;
 use wasmtime_environ::VMSharedTypeIndex;
 
 /// A pointer that is used by compiled code, or in other words is accessed
@@ -213,7 +213,8 @@ unsafe impl VmSafe for i64 {}
 unsafe impl VmSafe for i128 {}
 unsafe impl VmSafe for isize {}
 unsafe impl VmSafe for AtomicUsize {}
-unsafe impl VmSafe for AtomicU64 {}
+#[cfg(target_has_atomic = "64")]
+unsafe impl VmSafe for core::sync::atomic::AtomicU64 {}
 
 // This is a small `u32` wrapper defined in `wasmtime-environ`, so impl the
 // vm-safe-ness here.

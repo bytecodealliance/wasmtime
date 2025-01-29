@@ -5,7 +5,6 @@ use core::fmt;
 use core::marker;
 use core::num::NonZeroU64;
 use core::ops::{Index, IndexMut};
-use core::sync::atomic::{AtomicU64, Ordering::Relaxed};
 
 // This is defined here, in a private submodule, so we can explicitly reexport
 // it only as `pub(crate)`. This avoids a ton of
@@ -210,22 +209,46 @@ impl StoreId {
     /// Allocates a new unique identifier for a store that has never before been
     /// used in this process.
     pub fn allocate() -> StoreId {
-        static NEXT_ID: AtomicU64 = AtomicU64::new(0);
-
-        // Only allow 2^63 stores at which point we start panicking to prevent
-        // overflow.
+        // When 64-bit atomics are allowed then allow 2^63 stores at which point
+        // we start panicking to prevent overflow.
         //
         // If a store is created once per microsecond then this will last the
         // current process for 584,540 years before overflowing.
-        //
-        // Also note the usage of `Relaxed` ordering here which should be ok
-        // since we're only looking for atomicity on this counter and this
-        // otherwise isn't used to synchronize memory stored anywhere else.
-        let id = NEXT_ID.fetch_add(1, Relaxed);
-        if id & (1 << 63) != 0 {
-            NEXT_ID.store(1 << 63, Relaxed);
-            panic!("store id allocator overflow");
-        }
+        const OVERFLOW_THRESHOLD: u64 = 1 << 63;
+
+        #[cfg(target_has_atomic = "64")]
+        let id = {
+            use core::sync::atomic::{AtomicU64, Ordering::Relaxed};
+
+            // Note the usage of `Relaxed` ordering here which should be ok
+            // since we're only looking for atomicity on this counter and this
+            // otherwise isn't used to synchronize memory stored anywhere else.
+            static NEXT_ID: AtomicU64 = AtomicU64::new(0);
+            let id = NEXT_ID.fetch_add(1, Relaxed);
+            if id > OVERFLOW_THRESHOLD {
+                NEXT_ID.store(OVERFLOW_THRESHOLD, Relaxed);
+                panic!("store id allocator overflow");
+            }
+            id
+        };
+
+        // When 64-bit atomics are not allowed use a `RwLock<u64>`. This is
+        // already used elsewhere in Wasmtime and currently has the
+        // implementation of panic-on-contention, but it's at least no worse
+        // than what wasmtime had before and is at least correct and UB-free.
+        #[cfg(not(target_has_atomic = "64"))]
+        let id = {
+            use crate::sync::RwLock;
+            static NEXT_ID: RwLock<u64> = RwLock::new(0);
+
+            let mut lock = NEXT_ID.write();
+            if *lock > OVERFLOW_THRESHOLD {
+                panic!("store id allocator overflow");
+            }
+            let ret = *lock;
+            *lock += 1;
+            ret
+        };
 
         StoreId(NonZeroU64::new(id + 1).unwrap())
     }
