@@ -426,6 +426,9 @@ macro_rules! def_unsupported {
     (emit I16x8Sub $($rest:tt)*) => {};
     (emit I32x4Sub $($rest:tt)*) => {};
     (emit I64x2Sub $($rest:tt)*) => {};
+    (emit I16x8Mul $($rest:tt)*) => {};
+    (emit I32x4Mul $($rest:tt)*) => {};
+    (emit I64x2Mul $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -3588,6 +3591,30 @@ where
         self.context
             .binop(self.masm, OperandSize::S64, |masm, dst, src, size| {
                 masm.v128_sub(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_i16x8_mul(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
+                masm.v128_mul(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_i32x4_mul(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, size| {
+                masm.v128_mul(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::new(WasmValType::V128, dst))
+            })
+    }
+
+    fn visit_i64x2_mul(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S64, |masm, dst, src, size| {
+                masm.v128_mul(dst, src, writable!(dst), size)?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
     }

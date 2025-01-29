@@ -34,7 +34,7 @@ use cranelift_codegen::{
     isa::{
         unwind::UnwindInst,
         x64::{
-            args::{AvxOpcode, FenceKind, CC},
+            args::{Avx512Opcode, AvxOpcode, FenceKind, CC},
             settings as x64_settings, AtomicRmwSeqOp,
         },
     },
@@ -1912,6 +1912,28 @@ impl Masm for MacroAssembler {
         self.asm.xmm_rmi_rvex(op, lhs, rhs, dst);
         Ok(())
     }
+
+    fn v128_mul(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        let mul_avx = |this: &mut Self, op| {
+            this.ensure_has_avx()?;
+            this.asm.xmm_rmi_rvex(op, lhs, rhs, dst);
+            Ok(())
+        };
+
+        let mul_avx512 = |this: &mut Self, op| {
+            this.ensure_has_avx512vl()?;
+            this.ensure_has_avx512dq()?;
+            this.asm.xmm_rm_rvex3(op, lhs, rhs, dst);
+            Ok(())
+        };
+
+        match size {
+            OperandSize::S16 => mul_avx(self, AvxOpcode::Vpmullw),
+            OperandSize::S32 => mul_avx(self, AvxOpcode::Vpmulld),
+            OperandSize::S64 => mul_avx512(self, Avx512Opcode::Vpmullq),
+            _ => bail!(CodeGenError::unexpected_operand_size()),
+        }
+    }
 }
 
 impl MacroAssembler {
@@ -1950,6 +1972,22 @@ impl MacroAssembler {
 
     fn ensure_has_avx2(&self) -> Result<()> {
         anyhow::ensure!(self.flags.has_avx2(), CodeGenError::UnimplementedForNoAvx2);
+        Ok(())
+    }
+
+    fn ensure_has_avx512vl(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.flags.has_avx512vl(),
+            CodeGenError::UnimplementedForNoAvx2
+        );
+        Ok(())
+    }
+
+    fn ensure_has_avx512dq(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.flags.has_avx512dq(),
+            CodeGenError::UnimplementedForNoAvx2
+        );
         Ok(())
     }
 

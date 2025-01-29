@@ -18,10 +18,10 @@ use cranelift_codegen::{
         unwind::UnwindInst,
         x64::{
             args::{
-                self, AluRmiROpcode, Amode, AvxOpcode, CmpOpcode, DivSignedness, ExtMode,
-                FenceKind, FromWritableReg, Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg, RegMem,
-                RegMemImm, ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode, WritableGpr,
-                WritableXmm, Xmm, XmmMem, XmmMemAligned, XmmMemImm, CC,
+                self, AluRmiROpcode, Amode, Avx512Opcode, AvxOpcode, CmpOpcode, DivSignedness,
+                ExtMode, FenceKind, FromWritableReg, Gpr, GprMem, GprMemImm, Imm8Gpr, Imm8Reg,
+                RegMem, RegMemImm, ShiftKind as CraneliftShiftKind, SseOpcode, SyntheticAmode,
+                WritableGpr, WritableXmm, Xmm, XmmMem, XmmMemAligned, XmmMemImm, CC,
             },
             encoding::rex::{encode_modrm, RexFlags},
             settings as x64_settings, AtomicRmwSeqOp, EmitInfo, EmitState, Inst,
@@ -2073,6 +2073,23 @@ impl Assembler {
                 VcmpKind::Le => 2,
                 VcmpKind::Ne => 4,
             },
+        });
+    }
+
+    pub(crate) fn xmm_rm_rvex3(
+        &mut self,
+        op: Avx512Opcode,
+        src1: Reg,
+        src2: Reg,
+        dst: WritableReg,
+    ) {
+        self.emit(Inst::XmmRmREvex3 {
+            op,
+            // `src1` reuses `dst`, and is ignored in emission
+            src1: dst.to_reg().into(),
+            src2: src1.into(),
+            src3: src2.into(),
+            dst: dst.map(Into::into),
         });
     }
 }
