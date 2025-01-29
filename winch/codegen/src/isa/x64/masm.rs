@@ -234,6 +234,7 @@ impl Masm for MacroAssembler {
                 self.asm.fence(FenceKind::MFence);
             }
             StoreKind::VectorLane(LaneSelector { lane, size }) => {
+                self.ensure_has_avx()?;
                 self.asm
                     .xmm_vpextr_rm(&dst, src, lane, size, UNTRUSTED_FLAGS)?;
             }
@@ -343,6 +344,7 @@ impl Masm for MacroAssembler {
                 }
             }
             LoadKind::VectorLane(LaneSelector { lane, size }) => {
+                self.ensure_has_avx()?;
                 let byte_tmp = regs::scratch();
                 self.load_impl(src, writable!(byte_tmp), size, UNTRUSTED_FLAGS)?;
                 self.asm
