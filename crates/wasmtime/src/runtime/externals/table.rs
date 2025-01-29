@@ -5,8 +5,6 @@ use crate::trampoline::generate_table_export;
 use crate::vm::ExportTable;
 use crate::{AnyRef, AsContext, AsContextMut, ExternRef, Func, HeapType, Ref, TableType};
 use core::iter;
-use core::ptr::NonNull;
-use runtime::{GcRootsList, SendSyncPtr};
 use wasmtime_environ::TypeTrace;
 
 /// A WebAssembly `table`, or an array of values.
@@ -376,7 +374,12 @@ impl Table {
         Ok(())
     }
 
-    pub(crate) fn trace_roots(&self, store: &mut StoreOpaque, gc_roots_list: &mut GcRootsList) {
+    #[cfg(feature = "gc")]
+    pub(crate) fn trace_roots(
+        &self,
+        store: &mut StoreOpaque,
+        gc_roots_list: &mut crate::runtime::vm::GcRootsList,
+    ) {
         if !self
             ._ty(store)
             .element()
@@ -388,10 +391,8 @@ impl Table {
         let table = self.wasmtime_table(store, iter::empty());
         for gc_ref in unsafe { (*table).gc_refs_mut() } {
             if let Some(gc_ref) = gc_ref {
-                let gc_ref = NonNull::from(gc_ref);
-                let gc_ref = SendSyncPtr::new(gc_ref);
                 unsafe {
-                    gc_roots_list.add_root(gc_ref, "Wasm table element");
+                    gc_roots_list.add_root(gc_ref.into(), "Wasm table element");
                 }
             }
         }

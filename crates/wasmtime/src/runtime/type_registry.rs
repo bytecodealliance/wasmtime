@@ -392,6 +392,7 @@ impl RegisteredType {
     ///
     /// Only struct and array types have GC layouts; function types do not have
     /// layouts.
+    #[cfg(feature = "gc")]
     pub fn layout(&self) -> Option<&GcLayout> {
         self.layout.as_ref()
     }

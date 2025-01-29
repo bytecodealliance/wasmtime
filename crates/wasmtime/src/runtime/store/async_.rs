@@ -1,6 +1,5 @@
 use crate::prelude::*;
 use crate::runtime::vm::mpk::{self, ProtectionMask};
-use crate::runtime::vm::GcRootsList;
 use crate::store::{ResourceLimiterInner, StoreInner, StoreOpaque};
 #[cfg(feature = "call-hook")]
 use crate::CallHook;
@@ -251,7 +250,7 @@ impl StoreOpaque {
     }
 
     #[cfg(feature = "gc")]
-    async fn trace_roots_async(&mut self, gc_roots_list: &mut GcRootsList) {
+    async fn trace_roots_async(&mut self, gc_roots_list: &mut crate::runtime::vm::GcRootsList) {
         use crate::runtime::vm::Yield;
 
         log::trace!("Begin trace GC roots");

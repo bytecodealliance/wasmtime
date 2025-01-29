@@ -3,6 +3,7 @@
 mod arrayref;
 mod data;
 mod externref;
+#[cfg(feature = "gc-drc")]
 mod free_list;
 mod structref;
 
@@ -21,15 +22,11 @@ mod null;
 #[cfg(feature = "gc-null")]
 pub use null::*;
 
-use crate::runtime::vm::GcRuntime;
-
-/// The default GC heap capacity: 512KiB.
-#[cfg(not(miri))]
-const DEFAULT_GC_HEAP_CAPACITY: usize = 1 << 19;
-
-/// The default GC heap capacity for miri: 64KiB.
-#[cfg(miri)]
-const DEFAULT_GC_HEAP_CAPACITY: usize = 1 << 16;
+/// The default GC heap capacity.
+//
+// Note that this is a bit smaller for miri to avoid overheads.
+#[cfg(any(feature = "gc-drc", feature = "gc-null"))]
+const DEFAULT_GC_HEAP_CAPACITY: usize = if cfg!(miri) { 1 << 16 } else { 1 << 19 };
 
 // Explicit methods with `#[allow]` to clearly indicate that truncation is
 // desired when used.

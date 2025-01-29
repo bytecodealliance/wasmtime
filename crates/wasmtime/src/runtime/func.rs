@@ -13,7 +13,6 @@ use crate::{
 use alloc::sync::Arc;
 use core::ffi::c_void;
 use core::mem::{self, MaybeUninit};
-use core::num::NonZeroUsize;
 use core::ptr::NonNull;
 #[cfg(feature = "async")]
 use core::{future::Future, pin::Pin};
@@ -1211,7 +1210,7 @@ impl Func {
             // already. If it is at capacity (unlikely) then we need to do a GC
             // to free up space.
             let num_gc_refs = ty.as_wasm_func_type().non_i31_gc_ref_params_count();
-            if let Some(num_gc_refs) = NonZeroUsize::new(num_gc_refs) {
+            if let Some(num_gc_refs) = core::num::NonZeroUsize::new(num_gc_refs) {
                 return Ok(opaque
                     .gc_store()?
                     .gc_heap

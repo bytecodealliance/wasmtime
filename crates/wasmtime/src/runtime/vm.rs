@@ -31,7 +31,6 @@ mod memory;
 mod mmap_vec;
 mod provenance;
 mod send_sync_ptr;
-mod send_sync_unsafe_cell;
 mod store_box;
 mod sys;
 mod table;
@@ -95,7 +94,6 @@ pub use crate::runtime::vm::vmcontext::{
     VMOpaqueContext, VMRuntimeLimits, VMTableImport, VMWasmCallFunction, ValRaw,
 };
 pub use send_sync_ptr::SendSyncPtr;
-pub use send_sync_unsafe_cell::SendSyncUnsafeCell;
 
 mod module_id;
 pub use module_id::CompiledModuleId;
@@ -113,6 +111,11 @@ mod mmap;
 mod async_yield;
 #[cfg(feature = "async")]
 pub use crate::runtime::vm::async_yield::*;
+
+#[cfg(feature = "gc-null")]
+mod send_sync_unsafe_cell;
+#[cfg(feature = "gc-null")]
+pub use send_sync_unsafe_cell::SendSyncUnsafeCell;
 
 cfg_if::cfg_if! {
     if #[cfg(has_virtual_memory)] {

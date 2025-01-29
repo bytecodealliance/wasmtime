@@ -5,22 +5,14 @@
 
 #![allow(missing_docs)]
 
-use crate::prelude::*;
-use crate::runtime::vm::{GcHeap, GcRuntime};
-use wasmtime_environ::{
-    GcArrayLayout, GcStructLayout, GcTypeLayouts, WasmArrayType, WasmStructType,
-};
-
 pub enum VMExternRef {}
-
-pub enum VMEqRef {}
 
 pub enum VMStructRef {}
 
 pub enum VMArrayRef {}
 
 pub struct VMGcObjectDataMut<'a> {
-    inner: VMStructRef,
+    _inner: VMStructRef,
     _phantom: core::marker::PhantomData<&'a mut ()>,
 }
 

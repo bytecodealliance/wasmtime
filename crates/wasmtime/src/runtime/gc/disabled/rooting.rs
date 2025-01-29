@@ -1,12 +1,9 @@
-use crate::prelude::*;
 use crate::runtime::vm::{GcStore, VMGcRef};
 use crate::{
     runtime::Uninhabited,
     store::{AutoAssertNoGc, StoreOpaque},
     AsContext, AsContextMut, GcRef, Result, RootedGcRef,
 };
-use core::any::Any;
-use core::ffi::c_void;
 use core::fmt::{self, Debug};
 use core::hash::{Hash, Hasher};
 use core::marker;
@@ -46,13 +43,6 @@ impl RootSet {
     }
 
     pub(crate) fn exit_lifo_scope(&mut self, _gc_store: Option<&mut GcStore>, _scope: usize) {}
-
-    pub(crate) fn with_lifo_scope<T>(
-        store: &mut StoreOpaque,
-        f: impl FnOnce(&mut StoreOpaque) -> T,
-    ) -> T {
-        f(store)
-    }
 }
 
 /// This type is disabled because the `gc` cargo feature was not enabled at
@@ -124,10 +114,6 @@ impl<T: GcRef> Rooted<T> {
     ) -> Result<bool> {
         a.assert_unreachable()
     }
-
-    pub(crate) fn unchecked_cast<U: GcRef>(self) -> Rooted<U> {
-        match self.inner {}
-    }
 }
 
 /// This type has been disabled because the `gc` cargo feature was not enabled
@@ -197,10 +183,6 @@ impl<T> ManuallyRooted<T>
 where
     T: GcRef,
 {
-    pub(crate) fn comes_from_same_store(&self, _store: &StoreOpaque) -> bool {
-        match self.inner {}
-    }
-
     pub fn clone(&self, _store: impl AsContextMut) -> Self {
         match self.inner {}
     }
@@ -214,10 +196,6 @@ where
     }
 
     pub fn into_rooted(self, _context: impl AsContextMut) -> Rooted<T> {
-        match self.inner {}
-    }
-
-    pub(crate) fn unchecked_cast<U: GcRef>(self) -> ManuallyRooted<U> {
         match self.inner {}
     }
 }

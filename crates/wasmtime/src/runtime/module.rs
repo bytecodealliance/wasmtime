@@ -1095,6 +1095,7 @@ impl Module {
     }
 
     /// Lookup the stack map at a program counter value.
+    #[cfg(feature = "gc")]
     pub(crate) fn lookup_stack_map(&self, pc: usize) -> Option<&wasmtime_environ::StackMap> {
         let text_offset = pc - self.inner.module.text().as_ptr() as usize;
         let (index, func_offset) = self.inner.module.func_by_text_offset(text_offset)?;

@@ -9,7 +9,6 @@ use crate::{
 use core::ffi::c_void;
 use core::marker;
 use core::mem::{self, MaybeUninit};
-use core::num::NonZeroUsize;
 use core::ptr::{self, NonNull};
 use wasmtime_environ::VMSharedTypeIndex;
 
@@ -155,7 +154,7 @@ where
         {
             // See the comment in `Func::call_impl_check_args`.
             let num_gc_refs = _params.vmgcref_pointing_to_object_count();
-            if let Some(num_gc_refs) = NonZeroUsize::new(num_gc_refs) {
+            if let Some(num_gc_refs) = core::num::NonZeroUsize::new(num_gc_refs) {
                 return _store
                     .unwrap_gc_store()
                     .gc_heap

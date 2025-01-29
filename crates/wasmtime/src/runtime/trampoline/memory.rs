@@ -2,10 +2,9 @@ use crate::memory::{LinearMemory, MemoryCreator};
 use crate::prelude::*;
 use crate::runtime::vm::mpk::ProtectionKey;
 use crate::runtime::vm::{
-    CompiledModuleId, GcHeapAllocationIndex, Imports, InstanceAllocationRequest, InstanceAllocator,
-    InstanceAllocatorImpl, Memory, MemoryAllocationIndex, MemoryBase, ModuleRuntimeInfo,
-    OnDemandInstanceAllocator, RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory, StorePtr,
-    Table, TableAllocationIndex,
+    CompiledModuleId, Imports, InstanceAllocationRequest, InstanceAllocator, InstanceAllocatorImpl,
+    Memory, MemoryAllocationIndex, MemoryBase, ModuleRuntimeInfo, OnDemandInstanceAllocator,
+    RuntimeLinearMemory, RuntimeMemoryCreator, SharedMemory, StorePtr, Table, TableAllocationIndex,
 };
 use crate::store::{InstanceId, StoreOpaque};
 use crate::MemoryType;
@@ -246,14 +245,17 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
     fn allocate_gc_heap(
         &self,
         _gc_runtime: &dyn crate::runtime::vm::GcRuntime,
-    ) -> Result<(GcHeapAllocationIndex, Box<dyn crate::runtime::vm::GcHeap>)> {
+    ) -> Result<(
+        crate::runtime::vm::GcHeapAllocationIndex,
+        Box<dyn crate::runtime::vm::GcHeap>,
+    )> {
         unreachable!()
     }
 
     #[cfg(feature = "gc")]
     fn deallocate_gc_heap(
         &self,
-        _allocation_index: GcHeapAllocationIndex,
+        _allocation_index: crate::runtime::vm::GcHeapAllocationIndex,
         _gc_heap: Box<dyn crate::runtime::vm::GcHeap>,
     ) {
         unreachable!()

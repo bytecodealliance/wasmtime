@@ -1,5 +1,4 @@
 use crate::prelude::*;
-use crate::runtime::vm::{GcRootsList, SendSyncPtr};
 use crate::{
     store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored},
     trampoline::generate_global_export,
@@ -7,7 +6,6 @@ use crate::{
     RootedGcRefImpl, Val, ValType,
 };
 use core::ptr;
-use core::ptr::NonNull;
 use wasmtime_environ::TypeTrace;
 
 /// A WebAssembly `global` value which can be read and written to.
@@ -216,17 +214,20 @@ impl Global {
         Ok(())
     }
 
-    pub(crate) fn trace_root(&self, store: &mut StoreOpaque, gc_roots_list: &mut GcRootsList) {
+    #[cfg(feature = "gc")]
+    pub(crate) fn trace_root(
+        &self,
+        store: &mut StoreOpaque,
+        gc_roots_list: &mut crate::runtime::vm::GcRootsList,
+    ) {
         if let Some(ref_ty) = self._ty(store).content().as_ref() {
             if !ref_ty.is_vmgcref_type_and_points_to_object() {
                 return;
             }
 
             if let Some(gc_ref) = unsafe { store[self.0].definition.as_ref().as_gc_ref() } {
-                let gc_ref = NonNull::from(gc_ref);
-                let gc_ref = SendSyncPtr::new(gc_ref);
                 unsafe {
-                    gc_roots_list.add_root(gc_ref, "Wasm global");
+                    gc_roots_list.add_root(gc_ref.into(), "Wasm global");
                 }
             }
         }
