@@ -140,7 +140,7 @@ there's also a risk of being quite repetitive when using conditionally compiled
 code as well. In its most basic form any usage of a conditionally compiled piece
 of code must additionally be gated as well.
 
-```rust
+```rust,ignore
 #[cfg(feature = "gc")]
 fn gc() {
     // ...
@@ -167,7 +167,7 @@ macro either. Not a great experience!
 
 Here neither `gc.rs` nor `gc_disabled.rs` will be formatted by `cargo fmt`.
 
-```rust
+```rust,ignore
 cfg_if::cfg_if! {
     if #[cfg(feature = "gc")] {
         mod gc;
