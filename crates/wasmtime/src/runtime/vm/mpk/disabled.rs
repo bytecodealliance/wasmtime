@@ -18,6 +18,7 @@ pub fn keys(_: usize) -> &'static [ProtectionKey] {
 
 pub fn allow(_: ProtectionMask) {}
 
+#[cfg(feature = "async")]
 pub fn current_mask() -> ProtectionMask {
     ProtectionMask
 }

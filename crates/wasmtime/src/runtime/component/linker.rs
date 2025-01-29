@@ -9,9 +9,9 @@ use crate::hash_map::HashMap;
 use crate::prelude::*;
 use crate::{AsContextMut, Engine, Module, StoreContextMut};
 use alloc::sync::Arc;
-use core::future::Future;
 use core::marker;
-use core::pin::Pin;
+#[cfg(feature = "async")]
+use core::{future::Future, pin::Pin};
 use wasmtime_environ::component::{NameMap, NameMapIntern};
 use wasmtime_environ::PrimaryMap;
 
@@ -433,8 +433,8 @@ impl<T> LinkerInstance<'_, T> {
         );
         let ff = move |mut store: StoreContextMut<'_, T>, params: Params| -> Result<Return> {
             let async_cx = store.as_context_mut().0.async_cx().expect("async cx");
-            let mut future = Pin::from(f(store.as_context_mut(), params));
-            unsafe { async_cx.block_on(future.as_mut()) }?
+            let future = f(store.as_context_mut(), params);
+            unsafe { async_cx.block_on(Pin::from(future)) }?
         };
         self.func_wrap(name, ff)
     }
@@ -604,8 +604,8 @@ impl<T> LinkerInstance<'_, T> {
         );
         let ff = move |mut store: StoreContextMut<'_, T>, params: &[Val], results: &mut [Val]| {
             let async_cx = store.as_context_mut().0.async_cx().expect("async cx");
-            let mut future = Pin::from(f(store.as_context_mut(), params, results));
-            unsafe { async_cx.block_on(future.as_mut()) }?
+            let future = f(store.as_context_mut(), params, results);
+            unsafe { async_cx.block_on(Pin::from(future)) }?
         };
         self.func_new(name, ff)
     }
@@ -676,8 +676,8 @@ impl<T> LinkerInstance<'_, T> {
             &self.engine,
             move |mut cx: crate::Caller<'_, T>, (param,): (u32,)| {
                 let async_cx = cx.as_context_mut().0.async_cx().expect("async cx");
-                let mut future = Pin::from(dtor(cx.as_context_mut(), param));
-                match unsafe { async_cx.block_on(future.as_mut()) } {
+                let future = dtor(cx.as_context_mut(), param);
+                match unsafe { async_cx.block_on(Pin::from(future)) } {
                     Ok(Ok(())) => Ok(()),
                     Ok(Err(trap)) | Err(trap) => Err(trap),
                 }

@@ -198,6 +198,7 @@ pub struct PoolingInstanceAllocatorConfig {
     /// how much memory to zero out with `memset`.
     ///
     /// The rest of memory will be zeroed out with `madvise`.
+    #[cfg(feature = "async")]
     pub async_stack_keep_resident: usize,
     /// How much linear memory, in bytes, to keep resident after resetting for
     /// use with the next instance. This much memory will be `memset` to zero
@@ -224,6 +225,7 @@ impl Default for PoolingInstanceAllocatorConfig {
             stack_size: 2 << 20,
             limits: InstanceLimits::default(),
             async_stack_zeroing: false,
+            #[cfg(feature = "async")]
             async_stack_keep_resident: 0,
             linear_memory_keep_resident: 0,
             table_keep_resident: 0,
