@@ -2,7 +2,8 @@
 
 We use [issues] for asking questions ([open one here][newissue]!) and tracking
 bugs and unimplemented features, and [pull requests] (PRs) for tracking and
-reviewing code submissions.
+reviewing code submissions. We triage new issues at each of our bi-weekly
+[Wasmtime meetings][meetings].
 
 ### Before submitting a PR
 
@@ -77,3 +78,4 @@ removing warnings, etc.
 [issue keywords]: https://help.github.com/articles/closing-issues-using-keywords/
 [Core Team]: https://github.com/orgs/bytecodealliance/people/
 [newissue]: https://github.com/bytecodealliance/wasmtime/issues/new
+[meetings]: https://github.com/bytecodealliance/meetings/tree/main/wasmtime
