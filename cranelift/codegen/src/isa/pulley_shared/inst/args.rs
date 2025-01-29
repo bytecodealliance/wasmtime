@@ -145,8 +145,6 @@ impl XReg {
     }
 }
 
-pub use super::super::lower::isle::generated_code::ExtKind;
-
 pub use super::super::lower::isle::generated_code::Amode;
 
 impl Amode {
@@ -577,4 +575,207 @@ pub struct PulleyCall {
     /// registers. This tracks up to 4 registers and all remaining registers
     /// will be present and tracked in `CallInfo<T>` fields.
     pub args: SmallVec<[XReg; 4]>,
+}
+
+pub use super::super::lower::isle::generated_code::AddrO32;
+
+impl Copy for AddrO32 {}
+
+impl AddrO32 {
+    /// Implementation of regalloc for this addressing mode.
+    pub fn collect_operands(&mut self, collector: &mut impl OperandVisitor) {
+        match self {
+            AddrO32::Base { addr, offset: _ } => {
+                collector.reg_use(addr);
+            }
+        }
+    }
+}
+
+impl From<AddrO32> for pulley_interpreter::AddrO32 {
+    fn from(addr: AddrO32) -> Self {
+        match addr {
+            AddrO32::Base { addr, offset } => Self {
+                addr: addr.into(),
+                offset,
+            },
+        }
+    }
+}
+
+impl fmt::Display for AddrO32 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AddrO32::Base { addr, offset } => {
+                let addr = reg_name(**addr);
+                write!(f, "{addr}, {offset}")
+            }
+        }
+    }
+}
+
+pub use super::super::lower::isle::generated_code::AddrZ;
+
+impl Copy for AddrZ {}
+
+impl AddrZ {
+    /// Implementation of regalloc for this addressing mode.
+    pub fn collect_operands(&mut self, collector: &mut impl OperandVisitor) {
+        match self {
+            AddrZ::Base { addr, offset: _ } => {
+                collector.reg_use(addr);
+            }
+        }
+    }
+}
+
+impl From<AddrZ> for pulley_interpreter::AddrZ {
+    fn from(addr: AddrZ) -> Self {
+        match addr {
+            AddrZ::Base { addr, offset } => Self {
+                addr: addr.into(),
+                offset,
+            },
+        }
+    }
+}
+
+impl fmt::Display for AddrZ {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AddrZ::Base { addr, offset } => {
+                let addr = reg_name(**addr);
+                write!(f, "{addr}, {offset}")
+            }
+        }
+    }
+}
+
+pub use super::super::lower::isle::generated_code::AddrG32;
+
+impl Copy for AddrG32 {}
+
+impl AddrG32 {
+    /// Implementation of regalloc for this addressing mode.
+    pub fn collect_operands(&mut self, collector: &mut impl OperandVisitor) {
+        match self {
+            AddrG32::RegisterBound {
+                host_heap_base,
+                host_heap_bound,
+                wasm_addr,
+                offset: _,
+            } => {
+                collector.reg_use(host_heap_base);
+                collector.reg_use(host_heap_bound);
+                collector.reg_use(wasm_addr);
+            }
+        }
+    }
+}
+
+impl From<AddrG32> for pulley_interpreter::AddrG32 {
+    fn from(addr: AddrG32) -> Self {
+        match addr {
+            AddrG32::RegisterBound {
+                host_heap_base,
+                host_heap_bound,
+                wasm_addr,
+                offset,
+            } => Self {
+                host_heap_base: host_heap_base.into(),
+                host_heap_bound: host_heap_bound.into(),
+                wasm_addr: wasm_addr.into(),
+                offset,
+            },
+        }
+    }
+}
+
+impl fmt::Display for AddrG32 {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AddrG32::RegisterBound {
+                host_heap_base,
+                host_heap_bound,
+                wasm_addr,
+                offset,
+            } => {
+                let host_heap_base = reg_name(**host_heap_base);
+                let host_heap_bound = reg_name(**host_heap_bound);
+                let wasm_addr = reg_name(**wasm_addr);
+                write!(
+                    f,
+                    "{host_heap_base}, {host_heap_bound}, {wasm_addr}, {offset}",
+                )
+            }
+        }
+    }
+}
+
+pub use super::super::lower::isle::generated_code::AddrG32Bne;
+
+impl Copy for AddrG32Bne {}
+
+impl AddrG32Bne {
+    /// Implementation of regalloc for this addressing mode.
+    pub fn collect_operands(&mut self, collector: &mut impl OperandVisitor) {
+        match self {
+            AddrG32Bne::BoundNe {
+                host_heap_base,
+                host_heap_bound_addr,
+                host_heap_bound_offset: _,
+                wasm_addr,
+                offset: _,
+            } => {
+                collector.reg_use(host_heap_base);
+                collector.reg_use(host_heap_bound_addr);
+                collector.reg_use(wasm_addr);
+            }
+        }
+    }
+}
+
+impl From<AddrG32Bne> for pulley_interpreter::AddrG32Bne {
+    fn from(addr: AddrG32Bne) -> Self {
+        match addr {
+            AddrG32Bne::BoundNe {
+                host_heap_base,
+                host_heap_bound_addr,
+                host_heap_bound_offset,
+                wasm_addr,
+                offset,
+            } => Self {
+                host_heap_base: host_heap_base.into(),
+                host_heap_bound_addr: host_heap_bound_addr.into(),
+                host_heap_bound_offset,
+                wasm_addr: wasm_addr.into(),
+                offset,
+            },
+        }
+    }
+}
+
+impl fmt::Display for AddrG32Bne {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            AddrG32Bne::BoundNe {
+                host_heap_base,
+                host_heap_bound_addr,
+                host_heap_bound_offset,
+                wasm_addr,
+                offset,
+            } => {
+                let host_heap_base = reg_name(**host_heap_base);
+                let host_heap_bound_addr = reg_name(**host_heap_bound_addr);
+                let wasm_addr = reg_name(**wasm_addr);
+                write!(
+                    f,
+                    "{host_heap_base}, \
+                     *[{host_heap_bound_addr} + {host_heap_bound_offset}], \
+                     {wasm_addr}, \
+                     {offset}",
+                )
+            }
+        }
+    }
 }

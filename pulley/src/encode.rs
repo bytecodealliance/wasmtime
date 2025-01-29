@@ -202,6 +202,52 @@ impl<R: Reg + Encode> Encode for UpperRegSet<R> {
     }
 }
 
+impl Encode for AddrO32 {
+    const WIDTH: u8 = 5;
+
+    fn encode<E>(&self, sink: &mut E)
+    where
+        E: Extend<u8>,
+    {
+        self.addr.encode(sink);
+        self.offset.encode(sink);
+    }
+}
+
+impl Encode for AddrZ {
+    const WIDTH: u8 = 5;
+
+    fn encode<E>(&self, sink: &mut E)
+    where
+        E: Extend<u8>,
+    {
+        self.addr.encode(sink);
+        self.offset.encode(sink);
+    }
+}
+
+impl Encode for AddrG32 {
+    const WIDTH: u8 = 4;
+
+    fn encode<E>(&self, sink: &mut E)
+    where
+        E: Extend<u8>,
+    {
+        self.to_bits().encode(sink);
+    }
+}
+
+impl Encode for AddrG32Bne {
+    const WIDTH: u8 = 4;
+
+    fn encode<E>(&self, sink: &mut E)
+    where
+        E: Extend<u8>,
+    {
+        self.to_bits().encode(sink);
+    }
+}
+
 macro_rules! impl_encoders {
     (
         $(

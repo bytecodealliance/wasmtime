@@ -73,9 +73,9 @@
     ;;
     ;; How much is written to the register is defined by `ExtKind`. The `flags`
     ;; control behavior such as endianness.
-    (XLoad (dst WritableXReg) (mem Amode) (ty Type) (flags MemFlags) (ext ExtKind))
+    (XLoad (dst WritableXReg) (mem Amode) (ty Type) (flags MemFlags))
     (FLoad (dst WritableFReg) (mem Amode) (ty Type) (flags MemFlags))
-    (VLoad (dst WritableVReg) (mem Amode) (ty Type) (flags MemFlags) (ext VExtKind))
+    (VLoad (dst WritableVReg) (mem Amode) (ty Type) (flags MemFlags))
 
     ;; Stores.
     (XStore (mem Amode) (src XReg) (ty Type) (flags MemFlags))
@@ -158,6 +158,22 @@
 
 ;;;; Address Modes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
+(type ExtKind (enum None Sign32 Sign64 Zero32 Zero64))
+(type VExtKind (enum None S8x8 U8x8 S16x4 U16x4 S32x2 U32x2))
+
+;; Helper to convert a `(Value Offset32)` to `(Value i32)` while peeling off
+;; constant addition within the first `Value` into the static offset, if
+;; possible.
+;;
+;; Note that ideally this wouldn't be necessary and we could rely on the egraph
+;; pass to do this but that's not implemented at this time.
+(type ValueOffset (enum (Both (value Value) (offset i32))))
+(decl pure amode_base (Value Offset32) ValueOffset)
+(rule (amode_base addr (offset32 offset)) (ValueOffset.Both addr offset))
+(rule 1 (amode_base (iadd addr (i32_from_iconst b)) (offset32 offset))
+  (if-let new_offset (s32_add_fallible b offset))
+  (ValueOffset.Both addr new_offset))
+
 (type StackAMode extern (enum))
 
 (type Amode
@@ -168,9 +184,53 @@
   )
 )
 
-(type ExtKind (enum None Sign32 Sign64 Zero32 Zero64))
+(decl amode (Value Offset32) Amode)
+(rule (amode addr offset)
+  (if-let (ValueOffset.Both a o) (amode_base addr offset))
+  (Amode.RegOffset a o))
 
-(type VExtKind (enum None S8x8 U8x8 S16x4 U16x4 S32x2 U32x2))
+;;; ISLE representation of the `AddrO32` ("*_o32") addressing mode in Pulley.
+(type AddrO32
+  (enum
+    (Base
+      (addr XReg)
+      (offset i32))))
+
+;; Constructor for the `AddrO32` type used in `*_o32` loads/stores
+(decl addro32 (Value Offset32) AddrO32)
+(rule (addro32 addr offset)
+  (if-let (ValueOffset.Both reg off32) (amode_base addr offset))
+  (AddrO32.Base reg off32))
+
+;;; ISLE representation of the `AddrZ` ("*_z") addressing mode in Pulley.
+(type AddrZ
+  (enum
+    (Base
+      (addr XReg)
+      (offset i32))))
+
+;; Constructor for the `AddrZ` type used in `*_z` loads/stores
+(decl addrz (XReg i32) AddrZ)
+(rule (addrz base offset) (AddrZ.Base base offset))
+
+;;; ISLE representation of the `AddrG32` ("*_g32") addressing mode in Pulley.
+(type AddrG32
+  (enum
+    (RegisterBound
+      (host_heap_base XReg)
+      (host_heap_bound XReg)
+      (wasm_addr XReg)
+      (offset u16))))
+
+;;; ISLE representation of the `AddrG32Bne` ("*_g32bne") addressing mode in Pulley.
+(type AddrG32Bne
+  (enum
+    (BoundNe
+      (host_heap_base XReg)
+      (host_heap_bound_addr XReg)
+      (host_heap_bound_offset u8)
+      (wasm_addr XReg)
+      (offset u8))))
 
 ;; Helper to determine the endianness of `MemFlags` taking the current target
 ;; into account.
@@ -198,6 +258,7 @@
 (rule (sinkable_load value @ (value_type ty))
   (if-let inst @ (load flags addr (offset32 offset)) (is_sinkable_inst value))
   (if-let true (is_native_endianness (endianness flags)))
+  (if-let true (memflags_nontrapping flags))
   (if-let offset8 (u8_try_from_i32 offset))
   (SinkableLoad.Load inst ty addr offset8))
 
@@ -219,6 +280,130 @@
 (type PointerWidth extern (enum PointerWidth32 PointerWidth64))
 (decl pure pointer_width () PointerWidth)
 (extern constructor pointer_width pointer_width)
+
+(decl pure memflags_nontrapping (MemFlags) bool)
+(extern constructor memflags_nontrapping memflags_nontrapping)
+
+(decl pure memflags_is_wasm (MemFlags) bool)
+(extern constructor memflags_is_wasm memflags_is_wasm)
+
+;; Helper type to represent a "pending" `AddrG32` value.
+(type G32 (enum (All (heap_base Value) (heap_bound Value) (wasm_addr Value) (offset u16))))
+
+;; Auto-conversion from `G32` to `AddrG32`.
+(decl gen_addrg32 (G32) AddrG32)
+(rule (gen_addrg32 (G32.All base bound wasm offset))
+  (AddrG32.RegisterBound base bound wasm offset))
+(convert G32 AddrG32 gen_addrg32)
+
+;; Helper type to represent a "pending" `AddrG32Bne` value.
+(type G32Bne (enum (All (heap_base Value) (heap_bound SinkableLoad) (wasm_addr Value) (offset u8))))
+
+;; Auto-conversion from `G32Bne` to `AddrG32Bne`.
+(decl gen_addrg32bne (G32Bne) AddrG32Bne)
+(rule (gen_addrg32bne (G32Bne.All base heap_bound_load wasm offset))
+  (gen_addrg32bne_for_real base heap_bound_load wasm offset))
+(convert G32Bne AddrG32Bne gen_addrg32bne)
+
+;; Small workaround to pattern-match `SunkLoad` here.
+(decl gen_addrg32bne_for_real (XReg SunkLoad XReg u8) AddrG32Bne)
+(rule (gen_addrg32bne_for_real base (SunkLoad.Load _ bound_addr bound_offset) wasm_addr offset)
+  (AddrG32Bne.BoundNe base bound_addr bound_offset wasm_addr offset))
+
+;; Helper to extract `G32Bne` from `G32` if applicable.
+;;
+;; This is possible when the heap bound is itself a sinkable load which can get
+;; folded into `G32Bne`.
+(decl pure partial addrg32bne (G32) G32Bne)
+(rule (addrg32bne (G32.All heap_base heap_bound wasm_addr offset))
+  (if-let heap_bound_load (sinkable_load heap_bound))
+  (if-let offset8 (u8_try_from_u16 offset))
+  (G32Bne.All heap_base heap_bound_load wasm_addr offset8))
+
+;; Main entrypoint for matching a `G32` address which can be used in `*_g32`
+;; pulley instructions for loads/stores.
+;;
+;; Pulley loads/stores are emitted as fallible loads/stores where the only
+;; defined trapping address is null. That's modeled as a load-from-`select`
+;; where an out-of-bounds condition yields null.
+;;
+;; Here the top-layer of this rule matches the `(select ...)` node where 0 is
+;; used if the oob condition is true. Otherwise the raw address is used for the
+;; load/store.
+(decl pure partial wasm_g32 (Value Offset32 MemFlags Type) G32)
+(rule (wasm_g32 (select oob (u64_from_iconst 0) raw_addr) (offset32 0) flags ty)
+  ;; This must be a wasm load/store according to `MemFlags`, namely that it's
+  ;; got a "HEAP_OUT_OF_BOUNDS" trap code and it's little-endian.
+  (if-let true (memflags_is_wasm flags))
+  ;; Peel off the static wasm offset from `raw_addr`, if one is present. If
+  ;; one isn't present then `heap_offset` will be zero. This handles the `N`
+  ;; in wasm instructions `i32.load offset=N`.
+  (if-let (HostOffset.All host_addr heap_offset) (host_offset raw_addr))
+  ;; Next see if the `oob` and `raw_addr` combination match. This will attempt
+  ;; extract a full bounds check from these values. If everything succeeds the
+  ;; final step is then to extract an 8-bit offset of the load/store operation,
+  ;; if appplicable, assuming that the constants used in various places all line
+  ;; up just right.
+  (if-let (OobSelect.All base bound wasm_addr access_size_plus_offset)
+    (wasm_oob_select oob host_addr))
+  (if-let offset16 (g32_offset heap_offset ty access_size_plus_offset))
+  (G32.All base bound wasm_addr offset16))
+
+;; Host helper to do the math to extract the offset here.
+;;
+;; Ensures that the first argument, the heap offset on the load, plus the size
+;; of the type equals the third argument, the bounds-checked static offset. If
+;; the offset then fits within `u16` it's returned.
+(decl pure partial g32_offset (i32 Type u64) u16)
+(extern constructor g32_offset g32_offset)
+
+;; Helper used in `wasm_g32` above to extract `(iadd addr N)` where `N` is a
+;; constant. If there is no constant then the constant 0 is returned instead.
+(decl pure host_offset (Value) HostOffset)
+(type HostOffset (enum (All (a Value) (b i32))))
+(rule 0 (host_offset val) (HostOffset.All val 0))
+(rule 1 (host_offset (iadd val (i32_from_iconst n))) (HostOffset.All val n))
+(rule 2 (host_offset (iadd (i32_from_iconst n) val)) (HostOffset.All val n))
+
+;; Helper to test whether the first argument `oob` contains a condition for
+;; matching whether second argument `addr` is out-of-bounds. Searches for a
+;; variety of structures that optimizations or the frontend may produce.
+(decl pure partial wasm_oob_select (Value Value) OobSelect)
+(type OobSelect (enum (All (a Value) (b Value) (c Value) (d u64))))
+
+;; 32-bit hosts: search either side of the `iadd` for the base address within
+;; `oob` to see if it's a matching condition.
+(rule 0 (wasm_oob_select oob (iadd base wasm_addr @ (value_type $I32)))
+  (if-let (OobCond.All bound n) (wasm_oob_cond wasm_addr oob))
+  (if-let (PointerWidth.PointerWidth32) (pointer_width))
+  (OobSelect.All base bound wasm_addr n))
+(rule 1 (wasm_oob_select oob (iadd wasm_addr @ (value_type $I32) base))
+  (if-let (OobCond.All bound n) (wasm_oob_cond wasm_addr oob))
+  (if-let (PointerWidth.PointerWidth32) (pointer_width))
+  (OobSelect.All base bound wasm_addr n))
+
+;; 64-bit hosts: also search either side, but the wasm address must also be
+;; a `uextend` from a 32-bit value.
+(rule 0 (wasm_oob_select oob (iadd base wasm_addr_ext @ (value_type $I64)))
+  (if-let (OobCond.All bound n) (wasm_oob_cond wasm_addr_ext oob))
+  (if-let (uextend wasm_addr @ (value_type $I32)) wasm_addr_ext)
+  (if-let (PointerWidth.PointerWidth64) (pointer_width))
+  (OobSelect.All base bound wasm_addr n))
+(rule 1 (wasm_oob_select oob (iadd wasm_addr_ext @ (value_type $I64) base))
+  (if-let (OobCond.All bound n) (wasm_oob_cond wasm_addr_ext oob))
+  (if-let (uextend wasm_addr @ (value_type $I32)) wasm_addr_ext)
+  (if-let (PointerWidth.PointerWidth64) (pointer_width))
+  (OobSelect.All base bound wasm_addr n))
+
+;; Helper to search for the first argument, `wasm_addr`, within the oob
+;; condition second argument, `oob`. It should appear as an integer comparison
+;; of the address against a particular bound.
+(decl pure partial wasm_oob_cond (Value Value) OobCond)
+(type OobCond (enum (All (a Value) (b u64))))
+(rule (wasm_oob_cond wasm_addr (ugt wasm_addr (isub bound (u64_from_iconst n))))
+  (OobCond.All bound n))
+(rule (wasm_oob_cond wasm_addr (ult (isub bound (u64_from_iconst n)) wasm_addr))
+  (OobCond.All bound n))
 
 ;;;; Newtypes for Different Register Classes ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
@@ -467,10 +652,10 @@
 (rule (pulley_br_if cond taken not_taken)
       (SideEffectNoResult.Inst (MInst.BrIf cond taken not_taken)))
 
-(decl pulley_xload (Amode Type MemFlags ExtKind) XReg)
-(rule (pulley_xload amode ty flags ext)
+(decl pulley_xload (Amode Type MemFlags) XReg)
+(rule (pulley_xload amode ty flags)
       (let ((dst WritableXReg (temp_writable_xreg))
-            (_ Unit (emit (MInst.XLoad dst amode ty flags ext))))
+            (_ Unit (emit (MInst.XLoad dst amode ty flags))))
         dst))
 
 (decl pulley_xstore (Amode XReg Type MemFlags) SideEffectNoResult)
@@ -487,10 +672,10 @@
 (rule (pulley_fstore amode src ty flags)
       (SideEffectNoResult.Inst (MInst.FStore amode src ty flags)))
 
-(decl pulley_vload (Amode Type MemFlags VExtKind) VReg)
-(rule (pulley_vload amode ty flags ext)
+(decl pulley_vload (Amode Type MemFlags) VReg)
+(rule (pulley_vload amode ty flags)
       (let ((dst WritableVReg (temp_writable_vreg))
-            (_ Unit (emit (MInst.VLoad dst amode ty flags ext))))
+            (_ Unit (emit (MInst.VLoad dst amode ty flags))))
         dst))
 
 (decl pulley_vstore (Amode VReg Type MemFlags) SideEffectNoResult)
