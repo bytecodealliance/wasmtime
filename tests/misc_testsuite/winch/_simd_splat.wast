@@ -171,7 +171,7 @@
 (assert_return (invoke "as-v128_store-operand-4" (i64.const 1)) (v128.const i64x2 1 1))
 (assert_return (invoke "as-v128_store-operand-5" (f64.const -0x1p+0)) (v128.const f64x2 -0x1p+0 -0x1p+0))
 
-;; (module
+(module
 ;;   ;; Accessing lane
 ;;   (func (export "as-i8x16_extract_lane_s-operand-first") (param i32) (result i32)
 ;;     (i8x16.extract_lane_s 0 (i8x16.splat (local.get 0))))
@@ -257,21 +257,21 @@
 ;;     (i32x4.all_true (i32x4.splat (local.get 0))))
 ;;   (func (export "as-i32x4_all_true-operand2") (param i64) (result i32)
 ;;     (i32x4.all_true (i64x2.splat (local.get 0))))
-;; 
-;;   ;; Comparisons
-;;   (func (export "as-i8x16_eq-operands") (param i32 i32) (result v128)
-;;     (i8x16.eq (i8x16.splat (local.get 0)) (i8x16.splat (local.get 1))))
-;;   (func (export "as-i16x8_eq-operands") (param i32 i32) (result v128)
-;;     (i16x8.eq (i16x8.splat (local.get 0)) (i16x8.splat (local.get 1))))
-;;   (func (export "as-i32x4_eq-operands1") (param i32 i32) (result v128)
-;;     (i32x4.eq (i32x4.splat (local.get 0)) (i32x4.splat (local.get 1))))
-;;   (func (export "as-i32x4_eq-operands2") (param i64 i64) (result v128)
-;;     (i32x4.eq (i64x2.splat (local.get 0)) (i64x2.splat (local.get 1))))
-;;   (func (export "as-f32x4_eq-operands") (param f32 f32) (result v128)
-;;     (f32x4.eq (f32x4.splat (local.get 0)) (f32x4.splat (local.get 1))))
-;;   (func (export "as-f64x2_eq-operands") (param f64 f64) (result v128)
-;;     (f64x2.eq (f64x2.splat (local.get 0)) (f64x2.splat (local.get 1))))
-;; 
+
+  ;; Comparisons
+  (func (export "as-i8x16_eq-operands") (param i32 i32) (result v128)
+    (i8x16.eq (i8x16.splat (local.get 0)) (i8x16.splat (local.get 1))))
+  (func (export "as-i16x8_eq-operands") (param i32 i32) (result v128)
+    (i16x8.eq (i16x8.splat (local.get 0)) (i16x8.splat (local.get 1))))
+  (func (export "as-i32x4_eq-operands1") (param i32 i32) (result v128)
+    (i32x4.eq (i32x4.splat (local.get 0)) (i32x4.splat (local.get 1))))
+  (func (export "as-i32x4_eq-operands2") (param i64 i64) (result v128)
+    (i32x4.eq (i64x2.splat (local.get 0)) (i64x2.splat (local.get 1))))
+  (func (export "as-f32x4_eq-operands") (param f32 f32) (result v128)
+    (f32x4.eq (f32x4.splat (local.get 0)) (f32x4.splat (local.get 1))))
+  (func (export "as-f64x2_eq-operands") (param f64 f64) (result v128)
+    (f64x2.eq (f64x2.splat (local.get 0)) (f64x2.splat (local.get 1))))
+
 ;;   ;; Floating-point sign bit operations
 ;;   (func (export "as-f32x4_abs-operand") (param f32) (result v128)
 ;;     (f32x4.abs (f32x4.splat (local.get 0))))
@@ -289,8 +289,8 @@
 ;;     (f32x4.convert_i32x4_s (i32x4.splat (local.get 0))))
 ;;   (func (export "as-i32x4_trunc_s_f32x4_sat-operand") (param f32) (result v128)
 ;;     (i32x4.trunc_sat_f32x4_s (f32x4.splat (local.get 0))))
-;; )
-;; 
+)
+
 ;; (assert_return (invoke "as-i8x16_extract_lane_s-operand-first" (i32.const 42)) (i32.const 42))
 ;; (assert_return (invoke "as-i8x16_extract_lane_s-operand-last" (i32.const -42)) (i32.const -42))
 ;; (assert_return (invoke "as-i16x8_extract_lane_s-operand-first" (i32.const 0xffff7fff)) (i32.const 32767))
@@ -328,14 +328,14 @@
 ;; (assert_return (invoke "as-i16x8_all_true-operand" (i32.const 0xffff)) (i32.const 1))
 ;; (assert_return (invoke "as-i32x4_all_true-operand1" (i32.const 0xf0f0f0f0)) (i32.const 1))
 ;; (assert_return (invoke "as-i32x4_all_true-operand2" (i64.const -1)) (i32.const 1))
-;; 
-;; (assert_return (invoke "as-i8x16_eq-operands" (i32.const 1) (i32.const 2)) (v128.const i8x16 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
-;; (assert_return (invoke "as-i16x8_eq-operands" (i32.const -1) (i32.const 65535)) (v128.const i16x8 0xffff 0xffff 0xffff 0xffff 0xffff 0xffff 0xffff 0xffff))
-;; (assert_return (invoke "as-i32x4_eq-operands1" (i32.const -1) (i32.const 0xffffffff)) (v128.const i32x4 0xffffffff 0xffffffff 0xffffffff 0xffffffff))
-;; (assert_return (invoke "as-f32x4_eq-operands" (f32.const +0.0) (f32.const -0.0)) (v128.const i32x4 0xffffffff 0xffffffff 0xffffffff 0xffffffff))
-;; (assert_return (invoke "as-i32x4_eq-operands2" (i64.const 1) (i64.const 2)) (v128.const i64x2 0xffffffff00000000 0xffffffff00000000))
-;; (assert_return (invoke "as-f64x2_eq-operands" (f64.const +0.0) (f64.const -0.0)) (v128.const i64x2 -1 -1))
-;; 
+
+(assert_return (invoke "as-i8x16_eq-operands" (i32.const 1) (i32.const 2)) (v128.const i8x16 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
+(assert_return (invoke "as-i16x8_eq-operands" (i32.const -1) (i32.const 65535)) (v128.const i16x8 0xffff 0xffff 0xffff 0xffff 0xffff 0xffff 0xffff 0xffff))
+(assert_return (invoke "as-i32x4_eq-operands1" (i32.const -1) (i32.const 0xffffffff)) (v128.const i32x4 0xffffffff 0xffffffff 0xffffffff 0xffffffff))
+(assert_return (invoke "as-f32x4_eq-operands" (f32.const +0.0) (f32.const -0.0)) (v128.const i32x4 0xffffffff 0xffffffff 0xffffffff 0xffffffff))
+(assert_return (invoke "as-i32x4_eq-operands2" (i64.const 1) (i64.const 2)) (v128.const i64x2 0xffffffff00000000 0xffffffff00000000))
+(assert_return (invoke "as-f64x2_eq-operands" (f64.const +0.0) (f64.const -0.0)) (v128.const i64x2 -1 -1))
+
 ;; (assert_return (invoke "as-f32x4_abs-operand" (f32.const -1.125)) (v128.const f32x4 1.125 1.125 1.125 1.125))
 ;; (assert_return (invoke "as-f32x4_min-operands" (f32.const 0.25) (f32.const 1e-38)) (v128.const f32x4 1e-38 1e-38 1e-38 1e-38))
 ;; (assert_return (invoke "as-f32x4_div-operands" (f32.const 1.0) (f32.const 8.0)) (v128.const f32x4 0.125 0.125 0.125 0.125))

@@ -15,7 +15,7 @@ use crate::{
         CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I,
         IntCmpKind, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind,
         ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, StoreKind,
-        TrapCode, TruncKind, Zero,
+        TrapCode, TruncKind, VectorCompareKind, VectorEqualityKind, Zero,
     },
     stack::TypedReg,
 };
@@ -943,6 +943,66 @@ impl Masm for MacroAssembler {
         _extend: Option<Extend<Zero>>,
     ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_eq(
+        &mut self,
+        _dst: WritableReg,
+        _lhs: Reg,
+        _rhs: Reg,
+        _kind: VectorEqualityKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_ne(
+        &mut self,
+        _dst: WritableReg,
+        _lhs: Reg,
+        _rhs: Reg,
+        _kind: VectorEqualityKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_lt(
+        &mut self,
+        _dst: WritableReg,
+        _lhs: Reg,
+        _rhs: Reg,
+        _kind: VectorCompareKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_le(
+        &mut self,
+        _dst: WritableReg,
+        _lhs: Reg,
+        _rhs: Reg,
+        _kind: VectorCompareKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_gt(
+        &mut self,
+        _dst: WritableReg,
+        _lhs: Reg,
+        _rhs: Reg,
+        _kind: VectorCompareKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_ge(
+        &mut self,
+        _dst: WritableReg,
+        _lhs: Reg,
+        _rhs: Reg,
+        _kind: VectorCompareKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
     }
 
     fn v128_not(&mut self, _dst: WritableReg) -> Result<()> {

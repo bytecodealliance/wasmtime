@@ -13,7 +13,7 @@ use crate::masm::{
     DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler,
     MemMoveDirection, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp,
     RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, StoreKind, TruncKind,
-    VectorExtendKind, Zero,
+    VectorCompareKind, VectorEqualityKind, VectorExtendKind, Zero,
 };
 
 use crate::reg::{writable, Reg};
@@ -351,6 +351,54 @@ macro_rules! def_unsupported {
     (emit I64AtomicRmw16CmpxchgU $($rest:tt)*) => {};
     (emit I64AtomicRmw32CmpxchgU $($rest:tt)*) => {};
     (emit I64AtomicRmwCmpxchg $($rest:tt)*) => {};
+    (emit I8x16Eq $($rest:tt)*) => {};
+    (emit I16x8Eq $($rest:tt)*) => {};
+    (emit I32x4Eq $($rest:tt)*) => {};
+    (emit I64x2Eq $($rest:tt)*) => {};
+    (emit F32x4Eq $($rest:tt)*) => {};
+    (emit F64x2Eq $($rest:tt)*) => {};
+    (emit I8x16Ne $($rest:tt)*) => {};
+    (emit I16x8Ne $($rest:tt)*) => {};
+    (emit I32x4Ne $($rest:tt)*) => {};
+    (emit I64x2Ne $($rest:tt)*) => {};
+    (emit F32x4Ne $($rest:tt)*) => {};
+    (emit F64x2Ne $($rest:tt)*) => {};
+    (emit I8x16LtS $($rest:tt)*) => {};
+    (emit I8x16LtU $($rest:tt)*) => {};
+    (emit I16x8LtS $($rest:tt)*) => {};
+    (emit I16x8LtU $($rest:tt)*) => {};
+    (emit I32x4LtS $($rest:tt)*) => {};
+    (emit I32x4LtU $($rest:tt)*) => {};
+    (emit I64x2LtS $($rest:tt)*) => {};
+    (emit F32x4Lt $($rest:tt)*) => {};
+    (emit F64x2Lt $($rest:tt)*) => {};
+    (emit I8x16LeS $($rest:tt)*) => {};
+    (emit I8x16LeU $($rest:tt)*) => {};
+    (emit I16x8LeS $($rest:tt)*) => {};
+    (emit I16x8LeU $($rest:tt)*) => {};
+    (emit I32x4LeS $($rest:tt)*) => {};
+    (emit I32x4LeU $($rest:tt)*) => {};
+    (emit I64x2LeS $($rest:tt)*) => {};
+    (emit F32x4Le $($rest:tt)*) => {};
+    (emit F64x2Le $($rest:tt)*) => {};
+    (emit I8x16GtS $($rest:tt)*) => {};
+    (emit I8x16GtU $($rest:tt)*) => {};
+    (emit I16x8GtS $($rest:tt)*) => {};
+    (emit I16x8GtU $($rest:tt)*) => {};
+    (emit I32x4GtS $($rest:tt)*) => {};
+    (emit I32x4GtU $($rest:tt)*) => {};
+    (emit I64x2GtS $($rest:tt)*) => {};
+    (emit F32x4Gt $($rest:tt)*) => {};
+    (emit F64x2Gt $($rest:tt)*) => {};
+    (emit I8x16GeS $($rest:tt)*) => {};
+    (emit I8x16GeU $($rest:tt)*) => {};
+    (emit I16x8GeS $($rest:tt)*) => {};
+    (emit I16x8GeU $($rest:tt)*) => {};
+    (emit I32x4GeS $($rest:tt)*) => {};
+    (emit I32x4GeU $($rest:tt)*) => {};
+    (emit I64x2GeS $($rest:tt)*) => {};
+    (emit F32x4Ge $($rest:tt)*) => {};
+    (emit F64x2Ge $($rest:tt)*) => {};
     (emit MemoryAtomicWait32 $($rest:tt)*) => {};
     (emit MemoryAtomicWait64 $($rest:tt)*) => {};
     (emit MemoryAtomicNotify $($rest:tt)*) => {};
@@ -2919,6 +2967,390 @@ where
         self.context
             .extract_lane_op(self.masm, ExtractLaneKind::F64x2, |masm, src, dst, kind| {
                 masm.extract_lane(src, dst, lane, kind)
+            })
+    }
+
+    fn visit_i8x16_eq(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, _size| {
+                masm.v128_eq(writable!(dst), dst, src, VectorEqualityKind::I8x16)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i16x8_eq(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, _size| {
+                masm.v128_eq(writable!(dst), dst, src, VectorEqualityKind::I16x8)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i32x4_eq(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_eq(writable!(dst), dst, src, VectorEqualityKind::I32x4)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i64x2_eq(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
+                masm.v128_eq(writable!(dst), dst, src, VectorEqualityKind::I64x2)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_f32x4_eq(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_eq(writable!(dst), dst, src, VectorEqualityKind::F32x4)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_f64x2_eq(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
+                masm.v128_eq(writable!(dst), dst, src, VectorEqualityKind::F64x2)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i8x16_ne(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, _size| {
+                masm.v128_ne(writable!(dst), dst, src, VectorEqualityKind::I8x16)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i16x8_ne(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, _size| {
+                masm.v128_ne(writable!(dst), dst, src, VectorEqualityKind::I16x8)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i32x4_ne(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_ne(writable!(dst), dst, src, VectorEqualityKind::I32x4)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i64x2_ne(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
+                masm.v128_ne(writable!(dst), dst, src, VectorEqualityKind::I64x2)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_f32x4_ne(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_ne(writable!(dst), dst, src, VectorEqualityKind::F32x4)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_f64x2_ne(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
+                masm.v128_ne(writable!(dst), dst, src, VectorEqualityKind::F64x2)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i8x16_lt_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, _size| {
+                masm.v128_lt(writable!(dst), dst, src, VectorCompareKind::I8x16S)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i8x16_lt_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, _size| {
+                masm.v128_lt(writable!(dst), dst, src, VectorCompareKind::I8x16U)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i16x8_lt_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, _size| {
+                masm.v128_lt(writable!(dst), dst, src, VectorCompareKind::I16x8S)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i16x8_lt_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, _size| {
+                masm.v128_lt(writable!(dst), dst, src, VectorCompareKind::I16x8U)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i32x4_lt_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_lt(writable!(dst), dst, src, VectorCompareKind::I32x4S)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i32x4_lt_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_lt(writable!(dst), dst, src, VectorCompareKind::I32x4U)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i64x2_lt_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
+                masm.v128_lt(writable!(dst), dst, src, VectorCompareKind::I64x2S)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_f32x4_lt(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_lt(writable!(dst), dst, src, VectorCompareKind::F32x4)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_f64x2_lt(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
+                masm.v128_lt(writable!(dst), dst, src, VectorCompareKind::F64x2)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i8x16_le_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, _size| {
+                masm.v128_le(writable!(dst), dst, src, VectorCompareKind::I8x16S)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i8x16_le_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, _size| {
+                masm.v128_le(writable!(dst), dst, src, VectorCompareKind::I8x16U)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i16x8_le_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, _size| {
+                masm.v128_le(writable!(dst), dst, src, VectorCompareKind::I16x8S)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i16x8_le_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, _size| {
+                masm.v128_le(writable!(dst), dst, src, VectorCompareKind::I16x8U)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i32x4_le_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_le(writable!(dst), dst, src, VectorCompareKind::I32x4S)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i32x4_le_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_le(writable!(dst), dst, src, VectorCompareKind::I32x4U)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i64x2_le_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
+                masm.v128_le(writable!(dst), dst, src, VectorCompareKind::I64x2S)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_f32x4_le(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_le(writable!(dst), dst, src, VectorCompareKind::F32x4)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_f64x2_le(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
+                masm.v128_le(writable!(dst), dst, src, VectorCompareKind::F64x2)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i8x16_gt_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, _size| {
+                masm.v128_gt(writable!(dst), dst, src, VectorCompareKind::I8x16S)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i8x16_gt_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, _size| {
+                masm.v128_gt(writable!(dst), dst, src, VectorCompareKind::I8x16U)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i16x8_gt_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, _size| {
+                masm.v128_gt(writable!(dst), dst, src, VectorCompareKind::I16x8S)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i16x8_gt_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, _size| {
+                masm.v128_gt(writable!(dst), dst, src, VectorCompareKind::I16x8U)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i32x4_gt_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_gt(writable!(dst), dst, src, VectorCompareKind::I32x4S)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i32x4_gt_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_gt(writable!(dst), dst, src, VectorCompareKind::I32x4U)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i64x2_gt_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
+                masm.v128_gt(writable!(dst), dst, src, VectorCompareKind::I64x2S)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_f32x4_gt(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_gt(writable!(dst), dst, src, VectorCompareKind::F32x4)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_f64x2_gt(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
+                masm.v128_gt(writable!(dst), dst, src, VectorCompareKind::F64x2)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i8x16_ge_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, _size| {
+                masm.v128_ge(writable!(dst), dst, src, VectorCompareKind::I8x16S)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i8x16_ge_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, _size| {
+                masm.v128_ge(writable!(dst), dst, src, VectorCompareKind::I8x16U)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i16x8_ge_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, _size| {
+                masm.v128_ge(writable!(dst), dst, src, VectorCompareKind::I16x8S)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i16x8_ge_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, _size| {
+                masm.v128_ge(writable!(dst), dst, src, VectorCompareKind::I16x8U)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i32x4_ge_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_ge(writable!(dst), dst, src, VectorCompareKind::I32x4S)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i32x4_ge_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_ge(writable!(dst), dst, src, VectorCompareKind::I32x4U)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i64x2_ge_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S64, |masm, dst, src, _size| {
+                masm.v128_ge(writable!(dst), dst, src, VectorCompareKind::I64x2S)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_f32x4_ge(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_ge(writable!(dst), dst, src, VectorCompareKind::F32x4)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_f64x2_ge(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_ge(writable!(dst), dst, src, VectorCompareKind::F64x2)?;
+                Ok(TypedReg::v128(dst))
             })
     }
 

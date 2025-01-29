@@ -496,6 +496,68 @@ pub struct LaneSelector {
     pub size: OperandSize,
 }
 
+/// Kinds of vector equalities and non-equalities supported by WebAssembly.
+pub(crate) enum VectorEqualityKind {
+    /// 16 lanes of 8 bit integers.
+    I8x16,
+    /// 8 lanes of 16 bit integers.
+    I16x8,
+    /// 4 lanes of 32 bit integers.
+    I32x4,
+    /// 2 lanes of 64 bit integers.
+    I64x2,
+    /// 4 lanes of 32 bit floats.
+    F32x4,
+    /// 2 lanes of 64 bit floats.
+    F64x2,
+}
+
+impl VectorEqualityKind {
+    /// Get the lane size to use.
+    pub(crate) fn lane_size(&self) -> OperandSize {
+        match self {
+            Self::I8x16 => OperandSize::S8,
+            Self::I16x8 => OperandSize::S16,
+            Self::I32x4 | Self::F32x4 => OperandSize::S32,
+            Self::I64x2 | Self::F64x2 => OperandSize::S64,
+        }
+    }
+}
+
+/// Kinds of vector comparisons supported by WebAssembly.
+pub(crate) enum VectorCompareKind {
+    /// 16 lanes of signed 8 bit integers.
+    I8x16S,
+    /// 16 lanes of unsigned 8 bit integers.
+    I8x16U,
+    /// 8 lanes of signed 16 bit integers.
+    I16x8S,
+    /// 8 lanes of unsigned 16 bit integers.
+    I16x8U,
+    /// 4 lanes of signed 32 bit integers.
+    I32x4S,
+    /// 4 lanes of unsigned 32 bit integers.
+    I32x4U,
+    /// 2 lanes of signed 64 bit integers.
+    I64x2S,
+    /// 4 lanes of 32 bit floats.
+    F32x4,
+    /// 2 lanes of 64 bit floats.
+    F64x2,
+}
+
+impl VectorCompareKind {
+    /// Get the lane size to use.
+    pub(crate) fn lane_size(&self) -> OperandSize {
+        match self {
+            Self::I8x16S | Self::I8x16U => OperandSize::S8,
+            Self::I16x8S | Self::I16x8U => OperandSize::S16,
+            Self::I32x4S | Self::I32x4U | Self::F32x4 => OperandSize::S32,
+            Self::I64x2S | Self::F64x2 => OperandSize::S64,
+        }
+    }
+}
+
 /// Operand size, in bits.
 #[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub(crate) enum OperandSize {
@@ -1486,6 +1548,66 @@ pub(crate) trait MacroAssembler {
         size: OperandSize,
         flags: MemFlags,
         extend: Option<Extend<Zero>>,
+    ) -> Result<()>;
+
+    /// Compares vector registers `lhs` and `rhs` for equality and puts the
+    /// vector of results in `dst`.
+    fn v128_eq(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorEqualityKind,
+    ) -> Result<()>;
+
+    /// Compares vector registers `lhs` and `rhs` for inequality and puts the
+    /// vector of results in `dst`.
+    fn v128_ne(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorEqualityKind,
+    ) -> Result<()>;
+
+    /// Performs a less than comparison with vector registers `lhs` and `rhs`
+    /// and puts the vector of results in `dst`.
+    fn v128_lt(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorCompareKind,
+    ) -> Result<()>;
+
+    /// Performs a less than or equal comparison with vector registers `lhs`
+    /// and `rhs` and puts the vector of results in `dst`.
+    fn v128_le(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorCompareKind,
+    ) -> Result<()>;
+
+    /// Performs a greater than comparison with vector registers `lhs` and
+    /// `rhs` and puts the vector of results in `dst`.
+    fn v128_gt(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorCompareKind,
+    ) -> Result<()>;
+
+    /// Performs a greater than or equal comparison with vector registers `lhs`
+    /// and `rhs` and puts the vector of results in `dst`.
+    fn v128_ge(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorCompareKind,
     ) -> Result<()>;
 
     /// Emit a memory fence.
