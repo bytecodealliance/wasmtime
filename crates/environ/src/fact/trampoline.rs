@@ -543,11 +543,8 @@ impl<'a, 'b> Compiler<'a, 'b> {
         self.instruction(Drop);
 
         if let Some(globals) = result_globals {
-            self.flush_code();
             for global in globals {
-                self.module.funcs[self.result]
-                    .body
-                    .push(Body::GlobalGet(*global));
+                self.global_set(*global);
             }
         }
 
@@ -3158,6 +3155,13 @@ impl<'a, 'b> Compiler<'a, 'b> {
     fn trap(&mut self, trap: Trap) {
         self.traps.push((self.code.len(), trap));
         self.instruction(Unreachable);
+    }
+
+    fn global_set(&mut self, index: u32) {
+        self.flush_code();
+        self.module.funcs[self.result]
+            .body
+            .push(Body::GlobalGet(index));
     }
 
     /// Flushes out the current `code` instructions (and `traps` if there are
