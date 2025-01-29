@@ -94,6 +94,18 @@ impl From<Reg> for Xmm {
     }
 }
 
+impl From<Reg> for XmmMem {
+    fn from(value: Reg) -> Self {
+        XmmMem::unwrap_new(value.into())
+    }
+}
+
+impl From<Reg> for XmmMemImm {
+    fn from(value: Reg) -> Self {
+        XmmMemImm::unwrap_new(value.into())
+    }
+}
+
 impl From<OperandSize> for args::OperandSize {
     fn from(size: OperandSize) -> Self {
         match size {
@@ -1701,16 +1713,8 @@ impl Assembler {
 
     /// Extract a value from `src` into `dst` (zero extended) determined by `lane`.
     pub fn xmm_vpextr_rr(&mut self, dst: WritableReg, src: Reg, lane: u8, size: OperandSize) {
-        let op = match size {
-            OperandSize::S8 => AvxOpcode::Vpextrb,
-            OperandSize::S16 => AvxOpcode::Vpextrw,
-            OperandSize::S32 => AvxOpcode::Vpextrd,
-            OperandSize::S64 => AvxOpcode::Vpextrq,
-            _ => unimplemented!(),
-        };
-
         self.emit(Inst::XmmToGprImmVex {
-            op,
+            op: Self::vpextr_opcode(size),
             src: src.into(),
             dst: dst.to_reg().into(),
             imm: lane,
@@ -1862,6 +1866,62 @@ impl Assembler {
             OperandSize::S64 => AvxOpcode::Vpinsrq,
             _ => unimplemented!(),
         }
+    }
+
+    pub fn xmm_rmi_rvex(&mut self, op: AvxOpcode, src1: Reg, src2: Reg, dst: WritableReg) {
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.map(Into::into),
+        })
+    }
+
+    pub fn xmm_vptest(&mut self, src1: Reg, src2: Reg) {
+        self.emit(Inst::XmmCmpRmRVex {
+            op: AvxOpcode::Vptest,
+            src1: src1.into(),
+            src2: src2.into(),
+        })
+    }
+
+    /// The `vpextr` opcode to use.
+    fn vpextr_opcode(size: OperandSize) -> AvxOpcode {
+        match size {
+            OperandSize::S8 => AvxOpcode::Vpextrb,
+            OperandSize::S16 => AvxOpcode::Vpextrw,
+            OperandSize::S32 => AvxOpcode::Vpextrd,
+            OperandSize::S64 => AvxOpcode::Vpextrq,
+            _ => unimplemented!(),
+        }
+    }
+
+    /// Extract a value from `src` into `addr` determined by `lane`.
+    pub(crate) fn xmm_vpextr_rm(
+        &mut self,
+        addr: &Address,
+        src: Reg,
+        lane: u8,
+        size: OperandSize,
+        flags: MemFlags,
+    ) -> anyhow::Result<()> {
+        assert!(addr.is_offset());
+        let dst = Self::to_synthetic_amode(
+            addr,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            flags,
+        );
+
+        self.emit(Inst::XmmMovRMImmVex {
+            op: Self::vpextr_opcode(size),
+            src: src.into(),
+            dst,
+            imm: lane,
+        });
+
+        Ok(())
     }
 }
 

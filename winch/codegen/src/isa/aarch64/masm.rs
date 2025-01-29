@@ -13,8 +13,8 @@ use crate::{
     },
     masm::{
         CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I,
-        IntCmpKind, LoadKind, MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm,
-        RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot,
+        IntCmpKind, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind,
+        ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, StoreKind,
         TrapCode, TruncKind, Zero,
     },
     stack::TypedReg,
@@ -176,18 +176,17 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn wasm_store(
-        &mut self,
-        src: Reg,
-        dst: Self::Address,
-        size: OperandSize,
-        op_kind: MemOpKind,
-    ) -> Result<()> {
-        match op_kind {
-            MemOpKind::Atomic => Err(anyhow!(CodeGenError::unimplemented_masm_instruction())),
-            MemOpKind::Normal => {
+    fn wasm_store(&mut self, src: Reg, dst: Self::Address, kind: StoreKind) -> Result<()> {
+        match kind {
+            StoreKind::Operand(size) => {
                 self.asm.str(src, dst, size);
                 Ok(())
+            }
+            StoreKind::Atomic(_size) => {
+                Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+            }
+            StoreKind::VectorLane(_selector) => {
+                Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
             }
         }
     }
@@ -222,32 +221,28 @@ impl Masm for MacroAssembler {
         self.load(src, dst, self.ptr_size)
     }
 
-    fn wasm_load(
-        &mut self,
-        src: Self::Address,
-        dst: WritableReg,
-        kind: LoadKind,
-        op_kind: MemOpKind,
-    ) -> Result<()> {
+    fn wasm_load(&mut self, src: Self::Address, dst: WritableReg, kind: LoadKind) -> Result<()> {
         let size = kind.derive_operand_size();
-        match op_kind {
-            MemOpKind::Normal => match kind {
-                LoadKind::Operand(_) => self.asm.uload(src, dst, size),
-                LoadKind::Splat(_) => bail!(CodeGenError::UnimplementedWasmLoadKind),
-                LoadKind::ScalarExtend(extend_kind) => {
-                    if extend_kind.signed() {
-                        self.asm.sload(src, dst, size)
-                    } else {
-                        // unlike x64, unused bits are set to zero so we don't need to extend
-                        self.asm.uload(src, dst, size)
-                    }
+        match kind {
+            LoadKind::Operand(_) => self.asm.uload(src, dst, size),
+            LoadKind::Splat(_) => bail!(CodeGenError::UnimplementedWasmLoadKind),
+            LoadKind::ScalarExtend(extend_kind) => {
+                if extend_kind.signed() {
+                    self.asm.sload(src, dst, size)
+                } else {
+                    // unlike x64, unused bits are set to zero so we don't need to extend
+                    self.asm.uload(src, dst, size)
                 }
-                LoadKind::VectorExtend(_vector_extend_kind) => {
-                    bail!(CodeGenError::UnimplementedWasmLoadKind)
-                }
-            },
-            MemOpKind::Atomic => bail!(CodeGenError::unimplemented_masm_instruction()),
+            }
+            LoadKind::VectorExtend(_vector_extend_kind) => {
+                bail!(CodeGenError::UnimplementedWasmLoadKind)
+            }
+            LoadKind::VectorLane(_selector) => {
+                bail!(CodeGenError::unimplemented_masm_instruction())
+            }
+            LoadKind::Atomic(_, _) => bail!(CodeGenError::unimplemented_masm_instruction()),
         }
+
         Ok(())
     }
 
@@ -950,7 +945,41 @@ impl Masm for MacroAssembler {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
+    fn v128_not(&mut self, _dst: WritableReg) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
     fn fence(&mut self) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_and(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_and_not(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_or(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_xor(&mut self, _src1: Reg, _src2: Reg, _dst: WritableReg) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_bitselect(
+        &mut self,
+        _src1: Reg,
+        _src2: Reg,
+        _mask: Reg,
+        _dst: WritableReg,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_any_true(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 }

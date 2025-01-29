@@ -7,9 +7,9 @@ use super::{
 use anyhow::{anyhow, bail, Result};
 
 use crate::masm::{
-    DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I, IntCmpKind, LoadKind,
-    MacroAssembler as Masm, MemOpKind, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind,
-    RmwOp, RoundingMode, ShiftKind, SplatKind, TrapCode, TruncKind, Zero, TRUSTED_FLAGS,
+    DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I, IntCmpKind, LaneSelector,
+    LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind,
+    RmwOp, RoundingMode, ShiftKind, SplatKind, StoreKind, TrapCode, TruncKind, Zero, TRUSTED_FLAGS,
     UNTRUSTED_FLAGS,
 };
 use crate::{
@@ -34,7 +34,7 @@ use cranelift_codegen::{
     isa::{
         unwind::UnwindInst,
         x64::{
-            args::{FenceKind, CC},
+            args::{AvxOpcode, FenceKind, CC},
             settings as x64_settings, AtomicRmwSeqOp,
         },
     },
@@ -218,15 +218,12 @@ impl Masm for MacroAssembler {
         self.store_impl(src, dst, size, TRUSTED_FLAGS)
     }
 
-    fn wasm_store(
-        &mut self,
-        src: Reg,
-        dst: Self::Address,
-        size: OperandSize,
-        op_kind: MemOpKind,
-    ) -> Result<()> {
-        match op_kind {
-            MemOpKind::Atomic => {
+    fn wasm_store(&mut self, src: Reg, dst: Self::Address, kind: StoreKind) -> Result<()> {
+        match kind {
+            StoreKind::Operand(size) => {
+                self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS)?;
+            }
+            StoreKind::Atomic(size) => {
                 if size == OperandSize::S128 {
                     // TODO: we don't support 128-bit atomic store yet.
                     bail!(CodeGenError::unexpected_operand_size());
@@ -235,10 +232,15 @@ impl Masm for MacroAssembler {
                 // although, we could probably just emit a xchg.
                 self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS)?;
                 self.asm.fence(FenceKind::MFence);
-                Ok(())
             }
-            MemOpKind::Normal => self.store_impl(src.into(), dst, size, UNTRUSTED_FLAGS),
+            StoreKind::VectorLane(LaneSelector { lane, size }) => {
+                self.ensure_has_avx()?;
+                self.asm
+                    .xmm_vpextr_rm(&dst, src, lane, size, UNTRUSTED_FLAGS)?;
+            }
         }
+
+        Ok(())
     }
 
     fn pop(&mut self, dst: WritableReg, size: OperandSize) -> Result<()> {
@@ -298,61 +300,34 @@ impl Masm for MacroAssembler {
     }
 
     fn load(&mut self, src: Address, dst: WritableReg, size: OperandSize) -> Result<()> {
-        self.load_impl::<Self>(src, dst, size, TRUSTED_FLAGS)
+        self.load_impl(src, dst, size, TRUSTED_FLAGS)
     }
 
-    fn wasm_load(
-        &mut self,
-        src: Self::Address,
-        dst: WritableReg,
-        kind: LoadKind,
-        op_kind: MemOpKind,
-    ) -> Result<()> {
+    fn wasm_load(&mut self, src: Self::Address, dst: WritableReg, kind: LoadKind) -> Result<()> {
         let size = kind.derive_operand_size();
 
         match kind {
-            // The guarantees of the x86-64 memory model ensure that `SeqCst`
-            // loads are equivalent to normal loads.
-            LoadKind::ScalarExtend(ext) => {
-                if op_kind == MemOpKind::Atomic && size == OperandSize::S128 {
+            LoadKind::ScalarExtend(ext) => match ext {
+                ExtendKind::Signed(ext) => {
+                    self.asm.movsx_mr(&src, dst, ext, UNTRUSTED_FLAGS);
+                }
+                ExtendKind::Unsigned(_) => self.load_impl(src, dst, size, UNTRUSTED_FLAGS)?,
+            },
+            LoadKind::Operand(_) | LoadKind::Atomic(_, _) => {
+                // The guarantees of the x86-64 memory model ensure that `SeqCst`
+                // loads are equivalent to normal loads.
+                if kind.is_atomic() && size == OperandSize::S128 {
                     bail!(CodeGenError::unexpected_operand_size());
                 }
 
-                match ext {
-                    ExtendKind::Signed(ext) => {
-                        self.asm.movsx_mr(&src, dst, ext, UNTRUSTED_FLAGS);
-                    }
-                    ExtendKind::Unsigned(_) => {
-                        self.load_impl::<Self>(src, dst, size, UNTRUSTED_FLAGS)?
-                    }
-                }
-            }
-            LoadKind::Operand(_) => {
-                if op_kind == MemOpKind::Atomic && size == OperandSize::S128 {
-                    bail!(CodeGenError::unexpected_operand_size());
-                }
-
-                self.load_impl::<Self>(src, dst, size, UNTRUSTED_FLAGS)?;
+                self.load_impl(src, dst, size, UNTRUSTED_FLAGS)?;
             }
             LoadKind::VectorExtend(ext) => {
-                if op_kind == MemOpKind::Atomic {
-                    bail!(CodeGenError::unimplemented_masm_instruction());
-                }
-
-                if !self.flags.has_avx() {
-                    bail!(CodeGenError::UnimplementedForNoAvx)
-                }
-
+                self.ensure_has_avx()?;
                 self.asm.xmm_vpmov_mr(&src, dst, ext, UNTRUSTED_FLAGS)
             }
             LoadKind::Splat(_) => {
-                if op_kind == MemOpKind::Atomic {
-                    bail!(CodeGenError::unimplemented_masm_instruction());
-                }
-
-                if !self.flags.has_avx() {
-                    bail!(CodeGenError::UnimplementedForNoAvx)
-                }
+                self.ensure_has_avx()?;
 
                 if size == OperandSize::S64 {
                     self.asm
@@ -368,7 +343,15 @@ impl Masm for MacroAssembler {
                         .xmm_vpbroadcast_mr(&src, dst, size, UNTRUSTED_FLAGS);
                 }
             }
+            LoadKind::VectorLane(LaneSelector { lane, size }) => {
+                self.ensure_has_avx()?;
+                let byte_tmp = regs::scratch();
+                self.load_impl(src, writable!(byte_tmp), size, UNTRUSTED_FLAGS)?;
+                self.asm
+                    .xmm_vpinsr_rrr(dst, dst.to_reg(), byte_tmp, lane, size);
+            }
         }
+
         Ok(())
     }
 
@@ -1345,9 +1328,7 @@ impl Masm for MacroAssembler {
 
         // Perform the splat on the operands.
         if size == SplatKind::I64x2 || size == SplatKind::F64x2 {
-            if !self.flags.has_avx() {
-                bail!(CodeGenError::UnimplementedForNoAvx);
-            }
+            self.ensure_has_avx()?;
             let mask = Self::vpshuf_mask_for_64_bit_splats();
             match src {
                 RegImm::Reg(src) => self.asm.xmm_vpshuf_rr(src, dst, mask, OperandSize::S32),
@@ -1358,9 +1339,7 @@ impl Masm for MacroAssembler {
                 }
             }
         } else {
-            if !self.flags.has_avx2() {
-                bail!(CodeGenError::UnimplementedForNoAvx2);
-            }
+            self.ensure_has_avx2()?;
 
             match src {
                 RegImm::Reg(src) => self.asm.xmm_vpbroadcast_rr(src, dst, size.lane_size()),
@@ -1379,9 +1358,7 @@ impl Masm for MacroAssembler {
     }
 
     fn shuffle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, lanes: [u8; 16]) -> Result<()> {
-        if !self.flags.has_avx() {
-            bail!(CodeGenError::UnimplementedForNoAvx)
-        }
+        self.ensure_has_avx()?;
 
         // Use `vpshufb` with `lanes` to set the lanes in `lhs` and `rhs`
         // separately to either the selected index or 0.
@@ -1409,9 +1386,7 @@ impl Masm for MacroAssembler {
     }
 
     fn swizzle(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg) -> Result<()> {
-        if !self.flags.has_avx() {
-            bail!(CodeGenError::UnimplementedForNoAvx)
-        }
+        self.ensure_has_avx()?;
 
         // Clamp rhs to [0, 15 (i.e., 0xF)] and substitute 0 for anything
         // outside that range.
@@ -1500,9 +1475,7 @@ impl Masm for MacroAssembler {
         lane: u8,
         kind: ExtractLaneKind,
     ) -> Result<()> {
-        if !self.flags.has_avx() {
-            bail!(CodeGenError::UnimplementedForNoAvx);
-        }
+        self.ensure_has_avx()?;
 
         match kind {
             ExtractLaneKind::I8x16S
@@ -1548,9 +1521,7 @@ impl Masm for MacroAssembler {
         lane: u8,
         kind: ReplaceLaneKind,
     ) -> Result<()> {
-        if !self.flags.has_avx() {
-            bail!(CodeGenError::UnimplementedForNoAvx)
-        }
+        self.ensure_has_avx()?;
 
         match kind {
             ReplaceLaneKind::I8x16
@@ -1645,6 +1616,60 @@ impl Masm for MacroAssembler {
         self.asm.fence(FenceKind::MFence);
         Ok(())
     }
+
+    fn v128_not(&mut self, dst: WritableReg) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        let tmp = regs::scratch_xmm();
+        // First, we initialize `tmp` with all ones, by comparing it with itself.
+        self.asm
+            .xmm_rmi_rvex(AvxOpcode::Vpcmpeqd, tmp, tmp, writable!(tmp));
+        // then we `xor` tmp and `dst` together, yielding `!dst`.
+        self.asm
+            .xmm_rmi_rvex(AvxOpcode::Vpxor, tmp, dst.to_reg(), dst);
+        Ok(())
+    }
+
+    fn v128_and(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+        self.ensure_has_avx()?;
+        self.asm.xmm_rmi_rvex(AvxOpcode::Vpand, src1, src2, dst);
+        Ok(())
+    }
+
+    fn v128_and_not(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+        self.ensure_has_avx()?;
+        self.asm.xmm_rmi_rvex(AvxOpcode::Vpandn, src1, src2, dst);
+        Ok(())
+    }
+
+    fn v128_or(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+        self.ensure_has_avx()?;
+        self.asm.xmm_rmi_rvex(AvxOpcode::Vpor, src1, src2, dst);
+        Ok(())
+    }
+
+    fn v128_xor(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
+        self.ensure_has_avx()?;
+        self.asm.xmm_rmi_rvex(AvxOpcode::Vpxor, src1, src2, dst);
+        Ok(())
+    }
+
+    fn v128_bitselect(&mut self, src1: Reg, src2: Reg, mask: Reg, dst: WritableReg) -> Result<()> {
+        self.ensure_has_avx()?;
+        let tmp = regs::scratch_xmm();
+        self.v128_and(src1, mask, writable!(tmp))?;
+        self.v128_and_not(mask, src2, dst)?;
+        self.v128_or(dst.to_reg(), tmp, dst)?;
+
+        Ok(())
+    }
+
+    fn v128_any_true(&mut self, src: Reg, dst: WritableReg) -> Result<()> {
+        self.ensure_has_avx()?;
+        self.asm.xmm_vptest(src, src);
+        self.asm.setcc(IntCmpKind::Ne, dst);
+        Ok(())
+    }
 }
 
 impl MacroAssembler {
@@ -1676,6 +1701,16 @@ impl MacroAssembler {
         self.stack_max_use_add.replace(patch);
     }
 
+    fn ensure_has_avx(&self) -> Result<()> {
+        anyhow::ensure!(self.flags.has_avx(), CodeGenError::UnimplementedForNoAvx);
+        Ok(())
+    }
+
+    fn ensure_has_avx2(&self) -> Result<()> {
+        anyhow::ensure!(self.flags.has_avx2(), CodeGenError::UnimplementedForNoAvx2);
+        Ok(())
+    }
+
     fn increment_sp(&mut self, bytes: u32) {
         self.sp_offset += bytes;
 
@@ -1704,16 +1739,13 @@ impl MacroAssembler {
     }
 
     /// A common implementation for zero-extend stack loads.
-    fn load_impl<M>(
+    fn load_impl(
         &mut self,
         src: Address,
         dst: WritableReg,
         size: OperandSize,
         flags: MemFlags,
-    ) -> Result<()>
-    where
-        M: Masm,
-    {
+    ) -> Result<()> {
         if dst.to_reg().is_int() {
             let ext = size.extend_to::<Zero>(OperandSize::S64);
             self.asm.movzx_mr(&src, dst, ext, flags);
