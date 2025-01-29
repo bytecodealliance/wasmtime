@@ -1,6 +1,6 @@
 # Contributor Covenant Code of Conduct
 
-*Note*: this Code of Conduct pertains to individuals' behavior. Please also see the [Organizational Code of Conduct][OCoC].
+*Note*: this Code of Conduct pertains to individuals' behavior. Please also see the [Organizational Code of Conduct][OCoC]. Additionally, individuals must also adhere to the [Bytecode Alliance Code of Conduct][BACoC].
 
 ## Our Pledge
 
@@ -45,5 +45,6 @@ Project maintainers who do not follow or enforce the Code of Conduct in good fai
 This Code of Conduct is adapted from the [Contributor Covenant][homepage], version 1.4, available at [http://contributor-covenant.org/version/1/4][version]
 
 [OCoC]: https://github.com/bytecodealliance/wasmtime/blob/main/ORG_CODE_OF_CONDUCT.md
+[BACoC]: https://github.com/bytecodealliance/governance/blob/main/CODE_OF_CONDUCT.md
 [homepage]: https://www.contributor-covenant.org
 [version]: https://www.contributor-covenant.org/version/1/4/
