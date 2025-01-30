@@ -2443,7 +2443,7 @@ impl HostFunc {
     }
 
     /// Analog of [`Func::wrap_inner`]
-    #[cfg(feature = "async")]
+    #[cfg(any(feature = "component-model", feature = "async"))]
     pub fn wrap_inner<F, T, Params, Results>(engine: &Engine, func: F) -> Self
     where
         F: Fn(Caller<'_, T>, Params) -> Results + Send + Sync + 'static,
