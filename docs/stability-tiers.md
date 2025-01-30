@@ -38,6 +38,7 @@ For explanations of what each tier means see below.
 | WebAssembly Proposal | [`multi-memory`]                           |
 | WebAssembly Proposal | [`threads`]                                |
 | WebAssembly Proposal | [`tail-call`]                              |
+| WebAssembly Proposal | [`memory64`]                               |
 | WASI Proposal        | [`wasi-io`]                                |
 | WASI Proposal        | [`wasi-clocks`]                            |
 | WASI Proposal        | [`wasi-filesystem`]                        |
@@ -71,7 +72,6 @@ For explanations of what each tier means see below.
 | Target               | `s390x-unknown-linux-gnu`  | Continuous fuzzing          |
 | Target               | `x86_64-pc-windows-gnu`    | Clear owner of the target   |
 | Target               | Support for `#![no_std]`   | Support beyond CI checks    |
-| WebAssembly Proposal | [`memory64`]               | Unstable wasm proposal      |
 | WebAssembly Proposal | [`function-references`]    | Unstable wasm proposal      |
 | WebAssembly Proposal | [`wide-arithmetic`]        | Unstable wasm proposal      |
 | Execution Backend    | Pulley                     | More time fuzzing/baking    |
