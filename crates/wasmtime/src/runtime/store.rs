@@ -76,22 +76,22 @@
 //! contents of `StoreOpaque`. This is an invariant that we, as the authors of
 //! `wasmtime`, must uphold for the public interface to be safe.
 
-use crate::hash_set::HashSet;
 use crate::instance::InstanceData;
 use crate::linker::Definition;
 use crate::module::RegisteredModuleId;
 use crate::prelude::*;
 use crate::runtime::vm::mpk::ProtectionKey;
+#[cfg(feature = "gc")]
+use crate::runtime::vm::GcRootsList;
 use crate::runtime::vm::{
-    Backtrace, ExportGlobal, GcRootsList, GcStore, InstanceAllocationRequest, InstanceAllocator,
-    InstanceHandle, Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator,
-    SignalHandler, StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMRuntimeLimits,
+    ExportGlobal, GcStore, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
+    Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SignalHandler,
+    StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMRuntimeLimits,
 };
 use crate::trampoline::VMHostGlobalContext;
-use crate::type_registry::RegisteredType;
 use crate::RootSet;
 use crate::{module::ModuleRegistry, Engine, Module, Trap, Val, ValRaw};
-use crate::{Global, Instance, Memory, RootScope, Table, Uninhabited};
+use crate::{Global, Instance, Memory, Table, Uninhabited};
 use alloc::sync::Arc;
 use core::fmt;
 use core::marker;
@@ -317,9 +317,11 @@ pub struct StoreOpaque {
     // GC-related fields.
     gc_store: Option<GcStore>,
     gc_roots: RootSet,
+    #[cfg(feature = "gc")]
     gc_roots_list: GcRootsList,
     // Types for which the embedder has created an allocator for.
-    gc_host_alloc_types: HashSet<RegisteredType>,
+    #[cfg(feature = "gc")]
+    gc_host_alloc_types: crate::hash_set::HashSet<crate::type_registry::RegisteredType>,
 
     // Numbers of resources instantiated in this store, and their limits
     instance_count: usize,
@@ -528,8 +530,10 @@ impl<T> Store<T> {
                 signal_handler: None,
                 gc_store: None,
                 gc_roots: RootSet::default(),
+                #[cfg(feature = "gc")]
                 gc_roots_list: GcRootsList::default(),
-                gc_host_alloc_types: HashSet::default(),
+                #[cfg(feature = "gc")]
+                gc_host_alloc_types: Default::default(),
                 modules: ModuleRegistry::default(),
                 func_refs: FuncRefs::default(),
                 host_globals: Vec::new(),
@@ -1478,6 +1482,7 @@ impl StoreOpaque {
     }
 
     #[inline]
+    #[cfg(feature = "gc")]
     pub(crate) fn gc_roots_mut(&mut self) -> &mut RootSet {
         &mut self.gc_roots
     }
@@ -1536,7 +1541,7 @@ impl StoreOpaque {
 
     #[cfg(feature = "gc")]
     fn trace_wasm_stack_roots(&mut self, gc_roots_list: &mut GcRootsList) {
-        use crate::runtime::vm::SendSyncPtr;
+        use crate::runtime::vm::{Backtrace, SendSyncPtr};
         use core::ptr::NonNull;
 
         log::trace!("Begin trace GC roots :: Wasm stack");
@@ -1610,7 +1615,8 @@ impl StoreOpaque {
     /// type in this store, and we don't have to worry about the type being
     /// reclaimed (since it is possible that none of the Wasm modules in this
     /// store are holding it alive).
-    pub(crate) fn insert_gc_host_alloc_type(&mut self, ty: RegisteredType) {
+    #[cfg(feature = "gc")]
+    pub(crate) fn insert_gc_host_alloc_type(&mut self, ty: crate::type_registry::RegisteredType) {
         self.gc_host_alloc_types.insert(ty);
     }
 
@@ -2028,7 +2034,7 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
 
     #[cfg(feature = "gc")]
     fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>> {
-        let mut scope = RootScope::new(self);
+        let mut scope = crate::RootScope::new(self);
         let store = scope.as_context_mut().0;
         let store_id = store.id();
         let root = root.map(|r| store.gc_roots_mut().push_lifo_root(store_id, r));

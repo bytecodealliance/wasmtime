@@ -16,6 +16,7 @@ pub fn keys(_: usize) -> &'static [ProtectionKey] {
     &[]
 }
 
+#[cfg(any(feature = "async", feature = "pooling-allocator"))]
 pub fn allow(_: ProtectionMask) {}
 
 #[cfg(feature = "async")]
@@ -25,6 +26,7 @@ pub fn current_mask() -> ProtectionMask {
 
 #[derive(Clone, Copy, Debug)]
 pub enum ProtectionKey {}
+
 impl ProtectionKey {
     #[cfg(feature = "pooling-allocator")]
     pub fn protect(&self, _: &mut [u8]) -> Result<()> {
@@ -37,8 +39,12 @@ impl ProtectionKey {
 }
 
 #[derive(Clone, Copy, Debug)]
+#[cfg(any(feature = "async", feature = "pooling-allocator"))]
 pub struct ProtectionMask;
+
+#[cfg(any(feature = "async", feature = "pooling-allocator"))]
 impl ProtectionMask {
+    #[cfg(any(feature = "async", feature = "pooling-allocator"))]
     pub fn all() -> Self {
         Self
     }

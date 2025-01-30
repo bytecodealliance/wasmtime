@@ -66,6 +66,7 @@ impl ModuleRegistry {
     }
 
     /// Fetches a registered module given a program counter value.
+    #[cfg(feature = "gc")]
     pub fn lookup_module_by_pc(&self, pc: usize) -> Option<&Module> {
         let (module, _) = self.module_and_offset(pc)?;
         Some(module)

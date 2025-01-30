@@ -37,6 +37,10 @@ pub struct Backtrace(Vec<Frame>);
 #[derive(Debug)]
 pub struct Frame {
     pc: usize,
+    #[cfg_attr(
+        not(feature = "gc"),
+        expect(dead_code, reason = "not worth #[cfg] annotations to remove")
+    )]
     fp: usize,
 }
 
@@ -47,6 +51,7 @@ impl Frame {
     }
 
     /// Get this frame's frame pointer.
+    #[cfg(feature = "gc")]
     pub fn fp(&self) -> usize {
         self.fp
     }
@@ -88,6 +93,7 @@ impl Backtrace {
     }
 
     /// Walk the current Wasm stack, calling `f` for each frame we walk.
+    #[cfg(feature = "gc")]
     pub fn trace(store: &StoreOpaque, f: impl FnMut(Frame) -> ControlFlow<()>) {
         let limits = store.runtime_limits();
         let unwind = store.unwinder();

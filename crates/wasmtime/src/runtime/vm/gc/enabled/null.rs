@@ -9,8 +9,8 @@ use crate::{
     prelude::*,
     vm::{
         mmap::AlignedLength, ExternRefHostDataId, ExternRefHostDataTable, GarbageCollection,
-        GcHeap, GcHeapObject, GcProgress, GcRootsIter, Mmap, SendSyncUnsafeCell, TypedGcRef,
-        VMGcHeader, VMGcRef,
+        GcHeap, GcHeapObject, GcProgress, GcRootsIter, GcRuntime, Mmap, SendSyncUnsafeCell,
+        TypedGcRef, VMGcHeader, VMGcRef,
     },
     GcHeapOutOfMemory,
 };

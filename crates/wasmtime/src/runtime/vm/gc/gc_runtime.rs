@@ -37,6 +37,7 @@ pub unsafe trait GcRuntime: 'static + Send + Sync {
     fn layouts(&self) -> &dyn GcTypeLayouts;
 
     /// Construct a new GC heap.
+    #[cfg(feature = "gc")]
     fn new_gc_heap(&self) -> Result<Box<dyn GcHeap>>;
 }
 
@@ -524,11 +525,19 @@ pub struct GcRootsList(Vec<RawGcRoot>);
 //    contents of the roots list (when it is non-empty, during GCs) borrow from
 //    the store, which creates self-references.
 #[derive(Clone, Copy, Debug)]
+#[cfg_attr(
+    not(feature = "gc"),
+    expect(
+        dead_code,
+        reason = "not worth it at this time to #[cfg] away these variants",
+    )
+)]
 enum RawGcRoot {
     Stack(SendSyncPtr<u32>),
     NonStack(SendSyncPtr<VMGcRef>),
 }
 
+#[cfg(feature = "gc")]
 impl GcRootsList {
     /// Add a GC root that is inside a Wasm stack frame to this list.
     #[inline]

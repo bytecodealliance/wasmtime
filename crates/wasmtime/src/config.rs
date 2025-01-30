@@ -2729,6 +2729,7 @@ impl Default for Collector {
     }
 }
 
+#[cfg(feature = "gc")]
 impl Collector {
     fn not_auto(&self) -> Option<Collector> {
         match self {

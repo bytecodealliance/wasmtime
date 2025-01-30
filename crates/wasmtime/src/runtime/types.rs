@@ -1401,6 +1401,7 @@ impl StorageType {
     /// https://webassembly.github.io/gc/core/syntax/types.html#bitwidth-fieldtype
     /// and
     /// https://webassembly.github.io/gc/core/syntax/types.html#bitwidth-valtype
+    #[cfg(feature = "gc")]
     pub(crate) fn data_byte_size(&self) -> Option<u32> {
         match self {
             StorageType::I8 => Some(1),
@@ -1979,6 +1980,7 @@ impl ArrayType {
         Engine::same(self.registered_type.engine(), engine)
     }
 
+    #[cfg(feature = "gc")]
     pub(crate) fn registered_type(&self) -> &RegisteredType {
         &self.registered_type
     }
@@ -2342,6 +2344,7 @@ impl FuncType {
         self.registered_type.index()
     }
 
+    #[cfg(feature = "gc")]
     pub(crate) fn as_wasm_func_type(&self) -> &WasmFuncType {
         self.registered_type.unwrap_func()
     }

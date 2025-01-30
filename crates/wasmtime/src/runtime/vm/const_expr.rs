@@ -1,14 +1,15 @@
 //! Evaluating const expressions.
 
+use crate::prelude::*;
 use crate::runtime::vm::{Instance, VMGcRef, ValRaw, I31};
 use crate::store::{AutoAssertNoGc, StoreOpaque};
-use crate::{
-    prelude::*, ArrayRef, ArrayRefPre, ArrayType, StructRef, StructRefPre, StructType, Val,
-};
+#[cfg(feature = "gc")]
+use crate::{ArrayRef, ArrayRefPre, ArrayType, StructRef, StructRefPre, StructType, Val};
 use smallvec::SmallVec;
+use wasmtime_environ::{ConstExpr, ConstOp, FuncIndex, GlobalIndex};
+#[cfg(feature = "gc")]
 use wasmtime_environ::{
-    ConstExpr, ConstOp, FuncIndex, GlobalIndex, ModuleInternedTypeIndex, WasmCompositeInnerType,
-    WasmCompositeType, WasmSubType,
+    ModuleInternedTypeIndex, WasmCompositeInnerType, WasmCompositeType, WasmSubType,
 };
 
 /// An interpreter for const expressions.
