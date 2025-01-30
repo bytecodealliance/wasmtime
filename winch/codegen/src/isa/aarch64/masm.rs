@@ -3,6 +3,7 @@ use super::{
     address::Address,
     asm::Assembler,
     regs::{self, scratch},
+    ABI,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, local::LocalSlot, vmctx},
@@ -15,7 +16,7 @@ use crate::{
         CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I,
         IntCmpKind, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind,
         ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, StoreKind,
-        TrapCode, TruncKind, Zero,
+        TrapCode, TruncKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
     },
     stack::TypedReg,
 };
@@ -48,6 +49,49 @@ impl MacroAssembler {
             ptr_size: ptr_type_from_ptr_size(ptr_size.size()).try_into()?,
         })
     }
+
+    /// Ensures that the stack pointer remains 16-byte aligned for the duration
+    /// of the provided function. This alignment is necessary for AArch64
+    /// compliance, particularly for signal handlers that may be invoked
+    /// during execution. While the compiler doesn't directly use the stack
+    /// pointer for memory addressing, maintaining this alignment is crucial
+    /// to prevent issues when handling signals.
+    pub fn with_aligned_sp<F, T>(&mut self, mut f: F) -> Result<T>
+    where
+        F: FnMut(&mut Self) -> Result<T>,
+    {
+        let mut aligned = false;
+        let alignment: u32 = <Aarch64ABI as ABI>::call_stack_align().into();
+        let addend: u32 = <Aarch64ABI as ABI>::arg_base_offset().into();
+        let delta = calculate_frame_adjustment(self.sp_offset()?.as_u32(), addend, alignment);
+        if delta != 0 {
+            self.asm.sub_ir(
+                u64::from(delta),
+                // Since we don't need to synchronize the shadow stack pointer
+                // when freeing stack space [^1], the stack pointer may become
+                // out of sync with the primary shadow stack pointer. Therefore,
+                // we use the shadow stack pointer as the reference for
+                // calculating any alignment delta (self.sp_offset).
+                //
+                // [1]: This approach avoids an unnecessary move instruction and
+                // maintains the invariant of not accessing memory below the
+                // current stack pointer, preventing issues with signal handlers
+                // and interrupts.
+                regs::shadow_sp(),
+                writable!(regs::sp()),
+                OperandSize::S64,
+            );
+            aligned = true;
+        }
+
+        let res = f(self)?;
+
+        if aligned {
+            self.move_shadow_sp_to_sp();
+        }
+
+        Ok(res)
+    }
 }
 
 impl Masm for MacroAssembler {
@@ -77,6 +121,10 @@ impl Masm for MacroAssembler {
 
         let lr = regs::lr();
         let fp = regs::fp();
+
+        // Sync the real stack pointer with the value of the shadow stack
+        // pointer.
+        self.move_shadow_sp_to_sp();
         let addr = Address::post_indexed_from_sp(16);
 
         self.asm.ldp(fp, lr, addr);
@@ -89,10 +137,15 @@ impl Masm for MacroAssembler {
             return Ok(());
         }
 
-        let sp = regs::sp();
+        let ssp = regs::shadow_sp();
         self.asm
-            .sub_ir(bytes as u64, sp, writable!(sp), OperandSize::S64);
-        self.move_sp_to_shadow_sp();
+            .sub_ir(bytes as u64, ssp, writable!(ssp), OperandSize::S64);
+
+        // Even though we're using the shadow stack pointer to reserve stack, we
+        // must ensure that the real stack pointer reflects the stack claimed so
+        // far; we can't use stack memory below the real stack pointer as it
+        // could be clobbered by interrupts or signal handlers.
+        self.move_shadow_sp_to_sp();
 
         self.increment_sp(bytes);
         Ok(())
@@ -103,10 +156,9 @@ impl Masm for MacroAssembler {
             return Ok(());
         }
 
-        let sp = regs::sp();
+        let ssp = regs::shadow_sp();
         self.asm
-            .add_ir(bytes as u64, sp, writable!(sp), OperandSize::S64);
-        self.move_sp_to_shadow_sp();
+            .add_ir(bytes as u64, ssp, writable!(ssp), OperandSize::S64);
 
         self.decrement_sp(bytes);
         Ok(())
@@ -176,10 +228,10 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn wasm_store(&mut self, src: Reg, dst: Self::Address, kind: StoreKind) -> Result<()> {
-        match kind {
+    fn wasm_store(&mut self, src: Reg, dst: Self::Address, op_kind: StoreKind) -> Result<()> {
+        self.with_aligned_sp(|masm| match op_kind {
             StoreKind::Operand(size) => {
-                self.asm.str(src, dst, size);
+                masm.asm.str(src, dst, size);
                 Ok(())
             }
             StoreKind::Atomic(_size) => {
@@ -188,7 +240,7 @@ impl Masm for MacroAssembler {
             StoreKind::VectorLane(_selector) => {
                 Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
             }
-        }
+        })
     }
 
     fn call(
@@ -213,7 +265,7 @@ impl Masm for MacroAssembler {
     }
 
     fn load(&mut self, src: Address, dst: WritableReg, size: OperandSize) -> Result<()> {
-        self.asm.uload(src, dst, size);
+        self.asm.uload(src, dst, size, TRUSTED_FLAGS);
         Ok(())
     }
 
@@ -223,16 +275,18 @@ impl Masm for MacroAssembler {
 
     fn wasm_load(&mut self, src: Self::Address, dst: WritableReg, kind: LoadKind) -> Result<()> {
         let size = kind.derive_operand_size();
-        match kind {
-            LoadKind::Operand(_) => self.asm.uload(src, dst, size),
+        self.with_aligned_sp(|masm| match &kind {
+            LoadKind::Operand(_) => Ok(masm.asm.uload(src, dst, size, UNTRUSTED_FLAGS)),
             LoadKind::Splat(_) => bail!(CodeGenError::UnimplementedWasmLoadKind),
             LoadKind::ScalarExtend(extend_kind) => {
                 if extend_kind.signed() {
-                    self.asm.sload(src, dst, size)
+                    masm.asm.sload(src, dst, size, UNTRUSTED_FLAGS);
                 } else {
                     // unlike x64, unused bits are set to zero so we don't need to extend
-                    self.asm.uload(src, dst, size)
+                    masm.asm.uload(src, dst, size, UNTRUSTED_FLAGS);
                 }
+
+                Ok(())
             }
             LoadKind::VectorExtend(_vector_extend_kind) => {
                 bail!(CodeGenError::UnimplementedWasmLoadKind)
@@ -241,19 +295,17 @@ impl Masm for MacroAssembler {
                 bail!(CodeGenError::unimplemented_masm_instruction())
             }
             LoadKind::Atomic(_, _) => bail!(CodeGenError::unimplemented_masm_instruction()),
-        }
-
-        Ok(())
+        })
     }
 
     fn load_addr(&mut self, src: Self::Address, dst: WritableReg, size: OperandSize) -> Result<()> {
-        self.asm.uload(src, dst, size);
+        self.asm.uload(src, dst, size, TRUSTED_FLAGS);
         Ok(())
     }
 
     fn pop(&mut self, dst: WritableReg, size: OperandSize) -> Result<()> {
         let addr = self.address_from_sp(SPOffset::from_u32(self.sp_offset))?;
-        self.asm.uload(addr, dst, size);
+        self.asm.uload(addr, dst, size, TRUSTED_FLAGS);
         self.free_stack(size.bytes())
     }
 
@@ -828,18 +880,24 @@ impl Masm for MacroAssembler {
     }
 
     fn trap(&mut self, code: TrapCode) -> Result<()> {
-        self.asm.udf(code);
-        Ok(())
+        self.with_aligned_sp(|masm| {
+            masm.asm.udf(code);
+            Ok(())
+        })
     }
 
     fn trapz(&mut self, src: Reg, code: TrapCode) -> Result<()> {
-        self.asm.trapz(src, code, OperandSize::S64);
-        Ok(())
+        self.with_aligned_sp(|masm| {
+            masm.asm.trapz(src, code, OperandSize::S64);
+            Ok(())
+        })
     }
 
     fn trapif(&mut self, cc: IntCmpKind, code: TrapCode) -> Result<()> {
-        self.asm.trapif(cc.into(), code);
-        Ok(())
+        self.with_aligned_sp(|masm| {
+            masm.asm.trapif(cc.into(), code);
+            Ok(())
+        })
     }
 
     fn start_source_loc(&mut self, loc: RelSourceLoc) -> Result<(CodeOffset, RelSourceLoc)> {
@@ -996,14 +1054,30 @@ impl MacroAssembler {
     // Copies the value of the stack pointer to the shadow stack
     // pointer: mov x28, sp
 
-    // This function is usually called whenever the real stack pointer
-    // changes, for example after allocating or deallocating stack
-    // space, or after performing a push or pop.
-    // For more details around the stack pointer and shadow stack
-    // pointer see the docs at regs::shadow_sp().
+    // This function is called at the epilogue.
     fn move_sp_to_shadow_sp(&mut self) {
         let sp = regs::sp();
         let shadow_sp = regs::shadow_sp();
         self.asm.mov_rr(sp, writable!(shadow_sp), OperandSize::S64);
+    }
+
+    // Copies the value of the shadow stack pointer to the stack pointer: mov
+    // sp, x28.
+    //
+    // This function is usually called when the space is claimed, e.g., via
+    // a push, when stack space is reserved explcitly or after emitting code
+    // that requires explicit stack pointer alignment (code that could result in
+    // signal handling).
+    //
+    // This ensures the stack pointer always reflects the allocated stack space,
+    // otherwise any space below the stack pointer could get clobbered with
+    // interrups and signal handlers.
+    //
+    // This function must also be called at the function epilogue, since the
+    // stack pointer is used to restore the current function frame.
+    fn move_shadow_sp_to_sp(&mut self) {
+        let shadow_sp = regs::shadow_sp();
+        let sp = writable!(regs::sp());
+        self.asm.add_ir(0, shadow_sp, sp, OperandSize::S64);
     }
 }

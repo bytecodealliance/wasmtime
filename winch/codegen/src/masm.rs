@@ -290,6 +290,7 @@ impl ExtendKind {
 /// Kinds of vector extends in WebAssembly. Each MacroAssembler implementation
 /// is responsible for emitting the correct sequence of instructions when
 /// lowering to machine code.
+#[derive(Copy, Clone)]
 pub(crate) enum VectorExtendKind {
     /// Sign extends eight 8 bit integers to eight 16 bit lanes.
     V128Extend8x8S,
@@ -476,6 +477,7 @@ impl LoadKind {
 }
 
 /// Kinds of behavior supported by Wasm loads.
+#[derive(Copy, Clone)]
 pub enum StoreKind {
     /// Store the entire bytes of the operand size without any modifications.
     Operand(OperandSize),
@@ -491,6 +493,7 @@ impl StoreKind {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct LaneSelector {
     pub lane: u8,
     pub size: OperandSize,

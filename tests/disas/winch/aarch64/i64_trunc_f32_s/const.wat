@@ -12,8 +12,8 @@
 ;;       mov     x29, sp
 ;;       mov     x28, sp
 ;;       mov     x9, x0
-;;       sub     sp, sp, #0x10
-;;       mov     x28, sp
+;;       sub     x28, x28, #0x10
+;;       mov     sp, x28
 ;;       stur    x0, [x28, #8]
 ;;       stur    x1, [x28]
 ;;       mov     x16, #0x3f800000
@@ -29,8 +29,8 @@
 ;;       fcmp    s31, s0
 ;;       b.ge    #0x6c
 ;;   50: fcvtzs  x0, s0
-;;       add     sp, sp, #0x10
-;;       mov     x28, sp
+;;       add     x28, x28, #0x10
+;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;   64: .byte   0x1f, 0xc1, 0x00, 0x00

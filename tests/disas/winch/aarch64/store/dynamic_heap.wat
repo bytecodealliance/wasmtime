@@ -24,8 +24,8 @@
 ;;       mov     x29, sp
 ;;       mov     x28, sp
 ;;       mov     x9, x0
-;;       sub     sp, sp, #0x20
-;;       mov     x28, sp
+;;       sub     x28, x28, #0x20
+;;       mov     sp, x28
 ;;       stur    x0, [x28, #0x18]
 ;;       stur    x1, [x28, #0x10]
 ;;       stur    w2, [x28, #0xc]
@@ -82,8 +82,8 @@
 ;;       cmp     x3, x2, uxtx
 ;;       csel    x4, x5, x5, hi
 ;;       stur    w0, [x4]
-;;       add     sp, sp, #0x20
-;;       mov     x28, sp
+;;       add     x28, x28, #0x20
+;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;  108: .byte   0x1f, 0xc1, 0x00, 0x00
