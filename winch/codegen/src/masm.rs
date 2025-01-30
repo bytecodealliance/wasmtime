@@ -1684,5 +1684,11 @@ pub(crate) trait MacroAssembler {
 
     /// Perform a vector lane-wise mul between `lhs` and `rhs`, placing the result in `dst`, where each lane
     /// is interpreted to be `size` long.
-    fn v128_mul(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, lane_width: OperandSize) -> Result<()>;
+    fn v128_mul(
+        &mut self,
+        lhs: Reg,
+        rhs: Reg,
+        dst: WritableReg,
+        lane_width: OperandSize,
+    ) -> Result<()>;
 }
