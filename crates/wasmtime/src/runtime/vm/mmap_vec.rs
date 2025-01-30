@@ -5,12 +5,11 @@ use crate::runtime::vm::send_sync_ptr::SendSyncPtr;
 use crate::runtime::vm::{mmap::UnalignedLength, Mmap};
 #[cfg(not(has_virtual_memory))]
 use alloc::alloc::Layout;
-use alloc::sync::Arc;
 use core::ops::{Deref, Range};
 #[cfg(not(has_virtual_memory))]
 use core::ptr::NonNull;
 #[cfg(feature = "std")]
-use std::fs::File;
+use std::{fs::File, sync::Arc};
 
 /// A type which prefers to store backing memory in an OS-backed memory mapping
 /// but can fall back to the regular memory allocator as well.
