@@ -327,6 +327,7 @@ std = [
   'wasmtime-fiber?/std',
   'pulley-interpreter/std',
   'wasmtime-math/std',
+  'addr2line?/std',
 ]
 
 # Enables support for the `Store::call_hook` API which enables injecting custom

@@ -88,6 +88,12 @@ impl<T> OnceLock<T> {
     }
 }
 
+impl<T> Default for OnceLock<T> {
+    fn default() -> OnceLock<T> {
+        OnceLock::new()
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct RwLock<T> {
     val: UnsafeCell<T>,

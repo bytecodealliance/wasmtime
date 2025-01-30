@@ -284,11 +284,7 @@
 // NB: this list is currently being burned down to remove all features listed
 // here to get warnings in all configurations of Wasmtime.
 #![cfg_attr(
-    any(
-        not(feature = "cranelift"),
-        not(feature = "runtime"),
-        not(feature = "std"),
-    ),
+    any(not(feature = "runtime"), not(feature = "std")),
     allow(dead_code, unused_imports)
 )]
 // Allow broken links when the default features is disabled because most of our

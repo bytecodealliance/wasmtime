@@ -5,18 +5,15 @@ pub use crate::runtime::code_memory::CustomCodeMemory;
 use crate::runtime::type_registry::TypeRegistry;
 #[cfg(feature = "runtime")]
 use crate::runtime::vm::GcRuntime;
-use crate::sync::OnceLock;
 use crate::Config;
 use alloc::sync::Arc;
 #[cfg(target_has_atomic = "64")]
 use core::sync::atomic::{AtomicU64, Ordering};
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};
-use object::SectionKind;
 #[cfg(feature = "std")]
 use std::{fs::File, path::Path};
 use wasmparser::WasmFeatures;
-use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, TripleExt, Tunables};
 
 mod serialization;
@@ -68,7 +65,7 @@ struct EngineInner {
     /// One-time check of whether the compiler's settings, if present, are
     /// compatible with the native host.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
-    compatible_with_native_host: OnceLock<Result<(), String>>,
+    compatible_with_native_host: crate::sync::OnceLock<Result<(), String>>,
 }
 
 impl core::fmt::Debug for Engine {
@@ -134,7 +131,7 @@ impl Engine {
                 #[cfg(all(feature = "runtime", target_has_atomic = "64"))]
                 epoch: AtomicU64::new(0),
                 #[cfg(any(feature = "cranelift", feature = "winch"))]
-                compatible_with_native_host: OnceLock::new(),
+                compatible_with_native_host: Default::default(),
                 config,
                 tunables,
                 features,
@@ -251,64 +248,56 @@ impl Engine {
     /// engine can indeed load modules for the configured compiler (if any).
     /// Note that if cranelift is disabled this trivially returns `Ok` because
     /// loaded serialized modules are checked separately.
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub(crate) fn check_compatible_with_native_host(&self) -> Result<()> {
-        #[cfg(any(feature = "cranelift", feature = "winch"))]
-        {
-            self.inner
-                .compatible_with_native_host
-                .get_or_init(|| self._check_compatible_with_native_host())
-                .clone()
-                .map_err(anyhow::Error::msg)
-        }
-        #[cfg(not(any(feature = "cranelift", feature = "winch")))]
-        {
-            Ok(())
-        }
+        self.inner
+            .compatible_with_native_host
+            .get_or_init(|| self._check_compatible_with_native_host())
+            .clone()
+            .map_err(anyhow::Error::msg)
     }
 
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     fn _check_compatible_with_native_host(&self) -> Result<(), String> {
-        #[cfg(any(feature = "cranelift", feature = "winch"))]
-        {
-            use target_lexicon::Triple;
+        use target_lexicon::Triple;
 
-            let compiler = self.compiler();
+        let compiler = self.compiler();
 
-            let target = compiler.triple();
-            let host = Triple::host();
-            let target_matches_host = || {
-                // If the host target and target triple match, then it's valid
-                // to run results of compilation on this host.
-                if host == *target {
-                    return true;
-                }
-
-                // If there's a mismatch and the target is a compatible pulley
-                // target, then that's also ok to run.
-                if cfg!(feature = "pulley")
-                    && target.is_pulley()
-                    && target.pointer_width() == host.pointer_width()
-                    && target.endianness() == host.endianness()
-                {
-                    return true;
-                }
-
-                // ... otherwise everything else is considered not a match.
-                false
-            };
-
-            if !target_matches_host() {
-                return Err(format!(
-                    "target '{target}' specified in the configuration does not match the host"
-                ));
+        let target = compiler.triple();
+        let host = Triple::host();
+        let target_matches_host = || {
+            // If the host target and target triple match, then it's valid
+            // to run results of compilation on this host.
+            if host == *target {
+                return true;
             }
 
-            // Also double-check all compiler settings
-            for (key, value) in compiler.flags().iter() {
-                self.check_compatible_with_shared_flag(key, value)?;
+            // If there's a mismatch and the target is a compatible pulley
+            // target, then that's also ok to run.
+            if cfg!(feature = "pulley")
+                && target.is_pulley()
+                && target.pointer_width() == host.pointer_width()
+                && target.endianness() == host.endianness()
+            {
+                return true;
             }
-            for (key, value) in compiler.isa_flags().iter() {
-                self.check_compatible_with_isa_flag(key, value)?;
-            }
+
+            // ... otherwise everything else is considered not a match.
+            false
+        };
+
+        if !target_matches_host() {
+            return Err(format!(
+                "target '{target}' specified in the configuration does not match the host"
+            ));
+        }
+
+        // Also double-check all compiler settings
+        for (key, value) in compiler.flags().iter() {
+            self.check_compatible_with_shared_flag(key, value)?;
+        }
+        for (key, value) in compiler.isa_flags().iter() {
+            self.check_compatible_with_isa_flag(key, value)?;
         }
 
         // Double-check that this configuration isn't requesting capabilities
@@ -622,8 +611,8 @@ impl Engine {
     pub(crate) fn append_bti(&self, obj: &mut Object<'_>) {
         let section = obj.add_section(
             obj.segment_name(StandardSegment::Data).to_vec(),
-            obj::ELF_WASM_BTI.as_bytes().to_vec(),
-            SectionKind::ReadOnlyData,
+            wasmtime_environ::obj::ELF_WASM_BTI.as_bytes().to_vec(),
+            object::SectionKind::ReadOnlyData,
         );
         let contents = if self.compiler().is_branch_protection_enabled() {
             1
@@ -682,7 +671,7 @@ impl Engine {
         self.inner.profiler.as_ref()
     }
 
-    #[cfg(feature = "cache")]
+    #[cfg(all(feature = "cache", any(feature = "cranelift", feature = "winch")))]
     pub(crate) fn cache_config(&self) -> &wasmtime_cache::CacheConfig {
         &self.config().cache_config
     }

@@ -27,7 +27,7 @@ use core::str::FromStr;
 use object::endian::Endianness;
 #[cfg(any(feature = "cranelift", feature = "winch"))]
 use object::write::{Object, StandardSegment};
-use object::{read::elf::ElfFile64, FileFlags, Object as _, ObjectSection, SectionKind};
+use object::{read::elf::ElfFile64, FileFlags, Object as _, ObjectSection};
 use serde_derive::{Deserialize, Serialize};
 use wasmtime_environ::obj;
 use wasmtime_environ::{FlagValue, ObjectKind, Tunables};
@@ -122,7 +122,7 @@ pub fn append_compiler_info(engine: &Engine, obj: &mut Object<'_>, metadata: &Me
     let section = obj.add_section(
         obj.segment_name(StandardSegment::Data).to_vec(),
         obj::ELF_WASM_ENGINE.as_bytes().to_vec(),
-        SectionKind::ReadOnlyData,
+        object::SectionKind::ReadOnlyData,
     );
     let mut data = Vec::new();
     data.push(VERSION);
