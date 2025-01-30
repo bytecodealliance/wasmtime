@@ -74,6 +74,7 @@ For explanations of what each tier means see below.
 | WebAssembly Proposal | [`memory64`]               | Unstable wasm proposal      |
 | WebAssembly Proposal | [`function-references`]    | Unstable wasm proposal      |
 | WebAssembly Proposal | [`wide-arithmetic`]        | Unstable wasm proposal      |
+| Execution Backend    | Pulley                     | More time fuzzing/baking    |
 
 [`memory64`]: https://github.com/WebAssembly/memory64/blob/master/proposals/memory64/Overview.md
 [`multi-memory`]: https://github.com/WebAssembly/multi-memory/blob/master/proposals/multi-memory/Overview.md
@@ -105,7 +106,6 @@ For explanations of what each tier means see below.
 | Target               | `x86_64-unknown-none` [^5]        | CI testing, full-time maintainer |
 | Compiler Backend     | Winch on x86\_64                  | WebAssembly proposals (`simd`, `relaxed-simd`, `tail-call`, `reference-types`, `threads`)     |
 | Compiler Backend     | Winch on aarch64                  | Complete implementation     |
-| Execution Backend    | Pulley                            | fuzzing                     |
 | WebAssembly Proposal | [`gc`]                            | Complete implementation     |
 | WASI Proposal        | [`wasi-nn`]                       | More expansive CI testing   |
 | WASI Proposal        | [`wasi-threads`]                  | More CI, unstable proposal  |
