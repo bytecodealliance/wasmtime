@@ -20,7 +20,6 @@ use wasmtime_environ::{
 
 #[cfg(has_host_compiler_backend)]
 mod arch;
-mod async_yield;
 #[cfg(feature = "component-model")]
 pub mod component;
 mod const_expr;
@@ -63,7 +62,6 @@ pub use wasmtime_jit_debug::gdb_jit_int::GdbJitImageRegistration;
 
 #[cfg(has_host_compiler_backend)]
 pub use crate::runtime::vm::arch::get_stack_pointer;
-pub use crate::runtime::vm::async_yield::*;
 pub use crate::runtime::vm::export::*;
 pub use crate::runtime::vm::gc::*;
 pub use crate::runtime::vm::imports::Imports;
@@ -110,6 +108,11 @@ mod cow;
 mod cow_disabled;
 #[cfg(has_virtual_memory)]
 mod mmap;
+
+#[cfg(feature = "async")]
+mod async_yield;
+#[cfg(feature = "async")]
+pub use crate::runtime::vm::async_yield::*;
 
 cfg_if::cfg_if! {
     if #[cfg(has_virtual_memory)] {
