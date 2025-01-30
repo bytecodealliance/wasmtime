@@ -144,7 +144,10 @@ that will require building from source.
 
 [^5]: Rust targets that are `#![no_std]` don't support the entire feature set of
 Wasmtime. For example the `threads` Cargo feature requires the standard library.
-For more information see the [`no_std` documentation][nostd].
+For more information see the [`no_std` documentation][nostd]. Additionally these
+targets are sound in the presence of multiple threads but will panic on
+contention of data structures. If you're doing multithreaded things in `no_std`
+please file an issue so we can help solve your use case.
 
 [nostd]: ./stability-platform-support.md
 
