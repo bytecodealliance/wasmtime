@@ -1,7 +1,7 @@
 use crate::prelude::*;
 #[cfg(feature = "std")]
 use crate::runtime::vm::open_file_for_mmap;
-use crate::runtime::vm::{CompiledModuleId, MmapVec, ModuleMemoryImages, VMWasmCallFunction};
+use crate::runtime::vm::{CompiledModuleId, ModuleMemoryImages, VMWasmCallFunction};
 use crate::sync::OnceLock;
 use crate::{
     code::CodeObject,
@@ -153,6 +153,7 @@ struct ModuleInner {
     memory_images: OnceLock<Option<ModuleMemoryImages>>,
 
     /// Flag indicating whether this module can be serialized or not.
+    #[cfg(any(feature = "cranelift", feature = "winch"))]
     serializable: bool,
 
     /// Runtime offset information for `VMContext`.
@@ -344,7 +345,7 @@ impl Module {
     #[cfg(all(feature = "std", any(feature = "cranelift", feature = "winch")))]
     pub unsafe fn from_trusted_file(engine: &Engine, file: impl AsRef<Path>) -> Result<Module> {
         let open_file = open_file_for_mmap(file.as_ref())?;
-        let mmap = MmapVec::from_file(open_file)?;
+        let mmap = crate::runtime::vm::MmapVec::from_file(open_file)?;
         if &mmap[0..4] == b"\x7fELF" {
             let code = engine.load_code(mmap, ObjectKind::Module)?;
             return Module::from_parts(engine, code, None);
@@ -510,12 +511,15 @@ impl Module {
             .allocator()
             .validate_module(module.module(), &offsets)?;
 
+        let _ = serializable;
+
         Ok(Self {
             inner: Arc::new(ModuleInner {
                 engine: engine.clone(),
                 code,
                 memory_images: OnceLock::new(),
                 module,
+                #[cfg(any(feature = "cranelift", feature = "winch"))]
                 serializable,
                 offsets,
             }),

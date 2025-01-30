@@ -1,5 +1,3 @@
-use crate::hash_map::HashMap;
-use crate::hash_set::HashSet;
 use crate::prelude::*;
 use alloc::sync::Arc;
 use bitflags::Flags;
@@ -172,8 +170,8 @@ pub struct Config {
 #[derive(Debug, Clone)]
 struct CompilerConfig {
     strategy: Option<Strategy>,
-    settings: HashMap<String, String>,
-    flags: HashSet<String>,
+    settings: crate::hash_map::HashMap<String, String>,
+    flags: crate::hash_set::HashSet<String>,
     #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
     cache_store: Option<Arc<dyn CacheStore>>,
     clif_dir: Option<std::path::PathBuf>,
@@ -185,8 +183,8 @@ impl CompilerConfig {
     fn new() -> Self {
         Self {
             strategy: Strategy::Auto.not_auto(),
-            settings: HashMap::new(),
-            flags: HashSet::new(),
+            settings: Default::default(),
+            flags: Default::default(),
             #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
             cache_store: None,
             clif_dir: None,
@@ -2433,7 +2431,7 @@ impl Config {
             compiler.enable(flag)?;
         }
 
-        #[cfg(feature = "incremental-cache")]
+        #[cfg(all(feature = "incremental-cache", feature = "cranelift"))]
         if let Some(cache_store) = &self.compiler_config.cache_store {
             compiler.enable_incremental_compilation(cache_store.clone())?;
         }
@@ -2629,6 +2627,7 @@ pub enum Strategy {
     Winch,
 }
 
+#[cfg(any(feature = "winch", feature = "cranelift"))]
 impl Strategy {
     fn not_auto(&self) -> Option<Strategy> {
         match self {

@@ -253,7 +253,6 @@ macro_rules! declare_builtin_index_constructors {
         /// Returns a symbol name for this builtin.
         pub fn name(&self) -> &'static str {
             $(
-                $( #[$attr] )*
                 if *self == Self::$name() {
                     return stringify!($name);
                 }
@@ -286,7 +285,6 @@ macro_rules! declare_builtin_index_constructors {
              $rest_name:ident;
          )*
     ) => {
-        $( #[$this_attr] )*
         #[allow(missing_docs, reason = "macro-generated")]
         pub const fn $this_name() -> Self {
             Self($index)
