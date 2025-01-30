@@ -1,7 +1,7 @@
 use super::{
     abi::X64ABI,
     address::Address,
-    asm::{Assembler, PatchableAddToReg},
+    asm::{Assembler, PatchableAddToReg, VcmpKind},
     regs::{self, rbp, rsp},
 };
 use anyhow::{anyhow, bail, Result};
@@ -9,8 +9,8 @@ use anyhow::{anyhow, bail, Result};
 use crate::masm::{
     DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I, IntCmpKind, LaneSelector,
     LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind,
-    RmwOp, RoundingMode, ShiftKind, SplatKind, StoreKind, TrapCode, TruncKind, Zero, TRUSTED_FLAGS,
-    UNTRUSTED_FLAGS,
+    RmwOp, RoundingMode, ShiftKind, SplatKind, StoreKind, TrapCode, TruncKind, VectorCompareKind,
+    VectorEqualityKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
@@ -1608,6 +1608,218 @@ impl Masm for MacroAssembler {
 
         context.stack.push(expected.into());
         context.free_reg(replacement);
+
+        Ok(())
+    }
+
+    fn v128_eq(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorEqualityKind,
+    ) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        match kind {
+            VectorEqualityKind::I8x16
+            | VectorEqualityKind::I16x8
+            | VectorEqualityKind::I32x4
+            | VectorEqualityKind::I64x2 => {
+                self.asm.xmm_vpcmpeq_rrr(dst, lhs, rhs, kind.lane_size())
+            }
+            VectorEqualityKind::F32x4 | VectorEqualityKind::F64x2 => {
+                self.asm
+                    .xmm_vcmpp_rrr(dst, lhs, rhs, kind.lane_size(), VcmpKind::Eq)
+            }
+        }
+        Ok(())
+    }
+
+    fn v128_ne(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorEqualityKind,
+    ) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        match kind {
+            VectorEqualityKind::I8x16
+            | VectorEqualityKind::I16x8
+            | VectorEqualityKind::I32x4
+            | VectorEqualityKind::I64x2 => {
+                // Check for equality and invert the results.
+                self.asm
+                    .xmm_vpcmpeq_rrr(writable!(lhs), lhs, rhs, kind.lane_size());
+                self.asm
+                    .xmm_vpcmpeq_rrr(writable!(rhs), rhs, rhs, kind.lane_size());
+                self.asm.xmm_rmi_rvex(AvxOpcode::Vpxor, lhs, rhs, dst);
+            }
+            VectorEqualityKind::F32x4 | VectorEqualityKind::F64x2 => {
+                self.asm
+                    .xmm_vcmpp_rrr(dst, lhs, rhs, kind.lane_size(), VcmpKind::Ne)
+            }
+        }
+        Ok(())
+    }
+
+    fn v128_lt(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorCompareKind,
+    ) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        match kind {
+            VectorCompareKind::I8x16S
+            | VectorCompareKind::I16x8S
+            | VectorCompareKind::I32x4S
+            | VectorCompareKind::I64x2S => {
+                // Perform a greater than check with reversed parameters.
+                self.asm.xmm_vpcmpgt_rrr(dst, rhs, lhs, kind.lane_size())
+            }
+            VectorCompareKind::I8x16U | VectorCompareKind::I16x8U | VectorCompareKind::I32x4U => {
+                // Set `lhs` to min values, check for equality, then invert the
+                // result.
+                // If `lhs` is smaller, then equality check will fail and result
+                // will be inverted to true. Otherwise the equality check will
+                // pass and be inverted to false.
+                self.asm
+                    .xmm_vpminu_rrr(writable!(lhs), lhs, rhs, kind.lane_size());
+                self.asm
+                    .xmm_vpcmpeq_rrr(writable!(lhs), lhs, rhs, kind.lane_size());
+                self.asm
+                    .xmm_vpcmpeq_rrr(writable!(rhs), rhs, rhs, kind.lane_size());
+                self.asm.xmm_rmi_rvex(AvxOpcode::Vpxor, lhs, rhs, dst);
+            }
+            VectorCompareKind::F32x4 | VectorCompareKind::F64x2 => {
+                self.asm
+                    .xmm_vcmpp_rrr(dst, lhs, rhs, kind.lane_size(), VcmpKind::Lt)
+            }
+        }
+        Ok(())
+    }
+
+    fn v128_le(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorCompareKind,
+    ) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        match kind {
+            VectorCompareKind::I8x16S | VectorCompareKind::I16x8S | VectorCompareKind::I32x4S => {
+                // Set the `rhs` vector to the signed minimum values and then
+                // compare them with `lhs` for equality.
+                self.asm
+                    .xmm_vpmins_rrr(writable!(rhs), lhs, rhs, kind.lane_size());
+                self.asm.xmm_vpcmpeq_rrr(dst, lhs, rhs, kind.lane_size());
+            }
+            VectorCompareKind::I64x2S => {
+                // Do a greater than check and invert the results.
+                self.asm
+                    .xmm_vpcmpgt_rrr(writable!(lhs), lhs, rhs, kind.lane_size());
+                self.asm
+                    .xmm_vpcmpeq_rrr(writable!(rhs), rhs, rhs, kind.lane_size());
+                self.asm.xmm_rmi_rvex(AvxOpcode::Vpxor, lhs, rhs, dst);
+            }
+            VectorCompareKind::I8x16U | VectorCompareKind::I16x8U | VectorCompareKind::I32x4U => {
+                // Set the `rhs` vector to the signed minimum values and then
+                // compare them with `lhs` for equality.
+                self.asm
+                    .xmm_vpminu_rrr(writable!(rhs), lhs, rhs, kind.lane_size());
+                self.asm.xmm_vpcmpeq_rrr(dst, lhs, rhs, kind.lane_size());
+            }
+            VectorCompareKind::F32x4 | VectorCompareKind::F64x2 => {
+                self.asm
+                    .xmm_vcmpp_rrr(dst, lhs, rhs, kind.lane_size(), VcmpKind::Le)
+            }
+        }
+        Ok(())
+    }
+
+    fn v128_gt(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorCompareKind,
+    ) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        match kind {
+            VectorCompareKind::I8x16S
+            | VectorCompareKind::I16x8S
+            | VectorCompareKind::I32x4S
+            | VectorCompareKind::I64x2S => {
+                self.asm.xmm_vpcmpgt_rrr(dst, lhs, rhs, kind.lane_size())
+            }
+            VectorCompareKind::I8x16U | VectorCompareKind::I16x8U | VectorCompareKind::I32x4U => {
+                // Set `lhs` to max values, check for equality, then invert the
+                // result.
+                // If `lhs` is larger, then equality check will fail and result
+                // will be inverted to true. Otherwise the equality check will
+                // pass and be inverted to false.
+                self.asm
+                    .xmm_vpmaxu_rrr(writable!(lhs), lhs, rhs, kind.lane_size());
+                self.asm
+                    .xmm_vpcmpeq_rrr(writable!(lhs), lhs, rhs, kind.lane_size());
+                self.asm
+                    .xmm_vpcmpeq_rrr(writable!(rhs), rhs, rhs, kind.lane_size());
+                self.asm.xmm_rmi_rvex(AvxOpcode::Vpxor, lhs, rhs, dst);
+            }
+            VectorCompareKind::F32x4 | VectorCompareKind::F64x2 => {
+                // Do a less than comparison with the operands swapped.
+                self.asm
+                    .xmm_vcmpp_rrr(dst, rhs, lhs, kind.lane_size(), VcmpKind::Lt)
+            }
+        }
+        Ok(())
+    }
+
+    fn v128_ge(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        kind: VectorCompareKind,
+    ) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        match kind {
+            VectorCompareKind::I8x16S | VectorCompareKind::I16x8S | VectorCompareKind::I32x4S => {
+                // Set each lane to maximum value and then compare for equality.
+                self.asm
+                    .xmm_vpmaxs_rrr(writable!(rhs), lhs, rhs, kind.lane_size());
+                self.asm.xmm_vpcmpeq_rrr(dst, lhs, rhs, kind.lane_size());
+            }
+            VectorCompareKind::I64x2S => {
+                // Perform a greater than comparison with operands swapped,
+                // then invert the results.
+                self.asm
+                    .xmm_vpcmpgt_rrr(writable!(rhs), rhs, lhs, kind.lane_size());
+                self.asm.xmm_vpcmpeq_rrr(dst, lhs, lhs, kind.lane_size());
+                self.asm
+                    .xmm_rmi_rvex(AvxOpcode::Vpxor, dst.to_reg(), rhs, dst);
+            }
+            VectorCompareKind::I8x16U | VectorCompareKind::I16x8U | VectorCompareKind::I32x4U => {
+                // Set lanes to maximum values and compare them for equality.
+                self.asm
+                    .xmm_vpmaxu_rrr(writable!(rhs), lhs, rhs, kind.lane_size());
+                self.asm.xmm_vpcmpeq_rrr(dst, lhs, rhs, kind.lane_size());
+            }
+            VectorCompareKind::F32x4 | VectorCompareKind::F64x2 => {
+                // Perform a less than or equal comparison on swapped operands.
+                self.asm
+                    .xmm_vcmpp_rrr(dst, rhs, lhs, kind.lane_size(), VcmpKind::Le)
+            }
+        }
 
         Ok(())
     }

@@ -178,6 +178,18 @@ impl From<ExtendKind> for ExtMode {
     }
 }
 
+/// Kinds of comparisons supported by `vcmp`.
+pub(super) enum VcmpKind {
+    /// Equal comparison.
+    Eq,
+    /// Not equal comparison.
+    Ne,
+    /// Less than comparison.
+    Lt,
+    /// Less than or equal comparison.
+    Le,
+}
+
 /// Low level assembler implementation for x64.
 pub(crate) struct Assembler {
     /// The machine instruction buffer.
@@ -1922,6 +1934,146 @@ impl Assembler {
         });
 
         Ok(())
+    }
+
+    /// Compare vector registers `lhs` and `rhs` for equality between packed
+    /// integers and write the resulting vector into `dst`.
+    pub fn xmm_vpcmpeq_rrr(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpcmpeqb,
+            OperandSize::S16 => AvxOpcode::Vpcmpeqw,
+            OperandSize::S32 => AvxOpcode::Vpcmpeqd,
+            OperandSize::S64 => AvxOpcode::Vpcmpeqq,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: lhs.into(),
+            src2: XmmMemImm::unwrap_new(rhs.into()),
+            dst: dst.to_reg().into(),
+        })
+    }
+
+    /// Performs a greater than comparison with vectors of signed integers in
+    /// `lhs` and `rhs` and puts the results in `dst`.
+    pub fn xmm_vpcmpgt_rrr(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpcmpgtb,
+            OperandSize::S16 => AvxOpcode::Vpcmpgtw,
+            OperandSize::S32 => AvxOpcode::Vpcmpgtd,
+            OperandSize::S64 => AvxOpcode::Vpcmpgtq,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: lhs.into(),
+            src2: XmmMemImm::unwrap_new(rhs.into()),
+            dst: dst.to_reg().into(),
+        })
+    }
+
+    /// Performs a max operation with vectors of signed integers in `lhs` and
+    /// `rhs` and puts the results in `dst`.
+    pub fn xmm_vpmaxs_rrr(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpmaxsb,
+            OperandSize::S16 => AvxOpcode::Vpmaxsw,
+            OperandSize::S32 => AvxOpcode::Vpmaxsd,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: lhs.into(),
+            src2: XmmMemImm::unwrap_new(rhs.into()),
+            dst: dst.to_reg().into(),
+        })
+    }
+
+    /// Performs a max operation with vectors of unsigned integers in `lhs` and
+    /// `rhs` and puts the results in `dst`.
+    pub fn xmm_vpmaxu_rrr(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpmaxub,
+            OperandSize::S16 => AvxOpcode::Vpmaxuw,
+            OperandSize::S32 => AvxOpcode::Vpmaxud,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: lhs.into(),
+            src2: XmmMemImm::unwrap_new(rhs.into()),
+            dst: dst.to_reg().into(),
+        })
+    }
+
+    /// Performs a min operation with vectors of signed integers in `lhs` and
+    /// `rhs` and puts the results in `dst`.
+    pub fn xmm_vpmins_rrr(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpminsb,
+            OperandSize::S16 => AvxOpcode::Vpminsw,
+            OperandSize::S32 => AvxOpcode::Vpminsd,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: lhs.into(),
+            src2: XmmMemImm::unwrap_new(rhs.into()),
+            dst: dst.to_reg().into(),
+        })
+    }
+
+    /// Performs a min operation with vectors of unsigned integers in `lhs` and
+    /// `rhs` and puts the results in `dst`.
+    pub fn xmm_vpminu_rrr(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpminub,
+            OperandSize::S16 => AvxOpcode::Vpminuw,
+            OperandSize::S32 => AvxOpcode::Vpminud,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: lhs.into(),
+            src2: XmmMemImm::unwrap_new(rhs.into()),
+            dst: dst.to_reg().into(),
+        })
+    }
+
+    /// Performs a comparison operation between vectors of floats in `lhs` and
+    /// `rhs` and puts the results in `dst`.
+    pub fn xmm_vcmpp_rrr(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        rhs: Reg,
+        size: OperandSize,
+        kind: VcmpKind,
+    ) {
+        let op = match size {
+            OperandSize::S32 => AvxOpcode::Vcmpps,
+            OperandSize::S64 => AvxOpcode::Vcmppd,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmRImmVex {
+            op,
+            src1: lhs.into(),
+            src2: XmmMem::unwrap_new(rhs.into()),
+            dst: dst.to_reg().into(),
+            imm: match kind {
+                VcmpKind::Eq => 0,
+                VcmpKind::Lt => 1,
+                VcmpKind::Le => 2,
+                VcmpKind::Ne => 4,
+            },
+        });
     }
 }
 
