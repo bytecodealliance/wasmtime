@@ -40,7 +40,7 @@ pub enum Encoding {
 
 impl Encoding {
     /// Check that the encoding is valid for the given operands; this can find
-    /// issues earlier, during construction.
+    /// issues earlier, before generating any Rust code.
     pub fn validate(&self, operands: &[Operand]) {
         match self {
             Encoding::Rex(rex) => rex.validate(operands),
