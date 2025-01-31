@@ -5,6 +5,7 @@ use super::HostAlignedByteCount;
 use crate::prelude::*;
 use crate::runtime::vm::sys::{mmap, vm::MemoryImageSource};
 use alloc::sync::Arc;
+use core::marker;
 use core::ops::Range;
 use core::ptr::NonNull;
 #[cfg(feature = "std")]
@@ -58,7 +59,9 @@ pub struct UnalignedLength {
 #[derive(Debug)]
 pub struct Mmap<T> {
     sys: mmap::Mmap,
+    #[cfg(feature = "std")]
     data: T,
+    _marker: marker::PhantomData<T>,
 }
 
 impl Mmap<AlignedLength> {
@@ -86,19 +89,25 @@ impl Mmap<AlignedLength> {
         if mapping_size.is_zero() {
             Ok(Mmap {
                 sys: mmap::Mmap::new_empty(),
+                #[cfg(feature = "std")]
                 data: AlignedLength {},
+                _marker: marker::PhantomData,
             })
         } else if accessible_size == mapping_size {
             Ok(Mmap {
                 sys: mmap::Mmap::new(mapping_size)
                     .context(format!("mmap failed to allocate {mapping_size:#x} bytes"))?,
+                #[cfg(feature = "std")]
                 data: AlignedLength {},
+                _marker: marker::PhantomData,
             })
         } else {
             let result = Mmap {
                 sys: mmap::Mmap::reserve(mapping_size)
                     .context(format!("mmap failed to reserve {mapping_size:#x} bytes"))?,
+                #[cfg(feature = "std")]
                 data: AlignedLength {},
+                _marker: marker::PhantomData,
             };
             if !accessible_size.is_zero() {
                 // SAFETY: result was just created and is not in use.
@@ -121,10 +130,9 @@ impl Mmap<AlignedLength> {
     pub fn into_unaligned(self) -> Mmap<UnalignedLength> {
         Mmap {
             sys: self.sys,
-            data: UnalignedLength {
-                #[cfg(feature = "std")]
-                file: None,
-            },
+            #[cfg(feature = "std")]
+            data: UnalignedLength { file: None },
+            _marker: marker::PhantomData,
         }
     }
 
@@ -207,6 +215,7 @@ impl Mmap<UnalignedLength> {
         Ok(Mmap {
             sys,
             data: UnalignedLength { file: Some(file) },
+            _marker: marker::PhantomData,
         })
     }
 
