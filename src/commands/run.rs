@@ -16,6 +16,7 @@ use std::thread;
 use wasi_common::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
 use wasmtime_wasi::{IoView, WasiView};
+use wasmtime_wasi_tls::{WasiTlsConfig, WasiTlsCtx};
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::wit::WasiNnView;
@@ -825,6 +826,37 @@ impl RunCommand {
             }
         }
 
+        if self.run.common.wasi.tls == Some(true) {
+            #[cfg(not(all(feature = "wasi-tls", feature = "component-model")))]
+            {
+                bail!("Cannot enable wasi-tls when the binary is not compiled with this feature.");
+            }
+            #[cfg(all(feature = "wasi-tls", feature = "component-model"))]
+            {
+                match linker {
+                    CliLinker::Core(_) => {
+                        bail!("Cannot enable wasi-tls for core wasm modules");
+                    }
+                    CliLinker::Component(linker) => {
+                        let mut opts = wasmtime_wasi_tls::LinkOptions::default();
+                        opts.tls(true);
+                        wasmtime_wasi_tls::add_to_linker(linker, &mut opts, |h| {
+                            let preview2_ctx =
+                                h.preview2_ctx.as_mut().expect("wasip2 is not configured");
+                            let preview2_ctx =
+                                Arc::get_mut(preview2_ctx).unwrap().get_mut().unwrap();
+                            WasiTlsCtx::new(
+                                Arc::get_mut(h.wasi_tls_config.as_mut().unwrap()).unwrap(),
+                                preview2_ctx.table(),
+                            )
+                        })?;
+                    }
+                }
+
+                store.data_mut().wasi_tls_config = Some(Arc::new(WasiTlsConfig::new()));
+            }
+        }
+
         Ok(())
     }
 
@@ -930,6 +962,9 @@ struct Host {
     wasi_config: Option<Arc<WasiConfigVariables>>,
     #[cfg(feature = "wasi-keyvalue")]
     wasi_keyvalue: Option<Arc<WasiKeyValueCtx>>,
+
+    #[cfg(feature = "wasi-tls")]
+    wasi_tls_config: Option<Arc<WasiTlsConfig>>,
 }
 
 impl Host {

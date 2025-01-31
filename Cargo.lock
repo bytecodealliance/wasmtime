@@ -1202,11 +1202,13 @@ dependencies = [
 
 [[package]]
 name = "dlmalloc"
-version = "0.2.4"
+version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "203540e710bfadb90e5e29930baf5d10270cec1f43ab34f46f78b147b2de715a"
+checksum = "d9b5e0d321d61de16390ed273b647ce51605b575916d3c25e6ddf27a1e140035"
 dependencies = [
+ "cfg-if",
  "libc",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2173,9 +2175,9 @@ checksum = "8e9489c2807c139ffd9c1794f4af0ebe86a828db53ecdc7fea2111d0fed085d1"
 
 [[package]]
 name = "libfuzzer-sys"
-version = "0.4.8"
+version = "0.4.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b9569d2f74e257076d8c6bfa73fb505b46b851e51ddaecc825944aa3bed17fa"
+checksum = "cf78f52d400cf2d84a3a973a78a592b4adc535739e0a5597a0da6f0c357adc75"
 dependencies = [
  "arbitrary",
  "cc",
@@ -4382,6 +4384,7 @@ dependencies = [
  "wasmtime-wasi-keyvalue",
  "wasmtime-wasi-nn",
  "wasmtime-wasi-threads",
+ "wasmtime-wasi-tls",
  "wasmtime-wast",
  "wasmtime-wast-util",
  "wast 227.0.0",
@@ -4758,6 +4761,21 @@ dependencies = [
  "wasi-common",
  "wasmtime",
  "wasmtime-wasi",
+]
+
+[[package]]
+name = "wasmtime-wasi-tls"
+version = "32.0.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "rustls 0.22.4",
+ "test-programs-artifacts",
+ "tokio",
+ "tokio-rustls",
+ "wasmtime",
+ "wasmtime-wasi",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -5503,3 +5521,47 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "wasm-encoder"
+version = "0.226.0"
+
+[[patch.unused]]
+name = "wasm-metadata"
+version = "0.226.0"
+
+[[patch.unused]]
+name = "wasm-mutate"
+version = "0.226.0"
+
+[[patch.unused]]
+name = "wasm-smith"
+version = "0.226.0"
+
+[[patch.unused]]
+name = "wasm-wave"
+version = "0.226.0"
+
+[[patch.unused]]
+name = "wasmparser"
+version = "0.226.0"
+
+[[patch.unused]]
+name = "wasmprinter"
+version = "0.226.0"
+
+[[patch.unused]]
+name = "wast"
+version = "226.0.0"
+
+[[patch.unused]]
+name = "wat"
+version = "1.226.0"
+
+[[patch.unused]]
+name = "wit-component"
+version = "0.226.0"
+
+[[patch.unused]]
+name = "wit-parser"
+version = "0.226.0"

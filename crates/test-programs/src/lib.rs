@@ -2,6 +2,7 @@ pub mod http;
 pub mod nn;
 pub mod preview1;
 pub mod sockets;
+pub mod tls;
 
 wit_bindgen::generate!({
     inline: "
@@ -12,15 +13,17 @@ wit_bindgen::generate!({
             include wasi:http/imports@0.2.3;
             include wasi:config/imports@0.2.0-draft;
             include wasi:keyvalue/imports@0.2.0-draft;
+            include wasi:tls/imports@0.2.3;
         }
     ",
     path: [
         "../wasi-http/wit",
         "../wasi-config/wit",
         "../wasi-keyvalue/wit",
+        "../wasi-tls/wit/world.wit",
     ],
     world: "wasmtime:test/test",
-    features: ["cli-exit-with-code"],
+    features: ["cli-exit-with-code", "tls"],
     generate_all,
 });
 
