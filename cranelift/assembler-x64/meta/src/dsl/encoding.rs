@@ -211,7 +211,7 @@ impl Rex {
             assert_eq!(
                 op.bits(),
                 self.imm.bits(),
-                "for an immediate, the encoded bits must match the declared operand bits"
+                "for an immediate, the encoding width must match the declared operand width"
             );
         }
     }
