@@ -79,9 +79,9 @@ pub enum Size {
 /// This is due to avoid special cases of REX encodings, see Intel SDM Vol. 2A,
 /// table 2-5.
 #[derive(Clone, Copy, Debug)]
-pub struct MinusRsp<R: AsReg>(R);
+pub struct NonRspGpr<R: AsReg>(R);
 
-impl<R: AsReg> MinusRsp<R> {
+impl<R: AsReg> NonRspGpr<R> {
     /// See [`Gpr::new`].
     pub fn new(reg: R) -> Self {
         Self(reg)
@@ -100,13 +100,13 @@ impl<R: AsReg> MinusRsp<R> {
     }
 }
 
-impl<R: AsReg> AsMut<R> for MinusRsp<R> {
+impl<R: AsReg> AsMut<R> for NonRspGpr<R> {
     fn as_mut(&mut self) -> &mut R {
         &mut self.0
     }
 }
 
-impl<R: AsReg> Arbitrary<'_> for MinusRsp<R> {
+impl<R: AsReg> Arbitrary<'_> for NonRspGpr<R> {
     fn arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
         use enc::*;
         let gpr = u.choose(&[

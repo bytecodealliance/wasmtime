@@ -129,7 +129,7 @@ impl Into<asm::Amode<Gpr>> for SyntheticAmode {
                     flags,
                 } => asm::Amode::ImmRegRegShift {
                     base,
-                    index: asm::MinusRsp::new(index),
+                    index: asm::NonRspGpr::new(index),
                     scale: asm::Scale::new(shift),
                     simm32: simm32.into(),
                     trap: flags.trap_code().map(Into::into),

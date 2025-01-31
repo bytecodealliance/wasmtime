@@ -2,7 +2,7 @@
 
 use crate::api::{AsReg, CodeSink, Constant, KnownOffsetTable, Label, TrapCode};
 use crate::imm::{Simm32, Simm32PlusKnownOffset};
-use crate::reg::{self, MinusRsp, Size};
+use crate::reg::{self, NonRspGpr, Size};
 use crate::rex::{encode_modrm, encode_sib, Imm, RexFlags};
 use arbitrary::Arbitrary;
 
@@ -16,7 +16,7 @@ pub enum Amode<R: AsReg> {
     },
     ImmRegRegShift {
         base: R,
-        index: MinusRsp<R>,
+        index: NonRspGpr<R>,
         scale: Scale,
         simm32: Simm32,
         trap: Option<TrapCode>,
