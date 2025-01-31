@@ -140,6 +140,30 @@ where
     fn pointer_width(&mut self) -> PointerWidth {
         P::pointer_width()
     }
+
+    fn memflags_nontrapping(&mut self, flags: MemFlags) -> bool {
+        flags.trap_code().is_none()
+    }
+
+    fn memflags_is_wasm(&mut self, flags: MemFlags) -> bool {
+        flags.trap_code() == Some(TrapCode::HEAP_OUT_OF_BOUNDS)
+            && self.endianness(flags) == Endianness::Little
+    }
+
+    fn g32_offset(
+        &mut self,
+        load_offset: i32,
+        load_ty: Type,
+        bound_check_offset: u64,
+    ) -> Option<u16> {
+        // NB: for more docs on this see the ISLE definition.
+        let load_offset = u64::try_from(load_offset).ok()?;
+        let load_bytes = u64::from(load_ty.bytes());
+        if bound_check_offset != load_offset + load_bytes {
+            return None;
+        }
+        u16::try_from(load_offset).ok()
+    }
 }
 
 /// The main entry point for lowering with ISLE.

@@ -9,11 +9,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload8 x0+0 // flags =
+;   xload8_u32_z x0, x0, 0
 ;   ret
 ;
 ; Disassembled:
-; xload8_u32_offset8 x0, x0, 0
+; xload8_u32_z x0, x0, 0
 ; ret
 
 function %load_i8_s32(i64) -> i32 {
@@ -24,11 +24,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload8_s32 x0+0 // flags =
+;   xload8_s32_z x0, x0, 0
 ;   ret
 ;
 ; Disassembled:
-; xload8_s32_offset8 x0, x0, 0
+; xload8_s32_z x0, x0, 0
 ; ret
 
 function %load_i8_u32(i64) -> i32 {
@@ -39,11 +39,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload8_u32 x0+0 // flags =
+;   xload8_u32_z x0, x0, 0
 ;   ret
 ;
 ; Disassembled:
-; xload8_u32_offset8 x0, x0, 0
+; xload8_u32_z x0, x0, 0
 ; ret
 
 function %load_i16(i64) -> i16 {
@@ -54,11 +54,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload16 x0+0 // flags =
+;   xload16le_u32_z x0, x0, 0
 ;   ret
 ;
 ; Disassembled:
-; xload16le_u32_offset8 x0, x0, 0
+; xload16le_u32_z x0, x0, 0
 ; ret
 
 function %load_i16_s32(i64) -> i32 {
@@ -69,11 +69,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload16_s32 x0+0 // flags =
+;   xload16le_s32_z x0, x0, 0
 ;   ret
 ;
 ; Disassembled:
-; xload16le_s32_offset8 x0, x0, 0
+; xload16le_s32_z x0, x0, 0
 ; ret
 
 function %load_i16_u32(i64) -> i32 {
@@ -84,11 +84,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload16_u32 x0+0 // flags =
+;   xload16le_u32_z x0, x0, 0
 ;   ret
 ;
 ; Disassembled:
-; xload16le_u32_offset8 x0, x0, 0
+; xload16le_u32_z x0, x0, 0
 ; ret
 
 function %load_i32(i64) -> i32 {
@@ -99,11 +99,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload32 x0+0 // flags =
+;   xload32le_z x0, x0, 0
 ;   ret
 ;
 ; Disassembled:
-; xload32le_offset8 x0, x0, 0
+; xload32le_z x0, x0, 0
 ; ret
 
 function %load_i32_s64(i64) -> i64 {
@@ -114,11 +114,13 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload32_s64 x0+0 // flags =
+;   xload32le_z x2, x0, 0
+;   sext32 x0, x2
 ;   ret
 ;
 ; Disassembled:
-; xload32le_s64_offset8 x0, x0, 0
+; xload32le_z x2, x0, 0
+; sext32 x0, x2
 ; ret
 
 function %load_i32_u64(i64) -> i64 {
@@ -129,11 +131,13 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload32_u64 x0+0 // flags =
+;   xload32le_z x2, x0, 0
+;   zext32 x0, x2
 ;   ret
 ;
 ; Disassembled:
-; xload32le_u64_offset8 x0, x0, 0
+; xload32le_z x2, x0, 0
+; zext32 x0, x2
 ; ret
 
 function %load_i64(i64) -> i64 {
@@ -144,11 +148,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload64 x0+0 // flags =
+;   xload64le_z x0, x0, 0
 ;   ret
 ;
 ; Disassembled:
-; xload64le_offset8 x0, x0, 0
+; xload64le_z x0, x0, 0
 ; ret
 
 function %load_i8_offset(i64) -> i8 {
@@ -159,11 +163,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload8 x0+4 // flags =
+;   xload8_u32_z x0, x0, 4
 ;   ret
 ;
 ; Disassembled:
-; xload8_u32_offset8 x0, x0, 4
+; xload8_u32_z x0, x0, 4
 ; ret
 
 function %load_i8_s32_offset(i64) -> i32 {
@@ -174,11 +178,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload8_s32 x0+4 // flags =
+;   xload8_s32_z x0, x0, 4
 ;   ret
 ;
 ; Disassembled:
-; xload8_s32_offset8 x0, x0, 4
+; xload8_s32_z x0, x0, 4
 ; ret
 
 function %load_i8_u32_offset(i64) -> i32 {
@@ -189,11 +193,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload8_u32 x0+4 // flags =
+;   xload8_u32_z x0, x0, 4
 ;   ret
 ;
 ; Disassembled:
-; xload8_u32_offset8 x0, x0, 4
+; xload8_u32_z x0, x0, 4
 ; ret
 
 function %load_i16_offset(i64) -> i16 {
@@ -204,11 +208,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload16 x0+4 // flags =
+;   xload16le_u32_z x0, x0, 4
 ;   ret
 ;
 ; Disassembled:
-; xload16le_u32_offset8 x0, x0, 4
+; xload16le_u32_z x0, x0, 4
 ; ret
 
 function %load_i16_s32_offset(i64) -> i32 {
@@ -219,11 +223,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload16_s32 x0+4 // flags =
+;   xload16le_s32_z x0, x0, 4
 ;   ret
 ;
 ; Disassembled:
-; xload16le_s32_offset8 x0, x0, 4
+; xload16le_s32_z x0, x0, 4
 ; ret
 
 function %load_i16_u32_offset(i64) -> i32 {
@@ -234,11 +238,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload16_u32 x0+4 // flags =
+;   xload16le_u32_z x0, x0, 4
 ;   ret
 ;
 ; Disassembled:
-; xload16le_u32_offset8 x0, x0, 4
+; xload16le_u32_z x0, x0, 4
 ; ret
 
 function %load_i32_offset(i64) -> i32 {
@@ -249,11 +253,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload32 x0+4 // flags =
+;   xload32le_z x0, x0, 4
 ;   ret
 ;
 ; Disassembled:
-; xload32le_offset8 x0, x0, 4
+; xload32le_z x0, x0, 4
 ; ret
 
 function %load_i32_s64_offset(i64) -> i64 {
@@ -264,11 +268,13 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload32_s64 x0+4 // flags =
+;   xload32le_z x2, x0, 4
+;   sext32 x0, x2
 ;   ret
 ;
 ; Disassembled:
-; xload32le_s64_offset8 x0, x0, 4
+; xload32le_z x2, x0, 4
+; sext32 x0, x2
 ; ret
 
 function %load_i32_u64_offset(i64) -> i64 {
@@ -279,11 +285,13 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload32_u64 x0+4 // flags =
+;   xload32le_z x2, x0, 4
+;   zext32 x0, x2
 ;   ret
 ;
 ; Disassembled:
-; xload32le_u64_offset8 x0, x0, 4
+; xload32le_z x2, x0, 4
+; zext32 x0, x2
 ; ret
 
 function %load_i64_offset(i64) -> i64 {
@@ -294,11 +302,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload64 x0+65536 // flags =
+;   xload64le_z x0, x0, 65536
 ;   ret
 ;
 ; Disassembled:
-; xload64le_offset32 x0, x0, 65536
+; xload64le_z x0, x0, 65536
 ; ret
 
 function %load_i8_big_offset(i64) -> i8 {
@@ -309,11 +317,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload8 x0+65536 // flags =
+;   xload8_u32_z x0, x0, 65536
 ;   ret
 ;
 ; Disassembled:
-; xload8_u32_offset32 x0, x0, 65536
+; xload8_u32_z x0, x0, 65536
 ; ret
 
 function %load_i8_s32_big_offset(i64) -> i32 {
@@ -324,11 +332,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload8_s32 x0+65536 // flags =
+;   xload8_s32_z x0, x0, 65536
 ;   ret
 ;
 ; Disassembled:
-; xload8_s32_offset32 x0, x0, 65536
+; xload8_s32_z x0, x0, 65536
 ; ret
 
 function %load_i8_u32_big_offset(i64) -> i32 {
@@ -339,11 +347,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload8_u32 x0+65536 // flags =
+;   xload8_u32_z x0, x0, 65536
 ;   ret
 ;
 ; Disassembled:
-; xload8_u32_offset32 x0, x0, 65536
+; xload8_u32_z x0, x0, 65536
 ; ret
 
 function %load_i16_big_offset(i64) -> i16 {
@@ -354,11 +362,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload16 x0+65536 // flags =
+;   xload16le_u32_z x0, x0, 65536
 ;   ret
 ;
 ; Disassembled:
-; xload16le_u32_offset32 x0, x0, 65536
+; xload16le_u32_z x0, x0, 65536
 ; ret
 
 function %load_i16_s32_big_offset(i64) -> i32 {
@@ -369,11 +377,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload16_s32 x0+65536 // flags =
+;   xload16le_s32_z x0, x0, 65536
 ;   ret
 ;
 ; Disassembled:
-; xload16le_s32_offset32 x0, x0, 65536
+; xload16le_s32_z x0, x0, 65536
 ; ret
 
 function %load_i16_u32_big_offset(i64) -> i32 {
@@ -384,11 +392,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload16_u32 x0+65536 // flags =
+;   xload16le_u32_z x0, x0, 65536
 ;   ret
 ;
 ; Disassembled:
-; xload16le_u32_offset32 x0, x0, 65536
+; xload16le_u32_z x0, x0, 65536
 ; ret
 
 function %load_i32_big_offset(i64) -> i32 {
@@ -399,11 +407,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload32 x0+65536 // flags =
+;   xload32le_z x0, x0, 65536
 ;   ret
 ;
 ; Disassembled:
-; xload32le_offset32 x0, x0, 65536
+; xload32le_z x0, x0, 65536
 ; ret
 
 function %load_i32_s64_big_offset(i64) -> i64 {
@@ -414,11 +422,13 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload32_s64 x0+65536 // flags =
+;   xload32le_z x2, x0, 65536
+;   sext32 x0, x2
 ;   ret
 ;
 ; Disassembled:
-; xload32le_s64_offset32 x0, x0, 65536
+; xload32le_z x2, x0, 65536
+; sext32 x0, x2
 ; ret
 
 function %load_i32_u64_big_offset(i64) -> i64 {
@@ -429,11 +439,13 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload32_u64 x0+65536 // flags =
+;   xload32le_z x2, x0, 65536
+;   zext32 x0, x2
 ;   ret
 ;
 ; Disassembled:
-; xload32le_u64_offset32 x0, x0, 65536
+; xload32le_z x2, x0, 65536
+; zext32 x0, x2
 ; ret
 
 function %load_i64_big_offset(i64) -> i64 {
@@ -444,11 +456,11 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload64 x0+65536 // flags =
+;   xload64le_z x0, x0, 65536
 ;   ret
 ;
 ; Disassembled:
-; xload64le_offset32 x0, x0, 65536
+; xload64le_z x0, x0, 65536
 ; ret
 
 function %load_i64_with_add_and_offset(i64) -> i64 {
@@ -460,10 +472,12 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   x0 = xload64 x0+18 // flags =
+;   xadd64_u8 x3, x0, 10
+;   xload64le_z x0, x3, 8
 ;   ret
 ;
 ; Disassembled:
-; xload64le_offset8 x0, x0, 18
+; xadd64_u8 x3, x0, 10
+; xload64le_z x0, x3, 8
 ; ret
 

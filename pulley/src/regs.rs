@@ -329,6 +329,147 @@ impl<'a, R: Reg> arbitrary::Arbitrary<'a> for UpperRegSet<R> {
     }
 }
 
+/// Immediate used for the "o32" addresing mode.
+///
+/// This addressing mode represents a host address stored in `self.addr` which
+/// is byte-offset by `self.offset`.
+///
+/// This addressing mode cannot generate a trap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub struct AddrO32 {
+    /// The base address of memory.
+    pub addr: XReg,
+    /// A byte offset from `addr`.
+    pub offset: i32,
+}
+
+/// Immediate used for the "z" addresing mode.
+///
+/// This addressing mode represents a host address stored in `self.addr` which
+/// is byte-offset by `self.offset`.
+///
+/// If the `addr` specified is NULL then operating on this value will generate a
+/// trap.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub struct AddrZ {
+    /// The base address of memory, or NULL.
+    pub addr: XReg,
+    /// A byte offset from `addr`.
+    pub offset: i32,
+}
+
+/// Immediate used for the "g32" addressing mode.
+///
+/// This addressing mode represents the computation of a WebAssembly address for
+/// a 32-bit linear memory. This automatically folds a bounds-check into the
+/// address computation to generate a trap if the address is out-of-bounds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub struct AddrG32 {
+    /// The register holding the base address of the linear memory that is being
+    /// accessed.
+    pub host_heap_base: XReg,
+
+    /// The register holding the byte bound limit of the heap being accessed.
+    pub host_heap_bound: XReg,
+
+    /// The register holding a 32-bit WebAssembly address into linear memory.
+    ///
+    /// This is zero-extended on 64-bit platforms when performing the bounds
+    /// check.
+    pub wasm_addr: XReg,
+
+    /// A static byte offset from `host_heap_base` that is added to `wasm_addr`
+    /// when computing the bounds check.
+    pub offset: u16,
+}
+
+impl AddrG32 {
+    /// Decodes this immediate from a 32-bit integer.
+    pub fn from_bits(bits: u32) -> AddrG32 {
+        let host_heap_base = XReg::new(((bits >> 26) & 0b11111) as u8).unwrap();
+        let bound_reg = XReg::new(((bits >> 21) & 0b11111) as u8).unwrap();
+        let wasm_addr = XReg::new(((bits >> 16) & 0b11111) as u8).unwrap();
+        AddrG32 {
+            host_heap_base,
+            host_heap_bound: bound_reg,
+            wasm_addr,
+            offset: bits as u16,
+        }
+    }
+
+    /// Encodes this immediate into a 32-bit integer.
+    pub fn to_bits(&self) -> u32 {
+        u32::from(self.offset)
+            | (u32::from(self.wasm_addr.to_u8()) << 16)
+            | (u32::from(self.host_heap_bound.to_u8()) << 21)
+            | (u32::from(self.host_heap_base.to_u8()) << 26)
+    }
+}
+
+/// Similar structure to the [`AddrG32`] addressing mode but "g32bne" also
+/// represents that the bound to linear memory is stored itself in memory.
+///
+/// This instruction will load the heap bound from memory and then perform the
+/// same bounds check that [`AddrG32`] does.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+pub struct AddrG32Bne {
+    /// The register holding the base address of the linear memory that is being
+    /// accessed.
+    pub host_heap_base: XReg,
+
+    /// The register holding the address of where the heap bound is located in
+    /// host memory.
+    pub host_heap_bound_addr: XReg,
+
+    /// The static offset from `self.host_heap_bound_addr` that the bound is
+    /// located at.
+    pub host_heap_bound_offset: u8,
+
+    /// The register holding a 32-bit WebAssembly address into linear memory.
+    ///
+    /// This is zero-extended on 64-bit platforms when performing the bounds
+    /// check.
+    pub wasm_addr: XReg,
+
+    /// A static byte offset from `host_heap_base` that is added to `wasm_addr`
+    /// when computing the bounds check.
+    ///
+    /// Note that this is an 8-bit immediate instead of a 16-bit immediate
+    /// unlike [`AddrG32`]. That's just to pack this structure into a 32-bit
+    /// value for now but otherwise should be reasonable to extend to a larger
+    /// width in the future if necessary.
+    pub offset: u8,
+}
+
+impl AddrG32Bne {
+    /// Decodes [`AddrG32Bne`] from the 32-bit immediate provided.
+    pub fn from_bits(bits: u32) -> AddrG32Bne {
+        let host_heap_base = XReg::new(((bits >> 26) & 0b11111) as u8).unwrap();
+        let bound_reg = XReg::new(((bits >> 21) & 0b11111) as u8).unwrap();
+        let wasm_addr = XReg::new(((bits >> 16) & 0b11111) as u8).unwrap();
+        AddrG32Bne {
+            host_heap_base,
+            host_heap_bound_addr: bound_reg,
+            host_heap_bound_offset: (bits >> 8) as u8,
+            wasm_addr,
+            offset: bits as u8,
+        }
+    }
+
+    /// Encodes this immediate into a 32-bit integer.
+    pub fn to_bits(&self) -> u32 {
+        u32::from(self.offset)
+            | (u32::from(self.host_heap_bound_offset) << 8)
+            | (u32::from(self.wasm_addr.to_u8()) << 16)
+            | (u32::from(self.host_heap_bound_addr.to_u8()) << 21)
+            | (u32::from(self.host_heap_base.to_u8()) << 26)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

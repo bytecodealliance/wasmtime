@@ -65,10 +65,10 @@ extern crate alloc;
 /// * Instructions operating on memory contain a few pieces of information:
 ///
 ///   ```text
-///   xload16le_u32_offset32
-///   │└─┬┘└┤└┤ └┬┘ └──┬───┘
-///   │  │  │ │  │     ▼
-///   │  │  │ │  │     addressing mode
+///   xload16le_u32_o32
+///   │└─┬┘└┤└┤ └┬┘ └┬┘
+///   │  │  │ │  │   ▼
+///   │  │  │ │  │   addressing mode
 ///   │  │  │ │  ▼
 ///   │  │  │ │  width of register modified + sign-extension (optional)
 ///   │  │  │ ▼
@@ -392,102 +392,98 @@ macro_rules! for_each_op {
             /// `low32(dst) = low32(src1) <= low32(src2)` (unsigned)
             xulteq32 = Xulteq32 { operands: BinaryOperands<XReg> };
 
-            /// `low32(dst) = zext(*(ptr + offset))`
-            xload8_u32_offset32 = XLoad8U32Offset32 { dst: XReg, ptr: XReg, offset: i32 };
-            /// `low32(dst) = sext(*(ptr + offset))`
-            xload8_s32_offset32 = XLoad8S32Offset32 { dst: XReg, ptr: XReg, offset: i32 };
-            /// `low32(dst) = zext(*(ptr + offset))`
-            xload16le_u32_offset32 = XLoad16LeU32Offset32 { dst: XReg, ptr: XReg, offset: i32 };
-            /// `low32(dst) = sext(*(ptr + offset))`
-            xload16le_s32_offset32 = XLoad16LeS32Offset32 { dst: XReg, ptr: XReg, offset: i32 };
-            /// `low32(dst) = *(ptr + offset)`
-            xload32le_offset32 = XLoad32LeOffset32 { dst: XReg, ptr: XReg, offset: i32 };
-
-            /// `dst = zext(*(ptr + offset))`
-            xload8_u64_offset32 = XLoad8U64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
-            /// `dst = sext(*(ptr + offset))`
-            xload8_s64_offset32 = XLoad8S64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
-            /// `dst = zext(*(ptr + offset))`
-            xload16le_u64_offset32 = XLoad16LeU64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
-            /// `dst = sext(*(ptr + offset))`
-            xload16le_s64_offset32 = XLoad16LeS64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
-            /// `dst = zext(*(ptr + offset))`
-            xload32le_u64_offset32 = XLoad32LeU64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
-            /// `dst = sext(*(ptr + offset))`
-            xload32le_s64_offset32 = XLoad32LeS64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
-            /// `dst = *(ptr + offset)`
-            xload64le_offset32 = XLoad64LeOffset32 { dst: XReg, ptr: XReg, offset: i32 };
-
-            /// `*(ptr + offset) = low8(src)`
-            xstore8_offset32 = XStore8Offset32 { ptr: XReg, offset: i32, src: XReg };
-            /// `*(ptr + offset) = low16(src)`
-            xstore16le_offset32 = XStore16LeOffset32 { ptr: XReg, offset: i32, src: XReg };
-            /// `*(ptr + offset) = low32(src)`
-            xstore32le_offset32 = XStore32LeOffset32 { ptr: XReg, offset: i32, src: XReg };
-            /// `*(ptr + offset) = low64(src)`
-            xstore64le_offset32 = XStore64LeOffset32 { ptr: XReg, offset: i32, src: XReg };
-
-            /// `low32(dst) = zext(*(ptr + offset))`
-            xload8_u32_offset8 = XLoad8U32Offset8 { dst: XReg, ptr: XReg, offset: u8 };
-            /// `low32(dst) = sext(*(ptr + offset))`
-            xload8_s32_offset8 = XLoad8S32Offset8 { dst: XReg, ptr: XReg, offset: u8 };
-            /// `low32(dst) = zext(*(ptr + offset))`
-            xload16le_u32_offset8 = XLoad16LeU32Offset8 { dst: XReg, ptr: XReg, offset: u8 };
-            /// `low32(dst) = sext(*(ptr + offset))`
-            xload16le_s32_offset8 = XLoad16LeS32Offset8 { dst: XReg, ptr: XReg, offset: u8 };
-            /// `low32(dst) = *(ptr + offset)`
-            xload32le_offset8 = XLoad32LeOffset8 { dst: XReg, ptr: XReg, offset: u8 };
-
-            /// `dst = zext(*(ptr + offset))`
-            xload8_u64_offset8 = XLoad8U64Offset8 { dst: XReg, ptr: XReg, offset: u8 };
-            /// `dst = sext(*(ptr + offset))`
-            xload8_s64_offset8 = XLoad8S64Offset8 { dst: XReg, ptr: XReg, offset: u8 };
-            /// `dst = zext(*(ptr + offset))`
-            xload16le_u64_offset8 = XLoad16LeU64Offset8 { dst: XReg, ptr: XReg, offset: u8 };
-            /// `dst = sext(*(ptr + offset))`
-            xload16le_s64_offset8 = XLoad16LeS64Offset8 { dst: XReg, ptr: XReg, offset: u8 };
-            /// `dst = zext(*(ptr + offset))`
-            xload32le_u64_offset8 = XLoad32LeU64Offset8 { dst: XReg, ptr: XReg, offset: u8 };
-            /// `dst = sext(*(ptr + offset))`
-            xload32le_s64_offset8 = XLoad32LeS64Offset8 { dst: XReg, ptr: XReg, offset: u8 };
-            /// `dst = *(ptr + offset)`
-            xload64le_offset8 = XLoad64LeOffset8 { dst: XReg, ptr: XReg, offset: u8 };
-
-            /// `*(ptr + offset) = low8(src)`
-            xstore8_offset8 = XStore8Offset8 { ptr: XReg, offset: u8, src: XReg };
-            /// `*(ptr + offset) = low16(src)`
-            xstore16le_offset8 = XStore16LeOffset8 { ptr: XReg, offset: u8, src: XReg };
-            /// `*(ptr + offset) = low32(src)`
-            xstore32le_offset8 = XStore32LeOffset8 { ptr: XReg, offset: u8, src: XReg };
-            /// `*(ptr + offset) = low64(src)`
-            xstore64le_offset8 = XStore64LeOffset8 { ptr: XReg, offset: u8, src: XReg };
-
-            // wasm addressing modes
+            // Loads/stores with various addressing modes. Note that each style
+            // of addressing mode is split to its own suite of instructions to
+            // simplify the implementation of each opcode and avoid internal
+            // branching when using one addressing mode vs another.
             //
-            // g32 = 32-bit guest, arithmetic is zero-extending the `addr`
-            //       to the host pointer width.
+            // Note that big-endian, float, and vector loads are deferred to
+            // the "extended" opcode set below.
 
-            /// `low32(dst) = zext_8_32(*(base + zext(addr) + offset))`
-            xload8_u32_g32 = XLoad8U32G32 { dst: XReg, base: XReg, addr: XReg, offset: u8 };
-            /// `low32(dst) = sext_8_32(*(base + zext(addr) + offset))`
-            xload8_s32_g32 = XLoad8S32G32 { dst: XReg, base: XReg, addr: XReg, offset: u8 };
-            /// `low32(dst) = zext_16_32(*(base + zext(addr) + offset))`
-            xload16le_u32_g32 = XLoad16LeU32G32 { dst: XReg, base: XReg, addr: XReg, offset: u8 };
-            /// `low32(dst) = sext_16_32(*(base + zext(addr) + offset))`
-            xload16le_s32_g32 = XLoad16LeS32G32 { dst: XReg, base: XReg, addr: XReg, offset: u8 };
-            /// `low32(dst) = *(base + zext(addr) + offset)`
-            xload32le_g32 = XLoad32LeG32 { dst: XReg, base: XReg, addr: XReg, offset: u8 };
-            /// `dst = *(base + zext(addr) + offset)`
-            xload64le_g32 = XLoad64LeG32 { dst: XReg, base: XReg, addr: XReg, offset: u8 };
+            /// `low32(dst) = zext_8_32(*addr)`
+            xload8_u32_o32 = XLoad8U32O32 { dst: XReg, addr: AddrO32 };
+            /// `low32(dst) = sext_8_32(*addr)`
+            xload8_s32_o32 = XLoad8S32O32 { dst: XReg, addr: AddrO32 };
+            /// `low32(dst) = o32ext_16_32(*addr)`
+            xload16le_u32_o32 = XLoad16LeU32O32 { dst: XReg, addr: AddrO32 };
+            /// `low32(dst) = sext_16_32(*addr)`
+            xload16le_s32_o32 = XLoad16LeS32O32 { dst: XReg, addr: AddrO32 };
+            /// `low32(dst) = *addr`
+            xload32le_o32 = XLoad32LeO32 { dst: XReg, addr: AddrO32 };
+            /// `dst = *addr`
+            xload64le_o32 = XLoad64LeO32 { dst: XReg, addr: AddrO32 };
+            /// `*addr = low8(src)`
+            xstore8_o32 = XStore8O32 { addr: AddrO32, src: XReg };
+            /// `*addr = low16(src)`
+            xstore16le_o32 = XStore16LeO32 { addr: AddrO32, src: XReg };
+            /// `*addr = low32(src)`
+            xstore32le_o32 = XStore32LeO32 { addr: AddrO32, src: XReg };
+            /// `*addr = src`
+            xstore64le_o32 = XStore64LeO32 { addr: AddrO32, src: XReg };
 
-            /// `*(base + zext(addr) + offset) = low8(src)`
-            xstore8_g32 = XStore8G32 { base: XReg, addr: XReg, offset: u8, src: XReg };
-            /// `*(base + zext(addr) + offset) = low16(src)`
-            xstore16le_g32 = XStore16LeG32 { base: XReg, addr: XReg, offset: u8, src: XReg };
-            /// `*(base + zext(addr) + offset) = low32(src)`
-            xstore32le_g32 = XStore32LeG32 { base: XReg, addr: XReg, offset: u8, src: XReg };
-            /// `*(base + zext(addr) + offset) = src`
-            xstore64le_g32 = XStore64LeG32 { base: XReg, addr: XReg, offset: u8, src: XReg };
+            /// `low32(dst) = zext_8_32(*addr)`
+            xload8_u32_z = XLoad8U32Z { dst: XReg, addr: AddrZ };
+            /// `low32(dst) = sext_8_32(*addr)`
+            xload8_s32_z = XLoad8S32Z { dst: XReg, addr: AddrZ };
+            /// `low32(dst) = zext_16_32(*addr)`
+            xload16le_u32_z = XLoad16LeU32Z { dst: XReg, addr: AddrZ };
+            /// `low32(dst) = sext_16_32(*addr)`
+            xload16le_s32_z = XLoad16LeS32Z { dst: XReg, addr: AddrZ };
+            /// `low32(dst) = *addr`
+            xload32le_z = XLoad32LeZ { dst: XReg, addr: AddrZ };
+            /// `dst = *addr`
+            xload64le_z = XLoad64LeZ { dst: XReg, addr: AddrZ };
+            /// `*addr = low8(src)`
+            xstore8_z = XStore8Z { addr: AddrZ, src: XReg };
+            /// `*addr = low16(src)`
+            xstore16le_z = XStore16LeZ { addr: AddrZ, src: XReg };
+            /// `*addr = low32(src)`
+            xstore32le_z = XStore32LeZ { addr: AddrZ, src: XReg };
+            /// `*addr = src`
+            xstore64le_z = XStore64LeZ { addr: AddrZ, src: XReg };
+
+            /// `low32(dst) = zext_8_32(*addr)`
+            xload8_u32_g32 = XLoad8U32G32 { dst: XReg, addr: AddrG32 };
+            /// `low32(dst) = sext_8_32(*addr)`
+            xload8_s32_g32 = XLoad8S32G32 { dst: XReg, addr: AddrG32 };
+            /// `low32(dst) = zext_16_32(*addr)`
+            xload16le_u32_g32 = XLoad16LeU32G32 { dst: XReg, addr: AddrG32 };
+            /// `low32(dst) = sext_16_32(*addr)`
+            xload16le_s32_g32 = XLoad16LeS32G32 { dst: XReg, addr: AddrG32 };
+            /// `low32(dst) = *addr`
+            xload32le_g32 = XLoad32LeG32 { dst: XReg, addr: AddrG32 };
+            /// `dst = *addr`
+            xload64le_g32 = XLoad64LeG32 { dst: XReg, addr: AddrG32 };
+            /// `*addr = low8(src)`
+            xstore8_g32 = XStore8G32 { addr: AddrG32, src: XReg };
+            /// `*addr = low16(src)`
+            xstore16le_g32 = XStore16LeG32 { addr: AddrG32, src: XReg };
+            /// `*addr = low32(src)`
+            xstore32le_g32 = XStore32LeG32 { addr: AddrG32, src: XReg };
+            /// `*addr = src`
+            xstore64le_g32 = XStore64LeG32 { addr: AddrG32, src: XReg };
+
+            /// `low32(dst) = zext_8_32(*addr)`
+            xload8_u32_g32bne = XLoad8U32G32Bne { dst: XReg, addr: AddrG32Bne };
+            /// `low32(dst) = sext_8_32(*addr)`
+            xload8_s32_g32bne = XLoad8S32G32Bne { dst: XReg, addr: AddrG32Bne };
+            /// `low32(dst) = zext_16_32(*addr)`
+            xload16le_u32_g32bne = XLoad16LeU32G32Bne { dst: XReg, addr: AddrG32Bne };
+            /// `low32(dst) = sext_16_32(*addr)`
+            xload16le_s32_g32bne = XLoad16LeS32G32Bne { dst: XReg, addr: AddrG32Bne };
+            /// `low32(dst) = *addr`
+            xload32le_g32bne = XLoad32LeG32Bne { dst: XReg, addr: AddrG32Bne };
+            /// `dst = *addr`
+            xload64le_g32bne = XLoad64LeG32Bne { dst: XReg, addr: AddrG32Bne };
+            /// `*addr = low8(src)`
+            xstore8_g32bne = XStore8G32Bne { addr: AddrG32Bne, src: XReg };
+            /// `*addr = low16(src)`
+            xstore16le_g32bne = XStore16LeG32Bne { addr: AddrG32Bne, src: XReg };
+            /// `*addr = low32(src)`
+            xstore32le_g32bne = XStore32LeG32Bne { addr: AddrG32Bne, src: XReg };
+            /// `*addr = src`
+            xstore64le_g32bne = XStore64LeG32Bne { addr: AddrG32Bne, src: XReg };
+
 
             /// `push lr; push fp; fp = sp`
             push_frame = PushFrame ;
@@ -616,34 +612,6 @@ macro_rules! for_each_op {
             xselect32 = XSelect32 { dst: XReg, cond: XReg, if_nonzero: XReg, if_zero: XReg };
             /// `dst = low32(cond) ? if_nonzero : if_zero`
             xselect64 = XSelect64 { dst: XReg, cond: XReg, if_nonzero: XReg, if_zero: XReg };
-
-            /// `trapif(addr > bound_ptr - size)` (unsigned)
-            xbc32_bound_trap = XBc32BoundTrap {
-                addr: XReg,
-                bound: XReg,
-                size: u8
-            };
-            /// `trapif(addr > *(bound_ptr + bound_off) - size)` (unsigned)
-            ///
-            /// Note that the `bound_ptr + bound_off` load loads a
-            /// host-native-endian pointer-sized value.
-            xbc32_boundne_trap = XBc32BoundNeTrap {
-                addr: XReg,
-                bound_ptr: XReg,
-                bound_off: u8,
-                size: u8
-            };
-            /// `trapif(addr >= bound_ptr)` (unsigned)
-            xbc32_strict_bound_trap = XBc32StrictBoundTrap {
-                addr: XReg,
-                bound: XReg
-            };
-            /// `trapif(addr >= *(bound_ptr + bound_off))` (unsigned)
-            xbc32_strict_boundne_trap = XBc32StrictBoundNeTrap {
-                addr: XReg,
-                bound_ptr: XReg,
-                bound_off: u8
-            };
         }
     };
 }
@@ -710,46 +678,78 @@ macro_rules! for_each_extended_op {
             /// dst = if src == 0 { 0 } else { -1 }
             xbmask64 = Xbmask64 { dst: XReg, src: XReg };
 
-            /// `dst = zext(*(ptr + offset))`
-            xload16be_u64_offset32 = XLoad16BeU64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
-            /// `dst = sext(*(ptr + offset))`
-            xload16be_s64_offset32 = XLoad16BeS64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
-            /// `dst = zext(*(ptr + offset))`
-            xload32be_u64_offset32 = XLoad32BeU64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
-            /// `dst = sext(*(ptr + offset))`
-            xload32be_s64_offset32 = XLoad32BeS64Offset32 { dst: XReg, ptr: XReg, offset: i32 };
-            /// `dst = *(ptr + offset)`
-            xload64be_offset32 = XLoad64BeOffset32 { dst: XReg, ptr: XReg, offset: i32 };
+            // Big-endian loads/stores of X-registers using the "o32"
+            // addressing mode
 
-            /// `*(ptr + offset) = low16(src)`
-            xstore16be_offset32 = XStore16BeOffset32 { ptr: XReg, offset: i32, src: XReg };
-            /// `*(ptr + offset) = low32(src)`
-            xstore32be_offset32 = XStore32BeOffset32 { ptr: XReg, offset: i32, src: XReg };
-            /// `*(ptr + offset) = low64(src)`
-            xstore64be_offset32 = XStore64BeOffset32 { ptr: XReg, offset: i32, src: XReg };
+            /// `low32(dst) = zext(*addr)`
+            xload16be_u32_o32 = XLoad16BeU32O32 { dst: XReg, addr: AddrO32 };
+            /// `low32(dst) = sext(*addr)`
+            xload16be_s32_o32 = XLoad16BeS32O32 { dst: XReg, addr: AddrO32 };
+            /// `low32(dst) = zext(*addr)`
+            xload32be_o32 = XLoad32BeO32 { dst: XReg, addr: AddrO32 };
+            /// `dst = *addr`
+            xload64be_o32 = XLoad64BeO32 { dst: XReg, addr: AddrO32 };
+            /// `*addr = low16(src)`
+            xstore16be_o32 = XStore16BeO32 { addr: AddrO32, src: XReg };
+            /// `*addr = low32(src)`
+            xstore32be_o32 = XStore32BeO32 { addr: AddrO32, src: XReg };
+            /// `*addr = low64(src)`
+            xstore64be_o32 = XStore64BeO32 { addr: AddrO32, src: XReg };
 
-            /// `low32(dst) = zext(*(ptr + offset))`
-            fload32be_offset32 = Fload32BeOffset32 { dst: FReg, ptr: XReg, offset: i32 };
+            // Big and little endian float loads/stores. Note that the "Z"
+            // addressing mode only has little-endian variants.
+
+            /// `low32(dst) = zext(*addr)`
+            fload32be_o32 = Fload32BeO32 { dst: FReg, addr: AddrO32 };
+            /// `dst = *addr`
+            fload64be_o32 = Fload64BeO32 { dst: FReg, addr: AddrO32 };
+            /// `*addr = low32(src)`
+            fstore32be_o32 = Fstore32BeO32 { addr: AddrO32, src: FReg };
+            /// `*addr = src`
+            fstore64be_o32 = Fstore64BeO32 { addr: AddrO32, src: FReg };
+
+            /// `low32(dst) = zext(*addr)`
+            fload32le_o32 = Fload32LeO32 { dst: FReg, addr: AddrO32 };
+            /// `dst = *addr`
+            fload64le_o32 = Fload64LeO32 { dst: FReg, addr: AddrO32 };
+            /// `*addr = low32(src)`
+            fstore32le_o32 = Fstore32LeO32 { addr: AddrO32, src: FReg };
+            /// `*addr = src`
+            fstore64le_o32 = Fstore64LeO32 { addr: AddrO32, src: FReg };
+
+            /// `low32(dst) = zext(*addr)`
+            fload32le_z = Fload32LeZ { dst: FReg, addr: AddrZ };
+            /// `dst = *addr`
+            fload64le_z = Fload64LeZ { dst: FReg, addr: AddrZ };
+            /// `*addr = low32(src)`
+            fstore32le_z = Fstore32LeZ { addr: AddrZ, src: FReg };
+            /// `*addr = src`
+            fstore64le_z = Fstore64LeZ { addr: AddrZ, src: FReg };
+
+            /// `low32(dst) = zext(*addr)`
+            fload32le_g32 = Fload32LeG32 { dst: FReg, addr: AddrG32 };
+            /// `dst = *addr`
+            fload64le_g32 = Fload64LeG32 { dst: FReg, addr: AddrG32 };
+            /// `*addr = low32(src)`
+            fstore32le_g32 = Fstore32LeG32 { addr: AddrG32, src: FReg };
+            /// `*addr = src`
+            fstore64le_g32 = Fstore64LeG32 { addr: AddrG32, src: FReg };
+
+            // Vector loads/stores. Note that big-endian variants are all
+            // omitted.
+
+            /// `dst = *addr`
+            vload128le_o32 = VLoad128O32 { dst: VReg, addr: AddrO32 };
+            /// `*addr = src`
+            vstore128le_o32 = Vstore128LeO32 { addr: AddrO32, src: VReg };
             /// `dst = *(ptr + offset)`
-            fload64be_offset32 = Fload64BeOffset32 { dst: FReg, ptr: XReg, offset: i32 };
-            /// `*(ptr + offset) = low32(src)`
-            fstore32be_offset32 = Fstore32BeOffset32 { ptr: XReg, offset: i32, src: FReg };
+            vload128le_z = VLoad128Z { dst: VReg, addr: AddrZ };
             /// `*(ptr + offset) = src`
-            fstore64be_offset32 = Fstore64BeOffset32 { ptr: XReg, offset: i32, src: FReg };
-
-            /// `low32(dst) = zext(*(ptr + offset))`
-            fload32le_offset32 = Fload32LeOffset32 { dst: FReg, ptr: XReg, offset: i32 };
+            vstore128le_z = Vstore128LeZ { addr: AddrZ, src: VReg };
             /// `dst = *(ptr + offset)`
-            fload64le_offset32 = Fload64LeOffset32 { dst: FReg, ptr: XReg, offset: i32 };
-            /// `*(ptr + offset) = low32(src)`
-            fstore32le_offset32 = Fstore32LeOffset32 { ptr: XReg, offset: i32, src: FReg };
+            vload128le_g32 = VLoad128G32 { dst: VReg, addr: AddrG32 };
             /// `*(ptr + offset) = src`
-            fstore64le_offset32 = Fstore64LeOffset32 { ptr: XReg, offset: i32, src: FReg };
-
-            /// `dst = *(ptr + offset)`
-            vload128le_offset32 = VLoad128Offset32 { dst: VReg, ptr: XReg, offset: i32 };
-            /// `*(ptr + offset) = src`
-            vstore128le_offset32 = Vstore128LeOffset32 { ptr: XReg, offset: i32, src: VReg };
+            vstore128le_g32 = Vstore128LeG32 { addr: AddrG32, src: VReg };
 
             /// Move between `f` registers.
             fmov = Fmov { dst: FReg, src: FReg };
@@ -1006,17 +1006,17 @@ macro_rules! for_each_extended_op {
             vsplatf64 = VSplatF64 { dst: VReg, src: FReg };
 
             /// Load the 64-bit source as i8x8 and sign-extend to i16x8.
-            vload8x8_s_offset32 = VLoad8x8SOffset32 { dst: VReg, ptr: XReg, offset: i32 };
+            vload8x8_s_z = VLoad8x8SZ { dst: VReg, addr: AddrZ };
             /// Load the 64-bit source as u8x8 and zero-extend to i16x8.
-            vload8x8_u_offset32 = VLoad8x8UOffset32 { dst: VReg, ptr: XReg, offset: i32 };
+            vload8x8_u_z = VLoad8x8UZ { dst: VReg, addr: AddrZ };
             /// Load the 64-bit source as i16x4 and sign-extend to i32x4.
-            vload16x4le_s_offset32 = VLoad16x4LeSOffset32 { dst: VReg, ptr: XReg, offset: i32 };
+            vload16x4le_s_z = VLoad16x4LeSZ { dst: VReg, addr: AddrZ };
             /// Load the 64-bit source as u16x4 and zero-extend to i32x4.
-            vload16x4le_u_offset32 = VLoad16x4LeUOffset32 { dst: VReg, ptr: XReg, offset: i32 };
+            vload16x4le_u_z = VLoad16x4LeUZ { dst: VReg, addr: AddrZ };
             /// Load the 64-bit source as i32x2 and sign-extend to i64x2.
-            vload32x2le_s_offset32 = VLoad32x2LeSOffset32 { dst: VReg, ptr: XReg, offset: i32 };
+            vload32x2le_s_z = VLoad32x2LeSZ { dst: VReg, addr: AddrZ };
             /// Load the 64-bit source as u32x2 and zero-extend to i64x2.
-            vload32x2le_u_offset32 = VLoad32x2LeUOffset32 { dst: VReg, ptr: XReg, offset: i32 };
+            vload32x2le_u_z = VLoad32x2LeUZ { dst: VReg, addr: AddrZ };
 
             /// `dst = src1 & src2`
             vband128 = VBand128 { operands: BinaryOperands<VReg> };

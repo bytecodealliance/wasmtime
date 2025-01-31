@@ -156,13 +156,13 @@ block0:
 ; Disassembled:
 ; push_frame_save 64, 
 ; xzero x14
-; xstore64le_offset8 sp, 0, x14
-; xstore64le_offset8 sp, 8, x14
-; xstore64le_offset8 sp, 16, x14
-; xstore64le_offset8 sp, 24, x14
-; xstore64le_offset8 sp, 32, x14
-; xstore64le_offset8 sp, 40, x14
-; xstore64le_offset8 sp, 48, x14
+; xstore64le_o32 sp, 0, x14
+; xstore64le_o32 sp, 8, x14
+; xstore64le_o32 sp, 16, x14
+; xstore64le_o32 sp, 24, x14
+; xstore64le_o32 sp, 32, x14
+; xstore64le_o32 sp, 40, x14
+; xstore64le_o32 sp, 48, x14
 ; xmov x4, x14
 ; xmov x5, x14
 ; xmov x6, x14
@@ -173,7 +173,7 @@ block0:
 ; xmov x11, x14
 ; xmov x12, x14
 ; xmov x13, x14
-; call4 x14, x14, x14, x14, 0x0    // target = 0x41
+; call4 x14, x14, x14, x14, 0x0    // target = 0x56
 ; pop_frame_restore 64, 
 ; ret
 
@@ -257,12 +257,12 @@ block0:
 ; xmov x12, sp
 ; call1 x12, 0x0    // target = 0x8
 ; xmov x21, x12
-; xload64le_offset8 x28, sp, 0
-; xload64le_offset8 x16, sp, 8
-; xload64le_offset8 x12, sp, 16
-; xload64le_offset8 x15, sp, 24
-; xload64le_offset8 x22, sp, 32
-; xload64le_offset8 x24, sp, 40
+; xload64le_o32 x28, sp, 0
+; xload64le_o32 x16, sp, 8
+; xload64le_o32 x12, sp, 16
+; xload64le_o32 x15, sp, 24
+; xload64le_o32 x22, sp, 32
+; xload64le_o32 x24, sp, 40
 ; xadd64 x20, x0, x1
 ; xadd64 x19, x2, x3
 ; xadd64 x18, x4, x5

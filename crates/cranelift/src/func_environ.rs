@@ -3421,6 +3421,20 @@ impl FuncEnvironment<'_> {
     pub fn clif_instruction_traps_enabled(&self) -> bool {
         self.tunables.signals_based_traps || self.isa.triple().is_pulley()
     }
+
+    /// Returns whether loads from the null address are allowed as signals of
+    /// whether to trap or not.
+    pub fn load_from_zero_allowed(&self) -> bool {
+        // Pulley allows loads-from-zero and otherwise this is only allowed with
+        // traps + spectre mitigations.
+        self.isa.triple().is_pulley()
+            || (self.clif_memory_traps_enabled() && self.heap_access_spectre_mitigation())
+    }
+
+    /// Returns whether translation is happening for Pulley bytecode.
+    pub fn is_pulley(&self) -> bool {
+        self.isa.triple().is_pulley()
+    }
 }
 
 // Helper function to convert an `IndexType` to an `ir::Type`.

@@ -458,6 +458,48 @@ impl<R: Reg + Decode> Decode for UpperRegSet<R> {
     }
 }
 
+impl Decode for AddrO32 {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        Ok(AddrO32 {
+            addr: XReg::decode(bytecode)?,
+            offset: i32::decode(bytecode)?,
+        })
+    }
+}
+
+impl Decode for AddrZ {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        Ok(AddrZ {
+            addr: XReg::decode(bytecode)?,
+            offset: i32::decode(bytecode)?,
+        })
+    }
+}
+
+impl Decode for AddrG32 {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        Ok(AddrG32::from_bits(u32::decode(bytecode)?))
+    }
+}
+
+impl Decode for AddrG32Bne {
+    fn decode<T>(bytecode: &mut T) -> Result<Self, T::Error>
+    where
+        T: BytecodeStream,
+    {
+        Ok(AddrG32Bne::from_bits(u32::decode(bytecode)?))
+    }
+}
+
 /// A Pulley bytecode decoder.
 ///
 /// Does not materialize bytecode instructions, instead all decoding methods are

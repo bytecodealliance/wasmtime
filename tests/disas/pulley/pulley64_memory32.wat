@@ -58,139 +58,137 @@
 )
 ;; wasm[0]::function[0]::load8:
 ;;       push_frame
-;;       xbc32_strict_boundne_trap x2, x0, 88
-;;       xload64le_offset8 x5, x0, 80
-;;       xload8_u32_g32 x0, x5, x2, 0
+;;       xload64le_o32 x5, x0, 88
+;;       xload64le_o32 x6, x0, 80
+;;       xload8_u32_g32 x0, x6, x5, x2, 0
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[1]::load16:
 ;;       push_frame
-;;       xbc32_boundne_trap x2, x0, 88, 2
-;;       xload64le_offset8 x5, x0, 80
-;;       xload16le_u32_g32 x0, x5, x2, 0
+;;       xload64le_o32 x5, x0, 88
+;;       xload64le_o32 x6, x0, 80
+;;       xload16le_u32_g32 x0, x6, x5, x2, 0
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[2]::load32:
 ;;       push_frame
-;;       xbc32_boundne_trap x2, x0, 88, 4
-;;       xload64le_offset8 x5, x0, 80
-;;       xload32le_g32 x0, x5, x2, 0
+;;       xload64le_o32 x5, x0, 88
+;;       xload64le_o32 x6, x0, 80
+;;       xload32le_g32 x0, x6, x5, x2, 0
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[3]::load64:
 ;;       push_frame
-;;       xbc32_boundne_trap x2, x0, 88, 8
-;;       xload64le_offset8 x5, x0, 80
-;;       xload64le_g32 x0, x5, x2, 0
+;;       xload64le_o32 x5, x0, 88
+;;       xload64le_o32 x6, x0, 80
+;;       xload64le_g32 x0, x6, x5, x2, 0
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[4]::store8:
 ;;       push_frame
-;;       xbc32_strict_boundne_trap x2, x0, 88
-;;       xload64le_offset8 x5, x0, 80
-;;       xstore8_g32 x5, x2, 0, x3
+;;       xload64le_o32 x5, x0, 88
+;;       xload64le_o32 x6, x0, 80
+;;       xstore8_g32 x6, x5, x2, 0, x3
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[5]::store16:
 ;;       push_frame
-;;       xbc32_boundne_trap x2, x0, 88, 2
-;;       xload64le_offset8 x5, x0, 80
-;;       xstore16le_g32 x5, x2, 0, x3
+;;       xload64le_o32 x5, x0, 88
+;;       xload64le_o32 x6, x0, 80
+;;       xstore16le_g32 x6, x5, x2, 0, x3
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[6]::store32:
 ;;       push_frame
-;;       xbc32_boundne_trap x2, x0, 88, 4
-;;       xload64le_offset8 x5, x0, 80
-;;       xstore32le_g32 x5, x2, 0, x3
+;;       xload64le_o32 x5, x0, 88
+;;       xload64le_o32 x6, x0, 80
+;;       xstore32le_g32 x6, x5, x2, 0, x3
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[7]::store64:
 ;;       push_frame
-;;       xbc32_boundne_trap x2, x0, 88, 8
-;;       xload64le_offset8 x5, x0, 80
-;;       xstore64le_g32 x5, x2, 0, x3
+;;       xload64le_o32 x5, x0, 88
+;;       xload64le_o32 x6, x0, 80
+;;       xstore64le_g32 x6, x5, x2, 0, x3
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[8]::load8_offset:
 ;;       push_frame
-;;       xbc32_boundne_trap x2, x0, 88, 33
-;;       xload64le_offset8 x5, x0, 80
-;;       xload8_u32_g32 x0, x5, x2, 32
+;;       xload64le_o32 x5, x0, 88
+;;       xload64le_o32 x6, x0, 80
+;;       xload8_u32_g32 x0, x6, x5, x2, 32
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[9]::load16_offset:
 ;;       push_frame
-;;       xbc32_boundne_trap x2, x0, 88, 34
-;;       xload64le_offset8 x5, x0, 80
-;;       xload16le_u32_g32 x0, x5, x2, 32
+;;       xload64le_o32 x5, x0, 88
+;;       xload64le_o32 x6, x0, 80
+;;       xload16le_u32_g32 x0, x6, x5, x2, 32
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[10]::load32_offset:
 ;;       push_frame
-;;       xbc32_boundne_trap x2, x0, 88, 36
-;;       xload64le_offset8 x5, x0, 80
-;;       xload32le_g32 x0, x5, x2, 32
+;;       xload64le_o32 x5, x0, 88
+;;       xload64le_o32 x6, x0, 80
+;;       xload32le_g32 x0, x6, x5, x2, 32
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[11]::load64_offset:
 ;;       push_frame
-;;       xbc32_boundne_trap x2, x0, 88, 40
-;;       xload64le_offset8 x5, x0, 80
-;;       xload64le_g32 x0, x5, x2, 32
+;;       xload64le_o32 x5, x0, 88
+;;       xload64le_o32 x6, x0, 80
+;;       xload64le_g32 x0, x6, x5, x2, 32
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[12]::store8_offset:
 ;;       push_frame
-;;       xbc32_boundne_trap x2, x0, 88, 9
-;;       xload64le_offset8 x5, x0, 80
-;;       xstore8_g32 x5, x2, 8, x3
+;;       xload64le_o32 x5, x0, 88
+;;       xload64le_o32 x6, x0, 80
+;;       xstore8_g32 x6, x5, x2, 8, x3
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[13]::store16_offset:
 ;;       push_frame
-;;       xbc32_boundne_trap x2, x0, 88, 10
-;;       xload64le_offset8 x5, x0, 80
-;;       xstore16le_g32 x5, x2, 8, x3
+;;       xload64le_o32 x5, x0, 88
+;;       xload64le_o32 x6, x0, 80
+;;       xstore16le_g32 x6, x5, x2, 8, x3
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[14]::store32_offset:
 ;;       push_frame
-;;       xbc32_boundne_trap x2, x0, 88, 12
-;;       xload64le_offset8 x5, x0, 80
-;;       xstore32le_g32 x5, x2, 8, x3
+;;       xload64le_o32 x5, x0, 88
+;;       xload64le_o32 x6, x0, 80
+;;       xstore32le_g32 x6, x5, x2, 8, x3
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[15]::store64_offset:
 ;;       push_frame
-;;       xbc32_boundne_trap x2, x0, 88, 16
-;;       xload64le_offset8 x5, x0, 80
-;;       xstore64le_g32 x5, x2, 8, x3
+;;       xload64le_o32 x5, x0, 88
+;;       xload64le_o32 x6, x0, 80
+;;       xstore64le_g32 x6, x5, x2, 8, x3
 ;;       pop_frame
 ;;       ret
 ;;
 ;; wasm[0]::function[16]::load16_two:
 ;;       push_frame
-;;       xload64le_offset8 x7, x0, 88
-;;       xbc32_bound_trap x2, x7, 2
-;;       xload64le_offset8 x8, x0, 80
-;;       xload16le_u32_g32 x0, x8, x2, 0
-;;       xbc32_bound_trap x3, x7, 2
-;;       xload16le_u32_g32 x1, x8, x3, 0
+;;       xload64le_o32 x7, x0, 88
+;;       xload64le_o32 x8, x0, 80
+;;       xload16le_u32_g32 x0, x8, x7, x2, 0
+;;       xload16le_u32_g32 x1, x8, x7, x3, 0
 ;;       pop_frame
 ;;       ret
