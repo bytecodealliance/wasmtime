@@ -46,10 +46,16 @@ impl dsl::Format {
                 NoPrefix => unreachable!(),
                 _66 => fmtln!(f, "buf.put1(0x66);"),
                 _F0 => fmtln!(f, "buf.put1(0xf0);"),
-                _66F0 => fmtln!(f, "buf.put1(0x66); buf.put1(0xf0);"),
+                _66F0 => {
+                    fmtln!(f, "buf.put1(0x66);");
+                    fmtln!(f, "buf.put1(0xf0);");
+                }
                 _F2 => fmtln!(f, "buf.put1(0xf2);"),
                 _F3 => fmtln!(f, "buf.put1(0xf3);"),
-                _66F3 => fmtln!(f, "buf.put1(0x66); buf.put1(0xf3"),
+                _66F3 => {
+                    fmtln!(f, "buf.put1(0x66);");
+                    fmtln!(f, "buf.put1(0xf3);");
+                }
             }
         }
     }
