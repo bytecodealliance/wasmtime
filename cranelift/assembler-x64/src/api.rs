@@ -89,6 +89,7 @@ pub struct TrapCode(pub NonZeroU8);
 /// `KnownOffset`.
 pub trait KnownOffsetTable: Index<KnownOffset, Output = i32> {}
 impl KnownOffsetTable for Vec<i32> {}
+/// Provide a convenient implementation for testing.
 impl KnownOffsetTable for [i32; 2] {}
 
 /// A `KnownOffset` is a unique identifier for a specific offset known only at
