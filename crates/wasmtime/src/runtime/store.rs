@@ -348,7 +348,7 @@ pub struct StoreOpaque {
     store_data: ManuallyDrop<StoreData>,
     default_caller: InstanceHandle,
 
-    /// Used to optimzed wasm->host calls when the host function is defined with
+    /// Used to optimized wasm->host calls when the host function is defined with
     /// `Func::new` to avoid allocating a new vector each time a function is
     /// called.
     hostcall_val_storage: Vec<Val>,
