@@ -4,6 +4,7 @@ description = "Generate a Cranelift-specific assembler for x64 instructions"
 version = "0.117.0"
 license = "Apache-2.0 WITH LLVM-exception"
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 
