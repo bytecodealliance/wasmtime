@@ -69,7 +69,7 @@ mod trampolines {
     macro_rules! shims {
         (
             $(
-                $( #[$attr:meta] )*
+                $( #[cfg($attr:meta)] )?
                 $name:ident( $( $pname:ident: $param:ident ),* ) $( -> $result:ident )?;
             )*
         ) => (
@@ -77,12 +77,19 @@ mod trampolines {
                 pub unsafe extern "C" fn $name(
                     $($pname : signature!(@ty $param),)*
                 ) $( -> signature!(@ty $result))? {
-                    $(shims!(@validate_param $pname $param);)*
+                    $(#[cfg($attr)])?
+                    {
+                        $(shims!(@validate_param $pname $param);)*
 
-                    let ret = crate::runtime::vm::traphandlers::catch_unwind_and_record_trap(|| {
-                        shims!(@invoke $name() $($pname)*)
-                    });
-                    shims!(@convert_ret ret $($pname: $param)*)
+                        let ret = crate::runtime::vm::traphandlers::catch_unwind_and_record_trap(|| {
+                            shims!(@invoke $name() $($pname)*)
+                        });
+                        shims!(@convert_ret ret $($pname: $param)*)
+                    }
+                    $(
+                        #[cfg(not($attr))]
+                        unreachable!();
+                    )?
                 }
             )*
         );
@@ -570,6 +577,70 @@ unsafe fn resource_exit_call(vmctx: NonNull<VMComponentContext>) -> Result<()> {
 
 unsafe fn trap(_vmctx: NonNull<VMComponentContext>, code: u8) -> Result<Infallible> {
     Err(wasmtime_environ::Trap::from_u8(code).unwrap().into())
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn task_return(
+    vmctx: NonNull<VMComponentContext>,
+    ty: u32,
+    storage: *mut u8,
+    storage_len: usize,
+) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store()).component_async_store().task_return(
+            wasmtime_environ::component::TypeTupleIndex::from_u32(ty),
+            storage.cast::<crate::ValRaw>(),
+            storage_len,
+        )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn async_enter(
+    vmctx: NonNull<VMComponentContext>,
+    start: *mut u8,
+    return_: *mut u8,
+    caller_instance: u32,
+    task_return_type: u32,
+    params: u32,
+    results: u32,
+) -> Result<()> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store()).component_async_store().async_enter(
+            start.cast::<crate::vm::VMFuncRef>(),
+            return_.cast::<crate::vm::VMFuncRef>(),
+            wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
+            wasmtime_environ::component::TypeTupleIndex::from_u32(task_return_type),
+            params,
+            results,
+        )
+    })
+}
+
+#[cfg(feature = "component-model-async")]
+unsafe fn async_exit(
+    vmctx: NonNull<VMComponentContext>,
+    callback: *mut u8,
+    post_return: *mut u8,
+    caller_instance: u32,
+    callee: *mut u8,
+    callee_instance: u32,
+    param_count: u32,
+    result_count: u32,
+    flags: u32,
+) -> Result<u32> {
+    ComponentInstance::from_vmctx(vmctx, |instance| {
+        (*instance.store()).component_async_store().async_exit(
+            callback.cast::<crate::vm::VMFuncRef>(),
+            post_return.cast::<crate::vm::VMFuncRef>(),
+            wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(caller_instance),
+            callee.cast::<crate::vm::VMFuncRef>(),
+            wasmtime_environ::component::RuntimeComponentInstanceIndex::from_u32(callee_instance),
+            param_count,
+            result_count,
+            flags,
+        )
+    })
 }
 
 unsafe fn future_transfer(

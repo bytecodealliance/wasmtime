@@ -384,10 +384,12 @@ impl InterpreterRef<'_> {
             macro_rules! component {
                 (
                     $(
+                        $( #[cfg($attr:meta)] )?
                         $name:ident($($pname:ident: $param:ident ),* ) $(-> $result:ident)?;
                     )*
                 ) => {
                     $(
+                        $( #[cfg($attr)] )?
                         if id == const { HostCall::ComponentBuiltin(ComponentBuiltinFunctionIndex::$name()).index() } {
                             call!(@builtin($($param),*) $(-> $result)?);
                         }

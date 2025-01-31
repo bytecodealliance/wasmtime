@@ -1,8 +1,9 @@
 use {
-    crate::AsContextMut,
+    crate::{store::StoreInner, vm::VMFuncRef, AsContextMut, ValRaw},
     anyhow::Result,
     futures::{stream::FuturesUnordered, FutureExt},
     std::{boxed::Box, future::Future, pin::Pin},
+    wasmtime_environ::component::{RuntimeComponentInstanceIndex, TypeTupleIndex},
 };
 
 pub use futures_and_streams::{ErrorContext, FutureReader, StreamReader};
@@ -69,6 +70,100 @@ impl<T: 'static> PromisesUnordered<T> {
     /// Get the next result from this collection, if any.
     pub async fn next<U: Send>(&mut self, store: impl AsContextMut<Data = U>) -> Result<Option<T>> {
         _ = store;
+        todo!()
+    }
+}
+
+/// Trait representing component model ABI async intrinsics and fused adapter
+/// helper functions.
+pub unsafe trait VMComponentAsyncStore {
+    /// The `task.return` intrinsic.
+    fn task_return(
+        &mut self,
+        ty: TypeTupleIndex,
+        storage: *mut ValRaw,
+        storage_len: usize,
+    ) -> Result<()>;
+
+    /// A helper function for fused adapter modules involving calls where one or
+    /// both of the functions involved are async functions.
+    fn async_enter(
+        &mut self,
+        start: *mut VMFuncRef,
+        return_: *mut VMFuncRef,
+        caller_instance: RuntimeComponentInstanceIndex,
+        task_return_type: TypeTupleIndex,
+        params: u32,
+        results: u32,
+    ) -> Result<()>;
+
+    /// A helper function for fused adapter modules involving calls where one or
+    /// both of the functions involved are async functions.
+    fn async_exit(
+        &mut self,
+        callback: *mut VMFuncRef,
+        post_return: *mut VMFuncRef,
+        caller_instance: RuntimeComponentInstanceIndex,
+        callee: *mut VMFuncRef,
+        callee_instance: RuntimeComponentInstanceIndex,
+        param_count: u32,
+        result_count: u32,
+        flags: u32,
+    ) -> Result<u32>;
+}
+
+unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
+    fn task_return(
+        &mut self,
+        ty: TypeTupleIndex,
+        storage: *mut ValRaw,
+        storage_len: usize,
+    ) -> Result<()> {
+        _ = (ty, storage, storage_len);
+        todo!()
+    }
+
+    fn async_enter(
+        &mut self,
+        start: *mut VMFuncRef,
+        return_: *mut VMFuncRef,
+        caller_instance: RuntimeComponentInstanceIndex,
+        task_return_type: TypeTupleIndex,
+        params: u32,
+        results: u32,
+    ) -> Result<()> {
+        _ = (
+            start,
+            return_,
+            caller_instance,
+            task_return_type,
+            params,
+            results,
+        );
+        todo!()
+    }
+
+    fn async_exit(
+        &mut self,
+        callback: *mut VMFuncRef,
+        post_return: *mut VMFuncRef,
+        caller_instance: RuntimeComponentInstanceIndex,
+        callee: *mut VMFuncRef,
+        callee_instance: RuntimeComponentInstanceIndex,
+        param_count: u32,
+        result_count: u32,
+        flags: u32,
+    ) -> Result<u32> {
+        _ = (
+            callback,
+            post_return,
+            caller_instance,
+            callee,
+            callee_instance,
+            param_count,
+            result_count,
+            flags,
+        );
         todo!()
     }
 }

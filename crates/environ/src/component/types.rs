@@ -117,9 +117,6 @@ indices! {
     /// not just a subcomponent.
     pub struct TypeComponentGlobalErrorContextTableIndex(u32);
 
-    /// Index pointing to an interned `task.return` type within a component.
-    pub struct TypeTaskReturnIndex(u32);
-
     /// Index pointing to a resource table within a component.
     ///
     /// This is a Wasmtime-specific type index which isn't part of the component
@@ -277,7 +274,6 @@ pub struct ComponentTypes {
     pub(super) stream_tables: PrimaryMap<TypeStreamTableIndex, TypeStreamTable>,
     pub(super) error_context_tables:
         PrimaryMap<TypeComponentLocalErrorContextTableIndex, TypeErrorContextTable>,
-    pub(super) task_returns: PrimaryMap<TypeTaskReturnIndex, TypeTaskReturn>,
 }
 
 impl ComponentTypes {
@@ -477,20 +473,6 @@ pub struct TypeFunc {
     pub params: TypeTupleIndex,
     /// Results of the function represented as a tuple.
     pub results: TypeTupleIndex,
-    /// Expected core func type for memory32 `task.return` calls for this function.
-    pub task_return_type32: TypeTaskReturnIndex,
-    /// Expected core func type for memory64 `task.return` calls for this function.
-    pub task_return_type64: TypeTaskReturnIndex,
-}
-
-/// A core type representing the expected `task.return` signature for a
-/// component function.
-#[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]
-pub struct TypeTaskReturn {
-    /// Core type parameters for the signature.
-    ///
-    /// Note that `task.return` never returns results.
-    pub params: Vec<FlatType>,
 }
 
 /// All possible interface types that values can have.

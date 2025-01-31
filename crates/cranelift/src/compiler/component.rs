@@ -3,7 +3,7 @@
 use crate::{compiler::Compiler, TRAP_ALWAYS, TRAP_CANNOT_ENTER, TRAP_INTERNAL_ASSERT};
 use anyhow::Result;
 use cranelift_codegen::ir::condcodes::IntCC;
-use cranelift_codegen::ir::{self, InstBuilder, MemFlags};
+use cranelift_codegen::ir::{self, InstBuilder, MemFlags, Value};
 use cranelift_codegen::isa::{CallConv, TargetIsa};
 use cranelift_frontend::FunctionBuilder;
 use std::any::Any;
@@ -98,7 +98,7 @@ impl<'a> TrampolineCompiler<'a> {
                 _ = instance;
                 todo!()
             }
-            Trampoline::TaskReturn => todo!(),
+            Trampoline::TaskReturn { results } => self.translate_task_return_call(*results),
             Trampoline::TaskWait {
                 instance,
                 async_,
@@ -196,12 +196,12 @@ impl<'a> TrampolineCompiler<'a> {
             Trampoline::ResourceDrop(ty) => self.translate_resource_drop(*ty),
             Trampoline::ResourceTransferOwn => {
                 self.translate_resource_libcall(host::resource_transfer_own, |me, rets| {
-                    rets[0] = me.raise_if_resource_trapped(rets[0]);
+                    rets[0] = me.raise_if_negative_one(rets[0]);
                 })
             }
             Trampoline::ResourceTransferBorrow => {
                 self.translate_resource_libcall(host::resource_transfer_borrow, |me, rets| {
-                    rets[0] = me.raise_if_resource_trapped(rets[0]);
+                    rets[0] = me.raise_if_negative_one(rets[0]);
                 })
             }
             Trampoline::ResourceEnterCall => {
@@ -212,14 +212,17 @@ impl<'a> TrampolineCompiler<'a> {
                     me.raise_if_host_trapped(rets.pop().unwrap());
                 })
             }
-            Trampoline::AsyncEnterCall => todo!(),
+            Trampoline::AsyncEnterCall => {
+                self.translate_async_enter_or_exit(host::async_enter, None, ir::types::I8)
+            }
             Trampoline::AsyncExitCall {
                 callback,
                 post_return,
-            } => {
-                _ = (callback, post_return);
-                todo!()
-            }
+            } => self.translate_async_enter_or_exit(
+                host::async_exit,
+                Some((*callback, *post_return)),
+                ir::types::I64,
+            ),
             Trampoline::FutureTransfer => {
                 _ = host::future_transfer;
                 todo!()
@@ -235,6 +238,149 @@ impl<'a> TrampolineCompiler<'a> {
         }
     }
 
+    fn store_wasm_arguments(&mut self, args: &[Value]) -> (Value, Value) {
+        let pointer_type = self.isa.pointer_type();
+        let wasm_func_ty = &self.types[self.signature].unwrap_func();
+
+        // Start off by spilling all the wasm arguments into a stack slot to be
+        // passed to the host function.
+        match self.abi {
+            Abi::Wasm => {
+                let (ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
+                    wasm_func_ty,
+                    &mut self.builder,
+                    args,
+                );
+                let len = self.builder.ins().iconst(pointer_type, i64::from(len));
+                (ptr, len)
+            }
+            Abi::Array => {
+                let params = self.builder.func.dfg.block_params(self.block0);
+                (params[2], params[3])
+            }
+        }
+    }
+
+    fn translate_task_return_call(&mut self, results: TypeTupleIndex) {
+        match self.abi {
+            Abi::Wasm => {}
+
+            Abi::Array => {
+                // TODO: A guest could hypothetically export the `task.return`
+                // intrinsic it imported, allowing the host to call it.  We
+                // need to support that here.
+                self.builder.ins().trap(TRAP_INTERNAL_ASSERT);
+                return;
+            }
+        }
+
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+
+        let (values_vec_ptr, values_vec_len) = self.store_wasm_arguments(&args[2..]);
+
+        let (host_sig, index) = host::task_return(self.isa, &mut self.builder.func);
+        let host_fn = self.load_libcall(vmctx, index);
+
+        let ty = self
+            .builder
+            .ins()
+            .iconst(ir::types::I32, i64::from(results.as_u32()));
+
+        let call = self.compiler.call_indirect_host(
+            &mut self.builder,
+            index,
+            host_sig,
+            host_fn,
+            &[vmctx, ty, values_vec_ptr, values_vec_len],
+        );
+        let succeeded = self.builder.func.dfg.inst_results(call)[0];
+        self.raise_if_host_trapped(succeeded);
+        self.builder.ins().return_(&[]);
+    }
+
+    fn translate_async_enter_or_exit(
+        &mut self,
+        get_libcall: fn(
+            &dyn TargetIsa,
+            &mut ir::Function,
+        ) -> (ir::SigRef, ComponentBuiltinFunctionIndex),
+        callback_and_post_return: Option<(
+            Option<RuntimeCallbackIndex>,
+            Option<RuntimePostReturnIndex>,
+        )>,
+        result: ir::types::Type,
+    ) {
+        match self.abi {
+            Abi::Wasm => {}
+
+            // These trampolines can only actually be called by Wasm, so
+            // let's assert that here.
+            Abi::Array => {
+                self.builder.ins().trap(TRAP_INTERNAL_ASSERT);
+                return;
+            }
+        }
+
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+
+        let (host_sig, index) = get_libcall(self.isa, &mut self.builder.func);
+        let host_fn = self.load_libcall(vmctx, index);
+
+        let mut callee_args = vec![vmctx];
+
+        if let Some((callback, post_return)) = callback_and_post_return {
+            let pointer_type = self.isa.pointer_type();
+
+            // callback: *mut VMFuncRef
+            if let Some(callback) = callback {
+                callee_args.push(self.builder.ins().load(
+                    pointer_type,
+                    MemFlags::trusted(),
+                    vmctx,
+                    i32::try_from(self.offsets.runtime_callback(callback)).unwrap(),
+                ));
+            } else {
+                callee_args.push(self.builder.ins().iconst(pointer_type, 0));
+            }
+
+            // post_return: *mut VMFuncRef
+            if let Some(post_return) = post_return {
+                callee_args.push(self.builder.ins().load(
+                    pointer_type,
+                    MemFlags::trusted(),
+                    vmctx,
+                    i32::try_from(self.offsets.runtime_post_return(post_return)).unwrap(),
+                ));
+            } else {
+                callee_args.push(self.builder.ins().iconst(pointer_type, 0));
+            }
+        }
+
+        // remaining parameters
+        callee_args.extend(args[2..].iter().copied());
+
+        let call = self.compiler.call_indirect_host(
+            &mut self.builder,
+            index,
+            host_sig,
+            host_fn,
+            &callee_args,
+        );
+
+        if result == ir::types::I64 {
+            let result = self.builder.func.dfg.inst_results(call)[0];
+            let result = self.raise_if_negative_one(result);
+            self.abi_store_results(&[result]);
+        } else {
+            assert!(result == ir::types::I8);
+            let succeeded = self.builder.func.dfg.inst_results(call)[0];
+            self.raise_if_host_trapped(succeeded);
+            self.builder.ins().return_(&[]);
+        }
+    }
+
     fn translate_lower_import(
         &mut self,
         index: LoweredIndex,
@@ -246,23 +392,7 @@ impl<'a> TrampolineCompiler<'a> {
         let vmctx = args[0];
         let wasm_func_ty = self.types[self.signature].unwrap_func();
 
-        // Start off by spilling all the wasm arguments into a stack slot to be
-        // passed to the host function.
-        let (values_vec_ptr, values_vec_len) = match self.abi {
-            Abi::Wasm => {
-                let (ptr, len) = self.compiler.allocate_stack_array_and_spill_args(
-                    wasm_func_ty,
-                    &mut self.builder,
-                    &args[2..],
-                );
-                let len = self.builder.ins().iconst(pointer_type, i64::from(len));
-                (ptr, len)
-            }
-            Abi::Array => {
-                let params = self.builder.func.dfg.block_params(self.block0);
-                (params[2], params[3])
-            }
-        };
+        let (values_vec_ptr, values_vec_len) = self.store_wasm_arguments(&args[2..]);
 
         // Below this will incrementally build both the signature of the host
         // function we're calling as well as the list of arguments since the
@@ -457,7 +587,7 @@ impl<'a> TrampolineCompiler<'a> {
         );
         let call = self.call_libcall(vmctx, host::resource_new32, &host_args);
         let result = self.builder.func.dfg.inst_results(call)[0];
-        let result = self.raise_if_resource_trapped(result);
+        let result = self.raise_if_negative_one(result);
         self.abi_store_results(&[result]);
     }
 
@@ -486,7 +616,7 @@ impl<'a> TrampolineCompiler<'a> {
         );
         let call = self.call_libcall(vmctx, host::resource_rep32, &host_args);
         let result = self.builder.func.dfg.inst_results(call)[0];
-        let result = self.raise_if_resource_trapped(result);
+        let result = self.raise_if_negative_one(result);
         self.abi_store_results(&[result]);
     }
 
@@ -799,7 +929,7 @@ impl<'a> TrampolineCompiler<'a> {
         self.raise_if_host_trapped(succeeded);
     }
 
-    fn raise_if_resource_trapped(&mut self, ret: ir::Value) -> ir::Value {
+    fn raise_if_negative_one(&mut self, ret: ir::Value) -> ir::Value {
         let minus_one = self.builder.ins().iconst(ir::types::I64, -1);
         let succeeded = self.builder.ins().icmp(IntCC::NotEqual, ret, minus_one);
         self.raise_if_host_trapped(succeeded);

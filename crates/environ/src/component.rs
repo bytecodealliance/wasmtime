@@ -83,6 +83,13 @@ macro_rules! foreach_builtin_component_function {
             resource_enter_call(vmctx: vmctx);
             resource_exit_call(vmctx: vmctx) -> bool;
 
+            #[cfg(feature = "component-model-async")]
+            task_return(vmctx: vmctx, ty: u32, storage: ptr_u8, storage_len: size) -> bool;
+            #[cfg(feature = "component-model-async")]
+            async_enter(vmctx: vmctx, start: ptr_u8, return_: ptr_u8, caller_instance: u32, task_return_type: u32, params: u32, results: u32) -> bool;
+            #[cfg(feature = "component-model-async")]
+            async_exit(vmctx: vmctx, callback: ptr_u8, post_return: ptr_u8, caller_instance: u32, callee: ptr_u8, callee_instance: u32, param_count: u32, result_count: u32, flags: u32) -> u64;
+
             future_transfer(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
             stream_transfer(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
             error_context_transfer(vmctx: vmctx, src_idx: u32, src_table: u32, dst_table: u32) -> u64;
