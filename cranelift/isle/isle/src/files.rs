@@ -100,12 +100,33 @@ impl Files {
         self.file_names.get(file).map(|x| x.as_str())
     }
 
+    /// Same as `file_name` but try to make the file relative to the project root. Otherwise,
+    /// return the original file name (if found).
+    pub fn file_name_relative(&self, file: usize) -> Option<&str> {
+        self.file_name(file).map(|f| relative(f))
+    }
+
+    /// Try to make file names relative to the project root. Otherwise, return the original file
+    /// names.
+    pub fn file_names_relative(&self) -> Vec<&str> {
+        self.file_names.iter().map(|f| relative(f)).collect()
+    }
+
     pub fn file_text(&self, file: usize) -> Option<&str> {
         self.file_texts.get(file).map(|x| x.as_str())
     }
 
     pub fn file_line_map(&self, file: usize) -> Option<&LineMap> {
         self.file_line_maps.get(file)
+    }
+}
+
+/// If OUT_DIR is set, strips it from the file name.
+/// Otherwise returns the original file name.
+pub fn relative(file_name: &str) -> &str {
+    match std::env::var("OUT_DIR") {
+        Err(_) => file_name,
+        Ok(root) => file_name.strip_prefix(&root).unwrap_or(file_name).into(),
     }
 }
 
