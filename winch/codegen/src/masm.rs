@@ -1686,9 +1686,7 @@ pub(crate) trait MacroAssembler {
     /// is interpreted to be `size` long.
     fn v128_mul(
         &mut self,
-        lhs: Reg,
-        rhs: Reg,
-        dst: WritableReg,
+        context: &mut CodeGenContext<Emission>,
         lane_width: OperandSize,
     ) -> Result<()>;
 }

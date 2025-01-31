@@ -1880,7 +1880,13 @@ impl Assembler {
         }
     }
 
-    pub fn xmm_rmi_rvex(&mut self, op: AvxOpcode, src1: Reg, src2: Reg, dst: WritableReg) {
+    pub fn xmm_rmi_rvex(
+        &mut self,
+        op: AvxOpcode,
+        src1: Reg,
+        src2: impl Into<XmmMemImm>,
+        dst: WritableReg,
+    ) {
         self.emit(Inst::XmmRmiRVex {
             op,
             src1: src1.into(),

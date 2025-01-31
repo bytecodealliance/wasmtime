@@ -10,7 +10,10 @@ use crate::codegen::{
     FnCall,
 };
 use crate::masm::{
-    DivKind, Extend, ExtractLaneKind, FloatCmpKind, HandleOverflowKind, IntCmpKind, LoadKind, MacroAssembler, MemMoveDirection, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, StoreKind, TruncKind, V128LoadExtendKind, VectorCompareKind, VectorEqualityKind, Zero
+    DivKind, Extend, ExtractLaneKind, FloatCmpKind, HandleOverflowKind, IntCmpKind, LoadKind,
+    MacroAssembler, MemMoveDirection, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind,
+    RmwOp, RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, StoreKind,
+    TruncKind, V128LoadExtendKind, VectorCompareKind, VectorEqualityKind, Zero,
 };
 
 use crate::reg::{writable, Reg};
@@ -3601,27 +3604,15 @@ where
     }
 
     fn visit_i16x8_mul(&mut self) -> Self::Output {
-        self.context
-            .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
-                masm.v128_mul(dst, src, writable!(dst), size)?;
-                Ok(TypedReg::new(WasmValType::V128, dst))
-            })
+        self.masm.v128_mul(&mut self.context, OperandSize::S16)
     }
 
     fn visit_i32x4_mul(&mut self) -> Self::Output {
-        self.context
-            .binop(self.masm, OperandSize::S32, |masm, dst, src, size| {
-                masm.v128_mul(dst, src, writable!(dst), size)?;
-                Ok(TypedReg::new(WasmValType::V128, dst))
-            })
+        self.masm.v128_mul(&mut self.context, OperandSize::S32)
     }
 
     fn visit_i64x2_mul(&mut self) -> Self::Output {
-        self.context
-            .binop(self.masm, OperandSize::S64, |masm, dst, src, size| {
-                masm.v128_mul(dst, src, writable!(dst), size)?;
-                Ok(TypedReg::new(WasmValType::V128, dst))
-            })
+        self.masm.v128_mul(&mut self.context, OperandSize::S64)
     }
 
     fn visit_i8x16_add_sat_s(&mut self) -> Self::Output {
