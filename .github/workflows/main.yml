@@ -615,6 +615,7 @@ jobs:
     - run: cargo fuzz build --dev
     - run: cargo fuzz build --dev --fuzz-dir ./cranelift/isle/fuzz
     - run: cargo fuzz build --dev --fuzz-dir ./crates/environ/fuzz --features component-model
+    - run: cargo fuzz build --dev --fuzz-dir ./cranelift/assembler-x64/fuzz
 
     # common logic to cancel the entire run if this job fails
     - uses: ./.github/actions/cancel-on-failure

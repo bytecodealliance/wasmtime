@@ -1,4 +1,4 @@
-use super::{fmtln, generate_derive, Formatter};
+use super::{fmtln, generate_derive, generate_derive_arbitrary_bounds, Formatter};
 use crate::dsl;
 
 impl dsl::Inst {
@@ -13,6 +13,9 @@ impl dsl::Inst {
 
         f.line(format!("/// `{self}`"), None);
         generate_derive(f);
+        if self.requires_generic() {
+            generate_derive_arbitrary_bounds(f);
+        }
         fmtln!(f, "pub struct {struct_name} {where_clause} {{");
         f.indent(|f| {
             for k in &self.format.operands {

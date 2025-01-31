@@ -1,8 +1,7 @@
 //! Pure register operands; see [`Gpr`].
 
+use crate::rex::RexFlags;
 use crate::AsReg;
-use crate::{fuzz::FuzzReg, rex::RexFlags};
-use arbitrary::Arbitrary;
 
 /// A general purpose x64 register (e.g., `%rax`).
 ///
@@ -54,13 +53,6 @@ impl<R: AsReg> AsMut<R> for Gpr<R> {
     }
 }
 
-impl<'a, R: AsReg> Arbitrary<'a> for Gpr<R> {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        let reg = FuzzReg::arbitrary(u)?;
-        Ok(Self(R::new(reg.enc())))
-    }
-}
-
 /// A single x64 register encoding can access a different number of bits.
 #[derive(Copy, Clone, Debug)]
 pub enum Size {
@@ -103,16 +95,6 @@ impl<R: AsReg> NonRspGpr<R> {
 impl<R: AsReg> AsMut<R> for NonRspGpr<R> {
     fn as_mut(&mut self) -> &mut R {
         &mut self.0
-    }
-}
-
-impl<R: AsReg> Arbitrary<'_> for NonRspGpr<R> {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
-        use enc::*;
-        let gpr = u.choose(&[
-            RAX, RCX, RDX, RBX, RBP, RSI, RDI, R8, R9, R10, R11, R12, R13, R14, R15,
-        ])?;
-        Ok(Self(R::new(*gpr)))
     }
 }
 

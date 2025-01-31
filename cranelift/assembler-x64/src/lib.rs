@@ -5,12 +5,14 @@
 #![allow(non_camel_case_types)]
 
 mod api;
-pub mod fuzz;
 mod imm;
 pub mod isle;
 mod mem;
 mod reg;
 mod rex;
+
+#[cfg(feature = "arbitrary")]
+mod arbitrary_impls;
 
 pub use api::{
     AsReg, CodeSink, Constant, KnownOffsetTable, Label, RegisterVisitor, Registers, TrapCode,

@@ -5,7 +5,6 @@
 #![allow(clippy::cast_possible_wrap)] // Necessary to cast to `i*` for sign extension.
 
 use crate::api::{KnownOffset, KnownOffsetTable};
-use arbitrary::Arbitrary;
 
 /// This helper function prints the hexadecimal representation of the immediate
 /// value, but only if the value is greater than or equal to 10. This is
@@ -21,7 +20,8 @@ macro_rules! maybe_print_hex {
 }
 
 /// An 8-bit immediate operand.
-#[derive(Arbitrary, Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Imm8(u8);
 
 impl Imm8 {
@@ -49,7 +49,8 @@ impl Imm8 {
 }
 
 /// A 16-bit immediate operand.
-#[derive(Arbitrary, Clone, Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Imm16(u16);
 
 impl Imm16 {
@@ -81,7 +82,8 @@ impl Imm16 {
 /// Note that, "in 64-bit mode, the typical size of immediate operands remains
 /// 32 bits. When the operand size is 64 bits, the processor sign-extends all
 /// immediates to 64 bits prior to their use" (Intel SDM Vol. 2, 2.2.1.5).
-#[derive(Arbitrary, Clone, Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Imm32(u32);
 
 impl Imm32 {
@@ -110,7 +112,8 @@ impl Imm32 {
 
 /// A 32-bit immediate like [`Imm32`], but with slightly different
 /// pretty-printing.
-#[derive(Clone, Copy, Debug, Arbitrary)]
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Simm32(i32);
 
 impl Simm32 {
@@ -176,16 +179,6 @@ impl Simm32PlusKnownOffset {
         known_offset
             .checked_add(self.simm32.value())
             .expect("no wrapping")
-    }
-}
-
-impl Arbitrary<'_> for Simm32PlusKnownOffset {
-    fn arbitrary(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<Self> {
-        // For now, we don't generate offsets (TODO).
-        Ok(Self {
-            simm32: Simm32::arbitrary(u)?,
-            offset: None,
-        })
     }
 }
 

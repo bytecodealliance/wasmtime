@@ -4,10 +4,10 @@ use crate::api::{AsReg, CodeSink, Constant, KnownOffsetTable, Label, TrapCode};
 use crate::imm::{Simm32, Simm32PlusKnownOffset};
 use crate::reg::{self, NonRspGpr, Size};
 use crate::rex::{encode_modrm, encode_sib, Imm, RexFlags};
-use arbitrary::Arbitrary;
 
 /// x64 memory addressing modes.
-#[derive(Arbitrary, Clone, Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Amode<R: AsReg> {
     ImmReg {
         base: R,
@@ -74,7 +74,8 @@ impl<R: AsReg> Amode<R> {
 }
 
 /// For RIP-relative addressing, keep track of the [`CodeSink`]-specific target.
-#[derive(Arbitrary, Clone, Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum DeferredTarget {
     Label(Label),
     Constant(Constant),
@@ -111,7 +112,8 @@ impl<R: AsReg> std::fmt::Display for Amode<R> {
 }
 
 /// The scaling factor for the index register in certain [`Amode`]s.
-#[derive(Arbitrary, Clone, Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum Scale {
     One,
     Two,
@@ -157,7 +159,8 @@ impl Scale {
 }
 
 /// A general-purpose register or memory operand.
-#[derive(Arbitrary, Clone, Debug)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 #[allow(clippy::module_name_repetitions)]
 pub enum GprMem<R: AsReg, M: AsReg> {
     Gpr(R),

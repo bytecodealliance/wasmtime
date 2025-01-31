@@ -70,6 +70,7 @@ pub fn isle_definitions(f: &mut Formatter, insts: &[dsl::Inst]) {
 /// `enum Inst { ... }`
 fn generate_inst_enum(f: &mut Formatter, insts: &[dsl::Inst]) {
     generate_derive(f);
+    generate_derive_arbitrary_bounds(f);
     fmtln!(f, "pub enum Inst<R: Registers> {{");
     f.indent_push();
     for inst in insts {
@@ -83,7 +84,14 @@ fn generate_inst_enum(f: &mut Formatter, insts: &[dsl::Inst]) {
 
 /// `#[derive(...)]`
 fn generate_derive(f: &mut Formatter) {
-    f.line("#[derive(arbitrary::Arbitrary, Clone, Debug)]", None);
+    f.line("#[derive(Clone, Debug)]", None);
+    f.line("#[cfg_attr(feature = \"arbitrary\", derive(arbitrary::Arbitrary))]", None);
+}
+
+/// Adds a custom bound to the `Arbitrary` implementation which ensures that
+/// the associated registers are all `Arbitrary` as well.
+fn generate_derive_arbitrary_bounds(f: &mut Formatter) {
+    f.line("#[cfg_attr(feature = \"arbitrary\", arbitrary(bound = \"R: crate::arbitrary_impls::RegistersArbitrary\"))]", None);
 }
 
 /// `impl std::fmt::Display for Inst { ... }`

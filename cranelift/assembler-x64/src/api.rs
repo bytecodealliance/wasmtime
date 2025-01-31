@@ -1,7 +1,6 @@
 //! Contains traits that a user of this assembler must implement.
 
 use crate::reg;
-use arbitrary::Arbitrary;
 use std::{num::NonZeroU8, ops::Index, vec::Vec};
 
 /// Describe how an instruction is emitted into a code buffer.
@@ -67,15 +66,18 @@ impl CodeSink for Vec<u8> {
 }
 
 /// Wrap [`CodeSink`]-specific labels.
-#[derive(Debug, Clone, Arbitrary)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Label(pub u32);
 
 /// Wrap [`CodeSink`]-specific constant keys.
-#[derive(Debug, Clone, Arbitrary)]
+#[derive(Debug, Clone)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct Constant(pub u32);
 
 /// Wrap [`CodeSink`]-specific trap codes.
-#[derive(Debug, Clone, Copy, Arbitrary)]
+#[derive(Debug, Clone, Copy)]
+#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub struct TrapCode(pub NonZeroU8);
 
 /// A table mapping `KnownOffset` identifiers to their `i32` offset values.
@@ -103,10 +105,10 @@ pub type KnownOffset = usize;
 /// independent of this crate.
 pub trait Registers {
     /// An x64 general purpose register that may be read.
-    type ReadGpr: AsReg + for<'a> Arbitrary<'a>;
+    type ReadGpr: AsReg;
 
     /// An x64 general purpose register that may be read and written.
-    type ReadWriteGpr: AsReg + for<'a> Arbitrary<'a>;
+    type ReadWriteGpr: AsReg;
 }
 
 /// Describe how to interact with an external register type.
