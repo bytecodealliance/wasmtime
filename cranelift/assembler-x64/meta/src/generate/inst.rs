@@ -25,19 +25,13 @@ impl dsl::Inst {
         fmtln!(f, "}}");
     }
 
-    /// `<class name>_<format name>`
-    #[must_use]
-    pub(crate) fn struct_name(&self) -> String {
-        format!("{}_{}", self.name.to_lowercase(), self.format.name.to_lowercase())
-    }
-
     fn requires_generic(&self) -> bool {
         self.format.uses_variable_register()
     }
 
     /// `<struct_name><R>`
     pub(crate) fn struct_name_with_generic(&self) -> String {
-        let struct_name = self.struct_name();
+        let struct_name = self.name();
         if self.requires_generic() {
             format!("{struct_name}<R>")
         } else {
@@ -56,7 +50,7 @@ impl dsl::Inst {
 
     // `fn <inst>(<params>) -> Inst { ... }`
     pub fn generate_variant_constructor(&self, f: &mut Formatter) {
-        let variant_name = self.struct_name();
+        let variant_name = self.name();
         let params = comma_join(
             self.format
                 .operands
@@ -204,7 +198,7 @@ impl dsl::Inst {
             fmtln!(f, "let {location} = {to_string};");
         }
 
-        let inst_name = &self.name;
+        let inst_name = &self.mnemonic;
         let ordered_ops = self.format.generate_att_style_operands();
         fmtln!(f, "write!(f, \"{inst_name} {ordered_ops}\")");
         f.indent_pop();
@@ -221,7 +215,7 @@ impl dsl::Inst {
     /// This function panics if the instruction has no operands.
     pub fn generate_isle_macro(&self, f: &mut Formatter, read_ty: &str, read_write_ty: &str) {
         use dsl::OperandKind::*;
-        let struct_name = self.struct_name();
+        let struct_name = self.name();
         let operands = self
             .format
             .operands
@@ -264,7 +258,7 @@ impl dsl::Inst {
     pub fn generate_isle_definition(&self, f: &mut Formatter) {
         use dsl::OperandKind::*;
 
-        let struct_name = self.struct_name();
+        let struct_name = self.name();
         let rule_name = format!("x64_{struct_name}");
         let params = self
             .format

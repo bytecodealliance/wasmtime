@@ -73,7 +73,7 @@ fn generate_inst_enum(f: &mut Formatter, insts: &[dsl::Inst]) {
     fmtln!(f, "pub enum Inst<R: Registers> {{");
     f.indent_push();
     for inst in insts {
-        let variant_name = inst.struct_name();
+        let variant_name = inst.name();
         let struct_name = inst.struct_name_with_generic();
         fmtln!(f, "{variant_name}({struct_name}),");
     }
@@ -95,7 +95,7 @@ fn generate_inst_display_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
             fmtln!(f, "match self {{");
             f.indent_push();
             for inst in insts {
-                let variant_name = inst.struct_name();
+                let variant_name = inst.name();
                 fmtln!(f, "Self::{variant_name}(i) => write!(f, \"{{i}}\"),");
             }
             f.indent_pop();
@@ -115,7 +115,7 @@ fn generate_inst_encode_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
             fmtln!(f, "match self {{");
             f.indent_push();
             for inst in insts {
-                let variant_name = inst.struct_name();
+                let variant_name = inst.name();
                 fmtln!(f, "Self::{variant_name}(i) => i.encode(b, o),");
             }
             f.indent_pop();
@@ -135,7 +135,7 @@ fn generate_inst_visit_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
             fmtln!(f, "match self {{");
             f.indent_push();
             for inst in insts {
-                let variant_name = inst.struct_name();
+                let variant_name = inst.name();
                 fmtln!(f, "Self::{variant_name}(i) => i.visit(v),");
             }
             f.indent_pop();
@@ -156,7 +156,7 @@ fn generate_inst_features_impl(f: &mut Formatter, insts: &[dsl::Inst]) {
             fmtln!(f, "match self {{");
             f.indent_push();
             for inst in insts {
-                let variant_name = inst.struct_name();
+                let variant_name = inst.name();
                 fmtln!(f, "Self::{variant_name}(i) => i.features(),");
             }
             f.indent_pop();
