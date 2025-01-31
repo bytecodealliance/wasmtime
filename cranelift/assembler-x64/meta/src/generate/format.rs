@@ -7,6 +7,12 @@ use crate::dsl;
 impl dsl::Format {
     /// Re-order the Intel-style operand order to accommodate ATT-style
     /// printing.
+    ///
+    /// This is an unfortunate necessity to match Cranelift's current
+    /// disassembly, which uses AT&T-style printing. The plan is to eventually
+    /// transition to Intel-style printing (and avoid this awkward reordering)
+    /// once Cranelift has switched to using this assembler predominantly
+    /// (TODO).
     #[must_use]
     pub fn generate_att_style_operands(&self) -> String {
         let mut ordered_ops: Vec<_> = self
