@@ -105,45 +105,82 @@ pub struct Rex {
 }
 
 impl Rex {
+    /// Set the prefix bytes for the instruction.
     #[must_use]
     pub fn prefix(self, prefixes: LegacyPrefix) -> Self {
         Self { prefix: prefixes, ..self }
     }
 
+    /// Set the `REX.W` bit.
     #[must_use]
     pub fn w(self) -> Self {
         Self { w: true, ..self }
     }
 
+    /// Set the ModR/M byte to contain a register operand and an r/m operand;
+    /// equivalent to `/r` in the reference manual.
     #[must_use]
     pub fn r(self) -> Self {
         Self { r: true, ..self }
     }
 
+    /// Set the digit extending the opcode; equivalent to `/<digit>` in the
+    /// reference manual.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `digit` is too large.
     #[must_use]
-    #[allow(clippy::missing_panics_doc)]
     pub fn digit(self, digit: u8) -> Self {
         assert!(digit < 8);
         Self { digit, ..self }
     }
 
+    /// Append a byte-sized immediate operand (8-bit); equivalent to `ib` in the
+    /// reference manual.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an immediate operand is already set.
     #[must_use]
     pub fn ib(self) -> Self {
+        assert_eq!(self.imm, Imm::None);
         Self { imm: Imm::ib, ..self }
     }
 
+    /// Append a word-sized immediate operand (16-bit); equivalent to `iw` in
+    /// the reference manual.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an immediate operand is already set.
     #[must_use]
     pub fn iw(self) -> Self {
+        assert_eq!(self.imm, Imm::None);
         Self { imm: Imm::iw, ..self }
     }
 
+    /// Append a doubleword-sized immediate operand (32-bit); equivalent to `id`
+    /// in the reference manual.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an immediate operand is already set.
     #[must_use]
     pub fn id(self) -> Self {
+        assert_eq!(self.imm, Imm::None);
         Self { imm: Imm::id, ..self }
     }
 
+    /// Append a quadword-sized immediate operand (64-bit); equivalent to `io`
+    /// in the reference manual.
+    ///
+    /// # Panics
+    ///
+    /// Panics if an immediate operand is already set.
     #[must_use]
     pub fn io(self) -> Self {
+        assert_eq!(self.imm, Imm::None);
         Self { imm: Imm::io, ..self }
     }
 
@@ -239,7 +276,7 @@ impl LegacyPrefix {
     }
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 #[allow(non_camel_case_types)]
 pub enum Imm {
     None,
