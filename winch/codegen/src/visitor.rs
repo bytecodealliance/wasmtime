@@ -13,7 +13,7 @@ use crate::masm::{
     DivKind, Extend, ExtractLaneKind, FloatCmpKind, IntCmpKind, LoadKind, MacroAssembler,
     MemMoveDirection, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp,
     RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, StoreKind, TruncKind,
-    VectorCompareKind, VectorEqualityKind, VectorExtendKind, Zero,
+    V128LoadExtendKind, VectorCompareKind, VectorEqualityKind, Zero,
 };
 
 use crate::reg::{writable, Reg};
@@ -2790,7 +2790,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::VectorExtend(VectorExtendKind::V128Extend8x8S),
+            LoadKind::VectorExtend(V128LoadExtendKind::E8x8S),
         )
     }
 
@@ -2798,7 +2798,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::VectorExtend(VectorExtendKind::V128Extend8x8U),
+            LoadKind::VectorExtend(V128LoadExtendKind::E8x8U),
         )
     }
 
@@ -2806,7 +2806,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::VectorExtend(VectorExtendKind::V128Extend16x4S),
+            LoadKind::VectorExtend(V128LoadExtendKind::E16x4S),
         )
     }
 
@@ -2814,7 +2814,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::VectorExtend(VectorExtendKind::V128Extend16x4U),
+            LoadKind::VectorExtend(V128LoadExtendKind::E16x4U),
         )
     }
 
@@ -2822,7 +2822,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::VectorExtend(VectorExtendKind::V128Extend32x2S),
+            LoadKind::VectorExtend(V128LoadExtendKind::E32x2S),
         )
     }
 
@@ -2830,7 +2830,7 @@ where
         self.emit_wasm_load(
             &memarg,
             WasmValType::V128,
-            LoadKind::VectorExtend(VectorExtendKind::V128Extend32x2U),
+            LoadKind::VectorExtend(V128LoadExtendKind::E32x2U),
         )
     }
 

@@ -287,23 +287,23 @@ impl ExtendKind {
     }
 }
 
-/// Kinds of vector extends in WebAssembly. Each MacroAssembler implementation
-/// is responsible for emitting the correct sequence of instructions when
-/// lowering to machine code.
+/// Kinds of vector load and extends in WebAssembly. Each MacroAssembler
+/// implementation is responsible for emitting the correct sequence of
+/// instructions when lowering to machine code.
 #[derive(Copy, Clone)]
-pub(crate) enum VectorExtendKind {
+pub(crate) enum V128LoadExtendKind {
     /// Sign extends eight 8 bit integers to eight 16 bit lanes.
-    V128Extend8x8S,
+    E8x8S,
     /// Zero extends eight 8 bit integers to eight 16 bit lanes.
-    V128Extend8x8U,
+    E8x8U,
     /// Sign extends four 16 bit integers to four 32 bit lanes.
-    V128Extend16x4S,
+    E16x4S,
     /// Zero extends four 16 bit integers to four 32 bit lanes.
-    V128Extend16x4U,
+    E16x4U,
     /// Sign extends two 32 bit integers to two 64 bit lanes.
-    V128Extend32x2S,
+    E32x2S,
     /// Zero extends two 32 bit integers to two 64 bit lanes.
-    V128Extend32x2U,
+    E32x2U,
 }
 
 /// Kinds of splat loads supported by WebAssembly.
@@ -431,7 +431,7 @@ pub(crate) enum LoadKind {
     /// Scalar (non-vector) extend.
     ScalarExtend(ExtendKind),
     /// Vector extend.
-    VectorExtend(VectorExtendKind),
+    VectorExtend(V128LoadExtendKind),
     /// Load content into select lane.
     VectorLane(LaneSelector),
 }

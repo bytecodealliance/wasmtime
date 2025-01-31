@@ -4,7 +4,7 @@ use crate::{
     isa::{reg::Reg, CallingConvention},
     masm::{
         DivKind, Extend, ExtendKind, ExtendType, IntCmpKind, MulWideKind, OperandSize, RemKind,
-        RoundingMode, ShiftKind, Signed, VectorExtendKind, Zero,
+        RoundingMode, ShiftKind, Signed, V128LoadExtendKind, Zero,
     },
     reg::writable,
     x64::regs::scratch,
@@ -497,18 +497,18 @@ impl Assembler {
         &mut self,
         src: &Address,
         dst: WritableReg,
-        ext: VectorExtendKind,
+        ext: V128LoadExtendKind,
         flags: MemFlags,
     ) {
         assert!(dst.to_reg().is_float());
 
         let op = match ext {
-            VectorExtendKind::V128Extend8x8S => AvxOpcode::Vpmovsxbw,
-            VectorExtendKind::V128Extend8x8U => AvxOpcode::Vpmovzxbw,
-            VectorExtendKind::V128Extend16x4S => AvxOpcode::Vpmovsxwd,
-            VectorExtendKind::V128Extend16x4U => AvxOpcode::Vpmovzxwd,
-            VectorExtendKind::V128Extend32x2S => AvxOpcode::Vpmovsxdq,
-            VectorExtendKind::V128Extend32x2U => AvxOpcode::Vpmovzxdq,
+            V128LoadExtendKind::E8x8S => AvxOpcode::Vpmovsxbw,
+            V128LoadExtendKind::E8x8U => AvxOpcode::Vpmovzxbw,
+            V128LoadExtendKind::E16x4S => AvxOpcode::Vpmovsxwd,
+            V128LoadExtendKind::E16x4U => AvxOpcode::Vpmovzxwd,
+            V128LoadExtendKind::E32x2S => AvxOpcode::Vpmovsxdq,
+            V128LoadExtendKind::E32x2U => AvxOpcode::Vpmovzxdq,
         };
 
         let src = Self::to_synthetic_amode(
