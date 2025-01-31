@@ -229,10 +229,10 @@ impl fmt::Display for Rex {
             LegacyPrefix::NoPrefix => {}
             LegacyPrefix::_66 => write!(f, "0x66 + ")?,
             LegacyPrefix::_F0 => write!(f, "0xF0 + ")?,
-            LegacyPrefix::_66F0 => write!(f, "0x66F0 + ")?,
+            LegacyPrefix::_66F0 => write!(f, "0x66 0xF0 + ")?,
             LegacyPrefix::_F2 => write!(f, "0xF2 + ")?,
             LegacyPrefix::_F3 => write!(f, "0xF3 + ")?,
-            LegacyPrefix::_66F3 => write!(f, "0x66F3 + ")?,
+            LegacyPrefix::_66F3 => write!(f, "0x66 0xF3 + ")?,
         }
         if self.w {
             write!(f, "REX.W + ")?;
