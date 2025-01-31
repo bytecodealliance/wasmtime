@@ -17,7 +17,7 @@ use core::fmt;
 #[must_use]
 pub fn rex(opcode: u8) -> Rex {
     Rex {
-        prefixes: LegacyPrefixes::NoPrefix,
+        prefix: LegacyPrefix::NoPrefix,
         opcode,
         w: false,
         r: false,
@@ -67,8 +67,16 @@ impl fmt::Display for Encoding {
 /// emitted when necessary.
 pub struct Rex {
     /// Any legacy prefixes that should be included with the instruction.
-    pub prefixes: LegacyPrefixes,
+    pub prefix: LegacyPrefix,
     /// The opcode of the instruction.
+    ///
+    /// Multi-byte opcodes are handled by prefixing this `opcode` with a
+    /// [`LegacyPrefix`]; e.g., `66 0F 54` (`ANDPD`) is expressed as follows:
+    ///
+    /// ```
+    /// # use cranelift_assembler_x64_meta::dsl::{rex, LegacyPrefix::_66F0};
+    /// let enc = rex(0x54).prefix(_66F0);
+    /// ```
     pub opcode: u8,
     /// Indicates setting the REX.W bit.
     ///
@@ -98,8 +106,8 @@ pub struct Rex {
 
 impl Rex {
     #[must_use]
-    pub fn prefix(self, prefixes: LegacyPrefixes) -> Self {
-        Self { prefixes, ..self }
+    pub fn prefix(self, prefixes: LegacyPrefix) -> Self {
+        Self { prefix: prefixes, ..self }
     }
 
     #[must_use]
@@ -144,11 +152,11 @@ impl Rex {
         assert!(!(self.r && self.digit > 0));
         assert!(!(self.r && self.imm != Imm::None));
         assert!(
-            !(self.w && (self.prefixes.contains_66())),
+            !(self.w && (self.prefix.contains_66())),
             "though valid, if REX.W is set then the 66 prefix is ignored--avoid encoding this"
         );
 
-        if self.prefixes.contains_66() {
+        if self.prefix.contains_66() {
             assert!(
                 operands.iter().all(|&op| op.location.bits() == 16),
                 "when we encode the 66 prefix, we expect all operands to be 16-bit wide"
@@ -177,14 +185,14 @@ impl From<Rex> for Encoding {
 
 impl fmt::Display for Rex {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.prefixes {
-            LegacyPrefixes::NoPrefix => {}
-            LegacyPrefixes::_66 => write!(f, "0x66 + ")?,
-            LegacyPrefixes::_F0 => write!(f, "0xF0 + ")?,
-            LegacyPrefixes::_66F0 => write!(f, "0x66F0 + ")?,
-            LegacyPrefixes::_F2 => write!(f, "0xF2 + ")?,
-            LegacyPrefixes::_F3 => write!(f, "0xF3 + ")?,
-            LegacyPrefixes::_66F3 => write!(f, "0x66F3 + ")?,
+        match self.prefix {
+            LegacyPrefix::NoPrefix => {}
+            LegacyPrefix::_66 => write!(f, "0x66 + ")?,
+            LegacyPrefix::_F0 => write!(f, "0xF0 + ")?,
+            LegacyPrefix::_66F0 => write!(f, "0x66F0 + ")?,
+            LegacyPrefix::_F2 => write!(f, "0xF2 + ")?,
+            LegacyPrefix::_F3 => write!(f, "0xF3 + ")?,
+            LegacyPrefix::_66F3 => write!(f, "0x66F3 + ")?,
         }
         if self.w {
             write!(f, "REX.W + ")?;
@@ -204,7 +212,7 @@ impl fmt::Display for Rex {
 }
 
 #[derive(PartialEq)]
-pub enum LegacyPrefixes {
+pub enum LegacyPrefix {
     /// No prefix bytes.
     NoPrefix,
     /// Operand size override -- here, denoting "16-bit operation".
@@ -221,14 +229,12 @@ pub enum LegacyPrefixes {
     _66F3,
 }
 
-impl LegacyPrefixes {
+impl LegacyPrefix {
     #[must_use]
     pub fn contains_66(&self) -> bool {
         match self {
-            LegacyPrefixes::_66 | LegacyPrefixes::_66F0 | LegacyPrefixes::_66F3 => true,
-            LegacyPrefixes::NoPrefix | LegacyPrefixes::_F0 | LegacyPrefixes::_F2 | LegacyPrefixes::_F3 => {
-                false
-            }
+            LegacyPrefix::_66 | LegacyPrefix::_66F0 | LegacyPrefix::_66F3 => true,
+            LegacyPrefix::NoPrefix | LegacyPrefix::_F0 | LegacyPrefix::_F2 | LegacyPrefix::_F3 => false,
         }
     }
 }

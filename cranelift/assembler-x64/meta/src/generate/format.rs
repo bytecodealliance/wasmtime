@@ -32,11 +32,11 @@ impl dsl::Format {
     /// `buf.put1(...);`
     #[allow(clippy::unused_self)]
     fn generate_legacy_prefix(&self, f: &mut Formatter, rex: &dsl::Rex) {
-        use dsl::LegacyPrefixes::*;
-        if rex.prefixes != NoPrefix {
+        use dsl::LegacyPrefix::*;
+        if rex.prefix != NoPrefix {
             f.empty_line();
             f.comment("Emit legacy prefixes.");
-            match rex.prefixes {
+            match rex.prefix {
                 NoPrefix => unreachable!(),
                 _66 => fmtln!(f, "buf.put1(0x66);"),
                 _F0 => fmtln!(f, "buf.put1(0xf0);"),
