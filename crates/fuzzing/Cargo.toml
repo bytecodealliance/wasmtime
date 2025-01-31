@@ -50,6 +50,7 @@ features = [
   'pooling-allocator',
   'pulley',
   'threads',
+  'parallel-compilation',
 ]
 
 # We rely on precompiled v8 binaries, but rusty-v8 doesn't have a precompiled
