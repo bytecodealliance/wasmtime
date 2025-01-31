@@ -54,6 +54,15 @@ pub enum Feature {
     compat,
 }
 
+/// List all CPU features.
+///
+/// It is critical that this list contains _all_ variants of the [`Feature`]
+/// `enum`. We use this list here in the `meta` level so that we can accurately
+/// transcribe each variant to an `enum` available in the generated layer above.
+/// If this list is incomplete, we will (fortunately) see compile errors for
+/// generated functions that use the missing variants.
+pub const ALL_FEATURES: &[Feature] = &[Feature::_64b, Feature::compat];
+
 impl fmt::Display for Feature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {

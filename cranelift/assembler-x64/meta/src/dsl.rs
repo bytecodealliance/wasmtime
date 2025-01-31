@@ -9,7 +9,7 @@ mod features;
 pub mod format;
 
 pub use encoding::{rex, vex, Encoding, LegacyPrefix, Rex};
-pub use features::{Feature, Features};
+pub use features::{Feature, Features, ALL_FEATURES};
 pub use format::{fmt, r, rw, sxl, sxq, sxw};
 pub use format::{Extension, Format, Location, Mutability, Operand, OperandKind};
 
