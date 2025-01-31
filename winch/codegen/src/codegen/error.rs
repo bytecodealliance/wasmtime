@@ -26,6 +26,12 @@ pub(crate) enum CodeGenError {
     /// Unimplemented due to requiring AVX2.
     #[error("Instruction not implemented for CPUs without AVX2 support")]
     UnimplementedForNoAvx2,
+    /// Unimplemented due to requiring AVX512VL.
+    #[error("Instruction not implemented for CPUs without AVX512VL support")]
+    UnimplementedForNoAvx512VL,
+    /// Unimplemented due to requiring AVX512DQ.
+    #[error("Instruction not implemented for CPUs without AVX512DQ support")]
+    UnimplementedForNoAvx512DQ,
     /// Unsupported eager initialization of tables.
     #[error("Unsupported eager initialization of tables")]
     UnsupportedTableEagerInit,

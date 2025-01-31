@@ -428,7 +428,6 @@ impl WastTest {
                 "misc_testsuite/simd/issue_3327_bnot_lowering.wast",
                 "spec_testsuite/simd_bit_shift.wast",
                 "spec_testsuite/simd_boolean.wast",
-                "spec_testsuite/simd_const.wast",
                 "spec_testsuite/simd_conversions.wast",
                 "spec_testsuite/simd_f32x4.wast",
                 "spec_testsuite/simd_f32x4_arith.wast",
@@ -499,6 +498,7 @@ impl WastTest {
                     "misc_testsuite/simd/unaligned-load.wast",
                     "multi-memory/simd_memory-multi.wast",
                     "misc_testsuite/simd/issue4807.wast",
+                    "spec_testsuite/simd_const.wast",
                 ];
 
                 if unsupported.iter().any(|part| self.path.ends_with(part)) {
