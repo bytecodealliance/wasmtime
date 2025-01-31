@@ -1,5 +1,10 @@
 //! A DSL for describing x64 instruction formats--the shape of the operands.
 //!
+//! Every instruction has a format that corresponds to its encoding's expected
+//! operands. The format is what allows us to generate code that accepts
+//! operands of the right type and check that the operands are used in the right
+//! way.
+//!
 //! The entry point for this module is [`fmt`].
 //!
 //! ```
