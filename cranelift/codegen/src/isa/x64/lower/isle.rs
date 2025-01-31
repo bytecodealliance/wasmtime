@@ -961,8 +961,21 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 
     fn is_imm8(&mut self, src: &GprMemImm) -> Option<AssemblerImm8> {
         match src.clone().to_reg_mem_imm() {
-            RegMemImm::Imm { simm32 } if simm32 <= u8::MAX as u32 => {
-                Some(AssemblerImm8::new(simm32 as u8))
+            RegMemImm::Imm { simm32 } => {
+                // TODO fix down-convert logic: if an assembly instruction can
+                // only fit 8 bits, we check if down-converting the 32 bits from
+                // CLIF we have here will fit. Some assembler instructions will
+                // sign-extend this immediate, however, and we don't have a way
+                // to distinguish this yet. For a CLIF value `-2i8`, this
+                // conversion will both pass on the appropriate bytes and the
+                // emitted instruction will sign-extend them as expected. But,
+                // for a CLIF value `254u8` (the same bit pattern), we could
+                // pass on the right bits but the sign-extension will break
+                // Cranelift's semantics. For the time being, we conservatively
+                // only allow down-converting to `i8` values, meaning some valid
+                // constants will be rejected.
+                let imm = i8::try_from(simm32).ok()?;
+                Some(AssemblerImm8::new(imm as u8))
             }
             _ => None,
         }
@@ -970,8 +983,10 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
 
     fn is_imm16(&mut self, src: &GprMemImm) -> Option<AssemblerImm16> {
         match src.clone().to_reg_mem_imm() {
-            RegMemImm::Imm { simm32 } if simm32 <= u16::MAX as u32 => {
-                Some(AssemblerImm16::new(simm32 as u16))
+            RegMemImm::Imm { simm32 } => {
+                // TODO fix down-convert logic: see notes in `is_imm8`.
+                let imm = i16::try_from(simm32).ok()?;
+                Some(AssemblerImm16::new(imm as u16))
             }
             _ => None,
         }
