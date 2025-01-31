@@ -184,6 +184,9 @@ impl Rex {
         Self { imm: Imm::io, ..self }
     }
 
+    /// Check a subset of the rules for valid encodings outlined in chapter 2,
+    /// _Instruction Format_, of the Intel® 64 and IA-32 Architectures Software
+    /// Developer’s Manual, Volume 2A.
     fn validate(&self, operands: &[Operand]) {
         assert!(self.digit < 8);
         assert!(!(self.r && self.digit > 0));
