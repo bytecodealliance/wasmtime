@@ -20,6 +20,7 @@ mod emit;
 mod emit_state;
 #[cfg(test)]
 mod emit_tests;
+pub mod external;
 pub mod regs;
 mod stack_switch;
 pub mod unwind;
@@ -55,7 +56,7 @@ pub struct ReturnCallInfo<T> {
 fn inst_size_test() {
     // This test will help with unintentionally growing the size
     // of the Inst enum.
-    assert_eq!(40, std::mem::size_of::<Inst>());
+    assert_eq!(48, std::mem::size_of::<Inst>());
 }
 
 pub(crate) fn low32_will_sign_extend_to_64(x: u64) -> bool {
@@ -189,6 +190,17 @@ impl Inst {
             | Inst::XmmCmpRmRVex { op, .. } => op.available_from(),
 
             Inst::MulX { .. } => smallvec![InstructionSet::BMI2],
+
+            Inst::External { inst } => {
+                use cranelift_assembler_x64::Feature::*;
+                let features = smallvec![];
+                for f in inst.features() {
+                    match f {
+                        _64b | compat => {}
+                    }
+                }
+                features
+            }
         }
     }
 }
@@ -1966,6 +1978,10 @@ impl PrettyPrint for Inst {
                 let reg = pretty_print_reg(*reg, 8);
                 format!("dummy_use {reg}")
             }
+
+            Inst::External { inst } => {
+                format!("{inst}")
+            }
         }
     }
 }
@@ -2712,6 +2728,10 @@ fn x64_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
 
         Inst::DummyUse { reg } => {
             collector.reg_use(reg);
+        }
+
+        Inst::External { inst } => {
+            inst.visit(&mut external::RegallocVisitor { collector });
         }
     }
 }

@@ -325,7 +325,7 @@ block0(v0: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqu  const(1), %xmm0
-;   andq    %rdi, $7, %rdi
+;   andq $7, %rdi
 ;   movd    %edi, %xmm5
 ;   psllw   %xmm0, %xmm5, %xmm0
 ;   lea     const(0), %rsi
@@ -345,7 +345,7 @@ block0(v0: i32):
 ;   andq $7, %rdi
 ;   movd %edi, %xmm5
 ;   psllw %xmm5, %xmm0
-;   leaq 0x31(%rip), %rsi
+;   leaq 0x2e(%rip), %rsi
 ;   shlq $4, %rdi
 ;   movdqu (%rsi, %rdi), %xmm5
 ;   pand %xmm5, %xmm0
@@ -358,12 +358,9 @@ block0(v0: i32):
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addl %eax, (%rdx)
-;   addl 0x9080706(, %rax), %eax
-;   orb (%rbx), %cl
-;   orb $0xd, %al
+;   addb %al, (%rcx)
+;   addb (%rbx), %al
+;   addb $5, %al
 
 function %ishl_i8x16_imm(i8x16) -> i8x16 {
 block0(v0: i8x16):
@@ -601,7 +598,7 @@ block0(v0: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqu  const(0), %xmm1
-;   andq    %rdi, $7, %rdi
+;   andq $7, %rdi
 ;   movdqa  %xmm1, %xmm0
 ;   punpcklbw %xmm0, %xmm1, %xmm0
 ;   punpckhbw %xmm1, %xmm1, %xmm1
@@ -637,10 +634,10 @@ block0(v0: i32):
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
-;   addb %al, (%rax)
-;   addb %al, (%rcx)
-;   addb (%rbx), %al
-;   addb $5, %al
+;   addl %eax, (%rdx)
+;   addl 0x9080706(, %rax), %eax
+;   orb (%rbx), %cl
+;   orb $0xd, %al
 
 function %sshr_i8x16_imm(i8x16, i32) -> i8x16 {
 block0(v0: i8x16, v1: i32):
@@ -885,7 +882,7 @@ block0(v0: i64x2, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   andq    %rdi, $63, %rdi
+;   andq $0x3f, %rdi
 ;   movq    %rdi, %xmm5
 ;   movdqu  const(0), %xmm1
 ;   psrlq   %xmm1, %xmm5, %xmm1
@@ -905,7 +902,7 @@ block0(v0: i64x2, v1: i32):
 ; block1: ; offset 0x4
 ;   andq $0x3f, %rdi
 ;   movq %rdi, %xmm5
-;   movdqu 0x2b(%rip), %xmm1
+;   movdqu 0x28(%rip), %xmm1
 ;   psrlq %xmm5, %xmm1
 ;   psrlq %xmm5, %xmm0
 ;   movdqa %xmm0, %xmm7
@@ -924,7 +921,7 @@ block0(v0: i64x2, v1: i32):
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
-;   addb %al, (%rax)
+;   addb $0, (%rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
 

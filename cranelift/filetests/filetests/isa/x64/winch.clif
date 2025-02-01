@@ -303,7 +303,7 @@ block0(v0:i64):
 ;   call    *%r10
 ;   movq    4(%rsp), %rax
 ;   movq    0(%rsp), %r9
-;   andl    %eax, %r9d, %eax
+;   andl %r9d, %eax
 ;   movq    16(%rsp), %rbx
 ;   movq    24(%rsp), %r12
 ;   movq    32(%rsp), %r13

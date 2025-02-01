@@ -1005,6 +1005,12 @@ who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"
 version = "1.4.1"
 
+[[audits.arbtest]]
+who = "Andrew Brown <andrew.brown@intel.com>"
+criteria = "safe-to-run"
+version = "0.3.1"
+notes = "Nothing unusual; the most notable bit was a terminal escape sequence to make a random seed bold."
+
 [[audits.arrayref]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-deploy"

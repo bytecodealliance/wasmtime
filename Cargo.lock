@@ -147,6 +147,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "arbtest"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "23909d5fb517fac2a8a4c887e847dbe41dd22ec46914586f5727980d0a193fdc"
+dependencies = [
+ "arbitrary",
+]
+
+[[package]]
 name = "arrayvec"
 version = "0.7.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -709,6 +718,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "cranelift-assembler-x64"
+version = "0.117.0"
+dependencies = [
+ "arbitrary",
+ "arbtest",
+ "cranelift-assembler-x64-meta",
+]
+
+[[package]]
+name = "cranelift-assembler-x64-fuzz"
+version = "0.0.0"
+dependencies = [
+ "arbitrary",
+ "capstone",
+ "cranelift-assembler-x64",
+ "libfuzzer-sys",
+]
+
+[[package]]
+name = "cranelift-assembler-x64-meta"
+version = "0.117.0"
+
+[[package]]
 name = "cranelift-bforest"
 version = "0.117.0"
 dependencies = [
@@ -729,8 +761,10 @@ name = "cranelift-codegen"
 version = "0.117.0"
 dependencies = [
  "anyhow",
+ "arbitrary",
  "bumpalo",
  "capstone",
+ "cranelift-assembler-x64",
  "cranelift-bforest",
  "cranelift-bitset",
  "cranelift-codegen-meta",
@@ -760,6 +794,7 @@ dependencies = [
 name = "cranelift-codegen-meta"
 version = "0.117.0"
 dependencies = [
+ "cranelift-assembler-x64",
  "cranelift-codegen-shared",
  "pulley-interpreter",
 ]

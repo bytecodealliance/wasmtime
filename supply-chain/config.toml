@@ -25,6 +25,9 @@ url = "https://raw.githubusercontent.com/mozilla/supply-chain/main/audits.toml"
 [policy.cranelift]
 audit-as-crates-io = true
 
+[policy.cranelift-assembler-x64-fuzz]
+criteria = []
+
 [policy.cranelift-bforest]
 audit-as-crates-io = true
 

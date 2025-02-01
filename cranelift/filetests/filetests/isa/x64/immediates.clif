@@ -26,7 +26,7 @@ block0(v0: i64, v1: i64):
 ;   subq    %r11, const(0), %r11
 ;   movq    %r11, 0(%rsi)
 ;   movq    %rdi, %rax
-;   andq    %rax, const(0), %rax
+;   andq (%rip), %rax
 ;   movq    %rax, 0(%rsi)
 ;   orq     %rdi, const(0), %rdi
 ;   movq    %rdi, 0(%rsi)

@@ -143,7 +143,6 @@ pub(crate) fn emit(
             "Cannot emit inst '{inst:?}' for target; failed to match ISA requirements: {isa_requirements:?}"
         )
     }
-
     match inst {
         Inst::AluRmiR {
             size,
@@ -4692,6 +4691,22 @@ pub(crate) fn emit(
 
         Inst::DummyUse { .. } => {
             // Nothing.
+        }
+
+        Inst::External { inst } => {
+            let mut known_offsets = [0, 0];
+            // These values are transcribed from what is happening in
+            // `SyntheticAmode::finalize`. This, plus the `Into` logic
+            // converting a `SyntheticAmode` to its external counterpart, are
+            // necessary to communicate Cranelift's internal offsets to the
+            // assembler; due to when Cranelift determines these offsets, this
+            // happens quite late (i.e., here during emission).
+            let frame = state.frame_layout();
+            known_offsets[external::offsets::KEY_INCOMING_ARG] =
+                i32::try_from(frame.tail_args_size + frame.setup_area_size).unwrap();
+            known_offsets[external::offsets::KEY_SLOT_OFFSET] =
+                i32::try_from(frame.outgoing_args_size).unwrap();
+            inst.encode(sink, &known_offsets);
         }
     }
 

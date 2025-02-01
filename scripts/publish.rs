@@ -22,6 +22,8 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-math",
     "pulley-interpreter",
     // cranelift
+    "cranelift-assembler-x64-meta",
+    "cranelift-assembler-x64",
     "cranelift-isle",
     "cranelift-entity",
     "cranelift-bforest",
@@ -98,6 +100,8 @@ const PUBLIC_CRATES: &[&str] = &[
     "wasmtime-cli",
     // all cranelift crates are considered "public" in that they can't
     // have breaking API changes in patch releases
+    "cranelift-assembler-x64-meta",
+    "cranelift-assembler-x64",
     "cranelift-entity",
     "cranelift-bforest",
     "cranelift-bitset",
