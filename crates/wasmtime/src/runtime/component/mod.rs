@@ -115,7 +115,10 @@ pub mod types;
 mod values;
 pub use self::component::{Component, ComponentExportIndex};
 #[cfg(feature = "component-model-async")]
-pub use self::concurrent::{ErrorContext, FutureReader, Promise, PromisesUnordered, StreamReader};
+pub use self::concurrent::{
+    for_any, future, stream, ErrorContext, FutureReader, FutureWriter, Promise, PromisesUnordered,
+    StreamReader, StreamWriter, VMComponentAsyncStore,
+};
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };
@@ -672,3 +675,205 @@ pub mod bindgen_examples;
 #[cfg(not(any(docsrs, test, doctest)))]
 #[doc(hidden)]
 pub mod bindgen_examples {}
+
+#[cfg(not(feature = "component-model-async"))]
+pub(crate) mod concurrent {
+    use {
+        crate::{
+            component::{
+                func::{ComponentType, LiftContext, LowerContext},
+                Val,
+            },
+            AsContextMut, StoreContextMut,
+        },
+        alloc::{sync::Arc, task::Wake},
+        anyhow::Result,
+        core::{
+            future::Future,
+            marker::PhantomData,
+            mem::MaybeUninit,
+            pin::pin,
+            task::{Context, Poll, Waker},
+        },
+        wasmtime_environ::component::{InterfaceType, RuntimeComponentInstanceIndex},
+    };
+
+    pub fn for_any<F, R, T>(fun: F) -> F
+    where
+        F: FnOnce(StoreContextMut<T>) -> R + 'static,
+        R: 'static,
+    {
+        fun
+    }
+
+    fn dummy_waker() -> Waker {
+        struct DummyWaker;
+
+        impl Wake for DummyWaker {
+            fn wake(self: Arc<Self>) {}
+        }
+
+        Arc::new(DummyWaker).into()
+    }
+
+    pub(crate) fn poll_and_block<'a, T, R: Send + Sync + 'static>(
+        mut store: StoreContextMut<'a, T>,
+        future: impl Future<Output = impl FnOnce(StoreContextMut<T>) -> Result<R> + 'static>
+            + Send
+            + Sync
+            + 'static,
+        _caller_instance: RuntimeComponentInstanceIndex,
+    ) -> Result<(R, StoreContextMut<'a, T>)> {
+        match pin!(future).poll(&mut Context::from_waker(&dummy_waker())) {
+            Poll::Ready(fun) => {
+                let result = fun(store.as_context_mut())?;
+                Ok((result, store))
+            }
+            Poll::Pending => {
+                unreachable!()
+            }
+        }
+    }
+
+    pub struct ErrorContext;
+
+    impl ErrorContext {
+        pub(crate) fn new(_rep: u32) -> Self {
+            unreachable!()
+        }
+
+        pub(crate) fn into_val(self) -> Val {
+            unreachable!()
+        }
+
+        pub(crate) fn lower<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _dst: &mut MaybeUninit<<u32 as ComponentType>::Lower>,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn store<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _offset: usize,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn lift(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _src: &<u32 as ComponentType>::Lower,
+        ) -> Result<Self> {
+            unreachable!()
+        }
+
+        pub(crate) fn load(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _bytes: &[u8],
+        ) -> Result<Self> {
+            unreachable!()
+        }
+    }
+
+    pub struct StreamReader<P> {
+        _phantom: PhantomData<P>,
+    }
+
+    impl<P> StreamReader<P> {
+        pub(crate) fn new(_rep: u32) -> Self {
+            unreachable!()
+        }
+
+        pub(crate) fn into_val(self) -> Val {
+            unreachable!()
+        }
+
+        pub(crate) fn lower<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _dst: &mut MaybeUninit<<u32 as ComponentType>::Lower>,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn store<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _offset: usize,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn lift(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _src: &<u32 as ComponentType>::Lower,
+        ) -> Result<Self> {
+            unreachable!()
+        }
+
+        pub(crate) fn load(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _bytes: &[u8],
+        ) -> Result<Self> {
+            unreachable!()
+        }
+    }
+
+    pub struct FutureReader<P> {
+        _phantom: PhantomData<P>,
+    }
+
+    impl<P> FutureReader<P> {
+        pub(crate) fn new(_rep: u32) -> Self {
+            unreachable!()
+        }
+
+        pub(crate) fn into_val(self) -> Val {
+            unreachable!()
+        }
+
+        pub(crate) fn lower<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _dst: &mut MaybeUninit<<u32 as ComponentType>::Lower>,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn store<T>(
+            &self,
+            _cx: &mut LowerContext<'_, T>,
+            _ty: InterfaceType,
+            _offset: usize,
+        ) -> Result<()> {
+            unreachable!()
+        }
+
+        pub(crate) fn lift(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _src: &<u32 as ComponentType>::Lower,
+        ) -> Result<Self> {
+            unreachable!()
+        }
+
+        pub(crate) fn load(
+            _cx: &mut LiftContext<'_>,
+            _ty: InterfaceType,
+            _bytes: &[u8],
+        ) -> Result<Self> {
+            unreachable!()
+        }
+    }
+}

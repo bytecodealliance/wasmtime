@@ -1,3 +1,4 @@
+use crate::component::concurrent::{ErrorContext, FutureReader, StreamReader};
 use crate::component::func::{desc, Lift, LiftContext, Lower, LowerContext};
 use crate::component::ResourceAny;
 use crate::prelude::*;
@@ -86,6 +87,9 @@ pub enum Val {
     Result(Result<Option<Box<Val>>, Option<Box<Val>>>),
     Flags(Vec<String>),
     Resource(ResourceAny),
+    Future(FutureAny),
+    Stream(StreamAny),
+    ErrorContext(ErrorContextAny),
 }
 
 impl Val {
@@ -198,9 +202,9 @@ impl Val {
 
                 Val::Flags(flags.into())
             }
-            InterfaceType::Future(_)
-            | InterfaceType::Stream(_)
-            | InterfaceType::ErrorContext(_) => todo!(),
+            InterfaceType::Future(_) => FutureReader::<()>::lift(cx, ty, next(src))?.into_val(),
+            InterfaceType::Stream(_) => StreamReader::<()>::lift(cx, ty, next(src))?.into_val(),
+            InterfaceType::ErrorContext(_) => ErrorContext::lift(cx, ty, next(src))?.into_val(),
         })
     }
 
@@ -322,9 +326,9 @@ impl Val {
                 }
                 Val::Flags(flags.into())
             }
-            InterfaceType::Future(_)
-            | InterfaceType::Stream(_)
-            | InterfaceType::ErrorContext(_) => todo!(),
+            InterfaceType::Future(_) => FutureReader::<()>::load(cx, ty, bytes)?.into_val(),
+            InterfaceType::Stream(_) => StreamReader::<()>::load(cx, ty, bytes)?.into_val(),
+            InterfaceType::ErrorContext(_) => ErrorContext::load(cx, ty, bytes)?.into_val(),
         })
     }
 
@@ -435,9 +439,18 @@ impl Val {
                 Ok(())
             }
             (InterfaceType::Flags(_), _) => unexpected(ty, self),
-            (InterfaceType::Future(_), _)
-            | (InterfaceType::Stream(_), _)
-            | (InterfaceType::ErrorContext(_), _) => todo!(),
+            (InterfaceType::Future(_), Val::Future(FutureAny(rep))) => {
+                FutureReader::<()>::new(*rep).lower(cx, ty, next_mut(dst))
+            }
+            (InterfaceType::Future(_), _) => unexpected(ty, self),
+            (InterfaceType::Stream(_), Val::Stream(StreamAny(rep))) => {
+                StreamReader::<()>::new(*rep).lower(cx, ty, next_mut(dst))
+            }
+            (InterfaceType::Stream(_), _) => unexpected(ty, self),
+            (InterfaceType::ErrorContext(_), Val::ErrorContext(ErrorContextAny(rep))) => {
+                ErrorContext::new(*rep).lower(cx, ty, next_mut(dst))
+            }
+            (InterfaceType::ErrorContext(_), _) => unexpected(ty, self),
         }
     }
 
@@ -573,13 +586,22 @@ impl Val {
                 Ok(())
             }
             (InterfaceType::Flags(_), _) => unexpected(ty, self),
-            (InterfaceType::Future(_), _)
-            | (InterfaceType::Stream(_), _)
-            | (InterfaceType::ErrorContext(_), _) => todo!(),
+            (InterfaceType::Future(_), Val::Future(FutureAny(rep))) => {
+                FutureReader::<()>::new(*rep).store(cx, ty, offset)
+            }
+            (InterfaceType::Future(_), _) => unexpected(ty, self),
+            (InterfaceType::Stream(_), Val::Stream(StreamAny(rep))) => {
+                StreamReader::<()>::new(*rep).store(cx, ty, offset)
+            }
+            (InterfaceType::Stream(_), _) => unexpected(ty, self),
+            (InterfaceType::ErrorContext(_), Val::ErrorContext(ErrorContextAny(rep))) => {
+                ErrorContext::new(*rep).store(cx, ty, offset)
+            }
+            (InterfaceType::ErrorContext(_), _) => unexpected(ty, self),
         }
     }
 
-    fn desc(&self) -> &'static str {
+    pub(crate) fn desc(&self) -> &'static str {
         match self {
             Val::Bool(_) => "bool",
             Val::U8(_) => "u8",
@@ -603,6 +625,9 @@ impl Val {
             Val::Result(_) => "result",
             Val::Resource(_) => "resource",
             Val::Flags(_) => "flags",
+            Val::Future(_) => "future",
+            Val::Stream(_) => "stream",
+            Val::ErrorContext(_) => "error-context",
         }
     }
 
@@ -681,6 +706,12 @@ impl PartialEq for Val {
             (Self::Flags(_), _) => false,
             (Self::Resource(l), Self::Resource(r)) => l == r,
             (Self::Resource(_), _) => false,
+            (Self::Future(l), Self::Future(r)) => l == r,
+            (Self::Future(_), _) => false,
+            (Self::Stream(l), Self::Stream(r)) => l == r,
+            (Self::Stream(_), _) => false,
+            (Self::ErrorContext(l), Self::ErrorContext(r)) => l == r,
+            (Self::ErrorContext(_), _) => false,
         }
     }
 }
@@ -1000,3 +1031,12 @@ fn unexpected<T>(ty: InterfaceType, val: &Val) -> Result<T> {
         val.desc()
     )
 }
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FutureAny(pub(crate) u32);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StreamAny(pub(crate) u32);
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ErrorContextAny(pub(crate) u32);

@@ -45,7 +45,9 @@ unsafe impl Sync for AsyncState {}
 #[derive(Clone, Copy)]
 struct PollContext {
     future_context: *mut Context<'static>,
+    #[cfg_attr(feature = "component-model-async", allow(dead_code))]
     guard_range_start: *mut u8,
+    #[cfg_attr(feature = "component-model-async", allow(dead_code))]
     guard_range_end: *mut u8,
 }
 
@@ -196,6 +198,43 @@ impl<'a, T> StoreContextMut<'a, T> {
 }
 
 impl<T> StoreInner<T> {
+    /// Yields execution to the caller on out-of-gas or epoch interruption.
+    ///
+    /// This only works on async futures and stores, and assumes that we're
+    /// executing on a fiber. This will yield execution back to the caller once.
+    pub fn async_yield_impl(&mut self) -> Result<()> {
+        use crate::runtime::vm::Yield;
+
+        let mut future = Yield::new();
+
+        // When control returns, we have a `Result<()>` passed
+        // in from the host fiber. If this finished successfully then
+        // we were resumed normally via a `poll`, so keep going.  If
+        // the future was dropped while we were yielded, then we need
+        // to clean up this fiber. Do so by raising a trap which will
+        // abort all wasm and get caught on the other side to clean
+        // things up.
+        #[cfg(feature = "component-model-async")]
+        unsafe {
+            use crate::runtime::store::context::AsContextMut;
+            let async_cx =
+                crate::component::concurrent::AsyncCx::new(&mut (&mut *self).as_context_mut());
+            async_cx
+                .block_on(
+                    Pin::new_unchecked(&mut future),
+                    None::<StoreContextMut<'_, T>>,
+                )?
+                .0;
+            Ok(())
+        }
+        #[cfg(not(feature = "component-model-async"))]
+        unsafe {
+            self.async_cx()
+                .expect("attempted to pull async context during shutdown")
+                .block_on(Pin::new_unchecked(&mut future))
+        }
+    }
+
     #[cfg(target_has_atomic = "64")]
     fn epoch_deadline_async_yield_and_update(&mut self, delta: u64) {
         assert!(
@@ -292,29 +331,6 @@ impl StoreOpaque {
         })
     }
 
-    /// Yields execution to the caller on out-of-gas or epoch interruption.
-    ///
-    /// This only works on async futures and stores, and assumes that we're
-    /// executing on a fiber. This will yield execution back to the caller once.
-    pub fn async_yield_impl(&mut self) -> Result<()> {
-        use crate::runtime::vm::Yield;
-
-        let mut future = Yield::new();
-
-        // When control returns, we have a `Result<()>` passed
-        // in from the host fiber. If this finished successfully then
-        // we were resumed normally via a `poll`, so keep going.  If
-        // the future was dropped while we were yielded, then we need
-        // to clean up this fiber. Do so by raising a trap which will
-        // abort all wasm and get caught on the other side to clean
-        // things up.
-        unsafe {
-            self.async_cx()
-                .expect("attempted to pull async context during shutdown")
-                .block_on(Pin::new_unchecked(&mut future))
-        }
-    }
-
     fn allocate_fiber_stack(&mut self) -> Result<wasmtime_fiber::FiberStack> {
         if let Some(stack) = self.async_state.last_fiber_stack.take() {
             return Ok(stack);
@@ -336,16 +352,21 @@ impl StoreOpaque {
             }
         }
     }
-
-    pub(crate) fn async_guard_range(&self) -> Range<*mut u8> {
-        unsafe {
-            let ptr = self.async_state.current_poll_cx.get();
-            (*ptr).guard_range_start..(*ptr).guard_range_end
-        }
-    }
 }
 
 impl<T> StoreContextMut<'_, T> {
+    pub(crate) fn async_guard_range(&mut self) -> Range<*mut u8> {
+        #[cfg(feature = "component-model-async")]
+        {
+            self.concurrent_state().async_guard_range()
+        }
+        #[cfg(not(feature = "component-model-async"))]
+        unsafe {
+            let ptr = self.0.inner.async_state.current_poll_cx.get();
+            (*ptr).guard_range_start..(*ptr).guard_range_end
+        }
+    }
+
     /// Executes a synchronous computation `func` asynchronously on a new fiber.
     ///
     /// This function will convert the synchronous `func` into an asynchronous

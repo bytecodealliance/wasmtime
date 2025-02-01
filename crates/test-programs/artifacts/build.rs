@@ -4,6 +4,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use wasmparser::{Validator, WasmFeatures};
 use wit_component::ComponentEncoder;
 
 fn main() {
@@ -57,13 +58,13 @@ fn build_and_generate_tests() {
     let mut kinds = BTreeMap::new();
 
     for target in targets {
-        let camel = target.to_shouty_snake_case();
+        let shouty = target.to_shouty_snake_case();
         let wasm = out_dir
             .join("wasm32-wasip1")
             .join("debug")
             .join(format!("{target}.wasm"));
 
-        generated_code += &format!("pub const {camel}: &'static str = {wasm:?};\n");
+        generated_code += &format!("pub const {shouty}: &'static str = {wasm:?};\n");
 
         // Bucket, based on the name of the test, into a "kind" which generates
         // a `foreach_*` macro below.
@@ -78,6 +79,7 @@ fn build_and_generate_tests() {
             s if s.starts_with("dwarf_") => "dwarf",
             s if s.starts_with("config_") => "config",
             s if s.starts_with("keyvalue_") => "keyvalue",
+            s if s.starts_with("async_") => "async",
             // If you're reading this because you hit this panic, either add it
             // to a test suite above or add a new "suite". The purpose of the
             // categorization above is to have a static assertion that tests
@@ -100,11 +102,12 @@ fn build_and_generate_tests() {
         }
         let adapter = match target.as_str() {
             "reactor" => &reactor_adapter,
+            s if s.starts_with("async_") => &reactor_adapter,
             s if s.starts_with("api_proxy") => &proxy_adapter,
             _ => &command_adapter,
         };
         let path = compile_component(&wasm, adapter);
-        generated_code += &format!("pub const {camel}_COMPONENT: &'static str = {path:?};\n");
+        generated_code += &format!("pub const {shouty}_COMPONENT: &'static str = {path:?};\n");
     }
 
     for (kind, targets) in kinds {
@@ -168,11 +171,18 @@ fn compile_component(wasm: &Path, adapter: &[u8]) -> PathBuf {
     let component = ComponentEncoder::default()
         .module(module.as_slice())
         .unwrap()
-        .validate(true)
+        .validate(false)
         .adapter("wasi_snapshot_preview1", adapter)
         .unwrap()
         .encode()
         .expect("module can be translated to a component");
+
+    Validator::new_with_features(
+        WasmFeatures::WASM2 | WasmFeatures::COMPONENT_MODEL | WasmFeatures::COMPONENT_MODEL_ASYNC,
+    )
+    .validate_all(&component)
+    .expect("component output should validate");
+
     let out_dir = wasm.parent().unwrap();
     let stem = wasm.file_stem().unwrap().to_str().unwrap();
     let component_path = out_dir.join(format!("{stem}.component.wasm"));

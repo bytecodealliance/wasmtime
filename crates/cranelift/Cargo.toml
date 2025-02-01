@@ -46,3 +46,4 @@ gc = ["wasmtime-environ/gc"]
 gc-drc = ["gc", "wasmtime-environ/gc-drc"]
 gc-null = ["gc", "wasmtime-environ/gc-null"]
 threads = ["wasmtime-environ/threads"]
+

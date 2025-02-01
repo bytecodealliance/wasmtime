@@ -1,0 +1,424 @@
+/// This interface defines all of the types and methods for implementing HTTP
+/// Requests and Responses, as well as their headers, trailers, and bodies.
+interface types {
+  type duration = u64;
+
+  /// This type corresponds to HTTP standard Methods.
+  variant method {
+    get,
+    head,
+    post,
+    put,
+    delete,
+    connect,
+    options,
+    trace,
+    patch,
+    other(string)
+  }
+
+  /// This type corresponds to HTTP standard Related Schemes.
+  variant scheme {
+    HTTP,
+    HTTPS,
+    other(string)
+  }
+
+  /// These cases are inspired by the IANA HTTP Proxy Error Types:
+  ///   https://www.iana.org/assignments/http-proxy-status/http-proxy-status.xhtml#table-http-proxy-error-types
+  variant error-code {
+    DNS-timeout,
+    DNS-error(DNS-error-payload),
+    destination-not-found,
+    destination-unavailable,
+    destination-IP-prohibited,
+    destination-IP-unroutable,
+    connection-refused,
+    connection-terminated,
+    connection-timeout,
+    connection-read-timeout,
+    connection-write-timeout,
+    connection-limit-reached,
+    TLS-protocol-error,
+    TLS-certificate-error,
+    TLS-alert-received(TLS-alert-received-payload),
+    HTTP-request-denied,
+    HTTP-request-length-required,
+    HTTP-request-body-size(option<u64>),
+    HTTP-request-method-invalid,
+    HTTP-request-URI-invalid,
+    HTTP-request-URI-too-long,
+    HTTP-request-header-section-size(option<u32>),
+    HTTP-request-header-size(option<field-size-payload>),
+    HTTP-request-trailer-section-size(option<u32>),
+    HTTP-request-trailer-size(field-size-payload),
+    HTTP-response-incomplete,
+    HTTP-response-header-section-size(option<u32>),
+    HTTP-response-header-size(field-size-payload),
+    HTTP-response-body-size(option<u64>),
+    HTTP-response-trailer-section-size(option<u32>),
+    HTTP-response-trailer-size(field-size-payload),
+    HTTP-response-transfer-coding(option<string>),
+    HTTP-response-content-coding(option<string>),
+    HTTP-response-timeout,
+    HTTP-upgrade-failed,
+    HTTP-protocol-error,
+    loop-detected,
+    configuration-error,
+    /// This is a catch-all error for anything that doesn't fit cleanly into a
+    /// more specific case. It also includes an optional string for an
+    /// unstructured description of the error. Users should not depend on the
+    /// string for diagnosing errors, as it's not required to be consistent
+    /// between implementations.
+    internal-error(option<string>)
+  }
+
+  /// Defines the case payload type for `DNS-error` above:
+  record DNS-error-payload {
+    rcode: option<string>,
+    info-code: option<u16>
+  }
+
+  /// Defines the case payload type for `TLS-alert-received` above:
+  record TLS-alert-received-payload {
+    alert-id: option<u8>,
+    alert-message: option<string>
+  }
+
+  /// Defines the case payload type for `HTTP-response-{header,trailer}-size` above:
+  record field-size-payload {
+    field-name: option<string>,
+    field-size: option<u32>
+  }
+
+  /// Attempts to extract a http-related `error-code` from the stream `error`
+  /// provided.
+  ///
+  /// Stream operations may fail with a stream `error` with more information
+  /// about the operation that failed. This `error` can be passed to this
+  /// function to see if there's http-related information about the error to
+  /// return.
+  ///
+  /// Note that this function is fallible because not all stream errors are
+  /// http-related errors.
+  http-error-code: func(err: error-context) -> option<error-code>;
+
+  /// This type enumerates the different kinds of errors that may occur when
+  /// setting or appending to a `fields` resource.
+  variant header-error {
+    /// This error indicates that a `field-key` or `field-value` was
+    /// syntactically invalid when used with an operation that sets headers in a
+    /// `fields`.
+    invalid-syntax,
+
+    /// This error indicates that a forbidden `field-key` was used when trying
+    /// to set a header in a `fields`.
+    forbidden,
+
+    /// This error indicates that the operation on the `fields` was not
+    /// permitted because the fields are immutable.
+    immutable,
+  }
+  
+  /// This type enumerates the different kinds of errors that may occur when
+  /// setting fields of a `request-options` resource.
+  variant request-options-error {
+    /// Indicates the specified field is not supported by this implementation.
+    not-supported,
+
+    /// Indicates that the operation on the `request-options` was not permitted
+    /// because it is immutable.
+    immutable,
+  }
+
+  /// Field keys are always strings.
+  type field-key = string;
+
+  /// Field values should always be ASCII strings. However, in
+  /// reality, HTTP implementations often have to interpret malformed values,
+  /// so they are provided as a list of bytes.
+  type field-value = list<u8>;
+
+  /// This following block defines the `fields` resource which corresponds to
+  /// HTTP standard Fields. Fields are a common representation used for both
+  /// Headers and Trailers.
+  ///
+  /// A `fields` may be mutable or immutable. A `fields` created using the
+  /// constructor, `from-list`, or `clone` will be mutable, but a `fields`
+  /// resource given by other means (including, but not limited to,
+  /// `request.headers`) might be be immutable. In an immutable fields, the
+  /// `set`, `append`, and `delete` operations will fail with
+  /// `header-error.immutable`.
+  resource fields {
+
+    /// Construct an empty HTTP Fields.
+    ///
+    /// The resulting `fields` is mutable.
+    constructor();
+
+    /// Construct an HTTP Fields.
+    ///
+    /// The resulting `fields` is mutable.
+    ///
+    /// The list represents each key-value pair in the Fields. Keys
+    /// which have multiple values are represented by multiple entries in this
+    /// list with the same key.
+    ///
+    /// The tuple is a pair of the field key, represented as a string, and
+    /// Value, represented as a list of bytes. In a valid Fields, all keys
+    /// and values are valid UTF-8 strings. However, values are not always
+    /// well-formed, so they are represented as a raw list of bytes.
+    ///
+    /// An error result will be returned if any header or value was
+    /// syntactically invalid, or if a header was forbidden.
+    from-list: static func(
+      entries: list<tuple<field-key,field-value>>
+    ) -> result<fields, header-error>;
+
+    /// Get all of the values corresponding to a key. If the key is not present
+    /// in this `fields`, an empty list is returned. However, if the key is
+    /// present but empty, this is represented by a list with one or more
+    /// empty field-values present.
+    get: func(name: field-key) -> list<field-value>;
+
+    /// Returns `true` when the key is present in this `fields`. If the key is
+    /// syntactically invalid, `false` is returned.
+    has: func(name: field-key) -> bool;
+
+    /// Set all of the values for a key. Clears any existing values for that
+    /// key, if they have been set.
+    ///
+    /// Fails with `header-error.immutable` if the `fields` are immutable.
+    set: func(name: field-key, value: list<field-value>) -> result<_, header-error>;
+
+    /// Delete all values for a key. Does nothing if no values for the key
+    /// exist.
+    ///
+    /// Returns any values previously corresponding to the key.
+    ///
+    /// Fails with `header-error.immutable` if the `fields` are immutable.
+    delete: func(name: field-key) -> result<list<field-value>, header-error>;
+
+    /// Append a value for a key. Does not change or delete any existing
+    /// values for that key.
+    ///
+    /// Fails with `header-error.immutable` if the `fields` are immutable.
+    append: func(name: field-key, value: field-value) -> result<_, header-error>;
+
+    /// Retrieve the full set of keys and values in the Fields. Like the
+    /// constructor, the list represents each key-value pair.
+    ///
+    /// The outer list represents each key-value pair in the Fields. Keys
+    /// which have multiple values are represented by multiple entries in this
+    /// list with the same key.
+    entries: func() -> list<tuple<field-key,field-value>>;
+
+    /// Make a deep copy of the Fields. Equivelant in behavior to calling the
+    /// `fields` constructor on the return value of `entries`. The resulting
+    /// `fields` is mutable.
+    clone: func() -> fields;
+  }
+
+  /// Headers is an alias for Fields.
+  type headers = fields;
+
+  /// Trailers is an alias for Fields.
+  type trailers = fields;
+
+  /// Represents an HTTP Request or Response's Body.
+  ///
+  /// A body has both its contents - a stream of bytes - and a (possibly empty)
+  /// set of trailers, indicating that the full contents of the body have been
+  /// received. This resource represents the contents as a `stream<u8>` and the
+  /// delivery of trailers as a `trailers`, and ensures that the user of this
+  /// interface may only be consuming either the body contents or waiting on
+  /// trailers at any given time.
+  resource body {
+  
+    /// Construct a new `body` with the specified stream and trailers.
+    constructor(
+      %stream: stream<u8>,
+      trailers: option<future<trailers>>
+    );
+  
+    /// Returns the contents of the body, as a stream of bytes.
+    ///
+    /// This function may be called multiple times as long as any `stream`s
+    /// returned by previous calls have been dropped first.
+    %stream: func() -> result<stream<u8>>;
+
+    /// Takes ownership of `body`, and returns a `trailers`.  This function will
+    /// trap if a `stream` child is still alive.
+    finish: static func(this: body) -> result<option<trailers>, error-code>;
+  }
+  
+  /// Represents an HTTP Request.
+  resource request {
+
+    /// Construct a new `request` with a default `method` of `GET`, and
+    /// `none` values for `path-with-query`, `scheme`, and `authority`.
+    ///
+    /// * `headers` is the HTTP Headers for the Response.
+    /// * `body` is the contents of the body, as a stream of bytes.
+    /// * `trailers` is an optional `future` which resolves to the HTTP Trailers
+    ///   for the Response.
+    /// * `options` is optional `request-options` to be used if the request is
+    ///   sent over a network connection.
+    ///
+    /// It is possible to construct, or manipulate with the accessor functions
+    /// below, an `request` with an invalid combination of `scheme`
+    /// and `authority`, or `headers` which are not permitted to be sent.
+    /// It is the obligation of the `handler.handle` implementation
+    /// to reject invalid constructions of `request`.
+    constructor(
+      headers: headers,
+      body: body,
+      options: option<request-options>
+    );
+
+    /// Get the Method for the Request.
+    method: func() -> method;
+    /// Set the Method for the Request. Fails if the string present in a
+    /// `method.other` argument is not a syntactically valid method.
+    set-method: func(method: method) -> result;
+
+    /// Get the combination of the HTTP Path and Query for the Request.  When
+    /// `none`, this represents an empty Path and empty Query.
+    path-with-query: func() -> option<string>;
+    /// Set the combination of the HTTP Path and Query for the Request.  When
+    /// `none`, this represents an empty Path and empty Query. Fails is the
+    /// string given is not a syntactically valid path and query uri component.
+    set-path-with-query: func(path-with-query: option<string>) -> result;
+
+    /// Get the HTTP Related Scheme for the Request. When `none`, the
+    /// implementation may choose an appropriate default scheme.
+    scheme: func() -> option<scheme>;
+    /// Set the HTTP Related Scheme for the Request. When `none`, the
+    /// implementation may choose an appropriate default scheme. Fails if the
+    /// string given is not a syntactically valid uri scheme.
+    set-scheme: func(scheme: option<scheme>) -> result;
+
+    /// Get the HTTP Authority for the Request. A value of `none` may be used
+    /// with Related Schemes which do not require an Authority. The HTTP and
+    /// HTTPS schemes always require an authority.
+    authority: func() -> option<string>;
+    /// Set the HTTP Authority for the Request. A value of `none` may be used
+    /// with Related Schemes which do not require an Authority. The HTTP and
+    /// HTTPS schemes always require an authority. Fails if the string given is
+    /// not a syntactically valid uri authority.
+    set-authority: func(authority: option<string>) -> result;
+
+    /// Get the `request-options` to be associated with this request
+    ///
+    /// The returned `request-options` resource is immutable: `set-*` operations
+    /// will fail if invoked.
+    ///
+    /// This `request-options` resource is a child: it must be dropped before
+    /// the parent `request` is dropped, or its ownership is transfered to
+    /// another component by e.g. `handler.handle`.
+    options: func() -> option<request-options>;
+
+    /// Get the headers associated with the Request.
+    ///
+    /// The returned `headers` resource is immutable: `set`, `append`, and
+    /// `delete` operations will fail with `header-error.immutable`.
+    ///
+    /// This headers resource is a child: it must be dropped before the parent
+    /// `request` is dropped, or its ownership is transfered to another
+    /// component by e.g. `handler.handle`.
+    headers: func() -> headers;
+
+    /// Get the body associated with the Request.
+    ///
+    /// This body resource is a child: it must be dropped before the parent
+    /// `request` is dropped, or its ownership is transfered to another
+    /// component by e.g. `handler.handle`.
+    body: func() -> body;
+
+    /// Takes ownership of the `request` and returns the `headers` and `body`.
+    into-parts: static func(this: request) -> tuple<headers, body>;
+  }
+
+  /// Parameters for making an HTTP Request. Each of these parameters is
+  /// currently an optional timeout applicable to the transport layer of the
+  /// HTTP protocol.
+  ///
+  /// These timeouts are separate from any the user may use to bound an
+  /// asynchronous call.
+  resource request-options {
+    /// Construct a default `request-options` value.
+    constructor();
+
+    /// The timeout for the initial connect to the HTTP Server.
+    connect-timeout: func() -> option<duration>;
+
+    /// Set the timeout for the initial connect to the HTTP Server. An error
+    /// return value indicates that this timeout is not supported or that this
+    /// handle is immutable.
+    set-connect-timeout: func(duration: option<duration>) -> result<_, request-options-error>;
+
+    /// The timeout for receiving the first byte of the Response body.
+    first-byte-timeout: func() -> option<duration>;
+
+    /// Set the timeout for receiving the first byte of the Response body. An
+    /// error return value indicates that this timeout is not supported or that
+    /// this handle is immutable.
+    set-first-byte-timeout: func(duration: option<duration>) -> result<_, request-options-error>;
+
+    /// The timeout for receiving subsequent chunks of bytes in the Response
+    /// body stream.
+    between-bytes-timeout: func() -> option<duration>;
+
+    /// Set the timeout for receiving subsequent chunks of bytes in the Response
+    /// body stream. An error return value indicates that this timeout is not
+    /// supported or that this handle is immutable.
+    set-between-bytes-timeout: func(duration: option<duration>) -> result<_, request-options-error>;
+  }
+
+  /// This type corresponds to the HTTP standard Status Code.
+  type status-code = u16;
+
+  /// Represents an HTTP Response.
+  resource response {
+
+    /// Construct an `response`, with a default `status-code` of `200`.  If a
+    /// different `status-code` is needed, it must be set via the
+    /// `set-status-code` method.
+    ///
+    /// * `headers` is the HTTP Headers for the Response.
+    /// * `body` is the contents of the body, as a stream of bytes.
+    /// * `trailers` is an optional `future` which resolves to the HTTP Trailers
+    ///   for the Response.
+    constructor(
+      headers: headers,
+      body: body,
+    );
+
+    /// Get the HTTP Status Code for the Response.
+    status-code: func() -> status-code;
+
+    /// Set the HTTP Status Code for the Response. Fails if the status-code
+    /// given is not a valid http status code.
+    set-status-code: func(status-code: status-code) -> result;
+
+    /// Get the headers associated with the Request.
+    ///
+    /// The returned `headers` resource is immutable: `set`, `append`, and
+    /// `delete` operations will fail with `header-error.immutable`.
+    ///
+    /// This headers resource is a child: it must be dropped before the parent
+    /// `response` is dropped, or its ownership is transfered to another
+    /// component by e.g. `handler.handle`.
+    headers: func() -> headers;
+
+    /// Get the body associated with the Response.
+    ///
+    /// This body resource is a child: it must be dropped before the parent
+    /// `response` is dropped, or its ownership is transfered to another
+    /// component by e.g. `handler.handle`.
+    body: func() -> body;
+
+    /// Takes ownership of the `response` and returns the `headers` and `body`.
+    into-parts: static func(this: response) -> tuple<headers, body>;
+  }
+}

@@ -43,6 +43,11 @@ pub struct Options {
     ///
     /// This defaults to utf-8 but can be changed if necessary.
     string_encoding: StringEncoding,
+
+    async_: bool,
+
+    #[cfg_attr(not(feature = "component-model-async"), allow(unused))]
+    pub(crate) callback: Option<NonNull<VMFuncRef>>,
 }
 
 // The `Options` structure stores raw pointers but they're never used unless a
@@ -66,12 +71,16 @@ impl Options {
         memory: Option<NonNull<VMMemoryDefinition>>,
         realloc: Option<NonNull<VMFuncRef>>,
         string_encoding: StringEncoding,
+        async_: bool,
+        callback: Option<NonNull<VMFuncRef>>,
     ) -> Options {
         Options {
             store_id,
             memory,
             realloc,
             string_encoding,
+            async_,
+            callback,
         }
     }
 
@@ -163,6 +172,11 @@ impl Options {
     pub fn store_id(&self) -> StoreId {
         self.store_id
     }
+
+    /// Returns whether this lifting or lowering uses the async ABI.
+    pub fn async_(&self) -> bool {
+        self.async_
+    }
 }
 
 /// A helper structure which is a "package" of the context used during lowering
@@ -196,7 +210,7 @@ pub struct LowerContext<'a, T> {
     /// into.
     ///
     /// This pointer is required to be owned by the `store` provided.
-    instance: *mut ComponentInstance,
+    pub(crate) instance: *mut ComponentInstance,
 }
 
 #[doc(hidden)]
@@ -402,7 +416,7 @@ pub struct LiftContext<'a> {
 
     memory: Option<&'a [u8]>,
 
-    instance: *mut ComponentInstance,
+    pub(crate) instance: *mut ComponentInstance,
 
     host_table: &'a mut ResourceTable,
     host_resource_data: &'a mut HostResourceData,

@@ -15,12 +15,22 @@ use wasmtime_environ::component::{
     TypeFuncIndex, TypeTuple, MAX_FLAT_PARAMS, MAX_FLAT_RESULTS,
 };
 
+#[cfg(feature = "component-model-async")]
+use crate::component::concurrent::{self, LiftLowerContext, Promise};
+
 mod host;
 mod options;
 mod typed;
 pub use self::host::*;
 pub use self::options::*;
 pub use self::typed::*;
+
+#[cfg(feature = "component-model-async")]
+type LowerFn<T, Params, LowerParams> =
+    fn(&mut LowerContext<T>, &Params, InterfaceType, &mut MaybeUninit<LowerParams>) -> Result<()>;
+
+#[cfg(feature = "component-model-async")]
+type LiftFn<Return> = fn(&mut LiftContext, InterfaceType, &[ValRaw]) -> Result<Return>;
 
 #[repr(C)]
 union ParamsAndResults<Params: Copy, Return: Copy> {
@@ -36,17 +46,17 @@ union ParamsAndResults<Params: Copy, Return: Copy> {
 /// [`wasmtime::Func`](crate::Func) it's possible to call functions either
 /// synchronously or asynchronously and either typed or untyped.
 #[derive(Copy, Clone, Debug)]
-pub struct Func(Stored<FuncData>);
+pub struct Func(pub(crate) Stored<FuncData>);
 
 #[doc(hidden)]
 pub struct FuncData {
-    export: ExportFunction,
-    ty: TypeFuncIndex,
-    types: Arc<ComponentTypes>,
-    options: Options,
-    instance: Instance,
-    component_instance: RuntimeComponentInstanceIndex,
-    post_return: Option<ExportFunction>,
+    pub(crate) export: ExportFunction,
+    pub(crate) ty: TypeFuncIndex,
+    pub(crate) types: Arc<ComponentTypes>,
+    pub(crate) options: Options,
+    pub(crate) instance: Instance,
+    pub(crate) component_instance: RuntimeComponentInstanceIndex,
+    pub(crate) post_return: Option<ExportFunction>,
     post_return_arg: Option<ValRaw>,
 }
 
@@ -72,7 +82,19 @@ impl Func {
             ExportFunction { func_ref }
         });
         let component_instance = options.instance;
-        let options = unsafe { Options::new(store.id(), memory, realloc, options.string_encoding) };
+        let callback = options
+            .callback
+            .map(|i| data.instance().runtime_callback(i));
+        let options = unsafe {
+            Options::new(
+                store.id(),
+                memory,
+                realloc,
+                options.string_encoding,
+                options.async_,
+                callback,
+            )
+        };
         Func(store.store_data_mut().insert(FuncData {
             export,
             options,
@@ -269,9 +291,9 @@ impl Func {
     /// Panics if this is called on a function in an asynchronous store. This
     /// only works with functions defined within a synchronous store. Also
     /// panics if `store` does not own this function.
-    pub fn call(
+    pub fn call<U: Send>(
         &self,
-        mut store: impl AsContextMut,
+        mut store: impl AsContextMut<Data = U>,
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()> {
@@ -294,32 +316,98 @@ impl Func {
     /// only works with functions defined within an asynchronous store. Also
     /// panics if `store` does not own this function.
     #[cfg(feature = "async")]
-    pub async fn call_async<T>(
+    pub async fn call_async<T: Send>(
         &self,
         mut store: impl AsContextMut<Data = T>,
         params: &[Val],
         results: &mut [Val],
-    ) -> Result<()>
-    where
-        T: Send,
-    {
-        let mut store = store.as_context_mut();
+    ) -> Result<()> {
+        let store = store.as_context_mut();
         assert!(
             store.0.async_support(),
             "cannot use `call_async` without enabling async support in the config"
         );
-        store
-            .on_fiber(|store| self.call_impl(store, params, results))
+        #[cfg(feature = "component-model-async")]
+        {
+            let instance = store.0[self.0].component_instance;
+            // TODO: do we need to return the store here due to the possible
+            // invalidation of the reference we were passed?
+            concurrent::on_fiber(store, Some(instance), move |store| {
+                self.call_impl(store, params, results)
+            })
             .await?
+            .0
+        }
+        #[cfg(not(feature = "component-model-async"))]
+        {
+            let mut store = store;
+            store
+                .on_fiber(|store| self.call_impl(store, params, results))
+                .await?
+        }
     }
 
-    fn call_impl(
+    /// Start concurrent call to this function.
+    ///
+    /// Unlike [`Self::call`] and [`Self::call_async`] (both of which require
+    /// exclusive access to the store until the completion of the call), calls
+    /// made using this method may run concurrently with other calls to the same
+    /// instance.
+    #[cfg(feature = "component-model-async")]
+    pub async fn call_concurrent<T: Send>(
+        self,
+        mut store: impl AsContextMut<Data = T>,
+        params: Vec<Val>,
+    ) -> Result<Promise<Vec<Val>>> {
+        let store = store.as_context_mut();
+        assert!(
+            store.0.async_support(),
+            "cannot use `call_concurrent` when async support is not enabled on the config"
+        );
+        let instance = store.0[self.0].component_instance;
+        // TODO: do we need to return the store here due to the possible
+        // invalidation of the reference we were passed?
+        concurrent::on_fiber(store, Some(instance), move |store| {
+            self.start_call(store.as_context_mut(), params)
+        })
+        .await?
+        .0
+    }
+
+    #[cfg(feature = "component-model-async")]
+    fn start_call<'a, T: Send>(
+        self,
+        mut store: StoreContextMut<'a, T>,
+        params: Vec<Val>,
+    ) -> Result<Promise<Vec<Val>>> {
+        let store = store.as_context_mut();
+
+        let param_tys = self.params(&store);
+        if param_tys.len() != params.len() {
+            bail!(
+                "expected {} argument(s), got {}",
+                param_tys.len(),
+                params.len()
+            );
+        }
+
+        let lower = Self::lower_args as LowerFn<_, _, _>;
+        let lift = if store.0[self.0].options.async_() {
+            Self::lift_results_async as LiftFn<_>
+        } else {
+            Self::lift_results_sync as LiftFn<_>
+        };
+
+        Ok(self.start_call_raw_async(store, params, lower, lift)?.0)
+    }
+
+    fn call_impl<U: Send>(
         &self,
-        mut store: impl AsContextMut,
+        mut store: impl AsContextMut<Data = U>,
         params: &[Val],
         results: &mut [Val],
     ) -> Result<()> {
-        let store = &mut store.as_context_mut();
+        let store = store.as_context_mut();
 
         let param_tys = self.params(&store);
         let result_tys = self.results(&store);
@@ -333,49 +421,122 @@ impl Func {
         }
         if result_tys.len() != results.len() {
             bail!(
-                "expected {} results(s), got {}",
+                "expected {} result(s), got {}",
                 result_tys.len(),
                 results.len()
             );
         }
 
-        self.call_raw(
-            store,
-            params,
-            |cx, params, params_ty, dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>| {
-                let params_ty = match params_ty {
-                    InterfaceType::Tuple(i) => &cx.types[i],
-                    _ => unreachable!(),
-                };
-                if params_ty.abi.flat_count(MAX_FLAT_PARAMS).is_some() {
-                    let dst = &mut unsafe {
-                        mem::transmute::<_, &mut [MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>(dst)
-                    }
-                    .iter_mut();
-
-                    params
-                        .iter()
-                        .zip(params_ty.types.iter())
-                        .try_for_each(|(param, ty)| param.lower(cx, *ty, dst))
-                } else {
-                    self.store_args(cx, &params_ty, params, dst)
+        if store.0[self.0].options.async_() {
+            #[cfg(feature = "component-model-async")]
+            {
+                for (result, slot) in self
+                    .call_raw_async(
+                        store,
+                        params.iter().cloned().collect(),
+                        Self::lower_args,
+                        Self::lift_results_async,
+                    )?
+                    .0
+                    .into_iter()
+                    .zip(results)
+                {
+                    *slot = result;
                 }
-            },
-            |cx, results_ty, src: &[ValRaw; MAX_FLAT_RESULTS]| {
-                let results_ty = match results_ty {
-                    InterfaceType::Tuple(i) => &cx.types[i],
-                    _ => unreachable!(),
-                };
-                if results_ty.abi.flat_count(MAX_FLAT_RESULTS).is_some() {
-                    let mut flat = src.iter();
-                    for (ty, slot) in results_ty.types.iter().zip(results) {
-                        *slot = Val::lift(cx, *ty, &mut flat)?;
+                Ok(())
+            }
+            #[cfg(not(feature = "component-model-async"))]
+            {
+                unreachable!(
+                    "async-lifted exports should have failed validation \
+                     when `component-model-async` feature disabled"
+                );
+            }
+        } else {
+            self.call_raw(
+                store,
+                &params.iter().cloned().collect::<Vec<_>>(),
+                Self::lower_args,
+                |cx, results_ty, src: &[ValRaw; MAX_FLAT_RESULTS]| {
+                    for (result, slot) in Self::lift_results_sync(cx, results_ty, src)?
+                        .into_iter()
+                        .zip(results)
+                    {
+                        *slot = result;
                     }
                     Ok(())
-                } else {
-                    Self::load_results(cx, results_ty, results, &mut src.iter())
-                }
+                },
+            )
+        }
+    }
+
+    #[cfg(feature = "component-model-async")]
+    fn call_raw_async<'a, T: Send, Params, Return: Send + Sync + 'static, LowerParams>(
+        &self,
+        store: StoreContextMut<'a, T>,
+        params: Params,
+        lower: LowerFn<T, Params, LowerParams>,
+        lift: LiftFn<Return>,
+    ) -> Result<(Return, StoreContextMut<'a, T>)>
+    where
+        LowerParams: Copy,
+    {
+        let me = self.0;
+        // Note that we smuggle the params through as raw pointers to avoid
+        // requiring `Params: Send + Sync + 'static` bounds on this function,
+        // which would prevent passing references as parameters.  Technically,
+        // we don't need to do that for the return type, but we do it anyway for
+        // symmetry.
+        //
+        // This is only safe because `concurrent::call` will either consume or
+        // drop the contexts before returning.
+        concurrent::call::<_, LowerParams, _>(
+            store,
+            lower_params_with_context::<Params, LowerParams, T, LowerFn<T, Params, LowerParams>>,
+            concurrent::LiftLowerContext {
+                pointer: Box::into_raw(Box::new((me, params, lower))) as _,
+                dropper: drop_context::<(Stored<FuncData>, Params, LowerFn<T, Params, LowerParams>)>,
             },
+            lift_results_with_context::<Return, T, LiftFn<Return>>,
+            concurrent::LiftLowerContext {
+                pointer: Box::into_raw(Box::new((me, lift))) as _,
+                dropper: drop_context::<(Stored<FuncData>, LiftFn<Return>)>,
+            },
+            *self,
+        )
+    }
+
+    #[cfg(feature = "component-model-async")]
+    fn start_call_raw_async<
+        'a,
+        T: Send,
+        Params: Send + Sync + 'static,
+        Return: Send + Sync + 'static,
+        LowerParams,
+    >(
+        &self,
+        store: StoreContextMut<'a, T>,
+        params: Params,
+        lower: LowerFn<T, Params, LowerParams>,
+        lift: LiftFn<Return>,
+    ) -> Result<(Promise<Return>, StoreContextMut<'a, T>)>
+    where
+        LowerParams: Copy,
+    {
+        let me = self.0;
+        concurrent::start_call::<_, LowerParams, _>(
+            store,
+            lower_params_with_context::<Params, LowerParams, T, LowerFn<T, Params, LowerParams>>,
+            concurrent::LiftLowerContext {
+                pointer: Box::into_raw(Box::new((me, params, lower))) as _,
+                dropper: drop_context::<(Stored<FuncData>, Params, LowerFn<T, Params, LowerParams>)>,
+            },
+            lift_results_with_context::<Return, T, LiftFn<Return>>,
+            concurrent::LiftLowerContext {
+                pointer: Box::into_raw(Box::new((me, lift))) as _,
+                dropper: drop_context::<(Stored<FuncData>, LiftFn<Return>)>,
+            },
+            *self,
         )
     }
 
@@ -389,7 +550,7 @@ impl Func {
     /// happening.
     fn call_raw<T, Params: ?Sized, Return, LowerParams, LowerReturn>(
         &self,
-        store: &mut StoreContextMut<'_, T>,
+        mut store: StoreContextMut<'_, T>,
         params: &Params,
         lower: impl FnOnce(
             &mut LowerContext<'_, T>,
@@ -468,7 +629,7 @@ impl Func {
             // on the correctness of this module and `ComponentType`
             // implementations, hence `ComponentType` being an `unsafe` trait.
             crate::Func::call_unchecked_raw(
-                store,
+                &mut store,
                 export.func_ref,
                 NonNull::new(core::ptr::slice_from_raw_parts_mut(
                     space.as_mut_ptr().cast(),
@@ -644,8 +805,32 @@ impl Func {
         Ok(())
     }
 
+    fn lower_args<T>(
+        cx: &mut LowerContext<'_, T>,
+        params: &Vec<Val>,
+        params_ty: InterfaceType,
+        dst: &mut MaybeUninit<[ValRaw; MAX_FLAT_PARAMS]>,
+    ) -> Result<()> {
+        let params_ty = match params_ty {
+            InterfaceType::Tuple(i) => &cx.types[i],
+            _ => unreachable!(),
+        };
+        if params_ty.abi.flat_count(MAX_FLAT_PARAMS).is_some() {
+            let dst = &mut unsafe {
+                mem::transmute::<_, &mut [MaybeUninit<ValRaw>; MAX_FLAT_PARAMS]>(dst)
+            }
+            .iter_mut();
+
+            params
+                .iter()
+                .zip(params_ty.types.iter())
+                .try_for_each(|(param, ty)| param.lower(cx, *ty, dst))
+        } else {
+            Self::store_args(cx, &params_ty, params, dst)
+        }
+    }
+
     fn store_args<T>(
-        &self,
         cx: &mut LowerContext<'_, T>,
         params_ty: &TypeTuple,
         args: &[Val],
@@ -664,12 +849,55 @@ impl Func {
         Ok(())
     }
 
+    fn lift_results_sync(
+        cx: &mut LiftContext<'_>,
+        results_ty: InterfaceType,
+        src: &[ValRaw],
+    ) -> Result<Vec<Val>> {
+        Self::lift_results(cx, results_ty, src, false)
+    }
+
+    #[cfg(feature = "component-model-async")]
+    fn lift_results_async(
+        cx: &mut LiftContext<'_>,
+        results_ty: InterfaceType,
+        src: &[ValRaw],
+    ) -> Result<Vec<Val>> {
+        Self::lift_results(cx, results_ty, src, true)
+    }
+
+    fn lift_results(
+        cx: &mut LiftContext<'_>,
+        results_ty: InterfaceType,
+        src: &[ValRaw],
+        async_: bool,
+    ) -> Result<Vec<Val>> {
+        let results_ty = match results_ty {
+            InterfaceType::Tuple(i) => &cx.types[i],
+            _ => unreachable!(),
+        };
+        let limit = if async_ {
+            MAX_FLAT_PARAMS
+        } else {
+            MAX_FLAT_RESULTS
+        };
+        if results_ty.abi.flat_count(limit).is_some() {
+            let mut flat = src.iter();
+            results_ty
+                .types
+                .iter()
+                .map(|ty| Val::lift(cx, *ty, &mut flat))
+                .collect()
+        } else {
+            Self::load_results(cx, results_ty, &mut src.iter())
+        }
+    }
+
     fn load_results(
         cx: &mut LiftContext<'_>,
         results_ty: &TypeTuple,
-        results: &mut [Val],
         src: &mut core::slice::Iter<'_, ValRaw>,
-    ) -> Result<()> {
+    ) -> Result<Vec<Val>> {
         // FIXME(#4311): needs to read an i64 for memory64
         let ptr = usize::try_from(src.next().unwrap().get_u32())?;
         if ptr % usize::try_from(results_ty.abi.align32)? != 0 {
@@ -683,11 +911,156 @@ impl Func {
             .ok_or_else(|| anyhow::anyhow!("pointer out of bounds of memory"))?;
 
         let mut offset = 0;
-        for (ty, slot) in results_ty.types.iter().zip(results) {
-            let abi = cx.types.canonical_abi(ty);
-            let offset = abi.next_field32_size(&mut offset);
-            *slot = Val::load(cx, *ty, &bytes[offset..][..abi.size32 as usize])?;
+        results_ty
+            .types
+            .iter()
+            .map(|ty| {
+                let abi = cx.types.canonical_abi(ty);
+                let offset = abi.next_field32_size(&mut offset);
+                Val::load(cx, *ty, &bytes[offset..][..abi.size32 as usize])
+            })
+            .collect()
+    }
+}
+
+#[cfg(feature = "component-model-async")]
+fn drop_context<T>(pointer: *mut u8) {
+    drop(unsafe { Box::from_raw(pointer as *mut T) })
+}
+
+#[cfg(feature = "component-model-async")]
+fn lower_params_with_context<
+    Params,
+    LowerParams,
+    T,
+    F: FnOnce(
+            &mut LowerContext<T>,
+            &Params,
+            InterfaceType,
+            &mut MaybeUninit<LowerParams>,
+        ) -> Result<()>
+        + Send
+        + Sync,
+>(
+    context: LiftLowerContext,
+    store: *mut dyn crate::vm::VMStore,
+    lowered: &mut [MaybeUninit<ValRaw>],
+) -> Result<()> {
+    let (me, params, lower) = unsafe {
+        *Box::from_raw(
+            std::mem::ManuallyDrop::new(context).pointer as *mut (Stored<FuncData>, Params, F),
+        )
+    };
+
+    lower_params(store, lowered, me, params, lower)
+}
+
+#[cfg(feature = "component-model-async")]
+fn lower_params<
+    Params,
+    LowerParams,
+    T,
+    F: FnOnce(
+            &mut LowerContext<T>,
+            &Params,
+            InterfaceType,
+            &mut MaybeUninit<LowerParams>,
+        ) -> Result<()>
+        + Send
+        + Sync,
+>(
+    store: *mut dyn crate::vm::VMStore,
+    lowered: &mut [MaybeUninit<ValRaw>],
+    me: Stored<FuncData>,
+    params: Params,
+    lower: F,
+) -> Result<()> {
+    use crate::component::storage::slice_to_storage_mut;
+
+    let mut store = unsafe { StoreContextMut(&mut *store.cast()) };
+    let FuncData {
+        options,
+        instance,
+        component_instance,
+        ty,
+        ..
+    } = store.0[me];
+
+    let instance = store.0[instance.0].as_ref().unwrap();
+    let types = instance.component_types().clone();
+    let instance_ptr = instance.instance_ptr();
+    let mut flags = instance.instance().instance_flags(component_instance);
+
+    unsafe {
+        if !flags.may_enter() {
+            bail!(crate::Trap::CannotEnterComponent);
         }
+
+        flags.set_may_leave(false);
+        let mut cx = LowerContext::new(store.as_context_mut(), &options, &types, instance_ptr);
+        let result = lower(
+            &mut cx,
+            &params,
+            InterfaceType::Tuple(types[ty].params),
+            slice_to_storage_mut(lowered),
+        );
+        flags.set_may_leave(true);
+        result?;
+
+        if !options.async_() {
+            flags.set_may_enter(false);
+            flags.set_needs_post_return(true);
+        }
+
         Ok(())
+    }
+}
+
+#[cfg(feature = "component-model-async")]
+fn lift_results_with_context<
+    Return: Send + Sync + 'static,
+    T,
+    F: FnOnce(&mut LiftContext, InterfaceType, &[ValRaw]) -> Result<Return> + Send + Sync,
+>(
+    context: LiftLowerContext,
+    store: *mut dyn crate::vm::VMStore,
+    lowered: &[ValRaw],
+) -> Result<Box<dyn std::any::Any + Send + Sync>> {
+    let (me, lift) = unsafe {
+        *Box::from_raw(std::mem::ManuallyDrop::new(context).pointer as *mut (Stored<FuncData>, F))
+    };
+
+    lift_results::<_, T, _>(store, lowered, me, lift)
+}
+
+#[cfg(feature = "component-model-async")]
+fn lift_results<
+    Return: Send + Sync + 'static,
+    T,
+    F: FnOnce(&mut LiftContext, InterfaceType, &[ValRaw]) -> Result<Return> + Send + Sync,
+>(
+    store: *mut dyn crate::vm::VMStore,
+    lowered: &[ValRaw],
+    me: Stored<FuncData>,
+    lift: F,
+) -> Result<Box<dyn std::any::Any + Send + Sync>> {
+    let store = unsafe { StoreContextMut::<T>(&mut *store.cast()) };
+    let FuncData {
+        options,
+        instance,
+        ty,
+        ..
+    } = store.0[me];
+
+    let instance = store.0[instance.0].as_ref().unwrap();
+    let types = instance.component_types().clone();
+    let instance_ptr = instance.instance_ptr();
+
+    unsafe {
+        Ok(Box::new(lift(
+            &mut LiftContext::new(store.0, &options, &types, instance_ptr),
+            InterfaceType::Tuple(types[ty].results),
+            lowered,
+        )?) as Box<dyn std::any::Any + Send + Sync>)
     }
 }
