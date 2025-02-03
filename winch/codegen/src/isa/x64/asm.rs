@@ -1880,17 +1880,51 @@ impl Assembler {
         }
     }
 
-    pub fn xmm_rmi_rvex(
-        &mut self,
-        op: AvxOpcode,
-        src1: Reg,
-        src2: impl Into<XmmMemImm>,
-        dst: WritableReg,
-    ) {
+    /// Perform an AVX opcode `op` involving registers `src1` and `src2`, writing the
+    /// result to `dst`.
+    pub fn xmm_vex_rr(&mut self, op: AvxOpcode, src1: Reg, src2: Reg, dst: WritableReg) {
         self.emit(Inst::XmmRmiRVex {
             op,
             src1: src1.into(),
             src2: src2.into(),
+            dst: dst.map(Into::into),
+        })
+    }
+
+    /// Perform an AVX opcode `op` with a register `src1` and a memory `addr`, writing the result
+    /// to `dst`.
+    pub fn xmm_vex_rm(
+        &mut self,
+        op: AvxOpcode,
+        src1: Reg,
+        addr: &Address,
+        dst: WritableReg,
+        memflags: MemFlags,
+    ) {
+        let addr = Self::to_synthetic_amode(
+            addr,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            memflags,
+        );
+        let src2 = XmmMemImm::unwrap_new(RegMemImm::Mem { addr });
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2,
+            dst: dst.map(Into::into),
+        });
+    }
+
+    /// Perform an AVX opcode `op` involving register `src1` and an immediate `imm`, writing the
+    /// result to `dst`.
+    pub fn xmm_vex_ri(&mut self, op: AvxOpcode, src1: Reg, imm: u32, dst: WritableReg) {
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::imm(imm)),
             dst: dst.map(Into::into),
         })
     }
