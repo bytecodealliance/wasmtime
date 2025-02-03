@@ -65,7 +65,8 @@ macro_rules! impl_reg {
 #[repr(u8)]
 #[derive(Debug,Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[allow(non_camel_case_types, missing_docs)]
+#[allow(missing_docs, reason = "self-describing variants")]
+#[expect(non_camel_case_types, reason = "matching in-asm register names")]
 #[rustfmt::skip]
 pub enum XReg {
     x0,  x1,  x2,  x3,  x4,  x5,  x6,  x7,  x8,  x9,
@@ -107,7 +108,8 @@ fn assert_special_start_is_right() {
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[allow(non_camel_case_types, missing_docs)]
+#[allow(missing_docs, reason = "self-describing variants")]
+#[expect(non_camel_case_types, reason = "matching in-asm register names")]
 #[rustfmt::skip]
 pub enum FReg {
     f0,  f1,  f2,  f3,  f4,  f5,  f6,  f7,  f8,  f9,
@@ -120,7 +122,8 @@ pub enum FReg {
 #[repr(u8)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
-#[allow(non_camel_case_types, missing_docs)]
+#[allow(missing_docs, reason = "self-describing variants")]
+#[expect(non_camel_case_types, reason = "matching in-asm register names")]
 #[rustfmt::skip]
 pub enum VReg {
     v0,  v1,  v2,  v3,  v4,  v5,  v6,  v7,  v8,  v9,
@@ -137,7 +140,7 @@ impl_reg!(VReg, V, 0..32);
 ///
 /// Never appears inside an instruction -- instructions always name a particular
 /// class of register -- but this is useful for testing and things like that.
-#[allow(missing_docs)]
+#[allow(missing_docs, reason = "self-describing variants")]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
 pub enum AnyReg {

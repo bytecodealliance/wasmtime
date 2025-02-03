@@ -5,13 +5,10 @@
 #![cfg_attr(pulley_tail_calls, allow(incomplete_features, unstable_features))]
 #![deny(missing_docs)]
 #![no_std]
-#![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate std;
-
-#[allow(unused_extern_crates)] // Some cfg's don't use this.
 extern crate alloc;
 
 /// Calls the given macro with each opcode.
@@ -1408,12 +1405,11 @@ pub use op::*;
 pub mod opcode;
 pub use opcode::*;
 
-#[allow(dead_code)] // Unused in some `cfg`s.
 pub(crate) unsafe fn unreachable_unchecked<T>() -> T {
     #[cfg(debug_assertions)]
     unreachable!();
 
-    #[cfg_attr(debug_assertions, allow(unreachable_code))]
+    #[cfg(not(debug_assertions))]
     unsafe {
         core::hint::unreachable_unchecked()
     }
