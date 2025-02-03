@@ -32,7 +32,7 @@ const AFTER_HELP: &str =
 )]
 pub struct CompileCommand {
     #[command(flatten)]
-    #[allow(missing_docs)]
+    #[allow(missing_docs, reason = "don't want to mess with clap doc-strings")]
     pub common: CommonOptions,
 
     /// The path of the output compiled module; defaults to `<MODULE>.cwasm`
