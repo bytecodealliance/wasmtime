@@ -54,8 +54,11 @@ fn generate<P: AsRef<Path>>(
 /// Use the installed `rustfmt` binary to format the generated code; if it
 /// fails, skip formatting with a warning.
 fn rustfmt(file: &Path) {
-    let status = Command::new("rustfmt").arg(file).status().unwrap();
-    if !status.success() {
-        eprintln!("`rustfmt` exited with a non-zero status; skipping formatting of generated files");
+    if let Ok(status) = Command::new("rustfmt").arg(file).status() {
+        if !status.success() {
+            eprintln!("`rustfmt` exited with a non-zero status; skipping formatting of generated files");
+        }
+    } else {
+        eprintln!("`rustfmt` not found; skipping formatting of generated files");
     }
 }
