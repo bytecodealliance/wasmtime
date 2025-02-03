@@ -139,6 +139,7 @@ opt-level = 0
 resolver = '2'
 members = [
   "cranelift",
+  "cranelift/assembler-x64/fuzz",
   "cranelift/isle/fuzz",
   "cranelift/isle/islec",
   "cranelift/isle/veri/veri_engine",

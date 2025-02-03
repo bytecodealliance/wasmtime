@@ -1,0 +1,5 @@
+# This extra configuration allows defining extra-long lines in
+# `src/instructions`.
+fn_call_width = 100
+max_width = 110
+struct_lit_width = 50
