@@ -44,7 +44,7 @@ fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
 #[derive(Parser)]
 pub struct RunCommand {
     #[command(flatten)]
-    #[allow(missing_docs)]
+    #[allow(missing_docs, reason = "don't want to mess with clap doc-strings")]
     pub run: RunCommon,
 
     /// The name of the function to run
