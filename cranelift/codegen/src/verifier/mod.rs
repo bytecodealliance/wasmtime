@@ -663,6 +663,13 @@ impl<'a> Verifier<'a> {
             } => {
                 self.verify_bitcast(inst, flags, arg, errors)?;
             }
+            Load {
+                opcode: Opcode::Load,
+                arg,
+                ..
+            } => {
+                self.verify_is_address(inst, arg, errors)?;
+            }
             UnaryConst {
                 opcode: opcode @ (Opcode::Vconst | Opcode::F128const),
                 constant_handle,
@@ -1041,6 +1048,31 @@ impl<'a> Verifier<'a> {
                     "The instruction expects {constant} to have a size of {type_size} bytes but it has {constant_size}"
                 ),
             ))
+        } else {
+            Ok(())
+        }
+    }
+
+    fn verify_is_address(
+        &self,
+        loc_inst: Inst,
+        v: Value,
+        errors: &mut VerifierErrors,
+    ) -> VerifierStepResult {
+        if let Some(isa) = self.isa {
+            let pointer_width = isa.triple().pointer_width()?;
+            let value_type = &self.func.dfg.value_type(v);
+            let expected_width = pointer_width.bits() as u32;
+            let value_width = value_type.bits();
+            if expected_width != value_width {
+                errors.nonfatal((
+                    loc_inst,
+                    self.context(loc_inst),
+                    format!("invalid pointer width (got {value_width}, expected {expected_width}) encountered {v}"),
+                ))
+            } else {
+                Ok(())
+            }
         } else {
             Ok(())
         }
