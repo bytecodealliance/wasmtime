@@ -998,6 +998,26 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
+    fn is_gpr(&mut self, src: &GprMemImm) -> Option<AssemblerReadGprMem> {
+        match src.clone().to_reg_mem_imm() {
+            RegMemImm::Reg { reg } => {
+                let read = Gpr::new(reg).unwrap();
+                Some(AssemblerReadGprMem::Gpr(read))
+            }
+            _ => None,
+        }
+    }
+
+    fn is_mem(&mut self, src: &GprMemImm) -> Option<AssemblerReadGprMem> {
+        match src.clone().to_reg_mem_imm() {
+            RegMemImm::Mem { addr } => {
+                let addr = addr.into();
+                Some(AssemblerReadGprMem::Mem(addr))
+            }
+            _ => None,
+        }
+    }
+
     fn is_gpr_mem(&mut self, src: &GprMemImm) -> Option<AssemblerReadGprMem> {
         match src.clone().to_reg_mem_imm() {
             RegMemImm::Reg { reg } => {

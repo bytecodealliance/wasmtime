@@ -367,15 +367,15 @@ block0(v0: i128, v1: i128):
 ;   cmpq    %rdx, %rdi
 ;   sbbq    %rsi, %rcx, %rsi
 ;   setnb   %dil
-;   andb %r9b, %al
-;   andb %r11b, %r8b
-;   andb %r14b, %r10b
-;   andb %bl, %r13b
-;   andb %dil, %r15b
-;   andb %r8b, %al
-;   andb %r13b, %r10b
-;   andb %r10b, %al
-;   andb %r15b, %al
+;   andl %r9d, %eax
+;   andl %r11d, %r8d
+;   andl %r14d, %r10d
+;   andl %ebx, %r13d
+;   andl %edi, %r15d
+;   andl %r8d, %eax
+;   andl %r13d, %r10d
+;   andl %r10d, %eax
+;   andl %r15d, %eax
 ;   movq    0(%rsp), %rbx
 ;   movq    8(%rsp), %r12
 ;   movq    16(%rsp), %r13
@@ -440,15 +440,15 @@ block0(v0: i128, v1: i128):
 ;   cmpq %rdx, %rdi
 ;   sbbq %rcx, %rsi
 ;   setae %dil
-;   andb %r9b, %al
-;   andb %r11b, %r8b
-;   andb %r14b, %r10b
-;   andb %bl, %r13b
-;   andb %dil, %r15b
-;   andb %r8b, %al
-;   andb %r13b, %r10b
-;   andb %r10b, %al
-;   andb %r15b, %al
+;   andl %r9d, %eax
+;   andl %r11d, %r8d
+;   andl %r14d, %r10d
+;   andl %ebx, %r13d
+;   andl %edi, %r15d
+;   andl %r8d, %eax
+;   andl %r13d, %r10d
+;   andl %r10d, %eax
+;   andl %r15d, %eax
 ;   movq (%rsp), %rbx
 ;   movq 8(%rsp), %r12
 ;   movq 0x10(%rsp), %r13

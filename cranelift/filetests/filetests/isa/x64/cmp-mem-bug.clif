@@ -58,7 +58,7 @@ block0(v0: f64, v1: i64):
 ;   ucomisd %xmm1, %xmm0
 ;   setnp   %dil
 ;   setz    %al
-;   andb %al, %dil
+;   andl %eax, %edi
 ;   movzbq  %dil, %rax
 ;   ucomisd %xmm1, %xmm0
 ;   movdqa  %xmm0, %xmm2
@@ -77,13 +77,13 @@ block0(v0: f64, v1: i64):
 ;   ucomisd %xmm1, %xmm0
 ;   setnp %dil
 ;   sete %al
-;   andb %al, %dil
+;   andl %eax, %edi
 ;   movzbq %dil, %rax
 ;   ucomisd %xmm1, %xmm0
 ;   movdqa %xmm0, %xmm2
-;   jnp 0x2d
+;   jnp 0x2c
 ;   movsd %xmm2, %xmm0
-;   je 0x37
+;   je 0x36
 ;   movsd %xmm2, %xmm0
 ;   movq %rbp, %rsp
 ;   popq %rbp

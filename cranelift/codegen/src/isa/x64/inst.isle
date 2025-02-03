@@ -2918,6 +2918,10 @@
 (extern extractor is_imm16 is_imm16)
 (decl is_imm32 (AssemblerImm32) GprMemImm)
 (extern extractor is_imm32 is_imm32)
+(decl is_gpr (AssemblerReadGprMem) GprMemImm)
+(extern extractor is_gpr is_gpr)
+(decl is_mem (AssemblerReadGprMem) GprMemImm)
+(extern extractor is_mem is_mem)
 (decl is_gpr_mem (AssemblerReadGprMem) GprMemImm)
 (extern extractor is_gpr_mem is_gpr_mem)
 
@@ -2941,13 +2945,17 @@
 ;; Helper for emitting `and` instructions. The high-priority rules all make use
 ;; of the new assembler lowerings, but we retain the original cranelift-codegen
 ;; lowering as a fallback for the time being (TODO: eventually remove this).
+;; Note that, to avoid potential partial-register stalls, we use the 32-bit-wide
+;; instruction when we know the 8-bit or 16-bit values are both in registers.
 (decl x64_and (Type Gpr GprMemImm) Gpr)
-(rule 8 (x64_and $I8  src1 (is_imm8 src2))    (x64_andb_mi src1 src2))
-(rule 7 (x64_and $I16 src1 (is_imm16 src2))   (x64_andw_mi src1 src2))
-(rule 6 (x64_and $I32 src1 (is_imm32 src2))   (x64_andl_mi src1 src2))
-(rule 5 (x64_and $I64 src1 (is_imm32 src2))   (x64_andq_mi_sxlq src1 src2))
-(rule 4 (x64_and $I8  src1 (is_gpr_mem src2)) (x64_andb_rm src1 src2))
-(rule 3 (x64_and $I16 src1 (is_gpr_mem src2)) (x64_andw_rm src1 src2))
+(rule 10 (x64_and $I8  src1 (is_imm8 src2))   (x64_andb_mi src1 src2))
+(rule 9 (x64_and $I16 src1 (is_imm16 src2))   (x64_andw_mi src1 src2))
+(rule 8 (x64_and $I32 src1 (is_imm32 src2))   (x64_andl_mi src1 src2))
+(rule 7 (x64_and $I64 src1 (is_imm32 src2))   (x64_andq_mi_sxlq src1 src2))
+(rule 6 (x64_and $I8  src1 (is_gpr src2))     (x64_andl_rm src1 src2))
+(rule 5 (x64_and $I8  src1 (is_mem src2))     (x64_andb_rm src1 src2))
+(rule 4 (x64_and $I16 src1 (is_gpr src2))     (x64_andl_rm src1 src2))
+(rule 3 (x64_and $I16 src1 (is_mem src2))     (x64_andw_rm src1 src2))
 (rule 2 (x64_and $I32 src1 (is_gpr_mem src2)) (x64_andl_rm src1 src2))
 (rule 1 (x64_and $I64 src1 (is_gpr_mem src2)) (x64_andq_rm src1 src2))
 (rule 0 (x64_and ty src1 src2)
