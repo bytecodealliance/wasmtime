@@ -445,7 +445,6 @@ impl WastTest {
                 "spec_testsuite/simd_i64x2_arith2.wast",
                 "spec_testsuite/simd_i64x2_extmul_i32x4.wast",
                 "spec_testsuite/simd_i8x16_arith2.wast",
-                "spec_testsuite/simd_i8x16_sat_arith.wast",
                 "spec_testsuite/simd_lane.wast",
                 "spec_testsuite/simd_load.wast",
                 "spec_testsuite/simd_load_zero.wast",

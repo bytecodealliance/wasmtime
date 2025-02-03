@@ -28,8 +28,7 @@ use cranelift_codegen::{
         },
     },
     settings, CallInfo, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState,
-    MachLabel, PatchRegion, RelocDistance, VCodeConstantData, VCodeConstants,
-    Writable,
+    MachLabel, PatchRegion, RelocDistance, VCodeConstantData, VCodeConstants, Writable,
 };
 
 use crate::reg::WritableReg;
@@ -1971,7 +1970,7 @@ impl Assembler {
         let op = match size {
             OperandSize::S32 => AvxOpcode::Vmovd,
             OperandSize::S64 => AvxOpcode::Vmovq,
-            _ => unreachable!()
+            _ => unreachable!(),
         };
 
         self.emit(Inst::GprToXmmVex {
@@ -1980,7 +1979,6 @@ impl Assembler {
             dst: dst.map(Into::into),
             src_size: size.into(),
         })
-
     }
 
     /// The `vpinsr` opcode to use.

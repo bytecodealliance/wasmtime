@@ -16,7 +16,7 @@ pub(crate) enum Address {
         base: Reg,
         index: Reg,
         shift: u8,
-    }
+    },
 }
 
 impl Address {

@@ -1162,7 +1162,12 @@ impl Masm for MacroAssembler {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
-    fn v128_shift(&mut self, _context: &mut CodeGenContext<Emission>, _lane_width: OperandSize, _shift_kind: ShiftKind) -> Result<()> {
+    fn v128_shift(
+        &mut self,
+        _context: &mut CodeGenContext<Emission>,
+        _lane_width: OperandSize,
+        _shift_kind: ShiftKind,
+    ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 }

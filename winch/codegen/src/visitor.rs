@@ -3953,99 +3953,63 @@ where
     }
 
     fn visit_i8x16_shl(&mut self) -> Self::Output {
-        self.masm.v128_shift(
-            &mut self.context,
-            OperandSize::S8,
-            ShiftKind::Shl,
-        )
+        self.masm
+            .v128_shift(&mut self.context, OperandSize::S8, ShiftKind::Shl)
     }
 
     fn visit_i16x8_shl(&mut self) -> Self::Output {
-        self.masm.v128_shift(
-            &mut self.context,
-            OperandSize::S16,
-            ShiftKind::Shl,
-        )
+        self.masm
+            .v128_shift(&mut self.context, OperandSize::S16, ShiftKind::Shl)
     }
 
     fn visit_i32x4_shl(&mut self) -> Self::Output {
-        self.masm.v128_shift(
-            &mut self.context,
-            OperandSize::S32,
-            ShiftKind::Shl,
-        )
+        self.masm
+            .v128_shift(&mut self.context, OperandSize::S32, ShiftKind::Shl)
     }
 
     fn visit_i64x2_shl(&mut self) -> Self::Output {
-        self.masm.v128_shift(
-            &mut self.context,
-            OperandSize::S64,
-            ShiftKind::Shl,
-        )
+        self.masm
+            .v128_shift(&mut self.context, OperandSize::S64, ShiftKind::Shl)
     }
 
     fn visit_i8x16_shr_u(&mut self) -> Self::Output {
-        self.masm.v128_shift(
-            &mut self.context,
-            OperandSize::S8,
-            ShiftKind::ShrU,
-        )
+        self.masm
+            .v128_shift(&mut self.context, OperandSize::S8, ShiftKind::ShrU)
     }
 
     fn visit_i16x8_shr_u(&mut self) -> Self::Output {
-        self.masm.v128_shift(
-            &mut self.context,
-            OperandSize::S16,
-            ShiftKind::ShrU,
-        )
+        self.masm
+            .v128_shift(&mut self.context, OperandSize::S16, ShiftKind::ShrU)
     }
 
     fn visit_i32x4_shr_u(&mut self) -> Self::Output {
-        self.masm.v128_shift(
-            &mut self.context,
-            OperandSize::S32,
-            ShiftKind::ShrU,
-        )
+        self.masm
+            .v128_shift(&mut self.context, OperandSize::S32, ShiftKind::ShrU)
     }
 
     fn visit_i64x2_shr_u(&mut self) -> Self::Output {
-        self.masm.v128_shift(
-            &mut self.context,
-            OperandSize::S64,
-            ShiftKind::ShrU,
-        )
+        self.masm
+            .v128_shift(&mut self.context, OperandSize::S64, ShiftKind::ShrU)
     }
 
     fn visit_i8x16_shr_s(&mut self) -> Self::Output {
-        self.masm.v128_shift(
-            &mut self.context,
-            OperandSize::S8,
-            ShiftKind::ShrS,
-        )
+        self.masm
+            .v128_shift(&mut self.context, OperandSize::S8, ShiftKind::ShrS)
     }
 
     fn visit_i16x8_shr_s(&mut self) -> Self::Output {
-        self.masm.v128_shift(
-            &mut self.context,
-            OperandSize::S16,
-            ShiftKind::ShrS,
-        )
+        self.masm
+            .v128_shift(&mut self.context, OperandSize::S16, ShiftKind::ShrS)
     }
 
     fn visit_i32x4_shr_s(&mut self) -> Self::Output {
-        self.masm.v128_shift(
-            &mut self.context,
-            OperandSize::S32,
-            ShiftKind::ShrS,
-        )
+        self.masm
+            .v128_shift(&mut self.context, OperandSize::S32, ShiftKind::ShrS)
     }
 
     fn visit_i64x2_shr_s(&mut self) -> Self::Output {
-        self.masm.v128_shift(
-            &mut self.context,
-            OperandSize::S64,
-            ShiftKind::ShrS,
-        )
+        self.masm
+            .v128_shift(&mut self.context, OperandSize::S64, ShiftKind::ShrS)
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);

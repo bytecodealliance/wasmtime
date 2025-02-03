@@ -1826,5 +1826,10 @@ pub(crate) trait MacroAssembler {
     /// from the top of the stack, interpreted as packed integers of size `lane_width`.
     ///
     /// The shift amount is taken modulo `lane_width`.
-    fn v128_shift(&mut self, context: &mut CodeGenContext<Emission>, lane_width: OperandSize, kind: ShiftKind) -> Result<()>;
+    fn v128_shift(
+        &mut self,
+        context: &mut CodeGenContext<Emission>,
+        lane_width: OperandSize,
+        kind: ShiftKind,
+    ) -> Result<()>;
 }
