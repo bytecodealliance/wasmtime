@@ -9,6 +9,8 @@
 #[cfg(feature = "std")]
 #[macro_use]
 extern crate std;
+
+#[cfg(feature = "decode")]
 extern crate alloc;
 
 /// Calls the given macro with each opcode.
@@ -1405,6 +1407,7 @@ pub use op::*;
 pub mod opcode;
 pub use opcode::*;
 
+#[cfg(any(feature = "encode", feature = "decode"))]
 pub(crate) unsafe fn unreachable_unchecked<T>() -> T {
     #[cfg(debug_assertions)]
     unreachable!();
