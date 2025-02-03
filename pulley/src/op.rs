@@ -36,7 +36,7 @@ macro_rules! define_op {
                 $(
                     // TODO: add doc comments to all fields and update all
                     // the macros to match them.
-                    #[allow(missing_docs)]
+                    #[allow(missing_docs, reason = "macro-generated code")]
                     pub $field : $field_ty,
                 )*
             )? }
@@ -86,7 +86,7 @@ macro_rules! define_extended_op {
                 $(
                     // TODO: add doc comments to all fields and update all
                     // the macros to match them.
-                    #[allow(missing_docs)]
+                    #[allow(missing_docs, reason = "macro-generated code")]
                     pub $field : $field_ty,
                 )*
             )? }
