@@ -7,10 +7,10 @@ use super::{
 use anyhow::{anyhow, bail, Result};
 
 use crate::masm::{
-    DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I, IntCmpKind, LaneSelector,
-    LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind,
-    RmwOp, RoundingMode, ShiftKind, SplatKind, StoreKind, TrapCode, TruncKind, VectorCompareKind,
-    VectorEqualityKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
+    DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, HandleOverflowKind, Imm as I,
+    IntCmpKind, LaneSelector, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm,
+    RemKind, ReplaceLaneKind, RmwOp, RoundingMode, ShiftKind, SplatKind, StoreKind, TrapCode,
+    TruncKind, VectorCompareKind, VectorEqualityKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
@@ -34,7 +34,7 @@ use cranelift_codegen::{
     isa::{
         unwind::UnwindInst,
         x64::{
-            args::{AvxOpcode, FenceKind, CC},
+            args::{Avx512Opcode, AvxOpcode, FenceKind, RegMemImm, XmmMemImm, CC},
             settings as x64_settings, AtomicRmwSeqOp,
         },
     },
@@ -1882,6 +1882,195 @@ impl Masm for MacroAssembler {
         self.asm.setcc(IntCmpKind::Ne, dst);
         Ok(())
     }
+
+    fn v128_add(
+        &mut self,
+        lhs: Reg,
+        rhs: Reg,
+        dst: WritableReg,
+        size: OperandSize,
+        handle_overflow_kind: HandleOverflowKind,
+    ) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        let op = match handle_overflow_kind {
+            HandleOverflowKind::None => match size {
+                OperandSize::S8 => AvxOpcode::Vpaddb,
+                OperandSize::S16 => AvxOpcode::Vpaddw,
+                OperandSize::S32 => AvxOpcode::Vpaddd,
+                OperandSize::S64 => AvxOpcode::Vpaddq,
+                OperandSize::S128 => bail!(CodeGenError::unexpected_operand_size()),
+            },
+            HandleOverflowKind::SignedSaturating => match size {
+                OperandSize::S8 => AvxOpcode::Vpaddsb,
+                OperandSize::S16 => AvxOpcode::Vpaddsw,
+                _ => bail!(CodeGenError::unexpected_operand_size()),
+            },
+            HandleOverflowKind::UnsignedSaturating => match size {
+                OperandSize::S8 => AvxOpcode::Vpaddusb,
+                OperandSize::S16 => AvxOpcode::Vpaddusw,
+                _ => bail!(CodeGenError::unexpected_operand_size()),
+            },
+        };
+
+        self.asm.xmm_rmi_rvex(op, lhs, rhs, dst);
+
+        Ok(())
+    }
+
+    fn v128_sub(
+        &mut self,
+        lhs: Reg,
+        rhs: Reg,
+        dst: WritableReg,
+        size: OperandSize,
+        handle_overflow_kind: HandleOverflowKind,
+    ) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        let op = match handle_overflow_kind {
+            HandleOverflowKind::None => match size {
+                OperandSize::S8 => AvxOpcode::Vpsubb,
+                OperandSize::S16 => AvxOpcode::Vpsubw,
+                OperandSize::S32 => AvxOpcode::Vpsubd,
+                OperandSize::S64 => AvxOpcode::Vpsubq,
+                OperandSize::S128 => bail!(CodeGenError::unexpected_operand_size()),
+            },
+            HandleOverflowKind::SignedSaturating => match size {
+                OperandSize::S8 => AvxOpcode::Vpsubsb,
+                OperandSize::S16 => AvxOpcode::Vpsubsw,
+                _ => bail!(CodeGenError::unexpected_operand_size()),
+            },
+            HandleOverflowKind::UnsignedSaturating => match size {
+                OperandSize::S8 => AvxOpcode::Vpsubusb,
+                OperandSize::S16 => AvxOpcode::Vpsubusw,
+                _ => bail!(CodeGenError::unexpected_operand_size()),
+            },
+        };
+
+        self.asm.xmm_rmi_rvex(op, lhs, rhs, dst);
+
+        Ok(())
+    }
+
+    fn v128_mul(
+        &mut self,
+        context: &mut CodeGenContext<Emission>,
+        lane_width: OperandSize,
+    ) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        let rhs = context.pop_to_reg(self, None)?;
+        let lhs = context.pop_to_reg(self, None)?;
+
+        let mul_avx = |this: &mut Self, op| {
+            this.asm
+                .xmm_rmi_rvex(op, lhs.reg, rhs.reg, writable!(lhs.reg));
+        };
+
+        let mul_i64x2_avx512 = |this: &mut Self| {
+            this.asm
+                .xmm_rm_rvex3(Avx512Opcode::Vpmullq, lhs.reg, rhs.reg, writable!(lhs.reg));
+        };
+
+        let mul_i64x2_fallback =
+            |this: &mut Self, context: &mut CodeGenContext<Emission>| -> Result<()> {
+                // Standard AVX doesn't have an instruction for i64x2 multiplication, instead, we have to fallback
+                // to an instruction sequence using 32bits multiplication (taken from cranelift
+                // implementation, in `isa/x64/lower.isle`):
+                //
+                // > Otherwise, for i64x2 multiplication we describe a lane A as being composed of
+                // > a 32-bit upper half "Ah" and a 32-bit lower half "Al". The 32-bit long hand
+                // > multiplication can then be written as:
+                //
+                // >    Ah Al
+                // > *  Bh Bl
+                // >    -----
+                // >    Al * Bl
+                // > + (Ah * Bl) << 32
+                // > + (Al * Bh) << 32
+                //
+                // > So for each lane we will compute:
+                //
+                // >   A * B  = (Al * Bl) + ((Ah * Bl) + (Al * Bh)) << 32
+                //
+                // > Note, the algorithm will use `pmuludq` which operates directly on the lower
+                // > 32-bit (`Al` or `Bl`) of a lane and writes the result to the full 64-bits of
+                // > the lane of the destination. For this reason we don't need shifts to isolate
+                // > the lower 32-bits, however, we will need to use shifts to isolate the high
+                // > 32-bits when doing calculations, i.e., `Ah == A >> 32`.
+
+                let tmp1 = regs::scratch_xmm();
+                let tmp2 = context.any_fpr(this)?;
+
+                // tmp1 = lhs_hi = (lhs >> 32)
+                this.asm.xmm_rmi_rvex(
+                    AvxOpcode::Vpsrlq,
+                    lhs.reg,
+                    XmmMemImm::unwrap_new(RegMemImm::imm(32)),
+                    writable!(tmp1),
+                );
+                // tmp2 = lhs_hi * rhs_low = tmp1 * rhs
+                this.asm
+                    .xmm_rmi_rvex(AvxOpcode::Vpmuldq, tmp1, rhs.reg, writable!(tmp2));
+
+                // tmp1 = rhs_hi = rhs >> 32
+                this.asm.xmm_rmi_rvex(
+                    AvxOpcode::Vpsrlq,
+                    rhs.reg,
+                    XmmMemImm::unwrap_new(RegMemImm::imm(32)),
+                    writable!(tmp1),
+                );
+
+                // tmp1 = lhs_low * rhs_high = tmp1 * lhs
+                this.asm
+                    .xmm_rmi_rvex(AvxOpcode::Vpmuludq, tmp1, lhs.reg, writable!(tmp1));
+
+                // tmp1 = ((lhs_hi * rhs_low) + (lhs_lo * rhs_hi)) = tmp1 + tmp2
+                this.asm
+                    .xmm_rmi_rvex(AvxOpcode::Vpaddq, tmp1, tmp2, writable!(tmp1));
+
+                //tmp1 = tmp1 << 32
+                this.asm.xmm_rmi_rvex(
+                    AvxOpcode::Vpsllq,
+                    tmp1,
+                    XmmMemImm::unwrap_new(RegMemImm::imm(32)),
+                    writable!(tmp1),
+                );
+
+                // tmp2 = lhs_lo + rhs_lo
+                this.asm
+                    .xmm_rmi_rvex(AvxOpcode::Vpmuludq, lhs.reg, rhs.reg, writable!(tmp2));
+
+                // finally, with `lhs` as destination:
+                // lhs = (lhs_low * rhs_low) + ((lhs_hi * rhs_low) + (lhs_lo * rhs_hi)) = tmp1 + tmp2
+                this.asm
+                    .xmm_rmi_rvex(AvxOpcode::Vpaddq, tmp1, tmp2, writable!(lhs.reg));
+
+                context.free_reg(tmp2);
+
+                Ok(())
+            };
+
+        match lane_width {
+            OperandSize::S16 => mul_avx(self, AvxOpcode::Vpmullw),
+            OperandSize::S32 => mul_avx(self, AvxOpcode::Vpmulld),
+            // This is the fast path when AVX512 is available.
+            OperandSize::S64
+                if self.ensure_has_avx512vl().is_ok() && self.ensure_has_avx512dq().is_ok() =>
+            {
+                mul_i64x2_avx512(self)
+            }
+            // Otherwise, we emit AVX fallback sequence.
+            OperandSize::S64 => mul_i64x2_fallback(self, context)?,
+            _ => bail!(CodeGenError::unexpected_operand_size()),
+        }
+
+        context.stack.push(lhs.into());
+        context.free_reg(rhs);
+
+        Ok(())
+    }
 }
 
 impl MacroAssembler {
@@ -1920,6 +2109,22 @@ impl MacroAssembler {
 
     fn ensure_has_avx2(&self) -> Result<()> {
         anyhow::ensure!(self.flags.has_avx2(), CodeGenError::UnimplementedForNoAvx2);
+        Ok(())
+    }
+
+    fn ensure_has_avx512vl(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.flags.has_avx512vl(),
+            CodeGenError::UnimplementedForNoAvx512VL
+        );
+        Ok(())
+    }
+
+    fn ensure_has_avx512dq(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.flags.has_avx512dq(),
+            CodeGenError::UnimplementedForNoAvx512DQ
+        );
         Ok(())
     }
 

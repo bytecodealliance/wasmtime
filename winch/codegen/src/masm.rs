@@ -225,6 +225,16 @@ pub(crate) enum Extend<T: ExtendType> {
     __Kind(T),
 }
 
+/// How to handle overflow.
+pub enum HandleOverflowKind {
+    /// Do nothing.
+    None,
+    /// Perform signed saturation.
+    SignedSaturating,
+    /// Perform unsigned saturation.
+    UnsignedSaturating,
+}
+
 impl From<Extend<Zero>> for ExtendKind {
     fn from(value: Extend<Zero>) -> Self {
         ExtendKind::Unsigned(value)
@@ -1645,4 +1655,38 @@ pub(crate) trait MacroAssembler {
 
     /// If any bit in `src` is 1, set `dst` to 1, or 0 otherwise.
     fn v128_any_true(&mut self, src: Reg, dst: WritableReg) -> Result<()>;
+
+    /// Perform a vector add between `lsh` and `rhs`, placing the result in `dst`, where each lane
+    /// is interpreted to be `lane_width` long.
+    ///
+    /// `handle_overflow` determines how overflow should be handled.
+    fn v128_add(
+        &mut self,
+        lhs: Reg,
+        rhs: Reg,
+        dst: WritableReg,
+        lane_width: OperandSize,
+        handle_overflow: HandleOverflowKind,
+    ) -> Result<()>;
+
+    /// Perform a vector sub between `lhs` and `rhs`, placing the result in `dst`, where each lane
+    /// is interpreted to be `lane_width` long.
+    ///
+    /// `handle_overflow` determines how overflow should be handled.
+    fn v128_sub(
+        &mut self,
+        lhs: Reg,
+        rhs: Reg,
+        dst: WritableReg,
+        lane_width: OperandSize,
+        handle_overflow: HandleOverflowKind,
+    ) -> Result<()>;
+
+    /// Perform a vector lane-wise mul between `lhs` and `rhs`, placing the result in `dst`, where each lane
+    /// is interpreted to be `size` long.
+    fn v128_mul(
+        &mut self,
+        context: &mut CodeGenContext<Emission>,
+        lane_width: OperandSize,
+    ) -> Result<()>;
 }

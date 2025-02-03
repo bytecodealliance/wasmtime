@@ -13,10 +13,10 @@ use crate::{
         CallingConvention,
     },
     masm::{
-        CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I,
-        IntCmpKind, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind,
-        ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, StoreKind,
-        TrapCode, TruncKind, VectorCompareKind, VectorEqualityKind, Zero, TRUSTED_FLAGS,
+        CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, HandleOverflowKind,
+        Imm as I, IntCmpKind, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm,
+        RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot,
+        StoreKind, TrapCode, TruncKind, VectorCompareKind, VectorEqualityKind, Zero, TRUSTED_FLAGS,
         UNTRUSTED_FLAGS,
     },
     stack::TypedReg,
@@ -1099,6 +1099,36 @@ impl Masm for MacroAssembler {
     }
 
     fn v128_any_true(&mut self, _src: Reg, _dst: WritableReg) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_add(
+        &mut self,
+        _lhs: Reg,
+        _rhs: Reg,
+        _dst: WritableReg,
+        _size: OperandSize,
+        _handle_overflow: HandleOverflowKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_sub(
+        &mut self,
+        _lhs: Reg,
+        _rhs: Reg,
+        _dst: WritableReg,
+        _size: OperandSize,
+        _handle_overflow: HandleOverflowKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_mul(
+        &mut self,
+        _context: &mut CodeGenContext<Emission>,
+        _lane_width: OperandSize,
+    ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 }
