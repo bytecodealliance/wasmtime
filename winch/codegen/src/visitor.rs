@@ -464,6 +464,18 @@ macro_rules! def_unsupported {
     (emit I16x8Neg $($rest:tt)*) => {};
     (emit I32x4Neg $($rest:tt)*) => {};
     (emit I64x2Neg $($rest:tt)*) => {};
+    (emit I8x16Shl $($rest:tt)*) => {};
+    (emit I16x8Shl $($rest:tt)*) => {};
+    (emit I32x4Shl $($rest:tt)*) => {};
+    (emit I64x2Shl $($rest:tt)*) => {};
+    (emit I8x16ShrU $($rest:tt)*) => {};
+    (emit I16x8ShrU $($rest:tt)*) => {};
+    (emit I32x4ShrU $($rest:tt)*) => {};
+    (emit I64x2ShrU $($rest:tt)*) => {};
+    (emit I8x16ShrS $($rest:tt)*) => {};
+    (emit I16x8ShrS $($rest:tt)*) => {};
+    (emit I32x4ShrS $($rest:tt)*) => {};
+    (emit I64x2ShrS $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -3938,6 +3950,102 @@ where
             masm.v128_neg(writable!(op), OperandSize::S64)?;
             Ok(TypedReg::new(WasmValType::V128, op))
         })
+    }
+
+    fn visit_i8x16_shl(&mut self) -> Self::Output {
+        self.masm.v128_shift(
+            &mut self.context,
+            OperandSize::S8,
+            ShiftKind::Shl,
+        )
+    }
+
+    fn visit_i16x8_shl(&mut self) -> Self::Output {
+        self.masm.v128_shift(
+            &mut self.context,
+            OperandSize::S16,
+            ShiftKind::Shl,
+        )
+    }
+
+    fn visit_i32x4_shl(&mut self) -> Self::Output {
+        self.masm.v128_shift(
+            &mut self.context,
+            OperandSize::S32,
+            ShiftKind::Shl,
+        )
+    }
+
+    fn visit_i64x2_shl(&mut self) -> Self::Output {
+        self.masm.v128_shift(
+            &mut self.context,
+            OperandSize::S64,
+            ShiftKind::Shl,
+        )
+    }
+
+    fn visit_i8x16_shr_u(&mut self) -> Self::Output {
+        self.masm.v128_shift(
+            &mut self.context,
+            OperandSize::S8,
+            ShiftKind::ShrU,
+        )
+    }
+
+    fn visit_i16x8_shr_u(&mut self) -> Self::Output {
+        self.masm.v128_shift(
+            &mut self.context,
+            OperandSize::S16,
+            ShiftKind::ShrU,
+        )
+    }
+
+    fn visit_i32x4_shr_u(&mut self) -> Self::Output {
+        self.masm.v128_shift(
+            &mut self.context,
+            OperandSize::S32,
+            ShiftKind::ShrU,
+        )
+    }
+
+    fn visit_i64x2_shr_u(&mut self) -> Self::Output {
+        self.masm.v128_shift(
+            &mut self.context,
+            OperandSize::S64,
+            ShiftKind::ShrU,
+        )
+    }
+
+    fn visit_i8x16_shr_s(&mut self) -> Self::Output {
+        self.masm.v128_shift(
+            &mut self.context,
+            OperandSize::S8,
+            ShiftKind::ShrS,
+        )
+    }
+
+    fn visit_i16x8_shr_s(&mut self) -> Self::Output {
+        self.masm.v128_shift(
+            &mut self.context,
+            OperandSize::S16,
+            ShiftKind::ShrS,
+        )
+    }
+
+    fn visit_i32x4_shr_s(&mut self) -> Self::Output {
+        self.masm.v128_shift(
+            &mut self.context,
+            OperandSize::S32,
+            ShiftKind::ShrS,
+        )
+    }
+
+    fn visit_i64x2_shr_s(&mut self) -> Self::Output {
+        self.masm.v128_shift(
+            &mut self.context,
+            OperandSize::S64,
+            ShiftKind::ShrS,
+        )
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);

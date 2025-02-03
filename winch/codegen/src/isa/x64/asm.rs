@@ -28,7 +28,8 @@ use cranelift_codegen::{
         },
     },
     settings, CallInfo, Final, MachBuffer, MachBufferFinalized, MachInstEmit, MachInstEmitState,
-    MachLabel, PatchRegion, RelocDistance, VCodeConstantData, VCodeConstants, Writable,
+    MachLabel, PatchRegion, RelocDistance, VCodeConstantData, VCodeConstants,
+    Writable,
 };
 
 use crate::reg::WritableReg;
@@ -323,9 +324,9 @@ impl Assembler {
         buffer: &mut MachBuffer<Inst>,
         memflags: MemFlags,
     ) -> SyntheticAmode {
-        match addr {
+        match *addr {
             Address::Offset { base, offset } => {
-                let amode = Amode::imm_reg(*offset as i32, (*base).into()).with_flags(memflags);
+                let amode = Amode::imm_reg(offset as i32, base.into()).with_flags(memflags);
                 SyntheticAmode::real(amode)
             }
             Address::Const(c) => {
@@ -333,18 +334,30 @@ impl Assembler {
                 // `SyntheticAmode::ConstantOffset` addressing mode
                 // until the address is referenced by an actual
                 // instruction.
-                let constant_data = pool.get(*c);
-                let data = VCodeConstantData::Pool(*c, constant_data.clone());
+                let constant_data = pool.get(c);
+                let data = VCodeConstantData::Pool(c, constant_data.clone());
                 // If the constant data is not marked as used, it will be
                 // inserted, therefore, it needs to be registered.
                 let needs_registration = !constants.pool_uses(&data);
-                let constant = constants.insert(VCodeConstantData::Pool(*c, constant_data.clone()));
+                let constant = constants.insert(VCodeConstantData::Pool(c, constant_data.clone()));
 
                 if needs_registration {
                     buffer.register_constant(&constant, &data);
                 }
                 SyntheticAmode::ConstantOffset(constant)
             }
+            Address::ImmRegRegShift {
+                simm32,
+                base,
+                index,
+                shift,
+            } => SyntheticAmode::Real(Amode::ImmRegRegShift {
+                simm32,
+                base: base.into(),
+                index: index.into(),
+                shift,
+                flags: memflags,
+            }),
         }
     }
 
@@ -1935,6 +1948,39 @@ impl Assembler {
             src2: XmmMemImm::unwrap_new(src2.into()),
             dst: dst.to_reg().into(),
         });
+    }
+
+    /// Move unaligned packed integer values from address `src` to `dst`.
+    pub fn xmm_vmovdqu_mr(&mut self, src: &Address, dst: WritableReg, flags: MemFlags) {
+        let src = Self::to_synthetic_amode(
+            src,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            flags,
+        );
+        self.emit(Inst::XmmUnaryRmRVex {
+            op: AvxOpcode::Vmovdqu,
+            src: XmmMem::unwrap_new(RegMem::mem(src)),
+            dst: dst.map(Into::into),
+        });
+    }
+
+    /// Move integer from `src` to xmm register `dst` using an AVX instruction.
+    pub fn avx_gpr_to_xmm(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => AvxOpcode::Vmovd,
+            OperandSize::S64 => AvxOpcode::Vmovq,
+            _ => unreachable!()
+        };
+
+        self.emit(Inst::GprToXmmVex {
+            op,
+            src: src.into(),
+            dst: dst.map(Into::into),
+            src_size: size.into(),
+        })
+
     }
 
     /// The `vpinsr` opcode to use.
