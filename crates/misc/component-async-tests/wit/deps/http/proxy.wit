@@ -1,0 +1,6 @@
+package wasi:http@0.3.0-draft;
+
+world proxy {
+  import handler;
+  export handler;
+}

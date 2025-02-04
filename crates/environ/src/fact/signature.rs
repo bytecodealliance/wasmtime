@@ -26,6 +26,13 @@ impl ComponentTypesBuilder {
         let ty = &self[options.ty];
         let ptr_ty = options.options.ptr();
 
+        if let (Context::Lower, true) = (&context, options.options.async_) {
+            return Signature {
+                params: vec![ptr_ty; 2],
+                results: vec![ValType::I32],
+            };
+        }
+
         let mut params = match self.flatten_types(
             &options.options,
             MAX_FLAT_PARAMS,
@@ -36,6 +43,17 @@ impl ComponentTypesBuilder {
                 vec![ptr_ty]
             }
         };
+
+        if options.options.async_ {
+            return Signature {
+                params,
+                results: if options.options.callback.is_some() {
+                    vec![ptr_ty]
+                } else {
+                    Vec::new()
+                },
+            };
+        }
 
         let results = match self.flatten_types(
             &options.options,
@@ -59,6 +77,124 @@ impl ComponentTypesBuilder {
                 }
             }
         };
+        Signature { params, results }
+    }
+
+    pub(super) fn async_start_signature(
+        &self,
+        lower: &AdapterOptions,
+        lift: &AdapterOptions,
+    ) -> Signature {
+        let lower_ty = &self[lower.ty];
+        let lower_ptr_ty = lower.options.ptr();
+        let params = if lower.options.async_ {
+            vec![lower_ptr_ty]
+        } else {
+            match self.flatten_types(
+                &lower.options,
+                MAX_FLAT_PARAMS,
+                self[lower_ty.params].types.iter().copied(),
+            ) {
+                Some(list) => list,
+                None => {
+                    vec![lower_ptr_ty]
+                }
+            }
+        };
+
+        let lift_ty = &self[lift.ty];
+        let lift_ptr_ty = lift.options.ptr();
+        let results = match self.flatten_types(
+            &lift.options,
+            // Both sync- and async-lifted functions accept up to this many core
+            // parameters via the stack.  The host will call the `async-start`
+            // function (possibly after a backpressure delay), which will
+            // _return_ that many values (using a multi-value return, if
+            // necessary); the host will then pass them directly to the callee.
+            MAX_FLAT_PARAMS,
+            self[lift_ty.params].types.iter().copied(),
+        ) {
+            Some(list) => list,
+            None => {
+                vec![lift_ptr_ty]
+            }
+        };
+
+        Signature { params, results }
+    }
+
+    pub(super) fn flatten_lowering_types(
+        &self,
+        options: &Options,
+        tys: impl IntoIterator<Item = InterfaceType>,
+    ) -> Option<Vec<ValType>> {
+        if options.async_ {
+            // When lowering an async function, we always spill parameters to
+            // linear memory.
+            None
+        } else {
+            self.flatten_types(options, MAX_FLAT_RESULTS, tys)
+        }
+    }
+
+    pub(super) fn flatten_lifting_types(
+        &self,
+        options: &Options,
+        tys: impl IntoIterator<Item = InterfaceType>,
+    ) -> Option<Vec<ValType>> {
+        self.flatten_types(
+            options,
+            if options.async_ {
+                // Async functions return results by calling `task.return`,
+                // which accepts up to `MAX_FLAT_PARAMS` parameters via the
+                // stack.
+                MAX_FLAT_PARAMS
+            } else {
+                // Sync functions return results directly (at least until we add
+                // a `always-task-return` canonical option) and so are limited
+                // to returning up to `MAX_FLAT_RESULTS` results via the stack.
+                MAX_FLAT_RESULTS
+            },
+            tys,
+        )
+    }
+
+    pub(super) fn async_return_signature(
+        &self,
+        lower: &AdapterOptions,
+        lift: &AdapterOptions,
+    ) -> Signature {
+        let lift_ty = &self[lift.ty];
+        let lift_ptr_ty = lift.options.ptr();
+        let mut params = match self
+            .flatten_lifting_types(&lift.options, self[lift_ty.results].types.iter().copied())
+        {
+            Some(list) => list,
+            None => {
+                vec![lift_ptr_ty]
+            }
+        };
+
+        let lower_ty = &self[lower.ty];
+        let results = if lower.options.async_ {
+            // Add return pointer
+            params.push(lift_ptr_ty);
+            Vec::new()
+        } else {
+            match self.flatten_types(
+                &lower.options,
+                MAX_FLAT_RESULTS,
+                self[lower_ty.params].types.iter().copied(),
+            ) {
+                Some(list) => list,
+                None => {
+                    // Add return pointer
+                    params.push(lift_ptr_ty);
+                    Vec::new()
+                }
+            }
+        };
+
         Signature { params, results }
     }
 

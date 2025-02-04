@@ -196,6 +196,8 @@ impl<'data> Translator<'_, 'data> {
                 names.push(name);
             }
             let wasm = module.encode();
+            std::fs::write("/tmp/adapter.wasm", &wasm).unwrap();
+            wasmparser::Validator::new().validate_all(&wasm).unwrap();
             let imports = module.imports().to_vec();
 
             // Extend the lifetime of the owned `wasm: Vec<u8>` on the stack to
@@ -304,6 +306,12 @@ fn fact_import_to_core_def(
         }
         fact::Import::ResourceEnterCall => simple_intrinsic(dfg::Trampoline::ResourceEnterCall),
         fact::Import::ResourceExitCall => simple_intrinsic(dfg::Trampoline::ResourceExitCall),
+        fact::Import::SyncEnterCall => simple_intrinsic(dfg::Trampoline::SyncEnterCall),
+        fact::Import::SyncExitCall { callback } => {
+            simple_intrinsic(dfg::Trampoline::SyncExitCall {
+                callback: callback.clone().map(|v| dfg.callbacks.push(v)),
+            })
+        }
         fact::Import::AsyncEnterCall => simple_intrinsic(dfg::Trampoline::AsyncEnterCall),
         fact::Import::AsyncExitCall {
             callback,

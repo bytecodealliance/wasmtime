@@ -15,6 +15,7 @@ anyhow = { workspace = true, features = ['std'] }
 wasi = "0.11.0"
 wasi-nn = "0.6.0"
 wit-bindgen = { workspace = true, features = ['default'] }
+wit-bindgen-rt = { workspace = true, features = ['async'] }
 libc = { workspace = true }
 getrandom = "0.2.9"
 futures = { workspace = true, default-features = false, features = ['alloc'] }
@@ -22,3 +23,6 @@ url = { workspace = true }
 sha2 = "0.10.2"
 base64 = "0.21.0"
 wasip2 = { version = "0.14.0", package = 'wasi' }
+once_cell = "1.19.0"
+flate2 = "1.0.28"
+

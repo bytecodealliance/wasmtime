@@ -16,4 +16,5 @@ wasmtime = { workspace = true, features = ['incremental-cache', 'cranelift', 'co
 [build-dependencies]
 heck = { workspace = true }
 wit-component = { workspace = true }
+wasmparser = { workspace = true, features = ['features'] }
 cargo_metadata = "0.18.1"
