@@ -710,14 +710,6 @@ macro_rules! define_extended_decoder {
 }
 for_each_extended_op!(define_extended_decoder);
 
-/// Unwrap a `Result<T, Uninhabited>`.
-/// Always succeeds, since `Uninhabited` is uninhabited.
-pub fn unwrap_uninhabited<T>(res: Result<T, Uninhabited>) -> T {
-    match res {
-        Ok(ok) => ok,
-    }
-}
-
 /// Functions for decoding the operands of an instruction, assuming the opcode
 /// has already been decoded.
 pub mod operands {
