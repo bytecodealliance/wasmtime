@@ -19,9 +19,9 @@ block2(v6: i32):
 ;; Check that the `iadd` for `v4` is subsumed by `v2`:
 
 ; check: block0(v0: i32, v1: i32):
-; check:      v2 = iadd v0, v1
+; nextln:      v2 = iadd v0, v1
 ; check:  block1:
-; check:      v5 = iadd.i32 v2, v0
+; nextln:      v5 = iadd.i32 v2, v0
 ; nextln:     return v5
 ; check: block2:
 ; nextln:    return v1
