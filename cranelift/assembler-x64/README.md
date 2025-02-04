@@ -10,9 +10,9 @@ Like `cranelift-codegen`, using this assembler starts with `enum Inst`. For
 convenience, a `main.rs` script prints the path to this generated code:
 
 ```console
-$ cat $(cargo run)
-#[derive(arbitrary::Arbitrary, Debug)]
-pub enum Inst {
+$ cat $(cargo run) | head
+...
+pub enum Inst<R:Registers> {
     andb_i(andb_i),
     andw_i(andw_i),
     andl_i(andl_i),
