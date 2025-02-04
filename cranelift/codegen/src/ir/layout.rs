@@ -25,12 +25,12 @@ use core::cmp;
 ///
 #[derive(Debug, Clone, PartialEq, Hash)]
 pub struct Layout {
-    /// Linked list nodes for the layout order of blocks Forms a doubly linked list, terminated in
+    /// Linked list nodes for the layout order of blocks. Forms a doubly linked list, terminated at
     /// both ends by `None`.
     blocks: SecondaryMap<Block, BlockNode>,
 
-    /// Linked list nodes for the layout order of instructions. Forms a double linked list per block,
-    /// terminated in both ends by `None`.
+    /// Linked list nodes for the layout order of instructions. Forms a doubly linked list per block,
+    /// terminated at both ends by `None`.
     insts: SecondaryMap<Inst, InstNode>,
 
     /// First block in the layout order, or `None` when no blocks have been laid out.

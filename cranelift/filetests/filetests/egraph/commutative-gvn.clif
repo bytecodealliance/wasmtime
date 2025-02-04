@@ -1,0 +1,23 @@
+test optimize
+set opt_level=speed
+target x86_64
+
+function %f(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = iadd v0, v1
+    brif v2, block1(v0), block1(v1)
+
+block1(v3: i32):
+    v4 = iadd v1, v0
+    v5 = iadd v4, v3
+    return v5
+}
+
+;; Check that `v4` is subsumed by `v2`, even if `iadd v0, v1` has different operand order than
+;; `iadd v1, v0`:
+
+; check:  block0(v0: i32, v1: i32):
+; nextln:     v2 = iadd v0, v1
+; check:  block1(v3: i32):
+; nextln:     v5 = iadd.i32 v2, v3
+; nextln:     return v5

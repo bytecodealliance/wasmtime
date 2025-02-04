@@ -7,6 +7,7 @@
 //! directory.
 
 use crate::constant_hash::Table;
+use crate::ir::condcodes::CondCode;
 use alloc::vec::Vec;
 use core::fmt::{self, Display, Formatter};
 use core::ops::{Deref, DerefMut};
@@ -200,6 +201,32 @@ impl Opcode {
     #[inline]
     pub fn is_safepoint(self) -> bool {
         self.is_call() && !self.is_return()
+    }
+
+    /// Return whether the instruction is commutative: `op(x, y) == op(y, x)` for all x, y.
+    pub fn is_commutative(&self) -> bool {
+        match self {
+            Opcode::Band | Opcode::Bor | Opcode::Bxor | Opcode::BxorNot => true,
+
+            Opcode::Iadd
+            | Opcode::Imul
+            | Opcode::IaddPairwise
+            | Opcode::Umulhi
+            | Opcode::Smulhi
+            | Opcode::UaddOverflowTrap
+            | Opcode::Umin
+            | Opcode::Umax
+            | Opcode::Smin
+            | Opcode::Smax
+            | Opcode::AvgRound
+            | Opcode::UaddSat
+            | Opcode::SaddSat => true,
+
+            Opcode::Fadd | Opcode::Fmul => true,
+            Opcode::Fmin | Opcode::Fmax => true,
+
+            _ => false,
+        }
     }
 }
 
@@ -494,6 +521,51 @@ impl InstructionData {
             }
             _ => {}
         }
+    }
+
+    /// Return a copy of this instruction with its args swapped into a canonical
+    /// order iff the instruction is commutative. This boosts GVN hit rate.
+    pub fn with_sorted_args(&self) -> Self {
+        let mut cloned = self.clone(); // XXX: Do I need to clone deeper? There's a deep_clone(). Can I borrow and return a borrow and avoid so much copying? It doesn't need to live long, certainly not longer than self.
+                                       // XXX: Is there a more idiomatic, more concise way to structure this?
+        match cloned {
+            InstructionData::Binary {
+                opcode,
+                ref mut args,
+            } if args[0] > args[1] && opcode.is_commutative() => args.swap(0, 1),
+            InstructionData::Ternary {
+                opcode: Opcode::Fma,
+                ref mut args,
+            } if args[0] > args[1] => args.swap(0, 1),
+            InstructionData::IntCompare {
+                ref mut args,
+                ref mut cond,
+                ..
+            } if args[0] > args[1] => {
+                args.swap(0, 1);
+                *cond = cond.swap_args();
+            }
+            InstructionData::IntCompare {
+                args, ref mut cond, ..
+            } if args[0] == args[1] => {
+                *cond = std::cmp::min(*cond, cond.swap_args());
+            }
+            InstructionData::FloatCompare {
+                ref mut args,
+                ref mut cond,
+                ..
+            } if args[0] > args[1] => {
+                args.swap(0, 1);
+                *cond = cond.swap_args();
+            }
+            InstructionData::FloatCompare {
+                args, ref mut cond, ..
+            } if args[0] == args[1] => {
+                *cond = std::cmp::min(*cond, cond.swap_args());
+            }
+            _ => {}
+        }
+        cloned
     }
 }
 

@@ -116,10 +116,10 @@ pub(crate) enum NewOrExistingInst {
 impl NewOrExistingInst {
     fn get_inst_key<'a>(&'a self, dfg: &'a DataFlowGraph) -> (Type, InstructionData) {
         match self {
-            NewOrExistingInst::New(data, ty) => (*ty, *data),
+            NewOrExistingInst::New(data, ty) => (*ty, data.with_sorted_args()), // sort here too?
             NewOrExistingInst::Existing(inst) => {
                 let ty = dfg.ctrl_typevar(*inst);
-                (ty, dfg.insts[*inst])
+                (ty, dfg.insts[*inst].with_sorted_args())
             }
         }
     }
@@ -222,8 +222,11 @@ where
                 union_find: self.eclasses,
                 value_lists: &self.func.dfg.value_lists,
             };
-            self.gvn_map
-                .insert((ty, self.func.dfg.insts[inst]), opt_value, &gvn_context);
+            self.gvn_map.insert(
+                (ty, self.func.dfg.insts[inst].with_sorted_args()),
+                opt_value,
+                &gvn_context,
+            );
             self.value_to_opt_value[result] = opt_value;
             opt_value
         }
@@ -543,7 +546,7 @@ impl<'a> EgraphPass<'a> {
     pub fn run(&mut self) {
         self.remove_pure_and_optimize();
 
-        trace!("egraph built:\n{}\n", self.func.display());
+        trace!("egraph built:\n{}\n", self.func.display()); // Show only side-effect skeleton.
         if cfg!(feature = "trace-log") {
             for (value, def) in self.func.dfg.values_and_defs() {
                 trace!(" -> {} = {:?}", value, def);
@@ -581,6 +584,9 @@ impl<'a> EgraphPass<'a> {
     /// maintain acyclicity.)
     fn remove_pure_and_optimize(&mut self) {
         let mut cursor = FuncCursor::new(self.func);
+
+        // Map from a value to its optimized version. The optimizer (via
+        // insert_pure_enode()) updates this whenever it GVN-rewrites a result.
         let mut value_to_opt_value: SecondaryMap<Value, Value> =
             SecondaryMap::with_default(Value::reserved_value());
 
@@ -625,7 +631,7 @@ impl<'a> EgraphPass<'a> {
         // We assign an "available block" to every value. Values tied to
         // the side-effecting skeleton are available in the block where
         // they're defined. Results from pure instructions could legally
-        // float up the domtree so they are available as soon as all
+        // float up the domtree, so they are available as soon as all
         // their arguments are available. Values which identify union
         // nodes are available in the same block as all values in the
         // eclass, enforced by optimize_pure_enode.
