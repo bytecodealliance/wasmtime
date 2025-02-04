@@ -11,8 +11,8 @@ mod mem;
 mod reg;
 mod rex;
 
-#[cfg(feature = "arbitrary")]
-mod arbitrary_impls;
+#[cfg(any(test, feature = "fuzz"))]
+pub mod fuzz;
 
 pub use api::{
     AsReg, CodeSink, Constant, KnownOffsetTable, Label, RegisterVisitor, Registers, TrapCode,

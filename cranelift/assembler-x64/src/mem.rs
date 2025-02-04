@@ -7,7 +7,7 @@ use crate::rex::{encode_modrm, encode_sib, Imm, RexFlags};
 
 /// x64 memory addressing modes.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub enum Amode<R: AsReg> {
     ImmReg {
         base: R,
@@ -75,7 +75,7 @@ impl<R: AsReg> Amode<R> {
 
 /// For RIP-relative addressing, keep track of the [`CodeSink`]-specific target.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub enum DeferredTarget {
     Label(Label),
     Constant(Constant),
@@ -113,7 +113,7 @@ impl<R: AsReg> std::fmt::Display for Amode<R> {
 
 /// The scaling factor for the index register in certain [`Amode`]s.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub enum Scale {
     One,
     Two,
@@ -160,7 +160,7 @@ impl Scale {
 
 /// A general-purpose register or memory operand.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 #[allow(clippy::module_name_repetitions)]
 pub enum GprMem<R: AsReg, M: AsReg> {
     Gpr(R),

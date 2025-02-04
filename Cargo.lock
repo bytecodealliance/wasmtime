@@ -723,6 +723,7 @@ version = "0.117.0"
 dependencies = [
  "arbitrary",
  "arbtest",
+ "capstone",
  "cranelift-assembler-x64-meta",
 ]
 
@@ -730,8 +731,6 @@ dependencies = [
 name = "cranelift-assembler-x64-fuzz"
 version = "0.0.0"
 dependencies = [
- "arbitrary",
- "capstone",
  "cranelift-assembler-x64",
  "libfuzzer-sys",
 ]

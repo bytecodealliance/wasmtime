@@ -85,13 +85,16 @@ fn generate_inst_enum(f: &mut Formatter, insts: &[dsl::Inst]) {
 /// `#[derive(...)]`
 fn generate_derive(f: &mut Formatter) {
     f.line("#[derive(Clone, Debug)]", None);
-    f.line("#[cfg_attr(feature = \"arbitrary\", derive(arbitrary::Arbitrary))]", None);
+    f.line("#[cfg_attr(any(test, feature = \"fuzz\"), derive(arbitrary::Arbitrary))]", None);
 }
 
 /// Adds a custom bound to the `Arbitrary` implementation which ensures that
 /// the associated registers are all `Arbitrary` as well.
 fn generate_derive_arbitrary_bounds(f: &mut Formatter) {
-    f.line("#[cfg_attr(feature = \"arbitrary\", arbitrary(bound = \"R: crate::arbitrary_impls::RegistersArbitrary\"))]", None);
+    f.line(
+        "#[cfg_attr(any(test, feature = \"fuzz\"), arbitrary(bound = \"R: crate::fuzz::RegistersArbitrary\"))]",
+        None,
+    );
 }
 
 /// `impl std::fmt::Display for Inst { ... }`
