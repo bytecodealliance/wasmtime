@@ -1,7 +1,7 @@
 use super::{
     abi::X64ABI,
     address::Address,
-    asm::{Assembler, PatchableAddToReg, VcmpKind},
+    asm::{Assembler, PatchableAddToReg, VcmpKind, VcvtKind},
     regs::{self, rbp, rsp},
 };
 use anyhow::{anyhow, bail, Result};
@@ -10,7 +10,8 @@ use crate::masm::{
     DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, HandleOverflowKind, Imm as I,
     IntCmpKind, LaneSelector, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm,
     RemKind, ReplaceLaneKind, RmwOp, RoundingMode, ShiftKind, SplatKind, StoreKind, TrapCode,
-    TruncKind, VectorCompareKind, VectorEqualityKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
+    TruncKind, V128ConvertKind, V128ExtendKind, V128NarrowKind, VectorCompareKind,
+    VectorEqualityKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
@@ -324,7 +325,8 @@ impl Masm for MacroAssembler {
             }
             LoadKind::VectorExtend(ext) => {
                 self.ensure_has_avx()?;
-                self.asm.xmm_vpmov_mr(&src, dst, ext, UNTRUSTED_FLAGS)
+                self.asm
+                    .xmm_vpmov_mr(&src, dst, ext.into(), UNTRUSTED_FLAGS)
             }
             LoadKind::Splat(_) => {
                 self.ensure_has_avx()?;
@@ -1880,6 +1882,143 @@ impl Masm for MacroAssembler {
         self.ensure_has_avx()?;
         self.asm.xmm_vptest(src, src);
         self.asm.setcc(IntCmpKind::Ne, dst);
+        Ok(())
+    }
+
+    fn v128_convert(&mut self, src: Reg, dst: WritableReg, kind: V128ConvertKind) -> Result<()> {
+        self.ensure_has_avx()?;
+        match kind {
+            V128ConvertKind::I32x4S => self.asm.xmm_vcvt_rr(src, dst, VcvtKind::I32ToF32),
+            V128ConvertKind::I32x4LowS => self.asm.xmm_vcvt_rr(src, dst, VcvtKind::I32ToF64),
+            V128ConvertKind::I32x4U => {
+                let scratch = writable!(regs::scratch_xmm());
+
+                // Split each 32-bit integer into 16-bit parts.
+                // `scratch` will contain the low bits and `dst` will contain
+                // the high bits.
+                self.asm
+                    .xmm_vpsll_rr(src, scratch, 0x10, kind.src_lane_size());
+                self.asm
+                    .xmm_vpsrl_rr(scratch.to_reg(), scratch, 0x10, kind.src_lane_size());
+                self.asm
+                    .xmm_vpsub_rrr(src, scratch.to_reg(), dst, kind.src_lane_size());
+
+                // Convert the low bits in `scratch` to floating point numbers.
+                self.asm
+                    .xmm_vcvt_rr(scratch.to_reg(), scratch, VcvtKind::I32ToF32);
+
+                // Prevent overflow by right shifting high bits.
+                self.asm
+                    .xmm_vpsrl_rr(dst.to_reg(), dst, 1, kind.src_lane_size());
+                // Convert high bits in `dst` to floating point numbers.
+                self.asm.xmm_vcvt_rr(dst.to_reg(), dst, VcvtKind::I32ToF32);
+                // Double high bits in `dst` to reverse right shift.
+                self.asm
+                    .xmm_vaddp_rrr(dst.to_reg(), dst.to_reg(), dst, kind.src_lane_size());
+                // Add high bits in `dst` to low bits in `scratch`.
+                self.asm
+                    .xmm_vaddp_rrr(dst.to_reg(), scratch.to_reg(), dst, kind.src_lane_size());
+            }
+            V128ConvertKind::I32x4LowU => {
+                // See
+                // https://github.com/bytecodealliance/wasmtime/blob/bb886ffc3c81a476d8ba06311ff2dede15a6f7e1/cranelift/codegen/src/isa/x64/lower.isle#L3668
+                // for details on the Cranelift AVX implementation.
+                // Use `vunpcklp` to create doubles from the integers.
+                // Interleaving 0x1.0p52 (i.e., 0x43300000) with the integers
+                // creates a byte array for a double that sets the mantissa
+                // bits to the original integer value.
+                let conversion_constant = self
+                    .asm
+                    .add_constant(&[0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x30, 0x43]);
+                self.asm
+                    .xmm_vunpcklp_rrm(src, &conversion_constant, dst, kind.src_lane_size());
+                // Subtract the 0x1.0p52 added above.
+                let conversion_constant = self.asm.add_constant(&[
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x30, 0x43,
+                ]);
+                self.asm.xmm_vsub_rrm(
+                    dst.to_reg(),
+                    &conversion_constant,
+                    dst,
+                    kind.dst_lane_size(),
+                );
+            }
+        }
+        Ok(())
+    }
+
+    fn v128_narrow(
+        &mut self,
+        src1: Reg,
+        src2: Reg,
+        dst: WritableReg,
+        kind: V128NarrowKind,
+    ) -> Result<()> {
+        self.ensure_has_avx()?;
+        match kind {
+            V128NarrowKind::I16x8S | V128NarrowKind::I32x4S => {
+                self.asm
+                    .xmm_vpackss_rrr(src1, src2, dst, kind.dst_lane_size())
+            }
+            V128NarrowKind::I16x8U | V128NarrowKind::I32x4U => {
+                self.asm
+                    .xmm_vpackus_rrr(src1, src2, dst, kind.dst_lane_size())
+            }
+        }
+        Ok(())
+    }
+
+    fn v128_demote(&mut self, src: Reg, dst: WritableReg) -> Result<()> {
+        self.ensure_has_avx()?;
+        self.asm.xmm_vcvt_rr(src, dst, VcvtKind::F64ToF32);
+        Ok(())
+    }
+
+    fn v128_promote(&mut self, src: Reg, dst: WritableReg) -> Result<()> {
+        self.ensure_has_avx()?;
+        self.asm.xmm_vcvt_rr(src, dst, VcvtKind::F32ToF64);
+        Ok(())
+    }
+
+    fn v128_extend(&mut self, src: Reg, dst: WritableReg, kind: V128ExtendKind) -> Result<()> {
+        self.ensure_has_avx()?;
+        match kind {
+            V128ExtendKind::LowI8x16S
+            | V128ExtendKind::LowI8x16U
+            | V128ExtendKind::LowI16x8S
+            | V128ExtendKind::LowI16x8U
+            | V128ExtendKind::LowI32x4S
+            | V128ExtendKind::LowI32x4U => self.asm.xmm_vpmov_rr(src, dst, kind.into()),
+            V128ExtendKind::HighI8x16S | V128ExtendKind::HighI16x8S => {
+                self.asm.xmm_vpalignr_rrr(src, src, dst, 0x8);
+                self.asm.xmm_vpmov_rr(dst.to_reg(), dst, kind.into());
+            }
+            V128ExtendKind::HighI8x16U | V128ExtendKind::HighI16x8U => {
+                let scratch = regs::scratch_xmm();
+                self.asm
+                    .xmm_rmi_rvex(AvxOpcode::Vpxor, scratch, scratch, writable!(scratch));
+                self.asm
+                    .xmm_vpunpckh_rrr(src, scratch, dst, kind.src_lane_size());
+            }
+            V128ExtendKind::HighI32x4S => {
+                // Move the 3rd element (i.e., 0b10) to the 1st (rightmost)
+                // position and the 4th element (i.e., 0b11) to the 2nd (second
+                // from the right) position and then perform the extend.
+                self.asm
+                    .xmm_vpshuf_rr(src, dst, 0b11_10_11_10, kind.src_lane_size());
+                self.asm.xmm_vpmov_rr(dst.to_reg(), dst, kind.into());
+            }
+            V128ExtendKind::HighI32x4U => {
+                // Set `scratch` to a vector 0s.
+                let scratch = regs::scratch_xmm();
+                self.asm
+                    .xmm_vxorp_rrr(scratch, scratch, writable!(scratch), kind.src_lane_size());
+                // Interleave the 0 bits into the two 32-bit integers to zero extend them.
+                self.asm
+                    .xmm_vunpckhp_rrr(src, scratch, dst, kind.src_lane_size());
+            }
+        }
         Ok(())
     }
 

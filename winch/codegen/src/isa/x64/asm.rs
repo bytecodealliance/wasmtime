@@ -4,7 +4,7 @@ use crate::{
     isa::{reg::Reg, CallingConvention},
     masm::{
         DivKind, Extend, ExtendKind, ExtendType, IntCmpKind, MulWideKind, OperandSize, RemKind,
-        RoundingMode, ShiftKind, Signed, V128LoadExtendKind, Zero,
+        RoundingMode, ShiftKind, Signed, V128ExtendKind, V128LoadExtendKind, Zero,
     },
     reg::writable,
     x64::regs::scratch,
@@ -178,6 +178,62 @@ impl From<ExtendKind> for ExtMode {
     }
 }
 
+/// Kinds of extends supported by `vpmov`.
+pub(super) enum VpmovKind {
+    /// Sign extends 8 lanes of 8-bit integers to 8 lanes of 16-bit integers.
+    E8x8S,
+    /// Zero extends 8 lanes of 8-bit integers to 8 lanes of 16-bit integers.
+    E8x8U,
+    /// Sign extends 4 lanes of 16-bit integers to 4 lanes of 32-bit integers.
+    E16x4S,
+    /// Zero extends 4 lanes of 16-bit integers to 4 lanes of 32-bit integers.
+    E16x4U,
+    /// Sign extends 2 lanes of 32-bit integers to 2 lanes of 64-bit integers.
+    E32x2S,
+    /// Zero extends 2 lanes of 32-bit integers to 2 lanes of 64-bit integers.
+    E32x2U,
+}
+
+impl From<VpmovKind> for AvxOpcode {
+    fn from(value: VpmovKind) -> Self {
+        match value {
+            VpmovKind::E8x8S => AvxOpcode::Vpmovsxbw,
+            VpmovKind::E8x8U => AvxOpcode::Vpmovzxbw,
+            VpmovKind::E16x4S => AvxOpcode::Vpmovsxwd,
+            VpmovKind::E16x4U => AvxOpcode::Vpmovzxwd,
+            VpmovKind::E32x2S => AvxOpcode::Vpmovsxdq,
+            VpmovKind::E32x2U => AvxOpcode::Vpmovzxdq,
+        }
+    }
+}
+
+impl From<V128LoadExtendKind> for VpmovKind {
+    fn from(value: V128LoadExtendKind) -> Self {
+        match value {
+            V128LoadExtendKind::E8x8S => Self::E8x8S,
+            V128LoadExtendKind::E8x8U => Self::E8x8U,
+            V128LoadExtendKind::E16x4S => Self::E16x4S,
+            V128LoadExtendKind::E16x4U => Self::E16x4U,
+            V128LoadExtendKind::E32x2S => Self::E32x2S,
+            V128LoadExtendKind::E32x2U => Self::E32x2U,
+        }
+    }
+}
+
+impl From<V128ExtendKind> for VpmovKind {
+    fn from(value: V128ExtendKind) -> Self {
+        match value {
+            V128ExtendKind::LowI8x16S | V128ExtendKind::HighI8x16S => Self::E8x8S,
+            V128ExtendKind::LowI8x16U => Self::E8x8U,
+            V128ExtendKind::LowI16x8S | V128ExtendKind::HighI16x8S => Self::E16x4S,
+            V128ExtendKind::LowI16x8U => Self::E16x4U,
+            V128ExtendKind::LowI32x4S | V128ExtendKind::HighI32x4S => Self::E32x2S,
+            V128ExtendKind::LowI32x4U => Self::E32x2U,
+            _ => unimplemented!(),
+        }
+    }
+}
+
 /// Kinds of comparisons supported by `vcmp`.
 pub(super) enum VcmpKind {
     /// Equal comparison.
@@ -188,6 +244,18 @@ pub(super) enum VcmpKind {
     Lt,
     /// Less than or equal comparison.
     Le,
+}
+
+/// Kinds of conversions supported by `vcvt`.
+pub(super) enum VcvtKind {
+    /// Converts 32-bit integers to 32-bit floats.
+    I32ToF32,
+    /// Converts doubleword integers to double precision floats.
+    I32ToF64,
+    /// Converts double precision floats to single precision floats.
+    F64ToF32,
+    /// Converts single precision floats to double precision floats.
+    F32ToF64,
 }
 
 /// Low level assembler implementation for x64.
@@ -497,19 +565,10 @@ impl Assembler {
         &mut self,
         src: &Address,
         dst: WritableReg,
-        ext: V128LoadExtendKind,
+        kind: VpmovKind,
         flags: MemFlags,
     ) {
         assert!(dst.to_reg().is_float());
-
-        let op = match ext {
-            V128LoadExtendKind::E8x8S => AvxOpcode::Vpmovsxbw,
-            V128LoadExtendKind::E8x8U => AvxOpcode::Vpmovzxbw,
-            V128LoadExtendKind::E16x4S => AvxOpcode::Vpmovsxwd,
-            V128LoadExtendKind::E16x4U => AvxOpcode::Vpmovzxwd,
-            V128LoadExtendKind::E32x2S => AvxOpcode::Vpmovsxdq,
-            V128LoadExtendKind::E32x2U => AvxOpcode::Vpmovzxdq,
-        };
 
         let src = Self::to_synthetic_amode(
             src,
@@ -520,8 +579,17 @@ impl Assembler {
         );
 
         self.emit(Inst::XmmUnaryRmRVex {
-            op,
+            op: kind.into(),
             src: XmmMem::unwrap_new(RegMem::mem(src)),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Extends vector of integers in `src` and puts results in `dst`.
+    pub fn xmm_vpmov_rr(&mut self, src: Reg, dst: WritableReg, kind: VpmovKind) {
+        self.emit(Inst::XmmUnaryRmRVex {
+            op: kind.into(),
+            src: src.into(),
             dst: dst.to_reg().into(),
         });
     }
@@ -1942,6 +2010,82 @@ impl Assembler {
         Ok(())
     }
 
+    /// Converts vector of integers into vector of floating values.
+    pub fn xmm_vcvt_rr(&mut self, src: Reg, dst: WritableReg, kind: VcvtKind) {
+        let op = match kind {
+            VcvtKind::I32ToF32 => AvxOpcode::Vcvtdq2ps,
+            VcvtKind::I32ToF64 => AvxOpcode::Vcvtdq2pd,
+            VcvtKind::F64ToF32 => AvxOpcode::Vcvtpd2ps,
+            VcvtKind::F32ToF64 => AvxOpcode::Vcvtps2pd,
+        };
+
+        self.emit(Inst::XmmUnaryRmRVex {
+            op,
+            src: src.into(),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Shift vector data left by `imm`.
+    pub fn xmm_vpsll_rr(&mut self, src: Reg, dst: WritableReg, imm: u32, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => AvxOpcode::Vpslld,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::imm(imm)),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Shift vector data right by `imm`.
+    pub fn xmm_vpsrl_rr(&mut self, src: Reg, dst: WritableReg, imm: u32, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => AvxOpcode::Vpsrld,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::imm(imm)),
+            dst: dst.to_reg().into(),
+        })
+    }
+
+    /// Subtract integers in vector `src1` from integers in vector `src2`.
+    pub fn xmm_vpsub_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => AvxOpcode::Vpsubd,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
+        })
+    }
+
+    /// Add floats in vector `src1` to floats in vector `src2`.
+    pub fn xmm_vaddp_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => AvxOpcode::Vaddps,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
+        })
+    }
+
     /// Compare vector registers `lhs` and `rhs` for equality between packed
     /// integers and write the resulting vector into `dst`.
     pub fn xmm_vpcmpeq_rrr(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
@@ -2079,6 +2223,155 @@ impl Assembler {
                 VcmpKind::Le => 2,
                 VcmpKind::Ne => 4,
             },
+        });
+    }
+
+    /// Takes the lower lanes of vectors of floats in `src1` and `src2` and
+    /// interleaves them in `dst`.
+    pub fn xmm_vunpcklp_rrm(
+        &mut self,
+        src1: Reg,
+        src2: &Address,
+        dst: WritableReg,
+        size: OperandSize,
+    ) {
+        let op = match size {
+            OperandSize::S32 => AvxOpcode::Vunpcklps,
+            _ => unimplemented!(),
+        };
+
+        let address = Self::to_synthetic_amode(
+            src2,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::mem(address)),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Performs a subtraction on two vectors of floats and puts the results in
+    /// `dst`.
+    pub fn xmm_vsub_rrm(&mut self, src1: Reg, src2: &Address, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S64 => AvxOpcode::Vsubpd,
+            _ => unimplemented!(),
+        };
+
+        let address = Self::to_synthetic_amode(
+            src2,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::mem(address)),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Converts a vector of signed integers into a vector of narrower integers
+    /// using saturation to handle overflow.
+    pub fn xmm_vpackss_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpacksswb,
+            OperandSize::S16 => AvxOpcode::Vpackssdw,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Converts a vector of unsigned integers into a vector of narrower
+    /// integers using saturation to handle overflow.
+    pub fn xmm_vpackus_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpackuswb,
+            OperandSize::S16 => AvxOpcode::Vpackusdw,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Concatenates `src1` and `src2` and shifts right by `imm` and puts
+    /// result in `dst`.
+    pub fn xmm_vpalignr_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, imm: u8) {
+        self.emit(Inst::XmmRmRImmVex {
+            op: AvxOpcode::Vpalignr,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
+            imm,
+        })
+    }
+
+    /// Unpacks and interleaves the higher lanes of vectors of integers in
+    /// `src1` and `src2` and puts the results in `dst`.
+    pub fn xmm_vpunpckh_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpunpckhbw,
+            OperandSize::S16 => AvxOpcode::Vpunpckhwd,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Bitwise logical xor of vectors of floats in `src1` and `src2` and puts
+    /// the results in `dst`.
+    pub fn xmm_vxorp_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => AvxOpcode::Vxorps,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Unpacks and interleaves high order data of floats in `src1` and `src2`
+    /// and puts the results in `dst`.
+    pub fn xmm_vunpckhp_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => AvxOpcode::Vunpckhps,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
         });
     }
 
