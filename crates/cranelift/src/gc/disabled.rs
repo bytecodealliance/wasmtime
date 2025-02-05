@@ -1,7 +1,7 @@
 //! `GcCompiler` implementation when GC support is disabled.
 
 use super::GcCompiler;
-use crate::func_environ::FuncEnvironment;
+use crate::func_environ::{Extension, FuncEnvironment};
 use cranelift_codegen::ir;
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::{wasm_unsupported, TypeIndex, WasmRefType, WasmResult};
@@ -41,26 +41,7 @@ pub fn translate_struct_get(
     _struct_type_index: TypeIndex,
     _field_index: u32,
     _struct_ref: ir::Value,
-) -> WasmResult<ir::Value> {
-    disabled()
-}
-
-pub fn translate_struct_get_s(
-    _func_env: &mut FuncEnvironment<'_>,
-    _builder: &mut FunctionBuilder<'_>,
-    _struct_type_index: TypeIndex,
-    _field_index: u32,
-    _struct_ref: ir::Value,
-) -> WasmResult<ir::Value> {
-    disabled()
-}
-
-pub fn translate_struct_get_u(
-    _func_env: &mut FuncEnvironment<'_>,
-    _builder: &mut FunctionBuilder<'_>,
-    _struct_type_index: TypeIndex,
-    _field_index: u32,
-    _struct_ref: ir::Value,
+    _extension: Option<Extension>,
 ) -> WasmResult<ir::Value> {
     disabled()
 }
@@ -130,26 +111,7 @@ pub fn translate_array_get(
     _array_type_index: TypeIndex,
     _array: ir::Value,
     _index: ir::Value,
-) -> WasmResult<ir::Value> {
-    disabled()
-}
-
-pub fn translate_array_get_s(
-    _func_env: &mut FuncEnvironment<'_>,
-    _builder: &mut FunctionBuilder,
-    _array_type_index: TypeIndex,
-    _array: ir::Value,
-    _index: ir::Value,
-) -> WasmResult<ir::Value> {
-    disabled()
-}
-
-pub fn translate_array_get_u(
-    _func_env: &mut FuncEnvironment<'_>,
-    _builder: &mut FunctionBuilder,
-    _array_type_index: TypeIndex,
-    _array: ir::Value,
-    _index: ir::Value,
+    _extension: Option<Extension>,
 ) -> WasmResult<ir::Value> {
     disabled()
 }

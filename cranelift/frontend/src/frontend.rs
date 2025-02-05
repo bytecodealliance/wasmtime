@@ -357,6 +357,8 @@ impl<'a> FunctionBuilder<'a> {
     /// successor), the block will be declared filled and it will not be possible to append
     /// instructions to it.
     pub fn switch_to_block(&mut self, block: Block) {
+        log::trace!("switch to {block:?}");
+
         // First we check that the previous block has been filled.
         debug_assert!(
             self.position.is_none()
