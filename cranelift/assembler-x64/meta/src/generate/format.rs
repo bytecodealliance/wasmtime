@@ -86,21 +86,20 @@ impl dsl::Format {
             [FixedReg(dst), Imm(_)] => {
                 // TODO: don't emit REX byte here.
                 fmtln!(f, "let {dst} = {};", dst.generate_fixed_reg().unwrap());
-                fmtln!(f, "let digit = 0x{:x};", rex.digit);
+                fmtln!(f, "let digit = 0;"); // No digit for this pattern.
                 fmtln!(f, "rex.emit_two_op(buf, digit, {dst}.enc());");
             }
             [RegMem(dst), Imm(_)] => {
-                if rex.digit > 0 {
-                    fmtln!(f, "let digit = 0x{:x};", rex.digit);
-                    fmtln!(f, "match &self.{dst} {{");
-                    f.indent(|f| {
-                        fmtln!(f, "GprMem::Gpr({dst}) => rex.emit_two_op(buf, digit, {dst}.enc()),");
-                        fmtln!(f, "GprMem::Mem({dst}) => {dst}.emit_rex_prefix(rex, digit, buf),");
-                    });
-                    fmtln!(f, "}}");
-                } else {
-                    unimplemented!();
-                }
+                let digit = rex
+                    .digit
+                    .expect("REX digit must be set for operands: [RegMem, Imm]");
+                fmtln!(f, "let digit = 0x{digit:x};");
+                fmtln!(f, "match &self.{dst} {{");
+                f.indent(|f| {
+                    fmtln!(f, "GprMem::Gpr({dst}) => rex.emit_two_op(buf, digit, {dst}.enc()),");
+                    fmtln!(f, "GprMem::Mem({dst}) => {dst}.emit_rex_prefix(rex, digit, buf),");
+                });
+                fmtln!(f, "}}");
             }
             [Reg(dst), RegMem(src)] => {
                 fmtln!(f, "let {dst} = self.{dst}.enc();");
@@ -140,8 +139,10 @@ impl dsl::Format {
                 // No need to emit a ModRM byte: we know the register used.
             }
             [RegMem(dst), Imm(_)] => {
-                debug_assert!(rex.digit > 0);
-                fmtln!(f, "let digit = 0x{:x};", rex.digit);
+                let digit = rex
+                    .digit
+                    .expect("REX digit must be set for operands: [RegMem, Imm]");
+                fmtln!(f, "let digit = 0x{digit:x};");
                 fmtln!(f, "match &self.{dst} {{");
                 f.indent(|f| {
                     fmtln!(f, "GprMem::Gpr({dst}) => emit_modrm(buf, digit, {dst}.enc()),");
