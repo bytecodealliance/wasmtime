@@ -178,13 +178,7 @@ impl dsl::Format {
             [_, Imm(imm)] => {
                 f.empty_line();
                 f.comment("Emit immediate.");
-                fmtln!(f, "let bytes = {};", imm.bytes());
-                if imm.bits() == 32 {
-                    fmtln!(f, "let value = self.{imm}.value();");
-                } else {
-                    fmtln!(f, "let value = u32::from(self.{imm}.value());");
-                };
-                fmtln!(f, "emit_simm(buf, bytes, value);");
+                fmtln!(f, "self.{imm}.encode(buf);");
             }
             unknown => {
                 // Do nothing: no immediates expected.
