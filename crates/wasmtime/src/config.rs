@@ -2124,6 +2124,11 @@ impl Config {
             return target_lexicon::Triple::pulley_host();
         }
 
+        #[cfg(feature = "pulley")]
+        if self.target == Some(target_lexicon::Triple::pulley_host()) {
+            return target_lexicon::Triple::pulley_host();
+        }
+
         // And at this point the target is for sure the host.
         target_lexicon::Triple::host()
     }
