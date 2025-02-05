@@ -526,41 +526,31 @@ impl InstructionData {
     /// Return a copy of this instruction with its args swapped into a canonical
     /// order iff the instruction is commutative. This boosts GVN hit rate.
     pub fn with_sorted_args(&self) -> Self {
-        let mut cloned = self.clone(); // XXX: Do I need to clone deeper? There's a deep_clone(). Can I borrow and return a borrow and avoid so much copying? It doesn't need to live long, certainly not longer than self.
-                                       // XXX: Is there a more idiomatic, more concise way to structure this?
-        match cloned {
-            InstructionData::Binary {
-                opcode,
-                ref mut args,
-            } if args[0] > args[1] && opcode.is_commutative() => args.swap(0, 1),
+        let mut cloned = *self;
+        match &mut cloned {
+            InstructionData::Binary { opcode, args }
+                if args[0] > args[1] && opcode.is_commutative() =>
+            {
+                args.swap(0, 1)
+            }
             InstructionData::Ternary {
                 opcode: Opcode::Fma,
-                ref mut args,
+                args,
             } if args[0] > args[1] => args.swap(0, 1),
-            InstructionData::IntCompare {
-                ref mut args,
-                ref mut cond,
-                ..
-            } if args[0] > args[1] => {
+            InstructionData::IntCompare { args, cond, .. } if args[0] > args[1] => {
                 args.swap(0, 1);
                 *cond = cond.swap_args();
             }
-            InstructionData::IntCompare {
-                args, ref mut cond, ..
-            } if args[0] == args[1] => {
+            InstructionData::IntCompare { args, cond, .. } if args[0] == args[1] => {
+                // Some optimization later should eat these. Unnecessary here.
                 *cond = std::cmp::min(*cond, cond.swap_args());
             }
-            InstructionData::FloatCompare {
-                ref mut args,
-                ref mut cond,
-                ..
-            } if args[0] > args[1] => {
+            InstructionData::FloatCompare { args, cond, .. } if args[0] > args[1] => {
                 args.swap(0, 1);
                 *cond = cond.swap_args();
             }
-            InstructionData::FloatCompare {
-                args, ref mut cond, ..
-            } if args[0] == args[1] => {
+            InstructionData::FloatCompare { args, cond, .. } if args[0] == args[1] => {
+                // Do this elsewhere instead (like some ISLE rule) if it's not already done.
                 *cond = std::cmp::min(*cond, cond.swap_args());
             }
             _ => {}
