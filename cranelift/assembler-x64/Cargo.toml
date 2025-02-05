@@ -1,7 +1,7 @@
 [package]
 name = "cranelift-assembler-x64"
 description = "A Cranelift-specific x64 assembler"
-version = "0.117.0"
+version = "0.118.0"
 license = "Apache-2.0 WITH LLVM-exception"
 edition.workspace = true
 rust-version.workspace = true
@@ -13,7 +13,7 @@ arbitrary = { workspace = true, features = ["derive"], optional = true }
 arbtest = "0.3.1"
 
 [build-dependencies]
-cranelift-assembler-x64-meta = { path = "meta", version = "0.117.0" }
+cranelift-assembler-x64-meta = { path = "meta", version = "0.118.0" }
 
 [lints.clippy]
 all = "deny"
