@@ -1997,7 +1997,7 @@ impl Masm for MacroAssembler {
             V128ExtendKind::HighI8x16U | V128ExtendKind::HighI16x8U => {
                 let scratch = regs::scratch_xmm();
                 self.asm
-                    .xmm_rmi_rvex(AvxOpcode::Vpxor, scratch, scratch, writable!(scratch));
+                    .xmm_vex_rr(AvxOpcode::Vpxor, scratch, scratch, writable!(scratch));
                 self.asm
                     .xmm_vpunpckh_rrr(src, scratch, dst, kind.src_lane_size());
             }
