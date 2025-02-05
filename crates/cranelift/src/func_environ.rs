@@ -28,6 +28,12 @@ use wasmtime_environ::{
 };
 use wasmtime_environ::{FUNCREF_INIT_BIT, FUNCREF_MASK};
 
+#[derive(Debug)]
+pub(crate) enum Extension {
+    Sign,
+    Zero,
+}
+
 /// A struct with an `Option<ir::FuncRef>` member for every builtin
 /// function, to de-duplicate constructing/getting its function.
 pub(crate) struct BuiltinFunctions {
@@ -1955,28 +1961,16 @@ impl FuncEnvironment<'_> {
         struct_type_index: TypeIndex,
         field_index: u32,
         struct_ref: ir::Value,
+        extension: Option<Extension>,
     ) -> WasmResult<ir::Value> {
-        gc::translate_struct_get(self, builder, struct_type_index, field_index, struct_ref)
-    }
-
-    pub fn translate_struct_get_s(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        struct_type_index: TypeIndex,
-        field_index: u32,
-        struct_ref: ir::Value,
-    ) -> WasmResult<ir::Value> {
-        gc::translate_struct_get_s(self, builder, struct_type_index, field_index, struct_ref)
-    }
-
-    pub fn translate_struct_get_u(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        struct_type_index: TypeIndex,
-        field_index: u32,
-        struct_ref: ir::Value,
-    ) -> WasmResult<ir::Value> {
-        gc::translate_struct_get_u(self, builder, struct_type_index, field_index, struct_ref)
+        gc::translate_struct_get(
+            self,
+            builder,
+            struct_type_index,
+            field_index,
+            struct_ref,
+            extension,
+        )
     }
 
     pub fn translate_struct_set(
@@ -2181,28 +2175,9 @@ impl FuncEnvironment<'_> {
         array_type_index: TypeIndex,
         array: ir::Value,
         index: ir::Value,
+        extension: Option<Extension>,
     ) -> WasmResult<ir::Value> {
-        gc::translate_array_get(self, builder, array_type_index, array, index)
-    }
-
-    pub fn translate_array_get_s(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        array_type_index: TypeIndex,
-        array: ir::Value,
-        index: ir::Value,
-    ) -> WasmResult<ir::Value> {
-        gc::translate_array_get_s(self, builder, array_type_index, array, index)
-    }
-
-    pub fn translate_array_get_u(
-        &mut self,
-        builder: &mut FunctionBuilder,
-        array_type_index: TypeIndex,
-        array: ir::Value,
-        index: ir::Value,
-    ) -> WasmResult<ir::Value> {
-        gc::translate_array_get_u(self, builder, array_type_index, array, index)
+        gc::translate_array_get(self, builder, array_type_index, array, index, extension)
     }
 
     pub fn translate_array_set(

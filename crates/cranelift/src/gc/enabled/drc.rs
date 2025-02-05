@@ -228,6 +228,7 @@ impl DrcCompiler {
 
         // Current block: check whether the new value is non-null and
         // non-i31. If so, branch to the `inc_ref_block`.
+        log::trace!("DRC initialization barrier: check if the value is null or i31");
         let new_val_is_null_or_i31 = func_env.gc_ref_is_null_or_i31(builder, ty, new_val);
         builder.ins().brif(
             new_val_is_null_or_i31,
@@ -241,6 +242,7 @@ impl DrcCompiler {
         // and non-i31.
         builder.switch_to_block(inc_ref_block);
         builder.seal_block(inc_ref_block);
+        log::trace!("DRC initialization barrier: increment the ref count of the initial value");
         self.mutate_ref_count(func_env, builder, new_val, 1);
         builder.ins().jump(continue_block, &[]);
 
@@ -248,6 +250,9 @@ impl DrcCompiler {
         // to initialize the field.
         builder.switch_to_block(continue_block);
         builder.seal_block(continue_block);
+        log::trace!(
+            "DRC initialization barrier: finally, store into {dst:?} to initialize the field"
+        );
         unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags)?;
 
         Ok(())
@@ -417,6 +422,8 @@ impl GcCompiler for DrcCompiler {
         src: ir::Value,
         flags: ir::MemFlags,
     ) -> WasmResult<ir::Value> {
+        log::trace!("translate_read_gc_reference({ty:?}, {src:?}, {flags:?})");
+
         assert!(ty.is_vmgcref_type());
 
         let (reference_type, needs_stack_map) = func_env.reference_type(ty.heap_type);
@@ -494,7 +501,7 @@ impl GcCompiler for DrcCompiler {
         builder.insert_block_after(gc_block, no_gc_block);
         builder.insert_block_after(continue_block, gc_block);
 
-        // Load the GC reference and check for null/i31.
+        log::trace!("DRC read barrier: load the gc reference and check for null or i31");
         let gc_ref = unbarriered_load_gc_ref(builder, ty.heap_type, src, flags)?;
         let gc_ref_is_null_or_i31 = func_env.gc_ref_is_null_or_i31(builder, ty, gc_ref);
         builder.ins().brif(
@@ -512,6 +519,7 @@ impl GcCompiler for DrcCompiler {
         // bump region is full or not.
         builder.switch_to_block(non_null_gc_ref_block);
         builder.seal_block(non_null_gc_ref_block);
+        log::trace!("DRC read barrier: load bump region and check capacity");
         let (activations_table, next, end) = self.load_bump_region(func_env, builder);
         let bump_region_is_full = builder.ins().icmp(IntCC::Equal, next, end);
         builder
@@ -525,6 +533,7 @@ impl GcCompiler for DrcCompiler {
         // * and finally increment the `next` bump finger.
         builder.switch_to_block(no_gc_block);
         builder.seal_block(no_gc_block);
+        log::trace!("DRC read barrier: increment ref count and inline insert into bump region");
         self.mutate_ref_count(func_env, builder, gc_ref, 1);
         builder
             .ins()
@@ -543,6 +552,7 @@ impl GcCompiler for DrcCompiler {
         // Block for when the bump region is full and we need to do a GC.
         builder.switch_to_block(gc_block);
         builder.seal_block(gc_block);
+        log::trace!("DRC read barrier: slow path for when the bump region is full; do a gc");
         let gc_libcall = func_env.builtin_functions.gc(builder.func);
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
         builder.ins().call(gc_libcall, &[vmctx, gc_ref]);
@@ -551,6 +561,7 @@ impl GcCompiler for DrcCompiler {
         // Join point after we're done with the GC barrier.
         builder.switch_to_block(continue_block);
         builder.seal_block(continue_block);
+        log::trace!("translate_read_gc_reference(..) -> {gc_ref:?}");
         Ok(gc_ref)
     }
 
@@ -672,6 +683,7 @@ impl GcCompiler for DrcCompiler {
 
         // Load the old value and then check whether the new value is non-null
         // and non-i31.
+        log::trace!("DRC write barrier: load old ref; check if new ref is null or i31");
         let old_val = unbarriered_load_gc_ref(builder, ty.heap_type, dst, flags)?;
         let new_val_is_null_or_i31 = func_env.gc_ref_is_null_or_i31(builder, ty, new_val);
         builder.ins().brif(
@@ -685,6 +697,7 @@ impl GcCompiler for DrcCompiler {
         // Block to increment the ref count of the new value when it is non-null
         // and non-i31.
         builder.switch_to_block(inc_ref_block);
+        log::trace!("DRC write barrier: increment new ref's ref count");
         builder.seal_block(inc_ref_block);
         self.mutate_ref_count(func_env, builder, new_val, 1);
         builder.ins().jump(check_old_val_block, &[]);
@@ -694,6 +707,7 @@ impl GcCompiler for DrcCompiler {
         // decremented.
         builder.switch_to_block(check_old_val_block);
         builder.seal_block(check_old_val_block);
+        log::trace!("DRC write barrier: store new ref into field; check if old ref is null or i31");
         unbarriered_store_gc_ref(builder, ty.heap_type, dst, new_val, flags)?;
         let old_val_is_null_or_i31 = func_env.gc_ref_is_null_or_i31(builder, ty, old_val);
         builder.ins().brif(
@@ -708,6 +722,9 @@ impl GcCompiler for DrcCompiler {
         // and non-i31.
         builder.switch_to_block(dec_ref_block);
         builder.seal_block(dec_ref_block);
+        log::trace!(
+            "DRC write barrier: decrement old ref's ref count and check for zero ref count"
+        );
         let ref_count = self.load_ref_count(func_env, builder, old_val);
         let new_ref_count = builder.ins().iadd_imm(ref_count, -1);
         let old_val_needs_drop = builder.ins().icmp_imm(IntCC::Equal, new_ref_count, 0);
@@ -727,6 +744,7 @@ impl GcCompiler for DrcCompiler {
         // `new_ref_count != 0`.
         builder.switch_to_block(drop_old_val_block);
         builder.seal_block(drop_old_val_block);
+        log::trace!("DRC write barrier: drop old ref with a ref count of zero");
         let drop_gc_ref_libcall = func_env.builtin_functions.drop_gc_ref(builder.func);
         let vmctx = func_env.vmctx_val(&mut builder.cursor());
         builder.ins().call(drop_gc_ref_libcall, &[vmctx, old_val]);
@@ -736,12 +754,14 @@ impl GcCompiler for DrcCompiler {
         // `new_ref_count != 0`, as explained above.
         builder.switch_to_block(store_dec_ref_block);
         builder.seal_block(store_dec_ref_block);
+        log::trace!("DRC write barrier: store decremented ref count into old ref");
         self.store_ref_count(func_env, builder, old_val, new_ref_count);
         builder.ins().jump(continue_block, &[]);
 
         // Join point after we're done with the GC barrier.
         builder.switch_to_block(continue_block);
         builder.seal_block(continue_block);
+        log::trace!("DRC write barrier: finished");
         Ok(())
     }
 }
