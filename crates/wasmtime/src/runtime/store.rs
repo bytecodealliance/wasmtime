@@ -1888,6 +1888,13 @@ at https://bytecodealliance.org/security.
 }
 
 unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
+    #[cfg(feature = "component-model-async")]
+    fn component_async_store(
+        &mut self,
+    ) -> &mut dyn crate::runtime::component::VMComponentAsyncStore {
+        self
+    }
+
     fn store_opaque(&self) -> &StoreOpaque {
         &self.inner
     }

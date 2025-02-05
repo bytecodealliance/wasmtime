@@ -689,7 +689,10 @@ pub enum Trampoline {
     /// A `task.return` intrinsic, which returns a result to the caller of a
     /// lifted export function.  This allows the callee to continue executing
     /// after returning a result.
-    TaskReturn,
+    TaskReturn {
+        /// Tuple representing the result types this intrinsic accepts.
+        results: TypeTupleIndex,
+    },
 
     /// A `task.wait` intrinsic, which waits for at least one outstanding async
     /// task/stream/future to make progress, returning the first such event.
@@ -956,7 +959,7 @@ impl Trampoline {
             ResourceRep(i) => format!("component-resource-rep[{}]", i.as_u32()),
             ResourceDrop(i) => format!("component-resource-drop[{}]", i.as_u32()),
             TaskBackpressure { .. } => format!("task-backpressure"),
-            TaskReturn => format!("task-return"),
+            TaskReturn { .. } => format!("task-return"),
             TaskWait { .. } => format!("task-wait"),
             TaskPoll { .. } => format!("task-poll"),
             TaskYield { .. } => format!("task-yield"),

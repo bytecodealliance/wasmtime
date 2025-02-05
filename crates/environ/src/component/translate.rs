@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::mem;
 use wasmparser::component_types::{
     AliasableResourceId, ComponentCoreModuleTypeId, ComponentDefinedTypeId, ComponentEntityType,
-    ComponentFuncTypeId, ComponentInstanceTypeId,
+    ComponentFuncTypeId, ComponentInstanceTypeId, ComponentValType,
 };
 use wasmparser::types::Types;
 use wasmparser::{Chunk, ComponentImportName, Encoding, Parser, Payload, Validator};
@@ -193,6 +193,7 @@ enum LocalInitializer<'data> {
     },
     TaskReturn {
         func: ModuleInternedTypeIndex,
+        result: Option<ComponentValType>,
     },
     TaskWait {
         func: ModuleInternedTypeIndex,
@@ -632,10 +633,18 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::TaskBackpressure { func: core_type }
                         }
-                        wasmparser::CanonicalFunction::TaskReturn { .. } => {
-                            let core_type = self.core_func_signature(core_func_index)?;
+                        wasmparser::CanonicalFunction::TaskReturn { result } => {
+                            let result = result.map(|ty| match ty {
+                                wasmparser::ComponentValType::Primitive(ty) => {
+                                    ComponentValType::Primitive(ty)
+                                }
+                                wasmparser::ComponentValType::Type(ty) => {
+                                    ComponentValType::Type(types.component_defined_type_at(ty))
+                                }
+                            });
+                            let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::TaskReturn { func: core_type }
+                            LocalInitializer::TaskReturn { func, result }
                         }
                         wasmparser::CanonicalFunction::TaskWait { async_, memory } => {
                             let func = self.core_func_signature(core_func_index)?;
