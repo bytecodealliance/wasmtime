@@ -1,27 +1,10 @@
-## 30.0.0
+## 31.0.0
 
 Unreleased.
 
 ### Added
 
-* New `wasmtime-wasi-io` crate provides a `#![no_std]` wasi:io implementation,
-  factored out of `wasmtime-wasi`. Users of `wasmtime-wasi` don't have to
-  depend on this new crate.
-  [#10036](https://github.com/bytecodealliance/wasmtime/pull/10036)
-
 ### Changed
-
-* `wasmtime-wasi` split the `WasiView` trait into `IoView` and `WasiView`, and
-  `wasmtime-wasi-http` re-uses `IoView` in `WasiHttpView`. Details on porting
-  for embedders in PR.
-  [#10016](https://github.com/bytecodealliance/wasmtime/pull/10016)
-
-* `wasmtime-wasi` renamed some exported types and traits. Embedders which use 
-  `Pollable`, `InputStream`, `OutputStream`, `Subscribe`, `HostInputStream`,
-  `HostOutputStream`, `PollableFuture`, or `ClosureFuture` from that crate
-  will need to rename those imports to their new names, describe in PR.
-  [#10036](https://github.com/bytecodealliance/wasmtime/pull/10036)
-
 
 --------------------------------------------------------------------------------
 
@@ -29,6 +12,7 @@ Release notes for previous releases of Wasmtime can be found on the respective
 release branches of the Wasmtime repository.
 
 <!-- ARCHIVE_START -->
+* [30.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-30.0.0/RELEASES.md)
 * [29.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-29.0.0/RELEASES.md)
 * [28.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-28.0.0/RELEASES.md)
 * [27.0.x](https://github.com/bytecodealliance/wasmtime/blob/release-27.0.0/RELEASES.md)

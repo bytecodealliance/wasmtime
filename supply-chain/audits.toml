@@ -2175,6 +2175,12 @@ criteria = "safe-to-deploy"
 version = "0.2.5"
 notes = "I am the author of this crate."
 
+[[audits.leb128fmt]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.1.0"
+notes = "Well-scoped crate do doing LEB encoding with no `unsafe` code and does what it says on the tin."
+
 [[audits.libc]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"

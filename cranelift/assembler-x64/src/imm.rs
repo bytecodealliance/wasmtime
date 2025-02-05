@@ -21,7 +21,7 @@ macro_rules! maybe_print_hex {
 
 /// An 8-bit immediate operand.
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub struct Imm8(u8);
 
 impl Imm8 {
@@ -50,7 +50,7 @@ impl Imm8 {
 
 /// A 16-bit immediate operand.
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub struct Imm16(u16);
 
 impl Imm16 {
@@ -83,7 +83,7 @@ impl Imm16 {
 /// 32 bits. When the operand size is 64 bits, the processor sign-extends all
 /// immediates to 64 bits prior to their use" (Intel SDM Vol. 2, 2.2.1.5).
 #[derive(Clone, Debug)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub struct Imm32(u32);
 
 impl Imm32 {
@@ -113,7 +113,7 @@ impl Imm32 {
 /// A 32-bit immediate like [`Imm32`], but with slightly different
 /// pretty-printing.
 #[derive(Clone, Copy, Debug)]
-#[cfg_attr(feature = "arbitrary", derive(arbitrary::Arbitrary))]
+#[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
 pub struct Simm32(i32);
 
 impl Simm32 {

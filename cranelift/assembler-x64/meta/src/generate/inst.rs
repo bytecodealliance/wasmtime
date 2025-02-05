@@ -51,9 +51,25 @@ impl dsl::Inst {
         }
     }
 
-    // `fn <inst>(<params>) -> Inst { ... }`
-    pub fn generate_variant_constructor(&self, f: &mut Formatter) {
-        let variant_name = self.name();
+    /// `impl <inst> { ... }`
+    pub fn generate_struct_impl(&self, f: &mut Formatter) {
+        let impl_block = self.generate_impl_block_start();
+        let struct_name = self.struct_name_with_generic();
+        fmtln!(f, "{impl_block} {struct_name} {{");
+        f.indent(|f| {
+            self.generate_new_function(f);
+            f.empty_line();
+            self.generate_encode_function(f);
+            f.empty_line();
+            self.generate_visit_function(f);
+            f.empty_line();
+            self.generate_features_function(f);
+        });
+        fmtln!(f, "}}");
+    }
+
+    // `fn new(<params>) -> Self { ... }`
+    pub fn generate_new_function(&self, f: &mut Formatter) {
         let params = comma_join(
             self.format
                 .operands
@@ -69,26 +85,10 @@ impl dsl::Inst {
         );
 
         fmtln!(f, "#[must_use]");
-        fmtln!(f, "pub fn {variant_name}<R: Registers>({params}) -> Inst<R> {{");
+        fmtln!(f, "pub fn new({params}) -> Self {{");
         f.indent(|f| {
-            fmtln!(f, "Inst::{variant_name}({variant_name} {{ {args} }})",);
+            fmtln!(f, "Self {{ {args} }}",);
         });
-        fmtln!(f, "}}");
-    }
-
-    /// `impl <inst> { ... }`
-    pub fn generate_struct_impl(&self, f: &mut Formatter) {
-        let impl_block = self.generate_impl_block_start();
-        let struct_name = self.struct_name_with_generic();
-        fmtln!(f, "{impl_block} {struct_name} {{");
-
-        f.indent_push();
-        self.generate_encode_function(f);
-        f.empty_line();
-        self.generate_visit_function(f);
-        f.empty_line();
-        self.generate_features_function(f);
-        f.indent_pop();
         fmtln!(f, "}}");
     }
 
@@ -191,23 +191,35 @@ impl dsl::Inst {
         let impl_block = self.generate_impl_block_start();
         let struct_name = self.struct_name_with_generic();
         fmtln!(f, "{impl_block} std::fmt::Display for {struct_name} {{");
-        f.indent_push();
-        fmtln!(f, "fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {{");
-
-        f.indent_push();
-        for op in &self.format.operands {
-            let location = op.location;
-            let to_string = location.generate_to_string(op.extension);
-            fmtln!(f, "let {location} = {to_string};");
-        }
-
-        let inst_name = &self.mnemonic;
-        let ordered_ops = self.format.generate_att_style_operands();
-        fmtln!(f, "write!(f, \"{inst_name} {ordered_ops}\")");
-        f.indent_pop();
+        f.indent(|f| {
+            fmtln!(f, "fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {{");
+            f.indent(|f| {
+                for op in &self.format.operands {
+                    let location = op.location;
+                    let to_string = location.generate_to_string(op.extension);
+                    fmtln!(f, "let {location} = {to_string};");
+                }
+                let inst_name = &self.mnemonic;
+                let ordered_ops = self.format.generate_att_style_operands();
+                fmtln!(f, "write!(f, \"{inst_name} {ordered_ops}\")");
+            });
+            fmtln!(f, "}}");
+        });
         fmtln!(f, "}}");
+    }
 
-        f.indent_pop();
+    /// `impl From<struct> for Inst { ... }`
+    pub fn generate_from_impl(&self, f: &mut Formatter) {
+        let struct_name_r = self.struct_name_with_generic();
+        let variant_name = self.name();
+        fmtln!(f, "impl<R: Registers> From<{struct_name_r}> for Inst<R> {{");
+        f.indent(|f| {
+            fmtln!(f, "fn from(inst: {struct_name_r}) -> Self {{",);
+            f.indent(|f| {
+                fmtln!(f, "Self::{variant_name}(inst)");
+            });
+            fmtln!(f, "}}");
+        });
         fmtln!(f, "}}");
     }
 
@@ -245,7 +257,7 @@ impl dsl::Inst {
         // TODO: parameterize CraneliftRegisters?
         fmtln!(f, "fn x64_{struct_name}(&mut self, {params}) -> {ret_ty} {{",);
         f.indent(|f| {
-            fmtln!(f, "let inst = cranelift_assembler_x64::build::{struct_name}({args});");
+            fmtln!(f, "let inst = cranelift_assembler_x64::inst::{struct_name}::new({args}).into();");
             fmtln!(f, "self.lower_ctx.emit(MInst::External {{ inst }});");
             fmtln!(f, "{ret_val}");
         });

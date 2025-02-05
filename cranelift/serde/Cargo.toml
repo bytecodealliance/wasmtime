@@ -1,6 +1,6 @@
 [package]
 name = "cranelift-serde"
-version = "0.117.0"
+version = "0.118.0"
 authors = ["The Cranelift Project Developers"]
 description = "Serializer/Deserializer for Cranelift IR"
 repository = "https://github.com/bytecodealliance/wasmtime"

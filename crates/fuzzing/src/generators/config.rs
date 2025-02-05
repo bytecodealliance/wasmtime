@@ -389,6 +389,25 @@ impl Config {
             None
         };
 
+        // If malloc-based memory is going to be used, which requires these four
+        // options set to specific values (and Pulley auto-sets two of them)
+        // then be sure to cap `memory_reservation_for_growth` at a smaller
+        // value than the default. For malloc-based memory reservation beyond
+        // the end of memory isn't captured by `StoreLimiter` so we need to be
+        // sure it's small enough to not blow OOM limits while fuzzing.
+        if ((cfg.opts.signals_based_traps == Some(true) && cfg.opts.memory_guard_size == Some(0))
+            || self.wasmtime.compiler_strategy == CompilerStrategy::CraneliftPulley)
+            && cfg.opts.memory_reservation == Some(0)
+            && cfg.opts.memory_init_cow == Some(false)
+        {
+            let growth = &mut cfg.opts.memory_reservation_for_growth;
+            let max = 1 << 20;
+            *growth = match *growth {
+                Some(n) => Some(n.min(max)),
+                None => Some(max),
+            };
+        }
+
         log::debug!("creating wasmtime config with CLI options:\n{cfg}");
         let mut cfg = cfg.config(None).expect("failed to create wasmtime::Config");
 

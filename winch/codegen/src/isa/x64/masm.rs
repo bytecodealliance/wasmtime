@@ -35,7 +35,7 @@ use cranelift_codegen::{
     isa::{
         unwind::UnwindInst,
         x64::{
-            args::{Avx512Opcode, AvxOpcode, FenceKind, RegMemImm, XmmMemImm, CC},
+            args::{Avx512Opcode, AvxOpcode, FenceKind, CC},
             settings as x64_settings, AtomicRmwSeqOp,
         },
     },
@@ -1657,7 +1657,7 @@ impl Masm for MacroAssembler {
                     .xmm_vpcmpeq_rrr(writable!(lhs), lhs, rhs, kind.lane_size());
                 self.asm
                     .xmm_vpcmpeq_rrr(writable!(rhs), rhs, rhs, kind.lane_size());
-                self.asm.xmm_rmi_rvex(AvxOpcode::Vpxor, lhs, rhs, dst);
+                self.asm.xmm_vex_rr(AvxOpcode::Vpxor, lhs, rhs, dst);
             }
             VectorEqualityKind::F32x4 | VectorEqualityKind::F64x2 => {
                 self.asm
@@ -1696,7 +1696,7 @@ impl Masm for MacroAssembler {
                     .xmm_vpcmpeq_rrr(writable!(lhs), lhs, rhs, kind.lane_size());
                 self.asm
                     .xmm_vpcmpeq_rrr(writable!(rhs), rhs, rhs, kind.lane_size());
-                self.asm.xmm_rmi_rvex(AvxOpcode::Vpxor, lhs, rhs, dst);
+                self.asm.xmm_vex_rr(AvxOpcode::Vpxor, lhs, rhs, dst);
             }
             VectorCompareKind::F32x4 | VectorCompareKind::F64x2 => {
                 self.asm
@@ -1729,7 +1729,7 @@ impl Masm for MacroAssembler {
                     .xmm_vpcmpgt_rrr(writable!(lhs), lhs, rhs, kind.lane_size());
                 self.asm
                     .xmm_vpcmpeq_rrr(writable!(rhs), rhs, rhs, kind.lane_size());
-                self.asm.xmm_rmi_rvex(AvxOpcode::Vpxor, lhs, rhs, dst);
+                self.asm.xmm_vex_rr(AvxOpcode::Vpxor, lhs, rhs, dst);
             }
             VectorCompareKind::I8x16U | VectorCompareKind::I16x8U | VectorCompareKind::I32x4U => {
                 // Set the `rhs` vector to the signed minimum values and then
@@ -1774,7 +1774,7 @@ impl Masm for MacroAssembler {
                     .xmm_vpcmpeq_rrr(writable!(lhs), lhs, rhs, kind.lane_size());
                 self.asm
                     .xmm_vpcmpeq_rrr(writable!(rhs), rhs, rhs, kind.lane_size());
-                self.asm.xmm_rmi_rvex(AvxOpcode::Vpxor, lhs, rhs, dst);
+                self.asm.xmm_vex_rr(AvxOpcode::Vpxor, lhs, rhs, dst);
             }
             VectorCompareKind::F32x4 | VectorCompareKind::F64x2 => {
                 // Do a less than comparison with the operands swapped.
@@ -1808,7 +1808,7 @@ impl Masm for MacroAssembler {
                     .xmm_vpcmpgt_rrr(writable!(rhs), rhs, lhs, kind.lane_size());
                 self.asm.xmm_vpcmpeq_rrr(dst, lhs, lhs, kind.lane_size());
                 self.asm
-                    .xmm_rmi_rvex(AvxOpcode::Vpxor, dst.to_reg(), rhs, dst);
+                    .xmm_vex_rr(AvxOpcode::Vpxor, dst.to_reg(), rhs, dst);
             }
             VectorCompareKind::I8x16U | VectorCompareKind::I16x8U | VectorCompareKind::I32x4U => {
                 // Set lanes to maximum values and compare them for equality.
@@ -1837,34 +1837,34 @@ impl Masm for MacroAssembler {
         let tmp = regs::scratch_xmm();
         // First, we initialize `tmp` with all ones, by comparing it with itself.
         self.asm
-            .xmm_rmi_rvex(AvxOpcode::Vpcmpeqd, tmp, tmp, writable!(tmp));
+            .xmm_vex_rr(AvxOpcode::Vpcmpeqd, tmp, tmp, writable!(tmp));
         // then we `xor` tmp and `dst` together, yielding `!dst`.
         self.asm
-            .xmm_rmi_rvex(AvxOpcode::Vpxor, tmp, dst.to_reg(), dst);
+            .xmm_vex_rr(AvxOpcode::Vpxor, tmp, dst.to_reg(), dst);
         Ok(())
     }
 
     fn v128_and(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
         self.ensure_has_avx()?;
-        self.asm.xmm_rmi_rvex(AvxOpcode::Vpand, src1, src2, dst);
+        self.asm.xmm_vex_rr(AvxOpcode::Vpand, src1, src2, dst);
         Ok(())
     }
 
     fn v128_and_not(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
         self.ensure_has_avx()?;
-        self.asm.xmm_rmi_rvex(AvxOpcode::Vpandn, src1, src2, dst);
+        self.asm.xmm_vex_rr(AvxOpcode::Vpandn, src1, src2, dst);
         Ok(())
     }
 
     fn v128_or(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
         self.ensure_has_avx()?;
-        self.asm.xmm_rmi_rvex(AvxOpcode::Vpor, src1, src2, dst);
+        self.asm.xmm_vex_rr(AvxOpcode::Vpor, src1, src2, dst);
         Ok(())
     }
 
     fn v128_xor(&mut self, src1: Reg, src2: Reg, dst: WritableReg) -> Result<()> {
         self.ensure_has_avx()?;
-        self.asm.xmm_rmi_rvex(AvxOpcode::Vpxor, src1, src2, dst);
+        self.asm.xmm_vex_rr(AvxOpcode::Vpxor, src1, src2, dst);
         Ok(())
     }
 
@@ -2052,7 +2052,7 @@ impl Masm for MacroAssembler {
             },
         };
 
-        self.asm.xmm_rmi_rvex(op, lhs, rhs, dst);
+        self.asm.xmm_vex_rr(op, lhs, rhs, dst);
 
         Ok(())
     }
@@ -2087,7 +2087,7 @@ impl Masm for MacroAssembler {
             },
         };
 
-        self.asm.xmm_rmi_rvex(op, lhs, rhs, dst);
+        self.asm.xmm_vex_rr(op, lhs, rhs, dst);
 
         Ok(())
     }
@@ -2104,7 +2104,7 @@ impl Masm for MacroAssembler {
 
         let mul_avx = |this: &mut Self, op| {
             this.asm
-                .xmm_rmi_rvex(op, lhs.reg, rhs.reg, writable!(lhs.reg));
+                .xmm_vex_rr(op, lhs.reg, rhs.reg, writable!(lhs.reg));
         };
 
         let mul_i64x2_avx512 = |this: &mut Self| {
@@ -2143,48 +2143,36 @@ impl Masm for MacroAssembler {
                 let tmp2 = context.any_fpr(this)?;
 
                 // tmp1 = lhs_hi = (lhs >> 32)
-                this.asm.xmm_rmi_rvex(
-                    AvxOpcode::Vpsrlq,
-                    lhs.reg,
-                    XmmMemImm::unwrap_new(RegMemImm::imm(32)),
-                    writable!(tmp1),
-                );
+                this.asm
+                    .xmm_vex_ri(AvxOpcode::Vpsrlq, lhs.reg, 32, writable!(tmp1));
                 // tmp2 = lhs_hi * rhs_low = tmp1 * rhs
                 this.asm
-                    .xmm_rmi_rvex(AvxOpcode::Vpmuldq, tmp1, rhs.reg, writable!(tmp2));
+                    .xmm_vex_rr(AvxOpcode::Vpmuldq, tmp1, rhs.reg, writable!(tmp2));
 
                 // tmp1 = rhs_hi = rhs >> 32
-                this.asm.xmm_rmi_rvex(
-                    AvxOpcode::Vpsrlq,
-                    rhs.reg,
-                    XmmMemImm::unwrap_new(RegMemImm::imm(32)),
-                    writable!(tmp1),
-                );
+                this.asm
+                    .xmm_vex_ri(AvxOpcode::Vpsrlq, rhs.reg, 32, writable!(tmp1));
 
                 // tmp1 = lhs_low * rhs_high = tmp1 * lhs
                 this.asm
-                    .xmm_rmi_rvex(AvxOpcode::Vpmuludq, tmp1, lhs.reg, writable!(tmp1));
+                    .xmm_vex_rr(AvxOpcode::Vpmuludq, tmp1, lhs.reg, writable!(tmp1));
 
                 // tmp1 = ((lhs_hi * rhs_low) + (lhs_lo * rhs_hi)) = tmp1 + tmp2
                 this.asm
-                    .xmm_rmi_rvex(AvxOpcode::Vpaddq, tmp1, tmp2, writable!(tmp1));
+                    .xmm_vex_rr(AvxOpcode::Vpaddq, tmp1, tmp2, writable!(tmp1));
 
                 //tmp1 = tmp1 << 32
-                this.asm.xmm_rmi_rvex(
-                    AvxOpcode::Vpsllq,
-                    tmp1,
-                    XmmMemImm::unwrap_new(RegMemImm::imm(32)),
-                    writable!(tmp1),
-                );
+                this.asm
+                    .xmm_vex_ri(AvxOpcode::Vpsllq, tmp1, 32, writable!(tmp1));
 
                 // tmp2 = lhs_lo + rhs_lo
                 this.asm
-                    .xmm_rmi_rvex(AvxOpcode::Vpmuludq, lhs.reg, rhs.reg, writable!(tmp2));
+                    .xmm_vex_rr(AvxOpcode::Vpmuludq, lhs.reg, rhs.reg, writable!(tmp2));
 
                 // finally, with `lhs` as destination:
                 // lhs = (lhs_low * rhs_low) + ((lhs_hi * rhs_low) + (lhs_lo * rhs_hi)) = tmp1 + tmp2
                 this.asm
-                    .xmm_rmi_rvex(AvxOpcode::Vpaddq, tmp1, tmp2, writable!(lhs.reg));
+                    .xmm_vex_rr(AvxOpcode::Vpaddq, tmp1, tmp2, writable!(lhs.reg));
 
                 context.free_reg(tmp2);
 

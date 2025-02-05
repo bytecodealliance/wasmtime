@@ -2084,7 +2084,7 @@ impl OpVisitor for Interpreter<'_> {
         // Decode the `PcRelOffset` without tampering with `self.pc` as the
         // jump is relative to `self.pc`.
         let mut tmp = self.pc;
-        let rel = unwrap_uninhabited(PcRelOffset::decode(&mut tmp));
+        let Ok(rel) = PcRelOffset::decode(&mut tmp);
         let offset = isize::try_from(i32::from(rel)).unwrap();
         self.pc = unsafe { self.pc.offset(offset) };
         ControlFlow::Continue(())

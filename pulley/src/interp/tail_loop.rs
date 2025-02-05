@@ -27,7 +27,7 @@
 //!   at this time but doesn't actually run anywhere.
 
 use super::*;
-use crate::decode::{unwrap_uninhabited, ExtendedOpVisitor};
+use crate::decode::ExtendedOpVisitor;
 use crate::opcode::Opcode;
 use crate::profile::ExecutingPcRef;
 use crate::ExtendedOpcode;
@@ -90,7 +90,7 @@ fn dispatch(
     // opcode.
     let mut debug = debug(state, pc, executing_pc);
     debug.before_visit();
-    let opcode = unwrap_uninhabited(Opcode::decode(debug.bytecode()));
+    let Ok(opcode) = Opcode::decode(debug.bytecode());
     let handler = OPCODE_HANDLER_TABLE[opcode as usize];
     tail_call!(handler(debug.0.state, debug.0.pc, debug.0.executing_pc));
 }
@@ -102,7 +102,7 @@ fn run_extended(
     pc_ref: ExecutingPcRef<'_>,
 ) -> Done {
     let mut i = debug(state, pc, pc_ref);
-    let opcode = unwrap_uninhabited(ExtendedOpcode::decode(i.bytecode()));
+    let Ok(opcode) = ExtendedOpcode::decode(i.bytecode());
     let handler = EXTENDED_OPCODE_HANDLER_TABLE[opcode as usize];
     tail_call!(handler(i.0.state, i.0.pc, i.0.executing_pc));
 }
@@ -171,9 +171,7 @@ macro_rules! define_opcode_handler {
         ) -> Done {
             let mut debug = debug(state, pc, executing_pc);
             $(
-                let ($($field,)*) = unwrap_uninhabited(
-                    crate::decode::operands::$snake_name(debug.0.bytecode())
-                );
+                let Ok(($($field,)*)) = crate::decode::operands::$snake_name(debug.0.bytecode());
             )?
             let result = debug.$snake_name($($($field),*)?);
             debug.after_visit();
