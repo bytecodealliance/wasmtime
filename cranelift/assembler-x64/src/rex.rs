@@ -28,17 +28,6 @@ pub fn encode_sib(scale: u8, enc_index: u8, enc_base: u8) -> u8 {
     ((scale & 3) << 6) | ((enc_index & 7) << 3) | (enc_base & 7)
 }
 
-/// Write a suitable number of bits from an imm64 to the sink.
-#[allow(clippy::cast_possible_truncation)]
-pub fn emit_simm(sink: &mut impl CodeSink, size: u8, simm32: u32) {
-    match size {
-        8 | 4 => sink.put4(simm32),
-        2 => sink.put2(simm32 as u16),
-        1 => sink.put1(simm32 as u8),
-        _ => unreachable!(),
-    }
-}
-
 /// A small bit field to record a REX prefix specification:
 /// - bit 0 set to 1 indicates REX.W must be 0 (cleared).
 /// - bit 1 set to 1 indicates the REX prefix must always be emitted.

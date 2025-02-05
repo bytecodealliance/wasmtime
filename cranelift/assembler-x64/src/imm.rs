@@ -35,6 +35,10 @@ impl Imm8 {
         self.0
     }
 
+    pub fn encode(&self, sink: &mut impl CodeSink) {
+        sink.put1(self.0);
+    }
+
     #[must_use]
     pub fn to_string(&self, extend: Extension) -> String {
         use Extension::{None, SignExtendLong, SignExtendQuad, SignExtendWord, ZeroExtend};
@@ -62,6 +66,10 @@ impl Imm16 {
     #[must_use]
     pub fn value(&self) -> u16 {
         self.0
+    }
+
+    pub fn encode(&self, sink: &mut impl CodeSink) {
+        sink.put2(self.0);
     }
 
     #[must_use]
@@ -95,6 +103,10 @@ impl Imm32 {
     #[must_use]
     pub fn value(&self) -> u32 {
         self.0
+    }
+
+    pub fn encode(&self, sink: &mut impl CodeSink) {
+        sink.put4(self.0);
     }
 
     #[must_use]
