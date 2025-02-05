@@ -47,8 +47,8 @@ mod mem;
 mod reg;
 mod rex;
 
-#[cfg(feature = "arbitrary")]
-mod arbitrary_impls;
+#[cfg(any(test, feature = "fuzz"))]
+pub mod fuzz;
 
 /// An assembly instruction; contains all instructions known to the assembler.
 ///

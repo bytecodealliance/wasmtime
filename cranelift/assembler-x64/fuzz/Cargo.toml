@@ -10,9 +10,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = { workspace = true }
-cranelift-assembler-x64 = { path = "..", features = ['arbitrary'] }
-capstone = { workspace = true }
-arbitrary = { workspace = true, features = ['derive'] }
+cranelift-assembler-x64 = { path = "..", features = ['fuzz'] }
 
 [[bin]]
 name = "roundtrip"
