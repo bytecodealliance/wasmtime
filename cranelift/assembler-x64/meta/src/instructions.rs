@@ -1,14 +1,22 @@
 //! Defines x64 instructions using the DSL.
 
+mod add;
 mod and;
+mod or;
 mod shld;
+mod sub;
+mod xor;
 
 use crate::dsl::Inst;
 
 #[must_use]
 pub fn list() -> Vec<Inst> {
-    let mut ret = Vec::new();
-    ret.extend(and::list());
-    ret.extend(shld::list());
-    ret
+    let mut all = vec![];
+    all.extend(add::list());
+    all.extend(and::list());
+    all.extend(or::list());
+    all.extend(shld::list());
+    all.extend(sub::list());
+    all.extend(xor::list());
+    all
 }

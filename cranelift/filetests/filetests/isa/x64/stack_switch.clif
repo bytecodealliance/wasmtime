@@ -229,7 +229,7 @@ block0(v0: i64, v1: i64):
 ;   lea     0(%r9,%rdx,1), %rdx
 ;   lea     0(%r8,%rdx,1), %rdx
 ;   movq    rsp(24 + virtual offset), %r8
-;   addq    %r11, 0(%r8), %r11
+;   addq (%r8), %r11
 ;   movq    rsp(0 + virtual offset), %rdi
 ;   lea     0(%r11,%rdi,1), %r8
 ;   lea     0(%rdx,%r8,1), %rax
