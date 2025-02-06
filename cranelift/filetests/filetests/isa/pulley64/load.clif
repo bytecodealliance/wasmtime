@@ -472,12 +472,10 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   xadd64_u8 x3, x0, 10
-;   xload64le_z x0, x3, 8
+;   xload64le_z x0, x0, 18
 ;   ret
 ;
 ; Disassembled:
-; xadd64_u8 x3, x0, 10
-; xload64le_z x0, x3, 8
+; xload64le_z x0, x0, 18
 ; ret
 
