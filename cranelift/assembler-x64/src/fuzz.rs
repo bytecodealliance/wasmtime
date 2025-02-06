@@ -21,7 +21,8 @@ pub fn roundtrip(inst: &Inst<FuzzRegs>) {
     let assembled = assemble(inst);
     let expected = disassemble(&assembled);
 
-    // Check that our pretty-printed output matches the known-good output.
+    // Check that our pretty-printed output matches the known-good output. Trim
+    // off the instruction offset first.
     let expected = expected.split_once(' ').unwrap().1;
     let actual = inst.to_string();
     if expected != actual {
