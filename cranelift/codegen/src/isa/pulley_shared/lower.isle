@@ -990,7 +990,7 @@
 
 ;; Special case: wasm loads/stores that map trap use the `*_z` addressing modes
 ;; which generates a trap for load-from-null.
-(rule 1 (gen_xload addr (offset32 offset) flags ty ext)
+(rule 1 (gen_xload addr offset flags ty ext)
   (if-let true (memflags_is_wasm flags))
   (emit_addrz_xload (addrz addr offset) ty ext))
 
