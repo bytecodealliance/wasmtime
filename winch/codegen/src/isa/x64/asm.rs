@@ -2096,6 +2096,7 @@ impl Assembler {
     pub fn xmm_vpsrl_rr(&mut self, src: Reg, dst: WritableReg, imm: u32, size: OperandSize) {
         let op = match size {
             OperandSize::S32 => AvxOpcode::Vpsrld,
+            OperandSize::S64 => AvxOpcode::Vpsrlq,
             _ => unimplemented!(),
         };
 
@@ -2111,6 +2112,7 @@ impl Assembler {
     pub fn xmm_vpsub_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
         let op = match size {
             OperandSize::S32 => AvxOpcode::Vpsubd,
+            OperandSize::S64 => AvxOpcode::Vpsubq,
             _ => unimplemented!(),
         };
 
@@ -2440,6 +2442,56 @@ impl Assembler {
             src2: src1.into(),
             src3: src2.into(),
             dst: dst.map(Into::into),
+        });
+    }
+
+    /// Compute the absolute value of elements in vector `src` and put the
+    /// results in `dst`.
+    pub fn xmm_vpabs_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpabsb,
+            OperandSize::S16 => AvxOpcode::Vpabsw,
+            OperandSize::S32 => AvxOpcode::Vpabsd,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmUnaryRmRVex {
+            op,
+            src: src.into(),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Arithmetically (sign preserving) right shift on vector in `src` by
+    /// `imm` with result written to `dst`.
+    pub fn xmm_vpsra_rri(&mut self, src: Reg, dst: WritableReg, imm: u32, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => AvxOpcode::Vpsrad,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::imm(imm)),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Perform an `and` operation on vectors of floats in `src1` and `src2`
+    /// and put the results in `dst`.
+    pub fn xmm_vandp_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => AvxOpcode::Vandps,
+            OperandSize::S64 => AvxOpcode::Vandpd,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
         });
     }
 }

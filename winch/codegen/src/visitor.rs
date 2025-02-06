@@ -13,7 +13,7 @@ use crate::masm::{
     DivKind, Extend, ExtractLaneKind, FloatCmpKind, HandleOverflowKind, IntCmpKind, LoadKind,
     MacroAssembler, MemMoveDirection, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind,
     RmwOp, RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, StoreKind,
-    TruncKind, V128ConvertKind, V128ExtendKind, V128LoadExtendKind, V128NarrowKind,
+    TruncKind, V128AbsKind, V128ConvertKind, V128ExtendKind, V128LoadExtendKind, V128NarrowKind,
     VectorCompareKind, VectorEqualityKind, Zero,
 };
 
@@ -460,6 +460,12 @@ macro_rules! def_unsupported {
     (emit I16x8SubSatS $($rest:tt)*) => {};
     (emit I8x16SubSatU $($rest:tt)*) => {};
     (emit I16x8SubSatU $($rest:tt)*) => {};
+    (emit I8x16Abs $($rest:tt)*) => {};
+    (emit I16x8Abs $($rest:tt)*) => {};
+    (emit I32x4Abs $($rest:tt)*) => {};
+    (emit I64x2Abs $($rest:tt)*) => {};
+    (emit F32x4Abs $($rest:tt)*) => {};
+    (emit F64x2Abs $($rest:tt)*) => {};
     (emit I8x16Neg $($rest:tt)*) => {};
     (emit I16x8Neg $($rest:tt)*) => {};
     (emit I32x4Neg $($rest:tt)*) => {};
@@ -3922,6 +3928,48 @@ where
                 )?;
                 Ok(TypedReg::new(WasmValType::V128, dst))
             })
+    }
+
+    fn visit_i8x16_abs(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, reg| {
+            masm.v128_abs(reg, writable!(reg), V128AbsKind::I8x16)?;
+            Ok(TypedReg::new(WasmValType::V128, reg))
+        })
+    }
+
+    fn visit_i16x8_abs(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, reg| {
+            masm.v128_abs(reg, writable!(reg), V128AbsKind::I16x8)?;
+            Ok(TypedReg::new(WasmValType::V128, reg))
+        })
+    }
+
+    fn visit_i32x4_abs(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, reg| {
+            masm.v128_abs(reg, writable!(reg), V128AbsKind::I32x4)?;
+            Ok(TypedReg::new(WasmValType::V128, reg))
+        })
+    }
+
+    fn visit_i64x2_abs(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, reg| {
+            masm.v128_abs(reg, writable!(reg), V128AbsKind::I64x2)?;
+            Ok(TypedReg::new(WasmValType::V128, reg))
+        })
+    }
+
+    fn visit_f32x4_abs(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, reg| {
+            masm.v128_abs(reg, writable!(reg), V128AbsKind::F32x4)?;
+            Ok(TypedReg::new(WasmValType::V128, reg))
+        })
+    }
+
+    fn visit_f64x2_abs(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, reg| {
+            masm.v128_abs(reg, writable!(reg), V128AbsKind::F64x2)?;
+            Ok(TypedReg::new(WasmValType::V128, reg))
+        })
     }
 
     fn visit_i8x16_neg(&mut self) -> Self::Output {
