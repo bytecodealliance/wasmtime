@@ -1,22 +1,25 @@
 //! Immediate operands to instructions.
 
 #![allow(clippy::module_name_repetitions)]
-#![allow(unused_comparisons)] // Necessary to use maybe_print_hex! with `u*` values.
-#![allow(clippy::cast_possible_wrap)] // Necessary to cast to `i*` for sign extension.
 
-use crate::api::{KnownOffset, KnownOffsetTable};
+use crate::api::{CodeSink, KnownOffset, KnownOffsetTable};
 
-/// This helper function prints the hexadecimal representation of the immediate
-/// value, but only if the value is greater than or equal to 10. This is
-/// necessary to match how Capstone pretty-prints immediate values.
-macro_rules! maybe_print_hex {
+/// This helper function prints the unsigned hexadecimal representation of the
+/// immediate value: e.g., this prints `$0xfe` to represent both the signed `-2`
+/// and the unsigned `254`.
+macro_rules! hexify {
     ($n:expr) => {
-        if $n >= 0 && $n < 10 {
-            format!("${:x}", $n)
-        } else {
-            format!("$0x{:x}", $n)
-        }
+        format!("$0x{:x}", $n)
     };
+}
+
+/// Like `hexify!`, but this performs a sign extension.
+macro_rules! hexify_sign_extend {
+    ($n:expr, $from:ty => $to:ty) => {{
+        #[allow(clippy::cast_possible_wrap)]
+        let n = <$to>::from($n as $from);
+        format!("$0x{:x}", n)
+    }};
 }
 
 /// An 8-bit immediate operand.
@@ -43,11 +46,11 @@ impl Imm8 {
     pub fn to_string(&self, extend: Extension) -> String {
         use Extension::{None, SignExtendLong, SignExtendQuad, SignExtendWord, ZeroExtend};
         match extend {
-            None => maybe_print_hex!(self.0),
-            SignExtendWord => maybe_print_hex!(i16::from(self.0 as i8)),
-            SignExtendLong => maybe_print_hex!(i32::from(self.0 as i8)),
-            SignExtendQuad => maybe_print_hex!(i64::from(self.0 as i8)),
-            ZeroExtend => maybe_print_hex!(u64::from(self.0)),
+            None => hexify!(self.0),
+            SignExtendWord => hexify_sign_extend!(self.0, i8 => i16),
+            SignExtendLong => hexify_sign_extend!(self.0, i8 => i32),
+            SignExtendQuad => hexify_sign_extend!(self.0, i8 => i64),
+            ZeroExtend => hexify!(u64::from(self.0)),
         }
     }
 }
@@ -76,11 +79,11 @@ impl Imm16 {
     pub fn to_string(&self, extend: Extension) -> String {
         use Extension::{None, SignExtendLong, SignExtendQuad, SignExtendWord, ZeroExtend};
         match extend {
-            None => maybe_print_hex!(self.0),
-            SignExtendWord => maybe_print_hex!(self.0 as i16),
-            SignExtendLong => maybe_print_hex!(i32::from(self.0 as i16)),
-            SignExtendQuad => maybe_print_hex!(i64::from(self.0 as i16)),
-            ZeroExtend => maybe_print_hex!(u64::from(self.0)),
+            None => hexify!(self.0),
+            SignExtendWord => unreachable!("the 16-bit value is already 16 bits"),
+            SignExtendLong => hexify_sign_extend!(self.0, i16 => i32),
+            SignExtendQuad => hexify_sign_extend!(self.0, i16 => i64),
+            ZeroExtend => hexify!(u64::from(self.0)),
         }
     }
 }
@@ -113,11 +116,11 @@ impl Imm32 {
     pub fn to_string(&self, extend: Extension) -> String {
         use Extension::{None, SignExtendLong, SignExtendQuad, SignExtendWord, ZeroExtend};
         match extend {
-            None => maybe_print_hex!(self.0),
-            SignExtendWord => unreachable!("cannot sign extend a 32-bit value"),
-            SignExtendLong => maybe_print_hex!(self.0 as i32),
-            SignExtendQuad => maybe_print_hex!(i64::from(self.0 as i32)),
-            ZeroExtend => maybe_print_hex!(u64::from(self.0)),
+            None => hexify!(self.0),
+            SignExtendWord => unreachable!("cannot sign extend a 32-bit value to 16 bits"),
+            SignExtendLong => unreachable!("the 32-bit value is already 32 bits"),
+            SignExtendQuad => hexify_sign_extend!(self.0, i32 => i64),
+            ZeroExtend => hexify!(u64::from(self.0)),
         }
     }
 }
@@ -148,6 +151,8 @@ impl From<i32> for Simm32 {
 
 impl std::fmt::LowerHex for Simm32 {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // This rather complex implementation is necessary to match how
+        // `capstone` pretty-prints memory immediates.
         if self.0 == 0 {
             return Ok(());
         }
