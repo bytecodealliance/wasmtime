@@ -25,7 +25,7 @@ pub fn roundtrip(inst: &Inst<FuzzRegs>) {
     // off the instruction offset first.
     let expected = expected.split_once(' ').unwrap().1;
     let actual = inst.to_string();
-    if expected != actual {
+    if expected != actual && expected != replace_signed_immediates(&actual) {
         println!("> {inst}");
         println!("  debug: {inst:x?}");
         println!("  assembled: {}", pretty_print_hexadecimal(&assembled));
@@ -69,6 +69,80 @@ fn pretty_print_hexadecimal(hex: &[u8]) -> String {
         write!(&mut s, "{b:02X}").unwrap();
     }
     s
+}
+
+/// See `replace_signed_immediates`.
+macro_rules! hex_print_signed_imm {
+    ($hex:expr, $from:ty => $to:ty) => {{
+        let imm = <$from>::from_str_radix($hex, 16).unwrap() as $to;
+        let mut simm = String::new();
+        if imm < 0 {
+            simm.push_str("-");
+        }
+        let abs = match imm.checked_abs() {
+            Some(i) => i,
+            None => <$to>::MIN,
+        };
+        if imm > -10 && imm < 10 {
+            simm.push_str(&format!("{:x}", abs));
+        } else {
+            simm.push_str(&format!("0x{:x}", abs));
+        }
+        simm
+    }};
+}
+
+/// Replace signed immediates in the disassembly with their unsigned hexadecimal
+/// equivalent. This is only necessary to match `capstone`'s complex
+/// pretty-printing rules; e.g. `capsone` will:
+/// - omit the `0x` prefix when printing `0x0` as `0`.
+/// - omit the `0x` prefix when print small values (less than 10)
+/// - print negative values as `-0x...` (signed hex) instead of `0xff...`
+///   (normal hex)
+fn replace_signed_immediates(dis: &str) -> std::borrow::Cow<str> {
+    match dis.find("$") {
+        None => dis.into(),
+        Some(idx) => {
+            let (prefix, rest) = dis.split_at(idx + 1); // Skip the '$'.
+            let (_, rest) = chomp("-", rest); // Skip the '-' if it's there.
+            let (_, rest) = chomp("0x", rest); // Skip the '0x' if it's there.
+            let n = rest.chars().take_while(char::is_ascii_hexdigit).count();
+            let (hex, rest) = rest.split_at(n); // Split at next non-hex character.
+            let simm = match hex.len() {
+                1 | 2 => hex_print_signed_imm!(hex, u8 => i8),
+                4 => hex_print_signed_imm!(hex, u16 => i16),
+                8 => hex_print_signed_imm!(hex, u32 => i32),
+                16 => hex_print_signed_imm!(hex, u64 => i64),
+                _ => panic!("unexpected length for hex: {hex}"),
+            };
+            format!("{prefix}{simm}{rest}").into()
+        }
+    }
+}
+
+// See `replace_signed_immediates`.
+fn chomp<'a>(pat: &str, s: &'a str) -> (&'a str, &'a str) {
+    if s.starts_with(pat) {
+        s.split_at(pat.len())
+    } else {
+        ("", s)
+    }
+}
+
+#[test]
+fn replace() {
+    assert_eq!(
+        replace_signed_immediates("andl $0xffffff9a, %r11d"),
+        "andl $-0x66, %r11d"
+    );
+    assert_eq!(
+        replace_signed_immediates("xorq $0xffffffffffffffbc, 0x7f139ecc(%r9)"),
+        "xorq $-0x44, 0x7f139ecc(%r9)"
+    );
+    assert_eq!(
+        replace_signed_immediates("subl $0x3ca77a19, -0x1a030f40(%r14)"),
+        "subl $0x3ca77a19, -0x1a030f40(%r14)"
+    );
 }
 
 /// Fuzz-specific registers.
