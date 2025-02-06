@@ -361,11 +361,16 @@
 
 ;; Helper used in `wasm_g32` above to extract `(iadd addr N)` where `N` is a
 ;; constant. If there is no constant then the constant 0 is returned instead.
+;;
+;; Note that this also requires `addr` itself to be an `iadd` internally to
+;; represent the host address plus the guest offset. If `addr` isn't internally
+;; an `iadd` then the `N` here is instead probably the static address in the
+;; guest.
 (decl pure host_offset (Value) HostOffset)
 (type HostOffset (enum (All (a Value) (b i32))))
 (rule 0 (host_offset val) (HostOffset.All val 0))
-(rule 1 (host_offset (iadd val (i32_from_iconst n))) (HostOffset.All val n))
-(rule 2 (host_offset (iadd (i32_from_iconst n) val)) (HostOffset.All val n))
+(rule 1 (host_offset (iadd val @ (iadd _ _) (i32_from_iconst n))) (HostOffset.All val n))
+(rule 2 (host_offset (iadd (i32_from_iconst n) val @ (iadd _ _))) (HostOffset.All val n))
 
 ;; Helper to test whether the first argument `oob` contains a condition for
 ;; matching whether second argument `addr` is out-of-bounds. Searches for a
@@ -388,14 +393,22 @@
 ;; a `uextend` from a 32-bit value.
 (rule 0 (wasm_oob_select oob (iadd base wasm_addr_ext @ (value_type $I64)))
   (if-let (OobCond.All bound n) (wasm_oob_cond wasm_addr_ext oob))
-  (if-let (uextend wasm_addr @ (value_type $I32)) wasm_addr_ext)
+  (if-let wasm_addr (wasm32_addr_for_host64 wasm_addr_ext))
   (if-let (PointerWidth.PointerWidth64) (pointer_width))
   (OobSelect.All base bound wasm_addr n))
 (rule 1 (wasm_oob_select oob (iadd wasm_addr_ext @ (value_type $I64) base))
   (if-let (OobCond.All bound n) (wasm_oob_cond wasm_addr_ext oob))
-  (if-let (uextend wasm_addr @ (value_type $I32)) wasm_addr_ext)
+  (if-let wasm_addr (wasm32_addr_for_host64 wasm_addr_ext))
   (if-let (PointerWidth.PointerWidth64) (pointer_width))
   (OobSelect.All base bound wasm_addr n))
+
+;; Helper to extract a 32-bit `Value` from a 64-bit input. The returned value,
+;; if one is returned, can losslessly represent the original value when zero
+;; extended from 32-bits. That means that this only matches `(uextend ...)` or
+;; an `iconst` which already fits in 32 bits.
+(decl pure partial wasm32_addr_for_host64 (Value) Value)
+(rule (wasm32_addr_for_host64 (uextend addr @ (value_type $I32))) addr)
+(rule (wasm32_addr_for_host64 val @ (u32_from_iconst _)) val)
 
 ;; Helper to search for the first argument, `wasm_addr`, within the oob
 ;; condition second argument, `oob`. It should appear as an integer comparison

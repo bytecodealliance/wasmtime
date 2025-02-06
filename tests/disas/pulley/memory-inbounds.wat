@@ -48,15 +48,10 @@
 ;;
 ;; wasm[0]::function[4]::offset_just_bad:
 ;;       push_frame
-;;       xload64le_o32 x10, x0, 88
-;;       xsub64_u8 x10, x10, 4
-;;       xzero x11
-;;       xload64le_o32 x12, x0, 80
-;;       xadd64_u32 x12, x12, 65533
-;;       xconst32 x8, 65533
-;;       xult64 x10, x10, x8
-;;       xselect64 x12, x10, x11, x12
-;;       xload32le_z x0, x12, 0
+;;       xload64le_o32 x5, x0, 88
+;;       xconst32 x6, 65533
+;;       xload64le_o32 x7, x0, 80
+;;       xload32le_g32 x0, x7, x5, x6, 0
 ;;       pop_frame
 ;;       ret
 ;;
@@ -83,15 +78,10 @@
 ;;
 ;; wasm[0]::function[7]::maybe_inbounds:
 ;;       push_frame
-;;       xload64le_o32 x10, x0, 88
-;;       xsub64_u8 x10, x10, 4
-;;       xzero x11
-;;       xload64le_o32 x12, x0, 80
-;;       xadd64_u32 x12, x12, 131068
-;;       xconst32 x8, 131068
-;;       xult64 x10, x10, x8
-;;       xselect64 x12, x10, x11, x12
-;;       xload32le_z x0, x12, 0
+;;       xload64le_o32 x5, x0, 88
+;;       xconst32 x6, 131068
+;;       xload64le_o32 x7, x0, 80
+;;       xload32le_g32 x0, x7, x5, x6, 0
 ;;       pop_frame
 ;;       ret
 ;;
@@ -111,15 +101,10 @@
 ;;
 ;; wasm[0]::function[9]::never_inbounds:
 ;;       push_frame
-;;       xload64le_o32 x10, x0, 88
-;;       xsub64_u8 x10, x10, 4
-;;       xzero x11
-;;       xload64le_o32 x12, x0, 80
-;;       xadd64_u32 x12, x12, 131069
-;;       xconst32 x8, 131069
-;;       xult64 x10, x10, x8
-;;       xselect64 x12, x10, x11, x12
-;;       xload32le_z x0, x12, 0
+;;       xload64le_o32 x5, x0, 88
+;;       xconst32 x6, 131069
+;;       xload64le_o32 x7, x0, 80
+;;       xload32le_g32 x0, x7, x5, x6, 0
 ;;       pop_frame
 ;;       ret
 ;;
