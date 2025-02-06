@@ -10,6 +10,13 @@ pub(crate) enum Address {
     Offset { base: Reg, offset: u32 },
     /// Address to identify a constant.
     Const(Constant),
+    /// Address at `(base + index * 2^shift) + simm32`
+    ImmRegRegShift {
+        simm32: i32,
+        base: Reg,
+        index: Reg,
+        shift: u8,
+    },
 }
 
 impl Address {

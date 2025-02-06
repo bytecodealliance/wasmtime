@@ -1817,4 +1817,19 @@ pub(crate) trait MacroAssembler {
         context: &mut CodeGenContext<Emission>,
         lane_width: OperandSize,
     ) -> Result<()>;
+
+    /// Vectorized negate of the content of `op`, with lanes of size `size`.
+    fn v128_neg(&mut self, op: WritableReg, size: OperandSize) -> Result<()>;
+
+    /// Perform the shift operation specified by `kind`, by the shift amount specified by the 32-bit
+    /// integer at the top the the stack, on the 128-bit vector specified by the second value
+    /// from the top of the stack, interpreted as packed integers of size `lane_width`.
+    ///
+    /// The shift amount is taken modulo `lane_width`.
+    fn v128_shift(
+        &mut self,
+        context: &mut CodeGenContext<Emission>,
+        lane_width: OperandSize,
+        kind: ShiftKind,
+    ) -> Result<()>;
 }

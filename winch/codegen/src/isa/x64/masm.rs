@@ -44,6 +44,38 @@ use cranelift_codegen::{
 use wasmtime_cranelift::TRAP_UNREACHABLE;
 use wasmtime_environ::{PtrSize, WasmValType};
 
+// Taken from `cranelift/codegen/src/isa/x64/lower/isle.rs`
+// Since x64 doesn't have 8x16 shifts and we must use a 16x8 shift instead, we
+// need to fix up the bits that migrate from one half of the lane to the
+// other. Each 16-byte mask is indexed by the shift amount: e.g. if we shift
+// right by 0 (no movement), we want to retain all the bits so we mask with
+// `0xff`; if we shift right by 1, we want to retain all bits except the MSB so
+// we mask with `0x7f`; etc.
+
+#[rustfmt::skip] // Preserve 16 bytes (i.e. one mask) per row.
+const I8X16_ISHL_MASKS: [u8; 128] = [
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe,
+    0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc, 0xfc,
+    0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8, 0xf8,
+    0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0, 0xf0,
+    0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0, 0xe0,
+    0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0, 0xc0,
+    0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+];
+
+#[rustfmt::skip] // Preserve 16 bytes (i.e. one mask) per row.
+const I8X16_USHR_MASKS: [u8; 128] = [
+    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+    0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f, 0x7f,
+    0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f, 0x3f,
+    0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f, 0x1f,
+    0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f, 0x0f,
+    0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07, 0x07,
+    0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03, 0x03,
+    0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+];
+
 /// x64 MacroAssembler.
 pub(crate) struct MacroAssembler {
     /// Stack pointer offset.
@@ -2196,6 +2228,202 @@ impl Masm for MacroAssembler {
         context.stack.push(lhs.into());
         context.free_reg(rhs);
 
+        Ok(())
+    }
+
+    fn v128_neg(&mut self, op: WritableReg, size: OperandSize) -> Result<()> {
+        let tmp = regs::scratch_xmm();
+        self.v128_xor(tmp, tmp, writable!(tmp))?;
+        self.v128_sub(tmp, op.to_reg(), op, size, HandleOverflowKind::None)?;
+        Ok(())
+    }
+
+    fn v128_shift(
+        &mut self,
+        context: &mut CodeGenContext<Emission>,
+        lane_width: OperandSize,
+        kind: ShiftKind,
+    ) -> Result<()> {
+        self.ensure_has_avx()?;
+        let shift_amount = context.pop_to_reg(self, None)?.reg;
+        let operand = context.pop_to_reg(self, None)?.reg;
+
+        let tmp_xmm = regs::scratch_xmm();
+        let tmp = regs::scratch();
+        let amount_mask = lane_width.num_bits() - 1;
+        self.and(
+            writable!(shift_amount),
+            shift_amount,
+            RegImm::i32(amount_mask as i32),
+            OperandSize::S32,
+        )?;
+
+        let shl_normal = |this: &mut Self, op: AvxOpcode| {
+            this.asm
+                .avx_gpr_to_xmm(shift_amount, writable!(tmp_xmm), OperandSize::S32);
+            this.asm
+                .xmm_vex_rr(op, operand, tmp_xmm, writable!(operand));
+        };
+
+        let shift_i8x16 = |this: &mut Self, masks: &'static [u8], op: AvxOpcode| {
+            // The case for i8x16 is a little bit trickier because x64 doesn't provide a 8bit
+            // shift instruction. Instead, we shift as 16bits, and then mask the bits in the
+            // 8bits lane, for example (with 2 8bits lanes):
+            // - Before shifting:
+            // 01001101 11101110
+            // - shifting by 2 left:
+            // 00110111 10111000
+            //       ^^_ these bits come from the previous byte, and need to be masked.
+            // - The mask:
+            // 11111100 11111111
+            // - After masking:
+            // 00110100 10111000
+            //
+            // The mask is loaded from a well known memory, depending on the shift amount.
+
+            this.asm
+                .avx_gpr_to_xmm(shift_amount, writable!(tmp_xmm), OperandSize::S32);
+
+            // perform 16 bit shift
+            this.asm
+                .xmm_vex_rr(op, operand, tmp_xmm, writable!(operand));
+
+            // get a handle to the masks array constant.
+            let masks_addr = this.asm.add_constant(masks);
+
+            // Load the masks array effective address into the tmp register.
+            this.asm.lea(&masks_addr, writable!(tmp), OperandSize::S64);
+
+            // Compute the offset of the mask that we need to use. This is shift_amount * 16 ==
+            // shift_amount << 4.
+            this.asm
+                .shift_ir(4, writable!(shift_amount), ShiftKind::Shl, OperandSize::S32);
+
+            // Load the mask to tmp_xmm.
+            this.asm.xmm_vmovdqu_mr(
+                &Address::ImmRegRegShift {
+                    simm32: 0,
+                    base: tmp,
+                    index: shift_amount,
+                    shift: 0,
+                },
+                writable!(tmp_xmm),
+                MemFlags::trusted(),
+            );
+
+            // Mask unwanted bits from operand.
+            this.asm
+                .xmm_vex_rr(AvxOpcode::Vpand, tmp_xmm, operand, writable!(operand));
+        };
+
+        let i64x2_shr_s = |this: &mut Self, context: &mut CodeGenContext<Emission>| -> Result<()> {
+            const SIGN_MASK: u128 = 0x8000000000000000_8000000000000000;
+
+            // AVX doesn't have an instruction for i64x2 signed right shift. Instead we use the
+            // following formula (from hacker's delight 2-7), where x is the value and n the shift
+            // amount, for each lane:
+            // t = (1 << 63) >> n; ((x >> n) ^ t) - t
+
+            // we need an extra scratch register
+            let tmp_xmm2 = context.any_fpr(this)?;
+
+            this.asm
+                .avx_gpr_to_xmm(shift_amount, writable!(tmp_xmm), OperandSize::S32);
+
+            let cst = this.asm.add_constant(&SIGN_MASK.to_le_bytes());
+
+            this.asm
+                .xmm_vmovdqu_mr(&cst, writable!(tmp_xmm2), MemFlags::trusted());
+            this.asm
+                .xmm_vex_rr(AvxOpcode::Vpsrlq, tmp_xmm2, tmp_xmm, writable!(tmp_xmm2));
+            this.asm
+                .xmm_vex_rr(AvxOpcode::Vpsrlq, operand, tmp_xmm, writable!(operand));
+            this.asm
+                .xmm_vex_rr(AvxOpcode::Vpxor, operand, tmp_xmm2, writable!(operand));
+            this.asm
+                .xmm_vex_rr(AvxOpcode::Vpsubq, operand, tmp_xmm2, writable!(operand));
+
+            context.free_reg(tmp_xmm2);
+
+            Ok(())
+        };
+
+        let i8x16_shr_s = |this: &mut Self, context: &mut CodeGenContext<Emission>| -> Result<()> {
+            // Since the x86 instruction set does not have an 8x16 shift instruction and the
+            // approach used for `ishl` and `ushr` cannot be easily used (the masks do not
+            // preserve the sign), we use a different approach here: separate the low and
+            // high lanes, shift them separately, and merge them into the final result.
+            //
+            // Visually, this looks like the following, where `src.i8x16 = [s0, s1, ...,
+            // s15]:
+            //
+            //   lo.i16x8 = [(s0, s0), (s1, s1), ..., (s7, s7)]
+            //   shifted_lo.i16x8 = shift each lane of `low`
+            //   hi.i16x8 = [(s8, s8), (s9, s9), ..., (s15, s15)]
+            //   shifted_hi.i16x8 = shift each lane of `high`
+            //   result = [s0'', s1'', ..., s15'']
+
+            // In order for `packsswb` later to only use the high byte of each
+            // 16x8 lane, we shift right an extra 8 bits, relying on `psraw` to
+            // fill in the upper bits appropriately.
+            this.asm
+                .add_ir(8, writable!(shift_amount), OperandSize::S32);
+            this.asm
+                .avx_gpr_to_xmm(shift_amount, writable!(tmp_xmm), OperandSize::S32);
+
+            let tmp_lo = context.any_fpr(this)?;
+            let tmp_hi = context.any_fpr(this)?;
+
+            // Extract lower and upper bytes.
+            this.asm
+                .xmm_vex_rr(AvxOpcode::Vpunpcklbw, operand, operand, writable!(tmp_lo));
+            this.asm
+                .xmm_vex_rr(AvxOpcode::Vpunpckhbw, operand, operand, writable!(tmp_hi));
+
+            // Perform 16bit right shift of upper and lower bytes.
+            this.asm
+                .xmm_vex_rr(AvxOpcode::Vpsraw, tmp_lo, tmp_xmm, writable!(tmp_lo));
+            this.asm
+                .xmm_vex_rr(AvxOpcode::Vpsraw, tmp_hi, tmp_xmm, writable!(tmp_hi));
+
+            // Merge lower and upper bytes back.
+            this.asm
+                .xmm_vex_rr(AvxOpcode::Vpacksswb, tmp_lo, tmp_hi, writable!(operand));
+
+            context.free_reg(tmp_lo);
+            context.free_reg(tmp_hi);
+
+            Ok(())
+        };
+
+        match (lane_width, kind) {
+            // shl
+            (OperandSize::S8, ShiftKind::Shl) => {
+                shift_i8x16(self, &I8X16_ISHL_MASKS, AvxOpcode::Vpsllw)
+            }
+            (OperandSize::S16, ShiftKind::Shl) => shl_normal(self, AvxOpcode::Vpsllw),
+            (OperandSize::S32, ShiftKind::Shl) => shl_normal(self, AvxOpcode::Vpslld),
+            (OperandSize::S64, ShiftKind::Shl) => shl_normal(self, AvxOpcode::Vpsllq),
+            // shr_u
+            (OperandSize::S8, ShiftKind::ShrU) => {
+                shift_i8x16(self, &I8X16_USHR_MASKS, AvxOpcode::Vpsrlw)
+            }
+            (OperandSize::S16, ShiftKind::ShrU) => shl_normal(self, AvxOpcode::Vpsrlw),
+            (OperandSize::S32, ShiftKind::ShrU) => shl_normal(self, AvxOpcode::Vpsrld),
+            (OperandSize::S64, ShiftKind::ShrU) => shl_normal(self, AvxOpcode::Vpsrlq),
+            // shr_s
+            (OperandSize::S8, ShiftKind::ShrS) => i8x16_shr_s(self, context)?,
+            (OperandSize::S16, ShiftKind::ShrS) => shl_normal(self, AvxOpcode::Vpsraw),
+            (OperandSize::S32, ShiftKind::ShrS) => shl_normal(self, AvxOpcode::Vpsrad),
+            (OperandSize::S64, ShiftKind::ShrS) => i64x2_shr_s(self, context)?,
+
+            _ => bail!(CodeGenError::invalid_operand_combination()),
+        }
+
+        context.free_reg(shift_amount);
+        context
+            .stack
+            .push(TypedReg::new(WasmValType::V128, operand).into());
         Ok(())
     }
 }
