@@ -922,17 +922,11 @@ pub fn translate_ref_test(
 
     // Current block: check if the reference is null and branch appropriately.
     let is_null = func_env.translate_ref_is_null(builder.cursor(), val)?;
-    let is_null_result = if ref_ty.nullable {
-        is_null
-    } else {
-        let zero = builder.ins().iconst(ir::types::I32, 0);
-        let one = builder.ins().iconst(ir::types::I32, 1);
-        builder.ins().select(is_null, zero, one)
-    };
+    let result_when_is_null = builder.ins().iconst(ir::types::I32, ref_ty.nullable as i64);
     builder.ins().brif(
         is_null,
         continue_block,
-        &[is_null_result],
+        &[result_when_is_null],
         non_null_block,
         &[],
     );
@@ -949,17 +943,17 @@ pub fn translate_ref_test(
         let is_i31 = builder.ins().band(val, i31_mask);
         // If it is an `i31`, then create the result value based on whether we
         // want `i31`s to pass the test or not.
-        let is_i31_result = if ref_ty.heap_type == WasmHeapType::Eq {
-            is_i31
-        } else {
-            let zero = builder.ins().iconst(ir::types::I32, 0);
-            let one = builder.ins().iconst(ir::types::I32, 1);
-            builder.ins().select(is_i31, zero, one)
-        };
+        let result_when_is_i31 = builder.ins().iconst(
+            ir::types::I32,
+            matches!(
+                ref_ty.heap_type,
+                WasmHeapType::Any | WasmHeapType::Eq | WasmHeapType::I31
+            ) as i64,
+        );
         builder.ins().brif(
             is_i31,
             continue_block,
-            &[is_i31_result],
+            &[result_when_is_i31],
             non_null_non_i31_block,
             &[],
         );
