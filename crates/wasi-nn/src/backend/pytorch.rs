@@ -37,6 +37,7 @@ impl BackendInner for PytorchBackend {
 
         let graph = PytorchGraph {
             module: Arc::new(Mutex::new(compiled_module)),
+            target,
         };
         let box_: Box<dyn BackendGraph> = Box::new(graph);
         Ok(box_.into())
@@ -60,6 +61,7 @@ impl BackendFromDir for PytorchBackend {
         )?;
         let graph = PytorchGraph {
             module: Arc::new(Mutex::new(compiled_module)),
+            target,
         };
         let box_: Box<dyn BackendGraph> = Box::new(graph);
         Ok(box_.into())
@@ -68,6 +70,7 @@ impl BackendFromDir for PytorchBackend {
 
 struct PytorchGraph {
     module: Arc<Mutex<tch::CModule>>,
+    target: ExecutionTarget,
 }
 
 unsafe impl Send for PytorchGraph {}
@@ -80,7 +83,9 @@ impl BackendGraph for PytorchGraph {
             inputs: Vec::new(),
             output: TchTensor::new(),
             id_type: None,
+            target: self.target,
         });
+
         Ok(box_.into())
     }
 }
@@ -91,6 +96,7 @@ struct PytorchExecutionContext {
     inputs: Vec<Option<tch::Tensor>>,
     output: tch::Tensor,
     id_type: Option<Id>,
+    target: ExecutionTarget,
 }
 
 /// `set_input` supports multiple positional parameters with `Id::Index`, and a single named parameter with `Id::Name`.
@@ -104,7 +110,8 @@ impl BackendExecutionContext for PytorchExecutionContext {
             .iter()
             .map(|&dim| dim as i64)
             .collect::<Vec<_>>();
-        let tensor = TchTensor::from_data_size(&input_tensor.data, &dimensions, kind);
+        let tensor = TchTensor::from_data_size(&input_tensor.data, &dimensions, kind)
+            .to_device(map_execution_target_to_string(self.target));
         match id {
             Id::Index(i) => {
                 // Check if id_type is already set and if it matches the current id type
@@ -181,9 +188,7 @@ impl BackendExecutionContext for PytorchExecutionContext {
 fn map_execution_target_to_string(target: ExecutionTarget) -> Device {
     match target {
         ExecutionTarget::Cpu => Device::Cpu,
-        ExecutionTarget::Gpu => {
-            unimplemented!("the pytorch backend does not yet support GPU execution targets")
-        }
+        ExecutionTarget::Gpu => Device::Cuda(0),
         ExecutionTarget::Tpu => {
             unimplemented!("the pytorch backend does not yet support TPU execution targets")
         }
