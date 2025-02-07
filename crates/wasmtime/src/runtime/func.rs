@@ -289,8 +289,7 @@ pub(crate) struct FuncData {
     ty: Option<Box<FuncType>>,
 }
 
-/// The three ways that a function can be created and referenced from within a
-/// store.
+/// The ways that a function can be created and referenced from within a store.
 enum FuncKind {
     /// A function already owned by the store via some other means. This is
     /// used, for example, when creating a `Func` from an instance's exported
