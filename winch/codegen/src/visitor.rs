@@ -503,6 +503,18 @@ macro_rules! def_unsupported {
     (emit I8x16MaxS $($rest:tt)*) => {};
     (emit I16x8MaxS $($rest:tt)*) => {};
     (emit I32x4MaxS $($rest:tt)*) => {};
+    (emit I16x8ExtMulLowI8x16S $($rest:tt)*) => {};
+    (emit I32x4ExtMulLowI16x8S $($rest:tt)*) => {};
+    (emit I64x2ExtMulLowI32x4S $($rest:tt)*) => {};
+    (emit I16x8ExtMulHighI8x16S $($rest:tt)*) => {};
+    (emit I32x4ExtMulHighI16x8S $($rest:tt)*) => {};
+    (emit I64x2ExtMulHighI32x4S $($rest:tt)*) => {};
+    (emit I16x8ExtMulLowI8x16U $($rest:tt)*) => {};
+    (emit I32x4ExtMulLowI16x8U $($rest:tt)*) => {};
+    (emit I64x2ExtMulLowI32x4U $($rest:tt)*) => {};
+    (emit I16x8ExtMulHighI8x16U $($rest:tt)*) => {};
+    (emit I32x4ExtMulHighI16x8U $($rest:tt)*) => {};
+    (emit I64x2ExtMulHighI32x4U $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -4230,6 +4242,75 @@ where
                 masm.v128_max(src, dst, writable!(dst), size, MaxKind::Unsigned)?;
                 Ok(TypedReg::v128(dst))
             })
+    }
+
+    fn visit_i16x8_extmul_low_i8x16_s(&mut self) -> Self::Output {
+        self.masm
+            .v128_extmul(&mut self.context, OperandSize::S16, ExtMulKind::LowSigned)
+    }
+
+    fn visit_i32x4_extmul_low_i16x8_s(&mut self) -> Self::Output {
+        self.masm
+            .v128_extmul(&mut self.context, OperandSize::S32, ExtMulKind::LowSigned)
+    }
+
+    fn visit_i64x2_extmul_low_i32x4_s(&mut self) -> Self::Output {
+        self.masm
+            .v128_extmul(&mut self.context, OperandSize::S64, ExtMulKind::LowSigned)
+    }
+
+    fn visit_i16x8_extmul_low_i8x16_u(&mut self) -> Self::Output {
+        self.masm
+            .v128_extmul(&mut self.context, OperandSize::S16, ExtMulKind::LowUnsigned)
+    }
+
+    fn visit_i32x4_extmul_low_i16x8_u(&mut self) -> Self::Output {
+        self.masm
+            .v128_extmul(&mut self.context, OperandSize::S32, ExtMulKind::LowUnsigned)
+    }
+
+    fn visit_i64x2_extmul_low_i32x4_u(&mut self) -> Self::Output {
+        self.masm
+            .v128_extmul(&mut self.context, OperandSize::S64, ExtMulKind::LowUnsigned)
+    }
+
+    fn visit_i16x8_extmul_high_i8x16_u(&mut self) -> Self::Output {
+        self.masm.v128_extmul(
+            &mut self.context,
+            OperandSize::S16,
+            ExtMulKind::HighUnsigned,
+        )
+    }
+
+    fn visit_i32x4_extmul_high_i16x8_u(&mut self) -> Self::Output {
+        self.masm.v128_extmul(
+            &mut self.context,
+            OperandSize::S32,
+            ExtMulKind::HighUnsigned,
+        )
+    }
+
+    fn visit_i64x2_extmul_high_i32x4_u(&mut self) -> Self::Output {
+        self.masm.v128_extmul(
+            &mut self.context,
+            OperandSize::S64,
+            ExtMulKind::HighUnsigned,
+        )
+    }
+
+    fn visit_i16x8_extmul_high_i8x16_s(&mut self) -> Self::Output {
+        self.masm
+            .v128_extmul(&mut self.context, OperandSize::S16, ExtMulKind::HighSigned)
+    }
+
+    fn visit_i32x4_extmul_high_i16x8_s(&mut self) -> Self::Output {
+        self.masm
+            .v128_extmul(&mut self.context, OperandSize::S32, ExtMulKind::HighSigned)
+    }
+
+    fn visit_i64x2_extmul_high_i32x4_s(&mut self) -> Self::Output {
+        self.masm
+            .v128_extmul(&mut self.context, OperandSize::S64, ExtMulKind::HighSigned)
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);

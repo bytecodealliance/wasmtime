@@ -54,6 +54,18 @@ pub(crate) enum MaxKind {
     Unsigned,
 }
 
+/// Kind of extend-multiply
+pub(crate) enum ExtMulKind {
+    // Sign-extend higher-half of each lane.
+    HighSigned,
+    // Sign-extend lower-half of each lane.
+    LowSigned,
+    // Extend higher-half of each lane.
+    HighUnsigned,
+    // Extend lower-half of each lane.
+    LowUnsigned,
+}
+
 #[derive(Eq, PartialEq)]
 pub(crate) enum MulWideKind {
     Signed,
@@ -584,6 +596,7 @@ impl V128NarrowKind {
 }
 
 /// Kinds of vector extending operations supported by WebAssembly.
+#[derive(Debug, Copy, Clone)]
 pub(crate) enum V128ExtendKind {
     /// Low half of i8x16 sign extended.
     LowI8x16S,
@@ -1921,5 +1934,18 @@ pub(crate) trait MacroAssembler {
         dst: WritableReg,
         lane_width: OperandSize,
         kind: MaxKind,
+    ) -> Result<()>;
+
+    /// Perform lane-wise integer extended multiplication producing twice wider result than the inputs.
+    /// This is equivalent to a an extend followed by a multiply.
+    ///
+    /// The extention to be performed is infered from the `lane_width` and the `kind` of extmul,
+    /// e.g, if `lane_width` is `S16`, and `kind` is `LowSigned`, then we sign-extend the lower
+    /// 8bits of the 16bits lanes.
+    fn v128_extmul(
+        &mut self,
+        context: &mut CodeGenContext<Emission>,
+        lane_width: OperandSize,
+        kind: ExtMulKind,
     ) -> Result<()>;
 }

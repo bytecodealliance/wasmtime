@@ -2550,6 +2550,8 @@ impl Masm for MacroAssembler {
         lane_width: OperandSize,
         kind: MinKind,
     ) -> Result<()> {
+        self.ensure_has_avx()?;
+
         let op = match (lane_width, kind) {
             (OperandSize::S8, MinKind::Signed) => AvxOpcode::Vpminsb,
             (OperandSize::S16, MinKind::Signed) => AvxOpcode::Vpminsw,
@@ -2575,6 +2577,8 @@ impl Masm for MacroAssembler {
         lane_width: OperandSize,
         kind: MaxKind,
     ) -> Result<()> {
+        self.ensure_has_avx()?;
+
         let op = match (lane_width, kind) {
             (OperandSize::S8, MaxKind::Signed) => AvxOpcode::Vpmaxsb,
             (OperandSize::S16, MaxKind::Signed) => AvxOpcode::Vpmaxsw,
@@ -2590,6 +2594,51 @@ impl Masm for MacroAssembler {
         self.asm.xmm_vex_rr(op, src1, src2, dst);
 
         Ok(())
+    }
+
+    fn v128_extmul(
+        &mut self,
+        context: &mut CodeGenContext<Emission>,
+        lane_width: OperandSize,
+        kind: ExtMulKind,
+    ) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        // The implementation for extmul is not optimized; for simplicity's sake, we simply perform
+        // an extention followed by a multiplication using already implemented primitives.
+
+        let src1 = context.pop_to_reg(self, None)?;
+        let src2 = context.pop_to_reg(self, None)?;
+
+        let ext_kind = match (lane_width, kind) {
+            (OperandSize::S16, ExtMulKind::HighSigned) => V128ExtendKind::HighI8x16S,
+            (OperandSize::S32, ExtMulKind::HighSigned) => V128ExtendKind::HighI16x8S,
+            (OperandSize::S64, ExtMulKind::HighSigned) => V128ExtendKind::HighI32x4S,
+            (_, ExtMulKind::HighSigned) => bail!(CodeGenError::unexpected_operand_size()),
+
+            (OperandSize::S16, ExtMulKind::LowSigned) => V128ExtendKind::LowI8x16S,
+            (OperandSize::S32, ExtMulKind::LowSigned) => V128ExtendKind::LowI16x8S,
+            (OperandSize::S64, ExtMulKind::LowSigned) => V128ExtendKind::LowI32x4S,
+            (_, ExtMulKind::LowSigned) => bail!(CodeGenError::unexpected_operand_size()),
+
+            (OperandSize::S16, ExtMulKind::HighUnsigned) => V128ExtendKind::HighI8x16U,
+            (OperandSize::S32, ExtMulKind::HighUnsigned) => V128ExtendKind::HighI16x8U,
+            (OperandSize::S64, ExtMulKind::HighUnsigned) => V128ExtendKind::HighI32x4U,
+            (_, ExtMulKind::HighUnsigned) => bail!(CodeGenError::unexpected_operand_size()),
+
+            (OperandSize::S16, ExtMulKind::LowUnsigned) => V128ExtendKind::LowI8x16U,
+            (OperandSize::S32, ExtMulKind::LowUnsigned) => V128ExtendKind::LowI16x8U,
+            (OperandSize::S64, ExtMulKind::LowUnsigned) => V128ExtendKind::LowI32x4U,
+            (_, ExtMulKind::LowUnsigned) => bail!(CodeGenError::unexpected_operand_size()),
+        };
+
+        self.v128_extend(src1.reg, writable!(src1.reg), ext_kind)?;
+        self.v128_extend(src2.reg, writable!(src2.reg), ext_kind)?;
+
+        context.stack.push(src2.into());
+        context.stack.push(src1.into());
+
+        self.v128_mul(context, lane_width)
     }
 }
 
