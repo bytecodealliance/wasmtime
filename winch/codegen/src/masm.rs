@@ -54,7 +54,7 @@ pub(crate) enum MaxKind {
     Unsigned,
 }
 
-/// Kind of extend-multiply
+/// Kind of extend-multiply.
 pub(crate) enum ExtMulKind {
     // Sign-extend higher-half of each lane.
     HighSigned,
@@ -64,6 +64,14 @@ pub(crate) enum ExtMulKind {
     HighUnsigned,
     // Extend lower-half of each lane.
     LowUnsigned,
+}
+
+/// Kind of pairwise extend-add.
+pub(crate) enum ExtAddKind {
+    /// Signed pairwise extend add.
+    Signed,
+    /// Unsigned pairwise extend add.
+    Unsigned,
 }
 
 #[derive(Eq, PartialEq)]
@@ -1936,10 +1944,10 @@ pub(crate) trait MacroAssembler {
         kind: MaxKind,
     ) -> Result<()>;
 
-    /// Perform lane-wise integer extended multiplication producing twice wider result than the inputs.
-    /// This is equivalent to a an extend followed by a multiply.
+    /// Perform the lane-wise integer extended multiplication producing twice wider result than the
+    /// inputs. This is equivalent to an extend followed by a multiply.
     ///
-    /// The extention to be performed is infered from the `lane_width` and the `kind` of extmul,
+    /// The extension to be performed is inferred from the `lane_width` and the `kind` of extmul,
     /// e.g, if `lane_width` is `S16`, and `kind` is `LowSigned`, then we sign-extend the lower
     /// 8bits of the 16bits lanes.
     fn v128_extmul(
@@ -1947,5 +1955,15 @@ pub(crate) trait MacroAssembler {
         context: &mut CodeGenContext<Emission>,
         lane_width: OperandSize,
         kind: ExtMulKind,
+    ) -> Result<()>;
+
+    /// Perform the lane-wise integer extended pairwise addition producing extended results (twice
+    /// wider results than the inputs).
+    fn v128_extadd_pairwise(
+        &mut self,
+        src: Reg,
+        dst: WritableReg,
+        lane_width: OperandSize,
+        kind: ExtAddKind,
     ) -> Result<()>;
 }

@@ -10,11 +10,12 @@ use crate::codegen::{
     FnCall,
 };
 use crate::masm::{
-    DivKind, Extend, ExtractLaneKind, FloatCmpKind, HandleOverflowKind, IntCmpKind, LoadKind,
-    MacroAssembler, MaxKind, MemMoveDirection, MinKind, MulWideKind, OperandSize, RegImm, RemKind,
-    ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind,
-    StoreKind, TruncKind, V128AbsKind, V128ConvertKind, V128ExtendKind, V128LoadExtendKind,
-    V128NarrowKind, VectorCompareKind, VectorEqualityKind, Zero,
+    DivKind, ExtAddKind, ExtMulKind, Extend, ExtractLaneKind, FloatCmpKind, HandleOverflowKind,
+    IntCmpKind, LoadKind, MacroAssembler, MaxKind, MemMoveDirection, MinKind, MulWideKind,
+    OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind,
+    Signed, SplatKind, SplatLoadKind, StoreKind, TruncKind, V128AbsKind, V128ConvertKind,
+    V128ExtendKind, V128LoadExtendKind, V128NarrowKind, VectorCompareKind, VectorEqualityKind,
+    Zero,
 };
 
 use crate::reg::{writable, Reg};
@@ -515,6 +516,10 @@ macro_rules! def_unsupported {
     (emit I16x8ExtMulHighI8x16U $($rest:tt)*) => {};
     (emit I32x4ExtMulHighI16x8U $($rest:tt)*) => {};
     (emit I64x2ExtMulHighI32x4U $($rest:tt)*) => {};
+    (emit I16x8ExtAddPairwiseI8x16U $($rest:tt)*) => {};
+    (emit I16x8ExtAddPairwiseI8x16S $($rest:tt)*) => {};
+    (emit I32x4ExtAddPairwiseI16x8U $($rest:tt)*) => {};
+    (emit I32x4ExtAddPairwiseI16x8S $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -4097,6 +4102,7 @@ where
         self.context
             .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
                 masm.v128_q15mulr_sat_s(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::v128(dst))
             })
     }
 
@@ -4311,6 +4317,34 @@ where
     fn visit_i64x2_extmul_high_i32x4_s(&mut self) -> Self::Output {
         self.masm
             .v128_extmul(&mut self.context, OperandSize::S64, ExtMulKind::HighSigned)
+    }
+
+    fn visit_i16x8_extadd_pairwise_i8x16_s(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, op| {
+            masm.v128_extadd_pairwise(op, writable!(op), OperandSize::S16, ExtAddKind::Signed)?;
+            Ok(TypedReg::v128(op))
+        })
+    }
+
+    fn visit_i16x8_extadd_pairwise_i8x16_u(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, op| {
+            masm.v128_extadd_pairwise(op, writable!(op), OperandSize::S16, ExtAddKind::Unsigned)?;
+            Ok(TypedReg::v128(op))
+        })
+    }
+
+    fn visit_i32x4_extadd_pairwise_i16x8_s(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, op| {
+            masm.v128_extadd_pairwise(op, writable!(op), OperandSize::S32, ExtAddKind::Signed)?;
+            Ok(TypedReg::v128(op))
+        })
+    }
+
+    fn visit_i32x4_extadd_pairwise_i16x8_u(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, op| {
+            masm.v128_extadd_pairwise(op, writable!(op), OperandSize::S32, ExtAddKind::Unsigned)?;
+            Ok(TypedReg::v128(op))
+        })
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);
