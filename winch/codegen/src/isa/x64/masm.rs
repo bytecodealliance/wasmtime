@@ -8,10 +8,10 @@ use anyhow::{anyhow, bail, Result};
 
 use crate::masm::{
     DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, HandleOverflowKind, Imm as I,
-    IntCmpKind, LaneSelector, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm,
-    RemKind, ReplaceLaneKind, RmwOp, RoundingMode, ShiftKind, SplatKind, StoreKind, TrapCode,
-    TruncKind, V128AbsKind, V128ConvertKind, V128ExtendKind, V128NarrowKind, VectorCompareKind,
-    VectorEqualityKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
+    IntCmpKind, LaneSelector, LoadKind, MacroAssembler as Masm, MaxKind, MinKind, MulWideKind,
+    OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, ShiftKind, SplatKind,
+    StoreKind, TrapCode, TruncKind, V128AbsKind, V128ConvertKind, V128ExtendKind, V128NarrowKind,
+    VectorCompareKind, VectorEqualityKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
@@ -2540,6 +2540,55 @@ impl Masm for MacroAssembler {
             OperandSize::S32 | OperandSize::S64 => self.asm.xmm_vmovskp_rr(src, dst, size, size),
             _ => unimplemented!(),
         }
+    }
+
+    fn v128_min(
+        &mut self,
+        src1: Reg,
+        src2: Reg,
+        dst: WritableReg,
+        lane_width: OperandSize,
+        kind: MinKind,
+    ) -> Result<()> {
+        let op = match (lane_width, kind) {
+            (OperandSize::S8, MinKind::Signed) => AvxOpcode::Vpminsb,
+            (OperandSize::S16, MinKind::Signed) => AvxOpcode::Vpminsw,
+            (OperandSize::S32, MinKind::Signed) => AvxOpcode::Vpminsd,
+            (_, MinKind::Signed) => bail!(CodeGenError::unexpected_operand_size()),
+
+            (OperandSize::S8, MinKind::Unsigned) => AvxOpcode::Vpminub,
+            (OperandSize::S16, MinKind::Unsigned) => AvxOpcode::Vpminuw,
+            (OperandSize::S32, MinKind::Unsigned) => AvxOpcode::Vpminud,
+            (_, MinKind::Unsigned) => bail!(CodeGenError::unexpected_operand_size()),
+        };
+
+        self.asm.xmm_vex_rr(op, src1, src2, dst);
+
+        Ok(())
+    }
+
+    fn v128_max(
+        &mut self,
+        src1: Reg,
+        src2: Reg,
+        dst: WritableReg,
+        lane_width: OperandSize,
+        kind: MaxKind,
+    ) -> Result<()> {
+        let op = match (lane_width, kind) {
+            (OperandSize::S8, MaxKind::Signed) => AvxOpcode::Vpmaxsb,
+            (OperandSize::S16, MaxKind::Signed) => AvxOpcode::Vpmaxsw,
+            (OperandSize::S32, MaxKind::Signed) => AvxOpcode::Vpmaxsd,
+            (_, MaxKind::Signed) => bail!(CodeGenError::unexpected_operand_size()),
+
+            (OperandSize::S8, MaxKind::Unsigned) => AvxOpcode::Vpmaxub,
+            (OperandSize::S16, MaxKind::Unsigned) => AvxOpcode::Vpmaxuw,
+            (OperandSize::S32, MaxKind::Unsigned) => AvxOpcode::Vpmaxud,
+            (_, MaxKind::Unsigned) => bail!(CodeGenError::unexpected_operand_size()),
+        };
+
+        self.asm.xmm_vex_rr(op, src1, src2, dst);
+
         Ok(())
     }
 }

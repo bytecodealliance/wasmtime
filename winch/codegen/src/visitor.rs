@@ -11,10 +11,10 @@ use crate::codegen::{
 };
 use crate::masm::{
     DivKind, Extend, ExtractLaneKind, FloatCmpKind, HandleOverflowKind, IntCmpKind, LoadKind,
-    MacroAssembler, MemMoveDirection, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind,
-    RmwOp, RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind, StoreKind,
-    TruncKind, V128AbsKind, V128ConvertKind, V128ExtendKind, V128LoadExtendKind, V128NarrowKind,
-    VectorCompareKind, VectorEqualityKind, Zero,
+    MacroAssembler, MaxKind, MemMoveDirection, MinKind, MulWideKind, OperandSize, RegImm, RemKind,
+    ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, Signed, SplatKind, SplatLoadKind,
+    StoreKind, TruncKind, V128AbsKind, V128ConvertKind, V128ExtendKind, V128LoadExtendKind,
+    V128NarrowKind, VectorCompareKind, VectorEqualityKind, Zero,
 };
 
 use crate::reg::{writable, Reg};
@@ -491,6 +491,18 @@ macro_rules! def_unsupported {
     (emit I16x8Bitmask $($rest:tt)*) => {};
     (emit I32x4Bitmask $($rest:tt)*) => {};
     (emit I64x2Bitmask $($rest:tt)*) => {};
+    (emit I8x16MinU $($rest:tt)*) => {};
+    (emit I16x8MinU $($rest:tt)*) => {};
+    (emit I32x4MinU $($rest:tt)*) => {};
+    (emit I8x16MinS $($rest:tt)*) => {};
+    (emit I16x8MinS $($rest:tt)*) => {};
+    (emit I32x4MinS $($rest:tt)*) => {};
+    (emit I8x16MaxU $($rest:tt)*) => {};
+    (emit I16x8MaxU $($rest:tt)*) => {};
+    (emit I32x4MaxU $($rest:tt)*) => {};
+    (emit I8x16MaxS $($rest:tt)*) => {};
+    (emit I16x8MaxS $($rest:tt)*) => {};
+    (emit I32x4MaxS $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -4073,6 +4085,13 @@ where
         self.context
             .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
                 masm.v128_q15mulr_sat_s(dst, src, writable!(dst), size)?;
+            })
+    }
+
+    fn visit_i8x16_min_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, size| {
+                masm.v128_min(src, dst, writable!(dst), size, MinKind::Signed)?;
                 Ok(TypedReg::v128(dst))
             })
     }
@@ -4123,6 +4142,94 @@ where
         self.context.v128_bitmask_op(self.masm, |masm, src, dst| {
             masm.v128_bitmask(src, writable!(dst), OperandSize::S64)
         })
+    }
+
+    fn visit_i16x8_min_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
+                masm.v128_min(src, dst, writable!(dst), size, MinKind::Signed)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i32x4_min_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, size| {
+                masm.v128_min(src, dst, writable!(dst), size, MinKind::Signed)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i8x16_min_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, size| {
+                masm.v128_min(src, dst, writable!(dst), size, MinKind::Unsigned)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i16x8_min_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
+                masm.v128_min(src, dst, writable!(dst), size, MinKind::Unsigned)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i32x4_min_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, size| {
+                masm.v128_min(src, dst, writable!(dst), size, MinKind::Unsigned)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i8x16_max_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, size| {
+                masm.v128_max(src, dst, writable!(dst), size, MaxKind::Signed)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i16x8_max_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
+                masm.v128_max(src, dst, writable!(dst), size, MaxKind::Signed)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i32x4_max_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, size| {
+                masm.v128_max(src, dst, writable!(dst), size, MaxKind::Signed)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i8x16_max_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S8, |masm, dst, src, size| {
+                masm.v128_max(src, dst, writable!(dst), size, MaxKind::Signed)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i16x8_max_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
+                masm.v128_max(src, dst, writable!(dst), size, MaxKind::Unsigned)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_i32x4_max_u(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, size| {
+                masm.v128_max(src, dst, writable!(dst), size, MaxKind::Unsigned)?;
+                Ok(TypedReg::v128(dst))
+            })
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);

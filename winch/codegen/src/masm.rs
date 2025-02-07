@@ -38,6 +38,22 @@ impl RemKind {
     }
 }
 
+/// Min operation kind.
+pub(crate) enum MinKind {
+    /// Signed min.
+    Signed,
+    /// Unsigned min.
+    Unsigned,
+}
+
+/// Max operation kind.
+pub(crate) enum MaxKind {
+    /// Signed max.
+    Signed,
+    /// Unsigned max.
+    Unsigned,
+}
+
 #[derive(Eq, PartialEq)]
 pub(crate) enum MulWideKind {
     Signed,
@@ -1881,4 +1897,29 @@ pub(crate) trait MacroAssembler {
     /// Extracts the high bit of each lane in `src` and produces a scalar mask
     /// with all bits concatenated in `dst`.
     fn v128_bitmask(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
+    /// Perform a lane-wise `min` operation between `src1` and `src2`, interpreted as packed
+    /// integers of size `lane_width`.
+    ///
+    /// `kind` specifies whether the operand are interpreted as signed or unsigned integers.
+    fn v128_min(
+        &mut self,
+        src1: Reg,
+        src2: Reg,
+        dst: WritableReg,
+        lane_width: OperandSize,
+        kind: MinKind,
+    ) -> Result<()>;
+
+    /// Perform a lane-wise `max` operation between `src1` and `src2`, interpreted as packed
+    /// integers of size `lane_width`.
+    ///
+    /// `kind` specifies whether the operand are interpreted as signed or unsigned integers.
+    fn v128_max(
+        &mut self,
+        src1: Reg,
+        src2: Reg,
+        dst: WritableReg,
+        lane_width: OperandSize,
+        kind: MaxKind,
+    ) -> Result<()>;
 }
