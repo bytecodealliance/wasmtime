@@ -145,7 +145,7 @@ unsafe impl VmSafe for VMLowering {}
 /// component instance in Wasmtime. While the static size of this type is 0 the
 /// actual runtime size is variable depending on the shape of the component that
 /// this corresponds to. This structure always trails a `ComponentInstance`
-/// allocation and the allocation/liftetime of this allocation is managed by
+/// allocation and the allocation/lifetime of this allocation is managed by
 /// `ComponentInstance`.
 #[repr(C)]
 // Set an appropriate alignment for this structure where the most-aligned value
