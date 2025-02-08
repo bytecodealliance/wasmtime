@@ -1,0 +1,16 @@
+test verifier
+target pulley32
+
+; This is the correct pointer address size.
+function %i8_load_i32(i32) -> i8 {
+block0(v0: i32):
+    v1 = load.i8 v0
+    return v1
+}
+
+; This should fail, since i64 is used as an address for a load on a 32 bit platform.
+function %i8_load_i32(i64) -> i8 {
+block0(v0: i64):
+    v1 = load.i8 v0 ; error: invalid pointer width (got 64, expected 32) encountered v0
+    return v1
+}

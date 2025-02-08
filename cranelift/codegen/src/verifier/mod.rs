@@ -664,11 +664,13 @@ impl<'a> Verifier<'a> {
                 self.verify_bitcast(inst, flags, arg, errors)?;
             }
             Load {
-                opcode: Opcode::Load,
+                opcode,
                 arg,
                 ..
             } => {
-                self.verify_is_address(inst, arg, errors)?;
+                if opcode.can_load() {
+                    self.verify_is_address(inst, arg, errors)?;
+                }
             }
             UnaryConst {
                 opcode: opcode @ (Opcode::Vconst | Opcode::F128const),
@@ -699,7 +701,6 @@ impl<'a> Verifier<'a> {
             | IntCompare { .. }
             | IntCompareImm { .. }
             | FloatCompare { .. }
-            | Load { .. }
             | Store { .. }
             | Trap { .. }
             | CondTrap { .. }
