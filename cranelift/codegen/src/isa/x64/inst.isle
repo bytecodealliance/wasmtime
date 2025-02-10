@@ -2951,7 +2951,7 @@
 (rule 10 (x64_and $I8  src1 (is_imm8 src2))   (x64_andb_mi src1 src2))
 (rule 9 (x64_and $I16 src1 (is_imm16 src2))   (x64_andw_mi src1 src2))
 (rule 8 (x64_and $I32 src1 (is_imm32 src2))   (x64_andl_mi src1 src2))
-(rule 7 (x64_and $I64 src1 (is_imm32 src2))   (x64_andq_mi_sxlq src1 src2))
+(rule 7 (x64_and $I64 src1 (is_imm32 src2))   (x64_andq_mi_sxl src1 src2))
 (rule 6 (x64_and $I8  src1 (is_gpr src2))     (x64_andl_rm src1 src2))
 (rule 5 (x64_and $I8  src1 (is_mem src2))     (x64_andb_rm src1 src2))
 (rule 4 (x64_and $I16 src1 (is_gpr src2))     (x64_andl_rm src1 src2))
