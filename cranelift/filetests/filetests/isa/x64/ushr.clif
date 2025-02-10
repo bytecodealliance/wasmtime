@@ -400,7 +400,7 @@ block0(v0: i8, v1: i128):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
-;   andq $7, %rcx
+;   andq $0x7, %rcx
 ;   movq    %rdi, %rax
 ;   shrb    %cl, %al, %al
 ;   movq    %rbp, %rsp
@@ -787,7 +787,7 @@ block0(v0: i8, v1: i64):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
-;   andq $7, %rcx
+;   andq $0x7, %rcx
 ;   movq    %rdi, %rax
 ;   shrb    %cl, %al, %al
 ;   movq    %rbp, %rsp
@@ -818,7 +818,7 @@ block0(v0: i8, v1: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
-;   andq $7, %rcx
+;   andq $0x7, %rcx
 ;   movq    %rdi, %rax
 ;   shrb    %cl, %al, %al
 ;   movq    %rbp, %rsp
@@ -849,7 +849,7 @@ block0(v0: i8, v1: i16):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
-;   andq $7, %rcx
+;   andq $0x7, %rcx
 ;   movq    %rdi, %rax
 ;   shrb    %cl, %al, %al
 ;   movq    %rbp, %rsp
@@ -880,7 +880,7 @@ block0(v0: i8, v1: i8):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rsi, %rcx
-;   andq $7, %rcx
+;   andq $0x7, %rcx
 ;   movq    %rdi, %rax
 ;   shrb    %cl, %al, %al
 ;   movq    %rbp, %rsp

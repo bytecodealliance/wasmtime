@@ -47,8 +47,11 @@ type AssemblerReadGprMem = asm::GprMem<Gpr, Gpr>;
 type AssemblerReadWriteGprMem = asm::GprMem<PairedGpr, Gpr>;
 type AssemblerInst = asm::Inst<CraneliftRegisters>;
 type AssemblerImm8 = asm::Imm8;
+type AssemblerSimm8 = asm::Simm8;
 type AssemblerImm16 = asm::Imm16;
+type AssemblerSimm16 = asm::Simm16;
 type AssemblerImm32 = asm::Imm32;
+type AssemblerSimm32 = asm::Simm32;
 
 pub struct SinkableLoad {
     inst: Inst,
@@ -962,20 +965,18 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     fn is_imm8(&mut self, src: &GprMemImm) -> Option<AssemblerImm8> {
         match src.clone().to_reg_mem_imm() {
             RegMemImm::Imm { simm32 } => {
-                // TODO fix down-convert logic: if an assembly instruction can
-                // only fit 8 bits, we check if down-converting the 32 bits from
-                // CLIF we have here will fit. Some assembler instructions will
-                // sign-extend this immediate, however, and we don't have a way
-                // to distinguish this yet. For a CLIF value `-2i8`, this
-                // conversion will both pass on the appropriate bytes and the
-                // emitted instruction will sign-extend them as expected. But,
-                // for a CLIF value `254u8` (the same bit pattern), we could
-                // pass on the right bits but the sign-extension will break
-                // Cranelift's semantics. For the time being, we conservatively
-                // only allow down-converting to `i8` values, meaning some valid
-                // constants will be rejected.
+                let imm = u8::try_from(simm32).ok()?;
+                Some(AssemblerImm8::new(imm))
+            }
+            _ => None,
+        }
+    }
+
+    fn is_simm8(&mut self, src: &GprMemImm) -> Option<AssemblerSimm8> {
+        match src.clone().to_reg_mem_imm() {
+            RegMemImm::Imm { simm32 } => {
                 let imm = i8::try_from(simm32).ok()?;
-                Some(AssemblerImm8::new(imm as u8))
+                Some(AssemblerSimm8::new(imm))
             }
             _ => None,
         }
@@ -984,16 +985,33 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     fn is_imm16(&mut self, src: &GprMemImm) -> Option<AssemblerImm16> {
         match src.clone().to_reg_mem_imm() {
             RegMemImm::Imm { simm32 } => {
-                // TODO fix down-convert logic: see notes in `is_imm8`.
-                let imm = i16::try_from(simm32).ok()?;
-                Some(AssemblerImm16::new(imm as u16))
+                let imm = u16::try_from(simm32).ok()?;
+                Some(AssemblerImm16::new(imm))
             }
             _ => None,
         }
     }
+
+    fn is_simm16(&mut self, src: &GprMemImm) -> Option<AssemblerSimm16> {
+        match src.clone().to_reg_mem_imm() {
+            RegMemImm::Imm { simm32 } => {
+                let imm = i16::try_from(simm32).ok()?;
+                Some(AssemblerSimm16::new(imm))
+            }
+            _ => None,
+        }
+    }
+
     fn is_imm32(&mut self, src: &GprMemImm) -> Option<AssemblerImm32> {
         match src.clone().to_reg_mem_imm() {
             RegMemImm::Imm { simm32 } => Some(AssemblerImm32::new(simm32)),
+            _ => None,
+        }
+    }
+
+    fn is_simm32(&mut self, src: &GprMemImm) -> Option<AssemblerSimm32> {
+        match src.clone().to_reg_mem_imm() {
+            RegMemImm::Imm { simm32 } => Some(AssemblerSimm32::new(simm32 as i32)),
             _ => None,
         }
     }
