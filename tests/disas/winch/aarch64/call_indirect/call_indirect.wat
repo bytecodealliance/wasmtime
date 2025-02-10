@@ -80,7 +80,7 @@
 ;;       mov     x16, #0
 ;;       mov     w1, w16
 ;;       ldur    w2, [x28]
-;;       bl      #0x38c
+;;       bl      #0x3a8
 ;;   cc: add     x28, x28, #4
 ;;       ldur    x9, [x28, #0x14]
 ;;       b       #0xdc
@@ -146,7 +146,7 @@
 ;;       mov     x16, #0
 ;;       mov     w1, w16
 ;;       ldur    w2, [x28, #0xc]
-;;       bl      #0x38c
+;;       bl      #0x3a8
 ;;  1d4: add     x28, x28, #0xc
 ;;       add     x28, x28, #4
 ;;       ldur    x9, [x28, #0x18]
