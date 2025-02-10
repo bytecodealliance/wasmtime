@@ -1864,4 +1864,12 @@ pub(crate) trait MacroAssembler {
         lane_width: OperandSize,
         kind: ShiftKind,
     ) -> Result<()>;
+
+    /// Sets `dst` to 1 if all lanes in `src` are non-zero, sets `dst` to 0
+    /// otherwise.
+    fn v128_all_true(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
+
+    /// Extracts the high bit of each lane in `src` and produces a scalar mask
+    /// with all bits concatenated in `dst`.
+    fn v128_bitmask(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
 }

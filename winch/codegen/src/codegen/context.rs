@@ -839,6 +839,36 @@ impl<'a> CodeGenContext<'a, Emission> {
         Ok(())
     }
 
+    /// Prepares to emit a vector `all_true` operation.
+    pub fn v128_all_true_op<F, M>(&mut self, masm: &mut M, emit: F) -> Result<()>
+    where
+        F: FnOnce(&mut M, Reg, Reg) -> Result<()>,
+        M: MacroAssembler,
+    {
+        let src = self.pop_to_reg(masm, None)?;
+        let dst = self.any_gpr(masm)?;
+        emit(masm, src.reg, dst)?;
+        self.free_reg(src);
+        self.stack.push(TypedReg::i32(dst).into());
+
+        Ok(())
+    }
+
+    /// Prepares to emit a vector `bitmask` operation.
+    pub fn v128_bitmask_op<F, M>(&mut self, masm: &mut M, emit: F) -> Result<()>
+    where
+        F: FnOnce(&mut M, Reg, Reg) -> Result<()>,
+        M: MacroAssembler,
+    {
+        let src = self.pop_to_reg(masm, None)?;
+        let dst = self.any_gpr(masm)?;
+        emit(masm, src.reg, dst)?;
+        self.free_reg(src);
+        self.stack.push(TypedReg::i32(dst).into());
+
+        Ok(())
+    }
+
     /// Pops a register from the stack and then immediately frees it. Used to
     /// discard values from the last operation, for example.
     pub fn pop_and_free<M: MacroAssembler>(&mut self, masm: &mut M) -> Result<()> {

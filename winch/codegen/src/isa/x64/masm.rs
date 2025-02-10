@@ -2476,6 +2476,45 @@ impl Masm for MacroAssembler {
             .push(TypedReg::new(WasmValType::V128, operand).into());
         Ok(())
     }
+
+    fn v128_all_true(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        let scratch = regs::scratch_xmm();
+        // Create a mask of all 0s.
+        self.asm
+            .xmm_vex_rr(AvxOpcode::Vpxor, scratch, scratch, writable!(scratch));
+        // Sets lane in `dst` to not zero if `src` lane was zero, and lane in
+        // `dst` to zero if `src` lane was not zero.
+        self.asm.xmm_vpcmpeq_rrr(writable!(src), src, scratch, size);
+        // Sets ZF if all values are zero (i.e., if all original values were not zero).
+        self.asm.xmm_vptest(src, src);
+        // Set byte if ZF=1.
+        self.asm.setcc(IntCmpKind::Eq, dst);
+        Ok(())
+    }
+
+    fn v128_bitmask(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        match size {
+            OperandSize::S8 => self.asm.xmm_vpmovmsk_rr(src, dst, size, OperandSize::S32),
+            OperandSize::S16 => {
+                // Signed conversion of 16-bit integers to 8-bit integers.
+                self.asm
+                    .xmm_vpackss_rrr(src, src, writable!(src), OperandSize::S8);
+                // Creates a mask from each byte in `src`.
+                self.asm
+                    .xmm_vpmovmsk_rr(src, dst, OperandSize::S8, OperandSize::S32);
+                // Removes 8 bits added as a result of the `vpackss` step.
+                self.asm
+                    .shift_ir(0x8, dst, ShiftKind::ShrU, OperandSize::S32);
+            }
+            OperandSize::S32 | OperandSize::S64 => self.asm.xmm_vmovskp_rr(src, dst, size, size),
+            _ => unimplemented!(),
+        }
+        Ok(())
+    }
 }
 
 impl MacroAssembler {
