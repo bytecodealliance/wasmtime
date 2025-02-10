@@ -2139,19 +2139,47 @@ impl Assembler {
         })
     }
 
-    /// Compare vector registers `lhs` and `rhs` for equality between packed
-    /// integers and write the resulting vector into `dst`.
-    pub fn xmm_vpcmpeq_rrr(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
-        let op = match size {
+    fn vpcmpeq_opcode(size: OperandSize) -> AvxOpcode {
+        match size {
             OperandSize::S8 => AvxOpcode::Vpcmpeqb,
             OperandSize::S16 => AvxOpcode::Vpcmpeqw,
             OperandSize::S32 => AvxOpcode::Vpcmpeqd,
             OperandSize::S64 => AvxOpcode::Vpcmpeqq,
             _ => unimplemented!(),
-        };
+        }
+    }
+
+    /// Compare vector register `lhs` with a vector of integers in `rhs` for
+    /// equality between packed integers and write the resulting vector into
+    /// `dst`.
+    pub fn xmm_vpcmpeq_rrm(
+        &mut self,
+        dst: WritableReg,
+        lhs: Reg,
+        address: &Address,
+        size: OperandSize,
+    ) {
+        let address = Self::to_synthetic_amode(
+            address,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
 
         self.emit(Inst::XmmRmiRVex {
-            op,
+            op: Self::vpcmpeq_opcode(size),
+            src1: lhs.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::mem(address)),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Compare vector registers `lhs` and `rhs` for equality between packed
+    /// integers and write the resulting vector into `dst`.
+    pub fn xmm_vpcmpeq_rrr(&mut self, dst: WritableReg, lhs: Reg, rhs: Reg, size: OperandSize) {
+        self.emit(Inst::XmmRmiRVex {
+            op: Self::vpcmpeq_opcode(size),
             src1: lhs.into(),
             src2: XmmMemImm::unwrap_new(rhs.into()),
             dst: dst.to_reg().into(),
@@ -2484,6 +2512,26 @@ impl Assembler {
         let op = match size {
             OperandSize::S32 => AvxOpcode::Vandps,
             OperandSize::S64 => AvxOpcode::Vandpd,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Each lane in `src1` is multiplied by the corresponding lane in `src2`
+    /// producing intermediate 32-bit operands. Each intermediate 32-bit
+    /// operand is truncated to 18 most significant bits. Rounding is performed
+    /// by adding 1 to the least significant bit of the 18-bit intermediate
+    /// result. The 16 bits immediately to the right of the most significant
+    /// bit of each 18-bit intermediate result is placed in each lane of `dst`.
+    pub fn xmm_vpmulhrs_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S16 => AvxOpcode::Vpmulhrsw,
             _ => unimplemented!(),
         };
 

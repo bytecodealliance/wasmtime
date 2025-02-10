@@ -1864,4 +1864,13 @@ pub(crate) trait MacroAssembler {
         lane_width: OperandSize,
         kind: ShiftKind,
     ) -> Result<()>;
+
+    /// Perform a saturating integer q-format rounding multiplication.
+    fn v128_q15mulr_sat_s(
+        &mut self,
+        lhs: Reg,
+        rhs: Reg,
+        dst: WritableReg,
+        size: OperandSize,
+    ) -> Result<()>;
 }

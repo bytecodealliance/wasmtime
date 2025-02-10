@@ -2476,6 +2476,33 @@ impl Masm for MacroAssembler {
             .push(TypedReg::new(WasmValType::V128, operand).into());
         Ok(())
     }
+
+    fn v128_q15mulr_sat_s(
+        &mut self,
+        lhs: Reg,
+        rhs: Reg,
+        dst: WritableReg,
+        size: OperandSize,
+    ) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        self.asm.xmm_vpmulhrs_rrr(lhs, rhs, dst, size);
+
+        // Need to handle edge case of multiplying -1 by -1 (0x8000 in Q15
+        // format) because of how `vpmulhrs` handles rounding. `vpmulhrs`
+        // produces 0x8000 in that case when the correct result is 0x7FFF (that
+        // is, +1) so need to check if the result is 0x8000 and flip the bits
+        // of the result if it is.
+        let address = self.asm.add_constant(&[
+            0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80,
+            0x00, 0x80,
+        ]);
+        self.asm
+            .xmm_vpcmpeq_rrm(writable!(rhs), dst.to_reg(), &address, size);
+        self.asm
+            .xmm_vex_rr(AvxOpcode::Vpxor, dst.to_reg(), rhs, dst);
+        Ok(())
+    }
 }
 
 impl MacroAssembler {

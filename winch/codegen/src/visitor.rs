@@ -482,6 +482,7 @@ macro_rules! def_unsupported {
     (emit I16x8ShrS $($rest:tt)*) => {};
     (emit I32x4ShrS $($rest:tt)*) => {};
     (emit I64x2ShrS $($rest:tt)*) => {};
+    (emit I16x8Q15MulrSatS $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -4058,6 +4059,14 @@ where
     fn visit_i64x2_shr_s(&mut self) -> Self::Output {
         self.masm
             .v128_shift(&mut self.context, OperandSize::S64, ShiftKind::ShrS)
+    }
+
+    fn visit_i16x8_q15mulr_sat_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S16, |masm, dst, src, size| {
+                masm.v128_q15mulr_sat_s(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::v128(dst))
+            })
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);
