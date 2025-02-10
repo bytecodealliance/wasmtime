@@ -74,6 +74,7 @@ fn pretty_print_hexadecimal(hex: &[u8]) -> String {
 /// See `replace_signed_immediates`.
 macro_rules! hex_print_signed_imm {
     ($hex:expr, $from:ty => $to:ty) => {{
+        #[allow(clippy::cast_possible_wrap)]
         let imm = <$from>::from_str_radix($hex, 16).unwrap() as $to;
         let mut simm = String::new();
         if imm < 0 {
@@ -100,7 +101,7 @@ macro_rules! hex_print_signed_imm {
 /// - print negative values as `-0x...` (signed hex) instead of `0xff...`
 ///   (normal hex)
 fn replace_signed_immediates(dis: &str) -> std::borrow::Cow<str> {
-    match dis.find("$") {
+    match dis.find('$') {
         None => dis.into(),
         Some(idx) => {
             let (prefix, rest) = dis.split_at(idx + 1); // Skip the '$'.
