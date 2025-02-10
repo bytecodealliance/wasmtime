@@ -3384,7 +3384,7 @@ impl FuncEnvironment<'_> {
     /// being targeted since the Pulley runtime doesn't catch segfaults for
     /// itself.
     pub fn clif_memory_traps_enabled(&self) -> bool {
-        self.tunables.signals_based_traps && !self.isa.triple().is_pulley()
+        self.tunables.signals_based_traps && !self.is_pulley()
     }
 
     /// Returns whether it's acceptable to have CLIF instructions natively trap,
@@ -3394,7 +3394,21 @@ impl FuncEnvironment<'_> {
     /// unconditionally since Pulley doesn't use hardware-based traps in its
     /// runtime.
     pub fn clif_instruction_traps_enabled(&self) -> bool {
-        self.tunables.signals_based_traps || self.isa.triple().is_pulley()
+        self.tunables.signals_based_traps || self.is_pulley()
+    }
+
+    /// Returns whether loads from the null address are allowed as signals of
+    /// whether to trap or not.
+    pub fn load_from_zero_allowed(&self) -> bool {
+        // Pulley allows loads-from-zero and otherwise this is only allowed with
+        // traps + spectre mitigations.
+        self.is_pulley()
+            || (self.clif_memory_traps_enabled() && self.heap_access_spectre_mitigation())
+    }
+
+    /// Returns whether translation is happening for Pulley bytecode.
+    pub fn is_pulley(&self) -> bool {
+        self.isa.triple().is_pulley()
     }
 }
 
