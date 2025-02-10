@@ -1,7 +1,6 @@
 //! Memory operands to instructions.
 
-use crate::api::{AsReg, CodeSink, Constant, KnownOffsetTable, Label, TrapCode};
-use crate::imm::{Simm32, Simm32PlusKnownOffset};
+use crate::api::{AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, TrapCode};
 use crate::reg::{self, NonRspGpr, Size};
 use crate::rex::{encode_modrm, encode_sib, Imm, RexFlags};
 
@@ -11,14 +10,14 @@ use crate::rex::{encode_modrm, encode_sib, Imm, RexFlags};
 pub enum Amode<R: AsReg> {
     ImmReg {
         base: R,
-        simm32: Simm32PlusKnownOffset,
+        simm32: AmodeOffsetPlusKnownOffset,
         trap: Option<TrapCode>,
     },
     ImmRegRegShift {
         base: R,
         index: NonRspGpr<R>,
         scale: Scale,
-        simm32: Simm32,
+        simm32: AmodeOffset,
         trap: Option<TrapCode>,
     },
     RipRelative {
@@ -70,6 +69,88 @@ impl<R: AsReg> Amode<R> {
                 vec![]
             }
         }
+    }
+}
+
+/// A 32-bit immediate for address offsets.
+#[derive(Clone, Copy, Debug)]
+#[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
+pub struct AmodeOffset(i32);
+
+impl AmodeOffset {
+    #[must_use]
+    pub fn new(value: i32) -> Self {
+        Self(value)
+    }
+
+    #[must_use]
+    pub fn value(self) -> i32 {
+        self.0
+    }
+}
+
+impl From<i32> for AmodeOffset {
+    fn from(value: i32) -> Self {
+        Self(value)
+    }
+}
+
+impl std::fmt::LowerHex for AmodeOffset {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // This rather complex implementation is necessary to match how
+        // `capstone` pretty-prints memory immediates.
+        if self.0 == 0 {
+            return Ok(());
+        }
+        if self.0 < 0 {
+            write!(f, "-")?;
+        }
+        if self.0 > 9 || self.0 < -9 {
+            write!(f, "0x")?;
+        }
+        let abs = match self.0.checked_abs() {
+            Some(i) => i,
+            None => -2_147_483_648,
+        };
+        std::fmt::LowerHex::fmt(&abs, f)
+    }
+}
+
+/// An [`AmodeOffset`] immediate with an optional known offset.
+///
+/// Cranelift does not know certain offsets until emission time. To accommodate
+/// Cranelift, this structure stores an optional [`KnownOffset`]. The following
+/// happens immediately before emission:
+/// - the [`KnownOffset`] is looked up, mapping it to an offset value
+/// - the [`Simm32`] value is added to the offset value
+#[derive(Clone, Debug)]
+pub struct AmodeOffsetPlusKnownOffset {
+    pub simm32: AmodeOffset,
+    pub offset: Option<KnownOffset>,
+}
+
+impl AmodeOffsetPlusKnownOffset {
+    /// # Panics
+    ///
+    /// Panics if the sum of the immediate and the known offset value overflows.
+    #[must_use]
+    pub fn value(&self, offsets: &impl KnownOffsetTable) -> i32 {
+        let known_offset = match self.offset {
+            Some(offset) => offsets[offset],
+            None => 0,
+        };
+        known_offset
+            .checked_add(self.simm32.value())
+            .expect("no wrapping")
+    }
+}
+
+impl std::fmt::LowerHex for AmodeOffsetPlusKnownOffset {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        if let Some(offset) = self.offset {
+            write!(f, "<offset:{offset}>+")?;
+        }
+        std::fmt::LowerHex::fmt(&self.simm32, f)
     }
 }
 

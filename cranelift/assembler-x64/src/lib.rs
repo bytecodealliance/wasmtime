@@ -72,8 +72,8 @@ pub use api::{
     AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, RegisterVisitor, Registers,
     TrapCode,
 };
-pub use imm::{Extension, Imm16, Imm32, Imm8, Simm32, Simm32PlusKnownOffset};
-pub use mem::{Amode, DeferredTarget, GprMem, Scale};
+pub use imm::{Extension, Imm16, Imm32, Imm8, Simm16, Simm32, Simm8};
+pub use mem::{Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, DeferredTarget, GprMem, Scale};
 pub use reg::{Gpr, NonRspGpr, Size};
 pub use rex::RexFlags;
 

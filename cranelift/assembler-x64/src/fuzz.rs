@@ -4,7 +4,7 @@
 //! throughout this crate to avoid depending on the `arbitrary` crate
 //! unconditionally (use the `fuzz` feature instead).
 
-use crate::{AsReg, Gpr, Inst, NonRspGpr, Registers, Simm32, Simm32PlusKnownOffset};
+use crate::{AmodeOffset, AmodeOffsetPlusKnownOffset, AsReg, Gpr, Inst, NonRspGpr, Registers};
 use arbitrary::{Arbitrary, Result, Unstructured};
 use capstone::{arch::x86, arch::BuildsCapstone, arch::BuildsCapstoneSyntax, Capstone};
 
@@ -175,11 +175,11 @@ impl AsReg for FuzzReg {
     }
 }
 
-impl Arbitrary<'_> for Simm32PlusKnownOffset {
+impl Arbitrary<'_> for AmodeOffsetPlusKnownOffset {
     fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
         // For now, we don't generate offsets (TODO).
         Ok(Self {
-            simm32: Simm32::arbitrary(u)?,
+            simm32: AmodeOffset::arbitrary(u)?,
             offset: None,
         })
     }

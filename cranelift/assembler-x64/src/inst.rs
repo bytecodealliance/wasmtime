@@ -4,7 +4,7 @@
 //! See also: [`Inst`], an `enum` containing all these instructions.
 
 use crate::api::{AsReg, CodeSink, KnownOffsetTable, RegisterVisitor, Registers};
-use crate::imm::{Extension, Imm16, Imm32, Imm8};
+use crate::imm::{Extension, Imm16, Imm32, Imm8, Simm32, Simm8};
 use crate::mem::{emit_modrm_sib_disp, GprMem};
 use crate::reg::{self, Gpr, Size};
 use crate::rex::{self, RexFlags};

@@ -114,7 +114,7 @@ impl Into<asm::Amode<Gpr>> for SyntheticAmode {
                     base,
                     flags,
                 } => asm::Amode::ImmReg {
-                    simm32: asm::Simm32PlusKnownOffset {
+                    simm32: asm::AmodeOffsetPlusKnownOffset {
                         simm32: simm32.into(),
                         offset: None,
                     },
@@ -140,7 +140,7 @@ impl Into<asm::Amode<Gpr>> for SyntheticAmode {
             },
             SyntheticAmode::IncomingArg { offset } => asm::Amode::ImmReg {
                 base: Gpr::unwrap_new(regs::rbp()),
-                simm32: asm::Simm32PlusKnownOffset {
+                simm32: asm::AmodeOffsetPlusKnownOffset {
                     simm32: (-i32::try_from(offset).unwrap()).into(),
                     offset: Some(offsets::KEY_INCOMING_ARG),
                 },
@@ -148,7 +148,7 @@ impl Into<asm::Amode<Gpr>> for SyntheticAmode {
             },
             SyntheticAmode::SlotOffset { simm32 } => asm::Amode::ImmReg {
                 base: Gpr::unwrap_new(regs::rbp()),
-                simm32: asm::Simm32PlusKnownOffset {
+                simm32: asm::AmodeOffsetPlusKnownOffset {
                     simm32: simm32.into(),
                     offset: Some(offsets::KEY_SLOT_OFFSET),
                 },

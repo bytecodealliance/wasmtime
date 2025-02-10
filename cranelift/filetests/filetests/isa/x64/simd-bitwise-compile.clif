@@ -325,7 +325,7 @@ block0(v0: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqu  const(1), %xmm0
-;   andq $7, %rdi
+;   andq $0x7, %rdi
 ;   movd    %edi, %xmm5
 ;   psllw   %xmm0, %xmm5, %xmm0
 ;   lea     const(0), %rsi
@@ -598,7 +598,7 @@ block0(v0: i32):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movdqu  const(0), %xmm1
-;   andq $7, %rdi
+;   andq $0x7, %rdi
 ;   movdqa  %xmm1, %xmm0
 ;   punpcklbw %xmm0, %xmm1, %xmm0
 ;   punpckhbw %xmm1, %xmm1, %xmm1

@@ -914,7 +914,7 @@ block0(v0: i8x16, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   andq $7, %rdi
+;   andq $0x7, %rdi
 ;   vpunpcklbw %xmm0, %xmm0, %xmm5
 ;   vpunpckhbw %xmm0, %xmm0, %xmm7
 ;   addl    %edi, $8, %edi
@@ -1381,7 +1381,7 @@ block0(v0: i8x16, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   andq $7, %rdi
+;   andq $0x7, %rdi
 ;   vmovd   %edi, %xmm5
 ;   vpsllw  %xmm0, %xmm5, %xmm7
 ;   lea     const(0), %rsi
@@ -1618,7 +1618,7 @@ block0(v0: i8x16, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   andq $7, %rdi
+;   andq $0x7, %rdi
 ;   vmovd   %edi, %xmm5
 ;   vpsrlw  %xmm0, %xmm5, %xmm7
 ;   lea     const(0), %rsi
