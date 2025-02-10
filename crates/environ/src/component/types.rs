@@ -222,6 +222,14 @@ indices! {
     /// Same as `RuntimeMemoryIndex` except for the `post-return` function.
     pub struct RuntimePostReturnIndex(u32);
 
+    /// Index representing a table extracted from a wasm instance which is
+    /// stored in a `VMComponentContext`. This is used to deduplicate references
+    /// to the same table when it's only stored once in a `VMComponentContext`.
+    ///
+    /// This does not correspond to anything in the binary format for the
+    /// component model.
+    pub struct RuntimeTableIndex(u32);
+
     /// Index for all trampolines that are compiled in Cranelift for a
     /// component.
     ///

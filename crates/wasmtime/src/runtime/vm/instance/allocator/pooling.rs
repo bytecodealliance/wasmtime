@@ -527,6 +527,7 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
                 }
                 LowerImport { .. }
                 | ExtractMemory(_)
+                | ExtractTable(_)
                 | ExtractRealloc(_)
                 | ExtractCallback(_)
                 | ExtractPostReturn(_)

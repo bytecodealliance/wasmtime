@@ -9,7 +9,8 @@
 use crate::prelude::*;
 use crate::runtime::vm::{
     SendSyncPtr, VMArrayCallFunction, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
-    VMOpaqueContext, VMStore, VMStoreRawPtr, VMWasmCallFunction, ValRaw, VmPtr, VmSafe,
+    VMOpaqueContext, VMStore, VMStoreRawPtr, VMTableDefinition, VMWasmCallFunction, ValRaw, VmPtr,
+    VmSafe,
 };
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
@@ -289,6 +290,19 @@ impl ComponentInstance {
         }
     }
 
+    /// Returns the runtime table definition corresponding to the index of the
+    /// table provided.
+    ///
+    /// This can only be called after `idx` has been initialized at runtime
+    /// during the instantiation process of a component.
+    pub fn runtime_table(&self, idx: RuntimeTableIndex) -> *mut VMMemoryDefinition {
+        unsafe {
+            let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.runtime_table(idx));
+            debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
+            ret.as_ptr()
+        }
+    }
+
     /// Returns the realloc pointer corresponding to the index provided.
     ///
     /// This can only be called after `idx` has been initialized at runtime
@@ -399,6 +413,23 @@ impl ComponentInstance {
         unsafe {
             let storage = self
                 .vmctx_plus_offset_mut::<VmPtr<VMFuncRef>>(self.offsets.runtime_post_return(idx));
+            debug_assert!((*storage).as_ptr() as usize == INVALID_PTR);
+            *storage = ptr.into();
+        }
+    }
+
+    /// Stores the runtime memory pointer at the index specified.
+    ///
+    /// This is intended to be called during the instantiation process of a
+    /// component once a memory is available, which may not be until part-way
+    /// through component instantiation.
+    ///
+    /// Note that it should be a property of the component model that the `ptr`
+    /// here is never needed prior to it being configured here in the instance.
+    pub fn set_runtime_table(&mut self, idx: RuntimeTableIndex, ptr: NonNull<VMTableDefinition>) {
+        unsafe {
+            let storage = self
+                .vmctx_plus_offset_mut::<VmPtr<VMTableDefinition>>(self.offsets.runtime_table(idx));
             debug_assert!((*storage).as_ptr() as usize == INVALID_PTR);
             *storage = ptr.into();
         }
@@ -799,6 +830,11 @@ impl OwnedComponentInstance {
         ptr: NonNull<VMFuncRef>,
     ) {
         unsafe { self.instance_mut().set_runtime_post_return(idx, ptr) }
+    }
+
+    /// See `ComponentInstance::set_runtime_table`
+    pub fn set_runtime_table(&mut self, idx: RuntimeTableIndex, ptr: NonNull<VMTableDefinition>) {
+        unsafe { self.instance_mut().set_runtime_table(idx, ptr) }
     }
 
     /// See `ComponentInstance::set_lowering`

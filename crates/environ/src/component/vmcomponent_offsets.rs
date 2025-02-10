@@ -44,6 +44,8 @@ pub struct VMComponentOffsets<P> {
     pub num_lowerings: u32,
     /// The number of memories which are recorded in this component for options.
     pub num_runtime_memories: u32,
+    /// The number of tables which are recorded in this component for options.
+    pub num_runtime_tables: u32,
     /// The number of reallocs which are recorded in this component for options.
     pub num_runtime_reallocs: u32,
     /// The number of callbacks which are recorded in this component for options.
@@ -66,6 +68,7 @@ pub struct VMComponentOffsets<P> {
     trampoline_func_refs: u32,
     lowerings: u32,
     memories: u32,
+    tables: u32,
     reallocs: u32,
     callbacks: u32,
     post_returns: u32,
@@ -87,6 +90,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             ptr,
             num_lowerings: component.num_lowerings,
             num_runtime_memories: component.num_runtime_memories.try_into().unwrap(),
+            num_runtime_tables: component.num_runtime_tables.try_into().unwrap(),
             num_runtime_reallocs: component.num_runtime_reallocs.try_into().unwrap(),
             num_runtime_callbacks: component.num_runtime_callbacks.try_into().unwrap(),
             num_runtime_post_returns: component.num_runtime_post_returns.try_into().unwrap(),
@@ -103,6 +107,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             trampoline_func_refs: 0,
             lowerings: 0,
             memories: 0,
+            tables: 0,
             reallocs: 0,
             callbacks: 0,
             post_returns: 0,
@@ -260,6 +265,20 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     pub fn runtime_memory(&self, index: RuntimeMemoryIndex) -> u32 {
         assert!(index.as_u32() < self.num_runtime_memories);
         self.runtime_memories() + index.as_u32() * u32::from(self.ptr.size())
+    }
+
+    /// The offset of the base of the `runtime_tables` field
+    #[inline]
+    pub fn runtime_tables(&self) -> u32 {
+        self.tables
+    }
+
+    /// The offset of the `*mut VMTableDefinition` for the runtime index
+    /// provided.
+    #[inline]
+    pub fn runtime_table(&self, index: RuntimeTableIndex) -> u32 {
+        assert!(index.as_u32() < self.num_runtime_tables);
+        self.runtime_tables() + index.as_u32() * u32::from(self.ptr.size())
     }
 
     /// The offset of the base of the `runtime_reallocs` field
