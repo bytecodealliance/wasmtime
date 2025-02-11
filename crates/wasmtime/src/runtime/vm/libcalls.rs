@@ -59,9 +59,7 @@ use crate::runtime::vm::table::{Table, TableElementType};
 use crate::runtime::vm::vmcontext::VMFuncRef;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::VMGcRef;
-use crate::runtime::vm::{
-    i8x16, HostResultHasUnwindSentinel, Instance, TrapReason, VMStore
-};
+use crate::runtime::vm::{i8x16, HostResultHasUnwindSentinel, Instance, TrapReason, VMStore};
 use core::convert::Infallible;
 use core::ptr::NonNull;
 #[cfg(feature = "threads")]

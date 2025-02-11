@@ -21,10 +21,10 @@ mod tail_loop;
 
 // Polyfill `std::simd::i8x16` until it's stable.
 #[cfg(target_arch = "x86_64")]
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, reason = "this is a polyfill for a type in std")]
 type i8x16 = core::arch::x86_64::__m128i;
 #[cfg(not(target_arch = "x86_64"))]
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, reason = "this is a polyfill for a type in std")]
 struct i8x16(());
 
 const DEFAULT_STACK_SIZE: usize = 1 << 20; // 1 MiB
