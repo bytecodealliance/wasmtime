@@ -358,6 +358,36 @@
 (decl uimm8 (u8) Imm64)
 (extern extractor uimm8 uimm8)
 
+(decl eq (Value Value) Value)
+(extractor (eq x y) (icmp (IntCC.Equal) x y))
+
+(decl ne (Value Value) Value)
+(extractor (ne x y) (icmp (IntCC.NotEqual) x y))
+
+(decl ult (Value Value) Value)
+(extractor (ult x y) (icmp (IntCC.UnsignedLessThan) x y))
+
+(decl ule (Value Value) Value)
+(extractor (ule x y) (icmp (IntCC.UnsignedLessThanOrEqual) x y))
+
+(decl ugt (Value Value) Value)
+(extractor (ugt x y) (icmp (IntCC.UnsignedGreaterThan) x y))
+
+(decl uge (Value Value) Value)
+(extractor (uge x y) (icmp (IntCC.UnsignedGreaterThanOrEqual) x y))
+
+(decl slt (Value Value) Value)
+(extractor (slt x y) (icmp (IntCC.SignedLessThan) x y))
+
+(decl sle (Value Value) Value)
+(extractor (sle x y) (icmp (IntCC.SignedLessThanOrEqual) x y))
+
+(decl sgt (Value Value) Value)
+(extractor (sgt x y) (icmp (IntCC.SignedGreaterThan) x y))
+
+(decl sge (Value Value) Value)
+(extractor (sge x y) (icmp (IntCC.SignedGreaterThanOrEqual) x y))
+
 ;; Instruction creation helpers ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Emit an instruction.

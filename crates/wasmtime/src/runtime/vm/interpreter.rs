@@ -175,6 +175,7 @@ impl InterpreterRef<'_> {
                         TrapKind::IntegerOverflow => Trap::IntegerOverflow,
                         TrapKind::DivideByZero => Trap::IntegerDivisionByZero,
                         TrapKind::BadConversionToInteger => Trap::BadConversionToInteger,
+                        TrapKind::MemoryOutOfBounds => Trap::MemoryOutOfBounds,
                     };
                     s.set_jit_trap(regs, None, trap);
                 }

@@ -525,7 +525,7 @@ fn xulteq32() {
 }
 
 #[test]
-fn xload32le_u64_offset32() {
+fn xload32le_o32() {
     let a = UnsafeCell::new([11u32.to_le(), 22u32.to_le()]);
     let b = UnsafeCell::new([33u32.to_le(), 44u32.to_le()]);
     let c = UnsafeCell::new([55u32.to_le(), 66u32.to_le()]);
@@ -541,16 +541,17 @@ fn xload32le_u64_offset32() {
         (i32::MIN as u32 as u64, d.get(), 0),
         (i32::MAX as u32 as u64, d.get(), 4),
     ] {
+        let init = 0x1234567812345678u64;
+        let expected = init & !u64::from(u32::MAX) | expected;
         unsafe {
             assert_one(
                 [
-                    (x(0), Val::from(0x1234567812345678u64)),
+                    (x(0), Val::from(init)),
                     (x(1), Val::from(addr.cast::<u8>())),
                 ],
-                XLoad32LeU64Offset32 {
+                XLoad32LeO32 {
                     dst: x(0),
-                    ptr: x(1),
-                    offset,
+                    addr: AddrO32 { addr: x(1), offset },
                 },
                 x(0),
                 expected,
@@ -560,43 +561,7 @@ fn xload32le_u64_offset32() {
 }
 
 #[test]
-fn xload32le_s64_offset32() {
-    let a = UnsafeCell::new([11u32.to_le(), 22u32.to_le()]);
-    let b = UnsafeCell::new([33u32.to_le(), 44u32.to_le()]);
-    let c = UnsafeCell::new([55u32.to_le(), 66u32.to_le()]);
-    let d = UnsafeCell::new([(-1i32 as u32).to_le(), (i32::MAX as u32).to_le()]);
-
-    for (expected, addr, offset) in [
-        (11, a.get(), 0),
-        (22, a.get(), 4),
-        (33, b.get(), 0),
-        (44, b.get(), 4),
-        (55, c.get(), 0),
-        (55, unsafe { c.get().byte_add(4) }, -4),
-        (66, c.get(), 4),
-        (-1i64 as u64, d.get(), 0),
-        (i32::MAX as u32 as u64, d.get(), 4),
-    ] {
-        unsafe {
-            assert_one(
-                [
-                    (x(0), Val::from(0x1234567812345678u64)),
-                    (x(1), Val::from(addr.cast::<u8>())),
-                ],
-                XLoad32LeS64Offset32 {
-                    dst: x(0),
-                    ptr: x(1),
-                    offset,
-                },
-                x(0),
-                expected,
-            );
-        }
-    }
-}
-
-#[test]
-fn xload64le_offset32() {
+fn xload64le_o32() {
     let a = UnsafeCell::new([11u64.to_le(), 22u64.to_le()]);
     let b = UnsafeCell::new([33u64.to_le(), 44u64.to_le()]);
     let c = UnsafeCell::new([55u64.to_le(), 66u64.to_le()]);
@@ -618,10 +583,9 @@ fn xload64le_offset32() {
                     (x(0), Val::from(0x1234567812345678u64)),
                     (x(1), Val::from(addr)),
                 ],
-                XLoad64LeOffset32 {
+                XLoad64LeO32 {
                     dst: x(0),
-                    ptr: x(1),
-                    offset,
+                    addr: AddrO32 { addr: x(1), offset },
                 },
                 x(0),
                 expected,
@@ -631,7 +595,7 @@ fn xload64le_offset32() {
 }
 
 #[test]
-fn xstore32_le_offset32() {
+fn xstore32_le_o32() {
     let a = UnsafeCell::new([0x12u8, 0x34, 0x56, 0x78, 0x12, 0x34, 0x56, 0x78]);
     let b = UnsafeCell::new([0x12u8, 0x34, 0x56, 0x78, 0x12, 0x34, 0x56, 0x78]);
     let c = UnsafeCell::new([0x12u8, 0x34, 0x56, 0x78, 0x12, 0x34, 0x56, 0x78]);
@@ -645,10 +609,9 @@ fn xstore32_le_offset32() {
             let val = val as u64;
             assert_one(
                 [(x(0), Val::from(addr)), (x(1), Val::from(val))],
-                XStore32LeOffset32 {
-                    ptr: x(0),
+                XStore32LeO32 {
+                    addr: AddrO32 { addr: x(0), offset },
                     src: x(1),
-                    offset,
                 },
                 x(1),
                 val,
@@ -676,7 +639,8 @@ fn xstore32_le_offset32() {
 }
 
 #[test]
-fn xstore64_le_offset32() {
+
+fn xstore64_le_o32() {
     let a = UnsafeCell::new([0x1234567812345678, 0x1234567812345678, 0x1234567812345678]);
 
     unsafe {
@@ -687,10 +651,9 @@ fn xstore64_le_offset32() {
         ] {
             assert_one(
                 [(x(0), Val::from(addr)), (x(1), Val::from(val))],
-                XStore64LeOffset32 {
-                    ptr: x(0),
+                XStore64LeO32 {
                     src: x(1),
-                    offset,
+                    addr: AddrO32 { addr: x(0), offset },
                 },
                 x(1),
                 val,

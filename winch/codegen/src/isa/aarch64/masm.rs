@@ -1185,6 +1185,14 @@ impl Masm for MacroAssembler {
     ) -> Result<()> {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
+
+    fn v128_all_true(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_bitmask(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
 }
 
 impl MacroAssembler {

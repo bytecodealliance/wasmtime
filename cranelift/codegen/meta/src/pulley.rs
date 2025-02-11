@@ -186,6 +186,7 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
         let mut pat = String::new();
         let mut uses = Vec::new();
         let mut defs = Vec::new();
+        let mut addrs = Vec::new();
         for op in inst.operands() {
             match op {
                 // `{Push,Pop}Frame{Save,Restore}` doesn't participate in
@@ -198,6 +199,10 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
                 Operand::Normal { name, ty } => {
                     if ty.contains("Reg") {
                         uses.push(name);
+                        pat.push_str(name);
+                        pat.push_str(",");
+                    } else if ty.starts_with("Addr") {
+                        addrs.push(name);
                         pat.push_str(name);
                         pat.push_str(",");
                     }
@@ -230,12 +235,17 @@ pub fn generate_rust(filename: &str, out_dir: &Path) -> Result<(), Error> {
             .iter()
             .map(|u| format!("collector.reg_def({u});\n"))
             .collect::<String>();
+        let addrs = addrs
+            .iter()
+            .map(|u| format!("{u}.collect_operands(collector);\n"))
+            .collect::<String>();
 
         rust.push_str(&format!(
             "
         RawInst::{name} {{ {pat} .. }} => {{
             {uses}
             {defs}
+            {addrs}
         }}
         "
         ));
