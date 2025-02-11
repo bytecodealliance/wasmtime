@@ -290,6 +290,7 @@ mod wasi {
 /// Test that two distinct instantiations of the same module yield
 /// different control tag identities.
 #[test]
+#[cfg_attr(miri, ignore)]
 fn inter_instance_suspend() -> Result<()> {
     let mut config = Config::default();
     config.wasm_function_references(true);
@@ -366,6 +367,7 @@ mod host {
     use wasmtime::*;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     /// Tests calling a host function from within a wasm function running inside a continuation.
     /// Call chain:
     /// $entry -resume-> a -call-> host_func_a
@@ -396,6 +398,7 @@ mod host {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     /// We re-enter wasm from a host function and execute a continuation.
     /// Call chain:
     /// $entry -call-> $a -call-> $host_func_a -call-> $b -resume-> $c
@@ -437,6 +440,7 @@ mod host {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     /// Similar to `re_enter_wasm_ok2, but we run a continuation before the host call.
     /// Call chain:
     /// $entry -call-> $a -call-> $host_func_a -call-> $b -resume-> $c
@@ -482,6 +486,7 @@ mod host {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     /// We re-enter wasm from a host function while we were already on a continuation stack.
     /// This is currently forbidden (see wasmfx/wasmfxtime#109), but may be
     /// allowed in the future.
@@ -521,6 +526,7 @@ mod host {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     /// After crossing from the host back into wasm, we suspend to a tag that is
     /// handled by the surrounding function (i.e., without needing to cross the
     /// host frame to reach the handler).
@@ -572,6 +578,7 @@ mod host {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     /// Similar to `call_host_from_continuation_nested_suspend_ok`. However, we
     /// suspend to a tag that is only handled if we were to cross a host
     /// function boundary. That's not allowed, so we effectively suspend with an
@@ -697,6 +704,7 @@ mod traps {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     /// Tests that we get correct backtraces if we trap deep inside multiple continuations.
     /// Call chain:
     /// $entry -call-> $a -resume-> $b -call-> $c -resume-> $d -call-> $e -resume-> $f
@@ -747,6 +755,7 @@ mod traps {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     /// Tests that we get correct backtraces if we trap after returning from one
     /// continuation to its parent.
     fn trap_in_continuation_back_to_parent() -> Result<()> {
@@ -791,6 +800,7 @@ mod traps {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     /// Tests that we get correct backtraces if we trap after returning from
     /// several continuations back to the main stack.
     fn trap_in_continuation_back_to_main() -> Result<()> {
@@ -831,6 +841,7 @@ mod traps {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     /// Tests that we get correct backtraces after suspending a continuation.
     fn trap_in_continuation_suspend() -> Result<()> {
         let wat = r#"
@@ -882,6 +893,7 @@ mod traps {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     /// Tests that we get correct backtraces after suspending a continuation and
     /// then resuming it from a different stack frame.
     fn trap_in_continuation_suspend_resume() -> Result<()> {
@@ -944,6 +956,7 @@ mod traps {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     /// Tests that we get correct backtraces after suspending a continuation
     /// where we need to forward to an outer handler.
     fn trap_in_continuation_forward() -> Result<()> {
@@ -994,6 +1007,7 @@ mod traps {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     /// Tests that we get correct backtraces after suspending a continuation
     /// where we need to forward to an outer handler. We then resume the
     /// continuation from within another continuation.
@@ -1054,6 +1068,7 @@ mod traps {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     /// Tests that we get correct backtraces after switch.
     /// We first create the a stack with the following shape:
     /// entry -> a -> b, then switch, leading to
@@ -1124,6 +1139,7 @@ mod traps {
     // Test that we get correct backtraces after trapping inside a continuation
     // after re-entering Wasm while already inside a different continuation.
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn trap_after_re_enter() -> Result<()> {
         let wat = r#"
         (module
@@ -1190,6 +1206,7 @@ mod traps {
     // running inside a continuation: There must be no leftovers of the old
     // stack chain if we re-use the instance later.
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn reuse_instance_after_trap1() -> Result<()> {
         let wat = r#"
         (module
@@ -1260,6 +1277,7 @@ mod traps {
     // This test is similar to `reuse_instance_after_trap1`, but here we don't
     // trap the second time we enter the instance.
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn reuse_instance_after_trap2() -> Result<()> {
         let wat = r#"
         (module
@@ -1334,6 +1352,7 @@ mod traps {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     /// Tests that we get correct panic payloads if we panic deep inside multiple
     /// continuations. Note that wasmtime does not create its own backtraces for panics.
     fn panic_in_continuation() -> Result<()> {
@@ -1383,6 +1402,7 @@ mod traps {
     }
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn stack_overflow_in_continuation() -> Result<()> {
         let wat = r#"
         (module
@@ -1433,6 +1453,7 @@ mod misc {
 
     #[ignore]
     #[test]
+    #[cfg_attr(miri, ignore)]
     pub fn continuation_revision_counter_wraparound() -> Result<()> {
         let wat = r#"
 (module
