@@ -1453,7 +1453,6 @@ mod misc {
 
     #[ignore]
     #[test]
-    #[cfg_attr(miri, ignore)]
     pub fn continuation_revision_counter_wraparound() -> Result<()> {
         let wat = r#"
 (module
