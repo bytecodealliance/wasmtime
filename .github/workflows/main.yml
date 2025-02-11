@@ -1070,7 +1070,7 @@ jobs:
     name: Miri
     runs-on: ubuntu-latest
     env:
-      CARGO_NEXTEST_VERSION: 0.9.67
+      CARGO_NEXTEST_VERSION: 0.9.88
       MIRIFLAGS: -Zmiri-permissive-provenance
     steps:
     - uses: actions/checkout@v4

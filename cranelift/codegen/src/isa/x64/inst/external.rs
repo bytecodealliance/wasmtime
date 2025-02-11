@@ -5,7 +5,6 @@ use super::{
     SyntheticAmode, VCodeConstant, WritableGpr,
 };
 use crate::ir::TrapCode;
-use arbitrary::Arbitrary;
 use cranelift_assembler_x64 as asm;
 
 /// Define the types of registers Cranelift will use.
@@ -42,12 +41,6 @@ impl asm::AsReg for PairedGpr {
     }
 }
 
-impl<'a> Arbitrary<'a> for PairedGpr {
-    fn arbitrary(_: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        unimplemented!("assembler fuzzing is not implemented at this level")
-    }
-}
-
 /// This bridges the gap between codegen and assembler register types.
 impl asm::AsReg for Gpr {
     fn enc(&self) -> u8 {
@@ -56,12 +49,6 @@ impl asm::AsReg for Gpr {
 
     fn new(_: u8) -> Self {
         panic!("disallow creation of new assembler registers")
-    }
-}
-
-impl<'a> Arbitrary<'a> for Gpr {
-    fn arbitrary(_: &mut arbitrary::Unstructured<'a>) -> arbitrary::Result<Self> {
-        unimplemented!("assembler fuzzing is not implemented at this level")
     }
 }
 

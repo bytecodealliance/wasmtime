@@ -10,7 +10,7 @@ use crate::masm::{
     DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, HandleOverflowKind, Imm as I,
     IntCmpKind, LaneSelector, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm,
     RemKind, ReplaceLaneKind, RmwOp, RoundingMode, ShiftKind, SplatKind, StoreKind, TrapCode,
-    TruncKind, V128ConvertKind, V128ExtendKind, V128NarrowKind, VectorCompareKind,
+    TruncKind, V128AbsKind, V128ConvertKind, V128ExtendKind, V128NarrowKind, VectorCompareKind,
     VectorEqualityKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
 };
 use crate::{
@@ -2231,6 +2231,56 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
+    fn v128_abs(&mut self, src: Reg, dst: WritableReg, kind: V128AbsKind) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        match kind {
+            V128AbsKind::I8x16 | V128AbsKind::I16x8 | V128AbsKind::I32x4 => {
+                self.asm.xmm_vpabs_rr(src, dst, kind.lane_size())
+            }
+            V128AbsKind::I64x2 => {
+                let scratch = writable!(regs::scratch_xmm());
+                // Perform an arithmetic right shift of 31 bits. If the number
+                // is positive, this will result in all zeroes in the upper
+                // 32-bits. If the number is negative, this will result in all
+                // ones in the upper 32-bits.
+                self.asm.xmm_vpsra_rri(src, scratch, 0x1f, OperandSize::S32);
+                // Copy the ones and zeroes in the high bits of each 64-bit
+                // lane to the low bits of each 64-bit lane.
+                self.asm
+                    .xmm_vpshuf_rr(scratch.to_reg(), scratch, 0b11_11_01_01, OperandSize::S32);
+                // Flip the bits in lanes that were negative in `src` and leave
+                // the positive lanes as they are. Positive lanes will have a
+                // zero mask in `scratch` so xor doesn't affect them.
+                self.asm
+                    .xmm_vex_rr(AvxOpcode::Vpxor, src, scratch.to_reg(), dst);
+                // Subtract the mask from the results of xor which will
+                // complete the two's complement for lanes which were negative.
+                self.asm
+                    .xmm_vpsub_rrr(dst.to_reg(), scratch.to_reg(), dst, kind.lane_size());
+            }
+            V128AbsKind::F32x4 | V128AbsKind::F64x2 => {
+                let scratch = writable!(regs::scratch_xmm());
+                // Create a mask of all ones.
+                self.asm.xmm_vpcmpeq_rrr(
+                    scratch,
+                    scratch.to_reg(),
+                    scratch.to_reg(),
+                    kind.lane_size(),
+                );
+                // Right shift the mask so each lane is a single zero followed
+                // by all ones.
+                self.asm
+                    .xmm_vpsrl_rr(scratch.to_reg(), scratch, 0x1, kind.lane_size());
+                // Use the mask to zero the sign bit in each lane which will
+                // make the float value positive.
+                self.asm
+                    .xmm_vandp_rrr(src, scratch.to_reg(), dst, kind.lane_size());
+            }
+        }
+        Ok(())
+    }
+
     fn v128_neg(&mut self, op: WritableReg, size: OperandSize) -> Result<()> {
         let tmp = regs::scratch_xmm();
         self.v128_xor(tmp, tmp, writable!(tmp))?;
@@ -2424,6 +2474,72 @@ impl Masm for MacroAssembler {
         context
             .stack
             .push(TypedReg::new(WasmValType::V128, operand).into());
+        Ok(())
+    }
+
+    fn v128_q15mulr_sat_s(
+        &mut self,
+        lhs: Reg,
+        rhs: Reg,
+        dst: WritableReg,
+        size: OperandSize,
+    ) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        self.asm.xmm_vpmulhrs_rrr(lhs, rhs, dst, size);
+
+        // Need to handle edge case of multiplying -1 by -1 (0x8000 in Q15
+        // format) because of how `vpmulhrs` handles rounding. `vpmulhrs`
+        // produces 0x8000 in that case when the correct result is 0x7FFF (that
+        // is, +1) so need to check if the result is 0x8000 and flip the bits
+        // of the result if it is.
+        let address = self.asm.add_constant(&[
+            0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80,
+            0x00, 0x80,
+        ]);
+        self.asm
+            .xmm_vpcmpeq_rrm(writable!(rhs), dst.to_reg(), &address, size);
+        self.asm
+            .xmm_vex_rr(AvxOpcode::Vpxor, dst.to_reg(), rhs, dst);
+        Ok(())
+    }
+
+    fn v128_all_true(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        let scratch = regs::scratch_xmm();
+        // Create a mask of all 0s.
+        self.asm
+            .xmm_vex_rr(AvxOpcode::Vpxor, scratch, scratch, writable!(scratch));
+        // Sets lane in `dst` to not zero if `src` lane was zero, and lane in
+        // `dst` to zero if `src` lane was not zero.
+        self.asm.xmm_vpcmpeq_rrr(writable!(src), src, scratch, size);
+        // Sets ZF if all values are zero (i.e., if all original values were not zero).
+        self.asm.xmm_vptest(src, src);
+        // Set byte if ZF=1.
+        self.asm.setcc(IntCmpKind::Eq, dst);
+        Ok(())
+    }
+
+    fn v128_bitmask(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        match size {
+            OperandSize::S8 => self.asm.xmm_vpmovmsk_rr(src, dst, size, OperandSize::S32),
+            OperandSize::S16 => {
+                // Signed conversion of 16-bit integers to 8-bit integers.
+                self.asm
+                    .xmm_vpackss_rrr(src, src, writable!(src), OperandSize::S8);
+                // Creates a mask from each byte in `src`.
+                self.asm
+                    .xmm_vpmovmsk_rr(src, dst, OperandSize::S8, OperandSize::S32);
+                // Removes 8 bits added as a result of the `vpackss` step.
+                self.asm
+                    .shift_ir(0x8, dst, ShiftKind::ShrU, OperandSize::S32);
+            }
+            OperandSize::S32 | OperandSize::S64 => self.asm.xmm_vmovskp_rr(src, dst, size, size),
+            _ => unimplemented!(),
+        }
         Ok(())
     }
 }
