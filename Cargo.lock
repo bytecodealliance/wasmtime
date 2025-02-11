@@ -760,7 +760,6 @@ name = "cranelift-codegen"
 version = "0.118.0"
 dependencies = [
  "anyhow",
- "arbitrary",
  "bumpalo",
  "capstone",
  "cranelift-assembler-x64",
