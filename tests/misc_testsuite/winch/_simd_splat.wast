@@ -249,14 +249,14 @@
     (v128.xor (i32x4.splat (local.get 0)) (i32x4.splat (local.get 1))))
 
   ;; Boolean horizontal reductions
-;;   (func (export "as-i8x16_all_true-operand") (param i32) (result i32)
-;;     (i8x16.all_true (i8x16.splat (local.get 0))))
-;;   (func (export "as-i16x8_all_true-operand") (param i32) (result i32)
-;;     (i16x8.all_true (i16x8.splat (local.get 0))))
-;;   (func (export "as-i32x4_all_true-operand1") (param i32) (result i32)
-;;     (i32x4.all_true (i32x4.splat (local.get 0))))
-;;   (func (export "as-i32x4_all_true-operand2") (param i64) (result i32)
-;;     (i32x4.all_true (i64x2.splat (local.get 0))))
+  (func (export "as-i8x16_all_true-operand") (param i32) (result i32)
+    (i8x16.all_true (i8x16.splat (local.get 0))))
+  (func (export "as-i16x8_all_true-operand") (param i32) (result i32)
+    (i16x8.all_true (i16x8.splat (local.get 0))))
+  (func (export "as-i32x4_all_true-operand1") (param i32) (result i32)
+    (i32x4.all_true (i32x4.splat (local.get 0))))
+  (func (export "as-i32x4_all_true-operand2") (param i64) (result i32)
+    (i32x4.all_true (i64x2.splat (local.get 0))))
 
   ;; Comparisons
   (func (export "as-i8x16_eq-operands") (param i32 i32) (result v128)
@@ -324,10 +324,10 @@
 (assert_return (invoke "as-v128_or-operands" (i32.const 0) (i32.const 0xffff)) (v128.const i16x8 0xffff 0xffff 0xffff 0xffff 0xffff 0xffff 0xffff 0xffff))
 (assert_return (invoke "as-v128_xor-operands" (i32.const 0xf0f0f0f0) (i32.const 0xffffffff)) (v128.const i32x4 0xf0f0f0f 0xf0f0f0f 0xf0f0f0f 0xf0f0f0f))
 
-;; (assert_return (invoke "as-i8x16_all_true-operand" (i32.const 0)) (i32.const 0))
-;; (assert_return (invoke "as-i16x8_all_true-operand" (i32.const 0xffff)) (i32.const 1))
-;; (assert_return (invoke "as-i32x4_all_true-operand1" (i32.const 0xf0f0f0f0)) (i32.const 1))
-;; (assert_return (invoke "as-i32x4_all_true-operand2" (i64.const -1)) (i32.const 1))
+(assert_return (invoke "as-i8x16_all_true-operand" (i32.const 0)) (i32.const 0))
+(assert_return (invoke "as-i16x8_all_true-operand" (i32.const 0xffff)) (i32.const 1))
+(assert_return (invoke "as-i32x4_all_true-operand1" (i32.const 0xf0f0f0f0)) (i32.const 1))
+(assert_return (invoke "as-i32x4_all_true-operand2" (i64.const -1)) (i32.const 1))
 
 (assert_return (invoke "as-i8x16_eq-operands" (i32.const 1) (i32.const 2)) (v128.const i8x16 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0))
 (assert_return (invoke "as-i16x8_eq-operands" (i32.const -1) (i32.const 65535)) (v128.const i16x8 0xffff 0xffff 0xffff 0xffff 0xffff 0xffff 0xffff 0xffff))

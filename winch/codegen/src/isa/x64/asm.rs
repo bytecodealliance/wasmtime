@@ -2445,6 +2445,51 @@ impl Assembler {
         });
     }
 
+    /// Creates a mask made up of the most significant bit of each byte of
+    /// `src` and stores the result in `dst`.
+    pub fn xmm_vpmovmsk_rr(
+        &mut self,
+        src: Reg,
+        dst: WritableReg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+    ) {
+        let op = match src_size {
+            OperandSize::S8 => AvxOpcode::Vpmovmskb,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmToGprVex {
+            op,
+            src: src.into(),
+            dst: dst.to_reg().into(),
+            dst_size: dst_size.into(),
+        });
+    }
+
+    /// Creates a mask made up of the most significant bit of each byte of
+    /// in `src` and stores the result in `dst`.
+    pub fn xmm_vmovskp_rr(
+        &mut self,
+        src: Reg,
+        dst: WritableReg,
+        src_size: OperandSize,
+        dst_size: OperandSize,
+    ) {
+        let op = match src_size {
+            OperandSize::S32 => AvxOpcode::Vmovmskps,
+            OperandSize::S64 => AvxOpcode::Vmovmskpd,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmToGprVex {
+            op,
+            src: src.into(),
+            dst: dst.to_reg().into(),
+            dst_size: dst_size.into(),
+        })
+    }
+
     /// Compute the absolute value of elements in vector `src` and put the
     /// results in `dst`.
     pub fn xmm_vpabs_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
