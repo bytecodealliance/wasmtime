@@ -1,8 +1,8 @@
 use crate::prelude::*;
 use crate::{linker::DefinitionType, Engine};
 use wasmtime_environ::{
-    EntityType, Global, IndexType, Memory, ModuleTypes, Table, TypeTrace, VMSharedTypeIndex,
-    WasmHeapType, WasmRefType, WasmSubType, WasmValType,
+    EntityType, Global, IndexType, Memory, Table, TypeTrace, VMSharedTypeIndex, WasmHeapType,
+    WasmRefType, WasmSubType, WasmValType,
 };
 
 pub struct MatchCx<'a> {
@@ -13,24 +13,6 @@ impl MatchCx<'_> {
     /// Construct a new matching context for the given module.
     pub fn new(engine: &Engine) -> MatchCx<'_> {
         MatchCx { engine }
-    }
-
-    fn type_reference(&self, expected: VMSharedTypeIndex, actual: VMSharedTypeIndex) -> Result<()> {
-        if self.engine.signatures().is_subtype(actual, expected) {
-            return Ok(());
-        }
-
-        let msg = "types incompatible";
-        let expected = match self.engine.signatures().borrow(expected) {
-            Some(ty) => ty,
-            None => panic!("{expected:?} is not registered"),
-        };
-        let actual = match self.engine.signatures().borrow(actual) {
-            Some(ty) => ty,
-            None => panic!("{actual:?} is not registered"),
-        };
-
-        Err(concrete_type_mismatch(msg, &expected, &actual))
     }
 
     /// Validates that the `expected` type matches the type of `actual`
@@ -54,7 +36,7 @@ impl MatchCx<'_> {
             },
             EntityType::Function(expected) => match actual {
                 DefinitionType::Func(actual) => {
-                    self.type_reference(expected.unwrap_engine_type_index(), *actual)
+                    type_reference(self.engine, expected.unwrap_engine_type_index(), *actual)
                 }
                 _ => bail!("expected func, but found {}", actual.desc()),
             },
@@ -63,13 +45,30 @@ impl MatchCx<'_> {
     }
 }
 
-#[cfg_attr(not(feature = "component-model"), allow(dead_code))]
-pub fn entity_ty(
-    expected: &EntityType,
-    expected_types: &ModuleTypes,
-    actual: &EntityType,
-    actual_types: &ModuleTypes,
+fn type_reference(
+    engine: &Engine,
+    expected: VMSharedTypeIndex,
+    actual: VMSharedTypeIndex,
 ) -> Result<()> {
+    if engine.signatures().is_subtype(actual, expected) {
+        return Ok(());
+    }
+
+    let msg = "types incompatible";
+    let expected = match engine.signatures().borrow(expected) {
+        Some(ty) => ty,
+        None => panic!("{expected:?} is not registered"),
+    };
+    let actual = match engine.signatures().borrow(actual) {
+        Some(ty) => ty,
+        None => panic!("{actual:?} is not registered"),
+    };
+
+    Err(concrete_type_mismatch(msg, &expected, &actual))
+}
+
+#[cfg_attr(not(feature = "component-model"), allow(dead_code))]
+pub fn entity_ty(engine: &Engine, expected: &EntityType, actual: &EntityType) -> Result<()> {
     match expected {
         EntityType::Memory(expected) => match actual {
             EntityType::Memory(actual) => memory_ty(expected, actual, None),
@@ -85,17 +84,9 @@ pub fn entity_ty(
         },
         EntityType::Function(expected) => match actual {
             EntityType::Function(actual) => {
-                let expected = &expected_types[expected.unwrap_module_type_index()];
-                let actual = &actual_types[actual.unwrap_module_type_index()];
-                if expected == actual {
-                    Ok(())
-                } else {
-                    Err(concrete_type_mismatch(
-                        "function types incompatible",
-                        expected,
-                        actual,
-                    ))
-                }
+                let expected = expected.unwrap_engine_type_index();
+                let actual = actual.unwrap_engine_type_index();
+                type_reference(engine, expected, actual)
             }
             _ => bail!("expected func found {}", entity_desc(actual)),
         },

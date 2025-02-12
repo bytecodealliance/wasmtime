@@ -191,7 +191,9 @@ impl wasmtime_environ::Compiler for Compiler {
         let isa = &*self.isa;
         let module = &translation.module;
         let func_index = module.func_index(func_index);
-        let sig = translation.module.functions[func_index].signature;
+        let sig = translation.module.functions[func_index]
+            .signature
+            .unwrap_module_type_index();
         let wasm_func_ty = types[sig].unwrap_func();
 
         let mut compiler = self.function_compiler();
@@ -292,7 +294,9 @@ impl wasmtime_environ::Compiler for Compiler {
         def_func_index: DefinedFuncIndex,
     ) -> Result<Box<dyn Any + Send>, CompileError> {
         let func_index = translation.module.func_index(def_func_index);
-        let sig = translation.module.functions[func_index].signature;
+        let sig = translation.module.functions[func_index]
+            .signature
+            .unwrap_module_type_index();
         let wasm_func_ty = types[sig].unwrap_func();
 
         let isa = &*self.isa;

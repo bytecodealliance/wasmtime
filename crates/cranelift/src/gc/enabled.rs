@@ -284,7 +284,7 @@ pub fn translate_struct_new_default(
     builder: &mut FunctionBuilder<'_>,
     struct_type_index: TypeIndex,
 ) -> WasmResult<ir::Value> {
-    let interned_ty = func_env.module.types[struct_type_index];
+    let interned_ty = func_env.module.types[struct_type_index].unwrap_module_type_index();
     let struct_ty = func_env.types.unwrap_struct(interned_ty)?;
     let fields = struct_ty
         .fields
@@ -310,7 +310,7 @@ pub fn translate_struct_get(
     func_env.trapz(builder, struct_ref, crate::TRAP_NULL_REFERENCE);
 
     let field_index = usize::try_from(field_index).unwrap();
-    let interned_type_index = func_env.module.types[struct_type_index];
+    let interned_type_index = func_env.module.types[struct_type_index].unwrap_module_type_index();
 
     let struct_layout = func_env.struct_layout(interned_type_index);
     let struct_size = struct_layout.size;
@@ -355,7 +355,7 @@ pub fn translate_struct_set(
     func_env.trapz(builder, struct_ref, crate::TRAP_NULL_REFERENCE);
 
     let field_index = usize::try_from(field_index).unwrap();
-    let interned_type_index = func_env.module.types[struct_type_index];
+    let interned_type_index = func_env.module.types[struct_type_index].unwrap_module_type_index();
 
     let struct_layout = func_env.struct_layout(interned_type_index);
     let struct_size = struct_layout.size;
@@ -411,7 +411,7 @@ pub fn translate_array_new_default(
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_new_default({array_type_index:?}, {len:?})");
 
-    let interned_ty = func_env.module.types[array_type_index];
+    let interned_ty = func_env.module.types[array_type_index].unwrap_module_type_index();
     let array_ty = func_env.types.unwrap_array(interned_ty)?;
     let elem = default_value(&mut builder.cursor(), func_env, &array_ty.0.element_type);
     let result = gc_compiler(func_env)?.alloc_array(
@@ -621,7 +621,7 @@ pub fn translate_array_fill(
     func_env.trapnz(builder, out_of_bounds, crate::TRAP_ARRAY_OUT_OF_BOUNDS);
 
     // Get the address of the first element we want to fill.
-    let interned_type_index = func_env.module.types[array_type_index];
+    let interned_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
     let ArraySizeInfo {
         obj_size,
         one_elem_size,
@@ -821,7 +821,7 @@ pub fn translate_array_get(
 ) -> WasmResult<ir::Value> {
     log::trace!("translate_array_get({array_type_index:?}, {array_ref:?}, {index:?})");
 
-    let array_type_index = func_env.module.types[array_type_index];
+    let array_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
     let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index);
 
     let array_ty = func_env.types.unwrap_array(array_type_index)?;
@@ -842,7 +842,7 @@ pub fn translate_array_set(
 ) -> WasmResult<()> {
     log::trace!("translate_array_set({array_type_index:?}, {array_ref:?}, {index:?}, {value:?})");
 
-    let array_type_index = func_env.module.types[array_type_index];
+    let array_type_index = func_env.module.types[array_type_index].unwrap_module_type_index();
     let elem_addr = array_elem_addr(func_env, builder, array_type_index, array_ref, index);
 
     let array_ty = func_env.types.unwrap_array(array_type_index)?;

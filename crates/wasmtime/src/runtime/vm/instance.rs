@@ -857,14 +857,9 @@ impl Instance {
     fn construct_func_ref(
         &mut self,
         index: FuncIndex,
-        sig: ModuleInternedTypeIndex,
+        type_index: VMSharedTypeIndex,
         into: *mut VMFuncRef,
     ) {
-        let type_index = unsafe {
-            let base = self.type_ids_array().read().as_ptr();
-            *base.add(sig.index())
-        };
-
         let func_ref = if let Some(def_index) = self.env_module().defined_func_index(index) {
             VMFuncRef {
                 array_call: self
@@ -932,7 +927,7 @@ impl Instance {
             // if we don't have to track "is-initialized" state at
             // all!
             let func = &self.env_module().functions[index];
-            let sig = func.signature;
+            let sig = func.signature.unwrap_engine_type_index();
             let func_ref = self
                 .vmctx_plus_offset_mut::<VMFuncRef>(self.offsets().vmctx_func_ref(func.func_ref));
             self.construct_func_ref(index, sig, func_ref.as_ptr());

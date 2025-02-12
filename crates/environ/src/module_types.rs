@@ -1,4 +1,6 @@
-use crate::{ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, PrimaryMap, WasmSubType};
+use crate::{
+    ModuleInternedRecGroupIndex, ModuleInternedTypeIndex, PrimaryMap, TypeTrace, WasmSubType,
+};
 use core::ops::{Index, Range};
 use cranelift_entity::{packed_option::PackedOption, SecondaryMap};
 use serde_derive::{Deserialize, Serialize};
@@ -12,6 +14,28 @@ pub struct ModuleTypes {
     rec_groups: PrimaryMap<ModuleInternedRecGroupIndex, Range<ModuleInternedTypeIndex>>,
     wasm_types: PrimaryMap<ModuleInternedTypeIndex, WasmSubType>,
     trampoline_types: SecondaryMap<ModuleInternedTypeIndex, PackedOption<ModuleInternedTypeIndex>>,
+}
+
+impl TypeTrace for ModuleTypes {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(crate::EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        for ty in self.wasm_types.values() {
+            ty.trace(func)?;
+        }
+        Ok(())
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut crate::EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        for ty in self.wasm_types.values_mut() {
+            ty.trace_mut(func)?;
+        }
+        Ok(())
+    }
 }
 
 impl ModuleTypes {
@@ -78,6 +102,11 @@ impl ModuleTypes {
     pub fn trampoline_type(&self, ty: ModuleInternedTypeIndex) -> ModuleInternedTypeIndex {
         debug_assert!(self[ty].is_func());
         self.trampoline_types[ty].unwrap()
+    }
+
+    /// Iterate over ever type in this set, mutably.
+    pub fn iter_mut(&mut self) -> impl ExactSizeIterator<Item = &mut WasmSubType> {
+        self.wasm_types.iter_mut().map(|(_id, ty)| ty)
     }
 }
 

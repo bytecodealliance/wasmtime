@@ -234,19 +234,13 @@ impl Global {
     }
 
     pub(crate) unsafe fn from_wasmtime_global(
-        mut wasmtime_export: crate::runtime::vm::ExportGlobal,
+        wasmtime_export: crate::runtime::vm::ExportGlobal,
         store: &mut StoreOpaque,
     ) -> Global {
-        wasmtime_export
+        debug_assert!(wasmtime_export
             .global
             .wasm_ty
-            .canonicalize_for_runtime_usage(&mut |module_index| {
-                crate::runtime::vm::Instance::from_vmctx(
-                    wasmtime_export.vmctx.unwrap(),
-                    |instance| instance.engine_type_index(module_index),
-                )
-            });
-
+            .is_canonicalized_for_runtime_usage());
         Global(store.store_data_mut().insert(wasmtime_export))
     }
 

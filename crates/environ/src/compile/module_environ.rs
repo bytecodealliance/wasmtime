@@ -226,7 +226,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     .iter()
                     .filter_map(|(_, func)| {
                         if func.is_escaping() {
-                            Some(func.signature)
+                            Some(func.signature.unwrap_module_type_index())
                         } else {
                             None
                         }
@@ -282,7 +282,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     let len = elems.len();
                     self.result.module.types.reserve(len);
                     for ty in elems {
-                        self.result.module.types.push(ty);
+                        self.result.module.types.push(ty.into());
                     }
 
                     // Advance `type_index` to the start of the next rec group.
@@ -304,7 +304,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             let interned_index = self.result.module.types[index];
                             self.result.module.num_imported_funcs += 1;
                             self.result.debuginfo.wasm_file.imported_func_count += 1;
-                            EntityType::Function(EngineOrModuleTypeIndex::Module(interned_index))
+                            EntityType::Function(interned_index)
                         }
                         TypeRef::Memory(ty) => {
                             self.result.module.num_imported_memories += 1;
@@ -533,7 +533,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                 let func_index = FuncIndex::from_u32(func_index);
 
                 if self.tunables.generate_native_debuginfo {
-                    let sig_index = self.result.module.functions[func_index].signature;
+                    let sig_index = self.result.module.functions[func_index]
+                        .signature
+                        .unwrap_module_type_index();
                     let sig = self.types[sig_index].unwrap_func();
                     let mut locals = Vec::new();
                     for pair in body.get_locals_reader()? {
@@ -856,13 +858,17 @@ and for re-adding support for interface types you can see this issue:
 
 impl TypeConvert for ModuleEnvironment<'_, '_> {
     fn lookup_heap_type(&self, index: wasmparser::UnpackedIndex) -> WasmHeapType {
-        WasmparserTypeConverter::new(&self.types, |idx| self.result.module.types[idx])
-            .lookup_heap_type(index)
+        WasmparserTypeConverter::new(&self.types, |idx| {
+            self.result.module.types[idx].unwrap_module_type_index()
+        })
+        .lookup_heap_type(index)
     }
 
     fn lookup_type_index(&self, index: wasmparser::UnpackedIndex) -> EngineOrModuleTypeIndex {
-        WasmparserTypeConverter::new(&self.types, |idx| self.result.module.types[idx])
-            .lookup_type_index(index)
+        WasmparserTypeConverter::new(&self.types, |idx| {
+            self.result.module.types[idx].unwrap_module_type_index()
+        })
+        .lookup_type_index(index)
     }
 }
 

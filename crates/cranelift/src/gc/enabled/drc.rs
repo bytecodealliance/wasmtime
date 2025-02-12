@@ -305,7 +305,8 @@ impl GcCompiler for DrcCompiler {
         array_type_index: TypeIndex,
         init: super::ArrayInit<'_>,
     ) -> WasmResult<ir::Value> {
-        let interned_type_index = func_env.module.types[array_type_index];
+        let interned_type_index =
+            func_env.module.types[array_type_index].unwrap_module_type_index();
         let ptr_ty = func_env.pointer_type();
 
         let len_offset = gc_compiler(func_env)?.layouts().array_length_field_offset();
@@ -369,7 +370,8 @@ impl GcCompiler for DrcCompiler {
     ) -> WasmResult<ir::Value> {
         // First, call the `gc_alloc_raw` builtin libcall to allocate the
         // struct.
-        let interned_type_index = func_env.module.types[struct_type_index];
+        let interned_type_index =
+            func_env.module.types[struct_type_index].unwrap_module_type_index();
 
         let struct_layout = func_env.struct_layout(interned_type_index);
 

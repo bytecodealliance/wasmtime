@@ -1406,7 +1406,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 // If `ty_index` matches `table_ty`, then this call is
                 // statically known to have the right type, so no checks are
                 // necessary.
-                let specified_ty = self.env.module.types[ty_index];
+                let specified_ty = self.env.module.types[ty_index].unwrap_module_type_index();
                 if specified_ty == table_ty {
                     return CheckIndirectCallTypeSignature::StaticMatch {
                         may_be_null: table.ref_type.nullable,
@@ -1478,7 +1478,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         }
 
         // Load the caller's `VMSharedTypeIndex.
-        let interned_ty = self.env.module.types[ty_index];
+        let interned_ty = self.env.module.types[ty_index].unwrap_module_type_index();
         let caller_sig_id = self
             .env
             .module_interned_to_shared_ty(&mut self.builder.cursor(), interned_ty);
@@ -1677,13 +1677,17 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
 
 impl TypeConvert for FuncEnvironment<'_> {
     fn lookup_heap_type(&self, ty: wasmparser::UnpackedIndex) -> WasmHeapType {
-        wasmtime_environ::WasmparserTypeConverter::new(self.types, |idx| self.module.types[idx])
-            .lookup_heap_type(ty)
+        wasmtime_environ::WasmparserTypeConverter::new(self.types, |idx| {
+            self.module.types[idx].unwrap_module_type_index()
+        })
+        .lookup_heap_type(ty)
     }
 
     fn lookup_type_index(&self, index: wasmparser::UnpackedIndex) -> EngineOrModuleTypeIndex {
-        wasmtime_environ::WasmparserTypeConverter::new(self.types, |idx| self.module.types[idx])
-            .lookup_type_index(index)
+        wasmtime_environ::WasmparserTypeConverter::new(self.types, |idx| {
+            self.module.types[idx].unwrap_module_type_index()
+        })
+        .lookup_type_index(index)
     }
 }
 
@@ -1931,7 +1935,7 @@ impl FuncEnvironment<'_> {
     }
 
     pub fn struct_fields_len(&mut self, struct_type_index: TypeIndex) -> WasmResult<usize> {
-        let ty = self.module.types[struct_type_index];
+        let ty = self.module.types[struct_type_index].unwrap_module_type_index();
         match &self.types[ty].composite_type.inner {
             WasmCompositeInnerType::Struct(s) => Ok(s.fields.len()),
             _ => unreachable!(),
@@ -2029,7 +2033,7 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<ir::Value> {
         let libcall = gc::builtins::array_new_data(self, builder.func)?;
         let vmctx = self.vmctx_val(&mut builder.cursor());
-        let interned_type_index = self.module.types[array_type_index];
+        let interned_type_index = self.module.types[array_type_index].unwrap_module_type_index();
         let interned_type_index = builder
             .ins()
             .iconst(I32, i64::from(interned_type_index.as_u32()));
@@ -2052,7 +2056,7 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<ir::Value> {
         let libcall = gc::builtins::array_new_elem(self, builder.func)?;
         let vmctx = self.vmctx_val(&mut builder.cursor());
-        let interned_type_index = self.module.types[array_type_index];
+        let interned_type_index = self.module.types[array_type_index].unwrap_module_type_index();
         let interned_type_index = builder
             .ins()
             .iconst(I32, i64::from(interned_type_index.as_u32()));
@@ -2109,7 +2113,7 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<()> {
         let libcall = gc::builtins::array_init_data(self, builder.func)?;
         let vmctx = self.vmctx_val(&mut builder.cursor());
-        let interned_type_index = self.module.types[array_type_index];
+        let interned_type_index = self.module.types[array_type_index].unwrap_module_type_index();
         let interned_type_index = builder
             .ins()
             .iconst(I32, i64::from(interned_type_index.as_u32()));
@@ -2141,7 +2145,7 @@ impl FuncEnvironment<'_> {
     ) -> WasmResult<()> {
         let libcall = gc::builtins::array_init_elem(self, builder.func)?;
         let vmctx = self.vmctx_val(&mut builder.cursor());
-        let interned_type_index = self.module.types[array_type_index];
+        let interned_type_index = self.module.types[array_type_index].unwrap_module_type_index();
         let interned_type_index = builder
             .ins()
             .iconst(I32, i64::from(interned_type_index.as_u32()));
@@ -2513,7 +2517,7 @@ impl FuncEnvironment<'_> {
         func: &mut ir::Function,
         index: TypeIndex,
     ) -> WasmResult<ir::SigRef> {
-        let interned_index = self.module.types[index];
+        let interned_index = self.module.types[index].unwrap_module_type_index();
         let wasm_func_ty = self.types[interned_index].unwrap_func();
         let sig = crate::wasm_call_signature(self.isa, wasm_func_ty, &self.tunables);
         let sig_ref = func.import_signature(sig);
@@ -2526,7 +2530,9 @@ impl FuncEnvironment<'_> {
         func: &mut ir::Function,
         index: FuncIndex,
     ) -> WasmResult<ir::FuncRef> {
-        let sig = self.module.functions[index].signature;
+        let sig = self.module.functions[index]
+            .signature
+            .unwrap_module_type_index();
         let wasm_func_ty = self.types[sig].unwrap_func();
         let sig = crate::wasm_call_signature(self.isa, wasm_func_ty, &self.tunables);
         let signature = func.import_signature(sig);

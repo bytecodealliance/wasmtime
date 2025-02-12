@@ -475,7 +475,7 @@ impl Module {
         // Acquire this module's metadata and type information, deserializing
         // it from the provided artifact if it wasn't otherwise provided
         // already.
-        let (info, types) = match info_and_types {
+        let (mut info, mut types) = match info_and_types {
             Some((info, types)) => (info, types),
             None => postcard::from_bytes(code_memory.wasmtime_info())?,
         };
@@ -488,7 +488,8 @@ impl Module {
         // Note that the unsafety here should be ok since the `trampolines`
         // field should only point to valid trampoline function pointers
         // within the text section.
-        let signatures = TypeCollection::new_for_module(engine, &types);
+        let signatures =
+            engine.register_and_canonicalize_types(&mut types, core::iter::once(&mut info.module));
 
         // Package up all our data into a `CodeObject` and delegate to the final
         // step of module compilation.
@@ -708,10 +709,8 @@ impl Module {
         let engine = self.engine();
         module
             .imports()
-            .map(move |(imp_mod, imp_field, mut ty)| {
-                ty.canonicalize_for_runtime_usage(&mut |i| {
-                    self.signatures().shared_type(i).unwrap()
-                });
+            .map(move |(imp_mod, imp_field, ty)| {
+                debug_assert!(ty.is_canonicalized_for_runtime_usage());
                 ImportType::new(imp_mod, imp_field, ty, types, engine)
             })
             .collect::<Vec<_>>()

@@ -189,7 +189,8 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                 BlockSig::new(control::BlockType::single(ty))
             }
             FuncType(idx) => {
-                let sig_index = self.translation.module.types[TypeIndex::from_u32(idx)];
+                let sig_index = self.translation.module.types[TypeIndex::from_u32(idx)]
+                    .unwrap_module_type_index();
                 let sig = self.types[sig_index].unwrap_func();
                 BlockSig::new(control::BlockType::func(sig.clone()))
             }
@@ -338,7 +339,7 @@ impl<'a, 'translation, 'data, P: PtrSize> FuncEnv<'a, 'translation, 'data, P> {
                 if self.resolved_sigs.contains_key(idx) {
                     Ok(self.resolved_sigs.get(idx).unwrap())
                 } else {
-                    let sig_index = self.translation.module.types[*idx];
+                    let sig_index = self.translation.module.types[*idx].unwrap_module_type_index();
                     let ty = self.types[sig_index].unwrap_func();
                     let sig = wasm_sig::<A>(ty)?;
                     self.resolved_sigs.insert(*idx, sig);
@@ -391,7 +392,7 @@ pub(crate) struct TypeConverter<'a, 'data: 'a> {
 impl TypeConvert for TypeConverter<'_, '_> {
     fn lookup_heap_type(&self, idx: wasmparser::UnpackedIndex) -> WasmHeapType {
         wasmtime_environ::WasmparserTypeConverter::new(self.types, |idx| {
-            self.translation.module.types[idx]
+            self.translation.module.types[idx].unwrap_module_type_index()
         })
         .lookup_heap_type(idx)
     }
@@ -401,7 +402,7 @@ impl TypeConvert for TypeConverter<'_, '_> {
         index: wasmparser::UnpackedIndex,
     ) -> wasmtime_environ::EngineOrModuleTypeIndex {
         wasmtime_environ::WasmparserTypeConverter::new(self.types, |idx| {
-            self.translation.module.types[idx]
+            self.translation.module.types[idx].unwrap_module_type_index()
         })
         .lookup_type_index(index)
     }

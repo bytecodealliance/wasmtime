@@ -815,7 +815,7 @@ impl FunctionIndices {
                     .module
                     .types
                     .iter()
-                    .map(|(_, ty)| *ty)
+                    .map(|(_, ty)| ty.unwrap_module_type_index())
                     .filter(|idx| types[*idx].is_func())
                     .map(|idx| types.trampoline_type(idx))
                     .collect::<BTreeSet<_>>();
