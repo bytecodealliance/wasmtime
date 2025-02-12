@@ -284,6 +284,7 @@ mod wasi {
     }
 
     #[tokio::test]
+    #[cfg_attr(miri, ignore)]
     async fn sched_yield_test_async() -> Result<()> {
         assert_eq!(run_wasi_test_async(SCHED_YIELD_WAT).await?, 0);
         Ok(())
