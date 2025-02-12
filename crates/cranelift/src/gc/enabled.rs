@@ -29,7 +29,7 @@ pub fn gc_compiler(func_env: &FuncEnvironment<'_>) -> WasmResult<Box<dyn GcCompi
         Some(Collector::DeferredReferenceCounting) => Ok(Box::new(drc::DrcCompiler::default())),
         #[cfg(not(feature = "gc-drc"))]
         Some(Collector::DeferredReferenceCounting) => Err(wasm_unsupported!(
-            "the null collector is unavailable because the `gc-drc` feature \
+            "the DRC collector is unavailable because the `gc-drc` feature \
              was disabled at compile time",
         )),
 
