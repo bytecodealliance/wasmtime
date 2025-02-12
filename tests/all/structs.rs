@@ -1,5 +1,6 @@
 use super::gc_store;
 use wasmtime::*;
+use wasmtime_test_macros::wasmtime_test;
 
 #[test]
 fn struct_new_empty() -> Result<()> {
@@ -748,5 +749,40 @@ fn struct_ref_struct_in_same_rec_group_in_global() -> Result<()> {
         "#,
     )?;
     let _instance = Instance::new(&mut store, &module, &[])?;
+    Ok(())
+}
+
+#[wasmtime_test(wasm_features(function_references, gc))]
+#[cfg_attr(miri, ignore)]
+fn issue_9714(config: &mut Config) -> Result<()> {
+    let engine = Engine::new(config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+              (rec (type $a (struct))
+                   (type $b (struct)))
+              (rec (type $c (struct)))
+
+              (func (export "fa") (result (ref null $a)) unreachable)
+              (func (export "fb") (result (ref null $b)) unreachable)
+              (func (export "fc") (result (ref null $c)) unreachable)
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+
+    for exp in module.exports() {
+        let res_ty = exp.ty().unwrap_func().result(0).unwrap();
+        let struct_ty = res_ty
+            .unwrap_ref()
+            .heap_type()
+            .unwrap_concrete_struct()
+            .clone();
+        let _ = StructRefPre::new(&mut store, struct_ty);
+    }
+
     Ok(())
 }

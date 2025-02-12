@@ -265,13 +265,11 @@ impl PartialEq for RegisteredType {
     fn eq(&self, other: &Self) -> bool {
         let eq = self.index == other.index && Engine::same(&self.engine, &other.engine);
 
-        if cfg!(debug_assertions) {
-            if eq {
-                assert!(Arc::ptr_eq(&self.entry.0, &other.entry.0));
-                assert_eq!(self.ty, other.ty);
-            } else {
-                assert!(self.ty != other.ty || !Engine::same(&self.engine, &other.engine));
-            }
+        if cfg!(debug_assertions) && eq {
+            // If they are the same, then their rec group entries and
+            // `WasmSubType`s had better also be the same.
+            assert!(Arc::ptr_eq(&self.entry.0, &other.entry.0));
+            assert_eq!(self.ty, other.ty);
         }
 
         eq
