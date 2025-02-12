@@ -343,21 +343,3 @@ pub enum ControlEffect {
     /// Used to signal that a continuation has invoked a `suspend` instruction.
     Switch = CONTROL_EFFECT_SWITCH_DISCRIMINANT,
 }
-
-// FIXME(frank-emrich) This conversion assumes little-endian data layout.
-// We convert to and from u64 as follows: The 4 LSBs of the u64 are the
-// discriminant, the 4 MSBs are the handler_index (if `Suspend`)
-impl From<u64> for ControlEffect {
-    fn from(val: u64) -> ControlEffect {
-        unsafe { core::mem::transmute::<u64, ControlEffect>(val) }
-    }
-}
-
-// FIXME(frank-emrich) This conversion assumes little-endian data layout.
-// We convert to and from u64 as follows: The 4 LSBs of the u64 are the
-// discriminant, the 4 MSBs are the handler_index (if `Suspend`)
-impl From<ControlEffect> for u64 {
-    fn from(val: ControlEffect) -> u64 {
-        unsafe { core::mem::transmute::<ControlEffect, u64>(val) }
-    }
-}

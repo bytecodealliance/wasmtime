@@ -5,9 +5,11 @@ use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::stack_switching as stack_switching_environ;
 
 /// Universal control effect. This structure encodes return signal,
-/// resume signal, suspension signal, and suspension tags into a
-/// pointer. This instance is used at compile time. There is a runtime
+/// resume signal, suspension signal, and handler index into a
+/// u64 value. This instance is used at compile time. There is a runtime
 /// counterpart in `continuations/src/lib.rs`.
+/// We convert to and from u64 as follows: The 4 LSBs of the u64 are the
+/// discriminant, the 4 MSBs are the handler_index (if `Suspend`)
 #[derive(Clone, Copy)]
 pub struct ControlEffect(ir::Value);
 
@@ -71,7 +73,7 @@ impl ControlEffect {
         Self(val)
     }
 
-    // Returns the payload of the `Suspend` variant
+    /// Returns the payload of the `Suspend` variant
     pub fn handler_index<'a>(
         self,
         _env: &mut crate::func_environ::FuncEnvironment<'a>,
