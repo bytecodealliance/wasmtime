@@ -491,6 +491,7 @@ macro_rules! def_unsupported {
     (emit I16x8Bitmask $($rest:tt)*) => {};
     (emit I32x4Bitmask $($rest:tt)*) => {};
     (emit I64x2Bitmask $($rest:tt)*) => {};
+    (emit I32x4DotI16x8S $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -4123,6 +4124,14 @@ where
         self.context.v128_bitmask_op(self.masm, |masm, src, dst| {
             masm.v128_bitmask(src, writable!(dst), OperandSize::S64)
         })
+    }
+
+    fn visit_i32x4_dot_i16x8_s(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, _size| {
+                masm.v128_dot(dst, src, writable!(dst))?;
+                Ok(TypedReg::v128(dst))
+            })
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);

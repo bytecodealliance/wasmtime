@@ -1881,4 +1881,8 @@ pub(crate) trait MacroAssembler {
     /// Extracts the high bit of each lane in `src` and produces a scalar mask
     /// with all bits concatenated in `dst`.
     fn v128_bitmask(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
+
+    /// Lane-wise multiply signed 16-bit integers in `lhs` and `rhs` and add
+    /// adjacent pairs of the 32-bit results.
+    fn v128_dot(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg) -> Result<()>;
 }
