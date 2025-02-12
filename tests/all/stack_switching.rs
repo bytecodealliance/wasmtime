@@ -244,12 +244,14 @@ mod wasi {
 )"#;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn write_something_test() -> Result<()> {
         assert_eq!(run_wasi_test(WRITE_SOMETHING_WAT)?, 0);
         Ok(())
     }
 
     #[tokio::test]
+    #[cfg_attr(miri, ignore)]
     async fn write_something_test_async() -> Result<()> {
         assert_eq!(run_wasi_test_async(WRITE_SOMETHING_WAT).await?, 0);
         Ok(())
@@ -275,6 +277,7 @@ mod wasi {
 )"#;
 
     #[test]
+    #[cfg_attr(miri, ignore)]
     fn sched_yield_test() -> Result<()> {
         assert_eq!(run_wasi_test(SCHED_YIELD_WAT)?, 0);
         Ok(())
