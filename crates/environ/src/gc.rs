@@ -23,7 +23,7 @@ use crate::{
 use core::alloc::Layout;
 
 /// Discriminant to check whether GC reference is an `i31ref` or not.
-pub const I31_DISCRIMINANT: u64 = 1;
+pub const I31_DISCRIMINANT: u32 = 1;
 
 /// The size of the `VMGcHeader` in bytes.
 pub const VM_GC_HEADER_SIZE: u32 = 8;
