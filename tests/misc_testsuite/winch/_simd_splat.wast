@@ -287,8 +287,8 @@
   ;; Conversions
   (func (export "as-f32x4_convert_s_i32x4-operand") (param i32) (result v128)
     (f32x4.convert_i32x4_s (i32x4.splat (local.get 0))))
-;;   (func (export "as-i32x4_trunc_s_f32x4_sat-operand") (param f32) (result v128)
-;;     (i32x4.trunc_sat_f32x4_s (f32x4.splat (local.get 0))))
+  (func (export "as-i32x4_trunc_s_f32x4_sat-operand") (param f32) (result v128)
+    (i32x4.trunc_sat_f32x4_s (f32x4.splat (local.get 0))))
 )
 
 (assert_return (invoke "as-i8x16_extract_lane_s-operand-first" (i32.const 42)) (i32.const 42))
@@ -341,7 +341,7 @@
 ;; (assert_return (invoke "as-f32x4_div-operands" (f32.const 1.0) (f32.const 8.0)) (v128.const f32x4 0.125 0.125 0.125 0.125))
 
 (assert_return (invoke "as-f32x4_convert_s_i32x4-operand" (i32.const 12345)) (v128.const f32x4 12345.0 12345.0 12345.0 12345.0))
-;; (assert_return (invoke "as-i32x4_trunc_s_f32x4_sat-operand" (f32.const 1.1)) (v128.const i32x4 1 1 1 1))
+(assert_return (invoke "as-i32x4_trunc_s_f32x4_sat-operand" (f32.const 1.1)) (v128.const i32x4 1 1 1 1))
 
 
 ;; As the argument of control constructs and WASM instructions

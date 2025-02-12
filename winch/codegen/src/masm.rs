@@ -703,6 +703,33 @@ impl V128AbsKind {
     }
 }
 
+/// Kinds of saturating truncation for vectors supported by WebAssembly.
+pub(crate) enum V128TruncSatKind {
+    /// Signed F32x4.
+    F32x4S,
+    /// Unsigned F32x4.
+    F32x4U,
+    /// Signed F64x2.
+    F64x2SZero,
+    /// Unsigned F64x2.
+    F64x2UZero,
+}
+
+impl V128TruncSatKind {
+    /// The size of the source lanes.
+    pub(crate) fn src_lane_size(&self) -> OperandSize {
+        match self {
+            V128TruncSatKind::F32x4S | V128TruncSatKind::F32x4U => OperandSize::S32,
+            V128TruncSatKind::F64x2SZero | V128TruncSatKind::F64x2UZero => OperandSize::S64,
+        }
+    }
+
+    /// The size of the destination lanes.
+    pub(crate) fn dst_lane_size(&self) -> OperandSize {
+        OperandSize::S32
+    }
+}
+
 /// Operand size, in bits.
 #[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub(crate) enum OperandSize {
@@ -1881,6 +1908,17 @@ pub(crate) trait MacroAssembler {
     /// Extracts the high bit of each lane in `src` and produces a scalar mask
     /// with all bits concatenated in `dst`.
     fn v128_bitmask(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
+
+    /// Lane-wise saturating conversion from float to integer using the IEEE
+    /// `convertToIntegerTowardZero` function. If any input lane is NaN, the
+    /// resulting lane is 0. If the rounded integer value of a lane is outside
+    /// the range of the destination type, the result is saturated to the
+    /// nearest representable integer value.
+    fn v128_trunc_sat(
+        &mut self,
+        context: &mut CodeGenContext<Emission>,
+        kind: V128TruncSatKind,
+    ) -> Result<()>;
 
     /// Lane-wise multiply signed 16-bit integers in `lhs` and `rhs` and add
     /// adjacent pairs of the 32-bit results.
