@@ -8,12 +8,13 @@ use cranelift_codegen::{
     ir::{self, condcodes::IntCC, InstBuilder},
 };
 use cranelift_entity::packed_option::ReservedValue;
+use cranelift_entity::Signed;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
 use wasmtime_environ::{
     wasm_unsupported, Collector, GcArrayLayout, GcLayout, GcStructLayout, ModuleInternedTypeIndex,
     PtrSize, TypeIndex, VMGcKind, WasmHeapTopType, WasmHeapType, WasmRefType, WasmResult,
-    WasmStorageType, WasmValType, I31_DISCRIMINANT, NON_NULL_NON_I31_MASK,
+    WasmStorageType, WasmValType, I31_DISCRIMINANT,
 };
 
 #[cfg(feature = "gc-drc")]
@@ -1031,7 +1032,7 @@ pub fn translate_ref_test(
                 builder,
                 val,
                 Offset::Static(wasmtime_environ::VM_GC_HEADER_TYPE_INDEX_OFFSET),
-                BoundsCheck::Access(wasmtime_environ::VM_GC_HEADER_SIZE),
+                BoundsCheck::Access(func_env.offsets.size_of_vmshared_type_index().into()),
             );
             let actual_shared_ty = builder.ins().load(
                 ir::types::I32,
@@ -1361,6 +1362,7 @@ impl FuncEnvironment<'_> {
         ty: WasmRefType,
         gc_ref: ir::Value,
     ) -> ir::Value {
+        assert_eq!(builder.func.dfg.value_type(gc_ref), ir::types::I32);
         assert!(ty.is_vmgcref_type_and_not_i31());
 
         let might_be_i31 = match ty.heap_type {
@@ -1399,7 +1401,7 @@ impl FuncEnvironment<'_> {
             (false, false) => builder.ins().iconst(ir::types::I32, 0),
 
             // This GC reference is always non-null, but might be an i31.
-            (false, true) => builder.ins().band_imm(gc_ref, I31_DISCRIMINANT as i64),
+            (false, true) => builder.ins().band_imm(gc_ref, I31_DISCRIMINANT.signed()),
 
             // This GC reference might be null, but can never be an i31.
             (true, false) => builder.ins().icmp_imm(IntCC::Equal, gc_ref, 0),
@@ -1407,17 +1409,10 @@ impl FuncEnvironment<'_> {
             // Fully general case: this GC reference could be either null or an
             // i31.
             (true, true) => {
-                // Mask for checking whether any bits are set, other than the
-                // `i31ref` discriminant, which should not be set. This folds
-                // the null and i31ref checks together into a single `band`.
-                let mask = builder.ins().iconst(
-                    ir::types::I32,
-                    (NON_NULL_NON_I31_MASK & u32::MAX as u64) as i64,
-                );
-                let is_non_null_and_non_i31 = builder.ins().band(gc_ref, mask);
-                builder
-                    .ins()
-                    .icmp_imm(ir::condcodes::IntCC::Equal, is_non_null_and_non_i31, 0)
+                let is_i31 = builder.ins().band_imm(gc_ref, I31_DISCRIMINANT.signed());
+                let is_null = builder.ins().icmp_imm(IntCC::Equal, gc_ref, 0);
+                let is_null = builder.ins().uextend(ir::types::I32, is_null);
+                builder.ins().bor(is_i31, is_null)
             }
         }
     }

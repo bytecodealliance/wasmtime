@@ -33,39 +33,39 @@
 ;; @0023                               v13 = ireduce.i32 v12
 ;; @0023                               v16 = uextend.i64 v13
 ;; @0023                               v17 = iadd v15, v16
-;;                                     v49 = iconst.i64 16
-;; @0023                               v18 = iadd v17, v49  ; v49 = 16
+;;                                     v50 = iconst.i64 16
+;; @0023                               v18 = iadd v17, v50  ; v50 = 16
 ;; @0023                               store notrap aligned little v3, v18  ; v3 = 0.0
-;;                                     v50 = iconst.i64 20
-;; @0023                               v19 = iadd v17, v50  ; v50 = 20
+;;                                     v51 = iconst.i64 20
+;; @0023                               v19 = iadd v17, v51  ; v51 = 20
 ;; @0023                               istore8 notrap aligned little v4, v19  ; v4 = 0
-;;                                     v61 = iconst.i8 1
-;; @0023                               brif v61, block3, block2  ; v61 = 1
+;;                                     v53 = iconst.i32 1
+;; @0023                               brif v53, block3, block2  ; v53 = 1
 ;;
 ;;                                 block2:
-;;                                     v68 = iconst.i64 0
-;; @0023                               v29 = iconst.i64 8
-;; @0023                               v30 = uadd_overflow_trap v68, v29, user1  ; v68 = 0, v29 = 8
-;; @0023                               v32 = uadd_overflow_trap v30, v29, user1  ; v29 = 8
-;; @0023                               v27 = load.i64 notrap aligned readonly v0+48
-;; @0023                               v33 = icmp ule v32, v27
-;; @0023                               trapz v33, user1
-;; @0023                               v34 = iadd.i64 v15, v30
-;; @0023                               v35 = load.i64 notrap aligned v34
-;;                                     v53 = iconst.i64 1
-;; @0023                               v36 = iadd v35, v53  ; v53 = 1
-;; @0023                               store notrap aligned v36, v34
+;;                                     v76 = iconst.i64 0
+;; @0023                               v30 = iconst.i64 8
+;; @0023                               v31 = uadd_overflow_trap v76, v30, user1  ; v76 = 0, v30 = 8
+;; @0023                               v33 = uadd_overflow_trap v31, v30, user1  ; v30 = 8
+;; @0023                               v28 = load.i64 notrap aligned readonly v0+48
+;; @0023                               v34 = icmp ule v33, v28
+;; @0023                               trapz v34, user1
+;; @0023                               v35 = iadd.i64 v15, v31
+;; @0023                               v36 = load.i64 notrap aligned v35
+;;                                     v55 = iconst.i64 1
+;; @0023                               v37 = iadd v36, v55  ; v55 = 1
+;; @0023                               store notrap aligned v37, v35
 ;; @0023                               jump block3
 ;;
 ;;                                 block3:
-;;                                     v69 = iconst.i32 0
-;;                                     v51 = iconst.i64 24
-;; @0023                               v20 = iadd.i64 v17, v51  ; v51 = 24
-;; @0023                               store notrap aligned little v69, v20  ; v69 = 0
+;;                                     v77 = iconst.i32 0
+;;                                     v52 = iconst.i64 24
+;; @0023                               v20 = iadd.i64 v17, v52  ; v52 = 24
+;; @0023                               store notrap aligned little v77, v20  ; v77 = 0
 ;; @0023                               v6 = vconst.i8x16 const0
-;;                                     v54 = iconst.i64 32
-;; @0023                               v48 = iadd.i64 v17, v54  ; v54 = 32
-;; @0023                               store notrap aligned little v6, v48  ; v6 = const0
+;;                                     v56 = iconst.i64 32
+;; @0023                               v49 = iadd.i64 v17, v56  ; v56 = 32
+;; @0023                               store notrap aligned little v6, v49  ; v6 = const0
 ;; @0026                               jump block1
 ;;
 ;;                                 block1:
