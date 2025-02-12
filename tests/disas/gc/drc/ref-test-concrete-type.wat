@@ -33,8 +33,7 @@
 ;; @001d                               v17 = uextend.i64 v2
 ;; @001d                               v18 = iconst.i64 4
 ;; @001d                               v19 = uadd_overflow_trap v17, v18, user1  ; v18 = 4
-;; @001d                               v20 = iconst.i64 8
-;; @001d                               v21 = uadd_overflow_trap v19, v20, user1  ; v20 = 8
+;; @001d                               v21 = uadd_overflow_trap v19, v18, user1  ; v18 = 4
 ;; @001d                               v16 = load.i64 notrap aligned readonly v0+48
 ;; @001d                               v22 = icmp ule v21, v16
 ;; @001d                               trapz v22, user1
