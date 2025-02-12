@@ -8,7 +8,6 @@ use cranelift_codegen::{
     ir::{self, condcodes::IntCC, InstBuilder},
 };
 use cranelift_entity::packed_option::ReservedValue;
-use cranelift_entity::Signed;
 use cranelift_frontend::FunctionBuilder;
 use smallvec::SmallVec;
 use wasmtime_environ::{
@@ -899,7 +898,7 @@ pub fn translate_ref_test(
     if ref_ty.heap_type == WasmHeapType::I31 {
         let i31_mask = builder.ins().iconst(
             ir::types::I32,
-            i64::try_from(wasmtime_environ::I31_DISCRIMINANT).unwrap(),
+            i64::from(wasmtime_environ::I31_DISCRIMINANT),
         );
         let is_i31 = builder.ins().band(val, i31_mask);
         let result = if ref_ty.nullable {
@@ -939,7 +938,7 @@ pub fn translate_ref_test(
     if is_any_hierarchy {
         let i31_mask = builder.ins().iconst(
             ir::types::I32,
-            i64::try_from(wasmtime_environ::I31_DISCRIMINANT).unwrap(),
+            i64::from(wasmtime_environ::I31_DISCRIMINANT),
         );
         let is_i31 = builder.ins().band(val, i31_mask);
         // If it is an `i31`, then create the result value based on whether we
@@ -1401,7 +1400,7 @@ impl FuncEnvironment<'_> {
             (false, false) => builder.ins().iconst(ir::types::I32, 0),
 
             // This GC reference is always non-null, but might be an i31.
-            (false, true) => builder.ins().band_imm(gc_ref, I31_DISCRIMINANT.signed()),
+            (false, true) => builder.ins().band_imm(gc_ref, i64::from(I31_DISCRIMINANT)),
 
             // This GC reference might be null, but can never be an i31.
             (true, false) => builder.ins().icmp_imm(IntCC::Equal, gc_ref, 0),
@@ -1409,7 +1408,7 @@ impl FuncEnvironment<'_> {
             // Fully general case: this GC reference could be either null or an
             // i31.
             (true, true) => {
-                let is_i31 = builder.ins().band_imm(gc_ref, I31_DISCRIMINANT.signed());
+                let is_i31 = builder.ins().band_imm(gc_ref, i64::from(I31_DISCRIMINANT));
                 let is_null = builder.ins().icmp_imm(IntCC::Equal, gc_ref, 0);
                 let is_null = builder.ins().uextend(ir::types::I32, is_null);
                 builder.ins().bor(is_i31, is_null)
