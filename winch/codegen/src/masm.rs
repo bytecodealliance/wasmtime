@@ -7,7 +7,7 @@ use crate::isa::{
 use anyhow::Result;
 use cranelift_codegen::{
     binemit::CodeOffset,
-    ir::{Endianness, LibCall, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
+    ir::{Endianness, MemFlags, RelSourceLoc, SourceLoc, UserExternalNameRef},
     Final, MachBufferFinalized, MachLabel,
 };
 use std::{fmt::Debug, ops::Range};
@@ -934,10 +934,6 @@ pub(crate) const MAX_CONTEXT_ARGS: usize = 2;
 /// [FnCall::emit].
 #[derive(Clone, Debug)]
 pub(crate) enum ContextArgs {
-    /// No context arguments required. This is used for libcalls that don't
-    /// require any special context arguments. For example builtin functions
-    /// that perform float calculations.
-    None,
     /// A single context argument is required; the current pinned [VMcontext]
     /// register must be passed as the first argument of the function call.
     VMContext([VMContextLoc; 1]),
@@ -948,11 +944,6 @@ pub(crate) enum ContextArgs {
 }
 
 impl ContextArgs {
-    /// Construct an empty [ContextArgs].
-    pub fn none() -> Self {
-        Self::None
-    }
-
     /// Construct a [ContextArgs] declaring the usage of the pinned [VMContext]
     /// register as both the caller and callee context arguments.
     pub fn pinned_callee_and_caller_vmctx() -> Self {
@@ -979,7 +970,6 @@ impl ContextArgs {
     /// Get a slice of the context arguments.
     pub fn as_slice(&self) -> &[VMContextLoc] {
         match self {
-            Self::None => &[],
             Self::VMContext(a) => a.as_slice(),
             Self::CalleeAndCallerVMContext(a) => a.as_slice(),
         }
@@ -992,8 +982,6 @@ pub(crate) enum CalleeKind {
     Indirect(Reg),
     /// A function call to a local function.
     Direct(UserExternalNameRef),
-    /// Call to a well known LibCall.
-    LibCall(LibCall),
 }
 
 impl CalleeKind {
@@ -1005,11 +993,6 @@ impl CalleeKind {
     /// Creates a direct callee kind from a function name.
     pub fn direct(name: UserExternalNameRef) -> Self {
         Self::Direct(name)
-    }
-
-    /// Creates a known callee kind from a libcall.
-    pub fn libcall(call: LibCall) -> Self {
-        Self::LibCall(call)
     }
 }
 

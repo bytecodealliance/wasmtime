@@ -11,12 +11,8 @@
 
 ;; function u0:0(i64 vmctx, i64, i32, f32) tail {
 ;;     gv0 = vmctx
-;;     gv1 = load.i64 notrap aligned readonly gv0+8
-;;     gv2 = load.i64 notrap aligned gv1+16
-;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned gv3+88
-;;     gv5 = load.i64 notrap aligned readonly checked gv3+80
-;;     stack_limit = gv2
+;;     gv1 = load.i64 notrap aligned gv0+88
+;;     gv2 = load.i64 notrap aligned readonly checked gv0+80
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: f32):
 ;; @0031                               v4 = uextend.i64 v2

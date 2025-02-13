@@ -77,8 +77,6 @@ pub enum RelocationTarget {
     Wasm(FuncIndex),
     /// This is a reference to a trampoline for a builtin function.
     Builtin(BuiltinFunctionIndex),
-    /// A compiler-generated libcall.
-    HostLibcall(obj::LibCall),
     /// A pulley->host call from the interpreter.
     PulleyHostcall(u32),
 }

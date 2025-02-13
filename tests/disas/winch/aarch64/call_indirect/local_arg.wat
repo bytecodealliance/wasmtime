@@ -74,7 +74,7 @@
 ;;       mov     x16, #0
 ;;       mov     w1, w16
 ;;       ldur    w2, [x28]
-;;       bl      #0x380
+;;       bl      #0x3a8
 ;;   e8: add     x28, x28, #4
 ;;       ldur    x9, [x28, #0x14]
 ;;       b       #0xf8

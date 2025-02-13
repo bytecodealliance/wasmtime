@@ -19,7 +19,7 @@ use crate::prelude::*;
 use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
-use crate::runtime::vm::{Instance, InterpreterRef, VMContext, VMRuntimeLimits};
+use crate::runtime::vm::{i8x16, Instance, InterpreterRef, VMContext, VMRuntimeLimits};
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::ops::Range;
@@ -36,6 +36,7 @@ pub use traphandlers::SignalHandler;
 pub(crate) struct TrapRegisters {
     pub pc: usize,
     pub fp: usize,
+    pub sp: usize,
 }
 
 /// Return value from `test_if_trap`.
@@ -175,6 +176,9 @@ host_result_no_catch! {
     u32,
     *mut u8,
     u64,
+    f32,
+    f64,
+    i8x16,
 }
 
 impl HostResult for NonNull<u8> {
@@ -689,11 +693,18 @@ impl CallThreadState {
             return TrapTest::NotWasm;
         };
 
+        let stack_overflow_trap = if let Some(faulting_address) = faulting_addr {
+            (regs.sp - 128 <= faulting_address && faulting_address <= regs.sp + 4096)
+                .then_some(wasmtime_environ::Trap::StackOverflow)
+        } else {
+            None
+        };
+
         // If the fault was at a location that was not marked as potentially
         // trapping, then that's a bug in Cranelift/Winch/etc. Don't try to
         // catch the trap and pretend this isn't wasm so the program likely
         // aborts.
-        let Some(trap) = code.lookup_trap_code(text_offset) else {
+        let Some(trap) = stack_overflow_trap.or_else(|| code.lookup_trap_code(text_offset)) else {
             return TrapTest::NotWasm;
         };
 
