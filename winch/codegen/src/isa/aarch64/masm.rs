@@ -14,10 +14,10 @@ use crate::{
     },
     masm::{
         CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, HandleOverflowKind,
-        Imm as I, IntCmpKind, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm,
-        RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot,
-        StoreKind, TrapCode, TruncKind, V128AbsKind, V128ConvertKind, V128ExtendKind,
-        V128NarrowKind, VectorCompareKind, VectorEqualityKind, Zero, TRUSTED_FLAGS,
+        Imm as I, IntCmpKind, LoadKind, MacroAssembler as Masm, MaxKind, MinKind, MulWideKind,
+        OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind,
+        SplatKind, StackSlot, StoreKind, TrapCode, TruncKind, V128AbsKind, V128ConvertKind,
+        V128ExtendKind, V128NarrowKind, VectorCompareKind, VectorEqualityKind, Zero, TRUSTED_FLAGS,
         UNTRUSTED_FLAGS,
     },
     stack::TypedReg,
@@ -1192,6 +1192,47 @@ impl Masm for MacroAssembler {
 
     fn v128_bitmask(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
         bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_min(
+        &mut self,
+        _src1: Reg,
+        _src2: Reg,
+        _dst: WritableReg,
+        _lane_width: OperandSize,
+        _kind: MinKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_max(
+        &mut self,
+        _src1: Reg,
+        _src2: Reg,
+        _dst: WritableReg,
+        _lane_width: OperandSize,
+        _kind: MaxKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_extmul(
+        &mut self,
+        _context: &mut CodeGenContext<Emission>,
+        _lane_width: OperandSize,
+        _kind: crate::masm::ExtMulKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_extadd_pairwise(
+        &mut self,
+        _src: Reg,
+        _dst: WritableReg,
+        _lane_width: OperandSize,
+        _kind: crate::masm::ExtAddKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
     fn v128_dot(&mut self, _lhs: Reg, _rhs: Reg, _dst: WritableReg) -> Result<()> {

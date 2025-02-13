@@ -38,6 +38,42 @@ impl RemKind {
     }
 }
 
+/// Min operation kind.
+pub(crate) enum MinKind {
+    /// Signed min.
+    Signed,
+    /// Unsigned min.
+    Unsigned,
+}
+
+/// Max operation kind.
+pub(crate) enum MaxKind {
+    /// Signed max.
+    Signed,
+    /// Unsigned max.
+    Unsigned,
+}
+
+/// Kind of extend-multiply.
+pub(crate) enum ExtMulKind {
+    // Sign-extend higher-half of each lane.
+    HighSigned,
+    // Sign-extend lower-half of each lane.
+    LowSigned,
+    // Extend higher-half of each lane.
+    HighUnsigned,
+    // Extend lower-half of each lane.
+    LowUnsigned,
+}
+
+/// Kind of pairwise extend-add.
+pub(crate) enum ExtAddKind {
+    /// Signed pairwise extend add.
+    Signed,
+    /// Unsigned pairwise extend add.
+    Unsigned,
+}
+
 #[derive(Eq, PartialEq)]
 pub(crate) enum MulWideKind {
     Signed,
@@ -568,6 +604,7 @@ impl V128NarrowKind {
 }
 
 /// Kinds of vector extending operations supported by WebAssembly.
+#[derive(Debug, Copy, Clone)]
 pub(crate) enum V128ExtendKind {
     /// Low half of i8x16 sign extended.
     LowI8x16S,
@@ -1881,6 +1918,55 @@ pub(crate) trait MacroAssembler {
     /// Extracts the high bit of each lane in `src` and produces a scalar mask
     /// with all bits concatenated in `dst`.
     fn v128_bitmask(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
+
+    /// Perform a lane-wise `min` operation between `src1` and `src2`, interpreted as packed
+    /// integers of size `lane_width`.
+    ///
+    /// `kind` specifies whether the operand are interpreted as signed or unsigned integers.
+    fn v128_min(
+        &mut self,
+        src1: Reg,
+        src2: Reg,
+        dst: WritableReg,
+        lane_width: OperandSize,
+        kind: MinKind,
+    ) -> Result<()>;
+
+    /// Perform a lane-wise `max` operation between `src1` and `src2`, interpreted as packed
+    /// integers of size `lane_width`.
+    ///
+    /// `kind` specifies whether the operand are interpreted as signed or unsigned integers.
+    fn v128_max(
+        &mut self,
+        src1: Reg,
+        src2: Reg,
+        dst: WritableReg,
+        lane_width: OperandSize,
+        kind: MaxKind,
+    ) -> Result<()>;
+
+    /// Perform the lane-wise integer extended multiplication producing twice wider result than the
+    /// inputs. This is equivalent to an extend followed by a multiply.
+    ///
+    /// The extension to be performed is inferred from the `lane_width` and the `kind` of extmul,
+    /// e.g, if `lane_width` is `S16`, and `kind` is `LowSigned`, then we sign-extend the lower
+    /// 8bits of the 16bits lanes.
+    fn v128_extmul(
+        &mut self,
+        context: &mut CodeGenContext<Emission>,
+        lane_width: OperandSize,
+        kind: ExtMulKind,
+    ) -> Result<()>;
+
+    /// Perform the lane-wise integer extended pairwise addition producing extended results (twice
+    /// wider results than the inputs).
+    fn v128_extadd_pairwise(
+        &mut self,
+        src: Reg,
+        dst: WritableReg,
+        lane_width: OperandSize,
+        kind: ExtAddKind,
+    ) -> Result<()>;
 
     /// Lane-wise multiply signed 16-bit integers in `lhs` and `rhs` and add
     /// adjacent pairs of the 32-bit results.
