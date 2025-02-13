@@ -229,7 +229,7 @@ impl WasmValType {
         match bits {
             32 => Self::I32,
             64 => Self::I64,
-            size => panic!("invaid int bits for WasmValType: {size}"),
+            size => panic!("invalid int bits for WasmValType: {size}"),
         }
     }
 }
