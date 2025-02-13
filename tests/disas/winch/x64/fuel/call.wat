@@ -14,21 +14,25 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x91
+;;       ja      0x9f
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
+;;       movq    8(%r14), %rax
+;;       movq    (%rax), %r11
+;;       addq    $1, %r11
+;;       movq    %r11, (%rax)
 ;;       movq    8(%r14), %rcx
 ;;       movq    (%rcx), %rcx
 ;;       cmpq    $0, %rcx
-;;       jl      0x4a
-;;   3d: movq    %r14, %rdi
-;;       callq   0x1f1
+;;       jl      0x58
+;;   4b: movq    %r14, %rdi
+;;       callq   0x201
 ;;       movq    8(%rsp), %r14
 ;;       movq    8(%r14), %rax
 ;;       movq    (%rax), %r11
-;;       addq    $2, %r11
+;;       addq    $1, %r11
 ;;       movq    %r11, (%rax)
 ;;       movq    0x58(%r14), %rcx
 ;;       movq    0x48(%r14), %rax
@@ -42,12 +46,12 @@
 ;;       movq    %r11, (%rax)
 ;;       movq    %r14, %rdi
 ;;       movq    %r14, %rsi
-;;       callq   0xa0
+;;       callq   0xb0
 ;;       movq    8(%rsp), %r14
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   91: ud2
+;;   9f: ud2
 ;;
 ;; wasm[0]::function[2]::other:
 ;;       pushq   %rbp
@@ -56,23 +60,23 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0xfe
-;;   bc: movq    %rdi, %r14
+;;       ja      0x10e
+;;   cc: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
-;;       movq    8(%r14), %rcx
-;;       movq    (%rcx), %rcx
-;;       cmpq    $0, %rcx
-;;       jl      0xea
-;;   dd: movq    %r14, %rdi
-;;       callq   0x1f1
-;;       movq    8(%rsp), %r14
 ;;       movq    8(%r14), %rax
 ;;       movq    (%rax), %r11
 ;;       addq    $1, %r11
 ;;       movq    %r11, (%rax)
+;;       movq    8(%r14), %rcx
+;;       movq    (%rcx), %rcx
+;;       cmpq    $0, %rcx
+;;       jl      0x108
+;;   fb: movq    %r14, %rdi
+;;       callq   0x201
+;;       movq    8(%rsp), %r14
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   fe: ud2
+;;  10e: ud2
