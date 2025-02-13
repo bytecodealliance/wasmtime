@@ -2644,6 +2644,7 @@ impl Masm for MacroAssembler {
                 // unsigned value.
                 self.asm
                     .xmm_vpadd_rrr(reg.to_reg(), reg2.to_reg(), reg, kind.dst_lane_size());
+                context.free_reg(reg2.to_reg());
             }
             V128TruncSatKind::F64x2SZero => {
                 // Create a NaN mask (1s for non-NaN, 0s for NaN).
