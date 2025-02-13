@@ -1971,4 +1971,8 @@ pub(crate) trait MacroAssembler {
     /// Lane-wise multiply signed 16-bit integers in `lhs` and `rhs` and add
     /// adjacent pairs of the 32-bit results.
     fn v128_dot(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg) -> Result<()>;
+
+    /// Lane-wise rounding average of vectors of integers in `lhs` and `rhs`
+    /// and put the results in `dst`.
+    fn v128_avgr(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
 }

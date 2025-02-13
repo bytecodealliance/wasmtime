@@ -2587,6 +2587,23 @@ impl Assembler {
             dst: dst.to_reg().into(),
         });
     }
+
+    /// Perform an average operation for the vector of unsigned integers in
+    /// `src1` and `src2` and put the results in `dst`.
+    pub fn xmm_vpavg_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpavgb,
+            OperandSize::S16 => AvxOpcode::Vpavgw,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
+        });
+    }
 }
 
 /// Captures the region in a MachBuffer where an add-with-immediate instruction would be emitted,
