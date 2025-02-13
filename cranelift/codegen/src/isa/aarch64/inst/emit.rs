@@ -906,6 +906,7 @@ impl MachInstEmit for Inst {
                     ALUOp::OrrNot => 0b001_01010001,
                     ALUOp::EorNot => 0b010_01010001,
                     ALUOp::AndNot => 0b000_01010001,
+                    ALUOp::RotR => 0b000_10011100,
                     _ => unimplemented!("{:?}", alu_op),
                 };
                 let top11 = top11 | size.sf_bit() << 10;

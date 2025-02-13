@@ -1426,6 +1426,29 @@
 (rule 3 (lower (has_type $I128 (bor x (bnot y)))) (i128_alu_bitop (ALUOp.OrrNot) $I64 x y))
 (rule 4 (lower (has_type $I128 (bor (bnot y) x))) (i128_alu_bitop (ALUOp.OrrNot) $I64 x y))
 
+;; Specialized lowerings to generate the `extr` instruction.
+;;
+;; The `extr` instruction creates `a:b` and then extracts either 32 or 64-bits
+;; starting from an immediate index. This is pattern-matched here as a `bor` of
+;; the high/low halves of two values shifted around.
+;;
+;; The immediate used for the `extr` instruction itself is the N for the
+;; shift-right. Two patterns are used here to detect either ordering of the
+;; `bor`.
+(rule 5 (lower (has_type ty (bor (ishl x (u8_from_iconst xs))
+                                 (ushr y (u8_from_iconst ys)))))
+  (if-let shift (a64_extr_shift ty xs ys))
+  (a64_extr ty x y shift))
+(rule 5 (lower (has_type ty (bor (ushr y (u8_from_iconst ys))
+                                 (ishl x (u8_from_iconst xs)))))
+  (if-let shift (a64_extr_shift ty xs ys))
+  (a64_extr ty x y shift))
+
+;; Helper in Rust to test whether the pair of shifts of `u8` add up to the type
+;; width specified. Optionally returns the second value as `ImmShift`.
+(decl pure partial a64_extr_shift (Type u8 u8) ImmShift)
+(extern constructor a64_extr_shift a64_extr_shift)
+
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 (rule bxor_fits_in_64 -1 (lower (has_type (fits_in_64 ty) (bxor x y)))

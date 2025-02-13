@@ -3302,6 +3302,12 @@
 (decl a64_rotr_imm (Type Reg ImmShift) Reg)
 (rule (a64_rotr_imm ty x y) (alu_rr_imm_shift (ALUOp.RotR) ty x y))
 
+;; Helpers for generating `extr` instructions
+(decl a64_extr (Type Reg Reg ImmShift) Reg)
+(rule (a64_extr ty x y shift) (alu_rrr_shift (ALUOp.RotR) ty x y (a64_extr_imm ty shift)))
+(decl a64_extr_imm (Type ImmShift) ShiftOpAndAmt)
+(extern constructor a64_extr_imm a64_extr_imm)
+
 ;; Helpers for generating `rbit` instructions.
 (spec (rbit ty a)
   (provide

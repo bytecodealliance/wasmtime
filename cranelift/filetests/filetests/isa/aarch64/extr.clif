@@ -1,0 +1,111 @@
+test compile precise-output
+target aarch64
+
+function %a64_extr_i32_12(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = ushr_imm v0, 12
+    v3 = ishl_imm v1, 20
+    v4 = bor v2, v3
+    return v4
+}
+
+; VCode:
+; block0:
+;   ror w0, w1, w0, LSL 12
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   extr w0, w1, w0, #0xc
+;   ret
+
+function %a64_extr_i32_12_swap(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = ishl_imm v0, 20
+    v3 = ushr_imm v1, 12
+    v4 = bor v2, v3
+    return v4
+}
+
+; VCode:
+; block0:
+;   ror w0, w0, w1, LSL 12
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   extr w0, w0, w1, #0xc
+;   ret
+
+function %a64_extr_i32_28(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = ushr_imm v0, 4
+    v3 = ishl_imm v1, 28
+    v4 = bor v2, v3
+    return v4
+}
+
+; VCode:
+; block0:
+;   ror w0, w1, w0, LSL 4
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   extr w0, w1, w0, #4
+;   ret
+
+function %a64_extr_i32_28_swap(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = ishl_imm v0, 4
+    v3 = ushr_imm v1, 28
+    v4 = bor v2, v3
+    return v4
+}
+
+; VCode:
+; block0:
+;   ror w0, w0, w1, LSL 28
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   extr w0, w0, w1, #0x1c
+;   ret
+
+function %a64_extr_i64_12(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = ushr_imm v0, 12
+    v3 = ishl_imm v1, 52
+    v4 = bor v2, v3
+    return v4
+}
+
+; VCode:
+; block0:
+;   ror x0, x1, x0, LSR 12
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   extr x0, x1, x0, #0xc
+;   ret
+
+function %a64_extr_i64_12_swap(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = ishl_imm v0, 52
+    v3 = ushr_imm v1, 12
+    v4 = bor v2, v3
+    return v4
+}
+
+; VCode:
+; block0:
+;   ror x0, x0, x1, LSR 12
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   extr x0, x0, x1, #0xc
+;   ret
+

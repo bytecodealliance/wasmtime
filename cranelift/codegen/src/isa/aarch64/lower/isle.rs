@@ -762,4 +762,33 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         }
         Some(bit as u8)
     }
+
+    /// Used as a helper for generation of `extr` instructions.
+    ///
+    /// Tests that `xs + ys == ty.bits()` and then casts `ys` to the `ImmShift`
+    /// return value.
+    fn a64_extr_shift(&mut self, ty: Type, xs: u8, ys: u8) -> Option<ImmShift> {
+        if u32::from(xs.checked_add(ys)?) != ty.bits() {
+            return None;
+        }
+        ImmShift::maybe_from_u64(ys.into())
+    }
+
+    /// Use as a helper when generating `AluRRRShift` for `extr` instructions.
+    fn a64_extr_imm(&mut self, ty: Type, shift: ImmShift) -> ShiftOpAndAmt {
+        // The `ShiftOpAndAmt` immediate is used with `AluRRRShift` shape which
+        // requires `ShiftOpAndAmt` so the shift of `ty` and `shift` are
+        // translated into `ShiftOpAndAmt` here. The `ShiftOp` value here is
+        // only used for its encoding, not its logical meaning.
+        let (op, expected) = match ty {
+            types::I32 => (ShiftOp::LSL, 0b00),
+            types::I64 => (ShiftOp::LSR, 0b01),
+            _ => unreachable!(),
+        };
+        assert_eq!(op.bits(), expected);
+        ShiftOpAndAmt::new(
+            op,
+            ShiftOpShiftImm::maybe_from_shift(shift.value().into()).unwrap(),
+        )
+    }
 }
