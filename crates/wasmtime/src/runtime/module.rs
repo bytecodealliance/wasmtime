@@ -8,7 +8,6 @@ use crate::{
     code_memory::CodeMemory,
     instantiate::CompiledModule,
     resources::ResourcesRequired,
-    type_registry::TypeCollection,
     types::{ExportType, ExternType, ImportType},
     Engine,
 };
@@ -622,7 +621,8 @@ impl Module {
         self.inner.code.module_types()
     }
 
-    pub(crate) fn signatures(&self) -> &TypeCollection {
+    #[cfg(any(feature = "component-model", feature = "gc-drc"))]
+    pub(crate) fn signatures(&self) -> &crate::type_registry::TypeCollection {
         self.inner.code.signatures()
     }
 
