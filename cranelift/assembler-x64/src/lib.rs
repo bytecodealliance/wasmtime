@@ -36,8 +36,10 @@
 //! With an [`Inst`], we can encode the instruction into a code buffer; see the
 //! [example](Inst).
 
-// All of the generated struct names use snake case.
-#![allow(non_camel_case_types)]
+#![allow(
+    non_camel_case_types,
+    reason = "all of the generated struct names use snake case"
+)]
 
 mod api;
 mod imm;

@@ -280,7 +280,7 @@ impl LegacyPrefix {
 }
 
 #[derive(Debug, PartialEq)]
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, reason = "makes DSL definitions easier to read")]
 pub enum Imm {
     None,
     ib,
