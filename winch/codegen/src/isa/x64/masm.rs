@@ -2674,6 +2674,12 @@ impl Masm for MacroAssembler {
 
         self.v128_add(src, dst.to_reg(), dst, lane_width, HandleOverflowKind::None)
     }
+
+    fn v128_dot(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg) -> Result<()> {
+        self.ensure_has_avx()?;
+        self.asm.xmm_vex_rr(AvxOpcode::Vpmaddwd, lhs, rhs, dst);
+        Ok(())
+    }
 }
 
 impl MacroAssembler {
