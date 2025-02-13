@@ -124,7 +124,7 @@ impl Compiler {
         }
     }
 
-    /// Peform an indirect call from Cranelift-generated code to native code in
+    /// Perform an indirect call from Cranelift-generated code to native code in
     /// Wasmtime itself.
     ///
     /// For native platforms this is a simple `call_indirect` instruction but

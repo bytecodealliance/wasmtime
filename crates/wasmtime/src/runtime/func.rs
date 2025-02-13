@@ -1648,7 +1648,7 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
     // When Cranelift has support for the host then we might be running native
     // compiled code meaning we need to read the actual stack pointer. If
     // Cranelift can't be used though then we're guaranteed to be running pulley
-    // in which case this stack poitner isn't actually used as Pulley has custom
+    // in which case this stack pointer isn't actually used as Pulley has custom
     // mechanisms for stack overflow.
     #[cfg(has_host_compiler_backend)]
     let stack_pointer = crate::runtime::vm::get_stack_pointer();
