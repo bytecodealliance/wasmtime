@@ -14,8 +14,8 @@ use crate::masm::{
     IntCmpKind, LoadKind, MacroAssembler, MaxKind, MemMoveDirection, MinKind, MulWideKind,
     OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind,
     Signed, SplatKind, SplatLoadKind, StoreKind, TruncKind, V128AbsKind, V128ConvertKind,
-    V128ExtendKind, V128LoadExtendKind, V128NarrowKind, VectorCompareKind, VectorEqualityKind,
-    Zero,
+    V128ExtendKind, V128LoadExtendKind, V128NarrowKind, V128TruncSatKind, VectorCompareKind,
+    VectorEqualityKind, Zero,
 };
 
 use crate::reg::{writable, Reg};
@@ -492,6 +492,10 @@ macro_rules! def_unsupported {
     (emit I16x8Bitmask $($rest:tt)*) => {};
     (emit I32x4Bitmask $($rest:tt)*) => {};
     (emit I64x2Bitmask $($rest:tt)*) => {};
+    (emit I32x4TruncSatF32x4S $($rest:tt)*) => {};
+    (emit I32x4TruncSatF32x4U $($rest:tt)*) => {};
+    (emit I32x4TruncSatF64x2SZero $($rest:tt)*) => {};
+    (emit I32x4TruncSatF64x2UZero $($rest:tt)*) => {};
     (emit I8x16MinU $($rest:tt)*) => {};
     (emit I16x8MinU $($rest:tt)*) => {};
     (emit I32x4MinU $($rest:tt)*) => {};
@@ -4161,6 +4165,26 @@ where
         self.context.v128_bitmask_op(self.masm, |masm, src, dst| {
             masm.v128_bitmask(src, writable!(dst), OperandSize::S64)
         })
+    }
+
+    fn visit_i32x4_trunc_sat_f32x4_s(&mut self) -> Self::Output {
+        self.masm
+            .v128_trunc_sat(&mut self.context, V128TruncSatKind::F32x4S)
+    }
+
+    fn visit_i32x4_trunc_sat_f32x4_u(&mut self) -> Self::Output {
+        self.masm
+            .v128_trunc_sat(&mut self.context, V128TruncSatKind::F32x4U)
+    }
+
+    fn visit_i32x4_trunc_sat_f64x2_s_zero(&mut self) -> Self::Output {
+        self.masm
+            .v128_trunc_sat(&mut self.context, V128TruncSatKind::F64x2SZero)
+    }
+
+    fn visit_i32x4_trunc_sat_f64x2_u_zero(&mut self) -> Self::Output {
+        self.masm
+            .v128_trunc_sat(&mut self.context, V128TruncSatKind::F64x2UZero)
     }
 
     fn visit_i16x8_min_s(&mut self) -> Self::Output {

@@ -17,8 +17,8 @@ use crate::{
         Imm as I, IntCmpKind, LoadKind, MacroAssembler as Masm, MaxKind, MinKind, MulWideKind,
         OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind,
         SplatKind, StackSlot, StoreKind, TrapCode, TruncKind, V128AbsKind, V128ConvertKind,
-        V128ExtendKind, V128NarrowKind, VectorCompareKind, VectorEqualityKind, Zero, TRUSTED_FLAGS,
-        UNTRUSTED_FLAGS,
+        V128ExtendKind, V128NarrowKind, V128TruncSatKind, VectorCompareKind, VectorEqualityKind,
+        Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
     },
     stack::TypedReg,
 };
@@ -1191,6 +1191,14 @@ impl Masm for MacroAssembler {
     }
 
     fn v128_bitmask(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_trunc_sat(
+        &mut self,
+        _context: &mut CodeGenContext<Emission>,
+        _kind: V128TruncSatKind,
+    ) -> Result<()> {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
 
