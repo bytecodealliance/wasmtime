@@ -26,12 +26,13 @@ use core::ptr::NonNull;
 use core::sync::atomic::AtomicU64;
 use core::{mem, ptr};
 use sptr::Strict;
+#[cfg(feature = "gc")]
+use wasmtime_environ::ModuleInternedTypeIndex;
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
-    HostPtr, MemoryIndex, Module, ModuleInternedTypeIndex, PrimaryMap, PtrSize, TableIndex,
-    TableInitialValue, TableSegmentElements, Trap, VMOffsets, VMSharedTypeIndex, WasmHeapTopType,
-    VMCONTEXT_MAGIC,
+    HostPtr, MemoryIndex, Module, PrimaryMap, PtrSize, TableIndex, TableInitialValue,
+    TableSegmentElements, Trap, VMOffsets, VMSharedTypeIndex, WasmHeapTopType, VMCONTEXT_MAGIC,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -410,6 +411,7 @@ impl Instance {
 
     /// Translate a module-level interned type index into an engine-level
     /// interned type index.
+    #[cfg(feature = "gc")]
     pub fn engine_type_index(&self, module_index: ModuleInternedTypeIndex) -> VMSharedTypeIndex {
         self.runtime_info.engine_type_index(module_index)
     }
