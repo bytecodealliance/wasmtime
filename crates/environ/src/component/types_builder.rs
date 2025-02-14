@@ -242,9 +242,9 @@ impl ComponentTypesBuilder {
             .map(|(_name, ty)| self.valtype(types, ty))
             .collect::<Result<_>>()?;
         let results = ty
-            .results
+            .result
             .iter()
-            .map(|(_name, ty)| self.valtype(types, ty))
+            .map(|ty| self.valtype(types, ty))
             .collect::<Result<_>>()?;
         let params = self.new_tuple_type(params);
         let results = self.new_tuple_type(results);
