@@ -2714,6 +2714,12 @@ impl Masm for MacroAssembler {
         self.asm.xmm_vex_rr(AvxOpcode::Vpmaddwd, lhs, rhs, dst);
         Ok(())
     }
+
+    fn v128_avgr(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.ensure_has_avx()?;
+        self.asm.xmm_vpavg_rrr(lhs, rhs, dst, size);
+        Ok(())
+    }
 }
 
 impl MacroAssembler {
