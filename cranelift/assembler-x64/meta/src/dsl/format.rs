@@ -194,7 +194,7 @@ impl From<Location> for Operand {
 
 /// An operand location, as expressed in Intel's _Instruction Set Reference_.
 #[derive(Clone, Copy, Debug)]
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, reason = "makes DSL definitions easier to read")]
 pub enum Location {
     al,
     ax,

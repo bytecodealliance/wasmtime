@@ -8,9 +8,5 @@ rust-version.workspace = true
 
 [dependencies]
 
-[lints.clippy]
-all = "deny"
-pedantic = "warn"
-enum_glob_use = { level = "allow", priority = 1 }
-just_underscores_and_digits = { level = "allow", priority = 1 }
-wildcard_imports = { level = "allow", priority = 1 }
+[lints]
+workspace = true

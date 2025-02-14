@@ -36,7 +36,6 @@ impl dsl::Format {
     }
 
     /// `buf.put1(...);`
-    #[allow(clippy::unused_self)]
     fn generate_legacy_prefix(&self, f: &mut Formatter, rex: &dsl::Rex) {
         use dsl::LegacyPrefix::*;
         if rex.prefix != NoPrefix {
@@ -60,7 +59,7 @@ impl dsl::Format {
         }
     }
 
-    #[allow(clippy::unused_self)]
+    // `buf.put1(...);`
     fn generate_opcode(&self, f: &mut Formatter, rex: &dsl::Rex) {
         f.empty_line();
         f.comment("Emit opcode.");
