@@ -327,7 +327,7 @@ impl InterpreterRef<'_> {
             (@get u64 $reg:ident) => (self.0[$reg].get_u64());
             (@get f32 $reg:ident) => (self.0[$reg].get_f32());
             (@get f64 $reg:ident) => (self.0[$reg].get_f64());
-            (@get i8x16 $reg:ident) => (self.0[$reg].get_i8x16());
+            (@get i8x16 $reg:ident) => (unreachable::<i8x16, _>($reg));
             (@get vmctx $reg:ident) => (self.0[$reg].get_ptr());
             (@get pointer $reg:ident) => (self.0[$reg].get_ptr());
             (@get ptr $reg:ident) => (self.0[$reg].get_ptr());
@@ -344,7 +344,7 @@ impl InterpreterRef<'_> {
             (@set u64 $reg:ident $val:ident) => (self.0[$reg].set_u64($val));
             (@set f32 $reg:ident $val:ident) => (self.0[$reg].set_f32($val));
             (@set f64 $reg:ident $val:ident) => (self.0[$reg].set_f64($val));
-            (@set i8x16 $reg:ident $val:ident) => (self.0[$reg].set_i8x16($val));
+            (@set i8x16 $reg:ident $val:ident) => (unreachable::<i8x16, _>(($reg, $val)));
             (@set pointer $reg:ident $val:ident) => (self.0[$reg].set_ptr($val));
             (@set size $reg:ident $val:ident) => (self.0[$reg].set_ptr($val as *mut u8));
         }
@@ -411,7 +411,11 @@ impl InterpreterRef<'_> {
         }
 
         // if we got this far then something has gone seriously wrong.
-        unreachable!()
+        return unreachable(());
+
+        fn unreachable<T, U>(_: U) -> T {
+            unreachable!()
+        }
     }
 }
 
