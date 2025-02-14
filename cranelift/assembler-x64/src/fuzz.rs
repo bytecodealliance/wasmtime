@@ -29,6 +29,8 @@ pub fn roundtrip(inst: &Inst<FuzzRegs>) {
         println!("> {inst}");
         println!("  debug: {inst:x?}");
         println!("  assembled: {}", pretty_print_hexadecimal(&assembled));
+        println!("  expected (capstone): {expected}");
+        println!("  actual (to_string):  {actual}");
         assert_eq!(expected, &actual);
     }
 }
@@ -56,9 +58,17 @@ fn disassemble(assembled: &[u8]) -> String {
     let insns = cs
         .disasm_all(assembled, 0x0)
         .expect("failed to disassemble");
-    assert_eq!(insns.len(), 1, "not a single instruction: {assembled:x?}");
+    assert_eq!(insns.len(), 1, "not a single instruction: {assembled:02x?}");
     let insn = insns.first().expect("at least one instruction");
-    assert_eq!(assembled.len(), insn.len());
+    assert_eq!(
+        assembled.len(),
+        insn.len(),
+        "\ncranelift generated {} bytes: {assembled:02x?}\n\
+         capstone  generated {} bytes: {:02x?}",
+        assembled.len(),
+        insn.len(),
+        insn.bytes(),
+    );
     insn.to_string()
 }
 
