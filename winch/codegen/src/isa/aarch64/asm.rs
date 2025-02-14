@@ -1040,17 +1040,18 @@ impl Assembler {
     }
 
     // Convert ShiftKind to ALUOp. If kind == Rotl, then emulate it by emitting
-    // the negation of the given reg r, and returns ALUOp::RotR.
+    // the negation of the given reg r, and returns ALUOp::Extr (an alias for
+    // `ror` the rotate-right instruction)
     fn shift_kind_to_alu_op(&mut self, kind: ShiftKind, r: Reg, size: OperandSize) -> ALUOp {
         match kind {
             ShiftKind::Shl => ALUOp::Lsl,
             ShiftKind::ShrS => ALUOp::Asr,
             ShiftKind::ShrU => ALUOp::Lsr,
-            ShiftKind::Rotr => ALUOp::RotR,
+            ShiftKind::Rotr => ALUOp::Extr,
             ShiftKind::Rotl => {
                 // neg(r) is sub(zero, r).
                 self.alu_rrr(ALUOp::Sub, regs::zero(), r, writable!(r), size);
-                ALUOp::RotR
+                ALUOp::Extr
             }
         }
     }
