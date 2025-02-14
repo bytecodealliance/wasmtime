@@ -30,7 +30,7 @@ impl dsl::Format {
     pub fn generate_rex_encoding(&self, f: &mut Formatter, rex: &dsl::Rex) {
         self.generate_legacy_prefix(f, rex);
         self.generate_rex_prefix(f, rex);
-        self.generate_opcode(f, rex);
+        self.generate_opcodes(f, rex);
         self.generate_modrm_byte(f, rex);
         self.generate_immediate(f);
     }
@@ -39,10 +39,10 @@ impl dsl::Format {
     #[allow(clippy::unused_self)]
     fn generate_legacy_prefix(&self, f: &mut Formatter, rex: &dsl::Rex) {
         use dsl::LegacyPrefix::*;
-        if rex.prefix != NoPrefix {
+        if rex.opcodes.prefix != NoPrefix {
             f.empty_line();
             f.comment("Emit legacy prefixes.");
-            match rex.prefix {
+            match rex.opcodes.prefix {
                 NoPrefix => unreachable!(),
                 _66 => fmtln!(f, "buf.put1(0x66);"),
                 _F0 => fmtln!(f, "buf.put1(0xf0);"),
@@ -61,10 +61,16 @@ impl dsl::Format {
     }
 
     #[allow(clippy::unused_self)]
-    fn generate_opcode(&self, f: &mut Formatter, rex: &dsl::Rex) {
+    fn generate_opcodes(&self, f: &mut Formatter, rex: &dsl::Rex) {
         f.empty_line();
-        f.comment("Emit opcode.");
-        fmtln!(f, "buf.put1(0x{:x});", rex.opcode);
+        f.comment("Emit opcode(s).");
+        if rex.opcodes.escape {
+            fmtln!(f, "buf.put1(0x0f);");
+        }
+        fmtln!(f, "buf.put1(0x{:x});", rex.opcodes.primary);
+        if let Some(secondary) = rex.opcodes.secondary {
+            fmtln!(f, "buf.put1(0x{:x});", secondary);
+        }
     }
 
     fn generate_rex_prefix(&self, f: &mut Formatter, rex: &dsl::Rex) {
