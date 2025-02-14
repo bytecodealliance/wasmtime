@@ -26,12 +26,13 @@ use core::ptr::NonNull;
 use core::sync::atomic::AtomicU64;
 use core::{mem, ptr};
 use sptr::Strict;
+#[cfg(feature = "gc")]
+use wasmtime_environ::ModuleInternedTypeIndex;
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex, GlobalIndex,
-    HostPtr, MemoryIndex, Module, ModuleInternedTypeIndex, PrimaryMap, PtrSize, TableIndex,
-    TableInitialValue, TableSegmentElements, Trap, VMOffsets, VMSharedTypeIndex, WasmHeapTopType,
-    VMCONTEXT_MAGIC,
+    HostPtr, MemoryIndex, Module, PrimaryMap, PtrSize, TableIndex, TableInitialValue,
+    TableSegmentElements, Trap, VMOffsets, VMSharedTypeIndex, WasmHeapTopType, VMCONTEXT_MAGIC,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -410,6 +411,7 @@ impl Instance {
 
     /// Translate a module-level interned type index into an engine-level
     /// interned type index.
+    #[cfg(feature = "gc")]
     pub fn engine_type_index(&self, module_index: ModuleInternedTypeIndex) -> VMSharedTypeIndex {
         self.runtime_info.engine_type_index(module_index)
     }
@@ -857,14 +859,9 @@ impl Instance {
     fn construct_func_ref(
         &mut self,
         index: FuncIndex,
-        sig: ModuleInternedTypeIndex,
+        type_index: VMSharedTypeIndex,
         into: *mut VMFuncRef,
     ) {
-        let type_index = unsafe {
-            let base = self.type_ids_array().read().as_ptr();
-            *base.add(sig.index())
-        };
-
         let func_ref = if let Some(def_index) = self.env_module().defined_func_index(index) {
             VMFuncRef {
                 array_call: self
@@ -932,7 +929,7 @@ impl Instance {
             // if we don't have to track "is-initialized" state at
             // all!
             let func = &self.env_module().functions[index];
-            let sig = func.signature;
+            let sig = func.signature.unwrap_engine_type_index();
             let func_ref = self
                 .vmctx_plus_offset_mut::<VMFuncRef>(self.offsets().vmctx_func_ref(func.func_ref));
             self.construct_func_ref(index, sig, func_ref.as_ptr());

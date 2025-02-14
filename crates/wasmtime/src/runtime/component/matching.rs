@@ -1,10 +1,10 @@
 use crate::component::func::HostFunc;
 use crate::component::linker::{Definition, Strings};
 use crate::component::ResourceType;
-use crate::prelude::*;
 use crate::runtime::vm::component::ComponentInstance;
 use crate::types::matching;
 use crate::Module;
+use crate::{prelude::*, Engine};
 use alloc::sync::Arc;
 use core::any::Any;
 use wasmtime_environ::component::{
@@ -14,6 +14,7 @@ use wasmtime_environ::component::{
 use wasmtime_environ::PrimaryMap;
 
 pub struct TypeChecker<'a> {
+    pub engine: &'a Engine,
     pub types: &'a Arc<ComponentTypes>,
     pub strings: &'a Strings,
     pub imported_resources: Arc<PrimaryMap<ResourceIndex, ResourceType>>,
@@ -112,7 +113,6 @@ impl TypeChecker<'_> {
     }
 
     fn module(&self, expected: &TypeModule, actual: &Module) -> Result<()> {
-        let actual_types = actual.types();
         let actual = actual.env_module();
 
         // Every export that is expected should be in the actual module we have
@@ -122,7 +122,7 @@ impl TypeChecker<'_> {
                 .get(name)
                 .ok_or_else(|| anyhow!("module export `{name}` not defined"))?;
             let actual = actual.type_of(*idx);
-            matching::entity_ty(expected, self.types.module_types(), &actual, actual_types)
+            matching::entity_ty(self.engine, expected, &actual)
                 .with_context(|| format!("module export `{name}` has the wrong type"))?;
         }
 
@@ -136,7 +136,7 @@ impl TypeChecker<'_> {
                 .imports
                 .get(&(module.to_string(), name.to_string()))
                 .ok_or_else(|| anyhow!("module import `{module}::{name}` not defined"))?;
-            matching::entity_ty(&actual, actual_types, expected, self.types.module_types())
+            matching::entity_ty(self.engine, &actual, expected)
                 .with_context(|| format!("module import `{module}::{name}` has the wrong type"))?;
         }
         Ok(())

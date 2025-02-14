@@ -24,6 +24,7 @@ use wasmtime_environ::component::{
     GlobalInitializer, InstantiateModule, NameMapNoIntern, StaticModuleIndex, TrampolineIndex,
     TypeComponentIndex, TypeDef, VMComponentOffsets,
 };
+use wasmtime_environ::TypeTrace;
 use wasmtime_environ::{FunctionLoc, HostPtr, ObjectKind, PrimaryMap};
 
 /// A compiled WebAssembly Component.
@@ -384,8 +385,8 @@ impl Component {
         let ComponentArtifacts {
             ty,
             info,
-            types,
-            static_modules,
+            mut types,
+            mut static_modules,
         } = match artifacts {
             Some(artifacts) => artifacts,
             None => postcard::from_bytes(code_memory.wasmtime_info())?,
@@ -402,7 +403,11 @@ impl Component {
         // Create a signature registration with the `Engine` for all trampolines
         // and core wasm types found within this component, both for the
         // component and for all included core wasm modules.
-        let signatures = TypeCollection::new_for_module(engine, types.module_types());
+        let signatures = engine.register_and_canonicalize_types(
+            types.module_types_mut(),
+            static_modules.iter_mut().map(|(_, m)| &mut m.module),
+        );
+        types.canonicalize_for_runtime_usage(&mut |idx| signatures.shared_type(idx).unwrap());
 
         // Assemble the `CodeObject` artifact which is shared by all core wasm
         // modules as well as the final component.

@@ -982,11 +982,8 @@ fn typecheck<I>(
         bail!("expected {expected_len} imports, found {actual_len}");
     }
     let cx = matching::MatchCx::new(module.engine());
-    for ((name, field, mut expected_ty), actual) in env_module.imports().zip(import_args) {
-        expected_ty.canonicalize_for_runtime_usage(&mut |module_index| {
-            module.signatures().shared_type(module_index).unwrap()
-        });
-
+    for ((name, field, expected_ty), actual) in env_module.imports().zip(import_args) {
+        debug_assert!(expected_ty.is_canonicalized_for_runtime_usage());
         check(&cx, &expected_ty, actual)
             .with_context(|| format!("incompatible import type for `{name}::{field}`"))?;
     }

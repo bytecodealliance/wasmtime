@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use crate::{type_registry::RegisteredType, Engine};
 use core::fmt::{self, Display, Write};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityType, Global, IndexType, Limits, Memory, ModuleTypes, Table,
@@ -6,8 +7,6 @@ use wasmtime_environ::{
     WasmFieldType, WasmFuncType, WasmHeapType, WasmRefType, WasmStorageType, WasmStructType,
     WasmSubType, WasmValType,
 };
-
-use crate::{type_registry::RegisteredType, Engine};
 
 pub(crate) mod matching;
 
@@ -1203,6 +1202,10 @@ impl ExternType {
                 }
                 EngineOrModuleTypeIndex::Module(m) => {
                     let subty = &types[*m];
+                    debug_assert!(subty.is_canonicalized_for_runtime_usage());
+                    // subty.canonicalize_for_runtime_usage(&mut |idx| {
+                    //     signatures.shared_type(idx).unwrap()
+                    // });
                     FuncType::from_wasm_func_type(
                         engine,
                         subty.is_final,

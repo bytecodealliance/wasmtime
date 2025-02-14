@@ -154,7 +154,8 @@ impl GcCompiler for NullCompiler {
         array_type_index: TypeIndex,
         init: super::ArrayInit<'_>,
     ) -> WasmResult<ir::Value> {
-        let interned_type_index = func_env.module.types[array_type_index];
+        let interned_type_index =
+            func_env.module.types[array_type_index].unwrap_module_type_index();
         let ptr_ty = func_env.pointer_type();
 
         let len_offset = gc_compiler(func_env)?.layouts().array_length_field_offset();
@@ -215,7 +216,8 @@ impl GcCompiler for NullCompiler {
         struct_type_index: TypeIndex,
         field_vals: &[ir::Value],
     ) -> WasmResult<ir::Value> {
-        let interned_type_index = func_env.module.types[struct_type_index];
+        let interned_type_index =
+            func_env.module.types[struct_type_index].unwrap_module_type_index();
         let struct_layout = func_env.struct_layout(interned_type_index);
 
         // Copy some stuff out of the struct layout to avoid borrowing issues.

@@ -108,10 +108,19 @@ impl Debug for TypeCollection {
     }
 }
 
-impl TypeCollection {
-    /// Creates a type collection for a module given the module's types.
-    pub fn new_for_module(engine: &Engine, module_types: &ModuleTypes) -> Self {
-        let engine = engine.clone();
+impl Engine {
+    /// Registers the given types in this engine, re-canonicalizing them for
+    /// runtime usage.
+    pub(crate) fn register_and_canonicalize_types<'a, I>(
+        &self,
+        module_types: &mut ModuleTypes,
+        env_modules: I,
+    ) -> TypeCollection
+    where
+        I: IntoIterator<Item = &'a mut wasmtime_environ::Module>,
+        I::IntoIter: ExactSizeIterator,
+    {
+        let engine = self.clone();
         let registry = engine.signatures();
         let gc_runtime = engine.gc_runtime().ok().map(|rt| &**rt);
         let (rec_groups, types) = registry
@@ -119,6 +128,7 @@ impl TypeCollection {
             .write()
             .register_module_types(gc_runtime, module_types);
 
+        // First, register the types in this engine's registry.
         log::trace!("Begin building module's shared-to-module-trampoline-types map");
         let mut trampolines = SecondaryMap::with_capacity(types.len());
         for (module_ty, module_trampoline_ty) in module_types.trampoline_types() {
@@ -129,14 +139,27 @@ impl TypeCollection {
         }
         log::trace!("Done building module's shared-to-module-trampoline-types map");
 
-        Self {
+        // Second, re-canonicalize those types for runtime usage in this engine,
+        // replacing `ModuleInternedTypeIndex`es with the `VMSharedTypeIndex`es
+        // we just registered.
+        module_types.canonicalize_for_runtime_usage(&mut |idx| types[idx]);
+
+        // Third, re-canonicalize the types in our `wasmtime_environ::Module`s
+        // to point to the just-registered engine type indices.
+        for module in env_modules {
+            module.canonicalize_for_runtime_usage(&mut |idx| types[idx]);
+        }
+
+        TypeCollection {
             engine,
             rec_groups,
             types,
             trampolines,
         }
     }
+}
 
+impl TypeCollection {
     /// Treats the type collection as a map from a module type index to
     /// registered shared type indexes.
     ///
@@ -265,13 +288,11 @@ impl PartialEq for RegisteredType {
     fn eq(&self, other: &Self) -> bool {
         let eq = self.index == other.index && Engine::same(&self.engine, &other.engine);
 
-        if cfg!(debug_assertions) {
-            if eq {
-                assert!(Arc::ptr_eq(&self.entry.0, &other.entry.0));
-                assert_eq!(self.ty, other.ty);
-            } else {
-                assert!(self.ty != other.ty || !Engine::same(&self.engine, &other.engine));
-            }
+        if cfg!(debug_assertions) && eq {
+            // If they are the same, then their rec group entries and
+            // `WasmSubType`s had better also be the same.
+            assert!(Arc::ptr_eq(&self.entry.0, &other.entry.0));
+            assert_eq!(self.ty, other.ty);
         }
 
         eq

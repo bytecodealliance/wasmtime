@@ -2395,6 +2395,12 @@ pub(crate) struct HostFunc {
     engine: Engine,
 }
 
+impl core::fmt::Debug for HostFunc {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("HostFunc").finish_non_exhaustive()
+    }
+}
+
 impl HostFunc {
     /// Analog of [`Func::new`]
     ///

@@ -97,7 +97,9 @@ impl wasmtime_environ::Compiler for Compiler {
         types: &ModuleTypesBuilder,
     ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError> {
         let index = translation.module.func_index(index);
-        let sig = translation.module.functions[index].signature;
+        let sig = translation.module.functions[index]
+            .signature
+            .unwrap_module_type_index();
         let ty = types[sig].unwrap_func();
         let FunctionBodyData {
             body, validator, ..

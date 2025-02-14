@@ -370,9 +370,12 @@ impl EngineOrModuleTypeIndex {
     }
 
     /// Get the underlying engine-level type index, or panic.
+    #[track_caller]
     pub fn unwrap_engine_type_index(self) -> VMSharedTypeIndex {
-        self.as_engine_type_index()
-            .unwrap_or_else(|| panic!("`unwrap_engine_type_index` on {self:?}"))
+        match self.as_engine_type_index() {
+            Some(x) => x,
+            None => panic!("`unwrap_engine_type_index` on {self:?}"),
+        }
     }
 
     /// Is this an module-level type index?
@@ -389,9 +392,12 @@ impl EngineOrModuleTypeIndex {
     }
 
     /// Get the underlying module-level type index, or panic.
+    #[track_caller]
     pub fn unwrap_module_type_index(self) -> ModuleInternedTypeIndex {
-        self.as_module_type_index()
-            .unwrap_or_else(|| panic!("`unwrap_module_type_index` on {self:?}"))
+        match self.as_module_type_index() {
+            Some(x) => x,
+            None => panic!("`unwrap_module_type_index` on {self:?}"),
+        }
     }
 
     /// Is this an recgroup-level type index?
@@ -408,9 +414,12 @@ impl EngineOrModuleTypeIndex {
     }
 
     /// Get the underlying module-level type index, or panic.
+    #[track_caller]
     pub fn unwrap_rec_group_type_index(self) -> RecGroupRelativeTypeIndex {
-        self.as_rec_group_type_index()
-            .unwrap_or_else(|| panic!("`unwrap_rec_group_type_index` on {self:?}"))
+        match self.as_rec_group_type_index() {
+            Some(x) => x,
+            None => panic!("`unwrap_rec_group_type_index` on {self:?}"),
+        }
     }
 }
 

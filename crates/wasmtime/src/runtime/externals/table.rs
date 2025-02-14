@@ -399,18 +399,13 @@ impl Table {
     }
 
     pub(crate) unsafe fn from_wasmtime_table(
-        mut wasmtime_export: crate::runtime::vm::ExportTable,
+        wasmtime_export: crate::runtime::vm::ExportTable,
         store: &mut StoreOpaque,
     ) -> Table {
-        // Ensure that the table's type is engine-level canonicalized.
-        wasmtime_export
+        debug_assert!(wasmtime_export
             .table
             .ref_type
-            .canonicalize_for_runtime_usage(&mut |module_index| {
-                crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |instance| {
-                    instance.engine_type_index(module_index)
-                })
-            });
+            .is_canonicalized_for_runtime_usage());
 
         Table(store.store_data_mut().insert(wasmtime_export))
     }

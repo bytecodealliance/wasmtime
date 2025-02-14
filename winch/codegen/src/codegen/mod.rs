@@ -438,7 +438,7 @@ where
         let ptr_size: OperandSize = self.env.ptr_type().try_into()?;
         let sig_index_bytes = self.env.vmoffsets.size_of_vmshared_type_index();
         let sig_size = OperandSize::from_bytes(sig_index_bytes);
-        let sig_index = self.env.translation.module.types[type_index];
+        let sig_index = self.env.translation.module.types[type_index].unwrap_module_type_index();
         let sig_offset = sig_index
             .as_u32()
             .checked_mul(sig_index_bytes.into())
