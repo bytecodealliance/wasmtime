@@ -27,3 +27,4 @@ examples/.cache
 cranelift/isle/veri/veri_engine/test_output
 crates/explorer/node_modules
 tests/all/pulley_provenance_test.cwasm
+artifacts
