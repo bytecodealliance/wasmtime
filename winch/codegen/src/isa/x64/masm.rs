@@ -1,7 +1,7 @@
 use super::{
     abi::X64ABI,
     address::Address,
-    asm::{Assembler, PatchableAddToReg, VcmpKind, VcvtKind},
+    asm::{Assembler, PatchableAddToReg, VcmpKind, VcvtKind, VroundMode},
     regs::{self, rbp, rsp},
 };
 use anyhow::{anyhow, bail, Result};
@@ -11,8 +11,8 @@ use crate::masm::{
     HandleOverflowKind, Imm as I, IntCmpKind, LaneSelector, LoadKind, MacroAssembler as Masm,
     MaxKind, MinKind, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp,
     RoundingMode, ShiftKind, SplatKind, StoreKind, TrapCode, TruncKind, V128AbsKind,
-    V128ConvertKind, V128ExtendKind, V128NarrowKind, VectorCompareKind, VectorEqualityKind, Zero,
-    TRUSTED_FLAGS, UNTRUSTED_FLAGS,
+    V128ConvertKind, V128ExtendKind, V128NarrowKind, V128TruncSatKind, VectorCompareKind,
+    VectorEqualityKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
@@ -2545,6 +2545,40 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
+    fn v128_trunc_sat(
+        &mut self,
+        context: &mut CodeGenContext<Emission>,
+        kind: V128TruncSatKind,
+    ) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        let reg = writable!(context.pop_to_reg(self, None)?.reg);
+        match kind {
+            V128TruncSatKind::F32x4S => {
+                self.v128_trunc_sat_f32x4_s(reg, kind.src_lane_size(), kind.dst_lane_size());
+            }
+            V128TruncSatKind::F32x4U => {
+                let temp_reg = writable!(context.any_fpr(self)?);
+                self.v128_trunc_sat_f32x4_u(
+                    reg,
+                    temp_reg,
+                    kind.src_lane_size(),
+                    kind.dst_lane_size(),
+                );
+                context.free_reg(temp_reg.to_reg());
+            }
+            V128TruncSatKind::F64x2SZero => {
+                self.v128_trunc_sat_f64x2_s_zero(reg, kind.src_lane_size());
+            }
+            V128TruncSatKind::F64x2UZero => {
+                self.v128_trunc_sat_f64x2_u_zero(reg, kind.src_lane_size(), kind.dst_lane_size());
+            }
+        }
+
+        context.stack.push(TypedReg::v128(reg.to_reg()).into());
+        Ok(())
+    }
+
     fn v128_min(
         &mut self,
         src1: Reg,
@@ -2861,5 +2895,177 @@ impl MacroAssembler {
         // [d0, d1, d2, d3, d4, d5, d6, d7, ...] yields
         // [d4, d5, d6, d7, d0, d1, d2, d3, d4, d5, d6, d7, d0, d1, d2, d3].
         0b01_00_01_00
+    }
+
+    fn v128_trunc_sat_f32x4_s(
+        &mut self,
+        reg: WritableReg,
+        src_lane_size: OperandSize,
+        dst_lane_size: OperandSize,
+    ) {
+        let scratch = writable!(regs::scratch_xmm());
+        // Create a mask to handle NaN values (1 for not NaN, 0 for
+        // NaN).
+        self.asm.xmm_vcmpp_rrr(
+            scratch,
+            reg.to_reg(),
+            reg.to_reg(),
+            src_lane_size,
+            VcmpKind::Eq,
+        );
+        // Zero out any NaN values.
+        self.asm
+            .xmm_vandp_rrr(reg.to_reg(), scratch.to_reg(), reg, src_lane_size);
+        // Create a mask for the sign bits.
+        self.asm
+            .xmm_vex_rr(AvxOpcode::Vpxor, scratch.to_reg(), reg.to_reg(), scratch);
+        // Convert floats to integers.
+        self.asm.xmm_vcvt_rr(reg.to_reg(), reg, VcvtKind::F32ToI32);
+        // Apply sign mask to the converted integers.
+        self.asm
+            .xmm_vex_rr(AvxOpcode::Vpand, reg.to_reg(), scratch.to_reg(), scratch);
+        // Create a saturation mask of all 1s for negative numbers,
+        // all 0s for positive numbers. The arithmetic shift will cop
+        // the sign bit.
+        self.asm
+            .xmm_vpsra_rri(scratch.to_reg(), scratch, 0x1F, dst_lane_size);
+        // Combine converted integers with saturation mask.
+        self.asm
+            .xmm_vex_rr(AvxOpcode::Vpxor, reg.to_reg(), scratch.to_reg(), reg);
+    }
+
+    fn v128_trunc_sat_f32x4_u(
+        &mut self,
+        reg: WritableReg,
+        temp_reg: WritableReg,
+        src_lane_size: OperandSize,
+        dst_lane_size: OperandSize,
+    ) {
+        let scratch = writable!(regs::scratch_xmm());
+        // Set scratch to all zeros.
+        self.asm
+            .xmm_vxorp_rrr(reg.to_reg(), reg.to_reg(), scratch, src_lane_size);
+        // Clamp negative numbers to 0.
+        self.asm
+            .xmm_vmaxp_rrr(reg.to_reg(), scratch.to_reg(), reg, src_lane_size);
+        // Create a vector of all 1s.
+        self.asm
+            .xmm_vpcmpeq_rrr(scratch, scratch.to_reg(), scratch.to_reg(), src_lane_size);
+        // Set scratch to 0x7FFFFFFF (max signed 32-bit integer) by
+        // performing a logical shift right.
+        self.asm
+            .xmm_vpsrl_rr(scratch.to_reg(), scratch, 0x1, src_lane_size);
+        // Convert max signed int to float as a reference point for saturation.
+        self.asm
+            .xmm_vcvt_rr(scratch.to_reg(), scratch, VcvtKind::I32ToF32);
+        // Convert the floats to integers and put the results in `reg2`.
+        // This is signed and not unsigned so we need to handle the
+        // value for the high bit in each lane.
+        self.asm
+            .xmm_vcvt_rr(reg.to_reg(), temp_reg, VcvtKind::F32ToI32);
+        // Set `reg` lanes to the amount that the value in the lane
+        // exceeds the maximum signed 32-bit integer.
+        self.asm
+            .xmm_vsub_rrr(reg.to_reg(), scratch.to_reg(), reg, dst_lane_size);
+        // Create mask in `scratch` for numbers that are larger than
+        // the maximum signed 32-bit integer. Lanes that don't fit
+        // in 32-bits ints will be 1.
+        self.asm.xmm_vcmpp_rrr(
+            scratch,
+            scratch.to_reg(),
+            reg.to_reg(),
+            dst_lane_size,
+            VcmpKind::Le,
+        );
+        // Convert the excess over signed 32-bits from floats to integers.
+        self.asm.xmm_vcvt_rr(reg.to_reg(), reg, VcvtKind::F32ToI32);
+        // Apply large number mask to excess values which will flip the
+        // bits in any lanes that exceed signed 32-bits. Adding this
+        // flipped value to the signed value will set the high bit and
+        // the carry behavior will update the other bits correctly.
+        self.asm
+            .xmm_vex_rr(AvxOpcode::Vpxor, reg.to_reg(), scratch.to_reg(), scratch);
+        // Set `reg` to all 0s.
+        self.asm
+            .xmm_vex_rr(AvxOpcode::Vpxor, reg.to_reg(), reg.to_reg(), reg);
+        // Ensure excess values are not negative by taking max b/w
+        // excess values and zero.
+        self.asm
+            .xmm_vpmaxs_rrr(reg, scratch.to_reg(), reg.to_reg(), dst_lane_size);
+        // Perform the addition between the signed conversion value (in
+        // `reg2`) and the flipped excess value (in `reg`) to get the
+        // unsigned value.
+        self.asm
+            .xmm_vpadd_rrr(reg.to_reg(), temp_reg.to_reg(), reg, dst_lane_size);
+    }
+
+    fn v128_trunc_sat_f64x2_s_zero(&mut self, reg: WritableReg, src_lane_size: OperandSize) {
+        let scratch = writable!(regs::scratch_xmm());
+        // Create a NaN mask (1s for non-NaN, 0s for NaN).
+        self.asm.xmm_vcmpp_rrr(
+            scratch,
+            reg.to_reg(),
+            reg.to_reg(),
+            src_lane_size,
+            VcmpKind::Eq,
+        );
+        // Clamp NaN values to maximum 64-bit float that can be
+        // converted to an i32.
+        let address = self.asm.add_constant(&[
+            0x00, 0x00, 0xC0, 0xFF, 0xFF, 0xFF, 0xDF, 0x41, 0x00, 0x00, 0xC0, 0xFF, 0xFF, 0xFF,
+            0xDF, 0x41,
+        ]);
+        self.asm
+            .xmm_vandp_rrm(scratch.to_reg(), &address, scratch, src_lane_size);
+        // Handle the saturation for values too large to fit in an i32.
+        self.asm
+            .xmm_vminp_rrr(reg.to_reg(), scratch.to_reg(), reg, src_lane_size);
+        // Convert the floats to integers.
+        self.asm.xmm_vcvt_rr(reg.to_reg(), reg, VcvtKind::F64ToI32);
+    }
+
+    fn v128_trunc_sat_f64x2_u_zero(
+        &mut self,
+        reg: WritableReg,
+        src_lane_size: OperandSize,
+        dst_lane_size: OperandSize,
+    ) {
+        let scratch = writable!(regs::scratch_xmm());
+        // Zero out the scratch register.
+        self.asm
+            .xmm_vxorp_rrr(scratch.to_reg(), scratch.to_reg(), scratch, src_lane_size);
+        // Clamp negative values to zero.
+        self.asm
+            .xmm_vmaxp_rrr(reg.to_reg(), scratch.to_reg(), reg, src_lane_size);
+        // Clamp value to maximum unsigned 32-bit integer value
+        // (0x41F0000000000000).
+        let address = self.asm.add_constant(&[
+            0x00, 0x00, 0xE0, 0xFF, 0xFF, 0xFF, 0xEF, 0x41, 0x00, 0x00, 0xE0, 0xFF, 0xFF, 0xFF,
+            0xEF, 0x41,
+        ]);
+        self.asm
+            .xmm_vminp_rrm(reg.to_reg(), &address, reg, src_lane_size);
+        // Truncate floating point values.
+        self.asm
+            .xmm_vroundp_rri(reg.to_reg(), reg, VroundMode::TowardZero, src_lane_size);
+        // Add 2^52 (doubles store 52 bits in their mantissa) to each
+        // lane causing values in the lower bits to be shifted into
+        // position for integer conversion.
+        let address = self.asm.add_constant(&[
+            0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x30, 0x43, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+            0x30, 0x43,
+        ]);
+        self.asm
+            .xmm_vaddp_rrm(reg.to_reg(), &address, reg, src_lane_size);
+        // Takes lanes 0 and 2 from `reg` (converted values) and lanes
+        // 0 and 2 from `scratch` (zeroes) to put the converted ints in
+        // the lower lanes and zeroes in the upper lanes.
+        self.asm.xmm_vshufp_rrri(
+            reg.to_reg(),
+            scratch.to_reg(),
+            reg,
+            0b10_00_10_00,
+            dst_lane_size,
+        );
     }
 }

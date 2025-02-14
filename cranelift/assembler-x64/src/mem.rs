@@ -242,7 +242,10 @@ impl Scale {
 /// A general-purpose register or memory operand.
 #[derive(Clone, Debug)]
 #[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
-#[allow(clippy::module_name_repetitions)]
+#[allow(
+    clippy::module_name_repetitions,
+    reason = "'GprMem' indicates this has GPR and memory variants"
+)]
 pub enum GprMem<R: AsReg, M: AsReg> {
     Gpr(R),
     Mem(Amode<M>),
@@ -358,7 +361,7 @@ pub fn emit_modrm_sib_disp<R: AsReg>(
             // to the end of the u32 field. So, to compensate for
             // this, we emit a negative extra offset in the u32 field
             // initially, and the relocation will add to it.
-            #[allow(clippy::cast_sign_loss)]
+            #[allow(clippy::cast_sign_loss, reason = "bit conversion is intended here")]
             sink.put4(-(i32::from(bytes_at_end)) as u32);
         }
     }

@@ -18,13 +18,8 @@ capstone = { workspace = true }
 [build-dependencies]
 cranelift-assembler-x64-meta = { path = "meta", version = "0.118.0" }
 
-[lints.clippy]
-all = "deny"
-pedantic = "warn"
-module_name_repetitions = { level = "allow", priority = 1 }
-similar_names = { level = "allow", priority = 1 }
-wildcard_imports = { level = "allow", priority = 1 }
-too_many_lines = { level = "allow", priority = 1 }
+[lints]
+workspace = true
 
 [features]
 fuzz = ['dep:arbitrary', 'dep:capstone']

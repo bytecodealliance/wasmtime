@@ -74,7 +74,7 @@ fn pretty_print_hexadecimal(hex: &[u8]) -> String {
 /// See `replace_signed_immediates`.
 macro_rules! hex_print_signed_imm {
     ($hex:expr, $from:ty => $to:ty) => {{
-        #[allow(clippy::cast_possible_wrap)]
+        #[allow(clippy::cast_possible_wrap, reason = "bit conversion is intended here")]
         let imm = <$from>::from_str_radix($hex, 16).unwrap() as $to;
         let mut simm = String::new();
         if imm < 0 {
