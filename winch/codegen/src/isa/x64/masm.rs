@@ -2717,12 +2717,7 @@ impl Masm for MacroAssembler {
 
     fn v128_avgr(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
         self.ensure_has_avx()?;
-
-        match size {
-            OperandSize::S8 | OperandSize::S16 => self.asm.xmm_vpavg_rrr(lhs, rhs, dst, size),
-            _ => unimplemented!(),
-        }
-
+        self.asm.xmm_vpavg_rrr(lhs, rhs, dst, size);
         Ok(())
     }
 }
