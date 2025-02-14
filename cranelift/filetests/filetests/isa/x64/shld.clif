@@ -219,7 +219,7 @@ block0(v0: i8, v1: i8):
 ;   shrb    $3, %dil, %dil
 ;   shlb    $5, %sil, %sil
 ;   movq    %rdi, %rax
-;   orl     %eax, %esi, %eax
+;   orl %esi, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
