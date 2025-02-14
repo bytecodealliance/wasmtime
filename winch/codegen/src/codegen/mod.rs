@@ -1099,6 +1099,7 @@ where
             return Ok(());
         }
 
+        self.emit_fuel_increment()?;
         let out_of_fuel = self.env.builtins.out_of_gas::<M::ABI, M::Ptr>()?;
         let fuel_reg = self.context.without::<Result<Reg>, M, _>(
             &out_of_fuel.sig().regs,

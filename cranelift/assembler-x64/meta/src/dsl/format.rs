@@ -194,7 +194,7 @@ impl From<Location> for Operand {
 
 /// An operand location, as expressed in Intel's _Instruction Set Reference_.
 #[derive(Clone, Copy, Debug)]
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, reason = "makes DSL definitions easier to read")]
 pub enum Location {
     al,
     ax,
@@ -349,7 +349,14 @@ pub enum Extension {
     SignExtendQuad,
     SignExtendLong,
     SignExtendWord,
-    ZeroExtend,
+}
+
+impl Extension {
+    /// Check if the extension is sign-extended.
+    #[must_use]
+    pub fn is_sign_extended(&self) -> bool {
+        matches!(self, Self::SignExtendQuad | Self::SignExtendLong | Self::SignExtendWord)
+    }
 }
 
 impl Default for Extension {
@@ -365,7 +372,6 @@ impl core::fmt::Display for Extension {
             Extension::SignExtendQuad => write!(f, "sxq"),
             Extension::SignExtendLong => write!(f, "sxl"),
             Extension::SignExtendWord => write!(f, "sxw"),
-            Extension::ZeroExtend => write!(f, "zx"),
         }
     }
 }

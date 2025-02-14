@@ -53,8 +53,11 @@ pub fn isle_macro(f: &mut Formatter, insts: &[dsl::Inst]) {
 /// above.
 pub fn isle_definitions(f: &mut Formatter, insts: &[dsl::Inst]) {
     f.line("(type AssemblerImm8 extern (enum))", None);
+    f.line("(type AssemblerSimm8 extern (enum))", None);
     f.line("(type AssemblerImm16 extern (enum))", None);
+    f.line("(type AssemblerSimm16 extern (enum))", None);
     f.line("(type AssemblerImm32 extern (enum))", None);
+    f.line("(type AssemblerSimm32 extern (enum))", None);
     f.line("(type AssemblerReadGpr extern (enum))", None);
     f.line("(type AssemblerReadWriteGpr extern (enum))", None);
     f.line("(type AssemblerReadGprMem extern (enum))", None);
