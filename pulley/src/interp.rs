@@ -19,20 +19,6 @@ mod match_loop;
 #[cfg(any(pulley_tail_calls, pulley_assume_llvm_makes_tail_calls))]
 mod tail_loop;
 
-// Polyfill `std::simd::i8x16` until it's stable.
-#[cfg(target_arch = "x86_64")]
-#[allow(
-    non_camel_case_types,
-    reason = "this uses a name that's closer to the other builtin type names"
-)]
-type i8x16 = core::arch::x86_64::__m128i;
-#[cfg(not(target_arch = "x86_64"))]
-#[allow(
-    non_camel_case_types,
-    reason = "this uses a name that's closer to the other builtin type names"
-)]
-struct i8x16(());
-
 const DEFAULT_STACK_SIZE: usize = 1 << 20; // 1 MiB
 
 /// A virtual machine for interpreting Pulley bytecode.
@@ -210,7 +196,7 @@ impl Vm {
 
     /// Returns the current `sp` register value.
     pub fn sp(&self) -> *mut u8 {
-        self.state.sp
+        self.state[XReg::sp].get_ptr()
     }
 
     /// Returns the current `lr` register value.
@@ -499,10 +485,6 @@ impl XRegVal {
         f64::from_bits(u64::from_le(x))
     }
 
-    pub fn get_i8x16(&self) -> i8x16 {
-        todo!()
-    }
-
     pub fn get_ptr<T>(&self) -> *mut T {
         let ptr = unsafe { self.0.ptr };
         let ptr = usize::from_le(ptr);
@@ -534,10 +516,6 @@ impl XRegVal {
 
     pub fn set_f64(&mut self, x: f64) {
         self.0.u64 = x.to_bits().to_le();
-    }
-
-    pub fn set_i8x16(&mut self, _x: i8x16) {
-        todo!()
     }
 
     pub fn set_ptr<T>(&mut self, ptr: *mut T) {
@@ -606,20 +584,12 @@ impl FRegVal {
         f64::from_le_bytes(val.to_ne_bytes())
     }
 
-    pub fn get_i8x16(&self) -> i8x16 {
-        todo!("how does pulley do simd?")
-    }
-
     pub fn set_f32(&mut self, val: f32) {
         self.0.f32 = u32::from_ne_bytes(val.to_le_bytes());
     }
 
     pub fn set_f64(&mut self, val: f64) {
         self.0.f64 = u64::from_ne_bytes(val.to_le_bytes());
-    }
-
-    pub fn set_i8x16(&self, _val: i8x16) {
-        todo!("how does pulley do simd?")
     }
 }
 
@@ -788,7 +758,6 @@ pub struct MachineState {
     f_regs: [FRegVal; FReg::RANGE.end as usize],
     v_regs: [VRegVal; VReg::RANGE.end as usize],
     fp: *mut u8,
-    sp: *mut u8,
     lr: *mut u8,
     stack: Stack,
     done_reason: Option<DoneReason<()>>,
@@ -862,7 +831,6 @@ impl fmt::Debug for MachineState {
             stack: _,
             done_reason: _,
             fp: _,
-            sp: _,
             lr: _,
         } = self;
 
@@ -943,7 +911,6 @@ impl MachineState {
             stack: Stack::new(stack_size),
             done_reason: None,
             fp: HOST_RETURN_ADDR,
-            sp: HOST_RETURN_ADDR,
             lr: HOST_RETURN_ADDR,
         };
 
