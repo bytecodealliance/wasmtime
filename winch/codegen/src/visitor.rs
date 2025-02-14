@@ -4280,7 +4280,7 @@ where
     fn visit_i8x16_max_u(&mut self) -> Self::Output {
         self.context
             .binop(self.masm, OperandSize::S8, |masm, dst, src, size| {
-                masm.v128_max(src, dst, writable!(dst), size, MaxKind::Signed)?;
+                masm.v128_max(src, dst, writable!(dst), size, MaxKind::Unsigned)?;
                 Ok(TypedReg::v128(dst))
             })
     }
