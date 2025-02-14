@@ -451,25 +451,25 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::RotR,
+            alu_op: ALUOp::Extr,
             size: OperandSize::Size32,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
         },
         "A42CC61A",
-        "ror w4, w5, w6",
+        "extr w4, w5, w6",
     ));
     insns.push((
         Inst::AluRRR {
-            alu_op: ALUOp::RotR,
+            alu_op: ALUOp::Extr,
             size: OperandSize::Size64,
             rd: writable_xreg(4),
             rn: xreg(5),
             rm: xreg(6),
         },
         "A42CC69A",
-        "ror x4, x5, x6",
+        "extr x4, x5, x6",
     ));
     insns.push((
         Inst::AluRRR {
@@ -1130,25 +1130,25 @@ fn test_aarch64_binemit() {
 
     insns.push((
         Inst::AluRRImmShift {
-            alu_op: ALUOp::RotR,
+            alu_op: ALUOp::Extr,
             size: OperandSize::Size32,
             rd: writable_xreg(20),
             rn: xreg(21),
             immshift: ImmShift::maybe_from_u64(19).unwrap(),
         },
         "B44E9513",
-        "ror w20, w21, #19",
+        "extr w20, w21, #19",
     ));
     insns.push((
         Inst::AluRRImmShift {
-            alu_op: ALUOp::RotR,
+            alu_op: ALUOp::Extr,
             size: OperandSize::Size64,
             rd: writable_xreg(20),
             rn: xreg(21),
             immshift: ImmShift::maybe_from_u64(42).unwrap(),
         },
         "B4AAD593",
-        "ror x20, x21, #42",
+        "extr x20, x21, #42",
     ));
     insns.push((
         Inst::AluRRImmShift {
