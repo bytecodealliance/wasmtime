@@ -1435,19 +1435,16 @@
 ;; The immediate used for the `extr` instruction itself is the N for the
 ;; shift-right. Two patterns are used here to detect either ordering of the
 ;; `bor`.
-(rule 5 (lower (has_type ty (bor (ishl x (u8_from_iconst xs))
-                                 (ushr y (u8_from_iconst ys)))))
-  (if-let shift (a64_extr_shift ty xs ys))
-  (a64_extr ty x y shift))
-(rule 5 (lower (has_type ty (bor (ushr y (u8_from_iconst ys))
-                                 (ishl x (u8_from_iconst xs)))))
-  (if-let shift (a64_extr_shift ty xs ys))
-  (a64_extr ty x y shift))
-
-;; Helper in Rust to test whether the pair of shifts of `u8` add up to the type
-;; width specified. Optionally returns the second value as `ImmShift`.
-(decl pure partial a64_extr_shift (Type u8 u8) ImmShift)
-(extern constructor a64_extr_shift a64_extr_shift)
+;;
+;; (x << xs) | (y >> ys) if (xs + ys == widthof(ty)) => extr(x, y, ys)
+(rule 5 (lower (has_type (ty_32_or_64 ty)
+  (bor (ishl x (u8_from_iconst xs)) (ushr y (u8_from_iconst ys)))))
+  (if-let true (u64_eq (ty_bits ty) (u64_add xs ys)))
+  (a64_extr ty x y (imm_shift_from_u8 ys)))
+(rule 5 (lower (has_type (ty_32_or_64 ty)
+  (bor (ushr y (u8_from_iconst ys)) (ishl x (u8_from_iconst xs)))))
+  (if-let true (u64_eq (ty_bits ty) (u64_add xs ys)))
+  (a64_extr ty x y (imm_shift_from_u8 ys)))
 
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 

@@ -56,41 +56,41 @@
 ;; wasm[0]::function[0]::i32_21:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       extr    w2, w5, w4, #0x15
+;;       extr    w2, w4, w5, #0x15
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;
 ;; wasm[0]::function[1]::i32_21_swapped:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       extr    w2, w5, w4, #0x15
+;;       extr    w2, w4, w5, #0x15
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;
 ;; wasm[0]::function[2]::i32_11:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       extr    w2, w5, w4, #0xb
+;;       extr    w2, w4, w5, #0xb
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;
 ;; wasm[0]::function[3]::i64_21:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       extr    x2, x5, x4, #0x15
+;;       extr    x2, x4, x5, #0x15
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;
 ;; wasm[0]::function[4]::i64_21_swapped:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       extr    x2, x5, x4, #0x15
+;;       extr    x2, x4, x5, #0x15
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;
 ;; wasm[0]::function[5]::i64_11:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
-;;       extr    x2, x5, x4, #0xb
+;;       extr    x2, x4, x5, #0xb
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

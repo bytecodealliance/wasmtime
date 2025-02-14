@@ -759,7 +759,7 @@ impl MachInstEmit for Inst {
                     ALUOp::AddS => 0b00101011_000,
                     ALUOp::SubS => 0b01101011_000,
                     ALUOp::SDiv | ALUOp::UDiv => 0b00011010_110,
-                    ALUOp::RotR | ALUOp::Lsr | ALUOp::Asr | ALUOp::Lsl => 0b00011010_110,
+                    ALUOp::Extr | ALUOp::Lsr | ALUOp::Asr | ALUOp::Lsl => 0b00011010_110,
                     ALUOp::SMulH => 0b10011011_010,
                     ALUOp::UMulH => 0b10011011_110,
                 };
@@ -768,7 +768,7 @@ impl MachInstEmit for Inst {
                 let bit15_10 = match alu_op {
                     ALUOp::SDiv => 0b000011,
                     ALUOp::UDiv => 0b000010,
-                    ALUOp::RotR => 0b001011,
+                    ALUOp::Extr => 0b001011,
                     ALUOp::Lsr => 0b001001,
                     ALUOp::Asr => 0b001010,
                     ALUOp::Lsl => 0b001000,
@@ -859,7 +859,7 @@ impl MachInstEmit for Inst {
             } => {
                 let amt = immshift.value();
                 let (top10, immr, imms) = match alu_op {
-                    ALUOp::RotR => (0b0001001110, machreg_to_gpr(rn), u32::from(amt)),
+                    ALUOp::Extr => (0b0001001110, machreg_to_gpr(rn), u32::from(amt)),
                     ALUOp::Lsr => (0b0101001100, u32::from(amt), 0b011111),
                     ALUOp::Asr => (0b0001001100, u32::from(amt), 0b011111),
                     ALUOp::Lsl => {
@@ -906,7 +906,7 @@ impl MachInstEmit for Inst {
                     ALUOp::OrrNot => 0b001_01010001,
                     ALUOp::EorNot => 0b010_01010001,
                     ALUOp::AndNot => 0b000_01010001,
-                    ALUOp::RotR => 0b000_10011100,
+                    ALUOp::Extr => 0b000_10011100,
                     _ => unimplemented!("{:?}", alu_op),
                 };
                 let top11 = top11 | size.sf_bit() << 10;

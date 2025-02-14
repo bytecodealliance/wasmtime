@@ -72,7 +72,7 @@ block0(v0: i64, v1: i64):
 
 ; VCode:
 ; block0:
-;   ror x0, x0, x1
+;   extr x0, x0, x1
 ;   ret
 ;
 ; Disassembled:
@@ -88,7 +88,7 @@ block0(v0: i32, v1: i32):
 
 ; VCode:
 ; block0:
-;   ror w0, w0, w1
+;   extr w0, w0, w1
 ;   ret
 ;
 ; Disassembled:
@@ -219,7 +219,7 @@ block0(v0: i64, v1: i64):
 ; VCode:
 ; block0:
 ;   sub x3, xzr, x1
-;   ror x0, x0, x3
+;   extr x0, x0, x3
 ;   ret
 ;
 ; Disassembled:
@@ -237,7 +237,7 @@ block0(v0: i32, v1: i32):
 ; VCode:
 ; block0:
 ;   sub w3, wzr, w1
-;   ror w0, w0, w3
+;   extr w0, w0, w3
 ;   ret
 ;
 ; Disassembled:
@@ -527,7 +527,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   ror x0, x0, #17
+;   extr x0, x0, #17
 ;   ret
 ;
 ; Disassembled:
@@ -544,7 +544,7 @@ block0(v0: i64):
 
 ; VCode:
 ; block0:
-;   ror x0, x0, #47
+;   extr x0, x0, #47
 ;   ret
 ;
 ; Disassembled:
@@ -561,7 +561,7 @@ block0(v0: i32):
 
 ; VCode:
 ; block0:
-;   ror w0, w0, #15
+;   extr w0, w0, #15
 ;   ret
 ;
 ; Disassembled:
