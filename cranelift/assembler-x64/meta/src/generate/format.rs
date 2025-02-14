@@ -88,7 +88,8 @@ impl dsl::Format {
             [FixedReg(dst), Imm(_)] => {
                 // TODO: don't emit REX byte here.
                 fmtln!(f, "let {dst} = {};", dst.generate_fixed_reg().unwrap());
-                fmtln!(f, "let digit = 0;"); // No digit for this pattern.
+                assert_eq!(rex.digit, None, "we expect no digit for operands: [FixedReg, Imm]");
+                fmtln!(f, "let digit = 0;");
                 fmtln!(f, "rex.emit_two_op(buf, digit, {dst}.enc());");
             }
             [RegMem(dst), Imm(_)] => {
