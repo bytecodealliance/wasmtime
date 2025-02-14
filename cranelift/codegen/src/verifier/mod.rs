@@ -656,54 +656,46 @@ impl<'a> Verifier<'a> {
                     ));
                 }
             }
-            LoadNoOffset { opcode, flags, arg } => {
-                if opcode == Opcode::Bitcast {
-                    self.verify_bitcast(inst, flags, arg, errors)?;
-                }
-                if opcode.can_load() {
-                    self.verify_is_address(inst, arg, errors)?;
-                }
+            LoadNoOffset {
+                opcode: Opcode::Bitcast,
+                flags,
+                arg,
+            } => {
+                self.verify_bitcast(inst, flags, arg, errors)?;
             }
-            Load { opcode, arg, .. } => {
-                if opcode.can_load() {
-                    self.verify_is_address(inst, arg, errors)?;
-                }
+            LoadNoOffset { opcode, arg, .. } if opcode.can_load() => {
+                self.verify_is_address(inst, arg, errors)?;
+            }
+            Load { opcode, arg, .. } if opcode.can_load() => {
+                self.verify_is_address(inst, arg, errors)?;
             }
             AtomicCas {
                 opcode,
                 args: [p, _, _],
                 ..
-            } => {
-                if opcode.can_load() || opcode.can_store() {
-                    self.verify_is_address(inst, p, errors)?;
-                }
+            } if opcode.can_load() || opcode.can_store() => {
+                self.verify_is_address(inst, p, errors)?;
             }
             AtomicRmw {
                 opcode,
                 args: [p, _],
                 ..
-            } => {
-                if opcode.can_load() || opcode.can_store() {
-                    self.verify_is_address(inst, p, errors)?;
-                }
+            } if opcode.can_load() || opcode.can_store() => {
+                self.verify_is_address(inst, p, errors)?;
             }
             Store {
                 opcode,
                 args: [_, p],
                 ..
-            } => {
-                if opcode.can_store() {
-                    self.verify_is_address(inst, p, errors)?;
-                }
+            } if opcode.can_store() => {
+                self.verify_is_address(inst, p, errors)?;
             }
             StoreNoOffset {
                 opcode,
                 args: [_, p],
                 ..
-            } => {
-                if opcode.can_store() {
-                    self.verify_is_address(inst, p, errors)?;
-                }
+            } if opcode.can_store() => {
+                self.verify_is_address(inst, p, errors)?;
             }
             UnaryConst {
                 opcode: opcode @ (Opcode::Vconst | Opcode::F128const),
@@ -714,7 +706,11 @@ impl<'a> Verifier<'a> {
             }
 
             // Exhaustive list so we can't forget to add new formats
-            Unary { .. }
+            AtomicCas { .. }
+            | AtomicRmw { .. }
+            | LoadNoOffset { .. }
+            | StoreNoOffset { .. }
+            | Unary { .. }
             | UnaryConst { .. }
             | UnaryImm { .. }
             | UnaryIeee16 { .. }
@@ -730,6 +726,8 @@ impl<'a> Verifier<'a> {
             | IntCompare { .. }
             | IntCompareImm { .. }
             | FloatCompare { .. }
+            | Load { .. }
+            | Store { .. }
             | Trap { .. }
             | CondTrap { .. }
             | NullAry { .. } => {}
@@ -1090,7 +1088,7 @@ impl<'a> Verifier<'a> {
     ) -> VerifierStepResult {
         if let Some(isa) = self.isa {
             let pointer_width = isa.triple().pointer_width()?;
-            let value_type = &self.func.dfg.value_type(v);
+            let value_type = self.func.dfg.value_type(v);
             let expected_width = pointer_width.bits() as u32;
             let value_width = value_type.bits();
             if expected_width != value_width {
