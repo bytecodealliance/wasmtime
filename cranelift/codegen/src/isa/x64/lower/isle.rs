@@ -1050,10 +1050,39 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
+    fn convert_gpr_to_assembler_read_gpr(&mut self, read: Gpr) -> AssemblerReadGpr {
+        AssemblerReadGpr::new(read)
+    }
+
     fn convert_gpr_to_assembler_read_write_gpr(&mut self, read: Gpr) -> AssemblerReadWriteGpr {
         let write = self.lower_ctx.alloc_tmp(types::I64).only_reg().unwrap();
         let write = WritableGpr::from_writable_reg(write).unwrap();
         AssemblerReadWriteGpr::new(PairedGpr { read, write })
+    }
+
+    fn convert_gpr_to_assembler_read_gpr_mem(&mut self, read: Gpr) -> AssemblerReadGprMem {
+        asm::GprMem::Gpr(read)
+    }
+
+    fn convert_gpr_mem_to_assembler_read_gpr_mem(&mut self, read: &GprMem) -> AssemblerReadGprMem {
+        match read.clone().into() {
+            RegMem::Reg { reg } => asm::GprMem::Gpr(Gpr::new(reg).unwrap()),
+            RegMem::Mem { addr } => asm::GprMem::Mem(addr.into()),
+        }
+    }
+
+    fn convert_gpr_mem_to_assembler_read_write_gpr_mem(
+        &mut self,
+        read: &GprMem,
+    ) -> AssemblerReadWriteGprMem {
+        match read.clone().into() {
+            RegMem::Reg { reg } => asm::GprMem::Gpr(
+                *self
+                    .convert_gpr_to_assembler_read_write_gpr(Gpr::new(reg).unwrap())
+                    .as_ref(),
+            ),
+            RegMem::Mem { addr } => asm::GprMem::Mem(addr.into()),
+        }
     }
 
     fn convert_assembler_read_write_gpr_to_gpr(&mut self, gpr: &AssemblerReadWriteGpr) -> Gpr {
@@ -1079,6 +1108,10 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
                 unimplemented!("cannot convert a memory address to a GPR; check the ISLE rules")
             }
         }
+    }
+
+    fn u8_to_assembler_imm8(&mut self, val: u8) -> AssemblerImm8 {
+        AssemblerImm8::new(val)
     }
 }
 

@@ -2932,21 +2932,72 @@
 (extern extractor is_gpr_mem is_gpr_mem)
 
 ;; Helpers to auto-convert to and from assembler types.
-(decl pure convert_gpr_to_assembler_read_write_gpr (Gpr) AssemblerReadWriteGpr)
+
+;; Gpr => AssemblerReadGpr
+(decl pure convert_gpr_to_assembler_read_gpr (Gpr) AssemblerReadGpr)
+(extern constructor convert_gpr_to_assembler_read_gpr convert_gpr_to_assembler_read_gpr)
+(convert Gpr AssemblerReadGpr convert_gpr_to_assembler_read_gpr)
+
+;; Gpr => AssemblerReadGprMem
+(decl pure convert_gpr_to_assembler_read_gpr_mem (Gpr) AssemblerReadGprMem)
+(extern constructor convert_gpr_to_assembler_read_gpr_mem convert_gpr_to_assembler_read_gpr_mem)
+(convert Gpr AssemblerReadGprMem convert_gpr_to_assembler_read_gpr_mem)
+
+;; Gpr => AssemblerReadWriteGpr
+(decl convert_gpr_to_assembler_read_write_gpr (Gpr) AssemblerReadWriteGpr)
 (extern constructor convert_gpr_to_assembler_read_write_gpr convert_gpr_to_assembler_read_write_gpr)
 (convert Gpr AssemblerReadWriteGpr convert_gpr_to_assembler_read_write_gpr)
 
-(decl pure convert_assembler_read_write_gpr_to_gpr (AssemblerReadWriteGpr) Gpr)
-(extern constructor convert_assembler_read_write_gpr_to_gpr convert_assembler_read_write_gpr_to_gpr)
-(convert AssemblerReadWriteGpr Gpr convert_assembler_read_write_gpr_to_gpr)
-
+;; Gpr => AssemblerReadWriteGprMem
 (decl pure convert_gpr_to_assembler_read_write_gpr_mem (Gpr) AssemblerReadWriteGprMem)
 (extern constructor convert_gpr_to_assembler_read_write_gpr_mem convert_gpr_to_assembler_read_write_gpr_mem)
 (convert Gpr AssemblerReadWriteGprMem convert_gpr_to_assembler_read_write_gpr_mem)
 
+;; GprMem => AssemblerReadGprMem
+(decl pure convert_gpr_mem_to_assembler_read_gpr_mem (GprMem) AssemblerReadGprMem)
+(extern constructor convert_gpr_mem_to_assembler_read_gpr_mem convert_gpr_mem_to_assembler_read_gpr_mem)
+(convert GprMem AssemblerReadGprMem convert_gpr_to_assembler_read_gpr_mem)
+
+;; GprMem => AssemblerReadWriteGprMem
+(decl pure convert_gpr_mem_to_assembler_read_write_gpr_mem (GprMem) AssemblerReadWriteGprMem)
+(extern constructor convert_gpr_mem_to_assembler_read_write_gpr_mem convert_gpr_mem_to_assembler_read_write_gpr_mem)
+(convert GprMem AssemblerReadWriteGprMem convert_gpr_mem_to_assembler_read_write_gpr_mem)
+
+;; Value => AssemblerReadGpr
+(decl convert_value_to_assembler_read_gpr (Value) AssemblerReadGpr)
+(rule (convert_value_to_assembler_read_gpr val) (put_in_gpr val))
+(convert Value AssemblerReadGpr convert_value_to_assembler_read_gpr)
+
+;; Value => AssemblerReadGprMem
+(decl convert_value_to_assembler_read_gpr_mem (Value) AssemblerReadGprMem)
+(rule (convert_value_to_assembler_read_gpr_mem val)
+  (convert_gpr_mem_to_assembler_read_gpr_mem (put_in_gpr_mem val)))
+(convert Value AssemblerReadGprMem convert_value_to_assembler_read_gpr_mem)
+
+;; Value => AssemblerReadWriteGprMem
+(decl convert_value_to_assembler_read_write_gpr_mem (Value) AssemblerReadWriteGprMem)
+(rule (convert_value_to_assembler_read_write_gpr_mem val) (put_in_gpr_mem val))
+(convert Value AssemblerReadWriteGprMem convert_value_to_assembler_read_write_gpr_mem)
+
+;; AssemblerReadWriteGpr => Gpr
+(decl pure convert_assembler_read_write_gpr_to_gpr (AssemblerReadWriteGpr) Gpr)
+(extern constructor convert_assembler_read_write_gpr_to_gpr convert_assembler_read_write_gpr_to_gpr)
+(convert AssemblerReadWriteGpr Gpr convert_assembler_read_write_gpr_to_gpr)
+
+;; AssemblerReadWriteGprMem => Gpr
 (decl pure convert_assembler_read_write_gpr_mem_to_gpr (AssemblerReadWriteGprMem) Gpr)
 (extern constructor convert_assembler_read_write_gpr_mem_to_gpr convert_assembler_read_write_gpr_mem_to_gpr)
 (convert AssemblerReadWriteGprMem Gpr convert_assembler_read_write_gpr_mem_to_gpr)
+
+;; AssemblerReadWriteGprMem => InstOutput
+(decl convert_assembler_read_write_gpr_mem_to_inst_output (AssemblerReadWriteGprMem) InstOutput)
+(rule (convert_assembler_read_write_gpr_mem_to_inst_output val)
+  (let ((ret Gpr val)) ret))
+(convert AssemblerReadWriteGprMem InstOutput convert_assembler_read_write_gpr_mem_to_inst_output)
+
+(decl u8_to_assembler_imm8 (u8) AssemblerImm8)
+(extern constructor u8_to_assembler_imm8 u8_to_assembler_imm8)
+(convert u8 AssemblerImm8 u8_to_assembler_imm8)
 
 ;; Helper for emitting `and` instructions. The high-priority rules all make use
 ;; of the new assembler lowerings, but we retain the original cranelift-codegen
@@ -3129,6 +3180,13 @@
 (rule 1 (x64_sar (ty_32_or_64 ty) src1 (gpr_from_imm8_gpr src2))
         (if-let true (use_bmi2))
         (x64_sarx ty src1 src2))
+
+;; Helper for creating `shld` instructions.
+(decl x64_shld (Type Gpr Gpr u8) Gpr)
+;; NB: i8 is intentionally missing here as x64 doesn't have such an instruction
+(rule (x64_shld $I16 src1 src2 amt) (x64_shldw_mri src1 src2 amt))
+(rule (x64_shld $I32 src1 src2 amt) (x64_shldl_mri src1 src2 amt))
+(rule (x64_shld $I64 src1 src2 amt) (x64_shldq_mri src1 src2 amt))
 
 ;; Helper for creating zeroing-of-high-bits instructions bzhi
 ;;

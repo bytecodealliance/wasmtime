@@ -15,15 +15,12 @@ impl dsl::Format {
     /// (TODO).
     #[must_use]
     pub fn generate_att_style_operands(&self) -> String {
-        let mut ordered_ops: Vec<_> = self
+        let ordered_ops: Vec<_> = self
             .operands
             .iter()
+            .rev()
             .map(|o| format!("{{{}}}", o.location))
             .collect();
-        if ordered_ops.len() > 1 {
-            let first = ordered_ops.remove(0);
-            ordered_ops.push(first);
-        }
         ordered_ops.join(", ")
     }
 
@@ -116,7 +113,9 @@ impl dsl::Format {
                 });
                 fmtln!(f, "}}");
             }
-            [RegMem(dst), Reg(src)] => {
+            [RegMem(dst), Reg(src)]
+            | [RegMem(dst), Reg(src), Imm(_)]
+            | [RegMem(dst), Reg(src), FixedReg(_)] => {
                 fmtln!(f, "let {src} = self.{src}.enc();");
                 fmtln!(f, "match &self.{dst} {{");
                 f.indent(|f| {
@@ -163,7 +162,9 @@ impl dsl::Format {
                 });
                 fmtln!(f, "}}");
             }
-            [RegMem(dst), Reg(src)] => {
+            [RegMem(dst), Reg(src)]
+            | [RegMem(dst), Reg(src), Imm(_)]
+            | [RegMem(dst), Reg(src), FixedReg(_)] => {
                 fmtln!(f, "let {src} = self.{src}.enc();");
                 fmtln!(f, "match &self.{dst} {{");
                 f.indent(|f| {
@@ -180,14 +181,16 @@ impl dsl::Format {
     fn generate_immediate(&self, f: &mut Formatter) {
         use dsl::OperandKind::Imm;
         match self.operands_by_kind().as_slice() {
-            [_, Imm(imm)] => {
+            [prefix @ .., Imm(imm)] => {
+                assert!(!prefix.iter().any(|o| matches!(o, Imm(_))));
+
                 f.empty_line();
                 f.comment("Emit immediate.");
                 fmtln!(f, "self.{imm}.encode(buf);");
             }
             unknown => {
                 // Do nothing: no immediates expected.
-                debug_assert!(!unknown.iter().any(|o| matches!(o, Imm(_))));
+                assert!(!unknown.iter().any(|o| matches!(o, Imm(_))));
             }
         }
     }

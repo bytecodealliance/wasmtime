@@ -201,6 +201,8 @@ pub enum Location {
     eax,
     rax,
 
+    cl,
+
     imm8,
     imm16,
     imm32,
@@ -222,7 +224,7 @@ impl Location {
     pub fn bits(&self) -> u8 {
         use Location::*;
         match self {
-            al | imm8 | r8 | rm8 => 8,
+            al | cl | imm8 | r8 | rm8 => 8,
             ax | imm16 | r16 | rm16 => 16,
             eax | imm32 | r32 | rm32 => 32,
             rax | r64 | rm64 => 64,
@@ -240,7 +242,7 @@ impl Location {
     pub fn uses_memory(&self) -> bool {
         use Location::*;
         match self {
-            al | ax | eax | rax | imm8 | imm16 | imm32 | r8 | r16 | r32 | r64 => false,
+            al | cl | ax | eax | rax | imm8 | imm16 | imm32 | r8 | r16 | r32 | r64 => false,
             rm8 | rm16 | rm32 | rm64 => true,
         }
     }
@@ -251,7 +253,7 @@ impl Location {
     pub fn uses_variable_register(&self) -> bool {
         use Location::*;
         match self {
-            al | ax | eax | rax | imm8 | imm16 | imm32 => false,
+            al | ax | eax | rax | cl | imm8 | imm16 | imm32 => false,
             r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 => true,
         }
     }
@@ -261,7 +263,7 @@ impl Location {
     pub fn kind(&self) -> OperandKind {
         use Location::*;
         match self {
-            al | ax | eax | rax => OperandKind::FixedReg(*self),
+            al | ax | eax | rax | cl => OperandKind::FixedReg(*self),
             imm8 | imm16 | imm32 => OperandKind::Imm(*self),
             r8 | r16 | r32 | r64 => OperandKind::Reg(*self),
             rm8 | rm16 | rm32 | rm64 => OperandKind::RegMem(*self),
@@ -277,6 +279,8 @@ impl core::fmt::Display for Location {
             ax => write!(f, "ax"),
             eax => write!(f, "eax"),
             rax => write!(f, "rax"),
+
+            cl => write!(f, "cl"),
 
             imm8 => write!(f, "imm8"),
             imm16 => write!(f, "imm16"),

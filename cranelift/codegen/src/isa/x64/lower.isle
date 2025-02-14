@@ -472,6 +472,21 @@
 (rule 7 (lower (has_type $I128 (bor x y)))
       (or_i128 x y))
 
+;; Specialized lowerings to generate the `shld` instruction.
+;;
+;; The `shld` instruction will shift a value left and shift-in bits from a
+;; different register. Pattern-match doing this with bit-ops and shifts to
+;; generate a `shld` instruction.
+(rule 8 (lower (has_type (ty_int_ref_16_to_64 ty)
+  (bor (ishl x (u8_from_iconst xs)) (ushr y (u8_from_iconst ys)))))
+  (if-let true (u64_eq (ty_bits ty) (u64_add xs ys)))
+  (x64_shld ty x y xs))
+(rule 8 (lower (has_type (ty_int_ref_16_to_64 ty)
+  (bor (ushr y (u8_from_iconst ys)) (ishl x (u8_from_iconst xs)))))
+  (if-let true (u64_eq (ty_bits ty) (u64_add xs ys)))
+  (x64_shld ty x y xs))
+
+
 ;;;; Rules for `bxor` ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; `{i,b}64` and smaller.

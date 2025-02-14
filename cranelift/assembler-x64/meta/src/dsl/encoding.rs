@@ -195,7 +195,10 @@ impl Rex {
 
         if self.opcodes.prefix.contains_66() {
             assert!(
-                operands.iter().all(|&op| op.location.bits() == 16),
+                operands
+                    .iter()
+                    .all(|&op| matches!(op.location.kind(), OperandKind::Imm(_) | OperandKind::FixedReg(_))
+                        || op.location.bits() == 16),
                 "when we encode the 66 prefix, we expect all operands to be 16-bit wide"
             );
         }
@@ -332,7 +335,7 @@ impl From<[u8; 3]> for Opcodes {
     fn from(bytes: [u8; 3]) -> Opcodes {
         let [a, b, c] = bytes;
         match (LegacyPrefix::try_from(a), b, c) {
-            (Ok(prefix), 0x0f, primary) => Opcodes { prefix, escape: false, primary, secondary: None },
+            (Ok(prefix), 0x0f, primary) => Opcodes { prefix, escape: true, primary, secondary: None },
             (Err(0x0f), primary, secondary) => Opcodes {
                 prefix: LegacyPrefix::NoPrefix,
                 escape: true,
