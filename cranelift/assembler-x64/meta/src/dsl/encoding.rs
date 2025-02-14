@@ -9,16 +9,20 @@
 //! let enc = rex(0x25).w().id();
 //! assert_eq!(enc.to_string(), "REX.W + 0x25 id")
 //! ```
+//!
+//! This module references the Intel® 64 and IA-32 Architectures Software
+//! Development Manual, Volume 2: [link].
+//!
+//! [link]: https://software.intel.com/content/www/us/en/develop/articles/intel-sdm.html
 
 use super::{Operand, OperandKind};
 use core::fmt;
 
 /// An abbreviated constructor for REX-encoded instructions.
 #[must_use]
-pub fn rex(opcode: u8) -> Rex {
+pub fn rex(opcode: impl Into<Opcodes>) -> Rex {
     Rex {
-        prefix: LegacyPrefix::NoPrefix,
-        opcode,
+        opcodes: opcode.into(),
         w: false,
         r: false,
         digit: 0,
@@ -66,18 +70,17 @@ impl fmt::Display for Encoding {
 /// VEX, EVEX). The "REX" _byte_ is still optional in this encoding and only
 /// emitted when necessary.
 pub struct Rex {
-    /// Any legacy prefixes that should be included with the instruction.
-    pub prefix: LegacyPrefix,
-    /// The opcode of the instruction.
+    /// The opcodes for this instruction.
     ///
-    /// Multi-byte opcodes are handled by prefixing this `opcode` with a
-    /// [`LegacyPrefix`]; e.g., `66 0F 54` (`ANDPD`) is expressed as follows:
+    /// Multi-byte opcodes are handled by passing an array of opcodes (including
+    /// prefixes like `0x66` and escape bytes like `0x0f`) to the constructor.
+    /// E.g., `66 0F 54` (`ANDPD`) is expressed as follows:
     ///
     /// ```
-    /// # use cranelift_assembler_x64_meta::dsl::{rex, LegacyPrefix::_66F0};
-    /// let enc = rex(0x54).prefix(_66F0);
+    /// # use cranelift_assembler_x64_meta::dsl::rex;
+    /// let enc = rex([0x66, 0x0f, 0x54]);
     /// ```
-    pub opcode: u8,
+    pub opcodes: Opcodes,
     /// Indicates setting the REX.W bit.
     ///
     /// From the reference manual: "Indicates the use of a REX prefix that
@@ -105,12 +108,6 @@ pub struct Rex {
 }
 
 impl Rex {
-    /// Set the prefix bytes for the instruction.
-    #[must_use]
-    pub fn prefix(self, prefixes: LegacyPrefix) -> Self {
-        Self { prefix: prefixes, ..self }
-    }
-
     /// Set the `REX.W` bit.
     #[must_use]
     pub fn w(self) -> Self {
@@ -192,11 +189,11 @@ impl Rex {
         assert!(!(self.r && self.digit > 0));
         assert!(!(self.r && self.imm != Imm::None));
         assert!(
-            !(self.w && (self.prefix.contains_66())),
+            !(self.w && (self.opcodes.prefix.contains_66())),
             "though valid, if REX.W is set then the 66 prefix is ignored--avoid encoding this"
         );
 
-        if self.prefix.contains_66() {
+        if self.opcodes.prefix.contains_66() {
             assert!(
                 operands.iter().all(|&op| op.location.bits() == 16),
                 "when we encode the 66 prefix, we expect all operands to be 16-bit wide"
@@ -225,7 +222,7 @@ impl From<Rex> for Encoding {
 
 impl fmt::Display for Rex {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self.prefix {
+        match self.opcodes.prefix {
             LegacyPrefix::NoPrefix => {}
             LegacyPrefix::_66 => write!(f, "0x66 + ")?,
             LegacyPrefix::_F0 => write!(f, "0xF0 + ")?,
@@ -237,7 +234,13 @@ impl fmt::Display for Rex {
         if self.w {
             write!(f, "REX.W + ")?;
         }
-        write!(f, "{:#04x}", self.opcode)?;
+        if self.opcodes.escape {
+            write!(f, "0x0F + ")?;
+        }
+        write!(f, "{:#04x}", self.opcodes.primary)?;
+        if let Some(secondary) = self.opcodes.secondary {
+            write!(f, " {secondary:#04x}")?;
+        }
         if self.r {
             write!(f, " /r")?;
         }
@@ -251,11 +254,122 @@ impl fmt::Display for Rex {
     }
 }
 
+/// Describe an instruction's opcodes. From section 2.1.2 "Opcodes" in the
+/// reference manual:
+///
+/// > A primary opcode can be 1, 2, or 3 bytes in length. An additional 3-bit
+/// > opcode field is sometimes encoded in the ModR/M byte. Smaller fields can
+/// > be defined within the primary opcode. Such fields define the direction of
+/// > operation, size of displacements, register encoding, condition codes, or
+/// > sign extension. Encoding fields used by an opcode vary depending on the
+/// > class of operation.
+/// >
+/// > Two-byte opcode formats for general-purpose and SIMD instructions consist
+/// > of one of the following:
+/// > - An escape opcode byte `0FH` as the primary opcode and a second opcode
+/// >   byte.
+/// > - A mandatory prefix (`66H`, `F2H`, or `F3H`), an escape opcode byte, and
+/// >   a second opcode byte (same as previous bullet).
+/// >
+/// > For example, `CVTDQ2PD` consists of the following sequence: `F3 0F E6`.
+/// > The first byte is a mandatory prefix (it is not considered as a repeat
+/// > prefix).
+/// >
+/// > Three-byte opcode formats for general-purpose and SIMD instructions
+/// > consist of one of the following:
+/// > - An escape opcode byte `0FH` as the primary opcode, plus two additional
+/// >   opcode bytes.
+/// > - A mandatory prefix (`66H`, `F2H`, or `F3H`), an escape opcode byte, plus
+/// >   two additional opcode bytes (same as previous bullet).
+/// >
+/// > For example, `PHADDW` for XMM registers consists of the following
+/// > sequence: `66 0F 38 01`. The first byte is the mandatory prefix.
+pub struct Opcodes {
+    /// The prefix bytes for this instruction.
+    pub prefix: LegacyPrefix,
+    /// Indicates the use of an escape opcode byte, `0x0f`.
+    pub escape: bool,
+    /// The primary opcode.
+    pub primary: u8,
+    /// Some instructions (e.g., SIMD) may have a secondary opcode.
+    pub secondary: Option<u8>,
+}
+
+impl From<u8> for Opcodes {
+    fn from(primary: u8) -> Opcodes {
+        Opcodes {
+            prefix: LegacyPrefix::NoPrefix,
+            escape: false,
+            primary,
+            secondary: None,
+        }
+    }
+}
+
+impl From<[u8; 1]> for Opcodes {
+    fn from(bytes: [u8; 1]) -> Opcodes {
+        Opcodes::from(bytes[0])
+    }
+}
+
+impl From<[u8; 2]> for Opcodes {
+    fn from(bytes: [u8; 2]) -> Opcodes {
+        let [a, b] = bytes;
+        match (LegacyPrefix::try_from(a), b) {
+            (Ok(prefix), primary) => Opcodes { prefix, escape: false, primary, secondary: None },
+            (Err(0x0f), primary) => Opcodes {
+                prefix: LegacyPrefix::NoPrefix,
+                escape: true,
+                primary,
+                secondary: None,
+            },
+            _ => panic!("invalid opcodes; expected [prefix, opcode] or [0x0f, opcode]"),
+        }
+    }
+}
+
+impl From<[u8; 3]> for Opcodes {
+    fn from(bytes: [u8; 3]) -> Opcodes {
+        let [a, b, c] = bytes;
+        match (LegacyPrefix::try_from(a), b, c) {
+            (Ok(prefix), 0x0f, primary) => Opcodes { prefix, escape: false, primary, secondary: None },
+            (Err(0x0f), primary, secondary) => Opcodes {
+                prefix: LegacyPrefix::NoPrefix,
+                escape: true,
+                primary,
+                secondary: Some(secondary),
+            },
+            _ => panic!("invalid opcodes; expected [prefix, 0x0f, opcode] or [0x0f, opcode, opcode]"),
+        }
+    }
+}
+
+impl From<[u8; 4]> for Opcodes {
+    fn from(bytes: [u8; 4]) -> Opcodes {
+        let [a, b, c, d] = bytes;
+        match (LegacyPrefix::try_from(a), b, c, d) {
+            (Ok(prefix), 0x0f, primary, secondary) => Opcodes {
+                prefix,
+                escape: false,
+                primary,
+                secondary: Some(secondary),
+            },
+            _ => panic!("invalid opcodes; expected [prefix, 0x0f, opcode, opcode]"),
+        }
+    }
+}
+
+/// A prefix byte for an instruction.
 #[derive(PartialEq)]
 pub enum LegacyPrefix {
     /// No prefix bytes.
     NoPrefix,
-    /// Operand size override -- here, denoting "16-bit operation".
+    /// An operand size override typically denoting "16-bit operation". But the
+    /// reference manual is more nuanced:
+    ///
+    /// > The operand-size override prefix allows a program to switch between
+    /// > 16- and 32-bit operand sizes. Either size can be the default; use of
+    /// > the prefix selects the non-default.
     _66,
     /// The lock prefix.
     _F0,
@@ -276,6 +390,19 @@ impl LegacyPrefix {
             LegacyPrefix::_66 | LegacyPrefix::_66F0 | LegacyPrefix::_66F3 => true,
             LegacyPrefix::NoPrefix | LegacyPrefix::_F0 | LegacyPrefix::_F2 | LegacyPrefix::_F3 => false,
         }
+    }
+}
+
+impl TryFrom<u8> for LegacyPrefix {
+    type Error = u8;
+    fn try_from(byte: u8) -> Result<Self, Self::Error> {
+        Ok(match byte {
+            0x66 => LegacyPrefix::_66,
+            0xF0 => LegacyPrefix::_F0,
+            0xF2 => LegacyPrefix::_F2,
+            0xF3 => LegacyPrefix::_F3,
+            byte => return Err(byte),
+        })
     }
 }
 
