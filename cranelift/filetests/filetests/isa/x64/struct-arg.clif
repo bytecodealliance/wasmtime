@@ -43,7 +43,7 @@ block0(v0: i64, v1: i64):
 ;   lea     rbp(stack args max - 64), %rcx
 ;   movzbq  0(%rdi), %rax
 ;   movzbq  0(%rcx), %r9
-;   addl    %eax, %r9d, %eax
+;   addl %r9d, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -165,7 +165,7 @@ block0(v0: i64, v1: i64):
 ;   lea     rbp(stack args max - 64), %rcx
 ;   movzbq  0(%rsi), %rax
 ;   movzbq  0(%rcx), %r9
-;   addl    %eax, %r9d, %eax
+;   addl %r9d, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

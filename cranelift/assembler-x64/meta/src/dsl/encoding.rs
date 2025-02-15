@@ -25,7 +25,7 @@ pub fn rex(opcode: impl Into<Opcodes>) -> Rex {
         opcodes: opcode.into(),
         w: false,
         r: false,
-        digit: 0,
+        digit: None,
         imm: Imm::None,
     }
 }
@@ -96,7 +96,7 @@ pub struct Rex {
     /// ModR/M byte of the instruction uses only the r/m (register or memory)
     /// operand. The reg field contains the digit that provides an extension to
     /// the instruction's opcode."
-    pub digit: u8,
+    pub digit: Option<u8>,
     /// The number of bits used as an immediate operand to the instruction.
     ///
     /// From the reference manual: "a 1-byte (ib), 2-byte (iw), 4-byte (id) or
@@ -129,8 +129,8 @@ impl Rex {
     /// Panics if `digit` is too large.
     #[must_use]
     pub fn digit(self, digit: u8) -> Self {
-        assert!(digit < 8);
-        Self { digit, ..self }
+        assert!(digit <= 0b111, "must fit in 3 bits");
+        Self { digit: Some(digit), ..self }
     }
 
     /// Append a byte-sized immediate operand (8-bit); equivalent to `ib` in the
@@ -185,8 +185,7 @@ impl Rex {
     /// _Instruction Format_, of the Intel® 64 and IA-32 Architectures Software
     /// Developer’s Manual, Volume 2A.
     fn validate(&self, operands: &[Operand]) {
-        assert!(self.digit < 8);
-        assert!(!(self.r && self.digit > 0));
+        assert!(!(self.r && self.digit.is_some()));
         assert!(!(self.r && self.imm != Imm::None));
         assert!(
             !(self.w && (self.opcodes.prefix.contains_66())),
@@ -247,8 +246,8 @@ impl fmt::Display for Rex {
         if self.r {
             write!(f, " /r")?;
         }
-        if self.digit > 0 {
-            write!(f, " /{}", self.digit)?;
+        if let Some(digit) = self.digit {
+            write!(f, " /{digit}")?;
         }
         if self.imm != Imm::None {
             write!(f, " {}", self.imm)?;

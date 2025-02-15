@@ -107,9 +107,9 @@ block0(v0: i128, v1: i128):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   orq     %rax, %rdx, %rax
+;   orq %rdx, %rax
 ;   movq    %rsi, %rdx
-;   orq     %rdx, %rcx, %rdx
+;   orq %rcx, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -138,9 +138,9 @@ block0(v0: i128, v1: i128):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   movq    %rdi, %rax
-;   xorq    %rax, %rdx, %rax
+;   xorq %rdx, %rax
 ;   movq    %rsi, %rdx
-;   xorq    %rdx, %rcx, %rdx
+;   xorq %rcx, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -204,13 +204,13 @@ block0(v0: i128, v1: i128):
 ;   imulq   %rdx, %rcx, %rdx
 ;   movq    %rax, %rcx
 ;   imulq   %rsi, %rcx, %rsi
-;   addq    %rdx, %rsi, %rdx
+;   addq %rsi, %rdx
 ;   movq    %rdi, %rax
 ;   movq    %rdx, %r8
 ;   mulq    %rax, %rcx, %rax, %rdx
 ;   movq    %rdx, %rcx
 ;   movq    %r8, %rdx
-;   addq    %rdx, %rcx, %rdx
+;   addq %rcx, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -325,15 +325,15 @@ block0(v0: i128, v1: i128):
 ;   movq    %r15, 32(%rsp)
 ; block0:
 ;   movq    %rdi, %rax
-;   xorq    %rax, %rdx, %rax
+;   xorq %rdx, %rax
 ;   movq    %rsi, %r8
-;   xorq    %r8, %rcx, %r8
+;   xorq %rcx, %r8
 ;   orq     %rax, %r8, %rax
 ;   setz    %al
 ;   movq    %rdi, %r8
-;   xorq    %r8, %rdx, %r8
+;   xorq %rdx, %r8
 ;   movq    %rsi, %r9
-;   xorq    %r9, %rcx, %r9
+;   xorq %rcx, %r9
 ;   orq     %r8, %r9, %r8
 ;   setnz   %r9b
 ;   cmpq    %rdx, %rdi
@@ -758,16 +758,16 @@ block0(v0: i128):
 ;   shrq    $1, %rax, %rax
 ;   movabsq $8608480567731124087, %r8
 ;   andq %r8, %rax
-;   subq    %rdi, %rax, %rdi
+;   subq %rax, %rdi
 ;   shrq    $1, %rax, %rax
 ;   andq %r8, %rax
-;   subq    %rdi, %rax, %rdi
+;   subq %rax, %rdi
 ;   shrq    $1, %rax, %rax
 ;   andq %r8, %rax
-;   subq    %rdi, %rax, %rdi
+;   subq %rax, %rdi
 ;   movq    %rdi, %rax
 ;   shrq    $4, %rax, %rax
-;   addq    %rax, %rdi, %rax
+;   addq %rdi, %rax
 ;   movabsq $1085102592571150095, %rdi
 ;   andq %rdi, %rax
 ;   movabsq $72340172838076673, %rdx
@@ -777,22 +777,22 @@ block0(v0: i128):
 ;   shrq    $1, %rdi, %rdi
 ;   movabsq $8608480567731124087, %rcx
 ;   andq %rcx, %rdi
-;   subq    %rsi, %rdi, %rsi
+;   subq %rdi, %rsi
 ;   shrq    $1, %rdi, %rdi
 ;   andq %rcx, %rdi
-;   subq    %rsi, %rdi, %rsi
+;   subq %rdi, %rsi
 ;   shrq    $1, %rdi, %rdi
 ;   andq %rcx, %rdi
-;   subq    %rsi, %rdi, %rsi
+;   subq %rdi, %rsi
 ;   movq    %rsi, %rdi
 ;   shrq    $4, %rdi, %rdi
-;   addq    %rdi, %rsi, %rdi
+;   addq %rsi, %rdi
 ;   movabsq $1085102592571150095, %r10
 ;   andq %r10, %rdi
 ;   movabsq $72340172838076673, %rcx
 ;   imulq   %rdi, %rcx, %rdi
 ;   shrq    $56, %rdi, %rdi
-;   addq    %rax, %rdi, %rax
+;   addq %rdi, %rax
 ;   xorq    %rdx, %rdx, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
@@ -863,82 +863,82 @@ block0(v0: i128):
 ;   shrq    $1, %rsi, %rsi
 ;   andq %rcx, %rsi
 ;   shlq    $1, %rdx, %rdx
-;   orq     %rdx, %rsi, %rdx
+;   orq %rsi, %rdx
 ;   movabsq $3689348814741910323, %r9
 ;   movq    %rdx, %r10
 ;   andq %r9, %r10
 ;   shrq    $2, %rdx, %rdx
 ;   andq %r9, %rdx
 ;   shlq    $2, %r10, %r10
-;   orq     %r10, %rdx, %r10
+;   orq %rdx, %r10
 ;   movabsq $1085102592571150095, %rsi
 ;   movq    %r10, %rax
 ;   andq %rsi, %rax
 ;   shrq    $4, %r10, %r10
 ;   andq %rsi, %r10
 ;   shlq    $4, %rax, %rax
-;   orq     %rax, %r10, %rax
+;   orq %r10, %rax
 ;   movabsq $71777214294589695, %rcx
 ;   movq    %rax, %rdx
 ;   andq %rcx, %rdx
 ;   shrq    $8, %rax, %rax
 ;   andq %rcx, %rax
 ;   shlq    $8, %rdx, %rdx
-;   orq     %rdx, %rax, %rdx
+;   orq %rax, %rdx
 ;   movabsq $281470681808895, %r10
 ;   movq    %rdx, %r9
 ;   andq %r10, %r9
 ;   shrq    $16, %rdx, %rdx
 ;   andq %r10, %rdx
 ;   shlq    $16, %r9, %r9
-;   orq     %r9, %rdx, %r9
+;   orq %rdx, %r9
 ;   movabsq $4294967295, %rsi
 ;   movq    %r9, %rax
 ;   andq %rsi, %rax
 ;   shrq    $32, %r9, %r9
 ;   shlq    $32, %rax, %rax
-;   orq     %rax, %r9, %rax
+;   orq %r9, %rax
 ;   movabsq $6148914691236517205, %rdx
 ;   movq    %rdi, %rcx
 ;   andq %rdx, %rcx
 ;   shrq    $1, %rdi, %rdi
 ;   andq %rdx, %rdi
 ;   shlq    $1, %rcx, %rcx
-;   orq     %rcx, %rdi, %rcx
+;   orq %rdi, %rcx
 ;   movabsq $3689348814741910323, %rdx
 ;   movq    %rcx, %r8
 ;   andq %rdx, %r8
 ;   shrq    $2, %rcx, %rcx
 ;   andq %rdx, %rcx
 ;   shlq    $2, %r8, %r8
-;   orq     %r8, %rcx, %r8
+;   orq %rcx, %r8
 ;   movabsq $1085102592571150095, %r10
 ;   movq    %r8, %r11
 ;   andq %r10, %r11
 ;   shrq    $4, %r8, %r8
 ;   andq %r10, %r8
 ;   shlq    $4, %r11, %r11
-;   orq     %r11, %r8, %r11
+;   orq %r8, %r11
 ;   movabsq $71777214294589695, %rdi
 ;   movq    %r11, %rcx
 ;   andq %rdi, %rcx
 ;   shrq    $8, %r11, %r11
 ;   andq %rdi, %r11
 ;   shlq    $8, %rcx, %rcx
-;   orq     %rcx, %r11, %rcx
+;   orq %r11, %rcx
 ;   movabsq $281470681808895, %rdx
 ;   movq    %rcx, %r8
 ;   andq %rdx, %r8
 ;   shrq    $16, %rcx, %rcx
 ;   andq %rdx, %rcx
 ;   shlq    $16, %r8, %r8
-;   orq     %r8, %rcx, %r8
+;   orq %rcx, %r8
 ;   movabsq $4294967295, %r10
 ;   movq    %r8, %rdx
 ;   andq %r10, %rdx
 ;   shrq    $32, %r8, %r8
 ;   shlq    $32, %rdx, %rdx
-;   orq     %rdx, %r8, %rdx
+;   orq %r8, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1339,13 +1339,13 @@ block0(v0: i128):
 ;   bsrq    %rsi, %r9
 ;   cmovzq  %rcx, %r9, %r9
 ;   movl    $63, %edi
-;   subq    %rdi, %r9, %rdi
+;   subq %r9, %rdi
 ;   movabsq $-1, %rdx
 ;   bsrq    %r8, %r10
 ;   cmovzq  %rdx, %r10, %r10
 ;   movl    $63, %eax
-;   subq    %rax, %r10, %rax
-;   addq    %rax, $64, %rax
+;   subq %r10, %rax
+;   addq $0x40, %rax
 ;   cmpq    $64, %rdi
 ;   cmovnzq %rdi, %rax, %rax
 ;   xorq    %rdx, %rdx, %rdx
@@ -1393,7 +1393,7 @@ block0(v0: i128):
 ;   movl    $64, %edi
 ;   bsfq    %rsi, %rdx
 ;   cmovzq  %rdi, %rdx, %rdx
-;   addq    %rdx, $64, %rdx
+;   addq $0x40, %rdx
 ;   cmpq    $64, %rax
 ;   cmovzq  %rdx, %rax, %rax
 ;   xorq    %rdx, %rdx, %rdx
@@ -1469,12 +1469,12 @@ block0(v0: i128, v1: i128):
 ;   movq    %rcx, %r10
 ;   movl    $64, %ecx
 ;   movq    %r10, %r8
-;   subq    %rcx, %r8, %rcx
+;   subq %r8, %rcx
 ;   shrq    %cl, %rdi, %rdi
 ;   xorq    %rax, %rax, %rax
 ;   testq   $127, %r8
 ;   cmovzq  %rax, %rdi, %rdi
-;   orq     %rdi, %rsi, %rdi
+;   orq %rsi, %rdi
 ;   testq   $64, %r8
 ;   cmovzq  %rdx, %rax, %rax
 ;   cmovzq  %rdi, %rdx, %rdx
@@ -1526,12 +1526,12 @@ block0(v0: i128, v1: i128):
 ;   movq    %rcx, %r11
 ;   movl    $64, %ecx
 ;   movq    %r11, %rax
-;   subq    %rcx, %rax, %rcx
+;   subq %rax, %rcx
 ;   shlq    %cl, %rsi, %rsi
 ;   xorq    %rdx, %rdx, %rdx
 ;   testq   $127, %rax
 ;   cmovzq  %rdx, %rsi, %rsi
-;   orq     %rsi, %rdi, %rsi
+;   orq %rdi, %rsi
 ;   testq   $64, %rax
 ;   movq    %r10, %rax
 ;   cmovzq  %rsi, %rax, %rax
@@ -1585,13 +1585,13 @@ block0(v0: i128, v1: i128):
 ;   movq    %rcx, %r11
 ;   movl    $64, %ecx
 ;   movq    %r11, %rax
-;   subq    %rcx, %rax, %rcx
+;   subq %rax, %rcx
 ;   movq    %rsi, %r9
 ;   shlq    %cl, %r9, %r9
 ;   xorq    %r11, %r11, %r11
 ;   testq   $127, %rax
 ;   cmovzq  %r11, %r9, %r9
-;   orq     %rdi, %r9, %rdi
+;   orq %r9, %rdi
 ;   sarq    $63, %rsi, %rsi
 ;   testq   $64, %rax
 ;   movq    %r10, %rax
@@ -1651,38 +1651,38 @@ block0(v0: i128, v1: i128):
 ;   shlq    %cl, %r11, %r11
 ;   movl    $64, %ecx
 ;   movq    %r8, %rax
-;   subq    %rcx, %rax, %rcx
+;   subq %rax, %rcx
 ;   movq    %rdi, %r10
 ;   shrq    %cl, %r10, %r10
 ;   xorq    %rax, %rax, %rax
 ;   movq    %r8, %rcx
 ;   testq   $127, %rcx
 ;   cmovzq  %rax, %r10, %r10
-;   orq     %r10, %r11, %r10
+;   orq %r11, %r10
 ;   testq   $64, %rcx
 ;   cmovzq  %rdx, %rax, %rax
 ;   cmovzq  %r10, %rdx, %rdx
 ;   movl    $128, %ecx
 ;   movq    %r8, %r10
-;   subq    %rcx, %r10, %rcx
+;   subq %r10, %rcx
 ;   shrq    %cl, %rdi, %rdi
 ;   movq    %rsi, %r9
 ;   shrq    %cl, %r9, %r9
 ;   movq    %rcx, %r8
 ;   movl    $64, %ecx
 ;   movq    %r8, %r10
-;   subq    %rcx, %r10, %rcx
+;   subq %r10, %rcx
 ;   shlq    %cl, %rsi, %rsi
 ;   xorq    %r8, %r8, %r8
 ;   testq   $127, %r10
 ;   cmovzq  %r8, %rsi, %rsi
-;   orq     %rsi, %rdi, %rsi
+;   orq %rdi, %rsi
 ;   testq   $64, %r10
 ;   movq    %r9, %r10
 ;   cmovzq  %rsi, %r10, %r10
 ;   cmovzq  %r9, %r8, %r8
-;   orq     %rax, %r10, %rax
-;   orq     %rdx, %r8, %rdx
+;   orq %r10, %rax
+;   orq %r8, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1756,37 +1756,37 @@ block0(v0: i128, v1: i128):
 ;   shrq    %cl, %r10, %r10
 ;   movl    $64, %ecx
 ;   movq    %r9, %rax
-;   subq    %rcx, %rax, %rcx
+;   subq %rax, %rcx
 ;   movq    %rsi, %r11
 ;   shlq    %cl, %r11, %r11
 ;   xorq    %rdx, %rdx, %rdx
 ;   movq    %r9, %rcx
 ;   testq   $127, %rcx
 ;   cmovzq  %rdx, %r11, %r11
-;   orq     %r11, %r8, %r11
+;   orq %r8, %r11
 ;   testq   $64, %rcx
 ;   movq    %r10, %rax
 ;   cmovzq  %r11, %rax, %rax
 ;   cmovzq  %r10, %rdx, %rdx
 ;   movl    $128, %ecx
 ;   movq    %r9, %r10
-;   subq    %rcx, %r10, %rcx
+;   subq %r10, %rcx
 ;   movq    %rdi, %r8
 ;   shlq    %cl, %r8, %r8
 ;   shlq    %cl, %rsi, %rsi
 ;   movq    %rcx, %r9
 ;   movl    $64, %ecx
-;   subq    %rcx, %r9, %rcx
+;   subq %r9, %rcx
 ;   shrq    %cl, %rdi, %rdi
 ;   xorq    %r11, %r11, %r11
 ;   testq   $127, %r9
 ;   cmovzq  %r11, %rdi, %rdi
-;   orq     %rdi, %rsi, %rdi
+;   orq %rsi, %rdi
 ;   testq   $64, %r9
 ;   cmovzq  %r8, %r11, %r11
 ;   cmovzq  %rdi, %r8, %r8
-;   orq     %rax, %r11, %rax
-;   orq     %rdx, %r8, %rdx
+;   orq %r11, %rax
+;   orq %r8, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
