@@ -1,0 +1,79 @@
+test interpret
+test run
+target aarch64
+target s390x
+target x86_64
+target x86_64 sse41
+target x86_64 sse42
+target x86_64 sse42 has_avx
+set enable_multi_ret_implicit_sret
+target riscv64 has_v
+target riscv64 has_v has_c has_zcb
+target pulley64
+target pulley64be
+
+function %extractlane_i8x16_through_stack(i8x16) -> i8 {
+    ss0 = explicit_slot 8
+block0(v0: i8x16):
+    v2 = stack_addr.i64 ss0
+    v3 = extractlane v0, 1
+    store v3, v2
+    v4 = load.i8 v2
+    return v4
+}
+; run: %extractlane_i8x16_through_stack([1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16]) == 2
+
+function %extractlane_i16x8_through_stack(i16x8) -> i16 {
+    ss0 = explicit_slot 8
+block0(v0: i16x8):
+    v2 = stack_addr.i64 ss0
+    v3 = extractlane v0, 2
+    store v3, v2
+    v4 = load.i16 v2
+    return v4
+}
+; run: %extractlane_i16x8_through_stack([1 2 3 4 5 6 7 8]) == 3
+
+function %extractlane_i32x4_through_stack(i32x4) -> i32 {
+    ss0 = explicit_slot 8
+block0(v0: i32x4):
+    v2 = stack_addr.i64 ss0
+    v3 = extractlane v0, 3
+    store v3, v2
+    v4 = load.i32 v2
+    return v4
+}
+; run: %extractlane_i32x4_through_stack([1 2 3 4]) == 4
+
+function %extractlane_i64x2_through_stack(i64x2) -> i64 {
+    ss0 = explicit_slot 8
+block0(v0: i64x2):
+    v2 = stack_addr.i64 ss0
+    v3 = extractlane v0, 0
+    store v3, v2
+    v4 = load.i64 v2
+    return v4
+}
+; run: %extractlane_i64x2_through_stack([1 2]) == 1
+
+function %extractlane_f32x4_through_stack(f32x4) -> f32 {
+    ss0 = explicit_slot 8
+block0(v0: f32x4):
+    v2 = stack_addr.i64 ss0
+    v3 = extractlane v0, 3
+    store v3, v2
+    v4 = load.f32 v2
+    return v4
+}
+; run: %extractlane_f32x4_through_stack([0x1.0 0x2.0 0x3.0 0x4.0]) == 0x4.0
+
+function %extractlane_f64x2_through_stack(f64x2) -> f64 {
+    ss0 = explicit_slot 8
+block0(v0: f64x2):
+    v2 = stack_addr.i64 ss0
+    v3 = extractlane v0, 0
+    store v3, v2
+    v4 = load.f64 v2
+    return v4
+}
+; run: %extractlane_f64x2_through_stack([0x1.0 0x2.0]) == 0x1.0

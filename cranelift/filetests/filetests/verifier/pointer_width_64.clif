@@ -1,0 +1,61 @@
+test verifier
+target pulley64
+
+function %error_i8_load_store_i32(i32) -> i8 {
+block0(v0: i32):
+    v1 = load.i8 v0 ; error: invalid pointer width (got 32, expected 64) encountered v0
+    store.i8 v1, v0 ; error: invalid pointer width (got 32, expected 64) encountered v0
+    return v1
+}
+
+function %error_i8_load_offset_i32(i32) -> i8 {
+block0(v0: i32):
+    v1 = load.i8 v0+16 ; error: invalid pointer width (got 32, expected 64) encountered v0
+    store.i8 v1, v0+16 ; error: invalid pointer width (got 32, expected 64) encountered v0
+    return v1
+}
+
+function %error_i64_atomic_store_load(i64) -> i64 {
+    ss0 = explicit_slot 8
+
+block0(v0: i64):
+    v1 = stack_addr.i32 ss0
+    atomic_store.i64 v0, v1; error: invalid pointer width (got 32, expected 64) encountered v1
+    v2 = atomic_load.i64 v1; error: invalid pointer width (got 32, expected 64) encountered v1
+    return v2
+}
+
+function %error_atomic_cas(i128, i128, i128) -> i128, i128 {
+    ss0 = explicit_slot 16
+
+block0(v0: i128, v1: i128, v2: i128):
+    stack_store.i128 v0, ss0
+    v3 = stack_addr.i32 ss0
+    v4 = atomic_cas.i128 v3, v1, v2; error: invalid pointer width (got 32, expected 64) encountered v3
+    v5 = stack_load.i128 ss0
+    return v5, v4
+}
+
+function %error_atomic_rmw_add_i64(i64, i64) -> i64, i64 {
+    ss0 = explicit_slot 8
+
+block0(v0: i64, v1: i64):
+    v2 = stack_addr.i32 ss0
+    store.i64 little v0, v2 ; error: invalid pointer width (got 32, expected 64) encountered v2
+
+    v3 = atomic_rmw.i64 little add v2, v1; error: invalid pointer width (got 32, expected 64) encountered v2
+
+    v4 = load.i64 little v2 ; error: invalid pointer width (got 32, expected 64) encountered v2
+    return v3, v4
+}
+
+function %error_fmsub_f32x4(f32x4, f32x4, f32x4) -> f32x4 {
+    ss0 = explicit_slot 16
+block0(v0: f32x4, v1: f32x4, v2: f32x4):
+    v3 = stack_addr.i32 ss0
+    store.f32x4 v0, v3 ; error: invalid pointer width (got 32, expected 64) encountered v3
+    v4 = load.f32x4 v3 ; error: invalid pointer width (got 32, expected 64) encountered v3
+    v5 = fneg v2
+    v6 = fma v4, v1, v5
+    return v6
+}

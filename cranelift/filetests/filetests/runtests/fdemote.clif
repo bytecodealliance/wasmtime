@@ -73,21 +73,3 @@ block0(v0: f64):
 ; run: %fdemote_is_nan(-sNaN:0x1) == 1
 ; run: %fdemote_is_nan(+sNaN:0x4000000000001) == 1
 ; run: %fdemote_is_nan(-sNaN:0x4000000000001) == 1
-
-
-;; Tests a fdemote+load combo which some backends may optimize
-function %fdemote_load(i64, f64) -> f32 {
-    ss0 = explicit_slot 16
-
-block0(v1: i64, v2: f64):
-    v3 = stack_addr.i64 ss0
-    store.f64 v2, v3
-    v4 = load.f64 v3
-    v5 = fdemote.f32 v4
-    return v5
-}
-; run: %fdemote_load(0, 0x0.0) == 0x0.0
-; run: %fdemote_load(1, 0x0.1) == 0x0.1
-; run: %fdemote_load(2, 0x0.2) == 0x0.2
-; run: %fdemote_load(3, 0x3.2) == 0x3.2
-; run: %fdemote_load(0x8, 0x3.2) == 0x3.2
