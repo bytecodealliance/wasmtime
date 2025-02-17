@@ -1487,11 +1487,10 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
             | WasmHeapType::ConcreteArray(_)
             | WasmHeapType::Struct
             | WasmHeapType::ConcreteStruct(_)
+            | WasmHeapType::Cont
+            | WasmHeapType::ConcreteCont(_)
+            | WasmHeapType::NoCont
             | WasmHeapType::None => {
-                unreachable!()
-            }
-
-            WasmHeapType::NoCont | WasmHeapType::ConcreteCont(_) | WasmHeapType::Cont => {
                 unreachable!()
             }
         }

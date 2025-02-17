@@ -399,8 +399,6 @@ impl BuiltinFunctionIndex {
             (@get is_subtype u32) => (return None);
 
             (@get cont_new pointer) => (TrapSentinel::Negative);
-            (@get tc_allocate pointer) => (TrapSentinel::Negative);
-            (@get tc_reallocate pointer) => (TrapSentinel::Negative);
 
             // Bool-returning functions use `false` as an indicator of a trap.
             (@get $name:ident bool) => (TrapSentinel::Falsy);
