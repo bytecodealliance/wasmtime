@@ -135,7 +135,7 @@ pub struct Config {
     /// hand out the configuration object in the interface of
     /// `wasmtime_runtime::Store` trait, where the full `Config` type
     /// is not in scope.
-    pub stack_switching_config: StackSwitchingConfig,
+    pub(crate) stack_switching_config: StackSwitchingConfig,
 
     #[cfg(feature = "cache")]
     pub(crate) cache_config: CacheConfig,
