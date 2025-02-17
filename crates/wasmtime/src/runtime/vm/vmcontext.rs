@@ -721,7 +721,8 @@ impl VMTagDefinition {
     }
 }
 
-// FIXME(frank-emrich) Justify why this is afe
+// This is just a wrapper around `VMSharedTypeIndex`, which is in turn
+// `VmSafe`.
 unsafe impl VmSafe for VMTagDefinition {}
 
 #[cfg(test)]
