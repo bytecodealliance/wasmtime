@@ -9,7 +9,7 @@ use wasmtime_environ::stack_switching as stack_switching_environ;
 use wasmtime_environ::PtrSize;
 use wasmtime_environ::{WasmResult, WasmValType};
 
-pub const DEBUG_ASSERT_TRAP_CODE: crate::TrapCode = crate::TRAP_DEBUG_ASSERTION;
+pub const DEBUG_ASSERT_TRAP_CODE: crate::TrapCode = crate::TRAP_DELETE_ME_DEBUG_ASSERTION;
 
 // TODO(frank-emrich) This is the size for x64 Linux. Once we support different
 // platforms for stack switching, must select appropriate value for target.

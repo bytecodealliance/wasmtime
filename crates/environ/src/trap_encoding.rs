@@ -99,8 +99,9 @@ pub enum Trap {
     /// Attempt to resume a continuation twice.
     ContinuationAlreadyConsumed,
 
-    /// For debug assertions in generated code.
-    DebugAssertion,
+    /// FIXME(frank-emrich) Only used for stack switching debugging code, to be
+    /// removed from final upstreamed code.
+    DeleteMeDebugAssertion,
     // if adding a variant here be sure to update the `check!` macro below
 }
 
@@ -140,7 +141,7 @@ impl Trap {
             NoAsyncResult
             UnhandledTag
             ContinuationAlreadyConsumed
-            DebugAssertion
+            DeleteMeDebugAssertion
         }
 
         None
@@ -174,7 +175,7 @@ impl fmt::Display for Trap {
             NoAsyncResult => "async-lifted export failed to produce a result",
             UnhandledTag => "unhandled tag",
             ContinuationAlreadyConsumed => "continuation already consumed",
-            DebugAssertion => "triggered debug assertion",
+            DeleteMeDebugAssertion => "triggered debug assertion",
         };
         write!(f, "wasm trap: {desc}")
     }

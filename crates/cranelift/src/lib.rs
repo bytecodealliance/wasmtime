@@ -66,8 +66,8 @@ pub const TRAP_UNHANDLED_TAG: TrapCode =
     TrapCode::unwrap_user(Trap::UnhandledTag as u8 + TRAP_OFFSET);
 pub const TRAP_CONTINUATION_ALREADY_CONSUMED: TrapCode =
     TrapCode::unwrap_user(Trap::ContinuationAlreadyConsumed as u8 + TRAP_OFFSET);
-pub const TRAP_DEBUG_ASSERTION: TrapCode =
-    TrapCode::unwrap_user(Trap::DebugAssertion as u8 + TRAP_OFFSET);
+pub const TRAP_DELETE_ME_DEBUG_ASSERTION: TrapCode =
+    TrapCode::unwrap_user(Trap::DeleteMeDebugAssertion as u8 + TRAP_OFFSET);
 pub const TRAP_CAST_FAILURE: TrapCode =
     TrapCode::unwrap_user(Trap::CastFailure as u8 + TRAP_OFFSET);
 
