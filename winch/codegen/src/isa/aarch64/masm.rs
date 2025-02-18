@@ -13,12 +13,13 @@ use crate::{
         CallingConvention,
     },
     masm::{
-        CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, HandleOverflowKind,
-        Imm as I, IntCmpKind, LoadKind, MacroAssembler as Masm, MaxKind, MinKind, MulWideKind,
-        OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind,
-        SplatKind, StackSlot, StoreKind, TrapCode, TruncKind, V128AbsKind, V128ConvertKind,
-        V128ExtendKind, V128NarrowKind, V128TruncSatKind, VectorCompareKind, VectorEqualityKind,
-        Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
+        CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I,
+        IntCmpKind, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind,
+        ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, StoreKind,
+        TrapCode, TruncKind, V128AbsKind, V128AddKind, V128ConvertKind, V128ExtAddKind,
+        V128ExtMulKind, V128ExtendKind, V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind,
+        V128NegKind, V128SubKind, V128TruncKind, VectorCompareKind, VectorEqualityKind, Zero,
+        TRUSTED_FLAGS, UNTRUSTED_FLAGS,
     },
     stack::TypedReg,
 };
@@ -1134,8 +1135,7 @@ impl Masm for MacroAssembler {
         _lhs: Reg,
         _rhs: Reg,
         _dst: WritableReg,
-        _size: OperandSize,
-        _handle_overflow: HandleOverflowKind,
+        _kind: V128AddKind,
     ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
@@ -1145,8 +1145,7 @@ impl Masm for MacroAssembler {
         _lhs: Reg,
         _rhs: Reg,
         _dst: WritableReg,
-        _size: OperandSize,
-        _handle_overflow: HandleOverflowKind,
+        _kind: V128SubKind,
     ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
@@ -1154,7 +1153,7 @@ impl Masm for MacroAssembler {
     fn v128_mul(
         &mut self,
         _context: &mut CodeGenContext<Emission>,
-        _lane_width: OperandSize,
+        _kind: V128MulKind,
     ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
@@ -1163,7 +1162,7 @@ impl Masm for MacroAssembler {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
 
-    fn v128_neg(&mut self, _op: WritableReg, _size: OperandSize) -> Result<()> {
+    fn v128_neg(&mut self, _op: WritableReg, _kind: V128NegKind) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
@@ -1197,7 +1196,7 @@ impl Masm for MacroAssembler {
     fn v128_trunc_sat(
         &mut self,
         _context: &mut CodeGenContext<Emission>,
-        _kind: V128TruncSatKind,
+        _kind: V128TruncKind,
     ) -> Result<()> {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
@@ -1207,8 +1206,7 @@ impl Masm for MacroAssembler {
         _src1: Reg,
         _src2: Reg,
         _dst: WritableReg,
-        _lane_width: OperandSize,
-        _kind: MinKind,
+        _kind: V128MinKind,
     ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
@@ -1218,8 +1216,7 @@ impl Masm for MacroAssembler {
         _src1: Reg,
         _src2: Reg,
         _dst: WritableReg,
-        _lane_width: OperandSize,
-        _kind: MaxKind,
+        _kind: V128MaxKind,
     ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
@@ -1227,8 +1224,7 @@ impl Masm for MacroAssembler {
     fn v128_extmul(
         &mut self,
         _context: &mut CodeGenContext<Emission>,
-        _lane_width: OperandSize,
-        _kind: crate::masm::ExtMulKind,
+        _kind: V128ExtMulKind,
     ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
@@ -1237,8 +1233,7 @@ impl Masm for MacroAssembler {
         &mut self,
         _src: Reg,
         _dst: WritableReg,
-        _lane_width: OperandSize,
-        _kind: crate::masm::ExtAddKind,
+        _kind: V128ExtAddKind,
     ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
