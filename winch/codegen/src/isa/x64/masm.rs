@@ -2715,6 +2715,71 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
+    fn v128_popcnt(&mut self, context: &mut CodeGenContext<Emission>) -> Result<()> {
+        self.ensure_has_avx()?;
+
+        let reg = writable!(context.pop_to_reg(self, None)?.reg);
+        let scratch = writable!(regs::scratch_xmm());
+
+        // This works by using a lookup table to determine the count of bits
+        // set in the upper 4 bits and lower 4 bits separately and then adding
+        // the counts.
+
+        // A mask to zero out the upper 4 bits in each lane.
+        let address = self.asm.add_constant(&[
+            0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F, 0x0F,
+            0x0F, 0x0F,
+        ]);
+        // Zero out the upper 4 bits of each lane.
+        self.asm.xmm_vpand_rrm(reg.to_reg(), &address, scratch);
+        // Right shift bytes in input by 4 bits to put the upper 4 bits in the
+        // lower 4 bits.
+        self.asm
+            .xmm_vpsrl_rr(reg.to_reg(), reg, 0x4, OperandSize::S16);
+        // Zero out the upper 4 bits of each shifted lane.
+        self.asm.xmm_vpand_rrm(reg.to_reg(), &address, reg);
+
+        // Write a lookup table of 4 bit values to number of bits set to a
+        // register so we only perform the memory read once.
+        // Index (hex) | Value (binary) | Population Count
+        // 0x0         | 0000          | 0
+        // 0x1         | 0001          | 1
+        // 0x2         | 0010          | 1
+        // 0x3         | 0011          | 2
+        // 0x4         | 0100          | 1
+        // 0x5         | 0101          | 2
+        // 0x6         | 0110          | 2
+        // 0x7         | 0111          | 3
+        // 0x8         | 1000          | 1
+        // 0x9         | 1001          | 2
+        // 0xA         | 1010          | 2
+        // 0xB         | 1011          | 3
+        // 0xC         | 1100          | 2
+        // 0xD         | 1101          | 3
+        // 0xE         | 1110          | 3
+        // 0xF         | 1111          | 4
+        let address = self.asm.add_constant(&[
+            0x0, 0x1, 0x1, 0x2, 0x1, 0x2, 0x2, 0x3, 0x1, 0x2, 0x2, 0x3, 0x2, 0x3, 0x3, 0x4,
+        ]);
+        let reg2 = writable!(context.any_fpr(self)?);
+        self.asm
+            .xmm_mov_mr(&address, reg2, OperandSize::S128, MemFlags::trusted());
+        // Use the upper 4 bits as an index into the lookup table.
+        self.asm.xmm_vpshufb_rrr(reg, reg2.to_reg(), reg.to_reg());
+        // Use the lower 4 bits as an index into the lookup table.
+        self.asm
+            .xmm_vpshufb_rrr(scratch, reg2.to_reg(), scratch.to_reg());
+        context.free_reg(reg2.to_reg());
+
+        // Add the counts of the upper 4 bits and the lower 4 bits to get the
+        // total number of bits set.
+        self.asm
+            .xmm_vpadd_rrr(reg.to_reg(), scratch.to_reg(), reg, OperandSize::S8);
+
+        context.stack.push(TypedReg::v128(reg.to_reg()).into());
+        Ok(())
+    }
+
     fn v128_avgr(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
         self.ensure_has_avx()?;
         self.asm.xmm_vpavg_rrr(lhs, rhs, dst, size);

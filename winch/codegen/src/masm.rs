@@ -2010,6 +2010,9 @@ pub(crate) trait MacroAssembler {
     /// adjacent pairs of the 32-bit results.
     fn v128_dot(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg) -> Result<()>;
 
+    /// Count the number of bits set in each lane.
+    fn v128_popcnt(&mut self, context: &mut CodeGenContext<Emission>) -> Result<()>;
+
     /// Lane-wise rounding average of vectors of integers in `lhs` and `rhs`
     /// and put the results in `dst`.
     fn v128_avgr(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;

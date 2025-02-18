@@ -1813,6 +1813,7 @@ impl Assembler {
     /// `dst`.
     pub fn xmm_vpadd_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
         let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpaddb,
             OperandSize::S32 => AvxOpcode::Vpaddd,
             _ => unimplemented!(),
         };
@@ -2123,6 +2124,7 @@ impl Assembler {
     /// Shift vector data right by `imm`.
     pub fn xmm_vpsrl_rr(&mut self, src: Reg, dst: WritableReg, imm: u32, size: OperandSize) {
         let op = match size {
+            OperandSize::S16 => AvxOpcode::Vpsrlw,
             OperandSize::S32 => AvxOpcode::Vpsrld,
             OperandSize::S64 => AvxOpcode::Vpsrlq,
             _ => unimplemented!(),
@@ -2790,6 +2792,25 @@ impl Assembler {
             op,
             src1: src1.into(),
             src2: src2.into(),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Performs a bitwise `and` operation on the vectors in `src1` and `src2`
+    /// and stores the results in `dst`.
+    pub fn xmm_vpand_rrm(&mut self, src1: Reg, src2: &Address, dst: WritableReg) {
+        let address = Self::to_synthetic_amode(
+            &src2,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
+
+        self.emit(Inst::XmmRmiRVex {
+            op: AvxOpcode::Vpand,
+            src1: src1.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::mem(address)),
             dst: dst.to_reg().into(),
         });
     }
