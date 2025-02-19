@@ -1193,7 +1193,7 @@ impl Masm for MacroAssembler {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
 
-    fn v128_trunc_sat(
+    fn v128_trunc(
         &mut self,
         _context: &mut CodeGenContext<Emission>,
         _kind: V128TruncKind,
@@ -1253,6 +1253,18 @@ impl Masm for MacroAssembler {
         _dst: WritableReg,
         _size: OperandSize,
     ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_ceil(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_floor(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_nearest(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
 }

@@ -2508,7 +2508,7 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn v128_trunc_sat(
+    fn v128_trunc(
         &mut self,
         context: &mut CodeGenContext<Emission>,
         kind: V128TruncKind,
@@ -2517,6 +2517,12 @@ impl Masm for MacroAssembler {
 
         let reg = writable!(context.pop_to_reg(self, None)?.reg);
         match kind {
+            V128TruncKind::F32x4 | V128TruncKind::F64x2 => self.asm.xmm_vroundp_rri(
+                reg.to_reg(),
+                reg,
+                VroundMode::TowardZero,
+                kind.dst_lane_size(),
+            ),
             V128TruncKind::I32x4FromF32x4S => {
                 self.v128_trunc_sat_f32x4_s(reg, kind.src_lane_size(), kind.dst_lane_size());
             }
@@ -2708,6 +2714,27 @@ impl Masm for MacroAssembler {
     fn v128_avgr(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
         self.ensure_has_avx()?;
         self.asm.xmm_vpavg_rrr(lhs, rhs, dst, size);
+        Ok(())
+    }
+
+    fn v128_ceil(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.ensure_has_avx()?;
+        self.asm
+            .xmm_vroundp_rri(src, dst, VroundMode::TowardPositiveInfinity, size);
+        Ok(())
+    }
+
+    fn v128_floor(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.ensure_has_avx()?;
+        self.asm
+            .xmm_vroundp_rri(src, dst, VroundMode::TowardNegativeInfinity, size);
+        Ok(())
+    }
+
+    fn v128_nearest(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.ensure_has_avx()?;
+        self.asm
+            .xmm_vroundp_rri(src, dst, VroundMode::TowardNearest, size);
         Ok(())
     }
 }
