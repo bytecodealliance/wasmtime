@@ -525,6 +525,7 @@ macro_rules! def_unsupported {
     (emit I32x4ExtAddPairwiseI16x8U $($rest:tt)*) => {};
     (emit I32x4ExtAddPairwiseI16x8S $($rest:tt)*) => {};
     (emit I32x4DotI16x8S $($rest:tt)*) => {};
+    (emit I8x16Popcnt $($rest:tt)*) => {};
     (emit I8x16AvgrU $($rest:tt)*) => {};
     (emit I16x8AvgrU $($rest:tt)*) => {};
 
@@ -4155,6 +4156,10 @@ where
                 masm.v128_dot(dst, src, writable!(dst))?;
                 Ok(TypedReg::v128(dst))
             })
+    }
+
+    fn visit_i8x16_popcnt(&mut self) -> Self::Output {
+        self.masm.v128_popcnt(&mut self.context)
     }
 
     fn visit_i8x16_avgr_u(&mut self) -> Self::Output {

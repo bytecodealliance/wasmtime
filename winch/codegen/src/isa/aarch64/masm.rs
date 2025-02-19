@@ -1242,6 +1242,10 @@ impl Masm for MacroAssembler {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
 
+    fn v128_popcnt(&mut self, _context: &mut CodeGenContext<Emission>) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
     fn v128_avgr(
         &mut self,
         _lhs: Reg,
