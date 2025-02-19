@@ -3313,29 +3313,29 @@ impl FuncEnvironment<'_> {
         )
     }
 
-    pub fn continuation_arguments(&self, index: u32) -> &[WasmValType] {
-        let idx = self.module.types[TypeIndex::from_u32(index)].unwrap_module_type_index();
+    pub fn continuation_arguments(&self, index: TypeIndex) -> &[WasmValType] {
+        let idx = self.module.types[index].unwrap_module_type_index();
         self.types[self.types[idx].unwrap_cont().clone().interned_type_index()]
             .unwrap_func()
             .params()
     }
 
-    pub fn continuation_returns(&self, index: u32) -> &[WasmValType] {
-        let idx = self.module.types[TypeIndex::from_u32(index)].unwrap_module_type_index();
+    pub fn continuation_returns(&self, index: TypeIndex) -> &[WasmValType] {
+        let idx = self.module.types[index].unwrap_module_type_index();
         self.types[self.types[idx].unwrap_cont().clone().interned_type_index()]
             .unwrap_func()
             .returns()
     }
 
-    pub fn tag_params(&self, tag_index: u32) -> &[WasmValType] {
-        let idx = self.module.tags[TagIndex::from_u32(tag_index)].signature;
+    pub fn tag_params(&self, tag_index: TagIndex) -> &[WasmValType] {
+        let idx = self.module.tags[tag_index].signature;
         self.types[idx.unwrap_module_type_index()]
             .unwrap_func()
             .params()
     }
 
-    pub fn tag_returns(&self, tag_index: u32) -> &[WasmValType] {
-        let idx = self.module.tags[TagIndex::from_u32(tag_index)].signature;
+    pub fn tag_returns(&self, tag_index: TagIndex) -> &[WasmValType] {
+        let idx = self.module.tags[tag_index].signature;
         self.types[idx.unwrap_module_type_index()]
             .unwrap_func()
             .returns()

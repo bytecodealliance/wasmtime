@@ -94,7 +94,7 @@ use std::vec::Vec;
 use wasmparser::{FuncValidator, MemArg, Operator, WasmModuleResources};
 use wasmtime_environ::{
     wasm_unsupported, DataIndex, ElemIndex, FuncIndex, GlobalIndex, MemoryIndex, Signed,
-    TableIndex, TypeConvert, TypeIndex, Unsigned, WasmHeapType, WasmRefType, WasmResult,
+    TableIndex, TagIndex, TypeConvert, TypeIndex, Unsigned, WasmHeapType, WasmRefType, WasmResult,
 };
 
 /// Given a `Reachability<T>`, unwrap the inner `T` or, when unreachable, set
@@ -2877,8 +2877,9 @@ pub fn translate_operator(
         }
 
         Operator::ContNew { cont_type_index } => {
-            let arg_types = environ.continuation_arguments(*cont_type_index).to_vec();
-            let result_types = environ.continuation_returns(*cont_type_index).to_vec();
+            let cont_type_index = TypeIndex::from_u32(*cont_type_index);
+            let arg_types = environ.continuation_arguments(cont_type_index).to_vec();
+            let result_types = environ.continuation_returns(cont_type_index).to_vec();
             let r = state.pop1();
             let contobj =
                 environ.translate_cont_new(builder, state, r, &arg_types, &result_types)?;
@@ -2888,8 +2889,10 @@ pub fn translate_operator(
             argument_index,
             result_index,
         } => {
-            let src_types = environ.continuation_arguments(*argument_index);
-            let dst_arity = environ.continuation_arguments(*result_index).len();
+            let src_types = environ.continuation_arguments(TypeIndex::from_u32(*argument_index));
+            let dst_arity = environ
+                .continuation_arguments(TypeIndex::from_u32(*result_index))
+                .len();
             let arg_count = src_types.len() - dst_arity;
 
             let arg_types = &src_types[0..arg_count];
@@ -2914,9 +2917,10 @@ pub fn translate_operator(
             state.push1(new_contobj);
         }
         Operator::Suspend { tag_index } => {
-            let param_types = environ.tag_params(*tag_index).to_vec();
+            let tag_index = TagIndex::from_u32(*tag_index);
+            let param_types = environ.tag_params(tag_index).to_vec();
             let return_types: Vec<_> = environ
-                .tag_returns(*tag_index)
+                .tag_returns(tag_index)
                 .iter()
                 .map(|ty| crate::value_type(environ.isa, *ty))
                 .collect();
@@ -2925,7 +2929,7 @@ pub fn translate_operator(
             let param_count = params.len();
 
             let return_values =
-                environ.translate_suspend(builder, *tag_index, params, &return_types);
+                environ.translate_suspend(builder, tag_index.as_u32(), params, &return_types);
 
             state.popn(param_count);
             state.pushn(&return_values);
@@ -2951,12 +2955,13 @@ pub fn translate_operator(
                 }
             }
 
-            let arity = environ.continuation_arguments(*cont_type_index).len();
+            let cont_type_index = TypeIndex::from_u32(*cont_type_index);
+            let arity = environ.continuation_arguments(cont_type_index).len();
             let (contobj, call_args) = state.peekn(arity + 1).split_last().unwrap();
 
             let cont_return_vals = environ.translate_resume(
                 builder,
-                *cont_type_index,
+                cont_type_index.as_u32(),
                 *contobj,
                 call_args,
                 resumetable.as_slice(),
@@ -2975,8 +2980,9 @@ pub fn translate_operator(
             tag_index,
         } => {
             // Arguments of the continuation we are going to switch to
-            let continuation_argument_types =
-                environ.continuation_arguments(*cont_type_index).to_vec();
+            let continuation_argument_types = environ
+                .continuation_arguments(TypeIndex::from_u32(*cont_type_index))
+                .to_vec();
             // Arity includes the continuation argument
             let arity = continuation_argument_types.len();
             let (contobj, switch_args) = state.peekn(arity).split_last().unwrap();
@@ -2996,7 +3002,7 @@ pub fn translate_operator(
                         .expect("Only supporting module type indices on switch for now");
 
                     environ
-                        .continuation_arguments(mti.as_u32())
+                        .continuation_arguments(TypeIndex::from_u32(mti.as_u32()))
                         .iter()
                         .map(|ty| crate::value_type(environ.isa, *ty))
                         .collect()

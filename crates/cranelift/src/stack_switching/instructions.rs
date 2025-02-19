@@ -6,8 +6,7 @@ use cranelift_codegen::ir::{self, MemFlags};
 use cranelift_codegen::ir::{Block, BlockCall, InstBuilder, JumpTableData};
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::stack_switching as stack_switching_environ;
-use wasmtime_environ::PtrSize;
-use wasmtime_environ::{WasmResult, WasmValType};
+use wasmtime_environ::{PtrSize, TagIndex, TypeIndex, WasmResult, WasmValType};
 
 pub const DEBUG_ASSERT_TRAP_CODE: crate::TrapCode = crate::TRAP_DELETE_ME_DEBUG_ASSERTION;
 
@@ -1999,7 +1998,7 @@ pub(crate) fn translate_resume<'a>(
             preamble_blocks.push(preamble_block);
             builder.switch_to_block(preamble_block);
 
-            let param_types = env.tag_params(handle_tag);
+            let param_types = env.tag_params(TagIndex::from_u32(handle_tag));
             let param_types: Vec<ir::Type> = param_types
                 .iter()
                 .map(|wty| crate::value_type(env.isa, *wty))
@@ -2068,7 +2067,7 @@ pub(crate) fn translate_resume<'a>(
 
         // Load the values returned by the continuation.
         let return_types: Vec<_> = env
-            .continuation_returns(type_index)
+            .continuation_returns(TypeIndex::from_u32(type_index))
             .iter()
             .map(|ty| crate::value_type(env.isa, *ty))
             .collect();
