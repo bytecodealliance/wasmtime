@@ -1,11 +1,7 @@
 //! This module contains basic type definitions used by the implementation of
 //! the stack switching proposal.
 
-use core::{
-    convert::From,
-    default::Default,
-    marker::{Send, Sync},
-};
+use core::{convert::From, default::Default};
 
 /// FIXME(frank-emrich) Will remove in the final upstreamed version
 #[allow(dead_code, reason = "Only accessed in debug builds")]
@@ -122,18 +118,6 @@ impl StackLimits {
         }
     }
 }
-
-// Since `StackLimits` objects appear in the `StoreOpaque`,
-// they need to be `Send` and `Sync`.
-// This is safe for the same reason it is for `VMRuntimeLimits` (see comment
-// there): Both types are pod-type with no destructor, and we don't access any
-// of their fields from other threads.
-unsafe impl Send for StackLimits {}
-unsafe impl Sync for StackLimits {}
-
-// Same for HandlerList: They appear in the `StoreOpaque`.
-unsafe impl Send for HandlerList {}
-unsafe impl Sync for HandlerList {}
 
 #[repr(C)]
 #[derive(Debug, Clone)]
