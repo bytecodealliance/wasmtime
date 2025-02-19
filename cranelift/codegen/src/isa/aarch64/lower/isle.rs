@@ -762,4 +762,22 @@ impl Context for IsleContext<'_, '_, MInst, AArch64Backend> {
         }
         Some(bit as u8)
     }
+
+    /// Use as a helper when generating `AluRRRShift` for `extr` instructions.
+    fn a64_extr_imm(&mut self, ty: Type, shift: ImmShift) -> ShiftOpAndAmt {
+        // The `ShiftOpAndAmt` immediate is used with `AluRRRShift` shape which
+        // requires `ShiftOpAndAmt` so the shift of `ty` and `shift` are
+        // translated into `ShiftOpAndAmt` here. The `ShiftOp` value here is
+        // only used for its encoding, not its logical meaning.
+        let (op, expected) = match ty {
+            types::I32 => (ShiftOp::LSL, 0b00),
+            types::I64 => (ShiftOp::LSR, 0b01),
+            _ => unreachable!(),
+        };
+        assert_eq!(op.bits(), expected);
+        ShiftOpAndAmt::new(
+            op,
+            ShiftOpShiftImm::maybe_from_shift(shift.value().into()).unwrap(),
+        )
+    }
 }

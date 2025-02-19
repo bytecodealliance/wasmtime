@@ -15,16 +15,16 @@ block0(v0: i64):
 ;   shrq    $1, %rax, %rax
 ;   movabsq $8608480567731124087, %rdx
 ;   andq %rdx, %rax
-;   subq    %rdi, %rax, %rdi
+;   subq %rax, %rdi
 ;   shrq    $1, %rax, %rax
 ;   andq %rdx, %rax
-;   subq    %rdi, %rax, %rdi
+;   subq %rax, %rdi
 ;   shrq    $1, %rax, %rax
 ;   andq %rdx, %rax
-;   subq    %rdi, %rax, %rdi
+;   subq %rax, %rdi
 ;   movq    %rdi, %rax
 ;   shrq    $4, %rax, %rax
-;   addq    %rax, %rdi, %rax
+;   addq %rdi, %rax
 ;   movabsq $1085102592571150095, %r11
 ;   andq %r11, %rax
 ;   movabsq $72340172838076673, %rcx
@@ -78,16 +78,16 @@ block0(v0: i64):
 ;   shrq    $1, %rcx, %rcx
 ;   movabsq $8608480567731124087, %r8
 ;   andq %r8, %rcx
-;   subq    %rdx, %rcx, %rdx
+;   subq %rcx, %rdx
 ;   shrq    $1, %rcx, %rcx
 ;   andq %r8, %rcx
-;   subq    %rdx, %rcx, %rdx
+;   subq %rcx, %rdx
 ;   shrq    $1, %rcx, %rcx
 ;   andq %r8, %rcx
-;   subq    %rdx, %rcx, %rdx
+;   subq %rcx, %rdx
 ;   movq    %rdx, %rax
 ;   shrq    $4, %rax, %rax
-;   addq    %rax, %rdx, %rax
+;   addq %rdx, %rax
 ;   movabsq $1085102592571150095, %rsi
 ;   andq %rsi, %rax
 ;   movabsq $72340172838076673, %rdx
@@ -140,16 +140,16 @@ block0(v0: i32):
 ;   shrl    $1, %eax, %eax
 ;   movl    $2004318071, %edx
 ;   andl %edx, %eax
-;   subl    %edi, %eax, %edi
+;   subl %eax, %edi
 ;   shrl    $1, %eax, %eax
 ;   andl %edx, %eax
-;   subl    %edi, %eax, %edi
+;   subl %eax, %edi
 ;   shrl    $1, %eax, %eax
 ;   andl %edx, %eax
-;   subl    %edi, %eax, %edi
+;   subl %eax, %edi
 ;   movq    %rdi, %r9
 ;   shrl    $4, %r9d, %r9d
-;   addl    %r9d, %edi, %r9d
+;   addl %edi, %r9d
 ;   andl $0xf0f0f0f, %r9d
 ;   imull   %r9d, 0x1010101, %eax
 ;   shrl    $24, %eax, %eax
@@ -199,16 +199,16 @@ block0(v0: i64):
 ;   shrl    $1, %ecx, %ecx
 ;   movl    $2004318071, %r8d
 ;   andl %r8d, %ecx
-;   subl    %eax, %ecx, %eax
+;   subl %ecx, %eax
 ;   shrl    $1, %ecx, %ecx
 ;   andl %r8d, %ecx
-;   subl    %eax, %ecx, %eax
+;   subl %ecx, %eax
 ;   shrl    $1, %ecx, %ecx
 ;   andl %r8d, %ecx
-;   subl    %eax, %ecx, %eax
+;   subl %ecx, %eax
 ;   movq    %rax, %r10
 ;   shrl    $4, %r10d, %r10d
-;   addl    %r10d, %eax, %r10d
+;   addl %eax, %r10d
 ;   andl $0xf0f0f0f, %r10d
 ;   imull   %r10d, 0x1010101, %eax
 ;   shrl    $24, %eax, %eax

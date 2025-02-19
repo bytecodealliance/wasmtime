@@ -18,13 +18,13 @@ block0(v0: i128):
 ;   bsrq    %rsi, %r9
 ;   cmovzq  %rcx, %r9, %r9
 ;   movl    $63, %edi
-;   subq    %rdi, %r9, %rdi
+;   subq %r9, %rdi
 ;   movabsq $-1, %rdx
 ;   bsrq    %r8, %r10
 ;   cmovzq  %rdx, %r10, %r10
 ;   movl    $63, %eax
-;   subq    %rax, %r10, %rax
-;   addq    %rax, $64, %rax
+;   subq %r10, %rax
+;   addq $0x40, %rax
 ;   cmpq    $64, %rdi
 ;   cmovnzq %rdi, %rax, %rax
 ;   xorq    %rdx, %rdx, %rdx
@@ -70,7 +70,7 @@ block0(v0: i64):
 ;   bsrq    %rdi, %r8
 ;   cmovzq  %rax, %r8, %r8
 ;   movl    $63, %eax
-;   subq    %rax, %r8, %rax
+;   subq %r8, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -103,7 +103,7 @@ block0(v0: i32):
 ;   bsrl    %edi, %r8d
 ;   cmovzl  %eax, %r8d, %r8d
 ;   movl    $31, %eax
-;   subl    %eax, %r8d, %eax
+;   subl %r8d, %eax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -137,8 +137,8 @@ block0(v0: i16):
 ;   bsrq    %rax, %r10
 ;   cmovzq  %rdx, %r10, %r10
 ;   movl    $63, %eax
-;   subq    %rax, %r10, %rax
-;   subq    %rax, $48, %rax
+;   subq %r10, %rax
+;   subq $0x30, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -174,8 +174,8 @@ block0(v0: i8):
 ;   bsrq    %rax, %r10
 ;   cmovzq  %rdx, %r10, %r10
 ;   movl    $63, %eax
-;   subq    %rax, %r10, %rax
-;   subq    %rax, $56, %rax
+;   subq %r10, %rax
+;   subq $0x38, %rax
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

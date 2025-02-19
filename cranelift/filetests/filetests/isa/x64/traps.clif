@@ -86,7 +86,7 @@ block0(v0: i128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   orq     %rsi, %rdi, %rsi
+;   orq %rdi, %rsi
 ;   testq   %rsi, %rsi
 ;   jz #trap=user1
 ;   movq    %rbp, %rsp
@@ -144,7 +144,7 @@ block0(v0: i128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   orq     %rsi, %rdi, %rsi
+;   orq %rdi, %rsi
 ;   testq   %rsi, %rsi
 ;   jnz #trap=user1
 ;   movq    %rbp, %rsp

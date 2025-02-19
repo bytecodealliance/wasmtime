@@ -99,7 +99,7 @@ pub struct LinkerInstance<'a, T> {
     _marker: marker::PhantomData<fn() -> T>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(crate) enum Definition {
     Instance(NameMap<usize, Definition>),
     Func(Arc<HostFunc>),
@@ -160,6 +160,7 @@ impl<T> Linker<T> {
 
     fn typecheck<'a>(&'a self, component: &'a Component) -> Result<TypeChecker<'a>> {
         let mut cx = TypeChecker {
+            engine: &self.engine,
             types: component.types(),
             strings: &self.strings,
             imported_resources: Default::default(),

@@ -1233,6 +1233,9 @@ fn gen_builder(
 
         There is also a method per instruction format. These methods all
         return an `Inst`.
+
+        When an address to a load or store is specified, its integer
+        size is required to be equal to the platform's pointer width.
     "#,
     );
     fmt.line("pub trait InstBuilder<'f>: InstBuilderBase<'f> {");

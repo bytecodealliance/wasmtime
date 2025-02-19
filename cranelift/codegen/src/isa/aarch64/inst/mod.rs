@@ -1213,7 +1213,7 @@ impl Inst {
                 ALUOp::AndNot => "bic",
                 ALUOp::OrrNot => "orn",
                 ALUOp::EorNot => "eon",
-                ALUOp::RotR => "ror",
+                ALUOp::Extr => "extr",
                 ALUOp::Lsr => "lsr",
                 ALUOp::Asr => "asr",
                 ALUOp::Lsl => "lsl",

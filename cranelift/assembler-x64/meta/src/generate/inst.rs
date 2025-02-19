@@ -281,7 +281,14 @@ impl dsl::Inst {
             .iter()
             .filter_map(|o| match o.location.kind() {
                 FixedReg(_) => None,
-                Imm(loc) => Some(format!("AssemblerImm{}", loc.bits())),
+                Imm(loc) => {
+                    let bits = loc.bits();
+                    if o.extension.is_sign_extended() {
+                        Some(format!("AssemblerSimm{bits}"))
+                    } else {
+                        Some(format!("AssemblerImm{bits}"))
+                    }
+                }
                 Reg(_) => Some(format!("Assembler{}Gpr", o.mutability.generate_type())),
                 RegMem(_) => Some(format!("Assembler{}GprMem", o.mutability.generate_type())),
             })

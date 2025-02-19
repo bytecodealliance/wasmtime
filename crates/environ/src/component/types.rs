@@ -1,5 +1,5 @@
 use crate::component::{MAX_FLAT_PARAMS, MAX_FLAT_RESULTS};
-use crate::prelude::*;
+use crate::{prelude::*, TypeTrace};
 use crate::{EntityType, ModuleInternedTypeIndex, ModuleTypes, PrimaryMap};
 use core::hash::{Hash, Hasher};
 use core::ops::Index;
@@ -280,10 +280,43 @@ pub struct ComponentTypes {
     pub(super) task_returns: PrimaryMap<TypeTaskReturnIndex, TypeTaskReturn>,
 }
 
+impl TypeTrace for ComponentTypes {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(crate::EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        for (_, m) in &self.modules {
+            m.trace(func)?;
+        }
+        if let Some(m) = self.module_types.as_ref() {
+            m.trace(func)?;
+        }
+        Ok(())
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut crate::EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        for (_, m) in &mut self.modules {
+            m.trace_mut(func)?;
+        }
+        if let Some(m) = self.module_types.as_mut() {
+            m.trace_mut(func)?;
+        }
+        Ok(())
+    }
+}
+
 impl ComponentTypes {
     /// Returns the core wasm module types known within this component.
     pub fn module_types(&self) -> &ModuleTypes {
         self.module_types.as_ref().unwrap()
+    }
+
+    /// Returns the core wasm module types known within this component.
+    pub fn module_types_mut(&mut self) -> &mut ModuleTypes {
+        self.module_types.as_mut().unwrap()
     }
 
     /// Returns the canonical ABI information about the specified type.
@@ -447,6 +480,34 @@ pub struct TypeModule {
     /// Note that the value of this map is the core wasm `EntityType` to
     /// represent that core wasm items are being exported.
     pub exports: IndexMap<String, EntityType>,
+}
+
+impl TypeTrace for TypeModule {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(crate::EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        for ty in self.imports.values() {
+            ty.trace(func)?;
+        }
+        for ty in self.exports.values() {
+            ty.trace(func)?;
+        }
+        Ok(())
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut crate::EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        for ty in self.imports.values_mut() {
+            ty.trace_mut(func)?;
+        }
+        for ty in self.exports.values_mut() {
+            ty.trace_mut(func)?;
+        }
+        Ok(())
+    }
 }
 
 /// The type of a component in the component model.

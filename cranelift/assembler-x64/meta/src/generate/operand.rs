@@ -6,7 +6,14 @@ impl dsl::Operand {
         use dsl::OperandKind::*;
         match self.location.kind() {
             FixedReg(_) => None,
-            Imm(loc) => Some(format!("Imm{}", loc.bits())),
+            Imm(loc) => {
+                let bits = loc.bits();
+                if self.extension.is_sign_extended() {
+                    Some(format!("Simm{bits}"))
+                } else {
+                    Some(format!("Imm{bits}"))
+                }
+            }
             Reg(_) => Some(format!("Gpr<R::{}Gpr>", self.mutability.generate_type())),
             RegMem(_) => Some(format!("GprMem<R::{}Gpr, R::ReadGpr>", self.mutability.generate_type())),
         }
@@ -22,7 +29,14 @@ impl dsl::Operand {
         };
         match self.location.kind() {
             FixedReg(_) => None,
-            Imm(loc) => Some(format!("Imm{}", loc.bits())),
+            Imm(loc) => {
+                let bits = loc.bits();
+                if self.extension.is_sign_extended() {
+                    Some(format!("Simm{bits}"))
+                } else {
+                    Some(format!("Imm{bits}"))
+                }
+            }
             Reg(_) => Some(format!("Gpr<{pick_ty}>")),
             RegMem(_) => Some(format!("GprMem<{pick_ty}, {read_ty}>")),
         }
@@ -39,7 +53,7 @@ impl dsl::Location {
             None => String::new(),
         };
         match self {
-            al | ax | eax | rax => None,
+            al | ax | eax | rax | cl => None,
             imm8 => Some("Imm8".into()),
             imm16 => Some("Imm16".into()),
             imm32 => Some("Imm32".into()),
@@ -57,9 +71,14 @@ impl dsl::Location {
             ax => "\"%ax\"".into(),
             eax => "\"%eax\"".into(),
             rax => "\"%rax\"".into(),
+            cl => "\"%cl\"".into(),
             imm8 | imm16 | imm32 => {
-                let variant = extension.generate_variant();
-                format!("self.{self}.to_string({variant})")
+                if extension.is_sign_extended() {
+                    let variant = extension.generate_variant();
+                    format!("self.{self}.to_string({variant})")
+                } else {
+                    format!("self.{self}.to_string()")
+                }
             }
             r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 => match self.generate_size() {
                 Some(size) => format!("self.{self}.to_string({size})"),
@@ -73,7 +92,7 @@ impl dsl::Location {
     pub fn generate_size(&self) -> Option<&str> {
         use dsl::Location::*;
         match self {
-            al | ax | eax | rax | imm8 | imm16 | imm32 => None,
+            al | ax | eax | rax | cl | imm8 | imm16 | imm32 => None,
             r8 | rm8 => Some("Size::Byte"),
             r16 | rm16 => Some("Size::Word"),
             r32 | rm32 => Some("Size::Doubleword"),
@@ -87,6 +106,7 @@ impl dsl::Location {
         use dsl::Location::*;
         match self {
             al | ax | eax | rax => Some("reg::enc::RAX"),
+            cl => Some("reg::enc::RCX"),
             imm8 | imm16 | imm32 | r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 => None,
         }
     }
@@ -120,7 +140,6 @@ impl dsl::Extension {
             SignExtendWord => "Extension::SignExtendWord",
             SignExtendLong => "Extension::SignExtendLong",
             SignExtendQuad => "Extension::SignExtendQuad",
-            ZeroExtend => "Extension::ZeroExtend",
         }
     }
 }

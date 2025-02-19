@@ -1,3 +1,4 @@
+test interpret
 test run
 set opt_level=none
 target aarch64
@@ -31,7 +32,7 @@ block0:
     v4 = band v3, v2
     return v4
 }
-; run
+; run: %bnot_band() == 1
 
 ;; We have a optimization rule in the midend that turns this into a bmask
 ;; It's easier to have a runtest to ensure that it is correct than to inspect the output.
@@ -52,3 +53,61 @@ block0(v0: i16):
 ; run: %bitops_bmask(1) == -1
 ; run: %bitops_bmask(0xFFFF) == -1
 ; run: %bitops_bmask(0x8000) == -1
+
+function %a64_extr_i32_12(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = ushr_imm v0, 12
+    v3 = ishl_imm v1, 20
+    v4 = bor v2, v3
+    return v4
+}
+; run: %a64_extr_i32_12(0x1234_5678, 0x1234_5678) == 0x678_1234_5
+; run: %a64_extr_i32_12(0x1234_5678, 0x9abc_def0) == 0xef0_1234_5
+
+function %a64_extr_i32_12_swap(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = ishl_imm v0, 20
+    v3 = ushr_imm v1, 12
+    v4 = bor v2, v3
+    return v4
+}
+; run: %a64_extr_i32_12_swap(0x1234_5678, 0x1234_5678) == 0x678_1234_5
+; run: %a64_extr_i32_12_swap(0x1234_5678, 0x9abc_def0) == 0x678_9abc_d
+
+function %a64_extr_i32_28(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = ushr_imm v0, 4
+    v3 = ishl_imm v1, 28
+    v4 = bor v2, v3
+    return v4
+}
+; run: %a64_extr_i32_28(0x1234_5678, 0x1234_5678) == 0x8_1234_567
+; run: %a64_extr_i32_28(0x1234_5678, 0x9abc_def0) == 0x0_1234_567
+
+function %a64_extr_i32_28_swap(i32, i32) -> i32 {
+block0(v0: i32, v1: i32):
+    v2 = ishl_imm v0, 4
+    v3 = ushr_imm v1, 28
+    v4 = bor v2, v3
+    return v4
+}
+; run: %a64_extr_i32_28_swap(0x1234_5678, 0x1234_5678) == 0x234_5678_1
+; run: %a64_extr_i32_28_swap(0x1234_5678, 0x9abc_def0) == 0x234_5678_9
+
+function %a64_extr_i64_12(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = ushr_imm v0, 12
+    v3 = ishl_imm v1, 52
+    v4 = bor v2, v3
+    return v4
+}
+; run: %a64_extr_i64_12(0x0102_0304_0506_0708, 0x090a_0b0c_0d0e_0f00) == 0xf00_0102_0304_0506_0
+
+function %a64_extr_i64_12_swap(i64, i64) -> i64 {
+block0(v0: i64, v1: i64):
+    v2 = ishl_imm v0, 52
+    v3 = ushr_imm v1, 12
+    v4 = bor v2, v3
+    return v4
+}
+; run: %a64_extr_i64_12_swap(0x0102_0304_0506_0708, 0x090a_0b0c_0d0e_0f00) == 0x708_090a_0b0c_0d0e_0

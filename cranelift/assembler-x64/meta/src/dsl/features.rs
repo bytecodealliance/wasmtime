@@ -48,7 +48,7 @@ impl fmt::Display for Features {
 /// - __64-bit mode__: uses the full 64-bit address space
 /// - __compatibility mode__: allows use of legacy 32-bit code
 #[derive(Clone, Copy, PartialEq)]
-#[allow(non_camel_case_types)]
+#[allow(non_camel_case_types, reason = "makes DSL definitions easier to read")]
 pub enum Feature {
     _64b,
     compat,

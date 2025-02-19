@@ -254,8 +254,18 @@ pub(super) enum VcvtKind {
     I32ToF64,
     /// Converts double precision floats to single precision floats.
     F64ToF32,
+    // Converts double precision floats to 32-bit integers.
+    F64ToI32,
     /// Converts single precision floats to double precision floats.
     F32ToF64,
+    /// Converts single precision floats to 32-bit integers.
+    F32ToI32,
+}
+
+/// Modes supported by `vround`.
+pub(crate) enum VroundMode {
+    /// Rounds toward zero.
+    TowardZero,
 }
 
 /// Low level assembler implementation for x64.
@@ -1799,6 +1809,23 @@ impl Assembler {
         })
     }
 
+    /// Adds vectors of integers in `src1` and `src2` and puts the results in
+    /// `dst`.
+    pub fn xmm_vpadd_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpaddb,
+            OperandSize::S32 => AvxOpcode::Vpaddd,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
+        });
+    }
+
     pub fn fence(&mut self, kind: FenceKind) {
         self.emit(Inst::Fence { kind });
     }
@@ -2067,7 +2094,9 @@ impl Assembler {
             VcvtKind::I32ToF32 => AvxOpcode::Vcvtdq2ps,
             VcvtKind::I32ToF64 => AvxOpcode::Vcvtdq2pd,
             VcvtKind::F64ToF32 => AvxOpcode::Vcvtpd2ps,
+            VcvtKind::F64ToI32 => AvxOpcode::Vcvttpd2dq,
             VcvtKind::F32ToF64 => AvxOpcode::Vcvtps2pd,
+            VcvtKind::F32ToI32 => AvxOpcode::Vcvttps2dq,
         };
 
         self.emit(Inst::XmmUnaryRmRVex {
@@ -2095,6 +2124,7 @@ impl Assembler {
     /// Shift vector data right by `imm`.
     pub fn xmm_vpsrl_rr(&mut self, src: Reg, dst: WritableReg, imm: u32, size: OperandSize) {
         let op = match size {
+            OperandSize::S16 => AvxOpcode::Vpsrlw,
             OperandSize::S32 => AvxOpcode::Vpsrld,
             OperandSize::S64 => AvxOpcode::Vpsrlq,
             _ => unimplemented!(),
@@ -2124,15 +2154,42 @@ impl Assembler {
         })
     }
 
-    /// Add floats in vector `src1` to floats in vector `src2`.
-    pub fn xmm_vaddp_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
+    fn vaddp_opcode(size: OperandSize) -> AvxOpcode {
+        match size {
             OperandSize::S32 => AvxOpcode::Vaddps,
+            OperandSize::S64 => AvxOpcode::Vaddpd,
             _ => unimplemented!(),
-        };
+        }
+    }
+
+    /// Add floats in vector `src1` to floats in vector `src2`.
+    pub fn xmm_vaddp_rrm(
+        &mut self,
+        src1: Reg,
+        src2: &Address,
+        dst: WritableReg,
+        size: OperandSize,
+    ) {
+        let address = Self::to_synthetic_amode(
+            src2,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
 
         self.emit(Inst::XmmRmiRVex {
-            op,
+            op: Self::vaddp_opcode(size),
+            src1: src1.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::mem(address)),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Add floats in vector `src1` to floats in vector `src2`.
+    pub fn xmm_vaddp_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        self.emit(Inst::XmmRmiRVex {
+            op: Self::vaddp_opcode(size),
             src1: src1.into(),
             src2: src2.into(),
             dst: dst.to_reg().into(),
@@ -2361,6 +2418,22 @@ impl Assembler {
         });
     }
 
+    /// Performs a subtraction on two vectors of floats and puts the results in
+    /// `dst`.
+    pub fn xmm_vsub_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => AvxOpcode::Vsubps,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
+        });
+    }
+
     /// Converts a vector of signed integers into a vector of narrower integers
     /// using saturation to handle overflow.
     pub fn xmm_vpackss_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
@@ -2429,6 +2502,7 @@ impl Assembler {
     pub fn xmm_vxorp_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
         let op = match size {
             OperandSize::S32 => AvxOpcode::Vxorps,
+            OperandSize::S64 => AvxOpcode::Vxorpd,
             _ => unimplemented!(),
         };
 
@@ -2551,12 +2625,56 @@ impl Assembler {
         });
     }
 
+    fn vandp_opcode(size: OperandSize) -> AvxOpcode {
+        match size {
+            OperandSize::S32 => AvxOpcode::Vandps,
+            OperandSize::S64 => AvxOpcode::Vandpd,
+            _ => unimplemented!(),
+        }
+    }
+
+    /// Perform an `and` operation on vectors of floats in `src1` and `src2`
+    /// and put the results in `dst`.
+    pub fn xmm_vandp_rrm(
+        &mut self,
+        src1: Reg,
+        src2: &Address,
+        dst: WritableReg,
+        size: OperandSize,
+    ) {
+        let address = Self::to_synthetic_amode(
+            src2,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
+
+        self.emit(Inst::XmmRmiRVex {
+            op: Self::vandp_opcode(size),
+            src1: src1.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::mem(address)),
+            dst: dst.to_reg().into(),
+        });
+    }
+
     /// Perform an `and` operation on vectors of floats in `src1` and `src2`
     /// and put the results in `dst`.
     pub fn xmm_vandp_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        self.emit(Inst::XmmRmiRVex {
+            op: Self::vandp_opcode(size),
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Perform a max operation across two vectors of floats and put the
+    /// results in `dst`.
+    pub fn xmm_vmaxp_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
         let op = match size {
-            OperandSize::S32 => AvxOpcode::Vandps,
-            OperandSize::S64 => AvxOpcode::Vandpd,
+            OperandSize::S32 => AvxOpcode::Vmaxps,
+            OperandSize::S64 => AvxOpcode::Vmaxpd,
             _ => unimplemented!(),
         };
 
@@ -2565,6 +2683,96 @@ impl Assembler {
             src1: src1.into(),
             src2: src2.into(),
             dst: dst.to_reg().into(),
+        });
+    }
+
+    fn vminp_opcode(size: OperandSize) -> AvxOpcode {
+        match size {
+            OperandSize::S32 => AvxOpcode::Vminps,
+            OperandSize::S64 => AvxOpcode::Vminpd,
+            _ => unimplemented!(),
+        }
+    }
+
+    // Perform a min operation across two vectors of floats and put the
+    // results in `dst`.
+    pub fn xmm_vminp_rrm(
+        &mut self,
+        src1: Reg,
+        src2: &Address,
+        dst: WritableReg,
+        size: OperandSize,
+    ) {
+        let address = Self::to_synthetic_amode(
+            src2,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
+
+        self.emit(Inst::XmmRmiRVex {
+            op: Self::vminp_opcode(size),
+            src1: src1.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::mem(address)),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    // Perform a min operation across two vectors of floats and put the
+    // results in `dst`.
+    pub fn xmm_vminp_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        self.emit(Inst::XmmRmiRVex {
+            op: Self::vminp_opcode(size),
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    // Round a vector of floats toward 0.
+    pub fn xmm_vroundp_rri(
+        &mut self,
+        src: Reg,
+        dst: WritableReg,
+        mode: VroundMode,
+        size: OperandSize,
+    ) {
+        let op = match size {
+            OperandSize::S64 => AvxOpcode::Vroundpd,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmUnaryRmRImmVex {
+            op,
+            src: src.into(),
+            dst: dst.to_reg().into(),
+            imm: match mode {
+                VroundMode::TowardZero => 3,
+            },
+        });
+    }
+
+    /// Shuffle of vectors of floats.
+    pub fn xmm_vshufp_rrri(
+        &mut self,
+        src1: Reg,
+        src2: Reg,
+        dst: WritableReg,
+        imm: u8,
+        size: OperandSize,
+    ) {
+        let op = match size {
+            OperandSize::S32 => AvxOpcode::Vshufps,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmRImmVex {
+            op,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
+            imm,
         });
     }
 
@@ -2577,6 +2785,42 @@ impl Assembler {
     pub fn xmm_vpmulhrs_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
         let op = match size {
             OperandSize::S16 => AvxOpcode::Vpmulhrsw,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Performs a bitwise `and` operation on the vectors in `src1` and `src2`
+    /// and stores the results in `dst`.
+    pub fn xmm_vpand_rrm(&mut self, src1: Reg, src2: &Address, dst: WritableReg) {
+        let address = Self::to_synthetic_amode(
+            &src2,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
+
+        self.emit(Inst::XmmRmiRVex {
+            op: AvxOpcode::Vpand,
+            src1: src1.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::mem(address)),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Perform an average operation for the vector of unsigned integers in
+    /// `src1` and `src2` and put the results in `dst`.
+    pub fn xmm_vpavg_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S8 => AvxOpcode::Vpavgb,
+            OperandSize::S16 => AvxOpcode::Vpavgw,
             _ => unimplemented!(),
         };
 

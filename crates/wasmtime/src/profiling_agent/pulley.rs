@@ -9,7 +9,7 @@
 //! Pulley being executed in-process and serializing it to a file.
 //!
 //! The file collected here is populated by a sampling thread in-process. This
-//! sampling thread only collects the current program counter of any interpeters
+//! sampling thread only collects the current program counter of any interpreters
 //! in the process. This does not collect stack traces at all. That means that
 //! this profiler is only suitable for looking at "self time" and is not
 //! suitable for getting a broader picture of what's going on (e.g. why
@@ -157,7 +157,7 @@ impl ProfilingAgent for PulleyAgent {
 ///
 /// * Needs to sample, at `state.sampling_freq`, the state of all known
 ///   interpreters. Ideally this sampling is as steady as possible.
-/// * Needs to clean up interpeters which have been destroyed as there's
+/// * Needs to clean up interpreters which have been destroyed as there's
 ///   otherwise no hook for doing so.
 /// * Needs to send batches of samples to the recording thread to get written to
 ///   the filesystem.

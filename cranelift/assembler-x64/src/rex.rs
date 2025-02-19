@@ -1,12 +1,10 @@
 //! Encoding logic for REX instructions.
 
-#![allow(clippy::bool_to_int_with_if)]
+// #![allow(clippy::bool_to_int_with_if)]
 
 use crate::api::CodeSink;
 
-pub(crate) fn low8_will_sign_extend_to_32(x: u32) -> bool {
-    #[allow(clippy::cast_possible_wrap)]
-    let xs = x as i32;
+pub(crate) fn low8_will_sign_extend_to_32(xs: i32) -> bool {
     xs == ((xs << 24) >> 24)
 }
 
@@ -26,17 +24,6 @@ pub fn encode_sib(scale: u8, enc_index: u8, enc_base: u8) -> u8 {
     debug_assert!(enc_index < 8);
     debug_assert!(enc_base < 8);
     ((scale & 3) << 6) | ((enc_index & 7) << 3) | (enc_base & 7)
-}
-
-/// Write a suitable number of bits from an imm64 to the sink.
-#[allow(clippy::cast_possible_truncation)]
-pub fn emit_simm(sink: &mut impl CodeSink, size: u8, simm32: u32) {
-    match size {
-        8 | 4 => sink.put4(simm32),
-        2 => sink.put2(simm32 as u16),
-        1 => sink.put1(simm32 as u8),
-        _ => unreachable!(),
-    }
 }
 
 /// A small bit field to record a REX prefix specification:
@@ -134,7 +121,7 @@ impl RexFlags {
 }
 
 #[derive(Copy, Clone)]
-#[allow(missing_docs)]
+#[allow(missing_docs, reason = "variants are self-explanatory")]
 pub enum Imm {
     None,
     Imm8(i8),
@@ -163,9 +150,8 @@ impl Imm {
             Some(scaling) => {
                 if val % i32::from(scaling) == 0 {
                     let scaled = val / i32::from(scaling);
-                    #[allow(clippy::cast_sign_loss)]
-                    if low8_will_sign_extend_to_32(scaled as u32) {
-                        #[allow(clippy::cast_possible_truncation)]
+                    if low8_will_sign_extend_to_32(scaled) {
+                        #[allow(clippy::cast_possible_truncation, reason = "pre-existing code")]
                         return Imm::Imm8(scaled as i8);
                     }
                 }
@@ -197,7 +183,7 @@ impl Imm {
     }
 
     /// Emit the truncated immediate into the code sink.
-    #[allow(clippy::cast_sign_loss)]
+    #[allow(clippy::cast_sign_loss, reason = "bit conversion is intended here")]
     pub fn emit(self, sink: &mut impl CodeSink) {
         match self {
             Imm::None => {}

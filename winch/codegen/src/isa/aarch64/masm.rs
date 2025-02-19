@@ -13,12 +13,13 @@ use crate::{
         CallingConvention,
     },
     masm::{
-        CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, HandleOverflowKind,
-        Imm as I, IntCmpKind, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm,
-        RemKind, ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot,
-        StoreKind, TrapCode, TruncKind, V128AbsKind, V128ConvertKind, V128ExtendKind,
-        V128NarrowKind, VectorCompareKind, VectorEqualityKind, Zero, TRUSTED_FLAGS,
-        UNTRUSTED_FLAGS,
+        CalleeKind, DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I,
+        IntCmpKind, LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind,
+        ReplaceLaneKind, RmwOp, RoundingMode, SPOffset, ShiftKind, SplatKind, StackSlot, StoreKind,
+        TrapCode, TruncKind, V128AbsKind, V128AddKind, V128ConvertKind, V128ExtAddKind,
+        V128ExtMulKind, V128ExtendKind, V128MaxKind, V128MinKind, V128MulKind, V128NarrowKind,
+        V128NegKind, V128SubKind, V128TruncKind, VectorCompareKind, VectorEqualityKind, Zero,
+        TRUSTED_FLAGS, UNTRUSTED_FLAGS,
     },
     stack::TypedReg,
 };
@@ -1134,8 +1135,7 @@ impl Masm for MacroAssembler {
         _lhs: Reg,
         _rhs: Reg,
         _dst: WritableReg,
-        _size: OperandSize,
-        _handle_overflow: HandleOverflowKind,
+        _kind: V128AddKind,
     ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
@@ -1145,8 +1145,7 @@ impl Masm for MacroAssembler {
         _lhs: Reg,
         _rhs: Reg,
         _dst: WritableReg,
-        _size: OperandSize,
-        _handle_overflow: HandleOverflowKind,
+        _kind: V128SubKind,
     ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
@@ -1154,7 +1153,7 @@ impl Masm for MacroAssembler {
     fn v128_mul(
         &mut self,
         _context: &mut CodeGenContext<Emission>,
-        _lane_width: OperandSize,
+        _kind: V128MulKind,
     ) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
@@ -1163,7 +1162,7 @@ impl Masm for MacroAssembler {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
 
-    fn v128_neg(&mut self, _op: WritableReg, _size: OperandSize) -> Result<()> {
+    fn v128_neg(&mut self, _op: WritableReg, _kind: V128NegKind) -> Result<()> {
         Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
     }
 
@@ -1191,6 +1190,69 @@ impl Masm for MacroAssembler {
     }
 
     fn v128_bitmask(&mut self, _src: Reg, _dst: WritableReg, _size: OperandSize) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_trunc_sat(
+        &mut self,
+        _context: &mut CodeGenContext<Emission>,
+        _kind: V128TruncKind,
+    ) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_min(
+        &mut self,
+        _src1: Reg,
+        _src2: Reg,
+        _dst: WritableReg,
+        _kind: V128MinKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_max(
+        &mut self,
+        _src1: Reg,
+        _src2: Reg,
+        _dst: WritableReg,
+        _kind: V128MaxKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_extmul(
+        &mut self,
+        _context: &mut CodeGenContext<Emission>,
+        _kind: V128ExtMulKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_extadd_pairwise(
+        &mut self,
+        _src: Reg,
+        _dst: WritableReg,
+        _kind: V128ExtAddKind,
+    ) -> Result<()> {
+        Err(anyhow!(CodeGenError::unimplemented_masm_instruction()))
+    }
+
+    fn v128_dot(&mut self, _lhs: Reg, _rhs: Reg, _dst: WritableReg) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_popcnt(&mut self, _context: &mut CodeGenContext<Emission>) -> Result<()> {
+        bail!(CodeGenError::unimplemented_masm_instruction())
+    }
+
+    fn v128_avgr(
+        &mut self,
+        _lhs: Reg,
+        _rhs: Reg,
+        _dst: WritableReg,
+        _size: OperandSize,
+    ) -> Result<()> {
         bail!(CodeGenError::unimplemented_masm_instruction())
     }
 }

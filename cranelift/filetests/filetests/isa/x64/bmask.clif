@@ -509,7 +509,7 @@ block0(v0: i128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   orq     %rdi, %rsi, %rdi
+;   orq %rsi, %rdi
 ;   movq    %rdi, %r8
 ;   negq    %r8, %r8
 ;   movq    %rdi, %rdx
@@ -544,7 +544,7 @@ block0(v0: i128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   orq     %rdi, %rsi, %rdi
+;   orq %rsi, %rdi
 ;   movq    %rdi, %r8
 ;   negq    %r8, %r8
 ;   movq    %rdi, %rax
@@ -577,7 +577,7 @@ block0(v0: i128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   orq     %rdi, %rsi, %rdi
+;   orq %rsi, %rdi
 ;   movq    %rdi, %r8
 ;   negq    %r8, %r8
 ;   movq    %rdi, %rax
@@ -610,7 +610,7 @@ block0(v0: i128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   orq     %rdi, %rsi, %rdi
+;   orq %rsi, %rdi
 ;   movq    %rdi, %r8
 ;   negq    %r8, %r8
 ;   movq    %rdi, %rax
@@ -643,7 +643,7 @@ block0(v0: i128):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   orq     %rdi, %rsi, %rdi
+;   orq %rsi, %rdi
 ;   movq    %rdi, %r8
 ;   negq    %r8, %r8
 ;   movq    %rdi, %rax

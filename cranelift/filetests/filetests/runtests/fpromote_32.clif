@@ -1,0 +1,21 @@
+test interpret
+test run
+target pulley32
+target pulley32be
+
+;; Tests a fpromote+load combo which some backends may optimize
+function %fpromote_load(i64, f32) -> f64 {
+    ss0 = explicit_slot 16
+
+block0(v1: i64, v2: f32):
+    v3 = stack_addr.i32 ss0
+    store.f32 v2, v3
+    v4 = load.f32 v3
+    v5 = fpromote.f64 v4
+    return v5
+}
+; run: %fpromote_load(0, 0x0.0) == 0x0.0
+; run: %fpromote_load(1, 0x0.1) == 0x0.1
+; run: %fpromote_load(2, 0x0.2) == 0x0.2
+; run: %fpromote_load(3, 0x3.2) == 0x3.2
+; run: %fpromote_load(0xC, 0x3.2) == 0x3.2

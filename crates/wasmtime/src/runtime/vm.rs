@@ -15,9 +15,11 @@ use core::ptr::NonNull;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use stack_switching::StackChainCell;
 use wasmtime_environ::{
-    DefinedFuncIndex, DefinedMemoryIndex, HostPtr, ModuleInternedTypeIndex, VMOffsets,
-    VMSharedTypeIndex,
+    DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets, VMSharedTypeIndex,
 };
+
+#[cfg(feature = "gc")]
+use wasmtime_environ::ModuleInternedTypeIndex;
 
 #[cfg(has_host_compiler_backend)]
 mod arch;
@@ -302,6 +304,7 @@ impl ModuleRuntimeInfo {
 
     /// Translate a module-level interned type index into an engine-level
     /// interned type index.
+    #[cfg(feature = "gc")]
     fn engine_type_index(&self, module_index: ModuleInternedTypeIndex) -> VMSharedTypeIndex {
         match self {
             ModuleRuntimeInfo::Module(m) => m
