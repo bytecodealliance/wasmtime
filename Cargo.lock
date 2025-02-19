@@ -5221,8 +5221,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen"
 version = "0.40.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8e7091ed6c9abfa4e0a2ef3b39d0539da992d841fcf32c255f64fb98764ffee5"
+source = "git+https://github.com/bytecodealliance/wit-bindgen.git#b4d62a45c2c0d697a0ce88f0686fe05a7cba4805"
 dependencies = [
  "wit-bindgen-rt 0.40.0",
  "wit-bindgen-rust-macro",
@@ -5231,8 +5230,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-core"
 version = "0.40.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "398c650cec1278cfb72e214ba26ef3440ab726e66401bd39c04f465ee3979e6b"
+source = "git+https://github.com/bytecodealliance/wit-bindgen.git#b4d62a45c2c0d697a0ce88f0686fe05a7cba4805"
 dependencies = [
  "anyhow",
  "heck 0.5.0",
@@ -5251,8 +5249,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-rt"
 version = "0.40.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "68faed92ae696b93ea9a7b67ba6c37bf09d72c6d9a70fa824a743c3020212f11"
+source = "git+https://github.com/bytecodealliance/wit-bindgen.git#b4d62a45c2c0d697a0ce88f0686fe05a7cba4805"
 dependencies = [
  "bitflags 2.6.0",
  "futures",
@@ -5262,8 +5259,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-rust"
 version = "0.40.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83903c8dcd8084a8a67ae08190122cf0e25dc37bdc239070a00f47e22d3f0aae"
+source = "git+https://github.com/bytecodealliance/wit-bindgen.git#b4d62a45c2c0d697a0ce88f0686fe05a7cba4805"
 dependencies = [
  "anyhow",
  "heck 0.5.0",
@@ -5278,8 +5274,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-rust-macro"
 version = "0.40.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a7bf7f20495bcc7dc9f24c5fbcac9e919ca5ebdb7a1b1841d74447d3c8dd0c60"
+source = "git+https://github.com/bytecodealliance/wit-bindgen.git#b4d62a45c2c0d697a0ce88f0686fe05a7cba4805"
 dependencies = [
  "anyhow",
  "prettyplease",
@@ -5525,43 +5520,54 @@ dependencies = [
 [[patch.unused]]
 name = "wasm-encoder"
 version = "0.226.0"
+source = "git+https://github.com/jsturtevant/wasm-tools.git?branch=unstable-refrence-stable#9ab2b51f8654e599e20d271cb0234f2ded948270"
 
 [[patch.unused]]
 name = "wasm-metadata"
 version = "0.226.0"
+source = "git+https://github.com/jsturtevant/wasm-tools.git?branch=unstable-refrence-stable#9ab2b51f8654e599e20d271cb0234f2ded948270"
 
 [[patch.unused]]
 name = "wasm-mutate"
 version = "0.226.0"
+source = "git+https://github.com/jsturtevant/wasm-tools.git?branch=unstable-refrence-stable#9ab2b51f8654e599e20d271cb0234f2ded948270"
 
 [[patch.unused]]
 name = "wasm-smith"
 version = "0.226.0"
+source = "git+https://github.com/jsturtevant/wasm-tools.git?branch=unstable-refrence-stable#9ab2b51f8654e599e20d271cb0234f2ded948270"
 
 [[patch.unused]]
 name = "wasm-wave"
 version = "0.226.0"
+source = "git+https://github.com/jsturtevant/wasm-tools.git?branch=unstable-refrence-stable#9ab2b51f8654e599e20d271cb0234f2ded948270"
 
 [[patch.unused]]
 name = "wasmparser"
 version = "0.226.0"
+source = "git+https://github.com/jsturtevant/wasm-tools.git?branch=unstable-refrence-stable#9ab2b51f8654e599e20d271cb0234f2ded948270"
 
 [[patch.unused]]
 name = "wasmprinter"
 version = "0.226.0"
+source = "git+https://github.com/jsturtevant/wasm-tools.git?branch=unstable-refrence-stable#9ab2b51f8654e599e20d271cb0234f2ded948270"
 
 [[patch.unused]]
 name = "wast"
 version = "226.0.0"
+source = "git+https://github.com/jsturtevant/wasm-tools.git?branch=unstable-refrence-stable#9ab2b51f8654e599e20d271cb0234f2ded948270"
 
 [[patch.unused]]
 name = "wat"
 version = "1.226.0"
+source = "git+https://github.com/jsturtevant/wasm-tools.git?branch=unstable-refrence-stable#9ab2b51f8654e599e20d271cb0234f2ded948270"
 
 [[patch.unused]]
 name = "wit-component"
 version = "0.226.0"
+source = "git+https://github.com/jsturtevant/wasm-tools.git?branch=unstable-refrence-stable#9ab2b51f8654e599e20d271cb0234f2ded948270"
 
 [[patch.unused]]
 name = "wit-parser"
 version = "0.226.0"
+source = "git+https://github.com/jsturtevant/wasm-tools.git?branch=unstable-refrence-stable#9ab2b51f8654e599e20d271cb0234f2ded948270"

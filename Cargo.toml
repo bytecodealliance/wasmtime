@@ -576,16 +576,16 @@ codegen-units = 1
 lto = true
 
 [patch.crates-io]
-#wit-bindgen = { path = "../wit-bindgen/crates/guest-rust/" }
-#wit-bindgen-rust-macro = { path = "../wit-bindgen/crates/guest-rust/macro/" }
-wasmparser = { path = "../wasm-tools/crates/wasmparser" }
-wat =  { path = "../wasm-tools/crates/wat" }
-wast =  { path = "../wasm-tools/crates/wast" }
-wasmprinter =  { path = "../wasm-tools/crates/wasmprinter" }
-wasm-encoder =  { path = "../wasm-tools/crates/wasm-encoder" }
-wasm-smith =  { path = "../wasm-tools/crates/wasm-smith" }
-wasm-mutate =  { path = "../wasm-tools/crates/wasm-mutate" }
-wit-parser =  { path = "../wasm-tools/crates/wit-parser" }
-wit-component =  { path = "../wasm-tools/crates/wit-component" }
-wasm-wave =  { path = "../wasm-tools/crates/wasm-wave" }
-wasm-metadata =  { path = "../wasm-tools/crates/wasm-metadata" }
+wit-bindgen = { git = "https://github.com/bytecodealliance/wit-bindgen.git" }
+wit-bindgen-rust-macro = { git = "https://github.com/bytecodealliance/wit-bindgen.git" }
+wasmparser = { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wat =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wast =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wasmprinter =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wasm-encoder =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wasm-smith =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wasm-mutate =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wit-parser =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wit-component =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wasm-wave =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wasm-metadata =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
