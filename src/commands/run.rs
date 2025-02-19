@@ -16,7 +16,7 @@ use std::thread;
 use wasi_common::sync::{ambient_authority, Dir, TcpListener, WasiCtxBuilder};
 use wasmtime::{Engine, Func, Module, Store, StoreLimits, Val, ValType};
 use wasmtime_wasi::{IoView, WasiView};
-use wasmtime_wasi_tls::{WasiTlsConfig, WasiTlsCtx};
+use wasmtime_wasi_tls::WasiTlsCtx;
 
 #[cfg(feature = "wasi-nn")]
 use wasmtime_wasi_nn::wit::WasiNnView;
@@ -845,15 +845,10 @@ impl RunCommand {
                                 h.preview2_ctx.as_mut().expect("wasip2 is not configured");
                             let preview2_ctx =
                                 Arc::get_mut(preview2_ctx).unwrap().get_mut().unwrap();
-                            WasiTlsCtx::new(
-                                Arc::get_mut(h.wasi_tls_config.as_mut().unwrap()).unwrap(),
-                                preview2_ctx.table(),
-                            )
+                            WasiTlsCtx::new(preview2_ctx.table())
                         })?;
                     }
                 }
-
-                store.data_mut().wasi_tls_config = Some(Arc::new(WasiTlsConfig::new()));
             }
         }
 
@@ -962,9 +957,6 @@ struct Host {
     wasi_config: Option<Arc<WasiConfigVariables>>,
     #[cfg(feature = "wasi-keyvalue")]
     wasi_keyvalue: Option<Arc<WasiKeyValueCtx>>,
-
-    #[cfg(feature = "wasi-tls")]
-    wasi_tls_config: Option<Arc<WasiTlsConfig>>,
 }
 
 impl Host {

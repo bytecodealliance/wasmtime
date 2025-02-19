@@ -2,7 +2,7 @@
 //!
 //! This crate provides the Wasmtime host implementation for the [wasi-tls] API.
 //! The [wasi-tls] world allows WebAssembly modules to perform SSL/TLS operations,
-//! such as establishing secure connections to servers. TLS often relies on other wasi networking systems 
+//! such as establishing secure connections to servers. TLS often relies on other wasi networking systems
 //! to provide the stream so it will be common to enable the [wasi:cli] world as well with the networking features enabled.
 //!
 //! # An example of how to configure [wasi-tls] is the following:
@@ -13,25 +13,25 @@
 //!     component::{Linker, ResourceTable},
 //!     Store, Engine, Result, Config
 //! };
-//! use wasmtime_wasi_tls::{LinkOptions, WasiTlsConfig, WasiTlsCtx};
+//! use wasmtime_wasi_tls::{LinkOptions, WasiTlsCtx};
 //!
 //! struct Ctx {
 //!     table: ResourceTable,
 //!     wasi_ctx: WasiCtx,
-//!     config: WasiTlsConfig,
 //! }
+//!
 //! impl IoView for Ctx {
 //!     fn table(&mut self) -> &mut ResourceTable {
 //!         &mut self.table
 //!     }
 //! }
-//! 
+//!
 //! impl WasiView for Ctx {
 //!     fn ctx(&mut self) -> &mut WasiCtx {
 //!         &mut self.wasi_ctx
 //!     }
 //! }
-//! 
+//!
 //! #[tokio::main]
 //! async fn main() -> Result<()> {
 //!     let ctx = Ctx {
@@ -41,34 +41,32 @@
 //!             .inherit_network()
 //!             .allow_ip_name_lookup(true)
 //!             .build(),
-//!         config: WasiTlsConfig::new(),
 //!     };
-//! 
+//!
 //!     let mut config = Config::new();
 //!     config.async_support(true);
 //!     let engine = Engine::new(&config)?;
-//! 
+//!
 //!     // Set up wasi-cli
 //!     let mut store = Store::new(&engine, ctx);
 //!     let mut linker = Linker::new(&engine);
 //!     wasmtime_wasi::add_to_linker_async(&mut linker)?;
-//! 
+//!
 //!     // Add wasi-tls types and turn on the feature in linker
 //!     let mut opts = LinkOptions::default();
 //!     opts.tls(true);
 //!     wasmtime_wasi_tls::add_to_linker(&mut linker, &mut opts, |h: &mut Ctx| {
-//!         WasiTlsCtx::new(&h.config, &mut h.table)
+//!         WasiTlsCtx::new(&mut h.table)
 //!     })?;
-//! 
-//!     // ... use `linker` to instantiate within `store` ... 
-//! 
+//!
+//!     // ... use `linker` to instantiate within `store` ...
+//!
 //!     Ok(())
 //! }
-//! 
+//!
 //! ```
 //! [wasi-tls]: https://github.com/WebAssembly/wasi-tls
 //! [wasi:cli]: https://docs.rs/wasmtime-wasi/latest
-
 
 #![deny(missing_docs)]
 #![doc(test(attr(deny(warnings))))]
@@ -130,28 +128,15 @@ fn default_client_config() -> Arc<rustls::ClientConfig> {
     Arc::clone(&CONFIG)
 }
 
-/// Struct for configuring tls
-#[derive(Default)]
-pub struct WasiTlsConfig {}
-
-/// Generate default configuration
-impl WasiTlsConfig {
-    /// Creates new 
-    pub fn new() -> Self {
-        Default::default()
-    }
-}
-
 /// Wasi TLS context needed fro internal `wasi-tls`` state
 pub struct WasiTlsCtx<'a> {
     table: &'a mut ResourceTable,
-    config: &'a WasiTlsConfig,
 }
 
 impl<'a> WasiTlsCtx<'a> {
     /// Create a new Wasi TLS context
-    pub fn new(config: &'a WasiTlsConfig, table: &'a mut ResourceTable) -> Self {
-        Self { config, table }
+    pub fn new(table: &'a mut ResourceTable) -> Self {
+        Self { table }
     }
 }
 
@@ -221,7 +206,7 @@ impl<'a> generated::types::HostClientHandshake for WasiTlsCtx<'a> {
     }
 }
 
-/// Future TLS connection after the handshake is completed. 
+/// Future TLS connection after the handshake is completed.
 pub struct FutureClientStreams(StreamState<Result<TlsStream<TcpStreams>>>);
 
 #[async_trait]
@@ -609,10 +594,10 @@ impl AsyncTlsWriteStream {
             Err(err) => return Some(Err(err)),
         };
 
-        match writer.close_notify(){
+        match writer.close_notify() {
             None => None,
             Some(Ok(())) => Some(Ok(())),
-            Some(Err(e)) => Some(Err(StreamError::LastOperationFailed(e.into())))
+            Some(Err(e)) => Some(Err(StreamError::LastOperationFailed(e.into()))),
         }
     }
 }

@@ -30,7 +30,6 @@ interface types {
         close-notify: func() -> option<result<_, io-error>>;
     }
 
-
     @unstable(feature = tls)
     resource future-client-streams {
         @unstable(feature = tls)

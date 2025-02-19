@@ -5,12 +5,11 @@ use wasmtime::{
     Store,
 };
 use wasmtime_wasi::{bindings::Command, IoView, WasiCtx, WasiCtxBuilder, WasiView};
-use wasmtime_wasi_tls::{LinkOptions, WasiTlsConfig, WasiTlsCtx};
+use wasmtime_wasi_tls::{LinkOptions, WasiTlsCtx};
 
 struct Ctx {
     table: ResourceTable,
     wasi_ctx: WasiCtx,
-    config: WasiTlsConfig,
 }
 
 impl IoView for Ctx {
@@ -37,7 +36,7 @@ async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
     let mut opts = LinkOptions::default();
     opts.tls(true);
     wasmtime_wasi_tls::add_to_linker(&mut linker, &mut opts, |h: &mut Ctx| {
-        WasiTlsCtx::new(&h.config, &mut h.table)
+        WasiTlsCtx::new(&mut h.table)
     })?;
 
     let command = Command::instantiate_async(&mut store, &component, &linker).await?;
@@ -68,7 +67,6 @@ async fn tls_sample_application() -> Result<()> {
                 .inherit_network()
                 .allow_ip_name_lookup(true)
                 .build(),
-            config: WasiTlsConfig::new(),
         },
     )
     .await
