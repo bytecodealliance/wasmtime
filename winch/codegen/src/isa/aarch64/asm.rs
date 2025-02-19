@@ -149,9 +149,8 @@ impl Assembler {
     }
 
     /// Store a register.
-    pub fn str(&mut self, reg: Reg, addr: Address, size: OperandSize) {
+    pub fn str(&mut self, reg: Reg, addr: Address, size: OperandSize, flags: MemFlags) {
         let mem: AMode = addr.try_into().unwrap();
-        let flags = MemFlags::trusted();
 
         use OperandSize::*;
         let inst = match (reg.is_int(), size) {
