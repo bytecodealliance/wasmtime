@@ -457,6 +457,18 @@ wasmtime_option_group! {
     }
 }
 
+impl WasiOptions {
+    /// Get the name of a relevant WASI option for a given import
+    pub fn option_for_import(import_name: &str) -> Option<&str> {
+        // TODO: do we have common import parsing machinery?
+        if import_name.contains("wasi:http") {
+            return Some("http");
+        }
+        // TODO: fill out
+        return None;
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct WasiNnGraph {
     pub format: String,

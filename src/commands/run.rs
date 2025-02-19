@@ -472,12 +472,20 @@ impl RunCommand {
 
                 let component = module.unwrap_component();
 
-                let command = wasmtime_wasi::bindings::Command::instantiate_async(
+                let command = match wasmtime_wasi::bindings::Command::instantiate_async(
                     &mut *store,
                     component,
                     linker,
                 )
-                .await?;
+                .await
+                {
+                    Ok(c) => c,
+                    Err(e) => {
+                        print_wasi_import_option_hint(&e.to_string(), component, store);
+                        bail!(e);
+                    }
+                };
+
                 let result = command
                     .wasi_cli_run()
                     .call_run(&mut *store)
@@ -1025,4 +1033,29 @@ fn write_core_dump(
         .write_all(&core_dump)
         .with_context(|| format!("failed to write core dump file at `{path}`"))?;
     Ok(())
+}
+
+/// Print a hint about wasi import options for a given error
+/// message, only if it contains an error that is likely to refer
+/// to a missing option (i.e. -S <wasi import>)
+#[cfg(feature = "component-model")]
+fn print_wasi_import_option_hint(
+    err_string: &str,
+    component: &wasmtime::component::Component,
+    store: &mut Store<Host>,
+) {
+    if err_string.contains("matching implementation was not found in the linker") {
+        // Check if we're missing some imports that could have been provided by
+        for (name, _) in component.component_type().imports(store.engine()) {
+            if err_string.contains(&name) {
+                if let Some(option) = wasmtime_cli_flags::WasiOptions::option_for_import(&name) {
+                    eprintln!(
+                        "warning: missing import [{name}] has a WASI import option [{option}]  \
+                         that has not been enabled -- consider re-running with '-S {option}'.\n\
+                         Run `wasmtime -S help` for a full list of WASI import options.\n",
+                    );
+                }
+            }
+        }
+    }
 }
