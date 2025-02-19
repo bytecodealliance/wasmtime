@@ -562,9 +562,12 @@ impl Module {
     }
 
     /// TODO
-    pub fn push_tag(&mut self, _idx: TypeIndex, signature: ModuleInternedTypeIndex) -> TagIndex {
-        self.tags
-            .push(Tag::new(EngineOrModuleTypeIndex::Module(signature)))
+    pub fn push_tag(
+        &mut self,
+        _idx: TypeIndex,
+        signature: impl Into<EngineOrModuleTypeIndex>,
+    ) -> TagIndex {
+        self.tags.push(Tag::new(signature.into()))
     }
 
     /// Returns an iterator over all of the defined function indices in this
@@ -608,11 +611,13 @@ impl TypeTrace for Module {
             num_imported_tables: _,
             num_imported_memories: _,
             num_imported_globals: _,
+            num_imported_tags: _,
             num_escaped_funcs: _,
             functions,
             tables,
             memories: _,
             globals,
+            tags,
             global_initializers: _,
         } = self;
 
@@ -627,6 +632,9 @@ impl TypeTrace for Module {
         }
         for g in globals.values() {
             g.trace(func)?;
+        }
+        for t in tags.values() {
+            t.trace(func)?
         }
         Ok(())
     }
@@ -652,11 +660,13 @@ impl TypeTrace for Module {
             num_imported_tables: _,
             num_imported_memories: _,
             num_imported_globals: _,
+            num_imported_tags: _,
             num_escaped_funcs: _,
             functions,
             tables,
             memories: _,
             globals,
+            tags,
             global_initializers: _,
         } = self;
 
@@ -671,6 +681,9 @@ impl TypeTrace for Module {
         }
         for g in globals.values_mut() {
             g.trace_mut(func)?;
+        }
+        for t in tags.values_mut() {
+            t.trace_mut(func)?
         }
         Ok(())
     }

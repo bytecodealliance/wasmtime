@@ -3314,14 +3314,14 @@ impl FuncEnvironment<'_> {
     }
 
     pub fn continuation_arguments(&self, index: u32) -> &[WasmValType] {
-        let idx = self.module.types[TypeIndex::from_u32(index)];
+        let idx = self.module.types[TypeIndex::from_u32(index)].unwrap_module_type_index();
         self.types[self.types[idx].unwrap_cont().clone().interned_type_index()]
             .unwrap_func()
             .params()
     }
 
     pub fn continuation_returns(&self, index: u32) -> &[WasmValType] {
-        let idx = self.module.types[TypeIndex::from_u32(index)];
+        let idx = self.module.types[TypeIndex::from_u32(index)].unwrap_module_type_index();
         self.types[self.types[idx].unwrap_cont().clone().interned_type_index()]
             .unwrap_func()
             .returns()

@@ -33,9 +33,9 @@ use wasmtime_environ::ModuleInternedTypeIndex;
 use wasmtime_environ::{
     packed_option::ReservedValue, DataIndex, DefinedGlobalIndex, DefinedMemoryIndex,
     DefinedTableIndex, DefinedTagIndex, ElemIndex, EntityIndex, EntityRef, EntitySet, FuncIndex,
-    GlobalIndex, HostPtr, MemoryIndex, Module, ModuleInternedTypeIndex, PrimaryMap, PtrSize,
-    TableIndex, TableInitialValue, TableSegmentElements, TagIndex, Trap, VMOffsets,
-    VMSharedTypeIndex, WasmHeapTopType, VMCONTEXT_MAGIC,
+    GlobalIndex, HostPtr, MemoryIndex, Module, PrimaryMap, PtrSize, TableIndex, TableInitialValue,
+    TableSegmentElements, TagIndex, Trap, VMOffsets, VMSharedTypeIndex, WasmHeapTopType,
+    VMCONTEXT_MAGIC,
 };
 #[cfg(feature = "wmemcheck")]
 use wasmtime_wmemcheck::Wmemcheck;
@@ -1494,9 +1494,7 @@ impl Instance {
             let to = self.tag_ptr(defined_index);
             ptr::write(
                 to.as_ptr(),
-                VMTagDefinition::new(
-                    self.engine_type_index(tag.signature.unwrap_module_type_index()),
-                ),
+                VMTagDefinition::new(tag.signature.unwrap_engine_type_index()),
             );
         }
 

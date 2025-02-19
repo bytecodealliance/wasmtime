@@ -322,8 +322,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         TypeRef::Tag(ty) => {
                             let index = TypeIndex::from_u32(ty.func_type_idx);
                             let interned_index = self.result.module.types[index];
-                            let signature = crate::EngineOrModuleTypeIndex::Module(interned_index);
-                            let tag = crate::Tag { signature };
+                            let tag = crate::Tag {
+                                signature: interned_index,
+                            };
                             self.result.module.num_imported_tags += 1;
                             // TODO(dhil): debug info?
                             EntityType::Tag(tag)
@@ -398,7 +399,9 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     let sigindex = entry?.func_type_idx;
                     let ty = TypeIndex::from_u32(sigindex);
                     let interned_index = self.result.module.types[ty];
-                    self.result.module.push_tag(ty, interned_index);
+                    self.result
+                        .module
+                        .push_tag(ty, interned_index.unwrap_module_type_index());
                 }
             }
 

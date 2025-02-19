@@ -41,7 +41,8 @@ impl MatchCx<'_> {
                 _ => bail!("expected func, but found {}", actual.desc()),
             },
             EntityType::Tag(expected) => match actual {
-                DefinitionType::Tag(actual) => self.type_reference(
+                DefinitionType::Tag(actual) => type_reference(
+                    self.engine,
                     expected.signature.unwrap_engine_type_index(),
                     actual.signature.unwrap_engine_type_index(),
                 ),
