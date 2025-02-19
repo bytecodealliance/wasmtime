@@ -19,7 +19,7 @@
 //! [`stack_pool`]. See those modules for more details.
 
 mod decommit_queue;
-pub(crate) mod index_allocator;
+mod index_allocator;
 mod memory_pool;
 mod table_pool;
 
@@ -80,7 +80,7 @@ use wasmtime_environ::{
     StaticModuleIndex,
 };
 
-pub(crate) fn round_up_to_pow2(n: usize, to: usize) -> usize {
+fn round_up_to_pow2(n: usize, to: usize) -> usize {
     debug_assert!(to > 0);
     debug_assert!(to.is_power_of_two());
     (n + to - 1) & !(to - 1)

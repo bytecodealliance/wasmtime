@@ -2090,14 +2090,6 @@ impl TypeTrace for Tag {
     }
 }
 
-// impl From<wasmparser::TagType> for Tag {
-//     fn from(ty: wasmparser::TagType) -> Tag {
-//         match ty.kind {
-//             wasmparser::TagKind::Exception => Tag::partial(ty.func_type_idx),
-//         }
-//     }
-// }
-
 /// Helpers used to convert a `wasmparser` type to a type in this crate.
 #[allow(missing_docs, reason = "self-describing functions")]
 pub trait TypeConvert {

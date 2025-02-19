@@ -1531,16 +1531,6 @@ pub struct InstanceHandle {
     instance: Option<SendSyncPtr<Instance>>,
 }
 
-// These are only valid if the `Instance` type is send/sync, hence the
-// assertion below.
-unsafe impl Send for InstanceHandle {}
-unsafe impl Sync for InstanceHandle {}
-
-fn _assert_send_sync() {
-    fn _assert<T: Send + Sync>() {}
-    _assert::<Instance>();
-}
-
 impl InstanceHandle {
     /// Creates an "empty" instance handle which internally has a null pointer
     /// to an instance.
