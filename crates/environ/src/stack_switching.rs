@@ -1,8 +1,6 @@
 //! This module contains basic type definitions used by the implementation of
 //! the stack switching proposal.
 
-use core::{convert::From, default::Default};
-
 /// FIXME(frank-emrich) Will remove in the final upstreamed version
 #[allow(dead_code, reason = "Only accessed in debug builds")]
 pub const ENABLE_DEBUG_PRINTING: bool = false;

@@ -560,7 +560,7 @@ impl Module {
     /// they escape yet.
     pub fn push_function(&mut self, signature: ModuleInternedTypeIndex) -> FuncIndex {
         self.functions.push(FunctionType {
-            signature: signature,
+            signature,
             func_ref: FuncRefIndex::reserved_value(),
         })
     }

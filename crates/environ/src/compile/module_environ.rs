@@ -400,10 +400,6 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                     let interned_index = self.result.module.types[ty];
                     self.result.module.push_tag(ty, interned_index);
                 }
-
-                // This feature isn't enabled at this time, so we should
-                // never get here.
-                //unreachable!();
             }
 
             Payload::GlobalSection(globals) => {
