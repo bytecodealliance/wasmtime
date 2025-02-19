@@ -3,7 +3,7 @@ use crate::{type_registry::RegisteredType, Engine};
 use core::fmt::{self, Display, Write};
 use wasmtime_environ::{
     EngineOrModuleTypeIndex, EntityType, Global, IndexType, Limits, Memory, ModuleTypes, Table,
-    TypeTrace, VMSharedTypeIndex, WasmArrayType, WasmCompositeInnerType, WasmCompositeType,
+    Tag, TypeTrace, VMSharedTypeIndex, WasmArrayType, WasmCompositeInnerType, WasmCompositeType,
     WasmFieldType, WasmFuncType, WasmHeapType, WasmRefType, WasmStorageType, WasmStructType,
     WasmSubType, WasmValType,
 };
@@ -1156,6 +1156,8 @@ pub enum ExternType {
     Table(TableType),
     /// This external type is the type of a WebAssembly memory.
     Memory(MemoryType),
+    /// This external type is the type of a WebAssembly tag.
+    Tag(TagType),
 }
 
 macro_rules! extern_type_accessors {
@@ -1188,6 +1190,7 @@ impl ExternType {
         (Global(GlobalType) global unwrap_global)
         (Table(TableType) table unwrap_table)
         (Memory(MemoryType) memory unwrap_memory)
+        (Tag(TagType) tag unwrap_tag)
     }
 
     pub(crate) fn from_wasmtime(
@@ -1219,7 +1222,7 @@ impl ExternType {
             EntityType::Global(ty) => GlobalType::from_wasmtime_global(engine, ty).into(),
             EntityType::Memory(ty) => MemoryType::from_wasmtime_memory(ty).into(),
             EntityType::Table(ty) => TableType::from_wasmtime_table(engine, ty).into(),
-            EntityType::Tag(_) => unimplemented!("wasm tag support"),
+            EntityType::Tag(ty) => TagType::from_wasmtime_tag(engine, ty).into(),
         }
     }
 }
@@ -1245,6 +1248,12 @@ impl From<MemoryType> for ExternType {
 impl From<TableType> for ExternType {
     fn from(ty: TableType) -> ExternType {
         ExternType::Table(ty)
+    }
+}
+
+impl From<TagType> for ExternType {
+    fn from(ty: TagType) -> ExternType {
+        ExternType::Tag(ty)
     }
 }
 
@@ -2454,6 +2463,34 @@ impl GlobalType {
             Mutability::Const
         };
         GlobalType::new(ty, mutability)
+    }
+}
+
+// Tag Types
+
+/// A descriptor for a tag in a WebAssembly module.
+///
+/// This type describes an instance of a tag in a WebAssembly
+/// module. Tags are local to an [`Instance`](crate::Instance).
+#[derive(Debug, Clone, Hash)]
+pub struct TagType {
+    ty: FuncType,
+}
+
+impl TagType {
+    /// Creates a new global descriptor of the specified type.
+    pub fn new(ty: FuncType) -> TagType {
+        TagType { ty }
+    }
+
+    /// Returns the underlying function type of this tag descriptor.
+    pub fn ty(&self) -> &FuncType {
+        &self.ty
+    }
+
+    pub(crate) fn from_wasmtime_tag(engine: &Engine, tag: &Tag) -> TagType {
+        let ty = FuncType::from_shared_type_index(engine, tag.signature.unwrap_engine_type_index());
+        TagType { ty }
     }
 }
 
