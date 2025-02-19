@@ -184,7 +184,6 @@ macro_rules! foreach_config_option {
             wide_arithmetic
             hogs_memory
             nan_canonicalization
-            component_model_more_flags
             component_model_async
             simd
             gc_types

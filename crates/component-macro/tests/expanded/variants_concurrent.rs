@@ -696,24 +696,6 @@ pub mod foo {
                 > + Send + Sync + 'static
                 where
                     Self: Sized;
-                fn return_named_option(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Option<u8> + Send + Sync + 'static,
-                > + Send + Sync + 'static
-                where
-                    Self: Sized;
-                fn return_named_result(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Result<u8, MyErrno> + Send + Sync + 'static,
-                > + Send + Sync + 'static
-                where
-                    Self: Sized;
             }
             pub trait GetHost<
                 T,
@@ -1478,66 +1460,6 @@ pub mod foo {
                             >
                     },
                 )?;
-                inst.func_wrap_concurrent(
-                    "return-named-option",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = caller;
-                        let r = <G::Host as Host>::return_named_option(host);
-                        Box::pin(async move {
-                            let fun = r.await;
-                            Box::new(move |mut caller: wasmtime::StoreContextMut<'_, T>| {
-                                let r = fun(caller);
-                                Ok((r,))
-                            })
-                                as Box<
-                                    dyn FnOnce(
-                                        wasmtime::StoreContextMut<'_, T>,
-                                    ) -> wasmtime::Result<(Option<u8>,)> + Send + Sync,
-                                >
-                        })
-                            as ::core::pin::Pin<
-                                Box<
-                                    dyn ::core::future::Future<
-                                        Output = Box<
-                                            dyn FnOnce(
-                                                wasmtime::StoreContextMut<'_, T>,
-                                            ) -> wasmtime::Result<(Option<u8>,)> + Send + Sync,
-                                        >,
-                                    > + Send + Sync + 'static,
-                                >,
-                            >
-                    },
-                )?;
-                inst.func_wrap_concurrent(
-                    "return-named-result",
-                    move |mut caller: wasmtime::StoreContextMut<'_, T>, (): ()| {
-                        let host = caller;
-                        let r = <G::Host as Host>::return_named_result(host);
-                        Box::pin(async move {
-                            let fun = r.await;
-                            Box::new(move |mut caller: wasmtime::StoreContextMut<'_, T>| {
-                                let r = fun(caller);
-                                Ok((r,))
-                            })
-                                as Box<
-                                    dyn FnOnce(
-                                        wasmtime::StoreContextMut<'_, T>,
-                                    ) -> wasmtime::Result<(Result<u8, MyErrno>,)> + Send + Sync,
-                                >
-                        })
-                            as ::core::pin::Pin<
-                                Box<
-                                    dyn ::core::future::Future<
-                                        Output = Box<
-                                            dyn FnOnce(
-                                                wasmtime::StoreContextMut<'_, T>,
-                                            ) -> wasmtime::Result<(Result<u8, MyErrno>,)> + Send + Sync,
-                                        >,
-                                    > + Send + Sync + 'static,
-                                >,
-                            >
-                    },
-                )?;
                 Ok(())
             }
             pub fn add_to_linker<T, U>(
@@ -1840,30 +1762,6 @@ pub mod foo {
                     Self: Sized,
                 {
                     <_T as Host>::is_clone_return(store)
-                }
-                fn return_named_option(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Option<u8> + Send + Sync + 'static,
-                > + Send + Sync + 'static
-                where
-                    Self: Sized,
-                {
-                    <_T as Host>::return_named_option(store)
-                }
-                fn return_named_result(
-                    store: wasmtime::StoreContextMut<'_, Self::Data>,
-                ) -> impl ::core::future::Future<
-                    Output = impl FnOnce(
-                        wasmtime::StoreContextMut<'_, Self::Data>,
-                    ) -> Result<u8, MyErrno> + Send + Sync + 'static,
-                > + Send + Sync + 'static
-                where
-                    Self: Sized,
-                {
-                    <_T as Host>::return_named_result(store)
                 }
             }
         }
@@ -2241,8 +2139,6 @@ pub mod exports {
                     result_simple: wasmtime::component::Func,
                     is_clone_arg: wasmtime::component::Func,
                     is_clone_return: wasmtime::component::Func,
-                    return_named_option: wasmtime::component::Func,
-                    return_named_result: wasmtime::component::Func,
                 }
                 #[derive(Clone)]
                 pub struct GuestIndices {
@@ -2266,8 +2162,6 @@ pub mod exports {
                     result_simple: wasmtime::component::ComponentExportIndex,
                     is_clone_arg: wasmtime::component::ComponentExportIndex,
                     is_clone_return: wasmtime::component::ComponentExportIndex,
-                    return_named_option: wasmtime::component::ComponentExportIndex,
-                    return_named_result: wasmtime::component::ComponentExportIndex,
                 }
                 impl GuestIndices {
                     /// Constructor for [`GuestIndices`] which takes a
@@ -2342,8 +2236,6 @@ pub mod exports {
                         let result_simple = lookup("result-simple")?;
                         let is_clone_arg = lookup("is-clone-arg")?;
                         let is_clone_return = lookup("is-clone-return")?;
-                        let return_named_option = lookup("return-named-option")?;
-                        let return_named_result = lookup("return-named-result")?;
                         Ok(GuestIndices {
                             e1_arg,
                             e1_result,
@@ -2365,8 +2257,6 @@ pub mod exports {
                             result_simple,
                             is_clone_arg,
                             is_clone_return,
-                            return_named_option,
-                            return_named_result,
                         })
                     }
                     pub fn load(
@@ -2517,18 +2407,6 @@ pub mod exports {
                                 (IsClone,),
                             >(&mut store, &self.is_clone_return)?
                             .func();
-                        let return_named_option = *_instance
-                            .get_typed_func::<
-                                (),
-                                (Option<u8>,),
-                            >(&mut store, &self.return_named_option)?
-                            .func();
-                        let return_named_result = *_instance
-                            .get_typed_func::<
-                                (),
-                                (Result<u8, MyErrno>,),
-                            >(&mut store, &self.return_named_result)?
-                            .func();
                         Ok(Guest {
                             e1_arg,
                             e1_result,
@@ -2550,8 +2428,6 @@ pub mod exports {
                             result_simple,
                             is_clone_arg,
                             is_clone_return,
-                            return_named_option,
-                            return_named_result,
                         })
                     }
                 }
@@ -3019,44 +2895,6 @@ pub mod exports {
                                 (),
                                 (IsClone,),
                             >::new_unchecked(self.is_clone_return)
-                        };
-                        let promise = callee
-                            .call_concurrent(store.as_context_mut(), ())
-                            .await?;
-                        Ok(promise.map(|(v,)| v))
-                    }
-                    pub async fn call_return_named_option<S: wasmtime::AsContextMut>(
-                        &self,
-                        mut store: S,
-                    ) -> wasmtime::Result<wasmtime::component::Promise<Option<u8>>>
-                    where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
-                    {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (Option<u8>,),
-                            >::new_unchecked(self.return_named_option)
-                        };
-                        let promise = callee
-                            .call_concurrent(store.as_context_mut(), ())
-                            .await?;
-                        Ok(promise.map(|(v,)| v))
-                    }
-                    pub async fn call_return_named_result<S: wasmtime::AsContextMut>(
-                        &self,
-                        mut store: S,
-                    ) -> wasmtime::Result<
-                        wasmtime::component::Promise<Result<u8, MyErrno>>,
-                    >
-                    where
-                        <S as wasmtime::AsContext>::Data: Send + 'static,
-                    {
-                        let callee = unsafe {
-                            wasmtime::component::TypedFunc::<
-                                (),
-                                (Result<u8, MyErrno>,),
-                            >::new_unchecked(self.return_named_result)
                         };
                         let promise = callee
                             .call_concurrent(store.as_context_mut(), ())

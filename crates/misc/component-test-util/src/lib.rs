@@ -165,7 +165,6 @@ pub fn apply_test_config(config: &mut Config, test_config: &wasmtime_wast_util::
         tail_call,
         extended_const,
         wide_arithmetic,
-        component_model_more_flags,
         component_model_async,
         nan_canonicalization,
         simd,
@@ -184,7 +183,6 @@ pub fn apply_test_config(config: &mut Config, test_config: &wasmtime_wast_util::
     let tail_call = tail_call.unwrap_or(false);
     let extended_const = extended_const.unwrap_or(false);
     let wide_arithmetic = wide_arithmetic.unwrap_or(false);
-    let component_model_more_flags = component_model_more_flags.unwrap_or(false);
     let component_model_async = component_model_async.unwrap_or(false);
     let nan_canonicalization = nan_canonicalization.unwrap_or(false);
     let relaxed_simd = relaxed_simd.unwrap_or(false);
@@ -211,7 +209,6 @@ pub fn apply_test_config(config: &mut Config, test_config: &wasmtime_wast_util::
         .wasm_custom_page_sizes(custom_page_sizes)
         .wasm_extended_const(extended_const)
         .wasm_wide_arithmetic(wide_arithmetic)
-        .wasm_component_model_more_flags(component_model_more_flags)
         .wasm_component_model_async(component_model_async)
         .cranelift_nan_canonicalization(nan_canonicalization);
 }

@@ -91,7 +91,7 @@ impl Types {
             }
         }
         let mut live = LiveTypes::default();
-        for ty in func.results.iter_types() {
+        if let Some(ty) = &func.result {
             self.type_info(resolve, ty);
             live.add_type(resolve, ty);
         }
@@ -101,16 +101,12 @@ impl Types {
             }
         }
 
-        for ty in func.results.iter_types() {
-            let id = match ty {
-                Type::Id(id) => *id,
-                _ => continue,
-            };
-            let err = match &resolve.types[id].kind {
-                TypeDefKind::Result(Result_ { err, .. }) => err,
-                _ => continue,
-            };
-            if let Some(Type::Id(id)) = err {
+        if let Some(Type::Id(id)) = func.result {
+            if let TypeDefKind::Result(Result_ {
+                err: Some(Type::Id(id)),
+                ..
+            }) = &resolve.types[id].kind
+            {
                 let id = super::resolve_type_definition_id(resolve, *id);
                 self.type_info.get_mut(&id).unwrap().error = true;
             }
