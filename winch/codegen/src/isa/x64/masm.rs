@@ -7,12 +7,12 @@ use super::{
 use anyhow::{anyhow, bail, Result};
 
 use crate::masm::{
-    DivKind, ExtAddKind, ExtMulKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind,
-    HandleOverflowKind, Imm as I, IntCmpKind, LaneSelector, LoadKind, MacroAssembler as Masm,
-    MaxKind, MinKind, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind, RmwOp,
-    RoundingMode, ShiftKind, SplatKind, StoreKind, TrapCode, TruncKind, V128AbsKind,
-    V128ConvertKind, V128ExtendKind, V128NarrowKind, V128TruncSatKind, VectorCompareKind,
-    VectorEqualityKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
+    DivKind, Extend, ExtendKind, ExtractLaneKind, FloatCmpKind, Imm as I, IntCmpKind, LaneSelector,
+    LoadKind, MacroAssembler as Masm, MulWideKind, OperandSize, RegImm, RemKind, ReplaceLaneKind,
+    RmwOp, RoundingMode, ShiftKind, SplatKind, StoreKind, TrapCode, TruncKind, V128AbsKind,
+    V128AddKind, V128ConvertKind, V128ExtAddKind, V128ExtMulKind, V128ExtendKind, V128MaxKind,
+    V128MinKind, V128MulKind, V128NarrowKind, V128NegKind, V128SubKind, V128TruncKind,
+    VectorCompareKind, VectorEqualityKind, Zero, TRUSTED_FLAGS, UNTRUSTED_FLAGS,
 };
 use crate::{
     abi::{self, align_to, calculate_frame_adjustment, LocalSlot},
@@ -2055,80 +2055,44 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn v128_add(
-        &mut self,
-        lhs: Reg,
-        rhs: Reg,
-        dst: WritableReg,
-        size: OperandSize,
-        handle_overflow_kind: HandleOverflowKind,
-    ) -> Result<()> {
+    fn v128_add(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, kind: V128AddKind) -> Result<()> {
         self.ensure_has_avx()?;
 
-        let op = match handle_overflow_kind {
-            HandleOverflowKind::None => match size {
-                OperandSize::S8 => AvxOpcode::Vpaddb,
-                OperandSize::S16 => AvxOpcode::Vpaddw,
-                OperandSize::S32 => AvxOpcode::Vpaddd,
-                OperandSize::S64 => AvxOpcode::Vpaddq,
-                OperandSize::S128 => bail!(CodeGenError::unexpected_operand_size()),
-            },
-            HandleOverflowKind::SignedSaturating => match size {
-                OperandSize::S8 => AvxOpcode::Vpaddsb,
-                OperandSize::S16 => AvxOpcode::Vpaddsw,
-                _ => bail!(CodeGenError::unexpected_operand_size()),
-            },
-            HandleOverflowKind::UnsignedSaturating => match size {
-                OperandSize::S8 => AvxOpcode::Vpaddusb,
-                OperandSize::S16 => AvxOpcode::Vpaddusw,
-                _ => bail!(CodeGenError::unexpected_operand_size()),
-            },
+        let op = match kind {
+            V128AddKind::I8x16 => AvxOpcode::Vpaddb,
+            V128AddKind::I8x16SatS => AvxOpcode::Vpaddsb,
+            V128AddKind::I8x16SatU => AvxOpcode::Vpaddusb,
+            V128AddKind::I16x8 => AvxOpcode::Vpaddw,
+            V128AddKind::I16x8SatS => AvxOpcode::Vpaddsw,
+            V128AddKind::I16x8SatU => AvxOpcode::Vpaddusw,
+            V128AddKind::I32x4 => AvxOpcode::Vpaddd,
+            V128AddKind::I64x2 => AvxOpcode::Vpaddq,
         };
-
         self.asm.xmm_vex_rr(op, lhs, rhs, dst);
-
         Ok(())
     }
 
-    fn v128_sub(
-        &mut self,
-        lhs: Reg,
-        rhs: Reg,
-        dst: WritableReg,
-        size: OperandSize,
-        handle_overflow_kind: HandleOverflowKind,
-    ) -> Result<()> {
+    fn v128_sub(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, kind: V128SubKind) -> Result<()> {
         self.ensure_has_avx()?;
 
-        let op = match handle_overflow_kind {
-            HandleOverflowKind::None => match size {
-                OperandSize::S8 => AvxOpcode::Vpsubb,
-                OperandSize::S16 => AvxOpcode::Vpsubw,
-                OperandSize::S32 => AvxOpcode::Vpsubd,
-                OperandSize::S64 => AvxOpcode::Vpsubq,
-                OperandSize::S128 => bail!(CodeGenError::unexpected_operand_size()),
-            },
-            HandleOverflowKind::SignedSaturating => match size {
-                OperandSize::S8 => AvxOpcode::Vpsubsb,
-                OperandSize::S16 => AvxOpcode::Vpsubsw,
-                _ => bail!(CodeGenError::unexpected_operand_size()),
-            },
-            HandleOverflowKind::UnsignedSaturating => match size {
-                OperandSize::S8 => AvxOpcode::Vpsubusb,
-                OperandSize::S16 => AvxOpcode::Vpsubusw,
-                _ => bail!(CodeGenError::unexpected_operand_size()),
-            },
+        let op = match kind {
+            V128SubKind::I8x16 => AvxOpcode::Vpsubb,
+            V128SubKind::I8x16SatS => AvxOpcode::Vpsubsb,
+            V128SubKind::I8x16SatU => AvxOpcode::Vpsubusb,
+            V128SubKind::I16x8 => AvxOpcode::Vpsubw,
+            V128SubKind::I16x8SatS => AvxOpcode::Vpsubsw,
+            V128SubKind::I16x8SatU => AvxOpcode::Vpsubusw,
+            V128SubKind::I32x4 => AvxOpcode::Vpsubd,
+            V128SubKind::I64x2 => AvxOpcode::Vpsubq,
         };
-
         self.asm.xmm_vex_rr(op, lhs, rhs, dst);
-
         Ok(())
     }
 
     fn v128_mul(
         &mut self,
         context: &mut CodeGenContext<Emission>,
-        lane_width: OperandSize,
+        kind: V128MulKind,
     ) -> Result<()> {
         self.ensure_has_avx()?;
 
@@ -2212,18 +2176,17 @@ impl Masm for MacroAssembler {
                 Ok(())
             };
 
-        match lane_width {
-            OperandSize::S16 => mul_avx(self, AvxOpcode::Vpmullw),
-            OperandSize::S32 => mul_avx(self, AvxOpcode::Vpmulld),
+        match kind {
+            V128MulKind::I16x8 => mul_avx(self, AvxOpcode::Vpmullw),
+            V128MulKind::I32x4 => mul_avx(self, AvxOpcode::Vpmulld),
             // This is the fast path when AVX512 is available.
-            OperandSize::S64
+            V128MulKind::I64x2
                 if self.ensure_has_avx512vl().is_ok() && self.ensure_has_avx512dq().is_ok() =>
             {
                 mul_i64x2_avx512(self)
             }
             // Otherwise, we emit AVX fallback sequence.
-            OperandSize::S64 => mul_i64x2_fallback(self, context)?,
-            _ => bail!(CodeGenError::unexpected_operand_size()),
+            V128MulKind::I64x2 => mul_i64x2_fallback(self, context)?,
         }
 
         context.stack.push(lhs.into());
@@ -2282,10 +2245,10 @@ impl Masm for MacroAssembler {
         Ok(())
     }
 
-    fn v128_neg(&mut self, op: WritableReg, size: OperandSize) -> Result<()> {
+    fn v128_neg(&mut self, op: WritableReg, kind: V128NegKind) -> Result<()> {
         let tmp = regs::scratch_xmm();
         self.v128_xor(tmp, tmp, writable!(tmp))?;
-        self.v128_sub(tmp, op.to_reg(), op, size, HandleOverflowKind::None)?;
+        self.v128_sub(tmp, op.to_reg(), op, kind.into())?;
         Ok(())
     }
 
@@ -2548,16 +2511,16 @@ impl Masm for MacroAssembler {
     fn v128_trunc_sat(
         &mut self,
         context: &mut CodeGenContext<Emission>,
-        kind: V128TruncSatKind,
+        kind: V128TruncKind,
     ) -> Result<()> {
         self.ensure_has_avx()?;
 
         let reg = writable!(context.pop_to_reg(self, None)?.reg);
         match kind {
-            V128TruncSatKind::F32x4S => {
+            V128TruncKind::I32x4FromF32x4S => {
                 self.v128_trunc_sat_f32x4_s(reg, kind.src_lane_size(), kind.dst_lane_size());
             }
-            V128TruncSatKind::F32x4U => {
+            V128TruncKind::I32x4FromF32x4U => {
                 let temp_reg = writable!(context.any_fpr(self)?);
                 self.v128_trunc_sat_f32x4_u(
                     reg,
@@ -2567,10 +2530,10 @@ impl Masm for MacroAssembler {
                 );
                 context.free_reg(temp_reg.to_reg());
             }
-            V128TruncSatKind::F64x2SZero => {
+            V128TruncKind::I32x4FromF64x2SZero => {
                 self.v128_trunc_sat_f64x2_s_zero(reg, kind.src_lane_size());
             }
-            V128TruncSatKind::F64x2UZero => {
+            V128TruncKind::I32x4FromF64x2UZero => {
                 self.v128_trunc_sat_f64x2_u_zero(reg, kind.src_lane_size(), kind.dst_lane_size());
             }
         }
@@ -2584,25 +2547,19 @@ impl Masm for MacroAssembler {
         src1: Reg,
         src2: Reg,
         dst: WritableReg,
-        lane_width: OperandSize,
-        kind: MinKind,
+        kind: V128MinKind,
     ) -> Result<()> {
         self.ensure_has_avx()?;
 
-        let op = match (lane_width, kind) {
-            (OperandSize::S8, MinKind::Signed) => AvxOpcode::Vpminsb,
-            (OperandSize::S16, MinKind::Signed) => AvxOpcode::Vpminsw,
-            (OperandSize::S32, MinKind::Signed) => AvxOpcode::Vpminsd,
-            (_, MinKind::Signed) => bail!(CodeGenError::unexpected_operand_size()),
-
-            (OperandSize::S8, MinKind::Unsigned) => AvxOpcode::Vpminub,
-            (OperandSize::S16, MinKind::Unsigned) => AvxOpcode::Vpminuw,
-            (OperandSize::S32, MinKind::Unsigned) => AvxOpcode::Vpminud,
-            (_, MinKind::Unsigned) => bail!(CodeGenError::unexpected_operand_size()),
+        let op = match kind {
+            V128MinKind::I8x16S => AvxOpcode::Vpminsb,
+            V128MinKind::I8x16U => AvxOpcode::Vpminub,
+            V128MinKind::I16x8S => AvxOpcode::Vpminsw,
+            V128MinKind::I16x8U => AvxOpcode::Vpminuw,
+            V128MinKind::I32x4S => AvxOpcode::Vpminsd,
+            V128MinKind::I32x4U => AvxOpcode::Vpminud,
         };
-
         self.asm.xmm_vex_rr(op, src1, src2, dst);
-
         Ok(())
     }
 
@@ -2611,36 +2568,27 @@ impl Masm for MacroAssembler {
         src1: Reg,
         src2: Reg,
         dst: WritableReg,
-        lane_width: OperandSize,
-        kind: MaxKind,
+        kind: V128MaxKind,
     ) -> Result<()> {
         self.ensure_has_avx()?;
 
-        let op = match (lane_width, kind) {
-            (OperandSize::S8, MaxKind::Signed) => AvxOpcode::Vpmaxsb,
-            (OperandSize::S16, MaxKind::Signed) => AvxOpcode::Vpmaxsw,
-            (OperandSize::S32, MaxKind::Signed) => AvxOpcode::Vpmaxsd,
-            (_, MaxKind::Signed) => bail!(CodeGenError::unexpected_operand_size()),
-
-            (OperandSize::S8, MaxKind::Unsigned) => AvxOpcode::Vpmaxub,
-            (OperandSize::S16, MaxKind::Unsigned) => AvxOpcode::Vpmaxuw,
-            (OperandSize::S32, MaxKind::Unsigned) => AvxOpcode::Vpmaxud,
-            (_, MaxKind::Unsigned) => bail!(CodeGenError::unexpected_operand_size()),
+        let op = match kind {
+            V128MaxKind::I8x16S => AvxOpcode::Vpmaxsb,
+            V128MaxKind::I8x16U => AvxOpcode::Vpmaxub,
+            V128MaxKind::I16x8S => AvxOpcode::Vpmaxsw,
+            V128MaxKind::I16x8U => AvxOpcode::Vpmaxuw,
+            V128MaxKind::I32x4S => AvxOpcode::Vpmaxsd,
+            V128MaxKind::I32x4U => AvxOpcode::Vpmaxud,
         };
-
         self.asm.xmm_vex_rr(op, src1, src2, dst);
-
         Ok(())
     }
 
     fn v128_extmul(
         &mut self,
         context: &mut CodeGenContext<Emission>,
-        lane_width: OperandSize,
-        kind: ExtMulKind,
+        kind: V128ExtMulKind,
     ) -> Result<()> {
-        use V128ExtendKind::*;
-
         self.ensure_has_avx()?;
 
         // The implementation for extmul is not optimized; for simplicity's sake, we simply perform
@@ -2649,43 +2597,21 @@ impl Masm for MacroAssembler {
         let src1 = context.pop_to_reg(self, None)?;
         let src2 = context.pop_to_reg(self, None)?;
 
-        let ext_kind = match (lane_width, kind) {
-            (OperandSize::S16, ExtMulKind::HighSigned) => HighI8x16S,
-            (OperandSize::S32, ExtMulKind::HighSigned) => HighI16x8S,
-            (OperandSize::S64, ExtMulKind::HighSigned) => HighI32x4S,
-            (_, ExtMulKind::HighSigned) => bail!(CodeGenError::unexpected_operand_size()),
-
-            (OperandSize::S16, ExtMulKind::LowSigned) => LowI8x16S,
-            (OperandSize::S32, ExtMulKind::LowSigned) => LowI16x8S,
-            (OperandSize::S64, ExtMulKind::LowSigned) => LowI32x4S,
-            (_, ExtMulKind::LowSigned) => bail!(CodeGenError::unexpected_operand_size()),
-
-            (OperandSize::S16, ExtMulKind::HighUnsigned) => HighI8x16U,
-            (OperandSize::S32, ExtMulKind::HighUnsigned) => HighI16x8U,
-            (OperandSize::S64, ExtMulKind::HighUnsigned) => HighI32x4U,
-            (_, ExtMulKind::HighUnsigned) => bail!(CodeGenError::unexpected_operand_size()),
-
-            (OperandSize::S16, ExtMulKind::LowUnsigned) => LowI8x16U,
-            (OperandSize::S32, ExtMulKind::LowUnsigned) => LowI16x8U,
-            (OperandSize::S64, ExtMulKind::LowUnsigned) => LowI32x4U,
-            (_, ExtMulKind::LowUnsigned) => bail!(CodeGenError::unexpected_operand_size()),
-        };
-
+        let ext_kind = kind.into();
         self.v128_extend(src1.reg, writable!(src1.reg), ext_kind)?;
         self.v128_extend(src2.reg, writable!(src2.reg), ext_kind)?;
 
         context.stack.push(src2.into());
         context.stack.push(src1.into());
 
-        self.v128_mul(context, lane_width)
+        self.v128_mul(context, kind.into())
     }
 
     fn v128_extadd_pairwise(
         &mut self,
         src: Reg,
         dst: WritableReg,
-        lane_width: OperandSize,
-        kind: ExtAddKind,
+        kind: V128ExtAddKind,
     ) -> Result<()> {
         use V128ExtendKind::*;
 
@@ -2693,12 +2619,11 @@ impl Masm for MacroAssembler {
 
         // The implementation for extadd is not optimized; for simplicity's sake, we simply perform
         // an extension followed by an addition using already implemented primitives.
-        let (low_kind, high_kind) = match (lane_width, kind) {
-            (OperandSize::S16, ExtAddKind::Signed) => (LowI8x16S, HighI8x16S),
-            (OperandSize::S16, ExtAddKind::Unsigned) => (LowI8x16U, HighI8x16U),
-            (OperandSize::S32, ExtAddKind::Signed) => (LowI16x8S, HighI16x8S),
-            (OperandSize::S32, ExtAddKind::Unsigned) => (LowI16x8U, HighI16x8U),
-            _ => bail!(CodeGenError::unexpected_operand_size()),
+        let (low_kind, high_kind) = match kind {
+            V128ExtAddKind::I8x16S => (LowI8x16S, HighI8x16S),
+            V128ExtAddKind::I8x16U => (LowI8x16U, HighI8x16U),
+            V128ExtAddKind::I16x8S => (LowI16x8S, HighI16x8S),
+            V128ExtAddKind::I16x8U => (LowI16x8U, HighI16x8U),
         };
 
         let tmp = regs::scratch_xmm();
@@ -2706,7 +2631,7 @@ impl Masm for MacroAssembler {
         self.v128_extend(src, writable!(tmp), low_kind)?;
         self.v128_extend(src, dst, high_kind)?;
 
-        self.v128_add(src, dst.to_reg(), dst, lane_width, HandleOverflowKind::None)
+        self.v128_add(src, dst.to_reg(), dst, kind.into())
     }
 
     fn v128_dot(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg) -> Result<()> {
