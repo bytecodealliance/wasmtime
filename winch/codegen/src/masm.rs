@@ -757,6 +757,10 @@ impl V128TruncKind {
 
 /// Kinds of vector addition supported by WebAssembly.
 pub(crate) enum V128AddKind {
+    /// 4 lanes of 32-bit floats wrapping.
+    F32x4,
+    /// 2 lanes of 64-bit floats wrapping.
+    F64x2,
     /// 16 lanes of 8-bit integers wrapping.
     I8x16,
     /// 16 lanes of 8-bit integers signed saturating.
@@ -777,6 +781,10 @@ pub(crate) enum V128AddKind {
 
 /// Kinds of vector subtraction supported by WebAssembly.
 pub(crate) enum V128SubKind {
+    /// 4 lanes of 32-bit floats wrapping.
+    F32x4,
+    /// 2 lanes of 64-bit floats wrapping.
+    F64x2,
     /// 16 lanes of 8-bit integers wrapping.
     I8x16,
     /// 16 lanes of 8-bit integers signed saturating.
@@ -802,12 +810,17 @@ impl From<V128NegKind> for V128SubKind {
             V128NegKind::I16x8 => Self::I16x8,
             V128NegKind::I32x4 => Self::I32x4,
             V128NegKind::I64x2 => Self::I64x2,
+            V128NegKind::F32x4 | V128NegKind::F64x2 => unimplemented!(),
         }
     }
 }
 
 /// Kinds of vector multiplication supported by WebAssembly.
 pub(crate) enum V128MulKind {
+    /// 4 lanes of 32-bit floats.
+    F32x4,
+    /// 2 lanes of 64-bit floats.
+    F64x2,
     /// 8 lanes of 16-bit integers.
     I16x8,
     /// 4 lanes of 32-bit integers.
@@ -818,6 +831,10 @@ pub(crate) enum V128MulKind {
 
 /// Kinds of vector negation supported by WebAssembly.
 pub(crate) enum V128NegKind {
+    /// 4 lanes of 32-bit floats.
+    F32x4,
+    /// 2 lanes of 64-bit floats.
+    F64x2,
     /// 16 lanes of 8-bit integers.
     I8x16,
     /// 8 lanes of 16-bit integers.
@@ -826,6 +843,18 @@ pub(crate) enum V128NegKind {
     I32x4,
     /// 2 lanes of 64-bit integers.
     I64x2,
+}
+
+impl V128NegKind {
+    /// The size of the lanes.
+    pub(crate) fn lane_size(&self) -> OperandSize {
+        match self {
+            Self::F32x4 | Self::I32x4 => OperandSize::S32,
+            Self::F64x2 | Self::I64x2 => OperandSize::S64,
+            Self::I8x16 => OperandSize::S8,
+            Self::I16x8 => OperandSize::S16,
+        }
+    }
 }
 
 /// Kinds of extended pairwise addition supported by WebAssembly.
@@ -2110,4 +2139,10 @@ pub(crate) trait MacroAssembler {
     /// Lane-wise rounding average of vectors of integers in `lhs` and `rhs`
     /// and put the results in `dst`.
     fn v128_avgr(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
+
+    /// Lane-wise IEEE division on vectors of floats.
+    fn v128_div(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
+
+    /// Lane-wise IEEE square root of vector of floats.
+    fn v128_sqrt(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
 }

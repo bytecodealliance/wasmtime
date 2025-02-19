@@ -2110,6 +2110,7 @@ impl Assembler {
     pub fn xmm_vpsll_rr(&mut self, src: Reg, dst: WritableReg, imm: u32, size: OperandSize) {
         let op = match size {
             OperandSize::S32 => AvxOpcode::Vpslld,
+            OperandSize::S64 => AvxOpcode::Vpsllq,
             _ => unimplemented!(),
         };
 
@@ -2828,6 +2829,39 @@ impl Assembler {
             op,
             src1: src1.into(),
             src2: src2.into(),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Divide the vector of floats in `src1` by the vector of floats in `src2`
+    /// and put the results in `dst`.
+    pub fn xmm_vdivp_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => AvxOpcode::Vdivps,
+            OperandSize::S64 => AvxOpcode::Vdivpd,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src1.into(),
+            src2: src2.into(),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Compute square roots of vector of floats in `src` and put the results
+    /// in `dst`.
+    pub fn xmm_vsqrtp_rr(&mut self, src: Reg, dst: WritableReg, size: OperandSize) {
+        let op = match size {
+            OperandSize::S32 => AvxOpcode::Vsqrtps,
+            OperandSize::S64 => AvxOpcode::Vsqrtpd,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmUnaryRmRVex {
+            op,
+            src: src.into(),
             dst: dst.to_reg().into(),
         });
     }
