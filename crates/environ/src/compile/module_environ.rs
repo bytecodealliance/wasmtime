@@ -7,7 +7,7 @@ use crate::{
     ConstExpr, ConstOp, DataIndex, DefinedFuncIndex, ElemIndex, EngineOrModuleTypeIndex,
     EntityIndex, EntityType, FuncIndex, GlobalIndex, IndexType, InitMemory, MemoryIndex,
     ModuleInternedTypeIndex, ModuleTypesBuilder, PrimaryMap, SizeOverflow, StaticMemoryInitializer,
-    TableIndex, TableInitialValue, Tunables, TypeConvert, TypeIndex, Unsigned, WasmError,
+    TableIndex, TableInitialValue, TagIndex, Tunables, TypeConvert, TypeIndex, Unsigned, WasmError,
     WasmHeapTopType, WasmHeapType, WasmResult, WasmValType, WasmparserTypeConverter,
 };
 use anyhow::{bail, Result};
@@ -319,8 +319,16 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                             EntityType::Table(self.convert_table_type(&ty)?)
                         }
 
-                        // doesn't get past validation
-                        TypeRef::Tag(_) => unreachable!(),
+                        TypeRef::Tag(ty) => {
+                            let index = TypeIndex::from_u32(ty.func_type_idx);
+                            let interned_index = self.result.module.types[index];
+                            let tag = crate::Tag {
+                                signature: interned_index,
+                            };
+                            self.result.module.num_imported_tags += 1;
+                            // TODO(dhil): debug info?
+                            EntityType::Tag(tag)
+                        }
                     };
                     self.declare_import(import.module, import.name, ty);
                 }
@@ -384,9 +392,17 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
             Payload::TagSection(tags) => {
                 self.validator.tag_section(&tags)?;
 
-                // This feature isn't enabled at this time, so we should
-                // never get here.
-                unreachable!();
+                let cnt = usize::try_from(tags.count()).unwrap();
+                self.result.module.tags.reserve_exact(cnt);
+
+                for entry in tags {
+                    let sigindex = entry?.func_type_idx;
+                    let ty = TypeIndex::from_u32(sigindex);
+                    let interned_index = self.result.module.types[ty];
+                    self.result
+                        .module
+                        .push_tag(ty, interned_index.unwrap_module_type_index());
+                }
             }
 
             Payload::GlobalSection(globals) => {
@@ -424,9 +440,7 @@ impl<'a, 'data> ModuleEnvironment<'a, 'data> {
                         ExternalKind::Table => EntityIndex::Table(TableIndex::from_u32(index)),
                         ExternalKind::Memory => EntityIndex::Memory(MemoryIndex::from_u32(index)),
                         ExternalKind::Global => EntityIndex::Global(GlobalIndex::from_u32(index)),
-
-                        // this never gets past validation
-                        ExternalKind::Tag => unreachable!(),
+                        ExternalKind::Tag => EntityIndex::Tag(TagIndex::from_u32(index)),
                     };
                     self.result
                         .module
@@ -770,7 +784,7 @@ and for re-adding support for interface types you can see this issue:
             EntityType::Table(ty) => EntityIndex::Table(self.result.module.tables.push(ty)),
             EntityType::Memory(ty) => EntityIndex::Memory(self.result.module.memories.push(ty)),
             EntityType::Global(ty) => EntityIndex::Global(self.result.module.globals.push(ty)),
-            EntityType::Tag(_) => unimplemented!(),
+            EntityType::Tag(ty) => EntityIndex::Tag(self.result.module.tags.push(ty)),
         }
     }
 
@@ -1216,6 +1230,7 @@ impl ModuleTranslation<'_> {
                 // segments, but that's left as a future optimization if
                 // necessary.
                 WasmHeapTopType::Any | WasmHeapTopType::Extern => break,
+                WasmHeapTopType::Cont => break,
             }
 
             // Function indices can be optimized here, but fully general

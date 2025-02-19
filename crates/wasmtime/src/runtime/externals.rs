@@ -3,9 +3,11 @@ use crate::{AsContext, Engine, ExternType, Func, Memory, SharedMemory};
 
 mod global;
 mod table;
+mod tag;
 
 pub use global::Global;
 pub use table::Table;
+pub use tag::Tag;
 
 // Externals
 
@@ -30,6 +32,8 @@ pub enum Extern {
     /// A WebAssembly shared memory; these are handled separately from
     /// [`Memory`].
     SharedMemory(SharedMemory),
+    /// A WebAssembly `tag`.
+    Tag(Tag),
 }
 
 impl Extern {
@@ -100,6 +104,7 @@ impl Extern {
             Extern::SharedMemory(ft) => ExternType::Memory(ft.ty()),
             Extern::Table(tt) => ExternType::Table(tt.ty(store)),
             Extern::Global(gt) => ExternType::Global(gt.ty(store)),
+            Extern::Tag(tt) => ExternType::Tag(tt.ty(store)),
         }
     }
 
@@ -124,6 +129,7 @@ impl Extern {
             crate::runtime::vm::Export::Table(t) => {
                 Extern::Table(Table::from_wasmtime_table(t, store))
             }
+            crate::runtime::vm::Export::Tag(t) => Extern::Tag(Tag::from_wasmtime_tag(t, store)),
         }
     }
 
@@ -134,6 +140,7 @@ impl Extern {
             Extern::Memory(m) => m.comes_from_same_store(store),
             Extern::SharedMemory(m) => Engine::same(m.engine(), store.engine()),
             Extern::Table(t) => store.store_data().contains(t.0),
+            Extern::Tag(t) => store.store_data().contains(t.0),
         }
     }
 }
@@ -165,6 +172,12 @@ impl From<SharedMemory> for Extern {
 impl From<Table> for Extern {
     fn from(r: Table) -> Self {
         Extern::Table(r)
+    }
+}
+
+impl From<Tag> for Extern {
+    fn from(r: Tag) -> Self {
+        Extern::Tag(r)
     }
 }
 

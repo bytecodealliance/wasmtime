@@ -131,14 +131,14 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly gv3+72
+;;     gv4 = load.i64 notrap aligned readonly gv3+80
 ;;     sig0 = (i64 vmctx, i32, i64) -> i64 tail
 ;;     sig1 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail
 ;;     fn0 = colocated u1:9 sig0
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
-;; @0048                               v12 = load.i64 notrap aligned readonly v0+72
+;; @0048                               v12 = load.i64 notrap aligned readonly v0+80
 ;;                                     v68 = iconst.i64 8
 ;; @0048                               v14 = iadd v12, v68  ; v68 = 8
 ;; @0048                               v17 = load.i64 user5 aligned table v14
@@ -185,14 +185,14 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly gv3+72
+;;     gv4 = load.i64 notrap aligned readonly gv3+80
 ;;     sig0 = (i64 vmctx, i64, i32, i32, i32, i32) -> i32 tail
 ;;     sig1 = (i64 vmctx, i32, i64) -> i64 tail
 ;;     fn0 = colocated u1:9 sig1
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32, v5: i32):
-;; @0075                               v12 = load.i64 notrap aligned readonly v0+72
+;; @0075                               v12 = load.i64 notrap aligned readonly v0+80
 ;;                                     v68 = iconst.i64 8
 ;; @0075                               v14 = iadd v12, v68  ; v68 = 8
 ;; @0075                               v17 = load.i64 user5 aligned table v14

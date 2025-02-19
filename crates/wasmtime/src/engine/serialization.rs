@@ -198,6 +198,7 @@ struct WasmFeatures {
     relaxed_simd: bool,
     extended_const: bool,
     function_references: bool,
+    stack_switching: bool,
     gc: bool,
     custom_page_sizes: bool,
     component_model_more_flags: bool,
@@ -253,7 +254,6 @@ impl Metadata<'_> {
         assert!(!component_model_nested_names);
         assert!(!shared_everything_threads);
         assert!(!legacy_exceptions);
-        assert!(!stack_switching);
 
         Metadata {
             target: engine.compiler().triple().to_string(),
@@ -274,6 +274,7 @@ impl Metadata<'_> {
                 relaxed_simd,
                 extended_const,
                 function_references,
+                stack_switching,
                 gc,
                 custom_page_sizes,
                 component_model_more_flags,
@@ -491,6 +492,7 @@ impl Metadata<'_> {
             component_model_multiple_returns,
             component_model_async,
             gc_types,
+            stack_switching,
             wide_arithmetic,
         } = self.features;
 
@@ -560,6 +562,11 @@ impl Metadata<'_> {
             relaxed_simd,
             other.contains(F::RELAXED_SIMD),
             "WebAssembly relaxed-simd support",
+        )?;
+        Self::check_bool(
+            stack_switching,
+            other.contains(F::STACK_SWITCHING),
+            "WebAssembly stack-switching support",
         )?;
         Self::check_bool(
             custom_page_sizes,

@@ -224,12 +224,12 @@
 ;;       movl    (%rsp), %ecx
 ;;       addq    $4, %rsp
 ;;       movq    %r14, %rdx
-;;       movq    0xc8(%rdx), %rbx
+;;       movq    0xd0(%rdx), %rbx
 ;;       cmpq    %rbx, %rcx
 ;;       jae     0x39a
 ;;  308: movq    %rcx, %r11
 ;;       imulq   $8, %r11, %r11
-;;       movq    0xc0(%rdx), %rdx
+;;       movq    0xc8(%rdx), %rdx
 ;;       movq    %rdx, %rsi
 ;;       addq    %r11, %rdx
 ;;       cmpl    %ebx, %ecx

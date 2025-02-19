@@ -40,7 +40,14 @@ impl MatchCx<'_> {
                 }
                 _ => bail!("expected func, but found {}", actual.desc()),
             },
-            EntityType::Tag(_) => unimplemented!(),
+            EntityType::Tag(expected) => match actual {
+                DefinitionType::Tag(actual) => type_reference(
+                    self.engine,
+                    expected.signature.unwrap_engine_type_index(),
+                    actual.signature.unwrap_engine_type_index(),
+                ),
+                _ => bail!("expected tag, but found {}", actual.desc()),
+            },
         }
     }
 }
@@ -171,6 +178,7 @@ fn match_heap(expected: WasmHeapType, actual: WasmHeapType, desc: &str) -> Resul
         // TODO: Wasm GC introduces subtyping between function types, so it will
         // no longer suffice to check whether canonicalized type IDs are equal.
         (H::ConcreteArray(actual), H::ConcreteArray(expected)) => actual == expected,
+        (H::ConcreteCont(actual), H::ConcreteCont(expected)) => actual == expected,
         (H::ConcreteFunc(actual), H::ConcreteFunc(expected)) => actual == expected,
         (H::ConcreteStruct(actual), H::ConcreteStruct(expected)) => actual == expected,
 
@@ -185,6 +193,13 @@ fn match_heap(expected: WasmHeapType, actual: WasmHeapType, desc: &str) -> Resul
 
         (H::Extern | H::NoExtern, H::Extern) => true,
         (_, H::Extern) => false,
+
+        (H::NoCont | H::ConcreteCont(_) | H::Cont, H::Cont) => true,
+        (_, H::Cont) => false,
+        (H::NoCont, H::ConcreteCont(_)) => true,
+        (H::NoCont, H::NoCont) => true,
+        (_, H::NoCont) => false,
+        (_, H::ConcreteCont(_)) => false,
 
         (H::NoExtern, H::NoExtern) => true,
         (_, H::NoExtern) => false,

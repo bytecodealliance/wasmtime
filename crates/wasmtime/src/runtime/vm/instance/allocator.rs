@@ -606,6 +606,8 @@ fn initialize_tables(
                         let items = (0..table.size()).map(|_| funcref);
                         table.init_func(0, items)?;
                     }
+
+                    WasmHeapTopType::Cont => todo!(), // TODO(dhil): cont type table.
                 }
             }
         }

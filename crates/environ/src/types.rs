@@ -232,6 +232,14 @@ impl WasmValType {
             size => panic!("invalid int bits for WasmValType: {size}"),
         }
     }
+
+    /// TODO
+    pub fn unwrap_ref_type(&self) -> WasmRefType {
+        match self {
+            WasmValType::Ref(ref_type) => *ref_type,
+            _ => panic!("Called WasmValType::unwrap_ref_type on non-reference type"),
+        }
+    }
 }
 
 /// WebAssembly reference type -- equivalent of `wasmparser`'s RefType
@@ -431,6 +439,11 @@ pub enum WasmHeapType {
     Extern,
     NoExtern,
 
+    // Continuation types.
+    Cont,
+    ConcreteCont(EngineOrModuleTypeIndex),
+    NoCont,
+
     // Function types.
     Func,
     ConcreteFunc(EngineOrModuleTypeIndex),
@@ -454,6 +467,7 @@ impl From<WasmHeapTopType> for WasmHeapType {
             WasmHeapTopType::Extern => Self::Extern,
             WasmHeapTopType::Any => Self::Any,
             WasmHeapTopType::Func => Self::Func,
+            WasmHeapTopType::Cont => Self::Cont,
         }
     }
 }
@@ -465,6 +479,7 @@ impl From<WasmHeapBottomType> for WasmHeapType {
             WasmHeapBottomType::NoExtern => Self::NoExtern,
             WasmHeapBottomType::None => Self::None,
             WasmHeapBottomType::NoFunc => Self::NoFunc,
+            WasmHeapBottomType::NoCont => Self::NoCont,
         }
     }
 }
@@ -473,6 +488,9 @@ impl fmt::Display for WasmHeapType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Self::Extern => write!(f, "extern"),
+            Self::Cont => write!(f, "cont"),
+            Self::ConcreteCont(i) => write!(f, "cont {i}"),
+            Self::NoCont => write!(f, "nocont"),
             Self::NoExtern => write!(f, "noextern"),
             Self::Func => write!(f, "func"),
             Self::ConcreteFunc(i) => write!(f, "func {i}"),
@@ -497,6 +515,7 @@ impl TypeTrace for WasmHeapType {
         match *self {
             Self::ConcreteArray(i) => func(i),
             Self::ConcreteFunc(i) => func(i),
+            Self::ConcreteCont(i) => func(i),
             Self::ConcreteStruct(i) => func(i),
             _ => Ok(()),
         }
@@ -509,6 +528,7 @@ impl TypeTrace for WasmHeapType {
         match self {
             Self::ConcreteArray(i) => func(i),
             Self::ConcreteFunc(i) => func(i),
+            Self::ConcreteCont(i) => func(i),
             Self::ConcreteStruct(i) => func(i),
             _ => Ok(()),
         }
@@ -526,6 +546,8 @@ impl WasmHeapType {
 
             // All `t <: (ref null func)` are not.
             WasmHeapTopType::Func => false,
+
+            WasmHeapTopType::Cont => false,
         }
     }
 
@@ -555,6 +577,10 @@ impl WasmHeapType {
                 WasmHeapTopType::Func
             }
 
+            WasmHeapType::Cont | WasmHeapType::ConcreteCont(_) | WasmHeapType::NoCont => {
+                WasmHeapTopType::Cont
+            }
+
             WasmHeapType::Any
             | WasmHeapType::Eq
             | WasmHeapType::I31
@@ -582,6 +608,10 @@ impl WasmHeapType {
                 WasmHeapBottomType::NoFunc
             }
 
+            WasmHeapType::Cont | WasmHeapType::ConcreteCont(_) | WasmHeapType::NoCont => {
+                WasmHeapBottomType::NoCont
+            }
+
             WasmHeapType::Any
             | WasmHeapType::Eq
             | WasmHeapType::I31
@@ -603,6 +633,8 @@ pub enum WasmHeapTopType {
     Any,
     /// The common supertype of all function references.
     Func,
+    /// The common supertype of all continuation references.
+    Cont,
 }
 
 /// A bottom heap type.
@@ -614,6 +646,8 @@ pub enum WasmHeapBottomType {
     None,
     /// The common subtype of all function references.
     NoFunc,
+    /// The common subtype of all continuation references.
+    NoCont,
 }
 
 /// WebAssembly function type -- equivalent of `wasmparser`'s FuncType.
@@ -758,6 +792,48 @@ impl WasmFuncType {
             self.params().iter().map(|p| p.trampoline_type()).collect(),
             self.returns().iter().map(|r| r.trampoline_type()).collect(),
         ))
+    }
+}
+
+/// WebAssembly continuation type -- equivalent of `wasmparser`'s ContType.
+#[derive(Debug, Clone, Eq, PartialEq, Hash, Serialize, Deserialize)]
+pub struct WasmContType(EngineOrModuleTypeIndex);
+
+impl fmt::Display for WasmContType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "(cont {})", self.0)
+    }
+}
+
+impl WasmContType {
+    /// Constructs a new continuation type.
+    pub fn new(idx: EngineOrModuleTypeIndex) -> Self {
+        WasmContType(idx)
+    }
+
+    /// Returns the (module interned) index to the underlying function type.
+    pub fn interned_type_index(self) -> ModuleInternedTypeIndex {
+        match self.0 {
+            EngineOrModuleTypeIndex::Engine(_) => panic!("not module interned"),
+            EngineOrModuleTypeIndex::Module(idx) => idx,
+            EngineOrModuleTypeIndex::RecGroup(_) => todo!(),
+        }
+    }
+}
+
+impl TypeTrace for WasmContType {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        func(self.0)
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        func(&mut self.0)
     }
 }
 
@@ -934,6 +1010,7 @@ impl fmt::Display for WasmCompositeType {
 pub enum WasmCompositeInnerType {
     Array(WasmArrayType),
     Func(WasmFuncType),
+    Cont(WasmContType),
     Struct(WasmStructType),
 }
 
@@ -943,6 +1020,7 @@ impl fmt::Display for WasmCompositeInnerType {
             Self::Array(ty) => fmt::Display::fmt(ty, f),
             Self::Func(ty) => fmt::Display::fmt(ty, f),
             Self::Struct(ty) => fmt::Display::fmt(ty, f),
+            Self::Cont(ty) => fmt::Display::fmt(ty, f),
         }
     }
 }
@@ -1002,6 +1080,24 @@ impl WasmCompositeInnerType {
     pub fn unwrap_struct(&self) -> &WasmStructType {
         self.as_struct().unwrap()
     }
+
+    #[inline]
+    pub fn is_cont(&self) -> bool {
+        matches!(self, Self::Cont(_))
+    }
+
+    #[inline]
+    pub fn as_cont(&self) -> Option<&WasmContType> {
+        match self {
+            Self::Cont(f) => Some(f),
+            _ => None,
+        }
+    }
+
+    #[inline]
+    pub fn unwrap_cont(&self) -> &WasmContType {
+        self.as_cont().unwrap()
+    }
 }
 
 impl TypeTrace for WasmCompositeType {
@@ -1013,6 +1109,7 @@ impl TypeTrace for WasmCompositeType {
             WasmCompositeInnerType::Array(a) => a.trace(func),
             WasmCompositeInnerType::Func(f) => f.trace(func),
             WasmCompositeInnerType::Struct(a) => a.trace(func),
+            WasmCompositeInnerType::Cont(c) => c.trace(func),
         }
     }
 
@@ -1024,6 +1121,7 @@ impl TypeTrace for WasmCompositeType {
             WasmCompositeInnerType::Array(a) => a.trace_mut(func),
             WasmCompositeInnerType::Func(f) => f.trace_mut(func),
             WasmCompositeInnerType::Struct(a) => a.trace_mut(func),
+            WasmCompositeInnerType::Cont(c) => c.trace_mut(func),
         }
     }
 }
@@ -1102,6 +1200,20 @@ impl WasmSubType {
     pub fn unwrap_array(&self) -> &WasmArrayType {
         assert!(!self.composite_type.shared);
         self.composite_type.inner.unwrap_array()
+    }
+
+    pub fn is_cont(&self) -> bool {
+        self.composite_type.inner.is_cont()
+    }
+
+    #[inline]
+    pub fn as_cont(&self) -> Option<&WasmContType> {
+        self.composite_type.inner.as_cont()
+    }
+
+    #[inline]
+    pub fn unwrap_cont(&self) -> &WasmContType {
+        self.composite_type.inner.unwrap_cont()
     }
 
     #[inline]
@@ -1320,6 +1432,11 @@ entity_impl!(ElemIndex);
 pub struct TagIndex(u32);
 entity_impl!(TagIndex);
 
+/// Index type of a defined tag inside the WebAssembly module.
+#[derive(Copy, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Debug, Serialize, Deserialize)]
+pub struct DefinedTagIndex(u32);
+entity_impl!(DefinedTagIndex);
+
 /// Index into the global list of modules found within an entire component.
 ///
 /// Module translations are saved on the side to get fully compiled after
@@ -1339,6 +1456,8 @@ pub enum EntityIndex {
     Memory(MemoryIndex),
     /// Global index.
     Global(GlobalIndex),
+    /// Tag index.
+    Tag(TagIndex),
 }
 
 impl From<FuncIndex> for EntityIndex {
@@ -1362,6 +1481,12 @@ impl From<MemoryIndex> for EntityIndex {
 impl From<GlobalIndex> for EntityIndex {
     fn from(idx: GlobalIndex) -> EntityIndex {
         EntityIndex::Global(idx)
+    }
+}
+
+impl From<TagIndex> for EntityIndex {
+    fn from(idx: TagIndex) -> EntityIndex {
+        EntityIndex::Tag(idx)
     }
 }
 
@@ -1391,7 +1516,8 @@ impl TypeTrace for EntityType {
             Self::Global(g) => g.trace(func),
             Self::Table(t) => t.trace(func),
             Self::Function(idx) => func(*idx),
-            Self::Memory(_) | Self::Tag(_) => Ok(()),
+            Self::Tag(t) => t.trace(func),
+            Self::Memory(_) => Ok(()),
         }
     }
 
@@ -1403,7 +1529,8 @@ impl TypeTrace for EntityType {
             Self::Global(g) => g.trace_mut(func),
             Self::Table(t) => t.trace_mut(func),
             Self::Function(idx) => func(idx),
-            Self::Memory(_) | Self::Tag(_) => Ok(()),
+            Self::Tag(t) => t.trace_mut(func),
+            Self::Memory(_) => Ok(()),
         }
     }
 }
@@ -1426,9 +1553,9 @@ impl EntityType {
     }
 
     /// Assert that this entity is a tag
-    pub fn unwrap_tag(&self) -> &Tag {
+    pub fn unwrap_tag(&self) -> Tag {
         match self {
-            EntityType::Tag(g) => g,
+            EntityType::Tag(g) => *g,
             _ => panic!("not a tag"),
         }
     }
@@ -1936,17 +2063,30 @@ impl From<wasmparser::MemoryType> for Memory {
 /// WebAssembly event.
 #[derive(Debug, Clone, Copy, Hash, Eq, PartialEq, Serialize, Deserialize)]
 pub struct Tag {
-    /// The event signature type.
-    pub ty: TypeIndex,
+    /// The tag signature type.
+    pub signature: EngineOrModuleTypeIndex,
 }
 
-impl From<wasmparser::TagType> for Tag {
-    fn from(ty: wasmparser::TagType) -> Tag {
-        match ty.kind {
-            wasmparser::TagKind::Exception => Tag {
-                ty: TypeIndex::from_u32(ty.func_type_idx),
-            },
-        }
+impl Tag {
+    /// Constructs a new tag.
+    pub fn new(signature: EngineOrModuleTypeIndex) -> Self {
+        Self { signature }
+    }
+}
+
+impl TypeTrace for Tag {
+    fn trace<F, E>(&self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        func(self.signature)
+    }
+
+    fn trace_mut<F, E>(&mut self, func: &mut F) -> Result<(), E>
+    where
+        F: FnMut(&mut EngineOrModuleTypeIndex) -> Result<(), E>,
+    {
+        func(&mut self.signature)
     }
 }
 
@@ -1997,8 +2137,8 @@ pub trait TypeConvert {
             wasmparser::CompositeInnerType::Struct(s) => {
                 WasmCompositeInnerType::Struct(self.convert_struct_type(s))
             }
-            wasmparser::CompositeInnerType::Cont(_) => {
-                unimplemented!("continuation types")
+            wasmparser::CompositeInnerType::Cont(c) => {
+                WasmCompositeInnerType::Cont(self.convert_cont_type(c))
             }
         };
         WasmCompositeType {
@@ -2051,6 +2191,15 @@ pub trait TypeConvert {
         WasmFuncType::new(params, results)
     }
 
+    /// Converts a wasmparser continuation type to a wasmtime type
+    fn convert_cont_type(&self, ty: &wasmparser::ContType) -> WasmContType {
+        if let WasmHeapType::ConcreteFunc(sigidx) = self.lookup_heap_type(ty.0.unpack()) {
+            WasmContType::new(sigidx)
+        } else {
+            panic!("Failed to extract signature index for continuation type.")
+        }
+    }
+
     /// Converts a wasmparser value type to a wasmtime type
     fn convert_valtype(&self, ty: wasmparser::ValType) -> WasmValType {
         match ty {
@@ -2087,12 +2236,11 @@ pub trait TypeConvert {
                 wasmparser::AbstractHeapType::Struct => WasmHeapType::Struct,
                 wasmparser::AbstractHeapType::None => WasmHeapType::None,
 
-                wasmparser::AbstractHeapType::Exn
-                | wasmparser::AbstractHeapType::NoExn
-                | wasmparser::AbstractHeapType::Cont
-                | wasmparser::AbstractHeapType::NoCont => {
+                wasmparser::AbstractHeapType::Exn | wasmparser::AbstractHeapType::NoExn => {
                     unimplemented!("unsupported heap type {ty:?}");
                 }
+                wasmparser::AbstractHeapType::Cont => WasmHeapType::Cont,
+                wasmparser::AbstractHeapType::NoCont => WasmHeapType::NoCont,
             },
             _ => unimplemented!("unsupported heap type {ty:?}"),
         }

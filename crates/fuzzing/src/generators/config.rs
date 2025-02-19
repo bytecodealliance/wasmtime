@@ -145,6 +145,8 @@ impl Config {
             hogs_memory: _,
             nan_canonicalization: _,
             gc_types: _,
+            exceptions: _,
+            stack_switching: _,
         } = test.config;
 
         // Enable/disable some proposals that aren't configurable in wasm-smith
