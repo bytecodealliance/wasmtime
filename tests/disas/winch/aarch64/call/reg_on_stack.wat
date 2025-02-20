@@ -35,6 +35,7 @@
 ;;       mov     w2, w16
 ;;       bl      #0
 ;;   50: add     x28, x28, #4
+;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x14]
 ;;       sub     x28, x28, #4
 ;;       mov     sp, x28
@@ -44,21 +45,25 @@
 ;;       mov     x16, #1
 ;;       mov     w2, w16
 ;;       bl      #0
-;;   78: ldur    x9, [x28, #0x18]
+;;   7c: ldur    x9, [x28, #0x18]
 ;;       sub     x28, x28, #4
 ;;       mov     sp, x28
 ;;       stur    w0, [x28]
 ;;       ldur    w1, [x28]
 ;;       add     x28, x28, #4
+;;       mov     sp, x28
 ;;       ldur    w0, [x28]
 ;;       add     x28, x28, #4
+;;       mov     sp, x28
 ;;       tst     w1, w1
-;;       b.eq    #0xac
-;;       b       #0xa4
-;;   a4: add     x28, x28, #4
+;;       b.eq    #0xbc
 ;;       b       #0xb0
-;;   ac: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   b0: add     x28, x28, #4
+;;       mov     sp, x28
+;;       b       #0xc0
+;;   bc: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;       add     x28, x28, #0x18
+;;       mov     sp, x28
 ;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

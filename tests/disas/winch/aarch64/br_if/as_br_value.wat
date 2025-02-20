@@ -23,5 +23,6 @@
 ;;       b       #0x3c
 ;;   3c: add     x28, x28, #0x10
 ;;       mov     sp, x28
+;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

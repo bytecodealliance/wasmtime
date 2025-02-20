@@ -37,9 +37,9 @@
 ;;       ldur    x2, [x9, #0x60]
 ;;       mov     w3, w1
 ;;       add     x3, x3, #4
-;;       b.hs    #0x108
+;;       b.hs    #0x10c
 ;;   48: cmp     x3, x2, uxtx
-;;       b.hi    #0x10c
+;;       b.hi    #0x110
 ;;   50: ldur    x4, [x9, #0x58]
 ;;       add     x4, x4, x1, uxtx
 ;;       mov     x16, #0
@@ -52,9 +52,9 @@
 ;;       ldur    x2, [x9, #0x60]
 ;;       mov     w3, w1
 ;;       add     x3, x3, #8
-;;       b.hs    #0x110
+;;       b.hs    #0x114
 ;;   84: cmp     x3, x2, uxtx
-;;       b.hi    #0x114
+;;       b.hi    #0x118
 ;;   8c: ldur    x4, [x9, #0x58]
 ;;       add     x4, x4, x1, uxtx
 ;;       add     x4, x4, #4
@@ -70,9 +70,9 @@
 ;;       mov     w16, #3
 ;;       movk    w16, #0x10, lsl #16
 ;;       add     x3, x3, x16, uxtx
-;;       b.hs    #0x118
+;;       b.hs    #0x11c
 ;;   cc: cmp     x3, x2, uxtx
-;;       b.hi    #0x11c
+;;       b.hi    #0x120
 ;;   d4: ldur    x4, [x9, #0x58]
 ;;       add     x4, x4, x1, uxtx
 ;;       orr     x16, xzr, #0xfffff
@@ -84,11 +84,12 @@
 ;;       stur    w0, [x4]
 ;;       add     x28, x28, #0x20
 ;;       mov     sp, x28
+;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  108: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;  10c: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;  110: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;  114: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;  118: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;  11c: .byte   0x1f, 0xc1, 0x00, 0x00
+;;  120: .byte   0x1f, 0xc1, 0x00, 0x00

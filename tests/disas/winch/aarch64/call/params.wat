@@ -78,9 +78,11 @@
 ;;       mov     x16, #8
 ;;       mov     w16, w16
 ;;       stur    w16, [x28, #0x10]
-;;       bl      #0x160
+;;       bl      #0x180
 ;;   a4: add     x28, x28, #0x24
+;;       mov     sp, x28
 ;;       add     x28, x28, #4
+;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x10]
 ;;       ldur    w1, [x28, #4]
 ;;       ldur    w2, [x28]
@@ -114,11 +116,14 @@
 ;;       mov     x16, #8
 ;;       mov     w16, w16
 ;;       stur    w16, [x28, #0x10]
-;;       bl      #0x160
-;;  134: add     x28, x28, #0x20
+;;       bl      #0x180
+;;  13c: add     x28, x28, #0x20
+;;       mov     sp, x28
 ;;       add     x28, x28, #8
+;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x10]
 ;;       add     x28, x28, #0x18
+;;       mov     sp, x28
 ;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
@@ -157,6 +162,7 @@
 ;;       add     w1, w1, w0, uxtx
 ;;       mov     w0, w1
 ;;       add     x28, x28, #0x28
+;;       mov     sp, x28
 ;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
