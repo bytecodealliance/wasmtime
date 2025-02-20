@@ -13,6 +13,18 @@ audited_as = "0.114.0"
 version = "0.117.0"
 audited_as = "0.115.0"
 
+[[unpublished.cranelift]]
+version = "0.118.0"
+audited_as = "0.116.1"
+
+[[unpublished.cranelift-assembler-x64]]
+version = "0.118.0"
+audited_as = "0.117.0"
+
+[[unpublished.cranelift-assembler-x64-meta]]
+version = "0.118.0"
+audited_as = "0.117.0"
+
 [[unpublished.cranelift-bforest]]
 version = "0.115.0"
 audited_as = "0.113.1"
@@ -437,6 +449,14 @@ audited_as = "27.0.0"
 version = "30.0.0"
 audited_as = "28.0.0"
 
+[[unpublished.wasmtime-wasi-http]]
+version = "31.0.0"
+audited_as = "29.0.1"
+
+[[unpublished.wasmtime-wasi-io]]
+version = "31.0.0"
+audited_as = "30.0.0"
+
 [[unpublished.wasmtime-wasi-keyvalue]]
 version = "28.0.0"
 audited_as = "26.0.1"
@@ -779,6 +799,18 @@ user-name = "Jeff Muizelaar"
 [[publisher.cranelift]]
 version = "0.115.0"
 when = "2024-12-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-assembler-x64]]
+version = "0.117.0"
+when = "2025-02-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.cranelift-assembler-x64-meta]]
+version = "0.117.0"
+when = "2025-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
@@ -1514,6 +1546,12 @@ user-login = "wasmtime-publish"
 [[publisher.wasmtime-wasi-http]]
 version = "28.0.0"
 when = "2024-12-20"
+user-id = 73222
+user-login = "wasmtime-publish"
+
+[[publisher.wasmtime-wasi-io]]
+version = "30.0.0"
+when = "2025-02-20"
 user-id = 73222
 user-login = "wasmtime-publish"
 
