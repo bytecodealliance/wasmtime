@@ -109,8 +109,16 @@ impl dsl::Format {
                 fmtln!(f, "let {dst} = self.{dst}.enc();");
                 fmtln!(f, "match &self.{src} {{");
                 f.indent(|f| {
-                    fmtln!(f, "GprMem::Gpr({src}) => rex.emit_two_op(buf, {dst}, {src}.enc()),");
-                    fmtln!(f, "GprMem::Mem({src}) => {src}.emit_rex_prefix(rex, {dst}, buf),");
+                    match dst.bits() {
+                        128 => {
+                            fmtln!(f, "XmmMem::Xmm({src}) => rex.emit_two_op(buf, {dst}, {src}.enc()),");
+                            fmtln!(f, "XmmMem::Mem({src}) => {src}.emit_rex_prefix(rex, {dst}, buf),");
+                        }
+                        _ => {
+                            fmtln!(f, "GprMem::Gpr({src}) => rex.emit_two_op(buf, {dst}, {src}.enc()),");
+                            fmtln!(f, "GprMem::Mem({src}) => {src}.emit_rex_prefix(rex, {dst}, buf),");
+                        }
+                    };
                 });
                 fmtln!(f, "}}");
             }
@@ -119,9 +127,15 @@ impl dsl::Format {
             | [RegMem(dst), Reg(src), FixedReg(_)] => {
                 fmtln!(f, "let {src} = self.{src}.enc();");
                 fmtln!(f, "match &self.{dst} {{");
-                f.indent(|f| {
-                    fmtln!(f, "GprMem::Gpr({dst}) => rex.emit_two_op(buf, {src}, {dst}.enc()),");
-                    fmtln!(f, "GprMem::Mem({dst}) => {dst}.emit_rex_prefix(rex, {src}, buf),");
+                f.indent(|f| match src.bits() {
+                    128 => {
+                        fmtln!(f, "XmmMem::Xmm({dst}) => rex.emit_two_op(buf, {src}, {dst}.enc()),");
+                        fmtln!(f, "XmmMem::Mem({dst}) => {dst}.emit_rex_prefix(rex, {src}, buf),");
+                    }
+                    _ => {
+                        fmtln!(f, "GprMem::Gpr({dst}) => rex.emit_two_op(buf, {src}, {dst}.enc()),");
+                        fmtln!(f, "GprMem::Mem({dst}) => {dst}.emit_rex_prefix(rex, {src}, buf),");
+                    }
                 });
                 fmtln!(f, "}}");
             }
@@ -160,8 +174,22 @@ impl dsl::Format {
                 fmtln!(f, "let {dst} = self.{dst}.enc();");
                 fmtln!(f, "match &self.{src} {{");
                 f.indent(|f| {
-                    fmtln!(f, "GprMem::Gpr({src}) => emit_modrm(buf, {dst}, {src}.enc()),");
-                    fmtln!(f, "GprMem::Mem({src}) => emit_modrm_sib_disp(buf, off, {dst}, {src}, 0, None),");
+                    match dst.bits() {
+                        128 => {
+                            fmtln!(f, "XmmMem::Xmm({src}) => emit_modrm(buf, {dst}, {src}.enc()),");
+                            fmtln!(
+                                f,
+                                "XmmMem::Mem({src}) => emit_modrm_sib_disp(buf, off, {dst}, {src}, 0, None),"
+                            );
+                        }
+                        _ => {
+                            fmtln!(f, "GprMem::Gpr({src}) => emit_modrm(buf, {dst}, {src}.enc()),");
+                            fmtln!(
+                                f,
+                                "GprMem::Mem({src}) => emit_modrm_sib_disp(buf, off, {dst}, {src}, 0, None),"
+                            );
+                        }
+                    };
                 });
                 fmtln!(f, "}}");
             }
@@ -171,12 +199,25 @@ impl dsl::Format {
                 fmtln!(f, "let {src} = self.{src}.enc();");
                 fmtln!(f, "match &self.{dst} {{");
                 f.indent(|f| {
-                    fmtln!(f, "GprMem::Gpr({dst}) => emit_modrm(buf, {src}, {dst}.enc()),");
-                    fmtln!(f, "GprMem::Mem({dst}) => emit_modrm_sib_disp(buf, off, {src}, {dst}, 0, None),");
+                    match src.bits() {
+                        128 => {
+                            fmtln!(f, "XmmMem::Xmm({dst}) => emit_modrm(buf, {src}, {dst}.enc()),");
+                            fmtln!(
+                                f,
+                                "XmmMem::Mem({dst}) => emit_modrm_sib_disp(buf, off, {src}, {dst}, 0, None),"
+                            );
+                        }
+                        _ => {
+                            fmtln!(f, "GprMem::Gpr({dst}) => emit_modrm(buf, {src}, {dst}.enc()),");
+                            fmtln!(
+                                f,
+                                "GprMem::Mem({dst}) => emit_modrm_sib_disp(buf, off, {src}, {dst}, 0, None),"
+                            );
+                        }
+                    };
                 });
                 fmtln!(f, "}}");
             }
-
             unknown => unimplemented!("unknown pattern: {unknown:?}"),
         }
     }

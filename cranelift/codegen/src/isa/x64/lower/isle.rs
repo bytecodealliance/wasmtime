@@ -6,7 +6,7 @@ use crate::{ir::types, ir::AtomicRmwOp, isa};
 use generated_code::{AssemblerOutputs, Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
-use super::external::{CraneliftRegisters, PairedGpr};
+use super::external::{CraneliftRegisters, PairedGpr, PairedXmm};
 use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode, MergeableLoadSize};
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::immediates::*;
@@ -1015,6 +1015,13 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     fn is_gpr(&mut self, src: &GprMemImm) -> Option<Gpr> {
         match src.clone().to_reg_mem_imm() {
             RegMemImm::Reg { reg } => Gpr::new(reg),
+            _ => None,
+        }
+    }
+
+    fn is_xmm(&mut self, src: &XmmMemImm) -> Option<Xmm> {
+        match src.clone().to_reg_mem_imm() {
+            XmmMemImm::Reg { reg } => Xmm::new(reg),
             _ => None,
         }
     }

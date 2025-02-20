@@ -63,6 +63,10 @@ pub fn isle_definitions(f: &mut Formatter, insts: &[dsl::Inst]) {
     f.line("(type AssemblerReadGprMem extern (enum))", None);
     f.line("(type AssemblerReadWriteGprMem extern (enum))", None);
     f.line("(type AssemblerInst extern (enum))", None);
+    f.line("(type AssemblerReadXmm extern (enum))", None);
+    f.line("(type AssemblerReadWriteXmm extern (enum))", None);
+    f.line("(type AssemblerReadXmmMem extern (enum))", None);
+    f.line("(type AssemblerReadWriteXmmMem extern (enum))", None);
     f.empty_line();
 
     f.line("(type AssemblerOutputs (enum", None);

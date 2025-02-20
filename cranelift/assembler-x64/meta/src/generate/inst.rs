@@ -107,7 +107,14 @@ impl dsl::Inst {
         if let Some(op) = self.format.uses_memory() {
             f.empty_line();
             f.comment("Emit trap.");
-            fmtln!(f, "if let GprMem::Mem({op}) = &self.{op} {{");
+            match op {
+                crate::dsl::Location::rm128 => {
+                    fmtln!(f, "if let XmmMem::Mem({op}) = &self.{op} {{");
+                }
+                _ => {
+                    fmtln!(f, "if let GprMem::Mem({op}) = &self.{op} {{");
+                }
+            }
             f.indent(|f| {
                 fmtln!(f, "if let Some(trap_code) = {op}.trap_code() {{");
                 f.indent(|f| {
@@ -151,19 +158,42 @@ impl dsl::Inst {
                         fmtln!(f, "visitor.fixed_{call}(&R::{ty}Gpr::new({fixed}));");
                     }
                     Reg(reg) => {
-                        let call = o.mutability.generate_regalloc_call();
-                        fmtln!(f, "visitor.{call}(self.{reg}.as_mut());");
+                        match reg.bits() {
+                            128 => {
+                                let call = o.mutability.generate_xmm_regalloc_call();
+                                fmtln!(f, "visitor.{call}(self.{reg}.as_mut());");
+                            }
+                            _ => {
+                                let call = o.mutability.generate_regalloc_call();
+                                fmtln!(f, "visitor.{call}(self.{reg}.as_mut());");
+                            }
+                        };
                     }
                     RegMem(rm) => {
-                        let call = o.mutability.generate_regalloc_call();
-                        fmtln!(f, "match &mut self.{rm} {{");
-                        f.indent(|f| {
-                            fmtln!(f, "GprMem::Gpr(r) => visitor.{call}(r),");
-                            fmtln!(
-                                f,
-                                "GprMem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read(r)),"
-                            );
-                        });
+                        match rm.bits() {
+                            128 => {
+                                let call = o.mutability.generate_xmm_regalloc_call();
+                                fmtln!(f, "match &mut self.{rm} {{");
+                                f.indent(|f| {
+                                    fmtln!(f, "XmmMem::Xmm(r) => visitor.{call}(r),");
+                                    fmtln!(
+                                        f,
+                                        "XmmMem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read(r)),"
+                                    );
+                                });
+                            }
+                            _ => {
+                                let call = o.mutability.generate_regalloc_call();
+                                fmtln!(f, "match &mut self.{rm} {{");
+                                f.indent(|f| {
+                                    fmtln!(f, "GprMem::Gpr(r) => visitor.{call}(r),");
+                                    fmtln!(
+                                        f,
+                                        "GprMem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read(r)),"
+                                    );
+                                });
+                            }
+                        };
                         fmtln!(f, "}}");
                     }
                 }

@@ -15,8 +15,14 @@ impl dsl::Operand {
                     Some(format!("Imm{bits}"))
                 }
             }
-            Reg(_) => Some(format!("Gpr<R::{}Gpr>", self.mutability.generate_type())),
-            RegMem(_) => Some(format!("GprMem<R::{}Gpr, R::ReadGpr>", self.mutability.generate_type())),
+            Reg(r) => match r.bits() {
+                128 => Some(format!("Xmm<R::{}Xmm>", self.mutability.generate_type())),
+                _ => Some(format!("Gpr<R::{}Gpr>", self.mutability.generate_type())),
+            },
+            RegMem(rm) => match rm.bits() {
+                128 => Some(format!("XmmMem<R::{}Xmm, R::ReadGpr>", self.mutability.generate_type())),
+                _ => Some(format!("GprMem<R::{}Gpr, R::ReadGpr>", self.mutability.generate_type())),
+            },
         }
     }
 
@@ -38,8 +44,14 @@ impl dsl::Operand {
                     Some(format!("Imm{bits}"))
                 }
             }
-            Reg(_) => Some(format!("Gpr<{pick_ty}>")),
-            RegMem(_) => Some(format!("GprMem<{pick_ty}, {read_ty}>")),
+            Reg(r) => match r.bits() {
+                128 => Some(format!("Xmm<{pick_ty}>")),
+                _ => Some(format!("Gpr<{pick_ty}>")),
+            },
+            RegMem(rm) => match rm.bits() {
+                128 => Some(format!("XmmMem<{pick_ty}, Gpr>")),
+                _ => Some(format!("GprMem<{pick_ty}, {read_ty}>")),
+            },
         }
     }
 
@@ -129,6 +141,8 @@ impl dsl::Location {
             imm32 => Some("Imm32".into()),
             r8 | r16 | r32 | r64 => Some(format!("Gpr{generic}")),
             rm8 | rm16 | rm32 | rm64 => Some(format!("GprMem{generic}")),
+            xmm => Some(format!("Xmm{generic}")),
+            rm128 => Some(format!("XmmMem{generic}")),
         }
     }
 
@@ -154,6 +168,7 @@ impl dsl::Location {
                 Some(size) => format!("self.{self}.to_string({size})"),
                 None => unreachable!(),
             },
+            xmm | rm128 => format!("self.{self}.to_string()"),
         }
     }
 
@@ -167,6 +182,7 @@ impl dsl::Location {
             r16 | rm16 => Some("Size::Word"),
             r32 | rm32 => Some("Size::Doubleword"),
             r64 | rm64 => Some("Size::Quadword"),
+            xmm | rm128 => Some("Size::DoubleQuadword"),
         }
     }
 
@@ -177,7 +193,7 @@ impl dsl::Location {
         match self {
             al | ax | eax | rax => Some("reg::enc::RAX"),
             cl => Some("reg::enc::RCX"),
-            imm8 | imm16 | imm32 | r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 => None,
+            imm8 | imm16 | imm32 | r8 | r16 | r32 | r64 | xmm | rm8 | rm16 | rm32 | rm64 | rm128 => None,
         }
     }
 }
@@ -196,6 +212,14 @@ impl dsl::Mutability {
         match self {
             dsl::Mutability::Read => "Read",
             dsl::Mutability::ReadWrite => "ReadWrite",
+        }
+    }
+
+    #[must_use]
+    pub fn generate_xmm_regalloc_call(&self) -> &str {
+        match self {
+            dsl::Mutability::Read => "read_xmm",
+            dsl::Mutability::ReadWrite => "read_write_xmm",
         }
     }
 }

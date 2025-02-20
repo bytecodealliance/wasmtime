@@ -54,7 +54,7 @@ block0(v0: f64, v1: f64):
 ;   movdqa  %xmm7, %xmm0
 ;   andnpd  %xmm0, %xmm2, %xmm0
 ;   andpd   %xmm7, %xmm1, %xmm7
-;   orpd    %xmm0, %xmm7, %xmm0
+;   orpd %xmm7, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

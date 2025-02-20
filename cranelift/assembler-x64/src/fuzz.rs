@@ -4,7 +4,7 @@
 //! throughout this crate to avoid depending on the `arbitrary` crate
 //! unconditionally (use the `fuzz` feature instead).
 
-use crate::{AmodeOffset, AmodeOffsetPlusKnownOffset, AsReg, Gpr, Inst, NonRspGpr, Registers};
+use crate::{AmodeOffset, AmodeOffsetPlusKnownOffset, AsReg, Gpr, Inst, NonRspGpr, Registers, Xmm};
 use arbitrary::{Arbitrary, Result, Unstructured};
 use capstone::{arch::x86, arch::BuildsCapstone, arch::BuildsCapstoneSyntax, Capstone};
 
@@ -165,6 +165,8 @@ pub struct FuzzRegs;
 impl Registers for FuzzRegs {
     type ReadGpr = FuzzReg;
     type ReadWriteGpr = FuzzReg;
+    type ReadXmm = FuzzReg;
+    type ReadWriteXmm = FuzzReg;
 }
 
 /// A simple `u8` register type for fuzzing only.
@@ -209,11 +211,21 @@ impl<'a, R: AsReg> Arbitrary<'a> for Gpr<R> {
         Ok(Self(R::new(u.int_in_range(0..=15)?)))
     }
 }
+impl<'a, R: AsReg> Arbitrary<'a> for Xmm<R> {
+    fn arbitrary(u: &mut Unstructured<'a>) -> Result<Self> {
+        Ok(Self(R::new(u.int_in_range(0..=15)?)))
+    }
+}
 
 /// Helper trait that's used to be the same as `Registers` except with an extra
 /// `for<'a> Arbitrary<'a>` bound on all of the associated types.
 pub trait RegistersArbitrary:
-    Registers<ReadGpr: for<'a> Arbitrary<'a>, ReadWriteGpr: for<'a> Arbitrary<'a>>
+    Registers<
+    ReadGpr: for<'a> Arbitrary<'a>,
+    ReadWriteGpr: for<'a> Arbitrary<'a>,
+    ReadXmm: for<'a> Arbitrary<'a>,
+    ReadWriteXmm: for<'a> Arbitrary<'a>,
+>
 {
 }
 
@@ -222,6 +234,8 @@ where
     R: Registers,
     R::ReadGpr: for<'a> Arbitrary<'a>,
     R::ReadWriteGpr: for<'a> Arbitrary<'a>,
+    R::ReadXmm: for<'a> Arbitrary<'a>,
+    R::ReadWriteXmm: for<'a> Arbitrary<'a>,
 {
 }
 
