@@ -640,15 +640,15 @@ fn instance_too_large() -> Result<()> {
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
  * 76.19% - 256 bytes - instance state management
- * 21.43% - 72 bytes - static vmctx data
+ * 23.81% - 80 bytes - static vmctx data
 "
     } else {
         "\
-        instance allocation for this module requires 240 bytes which exceeds the \
+instance allocation for this module requires 240 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
  * 66.67% - 160 bytes - instance state management
- * 30.00% - 72 bytes - static vmctx data
+ * 33.33% - 80 bytes - static vmctx data
 "
     };
     match Module::new(&engine, "(module)") {
