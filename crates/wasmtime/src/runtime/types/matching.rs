@@ -187,6 +187,7 @@ fn match_heap(expected: WasmHeapType, actual: WasmHeapType, desc: &str) -> Resul
         (H::ConcreteArray(actual), H::ConcreteArray(expected)) => actual == expected,
         (H::ConcreteFunc(actual), H::ConcreteFunc(expected)) => actual == expected,
         (H::ConcreteStruct(actual), H::ConcreteStruct(expected)) => actual == expected,
+        (H::ConcreteCont(actual), H::ConcreteCont(expected)) => actual == expected,
 
         (H::NoFunc, H::NoFunc) => true,
         (_, H::NoFunc) => false,
@@ -242,6 +243,15 @@ fn match_heap(expected: WasmHeapType, actual: WasmHeapType, desc: &str) -> Resul
 
         (H::None, H::ConcreteStruct(_)) => true,
         (_, H::ConcreteStruct(_)) => false,
+
+        (H::NoCont | H::ConcreteCont(_) | H::Cont, H::Cont) => true,
+        (_, H::Cont) => false,
+
+        (H::NoCont, H::ConcreteCont(_)) => true,
+        (H::NoCont, H::NoCont) => true,
+
+        (_, H::NoCont) => false,
+        (_, H::ConcreteCont(_)) => false,
 
         (H::None, H::None) => true,
         (_, H::None) => false,
