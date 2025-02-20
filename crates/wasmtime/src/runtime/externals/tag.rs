@@ -44,7 +44,6 @@ impl Tag {
         let export = &store[self.0];
         crate::runtime::vm::VMTagImport {
             from: export.definition.into(),
-            vmctx: export.vmctx.into(),
         }
     }
 

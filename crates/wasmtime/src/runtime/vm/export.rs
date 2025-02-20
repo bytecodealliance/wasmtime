@@ -116,9 +116,6 @@ impl From<ExportGlobal> for Export {
 pub struct ExportTag {
     /// The address of the global storage.
     pub definition: NonNull<VMTagDefinition>,
-    /// Pointer to the containing `VMContext`. May be null for host-created
-    /// globals.
-    pub vmctx: NonNull<VMContext>,
     /// The global declaration, used for compatibility checking.
     pub tag: Tag,
 }

@@ -270,8 +270,6 @@ mod test_vmglobal_import {
 pub struct VMTagImport {
     /// A pointer to the imported tag description.
     pub from: VmPtr<VMTagDefinition>,
-    /// A pointer to the owning instance.
-    pub vmctx: VmPtr<VMContext>,
 }
 
 // SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.

@@ -733,7 +733,6 @@ impl Instance {
             } else {
                 self.imported_tag(index).from.as_non_null()
             },
-            vmctx: self.vmctx(),
             tag: self.env_module().tags[index],
         }
     }
