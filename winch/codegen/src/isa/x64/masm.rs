@@ -2252,6 +2252,8 @@ impl Masm for MacroAssembler {
     }
 
     fn v128_neg(&mut self, op: WritableReg, kind: V128NegKind) -> Result<()> {
+        self.ensure_has_avx()?;
+
         let tmp = regs::scratch_xmm();
         match kind {
             V128NegKind::I8x16 | V128NegKind::I16x8 | V128NegKind::I32x4 | V128NegKind::I64x2 => {
