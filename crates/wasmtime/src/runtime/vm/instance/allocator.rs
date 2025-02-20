@@ -606,6 +606,8 @@ fn initialize_tables(
                         let items = (0..table.size()).map(|_| funcref);
                         table.init_func(0, items)?;
                     }
+
+                    WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
                 }
             }
         }

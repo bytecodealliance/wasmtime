@@ -1096,6 +1096,8 @@ impl HeapType {
             | WasmHeapType::ConcreteStruct(EngineOrModuleTypeIndex::RecGroup(_)) => {
                 panic!("HeapType::from_wasm_type on non-canonicalized-for-runtime-usage heap type")
             }
+
+            WasmHeapType::Cont | WasmHeapType::ConcreteCont(_) | WasmHeapType::NoCont => todo!(), // FIXME: #10248 stack switching support.
         }
     }
 

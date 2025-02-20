@@ -1458,6 +1458,8 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                 return CheckIndirectCallTypeSignature::StaticTrap;
             }
 
+            WasmHeapType::Cont | WasmHeapType::ConcreteCont(_) | WasmHeapType::NoCont => todo!(), // FIXME: #10248 stack switching support.
+
             // Engine-indexed types don't show up until runtime and it's a Wasm
             // validation error to perform a call through a non-function table,
             // so these cases are dynamically not reachable.
@@ -1701,6 +1703,7 @@ impl<'module_environment> TargetEnvironment for FuncEnvironment<'module_environm
         let needs_stack_map = match wasm_ty.top() {
             WasmHeapTopType::Extern | WasmHeapTopType::Any => true,
             WasmHeapTopType::Func => false,
+            WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
         };
         (ty, needs_stack_map)
     }
@@ -1816,6 +1819,9 @@ impl FuncEnvironment<'_> {
             WasmHeapTopType::Func => {
                 Ok(self.get_or_init_func_ref_table_elem(builder, table_index, index, false))
             }
+
+            // Continuation types.
+            WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
         }
     }
 
@@ -1862,6 +1868,9 @@ impl FuncEnvironment<'_> {
                     .store(flags, value_with_init_bit, elem_addr, 0);
                 Ok(())
             }
+
+            // Continuation types.
+            WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
         }
     }
 
@@ -2213,6 +2222,7 @@ impl FuncEnvironment<'_> {
             WasmHeapTopType::Func => pos.ins().iconst(self.pointer_type(), 0),
             // NB: null GC references don't need to be in stack maps.
             WasmHeapTopType::Any | WasmHeapTopType::Extern => pos.ins().iconst(types::I32, 0),
+            WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
         })
     }
 

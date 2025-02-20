@@ -1088,6 +1088,7 @@ impl Instance {
                             )
                         }),
                     )?,
+                    WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
                 }
             }
         }

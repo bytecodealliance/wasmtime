@@ -1220,7 +1220,7 @@ impl ModuleTranslation<'_> {
                 // initializer won't trap so we could continue processing
                 // segments, but that's left as a future optimization if
                 // necessary.
-                WasmHeapTopType::Any | WasmHeapTopType::Extern => break,
+                WasmHeapTopType::Any | WasmHeapTopType::Extern | WasmHeapTopType::Cont => break,
             }
 
             // Function indices can be optimized here, but fully general

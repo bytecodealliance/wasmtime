@@ -263,6 +263,7 @@ fn wasm_to_table_type(ty: WasmRefType) -> TableElementType {
     match ty.heap_type.top() {
         WasmHeapTopType::Func => TableElementType::Func,
         WasmHeapTopType::Any | WasmHeapTopType::Extern => TableElementType::GcRef,
+        WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
     }
 }
 

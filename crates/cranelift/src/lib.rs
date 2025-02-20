@@ -202,6 +202,7 @@ fn reference_type(wasm_ht: WasmHeapType, pointer_type: ir::Type) -> ir::Type {
     match wasm_ht.top() {
         WasmHeapTopType::Func => pointer_type,
         WasmHeapTopType::Any | WasmHeapTopType::Extern => ir::types::I32,
+        WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
     }
 }
 
