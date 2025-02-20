@@ -1,5 +1,5 @@
 use std::{env, process};
-use test_programs::preview1::{assert_errno, config, create_file, open_scratch_directory};
+use test_programs::preview1::{assert_errno, create_file, open_scratch_directory};
 
 unsafe fn test_path_rename(dir_fd: wasi::Fd) {
     // First, try renaming a dir to nonexistent path
