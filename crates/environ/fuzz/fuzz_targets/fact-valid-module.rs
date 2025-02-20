@@ -61,17 +61,17 @@ fn target(data: &[u8]) -> arbitrary::Result<()> {
     };
     for _ in 0..u.int_in_range(1..=TEST_CASE_COUNT)? {
         let mut params = Vec::new();
-        let mut results = Vec::new();
+        let mut result = None;
         for _ in 0..u.int_in_range(0..=MAX_ARITY)? {
             params.push(u.choose(&types)?);
         }
-        for _ in 0..u.int_in_range(0..=MAX_ARITY)? {
-            results.push(u.choose(&types)?);
+        if u.arbitrary()? {
+            result = Some(u.choose(&types)?);
         }
 
         let test = TestCase {
             params,
-            results,
+            result,
             encoding1: u.arbitrary()?,
             encoding2: u.arbitrary()?,
         };
