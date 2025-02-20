@@ -217,10 +217,10 @@
     (i64x2.add (i64x2.splat (local.get 0))
       (i64x2.sub (i64x2.splat (local.get 1))
         (i64x2.mul (i64x2.splat (local.get 2)) (i64x2.splat (local.get 3))))))
-;;   (func (export "as-f64x2_add_sub_mul-operands") (param f64 f64 f64 f64) (result v128)
-;;     (f64x2.add (f64x2.splat (local.get 0))
-;;       (f64x2.sub (f64x2.splat (local.get 1))
-;;         (f64x2.mul (f64x2.splat (local.get 2)) (f64x2.splat (local.get 3))))))
+  (func (export "as-f64x2_add_sub_mul-operands") (param f64 f64 f64 f64) (result v128)
+    (f64x2.add (f64x2.splat (local.get 0))
+      (f64x2.sub (f64x2.splat (local.get 1))
+        (f64x2.mul (f64x2.splat (local.get 2)) (f64x2.splat (local.get 3))))))
 
   ;; Saturating integer arithmetic
   (func (export "as-i8x16_add_sat_s-operands") (param i32 i32) (result v128)
@@ -281,8 +281,8 @@
 ;;     (f32x4.min (f32x4.splat (local.get 0)) (f32x4.splat (local.get 1))))
 
   ;; Floating-point arithmetic
-;;   (func (export "as-f32x4_div-operands") (param f32 f32) (result v128)
-;;     (f32x4.div (f32x4.splat (local.get 0)) (f32x4.splat (local.get 1))))
+  (func (export "as-f32x4_div-operands") (param f32 f32) (result v128)
+    (f32x4.div (f32x4.splat (local.get 0)) (f32x4.splat (local.get 1))))
 
   ;; Conversions
   (func (export "as-f32x4_convert_s_i32x4-operand") (param i32) (result v128)
@@ -309,7 +309,7 @@
 (assert_return (invoke "as-i16x8_add_sub_mul-operands" (i32.const 257) (i32.const 128) (i32.const 16) (i32.const 16)) (v128.const i16x8 129 129 129 129 129 129 129 129))
 (assert_return (invoke "as-i32x4_add_sub_mul-operands" (i32.const 65535) (i32.const 65537) (i32.const 256) (i32.const 256)) (v128.const i32x4 0x10000 0x10000 0x10000 0x10000))
 (assert_return (invoke "as-i64x2_add_sub_mul-operands" (i64.const 0x7fffffff) (i64.const 0x1_0000_0001) (i64.const 65536) (i64.const 65536)) (v128.const i64x2 0x8000_0000 0x8000_0000))
-;; (assert_return (invoke "as-f64x2_add_sub_mul-operands" (f64.const 0x1p-1) (f64.const 0.75) (f64.const 0x1p-1) (f64.const 0.5)) (v128.const f64x2 0x1p+0 0x1p+0))
+(assert_return (invoke "as-f64x2_add_sub_mul-operands" (f64.const 0x1p-1) (f64.const 0.75) (f64.const 0x1p-1) (f64.const 0.5)) (v128.const f64x2 0x1p+0 0x1p+0))
 
 (assert_return (invoke "as-i8x16_add_sat_s-operands" (i32.const 0x7f) (i32.const 1)) (v128.const i8x16 0x7f 0x7f 0x7f 0x7f 0x7f 0x7f 0x7f 0x7f 0x7f 0x7f 0x7f 0x7f 0x7f 0x7f 0x7f 0x7f))
 (assert_return (invoke "as-i16x8_add_sat_s-operands" (i32.const 0x7fff) (i32.const 1)) (v128.const i16x8 0x7fff 0x7fff 0x7fff 0x7fff 0x7fff 0x7fff 0x7fff 0x7fff))
@@ -338,7 +338,7 @@
 
 (assert_return (invoke "as-f32x4_abs-operand" (f32.const -1.125)) (v128.const f32x4 1.125 1.125 1.125 1.125))
 ;; (assert_return (invoke "as-f32x4_min-operands" (f32.const 0.25) (f32.const 1e-38)) (v128.const f32x4 1e-38 1e-38 1e-38 1e-38))
-;; (assert_return (invoke "as-f32x4_div-operands" (f32.const 1.0) (f32.const 8.0)) (v128.const f32x4 0.125 0.125 0.125 0.125))
+(assert_return (invoke "as-f32x4_div-operands" (f32.const 1.0) (f32.const 8.0)) (v128.const f32x4 0.125 0.125 0.125 0.125))
 
 (assert_return (invoke "as-f32x4_convert_s_i32x4-operand" (i32.const 12345)) (v128.const f32x4 12345.0 12345.0 12345.0 12345.0))
 (assert_return (invoke "as-i32x4_trunc_s_f32x4_sat-operand" (f32.const 1.1)) (v128.const i32x4 1 1 1 1))
