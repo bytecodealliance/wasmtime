@@ -279,12 +279,12 @@ unsafe impl VmSafe for VMTagImport {}
 mod test_vmtag_import {
     use super::VMTagImport;
     use core::mem::{offset_of, size_of};
-    use wasmtime_environ::{Module, VMOffsets};
+    use wasmtime_environ::{HostPtr, Module, VMOffsets};
 
     #[test]
     fn check_vmtag_import_offsets() {
         let module = Module::new();
-        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
+        let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(
             size_of::<VMTagImport>(),
             usize::from(offsets.size_of_vmtag_import())
@@ -725,12 +725,12 @@ unsafe impl VmSafe for VMTagDefinition {}
 mod test_vmtag_definition {
     use super::VMTagDefinition;
     use std::mem::size_of;
-    use wasmtime_environ::{Module, PtrSize, VMOffsets};
+    use wasmtime_environ::{HostPtr, Module, PtrSize, VMOffsets};
 
     #[test]
     fn check_vmtag_definition_offsets() {
         let module = Module::new();
-        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
+        let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(
             size_of::<VMTagDefinition>(),
             usize::from(offsets.ptr.size_of_vmtag_definition())
@@ -740,7 +740,7 @@ mod test_vmtag_definition {
     #[test]
     fn check_vmtag_begins_aligned() {
         let module = Module::new();
-        let offsets = VMOffsets::new(size_of::<*mut u8>() as u8, &module);
+        let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(offsets.vmctx_tags_begin() % 16, 0);
     }
 }
