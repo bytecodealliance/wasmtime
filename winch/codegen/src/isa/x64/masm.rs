@@ -2059,6 +2059,8 @@ impl Masm for MacroAssembler {
         self.ensure_has_avx()?;
 
         let op = match kind {
+            V128AddKind::F32x4 => AvxOpcode::Vaddps,
+            V128AddKind::F64x2 => AvxOpcode::Vaddpd,
             V128AddKind::I8x16 => AvxOpcode::Vpaddb,
             V128AddKind::I8x16SatS => AvxOpcode::Vpaddsb,
             V128AddKind::I8x16SatU => AvxOpcode::Vpaddusb,
@@ -2076,6 +2078,8 @@ impl Masm for MacroAssembler {
         self.ensure_has_avx()?;
 
         let op = match kind {
+            V128SubKind::F32x4 => AvxOpcode::Vsubps,
+            V128SubKind::F64x2 => AvxOpcode::Vsubpd,
             V128SubKind::I8x16 => AvxOpcode::Vpsubb,
             V128SubKind::I8x16SatS => AvxOpcode::Vpsubsb,
             V128SubKind::I8x16SatU => AvxOpcode::Vpsubusb,
@@ -2177,6 +2181,8 @@ impl Masm for MacroAssembler {
             };
 
         match kind {
+            V128MulKind::F32x4 => mul_avx(self, AvxOpcode::Vmulps),
+            V128MulKind::F64x2 => mul_avx(self, AvxOpcode::Vmulpd),
             V128MulKind::I16x8 => mul_avx(self, AvxOpcode::Vpmullw),
             V128MulKind::I32x4 => mul_avx(self, AvxOpcode::Vpmulld),
             // This is the fast path when AVX512 is available.
@@ -2246,9 +2252,31 @@ impl Masm for MacroAssembler {
     }
 
     fn v128_neg(&mut self, op: WritableReg, kind: V128NegKind) -> Result<()> {
+        self.ensure_has_avx()?;
+
         let tmp = regs::scratch_xmm();
-        self.v128_xor(tmp, tmp, writable!(tmp))?;
-        self.v128_sub(tmp, op.to_reg(), op, kind.into())?;
+        match kind {
+            V128NegKind::I8x16 | V128NegKind::I16x8 | V128NegKind::I32x4 | V128NegKind::I64x2 => {
+                self.v128_xor(tmp, tmp, writable!(tmp))?;
+                self.v128_sub(tmp, op.to_reg(), op, kind.into())?;
+            }
+            V128NegKind::F32x4 | V128NegKind::F64x2 => {
+                // Create a mask of all 1s.
+                self.asm
+                    .xmm_vpcmpeq_rrr(writable!(tmp), tmp, tmp, kind.lane_size());
+                // Left shift the lanes in the mask so only the sign bit in the
+                // mask is set to 1.
+                self.asm.xmm_vpsll_rr(
+                    tmp,
+                    writable!(tmp),
+                    (kind.lane_size().num_bits() - 1) as u32,
+                    kind.lane_size(),
+                );
+                // Use the mask to flip the sign bit.
+                self.asm
+                    .xmm_vxorp_rrr(op.to_reg(), tmp, op, kind.lane_size());
+            }
+        }
         Ok(())
     }
 
@@ -2714,6 +2742,18 @@ impl Masm for MacroAssembler {
     fn v128_avgr(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
         self.ensure_has_avx()?;
         self.asm.xmm_vpavg_rrr(lhs, rhs, dst, size);
+        Ok(())
+    }
+
+    fn v128_div(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.ensure_has_avx()?;
+        self.asm.xmm_vdivp_rrr(lhs, rhs, dst, size);
+        Ok(())
+    }
+
+    fn v128_sqrt(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.ensure_has_avx()?;
+        self.asm.xmm_vsqrtp_rr(src, dst, size);
         Ok(())
     }
 
