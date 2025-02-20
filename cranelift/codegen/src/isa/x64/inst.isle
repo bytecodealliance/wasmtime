@@ -2759,11 +2759,6 @@
 (rule 1 (x64_add $I64 src1 (is_simm32 src2))  (x64_addq_mi_sxl src1 src2))
 (rule 2 (x64_add $I64 src1 (is_simm8 src2))   (x64_addq_mi_sxb src1 src2))
 (rule 3 (x64_add $I64 src1 (is_gpr_mem src2)) (x64_addq_rm src1 src2))
-(rule 0 (x64_add ty src1 src2)
-      (alu_rmi_r ty
-                 (AluRmiROpcode.Add)
-                 src1
-                 src2))
 
 ;; Helper for creating `add` instructions whose flags are also used.
 (decl x64_add_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
@@ -2835,11 +2830,6 @@
 (rule 1 (x64_sub $I64 src1 (is_simm32 src2))  (x64_subq_mi_sxl src1 src2))
 (rule 2 (x64_sub $I64 src1 (is_simm8 src2))   (x64_subq_mi_sxb src1 src2))
 (rule 3 (x64_sub $I64 src1 (is_gpr_mem src2)) (x64_subq_rm src1 src2))
-(rule 0 (x64_sub ty src1 src2)
-      (alu_rmi_r ty
-                 (AluRmiROpcode.Sub)
-                 src1
-                 src2))
 
 ;; Helper for creating `sub` instructions whose flags are also used.
 (decl x64_sub_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
@@ -3041,11 +3031,6 @@
 (rule 1 (x64_and $I64 src1 (is_simm32 src2))  (x64_andq_mi_sxl src1 src2))
 (rule 2 (x64_and $I64 src1 (is_simm8 src2))   (x64_andq_mi_sxb src1 src2))
 (rule 3 (x64_and $I64 src1 (is_gpr_mem src2)) (x64_andq_rm src1 src2))
-(rule 0 (x64_and ty src1 src2)
-      (alu_rmi_r ty
-                 (AluRmiROpcode.And)
-                 src1
-                 src2))
 
 (decl x64_and_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
 (rule (x64_and_with_flags_paired ty src1 src2)
@@ -3071,11 +3056,6 @@
 (rule 1 (x64_or $I64 src1 (is_simm32 src2))  (x64_orq_mi_sxl src1 src2))
 (rule 2 (x64_or $I64 src1 (is_simm8 src2))   (x64_orq_mi_sxb src1 src2))
 (rule 3 (x64_or $I64 src1 (is_gpr_mem src2)) (x64_orq_rm src1 src2))
-(rule 0 (x64_or ty src1 src2)
-      (alu_rmi_r ty
-                 (AluRmiROpcode.Or)
-                 src1
-                 src2))
 
 ;; Helper for emitting `xor` instructions.
 (decl x64_xor (Type Gpr GprMemImm) Gpr)
@@ -3091,11 +3071,6 @@
 (rule 1 (x64_xor $I64 src1 (is_simm32 src2))  (x64_xorq_mi_sxl src1 src2))
 (rule 2 (x64_xor $I64 src1 (is_simm8 src2))   (x64_xorq_mi_sxb src1 src2))
 (rule 3 (x64_xor $I64 src1 (is_gpr_mem src2)) (x64_xorq_rm src1 src2))
-(rule 0 (x64_xor ty src1 src2)
-      (alu_rmi_r ty
-                 (AluRmiROpcode.Xor)
-                 src1
-                 src2))
 
 (decl x64_andn (Type Gpr GprMem) Gpr)
 (rule (x64_andn ty src1 src2)
