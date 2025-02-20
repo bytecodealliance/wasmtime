@@ -1068,6 +1068,30 @@ impl Config {
         self
     }
 
+    /// Configures whether the [WebAssembly stack switching
+    /// proposal][proposal] will be enabled for compilation.
+    ///
+    /// This feature gates the use of control tags.
+    ///
+    /// This feature depends on the `function_reference_types` and
+    /// `exceptions` features.
+    ///
+    /// This feature is `false` by default.
+    ///
+    /// # Errors
+    ///
+    /// [proposal]: https://github.com/webassembly/stack-switching
+    pub fn wasm_stack_switching(&mut self, enable: bool) -> &mut Self {
+        // FIXME(dhil): Once the config provides a handle
+        // for turning on/off exception handling proposal support,
+        // this ought to only enable stack switching.
+        self.wasm_feature(
+            WasmFeatures::EXCEPTIONS | WasmFeatures::STACK_SWITCHING,
+            enable,
+        );
+        self
+    }
+
     /// Configures whether the WebAssembly component-model [proposal] will
     /// be enabled for compilation.
     ///

@@ -263,6 +263,39 @@ mod test_vmglobal_import {
     }
 }
 
+/// The fields compiled code needs to access to utilize a WebAssembly
+/// tag imported from another instance.
+#[derive(Debug, Copy, Clone)]
+#[repr(C)]
+pub struct VMTagImport {
+    /// A pointer to the imported tag description.
+    pub from: VmPtr<VMTagDefinition>,
+}
+
+// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+unsafe impl VmSafe for VMTagImport {}
+
+#[cfg(test)]
+mod test_vmtag_import {
+    use super::VMTagImport;
+    use core::mem::{offset_of, size_of};
+    use wasmtime_environ::{HostPtr, Module, VMOffsets};
+
+    #[test]
+    fn check_vmtag_import_offsets() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(HostPtr, &module);
+        assert_eq!(
+            size_of::<VMTagImport>(),
+            usize::from(offsets.size_of_vmtag_import())
+        );
+        assert_eq!(
+            offset_of!(VMTagImport, from),
+            usize::from(offsets.vmtag_import_from())
+        );
+    }
+}
+
 /// The fields compiled code needs to access to utilize a WebAssembly linear
 /// memory defined within the instance, namely the start address and the
 /// size in bytes.
@@ -666,6 +699,49 @@ mod test_vmshared_type_index {
             size_of::<VMSharedTypeIndex>(),
             usize::from(offsets.size_of_vmshared_type_index())
         );
+    }
+}
+
+/// A WebAssembly tag defined within the instance.
+///
+#[derive(Debug)]
+#[repr(C)]
+pub struct VMTagDefinition {
+    /// Function signature's type id.
+    pub type_index: VMSharedTypeIndex,
+}
+
+impl VMTagDefinition {
+    pub fn new(type_index: VMSharedTypeIndex) -> Self {
+        Self { type_index }
+    }
+}
+
+// SAFETY: the above structure is repr(C) and only contains VmSafe
+// fields.
+unsafe impl VmSafe for VMTagDefinition {}
+
+#[cfg(test)]
+mod test_vmtag_definition {
+    use super::VMTagDefinition;
+    use std::mem::size_of;
+    use wasmtime_environ::{HostPtr, Module, PtrSize, VMOffsets};
+
+    #[test]
+    fn check_vmtag_definition_offsets() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(HostPtr, &module);
+        assert_eq!(
+            size_of::<VMTagDefinition>(),
+            usize::from(offsets.ptr.size_of_vmtag_definition())
+        );
+    }
+
+    #[test]
+    fn check_vmtag_begins_aligned() {
+        let module = Module::new();
+        let offsets = VMOffsets::new(HostPtr, &module);
+        assert_eq!(offsets.vmctx_tags_begin() % 16, 0);
     }
 }
 

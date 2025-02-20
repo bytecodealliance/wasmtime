@@ -129,6 +129,7 @@ pub(crate) enum DefinitionType {
     // no longer be the current size of the table/memory.
     Table(wasmtime_environ::Table, u64),
     Memory(wasmtime_environ::Memory, u64),
+    Tag(wasmtime_environ::Tag),
 }
 
 impl<T> Linker<T> {
@@ -1388,6 +1389,7 @@ impl DefinitionType {
                 DefinitionType::Memory(*t.wasmtime_ty(data), t.internal_size(store))
             }
             Extern::SharedMemory(t) => DefinitionType::Memory(*t.ty().wasmtime_memory(), t.size()),
+            Extern::Tag(t) => DefinitionType::Tag(*t.wasmtime_ty(data)),
         }
     }
 
@@ -1397,6 +1399,7 @@ impl DefinitionType {
             DefinitionType::Table(..) => "table",
             DefinitionType::Memory(..) => "memory",
             DefinitionType::Global(_) => "global",
+            DefinitionType::Tag(_) => "tag",
         }
     }
 }

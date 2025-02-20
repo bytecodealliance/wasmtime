@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use crate::{linker::DefinitionType, Engine};
 use wasmtime_environ::{
-    EntityType, Global, IndexType, Memory, Table, TypeTrace, VMSharedTypeIndex, WasmHeapType,
+    EntityType, Global, IndexType, Memory, Table, Tag, TypeTrace, VMSharedTypeIndex, WasmHeapType,
     WasmRefType, WasmSubType, WasmValType,
 };
 
@@ -40,7 +40,10 @@ impl MatchCx<'_> {
                 }
                 _ => bail!("expected func, but found {}", actual.desc()),
             },
-            EntityType::Tag(_) => unimplemented!(),
+            EntityType::Tag(expected) => match actual {
+                DefinitionType::Tag(actual) => tag_ty(expected, actual),
+                _ => bail!("expected tag, but found {}", actual.desc()),
+            },
         }
     }
 }
@@ -90,7 +93,10 @@ pub fn entity_ty(engine: &Engine, expected: &EntityType, actual: &EntityType) ->
             }
             _ => bail!("expected func found {}", entity_desc(actual)),
         },
-        EntityType::Tag(_) => unimplemented!(),
+        EntityType::Tag(expected) => match actual {
+            EntityType::Tag(actual) => tag_ty(expected, actual),
+            _ => bail!("expected tag found {}", entity_desc(actual)),
+        },
     }
 }
 
@@ -163,6 +169,14 @@ fn memory_ty(expected: &Memory, actual: &Memory, actual_runtime_size: Option<u64
         )
     }
     Ok(())
+}
+
+fn tag_ty(expected: &Tag, actual: &Tag) -> Result<()> {
+    if expected.signature == actual.signature {
+        Ok(())
+    } else {
+        bail!("incompatible tag types")
+    }
 }
 
 fn match_heap(expected: WasmHeapType, actual: WasmHeapType, desc: &str) -> Result<()> {

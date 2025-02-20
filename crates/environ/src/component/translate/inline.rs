@@ -1229,6 +1229,7 @@ impl<'a> Inliner<'a> {
                 EntityIndex::Table(i) => frame.tables[i].clone().into(),
                 EntityIndex::Global(i) => frame.globals[i].clone().into(),
                 EntityIndex::Memory(i) => frame.memories[i].clone().into(),
+                EntityIndex::Tag(_) => todo!(), // FIXME: #10252 support for tags in the component model
             },
         }
     }

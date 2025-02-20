@@ -333,6 +333,9 @@ pub struct Module {
     /// Number of imported or aliased globals in the module.
     pub num_imported_globals: usize,
 
+    /// Number of imported or aliased tags in the module.
+    pub num_imported_tags: usize,
+
     /// Number of functions that "escape" from this module may need to have a
     /// `VMFuncRef` constructed for them.
     ///
@@ -354,6 +357,9 @@ pub struct Module {
 
     /// WebAssembly global initializers for locally-defined globals.
     pub global_initializers: PrimaryMap<DefinedGlobalIndex, ConstExpr>,
+
+    /// WebAssembly exception and control tags.
+    pub tags: PrimaryMap<TagIndex, Tag>,
 }
 
 /// Initialization routines for creating an instance, encompassing imports,
@@ -500,6 +506,29 @@ impl Module {
         index.index() < self.num_imported_globals
     }
 
+    /// Test whether the given tag index is for an imported tag.
+    #[inline]
+    pub fn is_imported_tag(&self, index: TagIndex) -> bool {
+        index.index() < self.num_imported_tags
+    }
+
+    /// Convert a `DefinedTagIndex` into a `TagIndex`.
+    #[inline]
+    pub fn tag_index(&self, defined_tag: DefinedTagIndex) -> TagIndex {
+        TagIndex::new(self.num_imported_tags + defined_tag.index())
+    }
+
+    /// Convert a `TagIndex` into a `DefinedTagIndex`. Returns None if the
+    /// index is an imported tag.
+    #[inline]
+    pub fn defined_tag_index(&self, tag: TagIndex) -> Option<DefinedTagIndex> {
+        if tag.index() < self.num_imported_tags {
+            None
+        } else {
+            Some(DefinedTagIndex::new(tag.index() - self.num_imported_tags))
+        }
+    }
+
     /// Returns an iterator of all the imports in this module, along with their
     /// module name, field name, and type that's being imported.
     pub fn imports(&self) -> impl ExactSizeIterator<Item = (&str, &str, EntityType)> {
@@ -517,7 +546,14 @@ impl Module {
             EntityIndex::Table(i) => EntityType::Table(self.tables[i]),
             EntityIndex::Memory(i) => EntityType::Memory(self.memories[i]),
             EntityIndex::Function(i) => EntityType::Function(self.functions[i].signature),
+            EntityIndex::Tag(i) => EntityType::Tag(self.tags[i]),
         }
+    }
+
+    /// Appends a new tag to this module with the given type information.
+    pub fn push_tag(&mut self, signature: impl Into<EngineOrModuleTypeIndex>) -> TagIndex {
+        let signature = signature.into();
+        self.tags.push(Tag { signature })
     }
 
     /// Appends a new function to this module with the given type information,
@@ -548,6 +584,12 @@ impl Module {
     pub fn num_defined_memories(&self) -> usize {
         self.memories.len() - self.num_imported_memories
     }
+
+    /// Returns the number of tags defined by this module itself: all tags
+    /// minus imported tags.
+    pub fn num_defined_tags(&self) -> usize {
+        self.tags.len() - self.num_imported_tags
+    }
 }
 
 impl TypeTrace for Module {
@@ -572,12 +614,14 @@ impl TypeTrace for Module {
             num_imported_tables: _,
             num_imported_memories: _,
             num_imported_globals: _,
+            num_imported_tags: _,
             num_escaped_funcs: _,
             functions,
             tables,
             memories: _,
             globals,
             global_initializers: _,
+            tags,
         } = self;
 
         for t in types.values().copied() {
@@ -591,6 +635,9 @@ impl TypeTrace for Module {
         }
         for g in globals.values() {
             g.trace(func)?;
+        }
+        for t in tags.values() {
+            t.trace(func)?;
         }
         Ok(())
     }
@@ -616,12 +663,14 @@ impl TypeTrace for Module {
             num_imported_tables: _,
             num_imported_memories: _,
             num_imported_globals: _,
+            num_imported_tags: _,
             num_escaped_funcs: _,
             functions,
             tables,
             memories: _,
             globals,
             global_initializers: _,
+            tags,
         } = self;
 
         for t in types.values_mut() {
@@ -635,6 +684,9 @@ impl TypeTrace for Module {
         }
         for g in globals.values_mut() {
             g.trace_mut(func)?;
+        }
+        for t in tags.values_mut() {
+            t.trace_mut(func)?;
         }
         Ok(())
     }

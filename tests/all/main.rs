@@ -42,6 +42,7 @@ mod stack_overflow;
 mod store;
 mod structs;
 mod table;
+mod tags;
 mod threads;
 mod traps;
 mod types;
