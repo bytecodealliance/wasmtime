@@ -78,6 +78,7 @@ fn build_and_generate_tests() {
             s if s.starts_with("dwarf_") => "dwarf",
             s if s.starts_with("config_") => "config",
             s if s.starts_with("keyvalue_") => "keyvalue",
+            s if s.starts_with("tls_") => "tls",
             // If you're reading this because you hit this panic, either add it
             // to a test suite above or add a new "suite". The purpose of the
             // categorization above is to have a static assertion that tests

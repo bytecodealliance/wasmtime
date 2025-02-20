@@ -54,6 +54,7 @@ wasi-common = { workspace = true, default-features = true, features = ["exit", "
 wasmtime-wasi = { workspace = true, default-features = true, optional = true }
 wasmtime-wasi-nn = { workspace = true, optional = true }
 wasmtime-wasi-config = { workspace = true, optional = true }
+wasmtime-wasi-tls = { workspace = true, optional = true }
 wasmtime-wasi-keyvalue = { workspace = true, optional = true }
 wasmtime-wasi-threads = { workspace = true, optional = true }
 wasmtime-wasi-http = { workspace = true, optional = true }
@@ -245,6 +246,7 @@ wasmtime-component-macro = { path = "crates/component-macro", version = "=31.0.0
 wasmtime-asm-macros = { path = "crates/asm-macros", version = "=31.0.0" }
 wasmtime-versioned-export-macros = { path = "crates/versioned-export-macros", version = "=31.0.0" }
 wasmtime-slab = { path = "crates/slab", version = "=31.0.0" }
+wasmtime-wasi-tls = { path = "crates/wasi-tls", version = "31.0.0" }
 component-test-util = { path = "crates/misc/component-test-util" }
 component-fuzz-util = { path = "crates/misc/component-fuzz-util" }
 wiggle = { path = "crates/wiggle", version = "=31.0.0", default-features = false }
@@ -376,6 +378,9 @@ libtest-mimic = "0.7.0"
 semver = { version = "1.0.17", default-features = false }
 ittapi = "0.4.0"
 libm = "0.2.7"
+tokio-rustls = "0.25.0" 
+rustls = "0.22.0"
+webpki-roots = "0.26.0"
 
 # =============================================================================
 #
@@ -408,6 +413,7 @@ default = [
   "wasi-http",
   "wasi-config",
   "wasi-keyvalue",
+  "wasi-tls",
 
   # Most features of Wasmtime are enabled by default.
   "wat",
@@ -458,6 +464,7 @@ disable-logging = ["log/max_level_off", "tracing/max_level_off"]
 # These features are all included in the `default` set above and this is
 # the internal mapping for what they enable in Wasmtime itself.
 wasi-nn = ["dep:wasmtime-wasi-nn"]
+wasi-tls = ["dep:wasmtime-wasi-tls"]
 wasi-threads = ["dep:wasmtime-wasi-threads", "threads"]
 wasi-http = ["component-model", "dep:wasmtime-wasi-http", "dep:tokio", "dep:hyper"]
 wasi-config = ["dep:wasmtime-wasi-config"]
@@ -566,3 +573,18 @@ opt-level = 's'
 inherits = "release"
 codegen-units = 1
 lto = true
+
+[patch.crates-io]
+wit-bindgen = { git = "https://github.com/bytecodealliance/wit-bindgen.git" }
+wit-bindgen-rust-macro = { git = "https://github.com/bytecodealliance/wit-bindgen.git" }
+wasmparser = { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wat =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wast =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wasmprinter =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wasm-encoder =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wasm-smith =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wasm-mutate =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wit-parser =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wit-component =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wasm-wave =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
+wasm-metadata =  { git = "https://github.com/jsturtevant/wasm-tools.git", branch="unstable-refrence-stable" }
