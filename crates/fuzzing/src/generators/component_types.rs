@@ -127,7 +127,6 @@ where
 
     let mut config = Config::new();
     config.wasm_component_model(true);
-    config.wasm_component_model_multiple_returns(true);
     config.debug_adapter_modules(input.arbitrary()?);
     let engine = Engine::new(&config).unwrap();
     let wat = declarations.make_component();

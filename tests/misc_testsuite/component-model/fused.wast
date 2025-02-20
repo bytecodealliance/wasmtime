@@ -1,5 +1,4 @@
 ;;! multi_memory = true
-;;! component_model_more_flags = true
 
 ;; smoke test with no arguments and no results
 (component
@@ -1225,34 +1224,6 @@
     "h1" "h2" "h3" "h4" "h5" "h6" "h7" "h8"
     "i1" "i2" "i3" "i4" "i5" "i6" "i7" "i8"
   ))
-  (type $f33' (flags
-    "f1" "f2" "f3" "f4" "f5" "f6" "f7" "f8"
-    "g1" "g2" "g3" "g4" "g5" "g6" "g7" "g8"
-    "h1" "h2" "h3" "h4" "h5" "h6" "h7" "h8"
-    "i1" "i2" "i3" "i4" "i5" "i6" "i7" "i8"
-    "i9"
-  ))
-  (type $f64' (flags
-    "f1" "f2" "f3" "f4" "f5" "f6" "f7" "f8"
-    "g1" "g2" "g3" "g4" "g5" "g6" "g7" "g8"
-    "h1" "h2" "h3" "h4" "h5" "h6" "h7" "h8"
-    "i1" "i2" "i3" "i4" "i5" "i6" "i7" "i8"
-    "j1" "j2" "j3" "j4" "j5" "j6" "j7" "j8"
-    "k1" "k2" "k3" "k4" "k5" "k6" "k7" "k8"
-    "l1" "l2" "l3" "l4" "l5" "l6" "l7" "l8"
-    "m1" "m2" "m3" "m4" "m5" "m6" "m7" "m8"
-  ))
-  (type $f65' (flags
-    "f1" "f2" "f3" "f4" "f5" "f6" "f7" "f8"
-    "g1" "g2" "g3" "g4" "g5" "g6" "g7" "g8"
-    "h1" "h2" "h3" "h4" "h5" "h6" "h7" "h8"
-    "i1" "i2" "i3" "i4" "i5" "i6" "i7" "i8"
-    "j1" "j2" "j3" "j4" "j5" "j6" "j7" "j8"
-    "k1" "k2" "k3" "k4" "k5" "k6" "k7" "k8"
-    "l1" "l2" "l3" "l4" "l5" "l6" "l7" "l8"
-    "m1" "m2" "m3" "m4" "m5" "m6" "m7" "m8"
-    "m9"
-  ))
 
   (component $c1
     (export $f1 "t-f1" (type $f1'))
@@ -1261,9 +1232,6 @@
     (export $f16 "t-f16" (type $f16'))
     (export $f17 "t-f17" (type $f17'))
     (export $f32 "t-f32" (type $f32'))
-    (export $f33 "t-f33" (type $f33'))
-    (export $f64 "t-f64" (type $f64'))
-    (export $f65 "t-f65" (type $f65'))
     (core module $m
       (func (export "f1") (param i32)
         (if (i32.ne (local.get 0) (i32.const 0x1)) (then (unreachable)))
@@ -1283,19 +1251,6 @@
       (func (export "f32") (param i32)
         (if (i32.ne (local.get 0) (i32.const 0x11111111)) (then (unreachable)))
       )
-      (func (export "f33") (param i32 i32)
-        (if (i32.ne (local.get 0) (i32.const 0x11111111)) (then (unreachable)))
-        (if (i32.ne (local.get 1) (i32.const 0x1)) (then (unreachable)))
-      )
-      (func (export "f64") (param i32 i32)
-        (if (i32.ne (local.get 0) (i32.const 0x11111111)) (then (unreachable)))
-        (if (i32.ne (local.get 1) (i32.const 0x11111111)) (then (unreachable)))
-      )
-      (func (export "f65") (param i32 i32 i32)
-        (if (i32.ne (local.get 0) (i32.const 0x11111111)) (then (unreachable)))
-        (if (i32.ne (local.get 1) (i32.const 0x11111111)) (then (unreachable)))
-        (if (i32.ne (local.get 2) (i32.const 0x1)) (then (unreachable)))
-      )
     )
     (core instance $m (instantiate $m))
     (func (export "f1") (param "a" $f1) (canon lift (core func $m "f1")))
@@ -1304,9 +1259,6 @@
     (func (export "f16") (param "a" $f16) (canon lift (core func $m "f16")))
     (func (export "f17") (param "a" $f17) (canon lift (core func $m "f17")))
     (func (export "f32") (param "a" $f32) (canon lift (core func $m "f32")))
-    (func (export "f33") (param "a" $f33) (canon lift (core func $m "f33")))
-    (func (export "f64") (param "a" $f64) (canon lift (core func $m "f64")))
-    (func (export "f65") (param "a" $f65) (canon lift (core func $m "f65")))
   )
   (instance $c1 (instantiate $c1))
 
@@ -1318,18 +1270,12 @@
       (export $f16 "t-f16" (type (eq $f16')))
       (export $f17 "t-f17" (type (eq $f17')))
       (export $f32 "t-f32" (type (eq $f32')))
-      (export $f33 "t-f33" (type (eq $f33')))
-      (export $f64 "t-f64" (type (eq $f64')))
-      (export $f65 "t-f65" (type (eq $f65')))
       (export "f1" (func (param "a" $f1)))
       (export "f8" (func (param "a" $f8)))
       (export "f9" (func (param "a" $f9)))
       (export "f16" (func (param "a" $f16)))
       (export "f17" (func (param "a" $f17)))
       (export "f32" (func (param "a" $f32)))
-      (export "f33" (func (param "a" $f33)))
-      (export "f64" (func (param "a" $f64)))
-      (export "f65" (func (param "a" $f65)))
     ))
     (core func $f1 (canon lower (func $i "f1")))
     (core func $f8 (canon lower (func $i "f8")))
@@ -1337,9 +1283,6 @@
     (core func $f16 (canon lower (func $i "f16")))
     (core func $f17 (canon lower (func $i "f17")))
     (core func $f32 (canon lower (func $i "f32")))
-    (core func $f33 (canon lower (func $i "f33")))
-    (core func $f64 (canon lower (func $i "f64")))
-    (core func $f65 (canon lower (func $i "f65")))
 
     (core module $m
       (import "" "f1" (func $f1 (param i32)))
@@ -1348,9 +1291,6 @@
       (import "" "f16" (func $f16 (param i32)))
       (import "" "f17" (func $f17 (param i32)))
       (import "" "f32" (func $f32 (param i32)))
-      (import "" "f33" (func $f33 (param i32 i32)))
-      (import "" "f64" (func $f64 (param i32 i32)))
-      (import "" "f65" (func $f65 (param i32 i32 i32)))
 
       (func $start
         (call $f1 (i32.const 0xffffff01))
@@ -1359,9 +1299,6 @@
         (call $f16 (i32.const 0xffff1111))
         (call $f17 (i32.const 0xffff1111))
         (call $f32 (i32.const 0x11111111))
-        (call $f33 (i32.const 0x11111111) (i32.const 0xffffffff))
-        (call $f64 (i32.const 0x11111111) (i32.const 0x11111111))
-        (call $f65 (i32.const 0x11111111) (i32.const 0x11111111) (i32.const 0xffffffff))
       )
 
       (start $start)
@@ -1374,9 +1311,6 @@
         (export "f16" (func $f16))
         (export "f17" (func $f17))
         (export "f32" (func $f32))
-        (export "f33" (func $f33))
-        (export "f64" (func $f64))
-        (export "f65" (func $f65))
       ))
     ))
   )

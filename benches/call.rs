@@ -567,7 +567,7 @@ mod component {
                         (func (export "nop")
                             (canon lift (core func $i "nop"))
                         )
-                        (func (export "nop-params-and-results") (param "x" u32) (param "y" u64) (result "z" float32)
+                        (func (export "nop-params-and-results") (param "x" u32) (param "y" u64) (result float32)
                             (canon lift (core func $i "nop-params-and-results"))
                         )
                     )

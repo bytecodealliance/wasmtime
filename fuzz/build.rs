@@ -82,7 +82,7 @@ mod component {
         for index in 0..TEST_CASE_COUNT {
             let (case, rust_params, rust_results) = generate(&mut rng, |u| {
                 let mut params = Vec::new();
-                let mut results = Vec::new();
+                let mut result = None;
                 let mut rust_params = TokenStream::new();
                 let mut rust_results = TokenStream::new();
                 for _ in 0..u.int_in_range(0..=MAX_ARITY)? {
@@ -91,16 +91,16 @@ mod component {
                     rust_params.extend(name.clone());
                     rust_params.extend(quote!(,));
                 }
-                for _ in 0..u.int_in_range(0..=MAX_ARITY)? {
+                if u.arbitrary()? {
                     let (name, ty) = u.choose(&types)?;
-                    results.push(ty);
+                    result = Some(ty);
                     rust_results.extend(name.clone());
                     rust_results.extend(quote!(,));
                 }
 
                 let case = TestCase {
                     params,
-                    results,
+                    result,
                     encoding1: u.arbitrary()?,
                     encoding2: u.arbitrary()?,
                 };

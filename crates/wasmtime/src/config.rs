@@ -1087,27 +1087,6 @@ impl Config {
         self
     }
 
-    /// Configures whether components support more than 32 flags in each `flags`
-    /// type.
-    ///
-    /// This is part of the transition plan in
-    /// <https://github.com/WebAssembly/component-model/issues/370>.
-    #[cfg(feature = "component-model")]
-    pub fn wasm_component_model_more_flags(&mut self, enable: bool) -> &mut Self {
-        self.wasm_feature(WasmFeatures::COMPONENT_MODEL_MORE_FLAGS, enable);
-        self
-    }
-
-    /// Configures whether components support more than one return value for functions.
-    ///
-    /// This is part of the transition plan in
-    /// <https://github.com/WebAssembly/component-model/pull/368>.
-    #[cfg(feature = "component-model")]
-    pub fn wasm_component_model_multiple_returns(&mut self, enable: bool) -> &mut Self {
-        self.wasm_feature(WasmFeatures::COMPONENT_MODEL_MULTIPLE_RETURNS, enable);
-        self
-    }
-
     /// Configures whether components support the async ABI [proposal] for
     /// lifting and lowering functions, as well as `stream`, `future`, and
     /// `error-context` types.

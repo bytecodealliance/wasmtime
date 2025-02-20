@@ -303,16 +303,16 @@ wit-bindgen = { version = "0.39.0", default-features = false }
 wit-bindgen-rust-macro = { version = "0.39.0", default-features = false }
 
 # wasm-tools family:
-wasmparser = { version = "0.225.0", default-features = false, features = ['simd'] }
-wat = "1.225.0"
-wast = "225.0.0"
-wasmprinter = "0.225.0"
-wasm-encoder = "0.225.0"
-wasm-smith = "0.225.0"
-wasm-mutate = "0.225.0"
-wit-parser = "0.225.0"
-wit-component = "0.225.0"
-wasm-wave = "0.225.0"
+wasmparser = { version = "0.226.0", default-features = false, features = ['simd'] }
+wat = "1.226.0"
+wast = "226.0.0"
+wasmprinter = "0.226.0"
+wasm-encoder = "0.226.0"
+wasm-smith = "0.226.0"
+wasm-mutate = "0.226.0"
+wit-parser = "0.226.0"
+wit-component = "0.226.0"
+wasm-wave = "0.226.0"
 
 # Non-Bytecode Alliance maintained dependencies:
 # --------------------------

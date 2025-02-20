@@ -125,9 +125,6 @@ interface variants {
 
   is-clone-arg: func(a: is-clone);
   is-clone-return: func() -> is-clone;
-
-  return-named-option: func() -> (a: option<u8>);
-  return-named-result: func() -> (a: result<u8, my-errno>);
 }
 
 world my-world {
