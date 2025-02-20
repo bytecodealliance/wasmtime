@@ -58,8 +58,7 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
     assert_errno!(
         wasi::path_rename(dir_fd, "source", dir_fd, "target")
             .expect_err("renaming directory to a nonempty directory"),
-        windows => wasi::ERRNO_ACCES,
-        unix => wasi::ERRNO_NOTEMPTY
+        wasi::ERRNO_NOTEMPTY
     );
 
     // Try renaming dir to a file
@@ -123,8 +122,7 @@ unsafe fn test_path_rename(dir_fd: wasi::Fd) {
     assert_errno!(
         wasi::path_rename(dir_fd, "source", dir_fd, "target")
             .expect_err("renaming a file to existing directory should fail"),
-        windows => wasi::ERRNO_ACCES,
-        unix => wasi::ERRNO_ISDIR
+        wasi::ERRNO_ISDIR
     );
 
     wasi::path_remove_directory(dir_fd, "target").expect("removing a directory");
