@@ -106,7 +106,14 @@ impl dsl::Inst {
         if let Some(op) = self.format.uses_memory() {
             f.empty_line();
             f.comment("Emit trap.");
-            fmtln!(f, "if let GprMem::Mem({op}) = &self.{op} {{");
+            match op {
+                crate::dsl::Location::rm128 => {
+                    fmtln!(f, "if let XmmMem::Mem({op}) = &self.{op} {{");
+                }
+                _ => {
+                    fmtln!(f, "if let GprMem::Mem({op}) = &self.{op} {{");
+                }
+            }
             f.indent(|f| {
                 fmtln!(f, "if let Some(trap_code) = {op}.trap_code() {{");
                 f.indent(|f| {
@@ -161,6 +168,22 @@ impl dsl::Inst {
                             fmtln!(
                                 f,
                                 "GprMem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read(r)),"
+                            );
+                        });
+                        fmtln!(f, "}}");
+                    }
+                    XmmReg(xmm_reg) => {
+                        let call = o.mutability.generate_xmm_regalloc_call();
+                        fmtln!(f, "visitor.{call}(self.{xmm_reg}.as_mut());");
+                    }
+                    XmmRegMem(xmm_rm) => {
+                        let call = o.mutability.generate_xmm_regalloc_call();
+                        fmtln!(f, "match &mut self.{xmm_rm} {{");
+                        f.indent(|f| {
+                            fmtln!(f, "XmmMem::Xmm(r) => visitor.{call}(r),");
+                            fmtln!(
+                                f,
+                                "XmmMem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read_xmm(r)),"
                             );
                         });
                         fmtln!(f, "}}");
@@ -241,11 +264,14 @@ impl dsl::Inst {
             Imm(_) => unreachable!(),
             Reg(_) | FixedReg(_) => format!("cranelift_assembler_x64::Gpr<{read_write_ty}>"),
             RegMem(_) => format!("cranelift_assembler_x64::GprMem<{read_write_ty}, {read_ty}>"),
+            XmmReg(_) => format!("cranelift_assembler_x64::Xmm<{read_write_ty}>"),
+            XmmRegMem(_) => format!("cranelift_assembler_x64::XmmMem<{read_write_ty}, {read_ty}>"),
         };
         let ret_val = match self.format.operands.first().unwrap().location.kind() {
             Imm(_) => unreachable!(),
             FixedReg(_) => "todo!()".to_string(),
             Reg(loc) | RegMem(loc) => format!("{loc}.clone()"),
+            XmmReg(loc) | XmmRegMem(loc) => format!("{loc}.clone()"),
         };
         let params = comma_join(
             operands
@@ -291,6 +317,8 @@ impl dsl::Inst {
                 }
                 Reg(_) => Some(format!("Assembler{}Gpr", o.mutability.generate_type())),
                 RegMem(_) => Some(format!("Assembler{}GprMem", o.mutability.generate_type())),
+                XmmReg(_) => Some(format!("Assembler{}Xmm", o.mutability.generate_type())),
+                XmmRegMem(_) => Some(format!("Assembler{}XmmMem", o.mutability.generate_type())),
             })
             .collect::<Vec<_>>()
             .join(" ");
@@ -298,6 +326,8 @@ impl dsl::Inst {
             Imm(_) => unreachable!(),
             FixedReg(_) | Reg(_) => "AssemblerReadWriteGpr",
             RegMem(_) => "AssemblerReadWriteGprMem",
+            XmmReg(_) => "AssemblerReadWriteXmm",
+            XmmRegMem(_) => "AssemblerReadWriteXmmMem",
         };
 
         f.line(format!("(decl {rule_name} ({params}) {ret})"), None);

@@ -197,7 +197,8 @@ impl Rex {
                 operands
                     .iter()
                     .all(|&op| matches!(op.location.kind(), OperandKind::Imm(_) | OperandKind::FixedReg(_))
-                        || op.location.bits() == 16),
+                        || op.location.bits() == 16)
+                        || operands.iter().any(|&op| matches!(op.location.kind(), OperandKind::XmmReg(_))),
                 "when we encode the 66 prefix, we expect all operands to be 16-bit wide"
             );
         }
@@ -366,7 +367,7 @@ impl From<[u8; 4]> for Opcodes {
 pub enum LegacyPrefix {
     /// No prefix bytes.
     NoPrefix,
-    /// An operand size override typically denoting "16-bit operation". But the
+    /// An operand size override typically denoting "16-bit operation" or "SSE instructions". But the
     /// reference manual is more nuanced:
     ///
     /// > The operand-size override prefix allows a program to switch between

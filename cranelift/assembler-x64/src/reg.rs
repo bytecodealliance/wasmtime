@@ -53,6 +53,46 @@ impl<R: AsReg> AsMut<R> for Gpr<R> {
     }
 }
 
+/// An x64 SSE register (e.g., `%xmm0`).
+#[derive(Clone, Copy, Debug)]
+pub struct Xmm<R: AsReg = u8>(pub(crate) R);
+
+impl<R: AsReg> Xmm<R> {
+    /// Create a new [`Xmm`] register.
+    pub fn new(reg: R) -> Self {
+        Self(reg)
+    }
+
+    /// Return the register's hardware encoding; the underlying type `R` _must_
+    /// be a real register at this point.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the register is not a valid Xmm register.
+    pub fn enc(&self) -> u8 {
+        let enc = self.0.enc();
+        assert!(enc < 16, "invalid register: {enc}");
+        enc
+    }
+
+    /// Return the register name.
+    pub fn to_string(&self) -> &str {
+        enc::to_string(self.enc(), Size::DoubleQuadword)
+    }
+}
+
+impl<R: AsReg> AsRef<R> for Xmm<R> {
+    fn as_ref(&self) -> &R {
+        &self.0
+    }
+}
+
+impl<R: AsReg> AsMut<R> for Xmm<R> {
+    fn as_mut(&mut self) -> &mut R {
+        &mut self.0
+    }
+}
+
 /// A single x64 register encoding can access a different number of bits.
 #[derive(Copy, Clone, Debug)]
 pub enum Size {
@@ -64,6 +104,8 @@ pub enum Size {
     Doubleword,
     /// A 64-bit access.
     Quadword,
+    /// A 128-bit access.
+    DoubleQuadword,
 }
 
 /// Like [`Gpr`], but with `%rsp` disallowed.
@@ -98,6 +140,7 @@ impl<R: AsReg> AsMut<R> for NonRspGpr<R> {
     }
 }
 
+
 /// Encode x64 registers.
 pub mod enc {
     use super::Size;
@@ -119,111 +162,167 @@ pub mod enc {
     pub const R14: u8 = 14;
     pub const R15: u8 = 15;
 
+    pub const XMM0: u8 = 0;
+    pub const XMM1: u8 = 1;
+    pub const XMM2: u8 = 2;
+    pub const XMM3: u8 = 3;
+    pub const XMM4: u8 = 4;
+    pub const XMM5: u8 = 5;
+    pub const XMM6: u8 = 6;
+    pub const XMM7: u8 = 7;
+    pub const XMM8: u8 = 8;
+    pub const XMM9: u8 = 9;
+    pub const XMM10: u8 = 10;
+    pub const XMM11: u8 = 11;
+    pub const XMM12: u8 = 12;
+    pub const XMM13: u8 = 13;
+    pub const XMM14: u8 = 14;
+    pub const XMM15: u8 = 15;
+
     /// Return the name of a GPR encoding (`enc`) at the given `size`.
     ///
     /// # Panics
     ///
     /// This function will panic if the encoding is not a valid x64 register.
     pub fn to_string(enc: u8, size: Size) -> &'static str {
-        use Size::{Byte, Doubleword, Quadword, Word};
-        match enc {
-            RAX => match size {
-                Byte => "%al",
-                Word => "%ax",
-                Doubleword => "%eax",
-                Quadword => "%rax",
+        use Size::{Byte, Doubleword, Quadword, Word, DoubleQuadword};
+        match size {
+            DoubleQuadword => match enc {
+                XMM0 => "%xmm0",
+                XMM1 => "%xmm1",
+                XMM2 => "%xmm2",
+                XMM3 => "%xmm3",
+                XMM4 => "%xmm4",
+                XMM5 => "%xmm5",
+                XMM6 => "%xmm6",
+                XMM7 => "%xmm7",
+                XMM8 => "%xmm8",
+                XMM9 => "%xmm9",
+                XMM10 => "%xmm10",
+                XMM11 => "%xmm11",
+                XMM12 => "%xmm12",
+                XMM13 => "%xmm13",
+                XMM14 => "%xmm14",
+                XMM15 => "%xmm15",
+                _ => panic!("%invalid{enc}"),
+            }, 
+            _ =>
+            match enc {
+                RAX => match size {
+                    Byte => "%al",
+                    Word => "%ax",
+                    Doubleword => "%eax",
+                    Quadword => "%rax",
+                    DoubleQuadword => panic!("invalid size"),
+                },
+                RBX => match size {
+                    Byte => "%bl",
+                    Word => "%bx",
+                    Doubleword => "%ebx",
+                    Quadword => "%rbx",
+                    DoubleQuadword => panic!("invalid size"),
+                },
+                RCX => match size {
+                    Byte => "%cl",
+                    Word => "%cx",
+                    Doubleword => "%ecx",
+                    Quadword => "%rcx",
+                    DoubleQuadword => panic!("invalid size"),
+                },
+                RDX => match size {
+                    Byte => "%dl",
+                    Word => "%dx",
+                    Doubleword => "%edx",
+                    Quadword => "%rdx",
+                    DoubleQuadword => panic!("invalid size"),
+                },
+                RSI => match size {
+                    Byte => "%sil",
+                    Word => "%si",
+                    Doubleword => "%esi",
+                    Quadword => "%rsi",
+                    DoubleQuadword => panic!("invalid size"),
+                },
+                RDI => match size {
+                    Byte => "%dil",
+                    Word => "%di",
+                    Doubleword => "%edi",
+                    Quadword => "%rdi",
+                    DoubleQuadword => panic!("invalid size"),
+                },
+                RBP => match size {
+                    Byte => "%bpl",
+                    Word => "%bp",
+                    Doubleword => "%ebp",
+                    Quadword => "%rbp",
+                    DoubleQuadword => panic!("invalid size"),
+                },
+                RSP => match size {
+                    Byte => "%spl",
+                    Word => "%sp",
+                    Doubleword => "%esp",
+                    Quadword => "%rsp",
+                    DoubleQuadword => panic!("invalid size"),
+                },
+                R8 => match size {
+                    Byte => "%r8b",
+                    Word => "%r8w",
+                    Doubleword => "%r8d",
+                    Quadword => "%r8",
+                    DoubleQuadword => panic!("invalid size"),
+                },
+                R9 => match size {
+                    Byte => "%r9b",
+                    Word => "%r9w",
+                    Doubleword => "%r9d",
+                    Quadword => "%r9",
+                    DoubleQuadword => panic!("invalid size"),
+                },
+                R10 => match size {
+                    Byte => "%r10b",
+                    Word => "%r10w",
+                    Doubleword => "%r10d",
+                    Quadword => "%r10",
+                    DoubleQuadword => panic!("invalid size"),
+                },
+                R11 => match size {
+                    Byte => "%r11b",
+                    Word => "%r11w",
+                    Doubleword => "%r11d",
+                    Quadword => "%r11",
+                    DoubleQuadword => panic!("invalid size"),
+                },
+                R12 => match size {
+                    Byte => "%r12b",
+                    Word => "%r12w",
+                    Doubleword => "%r12d",
+                    Quadword => "%r12",
+                    DoubleQuadword => panic!("invalid size"),
+                },
+                R13 => match size {
+                    Byte => "%r13b",
+                    Word => "%r13w",
+                    Doubleword => "%r13d",
+                    Quadword => "%r13",
+                    DoubleQuadword => panic!("invalid size"),
+                },
+                R14 => match size {
+                    Byte => "%r14b",
+                    Word => "%r14w",
+                    Doubleword => "%r14d",
+                    Quadword => "%r14",
+                    DoubleQuadword => panic!("invalid size"),
+                },
+                R15 => match size {
+                    Byte => "%r15b",
+                    Word => "%r15w",
+                    Doubleword => "%r15d",
+                    Quadword => "%r15",
+                    DoubleQuadword => panic!("invalid size"),
+                },
+                _ => panic!("%invalid{enc}"),
             },
-            RBX => match size {
-                Byte => "%bl",
-                Word => "%bx",
-                Doubleword => "%ebx",
-                Quadword => "%rbx",
-            },
-            RCX => match size {
-                Byte => "%cl",
-                Word => "%cx",
-                Doubleword => "%ecx",
-                Quadword => "%rcx",
-            },
-            RDX => match size {
-                Byte => "%dl",
-                Word => "%dx",
-                Doubleword => "%edx",
-                Quadword => "%rdx",
-            },
-            RSI => match size {
-                Byte => "%sil",
-                Word => "%si",
-                Doubleword => "%esi",
-                Quadword => "%rsi",
-            },
-            RDI => match size {
-                Byte => "%dil",
-                Word => "%di",
-                Doubleword => "%edi",
-                Quadword => "%rdi",
-            },
-            RBP => match size {
-                Byte => "%bpl",
-                Word => "%bp",
-                Doubleword => "%ebp",
-                Quadword => "%rbp",
-            },
-            RSP => match size {
-                Byte => "%spl",
-                Word => "%sp",
-                Doubleword => "%esp",
-                Quadword => "%rsp",
-            },
-            R8 => match size {
-                Byte => "%r8b",
-                Word => "%r8w",
-                Doubleword => "%r8d",
-                Quadword => "%r8",
-            },
-            R9 => match size {
-                Byte => "%r9b",
-                Word => "%r9w",
-                Doubleword => "%r9d",
-                Quadword => "%r9",
-            },
-            R10 => match size {
-                Byte => "%r10b",
-                Word => "%r10w",
-                Doubleword => "%r10d",
-                Quadword => "%r10",
-            },
-            R11 => match size {
-                Byte => "%r11b",
-                Word => "%r11w",
-                Doubleword => "%r11d",
-                Quadword => "%r11",
-            },
-            R12 => match size {
-                Byte => "%r12b",
-                Word => "%r12w",
-                Doubleword => "%r12d",
-                Quadword => "%r12",
-            },
-            R13 => match size {
-                Byte => "%r13b",
-                Word => "%r13w",
-                Doubleword => "%r13d",
-                Quadword => "%r13",
-            },
-            R14 => match size {
-                Byte => "%r14b",
-                Word => "%r14w",
-                Doubleword => "%r14d",
-                Quadword => "%r14",
-            },
-            R15 => match size {
-                Byte => "%r15b",
-                Word => "%r15w",
-                Doubleword => "%r15d",
-                Quadword => "%r15",
-            },
-            _ => panic!("%invalid{enc}"),
         }
     }
 }
+

@@ -70,7 +70,7 @@ impl dsl::Format {
     }
 
     fn generate_rex_prefix(&self, f: &mut Formatter, rex: &dsl::Rex) {
-        use dsl::OperandKind::{FixedReg, Imm, Reg, RegMem};
+        use dsl::OperandKind::{FixedReg, Imm, Reg, RegMem, XmmReg, XmmRegMem};
         f.empty_line();
         f.comment("Emit REX prefix.");
 
@@ -124,13 +124,31 @@ impl dsl::Format {
                 });
                 fmtln!(f, "}}");
             }
+            [XmmRegMem(dst), XmmReg(src)] => {
+                fmtln!(f, "let {src} = self.{src}.enc();");
+                fmtln!(f, "match &self.{dst} {{");
+                f.indent(|f| {
+                    fmtln!(f, "XmmMem::Xmm({dst}) => rex.emit_two_op(buf, {src}, {dst}.enc()),");
+                    fmtln!(f, "XmmMem::Mem({dst}) => {dst}.emit_rex_prefix(rex, {src}, buf),");
+                });
+                fmtln!(f, "}}");
+            }          
+            [XmmReg(dst), XmmRegMem(src)] => {
+                fmtln!(f, "let {dst} = self.{dst}.enc();");
+                fmtln!(f, "match &self.{src} {{");
+                f.indent(|f| {
+                    fmtln!(f, "XmmMem::Xmm({src}) => rex.emit_two_op(buf, {dst}, {src}.enc()),");
+                    fmtln!(f, "XmmMem::Mem({src}) => {src}.emit_rex_prefix(rex, {dst}, buf),");
+                });
+                fmtln!(f, "}}");
+            }
 
             unknown => unimplemented!("unknown pattern: {unknown:?}"),
         }
     }
 
     fn generate_modrm_byte(&self, f: &mut Formatter, rex: &dsl::Rex) {
-        use dsl::OperandKind::{FixedReg, Imm, Reg, RegMem};
+        use dsl::OperandKind::{FixedReg, Imm, Reg, RegMem, XmmReg, XmmRegMem};
 
         if let [FixedReg(_), Imm(_)] = self.operands_by_kind().as_slice() {
             // No need to emit a comment.
@@ -172,6 +190,30 @@ impl dsl::Format {
                 f.indent(|f| {
                     fmtln!(f, "GprMem::Gpr({dst}) => emit_modrm(buf, {src}, {dst}.enc()),");
                     fmtln!(f, "GprMem::Mem({dst}) => emit_modrm_sib_disp(buf, off, {src}, {dst}, 0, None),");
+                });
+                fmtln!(f, "}}");
+            }
+            [XmmRegMem(dst), XmmReg(src)] => {
+                fmtln!(f, "let {src} = self.{src}.enc();");
+                fmtln!(f, "match &self.{dst} {{");
+                f.indent(|f| {
+                    fmtln!(f, "XmmMem::Xmm({dst}) => emit_modrm(buf, {src}, {dst}.enc()),");
+                    fmtln!(
+                        f,
+                        "XmmMem::Mem({dst}) => emit_modrm_sib_disp(buf, off, {src}, {dst}, 0, None),"
+                    );
+                });
+                fmtln!(f, "}}");
+            }
+            [XmmReg(dst), XmmRegMem(src)] => {
+                fmtln!(f, "let {dst} = self.{dst}.enc();");
+                fmtln!(f, "match &self.{src} {{");
+                f.indent(|f| {
+                    fmtln!(f, "XmmMem::Xmm({src}) => emit_modrm(buf, {dst}, {src}.enc()),");
+                    fmtln!(
+                        f,
+                        "XmmMem::Mem({src}) => emit_modrm_sib_disp(buf, off, {dst}, {src}, 0, None),"
+                    );
                 });
                 fmtln!(f, "}}");
             }
