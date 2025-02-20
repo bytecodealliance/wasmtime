@@ -3,6 +3,7 @@ use crate::{
     store::{StoreData, StoreOpaque, Stored},
     AsContext,
 };
+use wasmtime_environ::VMSharedTypeIndex;
 
 /// A WebAssembly `tag`.
 #[derive(Copy, Clone, Debug)]
@@ -11,18 +12,13 @@ pub struct Tag(pub(super) Stored<crate::runtime::vm::ExportTag>);
 
 impl Tag {
     pub(crate) unsafe fn from_wasmtime_tag(
-        mut wasmtime_export: crate::runtime::vm::ExportTag,
+        wasmtime_export: crate::runtime::vm::ExportTag,
         store: &mut StoreOpaque,
     ) -> Self {
-        use wasmtime_environ::TypeTrace;
-        wasmtime_export
-            .tag
-            .canonicalize_for_runtime_usage(&mut |module_index| {
-                crate::runtime::vm::Instance::from_vmctx(wasmtime_export.vmctx, |instance| {
-                    instance.engine_type_index(module_index)
-                })
-            });
-
+        debug_assert!(
+            wasmtime_export.tag.signature.unwrap_engine_type_index()
+                != VMSharedTypeIndex::default()
+        );
         Tag(store.store_data_mut().insert(wasmtime_export))
     }
 

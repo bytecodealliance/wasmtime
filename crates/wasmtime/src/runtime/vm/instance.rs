@@ -1489,13 +1489,9 @@ impl Instance {
             let defined_index = DefinedTagIndex::new(i);
             let tag_index = module.tag_index(defined_index);
             let tag = module.tags[tag_index];
-            ptr.write(VMTagDefinition::new(match tag.signature {
-                wasmtime_environ::EngineOrModuleTypeIndex::Module(interned_index) => {
-                    self.engine_type_index(interned_index)
-                }
-                wasmtime_environ::EngineOrModuleTypeIndex::Engine(engine_index) => engine_index,
-                wasmtime_environ::EngineOrModuleTypeIndex::RecGroup(_) => unreachable!(),
-            }));
+            ptr.write(VMTagDefinition::new(
+                tag.signature.unwrap_engine_type_index(),
+            ));
             ptr = ptr.add(1);
         }
     }
