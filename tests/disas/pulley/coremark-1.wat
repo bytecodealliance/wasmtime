@@ -72,8 +72,8 @@
 ;; wasm[0]::function[0]:
 ;;       push_frame_save 16, x16
 ;;       xzero x6
-;;       xload64le_o32 x11, x0, 80
-;;       xload64le_o32 x13, x0, 88
+;;       xload64le_o32 x11, x0, 88
+;;       xload64le_o32 x13, x0, 96
 ;;       xload16le_u32_g32 x12, x11, x13, x2, 0
 ;;       xload16le_u32_g32 x13, x11, x13, x3, 0
 ;;       xsub32_u8 x4, x4, 1

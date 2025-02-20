@@ -16,6 +16,7 @@
 //      gc_heap_bound: *mut u8,
 //      gc_heap_data: *mut T, // Collector-specific pointer
 //      type_ids: *const VMSharedTypeIndex,
+//      stack_chain: *const StackChainCell,
 //
 //      // Variable-width fields come after the fixed-width fields above. Place
 //      // memory-related items first as they're some of the most frequently
@@ -29,8 +30,10 @@
 //      imported_functions: [VMFunctionImport; module.num_imported_functions],
 //      imported_tables: [VMTableImport; module.num_imported_tables],
 //      imported_globals: [VMGlobalImport; module.num_imported_globals],
+//      imported_tags: [VMTagImport; module.num_imported_tags],
 //      tables: [VMTableDefinition; module.num_defined_tables],
 //      globals: [VMGlobalDefinition; module.num_defined_globals],
+//      tags: [VMTagDefinition; module.num_defined_tags],
 //      func_refs: [VMFuncRef; module.num_escaped_funcs],
 // }
 
@@ -295,12 +298,22 @@ pub trait PtrSize {
         self.vmctx_gc_heap_data() + self.size()
     }
 
+    /// The offset of the `stack_chain` field.
+    /// This field stores a pointer into the `StoreOpauqe`, to a value of type
+    /// `crate::stack_switching::StackChain`.
+    // FIXME(#10248) This field is not actually in use, yet. It is only here for
+    // future use in a subsequent stack-switching PR.
+    #[inline]
+    fn vmctx_stack_chain(&self) -> u8 {
+        self.vmctx_type_ids_array() + self.size()
+    }
+
     /// The end of statically known offsets in `VMContext`.
     ///
     /// Data after this is dynamically sized.
     #[inline]
     fn vmctx_dynamic_data_start(&self) -> u8 {
-        self.vmctx_type_ids_array() + self.size()
+        self.vmctx_stack_chain() + self.size()
     }
 }
 
