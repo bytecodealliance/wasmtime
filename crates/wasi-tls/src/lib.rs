@@ -154,7 +154,7 @@ pub fn add_to_linker<T: Send>(
 ///  Represents the ClientHandshake which will be used to configure the handshake
 pub struct ClientHandShake {
     server_name: String,
-    streams: TcpStreams,
+    streams: WasiStreams,
 }
 
 impl<'a> generated::types::HostClientHandshake for WasiTlsCtx<'a> {
@@ -168,7 +168,7 @@ impl<'a> generated::types::HostClientHandshake for WasiTlsCtx<'a> {
         let output = self.table.delete(output)?;
         Ok(self.table.push(ClientHandShake {
             server_name,
-            streams: TcpStreams {
+            streams: WasiStreams {
                 input: StreamState::Ready(input),
                 output: StreamState::Ready(output),
             },
@@ -207,7 +207,7 @@ impl<'a> generated::types::HostClientHandshake for WasiTlsCtx<'a> {
 }
 
 /// Future TLS connection after the handshake is completed.
-pub struct FutureClientStreams(StreamState<Result<TlsStream<TcpStreams>>>);
+pub struct FutureClientStreams(StreamState<Result<TlsStream<WasiStreams>>>);
 
 #[async_trait]
 impl Pollable for FutureClientStreams {
@@ -324,12 +324,12 @@ enum StreamState<T> {
     Closed,
 }
 
-struct TcpStreams {
+struct WasiStreams {
     input: StreamState<BoxInputStream>,
     output: StreamState<BoxOutputStream>,
 }
 
-impl AsyncWrite for TcpStreams {
+impl AsyncWrite for WasiStreams {
     fn poll_write(
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -390,7 +390,7 @@ impl AsyncWrite for TcpStreams {
     }
 }
 
-impl AsyncRead for TcpStreams {
+impl AsyncRead for WasiStreams {
     fn poll_read(
         mut self: Pin<&mut Self>,
         cx: &mut std::task::Context<'_>,
@@ -443,7 +443,7 @@ impl AsyncRead for TcpStreams {
     }
 }
 
-type TlsWriteHalf = tokio::io::WriteHalf<tokio_rustls::client::TlsStream<TcpStreams>>;
+type TlsWriteHalf = tokio::io::WriteHalf<tokio_rustls::client::TlsStream<WasiStreams>>;
 
 struct TlsWriter {
     state: WriteState,
