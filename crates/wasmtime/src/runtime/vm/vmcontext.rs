@@ -500,6 +500,7 @@ impl VMGlobalDefinition {
                     global.init_gc_ref(store.gc_store_mut()?, r.as_ref())
                 }
                 WasmHeapTopType::Func => *global.as_func_ref_mut() = raw.get_funcref().cast(),
+                WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
             },
         }
         Ok(global)
@@ -533,6 +534,7 @@ impl VMGlobalDefinition {
                     }
                 }),
                 WasmHeapTopType::Func => ValRaw::funcref(self.as_func_ref().cast()),
+                WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
             },
         })
     }

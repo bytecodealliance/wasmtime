@@ -148,6 +148,7 @@ fn read_field_at_addr(
                         .call(get_interned_func_ref, &[vmctx, func_ref_id, expected_ty]);
                     builder.func.dfg.first_result(call_inst)
                 }
+                WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
             },
         },
     };
@@ -1059,6 +1060,8 @@ pub fn translate_ref_test(
 
             func_env.is_subtype(builder, actual_shared_ty, expected_shared_ty)
         }
+
+        WasmHeapType::Cont | WasmHeapType::ConcreteCont(_) | WasmHeapType::NoCont => todo!(), // FIXME: #10248 stack switching support.
     };
     builder.ins().jump(continue_block, &[result]);
 
@@ -1391,6 +1394,8 @@ impl FuncEnvironment<'_> {
             WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
                 unreachable!()
             }
+
+            WasmHeapType::Cont | WasmHeapType::ConcreteCont(_) | WasmHeapType::NoCont => todo!(), // FIXME: #10248 stack switching support.
         };
 
         match (ty.nullable, might_be_i31) {
