@@ -25,5 +25,6 @@
 ;;       cset    x0, eq
 ;;       add     x28, x28, #0x20
 ;;       mov     sp, x28
+;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

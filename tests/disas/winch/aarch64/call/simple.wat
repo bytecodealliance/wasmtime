@@ -36,6 +36,7 @@
 ;;       mov     w3, w16
 ;;       bl      #0x80
 ;;   4c: add     x28, x28, #8
+;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x10]
 ;;       mov     x16, #2
 ;;       mov     w1, w16
@@ -43,6 +44,7 @@
 ;;       ldur    w1, [x28, #4]
 ;;       add     w0, w0, w1, uxtx
 ;;       add     x28, x28, #0x18
+;;       mov     sp, x28
 ;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
@@ -63,6 +65,7 @@
 ;;       add     w1, w1, w0, uxtx
 ;;       mov     w0, w1
 ;;       add     x28, x28, #0x18
+;;       mov     sp, x28
 ;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

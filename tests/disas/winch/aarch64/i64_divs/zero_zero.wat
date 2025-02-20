@@ -22,15 +22,16 @@
 ;;       mov     x0, x16
 ;;       mov     x16, #0
 ;;       mov     x1, x16
-;;       cbz     x0, #0x58
+;;       cbz     x0, #0x5c
 ;;   34: cmn     x0, #1
 ;;       ccmp    x1, #1, #0, eq
-;;       b.vs    #0x5c
+;;       b.vs    #0x60
 ;;   40: sdiv    x1, x1, x0
 ;;       mov     x0, x1
 ;;       add     x28, x28, #0x10
 ;;       mov     sp, x28
+;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   58: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;   5c: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   60: .byte   0x1f, 0xc1, 0x00, 0x00

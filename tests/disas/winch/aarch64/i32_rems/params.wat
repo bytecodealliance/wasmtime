@@ -22,7 +22,7 @@
 ;;       stur    w3, [x28]
 ;;       ldur    w0, [x28]
 ;;       ldur    w1, [x28, #4]
-;;       cbz     w0, #0x58
+;;       cbz     w0, #0x5c
 ;;   34: sxtw    x0, w0
 ;;       sxtw    x1, w1
 ;;       sdiv    x16, x1, x0
@@ -30,6 +30,7 @@
 ;;       mov     w0, w1
 ;;       add     x28, x28, #0x18
 ;;       mov     sp, x28
+;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   58: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   5c: .byte   0x1f, 0xc1, 0x00, 0x00
