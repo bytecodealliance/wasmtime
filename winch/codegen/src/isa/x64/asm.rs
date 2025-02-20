@@ -264,6 +264,12 @@ pub(super) enum VcvtKind {
 
 /// Modes supported by `vround`.
 pub(crate) enum VroundMode {
+    /// Rounds toward nearest (ties to even).
+    TowardNearest,
+    /// Rounds toward negative infinity.
+    TowardNegativeInfinity,
+    /// Rounds toward positive infinity.
+    TowardPositiveInfinity,
     /// Rounds toward zero.
     TowardZero,
 }
@@ -2730,7 +2736,7 @@ impl Assembler {
         });
     }
 
-    // Round a vector of floats toward 0.
+    // Round a vector of floats.
     pub fn xmm_vroundp_rri(
         &mut self,
         src: Reg,
@@ -2739,6 +2745,7 @@ impl Assembler {
         size: OperandSize,
     ) {
         let op = match size {
+            OperandSize::S32 => AvxOpcode::Vroundps,
             OperandSize::S64 => AvxOpcode::Vroundpd,
             _ => unimplemented!(),
         };
@@ -2748,6 +2755,9 @@ impl Assembler {
             src: src.into(),
             dst: dst.to_reg().into(),
             imm: match mode {
+                VroundMode::TowardNearest => 0,
+                VroundMode::TowardNegativeInfinity => 1,
+                VroundMode::TowardPositiveInfinity => 2,
                 VroundMode::TowardZero => 3,
             },
         });
