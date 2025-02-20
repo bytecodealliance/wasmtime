@@ -163,6 +163,17 @@ impl Masm for MacroAssembler {
         self.asm
             .add_ir(bytes as u64, ssp, writable!(ssp), OperandSize::S64);
 
+        // We must ensure that the real stack pointer reflects the the offset
+        // tracked by `self.sp_offset`, we use such value to calculate
+        // alignment, which is crucial for calls.
+        //
+        // As an optimization: this synchronization doesn't need to happen all
+        // the time, in theory we could ensure to sync the shadow stack pointer
+        // with the stack pointer when alignment is required, like at callsites.
+        // This is the simplest approach at the time of writing, which
+        // integrates well with the rest of the aarch64 infrastructure.
+        self.move_shadow_sp_to_sp();
+
         self.decrement_sp(bytes);
         Ok(())
     }
