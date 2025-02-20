@@ -388,15 +388,12 @@ fn variant_size_and_alignment<'a>(
     }
 }
 
-fn make_import_and_export(params: &[&Type], results: &[&Type]) -> String {
+fn make_import_and_export(params: &[&Type], result: Option<&Type>) -> String {
     let params_lowered = params
         .iter()
         .flat_map(|ty| ty.lowered())
         .collect::<Box<[_]>>();
-    let results_lowered = results
-        .iter()
-        .flat_map(|ty| ty.lowered())
-        .collect::<Box<[_]>>();
+    let result_lowered = result.map(|t| t.lowered()).unwrap_or(Vec::new());
 
     let mut core_params = String::new();
     let mut gets = String::new();
@@ -417,13 +414,13 @@ fn make_import_and_export(params: &[&Type], results: &[&Type]) -> String {
         format!("(param{core_params})")
     };
 
-    if results_lowered.len() <= MAX_FLAT_RESULTS {
+    if result_lowered.len() <= MAX_FLAT_RESULTS {
         let mut core_results = String::new();
-        for result in results_lowered.iter() {
+        for result in result_lowered.iter() {
             write!(&mut core_results, " {result}").unwrap();
         }
 
-        let maybe_core_results = if results_lowered.is_empty() {
+        let maybe_core_results = if result_lowered.is_empty() {
             String::new()
         } else {
             format!("(result{core_results})")
@@ -440,9 +437,7 @@ fn make_import_and_export(params: &[&Type], results: &[&Type]) -> String {
             )"#
         )
     } else {
-        let SizeAndAlignment { size, alignment } =
-            Type::Record(VecInRange(results.iter().map(|t| (*t).clone()).collect()))
-                .size_and_alignment();
+        let SizeAndAlignment { size, alignment } = result.unwrap().size_and_alignment();
 
         format!(
             r#"
@@ -882,7 +877,7 @@ pub struct TestCase<'a> {
     /// The types of parameters to pass to the function
     pub params: Vec<&'a Type>,
     /// The result types of the function
-    pub results: Vec<&'a Type>,
+    pub result: Option<&'a Type>,
     /// String encoding to use from host-to-component.
     pub encoding1: StringEncoding,
     /// String encoding to use from component-to-host.
@@ -902,13 +897,13 @@ impl TestCase<'_> {
         }
 
         let mut results = String::new();
-        for (i, ty) in self.results.iter().enumerate() {
-            results.push_str(&format!(" (result \"r{i}\" "));
+        if let Some(ty) = self.result {
+            results.push_str(&format!(" (result "));
             builder.write_ref(ty, &mut results);
             results.push_str(")");
         }
 
-        let import_and_export = make_import_and_export(&self.params, &self.results);
+        let import_and_export = make_import_and_export(&self.params, self.result);
 
         let mut type_decls = Vec::new();
         let mut type_instantiation_args = String::new();

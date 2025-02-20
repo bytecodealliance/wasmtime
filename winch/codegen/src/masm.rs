@@ -728,6 +728,10 @@ impl V128AbsKind {
 
 /// Kinds of truncation for vectors supported by WebAssembly.
 pub(crate) enum V128TruncKind {
+    /// Truncates 4 lanes of 32-bit floats to nearest integral value.
+    F32x4,
+    /// Truncates 2 lanes of 64-bit floats to nearest integral value.
+    F64x2,
     /// Integers from signed F32x4.
     I32x4FromF32x4S,
     /// Integers from unsigned F32x4.
@@ -742,16 +746,22 @@ impl V128TruncKind {
     /// The size of the source lanes.
     pub(crate) fn src_lane_size(&self) -> OperandSize {
         match self {
-            V128TruncKind::I32x4FromF32x4S | V128TruncKind::I32x4FromF32x4U => OperandSize::S32,
-            V128TruncKind::I32x4FromF64x2SZero | V128TruncKind::I32x4FromF64x2UZero => {
-                OperandSize::S64
-            }
+            V128TruncKind::F32x4
+            | V128TruncKind::I32x4FromF32x4S
+            | V128TruncKind::I32x4FromF32x4U => OperandSize::S32,
+            V128TruncKind::F64x2
+            | V128TruncKind::I32x4FromF64x2SZero
+            | V128TruncKind::I32x4FromF64x2UZero => OperandSize::S64,
         }
     }
 
     /// The size of the destination lanes.
     pub(crate) fn dst_lane_size(&self) -> OperandSize {
-        OperandSize::S32
+        if let V128TruncKind::F64x2 = self {
+            OperandSize::S64
+        } else {
+            OperandSize::S32
+        }
     }
 }
 
@@ -2060,12 +2070,15 @@ pub(crate) trait MacroAssembler {
     /// with all bits concatenated in `dst`.
     fn v128_bitmask(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
 
-    /// Lane-wise saturating conversion from float to integer using the IEEE
+    /// Lanewise truncation operation.
+    ///
+    /// If using an integer kind of truncation, then this performs a lane-wise
+    /// saturating conversion from float to integer using the IEEE
     /// `convertToIntegerTowardZero` function. If any input lane is NaN, the
     /// resulting lane is 0. If the rounded integer value of a lane is outside
     /// the range of the destination type, the result is saturated to the
     /// nearest representable integer value.
-    fn v128_trunc_sat(
+    fn v128_trunc(
         &mut self,
         context: &mut CodeGenContext<Emission>,
         kind: V128TruncKind,
@@ -2110,4 +2123,13 @@ pub(crate) trait MacroAssembler {
     /// Lane-wise rounding average of vectors of integers in `lhs` and `rhs`
     /// and put the results in `dst`.
     fn v128_avgr(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
+
+    /// Lane-wise ceiling of vector of floats.
+    fn v128_ceil(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
+
+    /// Lane-wise flooring of vector of floats.
+    fn v128_floor(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
+
+    /// Lane-wise rounding to nearest integer for vector of floats.
+    fn v128_nearest(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
 }

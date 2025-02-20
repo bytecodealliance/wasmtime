@@ -340,8 +340,7 @@ fn enum_derive() -> Result<()> {
 
 #[test]
 fn flags() -> Result<()> {
-    let mut config = component_test_util::config();
-    config.wasm_component_model_more_flags(true);
+    let config = component_test_util::config();
     let engine = Engine::new(&config)?;
     let mut store = Store::new(&engine, ());
 
@@ -657,72 +656,6 @@ fn flags() -> Result<()> {
         Foo32Exact::F30,
         Foo32Exact::F31,
     ] {
-        let output = func.call_and_post_return(&mut store, (input,))?;
-
-        assert_eq!((input,), output);
-    }
-
-    // Happy path redux, with large flag count (more than 32)
-
-    flags_test!(Foo64, 33);
-
-    assert_eq!(Foo64::default(), (Foo64::F0 | Foo64::F31) & Foo64::F32);
-    assert_eq!(Foo64::F31, (Foo64::F0 | Foo64::F31) & Foo64::F31);
-    assert_eq!(Foo64::F0, (Foo64::F0 | Foo64::F31) & Foo64::F0);
-    assert_eq!(Foo64::F0 | Foo64::F31, Foo64::F0 ^ Foo64::F31);
-    assert_eq!(Foo64::default(), Foo64::F0 ^ Foo64::F0);
-    assert_eq!(Foo64::F0 | Foo64::F32, !((!Foo64::F0) & (!Foo64::F32)));
-
-    let component = Component::new(
-        &engine,
-        make_echo_component(
-            &format!(
-                "(flags {})",
-                (0..33)
-                    .map(|index| format!(r#""F{index}""#))
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            ),
-            8,
-        ),
-    )?;
-    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
-    let func = instance.get_typed_func::<(Foo64,), (Foo64,)>(&mut store, "echo")?;
-
-    for &input in &[Foo64::F0, Foo64::F1, Foo64::F30, Foo64::F31, Foo64::F32] {
-        let output = func.call_and_post_return(&mut store, (input,))?;
-
-        assert_eq!((input,), output);
-    }
-
-    // Happy path redux, with large flag count (more than 64)
-
-    flags_test!(Foo96, 65);
-
-    assert_eq!(Foo96::default(), (Foo96::F0 | Foo96::F63) & Foo96::F64);
-    assert_eq!(Foo96::F63, (Foo96::F0 | Foo96::F63) & Foo96::F63);
-    assert_eq!(Foo96::F0, (Foo96::F0 | Foo96::F63) & Foo96::F0);
-    assert_eq!(Foo96::F0 | Foo96::F63, Foo96::F0 ^ Foo96::F63);
-    assert_eq!(Foo96::default(), Foo96::F0 ^ Foo96::F0);
-    assert_eq!(Foo96::F0 | Foo96::F64, !((!Foo96::F0) & (!Foo96::F64)));
-
-    let component = Component::new(
-        &engine,
-        make_echo_component(
-            &format!(
-                "(flags {})",
-                (0..65)
-                    .map(|index| format!(r#""F{index}""#))
-                    .collect::<Vec<_>>()
-                    .join(" ")
-            ),
-            12,
-        ),
-    )?;
-    let instance = Linker::new(&engine).instantiate(&mut store, &component)?;
-    let func = instance.get_typed_func::<(Foo96,), (Foo96,)>(&mut store, "echo")?;
-
-    for &input in &[Foo96::F0, Foo96::F1, Foo96::F62, Foo96::F63, Foo96::F64] {
         let output = func.call_and_post_return(&mut store, (input,))?;
 
         assert_eq!((input,), output);

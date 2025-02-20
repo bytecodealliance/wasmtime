@@ -203,7 +203,7 @@ fn make_echo_component_with_params(type_definition: &str, params: &[Param]) -> S
             {type_section}
             (export $Foo "foo" (type $Foo'))
 
-            (func (export "echo") (param "a" $Foo) (result "b" $Foo)
+            (func (export "echo") (param "a" $Foo) (result $Foo)
                 (canon lift
                     (core func $i "echo")
                     (memory $i "memory")
