@@ -1,5 +1,7 @@
 use super::{fmtln, generate_derive, generate_derive_arbitrary_bounds, Formatter};
 use crate::dsl;
+use crate::dsl::format::IsleConstructorRaw;
+use crate::dsl::OperandKind;
 
 impl dsl::Inst {
     /// `struct <inst> { <op>: Reg, <op>: Reg, ... }`
@@ -228,80 +230,156 @@ impl dsl::Inst {
     /// # Panics
     ///
     /// This function panics if the instruction has no operands.
-    pub fn generate_isle_macro(&self, f: &mut Formatter, read_ty: &str, read_write_ty: &str) {
-        use dsl::OperandKind::*;
+    pub fn generate_isle_macro(&self, f: &mut Formatter) {
         let struct_name = self.name();
-        let operands = self
+        let raw = self.format.isle_constructor_raw();
+        let params = self
             .format
             .operands
             .iter()
-            .filter_map(|o| Some((o.location, o.generate_mut_ty(read_ty, read_write_ty)?)))
+            .filter(|o| o.mutability.is_read())
+            // FIXME(#10238) don't filter out fixed regs here
+            .filter(|o| !matches!(o.location.kind(), OperandKind::FixedReg(_)))
             .collect::<Vec<_>>();
-        let ret_ty = match self.format.operands.first().unwrap().location.kind() {
-            Imm(_) => unreachable!(),
-            Reg(_) | FixedReg(_) => format!("cranelift_assembler_x64::Gpr<{read_write_ty}>"),
-            RegMem(_) => format!("cranelift_assembler_x64::GprMem<{read_write_ty}, {read_ty}>"),
-        };
-        let ret_val = match self.format.operands.first().unwrap().location.kind() {
-            Imm(_) => unreachable!(),
-            FixedReg(_) => "todo!()".to_string(),
-            Reg(loc) | RegMem(loc) => format!("{loc}.clone()"),
-        };
-        let params = comma_join(
-            operands
-                .iter()
-                .map(|(l, ty)| format!("{l}: &cranelift_assembler_x64::{ty}")),
-        );
-        let args = comma_join(operands.iter().map(|(l, _)| format!("{l}.clone()")));
-
-        // TODO: parameterize CraneliftRegisters?
-        fmtln!(f, "fn x64_{struct_name}(&mut self, {params}) -> {ret_ty} {{",);
+        let results = self
+            .format
+            .operands
+            .iter()
+            .filter(|o| o.mutability.is_write())
+            .collect::<Vec<_>>();
+        let rust_params = params
+            .iter()
+            .map(|o| format!("{}: {}", o.location, o.rust_param_raw()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let result_ty = raw.isle_type();
+        fmtln!(f, "fn x64_{struct_name}_raw(&mut self, {rust_params}) -> {result_ty} {{",);
         f.indent(|f| {
+            for o in params.iter() {
+                let l = o.location;
+                match o.rust_convert_isle_to_assembler() {
+                    Some(cvt) => fmtln!(f, "let {l} = {cvt}({l});"),
+                    None => fmtln!(f, "let {l} = {l}.clone();"),
+                }
+            }
+            let args = params
+                .iter()
+                .map(|o| format!("{}.clone()", o.location))
+                .collect::<Vec<_>>();
+            let args = args.join(", ");
             fmtln!(f, "let inst = cranelift_assembler_x64::inst::{struct_name}::new({args}).into();");
-            fmtln!(f, "self.lower_ctx.emit(MInst::External {{ inst }});");
-            fmtln!(f, "{ret_val}");
+            fmtln!(f, "let inst = MInst::External {{ inst }};");
+
+            match raw {
+                IsleConstructorRaw::MInst => fmtln!(f, "inst"),
+                IsleConstructorRaw::MInstAndGpr => {
+                    assert_eq!(results.len(), 1);
+                    match results[0].location.kind() {
+                        // FIXME(#10238)
+                        OperandKind::FixedReg(_) => fmtln!(f, "todo!()"),
+                        _ => {
+                            fmtln!(f, "let gpr = {}.as_ref().write.to_reg();", results[0].location);
+                            fmtln!(f, "MInstAndGpr::Both {{ inst, gpr }}")
+                        }
+                    }
+                }
+                IsleConstructorRaw::MInstAndGprMem => {
+                    assert_eq!(results.len(), 1);
+                    let l = results[0].location;
+                    fmtln!(f, "match {l} {{");
+                    f.indent(|f| {
+                        fmtln!(f, "asm::GprMem::Gpr(reg) => {{");
+                        fmtln!(f, "let gpr = reg.write.to_reg();");
+                        fmtln!(f, "MInstAndGprMem::Gpr {{ inst, gpr }} ");
+                        fmtln!(f, "}}");
+
+                        fmtln!(f, "asm::GprMem::Mem(_) => {{");
+                        fmtln!(f, "MInstAndGprMem::Mem {{ inst }} ");
+                        fmtln!(f, "}}");
+                    });
+                    fmtln!(f, "}}");
+                }
+            }
         });
         fmtln!(f, "}}");
     }
 
-    /// `(decl x64_<inst> (<params>) <return>)
-    ///  (extern constructor x64_<inst> x64_<inst>)`
+    /// `(decl x64_<inst>_raw (<params>) <return>)`
+    /// `(decl x64_<inst> (<params>) <return>)`
+    /// `(decl x64_<inst>_mem (<params>) <return>)` (mabye)
     ///
     /// # Panics
     ///
     /// This function panics if the instruction has no operands.
     pub fn generate_isle_definition(&self, f: &mut Formatter) {
-        use dsl::OperandKind::*;
+        use crate::dsl::format::IsleConstructor::*;
+        use crate::dsl::format::IsleConstructorRaw::*;
 
         let struct_name = self.name();
-        let rule_name = format!("x64_{struct_name}");
+
+        // First declare the "raw" constructor which is implemented in Rust
+        // with `generate_isle_macro` above. This is an "extern" constructor
+        // with relatively raw types. This is not intended to be used by
+        // general lowering rules in ISLE.
+        let raw = self.format.isle_constructor_raw();
+        let raw_name = format!("x64_{struct_name}_raw");
         let params = self
             .format
             .operands
             .iter()
-            .filter_map(|o| match o.location.kind() {
-                FixedReg(_) => None,
-                Imm(loc) => {
-                    let bits = loc.bits();
-                    if o.extension.is_sign_extended() {
-                        Some(format!("AssemblerSimm{bits}"))
-                    } else {
-                        Some(format!("AssemblerImm{bits}"))
-                    }
-                }
-                Reg(_) => Some(format!("Assembler{}Gpr", o.mutability.generate_type())),
-                RegMem(_) => Some(format!("Assembler{}GprMem", o.mutability.generate_type())),
-            })
+            .filter(|o| o.mutability.is_read())
+            // FIXME(#10238) don't filter out fixed regs here
+            .filter(|o| !matches!(o.location.kind(), OperandKind::FixedReg(_)))
+            .collect::<Vec<_>>();
+        let raw_param_tys = params
+            .iter()
+            .map(|o| o.isle_param_raw())
             .collect::<Vec<_>>()
             .join(" ");
-        let ret = match self.format.operands.first().unwrap().location.kind() {
-            Imm(_) => unreachable!(),
-            FixedReg(_) | Reg(_) => "AssemblerReadWriteGpr",
-            RegMem(_) => "AssemblerReadWriteGprMem",
-        };
+        let raw_result_ty = raw.isle_type();
+        f.line(format!("(decl {raw_name} ({raw_param_tys}) {raw_result_ty})"), None);
+        f.line(format!("(extern constructor {raw_name} {raw_name})"), None);
 
-        f.line(format!("(decl {rule_name} ({params}) {ret})"), None);
-        f.line(format!("(extern constructor {rule_name} {rule_name})"), None);
+        // Next, for each "real" ISLE constructor being generated, synthesize a
+        // pure-ISLE constructor which delegates appropriately to the `*_raw`
+        // constructor above.
+        //
+        // The main purpose of these constructors is to have faithful type
+        // signatures for the SSA nature of VCode/ISLE, effectively translating
+        // x64's type system to ISLE/VCode's type system.
+        for ctor in self.format.isle_constructors() {
+            let result_ty = ctor.result_ty();
+            let param_tys = params
+                .iter()
+                .map(|o| o.isle_param_for_ctor(ctor))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let param_names = params
+                .iter()
+                .map(|o| o.location.to_string())
+                .collect::<Vec<_>>()
+                .join(" ");
+
+            // All variants of "raw => ctor" perform a conversion from the raw
+            // output into the actual output. Determine exactly what that
+            // conversion is here and use that to emit the rule down below.
+            let (convert, extra_name) = match (raw, ctor) {
+                (MInst, RetSideEffectNoResult) => ("SideEffectNoResult.Inst", ""),
+                (MInstAndGpr, RetGpr) => ("emit_minst_and_gpr", ""),
+                (MInstAndGprMem, RetSideEffectNoResult) => ("side_effect_minst_and_gpr_mem", "_mem"),
+                (MInstAndGprMem, RetGpr) => ("emit_minst_and_gpr_mem", ""),
+
+                // Not possible to generate since it should be using one of the
+                // above variants instead.
+                (MInst, RetGpr) | (MInstAndGpr, RetSideEffectNoResult) => unreachable!(),
+            };
+            let rule_name = format!("x64_{struct_name}{extra_name}");
+            f.line(format!("(decl {rule_name} ({param_tys}) {result_ty})"), None);
+            f.line(
+                format!("(rule ({rule_name} {param_names}) ({convert} ({raw_name} {param_names})))"),
+                None,
+            );
+        }
     }
 }
 

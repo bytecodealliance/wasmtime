@@ -2958,80 +2958,16 @@
 (extern extractor is_imm32 is_imm32)
 (decl is_simm32 (AssemblerSimm32) GprMemImm)
 (extern extractor is_simm32 is_simm32)
-(decl is_gpr (AssemblerReadGprMem) GprMemImm)
+(decl is_gpr (Gpr) GprMemImm)
 (extern extractor is_gpr is_gpr)
-(decl is_gpr_mem (AssemblerReadGprMem) GprMemImm)
+(decl is_gpr_mem (GprMem) GprMemImm)
 (extern extractor is_gpr_mem is_gpr_mem)
 
 ;; Helpers to auto-convert to and from assembler types.
 
-;; Gpr => AssemblerReadGpr
-(decl pure convert_gpr_to_assembler_read_gpr (Gpr) AssemblerReadGpr)
-(extern constructor convert_gpr_to_assembler_read_gpr convert_gpr_to_assembler_read_gpr)
-(convert Gpr AssemblerReadGpr convert_gpr_to_assembler_read_gpr)
-
-;; Gpr => AssemblerReadGprMem
-(decl pure convert_gpr_to_assembler_read_gpr_mem (Gpr) AssemblerReadGprMem)
-(extern constructor convert_gpr_to_assembler_read_gpr_mem convert_gpr_to_assembler_read_gpr_mem)
-(convert Gpr AssemblerReadGprMem convert_gpr_to_assembler_read_gpr_mem)
-
-;; Gpr => AssemblerReadWriteGpr
-(decl convert_gpr_to_assembler_read_write_gpr (Gpr) AssemblerReadWriteGpr)
-(extern constructor convert_gpr_to_assembler_read_write_gpr convert_gpr_to_assembler_read_write_gpr)
-(convert Gpr AssemblerReadWriteGpr convert_gpr_to_assembler_read_write_gpr)
-
-;; Gpr => AssemblerReadWriteGprMem
-(decl pure convert_gpr_to_assembler_read_write_gpr_mem (Gpr) AssemblerReadWriteGprMem)
-(extern constructor convert_gpr_to_assembler_read_write_gpr_mem convert_gpr_to_assembler_read_write_gpr_mem)
-(convert Gpr AssemblerReadWriteGprMem convert_gpr_to_assembler_read_write_gpr_mem)
-
-;; GprMem => AssemblerReadGprMem
-(decl pure convert_gpr_mem_to_assembler_read_gpr_mem (GprMem) AssemblerReadGprMem)
-(extern constructor convert_gpr_mem_to_assembler_read_gpr_mem convert_gpr_mem_to_assembler_read_gpr_mem)
-(convert GprMem AssemblerReadGprMem convert_gpr_to_assembler_read_gpr_mem)
-
-;; GprMem => AssemblerReadWriteGprMem
-(decl pure convert_gpr_mem_to_assembler_read_write_gpr_mem (GprMem) AssemblerReadWriteGprMem)
-(extern constructor convert_gpr_mem_to_assembler_read_write_gpr_mem convert_gpr_mem_to_assembler_read_write_gpr_mem)
-(convert GprMem AssemblerReadWriteGprMem convert_gpr_mem_to_assembler_read_write_gpr_mem)
-
-;; Value => AssemblerReadGpr
-(decl convert_value_to_assembler_read_gpr (Value) AssemblerReadGpr)
-(rule (convert_value_to_assembler_read_gpr val) (put_in_gpr val))
-(convert Value AssemblerReadGpr convert_value_to_assembler_read_gpr)
-
-;; Value => AssemblerReadGprMem
-(decl convert_value_to_assembler_read_gpr_mem (Value) AssemblerReadGprMem)
-(rule (convert_value_to_assembler_read_gpr_mem val)
-  (convert_gpr_mem_to_assembler_read_gpr_mem (put_in_gpr_mem val)))
-(convert Value AssemblerReadGprMem convert_value_to_assembler_read_gpr_mem)
-
-;; Value => AssemblerReadWriteGprMem
-(decl convert_value_to_assembler_read_write_gpr_mem (Value) AssemblerReadWriteGprMem)
-(rule (convert_value_to_assembler_read_write_gpr_mem val) (put_in_gpr_mem val))
-(convert Value AssemblerReadWriteGprMem convert_value_to_assembler_read_write_gpr_mem)
-
-;; AssemblerReadWriteGpr => Gpr
-(decl pure convert_assembler_read_write_gpr_to_gpr (AssemblerReadWriteGpr) Gpr)
-(extern constructor convert_assembler_read_write_gpr_to_gpr convert_assembler_read_write_gpr_to_gpr)
-(convert AssemblerReadWriteGpr Gpr convert_assembler_read_write_gpr_to_gpr)
-
-;; AssemblerReadWriteGprMem => Gpr
-(decl pure convert_assembler_read_write_gpr_mem_to_gpr (AssemblerReadWriteGprMem) Gpr)
-(extern constructor convert_assembler_read_write_gpr_mem_to_gpr convert_assembler_read_write_gpr_mem_to_gpr)
-(convert AssemblerReadWriteGprMem Gpr convert_assembler_read_write_gpr_mem_to_gpr)
-
-;; AssemblerReadWriteGprMem => InstOutput
-(decl convert_assembler_read_write_gpr_mem_to_inst_output (AssemblerReadWriteGprMem) InstOutput)
-(rule (convert_assembler_read_write_gpr_mem_to_inst_output val)
-  (let ((ret Gpr val)) ret))
-(convert AssemblerReadWriteGprMem InstOutput convert_assembler_read_write_gpr_mem_to_inst_output)
-
 (decl u8_to_assembler_imm8 (u8) AssemblerImm8)
 (extern constructor u8_to_assembler_imm8 u8_to_assembler_imm8)
 (convert u8 AssemblerImm8 u8_to_assembler_imm8)
-
-
 
 ;; Helper for emitting `and` instructions.
 (decl x64_and (Type Gpr GprMemImm) Gpr)
@@ -5121,24 +5057,40 @@
       )
        (require (or (= ty 32) (= ty 64)))
 )
-(rule (x64_add_mem ty addr val)
-      (alu_rm ty (AluRmiROpcode.Add) addr val))
+(rule (x64_add_mem $I8 addr val) (x64_addb_mr_mem addr val))
+(rule (x64_add_mem $I16 addr val) (x64_addw_mr_mem addr val))
+(rule (x64_add_mem $I32 addr val) (x64_addl_mr_mem addr val))
+(rule (x64_add_mem $I64 addr val) (x64_addq_mr_mem addr val))
 
 (decl x64_sub_mem (Type Amode Gpr) SideEffectNoResult)
-(rule (x64_sub_mem ty addr val)
-      (alu_rm ty (AluRmiROpcode.Sub) addr val))
+(rule (x64_sub_mem $I8 addr val) (x64_subb_mr_mem addr val))
+(rule (x64_sub_mem $I16 addr val) (x64_subw_mr_mem addr val))
+(rule (x64_sub_mem $I32 addr val) (x64_subl_mr_mem addr val))
+(rule (x64_sub_mem $I64 addr val) (x64_subq_mr_mem addr val))
 
 (decl x64_and_mem (Type Amode Gpr) SideEffectNoResult)
-(rule (x64_and_mem ty addr val)
-      (alu_rm ty (AluRmiROpcode.And) addr val))
+(rule (x64_and_mem $I8 addr val) (x64_andb_mr_mem addr val))
+(rule (x64_and_mem $I16 addr val) (x64_andw_mr_mem addr val))
+(rule (x64_and_mem $I32 addr val) (x64_andl_mr_mem addr val))
+(rule (x64_and_mem $F32 addr val) (x64_andl_mr_mem addr val))
+(rule (x64_and_mem $I64 addr val) (x64_andq_mr_mem addr val))
+(rule (x64_and_mem $F64 addr val) (x64_andq_mr_mem addr val))
 
 (decl x64_or_mem (Type Amode Gpr) SideEffectNoResult)
-(rule (x64_or_mem ty addr val)
-      (alu_rm ty (AluRmiROpcode.Or) addr val))
+(rule (x64_or_mem $I8 addr val) (x64_orb_mr_mem addr val))
+(rule (x64_or_mem $I16 addr val) (x64_orw_mr_mem addr val))
+(rule (x64_or_mem $I32 addr val) (x64_orl_mr_mem addr val))
+(rule (x64_or_mem $F32 addr val) (x64_orl_mr_mem addr val))
+(rule (x64_or_mem $I64 addr val) (x64_orq_mr_mem addr val))
+(rule (x64_or_mem $F64 addr val) (x64_orq_mr_mem addr val))
 
 (decl x64_xor_mem (Type Amode Gpr) SideEffectNoResult)
-(rule (x64_xor_mem ty addr val)
-      (alu_rm ty (AluRmiROpcode.Xor) addr val))
+(rule (x64_xor_mem $I8 addr val) (x64_xorb_mr_mem addr val))
+(rule (x64_xor_mem $I16 addr val) (x64_xorw_mr_mem addr val))
+(rule (x64_xor_mem $I32 addr val) (x64_xorl_mr_mem addr val))
+(rule (x64_xor_mem $F32 addr val) (x64_xorl_mr_mem addr val))
+(rule (x64_xor_mem $I64 addr val) (x64_xorq_mr_mem addr val))
+(rule (x64_xor_mem $F64 addr val) (x64_xorq_mr_mem addr val))
 
 ;; Trap if the condition code supplied is set.
 (decl trap_if (CC TrapCode) ConsumesFlags)
