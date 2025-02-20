@@ -39,14 +39,18 @@
 ;;       ldur    x0, [x28, #0xc]
 ;;       ldur    s31, [x28]
 ;;       add     x28, x28, #4
+;;       mov     sp, x28
 ;;       stur    s31, [x0]
 ;;       ldur    w16, [x28]
 ;;       add     x28, x28, #4
+;;       mov     sp, x28
 ;;       stur    w16, [x0, #4]
 ;;       ldur    w16, [x28]
 ;;       add     x28, x28, #4
+;;       mov     sp, x28
 ;;       stur    w16, [x0, #8]
 ;;       add     x28, x28, #0x28
+;;       mov     sp, x28
 ;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

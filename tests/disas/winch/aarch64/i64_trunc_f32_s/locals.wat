@@ -22,20 +22,21 @@
 ;;       stur    x16, [x28]
 ;;       ldur    s0, [x28, #4]
 ;;       fcmp    s0, s0
-;;       b.vs    #0x68
+;;       b.vs    #0x6c
 ;;   34: mov     x16, #0xdf000000
 ;;       fmov    s31, w16
 ;;       fcmp    s31, s0
-;;       b.le    #0x6c
+;;       b.le    #0x70
 ;;   44: mov     x16, #0x5f000000
 ;;       fmov    s31, w16
 ;;       fcmp    s31, s0
-;;       b.ge    #0x70
+;;       b.ge    #0x74
 ;;   54: fcvtzs  x0, s0
 ;;       add     x28, x28, #0x18
 ;;       mov     sp, x28
+;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   68: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;   6c: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;   70: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   74: .byte   0x1f, 0xc1, 0x00, 0x00

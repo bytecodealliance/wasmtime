@@ -33,8 +33,10 @@
 ;;       mov     sp, x28
 ;;       stur    w16, [x28]
 ;;       add     x28, x28, #4
+;;       mov     sp, x28
 ;;       b       #0x38
-;;   50: add     x28, x28, #0x18
+;;   54: add     x28, x28, #0x18
+;;       mov     sp, x28
 ;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
