@@ -141,7 +141,6 @@ impl AsyncReadStream {
                     break;
                 }
             }
-            println!("loop exit");
         });
         AsyncReadStream {
             closed: false,

@@ -14,7 +14,7 @@ impl ClientHandshake {
                 None => pollable.block_until(&timeout).expect("timed out"),
                 Some(Ok(r)) => return r,
                 Some(Err(e)) => {
-                    eprintln!("{:?}", e);
+                    eprintln!("{e:?}");
                     unimplemented!()
                 }
             }
