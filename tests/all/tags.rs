@@ -28,17 +28,17 @@ fn wasm_export_tags() -> Result<()> {
 
     let t1_ty = t1.ty(&store);
     let t2_ty = t2.ty(&store);
-    assert!(t1.eq(&t1, &store));
-    assert!(!t1.eq(&t2, &store));
+    assert!(Tag::eq(&t1, &t1, &store));
+    assert!(!Tag::eq(&t1, &t2, &store));
     assert!(FuncType::eq(t1_ty.ty(), t2_ty.ty()));
 
     let t3 = instance.get_tag(&mut store, "t3");
     assert!(t3.is_some());
     let t3 = t3.unwrap();
     let t3_ty = t3.ty(&store);
-    assert!(t3.eq(&t3, &store));
-    assert!(!t3.eq(&t1, &store));
-    assert!(!t3.eq(&t2, &store));
+    assert!(Tag::eq(&t3, &t3, &store));
+    assert!(!Tag::eq(&t3, &t1, &store));
+    assert!(!Tag::eq(&t3, &t2, &store));
     assert!(!FuncType::eq(t1_ty.ty(), t3_ty.ty()));
 
     return Ok(());
@@ -54,8 +54,9 @@ fn wasm_import_tags() -> Result<()> {
         "#;
     let m2_src = r#"
             (module
+                (tag (export "t1_2") (import "" "") (param i32) (result i32))
+                (tag (export "t1_22") (import "" "") (param i32) (result i32))
                 (tag (export "t2") (param i32) (result i32))
-                (tag (import "" "") (param i32) (result i32))
             )
         "#;
     let _ = env_logger::try_init();
@@ -68,7 +69,12 @@ fn wasm_import_tags() -> Result<()> {
 
     let m1_instance = Instance::new(&mut store, &m1, &[])?;
     let t1 = m1_instance.get_tag(&mut store, "t1").unwrap();
-    let _m2_instance = Instance::new(&mut store, &m2, &[t1.into()])?;
+    let m2_instance = Instance::new(&mut store, &m2, &[t1.into(), t1.into()])?;
+    let t1_2 = m2_instance.get_tag(&mut store, "t1_2").unwrap();
+    assert!(Tag::eq(&t1, &t1_2, &store));
+    let t1_22 = m2_instance.get_tag(&mut store, "t1_22").unwrap();
+    assert!(Tag::eq(&t1, &t1_22, &store));
+    assert!(Tag::eq(&t1_2, &t1_22, &store));
 
     return Ok(());
 }

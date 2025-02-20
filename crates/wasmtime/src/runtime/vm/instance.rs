@@ -1484,11 +1484,11 @@ impl Instance {
         }
 
         // Initialize the defined tags
-        for i in 0..module.tags.len() - module.num_imported_tags {
+        let mut ptr = self.vmctx_plus_offset_mut(offsets.vmctx_tags_begin());
+        for i in 0..module.num_defined_tags() {
             let defined_index = DefinedTagIndex::new(i);
             let tag_index = module.tag_index(defined_index);
             let tag = module.tags[tag_index];
-            let ptr = self.tag_ptr(defined_index);
             ptr.write(VMTagDefinition::new(match tag.signature {
                 wasmtime_environ::EngineOrModuleTypeIndex::Module(interned_index) => {
                     self.engine_type_index(interned_index)
@@ -1496,6 +1496,7 @@ impl Instance {
                 wasmtime_environ::EngineOrModuleTypeIndex::Engine(engine_index) => engine_index,
                 wasmtime_environ::EngineOrModuleTypeIndex::RecGroup(_) => unreachable!(),
             }));
+            ptr = ptr.add(1);
         }
     }
 

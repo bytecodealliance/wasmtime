@@ -58,13 +58,10 @@ impl Tag {
     /// # Panics
     ///
     /// Panics if either tag do not belong to the given `store`.
-    pub fn eq(&self, other: &Tag, store: impl AsContext) -> bool {
-        self._eq(other, store.as_context().0)
-    }
-
-    pub(crate) fn _eq(&self, other: &Tag, store: &StoreOpaque) -> bool {
-        let a = &store[self.0];
-        let b = &store[other.0];
+    pub fn eq(a: &Tag, b: &Tag, store: impl AsContext) -> bool {
+        let store = store.as_context().0;
+        let a = &store[a.0];
+        let b = &store[b.0];
         a.definition.eq(&b.definition)
     }
 }
