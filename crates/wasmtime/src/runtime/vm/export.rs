@@ -1,8 +1,9 @@
 use crate::runtime::vm::vmcontext::{
     VMContext, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition, VMTableDefinition,
+    VMTagDefinition,
 };
 use core::ptr::NonNull;
-use wasmtime_environ::{DefinedMemoryIndex, Global, Memory, Table};
+use wasmtime_environ::{DefinedMemoryIndex, Global, Memory, Table, Tag};
 
 /// The value of an export passed from one instance to another.
 pub enum Export {
@@ -17,6 +18,9 @@ pub enum Export {
 
     /// A global export value.
     Global(ExportGlobal),
+
+    /// A tag export value.
+    Tag(ExportTag),
 }
 
 /// A function export value.
@@ -104,5 +108,24 @@ unsafe impl Sync for ExportGlobal {}
 impl From<ExportGlobal> for Export {
     fn from(func: ExportGlobal) -> Export {
         Export::Global(func)
+    }
+}
+
+/// A tag export value.
+#[derive(Debug, Clone)]
+pub struct ExportTag {
+    /// The address of the global storage.
+    pub definition: NonNull<VMTagDefinition>,
+    /// The global declaration, used for compatibility checking.
+    pub tag: Tag,
+}
+
+// See docs on send/sync for `ExportFunction` above.
+unsafe impl Send for ExportTag {}
+unsafe impl Sync for ExportTag {}
+
+impl From<ExportTag> for Export {
+    fn from(func: ExportTag) -> Export {
+        Export::Tag(func)
     }
 }

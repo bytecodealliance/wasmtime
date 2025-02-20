@@ -23,6 +23,7 @@ pub extern "C" fn wasm_extern_kind(e: &wasm_extern_t) -> wasm_externkind_t {
         Extern::SharedMemory(_) => panic!(
             "Shared Memory no implemented for wasm_* types. Please use wasmtime_* types instead"
         ),
+        Extern::Tag(_) => todo!(), // FIXME: #10252 C embedder API for exceptions and control tags.
     }
 }
 
@@ -143,6 +144,7 @@ impl From<Extern> for wasmtime_extern_t {
                     sharedmemory: ManuallyDrop::new(Box::new(sharedmemory)),
                 },
             },
+            Extern::Tag(_) => todo!(), // FIXME: #10252 C embedder API for exceptions and control tags.
         }
     }
 }

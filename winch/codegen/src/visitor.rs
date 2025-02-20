@@ -540,6 +540,14 @@ macro_rules! def_unsupported {
     (emit F64x2Neg $($rest:tt)*) => {};
     (emit F32x4Sqrt $($rest:tt)*) => {};
     (emit F64x2Sqrt $($rest:tt)*) => {};
+    (emit F32x4Ceil $($rest:tt)*) => {};
+    (emit F64x2Ceil $($rest:tt)*) => {};
+    (emit F32x4Floor $($rest:tt)*) => {};
+    (emit F64x2Floor $($rest:tt)*) => {};
+    (emit F32x4Nearest $($rest:tt)*) => {};
+    (emit F64x2Nearest $($rest:tt)*) => {};
+    (emit F32x4Trunc $($rest:tt)*) => {};
+    (emit F64x2Trunc $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -4136,22 +4144,22 @@ where
 
     fn visit_i32x4_trunc_sat_f32x4_s(&mut self) -> Self::Output {
         self.masm
-            .v128_trunc_sat(&mut self.context, V128TruncKind::I32x4FromF32x4S)
+            .v128_trunc(&mut self.context, V128TruncKind::I32x4FromF32x4S)
     }
 
     fn visit_i32x4_trunc_sat_f32x4_u(&mut self) -> Self::Output {
         self.masm
-            .v128_trunc_sat(&mut self.context, V128TruncKind::I32x4FromF32x4U)
+            .v128_trunc(&mut self.context, V128TruncKind::I32x4FromF32x4U)
     }
 
     fn visit_i32x4_trunc_sat_f64x2_s_zero(&mut self) -> Self::Output {
         self.masm
-            .v128_trunc_sat(&mut self.context, V128TruncKind::I32x4FromF64x2SZero)
+            .v128_trunc(&mut self.context, V128TruncKind::I32x4FromF64x2SZero)
     }
 
     fn visit_i32x4_trunc_sat_f64x2_u_zero(&mut self) -> Self::Output {
         self.masm
-            .v128_trunc_sat(&mut self.context, V128TruncKind::I32x4FromF64x2UZero)
+            .v128_trunc(&mut self.context, V128TruncKind::I32x4FromF64x2UZero)
     }
 
     fn visit_i16x8_min_s(&mut self) -> Self::Output {
@@ -4421,9 +4429,23 @@ where
         })
     }
 
+    fn visit_f32x4_ceil(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, reg| {
+            masm.v128_ceil(reg, writable!(reg), OperandSize::S32)?;
+            Ok(TypedReg::v128(reg))
+        })
+    }
+
     fn visit_f64x2_neg(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_neg(writable!(reg), V128NegKind::F64x2)?;
+            Ok(TypedReg::v128(reg))
+        })
+    }
+
+    fn visit_f64x2_ceil(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, reg| {
+            masm.v128_ceil(reg, writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::v128(reg))
         })
     }
@@ -4435,11 +4457,49 @@ where
         })
     }
 
+    fn visit_f32x4_floor(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, reg| {
+            masm.v128_floor(reg, writable!(reg), OperandSize::S32)?;
+            Ok(TypedReg::v128(reg))
+        })
+    }
+
     fn visit_f64x2_sqrt(&mut self) -> Self::Output {
         self.context.unop(self.masm, |masm, reg| {
             masm.v128_sqrt(reg, writable!(reg), OperandSize::S64)?;
             Ok(TypedReg::v128(reg))
         })
+    }
+
+    fn visit_f64x2_floor(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, reg| {
+            masm.v128_floor(reg, writable!(reg), OperandSize::S64)?;
+            Ok(TypedReg::v128(reg))
+        })
+    }
+
+    fn visit_f32x4_nearest(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, reg| {
+            masm.v128_nearest(reg, writable!(reg), OperandSize::S32)?;
+            Ok(TypedReg::v128(reg))
+        })
+    }
+
+    fn visit_f64x2_nearest(&mut self) -> Self::Output {
+        self.context.unop(self.masm, |masm, reg| {
+            masm.v128_nearest(reg, writable!(reg), OperandSize::S64)?;
+            Ok(TypedReg::v128(reg))
+        })
+    }
+
+    fn visit_f32x4_trunc(&mut self) -> Self::Output {
+        self.masm
+            .v128_trunc(&mut self.context, V128TruncKind::F32x4)
+    }
+
+    fn visit_f64x2_trunc(&mut self) -> Self::Output {
+        self.masm
+            .v128_trunc(&mut self.context, V128TruncKind::F64x2)
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);
