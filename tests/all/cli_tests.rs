@@ -2060,6 +2060,50 @@ after empty
         Ok(())
     }
 
+    #[tokio::test]
+    async fn cli_serve_return_before_set() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_RETURN_BEFORE_SET_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        for _ in 0..2 {
+            let res = server
+                .send_request(
+                    hyper::Request::builder()
+                        .uri("http://localhost/")
+                        .body(String::new())
+                        .context("failed to make request")?,
+                )
+                .await;
+            assert!(res.is_err());
+        }
+
+        server.finish()?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cli_serve_trap_before_set() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_TRAP_BEFORE_SET_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        for _ in 0..2 {
+            let res = server
+                .send_request(
+                    hyper::Request::builder()
+                        .uri("http://localhost/")
+                        .body(String::new())
+                        .context("failed to make request")?,
+                )
+                .await;
+            assert!(res.is_err());
+        }
+
+        server.finish()?;
+        Ok(())
+    }
+
     #[test]
     fn cli_keyvalue() -> Result<()> {
         run_wasmtime(&[
