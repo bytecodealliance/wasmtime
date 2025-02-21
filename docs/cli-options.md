@@ -129,13 +129,13 @@ $ wasmtime settings
 
 # Additional options
 Many of the above subcommands also take additional options. For example,
-- run 
+- run
 - serve
 - compile
 - explore
 - wast
 
-are all subcommands which can take additional CLI options of the format 
+are all subcommands which can take additional CLI options of the format
 
 ```sh
 Options:
@@ -158,11 +158,11 @@ Options:
 For example, adding `--optimize opt-level=0` to a `wasmtime compile` subcommand
 will turn off most optimizations for the generated code.
 
-## CLI options using TOML file 
+## CLI options using TOML file
 Most key-value options that can be provided using the `--optimize`, `--codegen`,
 `--debug`, `--wasm`, and `--wasi` flags can also be provided using a TOML
 file using the `--config <FILE>` cli flag, by putting the key-value inside a TOML
-table with the same name. 
+table with the same name.
 
 For example, with a TOML file like this
 ```toml
@@ -172,10 +172,14 @@ opt-level = 0
 the command
 ```sh
 $ wasmtime compile --config config.toml
-``` 
-would be the same as 
+```
+would be the same as
 ```sh
 $ wasmtime compile --optimize opt-level=0
 ```
 assuming the TOML file is called `config.toml`. Of course you can put as many
 key-value pairs as you want in the TOML file.
+
+Options on the CLI take precedent over options specified in a configuration
+file, meaning they're allowed to shadow configuration values in a TOML
+configuration file.
