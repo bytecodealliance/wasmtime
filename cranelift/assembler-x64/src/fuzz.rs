@@ -220,7 +220,12 @@ impl<'a, R: AsReg> Arbitrary<'a> for Xmm<R> {
 /// Helper trait that's used to be the same as `Registers` except with an extra
 /// `for<'a> Arbitrary<'a>` bound on all of the associated types.
 pub trait RegistersArbitrary:
-    Registers<ReadGpr: for<'a> Arbitrary<'a>, ReadWriteGpr: for<'a> Arbitrary<'a>, ReadXmm: for<'a> Arbitrary<'a>, ReadWriteXmm: for<'a> Arbitrary<'a>>
+    Registers<
+    ReadGpr: for<'a> Arbitrary<'a>,
+    ReadWriteGpr: for<'a> Arbitrary<'a>,
+    ReadXmm: for<'a> Arbitrary<'a>,
+    ReadWriteXmm: for<'a> Arbitrary<'a>,
+>
 {
 }
 

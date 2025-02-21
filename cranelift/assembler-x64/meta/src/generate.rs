@@ -43,8 +43,7 @@ pub fn isle_macro(f: &mut Formatter, insts: &[dsl::Inst]) {
             for inst in insts {
                 if inst.format.operands.iter().any(|op| op.location.bits() == 128) {
                     inst.generate_isle_macro(f, "Xmm", "PairedXmm");
-                }
-                else {
+                } else {
                     inst.generate_isle_macro(f, "Gpr", "PairedGpr");
                 }
             }

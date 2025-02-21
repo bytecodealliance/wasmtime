@@ -2,7 +2,7 @@
 
 use super::{
     regs, Amode, Gpr, Inst, LabelUse, MachBuffer, MachLabel, OperandVisitor, OperandVisitorImpl,
-    SyntheticAmode, VCodeConstant, WritableGpr, Xmm, WritableXmm,
+    SyntheticAmode, VCodeConstant, WritableGpr, WritableXmm, Xmm,
 };
 use crate::ir::TrapCode;
 use cranelift_assembler_x64 as asm;

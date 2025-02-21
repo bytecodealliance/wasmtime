@@ -140,7 +140,6 @@ impl<R: AsReg> AsMut<R> for NonRspGpr<R> {
     }
 }
 
-
 /// Encode x64 registers.
 pub mod enc {
     use super::Size;
@@ -185,7 +184,7 @@ pub mod enc {
     ///
     /// This function will panic if the encoding is not a valid x64 register.
     pub fn to_string(enc: u8, size: Size) -> &'static str {
-        use Size::{Byte, Doubleword, Quadword, Word, DoubleQuadword};
+        use Size::{Byte, DoubleQuadword, Doubleword, Quadword, Word};
         match size {
             DoubleQuadword => match enc {
                 XMM0 => "%xmm0",
@@ -205,9 +204,8 @@ pub mod enc {
                 XMM14 => "%xmm14",
                 XMM15 => "%xmm15",
                 _ => panic!("%invalid{enc}"),
-            }, 
-            _ =>
-            match enc {
+            },
+            _ => match enc {
                 RAX => match size {
                     Byte => "%al",
                     Word => "%ax",
@@ -325,4 +323,3 @@ pub mod enc {
         }
     }
 }
-

@@ -132,7 +132,7 @@ impl dsl::Format {
                     fmtln!(f, "XmmMem::Mem({dst}) => {dst}.emit_rex_prefix(rex, {src}, buf),");
                 });
                 fmtln!(f, "}}");
-            }          
+            }
             [XmmReg(dst), XmmRegMem(src)] => {
                 fmtln!(f, "let {dst} = self.{dst}.enc();");
                 fmtln!(f, "match &self.{src} {{");
@@ -198,10 +198,7 @@ impl dsl::Format {
                 fmtln!(f, "match &self.{dst} {{");
                 f.indent(|f| {
                     fmtln!(f, "XmmMem::Xmm({dst}) => emit_modrm(buf, {src}, {dst}.enc()),");
-                    fmtln!(
-                        f,
-                        "XmmMem::Mem({dst}) => emit_modrm_sib_disp(buf, off, {src}, {dst}, 0, None),"
-                    );
+                    fmtln!(f, "XmmMem::Mem({dst}) => emit_modrm_sib_disp(buf, off, {src}, {dst}, 0, None),");
                 });
                 fmtln!(f, "}}");
             }
@@ -210,10 +207,7 @@ impl dsl::Format {
                 fmtln!(f, "match &self.{src} {{");
                 f.indent(|f| {
                     fmtln!(f, "XmmMem::Xmm({src}) => emit_modrm(buf, {dst}, {src}.enc()),");
-                    fmtln!(
-                        f,
-                        "XmmMem::Mem({src}) => emit_modrm_sib_disp(buf, off, {dst}, {src}, 0, None),"
-                    );
+                    fmtln!(f, "XmmMem::Mem({src}) => emit_modrm_sib_disp(buf, off, {dst}, {src}, 0, None),");
                 });
                 fmtln!(f, "}}");
             }
