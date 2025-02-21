@@ -4769,6 +4769,7 @@ version = "32.0.0"
 dependencies = [
  "anyhow",
  "bytes",
+ "futures",
  "rustls 0.22.4",
  "test-programs-artifacts",
  "tokio",

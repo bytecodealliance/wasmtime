@@ -186,15 +186,13 @@ impl<'a> generated::types::HostClientHandshake for WasiTlsCtx<'a> {
 
         Ok(self
             .table
-            .push(FutureClientStreams(StreamState::Pending(Box::pin(
-                async move {
-                    let connector = tokio_rustls::TlsConnector::from(default_client_config());
-                    connector
-                        .connect(domain, streams)
-                        .await
-                        .with_context(|| "connection failed")
-                },
-            ))))?)
+            .push(FutureStreams(StreamState::Pending(Box::pin(async move {
+                let connector = tokio_rustls::TlsConnector::from(default_client_config());
+                connector
+                    .connect(domain, streams)
+                    .await
+                    .with_context(|| "connection failed")
+            }))))?)
     }
 
     fn drop(
@@ -206,21 +204,20 @@ impl<'a> generated::types::HostClientHandshake for WasiTlsCtx<'a> {
     }
 }
 
-/// Future TLS connection after the handshake is completed.
-pub struct FutureClientStreams(StreamState<Result<TlsStream<WasiStreams>>>);
+/// Future streams provides the tls streams after the handshake is completed
+pub struct FutureStreams<T>(StreamState<Result<T>>);
+
+/// Library specific version of TLS connection after the handshake is completed.
+/// This alias allows it to use with wit-bindgen component generator which won't take generic types
+pub type FutureClientStreams = FutureStreams<TlsStream<WasiStreams>>;
 
 #[async_trait]
-impl Pollable for FutureClientStreams {
+impl<T: Send + 'static> Pollable for FutureStreams<T> {
     async fn ready(&mut self) {
-        match &self.0 {
-            StreamState::Pending(_) => (),
+        match &mut self.0 {
             StreamState::Ready(_) | StreamState::Closed => return,
+            StreamState::Pending(task) => self.0 = StreamState::Ready(task.as_mut().await),
         }
-
-        let StreamState::Pending(future) = mem::replace(&mut self.0, StreamState::Closed) else {
-            unreachable!()
-        };
-        self.0 = StreamState::Ready(future.await);
     }
 }
 
@@ -324,7 +321,8 @@ enum StreamState<T> {
     Closed,
 }
 
-struct WasiStreams {
+/// Wrapper around Input and Output wasi IO Stream that provides Async Read/Write
+pub struct WasiStreams {
     input: StreamState<BoxInputStream>,
     output: StreamState<BoxOutputStream>,
 }
@@ -634,4 +632,41 @@ fn try_lock_for_stream<TlsWriter>(
     mutex
         .try_lock()
         .map_err(|_| StreamError::trap("concurrent access to resource not supported"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::oneshot;
+
+    #[tokio::test]
+    async fn test_future_client_streams_ready_can_be_canceled() {
+        let (tx1, rx1) = oneshot::channel::<()>();
+
+        let mut future_streams = FutureStreams(StreamState::Pending(Box::pin(async move {
+            rx1.await.map_err(|_| anyhow::anyhow!("oneshot canceled"))
+        })));
+
+        let mut fut = future_streams.ready();
+
+        let mut cx = std::task::Context::from_waker(futures::task::noop_waker_ref());
+        assert!(fut.as_mut().poll(&mut cx).is_pending());
+
+        //cancel the readiness check
+        drop(fut);
+
+        match future_streams.0 {
+            StreamState::Closed => panic!("First future should be in Pending/ready state"),
+            _ => (),
+        }
+
+        // make it ready and wait for it to progress
+        tx1.send(()).unwrap();
+        future_streams.ready().await;
+
+        match future_streams.0 {
+            StreamState::Ready(Ok(())) => (),
+            _ => panic!("First future should be in Ready(Err) state"),
+        }
+    }
 }
