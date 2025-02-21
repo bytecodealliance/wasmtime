@@ -47,8 +47,8 @@ type AssemblerReadGprMem = asm::GprMem<Gpr, Gpr>;
 type AssemblerReadWriteGprMem = asm::GprMem<PairedGpr, Gpr>;
 type AssemblerReadXmm = asm::Xmm<Xmm>;
 type AssemblerReadWriteXmm = asm::Xmm<PairedXmm>;
-type AssemblerReadXmmMem = asm::XmmMem<Xmm, Xmm>;
-type AssemblerReadWriteXmmMem = asm::XmmMem<PairedXmm, Xmm>;
+type AssemblerReadXmmMem = asm::XmmMem<Xmm, Gpr>;
+type AssemblerReadWriteXmmMem = asm::XmmMem<PairedXmm, Gpr>;
 type AssemblerInst = asm::Inst<CraneliftRegisters>;
 type AssemblerImm8 = asm::Imm8;
 type AssemblerSimm8 = asm::Simm8;
@@ -1064,17 +1064,16 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
-    fn is_xmm_mem(&mut self, src: &XmmMemImm) -> Option<AssemblerReadXmmMem> {
-        match src.clone().to_reg_mem_imm() {
-            RegMemImm::Reg { reg } => {
+    fn is_xmm_mem(&mut self, src: &XmmMem) -> Option<AssemblerReadXmmMem> {
+        match src.clone().to_reg_mem() {
+            RegMem::Reg { reg } => {
                 let read = Xmm::new(reg).unwrap();
                 Some(AssemblerReadXmmMem::Xmm(read))
             }
-            RegMemImm::Mem { addr } => {
+            RegMem::Mem { addr } => {
                 let addr = addr.into();
                 Some(AssemblerReadXmmMem::Mem(addr))
             }
-            _ => None,
         }
     }
 
@@ -1093,7 +1092,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     }
 
     fn convert_xmm_to_assembler_read_write_xmm(&mut self, read: Xmm) -> AssemblerReadWriteXmm {
-        let write = self.lower_ctx.alloc_tmp(types::I128).only_reg().unwrap();
+        let write = self.lower_ctx.alloc_tmp(types::F32X4).only_reg().unwrap();
         let write = WritableXmm::from_writable_reg(write).unwrap();
         AssemblerReadWriteXmm::new(PairedXmm { read, write })
     }
@@ -1169,7 +1168,7 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         &mut self,
         read: Xmm,
     ) -> AssemblerReadWriteXmmMem {
-        let write = self.lower_ctx.alloc_tmp(types::I128).only_reg().unwrap();
+        let write = self.lower_ctx.alloc_tmp(types::F32X4).only_reg().unwrap();
         let write = WritableXmm::from_writable_reg(write).unwrap();
         AssemblerReadWriteXmmMem::Xmm(PairedXmm { read, write })
     }

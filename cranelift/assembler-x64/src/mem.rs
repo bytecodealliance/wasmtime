@@ -289,7 +289,6 @@ impl<R: AsReg, M: AsReg> XmmMem<R, M> {
             XmmMem::Mem(amode) => amode.to_string(),
         }
     }
-
 }
 
 /// Emit the ModRM/SIB/displacement sequence for a memory operand.

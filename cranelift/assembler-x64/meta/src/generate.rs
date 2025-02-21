@@ -41,7 +41,12 @@ pub fn isle_macro(f: &mut Formatter, insts: &[dsl::Inst]) {
         fmtln!(f, "() => {{");
         f.indent(|f| {
             for inst in insts {
-                inst.generate_isle_macro(f, "Gpr", "PairedGpr");
+                if inst.format.operands.iter().any(|op| op.location.bits() == 128) {
+                    inst.generate_isle_macro(f, "Xmm", "PairedXmm");
+                }
+                else {
+                    inst.generate_isle_macro(f, "Gpr", "PairedGpr");
+                }
             }
         });
         fmtln!(f, "}};");

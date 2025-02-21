@@ -183,7 +183,7 @@ impl dsl::Inst {
                             fmtln!(f, "XmmMem::Xmm(r) => visitor.{call}(r),");
                             fmtln!(
                                 f,
-                                "XmmMem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read_xmm(r)),"
+                                "XmmMem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read(r)),"
                             );
                         });
                         fmtln!(f, "}}");
@@ -265,7 +265,7 @@ impl dsl::Inst {
             Reg(_) | FixedReg(_) => format!("cranelift_assembler_x64::Gpr<{read_write_ty}>"),
             RegMem(_) => format!("cranelift_assembler_x64::GprMem<{read_write_ty}, {read_ty}>"),
             XmmReg(_) => format!("cranelift_assembler_x64::Xmm<{read_write_ty}>"),
-            XmmRegMem(_) => format!("cranelift_assembler_x64::XmmMem<{read_write_ty}, {read_ty}>"),
+            XmmRegMem(_) => {format!("cranelift_assembler_x64::XmmMem<{read_write_ty}, {read_ty}>")},
         };
         let ret_val = match self.format.operands.first().unwrap().location.kind() {
             Imm(_) => unreachable!(),

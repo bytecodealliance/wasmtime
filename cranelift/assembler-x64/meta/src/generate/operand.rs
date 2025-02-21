@@ -17,7 +17,7 @@ impl dsl::Operand {
             Reg(_) => Some(format!("Gpr<R::{}Gpr>", self.mutability.generate_type())),
             RegMem(_) => Some(format!("GprMem<R::{}Gpr, R::ReadGpr>", self.mutability.generate_type())),
             XmmReg(_) => Some(format!("Xmm<R::{}Xmm>", self.mutability.generate_type())),
-            XmmRegMem(_) => Some(format!("XmmMem<R::{}Xmm, R::ReadXmm>", self.mutability.generate_type())),
+            XmmRegMem(_) => Some(format!("XmmMem<R::{}Xmm, R::ReadGpr>", self.mutability.generate_type())),
         }
     }
 
@@ -42,7 +42,7 @@ impl dsl::Operand {
             Reg(_) => Some(format!("Gpr<{pick_ty}>")),
             RegMem(_) => Some(format!("GprMem<{pick_ty}, {read_ty}>")),
             XmmReg(_) => Some(format!("Xmm<{pick_ty}>")),
-            XmmRegMem(_) => Some(format!("XmmMem<{pick_ty}, {read_ty}>")),
+            XmmRegMem(_) => Some(format!("XmmMem<{pick_ty}, Gpr>")),
         }
     }
 }

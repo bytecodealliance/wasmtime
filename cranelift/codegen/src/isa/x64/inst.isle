@@ -2956,6 +2956,8 @@
 (extern extractor is_gpr_mem is_gpr_mem)
 (decl is_xmm_mem (AssemblerReadXmmMem) XmmMem)
 (extern extractor is_xmm_mem is_xmm_mem)
+(decl is_xmm (AssemblerReadXmmMem) XmmMemImm)
+(extern extractor is_xmm is_xmm)
 
 ;; Helpers to auto-convert to and from assembler types.
 
@@ -2979,6 +2981,16 @@
 (extern constructor convert_gpr_to_assembler_read_write_gpr_mem convert_gpr_to_assembler_read_write_gpr_mem)
 (convert Gpr AssemblerReadWriteGprMem convert_gpr_to_assembler_read_write_gpr_mem)
 
+;; Xmm => AssemblerReadXmmMem
+(decl pure convert_xmm_to_assembler_read_xmm_mem (Xmm) AssemblerReadXmmMem)
+(extern constructor convert_xmm_to_assembler_read_xmm_mem convert_xmm_to_assembler_read_xmm_mem)
+(convert Xmm AssemblerReadXmmMem convert_xmm_to_assembler_read_xmm_mem)
+
+;; Xmm => AssemblerReadWriteXmmMem
+(decl pure convert_xmm_to_assembler_read_write_xmm_mem (Xmm) AssemblerReadWriteXmmMem)
+(extern constructor convert_xmm_to_assembler_read_write_xmm_mem convert_xmm_to_assembler_read_write_xmm_mem)
+(convert Xmm AssemblerReadWriteXmmMem convert_xmm_to_assembler_read_write_xmm_mem)
+
 ;; Xmm => AssemblerReadXmm
 (decl pure convert_xmm_to_assembler_read_xmm (Xmm) AssemblerReadXmm)
 (extern constructor convert_xmm_to_assembler_read_xmm convert_xmm_to_assembler_read_xmm)
@@ -2994,10 +3006,20 @@
 (extern constructor convert_gpr_mem_to_assembler_read_gpr_mem convert_gpr_mem_to_assembler_read_gpr_mem)
 (convert GprMem AssemblerReadGprMem convert_gpr_to_assembler_read_gpr_mem)
 
+;; XmmMem => AssemblerReadXmmMem
+(decl pure convert_xmm_mem_to_assembler_read_xmm_mem (XmmMem) AssemblerReadXmmMem)
+(extern constructor convert_xmm_mem_to_assembler_read_xmm_mem convert_xmm_mem_to_assembler_read_xmm_mem)
+(convert XmmMem AssemblerReadXmmMem convert_xmm_to_assembler_read_xmm_mem)
+
 ;; GprMem => AssemblerReadWriteGprMem
 (decl pure convert_gpr_mem_to_assembler_read_write_gpr_mem (GprMem) AssemblerReadWriteGprMem)
 (extern constructor convert_gpr_mem_to_assembler_read_write_gpr_mem convert_gpr_mem_to_assembler_read_write_gpr_mem)
 (convert GprMem AssemblerReadWriteGprMem convert_gpr_mem_to_assembler_read_write_gpr_mem)
+
+;; XmmMem => AssemblerReadWriteXmmMem
+(decl pure convert_xmm_mem_to_assembler_read_write_xmm_mem (XmmMem) AssemblerReadWriteXmmMem)
+(extern constructor convert_xmm_mem_to_assembler_read_write_xmm_mem convert_xmm_mem_to_assembler_read_write_xmm_mem)
+(convert XmmMem AssemblerReadWriteXmmMem convert_xmm_mem_to_assembler_read_write_xmm_mem)
 
 ;; Value => AssemblerReadGpr
 (decl convert_value_to_assembler_read_gpr (Value) AssemblerReadGpr)
@@ -3024,6 +3046,11 @@
 (decl pure convert_assembler_read_write_gpr_mem_to_gpr (AssemblerReadWriteGprMem) Gpr)
 (extern constructor convert_assembler_read_write_gpr_mem_to_gpr convert_assembler_read_write_gpr_mem_to_gpr)
 (convert AssemblerReadWriteGprMem Gpr convert_assembler_read_write_gpr_mem_to_gpr)
+
+;; AssemblerReadWriteXmmMem => Xmm
+(decl pure convert_assembler_read_write_xmm_mem_to_xmm (AssemblerReadWriteXmmMem) Xmm)
+(extern constructor convert_assembler_read_write_xmm_mem_to_xmm convert_assembler_read_write_xmm_mem_to_xmm)
+(convert AssemblerReadWriteXmmMem Xmm convert_assembler_read_write_xmm_mem_to_xmm)
 
 ;; AssemblerReadWriteGprMem => InstOutput
 (decl convert_assembler_read_write_gpr_mem_to_inst_output (AssemblerReadWriteGprMem) InstOutput)
