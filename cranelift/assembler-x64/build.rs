@@ -1,5 +1,7 @@
 use cranelift_assembler_x64_meta as meta;
 use std::env;
+use std::fs::File;
+use std::io::Write;
 use std::path::Path;
 
 fn main() {
@@ -13,12 +15,12 @@ fn main() {
         meta::generate_isle_definitions(out_dir.join("assembler-definitions.isle")),
     ];
 
-    println!(
-        "cargo:rustc-env=ASSEMBLER_BUILT_FILES={}",
-        built_files
-            .iter()
-            .map(|p| p.to_string_lossy().to_string())
-            .collect::<Vec<_>>()
-            .join(":")
-    );
+    // Generating this additional bit of Rust is necessary for listing the
+    // generated files.
+    let mut vec_of_built_files = File::create(out_dir.join("generated-files.rs")).unwrap();
+    writeln!(vec_of_built_files, "vec![").unwrap();
+    for file in &built_files {
+        writeln!(vec_of_built_files, "  {:?}.into(),", file.display()).unwrap();
+    }
+    writeln!(vec_of_built_files, "]").unwrap();
 }
