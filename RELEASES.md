@@ -11,6 +11,8 @@ Released 2025-02-21.
 [Zulip discussion]: https://bytecodealliance.zulipchat.com/#narrow/channel/217126-wasmtime/topic/Wasmtime.2030.20x64.20assembler.20build.20error.20on.20Windows
 [#10270]: https://github.com/bytecodealliance/wasmtime/pull/10270
 
+--------------------------------------------------------------------------------
+
 ## 30.0.0
 
 Released 2025-02-20.
