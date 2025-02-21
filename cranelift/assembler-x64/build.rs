@@ -13,12 +13,16 @@ fn main() {
         meta::generate_isle_definitions(out_dir.join("assembler-definitions.isle")),
     ];
 
+    #[cfg(not(target_os = "windows"))]
+    const SEPARATOR: &str = ":";
+    #[cfg(target_os = "windows")]
+    const SEPARATOR: &str = ";";
     println!(
         "cargo:rustc-env=ASSEMBLER_BUILT_FILES={}",
         built_files
             .iter()
             .map(|p| p.to_string_lossy().to_string())
             .collect::<Vec<_>>()
-            .join(":")
+            .join(SEPARATOR)
     );
 }

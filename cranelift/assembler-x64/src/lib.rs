@@ -81,8 +81,12 @@ pub use rex::RexFlags;
 
 /// List the files generated to create this assembler.
 pub fn generated_files() -> Vec<std::path::PathBuf> {
+    #[cfg(not(target_os = "windows"))]
+    const SEPARATOR: char = ':';
+    #[cfg(target_os = "windows")]
+    const SEPARATOR: char = ';';
     env!("ASSEMBLER_BUILT_FILES")
-        .split(':')
+        .split(SEPARATOR)
         .map(std::path::PathBuf::from)
         .collect()
 }
