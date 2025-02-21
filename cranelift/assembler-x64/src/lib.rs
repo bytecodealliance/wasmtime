@@ -78,6 +78,7 @@ pub use reg::{Gpr, NonRspGpr, Size};
 pub use rex::RexFlags;
 
 /// List the files generated to create this assembler.
+#[must_use]
 pub fn generated_files() -> Vec<std::path::PathBuf> {
     include!(concat!(env!("OUT_DIR"), "/generated-files.rs"))
 }
