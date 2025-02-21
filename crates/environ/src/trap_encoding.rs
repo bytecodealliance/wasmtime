@@ -92,6 +92,16 @@ pub enum Trap {
     /// Async-lifted export failed to produce a result by calling `task.return`
     /// before returning `STATUS_DONE` and/or after all host tasks completed.
     NoAsyncResult,
+
+    /// We are suspending to a tag for which there is no active handler.
+    UnhandledTag,
+
+    /// Attempt to resume a continuation twice.
+    ContinuationAlreadyConsumed,
+
+    /// FIXME(frank-emrich) Only used for stack switching debugging code, to be
+    /// removed from final upstreamed code.
+    DeleteMeDebugAssertion,
     // if adding a variant here be sure to update the `check!` macro below
 }
 
@@ -129,6 +139,9 @@ impl Trap {
             CastFailure
             CannotEnterComponent
             NoAsyncResult
+            UnhandledTag
+            ContinuationAlreadyConsumed
+            DeleteMeDebugAssertion
         }
 
         None
@@ -160,6 +173,9 @@ impl fmt::Display for Trap {
             CastFailure => "cast failure",
             CannotEnterComponent => "cannot enter component instance",
             NoAsyncResult => "async-lifted export failed to produce a result",
+            UnhandledTag => "unhandled tag",
+            ContinuationAlreadyConsumed => "continuation already consumed",
+            DeleteMeDebugAssertion => "triggered debug assertion",
         };
         write!(f, "wasm trap: {desc}")
     }

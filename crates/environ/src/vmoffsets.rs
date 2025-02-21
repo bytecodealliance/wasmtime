@@ -165,6 +165,12 @@ pub trait PtrSize {
         4
     }
 
+    /// This is the size of the largest value type (i.e. a V128).
+    #[inline]
+    fn maximum_value_size(&self) -> u8 {
+        self.size_of_vmglobal_definition()
+    }
+
     // Offsets within `VMRuntimeLimits`
 
     /// Return the offset of the `fuel_consumed` field of `VMRuntimeLimits`
@@ -301,8 +307,6 @@ pub trait PtrSize {
     /// The offset of the `stack_chain` field.
     /// This field stores a pointer into the `StoreOpauqe`, to a value of type
     /// `crate::stack_switching::StackChain`.
-    // FIXME(#10248) This field is not actually in use, yet. It is only here for
-    // future use in a subsequent stack-switching PR.
     #[inline]
     fn vmctx_stack_chain(&self) -> u8 {
         self.vmctx_type_ids_array() + self.size()

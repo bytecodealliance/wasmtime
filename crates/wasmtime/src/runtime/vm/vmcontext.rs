@@ -500,7 +500,7 @@ impl VMGlobalDefinition {
                     global.init_gc_ref(store.gc_store_mut()?, r.as_ref())
                 }
                 WasmHeapTopType::Func => *global.as_func_ref_mut() = raw.get_funcref().cast(),
-                WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+                WasmHeapTopType::Cont => *global.as_func_ref_mut() = raw.get_funcref().cast(), // TODO(#10248): temporary hack.
             },
         }
         Ok(global)
