@@ -20,7 +20,7 @@ fn main() {
     let mut vec_of_built_files = File::create(out_dir.join("generated-files.rs")).unwrap();
     writeln!(vec_of_built_files, "vec![").unwrap();
     for file in &built_files {
-        writeln!(vec_of_built_files, "  \"{}\".into(),", file.display()).unwrap();
+        writeln!(vec_of_built_files, "  {:?}.into(),", file.display()).unwrap();
     }
     writeln!(vec_of_built_files, "]").unwrap();
 }
