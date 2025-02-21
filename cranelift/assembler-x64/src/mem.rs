@@ -272,6 +272,25 @@ impl<R: AsReg, M: AsReg> GprMem<R, M> {
     }
 }
 
+/// An XMM register or memory operand.
+#[derive(Clone, Debug)]
+#[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
+#[allow(clippy::module_name_repetitions)]
+pub enum XmmMem<R: AsReg, M: AsReg> {
+    Xmm(R),
+    Mem(Amode<M>),
+}
+
+impl<R: AsReg, M: AsReg> XmmMem<R, M> {
+    /// Pretty-print the operand.
+    pub fn to_string(&self) -> String {
+        match self {
+            XmmMem::Xmm(xmm) => reg::enc::to_string(xmm.enc(), Size::DoubleQuadword).to_owned(),
+            XmmMem::Mem(amode) => amode.to_string(),
+        }
+    }
+}
+
 /// Emit the ModRM/SIB/displacement sequence for a memory operand.
 pub fn emit_modrm_sib_disp<R: AsReg>(
     sink: &mut impl CodeSink,

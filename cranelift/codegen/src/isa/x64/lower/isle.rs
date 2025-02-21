@@ -6,7 +6,7 @@ use crate::{ir::types, ir::AtomicRmwOp, isa};
 use generated_code::{Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
-use super::external::{CraneliftRegisters, PairedGpr};
+use super::external::{CraneliftRegisters, PairedGpr, PairedXmm};
 use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode, MergeableLoadSize};
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::immediates::*;
@@ -45,6 +45,10 @@ type AssemblerReadGpr = asm::Gpr<Gpr>;
 type AssemblerReadWriteGpr = asm::Gpr<PairedGpr>;
 type AssemblerReadGprMem = asm::GprMem<Gpr, Gpr>;
 type AssemblerReadWriteGprMem = asm::GprMem<PairedGpr, Gpr>;
+type AssemblerReadXmm = asm::Xmm<Xmm>;
+type AssemblerReadWriteXmm = asm::Xmm<PairedXmm>;
+type AssemblerReadXmmMem = asm::XmmMem<Xmm, Gpr>;
+type AssemblerReadWriteXmmMem = asm::XmmMem<PairedXmm, Gpr>;
 type AssemblerInst = asm::Inst<CraneliftRegisters>;
 type AssemblerImm8 = asm::Imm8;
 type AssemblerSimm8 = asm::Simm8;
@@ -1026,6 +1030,16 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
+    fn is_xmm(&mut self, src: &XmmMemImm) -> Option<AssemblerReadXmmMem> {
+        match src.clone().to_reg_mem_imm() {
+            RegMemImm::Reg { reg } => {
+                let read = Xmm::new(reg).unwrap();
+                Some(AssemblerReadXmmMem::Xmm(read))
+            }
+            _ => None,
+        }
+    }
+
     fn is_mem(&mut self, src: &GprMemImm) -> Option<AssemblerReadGprMem> {
         match src.clone().to_reg_mem_imm() {
             RegMemImm::Mem { addr } => {
@@ -1050,8 +1064,25 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
+    fn is_xmm_mem(&mut self, src: &XmmMem) -> Option<AssemblerReadXmmMem> {
+        match src.clone().to_reg_mem() {
+            RegMem::Reg { reg } => {
+                let read = Xmm::new(reg).unwrap();
+                Some(AssemblerReadXmmMem::Xmm(read))
+            }
+            RegMem::Mem { addr } => {
+                let addr = addr.into();
+                Some(AssemblerReadXmmMem::Mem(addr))
+            }
+        }
+    }
+
     fn convert_gpr_to_assembler_read_gpr(&mut self, read: Gpr) -> AssemblerReadGpr {
         AssemblerReadGpr::new(read)
+    }
+
+    fn convert_xmm_to_assembler_read_xmm(&mut self, read: Xmm) -> AssemblerReadXmm {
+        AssemblerReadXmm::new(read)
     }
 
     fn convert_gpr_to_assembler_read_write_gpr(&mut self, read: Gpr) -> AssemblerReadWriteGpr {
@@ -1060,14 +1091,31 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         AssemblerReadWriteGpr::new(PairedGpr { read, write })
     }
 
+    fn convert_xmm_to_assembler_read_write_xmm(&mut self, read: Xmm) -> AssemblerReadWriteXmm {
+        let write = self.lower_ctx.alloc_tmp(types::F32X4).only_reg().unwrap();
+        let write = WritableXmm::from_writable_reg(write).unwrap();
+        AssemblerReadWriteXmm::new(PairedXmm { read, write })
+    }
+
     fn convert_gpr_to_assembler_read_gpr_mem(&mut self, read: Gpr) -> AssemblerReadGprMem {
         asm::GprMem::Gpr(read)
+    }
+
+    fn convert_xmm_to_assembler_read_xmm_mem(&mut self, read: Xmm) -> AssemblerReadXmmMem {
+        asm::XmmMem::Xmm(read)
     }
 
     fn convert_gpr_mem_to_assembler_read_gpr_mem(&mut self, read: &GprMem) -> AssemblerReadGprMem {
         match read.clone().into() {
             RegMem::Reg { reg } => asm::GprMem::Gpr(Gpr::new(reg).unwrap()),
             RegMem::Mem { addr } => asm::GprMem::Mem(addr.into()),
+        }
+    }
+
+    fn convert_xmm_mem_to_assembler_read_xmm_mem(&mut self, read: &XmmMem) -> AssemblerReadXmmMem {
+        match read.clone().into() {
+            RegMem::Reg { reg } => asm::XmmMem::Xmm(Xmm::new(reg).unwrap()),
+            RegMem::Mem { addr } => asm::XmmMem::Mem(addr.into()),
         }
     }
 
@@ -1085,8 +1133,26 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         }
     }
 
+    fn convert_xmm_mem_to_assembler_read_write_xmm_mem(
+        &mut self,
+        read: &XmmMem,
+    ) -> AssemblerReadWriteXmmMem {
+        match read.clone().into() {
+            RegMem::Reg { reg } => asm::XmmMem::Xmm(
+                *self
+                    .convert_xmm_to_assembler_read_write_xmm(Xmm::new(reg).unwrap())
+                    .as_ref(),
+            ),
+            RegMem::Mem { addr } => asm::XmmMem::Mem(addr.into()),
+        }
+    }
+
     fn convert_assembler_read_write_gpr_to_gpr(&mut self, gpr: &AssemblerReadWriteGpr) -> Gpr {
         gpr.as_ref().write.to_reg()
+    }
+
+    fn convert_assembler_read_write_xmm_to_xmm(&mut self, xmm: &AssemblerReadWriteXmm) -> Xmm {
+        xmm.as_ref().write.to_reg()
     }
 
     fn convert_gpr_to_assembler_read_write_gpr_mem(
@@ -1098,6 +1164,15 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
         AssemblerReadWriteGprMem::Gpr(PairedGpr { read, write })
     }
 
+    fn convert_xmm_to_assembler_read_write_xmm_mem(
+        &mut self,
+        read: Xmm,
+    ) -> AssemblerReadWriteXmmMem {
+        let write = self.lower_ctx.alloc_tmp(types::F32X4).only_reg().unwrap();
+        let write = WritableXmm::from_writable_reg(write).unwrap();
+        AssemblerReadWriteXmmMem::Xmm(PairedXmm { read, write })
+    }
+
     fn convert_assembler_read_write_gpr_mem_to_gpr(
         &mut self,
         reg_mem: &AssemblerReadWriteGprMem,
@@ -1106,6 +1181,18 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             asm::GprMem::Gpr(gpr) => gpr.write.to_reg(),
             asm::GprMem::Mem(_) => {
                 unimplemented!("cannot convert a memory address to a GPR; check the ISLE rules")
+            }
+        }
+    }
+
+    fn convert_assembler_read_write_xmm_mem_to_xmm(
+        &mut self,
+        reg_mem: &AssemblerReadWriteXmmMem,
+    ) -> Xmm {
+        match reg_mem {
+            asm::XmmMem::Xmm(xmm) => xmm.write.to_reg(),
+            asm::XmmMem::Mem(_) => {
+                unimplemented!("cannot convert a memory address to an XMM; check the ISLE rules")
             }
         }
     }
