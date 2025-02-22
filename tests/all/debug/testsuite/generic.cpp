@@ -1,5 +1,5 @@
 // clang-format off
-// clang generic.cpp generic-satellite.cpp -o generic.wasm -g -target wasm32-unknown-wasip1
+// clang -o generic.wasm -target wasm32-unknown-wasip1 -g generic.cpp generic-satellite.cpp
 // clang-format on
 //
 #include "generic.h"

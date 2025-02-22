@@ -3402,6 +3402,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "test-debug-assets"
+version = "0.0.0"
+
+[[package]]
 name = "test-log"
 version = "0.2.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4370,6 +4374,7 @@ dependencies = [
  "similar",
  "target-lexicon",
  "tempfile",
+ "test-debug-assets",
  "test-programs-artifacts",
  "tokio",
  "toml",
