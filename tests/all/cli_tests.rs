@@ -2078,7 +2078,10 @@ after empty
             assert!(res.is_err());
         }
 
-        server.finish()?;
+        let stderr = server.finish()?.1;
+        assert!(stderr.contains("guest returned before invoking `response-outparam::set` method"));
+        assert!(!stderr.contains("panicked"));
+
         Ok(())
     }
 
@@ -2100,7 +2103,10 @@ after empty
             assert!(res.is_err());
         }
 
-        server.finish()?;
+        let stderr = server.finish()?.1;
+        assert!(stderr.contains("guest never invoked `response-outparam::set` method:"));
+        assert!(!stderr.contains("panicked"));
+
         Ok(())
     }
 
