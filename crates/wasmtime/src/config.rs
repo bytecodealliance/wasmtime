@@ -849,6 +849,21 @@ impl Config {
         self
     }
 
+    /// Configures whether the WebAssembly [shared-everything-threads] proposal
+    /// will be enabled for compilation.
+    ///
+    /// This feature gates extended use of the `shared` attribute on items other
+    /// than memories, extra atomic instructions, and new component model
+    /// intrinsics for spawning threads. It depends on the
+    /// [`wasm_threads`][Self::wasm_threads] being enabled.
+    ///
+    /// [shared-everything-threads]:
+    ///     https://github.com/webassembly/shared-everything-threads
+    pub fn wasm_shared_everything_threads(&mut self, enable: bool) -> &mut Self {
+        self.wasm_feature(WasmFeatures::SHARED_EVERYTHING_THREADS, enable);
+        self
+    }
+
     /// Configures whether the [WebAssembly reference types proposal][proposal]
     /// will be enabled for compilation.
     ///
