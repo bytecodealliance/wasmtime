@@ -30,6 +30,16 @@ use wasmtime_environ::{Compiler, TripleExt, Unsigned};
 
 const TEXT_SECTION_NAME: &[u8] = b".text";
 
+fn text_align(compiler: &dyn Compiler) -> u64 {
+    // text pages will not be made executable with pulley, so the section
+    // doesn't need to be padded out to page alignment boundaries.
+    if compiler.triple().is_pulley() {
+        0x1
+    } else {
+        compiler.page_size_align()
+    }
+}
+
 /// A helper structure used to assemble the final text section of an executable,
 /// plus unwinding information and other related details.
 ///
@@ -282,7 +292,7 @@ impl<'a> ModuleTextBuilder<'a> {
         let text = self.text.finish(&mut self.ctrl_plane);
         self.obj
             .section_mut(self.text_section)
-            .set_data(text, self.compiler.page_size_align());
+            .set_data(text, text_align(self.compiler));
 
         // Append the unwind information for all our functions, if necessary.
         self.unwind_info
@@ -440,8 +450,7 @@ impl<'a> UnwindInfoBuilder<'a> {
         // This write will align the text section to a page boundary and then
         // return the offset at that point. This gives us the full size of the
         // text section at that point, after alignment.
-        let text_section_size =
-            obj.append_section_data(text_section, &[], compiler.page_size_align());
+        let text_section_size = obj.append_section_data(text_section, &[], text_align(compiler));
 
         if self.windows_xdata.len() > 0 {
             assert!(self.systemv_unwind_info.len() == 0);
