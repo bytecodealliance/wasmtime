@@ -974,11 +974,9 @@ pub(crate) mod stack_switching_helpers {
             _env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
-            use super::stack_switching_environ::offsets as o;
+            let offset = _env.offsets.ptr.vmcommon_stack_information_state() as i64;
 
-            builder
-                .ins()
-                .iadd_imm(self.address, o::common_stack_information::STATE as i64)
+            builder.ins().iadd_imm(self.address, offset)
         }
 
         fn get_stack_limits_ptr<'a>(
@@ -986,11 +984,9 @@ pub(crate) mod stack_switching_helpers {
             _env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
-            use super::stack_switching_environ::offsets as o;
+            let offset = _env.offsets.ptr.vmcommon_stack_information_limits() as i64;
 
-            builder
-                .ins()
-                .iadd_imm(self.address, o::common_stack_information::LIMITS as i64)
+            builder.ins().iadd_imm(self.address, offset)
         }
 
         fn load_state<'a>(
@@ -1079,40 +1075,42 @@ pub(crate) mod stack_switching_helpers {
                 .icmp_imm(IntCC::NotEqual, actual_state, allocated as i64)
         }
 
-        pub fn get_handler_list(&self) -> VMHandlerList {
-            let offset =
-                super::stack_switching_environ::offsets::common_stack_information::HANDLERS;
-            VMHandlerList::new(self.address, i32::try_from(offset).unwrap())
+        pub fn get_handler_list<'a>(
+            &self,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
+            _builder: &mut FunctionBuilder,
+        ) -> VMHandlerList {
+            let offset = env.offsets.ptr.vmcommon_stack_information_handlers() as i32;
+            VMHandlerList::new(self.address, offset)
         }
 
         pub fn get_first_switch_handler_index<'a>(
             &self,
-            _env: &mut crate::func_environ::FuncEnvironment<'a>,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
             // Field first_switch_handler_index has type u32
             let memflags = ir::MemFlags::trusted();
-            let offset = super::stack_switching_environ::offsets::common_stack_information::FIRST_SWITCH_HANDLER_INDEX;
-            builder
-                .ins()
-                .load(I32, memflags, self.address, i32::try_from(offset).unwrap())
+            let offset =
+                env.offsets
+                    .ptr
+                    .vmcommon_stack_information_first_switch_handler_index() as i32;
+            builder.ins().load(I32, memflags, self.address, offset)
         }
 
         pub fn set_first_switch_handler_index<'a>(
             &self,
-            _env: &mut crate::func_environ::FuncEnvironment<'a>,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
             value: ir::Value,
         ) {
             // Field first_switch_handler_index has type u32
             let memflags = ir::MemFlags::trusted();
-            let offset = super::stack_switching_environ::offsets::common_stack_information::FIRST_SWITCH_HANDLER_INDEX;
-            builder.ins().store(
-                memflags,
-                value,
-                self.address,
-                i32::try_from(offset).unwrap(),
-            );
+            let offset =
+                env.offsets
+                    .ptr
+                    .vmcommon_stack_information_first_switch_handler_index() as i32;
+            builder.ins().store(memflags, value, self.address, offset);
         }
 
         /// Sets `last_wasm_entry_sp` and `stack_limit` fields in
@@ -1493,7 +1491,7 @@ fn search_handler<'a>(
 
         let parent_csi = parent_link.get_common_stack_information(env, builder);
 
-        let handlers = parent_csi.get_handler_list();
+        let handlers = parent_csi.get_handler_list(env, builder);
         let handler_list_data_ptr = handlers.get_data(env, builder);
 
         let first_switch_handler_index = parent_csi.get_first_switch_handler_index(env, builder);
@@ -1824,7 +1822,7 @@ pub(crate) fn translate_resume<'a>(
         // Install handlers in (soon to be) parent's VMHandlerList:
         // Let the i-th handler clause be (on $tag $block).
         // Then the i-th entry of the VMHandlerList will be the address of $tag.
-        let handler_list = parent_csi.get_handler_list();
+        let handler_list = parent_csi.get_handler_list(env, builder);
 
         if resumetable.len() > 0 {
             // Total number of handlers (suspend and switch).

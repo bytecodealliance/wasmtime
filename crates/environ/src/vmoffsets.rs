@@ -243,6 +243,41 @@ pub trait PtrSize {
         .unwrap()
     }
 
+    // Offsets within `VMCommonStackInformation`
+
+    /// Return the offset of `VMCommonStackInformation::limits`.
+    fn vmcommon_stack_information_limits(&self) -> u8 {
+        0 * self.size()
+    }
+
+    /// Return the offset of `VMCommonStackInformation::state`.
+    fn vmcommon_stack_information_state(&self) -> u8 {
+        2 * self.size()
+    }
+
+    /// Return the offset of `VMCommonStackInformation::handlers`.
+    fn vmcommon_stack_information_handlers(&self) -> u8 {
+        u8::try_from(align(
+            self.vmcommon_stack_information_state() as u32 + 4,
+            u32::from(self.size()),
+        ))
+        .unwrap()
+    }
+
+    /// Return the offset of `VMCommonStackInformation::first_switch_handler_index`.
+    fn vmcommon_stack_information_first_switch_handler_index(&self) -> u8 {
+        self.vmcommon_stack_information_handlers() + 2 * 4 + self.size()
+    }
+
+    /// Return the size of `VMCommonStackInformation`.
+    fn size_of_vmcommon_stack_information(&self) -> u8 {
+        u8::try_from(align(
+            self.vmcommon_stack_information_first_switch_handler_index() as u32 + 4,
+            u32::from(self.size()),
+        ))
+        .unwrap()
+    }
+
     /// Return the offset to the `magic` value in this `VMContext`.
     #[inline]
     fn vmctx_magic(&self) -> u8 {

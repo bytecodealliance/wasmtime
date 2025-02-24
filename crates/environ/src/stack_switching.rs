@@ -107,6 +107,40 @@ impl VMCommonStackInformation {
     }
 }
 
+#[test]
+fn check_vm_common_stack_information_offsets() {
+    use crate::{HostPtr, Module, PtrSize, VMOffsets};
+    use core::mem::offset_of;
+    use std::mem::size_of;
+
+    let module = Module::new();
+    let offsets = VMOffsets::new(HostPtr, &module);
+    assert_eq!(
+        size_of::<VMCommonStackInformation>(),
+        usize::from(offsets.ptr.size_of_vmcommon_stack_information())
+    );
+    assert_eq!(
+        offset_of!(VMCommonStackInformation, limits),
+        usize::from(offsets.ptr.vmcommon_stack_information_limits())
+    );
+    assert_eq!(
+        offset_of!(VMCommonStackInformation, state),
+        usize::from(offsets.ptr.vmcommon_stack_information_state())
+    );
+    assert_eq!(
+        offset_of!(VMCommonStackInformation, handlers),
+        usize::from(offsets.ptr.vmcommon_stack_information_handlers())
+    );
+    assert_eq!(
+        offset_of!(VMCommonStackInformation, first_switch_handler_index),
+        usize::from(
+            offsets
+                .ptr
+                .vmcommon_stack_information_first_switch_handler_index()
+        )
+    );
+}
+
 impl VMStackLimits {
     /// Default value, but uses the given value for `stack_limit`.
     pub fn with_stack_limit(stack_limit: usize) -> Self {
@@ -264,22 +298,6 @@ pub mod offsets {
         pub const STACK_LIMIT: usize = offset_of!(VMStackLimits, stack_limit);
         /// Offset of `last_wasm_entry_fp` field
         pub const LAST_WASM_ENTRY_FP: usize = offset_of!(VMStackLimits, last_wasm_entry_fp);
-    }
-
-    /// Offsets of fields in `CommonStackInformation` struct.
-    pub mod common_stack_information {
-        use crate::stack_switching::*;
-        use core::mem::offset_of;
-
-        /// Offset of `limits` field
-        pub const LIMITS: usize = offset_of!(VMCommonStackInformation, limits);
-        /// Offset of `state` field
-        pub const STATE: usize = offset_of!(VMCommonStackInformation, state);
-        /// Offset of `handlers` field
-        pub const HANDLERS: usize = offset_of!(VMCommonStackInformation, handlers);
-        /// Offset of `first_switch_handler_index` field
-        pub const FIRST_SWITCH_HANDLER_INDEX: usize =
-            offset_of!(VMCommonStackInformation, first_switch_handler_index);
     }
 
     /// Size of wasmtime_runtime::continuation::FiberStack.
