@@ -20,8 +20,8 @@ pub const PINNED_REG: u8 = 21;
 
 /// Get a reference to an X-register (integer register). Do not use
 /// this for xsp / xzr; we have two special registers for those.
-pub fn xreg(num: u8) -> Reg {
-    Reg::from(xreg_preg(num))
+pub const fn xreg(num: u8) -> Reg {
+    Reg::from_preg(xreg_preg(num))
 }
 
 /// Get the given X-register as a PReg.
@@ -36,8 +36,8 @@ pub fn writable_xreg(num: u8) -> Writable<Reg> {
 }
 
 /// Get a reference to a V-register (vector/FP register).
-pub fn vreg(num: u8) -> Reg {
-    Reg::from(vreg_preg(num))
+pub const fn vreg(num: u8) -> Reg {
+    Reg::from_preg(vreg_preg(num))
 }
 
 /// Get the given V-register as a PReg.
@@ -101,7 +101,7 @@ pub fn writable_link_reg() -> Writable<Reg> {
 }
 
 /// Get a reference to the frame pointer (x29).
-pub fn fp_reg() -> Reg {
+pub const fn fp_reg() -> Reg {
     xreg(29)
 }
 
