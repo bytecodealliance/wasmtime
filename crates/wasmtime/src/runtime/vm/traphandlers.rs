@@ -421,7 +421,7 @@ where
 // usage of its accessor methods.
 mod call_thread_state {
     use super::*;
-    use crate::runtime::vm::stack_switching::StackChain;
+    use crate::runtime::vm::stack_switching::VMStackChain;
     use crate::runtime::vm::Unwind;
     use crate::RuntimeEntryState;
 
@@ -439,7 +439,7 @@ mod call_thread_state {
         pub(crate) limits: NonNull<VMRuntimeLimits>,
         pub(crate) unwinder: &'static dyn Unwind,
 
-        pub(crate) stack_chain: *const StackChain,
+        pub(crate) stack_chain: *const VMStackChain,
 
         pub(super) prev: Cell<tls::Ptr>,
         #[cfg(all(has_native_signals, unix))]
@@ -519,8 +519,8 @@ mod call_thread_state {
             (&*self.old_state).last_wasm_entry_fp
         }
 
-        /// Get the saved `StackChain` for the previous `CallThreadState`.
-        pub unsafe fn old_stack_chain(&self) -> StackChain {
+        /// Get the saved `VMStackChain` for the previous `CallThreadState`.
+        pub unsafe fn old_stack_chain(&self) -> VMStackChain {
             (&*self.old_state).stack_chain.clone()
         }
 

@@ -322,7 +322,7 @@ pub(crate) mod stack_switching_helpers {
     }
 
     #[derive(Copy, Clone)]
-    pub struct Array<T> {
+    pub struct VMArray<T> {
         /// Base address of this object, which must be shifted by `offset` below.
         base: ir::Value,
 
@@ -336,30 +336,30 @@ pub(crate) mod stack_switching_helpers {
         phantom: PhantomData<T>,
     }
 
-    pub type Payloads = Array<u128>;
+    pub type VMPayloads = VMArray<u128>;
 
     // Actually a vector of *mut VMTagDefinition
-    pub type HandlerList = Array<*mut u8>;
+    pub type VMHandlerList = VMArray<*mut u8>;
 
-    /// Size of `stack_switching_environ::StackChain` in machine words.
+    /// Size of `stack_switching_environ::VMStackChain` in machine words.
     /// Used to verify that we have not changed its representation.
     const STACK_CHAIN_POINTER_COUNT: usize =
         super::stack_switching_environ::offsets::STACK_CHAIN_SIZE / std::mem::size_of::<usize>();
 
-    /// Compile-time representation of stack_switching_environ::StackChain,
+    /// Compile-time representation of stack_switching_environ::VMStackChain,
     /// consisting of two `ir::Value`s.
-    pub struct StackChain {
+    pub struct VMStackChain {
         discriminant: ir::Value,
         payload: ir::Value,
         pointer_type: ir::Type,
     }
 
-    pub struct CommonStackInformation {
+    pub struct VMCommonStackInformation {
         pub address: ir::Value,
     }
 
-    /// Compile-time representation of `crate::runtime::vm::fibre::FiberStack`.
-    pub struct FiberStack {
+    /// Compile-time representation of `crate::runtime::vm::stack::VMContinuationStack`.
+    pub struct VMContinuationStack {
         /// This is NOT the "top of stack" address of the stack itself. In line
         /// with how the (runtime) `FiberStack` type works, this is a pointer to
         /// the TOS address.
@@ -371,35 +371,35 @@ pub(crate) mod stack_switching_helpers {
             VMContRef { address }
         }
 
-        pub fn args(&self) -> Payloads {
+        pub fn args(&self) -> VMPayloads {
             let offset = super::stack_switching_environ::offsets::vm_cont_ref::ARGS;
-            Payloads::new(self.address, i32::try_from(offset).unwrap())
+            VMPayloads::new(self.address, i32::try_from(offset).unwrap())
         }
 
-        pub fn values(&self) -> Payloads {
+        pub fn values(&self) -> VMPayloads {
             let offset = super::stack_switching_environ::offsets::vm_cont_ref::VALUES;
-            Payloads::new(self.address, i32::try_from(offset).unwrap())
+            VMPayloads::new(self.address, i32::try_from(offset).unwrap())
         }
 
         pub fn common_stack_information<'a>(
             &self,
             _env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
-        ) -> CommonStackInformation {
+        ) -> VMCommonStackInformation {
             let offset =
                 super::stack_switching_environ::offsets::vm_cont_ref::COMMON_STACK_INFORMATION;
             let address = builder.ins().iadd_imm(self.address, offset as i64);
-            CommonStackInformation { address }
+            VMCommonStackInformation { address }
         }
 
         /// Stores the parent of this continuation, which may either be another
         /// continuation or the initial stack. It is therefore represented as a
-        /// `StackChain` element.
+        /// `VMStackChain` element.
         pub fn set_parent_stack_chain<'a>(
             &mut self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
-            new_stack_chain: &StackChain,
+            new_stack_chain: &VMStackChain,
         ) {
             let offset = super::stack_switching_environ::offsets::vm_cont_ref::PARENT_CHAIN;
             new_stack_chain.store(env, builder, self.address, i32::try_from(offset).unwrap())
@@ -407,14 +407,14 @@ pub(crate) mod stack_switching_helpers {
 
         /// Loads the parent of this continuation, which may either be another
         /// continuation or the initial stack. It is therefore represented as a
-        /// `StackChain` element.
+        /// `VMStackChain` element.
         pub fn get_parent_stack_chain<'a>(
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
-        ) -> StackChain {
+        ) -> VMStackChain {
             let offset = super::stack_switching_environ::offsets::vm_cont_ref::PARENT_CHAIN;
-            StackChain::load(
+            VMStackChain::load(
                 env,
                 builder,
                 self.address,
@@ -505,15 +505,15 @@ pub(crate) mod stack_switching_helpers {
             &self,
             _env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
-        ) -> FiberStack {
+        ) -> VMContinuationStack {
             // The top of stack field is stored at offset 0 of the `FiberStack`.
             let offset = super::stack_switching_environ::offsets::vm_cont_ref::STACK;
             let fiber_stack_top_of_stack_ptr = builder.ins().iadd_imm(self.address, offset as i64);
-            FiberStack::new(fiber_stack_top_of_stack_ptr)
+            VMContinuationStack::new(fiber_stack_top_of_stack_ptr)
         }
     }
 
-    impl<T> Array<T> {
+    impl<T> VMArray<T> {
         pub(crate) fn new(base: ir::Value, offset: i32) -> Self {
             Self {
                 base,
@@ -796,31 +796,31 @@ pub(crate) mod stack_switching_helpers {
         }
     }
 
-    impl StackChain {
-        /// Creates a `Self` corressponding to `StackChain::Continuation(contref)`.
+    impl VMStackChain {
+        /// Creates a `Self` corressponding to `VMStackChain::Continuation(contref)`.
         pub fn from_continuation(
             builder: &mut FunctionBuilder,
             contref: ir::Value,
             pointer_type: ir::Type,
-        ) -> StackChain {
+        ) -> VMStackChain {
             debug_assert_eq!(STACK_CHAIN_POINTER_COUNT, 2);
             let discriminant =
                 super::stack_switching_environ::STACK_CHAIN_CONTINUATION_DISCRIMINANT;
             let discriminant = builder.ins().iconst(pointer_type, discriminant as i64);
-            StackChain {
+            VMStackChain {
                 discriminant,
                 payload: contref,
                 pointer_type,
             }
         }
 
-        /// Creates a `Self` corressponding to `StackChain::Absent`.
-        pub fn absent(builder: &mut FunctionBuilder, pointer_type: ir::Type) -> StackChain {
+        /// Creates a `Self` corressponding to `VMStackChain::Absent`.
+        pub fn absent(builder: &mut FunctionBuilder, pointer_type: ir::Type) -> VMStackChain {
             debug_assert_eq!(STACK_CHAIN_POINTER_COUNT, 2);
             let discriminant = super::stack_switching_environ::STACK_CHAIN_ABSENT_DISCRIMINANT;
             let discriminant = builder.ins().iconst(pointer_type, discriminant as i64);
             let zero_filler = builder.ins().iconst(pointer_type, 0i64);
-            StackChain {
+            VMStackChain {
                 discriminant,
                 payload: zero_filler,
                 pointer_type,
@@ -828,7 +828,7 @@ pub(crate) mod stack_switching_helpers {
         }
 
         /// For debugging purposes. Emits an assertion that `self` does not correspond to
-        /// `StackChain::Absent`.
+        /// `VMStackChain::Absent`.
         pub fn assert_not_absent<'a>(
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
@@ -863,7 +863,7 @@ pub(crate) mod stack_switching_helpers {
             )
         }
 
-        /// Return the two raw `ir::Value`s that represent this StackChain.
+        /// Return the two raw `ir::Value`s that represent this VMStackChain.
         pub fn to_raw_parts(&self) -> [ir::Value; STACK_CHAIN_POINTER_COUNT] {
             [self.discriminant, self.payload]
         }
@@ -872,22 +872,22 @@ pub(crate) mod stack_switching_helpers {
         pub fn from_raw_parts(
             raw_data: [ir::Value; STACK_CHAIN_POINTER_COUNT],
             pointer_type: ir::Type,
-        ) -> StackChain {
-            StackChain {
+        ) -> VMStackChain {
+            VMStackChain {
                 discriminant: raw_data[0],
                 payload: raw_data[1],
                 pointer_type,
             }
         }
 
-        /// Load a `StackChain` object from the given address.
+        /// Load a `VMStackChain` object from the given address.
         pub fn load<'a>(
             _env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
             pointer: ir::Value,
             initial_offset: i32,
             pointer_type: ir::Type,
-        ) -> StackChain {
+        ) -> VMStackChain {
             let memflags = ir::MemFlags::trusted();
             let mut offset = initial_offset;
             let mut data = vec![];
@@ -899,7 +899,7 @@ pub(crate) mod stack_switching_helpers {
             Self::from_raw_parts(data, pointer_type)
         }
 
-        /// Store this `StackChain` object at the given address.
+        /// Store this `VMStackChain` object at the given address.
         pub fn store<'a>(
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
@@ -918,7 +918,7 @@ pub(crate) mod stack_switching_helpers {
             }
         }
 
-        /// Use this only if you've already checked that `self` corresponds to a `StackChain::Continuation`.
+        /// Use this only if you've already checked that `self` corresponds to a `VMStackChain::Continuation`.
         pub fn unchecked_get_continuation<'a>(
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
@@ -944,31 +944,31 @@ pub(crate) mod stack_switching_helpers {
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
-        ) -> CommonStackInformation {
+        ) -> VMCommonStackInformation {
             use super::stack_switching_environ::offsets as o;
 
             self.assert_not_absent(env, builder);
 
-            // `self` corresponds to a StackChain::InitialStack or
-            // StackChain::Continuation.
+            // `self` corresponds to a VMStackChain::InitialStack or
+            // VMStackChain::Continuation.
             // In both cases, the payload is a pointer.
             let address = self.payload;
 
             // `obj` is now a pointer to the beginning of either
             // 1. A `VMContRef` struct (in the case of a
-            // StackChain::Continuation)
+            // VMStackChain::Continuation)
             // 2. A CommonStackInformation struct (in the case of
-            // StackChain::InitialStack)
+            // VMStackChain::InitialStack)
             //
             // Since a `VMContRef` starts with an (inlined) CommonStackInformation
             // object at offset 0, we actually have in both cases that `ptr` is
-            // now the address of the beginning of a StackLimits object.
+            // now the address of the beginning of a VMStackLimits object.
             debug_assert_eq!(o::vm_cont_ref::COMMON_STACK_INFORMATION, 0);
-            CommonStackInformation { address }
+            VMCommonStackInformation { address }
         }
     }
 
-    impl CommonStackInformation {
+    impl VMCommonStackInformation {
         fn get_state_ptr<'a>(
             &self,
             _env: &mut crate::func_environ::FuncEnvironment<'a>,
@@ -998,9 +998,10 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
-            // Let's make sure that we still represent the State enum as i32.
+            // Let's make sure that we still represent the VMStackState enum as i32.
             debug_assert!(
-                mem::size_of::<super::stack_switching_environ::State>() == mem::size_of::<i32>()
+                mem::size_of::<super::stack_switching_environ::VMStackState>()
+                    == mem::size_of::<i32>()
             );
 
             let mem_flags = ir::MemFlags::trusted();
@@ -1013,11 +1014,12 @@ pub(crate) mod stack_switching_helpers {
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
-            state: super::stack_switching_environ::State,
+            state: super::stack_switching_environ::VMStackState,
         ) {
-            // Let's make sure that we still represent the State enum as i32.
+            // Let's make sure that we still represent the VMStackState enum as i32.
             debug_assert!(
-                mem::size_of::<super::stack_switching_environ::State>() == mem::size_of::<i32>()
+                mem::size_of::<super::stack_switching_environ::VMStackState>()
+                    == mem::size_of::<i32>()
             );
 
             let discriminant = builder.ins().iconst(I32, state.discriminant() as i64);
@@ -1039,7 +1041,7 @@ pub(crate) mod stack_switching_helpers {
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
-            states: &[super::stack_switching_environ::State],
+            states: &[super::stack_switching_environ::VMStackState],
         ) -> ir::Value {
             let actual_state = self.load_state(env, builder);
             let zero = builder.ins().iconst(I8, 0);
@@ -1058,12 +1060,12 @@ pub(crate) mod stack_switching_helpers {
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
-            state: super::stack_switching_environ::State,
+            state: super::stack_switching_environ::VMStackState,
         ) -> ir::Value {
             self.has_state_any_of(env, builder, &[state])
         }
 
-        /// Checks whether the `State` reflects that the stack has ever been
+        /// Checks whether the `VMStackState` reflects that the stack has ever been
         /// active (instead of just having been allocated, but never resumed).
         pub fn was_invoked<'a>(
             &self,
@@ -1071,16 +1073,16 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
             let actual_state = self.load_state(env, builder);
-            let allocated: i32 = i32::from(super::stack_switching_environ::State::Fresh);
+            let allocated: i32 = i32::from(super::stack_switching_environ::VMStackState::Fresh);
             builder
                 .ins()
                 .icmp_imm(IntCC::NotEqual, actual_state, allocated as i64)
         }
 
-        pub fn get_handler_list(&self) -> HandlerList {
+        pub fn get_handler_list(&self) -> VMHandlerList {
             let offset =
                 super::stack_switching_environ::offsets::common_stack_information::HANDLERS;
-            HandlerList::new(self.address, i32::try_from(offset).unwrap())
+            VMHandlerList::new(self.address, i32::try_from(offset).unwrap())
         }
 
         pub fn get_first_switch_handler_index<'a>(
@@ -1114,7 +1116,7 @@ pub(crate) mod stack_switching_helpers {
         }
 
         /// Sets `last_wasm_entry_sp` and `stack_limit` fields in
-        /// `VMRuntimelimits` using the values from the `StackLimits` of this
+        /// `VMRuntimelimits` using the values from the `VMStackLimits` of this
         /// object.
         pub fn write_limits_to_vmcontext<'a>(
             &self,
@@ -1154,8 +1156,8 @@ pub(crate) mod stack_switching_helpers {
             );
         }
 
-        /// Overwrites the `last_wasm_entry_fp` field of the `StackLimits`
-        /// object in the `StackLimits` of this object by loading the corresponding
+        /// Overwrites the `last_wasm_entry_fp` field of the `VMStackLimits`
+        /// object in the `VMStackLimits` of this object by loading the corresponding
         /// field from the `VMRuntimeLimits`.
         /// If `load_stack_limit` is true, we do the same for the `stack_limit`
         /// field.
@@ -1201,7 +1203,7 @@ pub(crate) mod stack_switching_helpers {
         }
     }
 
-    impl FiberStack {
+    impl VMContinuationStack {
         /// The parameter is NOT the "top of stack" address of the stack itself. In line
         /// with how the (runtime) `FiberStack` type works, this is a pointer to
         /// the TOS address.
@@ -1232,14 +1234,14 @@ pub(crate) mod stack_switching_helpers {
     }
 }
 
-use helpers::StackChain;
+use helpers::VMStackChain;
 use stack_switching_environ::{
-    State, CONTROL_EFFECT_RESUME_DISCRIMINANT, CONTROL_EFFECT_SWITCH_DISCRIMINANT,
+    VMStackState, CONTROL_EFFECT_RESUME_DISCRIMINANT, CONTROL_EFFECT_SWITCH_DISCRIMINANT,
 };
 use stack_switching_helpers as helpers;
 
-/// Stores the given arguments in the appropriate `Payloads` object in the continuation.
-/// If the continuation was never invoked, use the `args` object.
+/// Stores the given arguments in the appropriate `VMPayloads` object in the
+/// continuation. If the continuation was never invoked, use the `args` object.
 /// Otherwise, use the `values` object.
 pub(crate) fn vmcontref_store_payloads<'a>(
     env: &mut crate::func_environ::FuncEnvironment<'a>,
@@ -1330,11 +1332,11 @@ pub fn vmctx_load_stack_chain<'a>(
     env: &mut crate::func_environ::FuncEnvironment<'a>,
     builder: &mut FunctionBuilder,
     vmctx: ir::Value,
-) -> StackChain {
+) -> VMStackChain {
     let offset = env.offsets.ptr.vmctx_stack_chain() as i32;
 
     // The `stack_switching_stack_chain` field of the VMContext only
-    // contains a pointer to the `StackChainCell` in the `Store`.
+    // contains a pointer to the `VMStackChainCell` in the `Store`.
     // The pointer never changes through the liftime of a `VMContext`,
     // which is why this load is `readonly`.
     // TODO(frank-emrich) Consider turning this pointer into a global
@@ -1344,7 +1346,7 @@ pub fn vmctx_load_stack_chain<'a>(
         .ins()
         .load(env.pointer_type(), memflags, vmctx, offset);
 
-    StackChain::load(env, builder, stack_chain_ptr, 0, env.pointer_type())
+    VMStackChain::load(env, builder, stack_chain_ptr, 0, env.pointer_type())
 }
 
 /// Stores the given stack chain saved in the `VMContext`, overwriting the
@@ -1353,7 +1355,7 @@ pub fn vmctx_store_stack_chain<'a>(
     env: &mut crate::func_environ::FuncEnvironment<'a>,
     builder: &mut FunctionBuilder,
     vmctx: ir::Value,
-    stack_chain: &StackChain,
+    stack_chain: &VMStackChain,
 ) {
     let offset = env.offsets.ptr.vmctx_stack_chain() as i32;
 
@@ -1368,14 +1370,14 @@ pub fn vmctx_store_stack_chain<'a>(
 }
 
 /// Similar to `vmctx_store_stack_chain`, but instead of storing an arbitrary
-/// `StackChain`, stores StackChain::Continuation(contref)`.
+/// `VMStackChain`, stores VMStackChain::Continuation(contref)`.
 pub fn vmctx_set_active_continuation<'a>(
     env: &mut crate::func_environ::FuncEnvironment<'a>,
     builder: &mut FunctionBuilder,
     vmctx: ir::Value,
     contref: ir::Value,
 ) {
-    let chain = StackChain::from_continuation(builder, contref, env.pointer_type());
+    let chain = VMStackChain::from_continuation(builder, contref, env.pointer_type());
     vmctx_store_stack_chain(env, builder, vmctx, &chain)
 }
 
@@ -1405,7 +1407,7 @@ pub fn vmctx_load_vm_runtime_limits_ptr<'a>(
 /// We trap if no handler was found.
 ///
 /// The returned values are:
-/// 1. The stack (continuation or initial stack, represented as a StackChain) in
+/// 1. The stack (continuation or initial stack, represented as a VMStackChain) in
 ///    whose handler list we found the tag (i.e., the stack that performed the
 ///    resume instruction that installed handler for the tag).
 /// 2. The continuation whose parent is the stack mentioned in 1.
@@ -1440,10 +1442,10 @@ pub fn vmctx_load_vm_runtime_limits_ptr<'a>(
 fn search_handler<'a>(
     env: &mut crate::func_environ::FuncEnvironment<'a>,
     builder: &mut FunctionBuilder,
-    start: &helpers::StackChain,
+    start: &helpers::VMStackChain,
     tag_address: ir::Value,
     search_suspend_handlers: bool,
-) -> (StackChain, ir::Value, ir::Value) {
+) -> (VMStackChain, ir::Value, ir::Value) {
     let handle_link = builder.create_block();
     let begin_search_handler_list = builder.create_block();
     let try_index = builder.create_block();
@@ -1462,7 +1464,7 @@ fn search_handler<'a>(
 
         let raw_parts = builder.block_params(handle_link);
         let chain_link =
-            helpers::StackChain::from_raw_parts([raw_parts[0], raw_parts[1]], env.pointer_type());
+            helpers::VMStackChain::from_raw_parts([raw_parts[0], raw_parts[1]], env.pointer_type());
         let is_initial_stack = chain_link.is_initial_stack(env, builder);
         builder.ins().brif(
             is_initial_stack,
@@ -1746,8 +1748,11 @@ pub(crate) fn translate_resume<'a>(
             // This should be impossible due to the linearity check.
             let zero = builder.ins().iconst(I8, 0);
             let csi = vmcontref.common_stack_information(env, builder);
-            let has_returned =
-                csi.has_state(env, builder, stack_switching_environ::State::Returned);
+            let has_returned = csi.has_state(
+                env,
+                builder,
+                stack_switching_environ::VMStackState::Returned,
+            );
             emit_debug_assert_eq!(env, builder, has_returned, zero);
         }
 
@@ -1795,9 +1800,9 @@ pub(crate) fn translate_resume<'a>(
         // one that will become the parent of the to-be-resumed one)
         //
         // 2. Copy `stack_limit` and `last_wasm_entry_sp` in the
-        // `StackLimits` of `resume_contref` into the `VMRuntimeLimits`.
+        // `VMStackLimits` of `resume_contref` into the `VMRuntimeLimits`.
         //
-        // See the comment on `stack_switching_environ::StackChain` for a
+        // See the comment on `stack_switching_environ::VMStackChain` for a
         // description of the invariants that we maintain for the various stack
         // limits.
 
@@ -1805,20 +1810,20 @@ pub(crate) fn translate_resume<'a>(
         let resume_contref = helpers::VMContRef::new(resume_contref);
         let resume_csi = resume_contref.common_stack_information(env, builder);
         let parent_csi = original_stack_chain.get_common_stack_information(env, builder);
-        resume_csi.set_state(env, builder, stack_switching_environ::State::Running);
-        parent_csi.set_state(env, builder, stack_switching_environ::State::Parent);
+        resume_csi.set_state(env, builder, stack_switching_environ::VMStackState::Running);
+        parent_csi.set_state(env, builder, stack_switching_environ::VMStackState::Parent);
 
-        // We update the `StackLimits` of the parent of the continuation to be resumed
+        // We update the `VMStackLimits` of the parent of the continuation to be resumed
         // as well as the `VMRuntimeLimits`.
-        // See the comment on `stack_switching_environ::StackChain` for a description
+        // See the comment on `stack_switching_environ::VMStackChain` for a description
         // of the invariants that we maintain for the various stack limits.
         let vm_runtime_limits_ptr = vmctx_load_vm_runtime_limits_ptr(env, builder, vmctx);
         parent_csi.load_limits_from_vmcontext(env, builder, vm_runtime_limits_ptr, true);
         resume_csi.write_limits_to_vmcontext(env, builder, vm_runtime_limits_ptr);
 
-        // Install handlers in (soon to be) parent's HandlerList:
+        // Install handlers in (soon to be) parent's VMHandlerList:
         // Let the i-th handler clause be (on $tag $block).
-        // Then the i-th entry of the HandlerList will be the address of $tag.
+        // Then the i-th entry of the VMHandlerList will be the address of $tag.
         let handler_list = parent_csi.get_handler_list();
 
         if resumetable.len() > 0 {
@@ -1894,7 +1899,7 @@ pub(crate) fn translate_resume<'a>(
 
         // Now the parent contref (or initial stack) is active again
         vmctx_store_stack_chain(env, builder, vmctx, &original_stack_chain);
-        parent_csi.set_state(env, builder, stack_switching_environ::State::Running);
+        parent_csi.set_state(env, builder, stack_switching_environ::VMStackState::Running);
 
         // Just for consistency: Clear the handler list.
         handler_list.clear(env, builder, true);
@@ -2063,7 +2068,11 @@ pub(crate) fn translate_resume<'a>(
         parent_csi.write_limits_to_vmcontext(env, builder, vm_runtime_limits_ptr);
 
         let returned_csi = returned_contref.common_stack_information(env, builder);
-        returned_csi.set_state(env, builder, stack_switching_environ::State::Returned);
+        returned_csi.set_state(
+            env,
+            builder,
+            stack_switching_environ::VMStackState::Returned,
+        );
 
         // Load the values returned by the continuation.
         let return_types: Vec<_> = env
@@ -2137,13 +2146,20 @@ pub(crate) fn translate_suspend<'a>(
     // Set current continuation to suspended and break up handler chain.
     let active_contref_csi = active_contref.common_stack_information(env, builder);
     if cfg!(debug_assertions) {
-        let is_running =
-            active_contref_csi.has_state(env, builder, stack_switching_environ::State::Running);
+        let is_running = active_contref_csi.has_state(
+            env,
+            builder,
+            stack_switching_environ::VMStackState::Running,
+        );
         emit_debug_assert!(env, builder, is_running);
     }
 
-    active_contref_csi.set_state(env, builder, stack_switching_environ::State::Suspended);
-    let absent_chain_link = StackChain::absent(builder, env.pointer_type());
+    active_contref_csi.set_state(
+        env,
+        builder,
+        stack_switching_environ::VMStackState::Suspended,
+    );
+    let absent_chain_link = VMStackChain::absent(builder, env.pointer_type());
     end_of_chain_contref.set_parent_stack_chain(env, builder, &absent_chain_link);
 
     let suspend_payload = ControlEffect::encode_suspend(env, builder, handler_index).to_u64();
@@ -2256,13 +2272,13 @@ pub(crate) fn translate_switch<'a>(
         emit_debug_assert!(
             env,
             builder,
-            switcher_contref_csi.has_state(env, builder, State::Running)
+            switcher_contref_csi.has_state(env, builder, VMStackState::Running)
         );
-        switcher_contref_csi.set_state(env, builder, State::Suspended);
+        switcher_contref_csi.set_state(env, builder, VMStackState::Suspended);
         // We break off `switcher_contref` from the chain of active
         // continuations, by separating the link between `last_ancestor` and its
         // parent stack.
-        let absent = StackChain::absent(builder, env.pointer_type());
+        let absent = VMStackChain::absent(builder, env.pointer_type());
         last_ancestor.set_parent_stack_chain(env, builder, &absent);
 
         // Load current runtime limits from `VMContext` and store in the
@@ -2311,9 +2327,13 @@ pub(crate) fn translate_switch<'a>(
         emit_debug_assert!(
             env,
             builder,
-            switchee_contref_csi.has_state_any_of(env, builder, &[State::Fresh, State::Suspended])
+            switchee_contref_csi.has_state_any_of(
+                env,
+                builder,
+                &[VMStackState::Fresh, VMStackState::Suspended]
+            )
         );
-        switchee_contref_csi.set_state(env, builder, State::Running);
+        switchee_contref_csi.set_state(env, builder, VMStackState::Running);
 
         let switchee_contref_last_ancestor = switchee_contref.get_last_ancestor(env, builder);
         let mut switchee_contref_last_ancestor =

@@ -5,7 +5,7 @@
 use crate::runtime::vm::const_expr::{ConstEvalContext, ConstExprEvaluator};
 use crate::runtime::vm::export::Export;
 use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator};
-use crate::runtime::vm::stack_switching::StackChainCell;
+use crate::runtime::vm::stack_switching::VMStackChainCell;
 use crate::runtime::vm::table::{Table, TableElement, TableElementType};
 use crate::runtime::vm::vmcontext::{
     VMBuiltinFunctionsArray, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
@@ -589,7 +589,7 @@ impl Instance {
 
     /// Return a pointer to the stack chain
     #[inline]
-    pub fn stack_chain(&mut self) -> NonNull<Option<VmPtr<StackChainCell>>> {
+    pub fn stack_chain(&mut self) -> NonNull<Option<VmPtr<VMStackChainCell>>> {
         unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_stack_chain()) }
     }
 

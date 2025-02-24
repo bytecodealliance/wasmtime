@@ -81,7 +81,7 @@ use crate::linker::Definition;
 use crate::module::RegisteredModuleId;
 use crate::prelude::*;
 use crate::runtime::vm::mpk::ProtectionKey;
-use crate::runtime::vm::stack_switching::StackChainCell;
+use crate::runtime::vm::stack_switching::VMStackChainCell;
 #[cfg(feature = "gc")]
 use crate::runtime::vm::GcRootsList;
 use crate::runtime::vm::{
@@ -115,7 +115,7 @@ pub use self::async_::CallHookHandler;
 #[cfg(feature = "async")]
 use self::async_::*;
 
-use super::vm::stack_switching::stack::ContinuationStack;
+use super::vm::stack_switching::stack::VMContinuationStack;
 use super::vm::stack_switching::VMContRef;
 
 /// A [`Store`] is a collection of WebAssembly instances and host-defined state.
@@ -312,11 +312,11 @@ pub struct StoreOpaque {
     runtime_limits: VMRuntimeLimits,
 
     // Stack information used by stack switching instructions. See documentation
-    // on `wasmtime_environ::stack_switching::StackChain` for details.
+    // on `wasmtime_environ::stack_switching::VMStackChain` for details.
     // FIXME(frank-emrich) This is a (typedef around an) UnsafeCell, just because
     // that's how the fields in `VMRuntimeLimits` are typed. Do we need that
     // here or not?
-    stack_chain: StackChainCell,
+    stack_chain: VMStackChainCell,
     continuations: Vec<Box<VMContRef>>,
 
     instances: Vec<StoreInstance>,
@@ -537,7 +537,7 @@ impl<T> Store<T> {
                 _marker: marker::PhantomPinned,
                 engine: engine.clone(),
                 runtime_limits: Default::default(),
-                stack_chain: StackChainCell::absent(),
+                stack_chain: VMStackChainCell::absent(),
                 continuations: Vec::new(),
                 instances: Vec::new(),
                 #[cfg(feature = "component-model")]
@@ -1645,7 +1645,7 @@ impl StoreOpaque {
             //   continuations below.
             // - For `Fresh` continuations, we know that there are no GC values
             //   on their stack, yet.
-            if state == wasmtime_environ::stack_switching::State::Suspended {
+            if state == wasmtime_environ::stack_switching::VMStackState::Suspended {
                 Backtrace::trace_suspended_continuation(self, continuation.deref(), |frame| {
                     self.trace_wasm_stack_frame(gc_roots_list, frame);
                     core::ops::ControlFlow::Continue(())
@@ -1745,7 +1745,7 @@ impl StoreOpaque {
     }
 
     #[inline]
-    pub fn stack_chain(&self) -> NonNull<StackChainCell> {
+    pub fn stack_chain(&self) -> NonNull<VMStackChainCell> {
         NonNull::from(&self.stack_chain)
     }
 
@@ -1960,7 +1960,7 @@ at https://bytecodealliance.org/security.
         // FIXME(frank-emrich) Do we need to pin this?
         let mut continuation = Box::new(VMContRef::empty());
         let stack_size = self.engine.config().stack_switching_config.stack_size;
-        let stack = ContinuationStack::new(stack_size)?;
+        let stack = VMContinuationStack::new(stack_size)?;
         continuation.stack = stack;
         let ptr = continuation.deref_mut() as *mut VMContRef;
         self.continuations.push(continuation);
@@ -1973,7 +1973,7 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
         &self.inner
     }
 
-    fn stack_chain(&self) -> &StackChainCell {
+    fn stack_chain(&self) -> &VMStackChainCell {
         &self.stack_chain
     }
 

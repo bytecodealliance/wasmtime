@@ -1,7 +1,7 @@
 use anyhow::Result;
 use core::ops::Range;
 
-use wasmtime_environ::stack_switching::Array;
+use wasmtime_environ::stack_switching::VMArray;
 
 use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
 
@@ -16,13 +16,13 @@ pub enum Allocator {
 /// make some tests happy.
 #[derive(Debug)]
 #[repr(C)]
-pub struct ContinuationStack {
+pub struct VMContinuationStack {
     _top: *mut u8,
     _len: usize,
     _allocator: Allocator,
 }
 
-impl ContinuationStack {
+impl VMContinuationStack {
     pub fn new(_size: usize) -> Result<Self> {
         anyhow::bail!("Stack switching disabled or not implemented on this platform")
     }
@@ -68,7 +68,7 @@ impl ContinuationStack {
         &self,
         _func_ref: *const VMFuncRef,
         _caller_vmctx: *mut VMContext,
-        _args: *mut Array<ValRaw>,
+        _args: *mut VMArray<ValRaw>,
         _parameter_count: u32,
         _return_value_count: u32,
     ) {

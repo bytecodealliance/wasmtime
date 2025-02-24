@@ -16,7 +16,7 @@ use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 #[cfg(feature = "async")]
 use core::{future::Future, pin::Pin};
-use wasmtime_environ::stack_switching::CommonStackInformation;
+use wasmtime_environ::stack_switching::VMCommonStackInformation;
 use wasmtime_environ::VMSharedTypeIndex;
 
 /// A reference to the abstract `nofunc` heap value.
@@ -358,7 +358,7 @@ macro_rules! for_each_function_signature {
 }
 
 mod typed;
-use crate::runtime::vm::stack_switching::{StackChain, StackChainCell};
+use crate::runtime::vm::stack_switching::{VMStackChain, VMStackChainCell};
 pub use typed::*;
 
 impl Func {
@@ -1603,7 +1603,7 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
         // The `enter_wasm` call below will reset the store's `stack_chain` to
         // a new `InitialStack`, pointing to the stack-allocated
         // `initial_stack_csi`.
-        let mut initial_stack_csi = CommonStackInformation::running_default();
+        let mut initial_stack_csi = VMCommonStackInformation::running_default();
         // Stores some state of the runtime just before entering Wasm. Will be
         // restored upon exiting Wasm. Note that the `CallThreadState` that is
         // created by the `catch_traps` call below will store a pointer to this
@@ -1640,14 +1640,14 @@ pub struct RuntimeEntryState {
     pub last_wasm_entry_fp: usize,
     /// Contains value of `stack_chain` field to restore in
     /// `Store` when exiting Wasm.
-    pub stack_chain: StackChain,
+    pub stack_chain: VMStackChain,
 
     /// We need a pointer to the runtime limits, so we can update them from
     /// `drop`/`exit_wasm`.
     runtime_limits: *const VMRuntimeLimits,
     /// We need a pointer to the stack chain in the store, so we can update it from
     /// `drop`/`exit_wasm`.
-    stack_chain_ptr: *const StackChainCell,
+    stack_chain_ptr: *const VMStackChainCell,
 }
 
 impl RuntimeEntryState {
@@ -1663,7 +1663,7 @@ impl RuntimeEntryState {
     /// It also saves the different last_wasm_* values in the `VMRuntimeLimits`.
     pub fn enter_wasm<T>(
         store: &mut StoreContextMut<'_, T>,
-        initial_stack_information: *mut CommonStackInformation,
+        initial_stack_information: *mut VMCommonStackInformation,
     ) -> Self {
         let stack_limit;
 
@@ -1735,7 +1735,7 @@ impl RuntimeEntryState {
 
             let stack_chain_ptr = store.0.stack_chain();
             let old_stack_chain = (*stack_chain_ptr.as_ref().0.get()).clone();
-            let new_stack_chain = StackChain::InitialStack(initial_stack_information);
+            let new_stack_chain = VMStackChain::InitialStack(initial_stack_information);
             *store.0.stack_chain().as_mut().0.get_mut() = new_stack_chain;
 
             Self {

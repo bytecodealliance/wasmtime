@@ -16,7 +16,7 @@
 //      gc_heap_bound: *mut u8,
 //      gc_heap_data: *mut T, // Collector-specific pointer
 //      type_ids: *const VMSharedTypeIndex,
-//      stack_chain: *const StackChainCell,
+//      stack_chain: *const VMStackChainCell,
 //
 //      // Variable-width fields come after the fixed-width fields above. Place
 //      // memory-related items first as they're some of the most frequently
@@ -306,7 +306,7 @@ pub trait PtrSize {
 
     /// The offset of the `stack_chain` field.
     /// This field stores a pointer into the `StoreOpauqe`, to a value of type
-    /// `crate::stack_switching::StackChain`.
+    /// `crate::stack_switching::VMStackChain`.
     #[inline]
     fn vmctx_stack_chain(&self) -> u8 {
         self.vmctx_type_ids_array() + self.size()

@@ -6,7 +6,7 @@
 use anyhow::Result;
 use core::ops::Range;
 
-use wasmtime_environ::stack_switching::Array;
+use wasmtime_environ::stack_switching::VMArray;
 
 use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
 
@@ -23,22 +23,22 @@ cfg_if::cfg_if! {
 /// Represents an execution stack to use for a fiber.
 #[derive(Debug)]
 #[repr(C)]
-pub struct ContinuationStack(imp::ContinuationStack);
+pub struct VMContinuationStack(imp::VMContinuationStack);
 
-impl ContinuationStack {
+impl VMContinuationStack {
     /// Creates a new fiber stack of the given size.
     pub fn new(size: usize) -> Result<Self> {
-        Ok(Self(imp::ContinuationStack::new(size)?))
+        Ok(Self(imp::VMContinuationStack::new(size)?))
     }
 
     /// Returns a stack of size 0.
     pub fn unallocated() -> Self {
-        Self(imp::ContinuationStack::unallocated())
+        Self(imp::VMContinuationStack::unallocated())
     }
 
     /// Is this stack unallocated/of size 0?
     pub fn is_unallocated(&self) -> bool {
-        imp::ContinuationStack::is_unallocated(&self.0)
+        imp::VMContinuationStack::is_unallocated(&self.0)
     }
 
     /// Creates a new fiber stack with the given pointer to the bottom of the
@@ -54,7 +54,7 @@ impl ContinuationStack {
     /// The caller must properly allocate the stack space with a guard page and
     /// make the pages accessible for correct behavior.
     pub unsafe fn from_raw_parts(bottom: *mut u8, guard_size: usize, len: usize) -> Result<Self> {
-        Ok(Self(imp::ContinuationStack::from_raw_parts(
+        Ok(Self(imp::VMContinuationStack::from_raw_parts(
             bottom, guard_size, len,
         )?))
     }
@@ -105,7 +105,7 @@ impl ContinuationStack {
         &self,
         func_ref: *const VMFuncRef,
         caller_vmctx: *mut VMContext,
-        args: *mut Array<ValRaw>,
+        args: *mut VMArray<ValRaw>,
         parameter_count: u32,
         return_value_count: u32,
     ) {

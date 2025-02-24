@@ -65,7 +65,7 @@ use std::io;
 use std::ops::Range;
 use std::ptr;
 
-use wasmtime_environ::stack_switching::Array;
+use wasmtime_environ::stack_switching::VMArray;
 
 use crate::runtime::vm::{VMContext, VMFuncRef, VMOpaqueContext, ValRaw};
 
@@ -77,7 +77,7 @@ pub enum Allocator {
 
 #[derive(Debug)]
 #[repr(C)]
-pub struct ContinuationStack {
+pub struct VMContinuationStack {
     // The top of the stack; for stacks allocated by the fiber implementation itself,
     // the base address of the allocation will be `top.sub(len.unwrap())`
     top: *mut u8,
@@ -87,7 +87,7 @@ pub struct ContinuationStack {
     allocator: Allocator,
 }
 
-impl ContinuationStack {
+impl VMContinuationStack {
     pub fn new(size: usize) -> io::Result<Self> {
         // Round up our stack size request to the nearest multiple of the
         // page size.
@@ -205,8 +205,8 @@ impl ContinuationStack {
     ///
     /// Note that this value is used below, and we may have s = 0.
     ///
-    /// The layout of the ContinuationStack near the top of stack (TOS) *after* running
-    /// this function is as follows:
+    /// The layout of the VMContinuationStack near the top of stack (TOS)
+    /// *after* running this function is as follows:
     ///
     ///
     ///  Offset from    |
@@ -231,7 +231,7 @@ impl ContinuationStack {
         &self,
         func_ref: *const VMFuncRef,
         caller_vmctx: *mut VMContext,
-        args: *mut Array<ValRaw>,
+        args: *mut VMArray<ValRaw>,
         parameter_count: u32,
         return_value_count: u32,
     ) {
@@ -271,7 +271,7 @@ impl ContinuationStack {
                 // Data after the args buffer:
                 (0x28 + s, func_ref as usize),
                 (0x30 + s, caller_vmctx as usize),
-                (0x38 + s, args as *mut Array<ValRaw> as usize),
+                (0x38 + s, args as *mut VMArray<ValRaw> as usize),
                 (0x40 + s, return_value_count as usize),
             ];
 
@@ -282,7 +282,7 @@ impl ContinuationStack {
     }
 }
 
-impl Drop for ContinuationStack {
+impl Drop for VMContinuationStack {
     fn drop(&mut self) {
         unsafe {
             match self.allocator {
@@ -307,7 +307,7 @@ unsafe extern "C" {
 unsafe extern "C" fn fiber_start(
     func_ref: *const VMFuncRef,
     caller_vmctx: *mut VMContext,
-    args: *mut Array<ValRaw>,
+    args: *mut VMArray<ValRaw>,
     return_value_count: u32,
 ) {
     unsafe {

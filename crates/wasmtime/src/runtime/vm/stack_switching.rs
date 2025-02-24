@@ -3,12 +3,14 @@
 
 use core::{cell::UnsafeCell, marker::PhantomPinned, ptr::NonNull};
 
-use stack::ContinuationStack;
-use wasmtime_environ::stack_switching::{Array, HandlerList, Payloads, StackLimits, State};
+use stack::VMContinuationStack;
+use wasmtime_environ::stack_switching::{
+    VMArray, VMHandlerList, VMPayloads, VMStackLimits, VMStackState,
+};
 #[allow(unused)]
 use wasmtime_environ::{
     debug_println,
-    stack_switching::{CommonStackInformation, ENABLE_DEBUG_PRINTING},
+    stack_switching::{VMCommonStackInformation, ENABLE_DEBUG_PRINTING},
 };
 
 use crate::vm::{Instance, TrapReason, VMFuncRef, VMStore};
@@ -82,21 +84,21 @@ fn null_pointer_optimization() {
 #[repr(C)]
 pub struct VMContRef {
     /// The `CommonStackInformation` of this continuation's stack.
-    pub common_stack_information: CommonStackInformation,
+    pub common_stack_information: VMCommonStackInformation,
 
     /// The parent of this continuation, which may be another continuation, the
     /// initial stack, or absent (in case of a suspended continuation).
-    pub parent_chain: StackChain,
+    pub parent_chain: VMStackChain,
 
     /// Only used if `common_stack_information.state` is `Suspended` or `Fresh`. In
     /// that case, this points to the end of the stack chain (i.e., the
     /// continuation in the parent chain whose own `parent_chain` field is
-    /// `StackChain::Absent`).
+    /// `VMStackChain::Absent`).
     /// Note that this may be a pointer to iself (if the state is `Fresh`, this is always the case).
     pub last_ancestor: *mut VMContRef,
 
     /// The underlying stack.
-    pub stack: ContinuationStack,
+    pub stack: VMContinuationStack,
 
     /// Used to store only
     /// 1. The arguments to the function passed to cont.new
@@ -104,7 +106,7 @@ pub struct VMContRef {
     ///
     /// Note that the actual data buffer (i.e., the one `args.data` points
     /// to) is always allocated on this continuation's stack.
-    pub args: Payloads,
+    pub args: VMPayloads,
 
     /// Once a continuation has been suspended (using suspend or switch),
     /// this buffer is used to pass payloads to and from the continuation.
@@ -115,7 +117,7 @@ pub struct VMContRef {
     ///
     /// Note that the actual data buffer (i.e., the one `values.data` points
     /// to) is always allocated on this continuation's stack.
-    pub values: Payloads,
+    pub values: VMPayloads,
 
     /// Revision counter.
     pub revision: u64,
@@ -126,32 +128,32 @@ pub struct VMContRef {
 }
 
 impl VMContRef {
-    pub fn fiber_stack(&self) -> &ContinuationStack {
+    pub fn fiber_stack(&self) -> &VMContinuationStack {
         &self.stack
     }
 
-    pub fn detach_stack(&mut self) -> ContinuationStack {
-        core::mem::replace(&mut self.stack, ContinuationStack::unallocated())
+    pub fn detach_stack(&mut self) -> VMContinuationStack {
+        core::mem::replace(&mut self.stack, VMContinuationStack::unallocated())
     }
 
     /// This is effectively a `Default` implementation, without calling it
     /// so. Used to create `VMContRef`s when initializing pooling allocator.
     #[allow(clippy::cast_possible_truncation)]
     pub fn empty() -> Self {
-        let limits = StackLimits::with_stack_limit(Default::default());
-        let state = State::Fresh;
-        let handlers = HandlerList::empty();
-        let common_stack_information = CommonStackInformation {
+        let limits = VMStackLimits::with_stack_limit(Default::default());
+        let state = VMStackState::Fresh;
+        let handlers = VMHandlerList::empty();
+        let common_stack_information = VMCommonStackInformation {
             limits,
             state,
             handlers,
             first_switch_handler_index: 0,
         };
-        let parent_chain = StackChain::Absent;
+        let parent_chain = VMStackChain::Absent;
         let last_ancestor = core::ptr::null_mut();
-        let stack = ContinuationStack::unallocated();
-        let args = Payloads::empty();
-        let values = Payloads::empty();
+        let stack = VMContinuationStack::unallocated();
+        let args = VMPayloads::empty();
+        let values = VMPayloads::empty();
         let revision = 0;
         let _marker = PhantomPinned;
 
@@ -203,14 +205,14 @@ pub fn cont_new(
     let contref = unsafe { contref.as_mut().unwrap() };
 
     let tsp = contref.stack.top().unwrap();
-    contref.parent_chain = StackChain::Absent;
+    contref.parent_chain = VMStackChain::Absent;
     // The continuation is fresh, which is a special case of being suspended.
     // Thus we need to set the correct end of the continuation chain: itself.
     contref.last_ancestor = contref;
 
     // The initialization function will allocate the actual args/return value buffer and
     // update this object (if needed).
-    let contref_args_ptr = &mut contref.args as *mut _ as *mut Array<ValRaw>;
+    let contref_args_ptr = &mut contref.args as *mut _ as *mut VMArray<ValRaw>;
 
     contref.stack.initialize(
         func.cast::<VMFuncRef>(),
@@ -229,9 +231,9 @@ pub fn cont_new(
         stack_pointer - store.engine().config().max_wasm_stack,
         tsp as usize - stack_size,
     );
-    let limits = StackLimits::with_stack_limit(wasm_stack_limit);
+    let limits = VMStackLimits::with_stack_limit(wasm_stack_limit);
     let csi = &mut contref.common_stack_information;
-    csi.state = State::Fresh;
+    csi.state = VMStackState::Fresh;
     csi.limits = limits;
 
     debug_println!("Created contref @ {:p}", contref);
@@ -262,10 +264,13 @@ fn offset_and_size_constants() {
 
     assert_eq!(offset_of!(VMContRef, revision), vm_cont_ref::REVISION);
 
-    assert_eq!(core::mem::size_of::<ContinuationStack>(), FIBER_STACK_SIZE);
-    assert_eq!(core::mem::size_of::<StackChain>(), STACK_CHAIN_SIZE);
+    assert_eq!(
+        core::mem::size_of::<VMContinuationStack>(),
+        FIBER_STACK_SIZE
+    );
+    assert_eq!(core::mem::size_of::<VMStackChain>(), STACK_CHAIN_SIZE);
 
-    // `CommonStackInformation` and `StackLimits` offsets don't need tests because
+    // `CommonStackInformation` and `VMStackLimits` offsets don't need tests because
     // they are defined diretly with `offset_of!`
 }
 
@@ -285,14 +290,14 @@ fn offset_and_size_constants() {
 ///   re-renters Wasm, the initial stack is actually the stack of that
 ///   continuation.
 ///
-/// Note that the linked list character of `StackChain` arises from the fact
-/// that `StackChain::Continuation` variants have a pointer to a
+/// Note that the linked list character of `VMStackChain` arises from the fact
+/// that `VMStackChain::Continuation` variants have a pointer to a
 /// `VMContRef`, which in turn has a `parent_chain` value of type
-/// `StackChain`. This is how the stack chain reflects the parent-child
+/// `VMStackChain`. This is how the stack chain reflects the parent-child
 /// relationships between continuations/stacks. This also shows how the
 /// initial stack (mentioned above) cannot have a parent.
 ///
-/// There are generally two uses of `StackChain`:
+/// There are generally two uses of `VMStackChain`:
 ///
 /// 1. The `stack_chain` field in the `StoreOpaque` contains such a
 /// chain of stacks, where the head of the list denotes the stack that is
@@ -308,19 +313,19 @@ fn offset_and_size_constants() {
 /// VMContext!
 ///
 ///
-/// As mentioned before, each stack in a `StackChain` has a corresponding
+/// As mentioned before, each stack in a `VMStackChain` has a corresponding
 /// `CommonStackInformation` object. For continuations, this is stored in
 /// the `common_stack_information` field of the corresponding `VMContRef`.
 /// For the initial stack, the `InitialStack` variant contains a pointer to
 /// a `CommonStackInformation`. The latter will be allocated allocated on
 /// the stack frame that executed by `invoke_wasm_and_catch_traps`.
 ///
-/// The following invariants hold for these `StackLimits` objects,
+/// The following invariants hold for these `VMStackLimits` objects,
 /// and the data in `VMRuntimeLimits`.
 ///
 /// Currently executing stack: For the currently executing stack (i.e., the
 /// stack that is at the head of the store's `stack_chain` list), the
-/// associated `StackLimits` object contains stale/undefined data. Instead,
+/// associated `VMStackLimits` object contains stale/undefined data. Instead,
 /// the live data describing the limits for the currently executing stack is
 /// always maintained in `VMRuntimeLimits`. Note that as a general rule
 /// independently from any execution of continuations, the `last_wasm_exit*`
@@ -331,13 +336,13 @@ fn offset_and_size_constants() {
 /// of the store's `stack_chain` list (i.e., stacks that are not currently
 /// executing themselves, but are an ancestor of the currently executing
 /// stack), we have the following: All the fields in the stack's
-/// `StackLimits` are valid, describing the stack's stack limit, and
+/// `VMStackLimits` are valid, describing the stack's stack limit, and
 /// pointers where executing for that stack entered and exited WASM.
 ///
 /// Suspended continuations: For suspended continuations (including their
 /// ancestors), we have the following. Note that the initial stack can never
 /// be in this state. The `stack_limit` and `last_enter_wasm_sp` fields of
-/// the corresponding `StackLimits` object contain valid data, while the
+/// the corresponding `VMStackLimits` object contain valid data, while the
 /// `last_exit_wasm_*` fields contain arbitrary values. There is only one
 /// exception to this: Note that a continuation that has been created with
 /// cont.new, but never been resumed so far, is considered "suspended".
@@ -348,7 +353,7 @@ fn offset_and_size_constants() {
 /// thus restoring the necessary invariant.
 #[derive(Debug, Clone, PartialEq)]
 #[repr(usize, C)]
-pub enum StackChain {
+pub enum VMStackChain {
     /// For suspended continuations, denotes the end of their chain of
     /// ancestors.
     Absent = wasmtime_environ::stack_switching::STACK_CHAIN_ABSENT_DISCRIMINANT,
@@ -358,17 +363,17 @@ pub enum StackChain {
     /// does not have a parent. The `CommonStackInformation` that this
     /// variant points to is stored in the stack frame of
     /// `invoke_wasm_and_catch_traps`.
-    InitialStack(*mut CommonStackInformation) =
+    InitialStack(*mut VMCommonStackInformation) =
         wasmtime_environ::stack_switching::STACK_CHAIN_INITIAL_STACK_DISCRIMINANT,
     /// Represents a continuation's stack.
     Continuation(*mut VMContRef) =
         wasmtime_environ::stack_switching::STACK_CHAIN_CONTINUATION_DISCRIMINANT,
 }
 
-impl StackChain {
+impl VMStackChain {
     /// Indicates if `self` is a `InitialStack` variant.
     pub fn is_initial_stack(&self) -> bool {
-        matches!(self, StackChain::InitialStack(_))
+        matches!(self, VMStackChain::InitialStack(_))
     }
 
     /// Returns an iterator over the continuations in this chain.
@@ -399,18 +404,18 @@ impl StackChain {
 }
 
 /// Iterator for Continuations in a stack chain.
-pub struct ContinuationIterator(StackChain);
+pub struct ContinuationIterator(VMStackChain);
 
-/// Iterator for StackLimits in a stack chain.
-pub struct StackLimitsIterator(StackChain);
+/// Iterator for VMStackLimits in a stack chain.
+pub struct StackLimitsIterator(VMStackChain);
 
 impl Iterator for ContinuationIterator {
     type Item = *mut VMContRef;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.0 {
-            StackChain::Absent | StackChain::InitialStack(_) => None,
-            StackChain::Continuation(ptr) => {
+            VMStackChain::Absent | VMStackChain::InitialStack(_) => None,
+            VMStackChain::Continuation(ptr) => {
                 let continuation = unsafe { ptr.as_mut().unwrap() };
                 self.0 = continuation.parent_chain.clone();
                 Some(ptr)
@@ -420,20 +425,20 @@ impl Iterator for ContinuationIterator {
 }
 
 impl Iterator for StackLimitsIterator {
-    type Item = *mut StackLimits;
+    type Item = *mut VMStackLimits;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.0 {
-            StackChain::Absent => None,
-            StackChain::InitialStack(csi) => {
-                let stack_limits = unsafe { &mut (*csi).limits } as *mut StackLimits;
-                self.0 = StackChain::Absent;
+            VMStackChain::Absent => None,
+            VMStackChain::InitialStack(csi) => {
+                let stack_limits = unsafe { &mut (*csi).limits } as *mut VMStackLimits;
+                self.0 = VMStackChain::Absent;
                 Some(stack_limits)
             }
-            StackChain::Continuation(ptr) => {
+            VMStackChain::Continuation(ptr) => {
                 let continuation = unsafe { ptr.as_mut().unwrap() };
                 let stack_limits =
-                    (&mut continuation.common_stack_information.limits) as *mut StackLimits;
+                    (&mut continuation.common_stack_information.limits) as *mut VMStackLimits;
                 self.0 = continuation.parent_chain.clone();
                 Some(stack_limits)
             }
@@ -442,24 +447,24 @@ impl Iterator for StackLimitsIterator {
 }
 
 #[repr(transparent)]
-/// Wraps a `StackChain` in an `UnsafeCell`, in order to store it in a
+/// Wraps a `VMStackChain` in an `UnsafeCell`, in order to store it in a
 /// `StoreOpaque`.
-pub struct StackChainCell(pub UnsafeCell<StackChain>);
+pub struct VMStackChainCell(pub UnsafeCell<VMStackChain>);
 
-impl StackChainCell {
-    /// Indicates if the underlying `StackChain` object has value `Absent`.
+impl VMStackChainCell {
+    /// Indicates if the underlying `VMStackChain` object has value `Absent`.
     pub fn absent() -> Self {
-        StackChainCell(UnsafeCell::new(StackChain::Absent))
+        VMStackChainCell(UnsafeCell::new(VMStackChain::Absent))
     }
 }
 
-// Since `StackChainCell` objects appear in the `StoreOpaque`,
+// Since `VMStackChainCell` objects appear in the `StoreOpaque`,
 // they need to be `Send` and `Sync`.
 // This is safe for the same reason it is for `VMRuntimeLimits` (see comment
 // there): Both types are pod-type with no destructor, and we don't access any
 // of their fields from other threads.
-unsafe impl Send for StackChainCell {}
-unsafe impl Sync for StackChainCell {}
+unsafe impl Send for VMStackChainCell {}
+unsafe impl Sync for VMStackChainCell {}
 
 /// FIXME(frank-emrich) Justify why this is safe
-unsafe impl crate::vm::VmSafe for StackChainCell {}
+unsafe impl crate::vm::VmSafe for VMStackChainCell {}

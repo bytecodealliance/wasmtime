@@ -13,7 +13,7 @@ use core::ops::Deref;
 use core::ops::DerefMut;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicUsize, Ordering};
-use stack_switching::StackChainCell;
+use stack_switching::VMStackChainCell;
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets, VMSharedTypeIndex,
 };
@@ -149,7 +149,7 @@ pub unsafe trait VMStore {
     fn store_opaque(&self) -> &StoreOpaque;
 
     /// Get the stack chain stored in this store.
-    fn stack_chain(&self) -> &StackChainCell;
+    fn stack_chain(&self) -> &VMStackChainCell;
 
     /// Get an exclusive borrow of this store's `StoreOpaque`.
     fn store_opaque_mut(&mut self) -> &mut StoreOpaque;

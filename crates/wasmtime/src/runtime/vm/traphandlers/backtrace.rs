@@ -23,14 +23,14 @@
 
 use crate::prelude::*;
 use crate::runtime::store::StoreOpaque;
-use crate::runtime::vm::stack_switching::StackChain;
+use crate::runtime::vm::stack_switching::VMStackChain;
 use crate::runtime::vm::{
     traphandlers::{tls, CallThreadState},
     Unwind, VMRuntimeLimits,
 };
 use crate::vm::stack_switching::VMContRef;
 use core::ops::ControlFlow;
-use wasmtime_environ::stack_switching::State;
+use wasmtime_environ::stack_switching::VMStackState;
 
 /// A WebAssembly stack trace.
 #[derive(Debug)]
@@ -116,7 +116,7 @@ impl Backtrace {
     ) {
         assert_eq!(
             continuation.common_stack_information.state,
-            State::Suspended
+            VMStackState::Suspended
         );
 
         let unwind = store.unwinder();
@@ -133,7 +133,7 @@ impl Backtrace {
             // terrible, but we won't actually modify any of the continuations
             // here.
             let stack_chain =
-                StackChain::Continuation(continuation as *const VMContRef as *mut VMContRef);
+                VMStackChain::Continuation(continuation as *const VMContRef as *mut VMContRef);
             Self::trace_through_continuations(unwind, stack_chain, pc, fp, trampoline_fp, f);
         }
     }
@@ -203,7 +203,7 @@ impl Backtrace {
                 debug_assert_eq!(*fp, 0);
                 debug_assert_eq!(*sp, 0);
             } else {
-                debug_assert_ne!(chain.clone(), StackChain::Absent)
+                debug_assert_ne!(chain.clone(), VMStackChain::Absent)
             }
             *pc != 0
         });
@@ -230,30 +230,30 @@ impl Backtrace {
     /// individually, up to (and including) the initial stack.
     unsafe fn trace_through_continuations(
         unwind: &dyn Unwind,
-        chain: StackChain,
+        chain: VMStackChain,
         pc: usize,
         fp: usize,
         trampoline_fp: usize,
         mut f: impl FnMut(Frame) -> ControlFlow<()>,
     ) -> ControlFlow<()> {
         use crate::runtime::vm::stack_switching::VMContRef;
-        use wasmtime_environ::stack_switching::StackLimits;
+        use wasmtime_environ::stack_switching::VMStackLimits;
 
         // Handle the stack that is currently running (which may be a
         // continuation or the initial stack).
         Self::trace_through_wasm(unwind, pc, fp, trampoline_fp, &mut f)?;
 
         // Note that the rest of this function has no effect if `chain` is
-        // `Some(StackChain::InitialStack(_))` (i.e., there is only one stack to
+        // `Some(VMStackChain::InitialStack(_))` (i.e., there is only one stack to
         // trace through: the initial stack)
 
-        assert_ne!(chain, StackChain::Absent);
-        let stack_limits_vec: Vec<*mut StackLimits> =
+        assert_ne!(chain, VMStackChain::Absent);
+        let stack_limits_vec: Vec<*mut VMStackLimits> =
             chain.clone().into_stack_limits_iter().collect();
         let continuations_vec: Vec<*mut VMContRef> =
             chain.clone().into_continuation_iter().collect();
 
-        // The StackLimits of the currently running stack (whether that's a
+        // The VMStackLimits of the currently running stack (whether that's a
         // continuation or the initial stack) contains undefined data, the
         // information about that stack is saved in the Store's
         // `VMRuntimeLimits` and handled at the top of this function
@@ -265,7 +265,7 @@ impl Backtrace {
         // stack_limits_vec[i + 1] below to get information about a
         // particular stack.
         //
-        // There must be exactly one more `StackLimits` object than there
+        // There must be exactly one more `VMStackLimits` object than there
         // are continuations, due to the initial stack having one, too.
         assert_eq!(stack_limits_vec.len(), continuations_vec.len() + 1);
 
