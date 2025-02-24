@@ -515,7 +515,7 @@ async fn handle_request(
             .call_handle(store, req, out)
             .await
         {
-            log::error!("[{req_id}] :: {:#?}", e);
+            log::error!("[{req_id}] :: {:?}", e);
             return Err(e);
         }
 
@@ -537,7 +537,7 @@ async fn handle_request(
                 Ok(r) => r.expect_err("if the receiver has an error, the task must have failed"),
                 Err(e) => e.into(),
             };
-            bail!("guest never invoked `response-outparam::set` method: {e:?}")
+            return Err(e.context("guest never invoked `response-outparam::set` method"));
         }
     }
 }
