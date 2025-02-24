@@ -7,6 +7,7 @@ mod inst;
 mod operand;
 
 use crate::dsl;
+use crate::dsl::format::IsleConstructorRaw;
 use formatter::fmtln;
 pub use formatter::{maybe_file_loc, Formatter};
 
@@ -41,7 +42,7 @@ pub fn isle_macro(f: &mut Formatter, insts: &[dsl::Inst]) {
         fmtln!(f, "() => {{");
         f.indent(|f| {
             for inst in insts {
-                inst.generate_isle_macro(f, "Gpr", "PairedGpr");
+                inst.generate_isle_macro(f);
             }
         });
         fmtln!(f, "}};");
@@ -63,6 +64,11 @@ pub fn isle_definitions(f: &mut Formatter, insts: &[dsl::Inst]) {
     f.line("(type AssemblerReadGprMem extern (enum))", None);
     f.line("(type AssemblerReadWriteGprMem extern (enum))", None);
     f.line("(type AssemblerInst extern (enum))", None);
+    for raw in IsleConstructorRaw::all() {
+        if let Some(def) = raw.isle_type_definition() {
+            f.line(def, None);
+        }
+    }
     f.empty_line();
     for inst in insts {
         inst.generate_isle_definition(f);
