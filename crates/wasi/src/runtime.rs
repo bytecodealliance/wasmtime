@@ -42,7 +42,7 @@ pub struct AbortOnDropJoinHandle<T>(tokio::task::JoinHandle<T>);
 impl<T> AbortOnDropJoinHandle<T> {
     /// Abort the task and wait for it to finish. Optionally returns the result
     /// of the task if it ran to completion prior to being aborted.
-    pub(crate) async fn cancel(mut self) -> Option<T> {
+    pub async fn cancel(mut self) -> Option<T> {
         self.0.abort();
 
         match (&mut self.0).await {
