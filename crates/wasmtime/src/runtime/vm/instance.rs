@@ -5,6 +5,7 @@
 use crate::runtime::vm::const_expr::{ConstEvalContext, ConstExprEvaluator};
 use crate::runtime::vm::export::Export;
 use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator};
+use crate::runtime::vm::stack_switching::StackChainCell;
 use crate::runtime::vm::table::{Table, TableElement, TableElementType};
 use crate::runtime::vm::vmcontext::{
     VMBuiltinFunctionsArray, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
@@ -586,6 +587,12 @@ impl Instance {
         unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_runtime_limits()) }
     }
 
+    /// Return a pointer to the stack chain
+    #[inline]
+    pub fn stack_chain(&mut self) -> NonNull<Option<VmPtr<StackChainCell>>> {
+        unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_stack_chain()) }
+    }
+
     /// Return a pointer to the global epoch counter used by this instance.
     #[cfg(target_has_atomic = "64")]
     pub fn epoch_ptr(&mut self) -> NonNull<Option<VmPtr<AtomicU64>>> {
@@ -617,11 +624,15 @@ impl Instance {
             self.epoch_ptr()
                 .write(Some(NonNull::from(store.engine().epoch_counter()).into()));
             self.set_gc_heap(store.gc_store_mut().ok());
+            //*self.stack_chain().as_ptr() =  NonNull::new(store.stack_chain()).map(|ptr| ptr.into());
+            self.stack_chain()
+                .write(Some(NonNull::from(store.stack_chain()).into()));
         } else {
             self.runtime_limits().write(None);
             #[cfg(target_has_atomic = "64")]
             self.epoch_ptr().write(None);
             self.set_gc_heap(None);
+            self.stack_chain().write(None);
         }
     }
 

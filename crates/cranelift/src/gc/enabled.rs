@@ -148,7 +148,9 @@ fn read_field_at_addr(
                         .call(get_interned_func_ref, &[vmctx, func_ref_id, expected_ty]);
                     builder.func.dfg.first_result(call_inst)
                 }
-                WasmHeapTopType::Cont => todo!(), // FIXME: #10248 stack switching support.
+                WasmHeapTopType::Cont => {
+                    unimplemented!("Stack switching feature not compatible with GC, yet")
+                }
             },
         },
     };
@@ -1008,6 +1010,8 @@ pub fn translate_ref_test(
         | WasmHeapType::NoExtern
         | WasmHeapType::Func
         | WasmHeapType::NoFunc
+        | WasmHeapType::Cont
+        | WasmHeapType::NoCont
         | WasmHeapType::I31 => unreachable!("handled top, bottom, and i31 types above"),
 
         // For these abstract but non-top and non-bottom types, we check the
@@ -1060,8 +1064,9 @@ pub fn translate_ref_test(
 
             func_env.is_subtype(builder, actual_shared_ty, expected_shared_ty)
         }
-
-        WasmHeapType::Cont | WasmHeapType::ConcreteCont(_) | WasmHeapType::NoCont => todo!(), // FIXME: #10248 stack switching support.
+        WasmHeapType::ConcreteCont(_) => {
+            unimplemented!("Stack switching feature not compatbile with GC, yet")
+        }
     };
     builder.ins().jump(continue_block, &[result]);
 
@@ -1394,8 +1399,9 @@ impl FuncEnvironment<'_> {
             WasmHeapType::Func | WasmHeapType::ConcreteFunc(_) | WasmHeapType::NoFunc => {
                 unreachable!()
             }
-
-            WasmHeapType::Cont | WasmHeapType::ConcreteCont(_) | WasmHeapType::NoCont => todo!(), // FIXME: #10248 stack switching support.
+            WasmHeapType::Cont | WasmHeapType::ConcreteCont(_) | WasmHeapType::NoCont => {
+                unreachable!()
+            }
         };
 
         match (ty.nullable, might_be_i31) {

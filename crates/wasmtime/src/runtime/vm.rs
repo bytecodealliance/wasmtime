@@ -13,6 +13,7 @@ use core::ops::Deref;
 use core::ops::DerefMut;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicUsize, Ordering};
+use stack_switching::StackChainCell;
 use wasmtime_environ::{
     DefinedFuncIndex, DefinedMemoryIndex, HostPtr, VMOffsets, VMSharedTypeIndex,
 };
@@ -42,6 +43,7 @@ mod vmcontext;
 
 #[cfg(feature = "threads")]
 mod parking_spot;
+pub mod stack_switching;
 
 // Note that `debug_builtins` here is disabled with a feature or a lack of a
 // native compilation backend because it's only here to assist in debugging
@@ -95,6 +97,7 @@ pub use crate::runtime::vm::vmcontext::{
     VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport,
     VMOpaqueContext, VMRuntimeLimits, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
 };
+
 pub use send_sync_ptr::SendSyncPtr;
 
 mod module_id;
@@ -144,6 +147,9 @@ cfg_if::cfg_if! {
 pub unsafe trait VMStore {
     /// Get a shared borrow of this store's `StoreOpaque`.
     fn store_opaque(&self) -> &StoreOpaque;
+
+    /// Get the stack chain stored in this store.
+    fn stack_chain(&self) -> &StackChainCell;
 
     /// Get an exclusive borrow of this store's `StoreOpaque`.
     fn store_opaque_mut(&mut self) -> &mut StoreOpaque;
