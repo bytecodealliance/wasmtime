@@ -385,6 +385,9 @@ impl Masm for MacroAssembler {
         size: OperandSize,
         trap: TrapCode,
     ) -> Result<()> {
+        // Similar to all the other potentially-trapping operations, we need to
+        // ensure that the real SP is 16-byte aligned in case control flow is
+        // transferred to a signal handler.
         self.with_aligned_sp(|masm| {
             masm.add(dst, lhs, rhs, size)?;
             masm.asm.trapif(Cond::Hs, trap);
