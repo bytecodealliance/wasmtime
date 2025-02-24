@@ -341,17 +341,11 @@ pub(crate) mod stack_switching_helpers {
     // Actually a vector of *mut VMTagDefinition
     pub type VMHandlerList = VMArray<*mut u8>;
 
-    /// Size of `stack_switching_environ::VMStackChain` in machine words.
-    /// Used to verify that we have not changed its representation.
-    const STACK_CHAIN_POINTER_COUNT: usize =
-        super::stack_switching_environ::offsets::STACK_CHAIN_SIZE / std::mem::size_of::<usize>();
-
     /// Compile-time representation of stack_switching_environ::VMStackChain,
     /// consisting of two `ir::Value`s.
     pub struct VMStackChain {
         discriminant: ir::Value,
         payload: ir::Value,
-        pointer_type: ir::Type,
     }
 
     pub struct VMCommonStackInformation {
@@ -784,32 +778,43 @@ pub(crate) mod stack_switching_helpers {
 
     impl VMStackChain {
         /// Creates a `Self` corressponding to `VMStackChain::Continuation(contref)`.
-        pub fn from_continuation(
+        pub fn from_continuation<'a>(
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
             contref: ir::Value,
-            pointer_type: ir::Type,
         ) -> VMStackChain {
-            debug_assert_eq!(STACK_CHAIN_POINTER_COUNT, 2);
+            debug_assert_eq!(
+                env.offsets.ptr.size_of_vmstack_chain(),
+                2 * env.offsets.ptr.size()
+            );
             let discriminant =
                 super::stack_switching_environ::STACK_CHAIN_CONTINUATION_DISCRIMINANT;
-            let discriminant = builder.ins().iconst(pointer_type, discriminant as i64);
+            let discriminant = builder
+                .ins()
+                .iconst(env.pointer_type(), discriminant as i64);
             VMStackChain {
                 discriminant,
                 payload: contref,
-                pointer_type,
             }
         }
 
         /// Creates a `Self` corressponding to `VMStackChain::Absent`.
-        pub fn absent(builder: &mut FunctionBuilder, pointer_type: ir::Type) -> VMStackChain {
-            debug_assert_eq!(STACK_CHAIN_POINTER_COUNT, 2);
+        pub fn absent<'a>(
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
+            builder: &mut FunctionBuilder,
+        ) -> VMStackChain {
+            debug_assert_eq!(
+                env.offsets.ptr.size_of_vmstack_chain(),
+                2 * env.offsets.ptr.size()
+            );
             let discriminant = super::stack_switching_environ::STACK_CHAIN_ABSENT_DISCRIMINANT;
-            let discriminant = builder.ins().iconst(pointer_type, discriminant as i64);
-            let zero_filler = builder.ins().iconst(pointer_type, 0i64);
+            let discriminant = builder
+                .ins()
+                .iconst(env.pointer_type(), discriminant as i64);
+            let zero_filler = builder.ins().iconst(env.pointer_type(), 0i64);
             VMStackChain {
                 discriminant,
                 payload: zero_filler,
-                pointer_type,
             }
         }
 
@@ -821,7 +826,9 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
         ) {
             let discriminant = super::stack_switching_environ::STACK_CHAIN_ABSENT_DISCRIMINANT;
-            let discriminant = builder.ins().iconst(self.pointer_type, discriminant as i64);
+            let discriminant = builder
+                .ins()
+                .iconst(env.pointer_type(), discriminant as i64);
             emit_debug_assert_ne!(env, builder, self.discriminant, discriminant);
         }
 
@@ -850,19 +857,15 @@ pub(crate) mod stack_switching_helpers {
         }
 
         /// Return the two raw `ir::Value`s that represent this VMStackChain.
-        pub fn to_raw_parts(&self) -> [ir::Value; STACK_CHAIN_POINTER_COUNT] {
+        pub fn to_raw_parts(&self) -> [ir::Value; 2] {
             [self.discriminant, self.payload]
         }
 
         /// Construct a `Self` from two raw `ir::Value`s.
-        pub fn from_raw_parts(
-            raw_data: [ir::Value; STACK_CHAIN_POINTER_COUNT],
-            pointer_type: ir::Type,
-        ) -> VMStackChain {
+        pub fn from_raw_parts(raw_data: [ir::Value; 2]) -> VMStackChain {
             VMStackChain {
                 discriminant: raw_data[0],
                 payload: raw_data[1],
-                pointer_type,
             }
         }
 
@@ -877,12 +880,12 @@ pub(crate) mod stack_switching_helpers {
             let memflags = ir::MemFlags::trusted();
             let mut offset = initial_offset;
             let mut data = vec![];
-            for _ in 0..STACK_CHAIN_POINTER_COUNT {
+            for _ in 0..2 {
                 data.push(builder.ins().load(pointer_type, memflags, pointer, offset));
                 offset += pointer_type.bytes() as i32;
             }
-            let data = <[ir::Value; STACK_CHAIN_POINTER_COUNT]>::try_from(data).unwrap();
-            Self::from_raw_parts(data, pointer_type)
+            let data = <[ir::Value; 2]>::try_from(data).unwrap();
+            Self::from_raw_parts(data)
         }
 
         /// Store this `VMStackChain` object at the given address.
@@ -900,7 +903,7 @@ pub(crate) mod stack_switching_helpers {
             for value in data {
                 debug_assert_eq!(builder.func.dfg.value_type(value), env.pointer_type());
                 builder.ins().store(memflags, value, target_pointer, offset);
-                offset += self.pointer_type.bytes() as i32;
+                offset += env.pointer_type().bytes() as i32;
             }
         }
 
@@ -1362,7 +1365,7 @@ pub fn vmctx_set_active_continuation<'a>(
     vmctx: ir::Value,
     contref: ir::Value,
 ) {
-    let chain = VMStackChain::from_continuation(builder, contref, env.pointer_type());
+    let chain = VMStackChain::from_continuation(env, builder, contref);
     vmctx_store_stack_chain(env, builder, vmctx, &chain)
 }
 
@@ -1448,8 +1451,7 @@ fn search_handler<'a>(
         builder.switch_to_block(handle_link);
 
         let raw_parts = builder.block_params(handle_link);
-        let chain_link =
-            helpers::VMStackChain::from_raw_parts([raw_parts[0], raw_parts[1]], env.pointer_type());
+        let chain_link = helpers::VMStackChain::from_raw_parts([raw_parts[0], raw_parts[1]]);
         let is_initial_stack = chain_link.is_initial_stack(env, builder);
         builder.ins().brif(
             is_initial_stack,
@@ -2144,7 +2146,7 @@ pub(crate) fn translate_suspend<'a>(
         builder,
         stack_switching_environ::VMStackState::Suspended,
     );
-    let absent_chain_link = VMStackChain::absent(builder, env.pointer_type());
+    let absent_chain_link = VMStackChain::absent(env, builder);
     end_of_chain_contref.set_parent_stack_chain(env, builder, &absent_chain_link);
 
     let suspend_payload = ControlEffect::encode_suspend(env, builder, handler_index).to_u64();
@@ -2263,7 +2265,7 @@ pub(crate) fn translate_switch<'a>(
         // We break off `switcher_contref` from the chain of active
         // continuations, by separating the link between `last_ancestor` and its
         // parent stack.
-        let absent = VMStackChain::absent(builder, env.pointer_type());
+        let absent = VMStackChain::absent(env, builder);
         last_ancestor.set_parent_stack_chain(env, builder, &absent);
 
         // Load current runtime limits from `VMContext` and store in the

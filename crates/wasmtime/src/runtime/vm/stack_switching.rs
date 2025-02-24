@@ -281,21 +281,6 @@ pub fn cont_new(
     Ok(contref)
 }
 
-// Tests
-#[test]
-fn offset_and_size_constants() {
-    use wasmtime_environ::stack_switching::offsets::*;
-
-    assert_eq!(
-        core::mem::size_of::<VMContinuationStack>(),
-        FIBER_STACK_SIZE
-    );
-    assert_eq!(core::mem::size_of::<VMStackChain>(), STACK_CHAIN_SIZE);
-
-    // `CommonStackInformation` and `VMStackLimits` offsets don't need tests because
-    // they are defined diretly with `offset_of!`
-}
-
 /// This type represents a linked lists ("chain") of stacks, where the a
 /// node's successor denotes its parent.
 /// A additionally, a `CommonStackInformation` object is associated with
@@ -423,6 +408,19 @@ impl VMStackChain {
     pub unsafe fn into_stack_limits_iter(self) -> StackLimitsIterator {
         StackLimitsIterator(self)
     }
+}
+
+#[test]
+fn check_vm_stack_chain_offsets() {
+    use std::mem::size_of;
+    use wasmtime_environ::{HostPtr, Module, PtrSize, VMOffsets};
+
+    let module = Module::new();
+    let offsets = VMOffsets::new(HostPtr, &module);
+    assert_eq!(
+        size_of::<VMStackChain>(),
+        usize::from(offsets.ptr.size_of_vmstack_chain())
+    );
 }
 
 /// Iterator for Continuations in a stack chain.

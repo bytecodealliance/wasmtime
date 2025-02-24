@@ -283,19 +283,6 @@ impl From<VMStackState> for i32 {
     }
 }
 
-/// Defines offsets of the fields in the continuation-related types.
-// FIXME(frank-emrich) This uses the host pointer size. We probably have to port
-// this to `VMOffsets`/`PtrSize`?
-pub mod offsets {
-    /// Size of wasmtime_runtime::continuation::FiberStack.
-    /// We test there that this value is correct.
-    pub const FIBER_STACK_SIZE: usize = 3 * core::mem::size_of::<usize>();
-
-    /// Size of type `wasmtime_runtime::continuation::VMStackChain`.
-    /// We test there that this value is correct.
-    pub const STACK_CHAIN_SIZE: usize = 2 * core::mem::size_of::<usize>();
-}
-
 /// Discriminant of variant `Return` in
 /// `ControlEffect`.
 pub const CONTROL_EFFECT_RETURN_DISCRIMINANT: u32 = 0;

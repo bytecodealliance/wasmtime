@@ -243,6 +243,11 @@ pub trait PtrSize {
         .unwrap()
     }
 
+    /// Return the size of `VMStackChain`.
+    fn size_of_vmstack_chain(&self) -> u8 {
+        2 * self.size()
+    }
+
     // Offsets within `VMStackLimits`
 
     /// Return the offset of `VMStackLimits::stack_limit`.
