@@ -298,6 +298,9 @@ impl Masm for MacroAssembler {
                 bail!(CodeGenError::unimplemented_masm_instruction())
             }
             LoadKind::Atomic(_, _) => bail!(CodeGenError::unimplemented_masm_instruction()),
+            LoadKind::VectorZero(_size) => {
+                bail!(CodeGenError::UnimplementedWasmLoadKind)
+            }
         })
     }
 

@@ -548,6 +548,8 @@ macro_rules! def_unsupported {
     (emit F64x2Nearest $($rest:tt)*) => {};
     (emit F32x4Trunc $($rest:tt)*) => {};
     (emit F64x2Trunc $($rest:tt)*) => {};
+    (emit V128Load32Zero $($rest:tt)*) => {};
+    (emit V128Load64Zero $($rest:tt)*) => {};
 
     (emit $unsupported:tt $($rest:tt)*) => {$($rest)*};
 }
@@ -4500,6 +4502,22 @@ where
     fn visit_f64x2_trunc(&mut self) -> Self::Output {
         self.masm
             .v128_trunc(&mut self.context, V128TruncKind::F64x2)
+    }
+
+    fn visit_v128_load32_zero(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::V128,
+            LoadKind::VectorZero(OperandSize::S32),
+        )
+    }
+
+    fn visit_v128_load64_zero(&mut self, memarg: MemArg) -> Self::Output {
+        self.emit_wasm_load(
+            &memarg,
+            WasmValType::V128,
+            LoadKind::VectorZero(OperandSize::S64),
+        )
     }
 
     wasmparser::for_each_visit_simd_operator!(def_unsupported);

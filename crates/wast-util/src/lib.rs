@@ -417,14 +417,12 @@ impl WastTest {
                 "spec_testsuite/table_set.wast",
                 "spec_testsuite/table_size.wast",
                 // simd-related failures
-                "memory64/simd.wast",
                 "misc_testsuite/simd/canonicalize-nan.wast",
                 "spec_testsuite/simd_f32x4.wast",
                 "spec_testsuite/simd_f32x4_pmin_pmax.wast",
                 "spec_testsuite/simd_f64x2.wast",
                 "spec_testsuite/simd_f64x2_pmin_pmax.wast",
                 "spec_testsuite/simd_load.wast",
-                "spec_testsuite/simd_load_zero.wast",
                 "spec_testsuite/simd_splat.wast",
             ];
 
@@ -437,6 +435,7 @@ impl WastTest {
             if !(std::is_x86_feature_detected!("avx") && std::is_x86_feature_detected!("avx2")) {
                 let unsupported = [
                     "annotations/simd_lane.wast",
+                    "memory64/simd.wast",
                     "misc_testsuite/int-to-float-splat.wast",
                     "misc_testsuite/issue6562.wast",
                     "misc_testsuite/simd/almost-extmul.wast",
@@ -465,6 +464,7 @@ impl WastTest {
                     "spec_testsuite/simd_int_to_int_extend.wast",
                     "spec_testsuite/simd_load_extend.wast",
                     "spec_testsuite/simd_load_splat.wast",
+                    "spec_testsuite/simd_load_zero.wast",
                     "spec_testsuite/simd_store16_lane.wast",
                     "spec_testsuite/simd_store32_lane.wast",
                     "spec_testsuite/simd_store64_lane.wast",
