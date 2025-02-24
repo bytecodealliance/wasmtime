@@ -243,6 +243,18 @@ pub trait PtrSize {
         .unwrap()
     }
 
+    // Offsets within `VMStackLimits`
+
+    /// Return the offset of `VMStackLimits::stack_limit`.
+    fn vmstack_limits_stack_limit(&self) -> u8 {
+        0
+    }
+
+    /// Return the offset of `VMStackLimits::last_wasm_entry_fp`.
+    fn vmstack_limits_last_wasm_entry_fp(&self) -> u8 {
+        self.size()
+    }
+
     // Offsets within `VMArray`
 
     /// Return the offset of `VMArray::length`.

@@ -49,6 +49,23 @@ pub struct VMStackLimits {
     pub last_wasm_entry_fp: usize,
 }
 
+#[test]
+fn check_vm_stack_limits_offsets() {
+    use crate::{HostPtr, Module, PtrSize, VMOffsets};
+    use core::mem::offset_of;
+
+    let module = Module::new();
+    let offsets = VMOffsets::new(HostPtr, &module);
+    assert_eq!(
+        offset_of!(VMStackLimits, stack_limit),
+        usize::from(offsets.ptr.vmstack_limits_stack_limit())
+    );
+    assert_eq!(
+        offset_of!(VMStackLimits, last_wasm_entry_fp),
+        usize::from(offsets.ptr.vmstack_limits_last_wasm_entry_fp())
+    );
+}
+
 /// This type represents "common" information that we need to save both for the
 /// initial stack and each continuation.
 #[repr(C)]
@@ -270,17 +287,6 @@ impl From<VMStackState> for i32 {
 // FIXME(frank-emrich) This uses the host pointer size. We probably have to port
 // this to `VMOffsets`/`PtrSize`?
 pub mod offsets {
-    /// Offsets of fields in `VMStackLimits` struct.
-    pub mod stack_limits {
-        use crate::stack_switching::*;
-        use core::mem::offset_of;
-
-        /// Offset of `stack_limit` field
-        pub const STACK_LIMIT: usize = offset_of!(VMStackLimits, stack_limit);
-        /// Offset of `last_wasm_entry_fp` field
-        pub const LAST_WASM_ENTRY_FP: usize = offset_of!(VMStackLimits, last_wasm_entry_fp);
-    }
-
     /// Size of wasmtime_runtime::continuation::FiberStack.
     /// We test there that this value is correct.
     pub const FIBER_STACK_SIZE: usize = 3 * core::mem::size_of::<usize>();

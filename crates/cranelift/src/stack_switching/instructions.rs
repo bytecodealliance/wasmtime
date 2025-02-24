@@ -1106,8 +1106,6 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
             vmruntime_limits_ptr: ir::Value,
         ) {
-            use super::stack_switching_environ::offsets as o;
-
             let stack_limits_ptr = self.get_stack_limits_ptr(env, builder);
 
             let memflags = ir::MemFlags::trusted();
@@ -1128,12 +1126,15 @@ pub(crate) mod stack_switching_helpers {
             };
 
             let pointer_size = u8::try_from(env.pointer_type().bytes()).unwrap();
+            let stack_limit_offset = env.offsets.ptr.vmstack_limits_stack_limit() as i32;
+            let last_wasm_entry_fp_offset =
+                env.offsets.ptr.vmstack_limits_last_wasm_entry_fp() as i32;
             copy_to_vm_runtime_limits(
-                o::stack_limits::STACK_LIMIT,
+                stack_limit_offset,
                 pointer_size.vmruntime_limits_stack_limit(),
             );
             copy_to_vm_runtime_limits(
-                o::stack_limits::LAST_WASM_ENTRY_FP,
+                last_wasm_entry_fp_offset,
                 pointer_size.vmruntime_limits_last_wasm_entry_fp(),
             );
         }
@@ -1150,8 +1151,6 @@ pub(crate) mod stack_switching_helpers {
             vmruntime_limits_ptr: ir::Value,
             load_stack_limit: bool,
         ) {
-            use super::stack_switching_environ::offsets as o;
-
             let stack_limits_ptr = self.get_stack_limits_ptr(env, builder);
 
             let memflags = ir::MemFlags::trusted();
@@ -1171,15 +1170,19 @@ pub(crate) mod stack_switching_helpers {
                     i32::try_from(stack_limits_offset).unwrap(),
                 );
             };
+
+            let last_wasm_entry_fp_offset =
+                env.offsets.ptr.vmstack_limits_last_wasm_entry_fp() as i32;
             copy(
                 pointer_size.vmruntime_limits_last_wasm_entry_fp(),
-                o::stack_limits::LAST_WASM_ENTRY_FP,
+                last_wasm_entry_fp_offset,
             );
 
             if load_stack_limit {
+                let stack_limit_offset = env.offsets.ptr.vmstack_limits_stack_limit() as i32;
                 copy(
                     pointer_size.vmruntime_limits_stack_limit(),
-                    o::stack_limits::STACK_LIMIT,
+                    stack_limit_offset,
                 );
             }
         }
