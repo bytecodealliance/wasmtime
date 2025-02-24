@@ -2585,15 +2585,53 @@ impl Masm for MacroAssembler {
     ) -> Result<()> {
         self.ensure_has_avx()?;
 
-        let op = match kind {
-            V128MinKind::I8x16S => AvxOpcode::Vpminsb,
-            V128MinKind::I8x16U => AvxOpcode::Vpminub,
-            V128MinKind::I16x8S => AvxOpcode::Vpminsw,
-            V128MinKind::I16x8U => AvxOpcode::Vpminuw,
-            V128MinKind::I32x4S => AvxOpcode::Vpminsd,
-            V128MinKind::I32x4U => AvxOpcode::Vpminud,
-        };
-        self.asm.xmm_vex_rr(op, src1, src2, dst);
+        match kind {
+            V128MinKind::I8x16S
+            | V128MinKind::I8x16U
+            | V128MinKind::I16x8S
+            | V128MinKind::I16x8U
+            | V128MinKind::I32x4S
+            | V128MinKind::I32x4U => {
+                let op = match kind {
+                    V128MinKind::I8x16S => AvxOpcode::Vpminsb,
+                    V128MinKind::I8x16U => AvxOpcode::Vpminub,
+                    V128MinKind::I16x8S => AvxOpcode::Vpminsw,
+                    V128MinKind::I16x8U => AvxOpcode::Vpminuw,
+                    V128MinKind::I32x4S => AvxOpcode::Vpminsd,
+                    V128MinKind::I32x4U => AvxOpcode::Vpminud,
+                    _ => unreachable!(),
+                };
+                self.asm.xmm_vex_rr(op, src1, src2, dst);
+            }
+            V128MinKind::F32x4 | V128MinKind::F64x2 => {
+                // Handling +0 and -0 as well as NaN values are not commutative
+                // when using `vminp` so we have to compensate.
+                let scratch = writable!(regs::scratch_xmm());
+                // Perform two comparison operations with the operands swapped
+                // and OR the result to propagate 0 (positive and negative) and
+                // NaN.
+                self.asm
+                    .xmm_vminp_rrr(src1, src2, scratch, kind.lane_size());
+                self.asm.xmm_vminp_rrr(src2, src1, dst, kind.lane_size());
+                // Use a single OR instruction to set the sign bit if either
+                // result has the sign bit set to correctly propagate -0.
+                self.asm
+                    .xmm_vorp_rrr(dst.to_reg(), scratch.to_reg(), dst, kind.lane_size());
+                // Set lanes with NaN to all 1s.
+                self.asm.xmm_vcmpp_rrr(
+                    writable!(src2),
+                    src2,
+                    dst.to_reg(),
+                    kind.lane_size(),
+                    VcmpKind::Unord,
+                );
+                // Doesn't change non-NaN values. For NaN values, sets all bits.
+                self.asm
+                    .xmm_vorp_rrr(src2, dst.to_reg(), dst, kind.lane_size());
+                self.canonicalize_nans(writable!(src2), dst, kind.lane_size());
+            }
+        }
+
         Ok(())
     }
 
@@ -2606,15 +2644,57 @@ impl Masm for MacroAssembler {
     ) -> Result<()> {
         self.ensure_has_avx()?;
 
-        let op = match kind {
-            V128MaxKind::I8x16S => AvxOpcode::Vpmaxsb,
-            V128MaxKind::I8x16U => AvxOpcode::Vpmaxub,
-            V128MaxKind::I16x8S => AvxOpcode::Vpmaxsw,
-            V128MaxKind::I16x8U => AvxOpcode::Vpmaxuw,
-            V128MaxKind::I32x4S => AvxOpcode::Vpmaxsd,
-            V128MaxKind::I32x4U => AvxOpcode::Vpmaxud,
-        };
-        self.asm.xmm_vex_rr(op, src1, src2, dst);
+        match kind {
+            V128MaxKind::I8x16S
+            | V128MaxKind::I8x16U
+            | V128MaxKind::I16x8S
+            | V128MaxKind::I16x8U
+            | V128MaxKind::I32x4S
+            | V128MaxKind::I32x4U => {
+                let op = match kind {
+                    V128MaxKind::I8x16S => AvxOpcode::Vpmaxsb,
+                    V128MaxKind::I8x16U => AvxOpcode::Vpmaxub,
+                    V128MaxKind::I16x8S => AvxOpcode::Vpmaxsw,
+                    V128MaxKind::I16x8U => AvxOpcode::Vpmaxuw,
+                    V128MaxKind::I32x4S => AvxOpcode::Vpmaxsd,
+                    V128MaxKind::I32x4U => AvxOpcode::Vpmaxud,
+                    _ => unreachable!(),
+                };
+                self.asm.xmm_vex_rr(op, src1, src2, dst);
+            }
+            V128MaxKind::F32x4 | V128MaxKind::F64x2 => {
+                // Handling +0 and -0 as well as NaN values are not commutative
+                // when using `vmaxp` so we have to compensate.
+                let scratch = writable!(regs::scratch_xmm());
+                // Perform two comparison operations with the operands swapped
+                // so we can propagate 0 (positive and negative) and NaNs
+                // correctly.
+                self.asm
+                    .xmm_vmaxp_rrr(src1, src2, scratch, kind.lane_size());
+                self.asm.xmm_vmaxp_rrr(src2, src1, dst, kind.lane_size());
+                // This combination of XOR, OR, and SUB will set the sign bit
+                // on a 0 result to the correct value for a max operation.
+                self.asm
+                    .xmm_vxorp_rrr(dst.to_reg(), scratch.to_reg(), dst, kind.lane_size());
+                self.asm.xmm_vorp_rrr(
+                    dst.to_reg(),
+                    scratch.to_reg(),
+                    writable!(src2),
+                    kind.lane_size(),
+                );
+                self.asm
+                    .xmm_vsub_rrr(src2, dst.to_reg(), dst, kind.lane_size());
+                // Set lanes of NaN values to 1.
+                self.asm.xmm_vcmpp_rrr(
+                    writable!(src2),
+                    src2,
+                    src2,
+                    kind.lane_size(),
+                    VcmpKind::Unord,
+                );
+                self.canonicalize_nans(writable!(src2), dst, kind.lane_size());
+            }
+        }
         Ok(())
     }
 
@@ -3130,5 +3210,24 @@ impl MacroAssembler {
             0b10_00_10_00,
             dst_lane_size,
         );
+    }
+
+    /// Given a vector of floats where lanes with NaN values are set to all 1s
+    /// in `reg` and a vector register `dst` with a mix of non-NaN values and
+    /// possibly non-canonical NaN values, this canonicalize any NaNs in `dst`.
+    fn canonicalize_nans(&mut self, mask: WritableReg, dst: WritableReg, size: OperandSize) {
+        // Canonical NaNs do not preserve the sign bit, have the exponent bits
+        // all set, and have only the high bit of the mantissa set so shift by
+        // that number.
+        // The mask we're producing in this step will be inverted in the next
+        // step.
+        let amount_to_shift = 1 + size.mantissa_bits() + 1;
+        self.asm
+            .xmm_vpsrl_rr(mask.to_reg(), mask, amount_to_shift as u32, size);
+        // The mask will be inverted by the ANDN so non-NaN values will be all
+        // 1s and NaN values will set the sign bit, exponent bits, and zero out
+        // almost all of the mantissa.
+        self.asm
+            .xmm_vandnp_rrr(mask.to_reg(), dst.to_reg(), dst, size);
     }
 }
