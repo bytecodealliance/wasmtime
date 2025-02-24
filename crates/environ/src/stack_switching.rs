@@ -270,39 +270,6 @@ impl From<VMStackState> for i32 {
 // FIXME(frank-emrich) This uses the host pointer size. We probably have to port
 // this to `VMOffsets`/`PtrSize`?
 pub mod offsets {
-    const fn align(offset: usize, alignment: usize) -> usize {
-        (offset + (alignment - 1)) / alignment * alignment
-    }
-
-    /// Offsets of fields in `wasmtime_runtime::continuation::VMContRef`.
-    /// We uses tests there to ensure these values are correct.
-    pub mod vm_cont_ref {
-        use super::align;
-        use crate::stack_switching::*;
-
-        /// Offset of `common_stack_information` field
-        pub const COMMON_STACK_INFORMATION: usize = 0;
-        /// Offset of `parent_chain` field
-        pub const PARENT_CHAIN: usize =
-            COMMON_STACK_INFORMATION + core::mem::size_of::<VMCommonStackInformation>();
-        /// Offset of `last_ancestor` field
-        pub const LAST_ANCESTOR: usize = PARENT_CHAIN + 2 * core::mem::size_of::<usize>();
-        /// Offset of `stack` field
-        pub const STACK: usize = LAST_ANCESTOR + core::mem::size_of::<usize>();
-        /// Offset of `args` field
-        pub const ARGS: usize = STACK + super::FIBER_STACK_SIZE;
-        /// Offset of `values` field
-        pub const VALUES: usize = ARGS + core::mem::size_of::<VMPayloads>();
-        /// Offset of `revision` field
-        // FIXME(frank-emrich) Just taking alignment into account here and
-        // nowhere else is terrible. But this whole module is probably going to
-        // be replaced by a `VMOffset`-based approach anyway.
-        pub const REVISION: usize = align(
-            VALUES + core::mem::size_of::<VMPayloads>(),
-            core::mem::align_of::<u64>(),
-        );
-    }
-
     /// Offsets of fields in `VMStackLimits` struct.
     pub mod stack_limits {
         use crate::stack_switching::*;

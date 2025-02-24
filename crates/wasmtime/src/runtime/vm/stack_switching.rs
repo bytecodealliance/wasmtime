@@ -97,6 +97,9 @@ pub struct VMContRef {
     /// Note that this may be a pointer to iself (if the state is `Fresh`, this is always the case).
     pub last_ancestor: *mut VMContRef,
 
+    /// Revision counter.
+    pub revision: u64,
+
     /// The underlying stack.
     pub stack: VMContinuationStack,
 
@@ -118,9 +121,6 @@ pub struct VMContRef {
     /// Note that the actual data buffer (i.e., the one `values.data` points
     /// to) is always allocated on this continuation's stack.
     pub values: VMPayloads,
-
-    /// Revision counter.
-    pub revision: u64,
 
     /// Tell the compiler that this structure has potential self-references
     /// through the `last_ancestor` pointer.
@@ -188,6 +188,47 @@ impl Drop for VMContRef {
 unsafe impl Send for VMContRef {}
 unsafe impl Sync for VMContRef {}
 
+#[test]
+fn check_vm_contref_offsets() {
+    use core::mem::offset_of;
+    use wasmtime_environ::{HostPtr, Module, PtrSize, VMOffsets};
+
+    let module = Module::new();
+    let offsets = VMOffsets::new(HostPtr, &module);
+    assert_eq!(
+        offset_of!(VMContRef, common_stack_information),
+        usize::from(offsets.ptr.vmcontref_common_stack_information())
+    );
+    assert_eq!(
+        offset_of!(VMContRef, parent_chain),
+        usize::from(offsets.ptr.vmcontref_parent_chain())
+    );
+    assert_eq!(
+        offset_of!(VMContRef, last_ancestor),
+        usize::from(offsets.ptr.vmcontref_last_ancestor())
+    );
+    // Some 32-bit platforms need this to be 8-byte aligned, some don't.
+    // So we need to make sure it always is, without padding.
+    assert_eq!(u8::vmcontref_revision(&4) % 8, 0);
+    assert_eq!(u8::vmcontref_revision(&8) % 8, 0);
+    assert_eq!(
+        offset_of!(VMContRef, revision),
+        usize::from(offsets.ptr.vmcontref_revision())
+    );
+    assert_eq!(
+        offset_of!(VMContRef, stack),
+        usize::from(offsets.ptr.vmcontref_stack())
+    );
+    assert_eq!(
+        offset_of!(VMContRef, args),
+        usize::from(offsets.ptr.vmcontref_args())
+    );
+    assert_eq!(
+        offset_of!(VMContRef, values),
+        usize::from(offsets.ptr.vmcontref_values())
+    );
+}
+
 /// Implements `cont.new` instructions (i.e., creation of continuations).
 #[inline(always)]
 pub fn cont_new(
@@ -243,26 +284,7 @@ pub fn cont_new(
 // Tests
 #[test]
 fn offset_and_size_constants() {
-    use core::mem::offset_of;
     use wasmtime_environ::stack_switching::offsets::*;
-
-    assert_eq!(
-        offset_of!(VMContRef, common_stack_information),
-        vm_cont_ref::COMMON_STACK_INFORMATION
-    );
-    assert_eq!(
-        offset_of!(VMContRef, parent_chain),
-        vm_cont_ref::PARENT_CHAIN
-    );
-    assert_eq!(
-        offset_of!(VMContRef, last_ancestor),
-        vm_cont_ref::LAST_ANCESTOR
-    );
-    assert_eq!(offset_of!(VMContRef, stack), vm_cont_ref::STACK);
-    assert_eq!(offset_of!(VMContRef, args), vm_cont_ref::ARGS);
-    assert_eq!(offset_of!(VMContRef, values), vm_cont_ref::VALUES);
-
-    assert_eq!(offset_of!(VMContRef, revision), vm_cont_ref::REVISION);
 
     assert_eq!(
         core::mem::size_of::<VMContinuationStack>(),

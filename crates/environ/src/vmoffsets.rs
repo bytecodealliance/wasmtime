@@ -300,6 +300,48 @@ pub trait PtrSize {
         .unwrap()
     }
 
+    // Offsets within `VMContRef`
+
+    /// Return the offset of `VMContRef::common_stack_information`.
+    fn vmcontref_common_stack_information(&self) -> u8 {
+        0 * self.size()
+    }
+
+    /// Return the offset of `VMContRef::parent_chain`.
+    fn vmcontref_parent_chain(&self) -> u8 {
+        u8::try_from(align(
+            (self.vmcontref_common_stack_information() + self.size_of_vmcommon_stack_information())
+                as u32,
+            u32::from(self.size()),
+        ))
+        .unwrap()
+    }
+
+    /// Return the offset of `VMContRef::last_ancestor`.
+    fn vmcontref_last_ancestor(&self) -> u8 {
+        self.vmcontref_parent_chain() + 2 * self.size()
+    }
+
+    /// Return the offset of `VMContRef::revision`.
+    fn vmcontref_revision(&self) -> u8 {
+        self.vmcontref_last_ancestor() + self.size()
+    }
+
+    /// Return the offset of `VMContRef::stack`.
+    fn vmcontref_stack(&self) -> u8 {
+        self.vmcontref_revision() + 8
+    }
+
+    /// Return the offset of `VMContRef::args`.
+    fn vmcontref_args(&self) -> u8 {
+        self.vmcontref_stack() + 3 * self.size()
+    }
+
+    /// Return the offset of `VMContRef::values`.
+    fn vmcontref_values(&self) -> u8 {
+        self.vmcontref_args() + self.size_of_vmarray()
+    }
+
     /// Return the offset to the `magic` value in this `VMContext`.
     #[inline]
     fn vmctx_magic(&self) -> u8 {

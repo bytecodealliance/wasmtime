@@ -371,24 +371,31 @@ pub(crate) mod stack_switching_helpers {
             VMContRef { address }
         }
 
-        pub fn args(&self) -> VMPayloads {
-            let offset = super::stack_switching_environ::offsets::vm_cont_ref::ARGS;
-            VMPayloads::new(self.address, i32::try_from(offset).unwrap())
+        pub fn args<'a>(
+            &self,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
+            _builder: &mut FunctionBuilder,
+        ) -> VMPayloads {
+            let offset = env.offsets.ptr.vmcontref_args() as i32;
+            VMPayloads::new(self.address, offset)
         }
 
-        pub fn values(&self) -> VMPayloads {
-            let offset = super::stack_switching_environ::offsets::vm_cont_ref::VALUES;
-            VMPayloads::new(self.address, i32::try_from(offset).unwrap())
+        pub fn values<'a>(
+            &self,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
+            _builder: &mut FunctionBuilder,
+        ) -> VMPayloads {
+            let offset = env.offsets.ptr.vmcontref_values() as i32;
+            VMPayloads::new(self.address, offset)
         }
 
         pub fn common_stack_information<'a>(
             &self,
-            _env: &mut crate::func_environ::FuncEnvironment<'a>,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> VMCommonStackInformation {
-            let offset =
-                super::stack_switching_environ::offsets::vm_cont_ref::COMMON_STACK_INFORMATION;
-            let address = builder.ins().iadd_imm(self.address, offset as i64);
+            let offset = env.offsets.ptr.vmcontref_common_stack_information() as i64;
+            let address = builder.ins().iadd_imm(self.address, offset);
             VMCommonStackInformation { address }
         }
 
@@ -401,8 +408,8 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
             new_stack_chain: &VMStackChain,
         ) {
-            let offset = super::stack_switching_environ::offsets::vm_cont_ref::PARENT_CHAIN;
-            new_stack_chain.store(env, builder, self.address, i32::try_from(offset).unwrap())
+            let offset = env.offsets.ptr.vmcontref_parent_chain() as i32;
+            new_stack_chain.store(env, builder, self.address, offset)
         }
 
         /// Loads the parent of this continuation, which may either be another
@@ -413,30 +420,21 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> VMStackChain {
-            let offset = super::stack_switching_environ::offsets::vm_cont_ref::PARENT_CHAIN;
-            VMStackChain::load(
-                env,
-                builder,
-                self.address,
-                i32::try_from(offset).unwrap(),
-                env.pointer_type(),
-            )
+            let offset = env.offsets.ptr.vmcontref_parent_chain() as i32;
+            VMStackChain::load(env, builder, self.address, offset, env.pointer_type())
         }
 
         pub fn set_last_ancestor<'a>(
             &self,
-            _env: &mut crate::func_environ::FuncEnvironment<'a>,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
             last_ancestor: ir::Value,
         ) {
-            let offset = super::stack_switching_environ::offsets::vm_cont_ref::LAST_ANCESTOR;
+            let offset = env.offsets.ptr.vmcontref_last_ancestor() as i32;
             let mem_flags = ir::MemFlags::trusted();
-            builder.ins().store(
-                mem_flags,
-                last_ancestor,
-                self.address,
-                i32::try_from(offset).unwrap(),
-            );
+            builder
+                .ins()
+                .store(mem_flags, last_ancestor, self.address, offset);
         }
 
         pub fn get_last_ancestor<'a>(
@@ -444,29 +442,23 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
-            let offset = super::stack_switching_environ::offsets::vm_cont_ref::LAST_ANCESTOR;
+            let offset = env.offsets.ptr.vmcontref_last_ancestor() as i32;
             let mem_flags = ir::MemFlags::trusted();
-            builder.ins().load(
-                env.pointer_type(),
-                mem_flags,
-                self.address,
-                i32::try_from(offset).unwrap(),
-            )
+            builder
+                .ins()
+                .load(env.pointer_type(), mem_flags, self.address, offset)
         }
 
         /// Gets the revision counter the a given continuation
         /// reference.
         pub fn get_revision<'a>(
             &mut self,
-            _env: &mut crate::func_environ::FuncEnvironment<'a>,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
             let mem_flags = ir::MemFlags::trusted();
-            let offset = super::stack_switching_environ::offsets::vm_cont_ref::REVISION;
-            let revision =
-                builder
-                    .ins()
-                    .load(I64, mem_flags, self.address, i32::try_from(offset).unwrap());
+            let offset = env.offsets.ptr.vmcontref_revision() as i32;
+            let revision = builder.ins().load(I64, mem_flags, self.address, offset);
             revision
         }
 
@@ -484,14 +476,11 @@ pub(crate) mod stack_switching_helpers {
                 emit_debug_assert_eq!(env, builder, revision, actual_revision);
             }
             let mem_flags = ir::MemFlags::trusted();
-            let offset = super::stack_switching_environ::offsets::vm_cont_ref::REVISION;
+            let offset = env.offsets.ptr.vmcontref_revision() as i32;
             let revision_plus1 = builder.ins().iadd_imm(revision, 1);
-            builder.ins().store(
-                mem_flags,
-                revision_plus1,
-                self.address,
-                i32::try_from(offset).unwrap(),
-            );
+            builder
+                .ins()
+                .store(mem_flags, revision_plus1, self.address, offset);
             if cfg!(debug_assertions) {
                 let new_revision = self.get_revision(env, builder);
                 emit_debug_assert_eq!(env, builder, revision_plus1, new_revision);
@@ -503,12 +492,12 @@ pub(crate) mod stack_switching_helpers {
 
         pub fn get_fiber_stack<'a>(
             &self,
-            _env: &mut crate::func_environ::FuncEnvironment<'a>,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> VMContinuationStack {
             // The top of stack field is stored at offset 0 of the `FiberStack`.
-            let offset = super::stack_switching_environ::offsets::vm_cont_ref::STACK;
-            let fiber_stack_top_of_stack_ptr = builder.ins().iadd_imm(self.address, offset as i64);
+            let offset = env.offsets.ptr.vmcontref_stack() as i64;
+            let fiber_stack_top_of_stack_ptr = builder.ins().iadd_imm(self.address, offset);
             VMContinuationStack::new(fiber_stack_top_of_stack_ptr)
         }
     }
@@ -942,8 +931,6 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> VMCommonStackInformation {
-            use super::stack_switching_environ::offsets as o;
-
             self.assert_not_absent(env, builder);
 
             // `self` corresponds to a VMStackChain::InitialStack or
@@ -960,7 +947,7 @@ pub(crate) mod stack_switching_helpers {
             // Since a `VMContRef` starts with an (inlined) CommonStackInformation
             // object at offset 0, we actually have in both cases that `ptr` is
             // now the address of the beginning of a VMStackLimits object.
-            debug_assert_eq!(o::vm_cont_ref::COMMON_STACK_INFORMATION, 0);
+            debug_assert_eq!(env.offsets.ptr.vmcontref_common_stack_information(), 0);
             VMCommonStackInformation { address }
         }
     }
@@ -1263,7 +1250,7 @@ pub(crate) fn vmcontref_store_payloads<'a>(
             builder.switch_to_block(use_args_block);
             builder.seal_block(use_args_block);
 
-            let args = co.args();
+            let args = co.args(env, builder);
             let ptr = args.occupy_next_slots(env, builder, count);
 
             builder.ins().jump(store_data_block, &[ptr]);
@@ -1273,7 +1260,7 @@ pub(crate) fn vmcontref_store_payloads<'a>(
             builder.switch_to_block(use_payloads_block);
             builder.seal_block(use_payloads_block);
 
-            let payloads = co.values();
+            let payloads = co.values(env, builder);
 
             // This also checks that the buffer is large enough to hold
             // `values.len()` more elements.
@@ -2004,7 +1991,7 @@ pub(crate) fn translate_resume<'a>(
                 .map(|wty| crate::value_type(env.isa, *wty))
                 .collect();
 
-            let values = suspended_contref.values();
+            let values = suspended_contref.values(env, builder);
             let mut suspend_args = values.load_data_entries(env, builder, &param_types);
 
             // At the suspend site, we store the suspend args in the the
@@ -2075,7 +2062,7 @@ pub(crate) fn translate_resume<'a>(
             .iter()
             .map(|ty| crate::value_type(env.isa, *ty))
             .collect();
-        let payloads = returned_contref.args();
+        let payloads = returned_contref.args(env, builder);
         let return_values = payloads.load_data_entries(env, builder, &return_types);
         payloads.clear(env, builder, true);
 
@@ -2120,7 +2107,7 @@ pub(crate) fn translate_suspend<'a>(
     // later store the following:
     // 1. The suspend arguments
     // 2. Afterwards, the tag return values
-    let values = active_contref.values();
+    let values = active_contref.values(env, builder);
     let required_capacity =
         u32::try_from(std::cmp::max(suspend_args.len(), tag_return_types.len()))
             .expect("Number of stack switching payloads should fit in u32");
@@ -2172,7 +2159,7 @@ pub(crate) fn translate_suspend<'a>(
         .stack_switch(control_context_ptr, control_context_ptr, suspend_payload);
 
     // The return values of the suspend instruction are the tag return values, saved in the `args` buffer.
-    let values = active_contref.values();
+    let values = active_contref.values(env, builder);
     let return_values = values.load_data_entries(env, builder, tag_return_types);
     // We effectively consume the values and discard the stack allocated buffer.
     values.clear(env, builder, true);
@@ -2252,7 +2239,7 @@ pub(crate) fn translate_switch<'a>(
 
         // In the switcher_contref's `values` buffer, stack-allocate enough room so that we can
         // later store `tag_return_types.len()` when resuming the continuation.
-        let values = switcher_contref.values();
+        let values = switcher_contref.values(env, builder);
         let required_capacity = u32::try_from(return_types.len()).unwrap();
         if required_capacity > 0 {
             env.stack_switching_values_buffer = Some(values.allocate_or_reuse_stack_slot(
@@ -2485,7 +2472,7 @@ pub(crate) fn translate_switch<'a>(
             emit_debug_assert_eq!(env, builder, switcher_contref.address, active_contref);
         }
 
-        let payloads = switcher_contref.values();
+        let payloads = switcher_contref.values(env, builder);
         let return_values = payloads.load_data_entries(env, builder, return_types);
         // We consume the values and discard the buffer (allocated on this stack)
         payloads.clear(env, builder, true);
