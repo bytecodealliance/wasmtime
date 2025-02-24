@@ -6,8 +6,7 @@
 use anyhow::Result;
 use core::ops::Range;
 
-use wasmtime_environ::stack_switching::VMArray;
-
+use crate::runtime::vm::stack_switching::VMArray;
 use crate::runtime::vm::{VMContext, VMFuncRef, ValRaw};
 
 cfg_if::cfg_if! {

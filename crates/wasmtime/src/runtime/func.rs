@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use crate::runtime::vm::stack_switching::VMCommonStackInformation;
 use crate::runtime::vm::{
     ExportFunction, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext,
     VMFuncRef, VMFunctionImport, VMOpaqueContext, VMRuntimeLimits,
@@ -16,7 +17,6 @@ use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 #[cfg(feature = "async")]
 use core::{future::Future, pin::Pin};
-use wasmtime_environ::stack_switching::VMCommonStackInformation;
 use wasmtime_environ::VMSharedTypeIndex;
 
 /// A reference to the abstract `nofunc` heap value.

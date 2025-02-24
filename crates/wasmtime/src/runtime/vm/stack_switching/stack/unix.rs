@@ -65,8 +65,7 @@ use std::io;
 use std::ops::Range;
 use std::ptr;
 
-use wasmtime_environ::stack_switching::VMArray;
-
+use crate::runtime::vm::stack_switching::VMArray;
 use crate::runtime::vm::{VMContext, VMFuncRef, VMOpaqueContext, ValRaw};
 
 #[derive(Debug, PartialEq, Eq)]
