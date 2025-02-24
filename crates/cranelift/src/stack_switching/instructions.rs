@@ -545,63 +545,60 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
-            self.get(
-                builder,
-                env.pointer_type(),
-                i32::try_from(super::stack_switching_environ::offsets::array::DATA).unwrap(),
-            )
+            let offset = env.offsets.ptr.vmarray_data() as i32;
+            self.get(builder, env.pointer_type(), offset)
         }
 
         fn get_capacity<'a>(
             &self,
-            _env: &mut crate::func_environ::FuncEnvironment<'a>,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
             // Array capacity is stored as u32.
-            self.get(
-                builder,
-                I32,
-                i32::try_from(super::stack_switching_environ::offsets::array::CAPACITY).unwrap(),
-            )
+            let offset = env.offsets.ptr.vmarray_capacity() as i32;
+            self.get(builder, I32, offset)
         }
 
         pub fn get_length<'a>(
             &self,
-            _env: &mut crate::func_environ::FuncEnvironment<'a>,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
             // Array length is stored as u32.
-            self.get(
-                builder,
-                I32,
-                i32::try_from(super::stack_switching_environ::offsets::array::LENGTH).unwrap(),
-            )
+            let offset = env.offsets.ptr.vmarray_length() as i32;
+            self.get(builder, I32, offset)
         }
 
-        fn set_length(&self, builder: &mut FunctionBuilder, length: ir::Value) {
+        fn set_length<'a>(
+            &self,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
+            builder: &mut FunctionBuilder,
+            length: ir::Value,
+        ) {
             // Array length is stored as u32.
-            self.set::<u32>(
-                builder,
-                i32::try_from(super::stack_switching_environ::offsets::array::LENGTH).unwrap(),
-                length,
-            );
+            let offset = env.offsets.ptr.vmarray_length() as i32;
+            self.set::<u32>(builder, offset, length);
         }
 
-        fn set_capacity(&self, builder: &mut FunctionBuilder, capacity: ir::Value) {
+        fn set_capacity<'a>(
+            &self,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
+            builder: &mut FunctionBuilder,
+            capacity: ir::Value,
+        ) {
             // Array capacity is stored as u32.
-            self.set::<u32>(
-                builder,
-                i32::try_from(super::stack_switching_environ::offsets::array::CAPACITY).unwrap(),
-                capacity,
-            );
+            let offset = env.offsets.ptr.vmarray_capacity() as i32;
+            self.set::<u32>(builder, offset, capacity);
         }
 
-        fn set_data(&self, builder: &mut FunctionBuilder, data: ir::Value) {
-            self.set::<*mut T>(
-                builder,
-                i32::try_from(super::stack_switching_environ::offsets::array::DATA).unwrap(),
-                data,
-            );
+        fn set_data<'a>(
+            &self,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
+            builder: &mut FunctionBuilder,
+            data: ir::Value,
+        ) {
+            let offset = env.offsets.ptr.vmarray_data() as i32;
+            self.set::<*mut T>(builder, offset, data);
         }
 
         /// Returns pointer to next empty slot in data buffer and marks the
@@ -615,7 +612,7 @@ pub(crate) mod stack_switching_helpers {
             let data = self.get_data(env, builder);
             let original_length = self.get_length(env, builder);
             let new_length = builder.ins().iadd_imm(original_length, arg_count as i64);
-            self.set_length(builder, new_length);
+            self.set_length(env, builder, new_length);
 
             if cfg!(debug_assertions) {
                 let capacity = self.get_capacity(env, builder);
@@ -665,8 +662,8 @@ pub(crate) mod stack_switching_helpers {
 
                     let existing_data = builder.ins().stack_addr(env.pointer_type(), slot, 0);
 
-                    self.set_capacity(builder, capacity_value);
-                    self.set_data(builder, existing_data);
+                    self.set_capacity(env, builder, capacity_value);
+                    self.set_data(env, builder, existing_data);
 
                     slot
                 }
@@ -689,8 +686,8 @@ pub(crate) mod stack_switching_helpers {
                     let slot = builder.create_sized_stack_slot(slot_size);
                     let new_data = builder.ins().stack_addr(env.pointer_type(), slot, 0);
 
-                    self.set_capacity(builder, capacity_value);
-                    self.set_data(builder, new_data);
+                    self.set_capacity(env, builder, capacity_value);
+                    self.set_data(env, builder, new_data);
 
                     slot
                 }
@@ -774,7 +771,7 @@ pub(crate) mod stack_switching_helpers {
                 offset += entry_size;
             }
 
-            self.set_length(builder, store_count);
+            self.set_length(env, builder, store_count);
         }
 
         pub fn clear<'a>(
@@ -784,14 +781,14 @@ pub(crate) mod stack_switching_helpers {
             discard_buffer: bool,
         ) {
             let zero32 = builder.ins().iconst(I32, 0);
-            self.set_length(builder, zero32);
+            self.set_length(env, builder, zero32);
 
             if discard_buffer {
                 let zero32 = builder.ins().iconst(I32, 0);
-                self.set_capacity(builder, zero32);
+                self.set_capacity(env, builder, zero32);
 
                 let zero_ptr = builder.ins().iconst(env.pointer_type(), 0);
-                self.set_data(builder, zero_ptr);
+                self.set_data(env, builder, zero_ptr);
             }
         }
     }

@@ -181,6 +181,34 @@ impl<T> VMArray<T> {
     }
 }
 
+#[test]
+fn check_vm_array_offsets() {
+    use crate::{HostPtr, Module, PtrSize, VMOffsets};
+    use core::mem::offset_of;
+    use std::mem::size_of;
+
+    // Note that the type parameter has no influence on the size and offsets.
+
+    let module = Module::new();
+    let offsets = VMOffsets::new(HostPtr, &module);
+    assert_eq!(
+        size_of::<VMArray<()>>(),
+        usize::from(offsets.ptr.size_of_vmarray())
+    );
+    assert_eq!(
+        offset_of!(VMArray<()>, length),
+        usize::from(offsets.ptr.vmarray_length())
+    );
+    assert_eq!(
+        offset_of!(VMArray<()>, capacity),
+        usize::from(offsets.ptr.vmarray_capacity())
+    );
+    assert_eq!(
+        offset_of!(VMArray<()>, data),
+        usize::from(offsets.ptr.vmarray_data())
+    );
+}
+
 /// Type used for passing payloads to and from continuations. The actual type
 /// argument should be wasmtime::runtime::vm::vmcontext::ValRaw, but we don't
 /// have access to that here.
@@ -244,20 +272,6 @@ impl From<VMStackState> for i32 {
 pub mod offsets {
     const fn align(offset: usize, alignment: usize) -> usize {
         (offset + (alignment - 1)) / alignment * alignment
-    }
-
-    /// Offsets of fields in `Array`.
-    /// Note that these are independent from the type parameter `T`.
-    pub mod array {
-        use crate::stack_switching::*;
-        use core::mem::offset_of;
-
-        /// Offset of `capacity` field
-        pub const CAPACITY: usize = offset_of!(VMArray<()>, capacity);
-        /// Offset of `data` field
-        pub const DATA: usize = offset_of!(VMArray<()>, data);
-        /// Offset of `length` field
-        pub const LENGTH: usize = offset_of!(VMArray<()>, length);
     }
 
     /// Offsets of fields in `wasmtime_runtime::continuation::VMContRef`.

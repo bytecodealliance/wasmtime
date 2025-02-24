@@ -243,6 +243,28 @@ pub trait PtrSize {
         .unwrap()
     }
 
+    // Offsets within `VMArray`
+
+    /// Return the offset of `VMArray::length`.
+    fn vmarray_length(&self) -> u8 {
+        0
+    }
+
+    /// Return the offset of `VMArray::capacity`.
+    fn vmarray_capacity(&self) -> u8 {
+        4
+    }
+
+    /// Return the offset of `VMArray::data`.
+    fn vmarray_data(&self) -> u8 {
+        8
+    }
+
+    /// Return the size of `VMArray`.
+    fn size_of_vmarray(&self) -> u8 {
+        8 + self.size()
+    }
+
     // Offsets within `VMCommonStackInformation`
 
     /// Return the offset of `VMCommonStackInformation::limits`.
@@ -266,7 +288,7 @@ pub trait PtrSize {
 
     /// Return the offset of `VMCommonStackInformation::first_switch_handler_index`.
     fn vmcommon_stack_information_first_switch_handler_index(&self) -> u8 {
-        self.vmcommon_stack_information_handlers() + 2 * 4 + self.size()
+        self.vmcommon_stack_information_handlers() + self.size_of_vmarray()
     }
 
     /// Return the size of `VMCommonStackInformation`.
