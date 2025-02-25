@@ -2857,6 +2857,22 @@ impl Masm for MacroAssembler {
             .xmm_vroundp_rri(src, dst, VroundMode::TowardNearest, size);
         Ok(())
     }
+
+    fn v128_pmin(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.ensure_has_avx()?;
+        // Reverse operands since Wasm specifies returning the first operand if
+        // either operand is NaN while x86 returns the second operand.
+        self.asm.xmm_vminp_rrr(rhs, lhs, dst, size);
+        Ok(())
+    }
+
+    fn v128_pmax(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()> {
+        self.ensure_has_avx()?;
+        // Reverse operands since Wasm specifies returning the first operand if
+        // either operand is NaN while x86 returns the second operand.
+        self.asm.xmm_vmaxp_rrr(rhs, lhs, dst, size);
+        Ok(())
+    }
 }
 
 impl MacroAssembler {
