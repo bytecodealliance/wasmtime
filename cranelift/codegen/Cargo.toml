@@ -21,7 +21,6 @@ workspace = true
 features = ["all-arch"]
 
 [dependencies]
-arbitrary = { version = "1.3.2", features = ["derive"] }
 anyhow = { workspace = true, optional = true, features = ['std'] }
 bumpalo = "3"
 capstone = { workspace = true, optional = true }
