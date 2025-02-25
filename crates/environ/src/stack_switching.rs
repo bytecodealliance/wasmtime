@@ -39,13 +39,13 @@ impl Default for StackSwitchingConfig {
 }
 
 /// Discriminant of variant `Absent` in
-/// `wasmtime_runtime::continuation::VMStackChain`.
+/// `wasmtime::runtime::vm::stack_switching::VMStackChain`.
 pub const STACK_CHAIN_ABSENT_DISCRIMINANT: usize = 0;
 /// Discriminant of variant `InitialStack` in
-/// `wasmtime_runtime::continuation::VMStackChain`.
+/// `wasmtime::runtime::vm::stack_switching::VMStackChain`.
 pub const STACK_CHAIN_INITIAL_STACK_DISCRIMINANT: usize = 1;
 /// Discriminant of variant `Continiation` in
-/// `wasmtime_runtime::continuation::VMStackChain`.
+/// `wasmtime::runtime::vm::stack_switching::VMStackChain`.
 pub const STACK_CHAIN_CONTINUATION_DISCRIMINANT: usize = 2;
 
 /// Encodes the life cycle of a `VMContRef`.
@@ -86,16 +86,16 @@ impl From<VMStackState> for i32 {
 }
 
 /// Discriminant of variant `Return` in
-/// `ControlEffect`.
+/// `runtime::vm::stack_switching::ControlEffect`.
 pub const CONTROL_EFFECT_RETURN_DISCRIMINANT: u32 = 0;
 /// Discriminant of variant `Resume` in
-/// `ControlEffect`.
+/// `runtime::vm::stack_switching::ControlEffect`.
 pub const CONTROL_EFFECT_RESUME_DISCRIMINANT: u32 = 1;
 /// Discriminant of variant `Suspend` in
-/// `ControlEffect`.
+/// `runtime::vm::stack_switching::ControlEffect`.
 pub const CONTROL_EFFECT_SUSPEND_DISCRIMINANT: u32 = 2;
 /// Discriminant of variant `Switch` in
-/// `ControlEffect`.
+/// `runtime::vm::stack_switching::ControlEffect`.
 pub const CONTROL_EFFECT_SWITCH_DISCRIMINANT: u32 = 3;
 
 /// Universal control effect. This structure encodes return signal, resume
