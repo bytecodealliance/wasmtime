@@ -981,31 +981,19 @@ pub(crate) mod stack_switching_helpers {
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
-            // Let's make sure that we still represent the VMStackState enum as i32.
-            debug_assert!(
-                mem::size_of::<super::stack_switching_environ::VMStackState>()
-                    == mem::size_of::<i32>()
-            );
-
             let mem_flags = ir::MemFlags::trusted();
             let state_ptr = self.get_state_ptr(env, builder);
 
             builder.ins().load(I32, mem_flags, state_ptr, 0)
         }
 
-        pub fn set_state<'a>(
+        fn set_state_no_payload<'a>(
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
-            state: super::stack_switching_environ::VMStackState,
+            discriminant: u32,
         ) {
-            // Let's make sure that we still represent the VMStackState enum as i32.
-            debug_assert!(
-                mem::size_of::<super::stack_switching_environ::VMStackState>()
-                    == mem::size_of::<i32>()
-            );
-
-            let discriminant = builder.ins().iconst(I32, state.discriminant() as i64);
+            let discriminant = builder.ins().iconst(I32, discriminant as i64);
             emit_debug_println!(
                 env,
                 builder,
@@ -1020,33 +1008,94 @@ pub(crate) mod stack_switching_helpers {
             builder.ins().store(mem_flags, discriminant, state_ptr, 0);
         }
 
+        pub fn set_state_running<'a>(
+            &self,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
+            builder: &mut FunctionBuilder,
+        ) {
+            let discriminant = wasmtime_environ::stack_switching::STACK_STATE_RUNNING_DISCRIMINANT;
+            self.set_state_no_payload(env, builder, discriminant);
+        }
+
+        pub fn set_state_parent<'a>(
+            &self,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
+            builder: &mut FunctionBuilder,
+        ) {
+            let discriminant = wasmtime_environ::stack_switching::STACK_STATE_PARENT_DISCRIMINANT;
+            self.set_state_no_payload(env, builder, discriminant);
+        }
+
+        pub fn set_state_returned<'a>(
+            &self,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
+            builder: &mut FunctionBuilder,
+        ) {
+            let discriminant = wasmtime_environ::stack_switching::STACK_STATE_RETURNED_DISCRIMINANT;
+            self.set_state_no_payload(env, builder, discriminant);
+        }
+
+        pub fn set_state_suspended<'a>(
+            &self,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
+            builder: &mut FunctionBuilder,
+        ) {
+            let discriminant =
+                wasmtime_environ::stack_switching::STACK_STATE_SUSPENDED_DISCRIMINANT;
+            self.set_state_no_payload(env, builder, discriminant);
+        }
+
         pub fn has_state_any_of<'a>(
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
-            states: &[super::stack_switching_environ::VMStackState],
+            state_discriminants: &[u32],
         ) -> ir::Value {
             let actual_state = self.load_state(env, builder);
             let zero = builder.ins().iconst(I8, 0);
             let mut res = zero;
-            for state in states {
+            for state_discriminant in state_discriminants {
                 let eq =
                     builder
                         .ins()
-                        .icmp_imm(IntCC::Equal, actual_state, state.discriminant() as i64);
+                        .icmp_imm(IntCC::Equal, actual_state, *state_discriminant as i64);
                 res = builder.ins().bor(res, eq);
             }
             res
         }
 
-        pub fn has_state<'a>(
+        pub fn has_state_returned<'a>(
             &self,
             env: &mut crate::func_environ::FuncEnvironment<'a>,
             builder: &mut FunctionBuilder,
-            state: super::stack_switching_environ::VMStackState,
         ) -> ir::Value {
-            self.has_state_any_of(env, builder, &[state])
+            self.has_state_any_of(
+                env,
+                builder,
+                &[wasmtime_environ::stack_switching::STACK_STATE_RETURNED_DISCRIMINANT],
+            )
         }
+
+        pub fn has_state_running<'a>(
+            &self,
+            env: &mut crate::func_environ::FuncEnvironment<'a>,
+            builder: &mut FunctionBuilder,
+        ) -> ir::Value {
+            self.has_state_any_of(
+                env,
+                builder,
+                &[wasmtime_environ::stack_switching::STACK_STATE_RUNNING_DISCRIMINANT],
+            )
+        }
+
+        // pub fn has_state<'a>(
+        //     &self,
+        //     env: &mut crate::func_environ::FuncEnvironment<'a>,
+        //     builder: &mut FunctionBuilder,
+        //     state: super::stack_switching_environ::VMStackState,
+        // ) -> ir::Value {
+        //     self.has_state_any_of(env, builder, &[state])
+        // }
 
         /// Checks whether the `VMStackState` reflects that the stack has ever been
         /// active (instead of just having been allocated, but never resumed).
@@ -1056,7 +1105,7 @@ pub(crate) mod stack_switching_helpers {
             builder: &mut FunctionBuilder,
         ) -> ir::Value {
             let actual_state = self.load_state(env, builder);
-            let allocated: i32 = i32::from(super::stack_switching_environ::VMStackState::Fresh);
+            let allocated = wasmtime_environ::stack_switching::STACK_STATE_FRESH_DISCRIMINANT;
             builder
                 .ins()
                 .icmp_imm(IntCC::NotEqual, actual_state, allocated as i64)
@@ -1224,7 +1273,7 @@ pub(crate) mod stack_switching_helpers {
 
 use helpers::VMStackChain;
 use stack_switching_environ::{
-    VMStackState, CONTROL_EFFECT_RESUME_DISCRIMINANT, CONTROL_EFFECT_SWITCH_DISCRIMINANT,
+    CONTROL_EFFECT_RESUME_DISCRIMINANT, CONTROL_EFFECT_SWITCH_DISCRIMINANT,
 };
 use stack_switching_helpers as helpers;
 
@@ -1735,11 +1784,7 @@ pub(crate) fn translate_resume<'a>(
             // This should be impossible due to the linearity check.
             let zero = builder.ins().iconst(I8, 0);
             let csi = vmcontref.common_stack_information(env, builder);
-            let has_returned = csi.has_state(
-                env,
-                builder,
-                stack_switching_environ::VMStackState::Returned,
-            );
+            let has_returned = csi.has_state_returned(env, builder);
             emit_debug_assert_eq!(env, builder, has_returned, zero);
         }
 
@@ -1797,8 +1842,8 @@ pub(crate) fn translate_resume<'a>(
         let resume_contref = helpers::VMContRef::new(resume_contref);
         let resume_csi = resume_contref.common_stack_information(env, builder);
         let parent_csi = original_stack_chain.get_common_stack_information(env, builder);
-        resume_csi.set_state(env, builder, stack_switching_environ::VMStackState::Running);
-        parent_csi.set_state(env, builder, stack_switching_environ::VMStackState::Parent);
+        resume_csi.set_state_running(env, builder);
+        parent_csi.set_state_parent(env, builder);
 
         // We update the `VMStackLimits` of the parent of the continuation to be resumed
         // as well as the `VMRuntimeLimits`.
@@ -1886,7 +1931,7 @@ pub(crate) fn translate_resume<'a>(
 
         // Now the parent contref (or initial stack) is active again
         vmctx_store_stack_chain(env, builder, vmctx, &original_stack_chain);
-        parent_csi.set_state(env, builder, stack_switching_environ::VMStackState::Running);
+        parent_csi.set_state_running(env, builder);
 
         // Just for consistency: Clear the handler list.
         handler_list.clear(env, builder, true);
@@ -2055,11 +2100,7 @@ pub(crate) fn translate_resume<'a>(
         parent_csi.write_limits_to_vmcontext(env, builder, vm_runtime_limits_ptr);
 
         let returned_csi = returned_contref.common_stack_information(env, builder);
-        returned_csi.set_state(
-            env,
-            builder,
-            stack_switching_environ::VMStackState::Returned,
-        );
+        returned_csi.set_state_returned(env, builder);
 
         // Load the values returned by the continuation.
         let return_types: Vec<_> = env
@@ -2133,19 +2174,11 @@ pub(crate) fn translate_suspend<'a>(
     // Set current continuation to suspended and break up handler chain.
     let active_contref_csi = active_contref.common_stack_information(env, builder);
     if cfg!(debug_assertions) {
-        let is_running = active_contref_csi.has_state(
-            env,
-            builder,
-            stack_switching_environ::VMStackState::Running,
-        );
+        let is_running = active_contref_csi.has_state_running(env, builder);
         emit_debug_assert!(env, builder, is_running);
     }
 
-    active_contref_csi.set_state(
-        env,
-        builder,
-        stack_switching_environ::VMStackState::Suspended,
-    );
+    active_contref_csi.set_state_suspended(env, builder);
     let absent_chain_link = VMStackChain::absent(env, builder);
     end_of_chain_contref.set_parent_stack_chain(env, builder, &absent_chain_link);
 
@@ -2259,9 +2292,9 @@ pub(crate) fn translate_switch<'a>(
         emit_debug_assert!(
             env,
             builder,
-            switcher_contref_csi.has_state(env, builder, VMStackState::Running)
+            switcher_contref_csi.has_state_running(env, builder)
         );
-        switcher_contref_csi.set_state(env, builder, VMStackState::Suspended);
+        switcher_contref_csi.set_state_suspended(env, builder);
         // We break off `switcher_contref` from the chain of active
         // continuations, by separating the link between `last_ancestor` and its
         // parent stack.
@@ -2317,10 +2350,13 @@ pub(crate) fn translate_switch<'a>(
             switchee_contref_csi.has_state_any_of(
                 env,
                 builder,
-                &[VMStackState::Fresh, VMStackState::Suspended]
+                &[
+                    wasmtime_environ::stack_switching::STACK_STATE_FRESH_DISCRIMINANT,
+                    wasmtime_environ::stack_switching::STACK_STATE_SUSPENDED_DISCRIMINANT
+                ]
             )
         );
-        switchee_contref_csi.set_state(env, builder, VMStackState::Running);
+        switchee_contref_csi.set_state_running(env, builder);
 
         let switchee_contref_last_ancestor = switchee_contref.get_last_ancestor(env, builder);
         let mut switchee_contref_last_ancestor =

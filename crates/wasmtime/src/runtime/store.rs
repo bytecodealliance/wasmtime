@@ -1645,7 +1645,7 @@ impl StoreOpaque {
             //   continuations below.
             // - For `Fresh` continuations, we know that there are no GC values
             //   on their stack, yet.
-            if state == wasmtime_environ::stack_switching::VMStackState::Suspended {
+            if state == crate::vm::stack_switching::VMStackState::Suspended {
                 Backtrace::trace_suspended_continuation(self, continuation.deref(), |frame| {
                     self.trace_wasm_stack_frame(gc_roots_list, frame);
                     core::ops::ControlFlow::Continue(())

@@ -28,9 +28,8 @@ use crate::runtime::vm::{
     traphandlers::{tls, CallThreadState},
     Unwind, VMRuntimeLimits,
 };
-use crate::vm::stack_switching::VMContRef;
+use crate::vm::stack_switching::{VMContRef, VMStackState};
 use core::ops::ControlFlow;
-use wasmtime_environ::stack_switching::VMStackState;
 
 /// A WebAssembly stack trace.
 #[derive(Debug)]

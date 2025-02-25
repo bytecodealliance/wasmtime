@@ -4,7 +4,6 @@
 use core::{cell::UnsafeCell, marker::PhantomPinned, ptr::NonNull};
 
 use stack::VMContinuationStack;
-use wasmtime_environ::stack_switching::VMStackState;
 #[allow(unused)]
 use wasmtime_environ::{debug_println, stack_switching::ENABLE_DEBUG_PRINTING};
 
@@ -682,6 +681,28 @@ unsafe impl Sync for VMStackChainCell {}
 /// FIXME(frank-emrich) Justify why this is safe
 unsafe impl crate::vm::VmSafe for VMStackChainCell {}
 
+/// Encodes the life cycle of a `VMContRef`.
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(u32)]
+pub enum VMStackState {
+    /// The `VMContRef` has been created, but neither `resume` or `switch` has ever been
+    /// called on it. During this stage, we may add arguments using `cont.bind`.
+    Fresh = wasmtime_environ::stack_switching::STACK_STATE_FRESH_DISCRIMINANT,
+    /// The continuation is running, meaning that it is the one currently
+    /// executing code.
+    Running = wasmtime_environ::stack_switching::STACK_STATE_RUNNING_DISCRIMINANT,
+    /// The continuation is suspended because it executed a resume instruction
+    /// that has not finished yet. In other words, it became the parent of
+    /// another continuation (which may itself be `Running`, a `Parent`, or
+    /// `Suspended`).
+    Parent = wasmtime_environ::stack_switching::STACK_STATE_PARENT_DISCRIMINANT,
+    /// The continuation was suspended by a `suspend` or `switch` instruction.
+    Suspended = wasmtime_environ::stack_switching::STACK_STATE_SUSPENDED_DISCRIMINANT,
+    /// The function originally passed to `cont.new` has returned normally.
+    /// Note that there is no guarantee that a VMContRef will ever
+    /// reach this status, as it may stay suspended until being dropped.
+    Returned = wasmtime_environ::stack_switching::STACK_STATE_RETURNED_DISCRIMINANT,
+}
 
 /// Universal control effect. This structure encodes return signal, resume
 /// signal, suspension signal, and the handler to suspend to in a single variant

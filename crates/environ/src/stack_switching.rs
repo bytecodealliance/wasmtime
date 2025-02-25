@@ -48,42 +48,21 @@ pub const STACK_CHAIN_INITIAL_STACK_DISCRIMINANT: usize = 1;
 /// `wasmtime::runtime::vm::stack_switching::VMStackChain`.
 pub const STACK_CHAIN_CONTINUATION_DISCRIMINANT: usize = 2;
 
-/// Encodes the life cycle of a `VMContRef`.
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[repr(i32)]
-pub enum VMStackState {
-    /// The `VMContRef` has been created, but neither `resume` or `switch` has ever been
-    /// called on it. During this stage, we may add arguments using `cont.bind`.
-    Fresh,
-    /// The continuation is running, meaning that it is the one currently
-    /// executing code.
-    Running,
-    /// The continuation is suspended because it executed a resume instruction
-    /// that has not finished yet. In other words, it became the parent of
-    /// another continuation (which may itself be `Running`, a `Parent`, or
-    /// `Suspended`).
-    Parent,
-    /// The continuation was suspended by a `suspend` or `switch` instruction.
-    Suspended,
-    /// The function originally passed to `cont.new` has returned normally.
-    /// Note that there is no guarantee that a VMContRef will ever
-    /// reach this status, as it may stay suspended until being dropped.
-    Returned,
-}
-
-impl VMStackState {
-    /// Returns i32 discriminant of this variant.
-    pub fn discriminant(&self) -> i32 {
-        // This is well-defined for an enum with repr(i32).
-        unsafe { *(self as *const Self as *const i32) }
-    }
-}
-
-impl From<VMStackState> for i32 {
-    fn from(st: VMStackState) -> Self {
-        st.discriminant()
-    }
-}
+/// Discriminant of variant `Fresh` in
+/// `runtime::vm::stack_switching::VMStackState`.
+pub const STACK_STATE_FRESH_DISCRIMINANT: u32 = 0;
+/// Discriminant of variant `Running` in
+/// `runtime::vm::stack_switching::VMStackState`.
+pub const STACK_STATE_RUNNING_DISCRIMINANT: u32 = 1;
+/// Discriminant of variant `Parent` in
+/// `runtime::vm::stack_switching::VMStackState`.
+pub const STACK_STATE_PARENT_DISCRIMINANT: u32 = 2;
+/// Discriminant of variant `Suspended` in
+/// `runtime::vm::stack_switching::VMStackState`.
+pub const STACK_STATE_SUSPENDED_DISCRIMINANT: u32 = 3;
+/// Discriminant of variant `Returned` in
+/// `runtime::vm::stack_switching::VMStackState`.
+pub const STACK_STATE_RETURNED_DISCRIMINANT: u32 = 4;
 
 /// Discriminant of variant `Return` in
 /// `runtime::vm::stack_switching::ControlEffect`.
