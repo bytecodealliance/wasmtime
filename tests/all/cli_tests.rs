@@ -2255,3 +2255,12 @@ fn config_cli_flag() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn invalid_subcommand() -> Result<()> {
+    let output = run_wasmtime_for_output(&["invalid-subcommand"], None)?;
+    dbg!(&output);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("invalid-subcommand"));
+    Ok(())
+}
