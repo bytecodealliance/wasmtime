@@ -385,6 +385,12 @@ impl Masm for MacroAssembler {
                 self.asm
                     .xmm_vpinsr_rrr(dst, dst.to_reg(), byte_tmp, lane, size);
             }
+            LoadKind::VectorZero(size) => {
+                self.ensure_has_avx()?;
+                let scratch = regs::scratch();
+                self.load_impl(src, writable!(scratch), size, UNTRUSTED_FLAGS)?;
+                self.asm.avx_gpr_to_xmm(scratch, dst, size);
+            }
         }
 
         Ok(())

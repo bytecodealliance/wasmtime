@@ -498,6 +498,9 @@ pub(crate) enum LoadKind {
     VectorExtend(V128LoadExtendKind),
     /// Load content into select lane.
     VectorLane(LaneSelector),
+    /// Load a single element into the lowest bits of a vector and initialize
+    /// all other bits to zero.
+    VectorZero(OperandSize),
 }
 
 impl LoadKind {
@@ -511,7 +514,8 @@ impl LoadKind {
             Self::Splat(kind) => Self::operand_size_for_splat(kind),
             Self::Operand(size)
             | Self::Atomic(size, None)
-            | Self::VectorLane(LaneSelector { size, .. }) => *size,
+            | Self::VectorLane(LaneSelector { size, .. })
+            | Self::VectorZero(size) => *size,
         }
     }
 
