@@ -40,6 +40,10 @@ impl RemKind {
 
 /// Kinds of vector min operation supported by WebAssembly.
 pub(crate) enum V128MinKind {
+    /// 4 lanes of 32-bit floats.
+    F32x4,
+    /// 2 lanes of 64-bit floats.
+    F64x2,
     /// 16 lanes of signed 8-bit integers.
     I8x16S,
     /// 16 lanes of unsigned 8-bit integers.
@@ -54,8 +58,24 @@ pub(crate) enum V128MinKind {
     I32x4U,
 }
 
+impl V128MinKind {
+    /// The size of each lane.
+    pub(crate) fn lane_size(&self) -> OperandSize {
+        match self {
+            Self::F32x4 | Self::I32x4S | Self::I32x4U => OperandSize::S32,
+            Self::F64x2 => OperandSize::S64,
+            Self::I8x16S | Self::I8x16U => OperandSize::S8,
+            Self::I16x8S | Self::I16x8U => OperandSize::S16,
+        }
+    }
+}
+
 /// Kinds of vector max operation supported by WebAssembly.
 pub(crate) enum V128MaxKind {
+    /// 4 lanes of 32-bit floats.
+    F32x4,
+    /// 2 lanes of 64-bit floats.
+    F64x2,
     /// 16 lanes of signed 8-bit integers.
     I8x16S,
     /// 16 lanes of unsigned 8-bit integers.
@@ -68,6 +88,18 @@ pub(crate) enum V128MaxKind {
     I32x4S,
     /// 4 lanes of unsigned 32-bit integers.
     I32x4U,
+}
+
+impl V128MaxKind {
+    /// The size of each lane.
+    pub(crate) fn lane_size(&self) -> OperandSize {
+        match self {
+            Self::F32x4 | Self::I32x4S | Self::I32x4U => OperandSize::S32,
+            Self::F64x2 => OperandSize::S64,
+            Self::I8x16S | Self::I8x16U => OperandSize::S8,
+            Self::I16x8S | Self::I16x8U => OperandSize::S16,
+        }
+    }
 }
 
 #[derive(Eq, PartialEq)]
@@ -1021,6 +1053,17 @@ impl OperandSize {
                 _ => None,
             },
             _ => None,
+        }
+    }
+
+    /// The number of bits in the mantissa.
+    ///
+    /// Only implemented for floats.
+    pub fn mantissa_bits(&self) -> u8 {
+        match self {
+            Self::S32 => 8,
+            Self::S64 => 11,
+            _ => unimplemented!(),
         }
     }
 }
