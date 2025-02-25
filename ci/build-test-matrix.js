@@ -16,7 +16,7 @@ const GENERIC_BUCKETS = 3;
 const SINGLE_CRATE_BUCKETS = ["wasmtime", "wasmtime-cli", "wasmtime-wasi"];
 
 const ubuntu = 'ubuntu-24.04';
-const windows = 'windows-2022';
+const windows = 'windows-2025';
 const macos = 'macos-14';
 
 // This is the small, fast-to-execute matrix we use for PRs before they enter

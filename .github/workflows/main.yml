@@ -774,7 +774,7 @@ jobs:
       run: sysctl hw
       if: runner.os == 'macOS'
     - name: CPU information
-      run: wmic cpu list /format:list
+      run: Get-WmiObject Win32_Processor
       shell: pwsh
       if: runner.os == 'Windows'
 
