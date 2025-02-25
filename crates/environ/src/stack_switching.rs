@@ -97,25 +97,3 @@ pub const CONTROL_EFFECT_SUSPEND_DISCRIMINANT: u32 = 2;
 /// Discriminant of variant `Switch` in
 /// `runtime::vm::stack_switching::ControlEffect`.
 pub const CONTROL_EFFECT_SWITCH_DISCRIMINANT: u32 = 3;
-
-/// Universal control effect. This structure encodes return signal, resume
-/// signal, suspension signal, and the handler to suspend to in a single variant
-/// type. This instance is used at runtime. There is a codegen counterpart in
-/// `cranelift/src/stack-switching/control_effect.rs`.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(u32)]
-pub enum ControlEffect {
-    /// Used to signal that a continuation has returned and control switches
-    /// back to the parent.
-    Return = CONTROL_EFFECT_RETURN_DISCRIMINANT,
-    /// Used to signal to a continuation that it is being resumed.
-    Resume = CONTROL_EFFECT_RESUME_DISCRIMINANT,
-    /// Used to signal that a continuation has invoked a `suspend` instruction.
-    Suspend {
-        /// The index of the handler to be used in the parent continuation to
-        /// switch back to.
-        handler_index: u32,
-    } = CONTROL_EFFECT_SUSPEND_DISCRIMINANT,
-    /// Used to signal that a continuation has invoked a `suspend` instruction.
-    Switch = CONTROL_EFFECT_SWITCH_DISCRIMINANT,
-}
