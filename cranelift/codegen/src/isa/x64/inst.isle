@@ -2747,23 +2747,27 @@
 
 ;; Helper for emitting `add` instructions.
 (decl x64_add (Type Gpr GprMemImm) Gpr)
-(rule 12 (x64_add $I8  src1 (is_imm8 src2))   (x64_addb_mi src1 src2))
-(rule 11 (x64_add $I16 src1 (is_imm16 src2))  (x64_addw_mi src1 src2))
-(rule 10 (x64_add $I32 src1 (is_simm8 src2))  (x64_addl_mi_sxb src1 src2))
-(rule 9 (x64_add $I32 src1 (is_imm32 src2))   (x64_addl_mi src1 src2))
-(rule 8 (x64_add $I64 src1 (is_simm8 src2))   (x64_addq_mi_sxb src1 src2))
-(rule 7 (x64_add $I64 src1 (is_simm32 src2))  (x64_addq_mi_sxl src1 src2))
-(rule 6 (x64_add $I8  src1 (is_gpr src2))     (x64_addl_rm src1 src2))
-(rule 5 (x64_add $I8  src1 (is_mem src2))     (x64_addb_rm src1 src2))
-(rule 4 (x64_add $I16 src1 (is_gpr src2))     (x64_addl_rm src1 src2))
-(rule 3 (x64_add $I16 src1 (is_mem src2))     (x64_addw_rm src1 src2))
-(rule 2 (x64_add $I32 src1 (is_gpr_mem src2)) (x64_addl_rm src1 src2))
-(rule 1 (x64_add $I64 src1 (is_gpr_mem src2)) (x64_addq_rm src1 src2))
-(rule 0 (x64_add ty src1 src2)
-      (alu_rmi_r ty
-                 (AluRmiROpcode.Add)
-                 src1
-                 src2))
+
+;; Match 8-bit immediates first; allows a smaller instruction encoding.
+(rule 3 (x64_add $I32 src1 (is_simm8 src2))   (x64_addl_mi_sxb src1 src2))
+(rule 3 (x64_add $I64 src1 (is_simm8 src2))   (x64_addq_mi_sxb src1 src2))
+
+;; Match the remaining immediates.
+(rule 2 (x64_add $I8  src1 (is_imm8 src2))    (x64_addb_mi src1 src2))
+(rule 2 (x64_add $I16 src1 (is_imm16 src2))   (x64_addw_mi src1 src2))
+(rule 2 (x64_add $I32 src1 (is_imm32 src2))   (x64_addl_mi src1 src2))
+(rule 2 (x64_add $I64 src1 (is_simm32 src2))  (x64_addq_mi_sxl src1 src2))
+
+;; Use wider instructions than necessary for 8/16-bit register-to-register
+;; operations to avoid CPU false dependencies.
+(rule 1 (x64_add $I8  src1 (is_gpr src2))     (x64_addl_rm src1 src2))
+(rule 1 (x64_add $I16 src1 (is_gpr src2))     (x64_addl_rm src1 src2))
+
+;; Match the operand size to the instruction width.
+(rule 0 (x64_add $I8  src1 (is_gpr_mem src2)) (x64_addb_rm src1 src2))
+(rule 0 (x64_add $I16 src1 (is_gpr_mem src2)) (x64_addw_rm src1 src2))
+(rule 0 (x64_add $I32 src1 (is_gpr_mem src2)) (x64_addl_rm src1 src2))
+(rule 0 (x64_add $I64 src1 (is_gpr_mem src2)) (x64_addq_rm src1 src2))
 
 ;; Helper for creating `add` instructions whose flags are also used.
 (decl x64_add_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
@@ -2821,25 +2825,31 @@
                         dst)
          dst)))
 
+
+
 ;; Helper for emitting `sub` instructions.
 (decl x64_sub (Type Gpr GprMemImm) Gpr)
-(rule 12 (x64_sub $I8  src1 (is_imm8 src2))   (x64_subb_mi src1 src2))
-(rule 11 (x64_sub $I16 src1 (is_imm16 src2))  (x64_subw_mi src1 src2))
-(rule 10 (x64_sub $I32 src1 (is_simm8 src2))  (x64_subl_mi_sxb src1 src2))
-(rule 9 (x64_sub $I32 src1 (is_imm32 src2))   (x64_subl_mi src1 src2))
-(rule 8 (x64_sub $I64 src1 (is_simm8 src2))   (x64_subq_mi_sxb src1 src2))
-(rule 7 (x64_sub $I64 src1 (is_simm32 src2))  (x64_subq_mi_sxl src1 src2))
-(rule 6 (x64_sub $I8  src1 (is_gpr src2))     (x64_subl_rm src1 src2))
-(rule 5 (x64_sub $I8  src1 (is_mem src2))     (x64_subb_rm src1 src2))
-(rule 4 (x64_sub $I16 src1 (is_gpr src2))     (x64_subl_rm src1 src2))
-(rule 3 (x64_sub $I16 src1 (is_mem src2))     (x64_subw_rm src1 src2))
-(rule 2 (x64_sub $I32 src1 (is_gpr_mem src2)) (x64_subl_rm src1 src2))
-(rule 1 (x64_sub $I64 src1 (is_gpr_mem src2)) (x64_subq_rm src1 src2))
-(rule 0 (x64_sub ty src1 src2)
-      (alu_rmi_r ty
-                 (AluRmiROpcode.Sub)
-                 src1
-                 src2))
+
+;; Match 8-bit immediates first; allows a smaller instruction encoding.
+(rule 3 (x64_sub $I32 src1 (is_simm8 src2))   (x64_subl_mi_sxb src1 src2))
+(rule 3 (x64_sub $I64 src1 (is_simm8 src2))   (x64_subq_mi_sxb src1 src2))
+
+;; Match the remaining immediates.
+(rule 2 (x64_sub $I8  src1 (is_imm8 src2))    (x64_subb_mi src1 src2))
+(rule 2 (x64_sub $I16 src1 (is_imm16 src2))   (x64_subw_mi src1 src2))
+(rule 2 (x64_sub $I32 src1 (is_imm32 src2))   (x64_subl_mi src1 src2))
+(rule 2 (x64_sub $I64 src1 (is_simm32 src2))  (x64_subq_mi_sxl src1 src2))
+
+;; Use wider instructions than necessary for 8/16-bit register-to-register
+;; operations to avoid CPU false dependencies.
+(rule 1 (x64_sub $I8  src1 (is_gpr src2))     (x64_subl_rm src1 src2))
+(rule 1 (x64_sub $I16 src1 (is_gpr src2))     (x64_subl_rm src1 src2))
+
+;; Match the operand size to the instruction width.
+(rule 0 (x64_sub $I8  src1 (is_gpr_mem src2)) (x64_subb_rm src1 src2))
+(rule 0 (x64_sub $I16 src1 (is_gpr_mem src2)) (x64_subw_rm src1 src2))
+(rule 0 (x64_sub $I32 src1 (is_gpr_mem src2)) (x64_subl_rm src1 src2))
+(rule 0 (x64_sub $I64 src1 (is_gpr_mem src2)) (x64_subq_rm src1 src2))
 
 ;; Helper for creating `sub` instructions whose flags are also used.
 (decl x64_sub_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
@@ -2950,8 +2960,6 @@
 (extern extractor is_simm32 is_simm32)
 (decl is_gpr (AssemblerReadGprMem) GprMemImm)
 (extern extractor is_gpr is_gpr)
-(decl is_mem (AssemblerReadGprMem) GprMemImm)
-(extern extractor is_mem is_mem)
 (decl is_gpr_mem (AssemblerReadGprMem) GprMemImm)
 (extern extractor is_gpr_mem is_gpr_mem)
 
@@ -3023,29 +3031,31 @@
 (extern constructor u8_to_assembler_imm8 u8_to_assembler_imm8)
 (convert u8 AssemblerImm8 u8_to_assembler_imm8)
 
-;; Helper for emitting `and` instructions. The high-priority rules all make use
-;; of the new assembler lowerings, but we retain the original cranelift-codegen
-;; lowering as a fallback for the time being (TODO: eventually remove this).
-;; Note that, to avoid potential partial-register stalls, we use the 32-bit-wide
-;; instruction when we know the 8-bit or 16-bit values are both in registers.
+
+
+;; Helper for emitting `and` instructions.
 (decl x64_and (Type Gpr GprMemImm) Gpr)
-(rule 12 (x64_and $I8  src1 (is_imm8 src2))   (x64_andb_mi src1 src2))
-(rule 11 (x64_and $I16 src1 (is_imm16 src2))  (x64_andw_mi src1 src2))
-(rule 10 (x64_and $I32 src1 (is_simm8 src2))  (x64_andl_mi_sxb src1 src2))
-(rule 9 (x64_and $I32 src1 (is_imm32 src2))   (x64_andl_mi src1 src2))
-(rule 8 (x64_and $I64 src1 (is_simm8 src2))   (x64_andq_mi_sxb src1 src2))
-(rule 7 (x64_and $I64 src1 (is_simm32 src2))  (x64_andq_mi_sxl src1 src2))
-(rule 6 (x64_and $I8  src1 (is_gpr src2))     (x64_andl_rm src1 src2))
-(rule 5 (x64_and $I8  src1 (is_mem src2))     (x64_andb_rm src1 src2))
-(rule 4 (x64_and $I16 src1 (is_gpr src2))     (x64_andl_rm src1 src2))
-(rule 3 (x64_and $I16 src1 (is_mem src2))     (x64_andw_rm src1 src2))
-(rule 2 (x64_and $I32 src1 (is_gpr_mem src2)) (x64_andl_rm src1 src2))
-(rule 1 (x64_and $I64 src1 (is_gpr_mem src2)) (x64_andq_rm src1 src2))
-(rule 0 (x64_and ty src1 src2)
-      (alu_rmi_r ty
-                 (AluRmiROpcode.And)
-                 src1
-                 src2))
+
+;; Match 8-bit immediates first; allows a smaller instruction encoding.
+(rule 3 (x64_and $I32 src1 (is_simm8 src2))   (x64_andl_mi_sxb src1 src2))
+(rule 3 (x64_and $I64 src1 (is_simm8 src2))   (x64_andq_mi_sxb src1 src2))
+
+;; Match the remaining immediates.
+(rule 2 (x64_and $I8  src1 (is_imm8 src2))    (x64_andb_mi src1 src2))
+(rule 2 (x64_and $I16 src1 (is_imm16 src2))   (x64_andw_mi src1 src2))
+(rule 2 (x64_and $I32 src1 (is_imm32 src2))   (x64_andl_mi src1 src2))
+(rule 2 (x64_and $I64 src1 (is_simm32 src2))  (x64_andq_mi_sxl src1 src2))
+
+;; Use wider instructions than necessary for 8/16-bit register-to-register
+;; operations to avoid CPU false dependencies.
+(rule 1 (x64_and $I8  src1 (is_gpr src2))     (x64_andl_rm src1 src2))
+(rule 1 (x64_and $I16 src1 (is_gpr src2))     (x64_andl_rm src1 src2))
+
+;; Match the operand size to the instruction width.
+(rule 0 (x64_and $I8  src1 (is_gpr_mem src2)) (x64_andb_rm src1 src2))
+(rule 0 (x64_and $I16 src1 (is_gpr_mem src2)) (x64_andw_rm src1 src2))
+(rule 0 (x64_and $I32 src1 (is_gpr_mem src2)) (x64_andl_rm src1 src2))
+(rule 0 (x64_and $I64 src1 (is_gpr_mem src2)) (x64_andq_rm src1 src2))
 
 (decl x64_and_with_flags_paired (Type Gpr GprMemImm) ProducesFlags)
 (rule (x64_and_with_flags_paired ty src1 src2)
@@ -3057,45 +3067,59 @@
                        src2
                        dst))))
 
+
+
 ;; Helper for emitting `or` instructions.
 (decl x64_or (Type Gpr GprMemImm) Gpr)
-(rule 12 (x64_or $I8  src1 (is_imm8 src2))   (x64_orb_mi src1 src2))
-(rule 11 (x64_or $I16 src1 (is_imm16 src2))  (x64_orw_mi src1 src2))
-(rule 10 (x64_or $I32 src1 (is_simm8 src2))  (x64_orl_mi_sxb src1 src2))
-(rule 9 (x64_or $I32 src1 (is_imm32 src2))   (x64_orl_mi src1 src2))
-(rule 8 (x64_or $I64 src1 (is_simm8 src2))   (x64_orq_mi_sxb src1 src2))
-(rule 7 (x64_or $I64 src1 (is_simm32 src2))  (x64_orq_mi_sxl src1 src2))
-(rule 6 (x64_or $I8  src1 (is_gpr src2))     (x64_orl_rm src1 src2))
-(rule 5 (x64_or $I8  src1 (is_mem src2))     (x64_orb_rm src1 src2))
-(rule 4 (x64_or $I16 src1 (is_gpr src2))     (x64_orl_rm src1 src2))
-(rule 3 (x64_or $I16 src1 (is_mem src2))     (x64_orw_rm src1 src2))
-(rule 2 (x64_or $I32 src1 (is_gpr_mem src2)) (x64_orl_rm src1 src2))
-(rule 1 (x64_or $I64 src1 (is_gpr_mem src2)) (x64_orq_rm src1 src2))
-(rule 0 (x64_or ty src1 src2)
-      (alu_rmi_r ty
-                 (AluRmiROpcode.Or)
-                 src1
-                 src2))
+
+;; Match 8-bit immediates first; allows a smaller instruction encoding.
+(rule 3 (x64_or $I32 src1 (is_simm8 src2))   (x64_orl_mi_sxb src1 src2))
+(rule 3 (x64_or $I64 src1 (is_simm8 src2))   (x64_orq_mi_sxb src1 src2))
+
+;; Match the remaining immediates.
+(rule 2 (x64_or $I8  src1 (is_imm8 src2))    (x64_orb_mi src1 src2))
+(rule 2 (x64_or $I16 src1 (is_imm16 src2))   (x64_orw_mi src1 src2))
+(rule 2 (x64_or $I32 src1 (is_imm32 src2))   (x64_orl_mi src1 src2))
+(rule 2 (x64_or $I64 src1 (is_simm32 src2))  (x64_orq_mi_sxl src1 src2))
+
+;; Use wider instructions than necessary for 8/16-bit register-to-register
+;; operations to avoid CPU false dependencies.
+(rule 1 (x64_or $I8  src1 (is_gpr src2))     (x64_orl_rm src1 src2))
+(rule 1 (x64_or $I16 src1 (is_gpr src2))     (x64_orl_rm src1 src2))
+
+;; Match the operand size to the instruction width.
+(rule 0 (x64_or $I8  src1 (is_gpr_mem src2)) (x64_orb_rm src1 src2))
+(rule 0 (x64_or $I16 src1 (is_gpr_mem src2)) (x64_orw_rm src1 src2))
+(rule 0 (x64_or $I32 src1 (is_gpr_mem src2)) (x64_orl_rm src1 src2))
+(rule 0 (x64_or $I64 src1 (is_gpr_mem src2)) (x64_orq_rm src1 src2))
+
+
 
 ;; Helper for emitting `xor` instructions.
 (decl x64_xor (Type Gpr GprMemImm) Gpr)
-(rule 12 (x64_xor $I8  src1 (is_imm8 src2))   (x64_xorb_mi src1 src2))
-(rule 11 (x64_xor $I16 src1 (is_imm16 src2))  (x64_xorw_mi src1 src2))
-(rule 10 (x64_xor $I32 src1 (is_simm8 src2))  (x64_xorl_mi_sxb src1 src2))
-(rule 9 (x64_xor $I32 src1 (is_imm32 src2))   (x64_xorl_mi src1 src2))
-(rule 8 (x64_xor $I64 src1 (is_simm8 src2))   (x64_xorq_mi_sxb src1 src2))
-(rule 7 (x64_xor $I64 src1 (is_simm32 src2))  (x64_xorq_mi_sxl src1 src2))
-(rule 6 (x64_xor $I8  src1 (is_gpr src2))     (x64_xorl_rm src1 src2))
-(rule 5 (x64_xor $I8  src1 (is_mem src2))     (x64_xorb_rm src1 src2))
-(rule 4 (x64_xor $I16 src1 (is_gpr src2))     (x64_xorl_rm src1 src2))
-(rule 3 (x64_xor $I16 src1 (is_mem src2))     (x64_xorw_rm src1 src2))
-(rule 2 (x64_xor $I32 src1 (is_gpr_mem src2)) (x64_xorl_rm src1 src2))
-(rule 1 (x64_xor $I64 src1 (is_gpr_mem src2)) (x64_xorq_rm src1 src2))
-(rule 0 (x64_xor ty src1 src2)
-      (alu_rmi_r ty
-                 (AluRmiROpcode.Xor)
-                 src1
-                 src2))
+
+;; Match 8-bit immediates first; allows a smaller instruction encoding.
+(rule 3 (x64_xor $I32 src1 (is_simm8 src2))   (x64_xorl_mi_sxb src1 src2))
+(rule 3 (x64_xor $I64 src1 (is_simm8 src2))   (x64_xorq_mi_sxb src1 src2))
+
+;; Match the remaining immediates.
+(rule 2 (x64_xor $I8  src1 (is_imm8 src2))    (x64_xorb_mi src1 src2))
+(rule 2 (x64_xor $I16 src1 (is_imm16 src2))   (x64_xorw_mi src1 src2))
+(rule 2 (x64_xor $I32 src1 (is_imm32 src2))   (x64_xorl_mi src1 src2))
+(rule 2 (x64_xor $I64 src1 (is_simm32 src2))  (x64_xorq_mi_sxl src1 src2))
+
+;; Use wider instructions than necessary for 8/16-bit register-to-register
+;; operations to avoid CPU false dependencies.
+(rule 1 (x64_xor $I8  src1 (is_gpr src2))     (x64_xorl_rm src1 src2))
+(rule 1 (x64_xor $I16 src1 (is_gpr src2))     (x64_xorl_rm src1 src2))
+
+;; Match the operand size to the instruction width.
+(rule 0 (x64_xor $I8  src1 (is_gpr_mem src2)) (x64_xorb_rm src1 src2))
+(rule 0 (x64_xor $I16 src1 (is_gpr_mem src2)) (x64_xorw_rm src1 src2))
+(rule 0 (x64_xor $I32 src1 (is_gpr_mem src2)) (x64_xorl_rm src1 src2))
+(rule 0 (x64_xor $I64 src1 (is_gpr_mem src2)) (x64_xorq_rm src1 src2))
+
+
 
 (decl x64_andn (Type Gpr GprMem) Gpr)
 (rule (x64_andn ty src1 src2)

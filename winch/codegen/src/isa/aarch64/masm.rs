@@ -227,14 +227,14 @@ impl Masm for MacroAssembler {
             RegImm::Reg(reg) => reg,
         };
 
-        self.asm.str(src, dst, size);
+        self.asm.str(src, dst, size, TRUSTED_FLAGS);
         Ok(())
     }
 
     fn wasm_store(&mut self, src: Reg, dst: Self::Address, op_kind: StoreKind) -> Result<()> {
         self.with_aligned_sp(|masm| match op_kind {
             StoreKind::Operand(size) => {
-                masm.asm.str(src, dst, size);
+                masm.asm.str(src, dst, size, UNTRUSTED_FLAGS);
                 Ok(())
             }
             StoreKind::Atomic(_size) => {
@@ -387,9 +387,14 @@ impl Masm for MacroAssembler {
         size: OperandSize,
         trap: TrapCode,
     ) -> Result<()> {
-        self.add(dst, lhs, rhs, size)?;
-        self.asm.trapif(Cond::Hs, trap);
-        Ok(())
+        // Similar to all the other potentially-trapping operations, we need to
+        // ensure that the real SP is 16-byte aligned in case control flow is
+        // transferred to a signal handler.
+        self.with_aligned_sp(|masm| {
+            masm.add(dst, lhs, rhs, size)?;
+            masm.asm.trapif(Cond::Hs, trap);
+            Ok(())
+        })
     }
 
     fn sub(&mut self, dst: WritableReg, lhs: Reg, rhs: RegImm, size: OperandSize) -> Result<()> {
@@ -745,7 +750,7 @@ impl Masm for MacroAssembler {
     fn push(&mut self, reg: Reg, size: OperandSize) -> Result<StackSlot> {
         self.reserve_stack(size.bytes())?;
         let address = self.address_from_sp(SPOffset::from_u32(self.sp_offset))?;
-        self.asm.str(reg, address, size);
+        self.asm.str(reg, address, size, TRUSTED_FLAGS);
 
         Ok(StackSlot {
             offset: SPOffset::from_u32(self.sp_offset),
