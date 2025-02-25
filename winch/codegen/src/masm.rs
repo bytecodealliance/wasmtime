@@ -2214,4 +2214,10 @@ pub(crate) trait MacroAssembler {
 
     /// Lane-wise rounding to nearest integer for vector of floats.
     fn v128_nearest(&mut self, src: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
+
+    /// Lane-wise minimum value defined as `rhs < lhs ? rhs : lhs`.
+    fn v128_pmin(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
+
+    /// Lane-wise maximum value defined as `lhs < rhs ? rhs : lhs`.
+    fn v128_pmax(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg, size: OperandSize) -> Result<()>;
 }

@@ -418,8 +418,6 @@ impl WastTest {
                 "spec_testsuite/table_size.wast",
                 // simd-related failures
                 "misc_testsuite/simd/canonicalize-nan.wast",
-                "spec_testsuite/simd_f32x4_pmin_pmax.wast",
-                "spec_testsuite/simd_f64x2_pmin_pmax.wast",
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {
@@ -446,10 +444,12 @@ impl WastTest {
                     "spec_testsuite/simd_f32x4.wast",
                     "spec_testsuite/simd_f32x4_arith.wast",
                     "spec_testsuite/simd_f32x4_cmp.wast",
+                    "spec_testsuite/simd_f32x4_pmin_pmax.wast",
                     "spec_testsuite/simd_f32x4_rounding.wast",
                     "spec_testsuite/simd_f64x2.wast",
                     "spec_testsuite/simd_f64x2_arith.wast",
                     "spec_testsuite/simd_f64x2_cmp.wast",
+                    "spec_testsuite/simd_f64x2_pmin_pmax.wast",
                     "spec_testsuite/simd_f64x2_rounding.wast",
                     "spec_testsuite/simd_i16x8_cmp.wast",
                     "spec_testsuite/simd_i32x4_cmp.wast",

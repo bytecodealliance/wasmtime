@@ -550,6 +550,10 @@ macro_rules! def_unsupported {
     (emit F64x2Trunc $($rest:tt)*) => {};
     (emit V128Load32Zero $($rest:tt)*) => {};
     (emit V128Load64Zero $($rest:tt)*) => {};
+    (emit F32x4PMin $($rest:tt)*) => {};
+    (emit F64x2PMin $($rest:tt)*) => {};
+    (emit F32x4PMax $($rest:tt)*) => {};
+    (emit F64x2PMax $($rest:tt)*) => {};
     (emit F32x4Min $($rest:tt)*) => {};
     (emit F64x2Min $($rest:tt)*) => {};
     (emit F32x4Max $($rest:tt)*) => {};
@@ -4522,6 +4526,38 @@ where
             WasmValType::V128,
             LoadKind::VectorZero(OperandSize::S64),
         )
+    }
+
+    fn visit_f32x4_pmin(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, size| {
+                masm.v128_pmin(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_f64x2_pmin(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S64, |masm, dst, src, size| {
+                masm.v128_pmin(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_f32x4_pmax(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S32, |masm, dst, src, size| {
+                masm.v128_pmax(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::v128(dst))
+            })
+    }
+
+    fn visit_f64x2_pmax(&mut self) -> Self::Output {
+        self.context
+            .binop(self.masm, OperandSize::S64, |masm, dst, src, size| {
+                masm.v128_pmax(dst, src, writable!(dst), size)?;
+                Ok(TypedReg::v128(dst))
+            })
     }
 
     fn visit_f32x4_min(&mut self) -> Self::Output {
