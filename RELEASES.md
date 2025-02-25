@@ -1,3 +1,16 @@
+## 30.0.2
+
+Released 2025-02-25.
+
+### Fixed
+
+* MinGW C API builds are now built with a newer version of GCC which seems to
+  fix an issue caused by #9929.
+  [#10290](https://github.com/bytecodealliance/wasmtime/pull/10290)
+
+
+--------------------------------------------------------------------------------
+
 ## 30.0.1
 
 Released 2025-02-21.
