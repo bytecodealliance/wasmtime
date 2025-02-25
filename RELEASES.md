@@ -8,6 +8,11 @@ Released 2025-02-25.
   fix an issue caused by #9929.
   [#10290](https://github.com/bytecodealliance/wasmtime/pull/10290)
 
+### Changed
+
+* The `cranelift-codegen` crate now no longer depends on `arbitrary`, a
+  now-unnecessary dependency.
+  [#10217](https://github.com/bytecodealliance/wasmtime/pull/10217)
 
 --------------------------------------------------------------------------------
 
