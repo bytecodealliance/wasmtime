@@ -622,11 +622,21 @@ impl WasmtimeConfig {
                 // at this time, so if winch is selected be sure to disable wasm
                 // proposals in `Config` to ensure that Winch can compile the
                 // module that wasm-smith generates.
-                config.simd_enabled = false;
                 config.relaxed_simd_enabled = false;
                 config.gc_enabled = false;
                 config.tail_call_enabled = false;
                 config.reference_types_enabled = false;
+
+                // Winch's SIMD implementations require AVX and AVX2.
+                if self
+                    .codegen_flag("has_avx")
+                    .is_some_and(|value| value == "false")
+                    || self
+                        .codegen_flag("has_avx2")
+                        .is_some_and(|value| value == "false")
+                {
+                    config.simd_enabled = false;
+                }
 
                 // Tuning  the following engine options is currently not supported
                 // by Winch.
