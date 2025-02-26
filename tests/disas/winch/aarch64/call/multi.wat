@@ -52,7 +52,7 @@
 ;;       mov     sp, x28
 ;;       mov     x1, x9
 ;;       mov     x2, x9
-;;       ldur    x0, [x28, #0xc]
+;;       add     x0, x28, #0xc
 ;;       bl      #0
 ;;   c0: add     x28, x28, #0xc
 ;;       mov     sp, x28
