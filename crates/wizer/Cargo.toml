@@ -46,8 +46,8 @@ optional = true
 
 [workspace.dependencies]
 wasmprinter = "0.202.0"
-wasmtime = "23"
-wasmtime-wasi = "23"
+wasmtime = "29"
+wasmtime-wasi = "29"
 
 [dev-dependencies]
 criterion = "0.5.1"
