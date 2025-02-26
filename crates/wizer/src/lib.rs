@@ -42,6 +42,7 @@ const DEFAULT_WASM_MULTI_VALUE: bool = true;
 const DEFAULT_WASM_MULTI_MEMORY: bool = true;
 const DEFAULT_WASM_BULK_MEMORY: bool = false;
 const DEFAULT_WASM_SIMD: bool = true;
+const DEFAULT_WASM_REFERENCE_TYPES: bool = false;
 
 /// The type of data that is stored in the `wasmtime::Store` during
 /// initialization.
@@ -249,6 +250,16 @@ pub struct Wizer {
     /// Enabled by default.
     #[cfg_attr(feature = "structopt", structopt(long, value_name = "true|false"))]
     wasm_simd: Option<bool>,
+
+    /// Enable or disable the Wasm reference-types proposal.
+    ///
+    /// Currently does not implement snapshotting or the use of references,
+    /// but enables initializing Wasm modules that use encodings introduced
+    /// in the reference-types proposal.
+    ///
+    /// Disabled by default.
+    #[cfg_attr(feature = "structopt", structopt(long, value_name = "true|false"))]
+    wasm_reference_types: Option<bool>,
 }
 
 impl std::fmt::Debug for Wizer {
@@ -269,6 +280,7 @@ impl std::fmt::Debug for Wizer {
             wasm_multi_value,
             wasm_bulk_memory,
             wasm_simd,
+            wasm_reference_types,
         } = self;
         f.debug_struct("Wizer")
             .field("init_func", &init_func)
@@ -286,6 +298,7 @@ impl std::fmt::Debug for Wizer {
             .field("wasm_multi_value", &wasm_multi_value)
             .field("wasm_bulk_memory", &wasm_bulk_memory)
             .field("wasm_simd", &wasm_simd)
+            .field("wasm_reference_types", &wasm_reference_types)
             .finish()
     }
 }
@@ -350,6 +363,7 @@ impl Wizer {
             wasm_multi_value: None,
             wasm_bulk_memory: None,
             wasm_simd: None,
+            wasm_reference_types: None,
         }
     }
 
@@ -556,6 +570,18 @@ impl Wizer {
         self
     }
 
+    /// Enable or disable the Wasm reference-types proposal.
+    ///
+    /// Currently does not implement snapshotting or the use of references,
+    /// but enables initializing Wasm modules that use encodings introduced
+    /// in the reference-types proposal.
+    ///
+    /// Defaults to `false`.
+    pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
+        self.wasm_reference_types = Some(enable);
+        self
+    }
+
     /// Initialize the given Wasm, snapshot it, and return the serialized
     /// snapshot as a new, pre-initialized Wasm module.
     pub fn run(&self, wasm: &[u8]) -> anyhow::Result<Vec<u8>> {
@@ -632,8 +658,14 @@ impl Wizer {
 
         config.wasm_simd(self.wasm_simd.unwrap_or(DEFAULT_WASM_SIMD));
 
+        // Note that reference_types are not actually supported,
+        // but many compilers now enable them by default
+        config.wasm_reference_types(
+            self.wasm_reference_types
+                .unwrap_or(DEFAULT_WASM_REFERENCE_TYPES),
+        );
+
         // Proposals that we should add support for.
-        config.wasm_reference_types(false);
         config.wasm_threads(false);
 
         Ok(config)
@@ -654,7 +686,9 @@ impl Wizer {
             multi_value: self.wasm_multi_value.unwrap_or(DEFAULT_WASM_MULTI_VALUE),
 
             // Proposals that we should add support for.
-            reference_types: false,
+            reference_types: self
+                .wasm_reference_types
+                .unwrap_or(DEFAULT_WASM_REFERENCE_TYPES),
             simd: self.wasm_simd.unwrap_or(DEFAULT_WASM_SIMD),
             threads: false,
             tail_call: false,
@@ -730,7 +764,31 @@ impl Wizer {
                                 anyhow::bail!("unsupported `data.drop` instruction")
                             }
                             wasmparser::Operator::TableSet { .. } => {
-                                unreachable!("part of reference types")
+                                anyhow::bail!("unsupported `table.set` instruction")
+                            }
+                            wasmparser::Operator::TableGet { .. } => {
+                                anyhow::bail!("unsupported `table.get` instruction")
+                            }
+                            wasmparser::Operator::RefNull { .. } => {
+                                anyhow::bail!("unsupported `ref.null` instruction")
+                            }
+                            wasmparser::Operator::RefIsNull => {
+                                anyhow::bail!("unsupported `ref.is_null` instruction")
+                            }
+                            wasmparser::Operator::TypedSelect { .. } => {
+                                anyhow::bail!("unsupported typed `select` instruction")
+                            }
+                            wasmparser::Operator::RefFunc { .. } => {
+                                anyhow::bail!("unsupported `ref.func` instruction")
+                            }
+                            wasmparser::Operator::TableSize { .. } => {
+                                anyhow::bail!("unsupported `table.size` instruction")
+                            }
+                            wasmparser::Operator::TableGrow { .. } => {
+                                anyhow::bail!("unsupported `table.grow` instruction")
+                            }
+                            wasmparser::Operator::TableFill { .. } => {
+                                anyhow::bail!("unsupported `table.fill` instruction")
                             }
                             _ => continue,
                         }

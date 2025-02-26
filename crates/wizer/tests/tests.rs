@@ -270,6 +270,100 @@ fn reject_table_get_set() -> Result<()> {
 }
 
 #[test]
+fn reject_table_get_set_with_reference_types_enabled() -> Result<()> {
+    let wat = r#"
+      (module
+        (table 3 funcref)
+
+        (func $f (result i32) (i32.const 0))
+        (func $g (result i32) (i32.const 0))
+        (func $h (result i32) (i32.const 0))
+
+        (func (export "main")
+          i32.const 0
+          i32.const 1
+          table.get
+          table.set)
+
+        (elem (i32.const 0) $f $g $h)
+      )"#;
+
+    let _ = env_logger::try_init();
+    let mut wizer = Wizer::new();
+    wizer.wasm_reference_types(true);
+
+    let wasm = wat_to_wasm(wat)?;
+    let result = wizen_and_run_wasm(&[], 42, &wasm, wizer);
+
+    assert!(result.is_err());
+
+    let err = result.unwrap_err();
+    assert!(err
+        .to_string()
+        .contains("unsupported `table.get` instruction"),);
+
+    Ok(())
+}
+
+#[test]
+fn reject_table_grow_with_reference_types_enabled() -> anyhow::Result<()> {
+    let wat = r#"
+      (module
+        (elem declare func $f)
+        (func $f)
+        (table 0 funcref)
+        (func (export "_initialize") (result i32)
+            ref.func $f
+            i32.const 1
+            table.grow
+        )
+      )"#;
+
+    let _ = env_logger::try_init();
+    let mut wizer = Wizer::new();
+    wizer.wasm_reference_types(true);
+
+    let wasm = wat_to_wasm(wat)?;
+    let result = wizen_and_run_wasm(&[], 42, &wasm, wizer);
+
+    assert!(result.is_err());
+
+    let err = result.unwrap_err();
+    assert!(err
+        .to_string()
+        .contains("unsupported `ref.func` instruction"));
+
+    Ok(())
+}
+
+#[test]
+fn indirect_call_with_reference_types() -> anyhow::Result<()> {
+    let wat = r#"
+      (module
+        (type $sig (func (result i32)))
+        (table 0 funcref)
+        (table $table1 1 funcref)
+        (elem (table $table1) (i32.const 0) func $f)
+        (func $f (type $sig)
+          i32.const 42
+        )
+        (func (export "wizer.initialize"))
+        (func (export "run") (result i32)
+          i32.const 0
+          call_indirect $table1 (type $sig)
+        )
+      )"#;
+
+    let _ = env_logger::try_init();
+    let mut wizer = Wizer::new();
+    wizer.wasm_reference_types(true);
+    wizer.wasm_bulk_memory(true);
+
+    let wasm = wat_to_wasm(wat)?;
+    wizen_and_run_wasm(&[], 42, &wasm, wizer)
+}
+
+#[test]
 fn reject_table_init() -> Result<()> {
     let result = run_wat(
         &[],
