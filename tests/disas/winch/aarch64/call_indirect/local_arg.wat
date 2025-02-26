@@ -29,6 +29,7 @@
 ;;       stur    w2, [x28, #4]
 ;;       add     x28, x28, #0x18
 ;;       mov     sp, x28
+;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
 ;;
@@ -53,7 +54,7 @@
 ;;       ldur    x3, [x2, #0x58]
 ;;       cmp     x1, x3, uxtx
 ;;       sub     sp, x28, #4
-;;       b.hs    #0x170
+;;       b.hs    #0x184
 ;;   94: mov     sp, x28
 ;;       mov     x16, x1
 ;;       mov     x16, #8
@@ -65,7 +66,7 @@
 ;;       csel    x2, x4, x4, hs
 ;;       ldur    x0, [x2]
 ;;       tst     x0, x0
-;;       b.ne    #0xf4
+;;       b.ne    #0xf8
 ;;       b       #0xc8
 ;;   c8: sub     x28, x28, #4
 ;;       mov     sp, x28
@@ -74,26 +75,28 @@
 ;;       mov     x16, #0
 ;;       mov     w1, w16
 ;;       ldur    w2, [x28]
-;;       bl      #0x380
+;;       bl      #0x394
 ;;   e8: add     x28, x28, #4
+;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x14]
-;;       b       #0xf8
-;;   f4: and     x0, x0, #0xfffffffffffffffe
+;;       b       #0xfc
+;;   f8: and     x0, x0, #0xfffffffffffffffe
 ;;       sub     sp, x28, #4
-;;       cbz     x0, #0x174
-;;  100: mov     sp, x28
+;;       cbz     x0, #0x188
+;;  104: mov     sp, x28
 ;;       ldur    x16, [x9, #0x40]
 ;;       ldur    w1, [x16]
 ;;       ldur    w2, [x0, #0x10]
 ;;       cmp     w1, w2, uxtx
 ;;       sub     sp, x28, #4
-;;       b.ne    #0x178
-;;  11c: mov     sp, x28
+;;       b.ne    #0x18c
+;;  120: mov     sp, x28
 ;;       sub     x28, x28, #8
 ;;       mov     sp, x28
 ;;       stur    x0, [x28]
 ;;       ldur    x3, [x28]
 ;;       add     x28, x28, #8
+;;       mov     sp, x28
 ;;       ldur    x5, [x3, #0x18]
 ;;       ldur    x4, [x3, #8]
 ;;       sub     x28, x28, #4
@@ -102,13 +105,16 @@
 ;;       mov     x1, x9
 ;;       ldur    w2, [x28, #4]
 ;;       blr     x4
-;;  154: add     x28, x28, #4
+;;  15c: add     x28, x28, #4
+;;       mov     sp, x28
 ;;       add     x28, x28, #4
+;;       mov     sp, x28
 ;;       ldur    x9, [x28, #0x10]
 ;;       add     x28, x28, #0x18
 ;;       mov     sp, x28
+;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  170: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  174: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  178: .byte   0x1f, 0xc1, 0x00, 0x00
+;;  184: .byte   0x1f, 0xc1, 0x00, 0x00
+;;  188: .byte   0x1f, 0xc1, 0x00, 0x00
+;;  18c: .byte   0x1f, 0xc1, 0x00, 0x00

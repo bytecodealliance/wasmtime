@@ -22,11 +22,12 @@
 ;;       stur    x3, [x28]
 ;;       ldur    x0, [x28]
 ;;       ldur    x1, [x28, #8]
-;;       cbz     x0, #0x4c
+;;       cbz     x0, #0x50
 ;;   34: udiv    x1, x1, x0
 ;;       mov     x0, x1
 ;;       add     x28, x28, #0x20
 ;;       mov     sp, x28
+;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   4c: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   50: .byte   0x1f, 0xc1, 0x00, 0x00

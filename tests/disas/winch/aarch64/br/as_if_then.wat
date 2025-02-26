@@ -31,5 +31,6 @@
 ;;   44: ldur    w0, [x28]
 ;;       add     x28, x28, #0x18
 ;;       mov     sp, x28
+;;       mov     sp, x28
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
