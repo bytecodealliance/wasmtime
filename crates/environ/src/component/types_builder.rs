@@ -16,7 +16,7 @@ use wasmparser::component_types::{
 };
 use wasmparser::names::KebabString;
 use wasmparser::types::TypesRef;
-use wasmparser::Validator;
+use wasmparser::{PrimitiveValType, Validator};
 use wasmtime_component_util::FlagsSize;
 
 mod resources;
@@ -395,7 +395,7 @@ impl ComponentTypesBuilder {
     ) -> Result<InterfaceType> {
         assert_eq!(types.id(), self.module_types.validator_id());
         let ret = match &types[id] {
-            ComponentDefinedType::Primitive(ty) => ty.into(),
+            ComponentDefinedType::Primitive(ty) => self.primitive_type(ty)?,
             ComponentDefinedType::Record(e) => InterfaceType::Record(self.record_type(types, e)?),
             ComponentDefinedType::Variant(e) => {
                 InterfaceType::Variant(self.variant_type(types, e)?)
@@ -418,9 +418,6 @@ impl ComponentTypesBuilder {
             ComponentDefinedType::Stream(ty) => {
                 InterfaceType::Stream(self.stream_table_type(types, ty)?)
             }
-            ComponentDefinedType::ErrorContext => {
-                InterfaceType::ErrorContext(self.error_context_table_type()?)
-            }
         };
         let info = self.type_information(&ret);
         if info.depth > MAX_TYPE_DEPTH {
@@ -441,8 +438,29 @@ impl ComponentTypesBuilder {
     ) -> Result<InterfaceType> {
         assert_eq!(types.id(), self.module_types.validator_id());
         match ty {
-            ComponentValType::Primitive(p) => Ok(p.into()),
+            ComponentValType::Primitive(p) => self.primitive_type(p),
             ComponentValType::Type(id) => self.defined_type(types, *id),
+        }
+    }
+
+    fn primitive_type(&mut self, ty: &PrimitiveValType) -> Result<InterfaceType> {
+        match ty {
+            wasmparser::PrimitiveValType::Bool => Ok(InterfaceType::Bool),
+            wasmparser::PrimitiveValType::S8 => Ok(InterfaceType::S8),
+            wasmparser::PrimitiveValType::U8 => Ok(InterfaceType::U8),
+            wasmparser::PrimitiveValType::S16 => Ok(InterfaceType::S16),
+            wasmparser::PrimitiveValType::U16 => Ok(InterfaceType::U16),
+            wasmparser::PrimitiveValType::S32 => Ok(InterfaceType::S32),
+            wasmparser::PrimitiveValType::U32 => Ok(InterfaceType::U32),
+            wasmparser::PrimitiveValType::S64 => Ok(InterfaceType::S64),
+            wasmparser::PrimitiveValType::U64 => Ok(InterfaceType::U64),
+            wasmparser::PrimitiveValType::F32 => Ok(InterfaceType::Float32),
+            wasmparser::PrimitiveValType::F64 => Ok(InterfaceType::Float64),
+            wasmparser::PrimitiveValType::Char => Ok(InterfaceType::Char),
+            wasmparser::PrimitiveValType::String => Ok(InterfaceType::String),
+            wasmparser::PrimitiveValType::ErrorContext => Ok(InterfaceType::ErrorContext(
+                self.error_context_table_type()?,
+            )),
         }
     }
 

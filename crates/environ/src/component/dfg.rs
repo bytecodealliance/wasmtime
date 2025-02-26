@@ -283,7 +283,7 @@ pub enum Trampoline {
     ResourceNew(TypeResourceTableIndex),
     ResourceRep(TypeResourceTableIndex),
     ResourceDrop(TypeResourceTableIndex),
-    TaskBackpressure {
+    BackpressureSet {
         instance: RuntimeComponentInstanceIndex,
     },
     TaskReturn {
@@ -294,12 +294,18 @@ pub enum Trampoline {
         async_: bool,
         memory: MemoryId,
     },
-    TaskPoll {
+    WaitableSetPoll {
         instance: RuntimeComponentInstanceIndex,
         async_: bool,
         memory: MemoryId,
     },
-    TaskYield {
+    WaitableSetDrop {
+        instance: RuntimeComponentInstanceIndex,
+    },
+    WaitableJoin {
+        instance: RuntimeComponentInstanceIndex,
+    },
+    Yield {
         async_: bool,
     },
     SubtaskDrop {
@@ -772,7 +778,7 @@ impl LinearizeDfg<'_> {
             Trampoline::ResourceNew(ty) => info::Trampoline::ResourceNew(*ty),
             Trampoline::ResourceDrop(ty) => info::Trampoline::ResourceDrop(*ty),
             Trampoline::ResourceRep(ty) => info::Trampoline::ResourceRep(*ty),
-            Trampoline::TaskBackpressure { instance } => info::Trampoline::TaskBackpressure {
+            Trampoline::BackpressureSet { instance } => info::Trampoline::BackpressureSet {
                 instance: *instance,
             },
             Trampoline::TaskReturn { results } => {
@@ -782,21 +788,27 @@ impl LinearizeDfg<'_> {
                 instance,
                 async_,
                 memory,
-            } => info::Trampoline::TaskWait {
+            } => info::Trampoline::WaitableSetWait {
                 instance: *instance,
                 async_: *async_,
                 memory: self.runtime_memory(*memory),
             },
-            Trampoline::TaskPoll {
+            Trampoline::WaitableSetPoll {
                 instance,
                 async_,
                 memory,
-            } => info::Trampoline::TaskPoll {
+            } => info::Trampoline::WaitableSetPoll {
                 instance: *instance,
                 async_: *async_,
                 memory: self.runtime_memory(*memory),
             },
-            Trampoline::TaskYield { async_ } => info::Trampoline::TaskYield { async_: *async_ },
+            Trampoline::WaitableSetDrop { instance } => info::Trampoline::WaitableSetDrop {
+                instance: *instance,
+            },
+            Trampoline::WaitableJoin { instance } => info::Trampoline::WaitableJoin {
+                instance: *instance,
+            },
+            Trampoline::Yield { async_ } => info::Trampoline::Yield { async_: *async_ },
             Trampoline::SubtaskDrop { instance } => info::Trampoline::SubtaskDrop {
                 instance: *instance,
             },

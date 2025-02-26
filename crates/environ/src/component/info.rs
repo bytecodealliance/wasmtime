@@ -679,9 +679,9 @@ pub enum Trampoline {
     /// Same as `ResourceNew`, but for the `resource.drop` intrinsic.
     ResourceDrop(TypeResourceTableIndex),
 
-    /// A `task.backpressure` intrinsic, which tells the host to enable or
+    /// A `backpressure.set` intrinsic, which tells the host to enable or
     /// disable backpressure for the caller's instance.
-    TaskBackpressure {
+    BackpressureSet {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
     },
@@ -694,9 +694,16 @@ pub enum Trampoline {
         results: TypeTupleIndex,
     },
 
-    /// A `task.wait` intrinsic, which waits for at least one outstanding async
-    /// task/stream/future to make progress, returning the first such event.
-    TaskWait {
+    /// A `waitable-set.new` intrinsic.
+    WaitableSetNew {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+    },
+
+    /// A `waitable-set.wait` intrinsic, which waits for at least one
+    /// outstanding async task/stream/future to make progress, returning the
+    /// first such event.
+    WaitableSetWait {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
         /// If `true`, indicates the caller instance maybe reentered.
@@ -705,10 +712,10 @@ pub enum Trampoline {
         memory: RuntimeMemoryIndex,
     },
 
-    /// A `task.poll` intrinsic, which checks whether any outstanding async
-    /// task/stream/future has made progress.  Unlike `task.wait`, this does not
-    /// block and may return nothing if no such event has occurred.
-    TaskPoll {
+    /// A `waitable-set.poll` intrinsic, which checks whether any outstanding
+    /// async task/stream/future has made progress.  Unlike `task.wait`, this
+    /// does not block and may return nothing if no such event has occurred.
+    WaitableSetPoll {
         /// The specific component instance which is calling the intrinsic.
         instance: RuntimeComponentInstanceIndex,
         /// If `true`, indicates the caller instance maybe reentered.
@@ -717,9 +724,21 @@ pub enum Trampoline {
         memory: RuntimeMemoryIndex,
     },
 
-    /// A `task.yield` intrinsic, which yields control to the host so that other
+    /// A `waitable-set.drop` intrinsic.
+    WaitableSetDrop {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+    },
+
+    /// A `waitable.join` intrinsic.
+    WaitableJoin {
+        /// The specific component instance which is calling the intrinsic.
+        instance: RuntimeComponentInstanceIndex,
+    },
+
+    /// A `yield` intrinsic, which yields control to the host so that other
     /// tasks are able to make progress, if any.
-    TaskYield {
+    Yield {
         /// If `true`, indicates the caller instance maybe reentered.
         async_: bool,
     },

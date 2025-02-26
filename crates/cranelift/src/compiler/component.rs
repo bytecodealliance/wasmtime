@@ -114,7 +114,7 @@ impl<'a> TrampolineCompiler<'a> {
             } => {
                 self.translate_task_wait_or_poll_call(*instance, *async_, *memory, host::task_wait)
             }
-            Trampoline::TaskPoll {
+            Trampoline::WaitableSetPoll {
                 instance,
                 async_,
                 memory,

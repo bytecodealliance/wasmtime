@@ -670,10 +670,10 @@ impl<'a> Inliner<'a> {
                     .push((*ty, dfg::Trampoline::ResourceDrop(id)));
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
-            TaskBackpressure { func } => {
+            BackpressureSet { func } => {
                 let index = self.result.trampolines.push((
                     *func,
-                    dfg::Trampoline::TaskBackpressure {
+                    dfg::Trampoline::BackpressureSet {
                         instance: frame.instance,
                     },
                 ));
@@ -691,7 +691,16 @@ impl<'a> Inliner<'a> {
                     .push((*func, dfg::Trampoline::TaskReturn { results }));
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
-            TaskWait {
+            WaitableSetNew { func } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::WaitableSetNew {
+                        instance: frame.instance,
+                    },
+                ));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            WaitableSetWait {
                 func,
                 async_,
                 memory,
@@ -700,7 +709,7 @@ impl<'a> Inliner<'a> {
                 let memory = self.result.memories.push(memory);
                 let index = self.result.trampolines.push((
                     *func,
-                    dfg::Trampoline::TaskWait {
+                    dfg::Trampoline::WaitableSetWait {
                         instance: frame.instance,
                         async_: *async_,
                         memory,
@@ -708,7 +717,7 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
-            TaskPoll {
+            WaitableSetPoll {
                 func,
                 async_,
                 memory,
@@ -717,7 +726,7 @@ impl<'a> Inliner<'a> {
                 let memory = self.result.memories.push(memory);
                 let index = self.result.trampolines.push((
                     *func,
-                    dfg::Trampoline::TaskPoll {
+                    dfg::Trampoline::WaitableSetPoll {
                         instance: frame.instance,
                         async_: *async_,
                         memory,
@@ -725,11 +734,29 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
-            TaskYield { func, async_ } => {
+            WaitableSetDrop { func } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::WaitableSetDrop {
+                        instance: frame.instance,
+                    },
+                ));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            WaitableJoin { func } => {
+                let index = self.result.trampolines.push((
+                    *func,
+                    dfg::Trampoline::WaitableJoin {
+                        instance: frame.instance,
+                    },
+                ));
+                frame.funcs.push(dfg::CoreDef::Trampoline(index));
+            }
+            Yield { func, async_ } => {
                 let index = self
                     .result
                     .trampolines
-                    .push((*func, dfg::Trampoline::TaskYield { async_: *async_ }));
+                    .push((*func, dfg::Trampoline::Yield { async_: *async_ }));
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
             SubtaskDrop { func } => {
