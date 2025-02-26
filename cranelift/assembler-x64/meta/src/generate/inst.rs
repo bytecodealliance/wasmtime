@@ -1,6 +1,5 @@
 use super::{fmtln, generate_derive, generate_derive_arbitrary_bounds, Formatter};
 use crate::dsl;
-use crate::dsl::format::IsleConstructorRaw;
 use crate::dsl::OperandKind;
 
 impl dsl::Inst {
@@ -232,7 +231,6 @@ impl dsl::Inst {
     /// This function panics if the instruction has no operands.
     pub fn generate_isle_macro(&self, f: &mut Formatter) {
         let struct_name = self.name();
-        let raw = self.format.isle_constructor_raw();
         let params = self
             .format
             .operands
@@ -252,8 +250,7 @@ impl dsl::Inst {
             .map(|o| format!("{}: {}", o.location, o.rust_param_raw()))
             .collect::<Vec<_>>()
             .join(", ");
-        let result_ty = raw.isle_type();
-        fmtln!(f, "fn x64_{struct_name}_raw(&mut self, {rust_params}) -> {result_ty} {{",);
+        fmtln!(f, "fn x64_{struct_name}_raw(&mut self, {rust_params}) -> AssemblerOutputs {{",);
         f.indent(|f| {
             for o in params.iter() {
                 let l = o.location;
@@ -270,35 +267,43 @@ impl dsl::Inst {
             fmtln!(f, "let inst = cranelift_assembler_x64::inst::{struct_name}::new({args}).into();");
             fmtln!(f, "let inst = MInst::External {{ inst }};");
 
-            match raw {
-                IsleConstructorRaw::MInst => fmtln!(f, "inst"),
-                IsleConstructorRaw::MInstAndGpr => {
-                    assert_eq!(results.len(), 1);
-                    match results[0].location.kind() {
+            use dsl::Mutability::*;
+            match results.as_slice() {
+                [] => fmtln!(f, "SideEffectNoResult::Inst(inst)"),
+                [one] => match one.mutability {
+                    Read => unreachable!(),
+                    ReadWrite => match one.location.kind() {
+                        OperandKind::Imm(_) => unreachable!(),
                         // FIXME(#10238)
                         OperandKind::FixedReg(_) => fmtln!(f, "todo!()"),
-                        _ => {
+                        // One read/write register output? Output the instruction
+                        // and that register.
+                        OperandKind::Reg(_) => {
                             fmtln!(f, "let gpr = {}.as_ref().write.to_reg();", results[0].location);
-                            fmtln!(f, "MInstAndGpr::Both {{ inst, gpr }}")
+                            fmtln!(f, "AssemblerOutputs::RetGpr {{ inst, gpr }}")
                         }
-                    }
-                }
-                IsleConstructorRaw::MInstAndGprMem => {
-                    assert_eq!(results.len(), 1);
-                    let l = results[0].location;
-                    fmtln!(f, "match {l} {{");
-                    f.indent(|f| {
-                        fmtln!(f, "asm::GprMem::Gpr(reg) => {{");
-                        fmtln!(f, "let gpr = reg.write.to_reg();");
-                        fmtln!(f, "MInstAndGprMem::Gpr {{ inst, gpr }} ");
-                        fmtln!(f, "}}");
+                        // One read/write regmem output? We need to output
+                        // everything and it'll internally disambiguate which was
+                        // emitted (e.g. the mem variant or the register variant).
+                        OperandKind::RegMem(_) => {
+                            assert_eq!(results.len(), 1);
+                            let l = results[0].location;
+                            fmtln!(f, "match {l} {{");
+                            f.indent(|f| {
+                                fmtln!(f, "asm::GprMem::Gpr(reg) => {{");
+                                fmtln!(f, "let gpr = reg.write.to_reg();");
+                                fmtln!(f, "AssemblerOutputs::RetGpr {{ inst, gpr }} ");
+                                fmtln!(f, "}}");
 
-                        fmtln!(f, "asm::GprMem::Mem(_) => {{");
-                        fmtln!(f, "MInstAndGprMem::Mem {{ inst }} ");
-                        fmtln!(f, "}}");
-                    });
-                    fmtln!(f, "}}");
-                }
+                                fmtln!(f, "asm::GprMem::Mem(_) => {{");
+                                fmtln!(f, "AssemblerOutputs::SideEffect {{ inst }} ");
+                                fmtln!(f, "}}");
+                            });
+                            fmtln!(f, "}}");
+                        }
+                    },
+                },
+                _ => panic!("instruction has more than one result"),
             }
         });
         fmtln!(f, "}}");
@@ -306,22 +311,17 @@ impl dsl::Inst {
 
     /// `(decl x64_<inst>_raw (<params>) <return>)`
     /// `(decl x64_<inst> (<params>) <return>)`
-    /// `(decl x64_<inst>_mem (<params>) <return>)` (mabye)
+    /// `(decl x64_<inst>_mem (<params>) <return>)` (maybe)
     ///
     /// # Panics
     ///
     /// This function panics if the instruction has no operands.
     pub fn generate_isle_definition(&self, f: &mut Formatter) {
-        use crate::dsl::format::IsleConstructor::*;
-        use crate::dsl::format::IsleConstructorRaw::*;
-
-        let struct_name = self.name();
-
         // First declare the "raw" constructor which is implemented in Rust
         // with `generate_isle_macro` above. This is an "extern" constructor
         // with relatively raw types. This is not intended to be used by
         // general lowering rules in ISLE.
-        let raw = self.format.isle_constructor_raw();
+        let struct_name = self.name();
         let raw_name = format!("x64_{struct_name}_raw");
         let params = self
             .format
@@ -336,8 +336,7 @@ impl dsl::Inst {
             .map(|o| o.isle_param_raw())
             .collect::<Vec<_>>()
             .join(" ");
-        let raw_result_ty = raw.isle_type();
-        f.line(format!("(decl {raw_name} ({raw_param_tys}) {raw_result_ty})"), None);
+        f.line(format!("(decl {raw_name} ({raw_param_tys}) AssemblerOutputs)"), None);
         f.line(format!("(extern constructor {raw_name} {raw_name})"), None);
 
         // Next, for each "real" ISLE constructor being generated, synthesize a
@@ -348,6 +347,8 @@ impl dsl::Inst {
         // signatures for the SSA nature of VCode/ISLE, effectively translating
         // x64's type system to ISLE/VCode's type system.
         for ctor in self.format.isle_constructors() {
+            let suffix = ctor.suffix();
+            let rule_name = format!("x64_{struct_name}{suffix}");
             let result_ty = ctor.result_ty();
             let param_tys = params
                 .iter()
@@ -359,21 +360,8 @@ impl dsl::Inst {
                 .map(|o| o.location.to_string())
                 .collect::<Vec<_>>()
                 .join(" ");
+            let convert = ctor.conversion_constructor();
 
-            // All variants of "raw => ctor" perform a conversion from the raw
-            // output into the actual output. Determine exactly what that
-            // conversion is here and use that to emit the rule down below.
-            let (convert, extra_name) = match (raw, ctor) {
-                (MInst, RetSideEffectNoResult) => ("SideEffectNoResult.Inst", ""),
-                (MInstAndGpr, RetGpr) => ("emit_minst_and_gpr", ""),
-                (MInstAndGprMem, RetSideEffectNoResult) => ("side_effect_minst_and_gpr_mem", "_mem"),
-                (MInstAndGprMem, RetGpr) => ("emit_minst_and_gpr_mem", ""),
-
-                // Not possible to generate since it should be using one of the
-                // above variants instead.
-                (MInst, RetGpr) | (MInstAndGpr, RetSideEffectNoResult) => unreachable!(),
-            };
-            let rule_name = format!("x64_{struct_name}{extra_name}");
             f.line(format!("(decl {rule_name} ({param_tys}) {result_ty})"), None);
             f.line(
                 format!("(rule ({rule_name} {param_names}) ({convert} ({raw_name} {param_names})))"),
@@ -385,4 +373,50 @@ impl dsl::Inst {
 
 fn comma_join<I: Into<String>>(items: impl Iterator<Item = I>) -> String {
     items.map(Into::into).collect::<Vec<_>>().join(", ")
+}
+
+/// Different kinds of ISLE constructors generated for a particular instruction.
+///
+/// One instruction may generate a single constructor or multiple constructors.
+/// For example an instruction that writes its result to a register will
+/// generate only a single constructor. An instruction where the destination
+/// read/write operand is `GprMem` will generate two constructors though, one
+/// for memory and one for in registers.
+#[derive(Copy, Clone, Debug)]
+pub enum IsleConstructor {
+    /// This constructor only produces a side effect, meaning that the
+    /// instruction does not produce results in registers. This may produce
+    /// a result in memory, however.
+    RetMemorySideEffect,
+
+    /// This constructor produces a `Gpr` value, meaning that it will write the
+    /// result to a `Gpr`.
+    RetGpr,
+}
+
+impl IsleConstructor {
+    /// Returns the result type, in ISLE, that this constructor generates.
+    pub fn result_ty(&self) -> &'static str {
+        match self {
+            IsleConstructor::RetMemorySideEffect => "SideEffectNoResult",
+            IsleConstructor::RetGpr => "Gpr",
+        }
+    }
+
+    /// Returns the constructor used to convert an `AssemblerOutput` into the
+    /// type returned by [`Self::result_ty`].
+    pub fn conversion_constructor(&self) -> &'static str {
+        match self {
+            IsleConstructor::RetMemorySideEffect => "defer_side_effect",
+            IsleConstructor::RetGpr => "emit_ret_gpr",
+        }
+    }
+
+    /// Returns the suffix used in the ISLE constructor name.
+    pub fn suffix(&self) -> &'static str {
+        match self {
+            IsleConstructor::RetMemorySideEffect => "_mem",
+            IsleConstructor::RetGpr => "",
+        }
+    }
 }

@@ -3,6 +3,7 @@
 
 use super::{fmtln, Formatter};
 use crate::dsl;
+use crate::generate::inst::IsleConstructor;
 
 impl dsl::Format {
     /// Re-order the Intel-style operand order to accommodate ATT-style
@@ -194,6 +195,38 @@ impl dsl::Format {
                 // Do nothing: no immediates expected.
                 assert!(!unknown.iter().any(|o| matches!(o, Imm(_))));
             }
+        }
+    }
+
+    /// Returns the ISLE constructors that are going to be used when generating
+    /// this instruction.
+    ///
+    /// Note that one instruction might need multiple constructors, such as one
+    /// for operating on memory and one for operating on registers.
+    pub fn isle_constructors(&self) -> Vec<IsleConstructor> {
+        use dsl::Mutability::*;
+        use dsl::OperandKind::*;
+
+        let write_operands = self
+            .operands
+            .iter()
+            .filter(|o| o.mutability.is_write())
+            .collect::<Vec<_>>();
+        match &write_operands[..] {
+            [] => unimplemented!("if you truly need this (and not a `SideEffect*`), add a `NoReturn` variant to `AssemblerOutputs`"),
+            [one] => match one.mutability {
+                Read => unreachable!(),
+                ReadWrite => match one.location.kind() {
+                    Imm(_) => unreachable!(),
+                    // One read/write register output? Output the instruction
+                    // and that register.
+                    FixedReg(_) | Reg(_) => vec![IsleConstructor::RetGpr],
+                    // One read/write reg-mem output? We need constructors for
+                    // both variants.
+                    RegMem(_) => vec![IsleConstructor::RetGpr, IsleConstructor::RetMemorySideEffect],
+                },
+            },
+            other => panic!("unsupported number of write operands {other:?}"),
         }
     }
 }

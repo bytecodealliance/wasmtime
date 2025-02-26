@@ -1,4 +1,5 @@
-use crate::dsl;
+use super::inst::IsleConstructor;
+use crate::dsl::{self, Mutability, OperandKind};
 
 impl dsl::Operand {
     #[must_use]
@@ -39,6 +40,75 @@ impl dsl::Operand {
             }
             Reg(_) => Some(format!("Gpr<{pick_ty}>")),
             RegMem(_) => Some(format!("GprMem<{pick_ty}, {read_ty}>")),
+        }
+    }
+
+    /// Returns the type of this operand in ISLE as part of the
+    /// `IsleConstructorRaw` variants.
+    pub fn isle_param_raw(&self) -> String {
+        match self.location.kind() {
+            OperandKind::Imm(loc) => {
+                let bits = loc.bits();
+                if self.extension.is_sign_extended() {
+                    format!("AssemblerSimm{bits}")
+                } else {
+                    format!("AssemblerImm{bits}")
+                }
+            }
+            OperandKind::Reg(_) => "Gpr".to_string(),
+            OperandKind::FixedReg(_) => "Gpr".to_string(),
+            OperandKind::RegMem(_) => "GprMem".to_string(),
+        }
+    }
+
+    /// Returns the parameter type used for the `IsleConstructor` variant
+    /// provided.
+    pub fn isle_param_for_ctor(&self, ctor: IsleConstructor) -> String {
+        match self.location.kind() {
+            // Writable `RegMem` operands are special here: in one constructor
+            // it's operating on memory so the argument is `Amode` and in the
+            // other constructor it's operating on registers so the argument is
+            // a `Gpr`.
+            OperandKind::RegMem(_) if self.mutability.is_write() => match ctor {
+                IsleConstructor::RetMemorySideEffect => "Amode".to_string(),
+                IsleConstructor::RetGpr => "Gpr".to_string(),
+            },
+
+            // everything else is the same as the "raw" variant
+            _ => self.isle_param_raw(),
+        }
+    }
+
+    /// Returns the Rust type used for the `IsleConstructorRaw` variants.
+    pub fn rust_param_raw(&self) -> String {
+        match self.location.kind() {
+            OperandKind::Imm(loc) => {
+                let bits = loc.bits();
+                if self.extension.is_sign_extended() {
+                    format!("&cranelift_assembler_x64::Simm{bits}")
+                } else {
+                    format!("&cranelift_assembler_x64::Imm{bits}")
+                }
+            }
+            OperandKind::RegMem(_) => "&GprMem".to_string(),
+            OperandKind::Reg(_) | OperandKind::FixedReg(_) => "Gpr".to_string(),
+        }
+    }
+
+    /// Returns the conversion function, if any, when converting the ISLE type
+    /// for this parameter to the assembler type for this parameter.
+    /// Effectively converts `self.rust_param_raw()` to the assembler type.
+    pub fn rust_convert_isle_to_assembler(&self) -> Option<&'static str> {
+        match self.location.kind() {
+            OperandKind::Reg(_) => Some(match self.mutability {
+                Mutability::Read => "cranelift_assembler_x64::Gpr::new",
+                Mutability::ReadWrite => "self.convert_gpr_to_assembler_read_write_gpr",
+            }),
+            OperandKind::RegMem(_) => Some(match self.mutability {
+                Mutability::Read => "self.convert_gpr_mem_to_assembler_read_gpr_mem",
+                Mutability::ReadWrite => "self.convert_gpr_mem_to_assembler_read_write_gpr_mem",
+            }),
+            OperandKind::FixedReg(_) | OperandKind::Imm(_) => None,
         }
     }
 }

@@ -3,7 +3,7 @@
 // Pull in the ISLE generated code.
 pub(crate) mod generated_code;
 use crate::{ir::types, ir::AtomicRmwOp, isa};
-use generated_code::{Context, MInst, RegisterClass};
+use generated_code::{AssemblerOutputs, Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
 use super::external::{CraneliftRegisters, PairedGpr};
@@ -48,8 +48,6 @@ type AssemblerImm16 = asm::Imm16;
 type AssemblerSimm16 = asm::Simm16;
 type AssemblerImm32 = asm::Imm32;
 type AssemblerSimm32 = asm::Simm32;
-
-use generated_code::{MInstAndGpr, MInstAndGprMem};
 
 pub struct SinkableLoad {
     inst: Inst,
