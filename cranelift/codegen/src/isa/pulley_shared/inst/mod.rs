@@ -126,6 +126,10 @@ fn pulley_get_operands(inst: &mut Inst, collector: &mut impl OperandVisitor) {
             }
         }
 
+        Inst::DummyUse { reg } => {
+            collector.reg_use(reg);
+        }
+
         Inst::Nop => {}
 
         Inst::TrapIf { cond, code: _ } => {
@@ -373,8 +377,8 @@ where
 
     const TRAP_OPCODE: &'static [u8] = TRAP_OPCODE;
 
-    fn gen_dummy_use(_reg: Reg) -> Self {
-        todo!()
+    fn gen_dummy_use(reg: Reg) -> Self {
+        Inst::DummyUse { reg }.into()
     }
 
     fn canonical_type_for_rc(rc: RegClass) -> Type {
@@ -596,6 +600,11 @@ impl Inst {
                     write!(&mut s, " {vreg}={preg}").unwrap();
                 }
                 s
+            }
+
+            Inst::DummyUse { reg } => {
+                let reg = format_reg(*reg);
+                format!("dummy_use {reg}")
             }
 
             Inst::TrapIf { cond, code } => {
