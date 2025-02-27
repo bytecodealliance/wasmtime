@@ -309,9 +309,30 @@ impl dsl::Inst {
         fmtln!(f, "}}");
     }
 
-    /// `(decl x64_<inst>_raw (<params>) <return>)`
-    /// `(decl x64_<inst> (<params>) <return>)`
-    /// `(decl x64_<inst>_mem (<params>) <return>)` (maybe)
+    /// Generate a "raw" constructor that simply constructs, but does not emit
+    /// the assembly instruction:
+    ///
+    /// ```text
+    /// (decl x64_<inst>_raw (<params>) AssemblerOutputs)
+    /// (extern constructor x64_<inst>_raw x64_<inst>_raw)
+    /// ```
+    ///
+    /// Using the "raw" constructor, we also generate "emitter" constructors
+    /// (see [`IsleConstructor`]). E.g., instructions that write to a register
+    /// will return the register:
+    ///
+    /// ```text
+    /// (decl x64_<inst> (<params>) Gpr)
+    /// (rule (x64_<inst> <params>) (emit_ret_gpr (x64_<inst>_raw <params>)))
+    /// ```
+    ///
+    /// For instructions that write to memory, we also generate an "emitter"
+    /// constructor with the `_mem` suffix:
+    ///
+    /// ```text
+    /// (decl x64_<inst>_mem (<params>) SideEffectNoResult)
+    /// (rule (x64_<inst>_mem <params>) (defer_side_effect (x64_<inst>_raw <params>)))
+    /// ```
     ///
     /// # Panics
     ///
@@ -339,8 +360,8 @@ impl dsl::Inst {
         f.line(format!("(decl {raw_name} ({raw_param_tys}) AssemblerOutputs)"), None);
         f.line(format!("(extern constructor {raw_name} {raw_name})"), None);
 
-        // Next, for each "real" ISLE constructor being generated, synthesize a
-        // pure-ISLE constructor which delegates appropriately to the `*_raw`
+        // Next, for each "emitter" ISLE constructor being generated, synthesize
+        // a pure-ISLE constructor which delegates appropriately to the `*_raw`
         // constructor above.
         //
         // The main purpose of these constructors is to have faithful type
