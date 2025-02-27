@@ -95,12 +95,8 @@ const FULL_MATRIX = [
     "filter": "mingw-x64"
   },
   {
-    "os": ubuntu,
+    "os": ubuntu + '-arm',
     "target": "aarch64-unknown-linux-gnu",
-    "gcc_package": "gcc-aarch64-linux-gnu",
-    "gcc": "aarch64-linux-gnu-gcc",
-    "qemu": "qemu-aarch64 -L /usr/aarch64-linux-gnu",
-    "qemu_target": "aarch64-linux-user",
     "name": "Test Linux arm64",
     "filter": "linux-arm64",
     "isa": "aarch64",
