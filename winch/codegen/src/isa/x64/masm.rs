@@ -319,7 +319,6 @@ impl Masm for MacroAssembler {
         match callee {
             CalleeKind::Indirect(reg) => self.asm.call_with_reg(cc, reg),
             CalleeKind::Direct(idx) => self.asm.call_with_name(cc, idx),
-            CalleeKind::LibCall(lib) => self.asm.call_with_lib(cc, lib, regs::scratch()),
         };
         Ok(total_stack)
     }

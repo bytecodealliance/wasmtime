@@ -194,6 +194,11 @@ impl Vm {
         self.state.fp
     }
 
+    /// Returns the current `sp` register value.
+    pub fn sp(&self) -> *mut u8 {
+        self.state[XReg::sp].get_ptr()
+    }
+
     /// Returns the current `lr` register value.
     pub fn lr(&self) -> *mut u8 {
         self.state.lr
@@ -470,6 +475,16 @@ impl XRegVal {
         u64::from_le(x)
     }
 
+    pub fn get_f32(&self) -> f32 {
+        let x = unsafe { self.0.u32 };
+        f32::from_bits(u32::from_le(x))
+    }
+
+    pub fn get_f64(&self) -> f64 {
+        let x = unsafe { self.0.u64 };
+        f64::from_bits(u64::from_le(x))
+    }
+
     pub fn get_ptr<T>(&self) -> *mut T {
         let ptr = unsafe { self.0.ptr };
         let ptr = usize::from_le(ptr);
@@ -493,6 +508,14 @@ impl XRegVal {
 
     pub fn set_u64(&mut self, x: u64) {
         self.0.u64 = x.to_le();
+    }
+
+    pub fn set_f32(&mut self, x: f32) {
+        self.0.u32 = x.to_bits().to_le();
+    }
+
+    pub fn set_f64(&mut self, x: f64) {
+        self.0.u64 = x.to_bits().to_le();
     }
 
     pub fn set_ptr<T>(&mut self, ptr: *mut T) {
