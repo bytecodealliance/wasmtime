@@ -468,8 +468,8 @@ impl ComponentInstance {
         *self.vmctx_plus_offset_mut(self.offsets.magic()) = VMCOMPONENT_MAGIC;
         *self.vmctx_plus_offset_mut(self.offsets.builtins()) =
             VmPtr::from(NonNull::from(&libcalls::VMComponentBuiltins::INIT));
-        *self.vmctx_plus_offset_mut(self.offsets.limits()) =
-            VmPtr::from(self.store.0.as_ref().vmruntime_limits());
+        *self.vmctx_plus_offset_mut(self.offsets.vm_store_context()) =
+            VmPtr::from(self.store.0.as_ref().vm_store_context_ptr());
 
         for i in 0..self.offsets.num_runtime_component_instances {
             let i = RuntimeComponentInstanceIndex::from_u32(i);

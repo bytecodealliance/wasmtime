@@ -856,17 +856,17 @@ impl ComponentCompiler for Compiler {
                 wasmtime_environ::component::VMCOMPONENT_MAGIC,
             );
             if let Abi::Wasm = abi {
-                let limits = c.builder.ins().load(
+                let vm_store_context = c.builder.ins().load(
                     pointer_type,
                     MemFlags::trusted(),
                     vmctx,
-                    i32::try_from(c.offsets.limits()).unwrap(),
+                    i32::try_from(c.offsets.vm_store_context()).unwrap(),
                 );
                 super::save_last_wasm_exit_fp_and_pc(
                     &mut c.builder,
                     pointer_type,
                     &c.offsets.ptr,
-                    limits,
+                    vm_store_context,
                 );
             }
 

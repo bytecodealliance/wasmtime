@@ -19,7 +19,7 @@ use crate::prelude::*;
 use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
-use crate::runtime::vm::{Instance, InterpreterRef, VMContext, VMRuntimeLimits};
+use crate::runtime::vm::{Instance, InterpreterRef, VMContext, VMStoreContext};
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
 use core::ops::Range;
@@ -426,20 +426,20 @@ mod call_thread_state {
         #[cfg(feature = "coredump")]
         pub(super) capture_coredump: bool,
 
-        pub(crate) limits: NonNull<VMRuntimeLimits>,
+        pub(crate) vm_store_context: NonNull<VMStoreContext>,
         pub(crate) unwinder: &'static dyn Unwind,
 
         pub(super) prev: Cell<tls::Ptr>,
         #[cfg(all(has_native_signals, unix))]
         pub(crate) async_guard_range: Range<*mut u8>,
 
-        // The values of `VMRuntimeLimits::last_wasm_{exit_{pc,fp},entry_sp}`
-        // for the *previous* `CallThreadState` for this same store/limits. Our
-        // *current* last wasm PC/FP/SP are saved in `self.limits`. We save a
-        // copy of the old registers here because the `VMRuntimeLimits`
+        // The values of `VMStoreContext::last_wasm_{exit_{pc,fp},entry_sp}` for
+        // the *previous* `CallThreadState` for this same store/limits. Our
+        // *current* last wasm PC/FP/SP are saved in `self.vm_store_context`. We
+        // save a copy of the old registers here because the `VMStoreContext`
         // typically doesn't change across nested calls into Wasm (i.e. they are
-        // typically calls back into the same store and `self.limits ==
-        // self.prev.limits`) and we must to maintain the list of
+        // typically calls back into the same store and `self.vm_store_context
+        // == self.prev.vm_store_context`) and we must to maintain the list of
         // contiguous-Wasm-frames stack regions for backtracing purposes.
         old_last_wasm_exit_fp: Cell<usize>,
         old_last_wasm_exit_pc: Cell<usize>,
@@ -453,10 +453,10 @@ mod call_thread_state {
             debug_assert!(self.unwind.replace(None).is_none());
 
             unsafe {
-                let limits = self.limits.as_ref();
-                *limits.last_wasm_exit_fp.get() = self.old_last_wasm_exit_fp.get();
-                *limits.last_wasm_exit_pc.get() = self.old_last_wasm_exit_pc.get();
-                *limits.last_wasm_entry_fp.get() = self.old_last_wasm_entry_fp.get();
+                let cx = self.vm_store_context.as_ref();
+                *cx.last_wasm_exit_fp.get() = self.old_last_wasm_exit_fp.get();
+                *cx.last_wasm_exit_pc.get() = self.old_last_wasm_exit_pc.get();
+                *cx.last_wasm_entry_fp.get() = self.old_last_wasm_entry_fp.get();
             }
         }
     }
@@ -466,8 +466,8 @@ mod call_thread_state {
 
         #[inline]
         pub(super) fn new(store: &mut StoreOpaque, caller: NonNull<VMContext>) -> CallThreadState {
-            let limits = unsafe {
-                Instance::from_vmctx(caller, |i| i.runtime_limits())
+            let vm_store_context = unsafe {
+                Instance::from_vmctx(caller, |i| i.vm_store_context())
                     .read()
                     .unwrap()
                     .as_non_null()
@@ -486,18 +486,18 @@ mod call_thread_state {
                 capture_backtrace: store.engine().config().wasm_backtrace,
                 #[cfg(feature = "coredump")]
                 capture_coredump: store.engine().config().coredump_on_trap,
-                limits,
+                vm_store_context,
                 #[cfg(all(has_native_signals, unix))]
                 async_guard_range: store.async_guard_range(),
                 prev: Cell::new(ptr::null()),
                 old_last_wasm_exit_fp: Cell::new(unsafe {
-                    *limits.as_ref().last_wasm_exit_fp.get()
+                    *vm_store_context.as_ref().last_wasm_exit_fp.get()
                 }),
                 old_last_wasm_exit_pc: Cell::new(unsafe {
-                    *limits.as_ref().last_wasm_exit_pc.get()
+                    *vm_store_context.as_ref().last_wasm_exit_pc.get()
                 }),
                 old_last_wasm_entry_fp: Cell::new(unsafe {
-                    *limits.as_ref().last_wasm_entry_fp.get()
+                    *vm_store_context.as_ref().last_wasm_entry_fp.get()
                 }),
             }
         }
@@ -598,8 +598,8 @@ impl CallThreadState {
                 (None, None)
             }
             UnwindReason::Trap(_) => (
-                self.capture_backtrace(self.limits.as_ptr(), None),
-                self.capture_coredump(self.limits.as_ptr(), None),
+                self.capture_backtrace(self.vm_store_context.as_ptr(), None),
+                self.capture_coredump(self.vm_store_context.as_ptr(), None),
             ),
         };
         self.unwind.set(Some((reason, backtrace, coredump)));
@@ -624,7 +624,7 @@ impl CallThreadState {
 
     fn capture_backtrace(
         &self,
-        limits: *const VMRuntimeLimits,
+        limits: *const VMStoreContext,
         trap_pc_and_fp: Option<(usize, usize)>,
     ) -> Option<Backtrace> {
         if !self.capture_backtrace {
@@ -717,8 +717,8 @@ impl CallThreadState {
         faulting_addr: Option<usize>,
         trap: wasmtime_environ::Trap,
     ) {
-        let backtrace = self.capture_backtrace(self.limits.as_ptr(), Some((pc, fp)));
-        let coredump = self.capture_coredump(self.limits.as_ptr(), Some((pc, fp)));
+        let backtrace = self.capture_backtrace(self.vm_store_context.as_ptr(), Some((pc, fp)));
+        let coredump = self.capture_coredump(self.vm_store_context.as_ptr(), Some((pc, fp)));
         self.unwind.set(Some((
             UnwindReason::Trap(TrapReason::Jit {
                 pc,
