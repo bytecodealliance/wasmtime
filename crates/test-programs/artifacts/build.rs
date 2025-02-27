@@ -25,8 +25,6 @@ fn build_and_generate_tests() {
         &["--no-default-features", "--features=proxy"],
     );
 
-    println!("cargo:rerun-if-changed=../src");
-
     // Build the test programs:
     let mut cmd = cargo();
     cmd.arg("build")
@@ -62,6 +60,7 @@ fn build_and_generate_tests() {
             .join("wasm32-wasip1")
             .join("debug")
             .join(format!("{target}.wasm"));
+        read_deps_of(&wasm);
 
         generated_code += &format!("pub const {camel}: &'static str = {wasm:?};\n");
 
@@ -123,7 +122,6 @@ fn build_and_generate_tests() {
 
 // Build the WASI Preview 1 adapter, and get the binary:
 fn build_adapter(out_dir: &PathBuf, name: &str, features: &[&str]) -> Vec<u8> {
-    println!("cargo:rerun-if-changed=../../wasi-preview1-component-adapter");
     let mut cmd = cargo();
     cmd.arg("build")
         .arg("--release")
@@ -139,15 +137,13 @@ fn build_adapter(out_dir: &PathBuf, name: &str, features: &[&str]) -> Vec<u8> {
     let status = cmd.status().unwrap();
     assert!(status.success());
 
+    let artifact = out_dir
+        .join("wasm32-unknown-unknown")
+        .join("release")
+        .join("wasi_snapshot_preview1.wasm");
     let adapter = out_dir.join(format!("wasi_snapshot_preview1.{name}.wasm"));
-    std::fs::copy(
-        out_dir
-            .join("wasm32-unknown-unknown")
-            .join("release")
-            .join("wasi_snapshot_preview1.wasm"),
-        &adapter,
-    )
-    .unwrap();
+    std::fs::copy(&artifact, &adapter).unwrap();
+    read_deps_of(&artifact);
     println!("wasi {name} adapter: {:?}", &adapter);
     fs::read(&adapter).unwrap()
 }
@@ -189,4 +185,35 @@ fn cargo() -> Command {
         cargo.env_remove("RUSTC").env_remove("RUSTC_WRAPPER");
     }
     cargo
+}
+
+/// Helper function to read the `*.d` file that corresponds to `artifact`, an
+/// artifact of a Cargo compilation.
+///
+/// This function will "parse" the makefile-based dep-info format to learn about
+/// what files each binary depended on to ensure that this build script reruns
+/// if any of these files change.
+///
+/// See
+/// <https://doc.rust-lang.org/nightly/cargo/reference/build-cache.html#dep-info-files>
+/// for more info.
+fn read_deps_of(artifact: &Path) {
+    let deps_file = artifact.with_extension("d");
+    let contents = std::fs::read_to_string(&deps_file).expect("failed to read deps file");
+    for line in contents.lines() {
+        let Some(pos) = line.find(": ") else {
+            continue;
+        };
+        let line = &line[pos + 2..];
+        let mut parts = line.split_whitespace();
+        while let Some(part) = parts.next() {
+            let mut file = part.to_string();
+            while file.ends_with('\\') {
+                file.pop();
+                file.push(' ');
+                file.push_str(parts.next().unwrap());
+            }
+            println!("cargo:rerun-if-changed={file}");
+        }
+    }
 }
