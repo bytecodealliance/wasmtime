@@ -1442,8 +1442,9 @@ pub(crate) trait MacroAssembler {
     /// to the pointer size of the target.
     fn load_ptr(&mut self, src: Self::Address, dst: WritableReg) -> Result<()>;
 
-    /// Loads the effective address into destination.
-    fn load_addr(
+    /// Computes the effective address and stores the result in the destination
+    /// register.
+    fn compute_addr(
         &mut self,
         _src: Self::Address,
         _dst: WritableReg,

@@ -315,8 +315,15 @@ impl Masm for MacroAssembler {
         })
     }
 
-    fn load_addr(&mut self, src: Self::Address, dst: WritableReg, size: OperandSize) -> Result<()> {
-        self.asm.uload(src, dst, size, TRUSTED_FLAGS);
+    fn compute_addr(
+        &mut self,
+        src: Self::Address,
+        dst: WritableReg,
+        size: OperandSize,
+    ) -> Result<()> {
+        let (base, offset) = src.unwrap_offset();
+        self.asm
+            .add_ir(u64::try_from(offset).unwrap(), base, dst, size);
         Ok(())
     }
 

@@ -328,7 +328,12 @@ impl Masm for MacroAssembler {
         self.load(src, dst, self.ptr_size)
     }
 
-    fn load_addr(&mut self, src: Self::Address, dst: WritableReg, size: OperandSize) -> Result<()> {
+    fn compute_addr(
+        &mut self,
+        src: Self::Address,
+        dst: WritableReg,
+        size: OperandSize,
+    ) -> Result<()> {
         self.asm.lea(&src, dst, size);
         Ok(())
     }
