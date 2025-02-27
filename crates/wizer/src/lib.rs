@@ -40,9 +40,9 @@ const DEFAULT_INHERIT_ENV: bool = false;
 const DEFAULT_KEEP_INIT_FUNC: bool = false;
 const DEFAULT_WASM_MULTI_VALUE: bool = true;
 const DEFAULT_WASM_MULTI_MEMORY: bool = true;
-const DEFAULT_WASM_BULK_MEMORY: bool = false;
+const DEFAULT_WASM_BULK_MEMORY: bool = true;
 const DEFAULT_WASM_SIMD: bool = true;
-const DEFAULT_WASM_REFERENCE_TYPES: bool = false;
+const DEFAULT_WASM_REFERENCE_TYPES: bool = true;
 
 /// The type of data that is stored in the `wasmtime::Store` during
 /// initialization.
@@ -241,7 +241,7 @@ pub struct Wizer {
     /// are currently supported.  Modules which use other instructions, such as
     /// `table.copy` will be rejected.
     ///
-    /// Disabled by default.
+    /// Enabled by default.
     #[cfg_attr(feature = "structopt", structopt(long, value_name = "true|false"))]
     wasm_bulk_memory: Option<bool>,
 
@@ -257,7 +257,7 @@ pub struct Wizer {
     /// but enables initializing Wasm modules that use encodings introduced
     /// in the reference-types proposal.
     ///
-    /// Disabled by default.
+    /// Enabled by default.
     #[cfg_attr(feature = "structopt", structopt(long, value_name = "true|false"))]
     wasm_reference_types: Option<bool>,
 }
@@ -556,7 +556,7 @@ impl Wizer {
     /// operations are currently supported.  Modules which use other
     /// instructions, such as `table.copy` will be rejected.
     ///
-    /// Defaults to `false`.
+    /// Defaults to `true`.
     pub fn wasm_bulk_memory(&mut self, enable: bool) -> &mut Self {
         self.wasm_bulk_memory = Some(enable);
         self
@@ -576,7 +576,7 @@ impl Wizer {
     /// but enables initializing Wasm modules that use encodings introduced
     /// in the reference-types proposal.
     ///
-    /// Defaults to `false`.
+    /// Defaults to `true`.
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
         self.wasm_reference_types = Some(enable);
         self

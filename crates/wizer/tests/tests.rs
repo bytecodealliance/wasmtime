@@ -238,10 +238,7 @@ fn reject_table_copy() -> Result<()> {
 
 #[test]
 fn reject_table_get_set() -> Result<()> {
-    let result = run_wat(
-        &[],
-        42,
-        r#"
+    let wat = r#"
 (module
   (table 3 funcref)
 
@@ -257,8 +254,15 @@ fn reject_table_get_set() -> Result<()> {
 
   (elem (i32.const 0) $f $g $h)
 )
-"#,
-    );
+"#;
+
+    let _ = env_logger::try_init();
+    let mut wizer = Wizer::new();
+    wizer.wasm_reference_types(false);
+
+    let wasm = wat_to_wasm(wat)?;
+    let result = wizen_and_run_wasm(&[], 42, &wasm, wizer);
+
     assert!(result.is_err());
 
     let err = result.unwrap_err();
@@ -271,7 +275,10 @@ fn reject_table_get_set() -> Result<()> {
 
 #[test]
 fn reject_table_get_set_with_reference_types_enabled() -> Result<()> {
-    let wat = r#"
+    let result = run_wat(
+        &[],
+        42,
+        r#"
       (module
         (table 3 funcref)
 
@@ -286,15 +293,8 @@ fn reject_table_get_set_with_reference_types_enabled() -> Result<()> {
           table.set)
 
         (elem (i32.const 0) $f $g $h)
-      )"#;
-
-    let _ = env_logger::try_init();
-    let mut wizer = Wizer::new();
-    wizer.wasm_reference_types(true);
-
-    let wasm = wat_to_wasm(wat)?;
-    let result = wizen_and_run_wasm(&[], 42, &wasm, wizer);
-
+      )"#,
+    );
     assert!(result.is_err());
 
     let err = result.unwrap_err();
