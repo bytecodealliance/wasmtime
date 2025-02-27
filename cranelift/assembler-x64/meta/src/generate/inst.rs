@@ -1,5 +1,6 @@
 use super::{fmtln, generate_derive, generate_derive_arbitrary_bounds, Formatter};
 use crate::dsl;
+use crate::dsl::OperandKind;
 
 impl dsl::Inst {
     /// `struct <inst> { <op>: Reg, <op>: Reg, ... }`
@@ -228,83 +229,215 @@ impl dsl::Inst {
     /// # Panics
     ///
     /// This function panics if the instruction has no operands.
-    pub fn generate_isle_macro(&self, f: &mut Formatter, read_ty: &str, read_write_ty: &str) {
-        use dsl::OperandKind::*;
+    pub fn generate_isle_macro(&self, f: &mut Formatter) {
         let struct_name = self.name();
-        let operands = self
+        let params = self
             .format
             .operands
             .iter()
-            .filter_map(|o| Some((o.location, o.generate_mut_ty(read_ty, read_write_ty)?)))
+            .filter(|o| o.mutability.is_read())
+            // FIXME(#10238) don't filter out fixed regs here
+            .filter(|o| !matches!(o.location.kind(), OperandKind::FixedReg(_)))
             .collect::<Vec<_>>();
-        let ret_ty = match self.format.operands.first().unwrap().location.kind() {
-            Imm(_) => unreachable!(),
-            Reg(_) | FixedReg(_) => format!("cranelift_assembler_x64::Gpr<{read_write_ty}>"),
-            RegMem(_) => format!("cranelift_assembler_x64::GprMem<{read_write_ty}, {read_ty}>"),
-        };
-        let ret_val = match self.format.operands.first().unwrap().location.kind() {
-            Imm(_) => unreachable!(),
-            FixedReg(_) => "todo!()".to_string(),
-            Reg(loc) | RegMem(loc) => format!("{loc}.clone()"),
-        };
-        let params = comma_join(
-            operands
-                .iter()
-                .map(|(l, ty)| format!("{l}: &cranelift_assembler_x64::{ty}")),
-        );
-        let args = comma_join(operands.iter().map(|(l, _)| format!("{l}.clone()")));
-
-        // TODO: parameterize CraneliftRegisters?
-        fmtln!(f, "fn x64_{struct_name}(&mut self, {params}) -> {ret_ty} {{",);
+        let results = self
+            .format
+            .operands
+            .iter()
+            .filter(|o| o.mutability.is_write())
+            .collect::<Vec<_>>();
+        let rust_params = params
+            .iter()
+            .map(|o| format!("{}: {}", o.location, o.rust_param_raw()))
+            .collect::<Vec<_>>()
+            .join(", ");
+        fmtln!(f, "fn x64_{struct_name}_raw(&mut self, {rust_params}) -> AssemblerOutputs {{",);
         f.indent(|f| {
+            for o in params.iter() {
+                let l = o.location;
+                match o.rust_convert_isle_to_assembler() {
+                    Some(cvt) => fmtln!(f, "let {l} = {cvt}({l});"),
+                    None => fmtln!(f, "let {l} = {l}.clone();"),
+                }
+            }
+            let args = params
+                .iter()
+                .map(|o| format!("{}.clone()", o.location))
+                .collect::<Vec<_>>();
+            let args = args.join(", ");
             fmtln!(f, "let inst = cranelift_assembler_x64::inst::{struct_name}::new({args}).into();");
-            fmtln!(f, "self.lower_ctx.emit(MInst::External {{ inst }});");
-            fmtln!(f, "{ret_val}");
+            fmtln!(f, "let inst = MInst::External {{ inst }};");
+
+            use dsl::Mutability::*;
+            match results.as_slice() {
+                [] => fmtln!(f, "SideEffectNoResult::Inst(inst)"),
+                [one] => match one.mutability {
+                    Read => unreachable!(),
+                    ReadWrite => match one.location.kind() {
+                        OperandKind::Imm(_) => unreachable!(),
+                        // FIXME(#10238)
+                        OperandKind::FixedReg(_) => fmtln!(f, "todo!()"),
+                        // One read/write register output? Output the instruction
+                        // and that register.
+                        OperandKind::Reg(_) => {
+                            fmtln!(f, "let gpr = {}.as_ref().write.to_reg();", results[0].location);
+                            fmtln!(f, "AssemblerOutputs::RetGpr {{ inst, gpr }}")
+                        }
+                        // One read/write regmem output? We need to output
+                        // everything and it'll internally disambiguate which was
+                        // emitted (e.g. the mem variant or the register variant).
+                        OperandKind::RegMem(_) => {
+                            assert_eq!(results.len(), 1);
+                            let l = results[0].location;
+                            fmtln!(f, "match {l} {{");
+                            f.indent(|f| {
+                                fmtln!(f, "asm::GprMem::Gpr(reg) => {{");
+                                fmtln!(f, "let gpr = reg.write.to_reg();");
+                                fmtln!(f, "AssemblerOutputs::RetGpr {{ inst, gpr }} ");
+                                fmtln!(f, "}}");
+
+                                fmtln!(f, "asm::GprMem::Mem(_) => {{");
+                                fmtln!(f, "AssemblerOutputs::SideEffect {{ inst }} ");
+                                fmtln!(f, "}}");
+                            });
+                            fmtln!(f, "}}");
+                        }
+                    },
+                },
+                _ => panic!("instruction has more than one result"),
+            }
         });
         fmtln!(f, "}}");
     }
 
-    /// `(decl x64_<inst> (<params>) <return>)
-    ///  (extern constructor x64_<inst> x64_<inst>)`
+    /// Generate a "raw" constructor that simply constructs, but does not emit
+    /// the assembly instruction:
+    ///
+    /// ```text
+    /// (decl x64_<inst>_raw (<params>) AssemblerOutputs)
+    /// (extern constructor x64_<inst>_raw x64_<inst>_raw)
+    /// ```
+    ///
+    /// Using the "raw" constructor, we also generate "emitter" constructors
+    /// (see [`IsleConstructor`]). E.g., instructions that write to a register
+    /// will return the register:
+    ///
+    /// ```text
+    /// (decl x64_<inst> (<params>) Gpr)
+    /// (rule (x64_<inst> <params>) (emit_ret_gpr (x64_<inst>_raw <params>)))
+    /// ```
+    ///
+    /// For instructions that write to memory, we also generate an "emitter"
+    /// constructor with the `_mem` suffix:
+    ///
+    /// ```text
+    /// (decl x64_<inst>_mem (<params>) SideEffectNoResult)
+    /// (rule (x64_<inst>_mem <params>) (defer_side_effect (x64_<inst>_raw <params>)))
+    /// ```
     ///
     /// # Panics
     ///
     /// This function panics if the instruction has no operands.
     pub fn generate_isle_definition(&self, f: &mut Formatter) {
-        use dsl::OperandKind::*;
-
+        // First declare the "raw" constructor which is implemented in Rust
+        // with `generate_isle_macro` above. This is an "extern" constructor
+        // with relatively raw types. This is not intended to be used by
+        // general lowering rules in ISLE.
         let struct_name = self.name();
-        let rule_name = format!("x64_{struct_name}");
+        let raw_name = format!("x64_{struct_name}_raw");
         let params = self
             .format
             .operands
             .iter()
-            .filter_map(|o| match o.location.kind() {
-                FixedReg(_) => None,
-                Imm(loc) => {
-                    let bits = loc.bits();
-                    if o.extension.is_sign_extended() {
-                        Some(format!("AssemblerSimm{bits}"))
-                    } else {
-                        Some(format!("AssemblerImm{bits}"))
-                    }
-                }
-                Reg(_) => Some(format!("Assembler{}Gpr", o.mutability.generate_type())),
-                RegMem(_) => Some(format!("Assembler{}GprMem", o.mutability.generate_type())),
-            })
+            .filter(|o| o.mutability.is_read())
+            // FIXME(#10238) don't filter out fixed regs here
+            .filter(|o| !matches!(o.location.kind(), OperandKind::FixedReg(_)))
+            .collect::<Vec<_>>();
+        let raw_param_tys = params
+            .iter()
+            .map(|o| o.isle_param_raw())
             .collect::<Vec<_>>()
             .join(" ");
-        let ret = match self.format.operands.first().unwrap().location.kind() {
-            Imm(_) => unreachable!(),
-            FixedReg(_) | Reg(_) => "AssemblerReadWriteGpr",
-            RegMem(_) => "AssemblerReadWriteGprMem",
-        };
+        f.line(format!("(decl {raw_name} ({raw_param_tys}) AssemblerOutputs)"), None);
+        f.line(format!("(extern constructor {raw_name} {raw_name})"), None);
 
-        f.line(format!("(decl {rule_name} ({params}) {ret})"), None);
-        f.line(format!("(extern constructor {rule_name} {rule_name})"), None);
+        // Next, for each "emitter" ISLE constructor being generated, synthesize
+        // a pure-ISLE constructor which delegates appropriately to the `*_raw`
+        // constructor above.
+        //
+        // The main purpose of these constructors is to have faithful type
+        // signatures for the SSA nature of VCode/ISLE, effectively translating
+        // x64's type system to ISLE/VCode's type system.
+        for ctor in self.format.isle_constructors() {
+            let suffix = ctor.suffix();
+            let rule_name = format!("x64_{struct_name}{suffix}");
+            let result_ty = ctor.result_ty();
+            let param_tys = params
+                .iter()
+                .map(|o| o.isle_param_for_ctor(ctor))
+                .collect::<Vec<_>>()
+                .join(" ");
+            let param_names = params
+                .iter()
+                .map(|o| o.location.to_string())
+                .collect::<Vec<_>>()
+                .join(" ");
+            let convert = ctor.conversion_constructor();
+
+            f.line(format!("(decl {rule_name} ({param_tys}) {result_ty})"), None);
+            f.line(
+                format!("(rule ({rule_name} {param_names}) ({convert} ({raw_name} {param_names})))"),
+                None,
+            );
+        }
     }
 }
 
 fn comma_join<I: Into<String>>(items: impl Iterator<Item = I>) -> String {
     items.map(Into::into).collect::<Vec<_>>().join(", ")
+}
+
+/// Different kinds of ISLE constructors generated for a particular instruction.
+///
+/// One instruction may generate a single constructor or multiple constructors.
+/// For example an instruction that writes its result to a register will
+/// generate only a single constructor. An instruction where the destination
+/// read/write operand is `GprMem` will generate two constructors though, one
+/// for memory and one for in registers.
+#[derive(Copy, Clone, Debug)]
+pub enum IsleConstructor {
+    /// This constructor only produces a side effect, meaning that the
+    /// instruction does not produce results in registers. This may produce
+    /// a result in memory, however.
+    RetMemorySideEffect,
+
+    /// This constructor produces a `Gpr` value, meaning that it will write the
+    /// result to a `Gpr`.
+    RetGpr,
+}
+
+impl IsleConstructor {
+    /// Returns the result type, in ISLE, that this constructor generates.
+    pub fn result_ty(&self) -> &'static str {
+        match self {
+            IsleConstructor::RetMemorySideEffect => "SideEffectNoResult",
+            IsleConstructor::RetGpr => "Gpr",
+        }
+    }
+
+    /// Returns the constructor used to convert an `AssemblerOutput` into the
+    /// type returned by [`Self::result_ty`].
+    pub fn conversion_constructor(&self) -> &'static str {
+        match self {
+            IsleConstructor::RetMemorySideEffect => "defer_side_effect",
+            IsleConstructor::RetGpr => "emit_ret_gpr",
+        }
+    }
+
+    /// Returns the suffix used in the ISLE constructor name.
+    pub fn suffix(&self) -> &'static str {
+        match self {
+            IsleConstructor::RetMemorySideEffect => "_mem",
+            IsleConstructor::RetGpr => "",
+        }
+    }
 }

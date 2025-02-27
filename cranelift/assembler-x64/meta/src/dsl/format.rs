@@ -326,6 +326,27 @@ pub enum Mutability {
     ReadWrite,
 }
 
+impl Mutability {
+    /// Returns whether this represents a read of the operand in question.
+    ///
+    /// Note that for read/write operands this returns `true`.
+    pub fn is_read(&self) -> bool {
+        match self {
+            Mutability::Read | Mutability::ReadWrite => true,
+        }
+    }
+
+    /// Returns whether this represents a write of the operand in question.
+    ///
+    /// Note that for read/write operands this returns `true`.
+    pub fn is_write(&self) -> bool {
+        match self {
+            Mutability::Read => false,
+            Mutability::ReadWrite => true,
+        }
+    }
+}
+
 impl Default for Mutability {
     fn default() -> Self {
         Self::Read

@@ -41,7 +41,7 @@ pub fn isle_macro(f: &mut Formatter, insts: &[dsl::Inst]) {
         fmtln!(f, "() => {{");
         f.indent(|f| {
             for inst in insts {
-                inst.generate_isle_macro(f, "Gpr", "PairedGpr");
+                inst.generate_isle_macro(f);
             }
         });
         fmtln!(f, "}};");
@@ -64,6 +64,31 @@ pub fn isle_definitions(f: &mut Formatter, insts: &[dsl::Inst]) {
     f.line("(type AssemblerReadWriteGprMem extern (enum))", None);
     f.line("(type AssemblerInst extern (enum))", None);
     f.empty_line();
+
+    f.line("(type AssemblerOutputs (enum", None);
+    f.line("    ;; Used for instructions that have ISLE `SideEffect`s (memory stores, traps,", None);
+    f.line("    ;; etc.) and do not return a `Value`.", None);
+    f.line("    (SideEffect (inst MInst))", None);
+    f.line("    ;; Used for instructions that return a GPR (including `GprMem` variants with", None);
+    f.line("    ;; a GPR as the first argument).", None);
+    f.line("    (RetGpr (inst MInst) (gpr Gpr))", None);
+    f.line("    ;; TODO: eventually add more variants for multi-return, XMM, etc.; see", None);
+    f.line("    ;; https://github.com/bytecodealliance/wasmtime/pull/10276", None);
+    f.line("))", None);
+    f.empty_line();
+
+    f.line(";; Directly emit instructions that return a GPR.", None);
+    f.line("(decl emit_ret_gpr (AssemblerOutputs) Gpr)", None);
+    f.line("(rule (emit_ret_gpr (AssemblerOutputs.RetGpr inst gpr))", None);
+    f.line("    (let ((_ Unit (emit inst))) gpr))", None);
+    f.empty_line();
+
+    f.line(";; Pass along the side-effecting instruction for later emission.", None);
+    f.line("(decl defer_side_effect (AssemblerOutputs) SideEffectNoResult)", None);
+    f.line("(rule (defer_side_effect (AssemblerOutputs.SideEffect inst))", None);
+    f.line("    (SideEffectNoResult.Inst inst))", None);
+    f.empty_line();
+
     for inst in insts {
         inst.generate_isle_definition(f);
         f.empty_line();
