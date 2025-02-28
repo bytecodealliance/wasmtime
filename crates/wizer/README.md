@@ -66,7 +66,9 @@ which `wasm-opt` can remove.
 
 ## Install
 
-Download the a pre-built release from the [releases](https://github.com/bytecodealliance/wizer/releases) page. Unarchive the binary and place it in your $PATH.
+Download the a pre-built release from the
+[releases](https://github.com/bytecodealliance/wizer/releases) page. Unarchive
+the binary and place it in your `$PATH`.
 
 Alternatively you can install via `cargo`:
 
@@ -122,7 +124,7 @@ Add a dependency in your `Cargo.toml`:
 # Cargo.toml
 
 [dependencies]
-wizer = "1"
+wizer = "8"
 ```
 
 And then use the `wizer::Wizer` builder to configure and run Wizer:
