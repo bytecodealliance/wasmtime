@@ -2653,7 +2653,7 @@ impl MemoryTypeBuilder {
     /// * Memories use 32-bit indexes.
     /// * The page size is 64KiB.
     ///
-    /// Each option can be configued through the methods on the returned
+    /// Each option can be configured through the methods on the returned
     /// builder.
     pub fn new() -> MemoryTypeBuilder {
         MemoryTypeBuilder::default()

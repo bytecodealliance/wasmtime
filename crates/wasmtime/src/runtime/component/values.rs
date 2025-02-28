@@ -607,7 +607,7 @@ impl Val {
     }
 
     /// Deserialize a [`Val`] from its [`crate::component::wasm_wave`] encoding. Deserialization
-    /// requrires a target [`crate::component::Type`].
+    /// requires a target [`crate::component::Type`].
     #[cfg(feature = "wave")]
     pub fn from_wave(ty: &crate::component::Type, s: &str) -> Result<Self> {
         Ok(wasm_wave::from_str(ty, s)?)
