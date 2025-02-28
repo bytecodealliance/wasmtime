@@ -114,6 +114,12 @@ pub(crate) trait ABI {
     /// The offset to the argument base, relative to the frame pointer.
     fn arg_base_offset() -> u8;
 
+    /// The initial size in bytes of the function's frame.
+    ///
+    /// This amount is constant and accounts for all the stack space allocated
+    /// at the frame setup.
+    fn initial_frame_size() -> u8;
+
     /// Construct the ABI-specific signature from a WebAssembly
     /// function type.
     #[cfg(test)]

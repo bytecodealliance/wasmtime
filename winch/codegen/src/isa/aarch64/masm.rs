@@ -9,6 +9,7 @@ use crate::{
     abi::{self, align_to, calculate_frame_adjustment, local::LocalSlot, vmctx},
     codegen::{ptr_type_from_ptr_size, CodeGenContext, CodeGenError, Emission, FuncEnv},
     isa::{
+        aarch64::abi::SHADOW_STACK_POINTER_SLOT_SIZE,
         reg::{writable, Reg, WritableReg},
         CallingConvention,
     },
@@ -65,7 +66,7 @@ impl MacroAssembler {
     {
         let mut aligned = false;
         let alignment: u32 = <Aarch64ABI as ABI>::call_stack_align().into();
-        let addend: u32 = <Aarch64ABI as ABI>::arg_base_offset().into();
+        let addend: u32 = <Aarch64ABI as ABI>::initial_frame_size().into();
         let delta = calculate_frame_adjustment(self.sp_offset()?.as_u32(), addend, alignment);
         if delta != 0 {
             self.asm.sub_ir(
@@ -106,10 +107,15 @@ impl Masm for MacroAssembler {
         let lr = regs::lr();
         let fp = regs::fp();
         let sp = regs::sp();
-        let addr = Address::pre_indexed_from_sp(-16);
 
+        let addr = Address::pre_indexed_from_sp(-16);
         self.asm.stp(fp, lr, addr);
         self.asm.mov_rr(sp, writable!(fp), OperandSize::S64);
+
+        let addr = Address::pre_indexed_from_sp(-(SHADOW_STACK_POINTER_SLOT_SIZE as i64));
+        self.asm
+            .str(regs::shadow_sp(), addr, OperandSize::S64, TRUSTED_FLAGS);
+
         self.move_sp_to_shadow_sp();
         Ok(())
     }
@@ -122,12 +128,24 @@ impl Masm for MacroAssembler {
     fn frame_restore(&mut self) -> Result<()> {
         debug_assert_eq!(self.sp_offset, 0);
 
-        let lr = regs::lr();
-        let fp = regs::fp();
-
         // Sync the real stack pointer with the value of the shadow stack
         // pointer.
         self.move_shadow_sp_to_sp();
+
+        // Pop the shadow stack pointer. It's assumed that at this point
+        // `sp_offset` is 0 and therfore the real stack pointer should be
+        // 16-byte aligned.
+        let addr = Address::post_indexed_from_sp(SHADOW_STACK_POINTER_SLOT_SIZE as i64);
+        self.asm.uload(
+            addr,
+            writable!(regs::shadow_sp()),
+            OperandSize::S64,
+            TRUSTED_FLAGS,
+        );
+
+        // Restore the link register and frame pointer.
+        let lr = regs::lr();
+        let fp = regs::fp();
         let addr = Address::post_indexed_from_sp(16);
 
         self.asm.ldp(fp, lr, addr);
@@ -263,7 +281,7 @@ impl Masm for MacroAssembler {
         mut load_callee: impl FnMut(&mut Self) -> Result<(CalleeKind, CallingConvention)>,
     ) -> Result<u32> {
         let alignment: u32 = <Self::ABI as abi::ABI>::call_stack_align().into();
-        let addend: u32 = <Self::ABI as abi::ABI>::arg_base_offset().into();
+        let addend: u32 = <Self::ABI as abi::ABI>::initial_frame_size().into();
         let delta = calculate_frame_adjustment(self.sp_offset()?.as_u32(), addend, alignment);
         let aligned_args_size = align_to(stack_args_size, alignment);
         let total_stack = delta + aligned_args_size;
