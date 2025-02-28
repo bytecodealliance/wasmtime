@@ -259,13 +259,20 @@ impl dsl::Format {
                 Read => unreachable!(),
                 ReadWrite => match one.location.kind() {
                     Imm(_) => unreachable!(),
+                    FixedReg(_) => vec![IsleConstructor::RetGpr],
                     // One read/write register output? Output the instruction
                     // and that register.
-                    FixedReg(_) | Reg(_) => vec![IsleConstructor::RetGpr],
+                    Reg(r) => match r.bits() {
+                        128 => vec![IsleConstructor::RetXmm],
+                        _ => vec![IsleConstructor::RetGpr],
+                    },
                     // One read/write reg-mem output? We need constructors for
                     // both variants.
-                    RegMem(_) => vec![IsleConstructor::RetGpr, IsleConstructor::RetMemorySideEffect],
-                },
+                    RegMem(rm) => match rm.bits() {
+                        128 => vec![IsleConstructor::RetXmm, IsleConstructor::RetMemorySideEffect],
+                        _ => vec![IsleConstructor::RetGpr, IsleConstructor::RetMemorySideEffect],
+                    },
+                }
             },
             other => panic!("unsupported number of write operands {other:?}"),
         }

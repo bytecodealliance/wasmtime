@@ -2962,9 +2962,9 @@
 (extern extractor is_gpr is_gpr)
 (decl is_gpr_mem (GprMem) GprMemImm)
 (extern extractor is_gpr_mem is_gpr_mem)
-(decl is_xmm_mem (AssemblerReadXmmMem) XmmMem)
+(decl is_xmm_mem (XmmMem) XmmMem)
 (extern extractor is_xmm_mem is_xmm_mem)
-(decl is_xmm (AssemblerReadXmmMem) XmmMemImm)
+(decl is_xmm (Xmm) XmmMem)
 (extern extractor is_xmm is_xmm)
 
 ;; Helpers to auto-convert to and from assembler types.

@@ -67,9 +67,15 @@ impl dsl::Operand {
                     format!("AssemblerImm{bits}")
                 }
             }
-            OperandKind::Reg(_) => "Gpr".to_string(),
+            OperandKind::Reg(r) => match r.bits() {
+                128 => "Xmm".to_string(),
+                _ => "Gpr".to_string(),
+            },
             OperandKind::FixedReg(_) => "Gpr".to_string(),
-            OperandKind::RegMem(_) => "GprMem".to_string(),
+            OperandKind::RegMem(rm) => match rm.bits() {
+                128 => "XmmMem".to_string(),
+                _ => "GprMem".to_string(),
+            },
         }
     }
 
@@ -84,6 +90,7 @@ impl dsl::Operand {
             OperandKind::RegMem(_) if self.mutability.is_write() => match ctor {
                 IsleConstructor::RetMemorySideEffect => "Amode".to_string(),
                 IsleConstructor::RetGpr => "Gpr".to_string(),
+                IsleConstructor::RetXmm => "Xmm".to_string(),
             },
 
             // everything else is the same as the "raw" variant
@@ -102,8 +109,15 @@ impl dsl::Operand {
                     format!("&cranelift_assembler_x64::Imm{bits}")
                 }
             }
-            OperandKind::RegMem(_) => "&GprMem".to_string(),
-            OperandKind::Reg(_) | OperandKind::FixedReg(_) => "Gpr".to_string(),
+            OperandKind::RegMem(rm) => match rm.bits() {
+                128 => "&XmmMem".to_string(),
+                _ => "&GprMem".to_string(),
+            },
+            OperandKind::Reg(r) => match r.bits() {
+                128 => "Xmm".to_string(),
+                _ => "Gpr".to_string(),
+            },
+            OperandKind::FixedReg(_) => "Gpr".to_string(),
         }
     }
 
@@ -112,14 +126,26 @@ impl dsl::Operand {
     /// Effectively converts `self.rust_param_raw()` to the assembler type.
     pub fn rust_convert_isle_to_assembler(&self) -> Option<&'static str> {
         match self.location.kind() {
-            OperandKind::Reg(_) => Some(match self.mutability {
-                Mutability::Read => "cranelift_assembler_x64::Gpr::new",
-                Mutability::ReadWrite => "self.convert_gpr_to_assembler_read_write_gpr",
-            }),
-            OperandKind::RegMem(_) => Some(match self.mutability {
-                Mutability::Read => "self.convert_gpr_mem_to_assembler_read_gpr_mem",
-                Mutability::ReadWrite => "self.convert_gpr_mem_to_assembler_read_write_gpr_mem",
-            }),
+            OperandKind::Reg(r) => match r.bits() {
+                128 => Some(match self.mutability {
+                    Mutability::Read => "cranelift_assembler_x64::Xmm::new",
+                    Mutability::ReadWrite => "self.convert_xmm_to_assembler_read_write_xmm",
+                }),
+                _ => Some(match self.mutability {
+                    Mutability::Read => "cranelift_assembler_x64::Gpr::new",
+                    Mutability::ReadWrite => "self.convert_gpr_to_assembler_read_write_gpr",
+                }),
+            },
+            OperandKind::RegMem(rm) => match rm.bits() {
+                128 => Some(match self.mutability {
+                    Mutability::Read => "self.convert_xmm_mem_to_assembler_read_xmm_mem",
+                    Mutability::ReadWrite => "self.convert_xmm_mem_to_assembler_read_write_xmm_mem",
+                }),
+                _ => Some(match self.mutability {
+                    Mutability::Read => "self.convert_gpr_mem_to_assembler_read_gpr_mem",
+                    Mutability::ReadWrite => "self.convert_gpr_mem_to_assembler_read_write_gpr_mem",
+                }),
+            },
             OperandKind::FixedReg(_) | OperandKind::Imm(_) => None,
         }
     }
