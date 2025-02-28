@@ -1632,7 +1632,7 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
     // For asynchronous stores then each call happens on a separate native
     // stack. This means that the previous stack limit is no longer relevant
     // because we're on a separate stack.
-    if unsafe { *store.0.runtime_limits().stack_limit.get() } != usize::MAX
+    if unsafe { *store.0.vm_store_context().stack_limit.get() } != usize::MAX
         && !store.0.async_support()
     {
         return None;
@@ -1676,7 +1676,7 @@ fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
     let wasm_stack_limit = stack_pointer - store.engine().config().max_wasm_stack;
     let prev_stack = unsafe {
         mem::replace(
-            &mut *store.0.runtime_limits().stack_limit.get(),
+            &mut *store.0.vm_store_context().stack_limit.get(),
             wasm_stack_limit,
         )
     };
@@ -1693,7 +1693,7 @@ fn exit_wasm<T>(store: &mut StoreContextMut<'_, T>, prev_stack: Option<usize>) {
     };
 
     unsafe {
-        *store.0.runtime_limits().stack_limit.get() = prev_stack;
+        *store.0.vm_store_context().stack_limit.get() = prev_stack;
     }
 }
 

@@ -1,6 +1,6 @@
 use super::CallThreadState;
 use crate::prelude::*;
-use crate::runtime::vm::{Backtrace, VMRuntimeLimits};
+use crate::runtime::vm::{Backtrace, VMStoreContext};
 use wasm_encoder::CoreDumpValue;
 
 /// A WebAssembly Coredump
@@ -25,14 +25,15 @@ pub struct CoreDumpStack {
 impl CallThreadState {
     pub(super) fn capture_coredump(
         &self,
-        limits: *const VMRuntimeLimits,
+        vm_store_context: *const VMStoreContext,
         trap_pc_and_fp: Option<(usize, usize)>,
     ) -> Option<CoreDumpStack> {
         if !self.capture_coredump {
             return None;
         }
-        let bt =
-            unsafe { Backtrace::new_with_trap_state(limits, self.unwinder, self, trap_pc_and_fp) };
+        let bt = unsafe {
+            Backtrace::new_with_trap_state(vm_store_context, self.unwinder, self, trap_pc_and_fp)
+        };
 
         Some(CoreDumpStack {
             bt,

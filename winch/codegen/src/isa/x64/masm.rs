@@ -92,7 +92,7 @@ pub(crate) struct MacroAssembler {
     asm: Assembler,
     /// ISA flags.
     flags: x64_settings::Flags,
-    /// Shared flags.
+    /// Shared flags.vmcontext_store_context
     shared_flags: settings::Flags,
     /// The target pointer size.
     ptr_size: OperandSize,
@@ -126,12 +126,12 @@ impl Masm for MacroAssembler {
         let scratch = regs::scratch();
 
         self.load_ptr(
-            self.address_at_reg(vmctx, ptr_size.vmcontext_runtime_limits().into())?,
+            self.address_at_reg(vmctx, ptr_size.vmcontext_store_context().into())?,
             writable!(scratch),
         )?;
 
         self.load_ptr(
-            Address::offset(scratch, ptr_size.vmruntime_limits_stack_limit().into()),
+            Address::offset(scratch, ptr_size.vmstore_context_stack_limit().into()),
             writable!(scratch),
         )?;
 

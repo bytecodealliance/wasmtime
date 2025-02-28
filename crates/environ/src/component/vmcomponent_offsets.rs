@@ -3,7 +3,7 @@
 // struct VMComponentContext {
 //      magic: u32,
 //      builtins: &'static VMComponentBuiltins,
-//      limits: *const VMRuntimeLimits,
+//      limits: *const VMStoreContext,
 //      flags: [VMGlobalDefinition; component.num_runtime_component_instances],
 //      trampoline_func_refs: [VMFuncRef; component.num_trampolines],
 //      lowerings: [VMLowering; component.num_lowerings],
@@ -61,7 +61,7 @@ pub struct VMComponentOffsets<P> {
     // precalculated offsets of various member fields
     magic: u32,
     builtins: u32,
-    limits: u32,
+    vm_store_context: u32,
     flags: u32,
     trampoline_func_refs: u32,
     lowerings: u32,
@@ -98,7 +98,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             num_resources: component.num_resources,
             magic: 0,
             builtins: 0,
-            limits: 0,
+            vm_store_context: 0,
             flags: 0,
             trampoline_func_refs: 0,
             lowerings: 0,
@@ -138,7 +138,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             size(magic) = 4u32,
             align(u32::from(ret.ptr.size())),
             size(builtins) = ret.ptr.size(),
-            size(limits) = ret.ptr.size(),
+            size(vm_store_context) = ret.ptr.size(),
             align(16),
             size(flags) = cmul(ret.num_runtime_component_instances, ret.ptr.size_of_vmglobal_definition()),
             align(u32::from(ret.ptr.size())),
@@ -186,10 +186,10 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         self.flags + index.as_u32() * u32::from(self.ptr.size_of_vmglobal_definition())
     }
 
-    /// The offset of the `limits` field.
+    /// The offset of the `vm_store_context` field.
     #[inline]
-    pub fn limits(&self) -> u32 {
-        self.limits
+    pub fn vm_store_context(&self) -> u32 {
+        self.vm_store_context
     }
 
     /// The offset of the `trampoline_func_refs` field.

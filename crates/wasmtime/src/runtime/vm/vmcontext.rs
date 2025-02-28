@@ -975,10 +975,17 @@ const _: () = {
     )
 };
 
-/// Structure used to control interrupting wasm code.
+/// Structure that holds all mutable context that is shared across all instances
+/// in a store, for example data related to fuel or epochs.
+///
+/// `VMStoreContext`s are one-to-one with `wasmtime::Store`s, the same way that
+/// `VMContext`s are one-to-one with `wasmtime::Instance`s. And the same way
+/// that multiple `wasmtime::Instance`s may be associated with the same
+/// `wasmtime::Store`, multiple `VMContext`s hold a pointer to the same
+/// `VMStoreContext` when they are associated with the same `wasmtime::Store`.
 #[derive(Debug)]
 #[repr(C)]
-pub struct VMRuntimeLimits {
+pub struct VMStoreContext {
     // NB: 64-bit integer fields are located first with pointer-sized fields
     // trailing afterwards. That makes the offsets in this structure easier to
     // calculate on 32-bit platforms as we don't have to worry about the
@@ -1046,19 +1053,19 @@ pub struct VMRuntimeLimits {
     pub last_wasm_entry_fp: UnsafeCell<usize>,
 }
 
-// The `VMRuntimeLimits` type is a pod-type with no destructor, and we don't
+// The `VMStoreContext` type is a pod-type with no destructor, and we don't
 // access any fields from other threads, so add in these trait impls which are
 // otherwise not available due to the `fuel_consumed` and `epoch_deadline`
-// variables in `VMRuntimeLimits`.
-unsafe impl Send for VMRuntimeLimits {}
-unsafe impl Sync for VMRuntimeLimits {}
+// variables in `VMStoreContext`.
+unsafe impl Send for VMStoreContext {}
+unsafe impl Sync for VMStoreContext {}
 
 // SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
-unsafe impl VmSafe for VMRuntimeLimits {}
+unsafe impl VmSafe for VMStoreContext {}
 
-impl Default for VMRuntimeLimits {
-    fn default() -> VMRuntimeLimits {
-        VMRuntimeLimits {
+impl Default for VMStoreContext {
+    fn default() -> VMStoreContext {
+        VMStoreContext {
             stack_limit: UnsafeCell::new(usize::max_value()),
             fuel_consumed: UnsafeCell::new(0),
             epoch_deadline: UnsafeCell::new(0),
@@ -1070,8 +1077,8 @@ impl Default for VMRuntimeLimits {
 }
 
 #[cfg(test)]
-mod test_vmruntime_limits {
-    use super::VMRuntimeLimits;
+mod test_vmstore_context {
+    use super::VMStoreContext;
     use core::mem::offset_of;
     use wasmtime_environ::{HostPtr, Module, PtrSize, VMOffsets};
 
@@ -1080,28 +1087,28 @@ mod test_vmruntime_limits {
         let module = Module::new();
         let offsets = VMOffsets::new(HostPtr, &module);
         assert_eq!(
-            offset_of!(VMRuntimeLimits, stack_limit),
-            usize::from(offsets.ptr.vmruntime_limits_stack_limit())
+            offset_of!(VMStoreContext, stack_limit),
+            usize::from(offsets.ptr.vmstore_context_stack_limit())
         );
         assert_eq!(
-            offset_of!(VMRuntimeLimits, fuel_consumed),
-            usize::from(offsets.ptr.vmruntime_limits_fuel_consumed())
+            offset_of!(VMStoreContext, fuel_consumed),
+            usize::from(offsets.ptr.vmstore_context_fuel_consumed())
         );
         assert_eq!(
-            offset_of!(VMRuntimeLimits, epoch_deadline),
-            usize::from(offsets.ptr.vmruntime_limits_epoch_deadline())
+            offset_of!(VMStoreContext, epoch_deadline),
+            usize::from(offsets.ptr.vmstore_context_epoch_deadline())
         );
         assert_eq!(
-            offset_of!(VMRuntimeLimits, last_wasm_exit_fp),
-            usize::from(offsets.ptr.vmruntime_limits_last_wasm_exit_fp())
+            offset_of!(VMStoreContext, last_wasm_exit_fp),
+            usize::from(offsets.ptr.vmstore_context_last_wasm_exit_fp())
         );
         assert_eq!(
-            offset_of!(VMRuntimeLimits, last_wasm_exit_pc),
-            usize::from(offsets.ptr.vmruntime_limits_last_wasm_exit_pc())
+            offset_of!(VMStoreContext, last_wasm_exit_pc),
+            usize::from(offsets.ptr.vmstore_context_last_wasm_exit_pc())
         );
         assert_eq!(
-            offset_of!(VMRuntimeLimits, last_wasm_entry_fp),
-            usize::from(offsets.ptr.vmruntime_limits_last_wasm_entry_fp())
+            offset_of!(VMStoreContext, last_wasm_entry_fp),
+            usize::from(offsets.ptr.vmstore_context_last_wasm_entry_fp())
         );
     }
 }

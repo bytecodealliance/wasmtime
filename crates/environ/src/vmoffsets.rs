@@ -8,7 +8,7 @@
 //      // these fields is a compile-time constant when using `HostPtr`.
 //      magic: u32,
 //      _padding: u32, // (On 64-bit systems)
-//      runtime_limits: *const VMRuntimeLimits,
+//      vm_store_context: *const VMStoreContext,
 //      builtin_functions: *mut VMBuiltinFunctionsArray,
 //      callee: *mut VMFunctionBody,
 //      epoch_ptr: *mut AtomicU64,
@@ -109,7 +109,7 @@ pub trait PtrSize {
     fn size(&self) -> u8;
 
     /// The offset of the `VMContext::runtime_limits` field
-    fn vmcontext_runtime_limits(&self) -> u8 {
+    fn vmcontext_store_context(&self) -> u8 {
         u8::try_from(align(
             u32::try_from(core::mem::size_of::<u32>()).unwrap(),
             u32::from(self.size()),
@@ -119,7 +119,7 @@ pub trait PtrSize {
 
     /// The offset of the `VMContext::builtin_functions` field
     fn vmcontext_builtin_functions(&self) -> u8 {
-        self.vmcontext_runtime_limits() + self.size()
+        self.vmcontext_store_context() + self.size()
     }
 
     /// The offset of the `array_call` field.
@@ -165,39 +165,39 @@ pub trait PtrSize {
         4
     }
 
-    // Offsets within `VMRuntimeLimits`
+    // Offsets within `VMStoreContext`
 
-    /// Return the offset of the `fuel_consumed` field of `VMRuntimeLimits`
+    /// Return the offset of the `fuel_consumed` field of `VMStoreContext`
     #[inline]
-    fn vmruntime_limits_fuel_consumed(&self) -> u8 {
+    fn vmstore_context_fuel_consumed(&self) -> u8 {
         0
     }
 
-    /// Return the offset of the `epoch_deadline` field of `VMRuntimeLimits`
+    /// Return the offset of the `epoch_deadline` field of `VMStoreContext`
     #[inline]
-    fn vmruntime_limits_epoch_deadline(&self) -> u8 {
-        self.vmruntime_limits_fuel_consumed() + 8
+    fn vmstore_context_epoch_deadline(&self) -> u8 {
+        self.vmstore_context_fuel_consumed() + 8
     }
 
-    /// Return the offset of the `stack_limit` field of `VMRuntimeLimits`
+    /// Return the offset of the `stack_limit` field of `VMStoreContext`
     #[inline]
-    fn vmruntime_limits_stack_limit(&self) -> u8 {
-        self.vmruntime_limits_epoch_deadline() + 8
+    fn vmstore_context_stack_limit(&self) -> u8 {
+        self.vmstore_context_epoch_deadline() + 8
     }
 
-    /// Return the offset of the `last_wasm_exit_fp` field of `VMRuntimeLimits`.
-    fn vmruntime_limits_last_wasm_exit_fp(&self) -> u8 {
-        self.vmruntime_limits_stack_limit() + self.size()
+    /// Return the offset of the `last_wasm_exit_fp` field of `VMStoreContext`.
+    fn vmstore_context_last_wasm_exit_fp(&self) -> u8 {
+        self.vmstore_context_stack_limit() + self.size()
     }
 
-    /// Return the offset of the `last_wasm_exit_pc` field of `VMRuntimeLimits`.
-    fn vmruntime_limits_last_wasm_exit_pc(&self) -> u8 {
-        self.vmruntime_limits_last_wasm_exit_fp() + self.size()
+    /// Return the offset of the `last_wasm_exit_pc` field of `VMStoreContext`.
+    fn vmstore_context_last_wasm_exit_pc(&self) -> u8 {
+        self.vmstore_context_last_wasm_exit_fp() + self.size()
     }
 
-    /// Return the offset of the `last_wasm_entry_fp` field of `VMRuntimeLimits`.
-    fn vmruntime_limits_last_wasm_entry_fp(&self) -> u8 {
-        self.vmruntime_limits_last_wasm_exit_pc() + self.size()
+    /// Return the offset of the `last_wasm_entry_fp` field of `VMStoreContext`.
+    fn vmstore_context_last_wasm_entry_fp(&self) -> u8 {
+        self.vmstore_context_last_wasm_exit_pc() + self.size()
     }
 
     // Offsets within `VMMemoryDefinition`
@@ -246,7 +246,7 @@ pub trait PtrSize {
         0
     }
 
-    /// Return the offset to the `VMRuntimeLimits` structure
+    /// Return the offset to the `VMStoreContext` structure
     #[inline]
     fn vmctx_runtime_limits(&self) -> u8 {
         self.vmctx_magic() + self.size()

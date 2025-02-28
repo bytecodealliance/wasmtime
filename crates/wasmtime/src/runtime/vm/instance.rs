@@ -8,7 +8,7 @@ use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator};
 use crate::runtime::vm::table::{Table, TableElement, TableElementType};
 use crate::runtime::vm::vmcontext::{
     VMBuiltinFunctionsArray, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext, VMRuntimeLimits,
+    VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext, VMStoreContext,
     VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
 };
 use crate::runtime::vm::{
@@ -582,7 +582,7 @@ impl Instance {
 
     /// Return a pointer to the interrupts structure
     #[inline]
-    pub fn runtime_limits(&mut self) -> NonNull<Option<VmPtr<VMRuntimeLimits>>> {
+    pub fn vm_store_context(&mut self) -> NonNull<Option<VmPtr<VMStoreContext>>> {
         unsafe { self.vmctx_plus_offset_mut(self.offsets().ptr.vmctx_runtime_limits()) }
     }
 
@@ -611,14 +611,14 @@ impl Instance {
         self.store = store.map(VMStoreRawPtr);
         if let Some(mut store) = store {
             let store = store.as_mut();
-            self.runtime_limits()
-                .write(Some(store.vmruntime_limits().into()));
+            self.vm_store_context()
+                .write(Some(store.vm_store_context_ptr().into()));
             #[cfg(target_has_atomic = "64")]
             self.epoch_ptr()
                 .write(Some(NonNull::from(store.engine().epoch_counter()).into()));
             self.set_gc_heap(store.gc_store_mut().ok());
         } else {
-            self.runtime_limits().write(None);
+            self.vm_store_context().write(None);
             #[cfg(target_has_atomic = "64")]
             self.epoch_ptr().write(None);
             self.set_gc_heap(None);

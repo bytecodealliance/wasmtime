@@ -86,7 +86,7 @@ use crate::runtime::vm::GcRootsList;
 use crate::runtime::vm::{
     ExportGlobal, GcStore, InstanceAllocationRequest, InstanceAllocator, InstanceHandle,
     Interpreter, InterpreterRef, ModuleRuntimeInfo, OnDemandInstanceAllocator, SignalHandler,
-    StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMRuntimeLimits,
+    StoreBox, StorePtr, Unwind, VMContext, VMFuncRef, VMGcRef, VMStoreContext,
 };
 use crate::trampoline::VMHostGlobalContext;
 use crate::RootSet;
@@ -305,7 +305,7 @@ pub struct StoreOpaque {
     _marker: marker::PhantomPinned,
 
     engine: Engine,
-    runtime_limits: VMRuntimeLimits,
+    vm_store_context: VMStoreContext,
     instances: Vec<StoreInstance>,
     #[cfg(feature = "component-model")]
     num_component_instances: usize,
@@ -523,7 +523,7 @@ impl<T> Store<T> {
             inner: StoreOpaque {
                 _marker: marker::PhantomPinned,
                 engine: engine.clone(),
-                runtime_limits: Default::default(),
+                vm_store_context: Default::default(),
                 instances: Vec::new(),
                 #[cfg(feature = "component-model")]
                 num_component_instances: 0,
@@ -1404,8 +1404,8 @@ impl StoreOpaque {
     }
 
     #[inline]
-    pub fn runtime_limits(&self) -> &VMRuntimeLimits {
-        &self.runtime_limits
+    pub fn vm_store_context(&self) -> &VMStoreContext {
+        &self.vm_store_context
     }
 
     #[inline(never)]
@@ -1625,12 +1625,12 @@ impl StoreOpaque {
             self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
-        let injected_fuel = unsafe { *self.runtime_limits.fuel_consumed.get() };
+        let injected_fuel = unsafe { *self.vm_store_context.fuel_consumed.get() };
         Ok(get_fuel(injected_fuel, self.fuel_reserve))
     }
 
     fn refuel(&mut self) -> bool {
-        let injected_fuel = unsafe { &mut *self.runtime_limits.fuel_consumed.get() };
+        let injected_fuel = unsafe { &mut *self.vm_store_context.fuel_consumed.get() };
         refuel(
             injected_fuel,
             &mut self.fuel_reserve,
@@ -1643,7 +1643,7 @@ impl StoreOpaque {
             self.engine().tunables().consume_fuel,
             "fuel is not configured in this store"
         );
-        let injected_fuel = unsafe { &mut *self.runtime_limits.fuel_consumed.get() };
+        let injected_fuel = unsafe { &mut *self.vm_store_context.fuel_consumed.get() };
         set_fuel(
             injected_fuel,
             &mut self.fuel_reserve,
@@ -1678,8 +1678,8 @@ impl StoreOpaque {
     }
 
     #[inline]
-    pub fn vmruntime_limits(&self) -> NonNull<VMRuntimeLimits> {
-        NonNull::from(&self.runtime_limits)
+    pub fn vm_store_context_ptr(&self) -> NonNull<VMStoreContext> {
+        NonNull::from(&self.vm_store_context)
     }
 
     #[inline]
@@ -2083,13 +2083,18 @@ impl<T> StoreInner<T> {
         // Set a new deadline based on the "epoch deadline delta".
         //
         // Safety: this is safe because the epoch deadline in the
-        // `VMRuntimeLimits` is accessed only here and by Wasm guest code
+        // `VMStoreContext` is accessed only here and by Wasm guest code
         // running in this store, and we have a `&mut self` here.
         //
         // Also, note that when this update is performed while Wasm is
         // on the stack, the Wasm will reload the new value once we
         // return into it.
-        let epoch_deadline = unsafe { self.vmruntime_limits().as_mut().epoch_deadline.get_mut() };
+        let epoch_deadline = unsafe {
+            self.vm_store_context_ptr()
+                .as_mut()
+                .epoch_deadline
+                .get_mut()
+        };
         *epoch_deadline = self.engine().current_epoch() + delta;
     }
 
@@ -2110,7 +2115,12 @@ impl<T> StoreInner<T> {
         // Safety: this is safe because, as above, it is only invoked
         // from within `new_epoch` which is called from guest Wasm
         // code, which will have an exclusive borrow on the Store.
-        let epoch_deadline = unsafe { self.vmruntime_limits().as_mut().epoch_deadline.get_mut() };
+        let epoch_deadline = unsafe {
+            self.vm_store_context_ptr()
+                .as_mut()
+                .epoch_deadline
+                .get_mut()
+        };
         *epoch_deadline
     }
 }
