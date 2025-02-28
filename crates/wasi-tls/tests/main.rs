@@ -1,3 +1,5 @@
+#![cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
+
 use anyhow::{anyhow, Result};
 use test_programs_artifacts::{foreach_tls, TLS_SAMPLE_APPLICATION_COMPONENT};
 use wasmtime::{
