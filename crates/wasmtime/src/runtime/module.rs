@@ -402,6 +402,24 @@ impl Module {
         Module::from_parts(engine, code, None)
     }
 
+    /// In-place deserialization of an in-memory compiled module previously
+    /// created with [`Module::serialize`] or [`Engine::precompile_module`].
+    ///
+    /// See [`Self::deserialize`] for additional information; this method
+    /// works identically except that it will not create a copy of the provided
+    /// memory but will use it directly.
+    ///
+    /// # Unsafety
+    ///
+    /// All of the safety notes from [`Self::deserialize`] apply here as well
+    /// with the additional constraint that the code memory provide by `memory`
+    /// lives for as long as the module and is nevery externally modified for
+    /// the lifetime of the deserialized module.
+    pub unsafe fn deserialize_raw(engine: &Engine, memory: NonNull<[u8]>) -> Result<Module> {
+        let code = engine.load_code_raw(memory, ObjectKind::Module)?;
+        Module::from_parts(engine, code, None)
+    }
+
     /// Same as [`deserialize`], except that the contents of `path` are read to
     /// deserialize into a [`Module`].
     ///
