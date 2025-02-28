@@ -431,6 +431,7 @@ pub fn to_rust_ident(name: &str) -> String {
         "virtual" => "virtual_".into(),
         "yield" => "yield_".into(),
         "try" => "try_".into(),
+        "gen" => "gen_".into(),
         s => s.to_snake_case(),
     }
 }
