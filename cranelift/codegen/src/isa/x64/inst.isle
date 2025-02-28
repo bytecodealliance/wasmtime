@@ -3568,19 +3568,21 @@
 
 ;; Helper for creating `andps` instructions.
 (decl x64_andps (Xmm XmmMem) Xmm)
-(rule 0 (x64_andps src1 src2)
-      (xmm_rm_r (SseOpcode.Andps) src1 src2))
-(rule 1 (x64_andps src1 src2)
+(rule 2 (x64_andps src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vandps) src1 src2))
+(rule 1 (x64_andps src1 (is_xmm_mem src2)) (x64_andps_a src1 src2))
+(rule 0 (x64_andps src1 src2)
+      (xmm_rm_r (SseOpcode.Andps) src1 src2))
 
 ;; Helper for creating `andpd` instructions.
 (decl x64_andpd (Xmm XmmMem) Xmm)
-(rule 0 (x64_andpd src1 src2)
-      (xmm_rm_r (SseOpcode.Andpd) src1 src2))
-(rule 1 (x64_andpd src1 src2)
+(rule 2 (x64_andpd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vandpd) src1 src2))
+(rule 1 (x64_andpd src1 (is_xmm_mem src2)) (x64_andpd_a src1 src2))
+(rule 0 (x64_andpd src1 src2)
+      (xmm_rm_r (SseOpcode.Andpd) src1 src2))
 
 ;; Helper for creating `por` instructions.
 (decl x64_por (Xmm XmmMem) Xmm)
@@ -3625,11 +3627,12 @@
 
 ;; Helper fxor creating `xorpd` instructions.
 (decl x64_xorpd (Xmm XmmMem) Xmm)
-(rule 0 (x64_xorpd src1 src2)
-      (xmm_rm_r (SseOpcode.Xorpd) src1 src2))
-(rule 1 (x64_xorpd src1 src2)
+(rule 2 (x64_xorpd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vxorpd) src1 src2))
+(rule 1 (x64_xorpd src1 (is_xmm_mem src2)) (x64_xorpd_a src1 src2))
+(rule 0 (x64_xorpd src1 src2)
+      (xmm_rm_r (SseOpcode.Xorpd) src1 src2))
 
 ;; Helper for creating `pmullw` instructions.
 (decl x64_pmullw (Xmm XmmMem) Xmm)
@@ -3801,19 +3804,21 @@
 
 ;; Helper for creating `addps` instructions.
 (decl x64_addps (Xmm XmmMem) Xmm)
-(rule 0 (x64_addps src1 src2)
-      (xmm_rm_r (SseOpcode.Addps) src1 src2))
-(rule 1 (x64_addps src1 src2)
+(rule 2 (x64_addps src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vaddps) src1 src2))
+(rule 1 (x64_addps src1 (is_xmm_mem src2)) (x64_addps_a src1 src2))
+(rule 0 (x64_addps src1 src2)
+      (xmm_rm_r (SseOpcode.Addps) src1 src2))
 
 ;; Helper for creating `addpd` instructions.
 (decl x64_addpd (Xmm XmmMem) Xmm)
-(rule 0 (x64_addpd src1 src2)
-      (xmm_rm_r (SseOpcode.Addpd) src1 src2))
-(rule 1 (x64_addpd src1 src2)
+(rule 2 (x64_addpd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vaddpd) src1 src2))
+(rule 1 (x64_addpd src1 (is_xmm_mem src2)) (x64_addpd_a src1 src2))
+(rule 0 (x64_addpd src1 src2)
+      (xmm_rm_r (SseOpcode.Addpd) src1 src2))
 
 ;; Helper for creating `subss` instructions.
 (decl x64_subss (Xmm XmmMem) Xmm)
@@ -3833,19 +3838,21 @@
 
 ;; Helper for creating `subps` instructions.
 (decl x64_subps (Xmm XmmMem) Xmm)
-(rule 0 (x64_subps src1 src2)
-      (xmm_rm_r (SseOpcode.Subps) src1 src2))
-(rule 1 (x64_subps src1 src2)
+(rule 2 (x64_subps src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vsubps) src1 src2))
+(rule 1 (x64_subps src1 (is_xmm_mem src2)) (x64_subps_a src1 src2))
+(rule 0 (x64_subps src1 src2)
+      (xmm_rm_r (SseOpcode.Subps) src1 src2))
 
 ;; Helper for creating `subpd` instructions.
 (decl x64_subpd (Xmm XmmMem) Xmm)
-(rule 0 (x64_subpd src1 src2)
-      (xmm_rm_r (SseOpcode.Subpd) src1 src2))
-(rule 1 (x64_subpd src1 src2)
+(rule 2 (x64_subpd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vsubpd) src1 src2))
+(rule 1 (x64_subpd src1 (is_xmm_mem src2)) (x64_subpd_a src1 src2))
+(rule 0 (x64_subpd src1 src2)
+      (xmm_rm_r (SseOpcode.Subpd) src1 src2))
 
 ;; Helper for creating `mulss` instructions.
 (decl x64_mulss (Xmm XmmMem) Xmm)

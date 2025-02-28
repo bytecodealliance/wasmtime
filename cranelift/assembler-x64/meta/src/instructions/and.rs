@@ -28,5 +28,7 @@ pub fn list() -> Vec<Inst> {
         inst("andw", fmt("RM", [rw(r16), r(rm16)]), rex([0x66, 0x23]).r(), _64b | compat),
         inst("andl", fmt("RM", [rw(r32), r(rm32)]), rex(0x23).r(), _64b | compat),
         inst("andq", fmt("RM", [rw(r64), r(rm64)]), rex(0x23).w().r(), _64b),
+        inst("andpd", fmt("A", [rw(xmm), r(rm128)]), rex([0x66, 0x0F, 0x54]).r(), _64b),
+        inst("andps", fmt("A", [rw(xmm), r(rm128)]), rex([0x0F, 0x54]).r(), _64b),
     ]
 }

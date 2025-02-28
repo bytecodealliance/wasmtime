@@ -21,6 +21,8 @@ pub fn list() -> Vec<Inst> {
         inst("subw", fmt("RM", [rw(r16), r(rm16)]), rex([0x66, 0x2B]).r(), _64b | compat),
         inst("subl", fmt("RM", [rw(r32), r(rm32)]), rex(0x2B).r(), _64b | compat),
         inst("subq", fmt("RM", [rw(r64), r(rm64)]), rex(0x2B).w().r(), _64b),
+        inst("subpd", fmt("A", [rw(xmm), r(rm128)]), rex([0x66, 0x0F, 0x5C]).r(), _64b),
+        inst("subps", fmt("A", [rw(xmm), r(rm128)]), rex([0x0F, 0x5C]).r(), _64b),
         // Subtract with borrow.
         inst("sbbb", fmt("I", [rw(al), r(imm8)]), rex(0x1C).ib(), _64b | compat),
         inst("sbbw", fmt("I", [rw(ax), r(imm16)]), rex([0x66, 0x1D]).iw(), _64b | compat),
