@@ -1,3 +1,5 @@
+#![cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))]
+
 //! # Wasmtime's [wasi-tls] (Transport Layer Security) Implementation
 //!
 //! This crate provides the Wasmtime host implementation for the [wasi-tls] API.
@@ -60,7 +62,6 @@
 //!     })?;
 //!
 //!     // ... use `linker` to instantiate within `store` ...
-//!
 //!     Ok(())
 //! }
 //!
