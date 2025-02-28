@@ -3,7 +3,7 @@
 use crate::api::{AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, TrapCode};
 use crate::reg::{self, NonRspGpr, Size};
 use crate::rex::{encode_modrm, encode_sib, Imm, RexFlags};
-use crate::xmm::{self};
+use crate::xmm;
 
 /// x64 memory addressing modes.
 #[derive(Clone, Debug)]

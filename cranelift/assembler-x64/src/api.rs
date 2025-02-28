@@ -132,7 +132,7 @@ pub trait AsReg: Clone + std::fmt::Debug {
     /// Return the register name.
     fn to_string(&self, size: Option<reg::Size>) -> &str {
         match size {
-            Some(_s) => reg::enc::to_string(self.enc(), size.unwrap()),
+            Some(size) => reg::enc::to_string(self.enc(), size),
             None => xmm::enc::to_string(self.enc()),
         }
     }

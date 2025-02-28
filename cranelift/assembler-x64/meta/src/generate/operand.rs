@@ -208,7 +208,7 @@ impl dsl::Location {
             r16 | rm16 => Some("Size::Word"),
             r32 | rm32 => Some("Size::Doubleword"),
             r64 | rm64 => Some("Size::Quadword"),
-            xmm | rm128 => Some("Size::DoubleQuadword"),
+            xmm | rm128 => panic!("no need to generate a size for XMM-sized access"),
         }
     }
 
