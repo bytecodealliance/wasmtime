@@ -16,6 +16,7 @@
 ;; wasm[0]::function[0]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
+;;       str     x28, [sp, #-0x10]!
 ;;       mov     x28, sp
 ;;       mov     x9, x0
 ;;       sub     x28, x28, #0x18
@@ -34,9 +35,10 @@
 ;;       stur    w16, [x28]
 ;;       add     x28, x28, #4
 ;;       mov     sp, x28
-;;       b       #0x38
-;;   54: add     x28, x28, #0x18
+;;       b       #0x3c
+;;   58: add     x28, x28, #0x18
 ;;       mov     sp, x28
 ;;       mov     sp, x28
+;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret

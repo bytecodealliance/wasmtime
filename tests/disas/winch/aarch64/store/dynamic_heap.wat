@@ -22,6 +22,7 @@
 ;; wasm[0]::function[0]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
+;;       str     x28, [sp, #-0x10]!
 ;;       mov     x28, sp
 ;;       mov     x9, x0
 ;;       sub     x28, x28, #0x20
@@ -37,10 +38,10 @@
 ;;       ldur    x2, [x9, #0x60]
 ;;       mov     w3, w1
 ;;       add     x3, x3, #4
-;;       b.hs    #0x10c
-;;   48: cmp     x3, x2, uxtx
-;;       b.hi    #0x110
-;;   50: ldur    x4, [x9, #0x58]
+;;       b.hs    #0x114
+;;   4c: cmp     x3, x2, uxtx
+;;       b.hi    #0x118
+;;   54: ldur    x4, [x9, #0x58]
 ;;       add     x4, x4, x1, uxtx
 ;;       mov     x16, #0
 ;;       mov     x5, x16
@@ -52,10 +53,10 @@
 ;;       ldur    x2, [x9, #0x60]
 ;;       mov     w3, w1
 ;;       add     x3, x3, #8
-;;       b.hs    #0x114
-;;   84: cmp     x3, x2, uxtx
-;;       b.hi    #0x118
-;;   8c: ldur    x4, [x9, #0x58]
+;;       b.hs    #0x11c
+;;   88: cmp     x3, x2, uxtx
+;;       b.hi    #0x120
+;;   90: ldur    x4, [x9, #0x58]
 ;;       add     x4, x4, x1, uxtx
 ;;       add     x4, x4, #4
 ;;       mov     x16, #0
@@ -70,10 +71,10 @@
 ;;       mov     w16, #3
 ;;       movk    w16, #0x10, lsl #16
 ;;       add     x3, x3, x16, uxtx
-;;       b.hs    #0x11c
-;;   cc: cmp     x3, x2, uxtx
-;;       b.hi    #0x120
-;;   d4: ldur    x4, [x9, #0x58]
+;;       b.hs    #0x124
+;;   d0: cmp     x3, x2, uxtx
+;;       b.hi    #0x128
+;;   d8: ldur    x4, [x9, #0x58]
 ;;       add     x4, x4, x1, uxtx
 ;;       orr     x16, xzr, #0xfffff
 ;;       add     x4, x4, x16, uxtx
@@ -85,11 +86,12 @@
 ;;       add     x28, x28, #0x20
 ;;       mov     sp, x28
 ;;       mov     sp, x28
+;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;  10c: .byte   0x1f, 0xc1, 0x00, 0x00
-;;  110: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;  114: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;  118: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;  11c: .byte   0x1f, 0xc1, 0x00, 0x00
 ;;  120: .byte   0x1f, 0xc1, 0x00, 0x00
+;;  124: .byte   0x1f, 0xc1, 0x00, 0x00
+;;  128: .byte   0x1f, 0xc1, 0x00, 0x00

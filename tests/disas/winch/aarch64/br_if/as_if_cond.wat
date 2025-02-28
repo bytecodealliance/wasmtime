@@ -14,6 +14,7 @@
 ;; wasm[0]::function[0]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
+;;       str     x28, [sp, #-0x10]!
 ;;       mov     x28, sp
 ;;       mov     x9, x0
 ;;       sub     x28, x28, #0x18
@@ -25,18 +26,19 @@
 ;;       mov     x16, #1
 ;;       mov     w0, w16
 ;;       tst     w1, w1
-;;       b.ne    #0x5c
-;;       b       #0x3c
-;;   3c: tst     w0, w0
-;;       b.eq    #0x54
-;;       b       #0x48
-;;   48: mov     x16, #2
+;;       b.ne    #0x60
+;;       b       #0x40
+;;   40: tst     w0, w0
+;;       b.eq    #0x58
+;;       b       #0x4c
+;;   4c: mov     x16, #2
 ;;       mov     w0, w16
-;;       b       #0x5c
-;;   54: mov     x16, #3
+;;       b       #0x60
+;;   58: mov     x16, #3
 ;;       mov     w0, w16
 ;;       add     x28, x28, #0x18
 ;;       mov     sp, x28
 ;;       mov     sp, x28
+;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
