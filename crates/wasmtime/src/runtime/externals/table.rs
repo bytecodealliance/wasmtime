@@ -188,6 +188,8 @@ impl Table {
                         ty => unreachable!("not a top type: {ty:?}"),
                     }
                 }
+
+                runtime::TableElement::ContRef(_c) => todo!(), // TODO(dhil): Required for the embedder API.
             }
         }
     }

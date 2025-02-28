@@ -130,6 +130,9 @@ impl Global {
                                 })
                                 .into(),
                         ),
+                        HeapType::NoCont | HeapType::ConcreteCont(_) | HeapType::Cont => todo!(
+                            "Embedder support for continuations has not yet been implemented!"
+                        ),
 
                         HeapType::NoExtern => Ref::Extern(None),
 

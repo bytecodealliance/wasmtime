@@ -187,6 +187,7 @@ macro_rules! foreach_config_option {
             component_model_async
             simd
             gc_types
+            stack_switching
         }
     };
 }
@@ -291,6 +292,7 @@ impl Compiler {
                     || config.gc()
                     || config.relaxed_simd()
                     || config.gc_types()
+                    || config.stack_switching()
                 {
                     return true;
                 }
@@ -301,6 +303,13 @@ impl Compiler {
                 // due to being unable to implement non-atomic loads/stores
                 // safely.
                 if config.threads() {
+                    return true;
+                }
+                // Unsupported proposals. Note that other proposals have partial
+                // support at this time (pulley is a work-in-progress) and so
+                // individual tests are listed below as "should fail" even if
+                // they're not covered in this list.
+                if config.stack_switching() {
                     return true;
                 }
             }
@@ -376,6 +385,14 @@ impl WastTest {
             ];
 
             if unsupported.iter().any(|part| self.path.ends_with(part)) {
+                return true;
+            }
+        }
+
+        if cfg!(not(all(unix, target_arch = "x86_64"))) {
+            // Stack switching is not implemented on platforms other than x64
+            // unix, the corresponding tests will fail.
+            if self.path.parent().unwrap().ends_with("stack-switching") {
                 return true;
             }
         }
