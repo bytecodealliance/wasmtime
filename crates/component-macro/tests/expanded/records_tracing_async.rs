@@ -321,6 +321,15 @@ pub mod foo {
                     4 == < Aggregates as wasmtime::component::ComponentType >::ALIGN32
                 );
             };
+            pub type TupleTypedef = (i32,);
+            const _: () = {
+                assert!(
+                    4 == < TupleTypedef as wasmtime::component::ComponentType >::SIZE32
+                );
+                assert!(
+                    4 == < TupleTypedef as wasmtime::component::ComponentType >::ALIGN32
+                );
+            };
             pub type IntTypedef = i32;
             const _: () = {
                 assert!(
@@ -872,6 +881,17 @@ pub mod exports {
                     );
                     assert!(
                         4 == < Aggregates as wasmtime::component::ComponentType
+                        >::ALIGN32
+                    );
+                };
+                pub type TupleTypedef = (i32,);
+                const _: () = {
+                    assert!(
+                        4 == < TupleTypedef as wasmtime::component::ComponentType
+                        >::SIZE32
+                    );
+                    assert!(
+                        4 == < TupleTypedef as wasmtime::component::ComponentType
                         >::ALIGN32
                     );
                 };
