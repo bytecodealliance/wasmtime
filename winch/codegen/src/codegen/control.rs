@@ -932,8 +932,8 @@ impl ControlStackFrame {
                     masm.store(RegImm::f64(v.bits()), addr, (*ty).try_into()?)?;
                 }
                 (ABIOperand::Stack { ty, offset, .. }, Val::V128(v)) => {
-                    let addr =
-                        masm.address_at_sp(SPOffset::from_u32(results_offset.as_u32() - *offset))?;
+                    let addr = masm
+                        .address_from_sp(SPOffset::from_u32(results_offset.as_u32() - *offset))?;
                     masm.store(RegImm::v128(*v), addr, (*ty).try_into()?)?;
                 }
                 (_, v) => debug_assert!(v.is_mem()),
