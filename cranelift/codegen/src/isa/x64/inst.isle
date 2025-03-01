@@ -3594,11 +3594,12 @@
 
 ;; Helper for creating `orps` instructions.
 (decl x64_orps (Xmm XmmMem) Xmm)
-(rule 0 (x64_orps src1 src2)
-      (xmm_rm_r (SseOpcode.Orps) src1 src2))
-(rule 1 (x64_orps src1 src2)
+(rule 2 (x64_orps src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vorps) src1 src2))
+(rule 1 (x64_orps src1 (is_xmm_mem src2)) (x64_orps_a src1 src2))
+(rule 0 (x64_orps src1 src2)
+      (xmm_rm_r (SseOpcode.Orps) src1 src2))
 
 ;; Helper for creating `orpd` instructions.
 (decl x64_orpd (Xmm XmmMem) Xmm)
