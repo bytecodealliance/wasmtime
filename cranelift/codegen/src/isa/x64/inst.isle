@@ -3619,11 +3619,12 @@
 
 ;; Helper fxor creating `xorps` instructions.
 (decl x64_xorps (Xmm XmmMem) Xmm)
-(rule 0 (x64_xorps src1 src2)
-      (xmm_rm_r (SseOpcode.Xorps) src1 src2))
-(rule 1 (x64_xorps src1 src2)
+(rule 2 (x64_xorps src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vxorps) src1 src2))
+(rule 1 (x64_xorps src1 (is_xmm_mem src2)) (x64_xorps_a src1 src2))
+(rule 0 (x64_xorps src1 src2)
+      (xmm_rm_r (SseOpcode.Xorps) src1 src2))
 
 ;; Helper fxor creating `xorpd` instructions.
 (decl x64_xorpd (Xmm XmmMem) Xmm)
