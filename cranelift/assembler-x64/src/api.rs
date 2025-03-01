@@ -1,6 +1,7 @@
 //! Contains traits that a user of this assembler must implement.
 
 use crate::reg;
+use crate::xmm;
 use std::{num::NonZeroU8, ops::Index, vec::Vec};
 
 /// Describe how an instruction is emitted into a code buffer.
@@ -109,6 +110,12 @@ pub trait Registers {
 
     /// An x64 general purpose register that may be read and written.
     type ReadWriteGpr: AsReg;
+
+    /// An x64 SSE register that may be read.
+    type ReadXmm: AsReg;
+
+    /// An x64 SSE register that may be read and written.
+    type ReadWriteXmm: AsReg;
 }
 
 /// Describe how to interact with an external register type.
@@ -123,8 +130,11 @@ pub trait AsReg: Clone + std::fmt::Debug {
     fn enc(&self) -> u8;
 
     /// Return the register name.
-    fn to_string(&self, size: reg::Size) -> &str {
-        reg::enc::to_string(self.enc(), size)
+    fn to_string(&self, size: Option<reg::Size>) -> &str {
+        match size {
+            Some(size) => reg::enc::to_string(self.enc(), size),
+            None => xmm::enc::to_string(self.enc()),
+        }
     }
 }
 
@@ -155,4 +165,14 @@ pub trait RegisterVisitor<R: Registers> {
     /// Visit a read-write fixed register; for safety, this register cannot be
     /// modified in-place.
     fn fixed_read_write(&mut self, reg: &R::ReadWriteGpr);
+    /// Visit a read-only SSE register.
+    fn read_xmm(&mut self, reg: &mut R::ReadXmm);
+    /// Visit a read-write SSE register.
+    fn read_write_xmm(&mut self, reg: &mut R::ReadWriteXmm);
+    /// Visit a read-only fixed SSE register; for safety, this register cannot
+    /// be modified in-place.
+    fn fixed_read_xmm(&mut self, reg: &R::ReadXmm);
+    /// Visit a read-write fixed SSE register; for safety, this register cannot
+    /// be modified in-place.
+    fn fixed_read_write_xmm(&mut self, reg: &R::ReadWriteXmm);
 }

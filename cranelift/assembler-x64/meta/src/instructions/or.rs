@@ -21,5 +21,6 @@ pub fn list() -> Vec<Inst> {
         inst("orw", fmt("RM", [rw(r16), r(rm16)]), rex([0x66, 0x0B]).r(), _64b | compat),
         inst("orl", fmt("RM", [rw(r32), r(rm32)]), rex(0x0B).r(), _64b | compat),
         inst("orq", fmt("RM", [rw(r64), r(rm64)]), rex(0x0B).w().r(), _64b),
+        inst("orpd", fmt("A", [rw(xmm), r(rm128)]), rex([0x66, 0x0F, 0x56]).r(), _64b),
     ]
 }

@@ -3,6 +3,7 @@
 use crate::api::{AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, TrapCode};
 use crate::reg::{self, NonRspGpr, Size};
 use crate::rex::{encode_modrm, encode_sib, Imm, RexFlags};
+use crate::xmm;
 
 /// x64 memory addressing modes.
 #[derive(Clone, Debug)]
@@ -268,6 +269,28 @@ impl<R: AsReg, M: AsReg> GprMem<R, M> {
                 rex.always_emit_if_8bit_needed(gpr.enc());
             }
             GprMem::Mem(_) => {}
+        }
+    }
+}
+
+/// An XMM register or memory operand.
+#[derive(Clone, Debug)]
+#[cfg_attr(any(test, feature = "fuzz"), derive(arbitrary::Arbitrary))]
+#[allow(
+    clippy::module_name_repetitions,
+    reason = "'XmmMem' indicates this has Xmm and memory variants"
+)]
+pub enum XmmMem<R: AsReg, M: AsReg> {
+    Xmm(R),
+    Mem(Amode<M>),
+}
+
+impl<R: AsReg, M: AsReg> XmmMem<R, M> {
+    /// Pretty-print the operand.
+    pub fn to_string(&self) -> String {
+        match self {
+            XmmMem::Xmm(xmm) => xmm::enc::to_string(xmm.enc()).to_owned(),
+            XmmMem::Mem(amode) => amode.to_string(),
         }
     }
 }
