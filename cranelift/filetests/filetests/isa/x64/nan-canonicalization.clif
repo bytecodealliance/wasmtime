@@ -12,15 +12,15 @@ block0(v0: f32x4, v1: f32x4):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   addps   %xmm0, %xmm1, %xmm0
+;   addps %xmm1, %xmm0
 ;   movdqa  %xmm0, %xmm1
 ;   movl    $2143289344, %esi
 ;   movd    %esi, %xmm5
 ;   shufps  $0, %xmm5, const(0), %xmm5
 ;   cmpps   $3, %xmm0, %xmm1, %xmm0
-;   andps   %xmm5, %xmm0, %xmm5
+;   andps %xmm0, %xmm5
 ;   andnps  %xmm0, %xmm1, %xmm0
-;   orps    %xmm0, %xmm5, %xmm0
+;   orps %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -66,7 +66,7 @@ block0(v0: f64, v1: f64):
 ;   movabsq $9221120237041090560, %r11
 ;   movq    %r11, %xmm5
 ;   cmppd   $3, %xmm0, %xmm7, %xmm0
-;   andpd   %xmm5, %xmm0, %xmm5
+;   andpd %xmm0, %xmm5
 ;   andnpd  %xmm0, %xmm7, %xmm0
 ;   orpd %xmm5, %xmm0
 ;   movq    %rbp, %rsp
@@ -105,9 +105,9 @@ block0(v0: f32, v1: f32):
 ;   movl    $2143289344, %r11d
 ;   movd    %r11d, %xmm5
 ;   cmpps   $3, %xmm0, %xmm7, %xmm0
-;   andps   %xmm5, %xmm0, %xmm5
+;   andps %xmm0, %xmm5
 ;   andnps  %xmm0, %xmm7, %xmm0
-;   orps    %xmm0, %xmm5, %xmm0
+;   orps %xmm5, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

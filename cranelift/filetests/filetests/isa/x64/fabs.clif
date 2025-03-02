@@ -13,7 +13,7 @@ block0(v0: f32):
 ; block0:
 ;   movl    $2147483647, %eax
 ;   movd    %eax, %xmm4
-;   andps   %xmm0, %xmm4, %xmm0
+;   andps %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -42,7 +42,7 @@ block0(v0: f64):
 ; block0:
 ;   movabsq $9223372036854775807, %rax
 ;   movq    %rax, %xmm4
-;   andpd   %xmm0, %xmm4, %xmm0
+;   andpd %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -72,7 +72,7 @@ block0(v0: f32x4):
 ;   uninit  %xmm4
 ;   pcmpeqd %xmm4, %xmm4, %xmm4
 ;   psrld   %xmm4, $1, %xmm4
-;   andps   %xmm0, %xmm4, %xmm0
+;   andps %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -102,7 +102,7 @@ block0(v0: f64x2):
 ;   uninit  %xmm4
 ;   pcmpeqd %xmm4, %xmm4, %xmm4
 ;   psrlq   %xmm4, $1, %xmm4
-;   andpd   %xmm0, %xmm4, %xmm0
+;   andpd %xmm4, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
