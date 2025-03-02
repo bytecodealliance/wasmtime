@@ -34,7 +34,7 @@ fn test_tls_sample_application() {
 
     tls_output.blocking_write_util(request.as_bytes()).unwrap();
     client_connection
-        .blocking_close_notify(&tls_output)
+        .blocking_close_output(&tls_output)
         .unwrap();
     socket.shutdown(ShutdownType::Send).unwrap();
     let response = tls_input.blocking_read_to_end().unwrap();
