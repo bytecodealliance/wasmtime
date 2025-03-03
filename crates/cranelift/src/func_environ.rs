@@ -130,17 +130,17 @@ pub struct FuncEnvironment<'module_environment> {
     /// A function-local variable which stores the cached value of the amount of
     /// fuel remaining to execute. If used this is modified frequently so it's
     /// stored locally as a variable instead of always referenced from the field
-    /// in `*const VMRuntimeLimits`
+    /// in `*const VMStoreContext`
     fuel_var: cranelift_frontend::Variable,
 
     /// A function-local variable which caches the value of `*const
-    /// VMRuntimeLimits` for this function's vmctx argument. This pointer is stored
+    /// VMStoreContext` for this function's vmctx argument. This pointer is stored
     /// in the vmctx itself, but never changes for the lifetime of the function,
     /// so if we load it up front we can continue to use it throughout.
-    vmruntime_limits_ptr: ir::Value,
+    vmstore_context_ptr: ir::Value,
 
     /// A cached epoch deadline value, when performing epoch-based
-    /// interruption. Loaded from `VMRuntimeLimits` and reloaded after
+    /// interruption. Loaded from `VMStoreContext` and reloaded after
     /// any yield.
     epoch_deadline_var: cranelift_frontend::Variable,
 
@@ -199,7 +199,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             fuel_var: Variable::new(0),
             epoch_deadline_var: Variable::new(0),
             epoch_ptr_var: Variable::new(0),
-            vmruntime_limits_ptr: ir::Value::reserved_value(),
+            vmstore_context_ptr: ir::Value::reserved_value(),
 
             // Start with at least one fuel being consumed because even empty
             // functions should consume at least some fuel.
@@ -304,8 +304,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         }
     }
 
-    fn declare_vmruntime_limits_ptr(&mut self, builder: &mut FunctionBuilder<'_>) {
-        // We load the `*const VMRuntimeLimits` value stored within vmctx at the
+    fn declare_vmstore_context_ptr(&mut self, builder: &mut FunctionBuilder<'_>) {
+        // We load the `*const VMStoreContext` value stored within vmctx at the
         // head of the function and reuse the same value across the entire
         // function. This is possible since we know that the pointer never
         // changes for the lifetime of the function.
@@ -313,8 +313,8 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let vmctx = self.vmctx(builder.func);
         let base = builder.ins().global_value(pointer_type, vmctx);
         let offset = i32::from(self.offsets.ptr.vmctx_runtime_limits());
-        debug_assert!(self.vmruntime_limits_ptr.is_reserved_value());
-        self.vmruntime_limits_ptr =
+        debug_assert!(self.vmstore_context_ptr.is_reserved_value());
+        self.vmstore_context_ptr =
             builder
                 .ins()
                 .load(pointer_type, ir::MemFlags::trusted(), base, offset);
@@ -324,7 +324,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // On function entry we load the amount of fuel into a function-local
         // `self.fuel_var` to make fuel modifications fast locally. This cache
         // is then periodically flushed to the Store-defined location in
-        // `VMRuntimeLimits` later.
+        // `VMStoreContext` later.
         builder.declare_var(self.fuel_var, ir::types::I64);
         self.fuel_load_into_var(builder);
         self.fuel_check(builder);
@@ -372,13 +372,13 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         match op {
             // Exiting a function (via a return or unreachable) or otherwise
             // entering a different function (via a call) means that we need to
-            // update the fuel consumption in `VMRuntimeLimits` because we're
+            // update the fuel consumption in `VMStoreContext` because we're
             // about to move control out of this function itself and the fuel
             // may need to be read.
             //
             // Before this we need to update the fuel counter from our own cost
             // leading up to this function call, and then we can store
-            // `self.fuel_var` into `VMRuntimeLimits`.
+            // `self.fuel_var` into `VMStoreContext`.
             Operator::Unreachable
             | Operator::Return
             | Operator::CallIndirect { .. }
@@ -463,7 +463,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         builder.def_var(self.fuel_var, fuel);
     }
 
-    /// Loads the fuel consumption value from `VMRuntimeLimits` into `self.fuel_var`
+    /// Loads the fuel consumption value from `VMStoreContext` into `self.fuel_var`
     fn fuel_load_into_var(&mut self, builder: &mut FunctionBuilder<'_>) {
         let (addr, offset) = self.fuel_addr_offset();
         let fuel = builder
@@ -473,7 +473,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     /// Stores the fuel consumption value from `self.fuel_var` into
-    /// `VMRuntimeLimits`.
+    /// `VMStoreContext`.
     fn fuel_save_from_var(&mut self, builder: &mut FunctionBuilder<'_>) {
         let (addr, offset) = self.fuel_addr_offset();
         let fuel_consumed = builder.use_var(self.fuel_var);
@@ -483,12 +483,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     }
 
     /// Returns the `(address, offset)` of the fuel consumption within
-    /// `VMRuntimeLimits`, used to perform loads/stores later.
+    /// `VMStoreContext`, used to perform loads/stores later.
     fn fuel_addr_offset(&mut self) -> (ir::Value, ir::immediates::Offset32) {
-        debug_assert!(!self.vmruntime_limits_ptr.is_reserved_value());
+        debug_assert!(!self.vmstore_context_ptr.is_reserved_value());
         (
-            self.vmruntime_limits_ptr,
-            i32::from(self.offsets.ptr.vmruntime_limits_fuel_consumed()).into(),
+            self.vmstore_context_ptr,
+            i32::from(self.offsets.ptr.vmstore_context_fuel_consumed()).into(),
         )
     }
 
@@ -672,15 +672,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         // We keep the deadline cached in a register to speed the checks
         // in the common case (between epoch ticks) but we want to do a
         // precise check here by reloading the cache first.
-        let deadline =
-            builder.ins().load(
-                ir::types::I64,
-                ir::MemFlags::trusted(),
-                self.vmruntime_limits_ptr,
-                ir::immediates::Offset32::new(
-                    self.offsets.ptr.vmruntime_limits_epoch_deadline() as i32
-                ),
-            );
+        let deadline = builder.ins().load(
+            ir::types::I64,
+            ir::MemFlags::trusted(),
+            self.vmstore_context_ptr,
+            ir::immediates::Offset32::new(self.offsets.ptr.vmstore_context_epoch_deadline() as i32),
+        );
         builder.def_var(self.epoch_deadline_var, deadline);
         self.epoch_check_cached(builder, cur_epoch_value, continuation_block);
 
@@ -3088,10 +3085,10 @@ impl FuncEnvironment<'_> {
             self.conditionally_trap(builder, overflow, ir::TrapCode::STACK_OVERFLOW);
         }
 
-        // If the `vmruntime_limits_ptr` variable will get used then we initialize
-        // it here.
+        // If the `vmstore_context_ptr` variable will get used then we
+        // initialize it here.
         if self.tunables.consume_fuel || self.tunables.epoch_interruption {
-            self.declare_vmruntime_limits_ptr(builder);
+            self.declare_vmstore_context_ptr(builder);
         }
         // Additionally we initialize `fuel_var` if it will get used.
         if self.tunables.consume_fuel {

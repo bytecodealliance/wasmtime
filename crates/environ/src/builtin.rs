@@ -116,7 +116,7 @@ macro_rules! foreach_builtin_function {
             // Wasm code, so that it doesn't need to make a libcall to go from
             // id to `VMFuncRef`. That will be a little tricky: it will also
             // require updating the pointer to the slab in the `VMContext` (or
-            // `VMRuntimeLimits` or wherever we put it) when the slab is
+            // `VMStoreContext` or wherever we put it) when the slab is
             // resized.
             #[cfg(feature = "gc")]
             get_interned_func_ref(

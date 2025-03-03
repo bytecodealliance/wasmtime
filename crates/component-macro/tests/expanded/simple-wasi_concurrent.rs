@@ -397,6 +397,25 @@ pub mod foo {
         pub mod wall_clock {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
+            #[derive(wasmtime::component::ComponentType)]
+            #[derive(wasmtime::component::Lift)]
+            #[derive(wasmtime::component::Lower)]
+            #[component(record)]
+            #[derive(Clone, Copy)]
+            pub struct WallClock {}
+            impl core::fmt::Debug for WallClock {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    f.debug_struct("WallClock").finish()
+                }
+            }
+            const _: () = {
+                assert!(
+                    0 == < WallClock as wasmtime::component::ComponentType >::SIZE32
+                );
+                assert!(
+                    1 == < WallClock as wasmtime::component::ComponentType >::ALIGN32
+                );
+            };
             pub trait Host {}
             pub trait GetHost<
                 T,

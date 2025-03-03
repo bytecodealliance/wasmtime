@@ -262,6 +262,56 @@ pub mod a {
         pub mod interface_with_dead_type {
             #[allow(unused_imports)]
             use wasmtime::component::__internal::{anyhow, Box};
+            pub type LiveType = super::super::super::a::b::interface_with_live_type::LiveType;
+            const _: () = {
+                assert!(4 == < LiveType as wasmtime::component::ComponentType >::SIZE32);
+                assert!(
+                    4 == < LiveType as wasmtime::component::ComponentType >::ALIGN32
+                );
+            };
+            #[derive(wasmtime::component::ComponentType)]
+            #[derive(wasmtime::component::Lift)]
+            #[derive(wasmtime::component::Lower)]
+            #[component(record)]
+            #[derive(Clone, Copy)]
+            pub struct DeadType {
+                #[component(name = "a")]
+                pub a: u32,
+            }
+            impl core::fmt::Debug for DeadType {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    f.debug_struct("DeadType").field("a", &self.a).finish()
+                }
+            }
+            const _: () = {
+                assert!(4 == < DeadType as wasmtime::component::ComponentType >::SIZE32);
+                assert!(
+                    4 == < DeadType as wasmtime::component::ComponentType >::ALIGN32
+                );
+            };
+            #[derive(wasmtime::component::ComponentType)]
+            #[derive(wasmtime::component::Lift)]
+            #[derive(wasmtime::component::Lower)]
+            #[component(variant)]
+            #[derive(Clone, Copy)]
+            pub enum V {
+                #[component(name = "a")]
+                A(LiveType),
+                #[component(name = "b")]
+                B(DeadType),
+            }
+            impl core::fmt::Debug for V {
+                fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                    match self {
+                        V::A(e) => f.debug_tuple("V::A").field(e).finish(),
+                        V::B(e) => f.debug_tuple("V::B").field(e).finish(),
+                    }
+                }
+            }
+            const _: () = {
+                assert!(8 == < V as wasmtime::component::ComponentType >::SIZE32);
+                assert!(4 == < V as wasmtime::component::ComponentType >::ALIGN32);
+            };
             #[wasmtime::component::__internal::trait_variant_make(::core::marker::Send)]
             pub trait Host: Send {}
             pub trait GetHost<

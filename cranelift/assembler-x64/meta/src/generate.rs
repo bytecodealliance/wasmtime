@@ -59,6 +59,8 @@ pub fn isle_definitions(f: &mut Formatter, insts: &[dsl::Inst]) {
     f.line("    ;; Used for instructions that return a GPR (including `GprMem` variants with", None);
     f.line("    ;; a GPR as the first argument).", None);
     f.line("    (RetGpr (inst MInst) (gpr Gpr))", None);
+    f.line("    ;; Used for instructions that return an XMM register.", None);
+    f.line("    (RetXmm (inst MInst) (xmm Xmm))", None);
     f.line("    ;; TODO: eventually add more variants for multi-return, XMM, etc.; see", None);
     f.line("    ;; https://github.com/bytecodealliance/wasmtime/pull/10276", None);
     f.line("))", None);
@@ -68,6 +70,12 @@ pub fn isle_definitions(f: &mut Formatter, insts: &[dsl::Inst]) {
     f.line("(decl emit_ret_gpr (AssemblerOutputs) Gpr)", None);
     f.line("(rule (emit_ret_gpr (AssemblerOutputs.RetGpr inst gpr))", None);
     f.line("    (let ((_ Unit (emit inst))) gpr))", None);
+    f.empty_line();
+
+    f.line(";; Directly emit instructions that return an XMM register.", None);
+    f.line("(decl emit_ret_xmm (AssemblerOutputs) Xmm)", None);
+    f.line("(rule (emit_ret_xmm (AssemblerOutputs.RetXmm inst xmm))", None);
+    f.line("    (let ((_ Unit (emit inst))) xmm))", None);
     f.empty_line();
 
     f.line(";; Pass along the side-effecting instruction for later emission.", None);

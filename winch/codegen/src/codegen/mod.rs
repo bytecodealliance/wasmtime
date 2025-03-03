@@ -1093,7 +1093,7 @@ where
 
     /// Checks if fuel consumption is enabled and emits a series of instructions
     /// that check the current fuel usage by performing a zero-comparison with
-    /// the number of units stored in `VMRuntimeLimits`.
+    /// the number of units stored in `VMStoreContext`.
     pub fn maybe_emit_fuel_check(&mut self) -> Result<()> {
         if !self.tunables.consume_fuel {
             return Ok(());
@@ -1141,10 +1141,10 @@ where
     }
 
     /// Emits a series of instructions that load the `fuel_consumed` field from
-    /// `VMRuntimeLimits`.
+    /// `VMStoreContext`.
     fn emit_load_fuel_consumed(&mut self, fuel_reg: Reg) -> Result<()> {
         let limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
-        let fuel_offset = self.env.vmoffsets.ptr.vmruntime_limits_fuel_consumed();
+        let fuel_offset = self.env.vmoffsets.ptr.vmstore_context_fuel_consumed();
         self.masm.load_ptr(
             self.masm.address_at_vmctx(u32::from(limits_offset))?,
             writable!(fuel_reg),
@@ -1222,7 +1222,7 @@ where
     ) -> Result<()> {
         let epoch_ptr_offset = self.env.vmoffsets.ptr.vmctx_epoch_ptr();
         let runtime_limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
-        let epoch_deadline_offset = self.env.vmoffsets.ptr.vmruntime_limits_epoch_deadline();
+        let epoch_deadline_offset = self.env.vmoffsets.ptr.vmstore_context_epoch_deadline();
 
         // Load the current epoch value into `epoch_counter_var`.
         self.masm.load_ptr(
@@ -1238,7 +1238,7 @@ where
             OperandSize::S64,
         )?;
 
-        // Load the `VMRuntimeLimits`.
+        // Load the `VMStoreContext`.
         self.masm.load_ptr(
             self.masm
                 .address_at_vmctx(u32::from(runtime_limits_offset))?,
@@ -1254,7 +1254,7 @@ where
         )
     }
 
-    /// Increments the fuel consumed in `VMRuntimeLimits` by flushing
+    /// Increments the fuel consumed in `VMStoreContext` by flushing
     /// `self.fuel_consumed` to memory.
     fn emit_fuel_increment(&mut self) -> Result<()> {
         let fuel_at_point = std::mem::replace(&mut self.fuel_consumed, 0);
@@ -1263,10 +1263,10 @@ where
         }
 
         let limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
-        let fuel_offset = self.env.vmoffsets.ptr.vmruntime_limits_fuel_consumed();
+        let fuel_offset = self.env.vmoffsets.ptr.vmstore_context_fuel_consumed();
         let limits_reg = self.context.any_gpr(self.masm)?;
 
-        // Load `VMRuntimeLimits` into the `limits_reg` reg.
+        // Load `VMStoreContext` into the `limits_reg` reg.
         self.masm.load_ptr(
             self.masm.address_at_vmctx(u32::from(limits_offset))?,
             writable!(limits_reg),
@@ -1289,7 +1289,7 @@ where
             OperandSize::S64,
         )?;
 
-        // Store the updated fuel consumed to `VMRuntimeLimits`.
+        // Store the updated fuel consumed to `VMStoreContext`.
         self.masm.store(
             scratch!(M).into(),
             self.masm

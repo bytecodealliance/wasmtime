@@ -107,7 +107,14 @@ impl dsl::Inst {
         if let Some(op) = self.format.uses_memory() {
             f.empty_line();
             f.comment("Emit trap.");
-            fmtln!(f, "if let GprMem::Mem({op}) = &self.{op} {{");
+            match op {
+                crate::dsl::Location::rm128 => {
+                    fmtln!(f, "if let XmmMem::Mem({op}) = &self.{op} {{");
+                }
+                _ => {
+                    fmtln!(f, "if let GprMem::Mem({op}) = &self.{op} {{");
+                }
+            }
             f.indent(|f| {
                 fmtln!(f, "if let Some(trap_code) = {op}.trap_code() {{");
                 f.indent(|f| {
@@ -151,19 +158,42 @@ impl dsl::Inst {
                         fmtln!(f, "visitor.fixed_{call}(&R::{ty}Gpr::new({fixed}));");
                     }
                     Reg(reg) => {
-                        let call = o.mutability.generate_regalloc_call();
-                        fmtln!(f, "visitor.{call}(self.{reg}.as_mut());");
+                        match reg.bits() {
+                            128 => {
+                                let call = o.mutability.generate_xmm_regalloc_call();
+                                fmtln!(f, "visitor.{call}(self.{reg}.as_mut());");
+                            }
+                            _ => {
+                                let call = o.mutability.generate_regalloc_call();
+                                fmtln!(f, "visitor.{call}(self.{reg}.as_mut());");
+                            }
+                        };
                     }
                     RegMem(rm) => {
-                        let call = o.mutability.generate_regalloc_call();
-                        fmtln!(f, "match &mut self.{rm} {{");
-                        f.indent(|f| {
-                            fmtln!(f, "GprMem::Gpr(r) => visitor.{call}(r),");
-                            fmtln!(
-                                f,
-                                "GprMem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read(r)),"
-                            );
-                        });
+                        match rm.bits() {
+                            128 => {
+                                let call = o.mutability.generate_xmm_regalloc_call();
+                                fmtln!(f, "match &mut self.{rm} {{");
+                                f.indent(|f| {
+                                    fmtln!(f, "XmmMem::Xmm(r) => visitor.{call}(r),");
+                                    fmtln!(
+                                        f,
+                                        "XmmMem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read(r)),"
+                                    );
+                                });
+                            }
+                            _ => {
+                                let call = o.mutability.generate_regalloc_call();
+                                fmtln!(f, "match &mut self.{rm} {{");
+                                f.indent(|f| {
+                                    fmtln!(f, "GprMem::Gpr(r) => visitor.{call}(r),");
+                                    fmtln!(
+                                        f,
+                                        "GprMem::Mem(m) => m.registers_mut().iter_mut().for_each(|r| visitor.read(r)),"
+                                    );
+                                });
+                            }
+                        };
                         fmtln!(f, "}}");
                     }
                 }
@@ -278,10 +308,16 @@ impl dsl::Inst {
                         OperandKind::FixedReg(_) => fmtln!(f, "todo!()"),
                         // One read/write register output? Output the instruction
                         // and that register.
-                        OperandKind::Reg(_) => {
-                            fmtln!(f, "let gpr = {}.as_ref().write.to_reg();", results[0].location);
-                            fmtln!(f, "AssemblerOutputs::RetGpr {{ inst, gpr }}")
-                        }
+                        OperandKind::Reg(r) => match r.bits() {
+                            128 => {
+                                fmtln!(f, "let xmm = {}.as_ref().write.to_reg();", results[0].location);
+                                fmtln!(f, "AssemblerOutputs::RetXmm {{ inst, xmm }}")
+                            }
+                            _ => {
+                                fmtln!(f, "let gpr = {}.as_ref().write.to_reg();", results[0].location);
+                                fmtln!(f, "AssemblerOutputs::RetGpr {{ inst, gpr }}")
+                            }
+                        },
                         // One read/write regmem output? We need to output
                         // everything and it'll internally disambiguate which was
                         // emitted (e.g. the mem variant or the register variant).
@@ -289,16 +325,32 @@ impl dsl::Inst {
                             assert_eq!(results.len(), 1);
                             let l = results[0].location;
                             fmtln!(f, "match {l} {{");
-                            f.indent(|f| {
-                                fmtln!(f, "asm::GprMem::Gpr(reg) => {{");
-                                fmtln!(f, "let gpr = reg.write.to_reg();");
-                                fmtln!(f, "AssemblerOutputs::RetGpr {{ inst, gpr }} ");
-                                fmtln!(f, "}}");
+                            match l.bits() {
+                                128 => {
+                                    f.indent(|f| {
+                                        fmtln!(f, "asm::XmmMem::Xmm(reg) => {{");
+                                        fmtln!(f, "let xmm = reg.write.to_reg();");
+                                        fmtln!(f, "AssemblerOutputs::RetXmm {{ inst, xmm }} ");
+                                        fmtln!(f, "}}");
 
-                                fmtln!(f, "asm::GprMem::Mem(_) => {{");
-                                fmtln!(f, "AssemblerOutputs::SideEffect {{ inst }} ");
-                                fmtln!(f, "}}");
-                            });
+                                        fmtln!(f, "asm::XmmMem::Mem(_) => {{");
+                                        fmtln!(f, "AssemblerOutputs::SideEffect {{ inst }} ");
+                                        fmtln!(f, "}}");
+                                    });
+                                }
+                                _ => {
+                                    f.indent(|f| {
+                                        fmtln!(f, "asm::GprMem::Gpr(reg) => {{");
+                                        fmtln!(f, "let gpr = reg.write.to_reg();");
+                                        fmtln!(f, "AssemblerOutputs::RetGpr {{ inst, gpr }} ");
+                                        fmtln!(f, "}}");
+
+                                        fmtln!(f, "asm::GprMem::Mem(_) => {{");
+                                        fmtln!(f, "AssemblerOutputs::SideEffect {{ inst }} ");
+                                        fmtln!(f, "}}");
+                                    });
+                                }
+                            };
                             fmtln!(f, "}}");
                         }
                     },
@@ -413,6 +465,10 @@ pub enum IsleConstructor {
     /// This constructor produces a `Gpr` value, meaning that it will write the
     /// result to a `Gpr`.
     RetGpr,
+
+    /// This constructor produces an `Xmm` value, meaning that it will write the
+    /// result to an `Xmm`.
+    RetXmm,
 }
 
 impl IsleConstructor {
@@ -421,6 +477,7 @@ impl IsleConstructor {
         match self {
             IsleConstructor::RetMemorySideEffect => "SideEffectNoResult",
             IsleConstructor::RetGpr => "Gpr",
+            IsleConstructor::RetXmm => "Xmm",
         }
     }
 
@@ -430,6 +487,7 @@ impl IsleConstructor {
         match self {
             IsleConstructor::RetMemorySideEffect => "defer_side_effect",
             IsleConstructor::RetGpr => "emit_ret_gpr",
+            IsleConstructor::RetXmm => "emit_ret_xmm",
         }
     }
 
@@ -438,6 +496,7 @@ impl IsleConstructor {
         match self {
             IsleConstructor::RetMemorySideEffect => "_mem",
             IsleConstructor::RetGpr => "",
+            IsleConstructor::RetXmm => "",
         }
     }
 }

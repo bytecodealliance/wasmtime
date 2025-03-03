@@ -2964,6 +2964,10 @@
 (extern extractor is_gpr is_gpr)
 (decl is_gpr_mem (GprMem) GprMemImm)
 (extern extractor is_gpr_mem is_gpr_mem)
+(decl is_xmm_mem (XmmMem) XmmMem)
+(extern extractor is_xmm_mem is_xmm_mem)
+(decl is_xmm (Xmm) XmmMem)
+(extern extractor is_xmm is_xmm)
 
 ;; Helper for emitting `and` instructions.
 (decl x64_and (Type Gpr GprMemImm) Gpr)
@@ -3592,11 +3596,12 @@
 
 ;; Helper for creating `orpd` instructions.
 (decl x64_orpd (Xmm XmmMem) Xmm)
-(rule 0 (x64_orpd src1 src2)
-      (xmm_rm_r (SseOpcode.Orpd) src1 src2))
-(rule 1 (x64_orpd src1 src2)
+(rule 2 (x64_orpd src1 src2)
       (if-let true (use_avx))
       (xmm_rmir_vex (AvxOpcode.Vorpd) src1 src2))
+(rule 1 (x64_orpd src1 (is_xmm_mem src2)) (x64_orpd_a src1 src2))
+(rule 0 (x64_orpd src1 src2)
+      (xmm_rm_r (SseOpcode.Orpd) src1 src2))
 
 ;; Helper fxor creating `pxor` instructions.
 (decl x64_pxor (Xmm XmmMem) Xmm)

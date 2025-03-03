@@ -92,7 +92,7 @@ pub(crate) struct MacroAssembler {
     asm: Assembler,
     /// ISA flags.
     flags: x64_settings::Flags,
-    /// Shared flags.
+    /// Shared flags.vmcontext_store_context
     shared_flags: settings::Flags,
     /// The target pointer size.
     ptr_size: OperandSize,
@@ -126,12 +126,12 @@ impl Masm for MacroAssembler {
         let scratch = regs::scratch();
 
         self.load_ptr(
-            self.address_at_reg(vmctx, ptr_size.vmcontext_runtime_limits().into())?,
+            self.address_at_reg(vmctx, ptr_size.vmcontext_store_context().into())?,
             writable!(scratch),
         )?;
 
         self.load_ptr(
-            Address::offset(scratch, ptr_size.vmruntime_limits_stack_limit().into()),
+            Address::offset(scratch, ptr_size.vmstore_context_stack_limit().into()),
             writable!(scratch),
         )?;
 
@@ -310,7 +310,7 @@ impl Masm for MacroAssembler {
         mut load_callee: impl FnMut(&mut Self) -> Result<(CalleeKind, CallingConvention)>,
     ) -> Result<u32> {
         let alignment: u32 = <Self::ABI as abi::ABI>::call_stack_align().into();
-        let addend: u32 = <Self::ABI as abi::ABI>::arg_base_offset().into();
+        let addend: u32 = <Self::ABI as abi::ABI>::initial_frame_size().into();
         let delta = calculate_frame_adjustment(self.sp_offset()?.as_u32(), addend, alignment);
         let aligned_args_size = align_to(stack_args_size, alignment);
         let total_stack = delta + aligned_args_size;

@@ -293,8 +293,16 @@ pub trait RustGenerator<'a> {
 
     fn modes_of(&self, ty: TypeId) -> Vec<(String, TypeMode)> {
         let info = self.info(ty);
+        // Info only populated for types that are passed to and from functions. For
+        // types which are not, default to the ownership setting.
         if !info.owned && !info.borrowed {
-            return Vec::new();
+            return vec![(
+                self.param_name(ty),
+                match self.ownership() {
+                    Ownership::Owning => TypeMode::Owned,
+                    Ownership::Borrowing { .. } => TypeMode::AllBorrowed("'a"),
+                },
+            )];
         }
         let mut result = Vec::new();
         let first_mode =
@@ -431,6 +439,7 @@ pub fn to_rust_ident(name: &str) -> String {
         "virtual" => "virtual_".into(),
         "yield" => "yield_".into(),
         "try" => "try_".into(),
+        "gen" => "gen_".into(),
         s => s.to_snake_case(),
     }
 }
