@@ -26,45 +26,16 @@ impl dsl::Operand {
         }
     }
 
-    #[must_use]
-    pub fn generate_mut_ty(&self, read_ty: &str, read_write_ty: &str) -> Option<String> {
-        use dsl::Mutability::*;
-        use dsl::OperandKind::*;
-        let pick_ty = match self.mutability {
-            Read => read_ty,
-            ReadWrite => read_write_ty,
-        };
-        match self.location.kind() {
-            FixedReg(_) => None,
-            Imm(loc) => {
-                let bits = loc.bits();
-                if self.extension.is_sign_extended() {
-                    Some(format!("Simm{bits}"))
-                } else {
-                    Some(format!("Imm{bits}"))
-                }
-            }
-            Reg(r) => match r.bits() {
-                128 => Some(format!("Xmm<{pick_ty}>")),
-                _ => Some(format!("Gpr<{pick_ty}>")),
-            },
-            RegMem(rm) => match rm.bits() {
-                128 => Some(format!("XmmMem<{pick_ty}, Gpr>")),
-                _ => Some(format!("GprMem<{pick_ty}, {read_ty}>")),
-            },
-        }
-    }
-
-    /// Returns the type of this operand in ISLE as part of the
-    /// `IsleConstructorRaw` variants.
+    /// Returns the type of this operand in ISLE as a part of the ISLE "raw"
+    /// constructors.
     pub fn isle_param_raw(&self) -> String {
         match self.location.kind() {
             OperandKind::Imm(loc) => {
                 let bits = loc.bits();
                 if self.extension.is_sign_extended() {
-                    format!("AssemblerSimm{bits}")
+                    format!("i{bits}")
                 } else {
-                    format!("AssemblerImm{bits}")
+                    format!("u{bits}")
                 }
             }
             OperandKind::Reg(r) => match r.bits() {
@@ -104,9 +75,9 @@ impl dsl::Operand {
             OperandKind::Imm(loc) => {
                 let bits = loc.bits();
                 if self.extension.is_sign_extended() {
-                    format!("&cranelift_assembler_x64::Simm{bits}")
+                    format!("i{bits}")
                 } else {
-                    format!("&cranelift_assembler_x64::Imm{bits}")
+                    format!("u{bits}")
                 }
             }
             OperandKind::RegMem(rm) => match rm.bits() {
@@ -126,52 +97,33 @@ impl dsl::Operand {
     /// Effectively converts `self.rust_param_raw()` to the assembler type.
     pub fn rust_convert_isle_to_assembler(&self) -> Option<&'static str> {
         match self.location.kind() {
-            OperandKind::Reg(r) => match r.bits() {
-                128 => Some(match self.mutability {
-                    Mutability::Read => "cranelift_assembler_x64::Xmm::new",
-                    Mutability::ReadWrite => "self.convert_xmm_to_assembler_read_write_xmm",
-                }),
-                _ => Some(match self.mutability {
-                    Mutability::Read => "cranelift_assembler_x64::Gpr::new",
-                    Mutability::ReadWrite => "self.convert_gpr_to_assembler_read_write_gpr",
-                }),
+            OperandKind::Reg(r) => Some(match (r.bits(), self.mutability) {
+                (128, Mutability::Read) => "cranelift_assembler_x64::Xmm::new",
+                (128, Mutability::ReadWrite) => "self.convert_xmm_to_assembler_read_write_xmm",
+                (_, Mutability::Read) => "cranelift_assembler_x64::Gpr::new",
+                (_, Mutability::ReadWrite) => "self.convert_gpr_to_assembler_read_write_gpr",
+            }),
+            OperandKind::RegMem(r) => Some(match (r.bits(), self.mutability) {
+                (128, Mutability::Read) => "self.convert_xmm_mem_to_assembler_read_xmm_mem",
+                (128, Mutability::ReadWrite) => "self.convert_xmm_mem_to_assembler_read_write_xmm_mem",
+                (_, Mutability::Read) => "self.convert_gpr_mem_to_assembler_read_gpr_mem",
+                (_, Mutability::ReadWrite) => "self.convert_gpr_mem_to_assembler_read_write_gpr_mem",
+            }),
+            OperandKind::Imm(loc) => match (self.extension.is_sign_extended(), loc.bits()) {
+                (true, 8) => Some("cranelift_assembler_x64::Simm8::new"),
+                (true, 16) => Some("cranelift_assembler_x64::Simm16::new"),
+                (true, 32) => Some("cranelift_assembler_x64::Simm32::new"),
+                (false, 8) => Some("cranelift_assembler_x64::Imm8::new"),
+                (false, 16) => Some("cranelift_assembler_x64::Imm16::new"),
+                (false, 32) => Some("cranelift_assembler_x64::Imm32::new"),
+                _ => None,
             },
-            OperandKind::RegMem(rm) => match rm.bits() {
-                128 => Some(match self.mutability {
-                    Mutability::Read => "self.convert_xmm_mem_to_assembler_read_xmm_mem",
-                    Mutability::ReadWrite => "self.convert_xmm_mem_to_assembler_read_write_xmm_mem",
-                }),
-                _ => Some(match self.mutability {
-                    Mutability::Read => "self.convert_gpr_mem_to_assembler_read_gpr_mem",
-                    Mutability::ReadWrite => "self.convert_gpr_mem_to_assembler_read_write_gpr_mem",
-                }),
-            },
-            OperandKind::FixedReg(_) | OperandKind::Imm(_) => None,
+            OperandKind::FixedReg(_) => None,
         }
     }
 }
 
 impl dsl::Location {
-    /// `<operand type>`, if the operand has a type (i.e., not fixed registers).
-    #[must_use]
-    pub fn generate_type(&self, generic: Option<String>) -> Option<String> {
-        use dsl::Location::*;
-        let generic = match generic {
-            Some(ty) => format!("<{ty}>"),
-            None => String::new(),
-        };
-        match self {
-            al | ax | eax | rax | cl => None,
-            imm8 => Some("Imm8".into()),
-            imm16 => Some("Imm16".into()),
-            imm32 => Some("Imm32".into()),
-            r8 | r16 | r32 | r64 => Some(format!("Gpr{generic}")),
-            rm8 | rm16 | rm32 | rm64 => Some(format!("GprMem{generic}")),
-            xmm => Some(format!("Xmm{generic}")),
-            rm128 => Some(format!("XmmMem{generic}")),
-        }
-    }
-
     /// `self.<operand>.to_string(...)`
     #[must_use]
     pub fn generate_to_string(&self, extension: dsl::Extension) -> String {
@@ -200,7 +152,7 @@ impl dsl::Location {
 
     /// `Size::<operand size>`
     #[must_use]
-    pub fn generate_size(&self) -> Option<&str> {
+    fn generate_size(&self) -> Option<&str> {
         use dsl::Location::*;
         match self {
             al | ax | eax | rax | cl | imm8 | imm16 | imm32 => None,

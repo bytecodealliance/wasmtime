@@ -52,23 +52,6 @@ pub fn isle_macro(f: &mut Formatter, insts: &[dsl::Inst]) {
 /// Generate the ISLE definitions that match the `isle_assembler_methods!` macro
 /// above.
 pub fn isle_definitions(f: &mut Formatter, insts: &[dsl::Inst]) {
-    f.line("(type AssemblerImm8 extern (enum))", None);
-    f.line("(type AssemblerSimm8 extern (enum))", None);
-    f.line("(type AssemblerImm16 extern (enum))", None);
-    f.line("(type AssemblerSimm16 extern (enum))", None);
-    f.line("(type AssemblerImm32 extern (enum))", None);
-    f.line("(type AssemblerSimm32 extern (enum))", None);
-    f.line("(type AssemblerReadGpr extern (enum))", None);
-    f.line("(type AssemblerReadWriteGpr extern (enum))", None);
-    f.line("(type AssemblerReadGprMem extern (enum))", None);
-    f.line("(type AssemblerReadWriteGprMem extern (enum))", None);
-    f.line("(type AssemblerInst extern (enum))", None);
-    f.line("(type AssemblerReadXmm extern (enum))", None);
-    f.line("(type AssemblerReadWriteXmm extern (enum))", None);
-    f.line("(type AssemblerReadXmmMem extern (enum))", None);
-    f.line("(type AssemblerReadWriteXmmMem extern (enum))", None);
-    f.empty_line();
-
     f.line("(type AssemblerOutputs (enum", None);
     f.line("    ;; Used for instructions that have ISLE `SideEffect`s (memory stores, traps,", None);
     f.line("    ;; etc.) and do not return a `Value`.", None);

@@ -42,12 +42,6 @@ type BoxSyntheticAmode = Box<SyntheticAmode>;
 /// When interacting with the external assembler (see `external.rs`), we
 /// need to fix the types we'll use.
 type AssemblerInst = asm::Inst<CraneliftRegisters>;
-type AssemblerImm8 = asm::Imm8;
-type AssemblerSimm8 = asm::Simm8;
-type AssemblerImm16 = asm::Imm16;
-type AssemblerSimm16 = asm::Simm16;
-type AssemblerImm32 = asm::Imm32;
-type AssemblerSimm32 = asm::Simm32;
 
 pub struct SinkableLoad {
     inst: Inst,
@@ -958,56 +952,44 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     ///// External assembler methods.
     ////////////////////////////////////////////////////////////////////////////
 
-    fn is_imm8(&mut self, src: &GprMemImm) -> Option<AssemblerImm8> {
+    fn is_imm8(&mut self, src: &GprMemImm) -> Option<u8> {
         match src.clone().to_reg_mem_imm() {
-            RegMemImm::Imm { simm32 } => {
-                let imm = u8::try_from(simm32).ok()?;
-                Some(AssemblerImm8::new(imm))
-            }
+            RegMemImm::Imm { simm32 } => Some(u8::try_from(simm32).ok()?),
             _ => None,
         }
     }
 
-    fn is_simm8(&mut self, src: &GprMemImm) -> Option<AssemblerSimm8> {
+    fn is_simm8(&mut self, src: &GprMemImm) -> Option<i8> {
         match src.clone().to_reg_mem_imm() {
-            RegMemImm::Imm { simm32 } => {
-                let imm = i8::try_from(simm32).ok()?;
-                Some(AssemblerSimm8::new(imm))
-            }
+            RegMemImm::Imm { simm32 } => Some(i8::try_from(simm32).ok()?),
             _ => None,
         }
     }
 
-    fn is_imm16(&mut self, src: &GprMemImm) -> Option<AssemblerImm16> {
+    fn is_imm16(&mut self, src: &GprMemImm) -> Option<u16> {
         match src.clone().to_reg_mem_imm() {
-            RegMemImm::Imm { simm32 } => {
-                let imm = u16::try_from(simm32).ok()?;
-                Some(AssemblerImm16::new(imm))
-            }
+            RegMemImm::Imm { simm32 } => Some(u16::try_from(simm32).ok()?),
             _ => None,
         }
     }
 
-    fn is_simm16(&mut self, src: &GprMemImm) -> Option<AssemblerSimm16> {
+    fn is_simm16(&mut self, src: &GprMemImm) -> Option<i16> {
         match src.clone().to_reg_mem_imm() {
-            RegMemImm::Imm { simm32 } => {
-                let imm = i16::try_from(simm32).ok()?;
-                Some(AssemblerSimm16::new(imm))
-            }
+            RegMemImm::Imm { simm32 } => Some(i16::try_from(simm32).ok()?),
             _ => None,
         }
     }
 
-    fn is_imm32(&mut self, src: &GprMemImm) -> Option<AssemblerImm32> {
+    fn is_imm32(&mut self, src: &GprMemImm) -> Option<u32> {
         match src.clone().to_reg_mem_imm() {
-            RegMemImm::Imm { simm32 } => Some(AssemblerImm32::new(simm32)),
+            RegMemImm::Imm { simm32 } => Some(simm32),
             _ => None,
         }
     }
 
-    fn is_simm32(&mut self, src: &GprMemImm) -> Option<AssemblerSimm32> {
+    fn is_simm32(&mut self, src: &GprMemImm) -> Option<i32> {
         match src.clone().to_reg_mem_imm() {
-            RegMemImm::Imm { simm32 } => Some(AssemblerSimm32::new(simm32 as i32)),
+            RegMemImm::Imm { simm32 } => Some(simm32 as i32),
             _ => None,
         }
     }
@@ -1039,10 +1021,6 @@ impl Context for IsleContext<'_, '_, MInst, X64Backend> {
             RegMem::Reg { reg } => XmmMem::new(RegMem::Reg { reg }),
             RegMem::Mem { addr } => XmmMem::new(RegMem::Mem { addr }),
         }
-    }
-
-    fn u8_to_assembler_imm8(&mut self, val: u8) -> AssemblerImm8 {
-        AssemblerImm8::new(val)
     }
 }
 
