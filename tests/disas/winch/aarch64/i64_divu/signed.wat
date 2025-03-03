@@ -12,6 +12,7 @@
 ;; wasm[0]::function[0]:
 ;;       stp     x29, x30, [sp, #-0x10]!
 ;;       mov     x29, sp
+;;       str     x28, [sp, #-0x10]!
 ;;       mov     x28, sp
 ;;       mov     x9, x0
 ;;       sub     x28, x28, #0x10
@@ -22,12 +23,13 @@
 ;;       mov     x0, x16
 ;;       mov     x16, #-1
 ;;       mov     x1, x16
-;;       cbz     x0, #0x50
-;;   34: udiv    x1, x1, x0
+;;       cbz     x0, #0x58
+;;   38: udiv    x1, x1, x0
 ;;       mov     x0, x1
 ;;       add     x28, x28, #0x10
 ;;       mov     sp, x28
 ;;       mov     sp, x28
+;;       ldr     x28, [sp], #0x10
 ;;       ldp     x29, x30, [sp], #0x10
 ;;       ret
-;;   50: .byte   0x1f, 0xc1, 0x00, 0x00
+;;   58: .byte   0x1f, 0xc1, 0x00, 0x00

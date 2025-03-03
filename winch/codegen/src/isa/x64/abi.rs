@@ -33,6 +33,12 @@ impl ABI for X64ABI {
         16
     }
 
+    fn initial_frame_size() -> u8 {
+        // The initial frame size is equal to the space allocated to save the
+        // return address and the frame pointer.
+        Self::arg_base_offset()
+    }
+
     fn word_bits() -> u8 {
         64
     }

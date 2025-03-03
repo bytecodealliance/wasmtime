@@ -9,6 +9,20 @@ use wasmtime_environ::{WasmHeapType, WasmRefType, WasmValType};
 #[derive(Default)]
 pub(crate) struct Aarch64ABI;
 
+/// The x28 register serves as the shadow stack pointer. For further details,
+/// please refer to [`crate::isa::aarch64::regs::shadow_sp`].
+///
+/// This register is designated as callee-saved to prevent corruption during
+/// function calls. This is especially important for Wasm-to-Wasm calls in
+/// Winch-generated code, as Winch's default calling convention does not define
+/// any callee-saved registers.
+///
+/// Note that 16 bytes are used to save the shadow stack pointer register even
+/// though only 8 are needed. 16 is used for simplicitly to ensure that the
+/// 16-byte alignment requirement for memory addressing is met at the function's
+/// prologue and epilogue.
+pub const SHADOW_STACK_POINTER_SLOT_SIZE: u8 = 16;
+
 impl ABI for Aarch64ABI {
     // TODO change to 16 once SIMD is supported
     fn stack_align() -> u8 {
@@ -20,7 +34,40 @@ impl ABI for Aarch64ABI {
     }
 
     fn arg_base_offset() -> u8 {
+        // Two 8-byte slots:
+        // * One for link register
+        // * One for the frame pointer
+        //
+        // ┌──────────┬───────── Argument base
+        // │   LR     │
+        // │          │
+        // ├──────────┼
+        // │          │
+        // │   FP     │
+        // └──────────┴ -> 16
         16
+    }
+
+    fn initial_frame_size() -> u8 {
+        // The initial frame size is composed of 4 8-byte slots:
+        // * Two slots for the link register and the frame pointer. See
+        //   [`Self::arg_base_offset`]
+        // * Two for the shadow stack pointer register. See
+        //   [`SHADOW_STACK_POINTER_SIZE`]
+        //
+        // ┌──────────┬───────── Argument base
+        // │   LR     │
+        // │          │
+        // ├──────────┼
+        // │          │
+        // │   FP     │
+        // ┌──────────┬
+        // │          │
+        // │          │
+        // │          │
+        // │   x28    │
+        // └──────────┴ -> 32
+        Self::arg_base_offset() + SHADOW_STACK_POINTER_SLOT_SIZE
     }
 
     fn word_bits() -> u8 {
