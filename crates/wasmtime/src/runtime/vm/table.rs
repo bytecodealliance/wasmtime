@@ -287,6 +287,10 @@ unsafe fn alloc_dynamic_table_elements<T>(len: usize) -> Result<Vec<Option<T>>> 
         "null table elements are represented with zeroed memory"
     );
 
+    if len == 0 {
+        return Ok(vec![]);
+    }
+
     let align = mem::align_of::<Option<T>>();
 
     let size = mem::size_of::<Option<T>>();
