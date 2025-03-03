@@ -59,6 +59,8 @@ macro_rules! assert_test_exists {
 foreach_tls!(assert_test_exists);
 
 #[tokio::test(flavor = "multi_thread")]
+// test uses TLS but riscv/s390x don't support that yet
+#[cfg_attr(any(target_arch = "riscv64", target_arch = "s390x"), ignore)]
 async fn tls_sample_application() -> Result<()> {
     run_wasi(
         TLS_SAMPLE_APPLICATION_COMPONENT,
