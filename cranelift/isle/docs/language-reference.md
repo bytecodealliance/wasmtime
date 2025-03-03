@@ -41,7 +41,7 @@ the real code [here](https://github.com/bytecodealliance/wasmtime/blob/main/cran
       (value_reg (add
                    (put_in_reg x)
                    ;; `y` is a `RegMemImm.Imm`.
-                   y)))
+                   y))))
 ```
 
 ISLE lets the compiler backend developer express this information in a
