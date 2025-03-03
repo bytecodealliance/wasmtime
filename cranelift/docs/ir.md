@@ -1,6 +1,6 @@
 # Cranelift IR Reference
 
-## Forward
+## Foreword
 
 This document is likely to be outdated and missing some important
 information. It is recommended to look at the list of instructions as
