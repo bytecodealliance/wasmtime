@@ -3,7 +3,7 @@
 You can also [browse this source code online][code] and clone the wasmtime
 repository to run the example locally.
 
-[code]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/wasi/main.rs
+[code]: https://github.com/bytecodealliance/wasmtime/blob/main/examples/wasip2/main.rs
 
 This example shows how to use the [`wasmtime-wasi`] crate to define WASI
 functions within a [`Linker`] which can then be used to instantiate a
