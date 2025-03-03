@@ -529,7 +529,14 @@ unsafe fn gc_alloc_raw(
         }
     };
 
-    Ok(gc_ref.as_raw_u32())
+    let raw = gc_ref.as_raw_u32();
+
+    store
+        .store_opaque_mut()
+        .unwrap_gc_store_mut()
+        .expose_gc_ref_to_wasm(gc_ref);
+
+    Ok(raw)
 }
 
 // Intern a `funcref` into the GC heap, returning its `FuncRefTableId`.
