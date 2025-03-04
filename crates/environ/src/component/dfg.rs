@@ -286,7 +286,9 @@ pub enum Trampoline {
     TaskBackpressure {
         instance: RuntimeComponentInstanceIndex,
     },
-    TaskReturn,
+    TaskReturn {
+        results: TypeTupleIndex,
+    },
     TaskWait {
         instance: RuntimeComponentInstanceIndex,
         async_: bool,
@@ -308,6 +310,7 @@ pub enum Trampoline {
     },
     StreamRead {
         ty: TypeStreamTableIndex,
+        err_ctx_ty: TypeComponentLocalErrorContextTableIndex,
         options: CanonicalOptions,
     },
     StreamWrite {
@@ -327,12 +330,14 @@ pub enum Trampoline {
     },
     StreamCloseWritable {
         ty: TypeStreamTableIndex,
+        err_ctx_ty: TypeComponentLocalErrorContextTableIndex,
     },
     FutureNew {
         ty: TypeFutureTableIndex,
     },
     FutureRead {
         ty: TypeFutureTableIndex,
+        err_ctx_ty: TypeComponentLocalErrorContextTableIndex,
         options: CanonicalOptions,
     },
     FutureWrite {
@@ -352,6 +357,7 @@ pub enum Trampoline {
     },
     FutureCloseWritable {
         ty: TypeFutureTableIndex,
+        err_ctx_ty: TypeComponentLocalErrorContextTableIndex,
     },
     ErrorContextNew {
         ty: TypeComponentLocalErrorContextTableIndex,
@@ -368,6 +374,10 @@ pub enum Trampoline {
     ResourceTransferBorrow,
     ResourceEnterCall,
     ResourceExitCall,
+    SyncEnterCall,
+    SyncExitCall {
+        callback: Option<CallbackId>,
+    },
     AsyncEnterCall,
     AsyncExitCall {
         callback: Option<CallbackId>,
@@ -765,7 +775,9 @@ impl LinearizeDfg<'_> {
             Trampoline::TaskBackpressure { instance } => info::Trampoline::TaskBackpressure {
                 instance: *instance,
             },
-            Trampoline::TaskReturn => info::Trampoline::TaskReturn,
+            Trampoline::TaskReturn { results } => {
+                info::Trampoline::TaskReturn { results: *results }
+            }
             Trampoline::TaskWait {
                 instance,
                 async_,
@@ -789,8 +801,13 @@ impl LinearizeDfg<'_> {
                 instance: *instance,
             },
             Trampoline::StreamNew { ty } => info::Trampoline::StreamNew { ty: *ty },
-            Trampoline::StreamRead { ty, options } => info::Trampoline::StreamRead {
+            Trampoline::StreamRead {
+                ty,
+                err_ctx_ty,
+                options,
+            } => info::Trampoline::StreamRead {
                 ty: *ty,
+                err_ctx_ty: *err_ctx_ty,
                 options: self.options(options),
             },
             Trampoline::StreamWrite { ty, options } => info::Trampoline::StreamWrite {
@@ -808,12 +825,20 @@ impl LinearizeDfg<'_> {
             Trampoline::StreamCloseReadable { ty } => {
                 info::Trampoline::StreamCloseReadable { ty: *ty }
             }
-            Trampoline::StreamCloseWritable { ty } => {
-                info::Trampoline::StreamCloseWritable { ty: *ty }
+            Trampoline::StreamCloseWritable { ty, err_ctx_ty } => {
+                info::Trampoline::StreamCloseWritable {
+                    ty: *ty,
+                    err_ctx_ty: *err_ctx_ty,
+                }
             }
             Trampoline::FutureNew { ty } => info::Trampoline::FutureNew { ty: *ty },
-            Trampoline::FutureRead { ty, options } => info::Trampoline::FutureRead {
+            Trampoline::FutureRead {
+                ty,
+                err_ctx_ty,
+                options,
+            } => info::Trampoline::FutureRead {
                 ty: *ty,
+                err_ctx_ty: *err_ctx_ty,
                 options: self.options(options),
             },
             Trampoline::FutureWrite { ty, options } => info::Trampoline::FutureWrite {
@@ -831,8 +856,11 @@ impl LinearizeDfg<'_> {
             Trampoline::FutureCloseReadable { ty } => {
                 info::Trampoline::FutureCloseReadable { ty: *ty }
             }
-            Trampoline::FutureCloseWritable { ty } => {
-                info::Trampoline::FutureCloseWritable { ty: *ty }
+            Trampoline::FutureCloseWritable { ty, err_ctx_ty } => {
+                info::Trampoline::FutureCloseWritable {
+                    ty: *ty,
+                    err_ctx_ty: *err_ctx_ty,
+                }
             }
             Trampoline::ErrorContextNew { ty, options } => info::Trampoline::ErrorContextNew {
                 ty: *ty,
@@ -849,6 +877,10 @@ impl LinearizeDfg<'_> {
             Trampoline::ResourceTransferBorrow => info::Trampoline::ResourceTransferBorrow,
             Trampoline::ResourceEnterCall => info::Trampoline::ResourceEnterCall,
             Trampoline::ResourceExitCall => info::Trampoline::ResourceExitCall,
+            Trampoline::SyncEnterCall => info::Trampoline::SyncEnterCall,
+            Trampoline::SyncExitCall { callback } => info::Trampoline::SyncExitCall {
+                callback: callback.map(|v| self.runtime_callback(v)),
+            },
             Trampoline::AsyncEnterCall => info::Trampoline::AsyncEnterCall,
             Trampoline::AsyncExitCall {
                 callback,

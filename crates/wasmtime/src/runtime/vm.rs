@@ -203,6 +203,11 @@ pub unsafe trait VMStore {
     /// Metadata required for resources for the component model.
     #[cfg(feature = "component-model")]
     fn component_calls(&mut self) -> &mut component::CallContexts;
+
+    #[cfg(feature = "component-model-async")]
+    fn component_async_store(
+        &mut self,
+    ) -> &mut dyn crate::runtime::component::VMComponentAsyncStore;
 }
 
 impl Deref for dyn VMStore + '_ {
@@ -235,7 +240,7 @@ impl DerefMut for dyn VMStore + '_ {
 /// usage of `Instance` and `ComponentInstance` for example.
 #[derive(Copy, Clone)]
 #[repr(transparent)]
-struct VMStoreRawPtr(NonNull<dyn VMStore>);
+struct VMStoreRawPtr(pub NonNull<dyn VMStore>);
 
 // SAFETY: this is the purpose of `VMStoreRawPtr`, see docs above about safe
 // usage.

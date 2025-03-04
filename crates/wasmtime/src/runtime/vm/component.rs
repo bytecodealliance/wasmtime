@@ -114,6 +114,7 @@ pub type VMLoweringCallee = extern "C" fn(
     vmctx: NonNull<VMOpaqueContext>,
     data: NonNull<u8>,
     ty: u32,
+    caller_instance: u32,
     flags: NonNull<VMGlobalDefinition>,
     opt_memory: *mut VMMemoryDefinition,
     opt_realloc: *mut VMFuncRef,
@@ -663,6 +664,39 @@ impl ComponentInstance {
 
     pub(crate) fn resource_exit_call(&mut self) -> Result<()> {
         self.resource_tables().exit_call()
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn future_transfer(
+        &mut self,
+        src_idx: u32,
+        src: TypeFutureTableIndex,
+        dst: TypeFutureTableIndex,
+    ) -> Result<u32> {
+        _ = (src_idx, src, dst);
+        todo!()
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn stream_transfer(
+        &mut self,
+        src_idx: u32,
+        src: TypeStreamTableIndex,
+        dst: TypeStreamTableIndex,
+    ) -> Result<u32> {
+        _ = (src_idx, src, dst);
+        todo!()
+    }
+
+    #[cfg(feature = "component-model-async")]
+    pub(crate) fn error_context_transfer(
+        &mut self,
+        src_idx: u32,
+        src: TypeComponentLocalErrorContextTableIndex,
+        dst: TypeComponentLocalErrorContextTableIndex,
+    ) -> Result<u32> {
+        _ = (src_idx, src, dst);
+        todo!()
     }
 }
 

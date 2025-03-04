@@ -689,7 +689,10 @@ pub enum Trampoline {
     /// A `task.return` intrinsic, which returns a result to the caller of a
     /// lifted export function.  This allows the callee to continue executing
     /// after returning a result.
-    TaskReturn,
+    TaskReturn {
+        /// Tuple representing the result types this intrinsic accepts.
+        results: TypeTupleIndex,
+    },
 
     /// A `task.wait` intrinsic, which waits for at least one outstanding async
     /// task/stream/future to make progress, returning the first such event.
@@ -738,6 +741,10 @@ pub enum Trampoline {
     StreamRead {
         /// The table index for the specific `stream` type and caller instance.
         ty: TypeStreamTableIndex,
+
+        /// The table index for the `error-context` type in the caller instance.
+        err_ctx_ty: TypeComponentLocalErrorContextTableIndex,
+
         /// Any options (e.g. string encoding) to use when storing values to
         /// memory.
         options: CanonicalOptions,
@@ -784,6 +791,9 @@ pub enum Trampoline {
     StreamCloseWritable {
         /// The table index for the specific `stream` type and caller instance.
         ty: TypeStreamTableIndex,
+
+        /// The table index for the `error-context` type in the caller instance.
+        err_ctx_ty: TypeComponentLocalErrorContextTableIndex,
     },
 
     /// A `future.new` intrinsic to create a new `future` handle of the
@@ -797,6 +807,10 @@ pub enum Trampoline {
     FutureRead {
         /// The table index for the specific `future` type and caller instance.
         ty: TypeFutureTableIndex,
+
+        /// The table index for the `error-context` type in the caller instance.
+        err_ctx_ty: TypeComponentLocalErrorContextTableIndex,
+
         /// Any options (e.g. string encoding) to use when storing values to
         /// memory.
         options: CanonicalOptions,
@@ -843,6 +857,9 @@ pub enum Trampoline {
     FutureCloseWritable {
         /// The table index for the specific `future` type and caller instance.
         ty: TypeFutureTableIndex,
+
+        /// The table index for the `error-context` type in the caller instance.
+        err_ctx_ty: TypeComponentLocalErrorContextTableIndex,
     },
 
     /// A `error-context.new` intrinsic to create a new `error-context` with a
@@ -890,12 +907,23 @@ pub enum Trampoline {
     /// Same as `ResourceEnterCall` except for when exiting a call.
     ResourceExitCall,
 
-    /// An intrinsic used by FACT-generated modules to begin a call to an
+    /// An intrinsic used by FACT-generated modules to begin a call involving a
+    /// sync-lowered import and async-lifted export.
+    SyncEnterCall,
+
+    /// An intrinsic used by FACT-generated modules to complete a call involving
+    /// a sync-lowered import and async-lifted export.
+    SyncExitCall {
+        /// The callee's callback function, if any.
+        callback: Option<RuntimeCallbackIndex>,
+    },
+
+    /// An intrinsic used by FACT-generated modules to begin a call involving an
     /// async-lowered import function.
     AsyncEnterCall,
 
-    /// An intrinsic used by FACT-generated modules to complete a call to an
-    /// async-lowered import function.
+    /// An intrinsic used by FACT-generated modules to complete a call involving
+    /// an async-lowered import function.
     ///
     /// Note that `AsyncEnterCall` and `AsyncExitCall` could theoretically be
     /// combined into a single `AsyncCall` intrinsic, but we separate them to
@@ -956,7 +984,7 @@ impl Trampoline {
             ResourceRep(i) => format!("component-resource-rep[{}]", i.as_u32()),
             ResourceDrop(i) => format!("component-resource-drop[{}]", i.as_u32()),
             TaskBackpressure { .. } => format!("task-backpressure"),
-            TaskReturn => format!("task-return"),
+            TaskReturn { .. } => format!("task-return"),
             TaskWait { .. } => format!("task-wait"),
             TaskPoll { .. } => format!("task-poll"),
             TaskYield { .. } => format!("task-yield"),
@@ -982,6 +1010,8 @@ impl Trampoline {
             ResourceTransferBorrow => format!("component-resource-transfer-borrow"),
             ResourceEnterCall => format!("component-resource-enter-call"),
             ResourceExitCall => format!("component-resource-exit-call"),
+            SyncEnterCall => format!("component-sync-enter-call"),
+            SyncExitCall { .. } => format!("component-sync-exit-call"),
             AsyncEnterCall => format!("component-async-enter-call"),
             AsyncExitCall { .. } => format!("component-async-exit-call"),
             FutureTransfer => format!("future-transfer"),
