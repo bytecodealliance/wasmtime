@@ -1005,6 +1005,7 @@ fn ref_matches() -> Result<()> {
 }
 
 #[test]
+#[cfg_attr(miri, ignore)]
 fn issue_9669() -> Result<()> {
     let _ = env_logger::try_init();
 
