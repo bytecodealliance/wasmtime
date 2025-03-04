@@ -1,4 +1,5 @@
 use crate::wasi::clocks::monotonic_clock;
+use crate::wasi::io::streams::StreamError;
 use crate::wasi::tls::types::{ClientConnection, ClientHandshake, InputStream, OutputStream};
 
 const TIMEOUT_NS: u64 = 1_000_000_000;
@@ -23,17 +24,21 @@ impl ClientHandshake {
 }
 
 impl ClientConnection {
-    pub fn blocking_close_notify(
+    pub fn blocking_close_output(
         &self,
         output: &OutputStream,
     ) -> Result<(), crate::wasi::io::error::Error> {
         let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS);
         let pollable = output.subscribe();
 
+        self.close_output();
+
         loop {
-            match self.close_notify() {
-                None => pollable.block_until(&timeout).expect("timed out"),
-                Some(result) => return result,
+            match output.check_write() {
+                Ok(0) => pollable.block_until(&timeout).expect("timed out"),
+                Ok(_) => unreachable!("After calling close_output, the output stream should never accept new writes again."),
+                Err(StreamError::Closed) => return Ok(()),
+                Err(StreamError::LastOperationFailed(e)) => return Err(e),
             }
         }
     }

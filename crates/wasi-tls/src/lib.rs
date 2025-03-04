@@ -90,7 +90,6 @@ use wasmtime_wasi::OutputStream;
 use wasmtime_wasi::{
     async_trait,
     bindings::io::{
-        error::Error as HostError,
         poll::Pollable as HostPollable,
         streams::{InputStream as BoxInputStream, OutputStream as BoxOutputStream},
     },
@@ -297,17 +296,8 @@ pub struct ClientConnection {
 }
 
 impl<'a> generated::types::HostClientConnection for WasiTlsCtx<'a> {
-    fn close_notify(
-        &mut self,
-        this: Resource<ClientConnection>,
-    ) -> wasmtime::Result<Option<Result<(), wasmtime::component::Resource<HostError>>>> {
-        let result = self.table.get_mut(&this)?.writer.close_notify();
-
-        Ok(match result {
-            None => None,
-            Some(Ok(())) => Some(Ok(())),
-            Some(Err(e)) => Some(Err(self.table.push(anyhow::Error::new(e))?)),
-        })
+    fn close_output(&mut self, this: Resource<ClientConnection>) -> wasmtime::Result<()> {
+        self.table.get_mut(&this)?.writer.close()
     }
 
     fn drop(&mut self, this: Resource<ClientConnection>) -> wasmtime::Result<()> {
@@ -524,14 +514,13 @@ impl TlsWriter {
         }
     }
 
-    fn close_notify(&mut self) -> Option<Result<(), io::Error>> {
+    fn close(&mut self) {
         match std::mem::replace(&mut self.state, WriteState::Closed) {
             // No write in progress, immediately shut down:
             WriteState::Ready(mut stream) => {
                 self.state = WriteState::Closing(wasmtime_wasi::runtime::spawn(async move {
                     stream.shutdown().await
                 }));
-                None
             }
 
             // Schedule the shutdown after the current write has finished:
@@ -540,15 +529,12 @@ impl TlsWriter {
                     let mut stream = write.await?;
                     stream.shutdown().await
                 }));
-                None
             }
 
             WriteState::Closing(t) => {
                 self.state = WriteState::Closing(t);
-                None
             }
-            WriteState::Closed => Some(Ok(())),
-            WriteState::Error(e) => Some(Err(e.into())),
+            WriteState::Closed | WriteState::Error(_) => {}
         }
     }
 
@@ -587,17 +573,9 @@ impl AsyncTlsWriteStream {
         AsyncTlsWriteStream(Arc::new(Mutex::new(writer)))
     }
 
-    fn close_notify(&mut self) -> Option<Result<(), StreamError>> {
-        let mut writer = match try_lock_for_stream(&self.0) {
-            Ok(writer) => writer,
-            Err(err) => return Some(Err(err)),
-        };
-
-        match writer.close_notify() {
-            None => None,
-            Some(Ok(())) => Some(Ok(())),
-            Some(Err(e)) => Some(Err(StreamError::LastOperationFailed(e.into()))),
-        }
+    fn close(&mut self) -> wasmtime::Result<()> {
+        try_lock_for_stream(&self.0)?.close();
+        Ok(())
     }
 }
 
