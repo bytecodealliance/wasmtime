@@ -28,7 +28,6 @@ impl WasiView for Ctx {
 async fn run_wasi(path: &str, ctx: Ctx) -> Result<()> {
     let engine = test_programs_artifacts::engine(|config| {
         config.async_support(true);
-        config.debug_info(true);
     });
     let mut store = Store::new(&engine, ctx);
     let component = Component::from_file(&engine, path)?;
