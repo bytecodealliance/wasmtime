@@ -32,6 +32,12 @@ use wasmtime_wasi_http::{
 #[cfg(feature = "wasi-keyvalue")]
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 
+#[cfg(all(
+    feature = "wasi-tls",
+    not(any(target_arch = "riscv64", target_arch = "s390x"))
+))]
+use wasmtime_wasi_tls::WasiTlsCtx;
+
 fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
     let parts: Vec<&str> = s.splitn(2, '=').collect();
     if parts.len() != 2 {
@@ -822,6 +828,43 @@ impl RunCommand {
                 }
 
                 store.data_mut().wasi_http = Some(Arc::new(WasiHttpCtx::new()));
+            }
+        }
+
+        if self.run.common.wasi.tls == Some(true) {
+            #[cfg(any(target_arch = "riscv64", target_arch = "s390x"))]
+            {
+                bail!("Unsupported architecture for wasi-tls");
+            }
+            #[cfg(all(
+                not(any(target_arch = "riscv64", target_arch = "s390x")),
+                not(all(feature = "wasi-tls", feature = "component-model"))
+            ))]
+            {
+                bail!("Cannot enable wasi-tls when the binary is not compiled with this feature.");
+            }
+            #[cfg(all(
+                feature = "wasi-tls",
+                feature = "component-model",
+                not(any(target_arch = "riscv64", target_arch = "s390x"))
+            ))]
+            {
+                match linker {
+                    CliLinker::Core(_) => {
+                        bail!("Cannot enable wasi-tls for core wasm modules");
+                    }
+                    CliLinker::Component(linker) => {
+                        let mut opts = wasmtime_wasi_tls::LinkOptions::default();
+                        opts.tls(true);
+                        wasmtime_wasi_tls::add_to_linker(linker, &mut opts, |h| {
+                            let preview2_ctx =
+                                h.preview2_ctx.as_mut().expect("wasip2 is not configured");
+                            let preview2_ctx =
+                                Arc::get_mut(preview2_ctx).unwrap().get_mut().unwrap();
+                            WasiTlsCtx::new(preview2_ctx.table())
+                        })?;
+                    }
+                }
             }
         }
 

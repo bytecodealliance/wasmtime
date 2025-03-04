@@ -414,6 +414,8 @@ wasmtime_option_group! {
         /// Grant access to the given TCP listen socket
         #[serde(default)]
         pub tcplisten: Vec<String>,
+        /// Enable support for WASI TLS (Transport Layer Security) imports (experimental)
+        pub tls: Option<bool>,
         /// Implement WASI Preview1 using new Preview2 implementation (true, default) or legacy
         /// implementation (false)
         pub preview2: Option<bool>,
