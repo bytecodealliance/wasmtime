@@ -1003,3 +1003,53 @@ fn ref_matches() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, ignore)]
+fn issue_9669() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    config.collector(Collector::DeferredReferenceCounting);
+
+    let engine = Engine::new(&config)?;
+
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $empty (struct))
+                (type $thing (struct
+                    (field $field1 (ref $empty))
+                    (field $field2 (ref $empty))
+                ))
+
+                (func (export "run")
+                    (local $object (ref $thing))
+
+                    struct.new $empty
+                    struct.new $empty
+                    struct.new $thing
+
+                    local.tee $object
+                    struct.get $thing $field1
+                    drop
+
+                    local.get $object
+                    struct.get $thing $field2
+                    drop
+                )
+            )
+        "#,
+    )?;
+
+    let mut store = Store::new(&engine, ());
+    let instance = Instance::new(&mut store, &module, &[])?;
+
+    let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
+    func.call(&mut store, ())?;
+
+    Ok(())
+}
