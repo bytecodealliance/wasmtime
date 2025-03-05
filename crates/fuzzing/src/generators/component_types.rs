@@ -109,9 +109,7 @@ pub fn arbitrary_val(ty: &component::Type, input: &mut Unstructured) -> arbitrar
         ),
 
         // Resources aren't fuzzed at this time.
-        Type::Own(_) | Type::Borrow(_) => {
-            unreachable!()
-        }
+        Type::Own(_) | Type::Borrow(_) => unreachable!(),
     })
 }
 
@@ -122,25 +120,8 @@ pub fn static_api_test<'a, P, R>(
     declarations: &Declarations,
 ) -> arbitrary::Result<()>
 where
-    P: ComponentNamedList
-        + Lift
-        + Lower
-        + Clone
-        + PartialEq
-        + Debug
-        + Arbitrary<'a>
-        + Send
-        + 'static,
-    R: ComponentNamedList
-        + Lift
-        + Lower
-        + Clone
-        + PartialEq
-        + Debug
-        + Arbitrary<'a>
-        + Send
-        + Sync
-        + 'static,
+    P: ComponentNamedList + Lift + Lower + Clone + PartialEq + Debug + Arbitrary<'a> + 'static,
+    R: ComponentNamedList + Lift + Lower + Clone + PartialEq + Debug + Arbitrary<'a> + 'static,
 {
     crate::init_fuzzing();
 
@@ -157,7 +138,7 @@ where
         .root()
         .func_wrap(
             IMPORT_FUNCTION,
-            |cx: StoreContextMut<'_, Box<dyn Any + Send>>, params: P| {
+            |cx: StoreContextMut<'_, Box<dyn Any>>, params: P| {
                 log::trace!("received parameters {params:?}");
                 let data: &(P, R) = cx.data().downcast_ref().unwrap();
                 let (expected_params, result) = data;
@@ -167,7 +148,7 @@ where
             },
         )
         .unwrap();
-    let mut store: Store<Box<dyn Any + Send>> = Store::new(&engine, Box::new(()));
+    let mut store: Store<Box<dyn Any>> = Store::new(&engine, Box::new(()));
     let instance = linker.instantiate(&mut store, &component).unwrap();
     let func = instance
         .get_typed_func::<P, R>(&mut store, EXPORT_FUNCTION)

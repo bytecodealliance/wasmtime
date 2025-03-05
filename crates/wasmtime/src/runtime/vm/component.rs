@@ -86,6 +86,8 @@ pub struct ComponentInstance {
 ///   which this function pointer was registered.
 /// * `ty` - the type index, relative to the tables in `vmctx`, that is the
 ///   type of the function being called.
+/// * `caller_instance` - the `RuntimeComponentInstanceIndex` representing the
+///   caller component instance, used to track the owner of an async host task.
 /// * `flags` - the component flags for may_enter/leave corresponding to the
 ///   component instance that the lowering happened within.
 /// * `opt_memory` - this nullable pointer represents the memory configuration
@@ -106,7 +108,7 @@ pub struct ComponentInstance {
 /// or not. On failure this function records trap information in TLS which
 /// should be suitable for reading later.
 //
-// FIXME: 9 arguments is probably too many. The `data` through `string-encoding`
+// FIXME: 11 arguments is probably too many. The `data` through `string-encoding`
 // parameters should probably get packaged up into the `VMComponentContext`.
 // Needs benchmarking one way or another though to figure out what the best
 // balance is here.

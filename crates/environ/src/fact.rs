@@ -43,6 +43,19 @@ mod traps;
 /// callee is an async-lifted export.
 pub const EXIT_FLAG_ASYNC_CALLEE: i32 = 1 << 0;
 
+/// Fixed parameter types for the `sync-enter` built-in function.
+///
+/// Note that `sync-enter` also takes a variable number of parameters in
+/// addition to these, determined by the signature of the function for which
+/// we're generating an adapter.
+pub static SYNC_ENTER_FIXED_PARAMS: &[ValType] = &[
+    ValType::FUNCREF,
+    ValType::FUNCREF,
+    ValType::I32,
+    ValType::I32,
+    ValType::I32,
+];
+
 /// Representation of an adapter module.
 pub struct Module<'a> {
     /// Whether or not debug code is inserted into the adapters themselves.
@@ -489,16 +502,11 @@ impl<'a> Module<'a> {
         self.import_simple_get_and_set(
             "sync",
             &format!("[enter-call]{suffix}"),
-            &[
-                ValType::FUNCREF,
-                ValType::FUNCREF,
-                ValType::I32,
-                ValType::I32,
-                ValType::I32,
-            ]
-            .into_iter()
-            .chain(params.iter().copied())
-            .collect::<Vec<_>>(),
+            &SYNC_ENTER_FIXED_PARAMS
+                .iter()
+                .copied()
+                .chain(params.iter().copied())
+                .collect::<Vec<_>>(),
             &[],
             Import::SyncEnterCall,
             |me| me.imported_sync_enter_call.get(suffix).copied(),

@@ -644,7 +644,7 @@ const fn max(a: u32, b: u32) -> u32 {
 
 impl CanonicalAbiInfo {
     /// ABI information for zero-sized types.
-    const ZERO: CanonicalAbiInfo = CanonicalAbiInfo {
+    pub const ZERO: CanonicalAbiInfo = CanonicalAbiInfo {
         size32: 0,
         align32: 1,
         size64: 0,
