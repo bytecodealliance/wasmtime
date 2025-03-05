@@ -1,5 +1,4 @@
 use crate::prelude::*;
-#[cfg(not(has_virtual_memory))]
 use crate::runtime::vm::send_sync_ptr::SendSyncPtr;
 #[cfg(has_virtual_memory)]
 use crate::runtime::vm::{mmap::UnalignedLength, Mmap};
@@ -7,7 +6,6 @@ use crate::runtime::vm::{mmap::UnalignedLength, Mmap};
 use alloc::alloc::Layout;
 use alloc::sync::Arc;
 use core::ops::{Deref, Range};
-#[cfg(not(has_virtual_memory))]
 use core::ptr::NonNull;
 #[cfg(feature = "std")]
 use std::fs::File;
@@ -39,6 +37,8 @@ pub enum MmapVec {
         base: SendSyncPtr<u8>,
         layout: Layout,
     },
+    #[doc(hidden)]
+    ExternallyOwned { memory: SendSyncPtr<[u8]> },
     #[doc(hidden)]
     #[cfg(has_virtual_memory)]
     Mmap {
@@ -74,6 +74,11 @@ impl MmapVec {
         MmapVec::Alloc { base, layout }
     }
 
+    fn new_externally_owned(memory: NonNull<[u8]>) -> MmapVec {
+        let memory = SendSyncPtr::new(memory);
+        MmapVec::ExternallyOwned { memory }
+    }
+
     /// Creates a new zero-initialized `MmapVec` with the given `size`
     /// and `alignment`.
     ///
@@ -101,6 +106,25 @@ impl MmapVec {
         MmapVec::from_slice_with_alignment(slice, 1)
     }
 
+    /// Creates a new `MmapVec` from an existing memory region
+    ///
+    /// This method avoids the copy performed by [`Self::from_slice`] by
+    /// directly using the memory region provided. This must be done with
+    /// extreme care, however, as any concurrent modification of the provided
+    /// memory will cause undefined and likely very, very bad things to
+    /// happen.
+    ///
+    /// The memory provided is guaranteed to not be mutated by the runtime.
+    ///
+    /// # Safety
+    ///
+    /// As there is no copy here, the runtime will be making direct readonly use
+    /// of the provided memory. As such, outside writes to this memory region
+    /// will result in undefined and likely very undesirable behavior.
+    pub unsafe fn from_raw(memory: NonNull<[u8]>) -> Result<MmapVec> {
+        Ok(MmapVec::new_externally_owned(memory))
+    }
+
     /// Creates a new `MmapVec` from the contents of an existing
     /// `slice`, with a minimum alignment.
     ///
@@ -110,7 +134,7 @@ impl MmapVec {
     ///
     /// A new `MmapVec` is allocated to hold the contents of `slice` and then
     /// `slice` is copied into the new mmap. It's recommended to avoid this
-    /// method if possible to avoid the need to copy data around.  pub
+    /// method if possible to avoid the need to copy data around.
     pub fn from_slice_with_alignment(slice: &[u8], align: usize) -> Result<MmapVec> {
         let mut result = MmapVec::with_capacity_and_alignment(slice.len(), align)?;
         // SAFETY: The mmap hasn't been made readonly yet so this should be
@@ -119,6 +143,37 @@ impl MmapVec {
             result.as_mut_slice().copy_from_slice(slice);
         }
         Ok(result)
+    }
+
+    /// Return `true` if the `MmapVec` suport virtual memory operations
+    ///
+    /// In some cases, such as when using externally owned memory, the underlying
+    /// platform may support virtual memory but it still may not be legal
+    /// to perform virtual memory operations on this memory.
+    pub fn supports_virtual_memory(&self) -> bool {
+        match self {
+            #[cfg(has_virtual_memory)]
+            MmapVec::Mmap { .. } => true,
+            MmapVec::ExternallyOwned { .. } => false,
+            #[cfg(not(has_virtual_memory))]
+            MmapVec::Alloc { .. } => false,
+        }
+    }
+
+    /// Return true if this `MmapVec` is always readonly
+    ///
+    /// Attempting to get access to mutate readonly memory via
+    /// [`MmapVec::as_mut`] will result in a panic.  Note that this method
+    /// does not change with runtime changes to portions of the code memory
+    /// via `MmapVec::make_readonly` for platforms with virtual memory.
+    pub fn is_always_readonly(&self) -> bool {
+        match self {
+            #[cfg(has_virtual_memory)]
+            MmapVec::Mmap { .. } => false,
+            MmapVec::ExternallyOwned { .. } => true,
+            #[cfg(not(has_virtual_memory))]
+            MmapVec::Alloc { .. } => false,
+        }
     }
 
     /// Creates a new `MmapVec` which is the given `File` mmap'd into memory.
@@ -148,6 +203,9 @@ impl MmapVec {
     ) -> Result<()> {
         let (mmap, len) = match self {
             MmapVec::Mmap { mmap, len } => (mmap, *len),
+            MmapVec::ExternallyOwned { .. } => {
+                bail!("Unable to make externally owned memory executable");
+            }
         };
         assert!(range.start <= range.end);
         assert!(range.end <= len);
@@ -159,6 +217,9 @@ impl MmapVec {
     pub unsafe fn make_readonly(&self, range: Range<usize>) -> Result<()> {
         let (mmap, len) = match self {
             MmapVec::Mmap { mmap, len } => (mmap, *len),
+            MmapVec::ExternallyOwned { .. } => {
+                bail!("Unable to make externally owned memory readonly");
+            }
         };
         assert!(range.start <= range.end);
         assert!(range.end <= len);
@@ -171,6 +232,7 @@ impl MmapVec {
         match self {
             #[cfg(not(has_virtual_memory))]
             MmapVec::Alloc { .. } => None,
+            MmapVec::ExternallyOwned { .. } => None,
             #[cfg(has_virtual_memory)]
             MmapVec::Mmap { mmap, .. } => mmap.original_file(),
         }
@@ -189,12 +251,20 @@ impl MmapVec {
     /// # Unsafety
     ///
     /// This method is only safe if `make_readonly` hasn't been called yet to
-    /// ensure that the memory is indeed writable
+    /// ensure that the memory is indeed writable.  For a MmapVec created from
+    /// a raw pointer using this memory as mutable is only safe if there are
+    /// no outside reads or writes to the memory region.
+    ///
+    /// Externally owned code is implicitly considered to be readonly and this
+    /// code will panic if called on externally owned memory.
     pub unsafe fn as_mut_slice(&mut self) -> &mut [u8] {
         match self {
             #[cfg(not(has_virtual_memory))]
             MmapVec::Alloc { base, layout } => {
                 core::slice::from_raw_parts_mut(base.as_mut(), layout.size())
+            }
+            MmapVec::ExternallyOwned { .. } => {
+                panic!("Mutating externally owned memory is prohibited");
             }
             #[cfg(has_virtual_memory)]
             MmapVec::Mmap { mmap, len } => mmap.slice_mut(0..*len),
@@ -212,6 +282,7 @@ impl Deref for MmapVec {
             MmapVec::Alloc { base, layout } => unsafe {
                 core::slice::from_raw_parts(base.as_ptr(), layout.size())
             },
+            MmapVec::ExternallyOwned { memory } => unsafe { memory.as_ref() },
             #[cfg(has_virtual_memory)]
             MmapVec::Mmap { mmap, len } => {
                 // SAFETY: all bytes for this mmap, which is owned by
@@ -229,6 +300,9 @@ impl Drop for MmapVec {
             MmapVec::Alloc { base, layout, .. } => unsafe {
                 alloc::alloc::dealloc(base.as_mut(), layout.clone());
             },
+            MmapVec::ExternallyOwned { .. } => {
+                // Memory is allocated externally, nothing to do
+            }
             #[cfg(has_virtual_memory)]
             MmapVec::Mmap { .. } => {
                 // Drop impl on the `mmap` takes care of this case.

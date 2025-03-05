@@ -324,11 +324,17 @@ impl CodeMemory {
             // we aren't able to make it readonly, but this is just a
             // defense-in-depth measure and isn't required for correctness.
             #[cfg(has_virtual_memory)]
-            self.mmap.make_readonly(0..self.mmap.len())?;
+            if self.mmap.supports_virtual_memory() {
+                self.mmap.make_readonly(0..self.mmap.len())?;
+            }
 
             // Switch the executable portion from readonly to read/execute.
             if self.needs_executable {
                 if !self.custom_publish()? {
+                    if !self.mmap.supports_virtual_memory() {
+                        bail!("this target requires virtual memory to be enabled");
+                    }
+
                     #[cfg(has_virtual_memory)]
                     {
                         let text = self.text();
@@ -349,8 +355,6 @@ impl CodeMemory {
                         // Flush any in-flight instructions from the pipeline
                         icache_coherence::pipeline_flush_mt().expect("Failed pipeline flush");
                     }
-                    #[cfg(not(has_virtual_memory))]
-                    bail!("this target requires virtual memory to be enabled");
                 }
             }
 
@@ -395,6 +399,10 @@ impl CodeMemory {
             return Ok(());
         }
 
+        if self.mmap.is_always_readonly() {
+            bail!("Unable to apply relocations to readonly MmapVec");
+        }
+
         for (offset, libcall) in self.relocations.iter() {
             let offset = self.text.start + offset;
             let libcall = match libcall {
@@ -413,6 +421,7 @@ impl CodeMemory {
                 #[cfg(not(target_arch = "x86_64"))]
                 obj::LibCall::X86Pshufb => unreachable!(),
             };
+
             self.mmap
                 .as_mut_slice()
                 .as_mut_ptr()
