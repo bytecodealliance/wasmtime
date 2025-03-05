@@ -8,7 +8,7 @@
 //! type numbering.
 
 use crate::cdsl::types as cdsl_types;
-use cranelift_srcgen::{error, Formatter, fmtln};
+use cranelift_srcgen::{error, fmtln, Formatter, Language};
 
 /// Emit a constant definition of a single value type.
 fn emit_type(ty: &cdsl_types::ValueType, fmt: &mut Formatter) {
@@ -62,7 +62,7 @@ fn emit_types(fmt: &mut Formatter) {
 
 /// Generate the types file.
 pub(crate) fn generate(filename: &str, out_dir: &std::path::Path) -> Result<(), error::Error> {
-    let mut fmt = Formatter::new();
+    let mut fmt = Formatter::new(Language::Rust);
     emit_types(&mut fmt);
     fmt.update_file(filename, out_dir)?;
     Ok(())

@@ -7,7 +7,7 @@ use crate::cdsl::operands::Operand;
 use crate::cdsl::typevar::{TypeSet, TypeVar};
 use crate::unique_table::{UniqueSeqTable, UniqueTable};
 use cranelift_codegen_shared::constant_hash;
-use cranelift_srcgen::{error, fmtln, Formatter, Match};
+use cranelift_srcgen::{error, fmtln, Formatter, Language, Match};
 use std::fmt;
 use std::rc::Rc;
 
@@ -1259,7 +1259,7 @@ pub(crate) fn generate(
     out_dir: &std::path::Path,
 ) -> Result<(), error::Error> {
     // Opcodes.
-    let mut fmt = Formatter::new();
+    let mut fmt = Formatter::new(Language::Rust);
     gen_formats(&formats, &mut fmt);
     gen_instruction_data(&formats, &mut fmt);
     fmt.empty_line();
@@ -1271,7 +1271,7 @@ pub(crate) fn generate(
     fmt.update_file(opcode_filename, out_dir)?;
 
     // Instruction builder.
-    let mut fmt = Formatter::new();
+    let mut fmt = Formatter::new(Language::Rust);
     gen_builder(all_inst, &formats, &mut fmt);
     fmt.update_file(inst_builder_filename, out_dir)?;
 

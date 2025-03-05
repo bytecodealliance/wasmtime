@@ -7,7 +7,7 @@ use crate::cdsl::settings::{
 use crate::constant_hash::generate_table;
 use crate::unique_table::UniqueSeqTable;
 use cranelift_codegen_shared::constant_hash::simple_hash;
-use cranelift_srcgen::{error, Formatter, Match, fmtln};
+use cranelift_srcgen::{error, fmtln, Formatter, Language, Match};
 use std::collections::HashMap;
 
 pub(crate) enum ParentGroup {
@@ -496,7 +496,7 @@ pub(crate) fn generate(
     filename: &str,
     out_dir: &std::path::Path,
 ) -> Result<(), error::Error> {
-    let mut fmt = Formatter::new();
+    let mut fmt = Formatter::new(Language::Rust);
     gen_group(settings, parent_group, &mut fmt);
     fmt.update_file(filename, out_dir)?;
     Ok(())
