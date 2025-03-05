@@ -41,8 +41,8 @@ impl<'a> Arbitrary<'a> for ModuleConfig {
         let _ = config.relaxed_simd_enabled;
         let _ = config.tail_call_enabled;
         let _ = config.extended_const_enabled;
+        let _ = config.gc_enabled;
         config.exceptions_enabled = false;
-        config.gc_enabled = false;
         config.custom_page_sizes_enabled = u.arbitrary()?;
         config.wide_arithmetic_enabled = u.arbitrary()?;
         config.memory64_enabled = u.ratio(1, 20)?;

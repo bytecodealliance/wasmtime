@@ -369,8 +369,11 @@ pub fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -
     // Creation of imports can fail due to resource limit constraints, and then
     // instantiation can naturally fail for a number of reasons as well. Bundle
     // the two steps together to match on the error below.
-    let instance =
-        dummy::dummy_linker(store, module).and_then(|l| l.instantiate(&mut *store, module));
+    let linker = dummy::dummy_linker(store, module);
+    if let Err(e) = &linker {
+        log::warn!("failed to create dummy linker: {e:?}");
+    }
+    let instance = linker.and_then(|l| l.instantiate(&mut *store, module));
     unwrap_instance(store, instance)
 }
 
