@@ -2738,25 +2738,71 @@ impl Masm for MacroAssembler {
         dst: WritableReg,
         kind: V128ExtAddKind,
     ) -> Result<()> {
-        use V128ExtendKind::*;
-
         self.ensure_has_avx()?;
 
-        // The implementation for extadd is not optimized; for simplicity's sake, we simply perform
-        // an extension followed by an addition using already implemented primitives.
-        let (low_kind, high_kind) = match kind {
-            V128ExtAddKind::I8x16S => (LowI8x16S, HighI8x16S),
-            V128ExtAddKind::I8x16U => (LowI8x16U, HighI8x16U),
-            V128ExtAddKind::I16x8S => (LowI16x8S, HighI16x8S),
-            V128ExtAddKind::I16x8U => (LowI16x8U, HighI16x8U),
-        };
+        match kind {
+            V128ExtAddKind::I8x16S => {
+                let scratch = regs::scratch_xmm();
+                // Use `vpmaddubsw` with a vector of 16 8-bit 1's which will
+                // sign extend `src` to 16 bits and add adjacent words.
+                // Need to supply constant as first operand since first operand
+                // is treated as unsigned and the second operand is signed.
+                let mask = self.asm.add_constant(&[1; 16]);
+                self.asm.xmm_mov_mr(
+                    &mask,
+                    writable!(scratch),
+                    OperandSize::S128,
+                    MemFlags::trusted(),
+                );
+                self.asm
+                    .xmm_vex_rr(AvxOpcode::Vpmaddubsw, scratch, src, dst);
+            }
+            V128ExtAddKind::I8x16U => {
+                // Same approach as the signed variant but treat `src` as
+                // unsigned instead of signed by passing it as the first
+                // operand.
+                let mask = self.asm.add_constant(&[1; 16]);
+                self.asm
+                    .xmm_vpmaddubs_rmr(src, &mask, dst, OperandSize::S16);
+            }
+            V128ExtAddKind::I16x8S => {
+                // Similar approach to the two variants above. The vector is 8
+                // lanes of 16-bit 1's and `vpmaddwd` treats both operands as
+                // signed.
+                let mask = self
+                    .asm
+                    .add_constant(&[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0]);
+                self.asm.xmm_vpmaddwd_rmr(src, &mask, dst);
+            }
+            V128ExtAddKind::I16x8U => {
+                // Similar approach as the signed variant.
+                // `vpmaddwd` operates on signed integers and the operand is
+                // unsigned so the operand needs to be converted to a signed
+                // format and than that process needs to be reversed after
+                // `vpmaddwd`.
+                // Flip the sign bit for 8 16-bit lanes.
+                let xor_mask = self.asm.add_constant(&[
+                    0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00, 0x80, 0x00,
+                    0x80, 0x00, 0x80,
+                ]);
+                self.asm.xmm_vpxor_rmr(src, &xor_mask, dst);
 
-        let tmp = regs::scratch_xmm();
+                let madd_mask = self
+                    .asm
+                    .add_constant(&[1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0]);
+                self.asm.xmm_vpmaddwd_rmr(dst.to_reg(), &madd_mask, dst);
 
-        self.v128_extend(src, writable!(tmp), low_kind)?;
-        self.v128_extend(src, dst, high_kind)?;
-
-        self.v128_add(src, dst.to_reg(), dst, kind.into())
+                // Reverse the XOR. The XOR effectively subtracts 32,768 from
+                // both pairs that are added together so 65,536 (0x10000)
+                // needs to be added to 4 lanes of 32-bit values.
+                let add_mask = self
+                    .asm
+                    .add_constant(&[0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0]);
+                self.asm
+                    .xmm_vpadd_rmr(dst.to_reg(), &add_mask, dst, OperandSize::S32);
+            }
+        }
+        Ok(())
     }
 
     fn v128_dot(&mut self, lhs: Reg, rhs: Reg, dst: WritableReg) -> Result<()> {
