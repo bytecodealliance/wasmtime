@@ -1,4 +1,5 @@
-//! Error returned during meta code-generation.
+//! Defines an `Error` returned during source code generation.
+
 use std::fmt;
 use std::io;
 

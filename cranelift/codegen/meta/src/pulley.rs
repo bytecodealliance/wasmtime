@@ -1,4 +1,4 @@
-use crate::error::Error;
+use cranelift_srcgen::error::Error;
 use std::path::Path;
 
 struct Inst<'a> {

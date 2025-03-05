@@ -1,9 +1,8 @@
-use std::rc::Rc;
-
 use crate::cdsl::formats::InstructionFormat;
 use crate::cdsl::instructions::AllInstructions;
 use crate::error;
-use crate::srcgen::Formatter;
+use cranelift_srcgen::{fmtln, Formatter};
+use std::rc::Rc;
 
 /// Which ISLE target are we generating code for?
 #[derive(Clone, Copy, PartialEq, Eq)]

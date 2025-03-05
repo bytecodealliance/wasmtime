@@ -1,21 +1,20 @@
-//! Source code generator.
+//! A source code generator.
 //!
-//! The `srcgen` module contains generic helper routines and classes for
-//! generating source code.
-
-#![macro_use]
+//! This crate contains generic helper routines and classes for generating
+//! source code.
 
 use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write;
 
-use crate::error;
+pub mod error;
 
 static SHIFTWIDTH: usize = 4;
 
 /// A macro that simplifies the usage of the Formatter by allowing format
 /// strings.
+#[macro_export]
 macro_rules! fmtln {
     ($fmt:ident, $fmtstring:expr, $($fmtargs:expr),*) => {
         $fmt.line(format!($fmtstring, $($fmtargs),*))
@@ -34,7 +33,7 @@ macro_rules! fmtln {
     };
 }
 
-pub(crate) struct Formatter {
+pub struct Formatter {
     indent: usize,
     lines: Vec<String>,
 }
@@ -240,7 +239,7 @@ fn parse_multiline(s: &str) -> Vec<String> {
 /// Note that this class is ignorant of Rust types, and considers two fields
 /// with the same name to be equivalent. BTreeMap/BTreeSet are used to
 /// represent the arms in order to make the order deterministic.
-pub(crate) struct Match {
+pub struct Match {
     expr: String,
     arms: BTreeMap<(Vec<String>, String), BTreeSet<String>>,
     /// The clause for the placeholder pattern _.

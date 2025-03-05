@@ -1,16 +1,14 @@
 //! Generate the ISA-specific settings.
-use std::collections::HashMap;
-
-use crate::constant_hash::generate_table;
-use cranelift_codegen_shared::constant_hash::simple_hash;
 
 use crate::cdsl::camel_case;
 use crate::cdsl::settings::{
     BoolSetting, Predicate, Preset, Setting, SettingGroup, SpecificSetting,
 };
-use crate::error;
-use crate::srcgen::{Formatter, Match};
+use crate::constant_hash::generate_table;
 use crate::unique_table::UniqueSeqTable;
+use cranelift_codegen_shared::constant_hash::simple_hash;
+use cranelift_srcgen::{error, Formatter, Match, fmtln};
+use std::collections::HashMap;
 
 pub(crate) enum ParentGroup {
     None,

@@ -5,9 +5,7 @@ use shared::Definitions;
 
 #[macro_use]
 mod cdsl;
-mod srcgen;
 
-pub mod error;
 pub mod isa;
 pub mod isle;
 
@@ -22,6 +20,8 @@ mod unique_table;
 
 #[cfg(feature = "pulley")]
 mod pulley;
+
+use cranelift_srcgen::error;
 
 /// Generate an ISA from an architecture string (e.g. "x86_64").
 pub fn isa_from_arch(arch: &str) -> Result<isa::Isa, String> {

@@ -1,18 +1,15 @@
 //! Generate instruction data (including opcodes, formats, builders, etc.).
-use std::fmt;
-use std::rc::Rc;
-
-use cranelift_codegen_shared::constant_hash;
 
 use crate::cdsl::camel_case;
 use crate::cdsl::formats::InstructionFormat;
 use crate::cdsl::instructions::{AllInstructions, Instruction};
 use crate::cdsl::operands::Operand;
 use crate::cdsl::typevar::{TypeSet, TypeVar};
-
-use crate::error;
-use crate::srcgen::{Formatter, Match};
 use crate::unique_table::{UniqueSeqTable, UniqueTable};
+use cranelift_codegen_shared::constant_hash;
+use cranelift_srcgen::{error, fmtln, Formatter, Match};
+use std::fmt;
+use std::rc::Rc;
 
 // TypeSet indexes are encoded in 8 bits, with `0xff` reserved.
 const TYPESET_LIMIT: usize = 0xff;
