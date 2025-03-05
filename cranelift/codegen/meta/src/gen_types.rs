@@ -64,6 +64,6 @@ fn emit_types(fmt: &mut Formatter) {
 pub(crate) fn generate(filename: &str, out_dir: &std::path::Path) -> Result<(), error::Error> {
     let mut fmt = Formatter::new(Language::Rust);
     emit_types(&mut fmt);
-    fmt.update_file(filename, out_dir)?;
+    fmt.write(filename, out_dir)?;
     Ok(())
 }

@@ -498,6 +498,6 @@ pub(crate) fn generate(
 ) -> Result<(), error::Error> {
     let mut fmt = Formatter::new(Language::Rust);
     gen_group(settings, parent_group, &mut fmt);
-    fmt.update_file(filename, out_dir)?;
+    fmt.write(filename, out_dir)?;
     Ok(())
 }

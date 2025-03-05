@@ -153,23 +153,6 @@ impl Formatter {
         self.lines.push("\n".to_string());
     }
 
-    /// Write `self.lines` to a file.
-    pub fn update_file(
-        &self,
-        filename: impl AsRef<std::path::Path>,
-        directory: &std::path::Path,
-    ) -> Result<(), error::Error> {
-        let path = directory.join(&filename);
-        eprintln!("Writing generated file: {}", path.display());
-        let mut f = fs::File::create(path)?;
-
-        for l in self.lines.iter().map(|l| l.as_bytes()) {
-            f.write_all(l)?;
-        }
-
-        Ok(())
-    }
-
     /// Add one or more lines after stripping common indentation.
     pub fn multi_line(&mut self, s: &str) {
         parse_multiline(s).into_iter().for_each(|l| self.line(&l));
@@ -232,6 +215,23 @@ impl Formatter {
             }
         });
         self.line("}");
+    }
+
+    /// Write `self.lines` to a file.
+    pub fn write(
+        &self,
+        filename: impl AsRef<std::path::Path>,
+        directory: &std::path::Path,
+    ) -> Result<(), error::Error> {
+        let path = directory.join(&filename);
+        eprintln!("Writing generated file: {}", path.display());
+        let mut f = fs::File::create(path)?;
+
+        for l in self.lines.iter().map(|l| l.as_bytes()) {
+            f.write_all(l)?;
+        }
+
+        Ok(())
     }
 }
 

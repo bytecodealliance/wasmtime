@@ -507,12 +507,12 @@ pub(crate) fn generate(
     // ISLE DSL: mid-end ("opt") generated bindings.
     let mut fmt = Formatter::new(Language::Isle);
     gen_opt_isle(&formats, all_inst, &mut fmt);
-    fmt.update_file(isle_opt_filename, isle_dir)?;
+    fmt.write(isle_opt_filename, isle_dir)?;
 
     // ISLE DSL: lowering generated bindings.
     let mut fmt = Formatter::new(Language::Isle);
     gen_lower_isle(&formats, all_inst, &mut fmt);
-    fmt.update_file(isle_lower_filename, isle_dir)?;
+    fmt.write(isle_lower_filename, isle_dir)?;
 
     Ok(())
 }
