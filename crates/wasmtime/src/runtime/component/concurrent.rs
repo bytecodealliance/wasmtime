@@ -84,8 +84,8 @@ impl<T: 'static> PromisesUnordered<T> {
 /// Trait representing component model ABI async intrinsics and fused adapter
 /// helper functions.
 pub unsafe trait VMComponentAsyncStore {
-    /// The `task.backpressure` intrinsic.
-    fn task_backpressure(
+    /// The `backpressure.set` intrinsic.
+    fn backpressure_set(
         &mut self,
         caller_instance: RuntimeComponentInstanceIndex,
         enabled: u32,
@@ -100,28 +100,54 @@ pub unsafe trait VMComponentAsyncStore {
         storage_len: usize,
     ) -> Result<()>;
 
-    /// The `task.wait` intrinsic.
-    fn task_wait(
+    /// The `waitable-set.new` intrinsic.
+    fn waitable_set_new(
         &mut self,
         instance: &mut ComponentInstance,
         caller_instance: RuntimeComponentInstanceIndex,
+    ) -> Result<u32>;
+
+    /// The `waitable-set.wait` intrinsic.
+    fn waitable_set_wait(
+        &mut self,
+        instance: &mut ComponentInstance,
+        caller_instance: RuntimeComponentInstanceIndex,
+        set: u32,
         async_: bool,
         memory: *mut VMMemoryDefinition,
         payload: u32,
     ) -> Result<u32>;
 
-    /// The `task.poll` intrinsic.
-    fn task_poll(
+    /// The `waitable-set.poll` intrinsic.
+    fn waitable_set_poll(
         &mut self,
         instance: &mut ComponentInstance,
         caller_instance: RuntimeComponentInstanceIndex,
+        set: u32,
         async_: bool,
         memory: *mut VMMemoryDefinition,
         payload: u32,
     ) -> Result<u32>;
 
-    /// The `task.yield` intrinsic.
-    fn task_yield(&mut self, instance: &mut ComponentInstance, async_: bool) -> Result<()>;
+    /// The `waitable-set.drop` intrinsic.
+    fn waitable_set_drop(
+        &mut self,
+        instance: &mut ComponentInstance,
+        caller_instance: RuntimeComponentInstanceIndex,
+        set: u32,
+    ) -> Result<()>;
+
+    /// The `waitable.join` intrinsic.
+    fn waitable_join(
+        &mut self,
+        instance: &mut ComponentInstance,
+        caller_instance: RuntimeComponentInstanceIndex,
+        set: u32,
+        waitable: u32,
+    ) -> Result<()>;
+
+    /// The `yield` intrinsic.
+    fn yield_(&mut self, instance: &mut ComponentInstance, async_: bool) -> Result<()>;
 
     /// The `subtask.drop` intrinsic.
     fn subtask_drop(
@@ -251,6 +277,7 @@ pub unsafe trait VMComponentAsyncStore {
         instance: &mut ComponentInstance,
         ty: TypeFutureTableIndex,
         reader: u32,
+        error: u32,
     ) -> Result<()>;
 
     /// The `stream.new` intrinsic.
@@ -321,6 +348,7 @@ pub unsafe trait VMComponentAsyncStore {
         instance: &mut ComponentInstance,
         ty: TypeStreamTableIndex,
         reader: u32,
+        error: u32,
     ) -> Result<()>;
 
     /// The "fast-path" implementation of the `stream.write` intrinsic for
@@ -388,7 +416,7 @@ pub unsafe trait VMComponentAsyncStore {
 }
 
 unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
-    fn task_backpressure(
+    fn backpressure_set(
         &mut self,
         caller_instance: RuntimeComponentInstanceIndex,
         enabled: u32,
@@ -408,31 +436,63 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
         todo!()
     }
 
-    fn task_wait(
+    fn waitable_set_new(
         &mut self,
         instance: &mut ComponentInstance,
         caller_instance: RuntimeComponentInstanceIndex,
+    ) -> Result<u32> {
+        _ = (instance, caller_instance);
+        todo!();
+    }
+
+    fn waitable_set_wait(
+        &mut self,
+        instance: &mut ComponentInstance,
+        caller_instance: RuntimeComponentInstanceIndex,
+        set: u32,
         async_: bool,
         memory: *mut VMMemoryDefinition,
         payload: u32,
     ) -> Result<u32> {
-        _ = (instance, caller_instance, async_, memory, payload);
-        todo!()
+        _ = (instance, caller_instance, set, async_, memory, payload);
+        todo!();
     }
 
-    fn task_poll(
+    fn waitable_set_poll(
         &mut self,
         instance: &mut ComponentInstance,
         caller_instance: RuntimeComponentInstanceIndex,
+        set: u32,
         async_: bool,
         memory: *mut VMMemoryDefinition,
         payload: u32,
     ) -> Result<u32> {
-        _ = (instance, caller_instance, async_, memory, payload);
-        todo!()
+        _ = (instance, caller_instance, set, async_, memory, payload);
+        todo!();
     }
 
-    fn task_yield(&mut self, instance: &mut ComponentInstance, async_: bool) -> Result<()> {
+    fn waitable_set_drop(
+        &mut self,
+        instance: &mut ComponentInstance,
+        caller_instance: RuntimeComponentInstanceIndex,
+        set: u32,
+    ) -> Result<()> {
+        _ = (instance, caller_instance, set);
+        todo!();
+    }
+
+    fn waitable_join(
+        &mut self,
+        instance: &mut ComponentInstance,
+        caller_instance: RuntimeComponentInstanceIndex,
+        set: u32,
+        waitable: u32,
+    ) -> Result<()> {
+        _ = (instance, caller_instance, set, waitable);
+        todo!();
+    }
+
+    fn yield_(&mut self, instance: &mut ComponentInstance, async_: bool) -> Result<()> {
         _ = (instance, async_);
         todo!()
     }
@@ -633,8 +693,9 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
         instance: &mut ComponentInstance,
         ty: TypeFutureTableIndex,
         reader: u32,
+        error: u32,
     ) -> Result<()> {
-        _ = (instance, ty, reader);
+        _ = (instance, ty, reader, error);
         todo!()
     }
 
@@ -736,8 +797,9 @@ unsafe impl<T> VMComponentAsyncStore for StoreInner<T> {
         instance: &mut ComponentInstance,
         ty: TypeStreamTableIndex,
         reader: u32,
+        error: u32,
     ) -> Result<()> {
-        _ = (instance, ty, reader);
+        _ = (instance, ty, reader, error);
         todo!()
     }
 

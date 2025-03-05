@@ -57,6 +57,9 @@ pub trait RustGenerator<'a> {
                     self.push_str(&format!("{wt}::component::__internal::String"))
                 }
             },
+            Type::ErrorContext => {
+                self.push_str("wasmtime::component::ErrorContext");
+            }
         }
     }
 
@@ -120,7 +123,7 @@ pub trait RustGenerator<'a> {
                         needs_generics(resolve, &resolve.types[*t].kind)
                     }
                     TypeDefKind::Type(Type::String) => true,
-                    TypeDefKind::Type(_) | TypeDefKind::ErrorContext => false,
+                    TypeDefKind::Type(_) => false,
                     TypeDefKind::Unknown => unreachable!(),
                 }
             }
@@ -174,9 +177,6 @@ pub trait RustGenerator<'a> {
                 self.push_str("wasmtime::component::StreamReader<");
                 self.print_optional_ty(ty.as_ref(), TypeMode::Owned);
                 self.push_str(">");
-            }
-            TypeDefKind::ErrorContext => {
-                self.push_str("wasmtime::component::ErrorContext");
             }
             TypeDefKind::Handle(handle) => {
                 self.print_handle(handle);
@@ -236,11 +236,6 @@ pub trait RustGenerator<'a> {
         self.push_str(&format!("{wt}::component::FutureReader<"));
         self.print_optional_ty(ty, TypeMode::Owned);
         self.push_str(">");
-    }
-
-    fn print_error_context(&mut self) {
-        let wt = self.wasmtime_path();
-        self.push_str(&format!("{wt}::component::ErrorContext"));
     }
 
     fn print_handle(&mut self, handle: &Handle) {

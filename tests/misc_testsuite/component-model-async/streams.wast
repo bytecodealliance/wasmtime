@@ -72,7 +72,7 @@
 ;; stream.close-readable
 (component
   (core module $m
-    (import "" "stream.close-readable" (func $stream-close-readable (param i32)))
+    (import "" "stream.close-readable" (func $stream-close-readable (param i32 i32)))
   )
   (type $stream-type (stream u8))
   (core func $stream-close-readable (canon stream.close-readable $stream-type))

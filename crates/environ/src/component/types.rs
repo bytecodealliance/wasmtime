@@ -576,26 +576,6 @@ pub enum InterfaceType {
     ErrorContext(TypeComponentLocalErrorContextTableIndex),
 }
 
-impl From<&wasmparser::PrimitiveValType> for InterfaceType {
-    fn from(ty: &wasmparser::PrimitiveValType) -> InterfaceType {
-        match ty {
-            wasmparser::PrimitiveValType::Bool => InterfaceType::Bool,
-            wasmparser::PrimitiveValType::S8 => InterfaceType::S8,
-            wasmparser::PrimitiveValType::U8 => InterfaceType::U8,
-            wasmparser::PrimitiveValType::S16 => InterfaceType::S16,
-            wasmparser::PrimitiveValType::U16 => InterfaceType::U16,
-            wasmparser::PrimitiveValType::S32 => InterfaceType::S32,
-            wasmparser::PrimitiveValType::U32 => InterfaceType::U32,
-            wasmparser::PrimitiveValType::S64 => InterfaceType::S64,
-            wasmparser::PrimitiveValType::U64 => InterfaceType::U64,
-            wasmparser::PrimitiveValType::F32 => InterfaceType::Float32,
-            wasmparser::PrimitiveValType::F64 => InterfaceType::Float64,
-            wasmparser::PrimitiveValType::Char => InterfaceType::Char,
-            wasmparser::PrimitiveValType::String => InterfaceType::String,
-        }
-    }
-}
-
 /// Bye information about a type in the canonical ABI, with metadata for both
 /// memory32 and memory64-based types.
 #[derive(Serialize, Deserialize, Clone, Hash, Eq, PartialEq, Debug)]

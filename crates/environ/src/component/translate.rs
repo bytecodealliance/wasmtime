@@ -188,24 +188,34 @@ enum LocalInitializer<'data> {
     ResourceRep(AliasableResourceId, ModuleInternedTypeIndex),
     ResourceDrop(AliasableResourceId, ModuleInternedTypeIndex),
 
-    TaskBackpressure {
+    BackpressureSet {
         func: ModuleInternedTypeIndex,
     },
     TaskReturn {
         func: ModuleInternedTypeIndex,
         result: Option<ComponentValType>,
+        options: LocalCanonicalOptions,
     },
-    TaskWait {
+    WaitableSetNew {
+        func: ModuleInternedTypeIndex,
+    },
+    WaitableSetWait {
         func: ModuleInternedTypeIndex,
         async_: bool,
         memory: MemoryIndex,
     },
-    TaskPoll {
+    WaitableSetPoll {
         func: ModuleInternedTypeIndex,
         async_: bool,
         memory: MemoryIndex,
     },
-    TaskYield {
+    WaitableSetDrop {
+        func: ModuleInternedTypeIndex,
+    },
+    WaitableJoin {
+        func: ModuleInternedTypeIndex,
+    },
+    Yield {
         func: ModuleInternedTypeIndex,
         async_: bool,
     },
@@ -618,6 +628,10 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::ResourceDrop(resource, ty)
                         }
+                        wasmparser::CanonicalFunction::ResourceDropAsync { resource } => {
+                            let _ = resource;
+                            bail!("support for `resource.drop async` not implemented yet")
+                        }
                         wasmparser::CanonicalFunction::ResourceRep { resource } => {
                             let resource = types.component_any_type_at(resource).unwrap_resource();
                             let ty = self.core_func_signature(core_func_index)?;
@@ -628,12 +642,12 @@ impl<'a, 'data> Translator<'a, 'data> {
                         | wasmparser::CanonicalFunction::ThreadAvailableParallelism => {
                             bail!("unsupported intrinsic")
                         }
-                        wasmparser::CanonicalFunction::TaskBackpressure => {
+                        wasmparser::CanonicalFunction::BackpressureSet => {
                             let core_type = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::TaskBackpressure { func: core_type }
+                            LocalInitializer::BackpressureSet { func: core_type }
                         }
-                        wasmparser::CanonicalFunction::TaskReturn { result } => {
+                        wasmparser::CanonicalFunction::TaskReturn { result, options } => {
                             let result = result.map(|ty| match ty {
                                 wasmparser::ComponentValType::Primitive(ty) => {
                                     ComponentValType::Primitive(ty)
@@ -642,32 +656,52 @@ impl<'a, 'data> Translator<'a, 'data> {
                                     ComponentValType::Type(types.component_defined_type_at(ty))
                                 }
                             });
+                            let options = self.canonical_options(&options);
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::TaskReturn { func, result }
+                            LocalInitializer::TaskReturn {
+                                func,
+                                result,
+                                options,
+                            }
                         }
-                        wasmparser::CanonicalFunction::TaskWait { async_, memory } => {
+                        wasmparser::CanonicalFunction::WaitableSetNew => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::TaskWait {
+                            LocalInitializer::WaitableSetNew { func }
+                        }
+                        wasmparser::CanonicalFunction::WaitableSetWait { async_, memory } => {
+                            let func = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::WaitableSetWait {
                                 func,
                                 async_,
                                 memory: MemoryIndex::from_u32(memory),
                             }
                         }
-                        wasmparser::CanonicalFunction::TaskPoll { async_, memory } => {
+                        wasmparser::CanonicalFunction::WaitableSetPoll { async_, memory } => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::TaskPoll {
+                            LocalInitializer::WaitableSetPoll {
                                 func,
                                 async_,
                                 memory: MemoryIndex::from_u32(memory),
                             }
                         }
-                        wasmparser::CanonicalFunction::TaskYield { async_ } => {
+                        wasmparser::CanonicalFunction::WaitableSetDrop => {
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::TaskYield { func, async_ }
+                            LocalInitializer::WaitableSetDrop { func }
+                        }
+                        wasmparser::CanonicalFunction::WaitableJoin => {
+                            let func = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::WaitableJoin { func }
+                        }
+                        wasmparser::CanonicalFunction::Yield { async_ } => {
+                            let func = self.core_func_signature(core_func_index)?;
+                            core_func_index += 1;
+                            LocalInitializer::Yield { func, async_ }
                         }
                         wasmparser::CanonicalFunction::SubtaskDrop => {
                             let func = self.core_func_signature(core_func_index)?;

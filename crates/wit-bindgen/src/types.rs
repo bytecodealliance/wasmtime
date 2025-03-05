@@ -155,7 +155,7 @@ impl Types {
                 info = self.optional_type_info(resolve, ty.as_ref());
             }
             TypeDefKind::Handle(_) => info.has_handle = true,
-            TypeDefKind::Resource | TypeDefKind::ErrorContext => {}
+            TypeDefKind::Resource => {}
             TypeDefKind::Unknown => unreachable!(),
         }
         self.type_info.insert(ty, info);
