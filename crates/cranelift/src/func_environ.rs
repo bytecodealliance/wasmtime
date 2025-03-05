@@ -298,7 +298,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 base: vmctx,
                 offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                 global_type: pointer_type,
-                flags: MemFlags::trusted().with_readonly(),
+                flags: MemFlags::trusted().with_readonly().with_pure(),
             });
             (global, 0)
         }
@@ -314,10 +314,12 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let base = builder.ins().global_value(pointer_type, vmctx);
         let offset = i32::from(self.offsets.ptr.vmctx_runtime_limits());
         debug_assert!(self.vmstore_context_ptr.is_reserved_value());
-        self.vmstore_context_ptr =
-            builder
-                .ins()
-                .load(pointer_type, ir::MemFlags::trusted(), base, offset);
+        self.vmstore_context_ptr = builder.ins().load(
+            pointer_type,
+            ir::MemFlags::trusted().with_readonly().with_pure(),
+            base,
+            offset,
+        );
     }
 
     fn fuel_function_entry(&mut self, builder: &mut FunctionBuilder<'_>) {
@@ -808,7 +810,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     base: vmctx,
                     offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                     global_type: pointer_type,
-                    flags: MemFlags::trusted().with_readonly(),
+                    flags: MemFlags::trusted().with_readonly().with_pure(),
                 });
                 let base_offset = i32::from(self.offsets.vmtable_definition_base());
                 let current_elements_offset =
@@ -832,7 +834,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             flags: if Some(table.limits.min) == table.limits.max {
                 // A fixed-size table can't be resized so its base address won't
                 // change.
-                MemFlags::trusted().with_readonly()
+                MemFlags::trusted().with_readonly().with_pure()
             } else {
                 MemFlags::trusted()
             },
@@ -1008,18 +1010,18 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     /// memtypes are in use, add a field to the original struct and
     /// generate a new memtype for the pointee.
     fn load_pointer_with_memtypes(
-        &self,
+        &mut self,
         func: &mut ir::Function,
-        value: ir::GlobalValue,
         offset: u32,
         readonly: bool,
         memtype: Option<ir::MemoryType>,
     ) -> (ir::GlobalValue, Option<ir::MemoryType>) {
+        let vmctx = self.vmctx(func);
         let pointee = func.create_global_value(ir::GlobalValueData::Load {
-            base: value,
+            base: vmctx,
             offset: Offset32::new(i32::try_from(offset).unwrap()),
             global_type: self.pointer_type(),
-            flags: MemFlags::trusted().with_readonly(),
+            flags: MemFlags::trusted().with_readonly().with_pure(),
         });
 
         let mt = memtype.map(|mt| {
@@ -1153,7 +1155,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ) -> ir::Value {
         let vmctx = self.vmctx_val(pos);
         let pointer_type = self.pointer_type();
-        let mem_flags = ir::MemFlags::trusted().with_readonly();
+        let mem_flags = ir::MemFlags::trusted().with_readonly().with_pure();
 
         // Load the base pointer of the array of `VMSharedTypeIndex`es.
         let shared_indices = pos.ins().load(
@@ -1270,7 +1272,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         let vmctx = self.env.vmctx(self.builder.func);
         let base = self.builder.ins().global_value(pointer_type, vmctx);
 
-        let mem_flags = ir::MemFlags::trusted().with_readonly();
+        let mem_flags = ir::MemFlags::trusted().with_readonly().with_pure();
 
         // Load the callee address.
         let body_offset = i32::try_from(
@@ -1426,10 +1428,11 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
                     // anyway.
                     if table.ref_type.nullable {
                         if self.env.clif_memory_traps_enabled() {
-                            let mem_flags = ir::MemFlags::trusted().with_readonly();
                             self.builder.ins().load(
                                 sig_id_type,
-                                mem_flags.with_trap_code(Some(crate::TRAP_INDIRECT_CALL_TO_NULL)),
+                                ir::MemFlags::trusted()
+                                    .with_readonly()
+                                    .with_trap_code(Some(crate::TRAP_INDIRECT_CALL_TO_NULL)),
                                 funcref_ptr,
                                 i32::from(self.env.offsets.ptr.vm_func_ref_type_index()),
                             );
@@ -2252,12 +2255,13 @@ impl FuncEnvironment<'_> {
         builder: &mut FunctionBuilder,
         index: GlobalIndex,
     ) -> WasmResult<ir::Value> {
-        let ty = self.module.globals[index].wasm_ty;
+        let global_ty = self.module.globals[index];
+        let wasm_ty = global_ty.wasm_ty;
         debug_assert!(
-            ty.is_vmgcref_type(),
+            wasm_ty.is_vmgcref_type(),
             "We only use GlobalVariable::Custom for VMGcRef types"
         );
-        let WasmValType::Ref(ty) = ty else {
+        let WasmValType::Ref(ref_ty) = wasm_ty else {
             unreachable!()
         };
 
@@ -2268,9 +2272,13 @@ impl FuncEnvironment<'_> {
         gc::gc_compiler(self)?.translate_read_gc_reference(
             self,
             builder,
-            ty,
+            ref_ty,
             src,
-            ir::MemFlags::trusted(),
+            if global_ty.mutability {
+                ir::MemFlags::trusted()
+            } else {
+                ir::MemFlags::trusted().with_readonly().with_pure()
+            },
         )
     }
 
@@ -2319,7 +2327,6 @@ impl FuncEnvironment<'_> {
                     let from_offset = self.offsets.vmctx_vmmemory_pointer(def_index);
                     let (memory, def_mt) = self.load_pointer_with_memtypes(
                         func,
-                        vmctx,
                         from_offset,
                         true,
                         self.pcc_vmctx_memtype,
@@ -2348,7 +2355,6 @@ impl FuncEnvironment<'_> {
                 let from_offset = self.offsets.vmctx_vmmemory_import_from(index);
                 let (memory, def_mt) = self.load_pointer_with_memtypes(
                     func,
-                    vmctx,
                     from_offset,
                     true,
                     self.pcc_vmctx_memtype,
@@ -2474,7 +2480,7 @@ impl FuncEnvironment<'_> {
             }
         };
 
-        let mut flags = MemFlags::trusted().with_checked();
+        let mut flags = MemFlags::trusted().with_checked().with_pure();
         if !memory.memory_may_move(self.tunables) {
             flags.set_readonly();
         }

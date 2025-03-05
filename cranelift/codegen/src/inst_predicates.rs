@@ -42,14 +42,14 @@ fn has_side_effect(func: &Function, inst: Inst) -> bool {
 /// aegraph semantics?
 ///
 /// - Actual pure nodes (arithmetic, etc)
-/// - Loads with the `readonly` flag set
+/// - Loads with the `readonly`, `notrap`, and `pure` flags set
 pub fn is_pure_for_egraph(func: &Function, inst: Inst) -> bool {
     let is_readonly_load = match func.dfg.insts[inst] {
         InstructionData::Load {
             opcode: Opcode::Load,
             flags,
             ..
-        } => flags.readonly() && flags.notrap(),
+        } => flags.readonly() && flags.notrap() && flags.pure(),
         _ => false,
     };
 

@@ -55,8 +55,8 @@
 ;; @0053                               brif v19, block3, block4
 ;;
 ;;                                 block4:
-;; @0053                               v21 = load.i64 notrap aligned readonly v0+40
-;; @0053                               v23 = load.i64 notrap aligned readonly v0+48
+;; @0053                               v21 = load.i64 notrap aligned readonly pure v0+40
+;; @0053                               v23 = load.i64 notrap aligned readonly pure v0+48
 ;;                                     v59 = stack_addr.i64 ss0
 ;;                                     v51 = load.i32 notrap v59
 ;; @0053                               v24 = uextend.i64 v51
@@ -70,8 +70,8 @@
 ;; @0053                               v31 = load.i64 notrap aligned v30
 ;;                                     v60 = iconst.i64 1
 ;; @0053                               v32 = iadd v31, v60  ; v60 = 1
-;; @0053                               v34 = load.i64 notrap aligned readonly v0+40
-;; @0053                               v36 = load.i64 notrap aligned readonly v0+48
+;; @0053                               v34 = load.i64 notrap aligned readonly pure v0+40
+;; @0053                               v36 = load.i64 notrap aligned readonly pure v0+48
 ;;                                     v61 = stack_addr.i64 ss0
 ;;                                     v50 = load.i32 notrap v61
 ;; @0053                               v37 = uextend.i64 v50
@@ -146,8 +146,8 @@
 ;; @005a                               brif v19, block3, block4
 ;;
 ;;                                 block4:
-;; @005a                               v21 = load.i64 notrap aligned readonly v0+40
-;; @005a                               v23 = load.i64 notrap aligned readonly v0+48
+;; @005a                               v21 = load.i64 notrap aligned readonly pure v0+40
+;; @005a                               v23 = load.i64 notrap aligned readonly pure v0+48
 ;;                                     v59 = stack_addr.i64 ss0
 ;;                                     v51 = load.i32 notrap v59
 ;; @005a                               v24 = uextend.i64 v51
@@ -161,8 +161,8 @@
 ;; @005a                               v31 = load.i64 notrap aligned v30
 ;;                                     v60 = iconst.i64 1
 ;; @005a                               v32 = iadd v31, v60  ; v60 = 1
-;; @005a                               v34 = load.i64 notrap aligned readonly v0+40
-;; @005a                               v36 = load.i64 notrap aligned readonly v0+48
+;; @005a                               v34 = load.i64 notrap aligned readonly pure v0+40
+;; @005a                               v36 = load.i64 notrap aligned readonly pure v0+48
 ;;                                     v61 = stack_addr.i64 ss0
 ;;                                     v50 = load.i32 notrap v61
 ;; @005a                               v37 = uextend.i64 v50
