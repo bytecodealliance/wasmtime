@@ -115,7 +115,9 @@ pub mod types;
 mod values;
 pub use self::component::{Component, ComponentExportIndex};
 #[cfg(feature = "component-model-async")]
-pub use self::concurrent::{ErrorContext, FutureReader, Promise, PromisesUnordered, StreamReader};
+pub use self::concurrent::{
+    ErrorContext, FutureReader, Promise, PromisesUnordered, StreamReader, VMComponentAsyncStore,
+};
 pub use self::func::{
     ComponentNamedList, ComponentType, Func, Lift, Lower, TypedFunc, WasmList, WasmStr,
 };
@@ -149,6 +151,7 @@ pub mod __internal {
     pub use alloc::string::String;
     pub use alloc::vec::Vec;
     pub use anyhow;
+    pub use core::cell::RefCell;
     pub use core::mem::transmute;
     #[cfg(feature = "async")]
     pub use trait_variant::make as trait_variant_make;
