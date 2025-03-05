@@ -1,9 +1,13 @@
-//! Print the contents of the generated `assembler_definitions.isle`.
+//! Generate `assembler-definitions.isle` for debugging purposes.
+
+const PATH: &str = "assembler-definitions.isle";
 
 fn main() {
-    println!(
-        "{}",
-        std::str::from_utf8(&cranelift_assembler_x64::assembler_definitions_isle_contents())
-            .unwrap()
-    );
+    std::fs::write(
+        PATH,
+        cranelift_assembler_x64::assembler_definitions_isle_contents(),
+    )
+    .unwrap();
+
+    println!("Successfully wrote generated isle to {PATH}.");
 }
