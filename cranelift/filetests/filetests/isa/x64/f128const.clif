@@ -12,7 +12,7 @@ block0():
 ;   movq    %rsp, %rbp
 ; block0:
 ;   uninit  %xmm0
-;   xorps   %xmm0, %xmm0, %xmm0
+;   xorps %xmm0, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
