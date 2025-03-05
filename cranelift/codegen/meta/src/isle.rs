@@ -82,11 +82,9 @@ pub fn get_isle_compilations(
         .join("pulley_shared");
 
     // Assembler definitions.
-    let asm_isle_definitions = cranelift_assembler_x64::generated_files()
-        .into_iter()
-        .filter(|p| p.extension() == Some(std::ffi::OsStr::new("isle")))
-        .next()
-        .unwrap();
+    let asm_isle_contents = cranelift_assembler_x64::assembler_definitions_isle_contents();
+    let asm_isle_definitions = gen_dir.join("assembler-definitions.isle");
+    std::fs::write(&asm_isle_definitions, asm_isle_contents).unwrap();
 
     // This is a set of ISLE compilation units.
     //

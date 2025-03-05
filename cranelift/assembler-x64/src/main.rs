@@ -1,7 +1,9 @@
-//! Print the path to the generated code.
+//! Print the contents of the generated `assembler_definitions.isle`.
 
 fn main() {
-    for path in cranelift_assembler_x64::generated_files() {
-        println!("{}", path.display());
-    }
+    println!(
+        "{}",
+        std::str::from_utf8(&cranelift_assembler_x64::assembler_definitions_isle_contents())
+            .unwrap()
+    );
 }
