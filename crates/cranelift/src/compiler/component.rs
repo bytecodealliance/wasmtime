@@ -387,6 +387,8 @@ impl<'a> TrampolineCompiler<'a> {
     }
 
     fn translate_task_return_call(&mut self, results: TypeTupleIndex, options: &CanonicalOptions) {
+        // FIXME(#10338) shouldn't ignore options here.
+        let _ = options;
         let args = self.builder.func.dfg.block_params(self.block0).to_vec();
         let vmctx = args[0];
 
