@@ -103,25 +103,36 @@ impl<'a> TrampolineCompiler<'a> {
             Trampoline::ResourceNew(ty) => self.translate_resource_new(*ty),
             Trampoline::ResourceRep(ty) => self.translate_resource_rep(*ty),
             Trampoline::ResourceDrop(ty) => self.translate_resource_drop(*ty),
-            Trampoline::TaskBackpressure { instance } => {
-                self.translate_task_backpressure_call(*instance)
+            Trampoline::BackpressureSet { instance } => {
+                self.translate_backpressure_set_call(*instance)
             }
-            Trampoline::TaskReturn { results } => self.translate_task_return_call(*results),
-            Trampoline::TaskWait {
+            Trampoline::TaskReturn { results, options } => {
+                self.translate_task_return_call(*results, options)
+            }
+            Trampoline::WaitableSetNew { instance } => self.translate_waitable_set_new(*instance),
+            Trampoline::WaitableSetWait {
                 instance,
                 async_,
                 memory,
-            } => {
-                self.translate_task_wait_or_poll_call(*instance, *async_, *memory, host::task_wait)
-            }
-            Trampoline::TaskPoll {
+            } => self.translate_task_wait_or_poll_call(
+                *instance,
+                *async_,
+                *memory,
+                host::waitable_set_wait,
+            ),
+            Trampoline::WaitableSetPoll {
                 instance,
                 async_,
                 memory,
-            } => {
-                self.translate_task_wait_or_poll_call(*instance, *async_, *memory, host::task_poll)
-            }
-            Trampoline::TaskYield { async_ } => self.translate_task_yield_call(*async_),
+            } => self.translate_task_wait_or_poll_call(
+                *instance,
+                *async_,
+                *memory,
+                host::waitable_set_poll,
+            ),
+            Trampoline::WaitableSetDrop { instance } => self.translate_waitable_set_drop(*instance),
+            Trampoline::WaitableJoin { instance } => self.translate_waitable_join(*instance),
+            Trampoline::Yield { async_ } => self.translate_yield_call(*async_),
             Trampoline::SubtaskDrop { instance } => self.translate_subtask_drop_call(*instance),
             Trampoline::StreamNew { ty } => self.translate_future_or_stream_call(
                 &[ty.as_u32()],
@@ -375,7 +386,9 @@ impl<'a> TrampolineCompiler<'a> {
         }
     }
 
-    fn translate_task_return_call(&mut self, results: TypeTupleIndex) {
+    fn translate_task_return_call(&mut self, results: TypeTupleIndex, options: &CanonicalOptions) {
+        // FIXME(#10338) shouldn't ignore options here.
+        let _ = options;
         let args = self.builder.func.dfg.block_params(self.block0).to_vec();
         let vmctx = args[0];
 
@@ -390,6 +403,60 @@ impl<'a> TrampolineCompiler<'a> {
             vmctx,
             host::task_return,
             &[vmctx, ty, values_vec_ptr, values_vec_len],
+            TrapSentinel::Falsy,
+        );
+    }
+
+    fn translate_waitable_set_new(&mut self, instance: RuntimeComponentInstanceIndex) {
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+
+        let instance = self
+            .builder
+            .ins()
+            .iconst(ir::types::I32, i64::from(instance.as_u32()));
+
+        self.translate_intrinsic_libcall(
+            vmctx,
+            host::waitable_set_new,
+            &[vmctx, instance],
+            TrapSentinel::NegativeOne,
+        );
+    }
+
+    fn translate_waitable_set_drop(&mut self, instance: RuntimeComponentInstanceIndex) {
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+        let set = args[2];
+
+        let instance = self
+            .builder
+            .ins()
+            .iconst(ir::types::I32, i64::from(instance.as_u32()));
+
+        self.translate_intrinsic_libcall(
+            vmctx,
+            host::waitable_set_drop,
+            &[vmctx, instance, set],
+            TrapSentinel::Falsy,
+        );
+    }
+
+    fn translate_waitable_join(&mut self, instance: RuntimeComponentInstanceIndex) {
+        let args = self.builder.func.dfg.block_params(self.block0).to_vec();
+        let vmctx = args[0];
+        let set = args[2];
+        let waitable = args[3];
+
+        let instance = self
+            .builder
+            .ins()
+            .iconst(ir::types::I32, i64::from(instance.as_u32()));
+
+        self.translate_intrinsic_libcall(
+            vmctx,
+            host::waitable_join,
+            &[vmctx, instance, set, waitable],
             TrapSentinel::Falsy,
         );
     }
@@ -534,7 +601,7 @@ impl<'a> TrampolineCompiler<'a> {
         self.translate_intrinsic_libcall(vmctx, get_libcall, &callee_args, sentinel);
     }
 
-    fn translate_task_backpressure_call(&mut self, caller_instance: RuntimeComponentInstanceIndex) {
+    fn translate_backpressure_set_call(&mut self, caller_instance: RuntimeComponentInstanceIndex) {
         let args = self.builder.func.dfg.block_params(self.block0).to_vec();
         let vmctx = args[0];
 
@@ -549,7 +616,7 @@ impl<'a> TrampolineCompiler<'a> {
 
         self.translate_intrinsic_libcall(
             vmctx,
-            host::task_backpressure,
+            host::backpressure_set,
             &callee_args,
             TrapSentinel::Falsy,
         );
@@ -586,7 +653,7 @@ impl<'a> TrampolineCompiler<'a> {
         );
     }
 
-    fn translate_task_yield_call(&mut self, async_: bool) {
+    fn translate_yield_call(&mut self, async_: bool) {
         let args = self.builder.func.dfg.block_params(self.block0).to_vec();
         let vmctx = args[0];
 
@@ -597,12 +664,7 @@ impl<'a> TrampolineCompiler<'a> {
                 .iconst(ir::types::I8, if async_ { 1 } else { 0 }),
         ];
 
-        self.translate_intrinsic_libcall(
-            vmctx,
-            host::task_yield,
-            &callee_args,
-            TrapSentinel::Falsy,
-        );
+        self.translate_intrinsic_libcall(vmctx, host::yield_, &callee_args, TrapSentinel::Falsy);
     }
 
     fn translate_subtask_drop_call(&mut self, caller_instance: RuntimeComponentInstanceIndex) {

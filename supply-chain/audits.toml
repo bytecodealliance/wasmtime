@@ -1063,6 +1063,12 @@ the environment's terminal information when asked. Does its stated purpose and
 no more.
 """
 
+[[audits.auditable-serde]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+version = "0.8.0"
+notes = "No `unsafe` code in this crate, small crate, only working with JSON and some serde data structures."
+
 [[audits.backtrace]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
@@ -1733,6 +1739,15 @@ who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
 delta = "1.0.26 -> 1.0.28"
 notes = "No new `unsafe` and no large changes in function. This diff is mostly refactoring with a lot of docs, CI, test changes. Adds some defensive clearing out of certain variables as a safeguard."
+
+[[audits.flate2]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "1.0.30 -> 1.1.0"
+notes = """
+Minor updates, mostly a new changelog with many lines. No new `unsafe` code and
+mostly just updating Rust idioms.
+"""
 
 [[audits.foldhash]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -2419,6 +2434,16 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.8.0 -> 0.7.4"
 notes = "Very few changes here, only minor updates here and there."
+
+[[audits.miniz_oxide]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.8.0 -> 0.8.5"
+notes = """
+Lots of small updates here and there, for example around modernizing Rust
+idioms. No new `unsafe` code and everything looks like what you'd expect a
+compression library to be doing.
+"""
 
 [[audits.mio]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -3147,6 +3172,15 @@ who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
 version = "0.7.4"
 notes = "Alex Crichton audited the safety of src/sync/reusable_box.rs, I audited the remainder of the crate."
+
+[[audits.topological-sort]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.1.0 -> 0.2.2"
+notes = """
+No major changes, mostly CI changes in this update. A new `Default` impl
+and a new test.
+"""
 
 [[audits.torch-sys]]
 who = "Andrew Brown <andrew.brown@intel.com>"
