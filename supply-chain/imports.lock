@@ -2015,6 +2015,13 @@ when = "2025-03-05"
 user-id = 73222
 user-login = "wasmtime-publish"
 
+[[publisher.web-sys]]
+version = "0.3.57"
+when = "2022-04-07"
+user-id = 1
+user-login = "alexcrichton"
+user-name = "Alex Crichton"
+
 [[publisher.wiggle]]
 version = "30.0.2"
 when = "2025-02-25"
