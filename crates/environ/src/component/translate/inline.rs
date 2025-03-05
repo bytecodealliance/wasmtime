@@ -679,16 +679,22 @@ impl<'a> Inliner<'a> {
                 ));
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
-            TaskReturn { func, result } => {
+            TaskReturn {
+                func,
+                result,
+                options,
+            } => {
                 let results = result
                     .iter()
                     .map(|ty| types.valtype(frame.translation.types_ref(), ty))
                     .collect::<Result<_>>()?;
                 let results = types.new_tuple_type(results);
+                let options = self.adapter_options(frame, types, options);
+                let options = self.canonical_options(options);
                 let index = self
                     .result
                     .trampolines
-                    .push((*func, dfg::Trampoline::TaskReturn { results }));
+                    .push((*func, dfg::Trampoline::TaskReturn { results, options }));
                 frame.funcs.push(dfg::CoreDef::Trampoline(index));
             }
             WaitableSetNew { func } => {

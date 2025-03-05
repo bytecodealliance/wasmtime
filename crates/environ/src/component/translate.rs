@@ -194,6 +194,7 @@ enum LocalInitializer<'data> {
     TaskReturn {
         func: ModuleInternedTypeIndex,
         result: Option<ComponentValType>,
+        options: LocalCanonicalOptions,
     },
     WaitableSetNew {
         func: ModuleInternedTypeIndex,
@@ -646,7 +647,7 @@ impl<'a, 'data> Translator<'a, 'data> {
                             core_func_index += 1;
                             LocalInitializer::BackpressureSet { func: core_type }
                         }
-                        wasmparser::CanonicalFunction::TaskReturn { result } => {
+                        wasmparser::CanonicalFunction::TaskReturn { result, options } => {
                             let result = result.map(|ty| match ty {
                                 wasmparser::ComponentValType::Primitive(ty) => {
                                     ComponentValType::Primitive(ty)
@@ -655,9 +656,14 @@ impl<'a, 'data> Translator<'a, 'data> {
                                     ComponentValType::Type(types.component_defined_type_at(ty))
                                 }
                             });
+                            let options = self.canonical_options(&options);
                             let func = self.core_func_signature(core_func_index)?;
                             core_func_index += 1;
-                            LocalInitializer::TaskReturn { func, result }
+                            LocalInitializer::TaskReturn {
+                                func,
+                                result,
+                                options,
+                            }
                         }
                         wasmparser::CanonicalFunction::WaitableSetNew => {
                             let func = self.core_func_signature(core_func_index)?;

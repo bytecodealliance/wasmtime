@@ -288,8 +288,12 @@ pub enum Trampoline {
     },
     TaskReturn {
         results: TypeTupleIndex,
+        options: CanonicalOptions,
     },
-    TaskWait {
+    WaitableSetNew {
+        instance: RuntimeComponentInstanceIndex,
+    },
+    WaitableSetWait {
         instance: RuntimeComponentInstanceIndex,
         async_: bool,
         memory: MemoryId,
@@ -781,10 +785,14 @@ impl LinearizeDfg<'_> {
             Trampoline::BackpressureSet { instance } => info::Trampoline::BackpressureSet {
                 instance: *instance,
             },
-            Trampoline::TaskReturn { results } => {
-                info::Trampoline::TaskReturn { results: *results }
-            }
-            Trampoline::TaskWait {
+            Trampoline::TaskReturn { results, options } => info::Trampoline::TaskReturn {
+                results: *results,
+                options: self.options(options),
+            },
+            Trampoline::WaitableSetNew { instance } => info::Trampoline::WaitableSetNew {
+                instance: *instance,
+            },
+            Trampoline::WaitableSetWait {
                 instance,
                 async_,
                 memory,

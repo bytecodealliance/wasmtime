@@ -72,7 +72,7 @@
 ;; future.close-readable
 (component
   (core module $m
-    (import "" "future.close-readable" (func $future-close-readable (param i32)))
+    (import "" "future.close-readable" (func $future-close-readable (param i32 i32)))
   )
   (type $future-type (future u8))
   (core func $future-close-readable (canon future.close-readable $future-type))

@@ -692,6 +692,9 @@ pub enum Trampoline {
     TaskReturn {
         /// Tuple representing the result types this intrinsic accepts.
         results: TypeTupleIndex,
+
+        /// The canonical ABI options specified for this intrinsic.
+        options: CanonicalOptions,
     },
 
     /// A `waitable-set.new` intrinsic.
@@ -1002,11 +1005,14 @@ impl Trampoline {
             ResourceNew(i) => format!("component-resource-new[{}]", i.as_u32()),
             ResourceRep(i) => format!("component-resource-rep[{}]", i.as_u32()),
             ResourceDrop(i) => format!("component-resource-drop[{}]", i.as_u32()),
-            TaskBackpressure { .. } => format!("task-backpressure"),
+            BackpressureSet { .. } => format!("backpressure-set"),
             TaskReturn { .. } => format!("task-return"),
-            TaskWait { .. } => format!("task-wait"),
-            TaskPoll { .. } => format!("task-poll"),
-            TaskYield { .. } => format!("task-yield"),
+            WaitableSetNew { .. } => format!("waitable-set-new"),
+            WaitableSetWait { .. } => format!("waitable-set-wait"),
+            WaitableSetPoll { .. } => format!("waitable-set-poll"),
+            WaitableSetDrop { .. } => format!("waitable-set-drop"),
+            WaitableJoin { .. } => format!("waitable-join"),
+            Yield { .. } => format!("yield"),
             SubtaskDrop { .. } => format!("subtask-drop"),
             StreamNew { .. } => format!("stream-new"),
             StreamRead { .. } => format!("stream-read"),
