@@ -1244,7 +1244,7 @@ impl FuncEnvironment<'_> {
     /// Get the GC heap's base pointer.
     fn get_gc_heap_base(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
         let ptr_ty = self.pointer_type();
-        let flags = ir::MemFlags::trusted().with_readonly().with_pure();
+        let flags = ir::MemFlags::trusted().with_readonly().with_can_move();
 
         let vmctx = self.vmctx(builder.func);
         let vmctx = builder.ins().global_value(ptr_ty, vmctx);
@@ -1258,7 +1258,7 @@ impl FuncEnvironment<'_> {
     /// Get the GC heap's bound.
     fn get_gc_heap_bound(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
         let ptr_ty = self.pointer_type();
-        let flags = ir::MemFlags::trusted().with_readonly().with_pure();
+        let flags = ir::MemFlags::trusted().with_readonly().with_can_move();
 
         let vmctx = self.vmctx(builder.func);
         let vmctx = builder.ins().global_value(ptr_ty, vmctx);

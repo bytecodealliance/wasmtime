@@ -73,7 +73,7 @@ pub struct MemFlags {
     // * 4 - checked flag
     // * 5/6 - alias region
     // * 7/8/9/10/11/12/13/14 - trap code
-    // * 15 - pure flag
+    // * 15 - can_move flag
     //
     // Current properties upheld are:
     //
@@ -112,11 +112,12 @@ const ALIAS_REGION_OFFSET: u16 = 5;
 const MASK_TRAP_CODE: u16 = 0b1111_1111 << TRAP_CODE_OFFSET;
 const TRAP_CODE_OFFSET: u16 = 7;
 
-/// Whether the load's/store's safety is purely a function of its data
-/// dependencies (i.e. operands) and is not guarded by
-/// outside-the-data-flow-graph properties, like implicit bounds-checking
+/// Whether this memory operation may be freely moved by the optimizer so long
+/// as its data dependencies are satisfied. That is, by setting this flag, the
+/// producer is guaranteeing that this memory operation's safety is not guarded
+/// by outside-the-data-flow-graph properties, like implicit bounds-checking
 /// control dependencies.
-const BIT_PURE: u16 = 1 << 15;
+const BIT_CAN_MOVE: u16 = 1 << 15;
 
 impl MemFlags {
     /// Create a new empty set of flags.
@@ -204,7 +205,7 @@ impl MemFlags {
                 self.with_alias_region(Some(AliasRegion::Vmctx))
             }
             "checked" => self.with_checked(),
-            "pure" => self.with_pure(),
+            "can_move" => self.with_can_move(),
 
             other => match TrapCode::from_str(other) {
                 Ok(code) => self.with_trap_code(Some(code)),
@@ -272,7 +273,7 @@ impl MemFlags {
     /// This flag does *not* mean that the associated instruction can be
     /// code-motioned to arbitrary places in the function so long as its data
     /// dependencies are met. This only means that, given its current location
-    /// in the function, it will never trap. See the `pure` method for more
+    /// in the function, it will never trap. See the `can_move` method for more
     /// details.
     pub const fn notrap(self) -> bool {
         self.trap_code().is_none()
@@ -289,8 +290,8 @@ impl MemFlags {
         self.with_trap_code(None)
     }
 
-    /// Is this memory operation's safety (e.g. the validity of its `notrap` and
-    /// `readonly` claims) purely a function of its data dependencies?
+    /// Is this memory operation safe to move so long as its data dependencies
+    /// remain satisfied?
     ///
     /// If this is `true`, then it is okay to code motion this instruction to
     /// arbitrary locations, in the function, including across blocks and
@@ -304,18 +305,18 @@ impl MemFlags {
     /// bounds check, which is not reflected in its operands, and it would be
     /// unsafe to code motion it above the bounds check, even if its data
     /// dependencies would still be satisfied.
-    pub const fn pure(self) -> bool {
-        self.read_bit(BIT_PURE)
+    pub const fn can_move(self) -> bool {
+        self.read_bit(BIT_CAN_MOVE)
     }
 
-    /// Set the `pure` flag.
-    pub const fn set_pure(&mut self) {
-        *self = self.with_pure();
+    /// Set the `can_move` flag.
+    pub const fn set_can_move(&mut self) {
+        *self = self.with_can_move();
     }
 
-    /// Set the `pure` flag, returning new flags.
-    pub const fn with_pure(self) -> Self {
-        self.with_bit(BIT_PURE)
+    /// Set the `can_move` flag, returning new flags.
+    pub const fn with_can_move(self) -> Self {
+        self.with_bit(BIT_CAN_MOVE)
     }
 
     /// Test if the `aligned` flag is set.
@@ -424,8 +425,8 @@ impl fmt::Display for MemFlags {
         if self.readonly() {
             write!(f, " readonly")?;
         }
-        if self.pure() {
-            write!(f, " pure")?;
+        if self.can_move() {
+            write!(f, " can_move")?;
         }
         if self.read_bit(BIT_BIG_ENDIAN) {
             write!(f, " big")?;

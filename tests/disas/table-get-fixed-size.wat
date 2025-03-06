@@ -21,7 +21,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly pure gv3+80
+;;     gv4 = load.i64 notrap aligned readonly can_move gv3+80
 ;;     sig0 = (i64 vmctx, i32) -> i64 tail
 ;;     fn0 = colocated u1:26 sig0
 ;;     stack_limit = gv2
@@ -31,7 +31,7 @@
 ;; @0054                               v4 = iconst.i32 7
 ;; @0054                               v5 = icmp uge v3, v4  ; v3 = 0, v4 = 7
 ;; @0054                               v6 = uextend.i64 v3  ; v3 = 0
-;; @0054                               v7 = load.i64 notrap aligned readonly pure v0+80
+;; @0054                               v7 = load.i64 notrap aligned readonly can_move v0+80
 ;;                                     v53 = iconst.i64 2
 ;; @0054                               v8 = ishl v6, v53  ; v53 = 2
 ;; @0054                               v9 = iadd v7, v8
@@ -54,8 +54,8 @@
 ;; @0054                               brif v18, block3, block4
 ;;
 ;;                                 block4:
-;; @0054                               v20 = load.i64 notrap aligned readonly pure v0+40
-;; @0054                               v22 = load.i64 notrap aligned readonly pure v0+48
+;; @0054                               v20 = load.i64 notrap aligned readonly can_move v0+40
+;; @0054                               v22 = load.i64 notrap aligned readonly can_move v0+48
 ;;                                     v57 = stack_addr.i64 ss0
 ;;                                     v50 = load.i32 notrap v57
 ;; @0054                               v23 = uextend.i64 v50
@@ -69,8 +69,8 @@
 ;; @0054                               v30 = load.i64 notrap aligned v29
 ;;                                     v58 = iconst.i64 1
 ;; @0054                               v31 = iadd v30, v58  ; v58 = 1
-;; @0054                               v33 = load.i64 notrap aligned readonly pure v0+40
-;; @0054                               v35 = load.i64 notrap aligned readonly pure v0+48
+;; @0054                               v33 = load.i64 notrap aligned readonly can_move v0+40
+;; @0054                               v35 = load.i64 notrap aligned readonly can_move v0+48
 ;;                                     v59 = stack_addr.i64 ss0
 ;;                                     v49 = load.i32 notrap v59
 ;; @0054                               v36 = uextend.i64 v49
@@ -111,7 +111,7 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
-;;     gv4 = load.i64 notrap aligned readonly pure gv3+80
+;;     gv4 = load.i64 notrap aligned readonly can_move gv3+80
 ;;     sig0 = (i64 vmctx, i32) -> i64 tail
 ;;     fn0 = colocated u1:26 sig0
 ;;     stack_limit = gv2
@@ -120,7 +120,7 @@
 ;; @005b                               v4 = iconst.i32 7
 ;; @005b                               v5 = icmp uge v2, v4  ; v4 = 7
 ;; @005b                               v6 = uextend.i64 v2
-;; @005b                               v7 = load.i64 notrap aligned readonly pure v0+80
+;; @005b                               v7 = load.i64 notrap aligned readonly can_move v0+80
 ;;                                     v53 = iconst.i64 2
 ;; @005b                               v8 = ishl v6, v53  ; v53 = 2
 ;; @005b                               v9 = iadd v7, v8
@@ -143,8 +143,8 @@
 ;; @005b                               brif v18, block3, block4
 ;;
 ;;                                 block4:
-;; @005b                               v20 = load.i64 notrap aligned readonly pure v0+40
-;; @005b                               v22 = load.i64 notrap aligned readonly pure v0+48
+;; @005b                               v20 = load.i64 notrap aligned readonly can_move v0+40
+;; @005b                               v22 = load.i64 notrap aligned readonly can_move v0+48
 ;;                                     v57 = stack_addr.i64 ss0
 ;;                                     v50 = load.i32 notrap v57
 ;; @005b                               v23 = uextend.i64 v50
@@ -158,8 +158,8 @@
 ;; @005b                               v30 = load.i64 notrap aligned v29
 ;;                                     v58 = iconst.i64 1
 ;; @005b                               v31 = iadd v30, v58  ; v58 = 1
-;; @005b                               v33 = load.i64 notrap aligned readonly pure v0+40
-;; @005b                               v35 = load.i64 notrap aligned readonly pure v0+48
+;; @005b                               v33 = load.i64 notrap aligned readonly can_move v0+40
+;; @005b                               v35 = load.i64 notrap aligned readonly can_move v0+48
 ;;                                     v59 = stack_addr.i64 ss0
 ;;                                     v49 = load.i32 notrap v59
 ;; @005b                               v36 = uextend.i64 v49

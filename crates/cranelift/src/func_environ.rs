@@ -298,7 +298,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                 base: vmctx,
                 offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                 global_type: pointer_type,
-                flags: MemFlags::trusted().with_readonly().with_pure(),
+                flags: MemFlags::trusted().with_readonly().with_can_move(),
             });
             (global, 0)
         }
@@ -316,7 +316,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         debug_assert!(self.vmstore_context_ptr.is_reserved_value());
         self.vmstore_context_ptr = builder.ins().load(
             pointer_type,
-            ir::MemFlags::trusted().with_readonly().with_pure(),
+            ir::MemFlags::trusted().with_readonly().with_can_move(),
             base,
             offset,
         );
@@ -810,7 +810,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
                     base: vmctx,
                     offset: Offset32::new(i32::try_from(from_offset).unwrap()),
                     global_type: pointer_type,
-                    flags: MemFlags::trusted().with_readonly().with_pure(),
+                    flags: MemFlags::trusted().with_readonly().with_can_move(),
                 });
                 let base_offset = i32::from(self.offsets.vmtable_definition_base());
                 let current_elements_offset =
@@ -834,7 +834,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             flags: if Some(table.limits.min) == table.limits.max {
                 // A fixed-size table can't be resized so its base address won't
                 // change.
-                MemFlags::trusted().with_readonly().with_pure()
+                MemFlags::trusted().with_readonly().with_can_move()
             } else {
                 MemFlags::trusted()
             },
@@ -1021,7 +1021,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
             base: vmctx,
             offset: Offset32::new(i32::try_from(offset).unwrap()),
             global_type: self.pointer_type(),
-            flags: MemFlags::trusted().with_readonly().with_pure(),
+            flags: MemFlags::trusted().with_readonly().with_can_move(),
         });
 
         let mt = memtype.map(|mt| {
@@ -1155,7 +1155,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
     ) -> ir::Value {
         let vmctx = self.vmctx_val(pos);
         let pointer_type = self.pointer_type();
-        let mem_flags = ir::MemFlags::trusted().with_readonly().with_pure();
+        let mem_flags = ir::MemFlags::trusted().with_readonly().with_can_move();
 
         // Load the base pointer of the array of `VMSharedTypeIndex`es.
         let shared_indices = pos.ins().load(
@@ -1272,7 +1272,7 @@ impl<'a, 'func, 'module_env> Call<'a, 'func, 'module_env> {
         let vmctx = self.env.vmctx(self.builder.func);
         let base = self.builder.ins().global_value(pointer_type, vmctx);
 
-        let mem_flags = ir::MemFlags::trusted().with_readonly().with_pure();
+        let mem_flags = ir::MemFlags::trusted().with_readonly().with_can_move();
 
         // Load the callee address.
         let body_offset = i32::try_from(
@@ -2277,7 +2277,7 @@ impl FuncEnvironment<'_> {
             if global_ty.mutability {
                 ir::MemFlags::trusted()
             } else {
-                ir::MemFlags::trusted().with_readonly().with_pure()
+                ir::MemFlags::trusted().with_readonly().with_can_move()
             },
         )
     }
@@ -2480,7 +2480,7 @@ impl FuncEnvironment<'_> {
             }
         };
 
-        let mut flags = MemFlags::trusted().with_checked().with_pure();
+        let mut flags = MemFlags::trusted().with_checked().with_can_move();
         if !memory.memory_may_move(self.tunables) {
             flags.set_readonly();
         }

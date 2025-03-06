@@ -49,14 +49,14 @@
 ;; @002e                               v18 = iconst.i64 4
 ;; @002e                               v19 = uadd_overflow_trap v17, v18, user1  ; v18 = 4
 ;; @002e                               v21 = uadd_overflow_trap v19, v18, user1  ; v18 = 4
-;; @002e                               v16 = load.i64 notrap aligned readonly pure v0+48
+;; @002e                               v16 = load.i64 notrap aligned readonly can_move v0+48
 ;; @002e                               v22 = icmp ule v21, v16
 ;; @002e                               trapz v22, user1
-;; @002e                               v14 = load.i64 notrap aligned readonly pure v0+40
+;; @002e                               v14 = load.i64 notrap aligned readonly can_move v0+40
 ;; @002e                               v23 = iadd v14, v19
 ;; @002e                               v24 = load.i32 notrap aligned readonly v23
-;; @002e                               v11 = load.i64 notrap aligned readonly pure v0+64
-;; @002e                               v12 = load.i32 notrap aligned readonly pure v11
+;; @002e                               v11 = load.i64 notrap aligned readonly can_move v0+64
+;; @002e                               v12 = load.i32 notrap aligned readonly can_move v11
 ;; @002e                               v25 = icmp eq v24, v12
 ;; @002e                               v26 = uextend.i32 v25
 ;; @002e                               brif v26, block7(v26), block6
@@ -73,14 +73,14 @@
 ;; @002e                               brif v30, block8, block2
 ;;
 ;;                                 block8:
-;; @0034                               v32 = load.i64 notrap aligned readonly pure v0+80
-;; @0034                               v33 = load.i64 notrap aligned readonly pure v0+96
+;; @0034                               v32 = load.i64 notrap aligned readonly can_move v0+80
+;; @0034                               v33 = load.i64 notrap aligned readonly can_move v0+96
 ;; @0034                               call_indirect sig1, v32(v33, v0)
 ;; @0036                               return
 ;;
 ;;                                 block2:
-;; @0038                               v35 = load.i64 notrap aligned readonly pure v0+104
-;; @0038                               v36 = load.i64 notrap aligned readonly pure v0+120
+;; @0038                               v35 = load.i64 notrap aligned readonly can_move v0+104
+;; @0038                               v36 = load.i64 notrap aligned readonly can_move v0+120
 ;; @0038                               call_indirect sig2, v35(v36, v0)
 ;; @003a                               return
 ;; }

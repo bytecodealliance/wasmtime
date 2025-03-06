@@ -13,7 +13,7 @@
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
 ;;     gv4 = load.i64 notrap aligned gv3+96
-;;     gv5 = load.i64 notrap aligned readonly pure checked gv3+88
+;;     gv5 = load.i64 notrap aligned readonly can_move checked gv3+88
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
@@ -21,7 +21,7 @@
 ;; @0020                               v5 = iconst.i64 0x0001_fffc
 ;; @0020                               v6 = icmp ugt v4, v5  ; v5 = 0x0001_fffc
 ;; @0020                               v9 = iconst.i64 0
-;; @0020                               v7 = load.i64 notrap aligned readonly pure checked v0+88
+;; @0020                               v7 = load.i64 notrap aligned readonly can_move checked v0+88
 ;; @0020                               v8 = iadd v7, v4
 ;; @0020                               v10 = select_spectre_guard v6, v9, v8  ; v9 = 0
 ;; @0020                               v11 = load.i32 little heap v10

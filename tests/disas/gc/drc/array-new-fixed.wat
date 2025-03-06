@@ -28,7 +28,7 @@
 ;; @0025                               v16 = iconst.i32 8
 ;; @0025                               v17 = call fn0(v0, v14, v15, v12, v16)  ; v14 = -1476395008, v15 = 0, v16 = 8
 ;; @0025                               v7 = iconst.i32 3
-;; @0025                               v20 = load.i64 notrap aligned readonly pure v0+40
+;; @0025                               v20 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0025                               v18 = ireduce.i32 v17
 ;; @0025                               v21 = uextend.i64 v18
 ;; @0025                               v22 = iadd v20, v21

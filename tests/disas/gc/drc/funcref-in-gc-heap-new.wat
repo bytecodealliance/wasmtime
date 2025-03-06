@@ -32,7 +32,7 @@
 ;;                                     store notrap v10, v21
 ;; @0020                               v17 = call fn1(v0, v2), stack_map=[i32 @ ss0+0]
 ;; @0020                               v18 = ireduce.i32 v17
-;; @0020                               v12 = load.i64 notrap aligned readonly pure v0+40
+;; @0020                               v12 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0020                               v13 = uextend.i64 v10
 ;; @0020                               v14 = iadd v12, v13
 ;;                                     v23 = iconst.i64 16
