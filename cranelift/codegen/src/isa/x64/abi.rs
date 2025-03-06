@@ -115,7 +115,7 @@ impl ABIMachineSpec for X64ABIMachineSpec {
             // the four initial in-arg parameters.
             //
             // (See:
-            // https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-160)
+            // https://learn.microsoft.com/en-us/cpp/build/x64-calling-convention?view=msvc-170)
             next_stack = 32;
         }
 
