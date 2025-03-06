@@ -767,15 +767,16 @@ impl Module for JITModule {
             align,
         } = data;
 
-        let size = init.size();
-        let ptr = if size == 0 {
-            // Return a correctly aligned non-null pointer to avoid UB in write_bytes and
-            // copy_nonoverlapping.
-            usize::try_from(align.unwrap_or(WRITABLE_DATA_ALIGNMENT)).unwrap() as *mut u8
-        } else if decl.writable {
+        // Make sure to allocate at least 1 byte. Allocating 0 bytes is UB. Previously a dummy
+        // value was used, however as it turns out this will cause pc-relative relocations to
+        // fail on architectures where pc-relative offsets are range restricted as the dummy
+        // value is not close enough to the code that has the pc-relative relocation.
+        let alloc_size = std::cmp::max(init.size(), 1);
+
+        let ptr = if decl.writable {
             self.memory
                 .writable
-                .allocate(size, align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
+                .allocate(alloc_size, align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
                 .map_err(|e| ModuleError::Allocation {
                     message: "unable to alloc writable data",
                     err: e,
@@ -783,7 +784,7 @@ impl Module for JITModule {
         } else {
             self.memory
                 .readonly
-                .allocate(size, align.unwrap_or(READONLY_DATA_ALIGNMENT))
+                .allocate(alloc_size, align.unwrap_or(READONLY_DATA_ALIGNMENT))
                 .map_err(|e| ModuleError::Allocation {
                     message: "unable to alloc readonly data",
                     err: e,
@@ -794,7 +795,7 @@ impl Module for JITModule {
             // FIXME pass a Layout to allocate and only compute the layout once.
             std::alloc::handle_alloc_error(
                 std::alloc::Layout::from_size_align(
-                    size,
+                    alloc_size,
                     align.unwrap_or(READONLY_DATA_ALIGNMENT).try_into().unwrap(),
                 )
                 .unwrap(),
@@ -805,12 +806,12 @@ impl Module for JITModule {
             Init::Uninitialized => {
                 panic!("data is not initialized yet");
             }
-            Init::Zeros { .. } => {
+            Init::Zeros { size } => {
                 unsafe { ptr::write_bytes(ptr, 0, size) };
             }
             Init::Bytes { ref contents } => {
                 let src = contents.as_ptr();
-                unsafe { ptr::copy_nonoverlapping(src, ptr, size) };
+                unsafe { ptr::copy_nonoverlapping(src, ptr, contents.len()) };
             }
         }
 
@@ -821,7 +822,11 @@ impl Module for JITModule {
         };
         let relocs = data.all_relocs(pointer_reloc).collect::<Vec<_>>();
 
-        self.compiled_data_objects[id] = Some(CompiledBlob { ptr, size, relocs });
+        self.compiled_data_objects[id] = Some(CompiledBlob {
+            ptr,
+            size: init.size(),
+            relocs,
+        });
         self.data_objects_to_finalize.push(id);
         if self.isa.flags().is_pic() {
             self.pending_got_updates.push(GotUpdate {
