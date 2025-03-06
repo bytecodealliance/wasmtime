@@ -3,8 +3,8 @@
 use anyhow::anyhow;
 use cranelift_codegen::binemit::{Addend, CodeOffset, Reloc};
 use cranelift_codegen::entity::SecondaryMap;
+use cranelift_codegen::ir;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
-use cranelift_codegen::{ir, FinalizedMachReloc};
 use cranelift_control::ControlPlane;
 use cranelift_module::{
     DataDescription, DataId, FuncId, Init, Linkage, Module, ModuleDeclarations, ModuleError,
@@ -347,20 +347,24 @@ impl Module for ObjectModule {
 
         self.define_function_bytes(
             func_id,
-            &ctx.func,
             alignment,
             ctx.compiled_code().unwrap().code_buffer(),
-            ctx.compiled_code().unwrap().buffer.relocs(),
+            &ctx.compiled_code()
+                .unwrap()
+                .buffer
+                .relocs()
+                .iter()
+                .map(|reloc| ModuleReloc::from_mach_reloc(&reloc, &ctx.func, func_id))
+                .collect::<Vec<_>>(),
         )
     }
 
     fn define_function_bytes(
         &mut self,
         func_id: FuncId,
-        func: &ir::Function,
         alignment: u64,
         bytes: &[u8],
-        relocs: &[FinalizedMachReloc],
+        relocs: &[ModuleReloc],
     ) -> ModuleResult<()> {
         info!("defining function {} with bytes", func_id);
         let decl = self.declarations.get_function_decl(func_id);
@@ -392,9 +396,7 @@ impl Module for ObjectModule {
         if !relocs.is_empty() {
             let relocs = relocs
                 .iter()
-                .map(|record| {
-                    self.process_reloc(&ModuleReloc::from_mach_reloc(&record, func, func_id))
-                })
+                .map(|reloc| self.process_reloc(reloc))
                 .collect();
             self.relocs.push(SymbolRelocs {
                 section,
