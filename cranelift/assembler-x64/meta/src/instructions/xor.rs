@@ -21,7 +21,8 @@ pub fn list() -> Vec<Inst> {
         inst("xorw", fmt("RM", [rw(r16), r(rm16)]), rex([0x66, 0x33]).r(), _64b | compat),
         inst("xorl", fmt("RM", [rw(r32), r(rm32)]), rex(0x33).r(), _64b | compat),
         inst("xorq", fmt("RM", [rw(r64), r(rm64)]), rex(0x33).w().r(), _64b),
-        inst("xorpd", fmt("A", [rw(xmm), r(rm128)]), rex([0x66, 0x0F, 0x57]).r(), _64b),
+        // SSE vector instructions
         inst("xorps", fmt("A", [rw(xmm), r(rm128)]), rex([0x0F, 0x57]).r(), _64b),
+        inst("xorpd", fmt("A", [rw(xmm), r(rm128)]), rex([0x66, 0x0F, 0x57]).r(), _64b),
     ]
 }
