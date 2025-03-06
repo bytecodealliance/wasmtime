@@ -1,4 +1,4 @@
-//! Generate instruction data (including opcodes, formats, builders, etc.).
+//! Generate CLIF instruction data (including opcodes, formats, builders, etc.).
 
 use crate::cdsl::camel_case;
 use crate::cdsl::formats::InstructionFormat;

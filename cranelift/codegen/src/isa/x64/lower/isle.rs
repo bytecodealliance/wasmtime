@@ -6,7 +6,7 @@ use crate::{ir::types, ir::AtomicRmwOp, isa};
 use generated_code::{AssemblerOutputs, Context, MInst, RegisterClass};
 
 // Types that the generated ISLE code uses via `use super::*`.
-use super::external::{CraneliftRegisters, PairedGpr, PairedXmm};
+use super::external::{isle_assembler_methods, CraneliftRegisters, PairedGpr, PairedXmm};
 use super::{is_int_or_ref_ty, is_mergeable_load, lower_to_amode, MergeableLoadSize};
 use crate::ir::condcodes::{FloatCC, IntCC};
 use crate::ir::immediates::*;
@@ -76,7 +76,7 @@ pub(crate) fn lower_branch(
 impl Context for IsleContext<'_, '_, MInst, X64Backend> {
     isle_lower_prelude_methods!();
     isle_prelude_caller_methods!(X64CallSite);
-    asm::isle_assembler_methods!();
+    isle_assembler_methods!();
 
     #[inline]
     fn operand_size_of_type_32_64(&mut self, ty: Type) -> OperandSize {
