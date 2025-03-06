@@ -738,6 +738,9 @@ dependencies = [
 [[package]]
 name = "cranelift-assembler-x64-meta"
 version = "0.119.0"
+dependencies = [
+ "cranelift-srcgen",
+]
 
 [[package]]
 name = "cranelift-bforest"

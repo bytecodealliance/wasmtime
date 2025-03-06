@@ -12,7 +12,7 @@ impl dsl::Inst {
             ""
         };
 
-        f.line(format!("/// `{self}`"), None);
+        fmtln!(f, "/// `{self}`");
         generate_derive(f);
         if self.requires_generic() {
             generate_derive_arbitrary_bounds(f);
@@ -409,8 +409,8 @@ impl dsl::Inst {
             .map(|o| o.isle_param_raw())
             .collect::<Vec<_>>()
             .join(" ");
-        f.line(format!("(decl {raw_name} ({raw_param_tys}) AssemblerOutputs)"), None);
-        f.line(format!("(extern constructor {raw_name} {raw_name})"), None);
+        fmtln!(f, "(decl {raw_name} ({raw_param_tys}) AssemblerOutputs)");
+        fmtln!(f, "(extern constructor {raw_name} {raw_name})");
 
         // Next, for each "emitter" ISLE constructor being generated, synthesize
         // a pure-ISLE constructor which delegates appropriately to the `*_raw`
@@ -435,11 +435,8 @@ impl dsl::Inst {
                 .join(" ");
             let convert = ctor.conversion_constructor();
 
-            f.line(format!("(decl {rule_name} ({param_tys}) {result_ty})"), None);
-            f.line(
-                format!("(rule ({rule_name} {param_names}) ({convert} ({raw_name} {param_names})))"),
-                None,
-            );
+            fmtln!(f, "(decl {rule_name} ({param_tys}) {result_ty})");
+            fmtln!(f, "(rule ({rule_name} {param_names}) ({convert} ({raw_name} {param_names})))");
         }
     }
 }
