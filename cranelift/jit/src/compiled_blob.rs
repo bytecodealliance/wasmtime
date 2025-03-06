@@ -23,8 +23,6 @@ impl CompiledBlob {
     pub(crate) fn perform_relocations(
         &self,
         get_address: impl Fn(&ModuleRelocTarget) -> *const u8,
-        get_got_entry: impl Fn(&ModuleRelocTarget) -> *const u8,
-        get_plt_entry: impl Fn(&ModuleRelocTarget) -> *const u8,
     ) {
         use std::ptr::write_unaligned;
 
@@ -59,16 +57,10 @@ impl CompiledBlob {
                     unsafe { write_unaligned(at as *mut i32, pcrel) };
                 }
                 Reloc::X86GOTPCRel4 => {
-                    let base = get_got_entry(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
-                    let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
-                    unsafe { write_unaligned(at as *mut i32, pcrel) };
+                    panic!("GOT relocation shouldn't be generated when !is_pic");
                 }
                 Reloc::X86CallPLTRel4 => {
-                    let base = get_plt_entry(name);
-                    let what = unsafe { base.offset(isize::try_from(addend).unwrap()) };
-                    let pcrel = i32::try_from((what as isize) - (at as isize)).unwrap();
-                    unsafe { write_unaligned(at as *mut i32, pcrel) };
+                    panic!("PLT relocation shouldn't be generated when !is_pic");
                 }
                 Reloc::S390xPCRel32Dbl | Reloc::S390xPLTRel32Dbl => {
                     let base = get_address(name);
@@ -95,33 +87,10 @@ impl CompiledBlob {
                     unsafe { modify_inst32(iptr, |inst| inst | imm26) };
                 }
                 Reloc::Aarch64AdrGotPage21 => {
-                    // Set the immediate value of an ADRP to bits [32:12] of X; check that –2^32 <= X < 2^32
-                    assert_eq!(addend, 0, "addend affects the address looked up in get_got_entry, which is currently only called with a symbol");
-                    let what = get_got_entry(name);
-                    let what_page = (what as usize) & !0xfff;
-                    let at_page = (at as usize) & !0xfff;
-                    let pcrel = (what_page as isize).checked_sub(at_page as isize).unwrap();
-                    assert!(
-                        (-1 << 32) <= (pcrel as i64) && (pcrel as i64) < (1 << 32),
-                        "can't reach GOT page with ±4GB `adrp` instruction"
-                    );
-                    let val = pcrel >> 12;
-
-                    let immlo = ((val as u32) & 0b11) << 29;
-                    let immhi = (((val as u32) >> 2) & &0x7ffff) << 5;
-                    let mask = !((0x7ffff << 5) | (0b11 << 29));
-                    unsafe { modify_inst32(at as *mut u32, |adrp| (adrp & mask) | immlo | immhi) };
+                    panic!("GOT relocation shouldn't be generated when !is_pic");
                 }
                 Reloc::Aarch64Ld64GotLo12Nc => {
-                    // Set the LD/ST immediate field to bits 11:3 of X. No overflow check; check that X&7 = 0
-                    assert_eq!(addend, 0);
-                    let base = get_got_entry(name);
-                    let what = base as u32;
-                    assert_eq!(what & 0b111, 0);
-                    let val = what >> 3;
-                    let imm9 = (val & 0x1ff) << 10;
-                    let mask = !(0x1ff << 10);
-                    unsafe { modify_inst32(at as *mut u32, |ldr| (ldr & mask) | imm9) };
+                    panic!("GOT relocation shouldn't be generated when !is_pic");
                 }
                 Reloc::RiscvCallPlt => {
                     // A R_RISCV_CALL_PLT relocation expects auipc+jalr instruction pair.
