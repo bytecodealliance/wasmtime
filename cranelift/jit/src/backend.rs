@@ -30,7 +30,6 @@ pub struct JITBuilder {
     symbols: HashMap<String, SendWrapper<*const u8>>,
     lookup_symbols: Vec<Box<dyn Fn(&str) -> Option<*const u8> + Send>>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
-    hotswap_enabled: bool,
 }
 
 impl JITBuilder {
@@ -94,7 +93,6 @@ impl JITBuilder {
             symbols,
             lookup_symbols,
             libcall_names,
-            hotswap_enabled: false,
         }
     }
 
@@ -145,15 +143,6 @@ impl JITBuilder {
         self.lookup_symbols.push(symbol_lookup_fn);
         self
     }
-
-    /// Enable or disable hotswap support. See [`JITModule::prepare_for_function_redefine`]
-    /// for more information.
-    ///
-    /// Enabling hotswap support requires PIC code.
-    pub fn hotswap(&mut self, enabled: bool) -> &mut Self {
-        self.hotswap_enabled = enabled;
-        self
-    }
 }
 
 /// A pending update to the GOT.
@@ -180,7 +169,6 @@ unsafe impl<T> Send for SendWrapper<T> {}
 /// See the `JITBuilder` for a convenient way to construct `JITModule` instances.
 pub struct JITModule {
     isa: OwnedTargetIsa,
-    hotswap_enabled: bool,
     symbols: RefCell<HashMap<String, SendWrapper<*const u8>>>,
     lookup_symbols: Vec<Box<dyn Fn(&str) -> Option<*const u8> + Send>>,
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
@@ -312,16 +300,12 @@ impl JITModule {
         match *name {
             ModuleRelocTarget::User { .. } => {
                 let (name, linkage) = if ModuleDeclarations::is_function(name) {
-                    if self.hotswap_enabled {
-                        return self.get_plt_address(name);
-                    } else {
-                        let func_id = FuncId::from_name(name);
-                        match &self.compiled_functions[func_id] {
-                            Some(compiled) => return compiled.ptr,
-                            None => {
-                                let decl = self.declarations.get_function_decl(func_id);
-                                (&decl.name, decl.linkage)
-                            }
+                    let func_id = FuncId::from_name(name);
+                    match &self.compiled_functions[func_id] {
+                        Some(compiled) => return compiled.ptr,
+                        None => {
+                            let decl = self.declarations.get_function_decl(func_id);
+                            (&decl.name, decl.linkage)
                         }
                     }
                 } else {
@@ -504,13 +488,6 @@ impl JITModule {
 
     /// Create a new `JITModule`.
     pub fn new(builder: JITBuilder) -> Self {
-        if builder.hotswap_enabled {
-            assert!(
-                builder.isa.flags().is_pic(),
-                "Hotswapping requires PIC code"
-            );
-        }
-
         let branch_protection =
             if cfg!(target_arch = "aarch64") && use_bti(&builder.isa.isa_flags()) {
                 BranchProtection::BTI
@@ -519,7 +496,6 @@ impl JITModule {
             };
         let mut module = Self {
             isa: builder.isa,
-            hotswap_enabled: builder.hotswap_enabled,
             symbols: RefCell::new(builder.symbols),
             lookup_symbols: builder.lookup_symbols,
             libcall_names: builder.libcall_names,
@@ -566,33 +542,6 @@ impl JITModule {
         }
 
         module
-    }
-
-    /// Allow a single future `define_function` on a previously defined function. This allows for
-    /// hot code swapping and lazy compilation of functions.
-    ///
-    /// This requires hotswap support to be enabled first using [`JITBuilder::hotswap`].
-    pub fn prepare_for_function_redefine(&mut self, func_id: FuncId) -> ModuleResult<()> {
-        assert!(self.hotswap_enabled, "Hotswap support is not enabled");
-        let decl = self.declarations.get_function_decl(func_id);
-        if !decl.linkage.is_definable() {
-            return Err(ModuleError::InvalidImportDefinition(
-                decl.linkage_name(func_id).into_owned(),
-            ));
-        }
-
-        if self.compiled_functions[func_id].is_none() {
-            return Err(ModuleError::Backend(anyhow::anyhow!(
-                "Tried to redefine not yet defined function {}",
-                decl.linkage_name(func_id),
-            )));
-        }
-
-        self.compiled_functions[func_id] = None;
-
-        // FIXME return some kind of handle that allows for deallocating the function
-
-        Ok(())
     }
 }
 
@@ -686,21 +635,6 @@ impl Module for JITModule {
             ));
         }
 
-        if self.hotswap_enabled {
-            // Disable colocated if hotswapping is enabled to avoid a PLT indirection in case of
-            // calls and to allow data objects to be hotswapped in the future.
-            for func in ctx.func.dfg.ext_funcs.values_mut() {
-                func.colocated = false;
-            }
-
-            for gv in ctx.func.global_values.values_mut() {
-                match gv {
-                    ir::GlobalValueData::Symbol { colocated, .. } => *colocated = false,
-                    _ => {}
-                }
-            }
-        }
-
         // work around borrow-checker to allow reuse of ctx below
         let res = ctx.compile(self.isa(), ctrl_plane)?;
         let alignment = res.buffer.alignment as u64;
@@ -741,30 +675,7 @@ impl Module for JITModule {
             })
         }
 
-        if self.hotswap_enabled {
-            self.compiled_functions[id]
-                .as_ref()
-                .unwrap()
-                .perform_relocations(
-                    |name| match *name {
-                        ModuleRelocTarget::User { .. } => {
-                            unreachable!("non GOT or PLT relocation in function {} to {}", id, name)
-                        }
-                        ModuleRelocTarget::LibCall(ref libcall) => self
-                            .libcall_plt_entries
-                            .get(libcall)
-                            .unwrap_or_else(|| panic!("can't resolve libcall {libcall}"))
-                            .0
-                            .as_ptr()
-                            .cast::<u8>(),
-                        _ => panic!("invalid name"),
-                    },
-                    |name| self.get_got_address(name).as_ptr().cast(),
-                    |name| self.get_plt_address(name),
-                );
-        } else {
-            self.functions_to_finalize.push(id);
-        }
+        self.functions_to_finalize.push(id);
 
         Ok(())
     }
@@ -821,18 +732,7 @@ impl Module for JITModule {
             })
         }
 
-        if self.hotswap_enabled {
-            self.compiled_functions[id]
-                .as_ref()
-                .unwrap()
-                .perform_relocations(
-                    |name| unreachable!("non GOT or PLT relocation in function {} to {}", id, name),
-                    |name| self.get_got_address(name).as_ptr().cast(),
-                    |name| self.get_plt_address(name),
-                );
-        } else {
-            self.functions_to_finalize.push(id);
-        }
+        self.functions_to_finalize.push(id);
 
         Ok(())
     }
@@ -863,15 +763,16 @@ impl Module for JITModule {
             align,
         } = data;
 
-        let size = init.size();
-        let ptr = if size == 0 {
-            // Return a correctly aligned non-null pointer to avoid UB in write_bytes and
-            // copy_nonoverlapping.
-            usize::try_from(align.unwrap_or(WRITABLE_DATA_ALIGNMENT)).unwrap() as *mut u8
-        } else if decl.writable {
+        // Make sure to allocate at least 1 byte. Allocating 0 bytes is UB. Previously a dummy
+        // value was used, however as it turns out this will cause pc-relative relocations to
+        // fail on architectures where pc-relative offsets are range restricted as the dummy
+        // value is not close enough to the code that has the pc-relative relocation.
+        let alloc_size = std::cmp::max(init.size(), 1);
+
+        let ptr = if decl.writable {
             self.memory
                 .writable
-                .allocate(size, align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
+                .allocate(alloc_size, align.unwrap_or(WRITABLE_DATA_ALIGNMENT))
                 .map_err(|e| ModuleError::Allocation {
                     message: "unable to alloc writable data",
                     err: e,
@@ -879,7 +780,7 @@ impl Module for JITModule {
         } else {
             self.memory
                 .readonly
-                .allocate(size, align.unwrap_or(READONLY_DATA_ALIGNMENT))
+                .allocate(alloc_size, align.unwrap_or(READONLY_DATA_ALIGNMENT))
                 .map_err(|e| ModuleError::Allocation {
                     message: "unable to alloc readonly data",
                     err: e,
@@ -890,7 +791,7 @@ impl Module for JITModule {
             // FIXME pass a Layout to allocate and only compute the layout once.
             std::alloc::handle_alloc_error(
                 std::alloc::Layout::from_size_align(
-                    size,
+                    alloc_size,
                     align.unwrap_or(READONLY_DATA_ALIGNMENT).try_into().unwrap(),
                 )
                 .unwrap(),
@@ -901,12 +802,12 @@ impl Module for JITModule {
             Init::Uninitialized => {
                 panic!("data is not initialized yet");
             }
-            Init::Zeros { .. } => {
+            Init::Zeros { size } => {
                 unsafe { ptr::write_bytes(ptr, 0, size) };
             }
             Init::Bytes { ref contents } => {
                 let src = contents.as_ptr();
-                unsafe { ptr::copy_nonoverlapping(src, ptr, size) };
+                unsafe { ptr::copy_nonoverlapping(src, ptr, contents.len()) };
             }
         }
 
@@ -917,7 +818,11 @@ impl Module for JITModule {
         };
         let relocs = data.all_relocs(pointer_reloc).collect::<Vec<_>>();
 
-        self.compiled_data_objects[id] = Some(CompiledBlob { ptr, size, relocs });
+        self.compiled_data_objects[id] = Some(CompiledBlob {
+            ptr,
+            size: init.size(),
+            relocs,
+        });
         self.data_objects_to_finalize.push(id);
         if self.isa.flags().is_pic() {
             self.pending_got_updates.push(GotUpdate {
