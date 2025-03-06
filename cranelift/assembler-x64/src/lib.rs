@@ -85,6 +85,11 @@ pub use reg::{Gpr, NonRspGpr, Size};
 pub use rex::RexFlags;
 pub use xmm::Xmm;
 
+/// List the files generated to create this assembler.
+pub fn generated_files() -> Vec<std::path::PathBuf> {
+    include!(concat!(env!("OUT_DIR"), "/generated-files.rs"))
+}
+
 /// Return the contents of `assembler-definitions.isle` which is needed to
 /// generate the x64 instruction selector.
 pub fn assembler_definitions_isle_contents() -> Vec<u8> {
