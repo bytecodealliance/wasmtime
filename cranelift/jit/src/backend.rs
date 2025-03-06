@@ -4,7 +4,7 @@ use crate::{compiled_blob::CompiledBlob, memory::BranchProtection, memory::Memor
 use cranelift_codegen::binemit::Reloc;
 use cranelift_codegen::isa::{OwnedTargetIsa, TargetIsa};
 use cranelift_codegen::settings::Configurable;
-use cranelift_codegen::{ir, settings, FinalizedMachReloc};
+use cranelift_codegen::{ir, settings};
 use cranelift_control::ControlPlane;
 use cranelift_entity::SecondaryMap;
 use cranelift_module::{
@@ -772,10 +772,9 @@ impl Module for JITModule {
     fn define_function_bytes(
         &mut self,
         id: FuncId,
-        func: &ir::Function,
         alignment: u64,
         bytes: &[u8],
-        relocs: &[FinalizedMachReloc],
+        relocs: &[ModuleReloc],
     ) -> ModuleResult<()> {
         info!("defining function {} with bytes", id);
         let decl = self.declarations.get_function_decl(id);
@@ -812,10 +811,7 @@ impl Module for JITModule {
         self.compiled_functions[id] = Some(CompiledBlob {
             ptr,
             size,
-            relocs: relocs
-                .iter()
-                .map(|reloc| ModuleReloc::from_mach_reloc(reloc, func, id))
-                .collect(),
+            relocs: relocs.to_owned(),
         });
 
         if self.isa.flags().is_pic() {
