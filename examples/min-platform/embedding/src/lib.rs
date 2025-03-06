@@ -5,6 +5,7 @@ extern crate alloc;
 
 use alloc::string::ToString;
 use anyhow::Result;
+use core::ptr;
 use wasmtime::{Engine, Instance, Linker, Module, Store};
 
 mod allocator;
@@ -94,7 +95,11 @@ fn simple_host_fn(module: &[u8]) -> Result<()> {
 }
 
 fn deserialize(engine: &Engine, module: &[u8]) -> Result<Option<Module>> {
-    match unsafe { Module::deserialize(engine, module) } {
+    // NOTE: deserialize_raw avoids creating a copy of the module code.  See the
+    // safety notes before using in your embedding.
+    let memory_ptr = ptr::slice_from_raw_parts(module.as_ptr(), module.len());
+    let module_memory = ptr::NonNull::new(memory_ptr.cast_mut()).unwrap();
+    match unsafe { Module::deserialize_raw(engine, module_memory) } {
         Ok(module) => Ok(Some(module)),
         Err(e) => {
             // Currently if custom signals/virtual memory are disabled then this
