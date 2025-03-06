@@ -16,8 +16,8 @@ block0(v0: f32, v1: f32):
 ;   movdqa  %xmm0, %xmm2
 ;   movdqa  %xmm7, %xmm0
 ;   andnps  %xmm0, %xmm2, %xmm0
-;   andps   %xmm7, %xmm1, %xmm7
-;   orps    %xmm0, %xmm7, %xmm0
+;   andps %xmm1, %xmm7
+;   orps %xmm7, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -53,7 +53,7 @@ block0(v0: f64, v1: f64):
 ;   movdqa  %xmm0, %xmm2
 ;   movdqa  %xmm7, %xmm0
 ;   andnpd  %xmm0, %xmm2, %xmm0
-;   andpd   %xmm7, %xmm1, %xmm7
+;   andpd %xmm1, %xmm7
 ;   orpd %xmm7, %xmm0
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
