@@ -13,7 +13,7 @@ wit_bindgen::generate!({
             include wasi:http/imports@0.2.3;
             include wasi:config/imports@0.2.0-draft;
             include wasi:keyvalue/imports@0.2.0-draft;
-            include wasi:tls/imports@0.2.3;
+            include wasi:tls/imports@0.2.0-draft;
         }
     ",
     path: [

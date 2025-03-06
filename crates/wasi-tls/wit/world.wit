@@ -1,4 +1,4 @@
-package wasi:tls@0.2.3;
+package wasi:tls@0.2.0-draft;
 
 @unstable(feature = tls)
 world imports {
