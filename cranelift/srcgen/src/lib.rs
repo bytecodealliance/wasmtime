@@ -162,7 +162,9 @@ impl Formatter {
 
     /// Add a comment line.
     pub fn comment(&mut self, s: impl AsRef<str>) {
-        fmtln!(self, "{} {}", self.lang.comment_token(), s.as_ref())
+        // Avoid `fmtln!` here: we don't want to append a location comment to a
+        // comment.
+        self.line(format!("{} {}", self.lang.comment_token(), s.as_ref()));
     }
 
     /// Add a (multi-line) documentation comment.
