@@ -915,15 +915,6 @@ pub(crate) enum V128ExtAddKind {
     I16x8U,
 }
 
-impl From<V128ExtAddKind> for V128AddKind {
-    fn from(value: V128ExtAddKind) -> Self {
-        match value {
-            V128ExtAddKind::I8x16S | V128ExtAddKind::I8x16U => Self::I16x8,
-            V128ExtAddKind::I16x8S | V128ExtAddKind::I16x8U => Self::I32x4,
-        }
-    }
-}
-
 /// Kinds of vector extended multiplication supported by WebAssembly.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum V128ExtMulKind {

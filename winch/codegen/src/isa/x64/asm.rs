@@ -1818,17 +1818,43 @@ impl Assembler {
         })
     }
 
-    /// Adds vectors of integers in `src1` and `src2` and puts the results in
-    /// `dst`.
-    pub fn xmm_vpadd_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
-        let op = match size {
+    /// Converts an operand size to the appropriate opcode for `vpadd``.
+    fn xmm_vpadd_opcode(size: OperandSize) -> AvxOpcode {
+        match size {
             OperandSize::S8 => AvxOpcode::Vpaddb,
             OperandSize::S32 => AvxOpcode::Vpaddd,
             _ => unimplemented!(),
-        };
+        }
+    }
+
+    pub fn xmm_vpadd_rmr(
+        &mut self,
+        src1: Reg,
+        src2: &Address,
+        dst: WritableReg,
+        size: OperandSize,
+    ) {
+        let address = Self::to_synthetic_amode(
+            src2,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
 
         self.emit(Inst::XmmRmiRVex {
-            op,
+            op: Self::xmm_vpadd_opcode(size),
+            src1: src1.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::mem(address)),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Adds vectors of integers in `src1` and `src2` and puts the results in
+    /// `dst`.
+    pub fn xmm_vpadd_rrr(&mut self, src1: Reg, src2: Reg, dst: WritableReg, size: OperandSize) {
+        self.emit(Inst::XmmRmiRVex {
+            op: Self::xmm_vpadd_opcode(size),
             src1: src1.into(),
             src2: src2.into(),
             dst: dst.to_reg().into(),
@@ -2913,6 +2939,72 @@ impl Assembler {
             src: src.into(),
             dst: dst.to_reg().into(),
         });
+    }
+
+    /// Multiply and add packed signed and unsigned bytes.
+    pub fn xmm_vpmaddubs_rmr(
+        &mut self,
+        src: Reg,
+        address: &Address,
+        dst: WritableReg,
+        size: OperandSize,
+    ) {
+        let address = Self::to_synthetic_amode(
+            address,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
+
+        let op = match size {
+            OperandSize::S16 => AvxOpcode::Vpmaddubsw,
+            _ => unimplemented!(),
+        };
+
+        self.emit(Inst::XmmRmiRVex {
+            op,
+            src1: src.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::mem(address)),
+            dst: dst.to_reg().into(),
+        });
+    }
+
+    /// Multiple and add packed integers.
+    pub fn xmm_vpmaddwd_rmr(&mut self, src: Reg, address: &Address, dst: WritableReg) {
+        let address = Self::to_synthetic_amode(
+            address,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
+
+        self.emit(Inst::XmmRmiRVex {
+            op: AvxOpcode::Vpmaddwd,
+            src1: src.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::mem(address)),
+            dst: dst.to_reg().into(),
+        })
+    }
+
+    /// Perform a logical on vector in `src` and in `address` and put the
+    /// results in `dst`.
+    pub fn xmm_vpxor_rmr(&mut self, src: Reg, address: &Address, dst: WritableReg) {
+        let address = Self::to_synthetic_amode(
+            address,
+            &mut self.pool,
+            &mut self.constants,
+            &mut self.buffer,
+            MemFlags::trusted(),
+        );
+
+        self.emit(Inst::XmmRmiRVex {
+            op: AvxOpcode::Vpxor,
+            src1: src.into(),
+            src2: XmmMemImm::unwrap_new(RegMemImm::mem(address)),
+            dst: dst.to_reg().into(),
+        })
     }
 }
 
