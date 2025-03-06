@@ -47,7 +47,7 @@ macro_rules! fmtln {
     };
 
     ($fmt:ident, $arg:expr) => {
-        $fmt.line_with_location($arg, $crate::loc!())
+        $fmt.line_with_location(format!($arg), $crate::loc!())
     };
 
     ($_:tt, $($args:expr),+) => {
@@ -60,6 +60,7 @@ macro_rules! fmtln {
 }
 
 /// Identify the source code language a [`Formatter`] will emit.
+#[derive(Debug, Clone, Copy)]
 pub enum Language {
     Rust,
     Isle,
@@ -112,6 +113,7 @@ impl Formatter {
         self.indent -= 1;
     }
 
+    /// Increase indentation level for the duration of `f`.
     pub fn indent<T, F: FnOnce(&mut Formatter) -> T>(&mut self, f: F) -> T {
         self.indent_push();
         let ret = f(self);
@@ -176,6 +178,16 @@ impl Formatter {
                 }
             })
             .for_each(|s| self.line(s.as_str()));
+    }
+
+    /// Add a brace-delimited block that begins with `start`: i.e., `<start> {
+    /// <f()> }`. This properly indents the contents of the block.
+    pub fn add_block<T, F: FnOnce(&mut Formatter) -> T>(&mut self, start: &str, f: F) -> T {
+        assert!(matches!(self.lang, Language::Rust));
+        self.line(format!("{start} {{"));
+        let ret = self.indent(f);
+        self.line("}");
+        ret
     }
 
     /// Add a match expression.
