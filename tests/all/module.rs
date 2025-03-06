@@ -1,7 +1,9 @@
 use anyhow::Context;
 use std::sync::atomic::{AtomicBool, Ordering::Relaxed};
 use std::sync::Arc;
+use target_lexicon::Triple;
 use wasmtime::*;
+use wasmtime_environ::TripleExt;
 use wasmtime_test_macros::wasmtime_test;
 
 #[test]
@@ -586,7 +588,7 @@ fn validate_deterministic() {
 fn deserialize_raw_avoids_copy() {
     // target pulley; executing code directly requires virtual memory
     let mut config = Config::new();
-    let target = format!("pulley{}", std::mem::size_of::<usize>() * 8);
+    let target = format!("{}", Triple::pulley_host());
     config.target(&target).unwrap();
     let engine = Engine::new(&config).unwrap();
     let wat = String::from(
