@@ -27,7 +27,7 @@
 ;;                                 block0(v0: i64, v1: i64):
 ;;                                     v94 = iconst.i64 112
 ;; @008f                               v7 = iadd v0, v94  ; v94 = 112
-;; @008f                               v8 = load.i32 notrap aligned v7
+;; @008f                               v8 = load.i32 notrap aligned readonly can_move v7
 ;;                                     v95 = stack_addr.i64 ss0
 ;;                                     store notrap v8, v95
 ;;                                     v96 = stack_addr.i64 ss0
@@ -44,8 +44,8 @@
 ;; @008f                               brif v14, block3, block4
 ;;
 ;;                                 block4:
-;; @008f                               v16 = load.i64 notrap aligned readonly v0+40
-;; @008f                               v18 = load.i64 notrap aligned readonly v0+48
+;; @008f                               v16 = load.i64 notrap aligned readonly can_move v0+40
+;; @008f                               v18 = load.i64 notrap aligned readonly can_move v0+48
 ;;                                     v98 = stack_addr.i64 ss0
 ;;                                     v92 = load.i32 notrap v98
 ;; @008f                               v19 = uextend.i64 v92
@@ -59,8 +59,8 @@
 ;; @008f                               v26 = load.i64 notrap aligned v25
 ;;                                     v99 = iconst.i64 1
 ;; @008f                               v27 = iadd v26, v99  ; v99 = 1
-;; @008f                               v29 = load.i64 notrap aligned readonly v0+40
-;; @008f                               v31 = load.i64 notrap aligned readonly v0+48
+;; @008f                               v29 = load.i64 notrap aligned readonly can_move v0+40
+;; @008f                               v31 = load.i64 notrap aligned readonly can_move v0+48
 ;;                                     v100 = stack_addr.i64 ss0
 ;;                                     v91 = load.i32 notrap v100
 ;; @008f                               v32 = uextend.i64 v91
@@ -89,7 +89,7 @@
 ;;                                 block5:
 ;;                                     v104 = iconst.i64 128
 ;; @0091                               v43 = iadd.i64 v0, v104  ; v104 = 128
-;; @0091                               v44 = load.i32 notrap aligned v43
+;; @0091                               v44 = load.i32 notrap aligned readonly can_move v43
 ;;                                     v105 = stack_addr.i64 ss1
 ;;                                     store notrap v44, v105
 ;;                                     v106 = stack_addr.i64 ss1
@@ -106,8 +106,8 @@
 ;; @0091                               brif v50, block7, block8
 ;;
 ;;                                 block8:
-;; @0091                               v52 = load.i64 notrap aligned readonly v0+40
-;; @0091                               v54 = load.i64 notrap aligned readonly v0+48
+;; @0091                               v52 = load.i64 notrap aligned readonly can_move v0+40
+;; @0091                               v54 = load.i64 notrap aligned readonly can_move v0+48
 ;;                                     v108 = stack_addr.i64 ss1
 ;;                                     v87 = load.i32 notrap v108
 ;; @0091                               v55 = uextend.i64 v87
@@ -121,8 +121,8 @@
 ;; @0091                               v62 = load.i64 notrap aligned v61
 ;;                                     v109 = iconst.i64 1
 ;; @0091                               v63 = iadd v62, v109  ; v109 = 1
-;; @0091                               v65 = load.i64 notrap aligned readonly v0+40
-;; @0091                               v67 = load.i64 notrap aligned readonly v0+48
+;; @0091                               v65 = load.i64 notrap aligned readonly can_move v0+40
+;; @0091                               v67 = load.i64 notrap aligned readonly can_move v0+48
 ;;                                     v110 = stack_addr.i64 ss1
 ;;                                     v86 = load.i32 notrap v110
 ;; @0091                               v68 = uextend.i64 v86

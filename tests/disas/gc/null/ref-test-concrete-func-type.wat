@@ -29,8 +29,8 @@
 ;;
 ;;                                 block3:
 ;; @0020                               v10 = load.i32 notrap aligned readonly v2+16
-;; @0020                               v8 = load.i64 notrap aligned readonly v0+64
-;; @0020                               v9 = load.i32 notrap aligned readonly v8
+;; @0020                               v8 = load.i64 notrap aligned readonly can_move v0+64
+;; @0020                               v9 = load.i32 notrap aligned readonly can_move v8
 ;; @0020                               v11 = icmp eq v10, v9
 ;; @0020                               v12 = uextend.i32 v11
 ;; @0020                               brif v12, block6(v12), block5

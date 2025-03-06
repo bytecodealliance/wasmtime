@@ -33,10 +33,10 @@
 ;; @0034                               v11 = uadd_overflow_trap v9, v10, user1  ; v10 = 8
 ;;                                     v16 = iconst.i64 24
 ;; @0034                               v13 = uadd_overflow_trap v9, v16, user1  ; v16 = 24
-;; @0034                               v8 = load.i64 notrap aligned readonly v0+48
+;; @0034                               v8 = load.i64 notrap aligned readonly can_move v0+48
 ;; @0034                               v14 = icmp ule v13, v8
 ;; @0034                               trapz v14, user1
-;; @0034                               v6 = load.i64 notrap aligned readonly v0+40
+;; @0034                               v6 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0034                               v15 = iadd v6, v11
 ;; @0034                               store notrap aligned little v3, v15
 ;; @0038                               jump block1
@@ -59,10 +59,10 @@
 ;; @003f                               v11 = uadd_overflow_trap v9, v10, user1  ; v10 = 12
 ;;                                     v16 = iconst.i64 24
 ;; @003f                               v13 = uadd_overflow_trap v9, v16, user1  ; v16 = 24
-;; @003f                               v8 = load.i64 notrap aligned readonly v0+48
+;; @003f                               v8 = load.i64 notrap aligned readonly can_move v0+48
 ;; @003f                               v14 = icmp ule v13, v8
 ;; @003f                               trapz v14, user1
-;; @003f                               v6 = load.i64 notrap aligned readonly v0+40
+;; @003f                               v6 = load.i64 notrap aligned readonly can_move v0+40
 ;; @003f                               v15 = iadd v6, v11
 ;; @003f                               istore8 notrap aligned little v3, v15
 ;; @0043                               jump block1
@@ -85,10 +85,10 @@
 ;; @004a                               v11 = uadd_overflow_trap v9, v10, user1  ; v10 = 16
 ;;                                     v16 = iconst.i64 24
 ;; @004a                               v13 = uadd_overflow_trap v9, v16, user1  ; v16 = 24
-;; @004a                               v8 = load.i64 notrap aligned readonly v0+48
+;; @004a                               v8 = load.i64 notrap aligned readonly can_move v0+48
 ;; @004a                               v14 = icmp ule v13, v8
 ;; @004a                               trapz v14, user1
-;; @004a                               v6 = load.i64 notrap aligned readonly v0+40
+;; @004a                               v6 = load.i64 notrap aligned readonly can_move v0+40
 ;; @004a                               v15 = iadd v6, v11
 ;; @004a                               store notrap aligned little v3, v15
 ;; @004e                               jump block1

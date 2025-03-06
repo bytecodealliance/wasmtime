@@ -30,16 +30,16 @@
 ;; @0021                               v6 = iconst.i32 24
 ;; @0021                               v18 = uadd_overflow_trap v17, v6, user18  ; v6 = 24
 ;; @0021                               v19 = uextend.i64 v18
-;; @0021                               v23 = load.i64 notrap aligned readonly v0+48
+;; @0021                               v23 = load.i64 notrap aligned readonly can_move v0+48
 ;; @0021                               v24 = icmp ule v19, v23
 ;; @0021                               trapz v24, user18
 ;;                                     v52 = iconst.i32 -1342177256
-;; @0021                               v21 = load.i64 notrap aligned readonly v0+40
+;; @0021                               v21 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0021                               v25 = uextend.i64 v17
 ;; @0021                               v26 = iadd v21, v25
 ;; @0021                               store notrap aligned v52, v26  ; v52 = -1342177256
-;; @0021                               v30 = load.i64 notrap aligned readonly v0+64
-;; @0021                               v31 = load.i32 notrap aligned readonly v30
+;; @0021                               v30 = load.i64 notrap aligned readonly can_move v0+64
+;; @0021                               v31 = load.i32 notrap aligned readonly can_move v30
 ;; @0021                               store notrap aligned v31, v26+4
 ;; @0021                               store notrap aligned v18, v11
 ;; @0021                               v3 = f32const 0.0

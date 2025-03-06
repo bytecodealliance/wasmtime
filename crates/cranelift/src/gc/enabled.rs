@@ -680,9 +680,12 @@ pub fn translate_array_len(
         // don't know its length yet. Chicken and egg problem.
         BoundsCheck::Access(ir::types::I32.bytes()),
     );
-    let result = builder
-        .ins()
-        .load(ir::types::I32, ir::MemFlags::trusted(), len_field, 0);
+    let result = builder.ins().load(
+        ir::types::I32,
+        ir::MemFlags::trusted().with_readonly(),
+        len_field,
+        0,
+    );
     log::trace!("translate_array_len(..) -> {result:?}");
     Ok(result)
 }
@@ -1241,7 +1244,7 @@ impl FuncEnvironment<'_> {
     /// Get the GC heap's base pointer.
     fn get_gc_heap_base(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
         let ptr_ty = self.pointer_type();
-        let flags = ir::MemFlags::trusted().with_readonly();
+        let flags = ir::MemFlags::trusted().with_readonly().with_can_move();
 
         let vmctx = self.vmctx(builder.func);
         let vmctx = builder.ins().global_value(ptr_ty, vmctx);
@@ -1255,7 +1258,7 @@ impl FuncEnvironment<'_> {
     /// Get the GC heap's bound.
     fn get_gc_heap_bound(&mut self, builder: &mut FunctionBuilder) -> ir::Value {
         let ptr_ty = self.pointer_type();
-        let flags = ir::MemFlags::trusted().with_readonly();
+        let flags = ir::MemFlags::trusted().with_readonly().with_can_move();
 
         let vmctx = self.vmctx(builder.func);
         let vmctx = builder.ins().global_value(ptr_ty, vmctx);

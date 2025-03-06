@@ -25,12 +25,12 @@
 ;; @0022                               v11 = uadd_overflow_trap v9, v10, user1  ; v10 = 16
 ;;                                     v19 = iconst.i64 24
 ;; @0022                               v13 = uadd_overflow_trap v9, v19, user1  ; v19 = 24
-;; @0022                               v8 = load.i64 notrap aligned readonly v0+48
+;; @0022                               v8 = load.i64 notrap aligned readonly can_move v0+48
 ;; @0022                               v14 = icmp ule v13, v8
 ;; @0022                               trapz v14, user1
 ;; @0022                               v17 = call fn0(v0, v3)
 ;; @0022                               v18 = ireduce.i32 v17
-;; @0022                               v6 = load.i64 notrap aligned readonly v0+40
+;; @0022                               v6 = load.i64 notrap aligned readonly can_move v0+40
 ;; @0022                               v15 = iadd v6, v11
 ;; @0022                               store notrap aligned little v18, v15
 ;; @0026                               jump block1

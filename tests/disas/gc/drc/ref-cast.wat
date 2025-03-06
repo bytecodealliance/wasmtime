@@ -37,14 +37,14 @@
 ;; @001e                               v18 = iconst.i64 4
 ;; @001e                               v19 = uadd_overflow_trap v17, v18, user1  ; v18 = 4
 ;; @001e                               v21 = uadd_overflow_trap v19, v18, user1  ; v18 = 4
-;; @001e                               v16 = load.i64 notrap aligned readonly v0+48
+;; @001e                               v16 = load.i64 notrap aligned readonly can_move v0+48
 ;; @001e                               v22 = icmp ule v21, v16
 ;; @001e                               trapz v22, user1
-;; @001e                               v14 = load.i64 notrap aligned readonly v0+40
+;; @001e                               v14 = load.i64 notrap aligned readonly can_move v0+40
 ;; @001e                               v23 = iadd v14, v19
 ;; @001e                               v24 = load.i32 notrap aligned readonly v23
-;; @001e                               v11 = load.i64 notrap aligned readonly v0+64
-;; @001e                               v12 = load.i32 notrap aligned readonly v11
+;; @001e                               v11 = load.i64 notrap aligned readonly can_move v0+64
+;; @001e                               v12 = load.i32 notrap aligned readonly can_move v11
 ;; @001e                               v25 = icmp eq v24, v12
 ;; @001e                               v26 = uextend.i32 v25
 ;; @001e                               brif v26, block6(v26), block5

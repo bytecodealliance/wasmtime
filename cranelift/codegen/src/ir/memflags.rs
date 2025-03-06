@@ -73,7 +73,7 @@ pub struct MemFlags {
     // * 4 - checked flag
     // * 5/6 - alias region
     // * 7/8/9/10/11/12/13/14 - trap code
-    // * 15 - unallocated
+    // * 15 - can_move flag
     //
     // Current properties upheld are:
     //
@@ -111,6 +111,13 @@ const ALIAS_REGION_OFFSET: u16 = 5;
 /// Trap code, if any, for this memory operation.
 const MASK_TRAP_CODE: u16 = 0b1111_1111 << TRAP_CODE_OFFSET;
 const TRAP_CODE_OFFSET: u16 = 7;
+
+/// Whether this memory operation may be freely moved by the optimizer so long
+/// as its data dependencies are satisfied. That is, by setting this flag, the
+/// producer is guaranteeing that this memory operation's safety is not guarded
+/// by outside-the-data-flow-graph properties, like implicit bounds-checking
+/// control dependencies.
+const BIT_CAN_MOVE: u16 = 1 << 15;
 
 impl MemFlags {
     /// Create a new empty set of flags.
@@ -198,6 +205,7 @@ impl MemFlags {
                 self.with_alias_region(Some(AliasRegion::Vmctx))
             }
             "checked" => self.with_checked(),
+            "can_move" => self.with_can_move(),
 
             other => match TrapCode::from_str(other) {
                 Ok(code) => self.with_trap_code(Some(code)),
@@ -261,6 +269,12 @@ impl MemFlags {
     /// If this returns `true` then the memory is *accessible*, which means
     /// that accesses will not trap. This makes it possible to delete an unused
     /// load or a dead store instruction.
+    ///
+    /// This flag does *not* mean that the associated instruction can be
+    /// code-motioned to arbitrary places in the function so long as its data
+    /// dependencies are met. This only means that, given its current location
+    /// in the function, it will never trap. See the `can_move` method for more
+    /// details.
     pub const fn notrap(self) -> bool {
         self.trap_code().is_none()
     }
@@ -274,6 +288,35 @@ impl MemFlags {
     /// flags.
     pub const fn with_notrap(self) -> Self {
         self.with_trap_code(None)
+    }
+
+    /// Is this memory operation safe to move so long as its data dependencies
+    /// remain satisfied?
+    ///
+    /// If this is `true`, then it is okay to code motion this instruction to
+    /// arbitrary locations, in the function, including across blocks and
+    /// conditional branches, so long as data dependencies (and trap ordering,
+    /// if any) are upheld.
+    ///
+    /// If this is `false`, then this memory operation's safety potentially
+    /// relies upon invariants that are not reflected in its data dependencies,
+    /// and therefore it is not safe to code motion this operation. For example,
+    /// this operation could be in a block that is dominated by a control-flow
+    /// bounds check, which is not reflected in its operands, and it would be
+    /// unsafe to code motion it above the bounds check, even if its data
+    /// dependencies would still be satisfied.
+    pub const fn can_move(self) -> bool {
+        self.read_bit(BIT_CAN_MOVE)
+    }
+
+    /// Set the `can_move` flag.
+    pub const fn set_can_move(&mut self) {
+        *self = self.with_can_move();
+    }
+
+    /// Set the `can_move` flag, returning new flags.
+    pub const fn with_can_move(self) -> Self {
+        self.with_bit(BIT_CAN_MOVE)
     }
 
     /// Test if the `aligned` flag is set.
@@ -381,6 +424,9 @@ impl fmt::Display for MemFlags {
         }
         if self.readonly() {
             write!(f, " readonly")?;
+        }
+        if self.can_move() {
+            write!(f, " can_move")?;
         }
         if self.read_bit(BIT_BIG_ENDIAN) {
             write!(f, " big")?;
