@@ -21,9 +21,6 @@ tokio = { workspace = true, features = [
 ] }
 wasmtime = { workspace = true, features = ["runtime", "component-model"] }
 wasmtime-wasi = { workspace = true }
-
-# The `ring` crate, used to implement TLS, does not build on riscv64 or s390x
-[target.'cfg(not(any(target_arch = "riscv64", target_arch = "s390x")))'.dependencies]
 tokio-rustls = { workspace = true }
 rustls = { workspace = true }
 webpki-roots = { workspace = true }

@@ -32,10 +32,7 @@ use wasmtime_wasi_http::{
 #[cfg(feature = "wasi-keyvalue")]
 use wasmtime_wasi_keyvalue::{WasiKeyValue, WasiKeyValueCtx, WasiKeyValueCtxBuilder};
 
-#[cfg(all(
-    feature = "wasi-tls",
-    not(any(target_arch = "riscv64", target_arch = "s390x"))
-))]
+#[cfg(feature = "wasi-tls")]
 use wasmtime_wasi_tls::WasiTlsCtx;
 
 fn parse_preloads(s: &str) -> Result<(String, PathBuf)> {
@@ -832,22 +829,11 @@ impl RunCommand {
         }
 
         if self.run.common.wasi.tls == Some(true) {
-            #[cfg(any(target_arch = "riscv64", target_arch = "s390x"))]
-            {
-                bail!("Unsupported architecture for wasi-tls");
-            }
-            #[cfg(all(
-                not(any(target_arch = "riscv64", target_arch = "s390x")),
-                not(all(feature = "wasi-tls", feature = "component-model"))
-            ))]
+            #[cfg(all(not(all(feature = "wasi-tls", feature = "component-model"))))]
             {
                 bail!("Cannot enable wasi-tls when the binary is not compiled with this feature.");
             }
-            #[cfg(all(
-                feature = "wasi-tls",
-                feature = "component-model",
-                not(any(target_arch = "riscv64", target_arch = "s390x"))
-            ))]
+            #[cfg(all(feature = "wasi-tls", feature = "component-model",))]
             {
                 match linker {
                     CliLinker::Core(_) => {
