@@ -438,7 +438,7 @@ impl<'a, 'b> Compiler<'a, 'b> {
             i32::try_from(self.types[adapter.lift.ty].results.as_u32()).unwrap(),
         ));
         // Async-lowered imports pass params and receive results via linear
-        // memory, and those pointers are in the the first and second params to
+        // memory, and those pointers are in the first and second params to
         // this adapter.  We pass them on to the host so it can store them in
         // the subtask for later use.
         self.instruction(LocalGet(0));

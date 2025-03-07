@@ -1173,7 +1173,7 @@ impl<M: ABIMachineSpec> Callee<M> {
             let start_offset = checked_round_up(unaligned_start_offset, mask)
                 .ok_or(CodegenError::ImplLimitExceeded)?;
 
-            // The end offset is the the start offset increased by the size
+            // The end offset is the start offset increased by the size
             end_offset = start_offset
                 .checked_add(data.size)
                 .ok_or(CodegenError::ImplLimitExceeded)?;

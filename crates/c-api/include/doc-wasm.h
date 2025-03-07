@@ -220,7 +220,7 @@
  * vector should not be previously initialized and the caller is responsible for
  * calling #wasm_byte_vec_delete after this function returns.
  *
- * Note that memory of the the initialization vector provided to this function
+ * Note that memory of the initialization vector provided to this function
  * must be managed externally. This function will copy the contents to the
  * output vector, but it's up to the caller to properly deallocate the memory.
  *
