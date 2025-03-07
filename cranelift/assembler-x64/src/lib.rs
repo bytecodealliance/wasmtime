@@ -89,3 +89,9 @@ pub use xmm::Xmm;
 pub fn generated_files() -> Vec<std::path::PathBuf> {
     include!(concat!(env!("OUT_DIR"), "/generated-files.rs"))
 }
+
+/// Return the contents of `assembler-definitions.isle` which is needed to
+/// generate the x64 instruction selector.
+pub fn assembler_definitions_isle_contents() -> Vec<u8> {
+    include_bytes!(concat!(env!("OUT_DIR"), "/assembler-definitions.isle")).to_vec()
+}
