@@ -101,6 +101,9 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
                 f,
                 "let inst = cranelift_assembler_x64::inst::{struct_name}::new({args}).into();"
             );
+            if let Some(OperandKind::FixedReg(_)) = results.first().map(|o| o.location.kind()) {
+                fmtln!(f, "#[allow(unused_variables, reason = \"FIXME(#10238): fixed register instructions have TODOs\")]");
+            }
             fmtln!(f, "let inst = MInst::External {{ inst }};");
 
             use cranelift_assembler_x64_meta::dsl::Mutability::*;
@@ -170,7 +173,6 @@ pub fn generate_macro_inst_fn(f: &mut Formatter, inst: &Inst) {
 /// Generate the `isle_assembler_methods!` macro.
 pub fn generate_rust_macro(f: &mut Formatter, insts: &[Inst]) {
     fmtln!(f, "#[doc(hidden)]");
-    fmtln!(f, "#[allow(unused_variables, reason = \"FIXME(#10238): fixed register instructions have TODOs\")]");
     fmtln!(f, "macro_rules! isle_assembler_methods {{");
     f.indent(|f| {
         fmtln!(f, "() => {{");
