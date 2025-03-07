@@ -12,13 +12,12 @@ impl dsl::Inst {
             ""
         };
 
-        f.line(format!("/// `{self}`"), None);
+        fmtln!(f, "/// `{self}`");
         generate_derive(f);
         if self.requires_generic() {
             generate_derive_arbitrary_bounds(f);
         }
-        fmtln!(f, "pub struct {struct_name} {where_clause} {{");
-        f.indent(|f| {
+        f.add_block(&format!("pub struct {struct_name} {where_clause}"), |f| {
             for k in &self.format.operands {
                 if let Some(ty) = k.generate_type() {
                     let loc = k.location;
@@ -26,7 +25,6 @@ impl dsl::Inst {
                 }
             }
         });
-        fmtln!(f, "}}");
     }
 
     fn requires_generic(&self) -> bool {
@@ -56,8 +54,7 @@ impl dsl::Inst {
     pub fn generate_struct_impl(&self, f: &mut Formatter) {
         let impl_block = self.generate_impl_block_start();
         let struct_name = self.struct_name_with_generic();
-        fmtln!(f, "{impl_block} {struct_name} {{");
-        f.indent(|f| {
+        f.add_block(&format!("{impl_block} {struct_name}"), |f| {
             self.generate_new_function(f);
             f.empty_line();
             self.generate_encode_function(f);
@@ -66,7 +63,6 @@ impl dsl::Inst {
             f.empty_line();
             self.generate_features_function(f);
         });
-        fmtln!(f, "}}");
     }
 
     // `fn new(<params>) -> Self { ... }`
@@ -86,11 +82,9 @@ impl dsl::Inst {
         );
 
         fmtln!(f, "#[must_use]");
-        fmtln!(f, "pub fn new({params}) -> Self {{");
-        f.indent(|f| {
+        f.add_block(&format!("pub fn new({params}) -> Self"), |f| {
             fmtln!(f, "Self {{ {args} }}",);
         });
-        fmtln!(f, "}}");
     }
 
     /// `fn encode(&self, ...) { ... }`
@@ -100,38 +94,35 @@ impl dsl::Inst {
         } else {
             "_"
         };
-        fmtln!(f, "pub fn encode(&self, buf: &mut impl CodeSink, {off}: &impl KnownOffsetTable) {{");
-        f.indent_push();
-
-        // Emit trap.
-        if let Some(op) = self.format.uses_memory() {
-            f.empty_line();
-            f.comment("Emit trap.");
-            match op {
-                crate::dsl::Location::rm128 => {
-                    fmtln!(f, "if let XmmMem::Mem({op}) = &self.{op} {{");
+        f.add_block(
+            &format!("pub fn encode(&self, buf: &mut impl CodeSink, {off}: &impl KnownOffsetTable)"),
+            |f| {
+                // Emit trap.
+                if let Some(op) = self.format.uses_memory() {
+                    f.empty_line();
+                    f.comment("Emit trap.");
+                    match op {
+                        crate::dsl::Location::rm128 => {
+                            fmtln!(f, "if let XmmMem::Mem({op}) = &self.{op} {{");
+                        }
+                        _ => {
+                            fmtln!(f, "if let GprMem::Mem({op}) = &self.{op} {{");
+                        }
+                    }
+                    f.indent(|f| {
+                        f.add_block(&format!("if let Some(trap_code) = {op}.trap_code()"), |f| {
+                            fmtln!(f, "buf.add_trap(trap_code);");
+                        });
+                    });
+                    fmtln!(f, "}}");
                 }
-                _ => {
-                    fmtln!(f, "if let GprMem::Mem({op}) = &self.{op} {{");
+
+                match &self.encoding {
+                    dsl::Encoding::Rex(rex) => self.format.generate_rex_encoding(f, rex),
+                    dsl::Encoding::Vex(_) => todo!(),
                 }
-            }
-            f.indent(|f| {
-                fmtln!(f, "if let Some(trap_code) = {op}.trap_code() {{");
-                f.indent(|f| {
-                    fmtln!(f, "buf.add_trap(trap_code);");
-                });
-                fmtln!(f, "}}");
-            });
-            fmtln!(f, "}}");
-        }
-
-        match &self.encoding {
-            dsl::Encoding::Rex(rex) => self.format.generate_rex_encoding(f, rex),
-            dsl::Encoding::Vex(_) => todo!(),
-        }
-
-        f.indent_pop();
-        fmtln!(f, "}}");
+            },
+        );
     }
 
     /// `fn visit(&self, ...) { ... }`
@@ -142,8 +133,7 @@ impl dsl::Inst {
         } else {
             "<R: Registers>"
         };
-        fmtln!(f, "pub fn visit{extra_generic_bound}(&mut self, visitor: &mut impl RegisterVisitor<R>) {{");
-        f.indent(|f| {
+        f.add_block(&format!("pub fn visit{extra_generic_bound}(&mut self, visitor: &mut impl RegisterVisitor<R>)"), |f| {
             for o in &self.format.operands {
                 match o.location.kind() {
                     Imm(_) => {
@@ -173,8 +163,7 @@ impl dsl::Inst {
                         match rm.bits() {
                             128 => {
                                 let call = o.mutability.generate_xmm_regalloc_call();
-                                fmtln!(f, "match &mut self.{rm} {{");
-                                f.indent(|f| {
+                                f.add_block(&format!("match &mut self.{rm}"), |f| {
                                     fmtln!(f, "XmmMem::Xmm(r) => visitor.{call}(r),");
                                     fmtln!(
                                         f,
@@ -184,8 +173,7 @@ impl dsl::Inst {
                             }
                             _ => {
                                 let call = o.mutability.generate_regalloc_call();
-                                fmtln!(f, "match &mut self.{rm} {{");
-                                f.indent(|f| {
+                                f.add_block(&format!("match &mut self.{rm}"), |f| {
                                     fmtln!(f, "GprMem::Gpr(r) => visitor.{call}(r),");
                                     fmtln!(
                                         f,
@@ -194,19 +182,16 @@ impl dsl::Inst {
                                 });
                             }
                         };
-                        fmtln!(f, "}}");
                     }
                 }
             }
         });
-        fmtln!(f, "}}");
     }
 
     /// `fn features(&self) -> Vec<Flag> { ... }`
     fn generate_features_function(&self, f: &mut Formatter) {
         fmtln!(f, "#[must_use]");
-        fmtln!(f, "pub fn features(&self) -> Vec<Feature> {{");
-        f.indent(|f| {
+        f.add_block("pub fn features(&self) -> Vec<Feature>", |f| {
             let flags = self
                 .features
                 .iter()
@@ -214,17 +199,14 @@ impl dsl::Inst {
                 .collect::<Vec<_>>();
             fmtln!(f, "vec![{}]", flags.join(", "));
         });
-        fmtln!(f, "}}");
     }
 
     /// `impl Display for <inst> { ... }`
     pub fn generate_display_impl(&self, f: &mut Formatter) {
         let impl_block = self.generate_impl_block_start();
         let struct_name = self.struct_name_with_generic();
-        fmtln!(f, "{impl_block} std::fmt::Display for {struct_name} {{");
-        f.indent(|f| {
-            fmtln!(f, "fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {{");
-            f.indent(|f| {
+        f.add_block(&format!("{impl_block} std::fmt::Display for {struct_name}"), |f| {
+            f.add_block("fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result", |f| {
                 for op in &self.format.operands {
                     let location = op.location;
                     let to_string = location.generate_to_string(op.extension);
@@ -234,24 +216,18 @@ impl dsl::Inst {
                 let ordered_ops = self.format.generate_att_style_operands();
                 fmtln!(f, "write!(f, \"{inst_name} {ordered_ops}\")");
             });
-            fmtln!(f, "}}");
         });
-        fmtln!(f, "}}");
     }
 
     /// `impl From<struct> for Inst { ... }`
     pub fn generate_from_impl(&self, f: &mut Formatter) {
         let struct_name_r = self.struct_name_with_generic();
         let variant_name = self.name();
-        fmtln!(f, "impl<R: Registers> From<{struct_name_r}> for Inst<R> {{");
-        f.indent(|f| {
-            fmtln!(f, "fn from(inst: {struct_name_r}) -> Self {{",);
-            f.indent(|f| {
+        f.add_block(&format!("impl<R: Registers> From<{struct_name_r}> for Inst<R>"), |f| {
+            f.add_block(&format!("fn from(inst: {struct_name_r}) -> Self"), |f| {
                 fmtln!(f, "Self::{variant_name}(inst)");
             });
-            fmtln!(f, "}}");
         });
-        fmtln!(f, "}}");
     }
 
     /// `fn x64_<inst>(&mut self, <params>) -> Inst<R> { ... }`
@@ -280,85 +256,78 @@ impl dsl::Inst {
             .map(|o| format!("{}: {}", o.location, o.rust_param_raw()))
             .collect::<Vec<_>>()
             .join(", ");
-        fmtln!(f, "fn x64_{struct_name}_raw(&mut self, {rust_params}) -> AssemblerOutputs {{",);
-        f.indent(|f| {
-            for o in params.iter() {
-                let l = o.location;
-                match o.rust_convert_isle_to_assembler() {
-                    Some(cvt) => fmtln!(f, "let {l} = {cvt}({l});"),
-                    None => fmtln!(f, "let {l} = {l}.clone();"),
+        f.add_block(
+            &format!("fn x64_{struct_name}_raw(&mut self, {rust_params}) -> AssemblerOutputs"),
+            |f| {
+                for o in params.iter() {
+                    let l = o.location;
+                    match o.rust_convert_isle_to_assembler() {
+                        Some(cvt) => fmtln!(f, "let {l} = {cvt}({l});"),
+                        None => fmtln!(f, "let {l} = {l}.clone();"),
+                    }
                 }
-            }
-            let args = params
-                .iter()
-                .map(|o| format!("{}.clone()", o.location))
-                .collect::<Vec<_>>();
-            let args = args.join(", ");
-            fmtln!(f, "let inst = cranelift_assembler_x64::inst::{struct_name}::new({args}).into();");
-            fmtln!(f, "let inst = MInst::External {{ inst }};");
+                let args = params
+                    .iter()
+                    .map(|o| format!("{}.clone()", o.location))
+                    .collect::<Vec<_>>();
+                let args = args.join(", ");
+                fmtln!(f, "let inst = cranelift_assembler_x64::inst::{struct_name}::new({args}).into();");
+                fmtln!(f, "let inst = MInst::External {{ inst }};");
 
-            use dsl::Mutability::*;
-            match results.as_slice() {
-                [] => fmtln!(f, "SideEffectNoResult::Inst(inst)"),
-                [one] => match one.mutability {
-                    Read => unreachable!(),
-                    ReadWrite => match one.location.kind() {
-                        OperandKind::Imm(_) => unreachable!(),
-                        // FIXME(#10238)
-                        OperandKind::FixedReg(_) => fmtln!(f, "todo!()"),
-                        // One read/write register output? Output the instruction
-                        // and that register.
-                        OperandKind::Reg(r) => match r.bits() {
-                            128 => {
-                                fmtln!(f, "let xmm = {}.as_ref().write.to_reg();", results[0].location);
-                                fmtln!(f, "AssemblerOutputs::RetXmm {{ inst, xmm }}")
-                            }
-                            _ => {
-                                fmtln!(f, "let gpr = {}.as_ref().write.to_reg();", results[0].location);
-                                fmtln!(f, "AssemblerOutputs::RetGpr {{ inst, gpr }}")
-                            }
-                        },
-                        // One read/write regmem output? We need to output
-                        // everything and it'll internally disambiguate which was
-                        // emitted (e.g. the mem variant or the register variant).
-                        OperandKind::RegMem(_) => {
-                            assert_eq!(results.len(), 1);
-                            let l = results[0].location;
-                            fmtln!(f, "match {l} {{");
-                            match l.bits() {
+                use dsl::Mutability::*;
+                match results.as_slice() {
+                    [] => fmtln!(f, "SideEffectNoResult::Inst(inst)"),
+                    [one] => match one.mutability {
+                        Read => unreachable!(),
+                        ReadWrite => match one.location.kind() {
+                            OperandKind::Imm(_) => unreachable!(),
+                            // FIXME(#10238)
+                            OperandKind::FixedReg(_) => fmtln!(f, "todo!()"),
+                            // One read/write register output? Output the instruction
+                            // and that register.
+                            OperandKind::Reg(r) => match r.bits() {
                                 128 => {
-                                    f.indent(|f| {
-                                        fmtln!(f, "asm::XmmMem::Xmm(reg) => {{");
-                                        fmtln!(f, "let xmm = reg.write.to_reg();");
-                                        fmtln!(f, "AssemblerOutputs::RetXmm {{ inst, xmm }} ");
-                                        fmtln!(f, "}}");
-
-                                        fmtln!(f, "asm::XmmMem::Mem(_) => {{");
-                                        fmtln!(f, "AssemblerOutputs::SideEffect {{ inst }} ");
-                                        fmtln!(f, "}}");
-                                    });
+                                    fmtln!(f, "let xmm = {}.as_ref().write.to_reg();", results[0].location);
+                                    fmtln!(f, "AssemblerOutputs::RetXmm {{ inst, xmm }}")
                                 }
                                 _ => {
-                                    f.indent(|f| {
-                                        fmtln!(f, "asm::GprMem::Gpr(reg) => {{");
-                                        fmtln!(f, "let gpr = reg.write.to_reg();");
-                                        fmtln!(f, "AssemblerOutputs::RetGpr {{ inst, gpr }} ");
-                                        fmtln!(f, "}}");
-
-                                        fmtln!(f, "asm::GprMem::Mem(_) => {{");
-                                        fmtln!(f, "AssemblerOutputs::SideEffect {{ inst }} ");
-                                        fmtln!(f, "}}");
-                                    });
+                                    fmtln!(f, "let gpr = {}.as_ref().write.to_reg();", results[0].location);
+                                    fmtln!(f, "AssemblerOutputs::RetGpr {{ inst, gpr }}")
                                 }
-                            };
-                            fmtln!(f, "}}");
-                        }
+                            },
+                            // One read/write regmem output? We need to output
+                            // everything and it'll internally disambiguate which was
+                            // emitted (e.g. the mem variant or the register variant).
+                            OperandKind::RegMem(_) => {
+                                assert_eq!(results.len(), 1);
+                                let l = results[0].location;
+                                f.add_block(&format!("match {l}"), |f| match l.bits() {
+                                    128 => {
+                                        f.add_block("asm::XmmMem::Xmm(reg) => ", |f| {
+                                            fmtln!(f, "let xmm = reg.write.to_reg();");
+                                            fmtln!(f, "AssemblerOutputs::RetXmm {{ inst, xmm }} ");
+                                        });
+                                        f.add_block("asm::XmmMem::Mem(_) => ", |f| {
+                                            fmtln!(f, "AssemblerOutputs::SideEffect {{ inst }} ");
+                                        });
+                                    }
+                                    _ => {
+                                        f.add_block("asm::GprMem::Gpr(reg) => ", |f| {
+                                            fmtln!(f, "let gpr = reg.write.to_reg();");
+                                            fmtln!(f, "AssemblerOutputs::RetGpr {{ inst, gpr }} ")
+                                        });
+                                        f.add_block("asm::GprMem::Mem(_) => ", |f| {
+                                            fmtln!(f, "AssemblerOutputs::SideEffect {{ inst }} ");
+                                        });
+                                    }
+                                });
+                            }
+                        },
                     },
-                },
-                _ => panic!("instruction has more than one result"),
-            }
-        });
-        fmtln!(f, "}}");
+                    _ => panic!("instruction has more than one result"),
+                }
+            },
+        );
     }
 
     /// Generate a "raw" constructor that simply constructs, but does not emit
@@ -409,8 +378,8 @@ impl dsl::Inst {
             .map(|o| o.isle_param_raw())
             .collect::<Vec<_>>()
             .join(" ");
-        f.line(format!("(decl {raw_name} ({raw_param_tys}) AssemblerOutputs)"), None);
-        f.line(format!("(extern constructor {raw_name} {raw_name})"), None);
+        fmtln!(f, "(decl {raw_name} ({raw_param_tys}) AssemblerOutputs)");
+        fmtln!(f, "(extern constructor {raw_name} {raw_name})");
 
         // Next, for each "emitter" ISLE constructor being generated, synthesize
         // a pure-ISLE constructor which delegates appropriately to the `*_raw`
@@ -435,11 +404,8 @@ impl dsl::Inst {
                 .join(" ");
             let convert = ctor.conversion_constructor();
 
-            f.line(format!("(decl {rule_name} ({param_tys}) {result_ty})"), None);
-            f.line(
-                format!("(rule ({rule_name} {param_names}) ({convert} ({raw_name} {param_names})))"),
-                None,
-            );
+            fmtln!(f, "(decl {rule_name} ({param_tys}) {result_ty})");
+            fmtln!(f, "(rule ({rule_name} {param_names}) ({convert} ({raw_name} {param_names})))");
         }
     }
 }

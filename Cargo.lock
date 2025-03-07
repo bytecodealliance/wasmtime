@@ -750,6 +750,9 @@ dependencies = [
 [[package]]
 name = "cranelift-assembler-x64-meta"
 version = "0.119.0"
+dependencies = [
+ "cranelift-srcgen",
+]
 
 [[package]]
 name = "cranelift-bforest"
@@ -806,6 +809,7 @@ version = "0.119.0"
 dependencies = [
  "cranelift-assembler-x64",
  "cranelift-codegen-shared",
+ "cranelift-srcgen",
  "pulley-interpreter",
 ]
 
@@ -982,6 +986,10 @@ dependencies = [
  "cranelift-reader",
  "serde_json",
 ]
+
+[[package]]
+name = "cranelift-srcgen"
+version = "0.119.0"
 
 [[package]]
 name = "cranelift-tools"

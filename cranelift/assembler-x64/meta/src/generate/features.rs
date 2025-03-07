@@ -12,12 +12,10 @@ impl dsl::Feature {
         fmtln!(f, "#[doc(hidden)]");
         generate_derive(f);
         fmtln!(f, "#[derive(Copy, PartialEq)]"); // Add a couple more helpful derives.
-        fmtln!(f, "pub enum Feature {{");
-        f.indent(|f| {
+        f.add_block("pub enum Feature", |f| {
             for feature in dsl::ALL_FEATURES {
                 fmtln!(f, "{feature},");
             }
         });
-        fmtln!(f, "}}");
     }
 }

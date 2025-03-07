@@ -1,28 +1,53 @@
-//! Source code generator.
+//! A source code generator.
 //!
-//! The `srcgen` module contains generic helper routines and classes for
-//! generating source code.
-
-#![macro_use]
+//! This crate contains generic helper routines and classes for generating
+//! source code.
 
 use std::cmp;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::Write;
 
-use crate::error;
+pub mod error;
 
 static SHIFTWIDTH: usize = 4;
 
-/// A macro that simplifies the usage of the Formatter by allowing format
+/// A macro for constructing a [`FileLocation`] at the current location.
+#[macro_export]
+macro_rules! loc {
+    () => {
+        $crate::FileLocation::new(file!(), line!())
+    };
+}
+
+/// Record a source location; preferably, use [`loc`] directly.
+pub struct FileLocation {
+    file: &'static str,
+    line: u32,
+}
+
+impl FileLocation {
+    pub fn new(file: &'static str, line: u32) -> Self {
+        Self { file, line }
+    }
+}
+
+impl core::fmt::Display for FileLocation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}:{}", self.file, self.line)
+    }
+}
+
+/// A macro that simplifies the usage of the [`Formatter`] by allowing format
 /// strings.
+#[macro_export]
 macro_rules! fmtln {
     ($fmt:ident, $fmtstring:expr, $($fmtargs:expr),*) => {
-        $fmt.line(format!($fmtstring, $($fmtargs),*))
+        $fmt.line_with_location(format!($fmtstring, $($fmtargs),*), $crate::loc!())
     };
 
     ($fmt:ident, $arg:expr) => {
-        $fmt.line($arg)
+        $fmt.line_with_location(format!($arg), $crate::loc!())
     };
 
     ($_:tt, $($args:expr),+) => {
@@ -34,18 +59,46 @@ macro_rules! fmtln {
     };
 }
 
-pub(crate) struct Formatter {
+/// Identify the source code language a [`Formatter`] will emit.
+#[derive(Debug, Clone, Copy)]
+pub enum Language {
+    Rust,
+    Isle,
+}
+
+impl Language {
+    /// Determine if a [`FileLocation`] comment should be appended to a line.
+    pub fn should_append_location(&self, line: &str) -> bool {
+        match self {
+            Language::Rust => !line.ends_with(['{', '}']),
+            Language::Isle => true,
+        }
+    }
+
+    /// Get the comment token for the language.
+    pub fn comment_token(&self) -> &'static str {
+        match self {
+            Language::Rust => "//",
+            Language::Isle => ";;",
+        }
+    }
+}
+
+/// Collect source code to be written to a file and keep track of indentation.
+pub struct Formatter {
     indent: usize,
     lines: Vec<String>,
+    lang: Language,
 }
 
 impl Formatter {
-    /// Source code formatter class. Used to collect source code to be written
-    /// to a file, and keep track of indentation.
-    pub fn new() -> Self {
+    /// Source code formatter class. Used to collect source code of a specific
+    /// [`Language`] to be written to a file, and keep track of indentation.
+    pub fn new(lang: Language) -> Self {
         Self {
             indent: 0,
             lines: Vec::new(),
+            lang,
         }
     }
 
@@ -60,6 +113,7 @@ impl Formatter {
         self.indent -= 1;
     }
 
+    /// Increase indentation level for the duration of `f`.
     pub fn indent<T, F: FnOnce(&mut Formatter) -> T>(&mut self, f: F) -> T {
         self.indent_push();
         let ret = f(self);
@@ -82,26 +136,23 @@ impl Formatter {
         self.lines.push(indented_line);
     }
 
+    /// Add an indented lin with a given a `location` appended as a comment to
+    /// the line (this is useful for identifying where a line was generated).
+    pub fn line_with_location(&mut self, contents: impl AsRef<str>, location: FileLocation) {
+        let indent = self.get_indent();
+        let contents = contents.as_ref();
+        let indented_line = if self.lang.should_append_location(contents) {
+            let comment_token = self.lang.comment_token();
+            format!("{indent}{contents} {comment_token} {location}\n")
+        } else {
+            format!("{indent}{contents}\n")
+        };
+        self.lines.push(indented_line);
+    }
+
     /// Pushes an empty line.
     pub fn empty_line(&mut self) {
         self.lines.push("\n".to_string());
-    }
-
-    /// Write `self.lines` to a file.
-    pub fn update_file(
-        &self,
-        filename: impl AsRef<std::path::Path>,
-        directory: &std::path::Path,
-    ) -> Result<(), error::Error> {
-        let path = directory.join(&filename);
-        eprintln!("Writing generated file: {}", path.display());
-        let mut f = fs::File::create(path)?;
-
-        for l in self.lines.iter().map(|l| l.as_bytes()) {
-            f.write_all(l)?;
-        }
-
-        Ok(())
     }
 
     /// Add one or more lines after stripping common indentation.
@@ -111,11 +162,14 @@ impl Formatter {
 
     /// Add a comment line.
     pub fn comment(&mut self, s: impl AsRef<str>) {
-        fmtln!(self, "// {}", s.as_ref());
+        // Avoid `fmtln!` here: we don't want to append a location comment to a
+        // comment.
+        self.line(format!("{} {}", self.lang.comment_token(), s.as_ref()));
     }
 
     /// Add a (multi-line) documentation comment.
     pub fn doc_comment(&mut self, contents: impl AsRef<str>) {
+        assert!(matches!(self.lang, Language::Rust));
         parse_multiline(contents.as_ref())
             .iter()
             .map(|l| {
@@ -128,8 +182,19 @@ impl Formatter {
             .for_each(|s| self.line(s.as_str()));
     }
 
+    /// Add a brace-delimited block that begins with `start`: i.e., `<start> {
+    /// <f()> }`. This properly indents the contents of the block.
+    pub fn add_block<T, F: FnOnce(&mut Formatter) -> T>(&mut self, start: &str, f: F) -> T {
+        assert!(matches!(self.lang, Language::Rust));
+        self.line(format!("{start} {{"));
+        let ret = self.indent(f);
+        self.line("}");
+        ret
+    }
+
     /// Add a match expression.
     pub fn add_match(&mut self, m: Match) {
+        assert!(matches!(self.lang, Language::Rust));
         fmtln!(self, "match {} {{", m.expr);
         self.indent(|fmt| {
             for (&(ref fields, ref body), ref names) in m.arms.iter() {
@@ -164,6 +229,23 @@ impl Formatter {
             }
         });
         self.line("}");
+    }
+
+    /// Write `self.lines` to a file.
+    pub fn write(
+        &self,
+        filename: impl AsRef<std::path::Path>,
+        directory: &std::path::Path,
+    ) -> Result<(), error::Error> {
+        let path = directory.join(&filename);
+        eprintln!("Writing generated file: {}", path.display());
+        let mut f = fs::File::create(path)?;
+
+        for l in self.lines.iter().map(|l| l.as_bytes()) {
+            f.write_all(l)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -240,7 +322,7 @@ fn parse_multiline(s: &str) -> Vec<String> {
 /// Note that this class is ignorant of Rust types, and considers two fields
 /// with the same name to be equivalent. BTreeMap/BTreeSet are used to
 /// represent the arms in order to make the order deterministic.
-pub(crate) struct Match {
+pub struct Match {
     expr: String,
     arms: BTreeMap<(Vec<String>, String), BTreeSet<String>>,
     /// The clause for the placeholder pattern _.
@@ -301,6 +383,7 @@ impl Match {
 mod srcgen_tests {
     use super::parse_multiline;
     use super::Formatter;
+    use super::Language;
     use super::Match;
 
     fn from_raw_string<S: Into<String>>(s: S) -> Vec<String> {
@@ -321,7 +404,7 @@ mod srcgen_tests {
         m.arm("Blue", vec!["x", "y"], "some body");
         assert_eq!(m.arms.len(), 3);
 
-        let mut fmt = Formatter::new();
+        let mut fmt = Formatter::new(Language::Rust);
         fmt.add_match(m);
 
         let expected_lines = from_raw_string(
@@ -352,7 +435,7 @@ match x {
         m.arm_no_fields("_", "unreachable!()");
         assert_eq!(m.arms.len(), 2); // catchall is not counted
 
-        let mut fmt = Formatter::new();
+        let mut fmt = Formatter::new(Language::Rust);
         fmt.add_match(m);
 
         let expected_lines = from_raw_string(
@@ -383,7 +466,7 @@ match x {
 
     #[test]
     fn formatter_basic_example_works() {
-        let mut fmt = Formatter::new();
+        let mut fmt = Formatter::new(Language::Rust);
         fmt.line("Hello line 1");
         fmt.indent_push();
         fmt.comment("Nested comment");
@@ -399,7 +482,7 @@ match x {
 
     #[test]
     fn get_indent_works() {
-        let mut fmt = Formatter::new();
+        let mut fmt = Formatter::new(Language::Rust);
         let expected_results = vec!["", "    ", "        ", ""];
 
         let actual_results = Vec::with_capacity(4);
@@ -418,15 +501,15 @@ match x {
 
     #[test]
     fn fmt_can_add_type_to_lines() {
-        let mut fmt = Formatter::new();
-        fmt.line(format!("pub const {}: Type = Type({:#x});", "example", 0,));
+        let mut fmt = Formatter::new(Language::Rust);
+        fmt.line(format!("pub const {}: Type = Type({:#x});", "example", 0));
         let expected_lines = vec!["pub const example: Type = Type(0x0);\n"];
         assert_eq!(fmt.lines, expected_lines);
     }
 
     #[test]
     fn fmt_can_add_indented_line() {
-        let mut fmt = Formatter::new();
+        let mut fmt = Formatter::new(Language::Rust);
         fmt.line("hello");
         fmt.indent_push();
         fmt.line("world");
@@ -436,7 +519,7 @@ match x {
 
     #[test]
     fn fmt_can_add_doc_comments() {
-        let mut fmt = Formatter::new();
+        let mut fmt = Formatter::new(Language::Rust);
         fmt.doc_comment("documentation\nis\ngood");
         let expected_lines = vec!["/// documentation\n", "/// is\n", "/// good\n"];
         assert_eq!(fmt.lines, expected_lines);
@@ -444,7 +527,7 @@ match x {
 
     #[test]
     fn fmt_can_add_doc_comments_with_empty_lines() {
-        let mut fmt = Formatter::new();
+        let mut fmt = Formatter::new(Language::Rust);
         fmt.doc_comment(
             r#"documentation
         can be really good.

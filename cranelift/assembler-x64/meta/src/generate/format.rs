@@ -98,17 +98,14 @@ impl dsl::Format {
                     .digit
                     .expect("REX digit must be set for operands: [RegMem, Imm]");
                 fmtln!(f, "let digit = 0x{digit:x};");
-                fmtln!(f, "match &self.{dst} {{");
-                f.indent(|f| {
+                f.add_block(&format!("match &self.{dst}"), |f| {
                     fmtln!(f, "GprMem::Gpr({dst}) => rex.emit_two_op(buf, digit, {dst}.enc()),");
                     fmtln!(f, "GprMem::Mem({dst}) => {dst}.emit_rex_prefix(rex, digit, buf),");
                 });
-                fmtln!(f, "}}");
             }
             [Reg(dst), RegMem(src)] => {
                 fmtln!(f, "let {dst} = self.{dst}.enc();");
-                fmtln!(f, "match &self.{src} {{");
-                f.indent(|f| {
+                f.add_block(&format!("match &self.{src}"), |f| {
                     match dst.bits() {
                         128 => {
                             fmtln!(f, "XmmMem::Xmm({src}) => rex.emit_two_op(buf, {dst}, {src}.enc()),");
@@ -120,14 +117,12 @@ impl dsl::Format {
                         }
                     };
                 });
-                fmtln!(f, "}}");
             }
             [RegMem(dst), Reg(src)]
             | [RegMem(dst), Reg(src), Imm(_)]
             | [RegMem(dst), Reg(src), FixedReg(_)] => {
                 fmtln!(f, "let {src} = self.{src}.enc();");
-                fmtln!(f, "match &self.{dst} {{");
-                f.indent(|f| match src.bits() {
+                f.add_block(&format!("match &self.{dst}"), |f| match src.bits() {
                     128 => {
                         fmtln!(f, "XmmMem::Xmm({dst}) => rex.emit_two_op(buf, {src}, {dst}.enc()),");
                         fmtln!(f, "XmmMem::Mem({dst}) => {dst}.emit_rex_prefix(rex, {src}, buf),");
@@ -137,7 +132,6 @@ impl dsl::Format {
                         fmtln!(f, "GprMem::Mem({dst}) => {dst}.emit_rex_prefix(rex, {src}, buf),");
                     }
                 });
-                fmtln!(f, "}}");
             }
 
             unknown => unimplemented!("unknown pattern: {unknown:?}"),
@@ -163,17 +157,14 @@ impl dsl::Format {
                     .digit
                     .expect("REX digit must be set for operands: [RegMem, Imm]");
                 fmtln!(f, "let digit = 0x{digit:x};");
-                fmtln!(f, "match &self.{dst} {{");
-                f.indent(|f| {
+                f.add_block(&format!("match &self.{dst}"), |f| {
                     fmtln!(f, "GprMem::Gpr({dst}) => emit_modrm(buf, digit, {dst}.enc()),");
                     fmtln!(f, "GprMem::Mem({dst}) => emit_modrm_sib_disp(buf, off, digit, {dst}, 0, None),");
                 });
-                fmtln!(f, "}}");
             }
             [Reg(dst), RegMem(src)] => {
                 fmtln!(f, "let {dst} = self.{dst}.enc();");
-                fmtln!(f, "match &self.{src} {{");
-                f.indent(|f| {
+                f.add_block(&format!("match &self.{src}"), |f| {
                     match dst.bits() {
                         128 => {
                             fmtln!(f, "XmmMem::Xmm({src}) => emit_modrm(buf, {dst}, {src}.enc()),");
@@ -191,14 +182,12 @@ impl dsl::Format {
                         }
                     };
                 });
-                fmtln!(f, "}}");
             }
             [RegMem(dst), Reg(src)]
             | [RegMem(dst), Reg(src), Imm(_)]
             | [RegMem(dst), Reg(src), FixedReg(_)] => {
                 fmtln!(f, "let {src} = self.{src}.enc();");
-                fmtln!(f, "match &self.{dst} {{");
-                f.indent(|f| {
+                f.add_block(&format!("match &self.{dst}"), |f| {
                     match src.bits() {
                         128 => {
                             fmtln!(f, "XmmMem::Xmm({dst}) => emit_modrm(buf, {src}, {dst}.enc()),");
@@ -216,7 +205,6 @@ impl dsl::Format {
                         }
                     };
                 });
-                fmtln!(f, "}}");
             }
             unknown => unimplemented!("unknown pattern: {unknown:?}"),
         }
