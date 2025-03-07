@@ -4382,6 +4382,7 @@ dependencies = [
  "wasmtime-wasi-keyvalue",
  "wasmtime-wasi-nn",
  "wasmtime-wasi-threads",
+ "wasmtime-wasi-tls",
  "wasmtime-wast",
  "wasmtime-wast-util",
  "wast 227.0.0",
@@ -4758,6 +4759,22 @@ dependencies = [
  "wasi-common",
  "wasmtime",
  "wasmtime-wasi",
+]
+
+[[package]]
+name = "wasmtime-wasi-tls"
+version = "32.0.0"
+dependencies = [
+ "anyhow",
+ "bytes",
+ "futures",
+ "rustls 0.22.4",
+ "test-programs-artifacts",
+ "tokio",
+ "tokio-rustls",
+ "wasmtime",
+ "wasmtime-wasi",
+ "webpki-roots",
 ]
 
 [[package]]
