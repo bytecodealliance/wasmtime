@@ -181,7 +181,7 @@ impl Masm for MacroAssembler {
         self.asm
             .add_ir(bytes as u64, ssp, writable!(ssp), OperandSize::S64);
 
-        // We must ensure that the real stack pointer reflects the the offset
+        // We must ensure that the real stack pointer reflects the offset
         // tracked by `self.sp_offset`, we use such value to calculate
         // alignment, which is crucial for calls.
         //
