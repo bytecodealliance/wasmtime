@@ -94,6 +94,7 @@ const PUBLIC_CRATES: &[&str] = &[
     "wasmtime",
     "wasmtime-wasi-io",
     "wasmtime-wasi",
+    "wasmtime-wasi-tls",
     "wasmtime-wasi-http",
     "wasmtime-wasi-nn",
     "wasmtime-wasi-config",
