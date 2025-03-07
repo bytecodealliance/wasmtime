@@ -75,6 +75,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "wasmtime-wasi-config",
     "wasmtime-wasi-keyvalue",
     "wasmtime-wasi-threads",
+    "wasmtime-wasi-tls",
     "wasmtime-wast",
     "wasmtime-c-api-macros",
     "wasmtime-c-api-impl",
