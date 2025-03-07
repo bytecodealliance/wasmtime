@@ -644,7 +644,7 @@ configured maximum of 16 bytes; breakdown of allocation requirement:
 "
     } else {
         "\
-        instance allocation for this module requires 240 bytes which exceeds the \
+instance allocation for this module requires 240 bytes which exceeds the \
 configured maximum of 16 bytes; breakdown of allocation requirement:
 
  * 66.67% - 160 bytes - instance state management
