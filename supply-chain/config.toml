@@ -216,10 +216,6 @@ criteria = "safe-to-deploy"
 version = "0.8.4"
 criteria = "safe-to-deploy"
 
-[[exemptions.ahash]]
-version = "0.8.11"
-criteria = "safe-to-deploy"
-
 [[exemptions.base64ct]]
 version = "1.6.0"
 criteria = "safe-to-deploy"
@@ -324,10 +320,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.half]]
 version = "2.4.1"
-criteria = "safe-to-deploy"
-
-[[exemptions.hermit-abi]]
-version = "0.2.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.hermit-abi]]
@@ -518,10 +510,6 @@ criteria = "safe-to-deploy"
 
 [[exemptions.shuffling-allocator]]
 version = "1.1.2"
-criteria = "safe-to-deploy"
-
-[[exemptions.slice-group-by]]
-version = "0.3.0"
 criteria = "safe-to-deploy"
 
 [[exemptions.smallvec]]
