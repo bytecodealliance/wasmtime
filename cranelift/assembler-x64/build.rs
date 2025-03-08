@@ -9,11 +9,7 @@ fn main() {
 
     let out_dir = env::var("OUT_DIR").expect("The OUT_DIR environment variable must be set");
     let out_dir = Path::new(&out_dir);
-    let built_files = [
-        meta::generate_rust_assembler(out_dir, "assembler.rs"),
-        meta::generate_isle_macro(out_dir, "assembler-isle-macro.rs"),
-        meta::generate_isle_definitions(out_dir, "assembler-definitions.isle"),
-    ];
+    let built_files = [meta::generate_rust_assembler(out_dir, "assembler.rs")];
 
     // Generating this additional bit of Rust is necessary for listing the
     // generated files.

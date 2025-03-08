@@ -807,7 +807,7 @@ dependencies = [
 name = "cranelift-codegen-meta"
 version = "0.119.0"
 dependencies = [
- "cranelift-assembler-x64",
+ "cranelift-assembler-x64-meta",
  "cranelift-codegen-shared",
  "cranelift-srcgen",
  "pulley-interpreter",

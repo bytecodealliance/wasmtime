@@ -46,7 +46,6 @@
 mod api;
 mod imm;
 pub mod inst;
-pub mod isle;
 mod mem;
 mod reg;
 mod rex;

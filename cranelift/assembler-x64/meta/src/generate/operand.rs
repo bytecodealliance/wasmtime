@@ -1,5 +1,4 @@
-use super::inst::IsleConstructor;
-use crate::dsl::{self, Mutability, OperandKind};
+use crate::dsl;
 
 impl dsl::Operand {
     #[must_use]
@@ -23,102 +22,6 @@ impl dsl::Operand {
                 128 => Some(format!("XmmMem<R::{}Xmm, R::ReadGpr>", self.mutability.generate_type())),
                 _ => Some(format!("GprMem<R::{}Gpr, R::ReadGpr>", self.mutability.generate_type())),
             },
-        }
-    }
-
-    /// Returns the type of this operand in ISLE as a part of the ISLE "raw"
-    /// constructors.
-    pub fn isle_param_raw(&self) -> String {
-        match self.location.kind() {
-            OperandKind::Imm(loc) => {
-                let bits = loc.bits();
-                if self.extension.is_sign_extended() {
-                    format!("i{bits}")
-                } else {
-                    format!("u{bits}")
-                }
-            }
-            OperandKind::Reg(r) => match r.bits() {
-                128 => "Xmm".to_string(),
-                _ => "Gpr".to_string(),
-            },
-            OperandKind::FixedReg(_) => "Gpr".to_string(),
-            OperandKind::RegMem(rm) => match rm.bits() {
-                128 => "XmmMem".to_string(),
-                _ => "GprMem".to_string(),
-            },
-        }
-    }
-
-    /// Returns the parameter type used for the `IsleConstructor` variant
-    /// provided.
-    pub fn isle_param_for_ctor(&self, ctor: IsleConstructor) -> String {
-        match self.location.kind() {
-            // Writable `RegMem` operands are special here: in one constructor
-            // it's operating on memory so the argument is `Amode` and in the
-            // other constructor it's operating on registers so the argument is
-            // a `Gpr`.
-            OperandKind::RegMem(_) if self.mutability.is_write() => match ctor {
-                IsleConstructor::RetMemorySideEffect => "Amode".to_string(),
-                IsleConstructor::RetGpr => "Gpr".to_string(),
-                IsleConstructor::RetXmm => "Xmm".to_string(),
-            },
-
-            // everything else is the same as the "raw" variant
-            _ => self.isle_param_raw(),
-        }
-    }
-
-    /// Returns the Rust type used for the `IsleConstructorRaw` variants.
-    pub fn rust_param_raw(&self) -> String {
-        match self.location.kind() {
-            OperandKind::Imm(loc) => {
-                let bits = loc.bits();
-                if self.extension.is_sign_extended() {
-                    format!("i{bits}")
-                } else {
-                    format!("u{bits}")
-                }
-            }
-            OperandKind::RegMem(rm) => match rm.bits() {
-                128 => "&XmmMem".to_string(),
-                _ => "&GprMem".to_string(),
-            },
-            OperandKind::Reg(r) => match r.bits() {
-                128 => "Xmm".to_string(),
-                _ => "Gpr".to_string(),
-            },
-            OperandKind::FixedReg(_) => "Gpr".to_string(),
-        }
-    }
-
-    /// Returns the conversion function, if any, when converting the ISLE type
-    /// for this parameter to the assembler type for this parameter.
-    /// Effectively converts `self.rust_param_raw()` to the assembler type.
-    pub fn rust_convert_isle_to_assembler(&self) -> Option<&'static str> {
-        match self.location.kind() {
-            OperandKind::Reg(r) => Some(match (r.bits(), self.mutability) {
-                (128, Mutability::Read) => "cranelift_assembler_x64::Xmm::new",
-                (128, Mutability::ReadWrite) => "self.convert_xmm_to_assembler_read_write_xmm",
-                (_, Mutability::Read) => "cranelift_assembler_x64::Gpr::new",
-                (_, Mutability::ReadWrite) => "self.convert_gpr_to_assembler_read_write_gpr",
-            }),
-            OperandKind::RegMem(r) => Some(match (r.bits(), self.mutability) {
-                (128, Mutability::Read) => "self.convert_xmm_mem_to_assembler_read_xmm_mem",
-                (128, Mutability::ReadWrite) => "self.convert_xmm_mem_to_assembler_read_write_xmm_mem",
-                (_, Mutability::Read) => "self.convert_gpr_mem_to_assembler_read_gpr_mem",
-                (_, Mutability::ReadWrite) => "self.convert_gpr_mem_to_assembler_read_write_gpr_mem",
-            }),
-            OperandKind::Imm(loc) => match (self.extension.is_sign_extended(), loc.bits()) {
-                (true, 8) => Some("cranelift_assembler_x64::Simm8::new"),
-                (true, 16) => Some("cranelift_assembler_x64::Simm16::new"),
-                (true, 32) => Some("cranelift_assembler_x64::Simm32::new"),
-                (false, 8) => Some("cranelift_assembler_x64::Imm8::new"),
-                (false, 16) => Some("cranelift_assembler_x64::Imm16::new"),
-                (false, 32) => Some("cranelift_assembler_x64::Imm32::new"),
-                _ => None,
-            },
-            OperandKind::FixedReg(_) => None,
         }
     }
 }

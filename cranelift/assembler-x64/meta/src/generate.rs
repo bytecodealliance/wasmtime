@@ -31,63 +31,6 @@ pub fn rust_assembler(f: &mut Formatter, insts: &[dsl::Inst]) {
     dsl::Feature::generate_enum(f);
 }
 
-/// Generate the `isle_assembler_methods!` macro.
-pub fn isle_macro(f: &mut Formatter, insts: &[dsl::Inst]) {
-    fmtln!(f, "#[macro_export]");
-    fmtln!(f, "macro_rules! isle_assembler_methods {{");
-    f.indent(|f| {
-        fmtln!(f, "() => {{");
-        f.indent(|f| {
-            for inst in insts {
-                inst.generate_isle_macro(f);
-            }
-        });
-        fmtln!(f, "}};");
-    });
-    fmtln!(f, "}}");
-}
-
-/// Generate the ISLE definitions that match the `isle_assembler_methods!` macro
-/// above.
-pub fn isle_definitions(f: &mut Formatter, insts: &[dsl::Inst]) {
-    fmtln!(f, "(type AssemblerOutputs (enum");
-    fmtln!(f, "    ;; Used for instructions that have ISLE `SideEffect`s (memory stores, traps,");
-    fmtln!(f, "    ;; etc.) and do not return a `Value`.");
-    fmtln!(f, "    (SideEffect (inst MInst))");
-    fmtln!(f, "    ;; Used for instructions that return a GPR (including `GprMem` variants with");
-    fmtln!(f, "    ;; a GPR as the first argument).");
-    fmtln!(f, "    (RetGpr (inst MInst) (gpr Gpr))");
-    fmtln!(f, "    ;; Used for instructions that return an XMM register.");
-    fmtln!(f, "    (RetXmm (inst MInst) (xmm Xmm))");
-    fmtln!(f, "    ;; TODO: eventually add more variants for multi-return, XMM, etc.; see");
-    fmtln!(f, "    ;; https://github.com/bytecodealliance/wasmtime/pull/10276");
-    fmtln!(f, "))");
-    f.empty_line();
-
-    fmtln!(f, ";; Directly emit instructions that return a GPR.");
-    fmtln!(f, "(decl emit_ret_gpr (AssemblerOutputs) Gpr)");
-    fmtln!(f, "(rule (emit_ret_gpr (AssemblerOutputs.RetGpr inst gpr))");
-    fmtln!(f, "    (let ((_ Unit (emit inst))) gpr))");
-    f.empty_line();
-
-    fmtln!(f, ";; Directly emit instructions that return an XMM register.");
-    fmtln!(f, "(decl emit_ret_xmm (AssemblerOutputs) Xmm)");
-    fmtln!(f, "(rule (emit_ret_xmm (AssemblerOutputs.RetXmm inst xmm))");
-    fmtln!(f, "    (let ((_ Unit (emit inst))) xmm))");
-    f.empty_line();
-
-    fmtln!(f, ";; Pass along the side-effecting instruction for later emission.");
-    fmtln!(f, "(decl defer_side_effect (AssemblerOutputs) SideEffectNoResult)");
-    fmtln!(f, "(rule (defer_side_effect (AssemblerOutputs.SideEffect inst))");
-    fmtln!(f, "    (SideEffectNoResult.Inst inst))");
-    f.empty_line();
-
-    for inst in insts {
-        inst.generate_isle_definition(f);
-        f.empty_line();
-    }
-}
-
 /// `enum Inst { ... }`
 fn generate_inst_enum(f: &mut Formatter, insts: &[dsl::Inst]) {
     fmtln!(f, "#[doc(hidden)]");
