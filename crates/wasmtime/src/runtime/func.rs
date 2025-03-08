@@ -1983,7 +1983,7 @@ pub unsafe trait WasmTyList {
 }
 
 macro_rules! impl_wasm_ty_list {
-    ($num:tt $($args:ident)*) => (paste::paste!{
+    ($num:tt $($args:ident)*) => (
         #[allow(non_snake_case)]
         unsafe impl<$($args),*> WasmTyList for ($($args,)*)
         where
@@ -2007,7 +2007,7 @@ macro_rules! impl_wasm_ty_list {
                 $( $args::may_gc() || )* false
             }
         }
-    });
+    );
 }
 
 for_each_function_signature!(impl_wasm_ty_list);

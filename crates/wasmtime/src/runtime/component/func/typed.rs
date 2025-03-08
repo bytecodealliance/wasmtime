@@ -1908,7 +1908,7 @@ unsafe impl<T> ComponentType for Option<T>
 where
     T: ComponentType,
 {
-    type Lower = TupleLower2<<u32 as ComponentType>::Lower, T::Lower>;
+    type Lower = TupleLower<<u32 as ComponentType>::Lower, T::Lower>;
 
     const ABI: CanonicalAbiInfo = CanonicalAbiInfo::variant_static(&[None, Some(T::ABI)]);
 
@@ -2330,22 +2330,61 @@ where
     unsafe { MaybeUninit::uninit().assume_init() }
 }
 
-macro_rules! impl_component_ty_for_tuples {
-    ($n:tt $($t:ident)*) => {paste::paste!{
-        #[allow(non_snake_case)]
-        #[doc(hidden)]
-        #[derive(Clone, Copy)]
-        #[repr(C)]
-        pub struct [<TupleLower$n>]<$($t),*> {
-            $($t: $t,)*
-            _align_tuple_lower0_correctly: [ValRaw; 0],
-        }
+/// Helper structure to define `Lower` for tuples below.
+///
+/// Uses default type parameters to have fields be zero-sized and not present
+/// in memory for smaller tuple values.
+#[allow(non_snake_case)]
+#[doc(hidden)]
+#[derive(Clone, Copy)]
+#[repr(C)]
+pub struct TupleLower<
+    T1 = (),
+    T2 = (),
+    T3 = (),
+    T4 = (),
+    T5 = (),
+    T6 = (),
+    T7 = (),
+    T8 = (),
+    T9 = (),
+    T10 = (),
+    T11 = (),
+    T12 = (),
+    T13 = (),
+    T14 = (),
+    T15 = (),
+    T16 = (),
+    T17 = (),
+> {
+    // NB: these names match the names in `for_each_function_signature!`
+    A1: T1,
+    A2: T2,
+    A3: T3,
+    A4: T4,
+    A5: T5,
+    A6: T6,
+    A7: T7,
+    A8: T8,
+    A9: T9,
+    A10: T10,
+    A11: T11,
+    A12: T12,
+    A13: T13,
+    A14: T14,
+    A15: T15,
+    A16: T16,
+    A17: T17,
+    _align_tuple_lower0_correctly: [ValRaw; 0],
+}
 
+macro_rules! impl_component_ty_for_tuples {
+    ($n:tt $($t:ident)*) => {
         #[allow(non_snake_case)]
         unsafe impl<$($t,)*> ComponentType for ($($t,)*)
             where $($t: ComponentType),*
         {
-            type Lower = [<TupleLower$n>]<$($t::Lower),*>;
+            type Lower = TupleLower<$($t::Lower),*>;
 
             const ABI: CanonicalAbiInfo = CanonicalAbiInfo::record_static(&[
                 $($t::ABI),*
@@ -2453,7 +2492,7 @@ macro_rules! impl_component_ty_for_tuples {
         unsafe impl<$($t,)*> ComponentNamedList for ($($t,)*)
             where $($t: ComponentType),*
         {}
-    }};
+    };
 }
 
 for_each_function_signature!(impl_component_ty_for_tuples);
