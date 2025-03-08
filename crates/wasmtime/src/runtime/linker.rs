@@ -8,7 +8,7 @@ use crate::{
     Instance, Module, StoreContextMut, Val, ValRaw, ValType,
 };
 use alloc::sync::Arc;
-use core::fmt;
+use core::fmt::{self, Debug};
 use core::marker;
 #[cfg(feature = "async")]
 use core::{future::Future, pin::Pin};
@@ -88,6 +88,12 @@ pub struct Linker<T> {
     allow_shadowing: bool,
     allow_unknown_exports: bool,
     _marker: marker::PhantomData<fn() -> T>,
+}
+
+impl<T> Debug for Linker<T> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Linker").finish_non_exhaustive()
+    }
 }
 
 impl<T> Clone for Linker<T> {
