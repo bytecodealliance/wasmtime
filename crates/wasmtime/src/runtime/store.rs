@@ -114,6 +114,9 @@ pub use self::async_::CallHookHandler;
 #[cfg(feature = "async")]
 use self::async_::*;
 
+use super::vm::stack_switching::stack::VMContinuationStack;
+use super::vm::stack_switching::VMContRef;
+
 /// A [`Store`] is a collection of WebAssembly instances and host-defined state.
 ///
 /// All WebAssembly instances and items will be attached to and refer to a
@@ -306,6 +309,11 @@ pub struct StoreOpaque {
 
     engine: Engine,
     vm_store_context: VMStoreContext,
+
+    // Contains all continuations ever allocated throughout the lifetime of this
+    // store.
+    continuations: Vec<Box<VMContRef>>,
+
     instances: Vec<StoreInstance>,
     #[cfg(feature = "component-model")]
     num_component_instances: usize,
@@ -524,6 +532,7 @@ impl<T> Store<T> {
                 _marker: marker::PhantomPinned,
                 engine: engine.clone(),
                 vm_store_context: Default::default(),
+                continuations: Vec::new(),
                 instances: Vec::new(),
                 #[cfg(feature = "component-model")]
                 num_component_instances: 0,
@@ -1533,6 +1542,7 @@ impl StoreOpaque {
         assert!(gc_roots_list.is_empty());
 
         self.trace_wasm_stack_roots(gc_roots_list);
+        self.trace_wasm_continuation_roots(gc_roots_list);
         self.trace_vmctx_roots(gc_roots_list);
         self.trace_user_roots(gc_roots_list);
 
@@ -1540,58 +1550,104 @@ impl StoreOpaque {
     }
 
     #[cfg(feature = "gc")]
-    fn trace_wasm_stack_roots(&mut self, gc_roots_list: &mut GcRootsList) {
-        use crate::runtime::vm::{Backtrace, SendSyncPtr};
+    fn trace_wasm_stack_frame(
+        &self,
+        gc_roots_list: &mut GcRootsList,
+        frame: crate::runtime::vm::Frame,
+    ) {
+        use crate::runtime::vm::SendSyncPtr;
         use core::ptr::NonNull;
 
+        let pc = frame.pc();
+        debug_assert!(pc != 0, "we should always get a valid PC for Wasm frames");
+
+        let fp = frame.fp() as *mut usize;
+        debug_assert!(
+            !fp.is_null(),
+            "we should always get a valid frame pointer for Wasm frames"
+        );
+
+        let module_info = self
+            .modules()
+            .lookup_module_by_pc(pc)
+            .expect("should have module info for Wasm frame");
+
+        let stack_map = match module_info.lookup_stack_map(pc) {
+            Some(sm) => sm,
+            None => {
+                log::trace!("No stack map for this Wasm frame");
+                return;
+            }
+        };
+        log::trace!(
+            "We have a stack map that maps {} bytes in this Wasm frame",
+            stack_map.frame_size()
+        );
+
+        let sp = unsafe { stack_map.sp(fp) };
+        for stack_slot in unsafe { stack_map.live_gc_refs(sp) } {
+            let raw: u32 = unsafe { core::ptr::read(stack_slot) };
+            log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
+
+            let gc_ref = VMGcRef::from_raw_u32(raw);
+            if gc_ref.is_some() {
+                unsafe {
+                    gc_roots_list
+                        .add_wasm_stack_root(SendSyncPtr::new(NonNull::new(stack_slot).unwrap()));
+                }
+            }
+        }
+    }
+
+    #[cfg(feature = "gc")]
+    fn trace_wasm_stack_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+        use crate::runtime::vm::Backtrace;
         log::trace!("Begin trace GC roots :: Wasm stack");
 
         Backtrace::trace(self, |frame| {
-            let pc = frame.pc();
-            debug_assert!(pc != 0, "we should always get a valid PC for Wasm frames");
-
-            let fp = frame.fp() as *mut usize;
-            debug_assert!(
-                !fp.is_null(),
-                "we should always get a valid frame pointer for Wasm frames"
-            );
-
-            let module_info = self
-                .modules()
-                .lookup_module_by_pc(pc)
-                .expect("should have module info for Wasm frame");
-
-            let stack_map = match module_info.lookup_stack_map(pc) {
-                Some(sm) => sm,
-                None => {
-                    log::trace!("No stack map for this Wasm frame");
-                    return core::ops::ControlFlow::Continue(());
-                }
-            };
-            log::trace!(
-                "We have a stack map that maps {} bytes in this Wasm frame",
-                stack_map.frame_size()
-            );
-
-            let sp = unsafe { stack_map.sp(fp) };
-            for stack_slot in unsafe { stack_map.live_gc_refs(sp) } {
-                let raw: u32 = unsafe { core::ptr::read(stack_slot) };
-                log::trace!("Stack slot @ {stack_slot:p} = {raw:#x}");
-
-                let gc_ref = VMGcRef::from_raw_u32(raw);
-                if gc_ref.is_some() {
-                    unsafe {
-                        gc_roots_list.add_wasm_stack_root(SendSyncPtr::new(
-                            NonNull::new(stack_slot).unwrap(),
-                        ));
-                    }
-                }
-            }
-
+            self.trace_wasm_stack_frame(gc_roots_list, frame);
             core::ops::ControlFlow::Continue(())
         });
 
         log::trace!("End trace GC roots :: Wasm stack");
+    }
+
+    #[cfg(feature = "gc")]
+    fn trace_wasm_continuation_roots(&mut self, gc_roots_list: &mut GcRootsList) {
+        use crate::runtime::vm::Backtrace;
+        log::trace!("Begin trace GC roots :: continuations");
+
+        for continuation in &self.continuations {
+            let state = continuation.common_stack_information.state;
+
+            // FIXME(frank-emrich) In general, it is not enough to just trace
+            // through the stacks of continuations; we also need to look through
+            // their `cont.bind` arguments. However, we don't currently have
+            // enough RTTI information to check if any of the values in the
+            // buffers used by `cont.bind` are GC values. As a workaround, note
+            // that we currently disallow cont.bind-ing GC values altogether.
+            // This way, it is okay not to check them here.
+
+            // Note that we only care about continuations that have state
+            // `Suspended`.
+            // - `Running` continuations will be handled by
+            //   `trace_wasm_stack_roots`.
+            // - For `Parent` continuations, we don't know if they are the
+            //   parent of a running continuation or a suspended one. But it
+            //   does not matter: They will be handled when traversing the stack
+            //   chain starting at either the running one, or the suspended
+            //   continuations below.
+            // - For `Fresh` continuations, we know that there are no GC values
+            //   on their stack, yet.
+            if state == crate::vm::stack_switching::VMStackState::Suspended {
+                Backtrace::trace_suspended_continuation(self, continuation.deref(), |frame| {
+                    self.trace_wasm_stack_frame(gc_roots_list, frame);
+                    core::ops::ControlFlow::Continue(())
+                });
+            }
+        }
+
+        log::trace!("End trace GC roots :: continuations");
     }
 
     #[cfg(feature = "gc")]
@@ -1884,6 +1940,20 @@ at https://bytecodealliance.org/security.
             #[cfg(has_host_compiler_backend)]
             Executor::Native => &crate::runtime::vm::UnwindHost,
         }
+    }
+
+    /// Allocates a new continuation. Note that we currently don't support
+    /// deallocating them. Instead, all continuations remain allocated
+    /// throughout the store's lifetime.
+    pub fn allocate_continuation(&mut self) -> Result<*mut VMContRef> {
+        // FIXME(frank-emrich) Do we need to pin this?
+        let mut continuation = Box::new(VMContRef::empty());
+        let stack_size = self.engine.config().stack_switching_config.stack_size;
+        let stack = VMContinuationStack::new(stack_size)?;
+        continuation.stack = stack;
+        let ptr = continuation.deref_mut() as *mut VMContRef;
+        self.continuations.push(continuation);
+        Ok(ptr)
     }
 }
 

@@ -478,3 +478,93 @@ check: exited with status = 0
         Ok(())
     }
 }
+
+#[cfg(all(feature = "stack-switching", unix, target_arch = "x86_64"))]
+mod stack_switching {
+    use super::{check_lldb_output, lldb_with_script};
+    use anyhow::Result;
+
+    /// Checks that we get backtraces including the entire continuation chain when
+    /// using just FP walking.
+    #[test]
+    #[ignore]
+    pub fn debug_info_disabled() -> Result<()> {
+        let output = lldb_with_script(
+            &[
+                "-Ccache=n",
+                "-Ddebug-info=n",
+                "-Wstack-switching",
+                "--invoke",
+                "entry",
+                "tests/all/debug/testsuite/stack_switch.wat",
+            ],
+            r#"r
+bt
+"#,
+        )?;
+
+        // We are running without debug-info enabled, so we will not get Wasm
+        // function names in the output. Instead, we look for
+        // wasmtime_continuation_start, the trampoline at the bottom of all
+        // continuation stacks.
+        //
+        // This directive matches lines like this:
+        // frame #12: 0x0000555558f18fc9 wasmtime`wasmtime_continuation_start + 9
+        let check = r#"
+      check: frame #$(=[0-9]+): 0x$(=[0-9a-f]+) wasmtime`wasmtime_continuation_start
+    "#;
+
+        // Our stack_switch.wat file traps inside 3 levels of nested continuations.
+        // Thus, we must have 3 stack frames at function `wasmtime_continuation_start`.
+        check_lldb_output(&output, &check.repeat(3))?;
+
+        Ok(())
+    }
+
+    /// Checks that we get backtraces including the entire continuation chain when
+    /// using just FP walking.
+    #[test]
+    #[ignore]
+    pub fn debug_info_enabled() -> Result<()> {
+        let output = lldb_with_script(
+            &[
+                "-Ccache=n",
+                "-Ddebug-info=y",
+                "-Wstack-switching",
+                "--invoke",
+                "entry",
+                "tests/all/debug/testsuite/stack_switch.wat",
+            ],
+            r#"r
+bt
+"#,
+        )?;
+
+        // We are running with debug-info enabled, so we get Wasm
+        // function names in the backtrace.
+        //
+        // Creates directive matching lines like this:
+        // frame #13: 0x00007ffff4e4a5be JIT(0x55555bc24b10)`c at <gen-0>.wasm:90
+        // where the string is parameterised over the function name (c in the
+        // example above).
+        let check = |name: &str| {
+            format!(
+            "check: frame #$(=[0-9]+): 0x$(=[0-9a-f]+) JIT(0x$(=[0-9a-f]+))`{name} at <gen-0>.wasm"
+        )
+        };
+
+        // Our stack_switch.wat file traps inside 3 levels of nested continuations.
+        // Let's check that our backtrace contains all the functions, even those in
+        // parent continuations.
+        check_lldb_output(
+            &output,
+            &["f", "e", "d", "c", "b", "a", "entry"]
+                .into_iter()
+                .map(check)
+                .collect::<Vec<String>>()
+                .join("\n"),
+        )?;
+
+        Ok(())
+    }
+}

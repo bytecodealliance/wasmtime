@@ -54,6 +54,8 @@
 //! }
 //! ```
 
+use super::stack_switching::VMContObj;
+use super::stack_switching::VMContRef;
 use crate::prelude::*;
 use crate::runtime::vm::table::{Table, TableElementType};
 use crate::runtime::vm::vmcontext::VMFuncRef;
@@ -219,6 +221,7 @@ unsafe fn table_grow_func_ref(
     let element = match instance.table_element_type(table_index) {
         TableElementType::Func => NonNull::new(init_value.cast::<VMFuncRef>()).into(),
         TableElementType::GcRef => unreachable!(),
+        TableElementType::Cont => unreachable!(),
     };
 
     let result = instance
@@ -248,6 +251,40 @@ unsafe fn table_grow_gc_ref(
                     .clone_gc_ref(&r)
             })
             .into(),
+        TableElementType::Cont => unreachable!(),
+    };
+
+    let result = instance
+        .table_grow(store, table_index, delta, element)?
+        .map(AllocationSize);
+    Ok(result)
+}
+
+unsafe fn table_grow_cont_obj(
+    store: &mut dyn VMStore,
+    instance: &mut Instance,
+    table_index: u32,
+    delta: u64,
+    // The following two values together form the intitial Option<VMContObj>.
+    // A None value is indicated by the pointer being null.
+    init_value_contref: *mut u8,
+    init_value_revision: u64,
+) -> Result<Option<AllocationSize>> {
+    use core::ptr::NonNull;
+    let init_value = if init_value_contref.is_null() {
+        None
+    } else {
+        // SAFETY: We just checked that the pointer is non-null
+        let contref = NonNull::new_unchecked(init_value_contref as *mut VMContRef);
+        let contobj = VMContObj::new(contref, init_value_revision);
+        Some(contobj)
+    };
+
+    let table_index = TableIndex::from_u32(table_index);
+
+    let element = match instance.table_element_type(table_index) {
+        TableElementType::Cont => init_value.into(),
+        _ => panic!("Wrong table growing function"),
     };
 
     let result = instance
@@ -274,6 +311,7 @@ unsafe fn table_fill_func_ref(
             Ok(())
         }
         TableElementType::GcRef => unreachable!(),
+        TableElementType::Cont => unreachable!(),
     }
 }
 
@@ -297,6 +335,38 @@ unsafe fn table_fill_gc_ref(
             table.fill(Some(gc_store), dst, gc_ref.into(), len)?;
             Ok(())
         }
+
+        TableElementType::Cont => unreachable!(),
+    }
+}
+
+unsafe fn table_fill_cont_obj(
+    store: &mut dyn VMStore,
+    instance: &mut Instance,
+    table_index: u32,
+    dst: u64,
+    value_contref: *mut u8,
+    value_revision: u64,
+    len: u64,
+) -> Result<()> {
+    use core::ptr::NonNull;
+    let table_index = TableIndex::from_u32(table_index);
+    let table = &mut *instance.get_table(table_index);
+    match table.element_type() {
+        TableElementType::Cont => {
+            let contobj = if value_contref.is_null() {
+                None
+            } else {
+                // SAFETY: We just checked that the pointer is non-null
+                let contref = NonNull::new_unchecked(value_contref as *mut VMContRef);
+                let contobj = VMContObj::new(contref, value_revision);
+                Some(contobj)
+            };
+
+            table.fill(store.optional_gc_store_mut()?, dst, contobj.into(), len)?;
+            Ok(())
+        }
+        _ => panic!("Wrong table filling function"),
     }
 }
 
@@ -1363,4 +1433,37 @@ pub mod relocs {
             .reg
         }
     }
+}
+
+// Builtins for continuations. These are thin wrappers around the
+// respective definitions in stack_switching.rs.
+fn cont_new(
+    store: &mut dyn VMStore,
+    instance: &mut Instance,
+    func: *mut u8,
+    param_count: u32,
+    result_count: u32,
+) -> Result<Option<AllocationSize>, TrapReason> {
+    let ans =
+        crate::vm::stack_switching::cont_new(store, instance, func, param_count, result_count)?;
+    Ok(Some(AllocationSize(ans.cast::<u8>() as usize)))
+}
+
+fn delete_me_print_str(_store: &mut dyn VMStore, _instance: &mut Instance, s: *const u8, len: u64) {
+    let len =
+        usize::try_from(len).map_err(|_error| TrapReason::User(anyhow::anyhow!("len too large!")));
+    let str = unsafe { core::slice::from_raw_parts(s, len.unwrap()) };
+    let _s = core::str::from_utf8(str).unwrap();
+    #[cfg(feature = "std")]
+    print!("{_s}")
+}
+
+fn delete_me_print_int(_store: &mut dyn VMStore, _instance: &mut Instance, _arg: u64) {
+    #[cfg(feature = "std")]
+    print!("{_arg}")
+}
+
+fn delete_me_print_pointer(_store: &mut dyn VMStore, _instance: &mut Instance, _arg: *const u8) {
+    #[cfg(feature = "std")]
+    print!("{_arg:p}")
 }

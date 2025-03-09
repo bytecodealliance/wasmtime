@@ -130,6 +130,10 @@ impl Global {
                                 })
                                 .into(),
                         ),
+                        HeapType::NoCont | HeapType::ConcreteCont(_) | HeapType::Cont => {
+                            // TODO(#10248) Required to support stack switching in the embedder API.
+                            unimplemented!()
+                        }
 
                         HeapType::NoExtern => Ref::Extern(None),
 
