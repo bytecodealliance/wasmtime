@@ -401,6 +401,11 @@ jobs:
               -p cranelift-codegen --benches
               -p cranelift-codegen --no-default-features --features std,unwind,pulley
 
+          - name: cranelift-entity
+            checks: |
+              -p cranelift-entity --no-default-features
+              -p cranelift-entity --no-default-features --features enable-serde
+              
           - name: wasmtime-bench-api
             checks: |
               -p wasmtime-bench-api
