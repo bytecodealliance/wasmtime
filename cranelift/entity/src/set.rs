@@ -9,7 +9,11 @@ use cranelift_bitset::CompoundBitSet;
 ///
 /// The `EntitySet` data structure uses the dense index space to implement a set with a bitvector.
 /// Like `SecondaryMap`, an `EntitySet` is used to associate secondary information with entities.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+#[cfg_attr(
+    feature = "enable-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct EntitySet<K>
 where
     K: EntityRef,
