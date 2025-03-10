@@ -366,48 +366,84 @@ and generated code need to handle.
 First there are a number of properties about linear memory which can be
 configured:
 
-* `wasmtime::Config::static_memory_maximum_size`
-* `wasmtime::Config::static_memory_guard_size`
-* `wasmtime::Config::dynamic_memory_guard_size`
+* `wasmtime::Config::memory_reservation`
+* `wasmtime::Config::memory_may_move`
+* `wasmtime::Config::memory_guard_size`
+* `wasmtime::Config::memory_reservation_for_growth`
+* `wasmtime::Config::memory_init_cow`
 * `wasmtime::Config::guard_before_linear_memory`
+* `wasmtime::Config::signals_based_traps`
 
 The methods on `Config` have a good bit of documentation to go over some
-nitty-gritty, but the general gist is that Wasmtime has two modes of memory:
-static and dynamic. Static memories represent an address space reservation that
-never moves and pages are committed to represent memory growth. Dynamic
-memories represent allocations where the committed portion exactly matches the
-wasm memory's size and growth happens by allocating a bigger chunk of memory.
+nitty-gritty. Wasmtime also has some `#[cfg]` directives which are calculated by
+`crates/wasmtime/build.rs` which affects the defaults of various strategies. For
+example `has_native_signals` means that segfaults are allowed to happen at
+runtime and are caught in a signal handler. Additionally `has_virtual_memory`
+means that `mmap` is available and will be used (otherwise a fallback to
+`malloc` is implemented). The matrix of all of these combinations is then used
+to implement a linear memory for a WebAssembly instance.
 
-The guard size configuration indicates the size of the guard region that
-happens after linear memory. This guard size affects whether generated JIT code
-emits bounds checks or not. Bounds checks are elided if out-of-bounds addresses
-provably encounter the guard pages.
+It's generally best to consult the documentation of `Config` for the most
+up-to-date information. Additionally code comments throughout the codebase can
+also be useful for understanding the impact of some of these options. Some
+example scenarios though are:
 
-The `guard_before_linear_memory` configuration additionally places guard pages
-in front of linear memory as well as after linear memory (the same size on both
-ends). This is only used to protect against possible Cranelift bugs and
-otherwise serves no purpose.
+* **`(memory 1)` on 64-bit platforms** - by default this WebAssembly memory has
+  unlimited size, meaning it's only limited by its index type (`i32`) meaning it
+  can grow up to 4GiB if the host/embedder allows it. This is implemented with a
+  8GiB virtual memory reservation -- 2GiB unmapped before linear memory, 4GiB
+  for linear memory itself (but only 1 wasm page, 64KiB, read/write at the
+  start), and 2GiB unmapped afterwards. The guard region before linear memory is
+  a defense-in-depth measure and should never be hit under any operation. The
+  guard region after linear memory is present to eliminate bounds checks in the
+  wasm module (WebAssembly addresses are effective 33-bit addresses when the
+  static `offset` is taken into account).
 
-The defaults for Wasmtime on 64-bit platforms are:
+* **`(memory i64 1)` on 64-bit platforms** - this WebAssembly memory uses 64-bit
+  indexes instead of 32-bit indexes. This means that the configuration looks
+  similar to `(memory 1)` above except that growth beyond 4GiB will copy all the
+  contents of linear memory to a new location. Embedders might want to raise
+  `Config::memory_reservation` in this situation. This configuration mode cannot
+  remove any bounds checks, but guard pages are still used to deduplicate bounds
+  checks where possible (so segfaults may still be caught at runtime for
+  out-of-bounds accesses).
 
-* 4GB static maximum size meaning all 32-bit memories are static and 64-bit
-  memories are dynamic.
-* 2GB static guard size meaning all loads/stores with less than 2GB offset
-  don't need bounds checks with 32-bit memories.
-* Guard pages before linear memory are enabled.
+* **`(memory 1)` on 64-bit platforms with the pooling allocator** - the pooling
+  allocator has a few important differences than the default settings. First is
+  that the pooling allocator is able to "overlap" the before/after guard regions
+  meaning that the virtual memory cost per-linear-memory is 6GiB by default
+  instead of 8GiB. Additionally the pooling allocator cannot resize memory so if
+  `Config::memory_reservation` is less than 4GiB then that's a hard limit on the
+  size of linear memory rather than being able to copy to a new location.
 
-Altogether this means that 32-bit linear memories result in an 8GB virtual
-address space reservation by default in Wasmtime. With the pooling allocator
-where we know that linear memories are contiguous this results in a 6GB
-reservation per memory because the guard region after one memory is the guard
-region before the next.
+* **`(memory 1)` on 64-bit platforms with a smaller reservation** - if the
+  `Config::memory_reservation` option is configured less than the default (the
+  default is 4GiB) then the virtual memory allocated for all linear memories
+  will be less than the 8GiB default. This means that linear memories may move
+  over time if they grow beyond their initial limit (assuming such growth is
+  allowed) and additionally bounds checks will be required for memory accesses.
 
-Note that 64-bit memories (the memory64 proposal for WebAssembly) can be
-configured to be static but will never be able to elide bounds checks at this
-time. This configuration is possible through the `static_memory_forced`
-configuration option. Additionally note that support for 64-bit memories in
-Wasmtime is functional but not yet tuned at this time so there's probably still
-some performance work and better defaults to manage.
+* **`(memory 1)` on 32-bit platforms** - unlike 64-bit platforms this memory
+  cannot have a 4GiB virtual memory reservation. Instead the linear memory is
+  allocated with `Config::memory_reservation_for_growth` unmapped bytes after it
+  to amortize the reallocation overhead of copying bytes. Guard pages are still
+  used and signals are used where available to deduplicate bounds checks.
+
+* **`(memory 1 (pagesize 1))` on any platforms** - this WebAssembly linear
+  memory, with a page size of 1 byte, means that virtual memory cannot be used
+  to catch traps. Instead explicit bounds checks are always required on all
+  accesses. This is still allocated with virtual memory where possible, however.
+
+There's quite a few possible combinations for how all of these options interact
+with each other. The high-level design goal of Wasmtime is such that each option
+is independent from all the others and is a knob for just its behavior. In this
+way it should be possible to customize the needs of embedders. Wasmtime
+additionally has different default behavior across platforms, such as 32-bit and
+64-bit platforms. Some platforms additionally don't have `mmap` by default and
+Wasmtime will adapt to that as well. The intention, however, is that it should
+be possible to mirror the default configuration on any platform into a
+"full-featured" platform such as 64-bit to assist with testing, fuzzing, and
+debugging.
 
 ## Tables and `externref`
 
