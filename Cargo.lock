@@ -4202,7 +4202,6 @@ dependencies = [
  "memfd",
  "object",
  "once_cell",
- "paste",
  "postcard",
  "proptest",
  "psm",
