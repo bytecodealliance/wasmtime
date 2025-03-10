@@ -654,22 +654,29 @@ pub fn make_api_calls(api: generators::api::ApiCalls) {
 /// Executes the wast `test` with the `config` specified.
 ///
 /// Ensures that wast tests pass regardless of the `Config`.
-pub fn wast_test(mut fuzz_config: generators::Config, test: generators::WastTest) {
+pub fn wast_test(u: &mut arbitrary::Unstructured<'_>) -> arbitrary::Result<()> {
     crate::init_fuzzing();
+
+    let mut fuzz_config: generators::Config = u.arbitrary()?;
+    let test: generators::WastTest = u.arbitrary()?;
+    if u.arbitrary()? {
+        fuzz_config.enable_async(u)?;
+    }
+
     let test = &test.test;
 
     // Discard tests that allocate a lot of memory as we don't want to OOM the
     // fuzzer and we also limit memory growth which would cause the test to
     // fail.
     if test.config.hogs_memory.unwrap_or(false) {
-        return;
+        return Err(arbitrary::Error::IncorrectFormat);
     }
 
     // Transform `fuzz_config` to be valid for `test` and make sure that this
     // test is supposed to pass.
     let wast_config = fuzz_config.make_wast_test_compliant(test);
     if test.should_fail(&wast_config) {
-        return;
+        return Err(arbitrary::Error::IncorrectFormat);
     }
 
     // Winch requires AVX and AVX2 for SIMD tests to pass so don't run the test
@@ -688,19 +695,24 @@ pub fn wast_test(mut fuzz_config: generators::Config, test: generators::WastTest
         log::warn!(
             "Skipping Wast test because Winch doesn't support SIMD tests with AVX or AVX2 disabled"
         );
-        return;
+        return Err(arbitrary::Error::IncorrectFormat);
     }
 
     // Fuel and epochs don't play well with threads right now, so exclude any
     // thread-spawning test if it looks like threads are spawned in that case.
     if fuzz_config.wasmtime.consume_fuel || fuzz_config.wasmtime.epoch_interruption {
         if test.contents.contains("(thread") {
-            return;
+            return Err(arbitrary::Error::IncorrectFormat);
         }
     }
 
     log::debug!("running {:?}", test.path);
-    let mut wast_context = WastContext::new(fuzz_config.to_store());
+    let async_ = if fuzz_config.wasmtime.async_config == generators::AsyncConfig::Disabled {
+        wasmtime_wast::Async::No
+    } else {
+        wasmtime_wast::Async::Yes
+    };
+    let mut wast_context = WastContext::new(fuzz_config.to_store(), async_);
     wast_context
         .register_spectest(&wasmtime_wast::SpectestConfig {
             use_shared_memory: true,
@@ -710,6 +722,7 @@ pub fn wast_test(mut fuzz_config: generators::Config, test: generators::WastTest
     wast_context
         .run_buffer(test.path.to_str().unwrap(), test.contents.as_bytes())
         .unwrap();
+    Ok(())
 }
 
 /// Execute a series of `table.get` and `table.set` operations.
@@ -1268,6 +1281,22 @@ mod tests {
         false
     }
 
+    /// Runs `f` with random data until it returns `Ok(())` `iters` times.
+    fn test_n_times<T: for<'a> Arbitrary<'a>>(
+        iters: u32,
+        mut f: impl FnMut(T, &mut Unstructured<'_>) -> arbitrary::Result<()>,
+    ) {
+        let mut to_test = 0..iters;
+        let ok = gen_until_pass(|a, b| {
+            if f(a, b).is_ok() {
+                Ok(to_test.next().is_none())
+            } else {
+                Ok(false)
+            }
+        });
+        assert!(ok);
+    }
+
     // Test that the `table_ops` fuzzer eventually runs the gc function in the host.
     // We've historically had issues where this fuzzer accidentally wasn't fuzzing
     // anything for a long time so this is an attempt to prevent that from happening
@@ -1352,5 +1381,10 @@ mod tests {
         if !ok {
             panic!("never generated wasm module using {expected:?}");
         }
+    }
+
+    #[test]
+    fn wast_smoke_test() {
+        test_n_times(50, |(), u| super::wast_test(u));
     }
 }

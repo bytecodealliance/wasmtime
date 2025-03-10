@@ -4,7 +4,7 @@ use std::sync::{Condvar, LazyLock, Mutex};
 use wasmtime::{
     Config, Engine, InstanceAllocationStrategy, MpkEnabled, PoolingAllocationConfig, Store,
 };
-use wasmtime_wast::{SpectestConfig, WastContext};
+use wasmtime_wast::{Async, SpectestConfig, WastContext};
 use wasmtime_wast_util::{limits, Collector, Compiler, WastConfig, WastTest};
 
 fn main() {
@@ -123,6 +123,7 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
     };
 
     let mut cfg = Config::new();
+    cfg.async_support(true);
     component_test_util::apply_test_config(&mut cfg, &test_config);
     component_test_util::apply_wast_config(&mut cfg, &config);
 
@@ -229,7 +230,7 @@ fn run_wast(test: &WastTest, config: WastConfig) -> anyhow::Result<()> {
     for (engine, desc) in engines {
         let result = engine.and_then(|engine| {
             let store = Store::new(&engine, ());
-            let mut wast_context = WastContext::new(store);
+            let mut wast_context = WastContext::new(store, Async::Yes);
             wast_context.register_spectest(&SpectestConfig {
                 use_shared_memory: true,
                 suppress_prints: true,
