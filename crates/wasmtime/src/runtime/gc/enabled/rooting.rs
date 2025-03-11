@@ -968,9 +968,7 @@ impl<T: GcRef> Rooted<T> {
         val_raw: impl Fn(u32) -> ValRaw,
     ) -> Result<()> {
         let gc_ref = self.inner.try_clone_gc_ref(store)?;
-        let raw = gc_ref.as_raw_u32();
-        debug_assert_ne!(raw, 0);
-        store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
+        let raw = store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
         ptr.write(val_raw(raw));
         Ok(())
     }
@@ -1758,9 +1756,7 @@ where
         val_raw: impl Fn(u32) -> ValRaw,
     ) -> Result<()> {
         let gc_ref = self.try_clone_gc_ref(store)?;
-        let raw = gc_ref.as_raw_u32();
-        debug_assert_ne!(raw, 0);
-        store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
+        let raw = store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
         ptr.write(val_raw(raw));
         Ok(())
     }

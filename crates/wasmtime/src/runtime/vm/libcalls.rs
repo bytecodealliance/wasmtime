@@ -460,14 +460,13 @@ unsafe fn gc(store: &mut dyn VMStore, _instance: &mut Instance, gc_ref: u32) -> 
         // GC.
         let gc_store = store.store_opaque_mut().unwrap_gc_store_mut();
         let gc_ref = gc_store.clone_gc_ref(gc_ref);
-        gc_store.expose_gc_ref_to_wasm(gc_ref);
+        let _ = gc_store.expose_gc_ref_to_wasm(gc_ref);
     }
 
     match store.maybe_async_gc(gc_ref)? {
         None => Ok(0),
         Some(r) => {
-            let raw = r.as_raw_u32();
-            store
+            let raw = store
                 .store_opaque_mut()
                 .unwrap_gc_store_mut()
                 .expose_gc_ref_to_wasm(r);
@@ -529,9 +528,7 @@ unsafe fn gc_alloc_raw(
         }
     };
 
-    let raw = gc_ref.as_raw_u32();
-
-    store
+    let raw = store
         .store_opaque_mut()
         .unwrap_gc_store_mut()
         .expose_gc_ref_to_wasm(gc_ref);
@@ -669,8 +666,7 @@ unsafe fn array_new_data(
         .copy_from_slice(array_layout.base_size, data);
 
     // Return the array to Wasm!
-    let raw = array_ref.as_gc_ref().as_raw_u32();
-    store
+    let raw = store
         .store_opaque_mut()
         .unwrap_gc_store_mut()
         .expose_gc_ref_to_wasm(array_ref.into());
@@ -839,8 +835,7 @@ unsafe fn array_new_elem(
 
         let mut store = AutoAssertNoGc::new(store);
         let gc_ref = array.try_clone_gc_ref(&mut store)?;
-        let raw = gc_ref.as_raw_u32();
-        store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
+        let raw = store.unwrap_gc_store_mut().expose_gc_ref_to_wasm(gc_ref);
         Ok(raw)
     })
 }
