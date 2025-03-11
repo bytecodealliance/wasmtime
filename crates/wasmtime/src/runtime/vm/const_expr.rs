@@ -167,6 +167,7 @@ impl ConstExprEvaluator {
         let mut store = AutoAssertNoGc::new(&mut store);
 
         for op in expr.ops() {
+            log::trace!("const-evaluating op: {op:?}");
             match op {
                 ConstOp::I32Const(i) => self.stack.push(ValRaw::i32(*i)),
                 ConstOp::I64Const(i) => self.stack.push(ValRaw::i64(*i)),
