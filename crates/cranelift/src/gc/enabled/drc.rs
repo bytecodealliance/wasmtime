@@ -436,6 +436,21 @@ impl GcCompiler for DrcCompiler {
         // null, or we are in dynamically unreachable code and should just trap.
         if let WasmHeapType::None = ty.heap_type {
             let null = builder.ins().iconst(reference_type, 0);
+
+            // If the `flags` can trap, then we need to do an actual load. We
+            // might be relying on, e.g., this load trapping to raise a
+            // out-of-bounds-table-index trap, rather than successfully loading
+            // a null `noneref`.
+            //
+            // That said, while we will do the load, we won't use the loaded
+            // value, and will still use our null constant below. This will
+            // avoid an unnecessary load dependency, slightly improving the code
+            // we ultimately emit. This probably doesn't matter, but it is easy
+            // to do and can only improve things, so we do it.
+            if flags.trap_code().is_some() {
+                let _ = builder.ins().load(reference_type, flags, src, 0);
+            }
+
             if !ty.nullable {
                 // NB: Don't use an unconditional trap instruction, since that
                 // is a block terminator, and we still need to integrate with
@@ -443,6 +458,7 @@ impl GcCompiler for DrcCompiler {
                 let zero = builder.ins().iconst(ir::types::I32, 0);
                 builder.ins().trapz(zero, TRAP_INTERNAL_ASSERT);
             }
+
             return Ok(null);
         };
 
