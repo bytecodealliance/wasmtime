@@ -2268,7 +2268,6 @@ fn invalid_subcommand() -> Result<()> {
 #[test]
 fn numeric_args() -> Result<()> {
     let wasm = build_wasm("tests/all/cli_tests/numeric_args.wat")?;
-    
     // Test decimal i32
     let output = run_wasmtime_for_output(
         &[
@@ -2282,7 +2281,6 @@ fn numeric_args() -> Result<()> {
     )?;
     assert_eq!(output.status.success(), true);
     assert_eq!(output.stdout, b"42\n");
-    
     // Test hexadecimal i32
     let output = run_wasmtime_for_output(
         &[
@@ -2296,7 +2294,6 @@ fn numeric_args() -> Result<()> {
     )?;
     assert_eq!(output.status.success(), true);
     assert_eq!(output.stdout, b"42\n");
-    
     // Test decimal i64
     let output = run_wasmtime_for_output(
         &[
@@ -2310,7 +2307,6 @@ fn numeric_args() -> Result<()> {
     )?;
     assert_eq!(output.status.success(), true);
     assert_eq!(output.stdout, b"42\n");
-    
     // Test hexadecimal i64
     let output = run_wasmtime_for_output(
         &[
@@ -2324,6 +2320,5 @@ fn numeric_args() -> Result<()> {
     )?;
     assert_eq!(output.status.success(), true);
     assert_eq!(output.stdout, b"42\n");
-    
     Ok(())
 }
