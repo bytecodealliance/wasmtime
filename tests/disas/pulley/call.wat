@@ -7,9 +7,9 @@
 )
 ;; wasm[0]::function[1]:
 ;;       push_frame
-;;       xload32le_o32 x3, x0, 40
+;;       xload32le_o32 x3, x0, 36
 ;;       xmov x6, x0
-;;       xload32le_o32 x0, x6, 48
+;;       xload32le_o32 x0, x6, 44
 ;;       xmov x1, x6
 ;;       call_indirect x3
 ;;       pop_frame
