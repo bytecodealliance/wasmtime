@@ -1388,8 +1388,14 @@ impl FuncEnvironment<'_> {
             | WasmHeapType::ConcreteStruct(_)
             | WasmHeapType::None => false,
 
-            // Wrong type hierarchy: cannot be an i31.
-            WasmHeapType::Extern | WasmHeapType::NoExtern => false,
+            // Despite being a different type hierarchy, this *could* be an
+            // `i31` if it is the result of
+            //
+            //     (extern.convert_any (ref.i31 ...))
+            WasmHeapType::Extern => true,
+
+            // Can only ever be `null`.
+            WasmHeapType::NoExtern => false,
 
             // Wrong type hierarchy, and also funcrefs are not GC-managed
             // types. Should have been caught by the assertion at the start of
