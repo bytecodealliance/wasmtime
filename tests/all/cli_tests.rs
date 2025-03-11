@@ -2281,7 +2281,7 @@ fn numeric_args() -> Result<()> {
     )?;
     assert_eq!(output.status.success(), true);
     assert_eq!(output.stdout, b"42\n");
-    // Test hexadecimal i32
+    // Test hexadecimal i32 with lowercase prefix
     let output = run_wasmtime_for_output(
         &[
             "run",
@@ -2294,6 +2294,31 @@ fn numeric_args() -> Result<()> {
     )?;
     assert_eq!(output.status.success(), true);
     assert_eq!(output.stdout, b"42\n");
+    // Test hexadecimal i32 with uppercase prefix
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i32_test",
+            wasm.path().to_str().unwrap(),
+            "0X2a",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"42\n");
+    // Test that non-prefixed hex strings are not interpreted as hex
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i32_test",
+            wasm.path().to_str().unwrap(),
+            "ff",
+        ],
+        None,
+    )?;
+    assert!(!output.status.success()); // Should fail as "ff" is not a valid decimal number
     // Test decimal i64
     let output = run_wasmtime_for_output(
         &[
