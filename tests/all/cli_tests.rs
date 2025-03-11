@@ -2264,3 +2264,66 @@ fn invalid_subcommand() -> Result<()> {
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid-subcommand"));
     Ok(())
 }
+
+#[test]
+fn numeric_args() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/numeric_args.wat")?;
+    
+    // Test decimal i32
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i32_test",
+            wasm.path().to_str().unwrap(),
+            "42",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"42\n");
+    
+    // Test hexadecimal i32
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i32_test",
+            wasm.path().to_str().unwrap(),
+            "0x2A",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"42\n");
+    
+    // Test decimal i64
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i64_test",
+            wasm.path().to_str().unwrap(),
+            "42",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"42\n");
+    
+    // Test hexadecimal i64
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i64_test",
+            wasm.path().to_str().unwrap(),
+            "0x2A",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"42\n");
+    
+    Ok(())
+}
