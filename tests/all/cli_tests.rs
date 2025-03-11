@@ -2319,6 +2319,7 @@ fn numeric_args() -> Result<()> {
         None,
     )?;
     assert!(!output.status.success()); // Should fail as "ff" is not a valid decimal number
+    
     // Test decimal i64
     let output = run_wasmtime_for_output(
         &[
