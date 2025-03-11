@@ -2264,3 +2264,87 @@ fn invalid_subcommand() -> Result<()> {
     assert!(String::from_utf8_lossy(&output.stderr).contains("invalid-subcommand"));
     Ok(())
 }
+
+#[test]
+fn numeric_args() -> Result<()> {
+    let wasm = build_wasm("tests/all/cli_tests/numeric_args.wat")?;
+    // Test decimal i32
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i32_test",
+            wasm.path().to_str().unwrap(),
+            "42",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"42\n");
+    // Test hexadecimal i32 with lowercase prefix
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i32_test",
+            wasm.path().to_str().unwrap(),
+            "0x2A",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"42\n");
+    // Test hexadecimal i32 with uppercase prefix
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i32_test",
+            wasm.path().to_str().unwrap(),
+            "0X2a",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"42\n");
+    // Test that non-prefixed hex strings are not interpreted as hex
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i32_test",
+            wasm.path().to_str().unwrap(),
+            "ff",
+        ],
+        None,
+    )?;
+    assert!(!output.status.success()); // Should fail as "ff" is not a valid decimal number
+
+    // Test decimal i64
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i64_test",
+            wasm.path().to_str().unwrap(),
+            "42",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"42\n");
+    // Test hexadecimal i64
+    let output = run_wasmtime_for_output(
+        &[
+            "run",
+            "--invoke",
+            "i64_test",
+            wasm.path().to_str().unwrap(),
+            "0x2A",
+        ],
+        None,
+    )?;
+    assert_eq!(output.status.success(), true);
+    assert_eq!(output.stdout, b"42\n");
+    Ok(())
+}
