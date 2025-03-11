@@ -528,12 +528,18 @@ impl RunCommand {
             values.push(match ty {
                 // Supports both decimal and hexadecimal notation (with 0x prefix)
                 ValType::I32 => Val::I32(
-                    val.parse::<i32>()
-                        .or_else(|_| i32::from_str_radix(&val.trim_start_matches("0x"), 16))?,
+                    if val.starts_with("0x") || val.starts_with("0X") {
+                        i32::from_str_radix(&val[2..], 16)?
+                    } else {
+                        val.parse::<i32>()?
+                    }
                 ),
                 ValType::I64 => Val::I64(
-                    val.parse::<i64>()
-                        .or_else(|_| i64::from_str_radix(&val.trim_start_matches("0x"), 16))?,
+                    if val.starts_with("0x") || val.starts_with("0X") {
+                        i64::from_str_radix(&val[2..], 16)?
+                    } else {
+                        val.parse::<i64>()?
+                    }
                 ),
                 ValType::F32 => Val::F32(val.parse::<f32>()?.to_bits()),
                 ValType::F64 => Val::F64(val.parse::<f64>()?.to_bits()),
