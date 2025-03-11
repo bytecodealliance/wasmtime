@@ -527,20 +527,16 @@ impl RunCommand {
                 .ok_or_else(|| anyhow!("argument is not valid utf-8: {val:?}"))?;
             values.push(match ty {
                 // Supports both decimal and hexadecimal notation (with 0x prefix)
-                ValType::I32 => Val::I32(
-                    if val.starts_with("0x") || val.starts_with("0X") {
-                        i32::from_str_radix(&val[2..], 16)?
-                    } else {
-                        val.parse::<i32>()?
-                    }
-                ),
-                ValType::I64 => Val::I64(
-                    if val.starts_with("0x") || val.starts_with("0X") {
-                        i64::from_str_radix(&val[2..], 16)?
-                    } else {
-                        val.parse::<i64>()?
-                    }
-                ),
+                ValType::I32 => Val::I32(if val.starts_with("0x") || val.starts_with("0X") {
+                    i32::from_str_radix(&val[2..], 16)?
+                } else {
+                    val.parse::<i32>()?
+                }),
+                ValType::I64 => Val::I64(if val.starts_with("0x") || val.starts_with("0X") {
+                    i64::from_str_radix(&val[2..], 16)?
+                } else {
+                    val.parse::<i64>()?
+                }),
                 ValType::F32 => Val::F32(val.parse::<f32>()?.to_bits()),
                 ValType::F64 => Val::F64(val.parse::<f64>()?.to_bits()),
                 t => bail!("unsupported argument type {:?}", t),
