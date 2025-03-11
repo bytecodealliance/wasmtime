@@ -413,7 +413,7 @@ impl Config {
         }
 
         if self.wasmtime.async_config != AsyncConfig::Disabled {
-            log::debug!("async config in used {:?}", self.wasmtime.async_config);
+            log::debug!("async config in use {:?}", self.wasmtime.async_config);
             self.wasmtime.async_config.configure(&mut cfg);
         }
 
@@ -432,20 +432,25 @@ impl Config {
     /// Configures a store based on this configuration.
     pub fn configure_store(&self, store: &mut Store<StoreLimits>) {
         store.limiter(|s| s as &mut dyn wasmtime::ResourceLimiter);
+
+        // Configure the store to never abort by default, that is it'll have
+        // max fuel or otherwise trap on an epoch change but the epoch won't
+        // ever change.
+        //
+        // Afterwards though see what `AsyncConfig` is being used an further
+        // refine the store's configuration based on that.
+        if self.wasmtime.consume_fuel {
+            store.set_fuel(u64::MAX).unwrap();
+        }
+        if self.wasmtime.epoch_interruption {
+            store.epoch_deadline_trap();
+            store.set_epoch_deadline(1);
+        }
         match self.wasmtime.async_config {
-            AsyncConfig::Disabled => {
-                if self.wasmtime.consume_fuel {
-                    store.set_fuel(u64::MAX).unwrap();
-                }
-                if self.wasmtime.epoch_interruption {
-                    store.epoch_deadline_trap();
-                    store.set_epoch_deadline(1);
-                }
-            }
+            AsyncConfig::Disabled => {}
             AsyncConfig::YieldWithFuel(amt) => {
                 assert!(self.wasmtime.consume_fuel);
                 store.fuel_async_yield_interval(Some(amt)).unwrap();
-                store.set_fuel(amt).unwrap();
             }
             AsyncConfig::YieldWithEpochs { ticks, .. } => {
                 assert!(self.wasmtime.epoch_interruption);

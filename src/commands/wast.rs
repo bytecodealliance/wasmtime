@@ -23,12 +23,17 @@ impl WastCommand {
     pub fn execute(mut self) -> Result<()> {
         self.common.init_logging()?;
 
-        let config = self.common.config(None)?;
+        let mut config = self.common.config(None)?;
+        config.async_support(true);
         let mut store = Store::new(&Engine::new(&config)?, ());
         if let Some(fuel) = self.common.wasm.fuel {
             store.set_fuel(fuel)?;
         }
-        let mut wast_context = WastContext::new(store);
+        if let Some(true) = self.common.wasm.epoch_interruption {
+            store.epoch_deadline_trap();
+            store.set_epoch_deadline(1);
+        }
+        let mut wast_context = WastContext::new(store, wasmtime_wast::Async::Yes);
 
         wast_context
             .register_spectest(&SpectestConfig {
