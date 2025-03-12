@@ -206,6 +206,32 @@ macro_rules! foreach_builtin_function {
             // Raises an unconditional trap where the trap information must have
             // been previously filled in.
             raise(vmctx: vmctx);
+
+            // Creates a new continuation from a funcref.
+            cont_new(vmctx: vmctx, r: pointer, param_count: u32, result_count: u32) -> pointer;
+
+            // FIXME(frank-emrich) The next three builtins are used by the debug printing mechanism.
+            // They are not supposed to be part of the final upstreamed code.
+            //
+            // Prints a 'static str, represented as a
+            // pointer and a length.
+            delete_me_print_str(vmctx: vmctx, s: pointer, len : u64);
+            // Prints integer
+            delete_me_print_int(vmctx: vmctx, arg : u64);
+            // Prints pointer, formatted as hex.
+            delete_me_print_pointer(vmctx: vmctx, arg : pointer);
+
+            // Returns an index for Wasm's `table.grow` instruction
+            // for `contobj`s.  Note that the initial
+            // Option<VMContObj> (i.e., the value to fill the new
+            // slots with) is split into two arguments: The underlying
+            // continuation reference and the revision count.  To
+            // denote the continuation being `None`, `init_contref`
+            // may be 0.
+            table_grow_cont_obj(vmctx: vmctx, table: u32, delta: u64, init_contref: pointer, init_revision: u64) -> pointer;
+            // `value_contref` and `value_revision` together encode
+            // the Option<VMContObj>, as in previous libcall.
+            table_fill_cont_obj(vmctx: vmctx, table: u32, dst: u64, value_contref: pointer, value_revision: u64, len: u64) -> bool;
         }
     };
 }
@@ -347,6 +373,7 @@ impl BuiltinFunctionIndex {
             (@get memory32_grow pointer) => (TrapSentinel::NegativeTwo);
             (@get table_grow_func_ref pointer) => (TrapSentinel::NegativeTwo);
             (@get table_grow_gc_ref pointer) => (TrapSentinel::NegativeTwo);
+            (@get table_grow_cont_obj pointer) => (TrapSentinel::NegativeTwo);
 
             // Atomics-related functions return a negative value indicating trap
             // indicate a trap.
@@ -370,6 +397,8 @@ impl BuiltinFunctionIndex {
             (@get get_interned_func_ref pointer) => (return None);
             (@get intern_func_ref_for_gc_heap u64) => (return None);
             (@get is_subtype u32) => (return None);
+
+            (@get cont_new pointer) => (TrapSentinel::Negative);
 
             // Bool-returning functions use `false` as an indicator of a trap.
             (@get $name:ident bool) => (TrapSentinel::Falsy);

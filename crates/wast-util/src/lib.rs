@@ -187,6 +187,7 @@ macro_rules! foreach_config_option {
             component_model_async
             simd
             gc_types
+            stack_switching
         }
     };
 }
@@ -291,6 +292,7 @@ impl Compiler {
                     || config.gc()
                     || config.relaxed_simd()
                     || config.gc_types()
+                    || config.stack_switching()
                 {
                     return true;
                 }
@@ -301,6 +303,11 @@ impl Compiler {
                 // due to being unable to implement non-atomic loads/stores
                 // safely.
                 if config.threads() {
+                    return true;
+                }
+
+                // Stack switching is not supported by Pulley.
+                if config.stack_switching() {
                     return true;
                 }
             }

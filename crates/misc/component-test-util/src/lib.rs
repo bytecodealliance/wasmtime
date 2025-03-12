@@ -168,6 +168,7 @@ pub fn apply_test_config(config: &mut Config, test_config: &wasmtime_wast_util::
         component_model_async,
         nan_canonicalization,
         simd,
+        stack_switching,
 
         hogs_memory: _,
         gc_types: _,
@@ -192,7 +193,8 @@ pub fn apply_test_config(config: &mut Config, test_config: &wasmtime_wast_util::
     // To avoid needing to enable all of them at once implicitly enable
     // downstream proposals once the end proposal is enabled (e.g. when enabling
     // gc that also enables function-references and reference-types).
-    let function_references = gc || function_references.unwrap_or(false);
+    let stack_switching = stack_switching.unwrap_or(false);
+    let function_references = gc || stack_switching || function_references.unwrap_or(false);
     let reference_types = function_references || reference_types.unwrap_or(false);
     let simd = relaxed_simd || simd.unwrap_or(false);
 
@@ -210,5 +212,6 @@ pub fn apply_test_config(config: &mut Config, test_config: &wasmtime_wast_util::
         .wasm_extended_const(extended_const)
         .wasm_wide_arithmetic(wide_arithmetic)
         .wasm_component_model_async(component_model_async)
+        .wasm_stack_switching(stack_switching)
         .cranelift_nan_canonicalization(nan_canonicalization);
 }

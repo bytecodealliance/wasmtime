@@ -8,7 +8,9 @@ use std::path::Path;
 use wasmparser::WasmFeatures;
 #[cfg(feature = "cache")]
 use wasmtime_cache::CacheConfig;
-use wasmtime_environ::{ConfigTunables, TripleExt, Tunables};
+use wasmtime_environ::{
+    stack_switching::StackSwitchingConfig, ConfigTunables, TripleExt, Tunables,
+};
 
 #[cfg(feature = "runtime")]
 use crate::memory::MemoryCreator;
@@ -127,6 +129,14 @@ pub struct Config {
     profiling_strategy: ProfilingStrategy,
     tunables: ConfigTunables,
 
+    /// Runtime configuration for the stack switching feature.
+    /// The structure is defined in the
+    /// `wasmtime_environ::stack_switching` module, so that we can
+    /// hand out the configuration object in the interface of
+    /// `wasmtime_runtime::Store` trait, where the full `Config` type
+    /// is not in scope.
+    pub(crate) stack_switching_config: StackSwitchingConfig,
+
     #[cfg(feature = "cache")]
     pub(crate) cache_config: CacheConfig,
     #[cfg(feature = "runtime")]
@@ -227,6 +237,7 @@ impl Config {
             tunables: ConfigTunables::default(),
             #[cfg(any(feature = "cranelift", feature = "winch"))]
             compiler_config: CompilerConfig::default(),
+            stack_switching_config: StackSwitchingConfig::default(),
             target: None,
             #[cfg(feature = "gc")]
             collector: Collector::default(),
@@ -774,6 +785,12 @@ impl Config {
     #[cfg(feature = "async")]
     pub fn async_stack_zeroing(&mut self, enable: bool) -> &mut Self {
         self.async_stack_zeroing = enable;
+        self
+    }
+
+    /// Configures the size of the stacks created with cont.new instructions.
+    pub fn stack_switching_stack_size(&mut self, size: usize) -> &mut Self {
+        self.stack_switching_config.stack_size = size;
         self
     }
 
@@ -2024,18 +2041,37 @@ impl Config {
                 // `threads` proposal, notably shared memory, because Rust can't
                 // safely implement loads/stores in the face of shared memory.
                 if self.compiler_target().is_pulley() {
-                    return WasmFeatures::THREADS;
+                    return WasmFeatures::THREADS | WasmFeatures::STACK_SWITCHING;
                 }
 
-                // Other Cranelift backends are either 100% missing or complete
-                // at this time, so no need to further filter.
-                WasmFeatures::empty()
+                use target_lexicon::*;
+                match self.compiler_target() {
+                    Triple {
+                        architecture: Architecture::X86_64 | Architecture::X86_64h,
+                        operating_system:
+                            OperatingSystem::Linux
+                            | OperatingSystem::MacOSX(_)
+                            | OperatingSystem::Darwin(_),
+                        ..
+                    } => {
+                        // Other Cranelift backends are either 100% missing or complete
+                        // at this time, so no need to further filter.
+                        WasmFeatures::empty()
+                    }
+
+                    _ => {
+                        // On platforms other than x64 Unix-like, we don't
+                        // support stack switching.
+                        WasmFeatures::STACK_SWITCHING
+                    }
+                }
             }
             Some(Strategy::Winch) => {
                 let mut unsupported = WasmFeatures::GC
                     | WasmFeatures::FUNCTION_REFERENCES
                     | WasmFeatures::RELAXED_SIMD
                     | WasmFeatures::TAIL_CALL
+                    | WasmFeatures::STACK_SWITCHING
                     | WasmFeatures::GC_TYPES;
                 match self.compiler_target().architecture {
                     target_lexicon::Architecture::Aarch64(_) => {
@@ -2424,6 +2460,27 @@ impl Config {
 
         if features.contains(WasmFeatures::RELAXED_SIMD) && !features.contains(WasmFeatures::SIMD) {
             bail!("cannot disable the simd proposal but enable the relaxed simd proposal");
+        }
+
+        if features.contains(WasmFeatures::STACK_SWITCHING) {
+            use target_lexicon::OperatingSystem;
+            let model = match target.operating_system {
+                OperatingSystem::Windows => "update_windows_tib",
+                OperatingSystem::Linux
+                | OperatingSystem::MacOSX(_)
+                | OperatingSystem::Darwin(_) => "basic",
+                _ => bail!("stack-switching feature not supported on this platform "),
+            };
+
+            if !self
+                .compiler_config
+                .ensure_setting_unset_or_given("stack_switch_model".into(), model.into())
+            {
+                bail!(
+                    "compiler option 'stack_switch_model' must be set to '{}' on this platform",
+                    model
+                );
+            }
         }
 
         // Apply compiler settings and flags

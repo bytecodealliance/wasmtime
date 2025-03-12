@@ -3441,3 +3441,20 @@ fn index_type_to_ir_type(index_type: IndexType) -> ir::Type {
         IndexType::I64 => I64,
     }
 }
+
+/// TODO(10248) This is removed in the next stack switching PR. It stops the
+/// compiler from complaining about the stack switching libcalls being dead
+/// code.
+#[allow(
+    dead_code,
+    reason = "Dummy function to supress more dead code warnings"
+)]
+pub fn use_stack_switching_libcalls() {
+    let _ = BuiltinFunctions::delete_me_print_str;
+    let _ = BuiltinFunctions::delete_me_print_int;
+    let _ = BuiltinFunctions::delete_me_print_pointer;
+
+    let _ = BuiltinFunctions::cont_new;
+    let _ = BuiltinFunctions::table_grow_cont_obj;
+    let _ = BuiltinFunctions::table_fill_cont_obj;
+}

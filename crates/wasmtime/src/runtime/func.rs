@@ -1,7 +1,8 @@
 use crate::prelude::*;
+use crate::runtime::vm::stack_switching::VMCommonStackInformation;
 use crate::runtime::vm::{
     ExportFunction, InterpreterRef, SendSyncPtr, StoreBox, VMArrayCallHostFuncContext, VMContext,
-    VMFuncRef, VMFunctionImport, VMOpaqueContext,
+    VMFuncRef, VMFunctionImport, VMOpaqueContext, VMStoreContext,
 };
 use crate::runtime::Uninhabited;
 use crate::store::{AutoAssertNoGc, StoreData, StoreOpaque, Stored};
@@ -357,6 +358,7 @@ macro_rules! for_each_function_signature {
 }
 
 mod typed;
+use crate::runtime::vm::stack_switching::VMStackChain;
 pub use typed::*;
 
 impl Func {
@@ -1191,6 +1193,7 @@ impl Func {
                 results.len()
             );
         }
+
         for (ty, arg) in ty.params().zip(params) {
             arg.ensure_matches_ty(opaque, &ty)
                 .context("argument type mismatch")?;
@@ -1597,103 +1600,173 @@ pub(crate) fn invoke_wasm_and_catch_traps<T>(
     closure: impl FnMut(NonNull<VMContext>, Option<InterpreterRef<'_>>) -> bool,
 ) -> Result<()> {
     unsafe {
-        let exit = enter_wasm(store);
+        // The `enter_wasm` call below will reset the store's `stack_chain` to
+        // a new `InitialStack`, pointing to the stack-allocated
+        // `initial_stack_csi`.
+        let mut initial_stack_csi = VMCommonStackInformation::running_default();
+        // Stores some state of the runtime just before entering Wasm. Will be
+        // restored upon exiting Wasm. Note that the `CallThreadState` that is
+        // created by the `catch_traps` call below will store a pointer to this
+        // stack-allocated `previous_runtime_state`.
+        let previous_runtime_state = EntryStoreContext::enter_wasm(store, &mut initial_stack_csi);
 
         if let Err(trap) = store.0.call_hook(CallHook::CallingWasm) {
-            exit_wasm(store, exit);
             return Err(trap);
         }
-        let result = crate::runtime::vm::catch_traps(store, closure);
-        exit_wasm(store, exit);
+        let result = crate::runtime::vm::catch_traps(store, &previous_runtime_state, closure);
+        core::mem::drop(previous_runtime_state);
         store.0.call_hook(CallHook::ReturningFromWasm)?;
         result.map_err(|t| crate::trap::from_runtime_box(store.0, t))
     }
 }
 
-/// This function is called to register state within `Store` whenever
-/// WebAssembly is entered within the `Store`.
-///
-/// This function sets up various limits such as:
-///
-/// * The stack limit. This is what ensures that we limit the stack space
-///   allocated by WebAssembly code and it's relative to the initial stack
-///   pointer that called into wasm.
-///
-/// This function may fail if the stack limit can't be set because an
-/// interrupt already happened.
-fn enter_wasm<T>(store: &mut StoreContextMut<'_, T>) -> Option<usize> {
-    // If this is a recursive call, e.g. our stack limit is already set, then
-    // we may be able to skip this function.
-    //
-    // For synchronous stores there's nothing else to do because all wasm calls
-    // happen synchronously and on the same stack. This means that the previous
-    // stack limit will suffice for the next recursive call.
-    //
-    // For asynchronous stores then each call happens on a separate native
-    // stack. This means that the previous stack limit is no longer relevant
-    // because we're on a separate stack.
-    if unsafe { *store.0.vm_store_context().stack_limit.get() } != usize::MAX
-        && !store.0.async_support()
-    {
-        return None;
-    }
+/// This type helps managing the state of the runtime when entering and exiting
+/// Wasm. To this end, it contains a subset of the data in `VMStoreContext`..
+/// Upon entering Wasm, it updates various runtime fields and their
+/// original values saved in this struct. Upon exiting Wasm, the previous values
+/// are restored.
+// FIXME(frank-emrich) Do the fields in here need to be (Unsafe)Cells?
+pub struct EntryStoreContext {
+    /// If set, contains value of `stack_limit` field to restore in
+    /// `VMRuntimeLimits` when exiting Wasm.
+    pub stack_limit: Option<usize>,
+    /// Contains value of `last_wasm_exit_pc` field to restore in
+    /// `VMRuntimeLimits` when exiting Wasm.
+    pub last_wasm_exit_pc: usize,
+    /// Contains value of `last_wasm_exit_fp` field to restore in
+    /// `VMRuntimeLimits` when exiting Wasm.
+    pub last_wasm_exit_fp: usize,
+    /// Contains value of `last_wasm_entry_fp` field to restore in
+    /// `VMRuntimeLimits` when exiting Wasm.
+    pub last_wasm_entry_fp: usize,
+    /// Contains value of `stack_chain` field to restore in
+    /// `Store` when exiting Wasm.
+    pub stack_chain: VMStackChain,
 
-    // Ignore this stack pointer business on miri since we can't execute wasm
-    // anyway and the concept of a stack pointer on miri is a bit nebulous
-    // regardless.
-    if cfg!(miri) {
-        return None;
-    }
-
-    // When Cranelift has support for the host then we might be running native
-    // compiled code meaning we need to read the actual stack pointer. If
-    // Cranelift can't be used though then we're guaranteed to be running pulley
-    // in which case this stack pointer isn't actually used as Pulley has custom
-    // mechanisms for stack overflow.
-    #[cfg(has_host_compiler_backend)]
-    let stack_pointer = crate::runtime::vm::get_stack_pointer();
-    #[cfg(not(has_host_compiler_backend))]
-    let stack_pointer = {
-        use wasmtime_environ::TripleExt;
-        debug_assert!(store.engine().target().is_pulley());
-        usize::MAX
-    };
-
-    // Determine the stack pointer where, after which, any wasm code will
-    // immediately trap. This is checked on the entry to all wasm functions.
-    //
-    // Note that this isn't 100% precise. We are requested to give wasm
-    // `max_wasm_stack` bytes, but what we're actually doing is giving wasm
-    // probably a little less than `max_wasm_stack` because we're
-    // calculating the limit relative to this function's approximate stack
-    // pointer. Wasm will be executed on a frame beneath this one (or next
-    // to it). In any case it's expected to be at most a few hundred bytes
-    // of slop one way or another. When wasm is typically given a MB or so
-    // (a million bytes) the slop shouldn't matter too much.
-    //
-    // After we've got the stack limit then we store it into the `stack_limit`
-    // variable.
-    let wasm_stack_limit = stack_pointer - store.engine().config().max_wasm_stack;
-    let prev_stack = unsafe {
-        mem::replace(
-            &mut *store.0.vm_store_context().stack_limit.get(),
-            wasm_stack_limit,
-        )
-    };
-
-    Some(prev_stack)
+    /// We need a pointer to the runtime limits, so we can update them from
+    /// `drop`/`exit_wasm`.
+    vm_store_context: *const VMStoreContext,
 }
 
-fn exit_wasm<T>(store: &mut StoreContextMut<'_, T>, prev_stack: Option<usize>) {
-    // If we don't have a previous stack pointer to restore, then there's no
-    // cleanup we need to perform here.
-    let prev_stack = match prev_stack {
-        Some(stack) => stack,
-        None => return,
-    };
+impl EntryStoreContext {
+    /// This function is called to update and save state when
+    /// WebAssembly is entered within the `Store`.
+    ///
+    /// This updates various fields such as:
+    ///
+    /// * The stack limit. This is what ensures that we limit the stack space
+    ///   allocated by WebAssembly code and it's relative to the initial stack
+    ///   pointer that called into wasm.
+    ///
+    /// It also saves the different last_wasm_* values in the `VMRuntimeLimits`.
+    pub fn enter_wasm<T>(
+        store: &mut StoreContextMut<'_, T>,
+        initial_stack_information: *mut VMCommonStackInformation,
+    ) -> Self {
+        let stack_limit;
 
-    unsafe {
-        *store.0.vm_store_context().stack_limit.get() = prev_stack;
+        // If this is a recursive call, e.g. our stack limit is already set, then
+        // we may be able to skip this function.
+        //
+        // For synchronous stores there's nothing else to do because all wasm calls
+        // happen synchronously and on the same stack. This means that the previous
+        // stack limit will suffice for the next recursive call.
+        //
+        // For asynchronous stores then each call happens on a separate native
+        // stack. This means that the previous stack limit is no longer relevant
+        // because we're on a separate stack.
+        if unsafe { *store.0.vm_store_context().stack_limit.get() } != usize::MAX
+            && !store.0.async_support()
+        {
+            stack_limit = None;
+        }
+        // Ignore this stack pointer business on miri since we can't execute wasm
+        // anyway and the concept of a stack pointer on miri is a bit nebulous
+        // regardless.
+        else if cfg!(miri) {
+            stack_limit = None;
+        } else {
+            // When Cranelift has support for the host then we might be running native
+            // compiled code meaning we need to read the actual stack pointer. If
+            // Cranelift can't be used though then we're guaranteed to be running pulley
+            // in which case this stack pointer isn't actually used as Pulley has custom
+            // mechanisms for stack overflow.
+            #[cfg(has_host_compiler_backend)]
+            let stack_pointer = crate::runtime::vm::get_stack_pointer();
+            #[cfg(not(has_host_compiler_backend))]
+            let stack_pointer = {
+                use wasmtime_environ::TripleExt;
+                debug_assert!(store.engine().target().is_pulley());
+                usize::MAX
+            };
+
+            // Determine the stack pointer where, after which, any wasm code will
+            // immediately trap. This is checked on the entry to all wasm functions.
+            //
+            // Note that this isn't 100% precise. We are requested to give wasm
+            // `max_wasm_stack` bytes, but what we're actually doing is giving wasm
+            // probably a little less than `max_wasm_stack` because we're
+            // calculating the limit relative to this function's approximate stack
+            // pointer. Wasm will be executed on a frame beneath this one (or next
+            // to it). In any case it's expected to be at most a few hundred bytes
+            // of slop one way or another. When wasm is typically given a MB or so
+            // (a million bytes) the slop shouldn't matter too much.
+            //
+            // After we've got the stack limit then we store it into the `stack_limit`
+            // variable.
+            let wasm_stack_limit = stack_pointer - store.engine().config().max_wasm_stack;
+            let prev_stack = unsafe {
+                mem::replace(
+                    &mut *store.0.vm_store_context().stack_limit.get(),
+                    wasm_stack_limit,
+                )
+            };
+            stack_limit = Some(prev_stack);
+        }
+
+        unsafe {
+            let last_wasm_exit_pc = *store.0.vm_store_context().last_wasm_exit_pc.get();
+            let last_wasm_exit_fp = *store.0.vm_store_context().last_wasm_exit_fp.get();
+            let last_wasm_entry_fp = *store.0.vm_store_context().last_wasm_entry_fp.get();
+            let stack_chain = (*store.0.vm_store_context().stack_chain.get()).clone();
+
+            let new_stack_chain = VMStackChain::InitialStack(initial_stack_information);
+            *store.0.vm_store_context().stack_chain.get() = new_stack_chain;
+
+            let vm_store_context = store.0.vm_store_context();
+
+            Self {
+                stack_limit,
+                last_wasm_exit_pc,
+                last_wasm_exit_fp,
+                last_wasm_entry_fp,
+                stack_chain,
+                vm_store_context,
+            }
+        }
+    }
+
+    /// This function restores the values stored in this struct. We invoke this
+    /// function through this type's `Drop` implementation. This ensures that we
+    /// even restore the values if we unwind the stack (e.g., because we are
+    /// panicing out of a Wasm execution).
+    fn exit_wasm(&mut self) {
+        unsafe {
+            self.stack_limit.inspect(|limit| {
+                *(&*self.vm_store_context).stack_limit.get() = *limit;
+            });
+
+            *(*self.vm_store_context).last_wasm_exit_fp.get() = self.last_wasm_exit_fp;
+            *(*self.vm_store_context).last_wasm_exit_pc.get() = self.last_wasm_exit_pc;
+            *(*self.vm_store_context).last_wasm_entry_fp.get() = self.last_wasm_entry_fp;
+            *(*self.vm_store_context).stack_chain.get() = self.stack_chain.clone();
+        }
+    }
+}
+
+impl Drop for EntryStoreContext {
+    fn drop(&mut self) {
+        self.exit_wasm();
     }
 }
 
