@@ -1,7 +1,5 @@
 //! Immediate operands to instructions.
 
-#![allow(clippy::module_name_repetitions, reason = "'imm::Imm*' is fine")]
-
 use crate::api::CodeSink;
 use std::fmt;
 
@@ -67,7 +65,6 @@ impl Simm8 {
     }
 
     pub fn encode(&self, sink: &mut impl CodeSink) {
-        #[allow(clippy::cast_sign_loss, reason = "bit conversion is intended here")]
         sink.put1(self.0 as u8);
     }
 
@@ -127,7 +124,6 @@ impl Simm16 {
     }
 
     pub fn encode(&self, sink: &mut impl CodeSink) {
-        #[allow(clippy::cast_sign_loss, reason = "bit conversion is intended here")]
         sink.put2(self.0 as u16);
     }
 
@@ -195,7 +191,6 @@ impl Simm32 {
     }
 
     pub fn encode(&self, sink: &mut impl CodeSink) {
-        #[allow(clippy::cast_sign_loss, reason = "bit conversion is intended here")]
         sink.put4(self.0 as u32);
     }
 
