@@ -133,7 +133,7 @@ impl Masm for MacroAssembler {
         self.move_shadow_sp_to_sp();
 
         // Pop the shadow stack pointer. It's assumed that at this point
-        // `sp_offset` is 0 and therfore the real stack pointer should be
+        // `sp_offset` is 0 and therefore the real stack pointer should be
         // 16-byte aligned.
         let addr = Address::post_indexed_from_sp(SHADOW_STACK_POINTER_SLOT_SIZE as i64);
         self.asm.uload(
@@ -1370,13 +1370,13 @@ impl MacroAssembler {
     // sp, x28.
     //
     // This function is usually called when the space is claimed, e.g., via
-    // a push, when stack space is reserved explcitly or after emitting code
+    // a push, when stack space is reserved explicitly or after emitting code
     // that requires explicit stack pointer alignment (code that could result in
     // signal handling).
     //
     // This ensures the stack pointer always reflects the allocated stack space,
     // otherwise any space below the stack pointer could get clobbered with
-    // interrups and signal handlers.
+    // interrupts and signal handlers.
     //
     // This function must also be called at the function epilogue, since the
     // stack pointer is used to restore the current function frame.
