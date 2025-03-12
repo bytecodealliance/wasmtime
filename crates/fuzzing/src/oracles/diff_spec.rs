@@ -49,7 +49,7 @@ impl DiffEngine for SpecInterpreter {
         let _ = (trap, err);
     }
 
-    fn is_stack_overflow(&self, err: &Error) -> bool {
+    fn is_non_deterministic_error(&self, err: &Error) -> bool {
         err.to_string().contains("(Isabelle) call stack exhausted")
     }
 }

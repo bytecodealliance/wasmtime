@@ -310,14 +310,6 @@ fn blocks_are_contiguous(prev_index: u32, prev_len: u32, next_index: u32) -> boo
     // the size of the `Layout` given to us upon deallocation (aka `prev_len`)
     // is smaller than the actual size of the block we allocated.
     let end_of_prev = prev_index + prev_len;
-    log::trace!(
-        "checking for overlapping blocks: \n\
-         \t prev_index = {prev_index:#x}\n\
-         \t   prev_len = {prev_len:#x}\n\
-         \tend_of_prev = {end_of_prev:#x}\n\
-         \t next_index = {next_index:#x}\n\
-         `next_index` should be >= `end_of_prev`"
-    );
     debug_assert!(
         next_index >= end_of_prev,
         "overlapping blocks: \n\

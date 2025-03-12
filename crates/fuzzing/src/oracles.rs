@@ -369,8 +369,11 @@ pub fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -
     // Creation of imports can fail due to resource limit constraints, and then
     // instantiation can naturally fail for a number of reasons as well. Bundle
     // the two steps together to match on the error below.
-    let instance =
-        dummy::dummy_linker(store, module).and_then(|l| l.instantiate(&mut *store, module));
+    let linker = dummy::dummy_linker(store, module);
+    if let Err(e) = &linker {
+        log::warn!("failed to create dummy linker: {e:?}");
+    }
+    let instance = linker.and_then(|l| l.instantiate(&mut *store, module));
     unwrap_instance(store, instance)
 }
 
@@ -507,6 +510,32 @@ pub enum DiffEqResult<T, U> {
     Failed,
 }
 
+fn wasmtime_trap_is_non_deterministic(trap: &Trap) -> bool {
+    match trap {
+        // Allocations being too large for the GC are
+        // implementation-defined.
+        Trap::AllocationTooLarge |
+        // Stack size, and therefore when overflow happens, is
+        // implementation-defined.
+        Trap::StackOverflow => true,
+        _ => false,
+    }
+}
+
+fn wasmtime_error_is_non_deterministic(error: &wasmtime::Error) -> bool {
+    match error.downcast_ref::<Trap>() {
+        Some(trap) => wasmtime_trap_is_non_deterministic(trap),
+
+        // For general, unknown errors, we can't rely on this being
+        // a deterministic Wasm failure that both engines handled
+        // identically, leaving Wasm in identical states. We could
+        // just as easily be hitting engine-specific failures, like
+        // different implementation-defined limits. So simply poison
+        // this execution and move on to the next test.
+        None => true,
+    }
+}
+
 impl<T, U> DiffEqResult<T, U> {
     /// Computes the differential result from executing in two different
     /// engines.
@@ -518,41 +547,37 @@ impl<T, U> DiffEqResult<T, U> {
         match (lhs_result, rhs_result) {
             (Ok(lhs_result), Ok(rhs_result)) => DiffEqResult::Success(lhs_result, rhs_result),
 
-            // Both sides failed. Check that the trap and state at the time of
-            // failure is the same, when possible.
+            // Handle all non-deterministic errors by poisoning this execution's
+            // state, so that we simply move on to the next test.
+            (Err(lhs), _) if lhs_engine.is_non_deterministic_error(&lhs) => {
+                log::debug!("lhs failed non-deterministically: {lhs:?}");
+                DiffEqResult::Poisoned
+            }
+            (_, Err(rhs)) if wasmtime_error_is_non_deterministic(&rhs) => {
+                log::debug!("rhs failed non-deterministically: {rhs:?}");
+                DiffEqResult::Poisoned
+            }
+
+            // Both sides failed deterministically. Check that the trap and
+            // state at the time of failure is the same.
             (Err(lhs), Err(rhs)) => {
-                let rhs = match rhs.downcast::<Trap>() {
-                    Ok(trap) => trap,
+                let rhs = rhs
+                    .downcast::<Trap>()
+                    .expect("non-traps handled in earlier match arm");
 
-                    // For general, unknown errors, we can't rely on this being
-                    // a deterministic Wasm failure that both engines handled
-                    // identically, leaving Wasm in identical states. We could
-                    // just as easily be hitting engine-specific failures, like
-                    // different implementation-defined limits. So simply report
-                    // failure and move on to the next test.
-                    Err(err) => {
-                        log::debug!("rhs failed: {err:?}");
-                        return DiffEqResult::Failed;
-                    }
-                };
-
-                // Even some traps are nondeterministic, and we can't rely on
-                // the errors matching or leaving Wasm in the same state.
-                let poisoned =
-                    // Allocations being too large for the GC are
-                    // implementation-defined.
-                    rhs == Trap::AllocationTooLarge
-                    // Stack size, and therefore when overflow happens, is
-                    // implementation-defined.
-                    || rhs == Trap::StackOverflow
-                    || lhs_engine.is_stack_overflow(&lhs);
-                if poisoned {
-                    return DiffEqResult::Poisoned;
-                }
+                debug_assert!(
+                    !lhs_engine.is_non_deterministic_error(&lhs),
+                    "non-deterministic traps handled in earlier match arm",
+                );
+                debug_assert!(
+                    !wasmtime_trap_is_non_deterministic(&rhs),
+                    "non-deterministic traps handled in earlier match arm",
+                );
 
                 lhs_engine.assert_error_match(&lhs, &rhs);
                 DiffEqResult::Failed
             }
+
             // A real bug is found if only one side fails.
             (Ok(_), Err(err)) => panic!("only the `rhs` failed for this input: {err:?}"),
             (Err(err), Ok(_)) => panic!("only the `lhs` failed for this input: {err:?}"),
@@ -1337,6 +1362,8 @@ mod tests {
             | WasmFeatures::TAIL_CALL
             | WasmFeatures::WIDE_ARITHMETIC
             | WasmFeatures::MEMORY64
+            | WasmFeatures::FUNCTION_REFERENCES
+            | WasmFeatures::GC
             | WasmFeatures::GC_TYPES
             | WasmFeatures::CUSTOM_PAGE_SIZES
             | WasmFeatures::EXTENDED_CONST;

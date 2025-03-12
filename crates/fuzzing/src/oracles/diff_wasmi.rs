@@ -85,7 +85,7 @@ impl DiffEngine for WasmiEngine {
         }
     }
 
-    fn is_stack_overflow(&self, err: &Error) -> bool {
+    fn is_non_deterministic_error(&self, err: &Error) -> bool {
         matches!(
             self.trap_code(err),
             Some(wasmi::core::TrapCode::StackOverflow)
