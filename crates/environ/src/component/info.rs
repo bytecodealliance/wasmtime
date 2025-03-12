@@ -488,7 +488,7 @@ pub struct CanonicalOptions {
 
 /// Possible encodings of strings within the component model.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
-#[allow(missing_docs, reason = "self-describing variants")]
+#[expect(missing_docs, reason = "self-describing variants")]
 pub enum StringEncoding {
     Utf8,
     Utf16,
@@ -515,7 +515,7 @@ impl StringEncoding {
 ///
 /// Note that each transcoding operation may have a unique signature depending
 /// on the precise operation.
-#[allow(missing_docs, reason = "self-describing variants")]
+#[expect(missing_docs, reason = "self-describing variants")]
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq)]
 pub enum Transcode {
     Copy(FixedEncoding),
@@ -571,7 +571,7 @@ impl Transcode {
 }
 
 #[derive(Debug, Copy, Clone, Hash, Eq, PartialEq, Serialize, Deserialize)]
-#[allow(missing_docs, reason = "self-describing variants")]
+#[expect(missing_docs, reason = "self-describing variants")]
 pub enum FixedEncoding {
     Utf8,
     Utf16,

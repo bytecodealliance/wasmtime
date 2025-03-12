@@ -220,7 +220,7 @@ impl From<FuncOrDataId> for ModuleRelocTarget {
     feature = "enable-serde",
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
-#[allow(missing_docs, reason = "self-describing fields")]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct FunctionDeclaration {
     pub name: Option<String>,
     pub linkage: Linkage,
@@ -377,7 +377,7 @@ pub type ModuleResult<T> = Result<T, ModuleError>;
     feature = "enable-serde",
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
-#[allow(missing_docs, reason = "self-describing fields")]
+#[expect(missing_docs, reason = "self-describing fields")]
 pub struct DataDeclaration {
     pub name: Option<String>,
     pub linkage: Linkage,

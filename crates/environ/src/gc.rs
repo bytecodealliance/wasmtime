@@ -325,7 +325,7 @@ impl GcStructLayout {
 #[repr(u32)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[rustfmt::skip]
-#[allow(missing_docs, reason = "self-describing variants")]
+#[expect(missing_docs, reason = "self-describing variants")]
 pub enum VMGcKind {
     ExternRef      = 0b01000 << 27,
     AnyRef         = 0b10000 << 27,

@@ -285,7 +285,7 @@ macro_rules! declare_builtin_index_constructors {
              $rest_name:ident;
          )*
     ) => {
-        #[allow(missing_docs, reason = "macro-generated")]
+        #[expect(missing_docs, reason = "macro-generated")]
         pub const fn $this_name() -> Self {
             Self($index)
         }

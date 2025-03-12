@@ -771,7 +771,7 @@ pub mod operands {
         ) => {
             $(
                 #[allow(unused_variables, reason = "macro-generated")]
-                #[allow(missing_docs, reason = "macro-generated")]
+                #[expect(missing_docs, reason = "macro-generated")]
                 pub fn $snake_name<T: BytecodeStream>(pc: &mut T) -> Result<($($($field_ty,)*)?), T::Error> {
                     Ok((($($((<$field_ty>::decode(pc))?,)*)?)))
                 }

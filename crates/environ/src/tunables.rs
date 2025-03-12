@@ -28,7 +28,7 @@ macro_rules! define_tunables {
 
         /// Optional tunable configuration options used in `wasmtime::Config`
         #[derive(Default, Clone)]
-        #[allow(missing_docs, reason = "macro-generated fields")]
+        #[expect(missing_docs, reason = "macro-generated fields")]
         pub struct $config_tunables {
             $(pub $field: Option<$field_ty>,)*
         }
