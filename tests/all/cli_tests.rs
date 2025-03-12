@@ -2104,7 +2104,7 @@ after empty
         }
 
         let stderr = server.finish()?.1;
-        assert!(stderr.contains("guest never invoked `response-outparam::set` method:"));
+        assert!(stderr.contains("guest never invoked `response-outparam::set` method"));
         assert!(!stderr.contains("panicked"));
 
         Ok(())
