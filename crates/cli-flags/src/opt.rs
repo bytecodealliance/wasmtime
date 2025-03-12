@@ -417,13 +417,42 @@ impl WasmtimeOptionValue for Duration {
         if let Ok(val) = s.parse() {
             return Ok(Duration::from_secs(val));
         }
-        // ... otherwise try to parse it with units such as `3s` or `300ms`
-        let dur = humantime::parse_duration(&s)?;
-        Ok(dur)
+
+        if let Some(num) = s.strip_suffix("s") {
+            if let Ok(val) = num.parse() {
+                return Ok(Duration::from_secs(val));
+            }
+        }
+        if let Some(num) = s.strip_suffix("ms") {
+            if let Ok(val) = num.parse() {
+                return Ok(Duration::from_millis(val));
+            }
+        }
+        if let Some(num) = s.strip_suffix("us").or(s.strip_suffix("μs")) {
+            if let Ok(val) = num.parse() {
+                return Ok(Duration::from_micros(val));
+            }
+        }
+        if let Some(num) = s.strip_suffix("ns") {
+            if let Ok(val) = num.parse() {
+                return Ok(Duration::from_nanos(val));
+            }
+        }
+
+        bail!("failed to parse duration: {s}")
     }
 
     fn display(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", humantime::format_duration(*self))
+        let subsec = self.subsec_nanos();
+        if subsec == 0 {
+            write!(f, "{}s", self.as_secs())
+        } else if subsec % 1_000 == 0 {
+            write!(f, "{}μs", self.as_micros())
+        } else if subsec % 1_000_000 == 0 {
+            write!(f, "{}ms", self.as_millis())
+        } else {
+            write!(f, "{}ns", self.as_nanos())
+        }
     }
 }
 
