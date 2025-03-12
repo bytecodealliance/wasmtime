@@ -179,10 +179,13 @@
 //!             // inspect the `task` result to see what happened
 //!             Err(_) => {
 //!                 let e = match task.await {
-//!                     Ok(r) => r.unwrap_err(),
+//!                     Ok(Ok(())) => {
+//!                         bail!("guest never invoked `response-outparam::set` method")
+//!                     }
+//!                     Ok(Err(e)) => e,
 //!                     Err(e) => e.into(),
 //!                 };
-//!                 bail!("guest never invoked `response-outparam::set` method: {e:?}")
+//!                 return Err(e.context("guest never invoked `response-outparam::set` method"));
 //!             }
 //!         }
 //!     }
