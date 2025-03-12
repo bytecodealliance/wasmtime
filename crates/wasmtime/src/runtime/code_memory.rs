@@ -45,9 +45,11 @@ impl Drop for CodeMemory {
         // If there is a custom code memory handler, restore the
         // original (non-executable) state of the memory.
         if let Some(mem) = self.custom_code_memory.as_ref() {
-            let text = self.text();
-            mem.unpublish_executable(text.as_ptr(), text.len())
-                .expect("Executable memory unpublish failed");
+            if self.published && self.needs_executable {
+                let text = self.text();
+                mem.unpublish_executable(text.as_ptr(), text.len())
+                    .expect("Executable memory unpublish failed");
+            }
         }
 
         // Drop the registrations before `self.mmap` since they (implicitly) refer to it.
