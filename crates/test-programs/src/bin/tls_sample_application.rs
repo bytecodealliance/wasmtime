@@ -24,35 +24,41 @@ fn make_tls_request(domain: &str) -> Result<String> {
     let socket = TcpSocket::new(ip.family()).unwrap();
     let (tcp_input, tcp_output) = socket
         .blocking_connect(&net, IpSocketAddress::new(ip, PORT))
-        .unwrap();
+        .context("failed to connect")?;
 
     let (client_connection, tls_input, tls_output) =
         ClientHandshake::new(domain, tcp_input, tcp_output)
             .blocking_finish()
-            .unwrap();
+            .map_err(|_| anyhow::anyhow!("failed to finish handshake"))?;
 
     tls_output.blocking_write_util(request.as_bytes()).unwrap();
     client_connection
         .blocking_close_output(&tls_output)
-        .unwrap();
+        .map_err(|_| anyhow::anyhow!("failed to close tls connection"))?;
     socket.shutdown(ShutdownType::Send)?;
-    let response = tls_input.blocking_read_to_end().unwrap();
+    let response = tls_input
+        .blocking_read_to_end()
+        .map_err(|_| anyhow::anyhow!("failed to read output"))?;
     String::from_utf8(response).context("error converting response")
 }
 
 fn test_tls_sample_application() {
     // since this is testing remote endpoint to ensure system cert store works
     // the test uses a couple different endpoints to reduce the number of flakes
-    const DOMAIN1: &'static str = "example.com";
-    const DOMAIN2: &'static str = "api.github.com";
+    const DOMAINS: &'static [&'static str] = &["example.com", "api.github.com"];
 
-    let response1 = make_tls_request(DOMAIN1).unwrap();
-    let response2 = make_tls_request(DOMAIN2).unwrap();
-
-    assert!(
-        response1.contains("HTTP/1.1 200 OK") || response2.contains("HTTP/1.1 200 OK"),
-        "Neither response contains 200 OK"
-    );
+    for &domain in DOMAINS {
+        match make_tls_request(domain) {
+            Ok(r) => {
+                assert!(r.contains("HTTP/1.1 200 OK"));
+                return;
+            }
+            Err(e) => {
+                eprintln!("Failed to make TLS request to {}: {}", domain, e);
+            }
+        }
+    }
+    panic!("All TLS requests failed.");
 }
 
 fn main() {
