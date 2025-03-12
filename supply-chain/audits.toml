@@ -2307,6 +2307,12 @@ This is a minor update which has some testing affordances as well as some
 updated math algorithms.
 """
 
+[[audits.libm]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.8 -> 0.2.11"
+notes = "Mostly formatting-related changes, nothing major."
+
 [[audits.libtest-mimic]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
