@@ -32,7 +32,7 @@ wasm-encoder = { workspace = true }
 wasm-smith = { workspace = true }
 wasm-mutate = { workspace = true }
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true }
-wasmi = "0.39.1"
+wasmi = "0.42.0"
 futures = { workspace = true }
 wasmtime-wast-util = { path = '../wast-util' }
 
