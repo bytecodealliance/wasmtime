@@ -70,7 +70,6 @@ serde_json = { workspace = true }
 wasmparser = { workspace = true }
 tracing = { workspace = true }
 log = { workspace = true }
-humantime = { workspace = true }
 tempfile = { workspace = true, optional = true }
 
 async-trait = { workspace = true }
@@ -371,7 +370,6 @@ syn = "2.0.25"
 test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt', 'env-filter', 'ansi', 'tracing-log'] }
 url = "2.3.1"
-humantime = "2.0.0"
 postcard = { version = "1.0.8", default-features = false, features = ['alloc'] }
 criterion = { version = "0.5.0", default-features = false, features = ["html_reports", "rayon"] }
 rustc-hash = "2.0.0"
@@ -379,7 +377,7 @@ libtest-mimic = "0.7.0"
 semver = { version = "1.0.17", default-features = false }
 ittapi = "0.4.0"
 libm = "0.2.7"
-tokio-rustls = "0.25.0" 
+tokio-rustls = "0.25.0"
 rustls = "0.22.0"
 webpki-roots = "0.26.0"
 
