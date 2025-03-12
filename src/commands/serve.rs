@@ -535,7 +535,7 @@ async fn handle_request(
             // `await` should resolve immediately.
             let e = match task.await {
                 Ok(Ok(())) => {
-                    bail!("guest returned before invoking `response-outparam::set` method")
+                    bail!("guest never invoked `response-outparam::set` method")
                 }
                 Ok(Err(e)) => e,
                 Err(e) => e.into(),
