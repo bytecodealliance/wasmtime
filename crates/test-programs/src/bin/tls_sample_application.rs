@@ -54,7 +54,7 @@ fn test_tls_sample_application() {
                 return;
             }
             Err(e) => {
-                eprintln!("Failed to make TLS request to {}: {}", domain, e);
+                eprintln!("Failed to make TLS request to {domain}: {e}");
             }
         }
     }
