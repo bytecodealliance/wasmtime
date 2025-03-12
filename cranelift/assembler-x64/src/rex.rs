@@ -121,7 +121,6 @@ impl RexFlags {
 }
 
 #[derive(Copy, Clone)]
-#[allow(missing_docs, reason = "variants are self-explanatory")]
 pub enum Imm {
     None,
     Imm8(i8),
