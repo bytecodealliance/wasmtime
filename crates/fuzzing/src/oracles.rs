@@ -522,6 +522,20 @@ fn wasmtime_trap_is_non_deterministic(trap: &Trap) -> bool {
     }
 }
 
+fn wasmtime_error_is_non_deterministic(error: &wasmtime::Error) -> bool {
+    match error.downcast_ref::<Trap>() {
+        Some(trap) => wasmtime_trap_is_non_deterministic(trap),
+
+        // For general, unknown errors, we can't rely on this being
+        // a deterministic Wasm failure that both engines handled
+        // identically, leaving Wasm in identical states. We could
+        // just as easily be hitting engine-specific failures, like
+        // different implementation-defined limits. So simply poison
+        // this execution and move on to the next test.
+        None => true,
+    }
+}
+
 impl<T, U> DiffEqResult<T, U> {
     /// Computes the differential result from executing in two different
     /// engines.
@@ -533,31 +547,32 @@ impl<T, U> DiffEqResult<T, U> {
         match (lhs_result, rhs_result) {
             (Ok(lhs_result), Ok(rhs_result)) => DiffEqResult::Success(lhs_result, rhs_result),
 
-            (Err(lhs), _) if lhs_engine.is_non_deterministic_error(&lhs) => DiffEqResult::Poisoned,
+            // Handle all non-deterministic errors by poisoning this execution's
+            // state, so that we simply move on to the next test.
+            (Err(lhs), _) if lhs_engine.is_non_deterministic_error(&lhs) => {
+                log::debug!("lhs failed non-deterministically: {lhs:?}");
+                DiffEqResult::Poisoned
+            }
+            (_, Err(rhs)) if wasmtime_error_is_non_deterministic(&rhs) => {
+                log::debug!("rhs failed non-deterministically: {rhs:?}");
+                DiffEqResult::Poisoned
+            }
 
-            // Both sides failed. Check that the trap and state at the time of
-            // failure is the same, when possible.
+            // Both sides failed deterministically. Check that the trap and
+            // state at the time of failure is the same.
             (Err(lhs), Err(rhs)) => {
-                let rhs = match rhs.downcast::<Trap>() {
-                    Ok(trap) => trap,
+                let rhs = rhs
+                    .downcast::<Trap>()
+                    .expect("non-traps handled in earlier match arm");
 
-                    // For general, unknown errors, we can't rely on this being
-                    // a deterministic Wasm failure that both engines handled
-                    // identically, leaving Wasm in identical states. We could
-                    // just as easily be hitting engine-specific failures, like
-                    // different implementation-defined limits. So simply poison
-                    // this execution and move on to the next test.
-                    Err(err) => {
-                        log::debug!("rhs failed: {err:?}");
-                        return DiffEqResult::Poisoned;
-                    }
-                };
-
-                // Even some traps are nondeterministic, and we can't rely on
-                // the errors matching or leaving Wasm in the same state.
-                if wasmtime_trap_is_non_deterministic(&rhs) {
-                    return DiffEqResult::Poisoned;
-                }
+                debug_assert!(
+                    !lhs_engine.is_non_deterministic_error(&lhs),
+                    "non-deterministic traps handled in earlier match arm",
+                );
+                debug_assert!(
+                    !wasmtime_trap_is_non_deterministic(&rhs),
+                    "non-deterministic traps handled in earlier match arm",
+                );
 
                 lhs_engine.assert_error_match(&lhs, &rhs);
                 DiffEqResult::Failed
