@@ -2082,6 +2082,54 @@ after empty
         ])?;
         Ok(())
     }
+
+    #[tokio::test]
+    async fn cli_serve_return_before_set() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_RETURN_BEFORE_SET_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        for _ in 0..2 {
+            let res = server
+                .send_request(
+                    hyper::Request::builder()
+                        .uri("http://localhost/")
+                        .body(String::new())
+                        .context("failed to make request")?,
+                )
+                .await;
+            assert!(res.is_err());
+        }
+
+        let stderr = server.finish()?.1;
+        assert!(stderr.contains("guest returned before invoking `response-outparam::set` method"));
+        assert!(!stderr.contains("panicked"));
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn cli_serve_trap_before_set() -> Result<()> {
+        let server = WasmtimeServe::new(CLI_SERVE_TRAP_BEFORE_SET_COMPONENT, |cmd| {
+            cmd.arg("-Scli");
+        })?;
+
+        for _ in 0..2 {
+            let res = server
+                .send_request(
+                    hyper::Request::builder()
+                        .uri("http://localhost/")
+                        .body(String::new())
+                        .context("failed to make request")?,
+                )
+                .await;
+            assert!(res.is_err());
+        }
+
+        let stderr = server.finish()?.1;
+        assert!(stderr.contains("guest never invoked `response-outparam::set` method"));
+        assert!(!stderr.contains("panicked"));
+        Ok(())
+    }
 }
 
 #[test]

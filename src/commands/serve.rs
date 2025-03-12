@@ -534,7 +534,10 @@ async fn handle_request(
             // that we assume the task has already exited at this point so the
             // `await` should resolve immediately.
             let e = match task.await {
-                Ok(r) => r.expect_err("if the receiver has an error, the task must have failed"),
+                Ok(Ok(())) => {
+                    bail!("guest returned before invoking `response-outparam::set` method")
+                }
+                Ok(Err(e)) => e,
                 Err(e) => e.into(),
             };
             return Err(e.context("guest never invoked `response-outparam::set` method"));
