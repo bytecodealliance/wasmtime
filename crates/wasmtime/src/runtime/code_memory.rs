@@ -45,7 +45,7 @@ impl Drop for CodeMemory {
         // If there is a custom code memory handler, restore the
         // original (non-executable) state of the memory.
         if let Some(mem) = self.custom_code_memory.as_ref() {
-            if self.published {
+            if self.published && self.needs_executable {
                 let text = self.text();
                 mem.unpublish_executable(text.as_ptr(), text.len())
                     .expect("Executable memory unpublish failed");
