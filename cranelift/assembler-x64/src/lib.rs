@@ -44,10 +44,10 @@
 )]
 
 mod api;
+mod gpr;
 mod imm;
 pub mod inst;
 mod mem;
-mod reg;
 mod rex;
 mod xmm;
 
@@ -76,11 +76,11 @@ pub use api::{
     AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, RegisterVisitor, Registers,
     TrapCode,
 };
+pub use gpr::{Gpr, NonRspGpr, Size};
 pub use imm::{Extension, Imm16, Imm32, Imm8, Simm16, Simm32, Simm8};
 pub use mem::{
     Amode, AmodeOffset, AmodeOffsetPlusKnownOffset, DeferredTarget, GprMem, Scale, XmmMem,
 };
-pub use reg::{Gpr, NonRspGpr, Size};
 pub use rex::RexFlags;
 pub use xmm::Xmm;
 

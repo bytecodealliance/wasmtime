@@ -198,7 +198,7 @@ impl Arbitrary<'_> for AmodeOffsetPlusKnownOffset {
 }
 impl<R: AsReg> Arbitrary<'_> for NonRspGpr<R> {
     fn arbitrary(u: &mut Unstructured<'_>) -> Result<Self> {
-        use crate::reg::enc::*;
+        use crate::gpr::enc::*;
         let gpr = u.choose(&[
             RAX, RCX, RDX, RBX, RBP, RSI, RDI, R8, R9, R10, R11, R12, R13, R14, R15,
         ])?;
