@@ -384,7 +384,6 @@ pub fn emit_modrm_sib_disp<R: AsReg>(
             // to the end of the u32 field. So, to compensate for
             // this, we emit a negative extra offset in the u32 field
             // initially, and the relocation will add to it.
-            #[allow(clippy::cast_sign_loss, reason = "bit conversion is intended here")]
             sink.put4(-(i32::from(bytes_at_end)) as u32);
         }
     }

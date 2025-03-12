@@ -1,7 +1,5 @@
 //! Encoding logic for REX instructions.
 
-// #![allow(clippy::bool_to_int_with_if)]
-
 use crate::api::CodeSink;
 
 pub(crate) fn low8_will_sign_extend_to_32(xs: i32) -> bool {
@@ -151,7 +149,6 @@ impl Imm {
                 if val % i32::from(scaling) == 0 {
                     let scaled = val / i32::from(scaling);
                     if low8_will_sign_extend_to_32(scaled) {
-                        #[allow(clippy::cast_possible_truncation, reason = "pre-existing code")]
                         return Imm::Imm8(scaled as i8);
                     }
                 }
@@ -183,7 +180,6 @@ impl Imm {
     }
 
     /// Emit the truncated immediate into the code sink.
-    #[allow(clippy::cast_sign_loss, reason = "bit conversion is intended here")]
     pub fn emit(self, sink: &mut impl CodeSink) {
         match self {
             Imm::None => {}
