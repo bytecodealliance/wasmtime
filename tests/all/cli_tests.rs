@@ -1530,6 +1530,7 @@ mod test_programs {
     struct WasmtimeServe {
         child: Option<Child>,
         addr: SocketAddr,
+        shutdown_addr: SocketAddr,
     }
 
     impl WasmtimeServe {
@@ -1548,61 +1549,73 @@ mod test_programs {
         }
 
         fn spawn(cmd: &mut Command) -> Result<WasmtimeServe> {
+            cmd.arg("--shutdown-addr=127.0.0.1:0");
             cmd.stdin(Stdio::null());
             cmd.stdout(Stdio::piped());
             cmd.stderr(Stdio::piped());
             let mut child = cmd.spawn()?;
 
-            // Read the first line of stderr which will say which address it's
-            // listening on.
-            //
-            // NB: this intentionally discards any extra buffered data in the
-            // `BufReader` once the newline is found. The server shouldn't print
-            // anything interesting other than the address so once we get a line
-            // all remaining output is left to be captured by future requests
-            // send to the server.
+            // Read the first few lines of stderr which will say which address
+            // it's listening on. The first line is the shutdown line (with
+            // `--shutdown-addr`) and the second is what `--addr` was bound to.
+            // This is done to figure out what `:0` was bound to in the child
+            // process.
             let mut line = String::new();
             let mut reader = BufReader::new(child.stderr.take().unwrap());
-            reader.read_line(&mut line)?;
+            let mut read_addr_from_line = |prefix: &str| -> Result<SocketAddr> {
+                reader.read_line(&mut line)?;
 
-            match line.find("127.0.0.1").and_then(|addr_start| {
-                let addr = &line[addr_start..];
-                let addr_end = addr.find("/")?;
-                addr[..addr_end].parse().ok()
-            }) {
-                Some(addr) => {
-                    assert!(reader.buffer().is_empty());
-                    child.stderr = Some(reader.into_inner());
-                    Ok(WasmtimeServe {
-                        child: Some(child),
-                        addr,
-                    })
+                if !line.starts_with(prefix) {
+                    bail!("input line `{line}` didn't start with `{prefix}`");
                 }
-                None => {
+                match line.find("127.0.0.1").and_then(|addr_start| {
+                    let addr = &line[addr_start..];
+                    let addr_end = addr.find("/")?;
+                    addr[..addr_end].parse().ok()
+                }) {
+                    Some(addr) => {
+                        line.truncate(0);
+                        Ok(addr)
+                    }
+                    None => bail!("failed to address from: {line}"),
+                }
+            };
+            let shutdown_addr = read_addr_from_line("Listening for shutdown");
+            let addr = read_addr_from_line("Serving HTTP on");
+            let (shutdown_addr, addr) = match (shutdown_addr, addr) {
+                (Ok(a), Ok(b)) => (a, b),
+                // If either failed kill the child and otherwise try to shepherd
+                // along any contextual information we have.
+                (Err(a), _) | (_, Err(a)) => {
                     child.kill()?;
                     child.wait()?;
                     reader.read_to_string(&mut line)?;
-                    bail!("failed to start child: {line}")
+                    return Err(a.context(line));
                 }
-            }
+            };
+            assert!(reader.buffer().is_empty());
+            child.stderr = Some(reader.into_inner());
+            Ok(WasmtimeServe {
+                child: Some(child),
+                addr,
+                shutdown_addr,
+            })
         }
 
         /// Completes this server gracefully by printing the output on failure.
         fn finish(mut self) -> Result<(String, String)> {
             let mut child = self.child.take().unwrap();
 
-            // If the child process has already exited then collect the output
-            // and test if it succeeded. Otherwise it's still running so kill it
-            // and then reap it. Assume that if it's still running then the test
-            // has otherwise passed so no need to print the output.
-            let known_failure = if child.try_wait()?.is_some() {
-                false
-            } else {
-                child.kill()?;
-                true
-            };
+            // If the child process has already exited, then great! Otherwise
+            // the server is still running so send it a graceful ctrl-c shutdown
+            // signal. If this platform doesn't support graceful ctrl-c then we
+            // can't expect the process to exit successfully.
+            if child.try_wait()?.is_none() {
+                std::net::TcpStream::connect(&self.shutdown_addr)
+                    .context("failed to initiate graceful shutdown")?;
+            }
             let output = child.wait_with_output()?;
-            if !known_failure && !output.status.success() {
+            if !output.status.success() {
                 bail!("child failed {output:?}");
             }
 

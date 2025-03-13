@@ -6,9 +6,10 @@ use std::{
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, AtomicU64, Ordering},
-        Arc,
+        Arc, Mutex,
     },
 };
+use tokio::sync::Notify;
 use wasmtime::component::Linker;
 use wasmtime::{Engine, Store, StoreLimits};
 use wasmtime_wasi::{IoView, StreamError, StreamResult, WasiCtx, WasiCtxBuilder, WasiView};
@@ -85,12 +86,19 @@ pub struct ServeCommand {
     run: RunCommon,
 
     /// Socket address for the web server to bind to.
-    #[arg(long = "addr", value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR)]
+    #[arg(long , value_name = "SOCKADDR", default_value_t = DEFAULT_ADDR)]
     addr: SocketAddr,
+
+    /// Socket address where, when connected to, will initiate a graceful
+    /// shutdown.
+    ///
+    /// Note that graceful shutdown is also supported on ctrl-c.
+    #[arg(long, value_name = "SOCKADDR")]
+    shutdown_addr: Option<SocketAddr>,
 
     /// Disable log prefixes of wasi-http handlers.
     /// if unspecified, logs will be prefixed with 'stdout|stderr [{req_id}] :: '
-    #[arg(long = "no-logging-prefix")]
+    #[arg(long)]
     no_logging_prefix: bool,
 
     /// The WebAssembly component to run.
@@ -134,17 +142,7 @@ impl ServeCommand {
             .enable_io()
             .build()?;
 
-        runtime.block_on(async move {
-            tokio::select! {
-                _ = tokio::signal::ctrl_c() => {
-                    Ok::<_, anyhow::Error>(())
-                }
-
-                res = self.serve() => {
-                    res
-                }
-            }
-        })?;
+        runtime.block_on(self.serve())?;
 
         Ok(())
     }
@@ -371,6 +369,30 @@ impl ServeCommand {
         let instance = linker.instantiate_pre(&component)?;
         let instance = ProxyPre::new(instance)?;
 
+        // Spawn background task(s) waiting for graceful shutdown signals. This
+        // always listens for ctrl-c but additionally can listen for a TCP
+        // connection to the specified address.
+        let shutdown = Arc::new(GracefulShutdown::default());
+        tokio::task::spawn({
+            let shutdown = shutdown.clone();
+            async move {
+                tokio::signal::ctrl_c().await.unwrap();
+                shutdown.requested.notify_one();
+            }
+        });
+        if let Some(addr) = self.shutdown_addr {
+            let listener = tokio::net::TcpListener::bind(addr).await?;
+            eprintln!(
+                "Listening for shutdown on tcp://{}/",
+                listener.local_addr()?
+            );
+            let shutdown = shutdown.clone();
+            tokio::task::spawn(async move {
+                let _ = listener.accept().await;
+                shutdown.requested.notify_one();
+            });
+        }
+
         let socket = match &self.addr {
             SocketAddr::V4(_) => tokio::net::TcpSocket::new_v4()?,
             SocketAddr::V6(_) => tokio::net::TcpSocket::new_v6()?,
@@ -403,9 +425,16 @@ impl ServeCommand {
         let handler = ProxyHandler::new(self, engine, instance);
 
         loop {
-            let (stream, _) = listener.accept().await?;
+            // Wait for a socket, but also "race" against shutdown to break out
+            // of this loop. Once the graceful shutdown signal is received then
+            // this loop exits immediately.
+            let (stream, _) = tokio::select! {
+                _ = shutdown.requested.notified() => break,
+                v = listener.accept() => v?,
+            };
             let stream = TokioIo::new(stream);
             let h = handler.clone();
+            let shutdown_guard = shutdown.clone().increment();
             tokio::task::spawn(async {
                 if let Err(e) = http1::Builder::new()
                     .keep_alive(true)
@@ -417,8 +446,75 @@ impl ServeCommand {
                 {
                     eprintln!("error: {e:?}");
                 }
+                drop(shutdown_guard);
             });
         }
+
+        // Upon exiting the loop we'll no longer process any more incoming
+        // connections but there may still be outstanding connections
+        // processing in child tasks. If there are wait for those to complete
+        // before shutting down completely. Also enable short-circuiting this
+        // wait with a second ctrl-c signal.
+        if shutdown.close() {
+            return Ok(());
+        }
+        eprintln!("Waiting for child tasks to exit, ctrl-c again to quit sooner...");
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => {}
+            _ = shutdown.complete.notified() => {}
+        }
+
+        Ok(())
+    }
+}
+
+/// Helper structure to manage graceful shutdown int he accept loop above.
+#[derive(Default)]
+struct GracefulShutdown {
+    /// Async notification that shutdown has been requested.
+    requested: Notify,
+    /// Async notification that shutdown has completed, signaled when
+    /// `notify_when_done` is `true` and `active_tasks` reaches 0.
+    complete: Notify,
+    /// Internal state related to what's in progress when shutdown is requested.
+    state: Mutex<GracefulShutdownState>,
+}
+
+#[derive(Default)]
+struct GracefulShutdownState {
+    active_tasks: u32,
+    notify_when_done: bool,
+}
+
+impl GracefulShutdown {
+    /// Increments the number of active tasks and returns a guard indicating
+    fn increment(self: Arc<Self>) -> impl Drop {
+        struct Guard(Arc<GracefulShutdown>);
+
+        let mut state = self.state.lock().unwrap();
+        assert!(!state.notify_when_done);
+        state.active_tasks += 1;
+        drop(state);
+
+        return Guard(self);
+
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                let mut state = self.0.state.lock().unwrap();
+                state.active_tasks -= 1;
+                if state.notify_when_done && state.active_tasks == 0 {
+                    self.0.complete.notify_one();
+                }
+            }
+        }
+    }
+
+    /// Flags this state as done spawning tasks and returns whether there are no
+    /// more child tasks remaining.
+    fn close(&self) -> bool {
+        let mut state = self.state.lock().unwrap();
+        state.notify_when_done = true;
+        state.active_tasks == 0
     }
 }
 
@@ -533,7 +629,7 @@ async fn handle_request(
             // which should more clearly tell the user what went wrong. Note
             // that we assume the task has already exited at this point so the
             // `await` should resolve immediately.
-            let e = match task.await {
+            let e = match dbg!(task.await) {
                 Ok(Ok(())) => {
                     bail!("guest never invoked `response-outparam::set` method")
                 }
