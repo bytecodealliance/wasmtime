@@ -629,7 +629,7 @@ async fn handle_request(
             // which should more clearly tell the user what went wrong. Note
             // that we assume the task has already exited at this point so the
             // `await` should resolve immediately.
-            let e = match dbg!(task.await) {
+            let e = match task.await {
                 Ok(Ok(())) => {
                     bail!("guest never invoked `response-outparam::set` method")
                 }

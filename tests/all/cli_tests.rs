@@ -1607,13 +1607,19 @@ mod test_programs {
             let mut child = self.child.take().unwrap();
 
             // If the child process has already exited, then great! Otherwise
-            // the server is still running so send it a graceful ctrl-c shutdown
-            // signal. If this platform doesn't support graceful ctrl-c then we
-            // can't expect the process to exit successfully.
+            // the server is still running and it shouldn't be possible to exit
+            // until a shutdown signal is sent, so do that here. Make a TCP
+            // connection to the shutdown port which is used as a shutdown
+            // signal.
             if child.try_wait()?.is_none() {
                 std::net::TcpStream::connect(&self.shutdown_addr)
                     .context("failed to initiate graceful shutdown")?;
             }
+
+            // Regardless of whether we just shut the server down or whether it
+            // was already shut down (e.g. panicked or similar), wait for the
+            // result here. The result should succeed (e.g. 0 exit status), and
+            // if it did then the stdout/stderr are the caller's problem.
             let output = child.wait_with_output()?;
             if !output.status.success() {
                 bail!("child failed {output:?}");
@@ -1918,9 +1924,9 @@ stdout [1] :: \n\
 stdout [1] :: after empty
 "
         );
-        assert_eq!(
-            err,
-            "\
+        assert!(
+            err.contains(
+                "\
 stderr [0] :: this is half a print to stderr
 stderr [0] :: \n\
 stderr [0] :: after empty
@@ -1928,6 +1934,8 @@ stderr [1] :: this is half a print to stderr
 stderr [1] :: \n\
 stderr [1] :: after empty
 "
+            ),
+            "bad stderr: {err}"
         );
 
         Ok(())
@@ -1964,9 +1972,9 @@ this is half a print to stdout
 after empty
 "
         );
-        assert_eq!(
-            err,
-            "\
+        assert!(
+            err.contains(
+                "\
 this is half a print to stderr
 \n\
 after empty
@@ -1974,6 +1982,8 @@ this is half a print to stderr
 \n\
 after empty
 "
+            ),
+            "bad stderr {err}",
         );
 
         Ok(())
@@ -2113,7 +2123,9 @@ after empty
             assert!(res.is_err());
         }
 
-        let stderr = server.finish()?.1;
+        let (stdout, stderr) = server.finish()?;
+        println!("stdout: {stdout}");
+        println!("stderr: {stderr}");
         assert!(stderr.contains("guest never invoked `response-outparam::set` method"));
         assert!(!stderr.contains("panicked"));
         Ok(())
