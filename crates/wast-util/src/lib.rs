@@ -439,6 +439,7 @@ impl WastTest {
                     "misc_testsuite/simd/replace-lane-preserve.wast",
                     "misc_testsuite/simd/spillslot-size-fuzzbug.wast",
                     "misc_testsuite/winch/issue-10331.wast",
+                    "misc_testsuite/winch/replace_lane.wast",
                     "spec_testsuite/simd_align.wast",
                     "spec_testsuite/simd_boolean.wast",
                     "spec_testsuite/simd_conversions.wast",

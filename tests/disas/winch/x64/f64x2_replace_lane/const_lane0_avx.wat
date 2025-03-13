@@ -14,32 +14,30 @@
 ;;       movq    0x10(%r11), %r11
 ;;       addq    $0x10, %r11
 ;;       cmpq    %rsp, %r11
-;;       ja      0x42
+;;       ja      0x47
 ;;   1c: movq    %rdi, %r14
 ;;       subq    $0x10, %rsp
 ;;       movq    %rdi, 8(%rsp)
 ;;       movq    %rsi, (%rsp)
 ;;       movdqu  0x1c(%rip), %xmm0
-;;       vmovsd  0x24(%rip), %xmm0
+;;       vmovsd  0x24(%rip), %xmm15
+;;       vmovsd  %xmm15, %xmm0, %xmm0
 ;;       addq    $0x10, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   42: ud2
-;;   44: addb    %al, (%rax)
-;;   46: addb    %al, (%rax)
-;;   48: addb    %al, (%rax)
-;;   4a: addb    %al, (%rax)
-;;   4c: addb    %al, (%rax)
-;;   4e: addb    %al, (%rax)
-;;   50: addl    %eax, (%rax)
-;;   52: addb    %al, (%rax)
-;;   54: addb    %al, (%rax)
-;;   56: addb    %al, (%rax)
-;;   58: addb    (%rax), %al
-;;   5a: addb    %al, (%rax)
-;;   5c: addb    %al, (%rax)
-;;   5e: addb    %al, (%rax)
-;;   60: addb    %al, (%rax)
-;;   62: addb    %al, (%rax)
-;;   64: addb    %al, (%rax)
-;;   66: addb    %al, (%rax)
+;;   47: ud2
+;;   49: addb    %al, (%rax)
+;;   4b: addb    %al, (%rax)
+;;   4d: addb    %al, (%rax)
+;;   4f: addb    %al, (%rcx)
+;;   51: addb    %al, (%rax)
+;;   53: addb    %al, (%rax)
+;;   55: addb    %al, (%rax)
+;;   57: addb    %al, (%rdx)
+;;   59: addb    %al, (%rax)
+;;   5b: addb    %al, (%rax)
+;;   5d: addb    %al, (%rax)
+;;   5f: addb    %al, (%rax)
+;;   61: addb    %al, (%rax)
+;;   63: addb    %al, (%rax)
+;;   65: addb    %al, (%rax)

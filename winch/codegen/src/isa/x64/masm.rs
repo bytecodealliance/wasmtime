@@ -1607,7 +1607,15 @@ impl Masm for MacroAssembler {
                 RegImm::Imm(imm) => {
                     let address = self.asm.add_constant(&imm.to_bytes());
                     match lane {
-                        0 => self.asm.xmm_vmovsd_rm(dst, &address),
+                        0 => {
+                            // Memory load variant of `vmovsd` zeroes the upper
+                            // 64 bits of the register so need to load the
+                            // immediate to a register to use the register
+                            // variant of `vmovsd` to perform the merge.
+                            let scratch = writable!(regs::scratch_xmm());
+                            self.asm.xmm_vmovsd_rm(scratch, &address);
+                            self.asm.xmm_vmovsd_rrr(dst, dst.to_reg(), scratch.to_reg());
+                        }
                         1 => self.asm.xmm_vmovlhps_rrm(dst, dst.to_reg(), &address),
                         _ => unreachable!(),
                     }
