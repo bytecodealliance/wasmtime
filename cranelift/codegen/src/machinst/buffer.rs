@@ -239,6 +239,8 @@ enum ForceVeneers {
 pub struct MachBuffer<I: VCodeInst> {
     /// The buffer contents, as raw bytes.
     data: SmallVec<[u8; 1024]>,
+    /// The required alignment of this buffer.
+    min_alignment: u32,
     /// Any relocations referring to this code. Note that only *external*
     /// relocations are tracked here; references to labels within the buffer are
     /// resolved before emission.
@@ -433,6 +435,7 @@ impl<I: VCodeInst> MachBuffer<I> {
     pub fn new() -> MachBuffer<I> {
         MachBuffer {
             data: SmallVec::new(),
+            min_alignment: I::function_alignment().minimum,
             relocs: SmallVec::new(),
             traps: SmallVec::new(),
             call_sites: SmallVec::new(),
@@ -607,7 +610,7 @@ impl<I: VCodeInst> MachBuffer<I> {
     /// at the ISA's minimum function alignment and can be increased due to
     /// constant requirements.
     fn finish_constants(&mut self, constants: &VCodeConstants) -> u32 {
-        let mut alignment = I::function_alignment().minimum;
+        let mut alignment = self.min_alignment;
         for (constant, offset) in mem::take(&mut self.used_constants) {
             let constant = constants.get(constant);
             let data = constant.as_slice();
@@ -1664,6 +1667,15 @@ impl<I: VCodeInst> MachBuffer<I> {
 
         stack_map.finalize(emit_state.frame_layout().sp_to_sized_stack_slots());
         self.user_stack_maps.push((return_addr, span, stack_map));
+    }
+
+    /// Increase the alignment of the buffer to the given alignment if bigger
+    /// than the current alignment.
+    pub fn set_log2_min_function_alignment(&mut self, align_to: u8) {
+        self.min_alignment = self.min_alignment.max(
+            1u32.checked_shl(u32::from(align_to))
+                .expect("log2_min_function_alignment too large"),
+        );
     }
 }
 

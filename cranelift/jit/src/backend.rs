@@ -641,9 +641,7 @@ impl Module for JITModule {
         let compiled_code = ctx.compiled_code().unwrap();
 
         let size = compiled_code.code_info().total_size as usize;
-        let align = alignment
-            .max(self.isa.function_alignment().minimum as u64)
-            .max(self.isa.symbol_alignment());
+        let align = alignment.max(self.isa.symbol_alignment());
         let ptr = self
             .memory
             .code
@@ -702,9 +700,7 @@ impl Module for JITModule {
         }
 
         let size = bytes.len();
-        let align = alignment
-            .max(self.isa.function_alignment().minimum as u64)
-            .max(self.isa.symbol_alignment());
+        let align = alignment.max(self.isa.symbol_alignment());
         let ptr = self
             .memory
             .code
