@@ -44,12 +44,12 @@
 )]
 
 mod api;
-mod gpr;
+pub mod gpr;
 mod imm;
 pub mod inst;
 mod mem;
 mod rex;
-mod xmm;
+pub mod xmm;
 
 #[cfg(any(test, feature = "fuzz"))]
 pub mod fuzz;

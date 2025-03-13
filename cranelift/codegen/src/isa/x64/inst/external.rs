@@ -6,6 +6,7 @@ use super::{
 };
 use crate::ir::TrapCode;
 use cranelift_assembler_x64 as asm;
+use std::string::String;
 
 /// Define the types of registers Cranelift will use.
 #[derive(Clone, Debug)]
@@ -38,6 +39,16 @@ impl asm::AsReg for PairedGpr {
         write
     }
 
+    fn to_string(&self, size: Option<asm::Size>) -> String {
+        if self.read.is_real() {
+            asm::gpr::enc::to_string(self.enc(), size.unwrap()).into()
+        } else {
+            let read = self.read.to_reg();
+            let write = self.write.to_reg().to_reg();
+            format!("(%{write:?} <- %{read:?})")
+        }
+    }
+
     fn new(_: u8) -> Self {
         panic!("disallow creation of new assembler registers")
     }
@@ -59,6 +70,17 @@ impl asm::AsReg for PairedXmm {
         write
     }
 
+    fn to_string(&self, size: Option<asm::Size>) -> String {
+        assert!(size.is_none(), "XMM registers do not have size variants");
+        if self.read.is_real() {
+            asm::xmm::enc::to_string(self.enc()).into()
+        } else {
+            let read = self.read.to_reg();
+            let write = self.write.to_reg().to_reg();
+            format!("(%{write:?} <- %{read:?})")
+        }
+    }
+
     fn new(_: u8) -> Self {
         panic!("disallow creation of new assembler registers")
     }
@@ -70,6 +92,14 @@ impl asm::AsReg for Gpr {
         enc_gpr(self)
     }
 
+    fn to_string(&self, size: Option<asm::Size>) -> String {
+        if self.is_real() {
+            asm::gpr::enc::to_string(self.enc(), size.unwrap()).into()
+        } else {
+            format!("%{:?}", self.to_reg())
+        }
+    }
+
     fn new(_: u8) -> Self {
         panic!("disallow creation of new assembler registers")
     }
@@ -79,6 +109,15 @@ impl asm::AsReg for Gpr {
 impl asm::AsReg for Xmm {
     fn enc(&self) -> u8 {
         enc_xmm(self)
+    }
+
+    fn to_string(&self, size: Option<asm::Size>) -> String {
+        assert!(size.is_none(), "XMM registers do not have size variants");
+        if self.is_real() {
+            asm::xmm::enc::to_string(self.enc()).into()
+        } else {
+            format!("%{:?}", self.to_reg())
+        }
     }
 
     fn new(_: u8) -> Self {

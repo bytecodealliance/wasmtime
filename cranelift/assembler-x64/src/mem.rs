@@ -256,7 +256,7 @@ impl<R: AsReg, M: AsReg> GprMem<R, M> {
     /// Pretty-print the operand.
     pub fn to_string(&self, size: Size) -> String {
         match self {
-            GprMem::Gpr(gpr) => gpr::enc::to_string(gpr.enc(), size).to_owned(),
+            GprMem::Gpr(gpr) => gpr.to_string(Some(size)),
             GprMem::Mem(amode) => amode.to_string(),
         }
     }
