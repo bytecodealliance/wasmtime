@@ -50,14 +50,15 @@ use crate::runtime::vm::{
     GcHeapObject, GcProgress, GcRootsIter, GcRuntime, Mmap, TypedGcRef, VMExternRef, VMGcHeader,
     VMGcRef,
 };
-use core::ops::{Deref, DerefMut, Range};
 use core::{
     alloc::Layout,
     any::Any,
     cell::UnsafeCell,
     mem,
     num::NonZeroUsize,
+    ops::{Deref, DerefMut, Range},
     ptr::{self, NonNull},
+    slice,
 };
 use wasmtime_environ::drc::DrcTypeLayouts;
 use wasmtime_environ::{GcArrayLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex};
@@ -87,12 +88,37 @@ unsafe impl GcRuntime for DrcCollector {
 
 /// A deferred reference-counting (DRC) heap.
 struct DrcHeap {
+    /// Count of how many no-gc scopes we are currently within.
     no_gc_count: u64,
-    // NB: this box shouldn't be strictly necessary, but it makes upholding the
-    // safety invariants of the `vmctx_gc_heap_data` more obviously correct.
+
+    /// This heap's bump table for GC refs entering the Wasm stack. This is
+    /// mutated directly by Wasm and a pointer to it is stored inside the
+    /// `VMContext`.
+    ///
+    /// NB: this box isn't strictly necessary (because the `DrcHeap` is itself
+    /// boxed up) but it makes upholding the safety invariants of the
+    /// `vmctx_gc_heap_data` more-obviously correct without needing to reason
+    /// about less-local system properties.
     activations_table: Box<VMGcRefActivationsTable>,
+
+    /// The storage for the GC heap itself.
     heap: Mmap<AlignedLength>,
+
+    /// A free list describing which ranges of the heap are available for use.
     free_list: FreeList,
+
+    /// An explicit stack to avoid recursion when deallocating one object needs
+    /// to dec-ref another object, which can then be deallocated and dec-refs
+    /// yet another object, etc...
+    ///
+    /// We store this stack here to reuse the storage and avoid repeated
+    /// allocations.
+    ///
+    /// Note that the `Option` is perhaps technically unnecessary (we could
+    /// remove the `Option` and, when we take the stack out of `self`, leave
+    /// behind an empty vec instead of `None`) but we keep it because it will
+    /// help us catch unexpected re-entry, similar to how a `RefCell` would.
+    dec_ref_stack: Option<Vec<VMGcRef>>,
 }
 
 impl DrcHeap {
@@ -110,11 +136,13 @@ impl DrcHeap {
             activations_table: Box::new(VMGcRefActivationsTable::default()),
             heap,
             free_list,
+            dec_ref_stack: Some(vec![]),
         })
     }
 
     fn dealloc(&mut self, gc_ref: VMGcRef) {
         let drc_ref = drc_ref(&gc_ref);
+        debug_assert_eq!(unsafe { *self.index(drc_ref).ref_count.get() }, 0);
         let size = self.index(drc_ref).object_size();
         let layout = FreeList::layout(size);
         self.free_list
@@ -183,24 +211,72 @@ impl DrcHeap {
     ///
     /// If the ref count reached zero, then deallocate the object and remove its
     /// associated entry from the `host_data_table` if necessary.
+    ///
+    /// This uses an explicit stack, rather than recursion, for the scenario
+    /// where dropping one object means that the ref count for another object
+    /// that it referenced reaches zero.
     fn dec_ref_and_maybe_dealloc(
         &mut self,
         host_data_table: &mut ExternRefHostDataTable,
         gc_ref: &VMGcRef,
     ) {
-        if self.dec_ref(gc_ref) {
-            // If this was an `externref`, remove its associated entry from
-            // the host data table.
-            if let Some(externref) = gc_ref.as_typed::<VMDrcExternRef>(self) {
-                let host_data_id = self.index(externref).host_data;
-                host_data_table.dealloc(host_data_id);
+        let mut stack = self.dec_ref_stack.take().unwrap();
+        debug_assert!(stack.is_empty());
+        stack.push(gc_ref.unchecked_copy());
+
+        while let Some(gc_ref) = stack.pop() {
+            if self.dec_ref(&gc_ref) {
+                // The object's reference count reached zero.
+                //
+                // Enqueue any other objects it references for dec-ref'ing.
+                stack.extend(
+                    self.trace_gc_ref(&gc_ref)
+                        .iter()
+                        .filter_map(|r| r.as_ref().map(|r| r.unchecked_copy())),
+                );
+
+                // If this object was an `externref`, remove its associated
+                // entry from the host-data table.
+                if let Some(externref) = gc_ref.as_typed::<VMDrcExternRef>(self) {
+                    let host_data_id = self.index(externref).host_data;
+                    host_data_table.dealloc(host_data_id);
+                }
+
+                // Deallocate this GC object!
+                self.dealloc(gc_ref.unchecked_copy());
             }
+        }
 
-            // TODO: `dec_ref_and_maybe_dealloc` each `VMGcRef` inside this
-            // object.
+        debug_assert!(stack.is_empty());
+        debug_assert!(self.dec_ref_stack.is_none());
+        self.dec_ref_stack = Some(stack);
+    }
 
-            // Deallocate this GC object.
-            self.dealloc(gc_ref.unchecked_copy());
+    /// Get a slice of all of the given `VMGcRef`'s outgoing edges.
+    fn trace_gc_ref(&self, gc_ref: &VMGcRef) -> &[Option<VMGcRef>] {
+        debug_assert!(!gc_ref.is_i31());
+
+        let len = self.index(drc_ref(gc_ref)).num_gc_refs();
+
+        let is_array = self.header(gc_ref).kind() == VMGcKind::ArrayRef;
+        let offset_in_obj = mem::size_of::<VMDrcHeader>() +
+            // Skip over the array's `length` field, if necessary.
+            usize::from(is_array) * mem::size_of::<u32>();
+        let offset_in_obj = u32::try_from(offset_in_obj).unwrap();
+
+        let offset_in_heap = gc_ref.as_heap_index().unwrap().get() + offset_in_obj;
+        let offset_in_heap = usize::try_from(offset_in_heap).unwrap();
+
+        let end = offset_in_heap.checked_add(len).unwrap();
+        assert!(end <= self.heap_slice().len());
+        unsafe {
+            slice::from_raw_parts(
+                self.heap
+                    .as_ptr()
+                    .add(offset_in_heap)
+                    .cast::<Option<VMGcRef>>(),
+                len,
+            )
         }
     }
 
@@ -410,6 +486,7 @@ fn externref_to_drc(externref: &VMExternRef) -> &TypedGcRef<VMDrcExternRef> {
 struct VMDrcHeader {
     header: VMGcHeader,
     ref_count: UnsafeCell<u64>,
+    object_size: u32,
 }
 
 // Although this contains an `UnsafeCell`, that is just for allowing the field
@@ -428,9 +505,14 @@ unsafe impl GcHeapObject for VMDrcHeader {
 
 impl VMDrcHeader {
     /// The size of this header's object.
+    fn object_size(&self) -> usize {
+        usize::try_from(self.object_size).unwrap()
+    }
+
+    /// The number of GC references this object contains.
     ///
     /// This is stored in the inner `VMGcHeader`'s reserved bits.
-    fn object_size(&self) -> usize {
+    fn num_gc_refs(&self) -> usize {
         let size = self.header.reserved_u27();
         usize::try_from(size).unwrap()
     }
@@ -523,6 +605,7 @@ unsafe impl GcHeap for DrcHeap {
             };
         self.index_mut::<VMDrcExternRef>(gc_ref.as_typed_unchecked())
             .host_data = host_data;
+        debug_assert_eq!(self.index(drc_ref(&gc_ref)).num_gc_refs(), 0);
         Ok(Some(gc_ref.into_externref_unchecked()))
     }
 
@@ -540,30 +623,23 @@ unsafe impl GcHeap for DrcHeap {
     }
 
     fn object_size(&self, gc_ref: &VMGcRef) -> usize {
-        let size = self.header(gc_ref).reserved_u27();
-        usize::try_from(size).unwrap()
+        self.index(drc_ref(gc_ref)).object_size()
     }
 
-    fn alloc_raw(&mut self, mut header: VMGcHeader, layout: Layout) -> Result<Option<VMGcRef>> {
+    fn alloc_raw(&mut self, header: VMGcHeader, layout: Layout) -> Result<Option<VMGcRef>> {
         debug_assert!(layout.size() >= core::mem::size_of::<VMDrcHeader>());
         debug_assert!(layout.align() >= core::mem::align_of::<VMDrcHeader>());
 
         let size = u32::try_from(layout.size()).unwrap();
-        if !VMGcKind::value_fits_in_unused_bits(size) {
-            return Err(crate::Trap::AllocationTooLarge.into());
-        }
-
         let gc_ref = match self.free_list.alloc(layout)? {
             None => return Ok(None),
             Some(index) => VMGcRef::from_heap_index(index).unwrap(),
         };
 
-        debug_assert_eq!(header.reserved_u27(), 0);
-        header.set_reserved_u27(size);
-
         *self.index_mut(drc_ref(&gc_ref)) = VMDrcHeader {
             header,
             ref_count: UnsafeCell::new(1),
+            object_size: size,
         };
         log::trace!("increment {gc_ref:#p} ref count -> 1");
         Ok(Some(gc_ref))
@@ -581,6 +657,25 @@ unsafe impl GcHeap for DrcHeap {
             None => return Ok(None),
             Some(gc_ref) => gc_ref,
         };
+
+        let num_gc_refs = layout.fields.iter().filter(|f| f.is_gc_ref).count();
+        if cfg!(debug_assertions) {
+            let mut fields_by_offset = layout.fields.clone();
+            fields_by_offset.sort_by_key(|f| f.offset);
+            debug_assert_eq!(
+                fields_by_offset.iter().take_while(|f| f.is_gc_ref).count(),
+                num_gc_refs,
+                "all GC refs should be placed at the start of the struct",
+            );
+        }
+
+        let num_gc_refs = u32::try_from(num_gc_refs).unwrap();
+        if !VMGcKind::value_fits_in_unused_bits(num_gc_refs) {
+            self.dealloc_uninit_struct(gc_ref.into_structref_unchecked());
+            return Err(crate::Trap::AllocationTooLarge.into());
+        }
+        self.header_mut(&gc_ref).set_reserved_u27(num_gc_refs);
+
         Ok(Some(gc_ref.into_structref_unchecked()))
     }
 
@@ -638,8 +733,18 @@ unsafe impl GcHeap for DrcHeap {
             None => return Ok(None),
             Some(gc_ref) => gc_ref,
         };
-        self.index_mut::<VMDrcArrayHeader>(gc_ref.as_typed_unchecked())
+
+        self.index_mut(gc_ref.as_typed_unchecked::<VMDrcArrayHeader>())
             .length = length;
+
+        let num_gc_refs = if layout.elems_are_gc_refs { length } else { 0 };
+        let num_gc_refs = u32::try_from(num_gc_refs).unwrap();
+        if !VMGcKind::value_fits_in_unused_bits(num_gc_refs) {
+            self.dealloc_uninit_array(gc_ref.into_arrayref_unchecked());
+            return Err(crate::Trap::AllocationTooLarge.into());
+        }
+        self.header_mut(&gc_ref).set_reserved_u27(num_gc_refs);
+
         Ok(Some(gc_ref.into_arrayref_unchecked()))
     }
 
@@ -678,24 +783,26 @@ unsafe impl GcHeap for DrcHeap {
             no_gc_count,
             activations_table,
             free_list,
+            dec_ref_stack,
             heap: _,
         } = self;
 
         *no_gc_count = 0;
         free_list.reset();
         activations_table.reset();
+        debug_assert!(dec_ref_stack.as_ref().is_some_and(|s| s.is_empty()));
     }
 
     fn heap_slice(&self) -> &[UnsafeCell<u8>] {
         let ptr = self.heap.as_ptr().cast();
         let len = self.heap.len();
-        unsafe { core::slice::from_raw_parts(ptr, len) }
+        unsafe { slice::from_raw_parts(ptr, len) }
     }
 
     fn heap_slice_mut(&mut self) -> &mut [u8] {
         let ptr = self.heap.as_mut_ptr();
         let len = self.heap.len();
-        unsafe { core::slice::from_raw_parts_mut(ptr, len) }
+        unsafe { slice::from_raw_parts_mut(ptr, len) }
     }
 }
 
@@ -1012,6 +1119,7 @@ mod tests {
         let extern_data = VMDrcHeader {
             header: VMGcHeader::externref(),
             ref_count: UnsafeCell::new(0),
+            object_size: 0,
         };
 
         let extern_data_ptr = &extern_data as *const _;
