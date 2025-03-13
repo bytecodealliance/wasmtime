@@ -195,6 +195,8 @@ pub struct VCode<I: VCodeInst> {
 
     /// Facts on VRegs, for proof-carrying code verification.
     facts: Vec<Option<Fact>>,
+
+    log2_min_function_alignment: u8,
 }
 
 /// The result of `VCode::emit`. Contains all information computed
@@ -281,8 +283,16 @@ impl<I: VCodeInst> VCodeBuilder<I> {
         block_order: BlockLoweringOrder,
         constants: VCodeConstants,
         direction: VCodeBuildDirection,
+        log2_min_function_alignment: u8,
     ) -> Self {
-        let vcode = VCode::new(sigs, abi, emit_info, block_order, constants);
+        let vcode = VCode::new(
+            sigs,
+            abi,
+            emit_info,
+            block_order,
+            constants,
+            log2_min_function_alignment,
+        );
 
         VCodeBuilder {
             vcode,
@@ -602,6 +612,7 @@ impl<I: VCodeInst> VCode<I> {
         emit_info: I::Info,
         block_order: BlockLoweringOrder,
         constants: VCodeConstants,
+        log2_min_function_alignment: u8,
     ) -> Self {
         let n_blocks = block_order.lowered_order().len();
         VCode {
@@ -630,6 +641,7 @@ impl<I: VCodeInst> VCode<I> {
             constants,
             debug_value_labels: vec![],
             facts: vec![],
+            log2_min_function_alignment,
         }
     }
 
@@ -714,6 +726,7 @@ impl<I: VCodeInst> VCode<I> {
 
         let _tt = timing::vcode_emit();
         let mut buffer = MachBuffer::new();
+        buffer.set_log2_min_function_alignment(self.log2_min_function_alignment);
         let mut bb_starts: Vec<Option<CodeOffset>> = vec![];
 
         // The first M MachLabels are reserved for block indices.

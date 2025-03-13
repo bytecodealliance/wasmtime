@@ -392,6 +392,7 @@ impl Engine {
             | "regalloc_algorithm"
             | "is_pic"
             | "bb_padding_log2_minus_one"
+            | "log2_min_function_alignment"
             | "machine_code_cfg_info"
             | "tls_model" // wasmtime doesn't use tls right now
             | "stack_switch_model" // wasmtime doesn't use stack switching right now

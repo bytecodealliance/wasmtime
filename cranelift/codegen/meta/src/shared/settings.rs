@@ -398,6 +398,13 @@ pub(crate) fn define() -> SettingGroup {
         0,
     );
 
+    settings.add_num(
+        "log2_min_function_alignment",
+        "The log2 of the minimum alignment of functions",
+        "The bigger of this value and the default alignment will be used as actual alignment.",
+        0,
+    );
+
     // When adding new settings please check if they can also be added
     // in cranelift/fuzzgen/src/lib.rs for fuzzing.
     settings.build()

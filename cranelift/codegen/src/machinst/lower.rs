@@ -382,6 +382,7 @@ impl<'func, I: VCodeInst> Lower<'func, I> {
             block_order,
             constants,
             VCodeBuildDirection::Backward,
+            flags.log2_min_function_alignment(),
         );
 
         // We usually need two VRegs per instruction result, plus extras for
