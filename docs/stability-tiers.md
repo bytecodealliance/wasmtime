@@ -111,6 +111,7 @@ For explanations of what each tier means see below.
 | WASI Proposal        | [`wasi-threads`]                  | More CI, unstable proposal  |
 | WASI Proposal        | [`wasi-config`]                   | unstable proposal           |
 | WASI Proposal        | [`wasi-keyvalue`]                 | unstable proposal           |
+| WASI Proposal        | [`wasi-tls`]                      | unstable proposal           |
 | *misc*               | Non-Wasmtime Cranelift usage [^1] | CI testing, full-time maintainer |
 | *misc*               | DWARF debugging [^2]              | CI testing, full-time maintainer, improved quality |
 
@@ -118,6 +119,7 @@ For explanations of what each tier means see below.
 [`wasi-threads`]: https://github.com/WebAssembly/wasi-threads
 [`wasi-config`]: https://github.com/WebAssembly/wasi-config
 [`wasi-keyvalue`]: https://github.com/WebAssembly/wasi-keyvalue
+[`wasi-tls`]: https://github.com/WebAssembly/wasi-tls
 [`gc`]: https://github.com/WebAssembly/gc
 
 [^1]: This is intended to encompass features that Cranelift supports as a
