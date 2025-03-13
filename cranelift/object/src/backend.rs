@@ -495,9 +495,7 @@ impl ObjectModule {
         }
         *defined = true;
 
-        let align = alignment
-            .max(self.isa.function_alignment().minimum.into())
-            .max(self.isa.symbol_alignment());
+        let align = alignment.max(self.isa.symbol_alignment());
         let section = if self.per_function_section {
             // FIXME pass empty symbol name once add_subsection produces `.text` as section name
             // instead of `.text.` when passed an empty symbol name. (object#748) Until then pass
