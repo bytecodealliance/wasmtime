@@ -228,6 +228,41 @@ check: exited with status = 0
 
 #[test]
 #[ignore]
+pub fn test_debug_codegen_optimized_lldb() -> Result<()> {
+    let output = lldb_with_script(
+        &[
+            "-Ccache=n",
+            "-Ddebug-info",
+            "-Oopt-level=2",
+            assets::CODEGEN_OPTIMIZED_WASM_PATH,
+        ],
+        r#"b InitializeTest
+r
+b codegen-optimized.cpp:25
+b codegen-optimized.cpp:26
+c
+v x
+c
+v x
+c"#,
+    )?;
+
+    check_lldb_output(
+        &output,
+        r#"
+check: stop reason = breakpoint 1.1
+check: stop reason = breakpoint 2.1
+check: x = 42
+check: stop reason = breakpoint 3.1
+check: x = <variable not available>
+check: exited with status = 0
+"#,
+    )?;
+    Ok(())
+}
+
+#[test]
+#[ignore]
 pub fn test_debug_dwarf_ref() -> Result<()> {
     let output = lldb_with_script(
         &[
