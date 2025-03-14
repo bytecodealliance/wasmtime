@@ -261,6 +261,7 @@ test-programs-artifacts = { path = 'crates/test-programs/artifacts' }
 pulley-interpreter = { path = 'pulley', version = "=32.0.0" }
 pulley-interpreter-fuzz = { path = 'pulley/fuzz' }
 
+cranelift-assembler-x64 = { path = "cranelift/assembler-x64", version = "0.119.0" }
 cranelift-codegen = { path = "cranelift/codegen", version = "0.119.0", default-features = false, features = ["std", "unwind"] }
 cranelift-frontend = { path = "cranelift/frontend", version = "0.119.0" }
 cranelift-entity = { path = "cranelift/entity", version = "0.119.0" }
