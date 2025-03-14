@@ -142,7 +142,6 @@ impl DrcHeap {
 
     fn dealloc(&mut self, gc_ref: VMGcRef) {
         let drc_ref = drc_ref(&gc_ref);
-        debug_assert_eq!(unsafe { *self.index(drc_ref).ref_count.get() }, 0);
         let size = self.index(drc_ref).object_size();
         let layout = FreeList::layout(size);
         self.free_list
