@@ -19,8 +19,8 @@
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @001f                               trapz v2, user16
 ;; @001f                               v8 = uextend.i64 v2
-;; @001f                               v9 = iconst.i64 16
-;; @001f                               v10 = uadd_overflow_trap v8, v9, user1  ; v9 = 16
+;; @001f                               v9 = iconst.i64 24
+;; @001f                               v10 = uadd_overflow_trap v8, v9, user1  ; v9 = 24
 ;; @001f                               v11 = iconst.i64 4
 ;; @001f                               v12 = uadd_overflow_trap v10, v11, user1  ; v11 = 4
 ;; @001f                               v7 = load.i64 notrap aligned readonly can_move v0+48
