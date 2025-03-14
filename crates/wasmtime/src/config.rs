@@ -1192,7 +1192,7 @@ impl Config {
     /// optimization level used for generated code in a few various ways. For
     /// more information see the documentation of [`OptLevel`].
     ///
-    /// The default value for this is `OptLevel::None`.
+    /// The default value for this is `OptLevel::Speed`.
     #[cfg(any(feature = "cranelift", feature = "winch"))]
     pub fn cranelift_opt_level(&mut self, level: OptLevel) -> &mut Self {
         let val = match level {
