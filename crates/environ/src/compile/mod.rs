@@ -285,23 +285,29 @@ pub trait Compiler: Send + Sync {
         use target_lexicon::Architecture::*;
 
         let triple = self.triple();
+        let (arch, flags) = match triple.architecture {
+            X86_32(_) => (Architecture::I386, 0),
+            X86_64 => (Architecture::X86_64, 0),
+            Arm(_) => (Architecture::Arm, 0),
+            Aarch64(_) => (Architecture::Aarch64, 0),
+            S390x => (Architecture::S390x, 0),
+            Riscv64(_) => (Architecture::Riscv64, 0),
+            // XXX: the `object` crate won't successfully build an object
+            // with relocations and such if it doesn't know the
+            // architecture, so just pretend we are riscv64. Yolo!
+            //
+            // Also note that we add some flags to `e_flags` in the object file
+            // to indicate that it's pulley, not actually riscv64. This is used
+            // by `wasmtime objdump` for example.
+            Pulley32 | Pulley32be => (Architecture::Riscv64, obj::EF_WASMTIME_PULLEY32),
+            Pulley64 | Pulley64be => (Architecture::Riscv64, obj::EF_WASMTIME_PULLEY64),
+            architecture => {
+                anyhow::bail!("target architecture {:?} is unsupported", architecture,);
+            }
+        };
         let mut obj = Object::new(
             BinaryFormat::Elf,
-            match triple.architecture {
-                X86_32(_) => Architecture::I386,
-                X86_64 => Architecture::X86_64,
-                Arm(_) => Architecture::Arm,
-                Aarch64(_) => Architecture::Aarch64,
-                S390x => Architecture::S390x,
-                Riscv64(_) => Architecture::Riscv64,
-                // XXX: the `object` crate won't successfully build an object
-                // with relocations and such if it doesn't know the
-                // architecture, so just pretend we are riscv64. Yolo!
-                Pulley32 | Pulley64 | Pulley32be | Pulley64be => Architecture::Riscv64,
-                architecture => {
-                    anyhow::bail!("target architecture {:?} is unsupported", architecture,);
-                }
-            },
+            arch,
             match triple.endianness().unwrap() {
                 target_lexicon::Endianness::Little => object::Endianness::Little,
                 target_lexicon::Endianness::Big => object::Endianness::Big,
@@ -309,10 +315,11 @@ pub trait Compiler: Send + Sync {
         );
         obj.flags = FileFlags::Elf {
             os_abi: obj::ELFOSABI_WASMTIME,
-            e_flags: match kind {
-                ObjectKind::Module => obj::EF_WASMTIME_MODULE,
-                ObjectKind::Component => obj::EF_WASMTIME_COMPONENT,
-            },
+            e_flags: flags
+                | match kind {
+                    ObjectKind::Module => obj::EF_WASMTIME_MODULE,
+                    ObjectKind::Component => obj::EF_WASMTIME_COMPONENT,
+                },
             abi_version: 0,
         };
         Ok(obj)
