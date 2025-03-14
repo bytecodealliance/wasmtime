@@ -24,7 +24,7 @@ features = ["all-arch"]
 anyhow = { workspace = true, optional = true, features = ['std'] }
 bumpalo = "3"
 capstone = { workspace = true, optional = true }
-cranelift-assembler-x64 = { path = "../assembler-x64", version = "0.119.0" }
+cranelift-assembler-x64 = { workspace = true }
 cranelift-codegen-shared = { path = "./shared", version = "0.119.0" }
 cranelift-entity = { workspace = true }
 cranelift-bforest = { workspace = true }

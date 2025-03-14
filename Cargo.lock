@@ -4495,6 +4495,7 @@ dependencies = [
  "arbitrary",
  "component-fuzz-util",
  "component-test-util",
+ "cranelift-assembler-x64",
  "cranelift-codegen",
  "cranelift-control",
  "cranelift-filetests",
