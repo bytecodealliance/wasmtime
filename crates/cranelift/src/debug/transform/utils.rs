@@ -20,6 +20,7 @@ pub(crate) fn append_vmctx_info(
         let expr = CompiledExpression::vmctx();
         let locs = expr
             .build_with_locals(scope_ranges, addr_tr, frame_info, isa)
+            .expressions
             .map(|i| {
                 i.map(|(begin, length, data)| write::Location::StartLength {
                     begin,
