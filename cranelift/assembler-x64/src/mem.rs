@@ -1,7 +1,7 @@
 //! Memory operands to instructions.
 
 use crate::api::{AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, TrapCode};
-use crate::reg::{self, NonRspGpr, Size};
+use crate::gpr::{self, NonRspGpr, Size};
 use crate::rex::{encode_modrm, encode_sib, Imm, RexFlags};
 use crate::xmm;
 
@@ -169,7 +169,7 @@ impl<R: AsReg> std::fmt::Display for Amode<R> {
             Amode::ImmReg { simm32, base, .. } => {
                 // Note: size is always 8; the address is 64 bits,
                 // even if the addressed operand is smaller.
-                let base = reg::enc::to_string(base.enc(), Size::Quadword);
+                let base = gpr::enc::to_string(base.enc(), Size::Quadword);
                 write!(f, "{simm32:x}({base})")
             }
             Amode::ImmRegRegShift {
@@ -179,8 +179,8 @@ impl<R: AsReg> std::fmt::Display for Amode<R> {
                 scale,
                 ..
             } => {
-                let base = reg::enc::to_string(base.enc(), Size::Quadword);
-                let index = reg::enc::to_string(index.enc(), Size::Quadword);
+                let base = gpr::enc::to_string(base.enc(), Size::Quadword);
+                let index = gpr::enc::to_string(index.enc(), Size::Quadword);
                 let shift = scale.shift();
                 if shift > 1 {
                     write!(f, "{simm32:x}({base}, {index}, {shift})")
@@ -256,7 +256,7 @@ impl<R: AsReg, M: AsReg> GprMem<R, M> {
     /// Pretty-print the operand.
     pub fn to_string(&self, size: Size) -> String {
         match self {
-            GprMem::Gpr(gpr) => reg::enc::to_string(gpr.enc(), size).to_owned(),
+            GprMem::Gpr(gpr) => gpr.to_string(Some(size)),
             GprMem::Mem(amode) => amode.to_string(),
         }
     }
@@ -313,7 +313,7 @@ pub fn emit_modrm_sib_disp<R: AsReg>(
             // optional immediate. If rsp is the base register, however, then a
             // SIB byte must be used.
             let enc_e_low3 = enc_e & 7;
-            if enc_e_low3 == reg::enc::RSP {
+            if enc_e_low3 == gpr::enc::RSP {
                 // Displacement from RSP is encoded with a SIB byte where
                 // the index and base are both encoded as RSP's encoding of
                 // 0b100. This special encoding means that the index register
@@ -326,7 +326,7 @@ pub fn emit_modrm_sib_disp<R: AsReg>(
                 // If the base register is rbp and there's no offset then force
                 // a 1-byte zero offset since otherwise the encoding would be
                 // invalid.
-                if enc_e_low3 == reg::enc::RBP {
+                if enc_e_low3 == gpr::enc::RBP {
                     imm.force_immediate();
                 }
                 sink.put1(encode_modrm(imm.m0d(), enc_g & 7, enc_e & 7));
@@ -348,14 +348,14 @@ pub fn emit_modrm_sib_disp<R: AsReg>(
             // ever be rsp. Note, though, that the encoding of r12, whose three
             // lower bits match the encoding of rsp, is explicitly allowed with
             // REX bytes so only rsp is disallowed.
-            assert!(enc_index != reg::enc::RSP);
+            assert!(enc_index != gpr::enc::RSP);
 
             // If the offset is zero then there is no immediate. Note, though,
             // that if the base register's lower three bits are `101` then an
             // offset must be present. This is a special case in the encoding of
             // the SIB byte and requires an explicit displacement with rbp/r13.
             let mut imm = Imm::new(simm32.value(), evex_scaling);
-            if enc_base & 7 == reg::enc::RBP {
+            if enc_base & 7 == gpr::enc::RBP {
                 imm.force_immediate();
             }
 

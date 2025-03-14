@@ -6,6 +6,7 @@ use super::{
 };
 use crate::ir::TrapCode;
 use cranelift_assembler_x64 as asm;
+use std::string::String;
 
 /// Define the types of registers Cranelift will use.
 #[derive(Clone, Debug)]
@@ -38,6 +39,16 @@ impl asm::AsReg for PairedGpr {
         write
     }
 
+    fn to_string(&self, size: Option<asm::Size>) -> String {
+        if self.read.is_real() {
+            asm::gpr::enc::to_string(self.enc(), size.unwrap()).into()
+        } else {
+            let read = self.read.to_reg();
+            let write = self.write.to_reg().to_reg();
+            format!("(%{write:?} <- %{read:?})")
+        }
+    }
+
     fn new(_: u8) -> Self {
         panic!("disallow creation of new assembler registers")
     }
@@ -59,6 +70,17 @@ impl asm::AsReg for PairedXmm {
         write
     }
 
+    fn to_string(&self, size: Option<asm::Size>) -> String {
+        assert!(size.is_none(), "XMM registers do not have size variants");
+        if self.read.is_real() {
+            asm::xmm::enc::to_string(self.enc()).into()
+        } else {
+            let read = self.read.to_reg();
+            let write = self.write.to_reg().to_reg();
+            format!("(%{write:?} <- %{read:?})")
+        }
+    }
+
     fn new(_: u8) -> Self {
         panic!("disallow creation of new assembler registers")
     }
@@ -70,6 +92,14 @@ impl asm::AsReg for Gpr {
         enc_gpr(self)
     }
 
+    fn to_string(&self, size: Option<asm::Size>) -> String {
+        if self.is_real() {
+            asm::gpr::enc::to_string(self.enc(), size.unwrap()).into()
+        } else {
+            format!("%{:?}", self.to_reg())
+        }
+    }
+
     fn new(_: u8) -> Self {
         panic!("disallow creation of new assembler registers")
     }
@@ -79,6 +109,15 @@ impl asm::AsReg for Gpr {
 impl asm::AsReg for Xmm {
     fn enc(&self) -> u8 {
         enc_xmm(self)
+    }
+
+    fn to_string(&self, size: Option<asm::Size>) -> String {
+        assert!(size.is_none(), "XMM registers do not have size variants");
+        if self.is_real() {
+            asm::xmm::enc::to_string(self.enc()).into()
+        } else {
+            format!("%{:?}", self.to_reg())
+        }
     }
 
     fn new(_: u8) -> Self {
@@ -286,3 +325,45 @@ impl From<asm::Constant> for VCodeConstant {
 // the assembler instructions exposed to ISLE.
 include!(concat!(env!("OUT_DIR"), "/assembler-isle-macro.rs"));
 pub(crate) use isle_assembler_methods;
+
+#[cfg(test)]
+mod tests {
+    use super::asm::{AsReg, Size};
+    use super::PairedGpr;
+    use crate::isa::x64::args::{FromWritableReg, Gpr, WritableGpr, WritableXmm, Xmm};
+    use crate::isa::x64::inst::external::PairedXmm;
+    use crate::{Reg, Writable};
+    use regalloc2::{RegClass, VReg};
+
+    #[test]
+    fn pretty_print_registers() {
+        // For logging, we need to be able to pretty-print the virtual registers
+        // that Cranelift uses before register allocation. This test ensures
+        // that these remain printable using the `AsReg::to_string` interface
+        // (see issue #10631).
+
+        let v200: Reg = VReg::new(200, RegClass::Int).into();
+        let gpr200 = Gpr::new(v200).unwrap();
+        assert_eq!(gpr200.to_string(Some(Size::Quadword)), "%v200");
+
+        let v300: Reg = VReg::new(300, RegClass::Int).into();
+        let wgpr300 = WritableGpr::from_writable_reg(Writable::from_reg(v300).into()).unwrap();
+        let pair = PairedGpr {
+            read: gpr200,
+            write: wgpr300,
+        };
+        assert_eq!(pair.to_string(Some(Size::Quadword)), "(%v300 <- %v200)");
+
+        let v400: Reg = VReg::new(400, RegClass::Float).into();
+        let xmm400 = Xmm::new(v400).unwrap();
+        assert_eq!(xmm400.to_string(None), "%v400");
+
+        let v500: Reg = VReg::new(500, RegClass::Float).into();
+        let wxmm500 = WritableXmm::from_writable_reg(Writable::from_reg(v500).into()).unwrap();
+        let pair = PairedXmm {
+            read: xmm400,
+            write: wxmm500,
+        };
+        assert_eq!(pair.to_string(None), "(%v500 <- %v400)");
+    }
+}

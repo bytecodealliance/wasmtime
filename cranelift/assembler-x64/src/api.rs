@@ -1,6 +1,6 @@
 //! Contains traits that a user of this assembler must implement.
 
-use crate::reg;
+use crate::gpr;
 use crate::xmm;
 use std::{num::NonZeroU8, ops::Index, vec::Vec};
 
@@ -130,10 +130,10 @@ pub trait AsReg: Clone + std::fmt::Debug {
     fn enc(&self) -> u8;
 
     /// Return the register name.
-    fn to_string(&self, size: Option<reg::Size>) -> &str {
+    fn to_string(&self, size: Option<gpr::Size>) -> String {
         match size {
-            Some(size) => reg::enc::to_string(self.enc(), size),
-            None => xmm::enc::to_string(self.enc()),
+            Some(size) => gpr::enc::to_string(self.enc(), size).into(),
+            None => xmm::enc::to_string(self.enc()).into(),
         }
     }
 }

@@ -30,8 +30,8 @@ impl<R: AsReg> Gpr<R> {
     }
 
     /// Return the register name at the given `size`.
-    pub fn to_string(&self, size: Size) -> &str {
-        enc::to_string(self.enc(), size)
+    pub fn to_string(&self, size: Size) -> String {
+        self.0.to_string(Some(size))
     }
 
     /// Proxy on the 8-bit REX flag emission; helpful for simplifying generated
