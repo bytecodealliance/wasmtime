@@ -220,7 +220,7 @@ pub trait Compiler: Send + Sync {
         wasm_func_ty: &WasmFuncType,
     ) -> Result<Box<dyn Any + Send>, CompileError>;
 
-    /// Creates a tramopline that can be used to call Wasmtime's implementation
+    /// Creates a trampoline that can be used to call Wasmtime's implementation
     /// of the builtin function specified by `index`.
     ///
     /// The trampoline created can technically have any ABI but currently has
