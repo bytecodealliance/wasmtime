@@ -17,6 +17,14 @@ pub const EF_WASMTIME_MODULE: u32 = 1 << 0;
 /// component.
 pub const EF_WASMTIME_COMPONENT: u32 = 1 << 1;
 
+/// Flag for the `e_flags` field in the ELF header indicating compiled code for
+/// pulley32
+pub const EF_WASMTIME_PULLEY32: u32 = 1 << 2;
+
+/// Flag for the `e_flags` field in the ELF header indicating compiled code for
+/// pulley64
+pub const EF_WASMTIME_PULLEY64: u32 = 1 << 3;
+
 /// Flag for the `sh_flags` field in the ELF text section that indicates that
 /// the text section does not itself need to be executable. This is used for the
 /// Pulley target, for example, to indicate that it does not need to be made

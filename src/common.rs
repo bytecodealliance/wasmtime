@@ -213,7 +213,7 @@ impl RunCommon {
         deserialize_module: impl FnOnce() -> Result<Module>,
         #[cfg(feature = "component-model")] deserialize_component: impl FnOnce() -> Result<Component>,
     ) -> Result<RunTarget> {
-        Ok(match engine.detect_precompiled(bytes) {
+        Ok(match Engine::detect_precompiled(bytes) {
             Some(Precompiled::Module) => {
                 self.ensure_allow_precompiled()?;
                 RunTarget::Core(deserialize_module()?)

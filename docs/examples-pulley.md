@@ -155,15 +155,13 @@ doesn't happen the same in LLVM on all architectures).
 
 ### Inspecting Pulley Bytecode
 
-When compiling to native the `*.cwasm` produced by `wasmtime compile` can be
-inspected with `objdump -S`, but this doesn't work with Pulley. A small example
-in the `pulley_interpreter` crate suffices for doing this though. You can
-inspect compiled Pulley bytecode from the Wasmtime repository with:
+Like when compiling to native the `wasmtime objdump` command can be used to
+inspect compiled bytecode:
 
 ```sh
-$ cargo run compile --target pulley64 foo.wat
-$ cargo run -p pulley-interpreter --all-features --example objdump foo.cwasm
-0x000000: <wasm[0]::function[20]>:
+$ wasmtime compile --target pulley64 foo.wat
+$ wasmtime objdump foo.cwasm --addresses --bytes
+0x000000: wasm[0]::function[20]:
        0: 9f 10 00 08 00                     push_frame_save 16, x19
        5: 40 13 00                           xmov x19, x0
        8: 03 13 13 3f cb 89 00               call2 x19, x19, 0x89cb3f    // target = 0x89cb47
@@ -173,10 +171,6 @@ $ cargo run -p pulley-interpreter --all-features --example objdump foo.cwasm
       24: 03 13 13 e0 45 00 00               call2 x19, x19, 0x45e0    // target = 0x4604
 ...
 ```
-
-The output is intended to look somewhat similar to `objdump` but otherwise
-mainly provides the ability to inspect opcode selection, see the encoded bytes,
-etc.
 
 ### Profiling Pulley
 

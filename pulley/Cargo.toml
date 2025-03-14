@@ -21,10 +21,9 @@ anyhow = { workspace = true, optional = true }
 
 [dev-dependencies]
 env_logger = { workspace = true }
-object = { workspace = true, features = ['std'] }
 anyhow = { workspace = true, features = ['std'] }
 clap = { workspace = true }
-termcolor = "1.4.1"
+termcolor = { workspace = true }
 
 [features]
 std = ['wasmtime-math?/std']
@@ -37,10 +36,6 @@ profile = ['std', 'dep:anyhow']
 
 [package.metadata.docs.rs]
 all-features = true
-
-[[example]]
-name = "objdump"
-required-features = ["disas"]
 
 [[example]]
 name = "profiler-html"
