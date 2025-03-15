@@ -5,7 +5,7 @@ use crate::prelude::*;
 use crate::{obj, Tunables};
 use crate::{
     BuiltinFunctionIndex, DefinedFuncIndex, FlagValue, FuncIndex, FunctionLoc, ObjectKind,
-    PrimaryMap, StaticModuleIndex, TripleExt, WasmError, WasmFuncType, WasmFunctionInfo,
+    PrimaryMap, StaticModuleIndex, TripleExt, WasmError, WasmFuncType,
 };
 use anyhow::Result;
 use object::write::{Object, SymbolId};
@@ -20,12 +20,14 @@ mod address_map;
 mod module_artifacts;
 mod module_environ;
 mod module_types;
+mod stack_maps;
 mod trap_encoding;
 
 pub use self::address_map::*;
 pub use self::module_artifacts::*;
 pub use self::module_environ::*;
 pub use self::module_types::*;
+pub use self::stack_maps::*;
 pub use self::trap_encoding::*;
 
 /// An error while compiling WebAssembly to machine code.
@@ -196,7 +198,7 @@ pub trait Compiler: Send + Sync {
         index: DefinedFuncIndex,
         data: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
-    ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError>;
+    ) -> Result<Box<dyn Any + Send>, CompileError>;
 
     /// Compile a trampoline for an array-call host function caller calling the
     /// `index`th Wasm function.
