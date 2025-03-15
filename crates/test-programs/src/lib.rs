@@ -20,7 +20,7 @@ wit_bindgen::generate!({
         "../wasi-http/wit",
         "../wasi-config/wit",
         "../wasi-keyvalue/wit",
-        "../wasi-tls/wit/world.wit",
+        "../wasi-tls/wit/deps/tls",
     ],
     world: "wasmtime:test/test",
     features: ["cli-exit-with-code", "tls"],

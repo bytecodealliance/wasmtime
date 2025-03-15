@@ -96,8 +96,8 @@ use wasmtime_wasi::{
 
 mod gen_ {
     wasmtime::component::bindgen!({
-        path: "wit/",
-        world: "imports",
+        path: "wit",
+        world: "wasi:tls/imports",
         with: {
             "wasi:io": wasmtime_wasi::bindings::io,
             "wasi:tls/types/client-connection": super::ClientConnection,
