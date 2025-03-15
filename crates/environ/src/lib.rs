@@ -29,6 +29,7 @@ pub mod obj;
 mod ref_bits;
 mod scopevec;
 mod stack_map;
+pub mod stack_switching;
 mod trap_encoding;
 mod tunables;
 mod types;
