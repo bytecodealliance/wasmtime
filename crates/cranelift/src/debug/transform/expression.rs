@@ -227,6 +227,11 @@ fn append_memory_deref(
     Ok(true)
 }
 
+pub struct BuiltCompiledExpression<TIter> {
+    pub expressions: TIter,
+    pub covers_entire_scope: bool,
+}
+
 impl CompiledExpression {
     pub fn is_simple(&self) -> bool {
         if let [CompiledExpressionPart::Code(_)] = self.parts.as_slice() {
@@ -250,7 +255,9 @@ impl CompiledExpression {
         addr_tr: &'a AddressTransform,
         frame_info: Option<&'a FunctionFrameInfo>,
         isa: &'a dyn TargetIsa,
-    ) -> impl Iterator<Item = Result<(write::Address, u64, write::Expression)>> + use<'a> {
+    ) -> BuiltCompiledExpression<
+        impl Iterator<Item = Result<(write::Address, u64, write::Expression)>> + use<'a>,
+    > {
         enum BuildWithLocalsResult<'a> {
             Empty,
             Simple(
@@ -284,18 +291,24 @@ impl CompiledExpression {
         }
 
         if scope.is_empty() {
-            return BuildWithLocalsResult::Empty;
+            return BuiltCompiledExpression {
+                expressions: BuildWithLocalsResult::Empty,
+                covers_entire_scope: false,
+            };
         }
 
         // If it a simple DWARF code, no need in locals processing. Just translate
         // the scope ranges.
         if let [CompiledExpressionPart::Code(code)] = self.parts.as_slice() {
-            return BuildWithLocalsResult::Simple(
-                Box::new(scope.iter().flat_map(move |(wasm_start, wasm_end)| {
-                    addr_tr.translate_ranges(*wasm_start, *wasm_end)
-                })),
-                code.clone(),
-            );
+            return BuiltCompiledExpression {
+                expressions: BuildWithLocalsResult::Simple(
+                    Box::new(scope.iter().flat_map(move |(wasm_start, wasm_end)| {
+                        addr_tr.translate_ranges(*wasm_start, *wasm_end)
+                    })),
+                    code.clone(),
+                ),
+                covers_entire_scope: false,
+            };
         }
 
         let vmctx_label = get_vmctx_value_label();
@@ -315,10 +328,11 @@ impl CompiledExpression {
         if self.need_deref {
             ranges_builder.process_label(vmctx_label);
         }
-        let ranges = ranges_builder.into_ranges();
 
-        return BuildWithLocalsResult::Ranges(Box::new(
+        let ranges = ranges_builder.into_ranges();
+        let expressions = BuildWithLocalsResult::Ranges(Box::new(
             ranges
+                .ranges
                 .into_iter()
                 .map(
                     move |CachedValueLabelRange {
@@ -402,6 +416,11 @@ impl CompiledExpression {
                 )
                 .filter_map(Result::transpose),
         ));
+
+        BuiltCompiledExpression {
+            expressions,
+            covers_entire_scope: ranges.covers_entire_scope,
+        }
     }
 }
 
@@ -690,6 +709,12 @@ struct ValueLabelRangesBuilder<'a, 'b> {
     ranges: Vec<CachedValueLabelRange>,
     frame_info: Option<&'a FunctionFrameInfo<'b>>,
     processed_labels: HashSet<ValueLabel>,
+    covers_entire_scope: bool,
+}
+
+struct BuiltValueLabelRanges<TIter> {
+    ranges: TIter,
+    covers_entire_scope: bool,
 }
 
 impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
@@ -725,6 +750,7 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
             ranges,
             frame_info,
             processed_labels: HashSet::new(),
+            covers_entire_scope: true,
         }
     }
 
@@ -778,6 +804,7 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
                     ranges[i].end = range_end;
                     tail.start = range_end;
                     ranges.insert(i + 1, tail);
+                    self.covers_entire_scope = false;
                 }
                 assert!(ranges[i].end <= range_end);
                 if range_start <= ranges[i].start {
@@ -790,11 +817,14 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
                 tail.start = range_start;
                 tail.label_location.insert(label, loc);
                 ranges.insert(i + 1, tail);
+                self.covers_entire_scope = false;
             }
         }
     }
 
-    pub fn into_ranges(self) -> impl Iterator<Item = CachedValueLabelRange> + use<> {
+    pub fn into_ranges(
+        self,
+    ) -> BuiltValueLabelRanges<impl Iterator<Item = CachedValueLabelRange> + use<>> {
         // Ranges with not-enough labels are discarded.
         let processed_labels_len = self.processed_labels.len();
         let is_valid_range =
@@ -813,7 +843,11 @@ impl<'a, 'b> ValueLabelRangesBuilder<'a, 'b> {
             }
             dbi_log!("");
         }
-        self.ranges.into_iter().filter(is_valid_range)
+
+        BuiltValueLabelRanges {
+            ranges: self.ranges.into_iter().filter(is_valid_range),
+            covers_entire_scope: self.covers_entire_scope,
+        }
     }
 }
 
@@ -1304,7 +1338,7 @@ mod tests {
 
         // No value labels, testing if entire function range coming through.
         let builder = ValueLabelRangesBuilder::new(&[(10, 20)], &addr_tr, Some(&fi), isa.as_ref());
-        let ranges = builder.into_ranges().collect::<Vec<_>>();
+        let ranges = builder.into_ranges().ranges.collect::<Vec<_>>();
         assert_eq!(ranges.len(), 1);
         assert_eq!(ranges[0].func_index, 0);
         assert_eq!(ranges[0].start, 0);
@@ -1315,7 +1349,7 @@ mod tests {
             ValueLabelRangesBuilder::new(&[(10, 20)], &addr_tr, Some(&fi), isa.as_ref());
         builder.process_label(value_labels.0);
         builder.process_label(value_labels.1);
-        let ranges = builder.into_ranges().collect::<Vec<_>>();
+        let ranges = builder.into_ranges().ranges.collect::<Vec<_>>();
         assert_eq!(ranges.len(), 1);
         assert_eq!(ranges[0].start, 5);
         assert_eq!(ranges[0].end, 25);
@@ -1327,7 +1361,7 @@ mod tests {
         builder.process_label(value_labels.0);
         builder.process_label(value_labels.1);
         builder.process_label(value_labels.2);
-        let ranges = builder.into_ranges().collect::<Vec<_>>();
+        let ranges = builder.into_ranges().ranges.collect::<Vec<_>>();
         // Result is two ranges @5..10 and @20..23
         assert_eq!(ranges.len(), 2);
         assert_eq!(ranges[0].start, 5);

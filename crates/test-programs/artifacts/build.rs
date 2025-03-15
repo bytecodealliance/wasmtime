@@ -210,17 +210,31 @@ fn build_debug_info_assets(paths_code: &mut String) {
     }
 
     // Compile the C/C++ assets.
-    let compile_commands = [(
-        "clang",
-        "generic.wasm",
-        [
-            "-target",
-            "wasm32-unknown-wasip1",
-            "-g",
-            "generic.cpp",
-            "generic-satellite.cpp",
-        ],
-    )];
+    let compile_commands = [
+        (
+            "clang",
+            "generic.wasm",
+            [
+                "-target",
+                "wasm32-unknown-wasip1",
+                "-g",
+                "generic.cpp",
+                "generic-satellite.cpp",
+            ]
+            .as_slice(),
+        ),
+        (
+            "clang",
+            "codegen-optimized.wasm",
+            [
+                "-target",
+                "wasm32-unknown-wasip1",
+                "-g",
+                "codegen-optimized.cpp",
+            ]
+            .as_slice(),
+        ),
+    ];
 
     // The debug tests relying on these assets are ignored by default,
     // so we cannot force the requirement of having a working WASI SDK

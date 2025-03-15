@@ -229,6 +229,7 @@ fn generate_vars(
             let loc_list_id = {
                 let locs = CompiledExpression::from_label(*label)
                     .build_with_locals(scope_ranges, addr_tr, Some(frame_info), isa)
+                    .expressions
                     .map(|i| {
                         i.map(|(begin, length, data)| write::Location::StartLength {
                             begin,
