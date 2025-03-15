@@ -17,8 +17,6 @@ use std::collections::HashMap;
 use std::ffi::CString;
 use std::io::Write;
 use std::ptr;
-use std::ptr::NonNull;
-use std::sync::atomic::{AtomicPtr, Ordering};
 use target_lexicon::PointerWidth;
 
 const WRITABLE_DATA_ALIGNMENT: u64 = 0x8;
@@ -64,7 +62,7 @@ impl JITBuilder {
         // which might not reach all definitions; we can't handle that here, so
         // we require long-range relocation types.
         flag_builder.set("use_colocated_libcalls", "false").unwrap();
-        flag_builder.set("is_pic", "true").unwrap();
+        flag_builder.set("is_pic", "false").unwrap();
         let isa_builder = cranelift_native::builder().unwrap_or_else(|msg| {
             panic!("host machine is not supported: {msg}");
         });
@@ -145,17 +143,6 @@ impl JITBuilder {
     }
 }
 
-/// A pending update to the GOT.
-struct GotUpdate {
-    /// The entry that is to be updated.
-    entry: NonNull<AtomicPtr<u8>>,
-
-    /// The new value of the entry.
-    ptr: *const u8,
-}
-
-unsafe impl Send for GotUpdate {}
-
 /// A wrapper that impls Send for the contents.
 ///
 /// SAFETY: This must not be used for any types where it would be UB for them to be Send
@@ -174,18 +161,10 @@ pub struct JITModule {
     libcall_names: Box<dyn Fn(ir::LibCall) -> String + Send + Sync>,
     memory: MemoryHandle,
     declarations: ModuleDeclarations,
-    function_got_entries: SecondaryMap<FuncId, Option<SendWrapper<NonNull<AtomicPtr<u8>>>>>,
-    function_plt_entries: SecondaryMap<FuncId, Option<SendWrapper<NonNull<[u8; 16]>>>>,
-    data_object_got_entries: SecondaryMap<DataId, Option<SendWrapper<NonNull<AtomicPtr<u8>>>>>,
-    libcall_got_entries: HashMap<ir::LibCall, SendWrapper<NonNull<AtomicPtr<u8>>>>,
-    libcall_plt_entries: HashMap<ir::LibCall, SendWrapper<NonNull<[u8; 16]>>>,
     compiled_functions: SecondaryMap<FuncId, Option<CompiledBlob>>,
     compiled_data_objects: SecondaryMap<DataId, Option<CompiledBlob>>,
     functions_to_finalize: Vec<FuncId>,
     data_objects_to_finalize: Vec<DataId>,
-
-    /// Updates to the GOT awaiting relocations to be made and region protections to be set
-    pending_got_updates: Vec<GotUpdate>,
 }
 
 /// A handle to allow freeing memory allocated by the `Module`.
@@ -227,75 +206,6 @@ impl JITModule {
         }
     }
 
-    fn new_got_entry(&mut self, val: *const u8) -> NonNull<AtomicPtr<u8>> {
-        let got_entry = self
-            .memory
-            .writable
-            .allocate(
-                std::mem::size_of::<AtomicPtr<u8>>(),
-                std::mem::align_of::<AtomicPtr<u8>>().try_into().unwrap(),
-            )
-            .unwrap()
-            .cast::<AtomicPtr<u8>>();
-        unsafe {
-            std::ptr::write(got_entry, AtomicPtr::new(val as *mut _));
-        }
-        NonNull::new(got_entry).unwrap()
-    }
-
-    fn new_plt_entry(&mut self, got_entry: NonNull<AtomicPtr<u8>>) -> NonNull<[u8; 16]> {
-        let plt_entry = self
-            .memory
-            .code
-            .allocate(
-                std::mem::size_of::<[u8; 16]>(),
-                self.isa
-                    .symbol_alignment()
-                    .max(self.isa.function_alignment().minimum as u64),
-            )
-            .unwrap()
-            .cast::<[u8; 16]>();
-        unsafe {
-            Self::write_plt_entry_bytes(plt_entry, got_entry);
-        }
-        NonNull::new(plt_entry).unwrap()
-    }
-
-    fn new_func_plt_entry(&mut self, id: FuncId, val: *const u8) {
-        let got_entry = self.new_got_entry(val);
-        self.function_got_entries[id] = Some(SendWrapper(got_entry));
-        let plt_entry = self.new_plt_entry(got_entry);
-        self.record_function_for_perf(
-            plt_entry.as_ptr().cast(),
-            std::mem::size_of::<[u8; 16]>(),
-            &format!(
-                "{}@plt",
-                self.declarations.get_function_decl(id).linkage_name(id)
-            ),
-        );
-        self.function_plt_entries[id] = Some(SendWrapper(plt_entry));
-    }
-
-    fn new_data_got_entry(&mut self, id: DataId, val: *const u8) {
-        let got_entry = self.new_got_entry(val);
-        self.data_object_got_entries[id] = Some(SendWrapper(got_entry));
-    }
-
-    unsafe fn write_plt_entry_bytes(plt_ptr: *mut [u8; 16], got_ptr: NonNull<AtomicPtr<u8>>) {
-        assert!(
-            cfg!(target_arch = "x86_64"),
-            "PLT is currently only supported on x86_64"
-        );
-        // jmp *got_ptr; ud2; ud2; ud2; ud2; ud2
-        let mut plt_val = [
-            0xff, 0x25, 0, 0, 0, 0, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b, 0x0f, 0x0b,
-        ];
-        let what = got_ptr.as_ptr() as isize - 4;
-        let at = plt_ptr as isize + 2;
-        plt_val[2..6].copy_from_slice(&i32::to_ne_bytes(i32::try_from(what - at).unwrap()));
-        std::ptr::write(plt_ptr, plt_val);
-    }
-
     fn get_address(&self, name: &ModuleRelocTarget) -> *const u8 {
         match *name {
             ModuleRelocTarget::User { .. } => {
@@ -334,60 +244,6 @@ impl JITModule {
                 self.lookup_symbol(&sym)
                     .unwrap_or_else(|| panic!("can't resolve libcall {sym}"))
             }
-            _ => panic!("invalid name"),
-        }
-    }
-
-    /// Returns the given function's entry in the Global Offset Table.
-    ///
-    /// Panics if there's no entry in the table for the given function.
-    pub fn read_got_entry(&self, func_id: FuncId) -> *const u8 {
-        let got_entry = self.function_got_entries[func_id].unwrap();
-        unsafe { got_entry.0.as_ref() }.load(Ordering::SeqCst)
-    }
-
-    fn get_got_address(&self, name: &ModuleRelocTarget) -> NonNull<AtomicPtr<u8>> {
-        match *name {
-            ModuleRelocTarget::User { .. } => {
-                if ModuleDeclarations::is_function(name) {
-                    let func_id = FuncId::from_name(name);
-                    self.function_got_entries[func_id].unwrap().0
-                } else {
-                    let data_id = DataId::from_name(name);
-                    self.data_object_got_entries[data_id].unwrap().0
-                }
-            }
-            ModuleRelocTarget::LibCall(ref libcall) => {
-                self.libcall_got_entries
-                    .get(libcall)
-                    .unwrap_or_else(|| panic!("can't resolve libcall {libcall}"))
-                    .0
-            }
-            _ => panic!("invalid name"),
-        }
-    }
-
-    fn get_plt_address(&self, name: &ModuleRelocTarget) -> *const u8 {
-        match *name {
-            ModuleRelocTarget::User { .. } => {
-                if ModuleDeclarations::is_function(name) {
-                    let func_id = FuncId::from_name(name);
-                    self.function_plt_entries[func_id]
-                        .unwrap()
-                        .0
-                        .as_ptr()
-                        .cast::<u8>()
-                } else {
-                    unreachable!("PLT relocations can only have functions as target");
-                }
-            }
-            ModuleRelocTarget::LibCall(ref libcall) => self
-                .libcall_plt_entries
-                .get(libcall)
-                .unwrap_or_else(|| panic!("can't resolve libcall {libcall}"))
-                .0
-                .as_ptr()
-                .cast::<u8>(),
             _ => panic!("invalid name"),
         }
     }
@@ -456,11 +312,7 @@ impl JITModule {
             let func = self.compiled_functions[func]
                 .as_ref()
                 .expect("function must be compiled before it can be finalized");
-            func.perform_relocations(
-                |name| self.get_address(name),
-                |name| self.get_got_address(name).as_ptr().cast(),
-                |name| self.get_plt_address(name),
-            );
+            func.perform_relocations(|name| self.get_address(name));
         }
 
         for data in std::mem::take(&mut self.data_objects_to_finalize) {
@@ -469,32 +321,30 @@ impl JITModule {
             let data = self.compiled_data_objects[data]
                 .as_ref()
                 .expect("data object must be compiled before it can be finalized");
-            data.perform_relocations(
-                |name| self.get_address(name),
-                |name| self.get_got_address(name).as_ptr().cast(),
-                |name| self.get_plt_address(name),
-            );
+            data.perform_relocations(|name| self.get_address(name));
         }
 
         // Now that we're done patching, prepare the memory for execution!
         self.memory.readonly.set_readonly()?;
         self.memory.code.set_readable_and_executable()?;
 
-        for update in self.pending_got_updates.drain(..) {
-            unsafe { update.entry.as_ref() }.store(update.ptr as *mut _, Ordering::SeqCst);
-        }
         Ok(())
     }
 
     /// Create a new `JITModule`.
     pub fn new(builder: JITBuilder) -> Self {
+        assert!(
+            !builder.isa.flags().is_pic(),
+            "cranelift-jit needs is_pic=false"
+        );
+
         let branch_protection =
             if cfg!(target_arch = "aarch64") && use_bti(&builder.isa.isa_flags()) {
                 BranchProtection::BTI
             } else {
                 BranchProtection::None
             };
-        let mut module = Self {
+        Self {
             isa: builder.isa,
             symbols: RefCell::new(builder.symbols),
             lookup_symbols: builder.lookup_symbols,
@@ -506,42 +356,11 @@ impl JITModule {
                 writable: Memory::new(BranchProtection::None),
             },
             declarations: ModuleDeclarations::default(),
-            function_got_entries: SecondaryMap::new(),
-            function_plt_entries: SecondaryMap::new(),
-            data_object_got_entries: SecondaryMap::new(),
-            libcall_got_entries: HashMap::new(),
-            libcall_plt_entries: HashMap::new(),
             compiled_functions: SecondaryMap::new(),
             compiled_data_objects: SecondaryMap::new(),
             functions_to_finalize: Vec::new(),
             data_objects_to_finalize: Vec::new(),
-            pending_got_updates: Vec::new(),
-        };
-
-        // Pre-create a GOT and PLT entry for each libcall.
-        let all_libcalls = if module.isa.flags().is_pic() {
-            ir::LibCall::all_libcalls()
-        } else {
-            &[] // Not PIC, so no GOT and PLT entries necessary
-        };
-        for &libcall in all_libcalls {
-            let sym = (module.libcall_names)(libcall);
-            let addr = if let Some(addr) = module.lookup_symbol(&sym) {
-                addr
-            } else {
-                continue;
-            };
-            let got_entry = module.new_got_entry(addr);
-            module
-                .libcall_got_entries
-                .insert(libcall, SendWrapper(got_entry));
-            let plt_entry = module.new_plt_entry(got_entry);
-            module
-                .libcall_plt_entries
-                .insert(libcall, SendWrapper(plt_entry));
         }
-
-        module
     }
 }
 
@@ -560,26 +379,14 @@ impl Module for JITModule {
         linkage: Linkage,
         signature: &ir::Signature,
     ) -> ModuleResult<FuncId> {
-        let (id, linkage) = self
+        let (id, _linkage) = self
             .declarations
             .declare_function(name, linkage, signature)?;
-        if self.function_got_entries[id].is_none() && self.isa.flags().is_pic() {
-            // FIXME populate got entries with a null pointer when defined
-            let val = if linkage == Linkage::Import {
-                self.lookup_symbol(name).unwrap_or(std::ptr::null())
-            } else {
-                std::ptr::null()
-            };
-            self.new_func_plt_entry(id, val);
-        }
         Ok(id)
     }
 
     fn declare_anonymous_function(&mut self, signature: &ir::Signature) -> ModuleResult<FuncId> {
         let id = self.declarations.declare_anonymous_function(signature)?;
-        if self.isa.flags().is_pic() {
-            self.new_func_plt_entry(id, std::ptr::null());
-        }
         Ok(id)
     }
 
@@ -591,27 +398,15 @@ impl Module for JITModule {
         tls: bool,
     ) -> ModuleResult<DataId> {
         assert!(!tls, "JIT doesn't yet support TLS");
-        let (id, linkage) = self
+        let (id, _linkage) = self
             .declarations
             .declare_data(name, linkage, writable, tls)?;
-        if self.data_object_got_entries[id].is_none() && self.isa.flags().is_pic() {
-            // FIXME populate got entries with a null pointer when defined
-            let val = if linkage == Linkage::Import {
-                self.lookup_symbol(name).unwrap_or(std::ptr::null())
-            } else {
-                std::ptr::null()
-            };
-            self.new_data_got_entry(id, val);
-        }
         Ok(id)
     }
 
     fn declare_anonymous_data(&mut self, writable: bool, tls: bool) -> ModuleResult<DataId> {
         assert!(!tls, "JIT doesn't yet support TLS");
         let id = self.declarations.declare_anonymous_data(writable, tls)?;
-        if self.isa.flags().is_pic() {
-            self.new_data_got_entry(id, std::ptr::null());
-        }
         Ok(id)
     }
 
@@ -666,13 +461,6 @@ impl Module for JITModule {
         self.record_function_for_perf(ptr, size, &decl.linkage_name(id));
         self.compiled_functions[id] = Some(CompiledBlob { ptr, size, relocs });
 
-        if self.isa.flags().is_pic() {
-            self.pending_got_updates.push(GotUpdate {
-                entry: self.function_got_entries[id].unwrap().0,
-                ptr,
-            })
-        }
-
         self.functions_to_finalize.push(id);
 
         Ok(())
@@ -720,13 +508,6 @@ impl Module for JITModule {
             size,
             relocs: relocs.to_owned(),
         });
-
-        if self.isa.flags().is_pic() {
-            self.pending_got_updates.push(GotUpdate {
-                entry: self.function_got_entries[id].unwrap().0,
-                ptr,
-            })
-        }
 
         self.functions_to_finalize.push(id);
 
@@ -820,12 +601,6 @@ impl Module for JITModule {
             relocs,
         });
         self.data_objects_to_finalize.push(id);
-        if self.isa.flags().is_pic() {
-            self.pending_got_updates.push(GotUpdate {
-                entry: self.data_object_got_entries[id].unwrap().0,
-                ptr,
-            })
-        }
 
         Ok(())
     }
