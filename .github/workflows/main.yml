@@ -393,6 +393,7 @@ jobs:
               -p wasmtime-cli --no-default-features --features compile
               -p wasmtime-cli --no-default-features --features compile,cranelift
               -p wasmtime-cli --no-default-features --features compile,cranelift,component-model
+              -p wasmtime-cli --no-default-features --features objdump
               -p wasmtime-cli --all-features
               -p wasmtime-cli --features component-model
 
@@ -405,7 +406,7 @@ jobs:
             checks: |
               -p cranelift-entity --no-default-features
               -p cranelift-entity --no-default-features --features enable-serde
-              
+
           - name: wasmtime-bench-api
             checks: |
               -p wasmtime-bench-api

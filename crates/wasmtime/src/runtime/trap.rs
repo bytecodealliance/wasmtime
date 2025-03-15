@@ -423,8 +423,7 @@ impl FrameInfo {
     pub(crate) fn new(module: Module, text_offset: usize) -> Option<FrameInfo> {
         let compiled_module = module.compiled_module();
         let (index, _func_offset) = compiled_module.func_by_text_offset(text_offset)?;
-        let info = compiled_module.wasm_func_info(index);
-        let func_start = info.start_srcloc;
+        let func_start = compiled_module.func_start_srcloc(index);
         let instr = wasmtime_environ::lookup_file_pos(
             compiled_module.code_memory().address_map_data(),
             text_offset,

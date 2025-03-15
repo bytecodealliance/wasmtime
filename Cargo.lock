@@ -2695,7 +2695,6 @@ dependencies = [
  "cranelift-bitset",
  "env_logger 0.11.5",
  "log",
- "object",
  "termcolor",
  "wasmtime-math",
 ]
@@ -4302,6 +4301,7 @@ dependencies = [
  "criterion",
  "env_logger 0.11.5",
  "filecheck",
+ "gimli",
  "http",
  "http-body-util",
  "hyper",
@@ -4321,6 +4321,7 @@ dependencies = [
  "similar",
  "target-lexicon",
  "tempfile",
+ "termcolor",
  "test-programs-artifacts",
  "tokio",
  "toml",

@@ -85,6 +85,10 @@ enum Subcommand {
     /// Generate shell completions for the `wasmtime` CLI
     #[cfg(feature = "completion")]
     Completion(CompletionCommand),
+
+    /// Inspect `*.cwasm` files output from Wasmtime
+    #[cfg(feature = "objdump")]
+    Objdump(wasmtime_cli::commands::ObjdumpCommand),
 }
 
 impl Wasmtime {
@@ -119,6 +123,9 @@ impl Wasmtime {
 
             #[cfg(feature = "completion")]
             Subcommand::Completion(c) => c.execute(),
+
+            #[cfg(feature = "objdump")]
+            Subcommand::Objdump(c) => c.execute(),
         }
     }
 }
