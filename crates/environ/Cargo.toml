@@ -65,6 +65,7 @@ compile = [
   "dep:wasmprinter",
 ]
 threads = ['std']
+shared-everything-threads = ['std']
 wmemcheck = ['std']
 std = [
   'anyhow/std',
