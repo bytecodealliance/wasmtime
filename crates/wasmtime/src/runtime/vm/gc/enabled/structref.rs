@@ -139,7 +139,7 @@ impl VMStructRef {
         ty: &StorageType,
         field: usize,
     ) -> Val {
-        let offset = layout.fields[field];
+        let offset = layout.fields[field].offset;
         let data = store.unwrap_gc_store_mut().gc_object_data(self.as_gc_ref());
         match ty {
             StorageType::I8 => Val::I32(data.read_u8(offset).into()),
@@ -195,7 +195,7 @@ impl VMStructRef {
     ) -> Result<()> {
         debug_assert!(val._matches_ty(&store, &ty.unpack())?);
 
-        let offset = layout.fields[field];
+        let offset = layout.fields[field].offset;
         let mut data = store.gc_store_mut()?.gc_object_data(self.as_gc_ref());
         match val {
             Val::I32(i) if ty.is_i8() => data.write_i8(offset, truncate_i32_to_i8(i)),
@@ -286,7 +286,7 @@ impl VMStructRef {
         val: Val,
     ) -> Result<()> {
         debug_assert!(val._matches_ty(&store, &ty.unpack())?);
-        let offset = layout.fields[field];
+        let offset = layout.fields[field].offset;
         match val {
             Val::I32(i) if ty.is_i8() => store
                 .gc_store_mut()?

@@ -20,8 +20,8 @@
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32, v4: i32):
 ;; @0024                               trapz v2, user16
 ;; @0024                               v11 = uextend.i64 v2
-;; @0024                               v12 = iconst.i64 16
-;; @0024                               v13 = uadd_overflow_trap v11, v12, user1  ; v12 = 16
+;; @0024                               v12 = iconst.i64 24
+;; @0024                               v13 = uadd_overflow_trap v11, v12, user1  ; v12 = 24
 ;; @0024                               v14 = iconst.i64 4
 ;; @0024                               v15 = uadd_overflow_trap v13, v14, user1  ; v14 = 4
 ;; @0024                               v10 = load.i64 notrap aligned readonly can_move v0+48
@@ -40,10 +40,10 @@
 ;; @0024                               trapnz v23, user1
 ;;                                     v89 = iconst.i32 3
 ;;                                     v90 = ishl v18, v89  ; v89 = 3
-;; @0024                               v25 = iconst.i32 24
-;; @0024                               v26 = uadd_overflow_trap v90, v25, user1  ; v25 = 24
+;; @0024                               v25 = iconst.i32 32
+;; @0024                               v26 = uadd_overflow_trap v90, v25, user1  ; v25 = 32
 ;;                                     v97 = ishl v3, v89  ; v89 = 3
-;; @0024                               v29 = iadd v97, v25  ; v25 = 24
+;; @0024                               v29 = iadd v97, v25  ; v25 = 32
 ;; @0024                               v35 = uextend.i64 v29
 ;; @0024                               v36 = uadd_overflow_trap v11, v35, user1
 ;; @0024                               v37 = uextend.i64 v26
@@ -55,7 +55,7 @@
 ;; @002b                               v54 = icmp ult v4, v18
 ;; @002b                               trapz v54, user17
 ;;                                     v99 = ishl v4, v89  ; v89 = 3
-;; @002b                               v64 = iadd v99, v25  ; v25 = 24
+;; @002b                               v64 = iadd v99, v25  ; v25 = 32
 ;; @002b                               v70 = uextend.i64 v64
 ;; @002b                               v71 = uadd_overflow_trap v11, v70, user1
 ;; @002b                               v75 = iadd v8, v71

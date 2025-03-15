@@ -21,10 +21,10 @@
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i64):
 ;; @0022                               trapz v2, user16
 ;; @0022                               v9 = uextend.i64 v2
-;; @0022                               v10 = iconst.i64 16
-;; @0022                               v11 = uadd_overflow_trap v9, v10, user1  ; v10 = 16
-;;                                     v19 = iconst.i64 24
-;; @0022                               v13 = uadd_overflow_trap v9, v19, user1  ; v19 = 24
+;; @0022                               v10 = iconst.i64 24
+;; @0022                               v11 = uadd_overflow_trap v9, v10, user1  ; v10 = 24
+;;                                     v19 = iconst.i64 32
+;; @0022                               v13 = uadd_overflow_trap v9, v19, user1  ; v19 = 32
 ;; @0022                               v8 = load.i64 notrap aligned readonly can_move v0+48
 ;; @0022                               v14 = icmp ule v13, v8
 ;; @0022                               trapz v14, user1

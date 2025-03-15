@@ -261,12 +261,13 @@ impl DrcCompiler {
 
 /// Emit CLIF to call the `gc_raw_alloc` libcall.
 ///
-/// It is the caller's responsibility to ensure that `size` fits within the
-/// `VMGcKind`'s unused bits.
+/// It is the caller's responsibility to ensure that `num_gc_refs` fits within
+/// the `VMGcKind`'s unused bits.
 fn emit_gc_raw_alloc(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
     kind: VMGcKind,
+    num_gc_refs: ir::Value,
     ty: ModuleInternedTypeIndex,
     size: ir::Value,
     align: u32,
@@ -277,15 +278,17 @@ fn emit_gc_raw_alloc(
     let kind = builder
         .ins()
         .iconst(ir::types::I32, i64::from(kind.as_u32()));
+    let kind_and_reserved = builder.ins().bor(kind, num_gc_refs);
 
     let ty = builder.ins().iconst(ir::types::I32, i64::from(ty.as_u32()));
 
     assert!(align.is_power_of_two());
     let align = builder.ins().iconst(ir::types::I32, i64::from(align));
 
-    let call_inst = builder
-        .ins()
-        .call(gc_alloc_raw_builtin, &[vmctx, kind, ty, size, align]);
+    let call_inst = builder.ins().call(
+        gc_alloc_raw_builtin,
+        &[vmctx, kind_and_reserved, ty, size, align],
+    );
 
     let gc_ref = builder.func.dfg.first_result(call_inst);
     let gc_ref = builder.ins().ireduce(ir::types::I32, gc_ref);
@@ -318,6 +321,11 @@ impl GcCompiler for DrcCompiler {
         // First, compute the array's total size from its base size, element
         // size, and length.
         let size = emit_array_size(func_env, builder, &array_layout, init);
+        let num_gc_refs = if array_layout.elems_are_gc_refs {
+            size
+        } else {
+            builder.ins().iconst(ir::types::I32, 0)
+        };
 
         // Second, now that we have the array object's total size, call the
         // `gc_alloc_raw` builtin libcall to allocate the array.
@@ -325,6 +333,7 @@ impl GcCompiler for DrcCompiler {
             func_env,
             builder,
             VMGcKind::ArrayRef,
+            num_gc_refs,
             interned_type_index,
             size,
             align,
@@ -385,10 +394,15 @@ impl GcCompiler for DrcCompiler {
         assert_eq!(VMGcKind::UNUSED_MASK & struct_size, struct_size);
         let struct_size_val = builder.ins().iconst(ir::types::I32, i64::from(struct_size));
 
+        let num_gc_refs = struct_layout.fields.iter().filter(|f| f.is_gc_ref).count();
+        let num_gc_refs = u32::try_from(num_gc_refs).unwrap();
+        let num_gc_refs = builder.ins().iconst(ir::types::I32, i64::from(num_gc_refs));
+
         let struct_ref = emit_gc_raw_alloc(
             func_env,
             builder,
             VMGcKind::StructRef,
+            num_gc_refs,
             interned_type_index,
             struct_size_val,
             struct_align,

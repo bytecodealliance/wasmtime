@@ -316,7 +316,7 @@ pub fn translate_struct_get(
     let struct_size = struct_layout.size;
     let struct_size_val = builder.ins().iconst(ir::types::I32, i64::from(struct_size));
 
-    let field_offset = struct_layout.fields[field_index];
+    let field_offset = struct_layout.fields[field_index].offset;
     let field_ty = &func_env.types.unwrap_struct(interned_type_index)?.fields[field_index];
     let field_size = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&field_ty.element_type);
     assert!(field_offset + field_size <= struct_size);
@@ -361,7 +361,7 @@ pub fn translate_struct_set(
     let struct_size = struct_layout.size;
     let struct_size_val = builder.ins().iconst(ir::types::I32, i64::from(struct_size));
 
-    let field_offset = struct_layout.fields[field_index];
+    let field_offset = struct_layout.fields[field_index].offset;
     let field_ty = &func_env.types.unwrap_struct(interned_type_index)?.fields[field_index];
     let field_size = wasmtime_environ::byte_size_of_wasm_ty_in_gc_heap(&field_ty.element_type);
     assert!(field_offset + field_size <= struct_size);
@@ -1194,7 +1194,7 @@ fn initialize_struct_fields(
 ) -> WasmResult<()> {
     let struct_layout = func_env.struct_layout(struct_ty);
     let struct_size = struct_layout.size;
-    let field_offsets: SmallVec<[_; 8]> = struct_layout.fields.iter().copied().collect();
+    let field_offsets: SmallVec<[_; 8]> = struct_layout.fields.iter().map(|f| f.offset).collect();
     assert_eq!(field_offsets.len(), field_values.len());
 
     assert!(!func_env.types[struct_ty].composite_type.shared);
