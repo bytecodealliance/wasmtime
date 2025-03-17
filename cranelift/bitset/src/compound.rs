@@ -76,7 +76,7 @@ impl CompoundBitSet {
 }
 
 impl<T: ScalarBitSetStorage> CompoundBitSet<T> {
-    const BITS_PER_WORD: usize = mem::size_of::<T>() * 8;
+    const BITS_PER_SCALAR: usize = mem::size_of::<T>() * 8;
 
     /// Construct a new, empty bit set with space reserved to store any element
     /// `x` such that `x < capacity`.
@@ -146,7 +146,7 @@ impl<T: ScalarBitSetStorage> CompoundBitSet<T> {
     /// assert!(bitset.capacity() >= 999);
     ///```
     pub fn capacity(&self) -> usize {
-        self.elems.len() * Self::BITS_PER_WORD
+        self.elems.len() * Self::BITS_PER_SCALAR
     }
 
     /// Is this bitset empty?
@@ -174,8 +174,8 @@ impl<T: ScalarBitSetStorage> CompoundBitSet<T> {
     /// `ScalarBitSet<usize>` at `self.elems[word]`.
     #[inline]
     fn word_and_bit(i: usize) -> (usize, u8) {
-        let word = i / Self::BITS_PER_WORD;
-        let bit = i % Self::BITS_PER_WORD;
+        let word = i / Self::BITS_PER_SCALAR;
+        let bit = i % Self::BITS_PER_SCALAR;
         let bit = u8::try_from(bit).unwrap();
         (word, bit)
     }
@@ -185,8 +185,8 @@ impl<T: ScalarBitSetStorage> CompoundBitSet<T> {
     #[inline]
     fn elem(word: usize, bit: u8) -> usize {
         let bit = usize::from(bit);
-        debug_assert!(bit < Self::BITS_PER_WORD);
-        word * Self::BITS_PER_WORD + bit
+        debug_assert!(bit < Self::BITS_PER_SCALAR);
+        word * Self::BITS_PER_SCALAR + bit
     }
 
     /// Is `i` contained in this bitset?
@@ -509,7 +509,7 @@ impl<T: ScalarBitSetStorage> CompoundBitSet<T> {
     /// ```
     pub fn iter_words(&self) -> impl Iterator<Item = T> + '_ {
         let nwords = match self.max {
-            Some(n) => 1 + (n as usize / Self::BITS_PER_WORD),
+            Some(n) => 1 + (n as usize / Self::BITS_PER_SCALAR),
             None => 0,
         };
         self.elems.iter().map(|b| b.0).take(nwords)

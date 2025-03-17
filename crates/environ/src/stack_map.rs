@@ -1,3 +1,4 @@
+use cranelift_bitset::ScalarBitSet;
 use object::{Bytes, LittleEndian, U32Bytes};
 
 struct StackMapSection<'a> {
@@ -134,18 +135,9 @@ impl<'a> StackMap<'a> {
         // Here `self.data` is a bit set of offsets divided by 4, so iterate
         // over all the bits in `self.data` and multiply their position by 4.
         let bit_positions = self.data.iter().enumerate().flat_map(|(i, word)| {
-            let i = i as u32;
-            let mut remaining = word.get(LittleEndian);
-            core::iter::from_fn(move || {
-                if remaining == 0 {
-                    None
-                } else {
-                    let pos = remaining.trailing_zeros();
-                    let bit = 1 << pos;
-                    remaining ^= bit;
-                    Some(i * 32 + pos)
-                }
-            })
+            ScalarBitSet(word.get(LittleEndian))
+                .iter()
+                .map(move |bit| (i as u32) * 32 + u32::from(bit))
         });
 
         bit_positions.map(|pos| pos * 4)

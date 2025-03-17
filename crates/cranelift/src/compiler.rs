@@ -1079,16 +1079,14 @@ fn clif_to_env_stack_maps(
     clif_stack_maps: &[(CodeOffset, u32, ir::UserStackMap)],
 ) {
     for (offset, frame_size, stack_map) in clif_stack_maps {
-        let mut offsets = Vec::new();
-        for (ty, offset) in stack_map.entries() {
+        let mut frame_offsets = Vec::new();
+        for (ty, frame_offset) in stack_map.entries() {
             assert_eq!(ty, ir::types::I32);
-            offsets.push(offset);
+            frame_offsets.push(frame_offset);
         }
-        section.push(
-            range.start + u64::from(*offset),
-            *frame_size,
-            offsets.into_iter(),
-        );
+        let code_offset = range.start + u64::from(*offset);
+        assert!(code_offset < range.end);
+        section.push(code_offset, *frame_size, frame_offsets.into_iter());
     }
 }
 

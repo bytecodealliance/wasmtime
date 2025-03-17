@@ -10,20 +10,65 @@ use object::{LittleEndian, SectionKind, U32Bytes};
 ///
 /// The current layout of the format is:
 ///
-/// * A 4-byte little-endian count of how many stack maps there are: `N`.
-/// * `N` 4-byte little endian program counters, in ascending order.
-/// * `N` 4-byte little endian offsets.
-/// * Stack map data as 4-byte little endian integers.
+/// ```text
+/// ┌─────────────────────┬───── 0x00 (relative, not necessarily aligned)
+/// │ count: 4-byte LE    │
+/// ├─────────────────────┼───── 0x04
+/// │ pc1: 4-byte LE      │
+/// │ pc2: 4-byte LE      │
+/// │ ...                 │
+/// │ pcN: 4-byte LE      │
+/// ├─────────────────────┼───── 0x04 + 4 * count
+/// │ offset1: 4-byte LE  │
+/// │ offset1: 4-byte LE  │
+/// │ ...                 │
+/// │ offsetN: 4-byte LE  │
+/// ├─────────────────────┼───── 0x04 + 8 * count
+/// │ data[0]: 4-byte LE  │
+/// │ data[1]: 4-byte LE  │
+/// │ ...                 │
+/// │ data[M]: 4-byte LE  │
+/// └─────────────────────┴───── 0x04 + 8 * count + 4 * M
+/// ```
 ///
-/// The "offset" is an offset into the "stack map data" field which are encoded
-/// as:
+/// Here `count` is the size of the `pcN` and `offsetN` arrays. The two arrays
+/// are the same size and have corresponding entries in one another. When
+/// looking up a stack map for a particular program counter:
 ///
-/// * A 4-byte little-endian frame size
-/// * A 4-byte little-endian count of remaining bits: `M`
-/// * `M` 4-byte little-endian integers as a bit map.
+/// * A binary search is performed on the `pcN` array.
+/// * The corresponding `offsetM` value is looked up once the `pcM` entry,
+///   matching the lookup pc, is found.
+/// * The `offsetM` value is used to access `data[offsetM]` which is an array of
+///   4-byte entries located after the `offset*` array. This stack map is then
+///   encoded as below.
 ///
-/// Entries in the bit map represent `stack_slot / 4` so must be muliplied by 4
-/// to get the actual stack offset entry.
+/// This encoding scheme is chosen so parsing this data structure effectively
+/// isn't required. It's usable at-rest from a compiled artifact in a section of
+/// an executable. Notably having offsets into the data array means that a stack
+/// map is just a slice into the data array, and the entire data structure can
+/// be "parsed" by reading `count` and otherwise just making sure various
+/// offsets are in-bounds.
+///
+/// A stack map located at `data[offsetM]` is encoded as:
+///
+/// ```text
+/// ┌───────────────────────────────────────────────────────┐
+/// │ data[offsetM + 0]: frame_size: 4-byte LE              │
+/// ├───────────────────────────────────────────────────────┤
+/// │ data[offsetM + 1]: count: 4-byte LE                   │
+/// ├───────────────────────────────────────────────────────┤
+/// │ data[offsetM + 2 + 0]: bitmap: 4-byte LE              │
+/// │ data[offsetM + 2 + 1]: bitmap: 4-byte LE              │
+/// │ ...                                                   │
+/// │ data[offsetM + 2 + count - 1]: bitmap: 4-byte LE      │
+/// └───────────────────────────────────────────────────────┘
+/// ```
+///
+/// Here `frame_size` and `count` are always greater than 0. Entries in the bit
+/// map represent `stack_slot / 4` so must be multiplied by 4 to get the actual
+/// stack offset entry. This is because all stack slots are aligned at 4 bytes
+/// so by dividing them all by 4 we're able to compress the bit map that much
+/// more.
 #[derive(Default)]
 pub struct StackMapSection {
     pcs: Vec<U32Bytes<LittleEndian>>,
@@ -33,25 +78,32 @@ pub struct StackMapSection {
 }
 
 impl StackMapSection {
-    /// Appends stack map information for `pc` which has the specified
-    /// `frame_size` and `offsets` are the active GC references.
-    pub fn push(&mut self, pc: u64, frame_size: u32, offsets: impl ExactSizeIterator<Item = u32>) {
+    /// Appends stack map information for `code_offset` which has the specified
+    /// `frame_size` and `frame_offsets` are the active GC references.
+    pub fn push(
+        &mut self,
+        code_offset: u64,
+        frame_size: u32,
+        frame_offsets: impl ExactSizeIterator<Item = u32>,
+    ) {
         // NB: for now this only supports <=4GB text sections in object files.
         // Alternative schemes will need to be created for >32-bit offsets to
         // avoid making this section overly large.
-        let pc = u32::try_from(pc).unwrap();
+        let code_offset = u32::try_from(code_offset).unwrap();
 
         // Sanity-check to ensure that functions are pushed in-order, otherwise
         // the `pcs` array won't be sorted which is our goal.
-        assert!(pc >= self.last_offset);
-        self.last_offset = pc;
+        assert!(code_offset >= self.last_offset);
+        self.last_offset = code_offset;
 
-        if offsets.len() == 0 {
+        // Skip encoding information for this code offset if there's not
+        // actually anything in the stack map.
+        if frame_offsets.len() == 0 {
             return;
         }
 
         // Record parallel entries in `pcs`/`pointers_to_stack_map`.
-        self.pcs.push(U32Bytes::new(LittleEndian, pc));
+        self.pcs.push(U32Bytes::new(LittleEndian, code_offset));
         self.pointers_to_stack_map.push(U32Bytes::new(
             LittleEndian,
             u32::try_from(self.stack_map_data.len()).unwrap(),
@@ -63,7 +115,7 @@ impl StackMapSection {
             .push(U32Bytes::new(LittleEndian, frame_size));
 
         let mut bits = CompoundBitSet::<u32>::default();
-        for offset in offsets {
+        for offset in frame_offsets {
             assert!(offset % 4 == 0);
             bits.insert((offset / 4) as usize);
         }
@@ -77,6 +129,8 @@ impl StackMapSection {
 
     /// Finishes encoding this section into the `Object` provided.
     pub fn append_to(self, obj: &mut Object) {
+        // Don't append anything for this section if there weren't any actual
+        // stack maps present, no need to waste space!
         if self.pcs.is_empty() {
             return;
         }
