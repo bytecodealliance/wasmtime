@@ -150,7 +150,7 @@ fn pure_op_cost(op: Opcode) -> Cost {
 
         // Extends/reduces.
         Opcode::Uextend | Opcode::Sextend | Opcode::Ireduce | Opcode::Iconcat | Opcode::Isplit => {
-            Cost::new(2, 0)
+            Cost::new(1, 0)
         }
 
         // "Simple" arithmetic.
