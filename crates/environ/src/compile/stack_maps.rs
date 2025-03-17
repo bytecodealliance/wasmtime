@@ -13,7 +13,7 @@ use object::{LittleEndian, SectionKind, U32Bytes};
 /// * A 4-byte little-endian count of how many stack maps there are: `N`.
 /// * `N` 4-byte little endian program counters, in ascending order.
 /// * `N` 4-byte little endian offsets.
-/// * Stack map data as 4-bit little endian integers.
+/// * Stack map data as 4-byte little endian integers.
 ///
 /// The "offset" is an offset into the "stack map data" field which are encoded
 /// as:
