@@ -4,7 +4,96 @@ Unreleased.
 
 ### Added
 
+* Winch's implementation of the SIMD proposal for WebAssembly is now
+  feature-complete (but still being fuzzed).
+  [#10180](https://github.com/bytecodealliance/wasmtime/pull/10180)
+  [#10170](https://github.com/bytecodealliance/wasmtime/pull/10170)
+  [#10203](https://github.com/bytecodealliance/wasmtime/pull/10203)
+  [#10202](https://github.com/bytecodealliance/wasmtime/pull/10202)
+  [#10210](https://github.com/bytecodealliance/wasmtime/pull/10210)
+  [#10213](https://github.com/bytecodealliance/wasmtime/pull/10213)
+  [#10224](https://github.com/bytecodealliance/wasmtime/pull/10224)
+  [#10205](https://github.com/bytecodealliance/wasmtime/pull/10205)
+  [#10226](https://github.com/bytecodealliance/wasmtime/pull/10226)
+  [#10228](https://github.com/bytecodealliance/wasmtime/pull/10228)
+  [#10236](https://github.com/bytecodealliance/wasmtime/pull/10236)
+  [#10241](https://github.com/bytecodealliance/wasmtime/pull/10241)
+  [#10243](https://github.com/bytecodealliance/wasmtime/pull/10243)
+  [#10247](https://github.com/bytecodealliance/wasmtime/pull/10247)
+  [#10271](https://github.com/bytecodealliance/wasmtime/pull/10271)
+  [#10284](https://github.com/bytecodealliance/wasmtime/pull/10284)
+  [#10288](https://github.com/bytecodealliance/wasmtime/pull/10288)
+  [#10296](https://github.com/bytecodealliance/wasmtime/pull/10296)
+
+* The pytorch implementation in wasmtime-wasi-nn now has GPU support.
+  [#10204](https://github.com/bytecodealliance/wasmtime/pull/10204)
+
+* Cranelift now supports emitting the AArch64 `extr` instruction.
+  [#10229](https://github.com/bytecodealliance/wasmtime/pull/10229)
+
+* Cranelift now supports emitting the x64 `shld` instruction.
+  [#10233](https://github.com/bytecodealliance/wasmtime/pull/10233)
+
+* Initial support for the stack-switching proposal has started to land, but it
+  is not complete just yet.
+  [#10251](https://github.com/bytecodealliance/wasmtime/pull/10251)
+  [#10265](https://github.com/bytecodealliance/wasmtime/pull/10265)
+  [#10255](https://github.com/bytecodealliance/wasmtime/pull/10255)
+
 ### Changed
+
+* Pulley's implementation of loads/stores to linear memory has changed to
+  better support optimizations and reduction of interpreter opcodes in the
+  final binary.
+  [#10154](https://github.com/bytecodealliance/wasmtime/pull/10154)
+
+* Cranelift's verifier now ensures that integers used as address types have the
+  correct width.
+  [#10209](https://github.com/bytecodealliance/wasmtime/pull/10209)
+
+* Wasmtime and Cranelift's minimum supported version of Rust is now 1.83.0.
+  [#10264](https://github.com/bytecodealliance/wasmtime/pull/10264)
+
+* Wasmtime now mentions the filename when the input cannot be opened on the CLI.
+  [#10292](https://github.com/bytecodealliance/wasmtime/pull/10292)
+
+* All types are now generated in `component::bindgen!`, even if they're not
+  reachable.
+  [#10311](https://github.com/bytecodealliance/wasmtime/pull/10311)
+
+* Tables allocated with the system allocator now use `alloc_zeroed` (aka
+  `calloc`) for allocation.
+  [#10313](https://github.com/bytecodealliance/wasmtime/pull/10313)
+
+### Fixed
+
+* GC: the is-null-or-i31ref checks have been fixed.
+  [#10221](https://github.com/bytecodealliance/wasmtime/pull/10221)
+
+* GC: an incorrect assertion and canonicalized types for runtime usage has been
+  fixed.
+  [#10223](https://github.com/bytecodealliance/wasmtime/pull/10223)
+
+* GC: subtype checks for imported globals during instantiation have been fixed.
+  [#10304](https://github.com/bytecodealliance/wasmtime/pull/10304)
+
+* GC: exposing references to wasm in the `gc_alloc_raw` libcall has been fixed.
+  [#10322](https://github.com/bytecodealliance/wasmtime/pull/10322)
+
+* Winch's fuel checks correctly sync fuel before the check now.
+  [#10231](https://github.com/bytecodealliance/wasmtime/pull/10231)
+
+* Winch's treatment of stores and other trapping ops has been fixed on AArch64.
+  [#10201](https://github.com/bytecodealliance/wasmtime/pull/10201)
+
+* Winch's handling of the shadow stack pointer has been fixed on AArch64.
+  [#10263](https://github.com/bytecodealliance/wasmtime/pull/10263)
+
+* Winch's handling of address calculations has been fixed on AArch64.
+  [#10297](https://github.com/bytecodealliance/wasmtime/pull/10297)
+
+* Winch's handling of multivalue return of constants has ben fixed.
+  [#10315](https://github.com/bytecodealliance/wasmtime/pull/10315)
 
 --------------------------------------------------------------------------------
 
