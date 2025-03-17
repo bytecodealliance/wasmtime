@@ -86,8 +86,8 @@ block0(v0: i32):
     v3 = ishl v2, v1
     v4 = ushr v3, v1
     return v4
-    ; check: v7 = uextend.i64 v0
-    ; check: return v7
+    ; check: v6 = uextend.i64 v0
+    ; check: return v6
 }
 
 function %sextend_shift_32_64_signed(i32) -> i64 {
@@ -129,8 +129,8 @@ block0(v0: i8):
     v3 = ishl v2, v1
     v4 = ushr v3, v1
     return v4
-    ; check: v7 = uextend.i64 v0
-    ; check: return v7
+    ; check: v6 = uextend.i64 v0
+    ; check: return v6
 }
 
 function %sextend_shift_8_64_signed(i8) -> i64 {
@@ -271,9 +271,9 @@ block0(v0: i32):
     v1 = ishl_imm v0, 24
     v2 = ushr_imm v1, 24
     return v2
-    ; check: v7 = ireduce.i8 v0
-    ; check: v8 = uextend.i32 v7
-    ; check: return v8
+    ; check: v5 = ireduce.i8 v0
+    ; check: v6 = uextend.i32 v5
+    ; check: return v6
 }
 
 function %i32_shl_ushr_16_to_ireduce(i32) -> i32 {
@@ -281,9 +281,9 @@ block0(v0: i32):
     v1 = ishl_imm v0, 16
     v2 = ushr_imm v1, 16
     return v2
-    ; check: v7 = ireduce.i16 v0
-    ; check: v8 = uextend.i32 v7
-    ; check: return v8
+    ; check: v5 = ireduce.i16 v0
+    ; check: v6 = uextend.i32 v5
+    ; check: return v6
 }
 
 function %i64_shl_ushr_8_to_ireduce(i64) -> i64 {
@@ -291,9 +291,9 @@ block0(v0: i64):
     v1 = ishl_imm v0, 56
     v2 = ushr_imm v1, 56
     return v2
-    ; check: v7 = ireduce.i8 v0
-    ; check: v8 = uextend.i64 v7
-    ; check: return v8
+    ; check: v5 = ireduce.i8 v0
+    ; check: v6 = uextend.i64 v5
+    ; check: return v6
 }
 
 function %i64_shl_ushr_16_to_ireduce(i64) -> i64 {
@@ -301,9 +301,9 @@ block0(v0: i64):
     v1 = ishl_imm v0, 48
     v2 = ushr_imm v1, 48
     return v2
-    ; check: v7 = ireduce.i16 v0
-    ; check: v8 = uextend.i64 v7
-    ; check: return v8
+    ; check: v5 = ireduce.i16 v0
+    ; check: v6 = uextend.i64 v5
+    ; check: return v6
 }
 
 function %i64_shl_ushr_32_to_ireduce(i64) -> i64 {
@@ -311,9 +311,9 @@ block0(v0: i64):
     v1 = ishl_imm v0, 32
     v2 = ushr_imm v1, 32
     return v2
-    ; check: v7 = ireduce.i32 v0
-    ; check: v8 = uextend.i64 v7
-    ; check: return v8
+    ; check: v5 = ireduce.i32 v0
+    ; check: v6 = uextend.i64 v5
+    ; check: return v6
 }
 
 function %ishl_amt_type_ireduce(i8, i16) -> i8 {
