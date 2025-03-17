@@ -1,7 +1,11 @@
-//! Standalone environment for WebAssembly using Cranelift. Provides functions to translate
-//! `get_global`, `set_global`, `memory.size`, `memory.grow`, `call_indirect` that hardcode in
-//! the translation the base addresses of regions of memory that will hold the globals, tables and
-//! linear memories.
+//! Internal dependency of the `wasmtime` crate.
+//!
+//! This crate is responsible for defining types and basic runtime structures
+//! used by the `wasmtime` crate. This additionally defines primitives of
+//! compilation and what compilers are expected to emit.
+//!
+//! If you don't already know what this crate is you probably want to use
+//! `wasmtime`, not this crate.
 
 #![deny(missing_docs)]
 #![warn(clippy::cast_sign_loss)]
