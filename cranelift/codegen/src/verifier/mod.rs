@@ -1766,6 +1766,7 @@ impl<'a> Verifier<'a> {
                 return errors.fatal((block, format!("{block} cannot be empty")));
             }
             for inst in self.func.layout.block_insts(block) {
+                crate::trace!("verifying {inst:?}: {}", self.func.dfg.display_inst(inst));
                 self.block_integrity(block, inst, errors)?;
                 self.instruction_integrity(inst, errors)?;
                 self.typecheck(inst, errors)?;
