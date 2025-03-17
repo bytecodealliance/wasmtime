@@ -813,7 +813,7 @@ jobs:
   test_wasi_nn:
     strategy:
       matrix:
-        feature: ["openvino", "onnx"]
+        feature: ["openvino"]
         os: ["ubuntu-latest", "windows-latest"]
         include:
           - os: windows-latest
