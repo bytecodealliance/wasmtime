@@ -477,42 +477,42 @@ impl<T: ScalarBitSetStorage> CompoundBitSet<T> {
     /// # Example
     ///
     /// ```
-    /// use cranelift_bitset::CompoundBitSet;
+    /// use cranelift_bitset::{CompoundBitSet, ScalarBitSet};
     ///
     /// let mut bitset = CompoundBitSet::<u32>::default();
     ///
     /// assert_eq!(
-    ///     bitset.iter_words().collect::<Vec<_>>(),
+    ///     bitset.iter_scalars().collect::<Vec<_>>(),
     ///     [],
     /// );
     ///
     /// bitset.insert(0);
     ///
     /// assert_eq!(
-    ///     bitset.iter_words().collect::<Vec<_>>(),
-    ///     [0x1],
+    ///     bitset.iter_scalars().collect::<Vec<_>>(),
+    ///     [ScalarBitSet(0x1)],
     /// );
     ///
     /// bitset.insert(1);
     ///
     /// assert_eq!(
-    ///     bitset.iter_words().collect::<Vec<_>>(),
-    ///     [0x3],
+    ///     bitset.iter_scalars().collect::<Vec<_>>(),
+    ///     [ScalarBitSet(0x3)],
     /// );
     ///
     /// bitset.insert(32);
     ///
     /// assert_eq!(
-    ///     bitset.iter_words().collect::<Vec<_>>(),
-    ///     [0x3, 0x1],
+    ///     bitset.iter_scalars().collect::<Vec<_>>(),
+    ///     [ScalarBitSet(0x3), ScalarBitSet(0x1)],
     /// );
     /// ```
-    pub fn iter_words(&self) -> impl Iterator<Item = T> + '_ {
+    pub fn iter_scalars(&self) -> impl Iterator<Item = ScalarBitSet<T>> + '_ {
         let nwords = match self.max {
             Some(n) => 1 + (n as usize / Self::BITS_PER_SCALAR),
             None => 0,
         };
-        self.elems.iter().map(|b| b.0).take(nwords)
+        self.elems.iter().copied().take(nwords)
     }
 }
 

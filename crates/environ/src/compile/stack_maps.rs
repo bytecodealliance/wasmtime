@@ -119,11 +119,12 @@ impl StackMapSection {
             assert!(offset % 4 == 0);
             bits.insert((offset / 4) as usize);
         }
-        let count = bits.iter_words().count();
+        let count = bits.iter_scalars().count();
         self.stack_map_data
             .push(U32Bytes::new(LittleEndian, count as u32));
-        for word in bits.iter_words() {
-            self.stack_map_data.push(U32Bytes::new(LittleEndian, word));
+        for scalar in bits.iter_scalars() {
+            self.stack_map_data
+                .push(U32Bytes::new(LittleEndian, scalar.0));
         }
     }
 
