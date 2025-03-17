@@ -386,33 +386,32 @@ fn unwrap_instance(
         Err(e) => e,
     };
 
+    log::debug!("failed to instantiate: {e:?}");
+
     // If the instantiation hit OOM for some reason then that's ok, it's
     // expected that fuzz-generated programs try to allocate lots of
     // stuff.
     if store.data().is_oom() {
-        log::debug!("failed to instantiate: OOM");
         return None;
     }
 
     // Allow traps which can happen normally with `unreachable` or a
     // timeout or such
-    if let Some(trap) = e.downcast_ref::<Trap>() {
-        log::debug!("failed to instantiate: {}", trap);
+    if e.is::<Trap>() {
         return None;
     }
 
     let string = e.to_string();
+
     // Currently we instantiate with a `Linker` which can't instantiate
     // every single module under the sun due to using name-based resolution
     // rather than positional-based resolution
     if string.contains("incompatible import type") {
-        log::debug!("failed to instantiate: {}", string);
         return None;
     }
 
     // Also allow failures to instantiate as a result of hitting pooling limits.
     if e.is::<wasmtime::PoolConcurrencyLimitError>() {
-        log::debug!("failed to instantiate: {}", string);
         return None;
     }
 
