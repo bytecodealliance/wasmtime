@@ -15,7 +15,7 @@ pub fn rust_param_raw(op: &Operand) -> String {
             }
         }
         OperandKind::RegMem(rm) => match rm.bits() {
-            128 => "&XmmMem".to_string(),
+            128 => "&XmmMemAligned".to_string(),
             _ => "&GprMem".to_string(),
         },
         OperandKind::Reg(r) => match r.bits() {
@@ -204,7 +204,7 @@ pub fn isle_param_raw(op: &Operand) -> String {
         },
         OperandKind::FixedReg(_) => "Gpr".to_string(),
         OperandKind::RegMem(rm) => match rm.bits() {
-            128 => "XmmMem".to_string(),
+            128 => "XmmMemAligned".to_string(),
             _ => "GprMem".to_string(),
         },
     }
