@@ -228,11 +228,7 @@ impl DrcHeap {
                 // The object's reference count reached zero.
                 //
                 // Enqueue any other objects it references for dec-ref'ing.
-                stack.extend(
-                    self.trace_gc_ref(&gc_ref)
-                        .iter()
-                        .filter_map(|r| r.as_ref().map(|r| r.unchecked_copy())),
-                );
+                stack.extend(self.trace_gc_ref(&gc_ref));
 
                 // If this object was an `externref`, remove its associated
                 // entry from the host-data table.
@@ -251,32 +247,42 @@ impl DrcHeap {
         self.dec_ref_stack = Some(stack);
     }
 
-    /// Get a slice of all of the given `VMGcRef`'s outgoing edges.
-    fn trace_gc_ref(&self, gc_ref: &VMGcRef) -> &[Option<VMGcRef>] {
+    /// Enumerate all of the given `VMGcRef`'s outgoing edges.
+    fn trace_gc_ref(&self, gc_ref: &VMGcRef) -> impl Iterator<Item = VMGcRef> + use<'_> {
         debug_assert!(!gc_ref.is_i31());
 
         let len = self.index(drc_ref(gc_ref)).num_gc_refs();
 
         let is_array = self.header(gc_ref).kind() == VMGcKind::ArrayRef;
-        let offset_in_obj = mem::size_of::<VMDrcHeader>() +
+        let start_in_obj = mem::size_of::<VMDrcHeader>() +
             // Skip over the array's `length` field, if necessary.
             usize::from(is_array) * mem::size_of::<u32>();
-        let offset_in_obj = u32::try_from(offset_in_obj).unwrap();
 
-        let offset_in_heap = gc_ref.as_heap_index().unwrap().get() + offset_in_obj;
-        let offset_in_heap = usize::try_from(offset_in_heap).unwrap();
+        let end_in_obj = start_in_obj + len * mem::size_of::<u32>();
 
-        let end = offset_in_heap.checked_add(len).unwrap();
-        assert!(end <= self.heap_slice().len());
-        unsafe {
-            slice::from_raw_parts(
-                self.heap
-                    .as_ptr()
-                    .add(offset_in_heap)
-                    .cast::<Option<VMGcRef>>(),
-                len,
-            )
-        }
+        let object_range = self.object_range(gc_ref);
+        let object_data = &self.heap_slice()[object_range];
+        let gc_refs_data = &object_data[start_in_obj..end_in_obj];
+
+        gc_refs_data
+            .chunks(mem::size_of::<u32>())
+            .filter_map(|chunk| {
+                assert_eq!(chunk.len(), 4);
+
+                let bytes = unsafe {
+                    [
+                        *chunk[0].get(),
+                        *chunk[1].get(),
+                        *chunk[2].get(),
+                        *chunk[3].get(),
+                    ]
+                };
+
+                // Values are always little-endian inside the GC heap.
+                let raw = u32::from_le_bytes(bytes);
+
+                VMGcRef::from_raw_u32(raw)
+            })
     }
 
     fn trace(&mut self, roots: &mut GcRootsIter<'_>) {
