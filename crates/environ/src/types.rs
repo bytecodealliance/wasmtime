@@ -198,8 +198,8 @@ impl WasmValType {
     /// Is this a type that is represented as a `VMGcRef` and is additionally
     /// not an `i31`?
     ///
-    /// That is, is this a a type that actually refers to an object allocated in
-    /// a GC heap?
+    /// That is, is this a type that actually refers to an object allocated in a
+    /// GC heap?
     #[inline]
     pub fn is_vmgcref_type_and_not_i31(&self) -> bool {
         match self {
@@ -280,8 +280,8 @@ impl WasmRefType {
     /// Is this a type that is represented as a `VMGcRef` and is additionally
     /// not an `i31`?
     ///
-    /// That is, is this a a type that actually refers to an object allocated in
-    /// a GC heap?
+    /// That is, is this a type that actually refers to an object allocated in a
+    /// GC heap?
     #[inline]
     pub fn is_vmgcref_type_and_not_i31(&self) -> bool {
         self.heap_type.is_vmgcref_type_and_not_i31()
@@ -545,8 +545,8 @@ impl WasmHeapType {
     /// Is this a type that is represented as a `VMGcRef` and is additionally
     /// not an `i31`?
     ///
-    /// That is, is this a a type that actually refers to an object allocated in
-    /// a GC heap?
+    /// That is, is this a type that actually refers to an object allocated in a
+    /// GC heap?
     #[inline]
     pub fn is_vmgcref_type_and_not_i31(&self) -> bool {
         self.is_vmgcref_type() && *self != Self::I31
@@ -858,6 +858,20 @@ impl TypeTrace for WasmStorageType {
         match self {
             WasmStorageType::I8 | WasmStorageType::I16 => Ok(()),
             WasmStorageType::Val(v) => v.trace_mut(func),
+        }
+    }
+}
+
+impl WasmStorageType {
+    /// Is this a type that is represented as a `VMGcRef` and is additionally
+    /// not an `i31`?
+    ///
+    /// That is, is this a type that actually refers to an object allocated in a
+    /// GC heap?
+    pub fn is_vmgcref_type_and_not_i31(&self) -> bool {
+        match self {
+            WasmStorageType::I8 | WasmStorageType::I16 => false,
+            WasmStorageType::Val(v) => v.is_vmgcref_type_and_not_i31(),
         }
     }
 }

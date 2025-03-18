@@ -80,6 +80,14 @@ fn smoke_test_gc_impl(use_epochs: bool) -> Result<()> {
     Ok(())
 }
 
+struct CountDrops(Arc<AtomicUsize>);
+
+impl Drop for CountDrops {
+    fn drop(&mut self) {
+        self.0.fetch_add(1, SeqCst);
+    }
+}
+
 #[test]
 #[cfg_attr(miri, ignore)]
 fn wasm_dropping_refs() -> Result<()> {
@@ -115,14 +123,6 @@ fn wasm_dropping_refs() -> Result<()> {
     assert_eq!(num_refs_dropped.load(SeqCst), 4096);
 
     return Ok(());
-
-    struct CountDrops(Arc<AtomicUsize>);
-
-    impl Drop for CountDrops {
-        fn drop(&mut self) {
-            self.0.fetch_add(1, SeqCst);
-        }
-    }
 }
 
 #[test]
@@ -1050,6 +1050,124 @@ fn issue_9669() -> Result<()> {
 
     let func = instance.get_typed_func::<(), ()>(&mut store, "run")?;
     func.call(&mut store, ())?;
+
+    Ok(())
+}
+
+#[test]
+fn drc_transitive_drop_cons_list() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    config.collector(Collector::DeferredReferenceCounting);
+
+    let engine = Engine::new(&config)?;
+
+    // Define a module that defines a recursive type (a `cons` list of
+    // `externref`s) and exports a global of that type so that we can access it
+    // from the host, because we don't yet have host APIs for defining recursive
+    // types or rec groups.
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $cons (struct (field externref) (field (ref null $cons))))
+                (global (export "g") (ref null $cons) (ref.null $cons))
+            )
+        "#,
+    )?;
+
+    let export = module.exports().nth(0).unwrap().ty();
+    let global = export.unwrap_global();
+    let ref_ty = global.content().unwrap_ref();
+    let struct_ty = ref_ty.heap_type().unwrap_concrete_struct();
+
+    let mut store = Store::new(&engine, ());
+
+    let pre = StructRefPre::new(&mut store, struct_ty.clone());
+    let num_refs_dropped = Arc::new(AtomicUsize::new(0));
+
+    let len = if cfg!(miri) { 2 } else { 100 };
+    {
+        let mut store = RootScope::new(&mut store);
+
+        let mut cdr = None;
+        for _ in 0..len {
+            let externref = ExternRef::new(&mut store, CountDrops(num_refs_dropped.clone()))?;
+            let cons = StructRef::new(&mut store, &pre, &[externref.into(), cdr.into()])?;
+            cdr = Some(cons);
+        }
+
+        // Still holding the cons list alive at this point.
+        assert_eq!(num_refs_dropped.load(SeqCst), 0);
+    }
+
+    // Not holding the cons list alive anymore; should transitively drop
+    // everything we created.
+    store.gc();
+    assert_eq!(num_refs_dropped.load(SeqCst), len);
+
+    Ok(())
+}
+
+#[test]
+fn drc_transitive_drop_nested_arrays_tree() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    config.collector(Collector::DeferredReferenceCounting);
+
+    let engine = Engine::new(&config)?;
+
+    let array_ty = ArrayType::new(
+        &engine,
+        FieldType::new(
+            Mutability::Var,
+            StorageType::ValType(ValType::Ref(RefType::ANYREF)),
+        ),
+    );
+
+    let mut store = Store::new(&engine, ());
+    let pre = ArrayRefPre::new(&mut store, array_ty);
+    let num_refs_dropped = Arc::new(AtomicUsize::new(0));
+    let mut expected = 0;
+
+    fn recursively_build_tree(
+        mut store: &mut RootScope<&mut Store<()>>,
+        pre: &ArrayRefPre,
+        num_refs_dropped: &Arc<AtomicUsize>,
+        expected: &mut usize,
+        depth: u32,
+    ) -> Result<Rooted<AnyRef>> {
+        let max = if cfg!(miri) { 1 } else { 3 };
+        if depth >= max {
+            *expected += 1;
+            let e = ExternRef::new(&mut store, CountDrops(num_refs_dropped.clone()))?;
+            AnyRef::convert_extern(&mut store, e)
+        } else {
+            let left = recursively_build_tree(store, pre, num_refs_dropped, expected, depth + 1)?;
+            let right = recursively_build_tree(store, pre, num_refs_dropped, expected, depth + 1)?;
+            let arr = ArrayRef::new_fixed(store, pre, &[left.into(), right.into()])?;
+            Ok(arr.to_anyref())
+        }
+    }
+
+    {
+        let mut store = RootScope::new(&mut store);
+        let _tree = recursively_build_tree(&mut store, &pre, &num_refs_dropped, &mut expected, 0)?;
+
+        // Still holding the tree alive at this point.
+        assert_eq!(num_refs_dropped.load(SeqCst), 0);
+    }
+
+    // Not holding the tree alive anymore; should transitively drop everything
+    // we created.
+    store.gc();
+    assert_eq!(num_refs_dropped.load(SeqCst), expected);
 
     Ok(())
 }

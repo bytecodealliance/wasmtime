@@ -482,7 +482,7 @@ unsafe fn gc(store: &mut dyn VMStore, _instance: &mut Instance, gc_ref: u32) -> 
 unsafe fn gc_alloc_raw(
     store: &mut dyn VMStore,
     instance: &mut Instance,
-    kind: u32,
+    kind_and_reserved: u32,
     module_interned_type_index: u32,
     size: u32,
     align: u32,
@@ -491,7 +491,7 @@ unsafe fn gc_alloc_raw(
     use core::alloc::Layout;
     use wasmtime_environ::{ModuleInternedTypeIndex, VMGcKind};
 
-    let kind = VMGcKind::from_high_bits_of_u32(kind);
+    let kind = VMGcKind::from_high_bits_of_u32(kind_and_reserved);
     log::trace!("gc_alloc_raw(kind={kind:?}, size={size}, align={align})",);
 
     let module = instance
@@ -504,7 +504,8 @@ unsafe fn gc_alloc_raw(
         .shared_type(module_interned_type_index)
         .expect("should have engine type index for module type index");
 
-    let header = VMGcHeader::from_kind_and_index(kind, shared_type_index);
+    let mut header = VMGcHeader::from_kind_and_index(kind, shared_type_index);
+    header.set_reserved_u27(kind_and_reserved & VMGcKind::UNUSED_MASK);
 
     let size = usize::try_from(size).unwrap();
     let align = usize::try_from(align).unwrap();
