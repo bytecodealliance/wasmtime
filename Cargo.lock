@@ -195,12 +195,6 @@ dependencies = [
 
 [[package]]
 name = "base64"
-version = "0.21.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a4a4ddaa51a5bc52a6948f74c06d20aaaddb71924eab79b8c97a8c556e942d6a"
-
-[[package]]
-name = "base64"
 version = "0.22.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72b3254f16251a8381aa12e40e3c4d2f0199f8c6508fbecb9d91f575e0fbb8c6"
@@ -3437,7 +3431,7 @@ name = "test-programs"
 version = "0.0.0"
 dependencies = [
  "anyhow",
- "base64 0.21.0",
+ "base64",
  "futures",
  "getrandom",
  "libc",
@@ -3769,7 +3763,7 @@ version = "2.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "72139d247e5f97a3eff96229a7ae85ead5328a39efe76f8bf5a06313d505b6ea"
 dependencies = [
- "base64 0.22.1",
+ "base64",
  "log",
  "once_cell",
  "rustls 0.23.7",
@@ -4292,7 +4286,7 @@ name = "wasmtime-cache"
 version = "32.0.0"
 dependencies = [
  "anyhow",
- "base64 0.21.0",
+ "base64",
  "directories-next",
  "filetime",
  "log",
@@ -4676,7 +4670,7 @@ version = "32.0.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "base64 0.21.0",
+ "base64",
  "bytes",
  "futures",
  "http",
