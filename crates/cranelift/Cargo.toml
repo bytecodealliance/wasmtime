@@ -31,7 +31,7 @@ smallvec = { workspace = true }
 thiserror = { workspace = true }
 cfg-if = { workspace = true }
 wasmtime-versioned-export-macros = { workspace = true }
-itertools = "0.12"
+itertools = { workspace = true }
 pulley-interpreter = { workspace = true, optional = true }
 
 [features]

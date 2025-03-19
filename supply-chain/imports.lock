@@ -680,6 +680,13 @@ user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
 
+[[publisher.linux-raw-sys]]
+version = "0.9.3"
+when = "2025-03-14"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
 [[publisher.memchr]]
 version = "2.5.0"
 when = "2022-04-30"
@@ -773,6 +780,13 @@ user-name = "Andrew Gallant"
 [[publisher.rustix]]
 version = "0.38.34"
 when = "2024-04-22"
+user-id = 6825
+user-login = "sunfishcode"
+user-name = "Dan Gohman"
+
+[[publisher.rustix]]
+version = "1.0.3"
+when = "2025-03-18"
 user-id = 6825
 user-login = "sunfishcode"
 user-name = "Dan Gohman"
