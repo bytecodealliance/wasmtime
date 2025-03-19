@@ -2349,6 +2349,12 @@ criteria = "safe-to-run"
 delta = "0.6.1 -> 0.7.0"
 notes = "Only minor changes with new flags and such, no major updates to `unsafe` or anything outside of a test framework."
 
+[[audits.libtest-mimic]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "0.7.0 -> 0.8.1"
+notes = "Nothing major that's new in this update, mostly just updating a few things here and there. Nothing suspicious."
+
 [[audits.linux-raw-sys]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
