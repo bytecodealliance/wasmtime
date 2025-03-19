@@ -110,7 +110,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 walkdir = { workspace = true }
 test-programs-artifacts = { workspace = true }
-bytesize = "1.3.0"
+bytesize = "2.0.1"
 wit-component = { workspace = true }
 cranelift-filetests = { workspace = true }
 cranelift-codegen = { workspace = true, features = ["disas", "trace-log", "timing"] }

@@ -120,7 +120,7 @@ struct Pool {
 impl Pool {
     /// Print a human-readable, tab-separated description of this structure.
     fn to_string(&self) -> String {
-        let human_size = ByteSize::b(self.mapped_bytes as u64).to_string_as(true);
+        let human_size = ByteSize::b(self.mapped_bytes as u64).display().si();
         format!(
             "{} memory slots\t{} reserved",
             self.num_memories, human_size

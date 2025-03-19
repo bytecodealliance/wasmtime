@@ -1158,6 +1158,12 @@ who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
 version = "1.3.0"
 
+[[audits.bytesize]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "1.3.0 -> 2.0.1"
+notes = "New functionality, but no new unsafe, and no other suspicious changes."
+
 [[audits.camino]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
