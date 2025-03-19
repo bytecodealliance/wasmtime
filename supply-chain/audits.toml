@@ -1385,6 +1385,18 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.4.0 -> 3.4.1"
 
+[[audits.capstone]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.12.0 -> 0.13.0"
+notes = "No new major features added here, mostly new architectures from a capstone update. No fundamental new `unsafe` code or anything suspicious"
+
+[[audits.capstone-sys]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.16.0 -> 0.17.0"
+notes = "Updates to the build process of capstone and adding some new architectures. Nothing major."
+
 [[audits.cargo-platform]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
