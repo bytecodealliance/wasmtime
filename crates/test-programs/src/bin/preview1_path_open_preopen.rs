@@ -1,18 +1,18 @@
 const FIRST_PREOPEN: u32 = 3;
 
 unsafe fn path_open_preopen() {
-    let prestat = wasi::fd_prestat_get(FIRST_PREOPEN).expect("fd 3 is a preopen");
+    let prestat = wasip1::fd_prestat_get(FIRST_PREOPEN).expect("fd 3 is a preopen");
     assert_eq!(
         prestat.tag,
-        wasi::PREOPENTYPE_DIR.raw(),
+        wasip1::PREOPENTYPE_DIR.raw(),
         "prestat is a directory"
     );
     let mut dst = Vec::with_capacity(prestat.u.dir.pr_name_len);
-    wasi::fd_prestat_dir_name(FIRST_PREOPEN, dst.as_mut_ptr(), dst.capacity())
+    wasip1::fd_prestat_dir_name(FIRST_PREOPEN, dst.as_mut_ptr(), dst.capacity())
         .expect("get preopen dir name");
     dst.set_len(prestat.u.dir.pr_name_len);
 
-    let fdstat = wasi::fd_fdstat_get(FIRST_PREOPEN).expect("get fdstat");
+    let fdstat = wasip1::fd_fdstat_get(FIRST_PREOPEN).expect("get fdstat");
 
     println!(
         "preopen dir: {:?} base {:?} inheriting {:?}",
@@ -34,7 +34,7 @@ unsafe fn path_open_preopen() {
     }
 
     // Open with same rights it has now:
-    let _ = wasi::path_open(
+    let _ = wasip1::path_open(
         FIRST_PREOPEN,
         0,
         ".",
@@ -46,19 +46,19 @@ unsafe fn path_open_preopen() {
     .expect("open with same rights");
 
     // Open with an empty set of rights:
-    let _ = wasi::path_open(FIRST_PREOPEN, 0, ".", 0, 0, 0, 0).expect("open with empty rights");
+    let _ = wasip1::path_open(FIRST_PREOPEN, 0, ".", 0, 0, 0, 0).expect("open with empty rights");
 
     // Open OFLAGS_DIRECTORY with an empty set of rights:
-    let _ = wasi::path_open(FIRST_PREOPEN, 0, ".", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
+    let _ = wasip1::path_open(FIRST_PREOPEN, 0, ".", wasip1::OFLAGS_DIRECTORY, 0, 0, 0)
         .expect("open with O_DIRECTORY empty rights");
 
     // Open OFLAGS_DIRECTORY with just the read right:
-    let _ = wasi::path_open(
+    let _ = wasip1::path_open(
         FIRST_PREOPEN,
         0,
         ".",
-        wasi::OFLAGS_DIRECTORY,
-        wasi::RIGHTS_FD_READ,
+        wasip1::OFLAGS_DIRECTORY,
+        wasip1::RIGHTS_FD_READ,
         0,
         0,
     )
@@ -66,12 +66,12 @@ unsafe fn path_open_preopen() {
 
     if !test_programs::preview1::config().errno_expect_windows() {
         // Open OFLAGS_DIRECTORY and read/write rights should fail with isdir:
-        let err = wasi::path_open(
+        let err = wasip1::path_open(
             FIRST_PREOPEN,
             0,
             ".",
-            wasi::OFLAGS_DIRECTORY,
-            wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+            wasip1::OFLAGS_DIRECTORY,
+            wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
             0,
             0,
         )
@@ -79,17 +79,17 @@ unsafe fn path_open_preopen() {
         .expect("open with O_DIRECTORY and read/write should fail");
         assert_eq!(
             err,
-            wasi::ERRNO_ISDIR,
+            wasip1::ERRNO_ISDIR,
             "opening directory read/write should fail with ISDIR"
         );
     } else {
         // Open OFLAGS_DIRECTORY and read/write rights will succeed, only on windows:
-        let _ = wasi::path_open(
+        let _ = wasip1::path_open(
             FIRST_PREOPEN,
             0,
             ".",
-            wasi::OFLAGS_DIRECTORY,
-            wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+            wasip1::OFLAGS_DIRECTORY,
+            wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
             0,
             0,
         )
@@ -108,46 +108,58 @@ fn main() {
 // implementations expect (at least) this set of rights to be present on all
 // directories:
 
-fn directory_base_rights() -> Vec<(wasi::Rights, &'static str)> {
+fn directory_base_rights() -> Vec<(wasip1::Rights, &'static str)> {
     vec![
-        (wasi::RIGHTS_PATH_CREATE_DIRECTORY, "PATH_CREATE_DIRECTORY"),
-        (wasi::RIGHTS_PATH_CREATE_FILE, "PATH_CREATE_FILE"),
-        (wasi::RIGHTS_PATH_LINK_SOURCE, "PATH_LINK_SOURCE"),
-        (wasi::RIGHTS_PATH_LINK_TARGET, "PATH_LINK_TARGET"),
-        (wasi::RIGHTS_PATH_OPEN, "PATH_OPEN"),
-        (wasi::RIGHTS_FD_READDIR, "FD_READDIR"),
-        (wasi::RIGHTS_PATH_READLINK, "PATH_READLINK"),
-        (wasi::RIGHTS_PATH_RENAME_SOURCE, "PATH_RENAME_SOURCE"),
-        (wasi::RIGHTS_PATH_RENAME_TARGET, "PATH_RENAME_TARGET"),
-        (wasi::RIGHTS_PATH_SYMLINK, "PATH_SYMLINK"),
-        (wasi::RIGHTS_PATH_REMOVE_DIRECTORY, "PATH_REMOVE_DIRECTORY"),
-        (wasi::RIGHTS_PATH_UNLINK_FILE, "PATH_UNLINK_FILE"),
-        (wasi::RIGHTS_PATH_FILESTAT_GET, "PATH_FILESTAT_GET"),
         (
-            wasi::RIGHTS_PATH_FILESTAT_SET_TIMES,
+            wasip1::RIGHTS_PATH_CREATE_DIRECTORY,
+            "PATH_CREATE_DIRECTORY",
+        ),
+        (wasip1::RIGHTS_PATH_CREATE_FILE, "PATH_CREATE_FILE"),
+        (wasip1::RIGHTS_PATH_LINK_SOURCE, "PATH_LINK_SOURCE"),
+        (wasip1::RIGHTS_PATH_LINK_TARGET, "PATH_LINK_TARGET"),
+        (wasip1::RIGHTS_PATH_OPEN, "PATH_OPEN"),
+        (wasip1::RIGHTS_FD_READDIR, "FD_READDIR"),
+        (wasip1::RIGHTS_PATH_READLINK, "PATH_READLINK"),
+        (wasip1::RIGHTS_PATH_RENAME_SOURCE, "PATH_RENAME_SOURCE"),
+        (wasip1::RIGHTS_PATH_RENAME_TARGET, "PATH_RENAME_TARGET"),
+        (wasip1::RIGHTS_PATH_SYMLINK, "PATH_SYMLINK"),
+        (
+            wasip1::RIGHTS_PATH_REMOVE_DIRECTORY,
+            "PATH_REMOVE_DIRECTORY",
+        ),
+        (wasip1::RIGHTS_PATH_UNLINK_FILE, "PATH_UNLINK_FILE"),
+        (wasip1::RIGHTS_PATH_FILESTAT_GET, "PATH_FILESTAT_GET"),
+        (
+            wasip1::RIGHTS_PATH_FILESTAT_SET_TIMES,
             "PATH_FILESTAT_SET_TIMES",
         ),
-        (wasi::RIGHTS_FD_FILESTAT_GET, "FD_FILESTAT_GET"),
-        (wasi::RIGHTS_FD_FILESTAT_SET_TIMES, "FD_FILESTAT_SET_TIMES"),
+        (wasip1::RIGHTS_FD_FILESTAT_GET, "FD_FILESTAT_GET"),
+        (
+            wasip1::RIGHTS_FD_FILESTAT_SET_TIMES,
+            "FD_FILESTAT_SET_TIMES",
+        ),
     ]
 }
 
-pub(crate) fn directory_inheriting_rights() -> Vec<(wasi::Rights, &'static str)> {
+pub(crate) fn directory_inheriting_rights() -> Vec<(wasip1::Rights, &'static str)> {
     let mut rights = directory_base_rights();
     rights.extend_from_slice(&[
-        (wasi::RIGHTS_FD_DATASYNC, "FD_DATASYNC"),
-        (wasi::RIGHTS_FD_READ, "FD_READ"),
-        (wasi::RIGHTS_FD_SEEK, "FD_SEEK"),
-        (wasi::RIGHTS_FD_FDSTAT_SET_FLAGS, "FD_FDSTAT_SET_FLAGS"),
-        (wasi::RIGHTS_FD_SYNC, "FD_SYNC"),
-        (wasi::RIGHTS_FD_TELL, "FD_TELL"),
-        (wasi::RIGHTS_FD_WRITE, "FD_WRITE"),
-        (wasi::RIGHTS_FD_ADVISE, "FD_ADVISE"),
-        (wasi::RIGHTS_FD_ALLOCATE, "FD_ALLOCATE"),
-        (wasi::RIGHTS_FD_FILESTAT_GET, "FD_FILESTAT_GET"),
-        (wasi::RIGHTS_FD_FILESTAT_SET_SIZE, "FD_FILESTAT_SET_SIZE"),
-        (wasi::RIGHTS_FD_FILESTAT_SET_TIMES, "FD_FILESTAT_SET_TIMES"),
-        (wasi::RIGHTS_POLL_FD_READWRITE, "POLL_FD_READWRITE"),
+        (wasip1::RIGHTS_FD_DATASYNC, "FD_DATASYNC"),
+        (wasip1::RIGHTS_FD_READ, "FD_READ"),
+        (wasip1::RIGHTS_FD_SEEK, "FD_SEEK"),
+        (wasip1::RIGHTS_FD_FDSTAT_SET_FLAGS, "FD_FDSTAT_SET_FLAGS"),
+        (wasip1::RIGHTS_FD_SYNC, "FD_SYNC"),
+        (wasip1::RIGHTS_FD_TELL, "FD_TELL"),
+        (wasip1::RIGHTS_FD_WRITE, "FD_WRITE"),
+        (wasip1::RIGHTS_FD_ADVISE, "FD_ADVISE"),
+        (wasip1::RIGHTS_FD_ALLOCATE, "FD_ALLOCATE"),
+        (wasip1::RIGHTS_FD_FILESTAT_GET, "FD_FILESTAT_GET"),
+        (wasip1::RIGHTS_FD_FILESTAT_SET_SIZE, "FD_FILESTAT_SET_SIZE"),
+        (
+            wasip1::RIGHTS_FD_FILESTAT_SET_TIMES,
+            "FD_FILESTAT_SET_TIMES",
+        ),
+        (wasip1::RIGHTS_POLL_FD_READWRITE, "POLL_FD_READWRITE"),
     ]);
     rights
 }

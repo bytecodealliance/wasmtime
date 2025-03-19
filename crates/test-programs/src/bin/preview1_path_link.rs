@@ -38,144 +38,146 @@ macro_rules! fdstats_assert_eq {
 macro_rules! check_rights {
     ($orig_fd:ident, $link_fd:ident) => {
         let orig_filestat =
-            wasi::fd_filestat_get($orig_fd).expect("reading filestat of the source");
-        let link_filestat = wasi::fd_filestat_get($link_fd).expect("reading filestat of the link");
+            wasip1::fd_filestat_get($orig_fd).expect("reading filestat of the source");
+        let link_filestat =
+            wasip1::fd_filestat_get($link_fd).expect("reading filestat of the link");
         filestats_assert_eq!(orig_filestat, link_filestat);
 
         // Compare Fdstats
-        let orig_fdstat = wasi::fd_fdstat_get($orig_fd).expect("reading fdstat of the source");
-        let link_fdstat = wasi::fd_fdstat_get($link_fd).expect("reading fdstat of the link");
+        let orig_fdstat = wasip1::fd_fdstat_get($orig_fd).expect("reading fdstat of the source");
+        let link_fdstat = wasip1::fd_fdstat_get($link_fd).expect("reading fdstat of the link");
         fdstats_assert_eq!(orig_fdstat, link_fdstat);
     };
 }
 // Extra calls of fd_close are needed for Windows, which will not remove
 // the directory until all handles are closed.
-unsafe fn test_path_link(dir_fd: wasi::Fd) {
+unsafe fn test_path_link(dir_fd: wasip1::Fd) {
     // Create a file
     let create_fd =
-        wasi::path_open(dir_fd, 0, "file", wasi::OFLAGS_CREAT, 0, 0, 0).expect("create file");
-    wasi::fd_close(create_fd).unwrap();
+        wasip1::path_open(dir_fd, 0, "file", wasip1::OFLAGS_CREAT, 0, 0, 0).expect("create file");
+    wasip1::fd_close(create_fd).unwrap();
 
     // Open a fresh descriptor to the file. We won't have a write right that was implied by OFLAGS_CREAT
     // above.
-    let file_fd = wasi::path_open(dir_fd, 0, "file", 0, 0, 0, 0).expect("open file");
+    let file_fd = wasip1::path_open(dir_fd, 0, "file", 0, 0, 0, 0).expect("open file");
 
     // Create a link in the same directory and compare rights
-    wasi::path_link(dir_fd, 0, "file", dir_fd, "link")
+    wasip1::path_link(dir_fd, 0, "file", dir_fd, "link")
         .expect("creating a link in the same directory");
 
-    let link_fd = wasi::path_open(dir_fd, 0, "link", 0, 0, 0, 0).expect("open link");
+    let link_fd = wasip1::path_open(dir_fd, 0, "link", 0, 0, 0, 0).expect("open link");
 
     check_rights!(file_fd, link_fd);
-    wasi::fd_close(link_fd).expect("Closing link_fd"); // needed for Windows
-    wasi::path_unlink_file(dir_fd, "link").expect("removing a link");
+    wasip1::fd_close(link_fd).expect("Closing link_fd"); // needed for Windows
+    wasip1::path_unlink_file(dir_fd, "link").expect("removing a link");
 
     // Create a link in a different directory and compare rights
-    wasi::path_create_directory(dir_fd, "subdir").expect("creating a subdirectory");
-    let subdir_fd = wasi::path_open(dir_fd, 0, "subdir", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
+    wasip1::path_create_directory(dir_fd, "subdir").expect("creating a subdirectory");
+    let subdir_fd = wasip1::path_open(dir_fd, 0, "subdir", wasip1::OFLAGS_DIRECTORY, 0, 0, 0)
         .expect("open subdir directory");
-    wasi::path_link(dir_fd, 0, "file", subdir_fd, "link").expect("creating a link in subdirectory");
-    let link_fd = wasi::path_open(subdir_fd, 0, "link", 0, 0, 0, 0).expect("open link in subdir");
+    wasip1::path_link(dir_fd, 0, "file", subdir_fd, "link")
+        .expect("creating a link in subdirectory");
+    let link_fd = wasip1::path_open(subdir_fd, 0, "link", 0, 0, 0, 0).expect("open link in subdir");
     check_rights!(file_fd, link_fd);
-    wasi::fd_close(link_fd).expect("Closing link_fd"); // needed for Windows
-    wasi::path_unlink_file(subdir_fd, "link").expect("removing a link");
-    wasi::fd_close(subdir_fd).expect("Closing subdir_fd"); // needed for Windows
-    wasi::path_remove_directory(dir_fd, "subdir").expect("removing a subdirectory");
+    wasip1::fd_close(link_fd).expect("Closing link_fd"); // needed for Windows
+    wasip1::path_unlink_file(subdir_fd, "link").expect("removing a link");
+    wasip1::fd_close(subdir_fd).expect("Closing subdir_fd"); // needed for Windows
+    wasip1::path_remove_directory(dir_fd, "subdir").expect("removing a subdirectory");
 
     // Create a link to a path that already exists
     create_file(dir_fd, "link");
 
     assert_errno!(
-        wasi::path_link(dir_fd, 0, "file", dir_fd, "link")
+        wasip1::path_link(dir_fd, 0, "file", dir_fd, "link")
             .expect_err("creating a link to existing path should fail"),
-        wasi::ERRNO_EXIST
+        wasip1::ERRNO_EXIST
     );
-    wasi::path_unlink_file(dir_fd, "link").expect("removing a file");
+    wasip1::path_unlink_file(dir_fd, "link").expect("removing a file");
 
     // Create a link to itself
     assert_errno!(
-        wasi::path_link(dir_fd, 0, "file", dir_fd, "file")
+        wasip1::path_link(dir_fd, 0, "file", dir_fd, "file")
             .expect_err("creating a link to itself should fail"),
-        wasi::ERRNO_EXIST
+        wasip1::ERRNO_EXIST
     );
 
     // Create a link where target is a directory
-    wasi::path_create_directory(dir_fd, "link").expect("creating a dir");
+    wasip1::path_create_directory(dir_fd, "link").expect("creating a dir");
 
     assert_errno!(
-        wasi::path_link(dir_fd, 0, "file", dir_fd, "link")
+        wasip1::path_link(dir_fd, 0, "file", dir_fd, "link")
             .expect_err("creating a link where target is a directory should fail"),
-        wasi::ERRNO_EXIST
+        wasip1::ERRNO_EXIST
     );
-    wasi::path_remove_directory(dir_fd, "link").expect("removing a dir");
+    wasip1::path_remove_directory(dir_fd, "link").expect("removing a dir");
 
     // Create a link to a directory
-    wasi::path_create_directory(dir_fd, "subdir").expect("creating a subdirectory");
-    let subdir_fd = wasi::path_open(dir_fd, 0, "subdir", wasi::OFLAGS_DIRECTORY, 0, 0, 0)
+    wasip1::path_create_directory(dir_fd, "subdir").expect("creating a subdirectory");
+    let subdir_fd = wasip1::path_open(dir_fd, 0, "subdir", wasip1::OFLAGS_DIRECTORY, 0, 0, 0)
         .expect("open new descriptor to subdir");
 
     assert_errno!(
-        wasi::path_link(dir_fd, 0, "subdir", dir_fd, "link")
+        wasip1::path_link(dir_fd, 0, "subdir", dir_fd, "link")
             .expect_err("creating a link to a directory should fail"),
-        wasi::ERRNO_PERM,
-        wasi::ERRNO_ACCES
+        wasip1::ERRNO_PERM,
+        wasip1::ERRNO_ACCES
     );
-    wasi::fd_close(subdir_fd).expect("close subdir before deleting it");
-    wasi::path_remove_directory(dir_fd, "subdir").expect("removing a subdirectory");
+    wasip1::fd_close(subdir_fd).expect("close subdir before deleting it");
+    wasip1::path_remove_directory(dir_fd, "subdir").expect("removing a subdirectory");
 
     // Create a link to a file with trailing slash
     assert_errno!(
-        wasi::path_link(dir_fd, 0, "file", dir_fd, "link/")
+        wasip1::path_link(dir_fd, 0, "file", dir_fd, "link/")
             .expect_err("creating a link to a file with trailing slash should fail"),
-        wasi::ERRNO_NOENT
+        wasip1::ERRNO_NOENT
     );
 
     if config().support_dangling_filesystem() {
         // Create a link to a dangling symlink
-        wasi::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
+        wasip1::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
 
         // This should succeed, because we're not following symlinks
-        wasi::path_link(dir_fd, 0, "symlink", dir_fd, "link")
+        wasip1::path_link(dir_fd, 0, "symlink", dir_fd, "link")
             .expect("creating a link to a dangling symlink should succeed");
-        wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
-        wasi::path_unlink_file(dir_fd, "link").expect("removing a hardlink");
+        wasip1::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
+        wasip1::path_unlink_file(dir_fd, "link").expect("removing a hardlink");
 
         // Create a link to a symlink loop
-        wasi::path_symlink("symlink", dir_fd, "symlink").expect("creating a symlink loop");
+        wasip1::path_symlink("symlink", dir_fd, "symlink").expect("creating a symlink loop");
 
-        wasi::path_link(dir_fd, 0, "symlink", dir_fd, "link")
+        wasip1::path_link(dir_fd, 0, "symlink", dir_fd, "link")
             .expect("creating a link to a symlink loop should succeed");
-        wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
-        wasi::path_unlink_file(dir_fd, "link").expect("removing a hardlink");
+        wasip1::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
+        wasip1::path_unlink_file(dir_fd, "link").expect("removing a hardlink");
 
         // Create a link where target is a dangling symlink
-        wasi::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
+        wasip1::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
 
         assert_errno!(
-            wasi::path_link(dir_fd, 0, "file", dir_fd, "symlink")
+            wasip1::path_link(dir_fd, 0, "file", dir_fd, "symlink")
                 .expect_err("creating a link where target is a dangling symlink"),
-            wasi::ERRNO_EXIST
+            wasip1::ERRNO_EXIST
         );
-        wasi::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
+        wasip1::path_unlink_file(dir_fd, "symlink").expect("removing a symlink");
 
         // Create a link where target is a dangling symlink following symlinks
-        wasi::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
+        wasip1::path_symlink("target", dir_fd, "symlink").expect("creating a dangling symlink");
 
         // Symlink following with path_link is rejected
         assert_errno!(
-            wasi::path_link(
+            wasip1::path_link(
                 dir_fd,
-                wasi::LOOKUPFLAGS_SYMLINK_FOLLOW,
+                wasip1::LOOKUPFLAGS_SYMLINK_FOLLOW,
                 "symlink",
                 dir_fd,
                 "link",
             )
             .expect_err("calling path_link with LOOKUPFLAGS_SYMLINK_FOLLOW should fail"),
-            wasi::ERRNO_INVAL
+            wasip1::ERRNO_INVAL
         );
 
         // Clean up.
-        wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
+        wasip1::path_unlink_file(dir_fd, "file").expect("removing a file");
     }
 }
 

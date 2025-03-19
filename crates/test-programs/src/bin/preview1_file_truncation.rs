@@ -1,16 +1,16 @@
 use std::{env, process};
 use test_programs::preview1::open_scratch_directory;
 
-unsafe fn test_file_truncation(dir_fd: wasi::Fd) {
+unsafe fn test_file_truncation(dir_fd: wasip1::Fd) {
     const FILENAME: &str = "test.txt";
 
     // Open a file for writing
-    let file_fd = wasi::path_open(
+    let file_fd = wasip1::path_open(
         dir_fd,
         0,
         FILENAME,
-        wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_WRITE,
+        wasip1::OFLAGS_CREAT,
+        wasip1::RIGHTS_FD_WRITE,
         0,
         0,
     )
@@ -18,9 +18,9 @@ unsafe fn test_file_truncation(dir_fd: wasi::Fd) {
 
     // Write to the file
     let content = b"this content will be truncated!";
-    let nwritten = wasi::fd_write(
+    let nwritten = wasip1::fd_write(
         file_fd,
-        &[wasi::Ciovec {
+        &[wasip1::Ciovec {
             buf: content.as_ptr() as *const _,
             buf_len: content.len(),
         }],
@@ -28,15 +28,15 @@ unsafe fn test_file_truncation(dir_fd: wasi::Fd) {
     .expect("writing file content");
     assert_eq!(nwritten, content.len(), "nwritten bytes check");
 
-    wasi::fd_close(file_fd).expect("closing the file");
+    wasip1::fd_close(file_fd).expect("closing the file");
 
     // Open the file for truncation
-    let file_fd = wasi::path_open(
+    let file_fd = wasip1::path_open(
         dir_fd,
         0,
         FILENAME,
-        wasi::OFLAGS_CREAT | wasi::OFLAGS_TRUNC,
-        wasi::RIGHTS_FD_WRITE | wasi::RIGHTS_FD_READ,
+        wasip1::OFLAGS_CREAT | wasip1::OFLAGS_TRUNC,
+        wasip1::RIGHTS_FD_WRITE | wasip1::RIGHTS_FD_READ,
         0,
         0,
     )
@@ -44,9 +44,9 @@ unsafe fn test_file_truncation(dir_fd: wasi::Fd) {
 
     // Read the file's contents
     let buffer = &mut [0u8; 100];
-    let nread = wasi::fd_read(
+    let nread = wasip1::fd_read(
         file_fd,
-        &[wasi::Iovec {
+        &[wasip1::Iovec {
             buf: buffer.as_mut_ptr(),
             buf_len: buffer.len(),
         }],
@@ -56,7 +56,7 @@ unsafe fn test_file_truncation(dir_fd: wasi::Fd) {
     // The file should be empty due to truncation
     assert_eq!(nread, 0, "expected an empty file after truncation");
 
-    wasi::fd_close(file_fd).expect("closing the file");
+    wasip1::fd_close(file_fd).expect("closing the file");
 }
 
 fn main() {

@@ -12,7 +12,6 @@ workspace = true
 
 [dependencies]
 anyhow = { workspace = true, features = ['std'] }
-wasi = "0.11.0"
 wasi-nn = "0.6.0"
 wit-bindgen = { workspace = true, features = ['default'] }
 libc = { workspace = true }
@@ -21,4 +20,5 @@ futures = { workspace = true, default-features = false, features = ['alloc'] }
 url = { workspace = true }
 sha2 = "0.10.2"
 base64 = "0.21.0"
+wasip1 = { version = "0.11.0", package = 'wasi' }
 wasip2 = { version = "0.14.0", package = 'wasi' }

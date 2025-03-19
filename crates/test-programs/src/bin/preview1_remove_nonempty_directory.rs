@@ -1,24 +1,24 @@
 use std::{env, process};
 use test_programs::preview1::{assert_errno, open_scratch_directory};
 
-unsafe fn test_remove_nonempty_directory(dir_fd: wasi::Fd) {
+unsafe fn test_remove_nonempty_directory(dir_fd: wasip1::Fd) {
     // Create a directory in the scratch directory.
-    wasi::path_create_directory(dir_fd, "dir").expect("creating a directory");
+    wasip1::path_create_directory(dir_fd, "dir").expect("creating a directory");
 
     // Create a directory in the directory we just created.
-    wasi::path_create_directory(dir_fd, "dir/nested").expect("creating a subdirectory");
+    wasip1::path_create_directory(dir_fd, "dir/nested").expect("creating a subdirectory");
 
     // Test that attempting to unlink the first directory returns the expected error code.
     assert_errno!(
-        wasi::path_remove_directory(dir_fd, "dir")
+        wasip1::path_remove_directory(dir_fd, "dir")
             .expect_err("remove_directory on a directory should return ENOTEMPTY"),
-        wasi::ERRNO_NOTEMPTY
+        wasip1::ERRNO_NOTEMPTY
     );
 
     // Removing the directories.
-    wasi::path_remove_directory(dir_fd, "dir/nested")
+    wasip1::path_remove_directory(dir_fd, "dir/nested")
         .expect("remove_directory on a nested directory should succeed");
-    wasi::path_remove_directory(dir_fd, "dir").expect("removing a directory");
+    wasip1::path_remove_directory(dir_fd, "dir").expect("removing a directory");
 }
 
 fn main() {

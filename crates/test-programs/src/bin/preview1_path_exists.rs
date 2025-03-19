@@ -1,57 +1,58 @@
 use std::{env, process};
 use test_programs::preview1::{create_file, open_scratch_directory};
 
-unsafe fn test_path_exists(dir_fd: wasi::Fd) {
+unsafe fn test_path_exists(dir_fd: wasip1::Fd) {
     // Create a temporary directory
-    wasi::path_create_directory(dir_fd, "subdir").expect("create directory");
+    wasip1::path_create_directory(dir_fd, "subdir").expect("create directory");
 
     // Check directory exists:
-    let file_stat = wasi::path_filestat_get(dir_fd, 0, "subdir").expect("reading file stats");
-    assert_eq!(file_stat.filetype, wasi::FILETYPE_DIRECTORY);
+    let file_stat = wasip1::path_filestat_get(dir_fd, 0, "subdir").expect("reading file stats");
+    assert_eq!(file_stat.filetype, wasip1::FILETYPE_DIRECTORY);
 
     // Should still exist with symlink follow flag:
-    let file_stat = wasi::path_filestat_get(dir_fd, wasi::LOOKUPFLAGS_SYMLINK_FOLLOW, "subdir")
+    let file_stat = wasip1::path_filestat_get(dir_fd, wasip1::LOOKUPFLAGS_SYMLINK_FOLLOW, "subdir")
         .expect("reading file stats");
-    assert_eq!(file_stat.filetype, wasi::FILETYPE_DIRECTORY);
+    assert_eq!(file_stat.filetype, wasip1::FILETYPE_DIRECTORY);
 
     // Create a file:
     create_file(dir_fd, "subdir/file");
     // Check directory exists:
-    let file_stat = wasi::path_filestat_get(dir_fd, 0, "subdir/file").expect("reading file stats");
-    assert_eq!(file_stat.filetype, wasi::FILETYPE_REGULAR_FILE);
+    let file_stat =
+        wasip1::path_filestat_get(dir_fd, 0, "subdir/file").expect("reading file stats");
+    assert_eq!(file_stat.filetype, wasip1::FILETYPE_REGULAR_FILE);
 
     // Should still exist with symlink follow flag:
     let file_stat =
-        wasi::path_filestat_get(dir_fd, wasi::LOOKUPFLAGS_SYMLINK_FOLLOW, "subdir/file")
+        wasip1::path_filestat_get(dir_fd, wasip1::LOOKUPFLAGS_SYMLINK_FOLLOW, "subdir/file")
             .expect("reading file stats");
-    assert_eq!(file_stat.filetype, wasi::FILETYPE_REGULAR_FILE);
+    assert_eq!(file_stat.filetype, wasip1::FILETYPE_REGULAR_FILE);
 
     // Create a symlink to a file:
-    wasi::path_symlink("subdir/file", dir_fd, "link1").expect("create symlink");
+    wasip1::path_symlink("subdir/file", dir_fd, "link1").expect("create symlink");
     // Check symlink exists:
-    let file_stat = wasi::path_filestat_get(dir_fd, 0, "link1").expect("reading file stats");
-    assert_eq!(file_stat.filetype, wasi::FILETYPE_SYMBOLIC_LINK);
+    let file_stat = wasip1::path_filestat_get(dir_fd, 0, "link1").expect("reading file stats");
+    assert_eq!(file_stat.filetype, wasip1::FILETYPE_SYMBOLIC_LINK);
 
     // Should still exist with symlink follow flag, pointing to regular file
-    let file_stat = wasi::path_filestat_get(dir_fd, wasi::LOOKUPFLAGS_SYMLINK_FOLLOW, "link1")
+    let file_stat = wasip1::path_filestat_get(dir_fd, wasip1::LOOKUPFLAGS_SYMLINK_FOLLOW, "link1")
         .expect("reading file stats");
-    assert_eq!(file_stat.filetype, wasi::FILETYPE_REGULAR_FILE);
+    assert_eq!(file_stat.filetype, wasip1::FILETYPE_REGULAR_FILE);
 
     // Create a symlink to a dir:
-    wasi::path_symlink("subdir", dir_fd, "link2").expect("create symlink");
+    wasip1::path_symlink("subdir", dir_fd, "link2").expect("create symlink");
     // Check symlink exists:
-    let file_stat = wasi::path_filestat_get(dir_fd, 0, "link2").expect("reading file stats");
-    assert_eq!(file_stat.filetype, wasi::FILETYPE_SYMBOLIC_LINK);
+    let file_stat = wasip1::path_filestat_get(dir_fd, 0, "link2").expect("reading file stats");
+    assert_eq!(file_stat.filetype, wasip1::FILETYPE_SYMBOLIC_LINK);
 
     // Should still exist with symlink follow flag, pointing to directory
-    let file_stat = wasi::path_filestat_get(dir_fd, wasi::LOOKUPFLAGS_SYMLINK_FOLLOW, "link2")
+    let file_stat = wasip1::path_filestat_get(dir_fd, wasip1::LOOKUPFLAGS_SYMLINK_FOLLOW, "link2")
         .expect("reading file stats");
-    assert_eq!(file_stat.filetype, wasi::FILETYPE_DIRECTORY);
+    assert_eq!(file_stat.filetype, wasip1::FILETYPE_DIRECTORY);
 
-    wasi::path_unlink_file(dir_fd, "link1").expect("clean up");
-    wasi::path_unlink_file(dir_fd, "link2").expect("clean up");
-    wasi::path_unlink_file(dir_fd, "subdir/file").expect("clean up");
-    wasi::path_remove_directory(dir_fd, "subdir").expect("clean up");
+    wasip1::path_unlink_file(dir_fd, "link1").expect("clean up");
+    wasip1::path_unlink_file(dir_fd, "link2").expect("clean up");
+    wasip1::path_unlink_file(dir_fd, "subdir/file").expect("clean up");
+    wasip1::path_remove_directory(dir_fd, "subdir").expect("clean up");
 }
 
 fn main() {

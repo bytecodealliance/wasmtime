@@ -1,59 +1,59 @@
 use std::{env, process};
 use test_programs::preview1::{assert_errno, open_scratch_directory};
 
-unsafe fn test_renumber(dir_fd: wasi::Fd) {
-    let pre_fd: wasi::Fd = (libc::STDERR_FILENO + 1) as wasi::Fd;
+unsafe fn test_renumber(dir_fd: wasip1::Fd) {
+    let pre_fd: wasip1::Fd = (libc::STDERR_FILENO + 1) as wasip1::Fd;
 
     assert!(dir_fd > pre_fd, "dir_fd number");
 
     // Create a file in the scratch directory.
-    let fd_from = wasi::path_open(
+    let fd_from = wasip1::path_open(
         dir_fd,
         0,
         "file1",
-        wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        wasip1::OFLAGS_CREAT,
+        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
         0,
         0,
     )
     .expect("opening a file");
     assert!(
-        fd_from > libc::STDERR_FILENO as wasi::Fd,
+        fd_from > libc::STDERR_FILENO as wasip1::Fd,
         "file descriptor range check",
     );
 
     // Get fd_from fdstat attributes
     let fdstat_from =
-        wasi::fd_fdstat_get(fd_from).expect("calling fd_fdstat on the open file descriptor");
+        wasip1::fd_fdstat_get(fd_from).expect("calling fd_fdstat on the open file descriptor");
 
     // Create another file in the scratch directory.
-    let fd_to = wasi::path_open(
+    let fd_to = wasip1::path_open(
         dir_fd,
         0,
         "file2",
-        wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        wasip1::OFLAGS_CREAT,
+        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
         0,
         0,
     )
     .expect("opening a file");
     assert!(
-        fd_to > libc::STDERR_FILENO as wasi::Fd,
+        fd_to > libc::STDERR_FILENO as wasip1::Fd,
         "file descriptor range check",
     );
 
     // Renumber fd of file1 into fd of file2
-    wasi::fd_renumber(fd_from, fd_to).expect("renumbering two descriptors");
+    wasip1::fd_renumber(fd_from, fd_to).expect("renumbering two descriptors");
 
     // Ensure that fd_from is closed
     assert_errno!(
-        wasi::fd_close(fd_from).expect_err("closing already closed file descriptor"),
-        wasi::ERRNO_BADF
+        wasip1::fd_close(fd_from).expect_err("closing already closed file descriptor"),
+        wasip1::ERRNO_BADF
     );
 
     // Ensure that fd_to is still open.
     let fdstat_to =
-        wasi::fd_fdstat_get(fd_to).expect("calling fd_fdstat on the open file descriptor");
+        wasip1::fd_fdstat_get(fd_to).expect("calling fd_fdstat on the open file descriptor");
     assert_eq!(
         fdstat_from.fs_filetype, fdstat_to.fs_filetype,
         "expected fd_to have the same fdstat as fd_from"
@@ -71,7 +71,7 @@ unsafe fn test_renumber(dir_fd: wasi::Fd) {
         "expected fd_to have the same fdstat as fd_from"
     );
 
-    wasi::fd_close(fd_to).expect("closing a file");
+    wasip1::fd_close(fd_to).expect("closing a file");
 }
 
 fn main() {

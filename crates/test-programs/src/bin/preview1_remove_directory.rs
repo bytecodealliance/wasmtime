@@ -1,12 +1,12 @@
 use std::{env, process};
 use test_programs::preview1::{assert_errno, create_file, open_scratch_directory};
 
-unsafe fn test_remove_directory(dir_fd: wasi::Fd) {
+unsafe fn test_remove_directory(dir_fd: wasip1::Fd) {
     // Create a directory in the scratch directory.
-    wasi::path_create_directory(dir_fd, "dir").expect("creating a directory");
+    wasip1::path_create_directory(dir_fd, "dir").expect("creating a directory");
 
     // Test that removing it succeeds.
-    wasi::path_remove_directory(dir_fd, "dir")
+    wasip1::path_remove_directory(dir_fd, "dir")
         .expect("remove_directory on a directory should succeed");
 
     // There isn't consistient behavior across operating systems of whether removing with a
@@ -18,19 +18,19 @@ unsafe fn test_remove_directory(dir_fd: wasi::Fd) {
 
     // Test that removing it with no trailing slash fails.
     assert_errno!(
-        wasi::path_remove_directory(dir_fd, "file")
+        wasip1::path_remove_directory(dir_fd, "file")
             .expect_err("remove_directory without a trailing slash on a file should fail"),
-        wasi::ERRNO_NOTDIR
+        wasip1::ERRNO_NOTDIR
     );
 
     // Test that removing it with a trailing slash fails.
     assert_errno!(
-        wasi::path_remove_directory(dir_fd, "file/")
+        wasip1::path_remove_directory(dir_fd, "file/")
             .expect_err("remove_directory with a trailing slash on a file should fail"),
-        wasi::ERRNO_NOTDIR
+        wasip1::ERRNO_NOTDIR
     );
 
-    wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
+    wasip1::path_unlink_file(dir_fd, "file").expect("removing a file");
 }
 
 fn main() {

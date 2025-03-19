@@ -1,14 +1,16 @@
 use std::{env, mem::MaybeUninit, process};
 use test_programs::preview1::{assert_errno, open_scratch_directory};
 
-const CLOCK_ID: wasi::Userdata = 0x0123_45678;
+const CLOCK_ID: wasip1::Userdata = 0x0123_45678;
 
-unsafe fn poll_oneoff_impl(r#in: &[wasi::Subscription]) -> Result<Vec<wasi::Event>, wasi::Errno> {
-    let mut out: Vec<wasi::Event> = Vec::new();
+unsafe fn poll_oneoff_impl(
+    r#in: &[wasip1::Subscription],
+) -> Result<Vec<wasip1::Event>, wasip1::Errno> {
+    let mut out: Vec<wasip1::Event> = Vec::new();
     out.resize_with(r#in.len(), || {
-        MaybeUninit::<wasi::Event>::zeroed().assume_init()
+        MaybeUninit::<wasip1::Event>::zeroed().assume_init()
     });
-    let size = wasi::poll_oneoff(r#in.as_ptr(), out.as_mut_ptr(), r#in.len())?;
+    let size = wasip1::poll_oneoff(r#in.as_ptr(), out.as_mut_ptr(), r#in.len())?;
     out.truncate(size);
     Ok(out)
 }
@@ -16,16 +18,16 @@ unsafe fn poll_oneoff_impl(r#in: &[wasi::Subscription]) -> Result<Vec<wasi::Even
 /// Repeatedly call `poll_oneoff` until all the subscriptions in `in` have
 /// seen their events occur.
 unsafe fn poll_oneoff_with_retry(
-    r#in: &[wasi::Subscription],
-) -> Result<Vec<wasi::Event>, wasi::Errno> {
+    r#in: &[wasip1::Subscription],
+) -> Result<Vec<wasip1::Event>, wasip1::Errno> {
     let mut subscriptions = r#in.to_vec();
     let mut events = Vec::new();
     while !subscriptions.is_empty() {
-        let mut out: Vec<wasi::Event> = Vec::new();
+        let mut out: Vec<wasip1::Event> = Vec::new();
         out.resize_with(subscriptions.len(), || {
-            MaybeUninit::<wasi::Event>::zeroed().assume_init()
+            MaybeUninit::<wasip1::Event>::zeroed().assume_init()
         });
-        let size = wasi::poll_oneoff(
+        let size = wasip1::poll_oneoff(
             subscriptions.as_ptr(),
             out.as_mut_ptr(),
             subscriptions.len(),
@@ -44,38 +46,38 @@ unsafe fn poll_oneoff_with_retry(
 
 unsafe fn test_empty_poll() {
     let r#in = [];
-    let mut out: Vec<wasi::Event> = Vec::new();
+    let mut out: Vec<wasip1::Event> = Vec::new();
     assert_errno!(
-        wasi::poll_oneoff(r#in.as_ptr(), out.as_mut_ptr(), r#in.len())
+        wasip1::poll_oneoff(r#in.as_ptr(), out.as_mut_ptr(), r#in.len())
             .expect_err("empty poll_oneoff should fail"),
-        wasi::ERRNO_INVAL
+        wasip1::ERRNO_INVAL
     );
 }
 
 unsafe fn test_timeout() {
     let timeout = 5_000_000u64; // 5 milliseconds
-    let clock = wasi::SubscriptionClock {
-        id: wasi::CLOCKID_MONOTONIC,
+    let clock = wasip1::SubscriptionClock {
+        id: wasip1::CLOCKID_MONOTONIC,
         timeout,
         precision: 0,
         flags: 0,
     };
-    let r#in = [wasi::Subscription {
+    let r#in = [wasip1::Subscription {
         userdata: CLOCK_ID,
-        u: wasi::SubscriptionU {
-            tag: wasi::EVENTTYPE_CLOCK.raw(),
-            u: wasi::SubscriptionUU { clock },
+        u: wasip1::SubscriptionU {
+            tag: wasip1::EVENTTYPE_CLOCK.raw(),
+            u: wasip1::SubscriptionUU { clock },
         },
     }];
-    let before = wasi::clock_time_get(wasi::CLOCKID_MONOTONIC, 0).unwrap();
+    let before = wasip1::clock_time_get(wasip1::CLOCKID_MONOTONIC, 0).unwrap();
     let out = poll_oneoff_impl(&r#in).unwrap();
-    let after = wasi::clock_time_get(wasi::CLOCKID_MONOTONIC, 0).unwrap();
+    let after = wasip1::clock_time_get(wasip1::CLOCKID_MONOTONIC, 0).unwrap();
     assert_eq!(out.len(), 1, "should return 1 event");
     let event = &out[0];
-    assert_errno!(event.error, wasi::ERRNO_SUCCESS);
+    assert_errno!(event.error, wasip1::ERRNO_SUCCESS);
     assert_eq!(
         event.type_,
-        wasi::EVENTTYPE_CLOCK,
+        wasip1::EVENTTYPE_CLOCK,
         "the event.type should equal clock"
     );
     assert_eq!(
@@ -92,28 +94,28 @@ unsafe fn test_timeout() {
 // functions do.
 unsafe fn test_sleep() {
     let timeout = 5_000_000u64; // 5 milliseconds
-    let clock = wasi::SubscriptionClock {
-        id: wasi::CLOCKID_REALTIME,
+    let clock = wasip1::SubscriptionClock {
+        id: wasip1::CLOCKID_REALTIME,
         timeout,
         precision: 0,
         flags: 0,
     };
-    let r#in = [wasi::Subscription {
+    let r#in = [wasip1::Subscription {
         userdata: CLOCK_ID,
-        u: wasi::SubscriptionU {
-            tag: wasi::EVENTTYPE_CLOCK.raw(),
-            u: wasi::SubscriptionUU { clock },
+        u: wasip1::SubscriptionU {
+            tag: wasip1::EVENTTYPE_CLOCK.raw(),
+            u: wasip1::SubscriptionUU { clock },
         },
     }];
-    let before = wasi::clock_time_get(wasi::CLOCKID_MONOTONIC, 0).unwrap();
+    let before = wasip1::clock_time_get(wasip1::CLOCKID_MONOTONIC, 0).unwrap();
     let out = poll_oneoff_impl(&r#in).unwrap();
-    let after = wasi::clock_time_get(wasi::CLOCKID_MONOTONIC, 0).unwrap();
+    let after = wasip1::clock_time_get(wasip1::CLOCKID_MONOTONIC, 0).unwrap();
     assert_eq!(out.len(), 1, "should return 1 event");
     let event = &out[0];
-    assert_errno!(event.error, wasi::ERRNO_SUCCESS);
+    assert_errno!(event.error, wasip1::ERRNO_SUCCESS);
     assert_eq!(
         event.type_,
-        wasi::EVENTTYPE_CLOCK,
+        wasip1::EVENTTYPE_CLOCK,
         "the event.type should equal clock"
     );
     assert_eq!(
@@ -126,25 +128,29 @@ unsafe fn test_sleep() {
     );
 }
 
-unsafe fn test_fd_readwrite(readable_fd: wasi::Fd, writable_fd: wasi::Fd, error_code: wasi::Errno) {
+unsafe fn test_fd_readwrite(
+    readable_fd: wasip1::Fd,
+    writable_fd: wasip1::Fd,
+    error_code: wasip1::Errno,
+) {
     let r#in = [
-        wasi::Subscription {
+        wasip1::Subscription {
             userdata: 1,
-            u: wasi::SubscriptionU {
-                tag: wasi::EVENTTYPE_FD_READ.raw(),
-                u: wasi::SubscriptionUU {
-                    fd_read: wasi::SubscriptionFdReadwrite {
+            u: wasip1::SubscriptionU {
+                tag: wasip1::EVENTTYPE_FD_READ.raw(),
+                u: wasip1::SubscriptionUU {
+                    fd_read: wasip1::SubscriptionFdReadwrite {
                         file_descriptor: readable_fd,
                     },
                 },
             },
         },
-        wasi::Subscription {
+        wasip1::Subscription {
             userdata: 2,
-            u: wasi::SubscriptionU {
-                tag: wasi::EVENTTYPE_FD_WRITE.raw(),
-                u: wasi::SubscriptionUU {
-                    fd_write: wasi::SubscriptionFdReadwrite {
+            u: wasip1::SubscriptionU {
+                tag: wasip1::EVENTTYPE_FD_WRITE.raw(),
+                u: wasip1::SubscriptionUU {
+                    fd_write: wasip1::SubscriptionFdReadwrite {
                         file_descriptor: writable_fd,
                     },
                 },
@@ -166,7 +172,7 @@ unsafe fn test_fd_readwrite(readable_fd: wasi::Fd, writable_fd: wasi::Fd, error_
     assert_errno!(read.error, error_code);
     assert_eq!(
         read.type_,
-        wasi::EVENTTYPE_FD_READ,
+        wasip1::EVENTTYPE_FD_READ,
         "the event.type_ should equal FD_READ"
     );
     assert_eq!(
@@ -176,93 +182,94 @@ unsafe fn test_fd_readwrite(readable_fd: wasi::Fd, writable_fd: wasi::Fd, error_
     assert_errno!(write.error, error_code);
     assert_eq!(
         write.type_,
-        wasi::EVENTTYPE_FD_WRITE,
+        wasip1::EVENTTYPE_FD_WRITE,
         "the event.type_ should equal FD_WRITE"
     );
 }
 
-unsafe fn test_fd_readwrite_valid_fd(dir_fd: wasi::Fd) {
+unsafe fn test_fd_readwrite_valid_fd(dir_fd: wasip1::Fd) {
     // Create a file in the scratch directory.
-    let nonempty_file = wasi::path_open(
+    let nonempty_file = wasip1::path_open(
         dir_fd,
         0,
         "readable_file",
-        wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_WRITE,
+        wasip1::OFLAGS_CREAT,
+        wasip1::RIGHTS_FD_WRITE,
         0,
         0,
     )
     .expect("create writable file");
     // Write to file
     let contents = &[1u8];
-    let ciovec = wasi::Ciovec {
+    let ciovec = wasip1::Ciovec {
         buf: contents.as_ptr() as *const _,
         buf_len: contents.len(),
     };
-    wasi::fd_write(nonempty_file, &[ciovec]).expect("write");
-    wasi::fd_close(nonempty_file).expect("close");
+    wasip1::fd_write(nonempty_file, &[ciovec]).expect("write");
+    wasip1::fd_close(nonempty_file).expect("close");
 
     // Now open the file for reading
-    let readable_fd = wasi::path_open(dir_fd, 0, "readable_file", 0, wasi::RIGHTS_FD_READ, 0, 0)
-        .expect("opening a readable file");
+    let readable_fd =
+        wasip1::path_open(dir_fd, 0, "readable_file", 0, wasip1::RIGHTS_FD_READ, 0, 0)
+            .expect("opening a readable file");
 
     assert!(
-        readable_fd > libc::STDERR_FILENO as wasi::Fd,
+        readable_fd > libc::STDERR_FILENO as wasip1::Fd,
         "file descriptor range check",
     );
     // Create a file in the scratch directory.
-    let writable_fd = wasi::path_open(
+    let writable_fd = wasip1::path_open(
         dir_fd,
         0,
         "writable_file",
-        wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_WRITE,
+        wasip1::OFLAGS_CREAT,
+        wasip1::RIGHTS_FD_WRITE,
         0,
         0,
     )
     .expect("opening a writable file");
     assert!(
-        writable_fd > libc::STDERR_FILENO as wasi::Fd,
+        writable_fd > libc::STDERR_FILENO as wasip1::Fd,
         "file descriptor range check",
     );
 
-    test_fd_readwrite(readable_fd, writable_fd, wasi::ERRNO_SUCCESS);
+    test_fd_readwrite(readable_fd, writable_fd, wasip1::ERRNO_SUCCESS);
 
-    wasi::fd_close(readable_fd).expect("closing readable_file");
-    wasi::fd_close(writable_fd).expect("closing writable_file");
-    wasi::path_unlink_file(dir_fd, "readable_file").expect("removing readable_file");
-    wasi::path_unlink_file(dir_fd, "writable_file").expect("removing writable_file");
+    wasip1::fd_close(readable_fd).expect("closing readable_file");
+    wasip1::fd_close(writable_fd).expect("closing writable_file");
+    wasip1::path_unlink_file(dir_fd, "readable_file").expect("removing readable_file");
+    wasip1::path_unlink_file(dir_fd, "writable_file").expect("removing writable_file");
 }
 
 unsafe fn test_fd_readwrite_invalid_fd() {
-    let fd_readwrite = wasi::SubscriptionFdReadwrite {
-        file_descriptor: wasi::Fd::max_value(),
+    let fd_readwrite = wasip1::SubscriptionFdReadwrite {
+        file_descriptor: wasip1::Fd::max_value(),
     };
     let r#in = [
-        wasi::Subscription {
+        wasip1::Subscription {
             userdata: 1,
-            u: wasi::SubscriptionU {
-                tag: wasi::EVENTTYPE_FD_READ.raw(),
-                u: wasi::SubscriptionUU {
+            u: wasip1::SubscriptionU {
+                tag: wasip1::EVENTTYPE_FD_READ.raw(),
+                u: wasip1::SubscriptionUU {
                     fd_read: fd_readwrite,
                 },
             },
         },
-        wasi::Subscription {
+        wasip1::Subscription {
             userdata: 2,
-            u: wasi::SubscriptionU {
-                tag: wasi::EVENTTYPE_FD_WRITE.raw(),
-                u: wasi::SubscriptionUU {
+            u: wasip1::SubscriptionU {
+                tag: wasip1::EVENTTYPE_FD_WRITE.raw(),
+                u: wasip1::SubscriptionUU {
                     fd_write: fd_readwrite,
                 },
             },
         },
     ];
     let err = poll_oneoff_impl(&r#in).unwrap_err();
-    assert_eq!(err, wasi::ERRNO_BADF)
+    assert_eq!(err, wasip1::ERRNO_BADF)
 }
 
-unsafe fn test_poll_oneoff(dir_fd: wasi::Fd) {
+unsafe fn test_poll_oneoff(dir_fd: wasip1::Fd) {
     test_timeout();
     test_sleep();
     test_empty_poll();
