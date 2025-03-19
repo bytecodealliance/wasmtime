@@ -1415,6 +1415,12 @@ criteria = "safe-to-deploy"
 delta = "0.17.0 -> 0.18.1"
 notes = "No major changes, no unsafe code here."
 
+[[audits.cargo_metadata]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.18.1 -> 0.19.2"
+notes = "Dependency updates and minor changes, nothing suspicious."
+
 [[audits.cast]]
 who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
@@ -4597,7 +4603,7 @@ end = "2025-12-02"
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-02-28"
-end = "2024-07-06"
+end = "2026-03-19"
 
 [[trusted.serde_spanned]]
 criteria = "safe-to-deploy"

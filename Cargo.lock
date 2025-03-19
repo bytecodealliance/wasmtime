@@ -447,16 +447,16 @@ dependencies = [
 
 [[package]]
 name = "cargo_metadata"
-version = "0.18.1"
+version = "0.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2d886547e41f740c616ae73108f6eb70afe6d940c7bc697cb30f13daec073037"
+checksum = "dd5eb614ed4c27c5d706420e4320fbe3216ab31fa1c33cd8246ac36dae4479ba"
 dependencies = [
  "camino",
  "cargo-platform",
  "semver",
  "serde",
  "serde_json",
- "thiserror",
+ "thiserror 2.0.12",
 ]
 
 [[package]]
@@ -837,7 +837,7 @@ dependencies = [
  "similar",
  "smallvec",
  "target-lexicon",
- "thiserror",
+ "thiserror 1.0.65",
  "toml",
  "wat",
 ]
@@ -877,7 +877,7 @@ dependencies = [
  "libm",
  "log",
  "smallvec",
- "thiserror",
+ "thiserror 1.0.65",
 ]
 
 [[package]]
@@ -1000,7 +1000,7 @@ dependencies = [
  "serde",
  "similar",
  "target-lexicon",
- "thiserror",
+ "thiserror 1.0.65",
  "toml",
  "walkdir",
 ]
@@ -1375,7 +1375,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2fe00b427b7c4835f8b82170eb7b9a63634376b63d73b9a9093367e82570bbaa"
 dependencies = [
  "regex",
- "thiserror",
+ "thiserror 1.0.65",
 ]
 
 [[package]]
@@ -2528,7 +2528,7 @@ checksum = "0bc80894094c6a875bfac64415ed456fa661081a278a035e22be661305c87e14"
 dependencies = [
  "js-sys",
  "ort-sys",
- "thiserror",
+ "thiserror 1.0.65",
  "tracing",
  "web-sys",
 ]
@@ -2823,7 +2823,7 @@ checksum = "b033d837a7cf162d7993aded9304e30a83213c648b6e389db233191f891e5c2b"
 dependencies = [
  "getrandom",
  "redox_syscall 0.2.13",
- "thiserror",
+ "thiserror 1.0.65",
 ]
 
 [[package]]
@@ -3077,11 +3077,12 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.107"
+version = "1.0.140"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6b420ce6e3d8bd882e9b243c6eed35dbc9a6110c9769e74b584e0d68d1f20c65"
+checksum = "20068b6e96dc6c9bd23e01df8827e6c7e1f2fddd43c21810382803c136b99373"
 dependencies = [
  "itoa",
+ "memchr",
  "ryu",
  "serde",
 ]
@@ -3363,7 +3364,7 @@ dependencies = [
  "ndarray",
  "rand",
  "safetensors",
- "thiserror",
+ "thiserror 1.0.65",
  "torch-sys",
  "zip",
 ]
@@ -3444,7 +3445,16 @@ version = "1.0.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5d11abd9594d9b38965ef50805c5e469ca9cc6f197f883f717e0269a3057b3d5"
 dependencies = [
- "thiserror-impl",
+ "thiserror-impl 1.0.65",
+]
+
+[[package]]
+name = "thiserror"
+version = "2.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "567b8a2dae586314f7be2a752ec7474332959c6460e02bde30d702a66d488708"
+dependencies = [
+ "thiserror-impl 2.0.12",
 ]
 
 [[package]]
@@ -3452,6 +3462,17 @@ name = "thiserror-impl"
 version = "1.0.65"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae71770322cbd277e69d762a16c444af02aa0575ac0d174f0b9562d3b37f8602"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.90",
+]
+
+[[package]]
+name = "thiserror-impl"
+version = "2.0.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f7cf42b4507d8ea322120659672cf1b9dbb93f8f2d4ecfd6e51350ff5b17a1d"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3907,7 +3928,7 @@ dependencies = [
  "tempfile",
  "test-log",
  "test-programs-artifacts",
- "thiserror",
+ "thiserror 1.0.65",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -3923,7 +3944,7 @@ version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7031683cc05a71515d9200fb159b28d717ded3c40dbb979d1602cf46f3a68f40"
 dependencies = [
- "thiserror",
+ "thiserror 1.0.65",
 ]
 
 [[package]]
@@ -4031,7 +4052,7 @@ dependencies = [
  "egg",
  "log",
  "rand",
- "thiserror",
+ "thiserror 1.0.65",
  "wasm-encoder",
  "wasmparser",
 ]
@@ -4064,7 +4085,7 @@ checksum = "3c6463c8be4f494f627ac1b07138cea94781bf2029402afb9c08e4f58c8307f4"
 dependencies = [
  "indexmap 2.7.0",
  "logos",
- "thiserror",
+ "thiserror 1.0.65",
  "wit-parser",
 ]
 
@@ -4408,7 +4429,7 @@ dependencies = [
  "pulley-interpreter",
  "smallvec",
  "target-lexicon",
- "thiserror",
+ "thiserror 1.0.65",
  "wasmparser",
  "wasmtime-environ",
  "wasmtime-versioned-export-macros",
@@ -4618,7 +4639,7 @@ dependencies = [
  "tempfile",
  "test-log",
  "test-programs-artifacts",
- "thiserror",
+ "thiserror 1.0.65",
  "tokio",
  "tracing",
  "tracing-subscriber",
@@ -4699,7 +4720,7 @@ dependencies = [
  "ort",
  "tch",
  "test-programs-artifacts",
- "thiserror",
+ "thiserror 1.0.65",
  "tracing",
  "tracing-subscriber",
  "walkdir",
@@ -4857,7 +4878,7 @@ dependencies = [
  "async-trait",
  "bitflags 2.6.0",
  "proptest",
- "thiserror",
+ "thiserror 1.0.65",
  "tokio",
  "tracing",
  "wasmtime",
@@ -4897,7 +4918,7 @@ dependencies = [
  "anyhow",
  "env_logger 0.11.5",
  "proptest",
- "thiserror",
+ "thiserror 1.0.65",
  "tracing",
  "tracing-subscriber",
  "wiggle",
@@ -4944,7 +4965,7 @@ dependencies = [
  "regalloc2",
  "smallvec",
  "target-lexicon",
- "thiserror",
+ "thiserror 1.0.65",
  "wasmparser",
  "wasmtime-cranelift",
  "wasmtime-environ",
@@ -5283,7 +5304,7 @@ checksum = "e366f27a5cabcddb2706a78296a40b8fcc451e1a6aba2fc1d94b4a01bdaaef4b"
 dependencies = [
  "anyhow",
  "log",
- "thiserror",
+ "thiserror 1.0.65",
  "wast 35.0.2",
 ]
 
