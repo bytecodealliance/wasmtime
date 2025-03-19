@@ -1,18 +1,18 @@
 use std::{env, process};
 use test_programs::preview1::{assert_errno, open_scratch_directory};
 
-unsafe fn test_overwrite_preopen(dir_fd: wasi::Fd) {
-    let pre_fd: wasi::Fd = (libc::STDERR_FILENO + 1) as wasi::Fd;
+unsafe fn test_overwrite_preopen(dir_fd: wasip1::Fd) {
+    let pre_fd: wasip1::Fd = (libc::STDERR_FILENO + 1) as wasip1::Fd;
 
     assert!(dir_fd > pre_fd, "dir_fd number");
 
-    let old_dir_filestat = wasi::fd_filestat_get(dir_fd).expect("failed fd_filestat_get");
+    let old_dir_filestat = wasip1::fd_filestat_get(dir_fd).expect("failed fd_filestat_get");
 
     // Try to renumber over a preopened directory handle.
-    wasi::fd_renumber(dir_fd, pre_fd).expect("renumbering over a preopened file descriptor");
+    wasip1::fd_renumber(dir_fd, pre_fd).expect("renumbering over a preopened file descriptor");
 
     // Ensure that pre_fd is still open.
-    let new_dir_filestat = wasi::fd_filestat_get(pre_fd).expect("failed fd_filestat_get");
+    let new_dir_filestat = wasip1::fd_filestat_get(pre_fd).expect("failed fd_filestat_get");
 
     // Ensure that we renumbered.
     assert_eq!(old_dir_filestat.dev, new_dir_filestat.dev);
@@ -20,8 +20,8 @@ unsafe fn test_overwrite_preopen(dir_fd: wasi::Fd) {
 
     // Ensure that dir_fd is closed.
     assert_errno!(
-        wasi::fd_fdstat_get(dir_fd).expect_err("failed fd_fdstat_get"),
-        wasi::ERRNO_BADF
+        wasip1::fd_fdstat_get(dir_fd).expect_err("failed fd_fdstat_get"),
+        wasip1::ERRNO_BADF
     );
 }
 

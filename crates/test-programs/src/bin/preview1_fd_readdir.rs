@@ -4,7 +4,7 @@ use test_programs::preview1::open_scratch_directory;
 const BUF_LEN: usize = 256;
 
 struct DirEntry {
-    dirent: wasi::Dirent,
+    dirent: wasip1::Dirent,
     name: String,
 }
 
@@ -25,15 +25,15 @@ impl<'a> Iterator for ReadDir<'a> {
 
     fn next(&mut self) -> Option<DirEntry> {
         unsafe {
-            if self.buf.len() < mem::size_of::<wasi::Dirent>() {
+            if self.buf.len() < mem::size_of::<wasip1::Dirent>() {
                 return None;
             }
 
             // Read the data
-            let dirent_ptr = self.buf.as_ptr() as *const wasi::Dirent;
+            let dirent_ptr = self.buf.as_ptr() as *const wasip1::Dirent;
             let dirent = dirent_ptr.read_unaligned();
 
-            if self.buf.len() < mem::size_of::<wasi::Dirent>() + dirent.d_namlen as usize {
+            if self.buf.len() < mem::size_of::<wasip1::Dirent>() + dirent.d_namlen as usize {
                 return None;
             }
 
@@ -53,10 +53,10 @@ impl<'a> Iterator for ReadDir<'a> {
 }
 
 /// Return the entries plus a bool indicating EOF.
-unsafe fn exec_fd_readdir(fd: wasi::Fd, cookie: wasi::Dircookie) -> (Vec<DirEntry>, bool) {
+unsafe fn exec_fd_readdir(fd: wasip1::Fd, cookie: wasip1::Dircookie) -> (Vec<DirEntry>, bool) {
     let mut buf: [u8; BUF_LEN] = [0; BUF_LEN];
     let bufused =
-        wasi::fd_readdir(fd, buf.as_mut_ptr(), BUF_LEN, cookie).expect("failed fd_readdir");
+        wasip1::fd_readdir(fd, buf.as_mut_ptr(), BUF_LEN, cookie).expect("failed fd_readdir");
     assert!(bufused <= BUF_LEN);
 
     let sl = slice::from_raw_parts(buf.as_ptr(), bufused);
@@ -65,8 +65,8 @@ unsafe fn exec_fd_readdir(fd: wasi::Fd, cookie: wasi::Dircookie) -> (Vec<DirEntr
     (dirs, eof)
 }
 
-unsafe fn assert_empty_dir(dir_fd: wasi::Fd) {
-    let stat = wasi::fd_filestat_get(dir_fd).expect("failed filestat");
+unsafe fn assert_empty_dir(dir_fd: wasip1::Fd) {
+    let stat = wasip1::fd_filestat_get(dir_fd).expect("failed filestat");
 
     let (mut dirs, eof) = exec_fd_readdir(dir_fd, 0);
     assert!(eof, "expected to read the entire directory");
@@ -77,14 +77,14 @@ unsafe fn assert_empty_dir(dir_fd: wasi::Fd) {
     // the first entry should be `.`
     let dir = dirs.next().expect("first entry is None");
     assert_eq!(dir.name, ".", "first name");
-    assert_eq!(dir.dirent.d_type, wasi::FILETYPE_DIRECTORY, "first type");
+    assert_eq!(dir.dirent.d_type, wasip1::FILETYPE_DIRECTORY, "first type");
     assert_eq!(dir.dirent.d_ino, stat.ino);
     assert_eq!(dir.dirent.d_namlen, 1);
 
     // the second entry should be `..`
     let dir = dirs.next().expect("second entry is None");
     assert_eq!(dir.name, "..", "second name");
-    assert_eq!(dir.dirent.d_type, wasi::FILETYPE_DIRECTORY, "second type");
+    assert_eq!(dir.dirent.d_type, wasip1::FILETYPE_DIRECTORY, "second type");
 
     assert!(
         dirs.next().is_none(),
@@ -92,33 +92,33 @@ unsafe fn assert_empty_dir(dir_fd: wasi::Fd) {
     );
 }
 
-unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
+unsafe fn test_fd_readdir(dir_fd: wasip1::Fd) {
     // Check the behavior in an empty directory
     assert_empty_dir(dir_fd);
 
     // Add a file and check the behavior
-    let file_fd = wasi::path_open(
+    let file_fd = wasip1::path_open(
         dir_fd,
         0,
         "file",
-        wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        wasip1::OFLAGS_CREAT,
+        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
         0,
         0,
     )
     .expect("failed to create file");
     assert!(
-        file_fd > libc::STDERR_FILENO as wasi::Fd,
+        file_fd > libc::STDERR_FILENO as wasip1::Fd,
         "file descriptor range check",
     );
 
-    let file_stat = wasi::fd_filestat_get(file_fd).expect("failed filestat");
-    wasi::fd_close(file_fd).expect("closing a file");
+    let file_stat = wasip1::fd_filestat_get(file_fd).expect("failed filestat");
+    wasip1::fd_close(file_fd).expect("closing a file");
 
-    wasi::path_create_directory(dir_fd, "nested").expect("create a directory");
-    let nested_fd =
-        wasi::path_open(dir_fd, 0, "nested", 0, 0, 0, 0).expect("failed to open nested directory");
-    let nested_stat = wasi::fd_filestat_get(nested_fd).expect("failed filestat");
+    wasip1::path_create_directory(dir_fd, "nested").expect("create a directory");
+    let nested_fd = wasip1::path_open(dir_fd, 0, "nested", 0, 0, 0, 0)
+        .expect("failed to open nested directory");
+    let nested_stat = wasip1::fd_filestat_get(nested_fd).expect("failed filestat");
 
     // Execute another readdir
     let (mut dirs, eof) = exec_fd_readdir(dir_fd, 0);
@@ -139,7 +139,7 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
     assert_eq!(dir.name, "file", "file name doesn't match");
     assert_eq!(
         dir.dirent.d_type,
-        wasi::FILETYPE_REGULAR_FILE,
+        wasip1::FILETYPE_REGULAR_FILE,
         "type for the real file"
     );
     assert_eq!(dir.dirent.d_ino, file_stat.ino);
@@ -148,7 +148,7 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
     assert_eq!(dir.name, "nested", "nested directory name doesn't match");
     assert_eq!(
         dir.dirent.d_type,
-        wasi::FILETYPE_DIRECTORY,
+        wasip1::FILETYPE_DIRECTORY,
         "type for the nested directory"
     );
     assert_eq!(dir.dirent.d_ino, nested_stat.ino);
@@ -161,30 +161,30 @@ unsafe fn test_fd_readdir(dir_fd: wasi::Fd) {
 
     // check if nested directory shows up as empty
     assert_empty_dir(nested_fd);
-    wasi::fd_close(nested_fd).expect("closing a nested directory");
+    wasip1::fd_close(nested_fd).expect("closing a nested directory");
 
-    wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
-    wasi::path_remove_directory(dir_fd, "nested").expect("removing a nested directory");
+    wasip1::path_unlink_file(dir_fd, "file").expect("removing a file");
+    wasip1::path_remove_directory(dir_fd, "nested").expect("removing a nested directory");
 }
 
-unsafe fn test_fd_readdir_lots(dir_fd: wasi::Fd) {
+unsafe fn test_fd_readdir_lots(dir_fd: wasip1::Fd) {
     // Add a file and check the behavior
     for count in 0..1000 {
-        let file_fd = wasi::path_open(
+        let file_fd = wasip1::path_open(
             dir_fd,
             0,
             &format!("file.{count}"),
-            wasi::OFLAGS_CREAT,
-            wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+            wasip1::OFLAGS_CREAT,
+            wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
             0,
             0,
         )
         .expect("failed to create file");
         assert!(
-            file_fd > libc::STDERR_FILENO as wasi::Fd,
+            file_fd > libc::STDERR_FILENO as wasip1::Fd,
             "file descriptor range check",
         );
-        wasi::fd_close(file_fd).expect("closing a file");
+        wasip1::fd_close(file_fd).expect("closing a file");
     }
 
     // Count the entries to ensure that we see the correct number.
@@ -201,31 +201,31 @@ unsafe fn test_fd_readdir_lots(dir_fd: wasi::Fd) {
     assert_eq!(total, 1002, "expected 1000 entries plus . and ..");
 
     for count in 0..1000 {
-        wasi::path_unlink_file(dir_fd, &format!("file.{count}")).expect("removing a file");
+        wasip1::path_unlink_file(dir_fd, &format!("file.{count}")).expect("removing a file");
     }
 }
 
-unsafe fn test_fd_readdir_unicode_boundary(dir_fd: wasi::Fd) {
+unsafe fn test_fd_readdir_unicode_boundary(dir_fd: wasip1::Fd) {
     let filename = "Действие";
-    let file_fd = wasi::path_open(
+    let file_fd = wasip1::path_open(
         dir_fd,
         0,
         filename,
-        wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        wasip1::OFLAGS_CREAT,
+        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
         0,
         0,
     )
     .expect("failed to create file");
     assert!(
-        file_fd > libc::STDERR_FILENO as wasi::Fd,
+        file_fd > libc::STDERR_FILENO as wasip1::Fd,
         "file descriptor range check",
     );
-    wasi::fd_close(file_fd).expect("closing a file");
+    wasip1::fd_close(file_fd).expect("closing a file");
 
     let mut buf = Vec::new();
     'outer: loop {
-        let len = wasi::fd_readdir(dir_fd, buf.as_mut_ptr(), buf.capacity(), 0).unwrap();
+        let len = wasip1::fd_readdir(dir_fd, buf.as_mut_ptr(), buf.capacity(), 0).unwrap();
         buf.set_len(len);
 
         for entry in ReadDir::from_slice(&buf) {
@@ -236,7 +236,7 @@ unsafe fn test_fd_readdir_unicode_boundary(dir_fd: wasi::Fd) {
         buf = Vec::with_capacity(buf.capacity() + 1);
     }
 
-    wasi::path_unlink_file(dir_fd, filename).expect("removing a file");
+    wasip1::path_unlink_file(dir_fd, filename).expect("removing a file");
 }
 
 fn main() {

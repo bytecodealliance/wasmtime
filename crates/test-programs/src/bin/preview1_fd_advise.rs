@@ -1,42 +1,42 @@
 use std::{env, process};
 use test_programs::preview1::open_scratch_directory;
 
-unsafe fn test_fd_advise(dir_fd: wasi::Fd) {
+unsafe fn test_fd_advise(dir_fd: wasip1::Fd) {
     // Create a file in the scratch directory.
-    let file_fd = wasi::path_open(
+    let file_fd = wasip1::path_open(
         dir_fd,
         0,
         "file",
-        wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        wasip1::OFLAGS_CREAT,
+        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
         0,
         0,
     )
     .expect("failed to open file");
     assert!(
-        file_fd > libc::STDERR_FILENO as wasi::Fd,
+        file_fd > libc::STDERR_FILENO as wasip1::Fd,
         "file descriptor range check",
     );
 
     // Check file size
-    let stat = wasi::fd_filestat_get(file_fd).expect("failed to fdstat");
+    let stat = wasip1::fd_filestat_get(file_fd).expect("failed to fdstat");
     assert_eq!(stat.size, 0, "file size should be 0");
 
     // set_size it bigger
-    wasi::fd_filestat_set_size(file_fd, 100).expect("setting size");
+    wasip1::fd_filestat_set_size(file_fd, 100).expect("setting size");
 
-    let stat = wasi::fd_filestat_get(file_fd).expect("failed to fdstat 2");
+    let stat = wasip1::fd_filestat_get(file_fd).expect("failed to fdstat 2");
     assert_eq!(stat.size, 100, "file size should be 100");
 
     // Advise the kernel
-    wasi::fd_advise(file_fd, 10, 50, wasi::ADVICE_NORMAL).expect("failed advise");
+    wasip1::fd_advise(file_fd, 10, 50, wasip1::ADVICE_NORMAL).expect("failed advise");
 
     // Advise shouldn't change size
-    let stat = wasi::fd_filestat_get(file_fd).expect("failed to fdstat 3");
+    let stat = wasip1::fd_filestat_get(file_fd).expect("failed to fdstat 3");
     assert_eq!(stat.size, 100, "file size should be 100");
 
-    wasi::fd_close(file_fd).expect("failed to close");
-    wasi::path_unlink_file(dir_fd, "file").expect("failed to unlink");
+    wasip1::fd_close(file_fd).expect("failed to close");
+    wasip1::path_unlink_file(dir_fd, "file").expect("failed to unlink");
 }
 fn main() {
     let mut args = env::args();

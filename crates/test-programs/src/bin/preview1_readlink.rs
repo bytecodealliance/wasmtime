@@ -1,16 +1,16 @@
 use std::{env, process};
 use test_programs::preview1::{create_file, open_scratch_directory};
 
-unsafe fn test_readlink(dir_fd: wasi::Fd) {
+unsafe fn test_readlink(dir_fd: wasip1::Fd) {
     // Create a file in the scratch directory.
     create_file(dir_fd, "target");
 
     // Create a symlink
-    wasi::path_symlink("target", dir_fd, "symlink").expect("creating a symlink");
+    wasip1::path_symlink("target", dir_fd, "symlink").expect("creating a symlink");
 
     // Read link into the buffer
     let buf = &mut [0u8; 10];
-    let bufused = wasi::path_readlink(dir_fd, "symlink", buf.as_mut_ptr(), buf.len())
+    let bufused = wasip1::path_readlink(dir_fd, "symlink", buf.as_mut_ptr(), buf.len())
         .expect("readlink should succeed");
     assert_eq!(bufused, 6, "should use 6 bytes of the buffer");
     assert_eq!(&buf[..6], b"target", "buffer should contain 'target'");
@@ -22,28 +22,28 @@ unsafe fn test_readlink(dir_fd: wasi::Fd) {
 
     // Read link into smaller buffer than the actual link's length
     let buf = &mut [0u8; 4];
-    let bufused = wasi::path_readlink(dir_fd, "symlink", buf.as_mut_ptr(), buf.len())
+    let bufused = wasip1::path_readlink(dir_fd, "symlink", buf.as_mut_ptr(), buf.len())
         .expect("readlink with too-small buffer should silently truncate");
     assert_eq!(bufused, 4);
     assert_eq!(buf, b"targ");
 
     // Clean up.
-    wasi::path_unlink_file(dir_fd, "target").expect("removing a file");
-    wasi::path_unlink_file(dir_fd, "symlink").expect("removing a file");
+    wasip1::path_unlink_file(dir_fd, "target").expect("removing a file");
+    wasip1::path_unlink_file(dir_fd, "symlink").expect("removing a file");
 }
 
-unsafe fn test_incremental_readlink(dir_fd: wasi::Fd) {
+unsafe fn test_incremental_readlink(dir_fd: wasip1::Fd) {
     let filename = "Действие";
     create_file(dir_fd, filename);
 
-    wasi::path_symlink(filename, dir_fd, "symlink").expect("creating a symlink");
+    wasip1::path_symlink(filename, dir_fd, "symlink").expect("creating a symlink");
 
     let mut buf = Vec::new();
     loop {
         if buf.capacity() > 2 * filename.len() {
             panic!()
         }
-        let bufused = wasi::path_readlink(dir_fd, "symlink", buf.as_mut_ptr(), buf.capacity())
+        let bufused = wasip1::path_readlink(dir_fd, "symlink", buf.as_mut_ptr(), buf.capacity())
             .expect("readlink should succeed");
         buf.set_len(bufused);
         if buf.capacity() > filename.len() {
@@ -52,8 +52,8 @@ unsafe fn test_incremental_readlink(dir_fd: wasi::Fd) {
         }
         buf = Vec::with_capacity(buf.capacity() + 1);
     }
-    wasi::path_unlink_file(dir_fd, filename).expect("removing a file");
-    wasi::path_unlink_file(dir_fd, "symlink").expect("removing a file");
+    wasip1::path_unlink_file(dir_fd, filename).expect("removing a file");
+    wasip1::path_unlink_file(dir_fd, "symlink").expect("removing a file");
 }
 
 fn main() {

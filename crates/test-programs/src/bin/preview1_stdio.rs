@@ -2,8 +2,8 @@ use test_programs::preview1::{STDERR_FD, STDIN_FD, STDOUT_FD};
 
 unsafe fn test_stdio() {
     for fd in &[STDIN_FD, STDOUT_FD, STDERR_FD] {
-        wasi::fd_fdstat_get(*fd).expect("fd_fdstat_get on stdio");
-        wasi::fd_renumber(*fd, *fd + 100).expect("renumbering stdio");
+        wasip1::fd_fdstat_get(*fd).expect("fd_fdstat_get on stdio");
+        wasip1::fd_renumber(*fd, *fd + 100).expect("renumbering stdio");
     }
 }
 

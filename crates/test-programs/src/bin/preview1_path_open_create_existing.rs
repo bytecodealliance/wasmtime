@@ -1,22 +1,22 @@
 use std::{env, process};
 use test_programs::preview1::{assert_errno, create_file, open_scratch_directory};
 
-unsafe fn test_path_open_create_existing(dir_fd: wasi::Fd) {
+unsafe fn test_path_open_create_existing(dir_fd: wasip1::Fd) {
     create_file(dir_fd, "file");
     assert_errno!(
-        wasi::path_open(
+        wasip1::path_open(
             dir_fd,
             0,
             "file",
-            wasi::OFLAGS_CREAT | wasi::OFLAGS_EXCL,
+            wasip1::OFLAGS_CREAT | wasip1::OFLAGS_EXCL,
             0,
             0,
             0,
         )
         .expect_err("trying to create a file that already exists"),
-        wasi::ERRNO_EXIST
+        wasip1::ERRNO_EXIST
     );
-    wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
+    wasip1::path_unlink_file(dir_fd, "file").expect("removing a file");
 }
 
 fn main() {

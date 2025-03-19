@@ -1,14 +1,14 @@
 use std::{env, process};
 use test_programs::preview1::{assert_errno, open_scratch_directory};
 
-unsafe fn test_path_open_missing(dir_fd: wasi::Fd) {
+unsafe fn test_path_open_missing(dir_fd: wasip1::Fd) {
     assert_errno!(
-        wasi::path_open(
+        wasip1::path_open(
             dir_fd, 0, "file", 0, // not passing O_CREAT here
             0, 0, 0,
         )
         .expect_err("trying to open a file that doesn't exist"),
-        wasi::ERRNO_NOENT
+        wasip1::ERRNO_NOENT
     );
 }
 

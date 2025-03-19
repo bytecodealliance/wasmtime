@@ -3,64 +3,64 @@ use test_programs::preview1::{
     assert_errno, assert_fs_time_eq, open_scratch_directory, TestConfig,
 };
 
-unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
+unsafe fn test_path_filestat(dir_fd: wasip1::Fd) {
     let cfg = TestConfig::from_env();
-    let fdflags = wasi::FDFLAGS_APPEND;
+    let fdflags = wasip1::FDFLAGS_APPEND;
 
     // Create a file in the scratch directory.
-    let file_fd = wasi::path_open(
+    let file_fd = wasip1::path_open(
         dir_fd,
         0,
         "file",
-        wasi::OFLAGS_CREAT,
-        wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+        wasip1::OFLAGS_CREAT,
+        wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
         0,
         // Pass some flags for later retrieval
         fdflags,
     )
     .expect("opening a file");
     assert!(
-        file_fd > libc::STDERR_FILENO as wasi::Fd,
+        file_fd > libc::STDERR_FILENO as wasip1::Fd,
         "file descriptor range check",
     );
 
-    let fdstat = wasi::fd_fdstat_get(file_fd).expect("fd_fdstat_get");
+    let fdstat = wasip1::fd_fdstat_get(file_fd).expect("fd_fdstat_get");
     assert_eq!(
-        fdstat.fs_flags & wasi::FDFLAGS_APPEND,
-        wasi::FDFLAGS_APPEND,
+        fdstat.fs_flags & wasip1::FDFLAGS_APPEND,
+        wasip1::FDFLAGS_APPEND,
         "file should have the APPEND fdflag used to create the file"
     );
     assert_errno!(
-        wasi::path_open(
+        wasip1::path_open(
             dir_fd,
             0,
             "file",
             0,
-            wasi::RIGHTS_FD_READ | wasi::RIGHTS_FD_WRITE,
+            wasip1::RIGHTS_FD_READ | wasip1::RIGHTS_FD_WRITE,
             0,
-            wasi::FDFLAGS_SYNC,
+            wasip1::FDFLAGS_SYNC,
         )
         .expect_err("FDFLAGS_SYNC not supported by platform"),
-        wasi::ERRNO_NOTSUP
+        wasip1::ERRNO_NOTSUP
     );
 
     // Check file size
-    let file_stat = wasi::path_filestat_get(dir_fd, 0, "file").expect("reading file stats");
+    let file_stat = wasip1::path_filestat_get(dir_fd, 0, "file").expect("reading file stats");
     assert_eq!(file_stat.size, 0, "file size should be 0");
 
     // Check path_filestat_set_times
     let new_mtim = Duration::from_nanos(file_stat.mtim) - 2 * cfg.fs_time_precision();
-    wasi::path_filestat_set_times(
+    wasip1::path_filestat_set_times(
         dir_fd,
         0,
         "file",
         0,
         new_mtim.as_nanos() as u64,
-        wasi::FSTFLAGS_MTIM,
+        wasip1::FSTFLAGS_MTIM,
     )
     .expect("path_filestat_set_times should succeed");
 
-    let modified_file_stat = wasi::path_filestat_get(dir_fd, 0, "file")
+    let modified_file_stat = wasip1::path_filestat_get(dir_fd, 0, "file")
         .expect("reading file stats after path_filestat_set_times");
 
     assert_fs_time_eq!(
@@ -70,20 +70,20 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
     );
 
     assert_errno!(
-        wasi::path_filestat_set_times(
+        wasip1::path_filestat_set_times(
             dir_fd,
             0,
             "file",
             0,
             new_mtim.as_nanos() as u64,
-            wasi::FSTFLAGS_MTIM | wasi::FSTFLAGS_MTIM_NOW,
+            wasip1::FSTFLAGS_MTIM | wasip1::FSTFLAGS_MTIM_NOW,
         )
         .expect_err("MTIM and MTIM_NOW can't both be set"),
-        wasi::ERRNO_INVAL
+        wasip1::ERRNO_INVAL
     );
 
     // check if the times were untouched
-    let unmodified_file_stat = wasi::path_filestat_get(dir_fd, 0, "file")
+    let unmodified_file_stat = wasip1::path_filestat_get(dir_fd, 0, "file")
         .expect("reading file stats after ERRNO_INVAL fd_filestat_set_times");
 
     assert_fs_time_eq!(
@@ -94,20 +94,20 @@ unsafe fn test_path_filestat(dir_fd: wasi::Fd) {
 
     // Invalid arguments to set_times:
     assert_errno!(
-        wasi::path_filestat_set_times(
+        wasip1::path_filestat_set_times(
             dir_fd,
             0,
             "file",
             0,
             0,
-            wasi::FSTFLAGS_ATIM | wasi::FSTFLAGS_ATIM_NOW,
+            wasip1::FSTFLAGS_ATIM | wasip1::FSTFLAGS_ATIM_NOW,
         )
         .expect_err("ATIM & ATIM_NOW can't both be set"),
-        wasi::ERRNO_INVAL
+        wasip1::ERRNO_INVAL
     );
 
-    wasi::fd_close(file_fd).expect("closing a file");
-    wasi::path_unlink_file(dir_fd, "file").expect("removing a file");
+    wasip1::fd_close(file_fd).expect("closing a file");
+    wasip1::path_unlink_file(dir_fd, "file").expect("removing a file");
 }
 fn main() {
     let mut args = env::args();
