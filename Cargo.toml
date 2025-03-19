@@ -334,7 +334,7 @@ capstone = "0.13.0"
 smallvec = { version = "1.6.1", features = ["union"] }
 tracing = "0.1.26"
 bitflags = "2.0"
-thiserror = "1.0.43"
+thiserror = "2.0.12"
 async-trait = "0.1.71"
 trait-variant = "0.1.2"
 heck = "0.5"
