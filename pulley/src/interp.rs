@@ -1317,16 +1317,14 @@ impl OpVisitor for Interpreter<'_> {
     fn call(&mut self, offset: PcRelOffset) -> ControlFlow<Done> {
         let return_addr = self.pc.as_ptr();
         self.state.lr = return_addr.as_ptr();
-        self.pc_rel_jump::<crate::Call>(offset);
-        ControlFlow::Continue(())
+        self.pc_rel_jump::<crate::Call>(offset)
     }
 
     fn call1(&mut self, arg1: XReg, offset: PcRelOffset) -> ControlFlow<Done> {
         let return_addr = self.pc.as_ptr();
         self.state.lr = return_addr.as_ptr();
         self.state[XReg::x0] = self.state[arg1];
-        self.pc_rel_jump::<crate::Call1>(offset);
-        ControlFlow::Continue(())
+        self.pc_rel_jump::<crate::Call1>(offset)
     }
 
     fn call2(&mut self, arg1: XReg, arg2: XReg, offset: PcRelOffset) -> ControlFlow<Done> {
@@ -1335,8 +1333,7 @@ impl OpVisitor for Interpreter<'_> {
         let (x0, x1) = (self.state[arg1], self.state[arg2]);
         self.state[XReg::x0] = x0;
         self.state[XReg::x1] = x1;
-        self.pc_rel_jump::<crate::Call2>(offset);
-        ControlFlow::Continue(())
+        self.pc_rel_jump::<crate::Call2>(offset)
     }
 
     fn call3(
@@ -1352,8 +1349,7 @@ impl OpVisitor for Interpreter<'_> {
         self.state[XReg::x0] = x0;
         self.state[XReg::x1] = x1;
         self.state[XReg::x2] = x2;
-        self.pc_rel_jump::<crate::Call3>(offset);
-        ControlFlow::Continue(())
+        self.pc_rel_jump::<crate::Call3>(offset)
     }
 
     fn call4(
@@ -1376,8 +1372,7 @@ impl OpVisitor for Interpreter<'_> {
         self.state[XReg::x1] = x1;
         self.state[XReg::x2] = x2;
         self.state[XReg::x3] = x3;
-        self.pc_rel_jump::<crate::Call4>(offset);
-        ControlFlow::Continue(())
+        self.pc_rel_jump::<crate::Call4>(offset)
     }
 
     fn call_indirect(&mut self, dst: XReg) -> ControlFlow<Done> {
@@ -1393,8 +1388,7 @@ impl OpVisitor for Interpreter<'_> {
     }
 
     fn jump(&mut self, offset: PcRelOffset) -> ControlFlow<Done> {
-        self.pc_rel_jump::<crate::Jump>(offset);
-        ControlFlow::Continue(())
+        self.pc_rel_jump::<crate::Jump>(offset)
     }
 
     fn xjump(&mut self, reg: XReg) -> ControlFlow<Done> {
