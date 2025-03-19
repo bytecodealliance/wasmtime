@@ -1,6 +1,7 @@
 # Documentation for this configuration file can be found here
 # https://embarkstudios.github.io/cargo-deny/checks/cfg.html
 
+[graph]
 targets = [
     { triple = "x86_64-unknown-linux-gnu" },
     { triple = "x86_64-apple-darwin" },

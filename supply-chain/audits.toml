@@ -2166,6 +2166,15 @@ Minimal `unsafe` usage. Few blocks that existed looked reasonable. Does what it
 says on the tin: lots of iterators.
 """
 
+[[audits.itertools]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.12.1 -> 0.14.0"
+notes = """
+Lots of new iterators and shuffling some things around. Some new unsafe code but
+it's well-documented and well-tested. Nothing suspicious.
+"""
+
 [[audits.itoa]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
