@@ -621,44 +621,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "acbf1af155f9b9ef647e42cdc158db4b64a1b61f743629225fde6f3e0be2a7c7"
 
 [[package]]
-name = "component-fuzz-util"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "arbitrary",
- "proc-macro2",
- "quote",
- "wasmtime-component-util",
-]
-
-[[package]]
-name = "component-macro-test"
-version = "0.0.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.90",
-]
-
-[[package]]
 name = "component-macro-test-helpers"
 version = "0.0.0"
 dependencies = [
  "proc-macro2",
  "quote",
-]
-
-[[package]]
-name = "component-test-util"
-version = "0.0.0"
-dependencies = [
- "anyhow",
- "arbitrary",
- "env_logger 0.11.5",
- "target-lexicon",
- "wasmtime",
- "wasmtime-environ",
- "wasmtime-wast-util",
 ]
 
 [[package]]
@@ -4293,8 +4260,6 @@ dependencies = [
  "cfg-if",
  "clap",
  "clap_complete",
- "component-macro-test",
- "component-test-util",
  "cranelift-codegen",
  "cranelift-filetests",
  "cranelift-native",
@@ -4338,6 +4303,7 @@ dependencies = [
  "wasmtime-environ",
  "wasmtime-explorer",
  "wasmtime-test-macros",
+ "wasmtime-test-util",
  "wasmtime-wasi",
  "wasmtime-wasi-config",
  "wasmtime-wasi-http",
@@ -4346,7 +4312,6 @@ dependencies = [
  "wasmtime-wasi-threads",
  "wasmtime-wasi-tls",
  "wasmtime-wast",
- "wasmtime-wast-util",
  "wast 227.0.0",
  "wat",
  "windows-sys 0.59.0",
@@ -4449,12 +4414,12 @@ name = "wasmtime-environ-fuzz"
 version = "0.0.0"
 dependencies = [
  "arbitrary",
- "component-fuzz-util",
  "env_logger 0.11.5",
  "libfuzzer-sys",
  "wasmparser",
  "wasmprinter",
  "wasmtime-environ",
+ "wasmtime-test-util",
  "wat",
 ]
 
@@ -4493,8 +4458,6 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "arbitrary",
- "component-fuzz-util",
- "component-test-util",
  "cranelift-assembler-x64",
  "cranelift-codegen",
  "cranelift-control",
@@ -4515,6 +4478,7 @@ dependencies = [
  "wasmparser",
  "wasmtime",
  "wasmtime-fuzzing",
+ "wasmtime-test-util",
 ]
 
 [[package]]
@@ -4523,8 +4487,6 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "arbitrary",
- "component-fuzz-util",
- "component-test-util",
  "env_logger 0.11.5",
  "futures",
  "log",
@@ -4542,8 +4504,8 @@ dependencies = [
  "wasmprinter",
  "wasmtime",
  "wasmtime-cli-flags",
+ "wasmtime-test-util",
  "wasmtime-wast",
- "wasmtime-wast-util",
  "wat",
 ]
 
@@ -4586,7 +4548,25 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.90",
- "wasmtime-wast-util",
+ "wasmtime-test-util",
+]
+
+[[package]]
+name = "wasmtime-test-util"
+version = "32.0.0"
+dependencies = [
+ "anyhow",
+ "arbitrary",
+ "env_logger 0.11.5",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "serde_derive",
+ "target-lexicon",
+ "toml",
+ "wasmtime",
+ "wasmtime-component-util",
+ "wasmtime-environ",
 ]
 
 [[package]]
@@ -4748,16 +4728,6 @@ dependencies = [
  "tokio",
  "wasmtime",
  "wast 227.0.0",
-]
-
-[[package]]
-name = "wasmtime-wast-util"
-version = "32.0.0"
-dependencies = [
- "anyhow",
- "serde",
- "serde_derive",
- "toml",
 ]
 
 [[package]]

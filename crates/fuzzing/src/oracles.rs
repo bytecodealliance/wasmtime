@@ -991,9 +991,11 @@ impl Drop for HelperThread {
 /// arbitrary types and values.
 pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbitrary::Result<()> {
     use crate::generators::component_types;
-    use component_fuzz_util::{TestCase, Type, EXPORT_FUNCTION, IMPORT_FUNCTION, MAX_TYPE_DEPTH};
-    use component_test_util::FuncExt;
     use wasmtime::component::{Component, Linker, Val};
+    use wasmtime_test_util::component::FuncExt;
+    use wasmtime_test_util::component_fuzz::{
+        TestCase, Type, EXPORT_FUNCTION, IMPORT_FUNCTION, MAX_TYPE_DEPTH,
+    };
 
     crate::init_fuzzing();
 
@@ -1019,7 +1021,7 @@ pub fn dynamic_component_api_target(input: &mut arbitrary::Unstructured) -> arbi
         encoding2: input.arbitrary()?,
     };
 
-    let mut config = component_test_util::config();
+    let mut config = wasmtime_test_util::component::config();
     config.debug_adapter_modules(input.arbitrary()?);
     let engine = Engine::new(&config).unwrap();
     let mut store = Store::new(&engine, (Vec::new(), None));

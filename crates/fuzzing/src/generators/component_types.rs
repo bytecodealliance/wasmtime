@@ -7,12 +7,12 @@
 //! lifting and lowering code and verify the values remain intact during both processes.
 
 use arbitrary::{Arbitrary, Unstructured};
-use component_fuzz_util::{Declarations, EXPORT_FUNCTION, IMPORT_FUNCTION};
 use std::any::Any;
 use std::fmt::Debug;
 use std::ops::ControlFlow;
 use wasmtime::component::{self, Component, ComponentNamedList, Lift, Linker, Lower, Val};
 use wasmtime::{Config, Engine, Store, StoreContextMut};
+use wasmtime_test_util::component_fuzz::{Declarations, EXPORT_FUNCTION, IMPORT_FUNCTION};
 
 /// Minimum length of an arbitrary list value generated for a test case
 const MIN_LIST_LENGTH: u32 = 0;
