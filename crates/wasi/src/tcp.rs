@@ -520,7 +520,7 @@ impl TcpSocket {
 
     pub fn keep_alive_enabled(&self) -> SocketResult<bool> {
         let view = &*self.as_std_view()?;
-        Ok(sockopt::get_socket_keepalive(view)?)
+        Ok(sockopt::socket_keepalive(view)?)
     }
 
     pub fn set_keep_alive_enabled(&self, value: bool) -> SocketResult<()> {
@@ -530,7 +530,7 @@ impl TcpSocket {
 
     pub fn keep_alive_idle_time(&self) -> SocketResult<std::time::Duration> {
         let view = &*self.as_std_view()?;
-        Ok(sockopt::get_tcp_keepidle(view)?)
+        Ok(sockopt::tcp_keepidle(view)?)
     }
 
     pub fn set_keep_alive_idle_time(&mut self, duration: std::time::Duration) -> SocketResult<()> {
@@ -549,7 +549,7 @@ impl TcpSocket {
 
     pub fn keep_alive_interval(&self) -> SocketResult<std::time::Duration> {
         let view = &*self.as_std_view()?;
-        Ok(sockopt::get_tcp_keepintvl(view)?)
+        Ok(sockopt::tcp_keepintvl(view)?)
     }
 
     pub fn set_keep_alive_interval(&self, duration: std::time::Duration) -> SocketResult<()> {
@@ -559,7 +559,7 @@ impl TcpSocket {
 
     pub fn keep_alive_count(&self) -> SocketResult<u32> {
         let view = &*self.as_std_view()?;
-        Ok(sockopt::get_tcp_keepcnt(view)?)
+        Ok(sockopt::tcp_keepcnt(view)?)
     }
 
     pub fn set_keep_alive_count(&self, value: u32) -> SocketResult<()> {

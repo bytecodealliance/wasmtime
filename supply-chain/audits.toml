@@ -1158,6 +1158,12 @@ who = "Andrew Brown <andrew.brown@intel.com>"
 criteria = "safe-to-deploy"
 version = "1.3.0"
 
+[[audits.bytesize]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "1.3.0 -> 2.0.1"
+notes = "New functionality, but no new unsafe, and no other suspicious changes."
+
 [[audits.camino]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -1385,6 +1391,18 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "3.4.0 -> 3.4.1"
 
+[[audits.capstone]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.12.0 -> 0.13.0"
+notes = "No new major features added here, mostly new architectures from a capstone update. No fundamental new `unsafe` code or anything suspicious"
+
+[[audits.capstone-sys]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.16.0 -> 0.17.0"
+notes = "Updates to the build process of capstone and adding some new architectures. Nothing major."
+
 [[audits.cargo-platform]]
 who = "Pat Hickey <phickey@fastly.com>"
 criteria = "safe-to-deploy"
@@ -1402,6 +1420,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-deploy"
 delta = "0.17.0 -> 0.18.1"
 notes = "No major changes, no unsafe code here."
+
+[[audits.cargo_metadata]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.18.1 -> 0.19.2"
+notes = "Dependency updates and minor changes, nothing suspicious."
 
 [[audits.cast]]
 who = "Alex Crichton <alex@alexcrichton.com>"
@@ -2166,6 +2190,15 @@ Minimal `unsafe` usage. Few blocks that existed looked reasonable. Does what it
 says on the tin: lots of iterators.
 """
 
+[[audits.itertools]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.12.1 -> 0.14.0"
+notes = """
+Lots of new iterators and shuffling some things around. Some new unsafe code but
+it's well-documented and well-tested. Nothing suspicious.
+"""
+
 [[audits.itoa]]
 who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
@@ -2271,6 +2304,15 @@ who = "Dan Gohman <dev@sunfishcode.online>"
 criteria = "safe-to-deploy"
 delta = "0.2.158 -> 0.2.161"
 
+[[audits.libc]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-deploy"
+delta = "0.2.161 -> 0.2.171"
+notes = """
+Lots of unsafe, but that's par for the course with libc, it's all FFI type
+definitions updates/adjustments/etc.
+"""
+
 [[audits.libfuzzer-sys]]
 who = "Nick Fitzgerald <fitzgen@gmail.com>"
 criteria = "safe-to-run"
@@ -2318,6 +2360,12 @@ who = "Alex Crichton <alex@alexcrichton.com>"
 criteria = "safe-to-run"
 delta = "0.6.1 -> 0.7.0"
 notes = "Only minor changes with new flags and such, no major updates to `unsafe` or anything outside of a test framework."
+
+[[audits.libtest-mimic]]
+who = "Alex Crichton <alex@alexcrichton.com>"
+criteria = "safe-to-run"
+delta = "0.7.0 -> 0.8.1"
+notes = "Nothing major that's new in this update, mostly just updating a few things here and there. Nothing suspicious."
 
 [[audits.linux-raw-sys]]
 who = "Dan Gohman <dev@sunfishcode.online>"
@@ -4447,7 +4495,7 @@ end = "2024-07-06"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2021-06-12"
-end = "2024-07-14"
+end = "2026-03-19"
 
 [[trusted.lock_api]]
 criteria = "safe-to-deploy"
@@ -4525,7 +4573,7 @@ end = "2025-11-13"
 criteria = "safe-to-deploy"
 user-id = 6825 # Dan Gohman (sunfishcode)
 start = "2021-10-29"
-end = "2024-07-14"
+end = "2026-03-19"
 
 [[trusted.ryu]]
 criteria = "safe-to-deploy"
@@ -4561,7 +4609,7 @@ end = "2025-12-02"
 criteria = "safe-to-deploy"
 user-id = 3618 # David Tolnay (dtolnay)
 start = "2019-02-28"
-end = "2024-07-06"
+end = "2026-03-19"
 
 [[trusted.serde_spanned]]
 criteria = "safe-to-deploy"

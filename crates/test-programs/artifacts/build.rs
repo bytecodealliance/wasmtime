@@ -47,7 +47,7 @@ fn build_and_generate_tests() {
         .unwrap()
         .targets
         .iter()
-        .filter(move |t| t.kind == &["bin"])
+        .filter(move |t| t.kind == &[cargo_metadata::TargetKind::Bin])
         .map(|t| &t.name)
         .collect::<Vec<_>>();
 
