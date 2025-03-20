@@ -9,11 +9,6 @@ on:
     - main
     - 'release-*'
 
-  # Run full CI on the `main` branch once a day to prime the GitHub Actions
-  # caches used by PRs and the merge queue.
-  schedule:
-  - cron: '13 4 * * *'
-
   # This is the CI that runs for PRs-to-merge.
   merge_group:
 
@@ -25,6 +20,9 @@ on:
     # tag at the end of CI if successful and the tag will trigger the artifact
     # uploads as well as publication to crates.io.
     - 'release-*'
+
+  # Allow manually triggering this request via a button or another workflow.
+  workflow_dispatch:
 
 defaults:
   run:
@@ -1262,3 +1260,29 @@ jobs:
         }
         EOF
       if: steps.tag.outputs.push_tag == 'yes'
+
+  # File an issue on the repo if this run failed and was triggered via
+  # `workflow_dispatch`, which mostly means that
+  # `.github/workflows/trigger-release-branch-ci.yml` will file issues on
+  # failure so we get to see a notification when a build fails for a historical
+  # release branch.
+  file-issue-on-error:
+    name: File an issue if this build failed and was cron-triggered
+    runs-on: ubuntu-latest
+    needs: ci-status
+    if: |
+      always()
+      && needs.ci-status.result != 'success'
+      && github.event_name == 'workflow_dispatch'
+    permissions:
+      issues: write
+    steps:
+    - uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `Failed CI build for ${context.ref}`,
+            body: `See https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+          })
