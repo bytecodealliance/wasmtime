@@ -12,7 +12,6 @@ use pulley_interpreter::disas::Disassembler;
 use std::io::{IsTerminal, Read, Write};
 use std::iter::{self, Peekable};
 use std::path::{Path, PathBuf};
-use std::str::FromStr;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use wasmtime::Engine;
 use wasmtime_environ::{obj, FilePos, StackMap, Trap};
@@ -35,8 +34,8 @@ pub struct ObjdumpCommand {
     #[arg(long)]
     address_jumps: bool,
 
-    /// What functions should be printed (all|wasm|trampoline|builtin|libcall, default: wasm)
-    #[arg(long, value_parser = Func::from_str, value_name = "KIND")]
+    /// What functions should be printed
+    #[arg(long, default_value = "wasm", value_name = "KIND")]
     funcs: Vec<Func>,
 
     /// String filter to apply to function names to only print some functions.
@@ -481,33 +480,13 @@ struct Inst {
     bytes: Vec<u8>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(clap::ValueEnum, Clone, Copy, PartialEq, Eq)]
 enum Func {
     All,
     Wasm,
     Trampoline,
     Builtin,
     Libcall,
-}
-
-impl FromStr for Func {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Func> {
-        Ok(match s {
-            "all" => Func::All,
-            "wasm" => Func::Wasm,
-            "trampoline" => Func::Trampoline,
-            "builtin" => Func::Builtin,
-            "libcall" => Func::Libcall,
-            other => {
-                bail!(
-                    "unknown function kind `{other}`, \
-                     must be [all|wasm|trampoline|builtin|libcall]"
-                )
-            }
-        })
-    }
 }
 
 struct Decorator<'a> {
