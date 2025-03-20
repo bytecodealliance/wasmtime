@@ -20,10 +20,6 @@ impl WasmiEngine {
         config.exceptions_enabled = false;
         config.gc_enabled = false;
 
-        // FIXME: currently wasmi has a bug in wide-arithmetic (see #10418), so
-        // disable it temporarily.
-        config.wide_arithmetic_enabled = false;
-
         let mut wasmi_config = wasmi::Config::default();
         wasmi_config
             .consume_fuel(false)
