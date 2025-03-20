@@ -1796,10 +1796,7 @@ impl StructType {
     }
 
     pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> StructType {
-        let ty = RegisteredType::root(engine, index).expect(
-            "VMSharedTypeIndex is not registered in the Engine! Wrong \
-             engine? Didn't root the index somewhere?",
-        );
+        let ty = RegisteredType::root(engine, index);
         Self::from_registered_type(ty)
     }
 
@@ -2040,10 +2037,7 @@ impl ArrayType {
     }
 
     pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> ArrayType {
-        let ty = RegisteredType::root(engine, index).expect(
-            "VMSharedTypeIndex is not registered in the Engine! Wrong \
-             engine? Didn't root the index somewhere?",
-        );
+        let ty = RegisteredType::root(engine, index);
         Self::from_registered_type(ty)
     }
 
@@ -2400,10 +2394,7 @@ impl FuncType {
     }
 
     pub(crate) fn from_shared_type_index(engine: &Engine, index: VMSharedTypeIndex) -> FuncType {
-        let ty = RegisteredType::root(engine, index).expect(
-            "VMSharedTypeIndex is not registered in the Engine! Wrong \
-             engine? Didn't root the index somewhere?",
-        );
+        let ty = RegisteredType::root(engine, index);
         Self::from_registered_type(ty)
     }
 
