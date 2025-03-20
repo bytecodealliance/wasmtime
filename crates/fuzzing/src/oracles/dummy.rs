@@ -3,19 +3,6 @@
 use anyhow::ensure;
 use wasmtime::*;
 
-/// Create a set of dummy functions/globals/etc for the given imports.
-pub fn dummy_linker<T>(store: &mut Store<T>, module: &Module) -> Result<Linker<T>> {
-    let mut linker = Linker::new(store.engine());
-    linker.allow_shadowing(true);
-    for import in module.imports() {
-        let extern_ = dummy_extern(store, import.ty())?;
-        linker
-            .define(&store, import.module(), import.name(), extern_)
-            .unwrap();
-    }
-    Ok(linker)
-}
-
 /// Construct a dummy `Extern` from its type signature
 pub fn dummy_extern<T>(store: &mut Store<T>, ty: ExternType) -> Result<Extern> {
     Ok(match ty {

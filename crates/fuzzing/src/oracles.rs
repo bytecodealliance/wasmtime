@@ -366,14 +366,18 @@ fn compile_module(
 /// also yield the same values for each configuration, and we should assert
 /// that.
 pub fn instantiate_with_dummy(store: &mut Store<StoreLimits>, module: &Module) -> Option<Instance> {
+    assert!(Engine::same(store.engine(), module.engine()));
     // Creation of imports can fail due to resource limit constraints, and then
     // instantiation can naturally fail for a number of reasons as well. Bundle
     // the two steps together to match on the error below.
-    let linker = dummy::dummy_linker(store, module);
-    if let Err(e) = &linker {
-        log::warn!("failed to create dummy linker: {e:?}");
-    }
-    let instance = linker.and_then(|l| l.instantiate(&mut *store, module));
+    let mut linker = Linker::new(store.engine());
+    let instance = match linker.define_unknown_imports_as_default_values(module) {
+        Ok(()) => linker.instantiate(&mut *store, module),
+        Err(e) => {
+            log::warn!("failed to create dummy linker: {e:?}");
+            Err(e)
+        }
+    };
     unwrap_instance(store, instance)
 }
 

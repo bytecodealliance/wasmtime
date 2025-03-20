@@ -1,13 +1,12 @@
 //! Evaluate an exported Wasm function using Wasmtime.
 
 use crate::generators::{self, CompilerStrategy, DiffValue, DiffValueType, WasmtimeConfig};
-use crate::oracles::dummy;
 use crate::oracles::engine::DiffInstance;
 use crate::oracles::{compile_module, engine::DiffEngine, StoreLimits};
 use crate::single_module_fuzzer::KnownValid;
 use anyhow::{Context, Error, Result};
 use arbitrary::Unstructured;
-use wasmtime::{Extern, FuncType, Instance, Module, Store, Trap, Val};
+use wasmtime::{Extern, FuncType, Instance, Linker, Module, Store, Trap, Val};
 
 /// A wrapper for using Wasmtime as a [`DiffEngine`].
 pub struct WasmtimeEngine {
@@ -83,8 +82,12 @@ pub struct WasmtimeInstance {
 impl WasmtimeInstance {
     /// Instantiate a new Wasmtime instance.
     pub fn new(mut store: Store<StoreLimits>, module: Module) -> Result<Self> {
-        let instance = dummy::dummy_linker(&mut store, &module)
-            .and_then(|l| l.instantiate(&mut store, &module))
+        let mut linker = Linker::new(store.engine());
+        linker
+            .define_unknown_imports_as_default_values(&module)
+            .context("unable to create dummy linker for module")?;
+        let instance = linker
+            .instantiate(&mut store, &module)
             .context("unable to instantiate module in wasmtime")?;
         Ok(Self { store, instance })
     }
