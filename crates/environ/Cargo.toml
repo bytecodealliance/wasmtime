@@ -42,6 +42,11 @@ smallvec = { workspace = true, features = ['serde'] }
 clap = { workspace = true, features = ['default'] }
 env_logger = { workspace = true }
 wat = { workspace = true }
+# Fix a test parsing ELF files internally where the bytes themselves reside in a
+# `Vec<u8>` with no alignment requirements on it. By enabling the `unaligned`
+# feature we don't require anything to be aligned so it doesn't matter the
+# alignment of the bytes that we're reading.
+object = { workspace = true, features = ['unaligned'] }
 
 [[example]]
 name = "factc"

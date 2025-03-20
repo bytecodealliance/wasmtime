@@ -60,6 +60,17 @@ pub const SH_WASMTIME_NOT_EXECUTED: u64 = 1 << 0;
 /// mean that >=4gb text sections are not supported.
 pub const ELF_WASMTIME_ADDRMAP: &str = ".wasmtime.addrmap";
 
+/// A custom Wasmtime-specific section of compilation which store information
+/// about live gc references at various locations in the text section (stack
+/// maps).
+///
+/// This section has a custom binary encoding described in `stack_maps.rs` which
+/// is used to implement the single query we want to satisy of: where are the
+/// live GC references at this pc? Like the addrmap section this has an
+/// alignment of 1 with unaligned reads, and it additionally doesn't support
+/// >=4gb text sections.
+pub const ELF_WASMTIME_STACK_MAP: &str = ".wasmtime.stackmap";
+
 /// A custom binary-encoded section of wasmtime compilation artifacts which
 /// encodes the ability to map an offset in the text section to the trap code
 /// that it corresponds to.

@@ -50,7 +50,7 @@ pub use crate::module_artifacts::*;
 pub use crate::module_types::*;
 pub use crate::ref_bits::*;
 pub use crate::scopevec::ScopeVec;
-pub use crate::stack_map::StackMap;
+pub use crate::stack_map::*;
 pub use crate::trap_encoding::*;
 pub use crate::tunables::*;
 pub use crate::types::*;

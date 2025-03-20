@@ -9,7 +9,7 @@ use wasmtime_cranelift::{CompiledFunction, ModuleTextBuilder};
 use wasmtime_environ::{
     AddressMapSection, BuiltinFunctionIndex, CompileError, DefinedFuncIndex, FunctionBodyData,
     FunctionLoc, ModuleTranslation, ModuleTypesBuilder, PrimaryMap, RelocationTarget,
-    StaticModuleIndex, TrapEncodingBuilder, Tunables, VMOffsets, WasmFunctionInfo,
+    StaticModuleIndex, TrapEncodingBuilder, Tunables, VMOffsets,
 };
 use winch_codegen::{BuiltinFunctions, CallingConvention, TargetIsa};
 
@@ -95,7 +95,7 @@ impl wasmtime_environ::Compiler for Compiler {
         index: DefinedFuncIndex,
         data: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
-    ) -> Result<(WasmFunctionInfo, Box<dyn Any + Send>), CompileError> {
+    ) -> Result<Box<dyn Any + Send>, CompileError> {
         let index = translation.module.func_index(index);
         let sig = translation.module.functions[index]
             .signature
@@ -132,13 +132,7 @@ impl wasmtime_environ::Compiler for Compiler {
             self.emit_unwind_info(&mut func)?;
         }
 
-        Ok((
-            WasmFunctionInfo {
-                start_srcloc: func.metadata().address_map.start_srcloc,
-                stack_maps: Box::new([]),
-            },
-            Box::new(func),
-        ))
+        Ok(Box::new(func))
     }
 
     fn compile_array_to_wasm_trampoline(
