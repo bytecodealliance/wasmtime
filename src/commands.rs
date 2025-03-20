@@ -34,3 +34,8 @@ pub use self::compile::*;
 mod settings;
 #[cfg(feature = "cranelift")]
 pub use self::settings::*;
+
+#[cfg(feature = "objdump")]
+mod objdump;
+#[cfg(feature = "objdump")]
+pub use self::objdump::*;

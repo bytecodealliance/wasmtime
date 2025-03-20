@@ -49,11 +49,7 @@ fn custom_limiter_detect_os_oom_failure() -> Result<()> {
     // QEMU commits 5dfa88f7162f ("linux-user: do setrlimit selectively") and
     // 055d92f8673c ("linux-user: do prlimit selectively") for more
     // information.
-    if std::env::vars()
-        .filter(|(k, _v)| k.starts_with("CARGO_TARGET") && k.ends_with("RUNNER"))
-        .count()
-        > 0
-    {
+    if wasmtime_test_util::cargo_test_runner().is_some() {
         return Ok(());
     }
 

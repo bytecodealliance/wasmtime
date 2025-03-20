@@ -71,6 +71,12 @@ wasmparser = { workspace = true }
 tracing = { workspace = true }
 log = { workspace = true }
 tempfile = { workspace = true, optional = true }
+object = { workspace = true, optional = true }
+cranelift-codegen = { workspace = true, optional = true, features = ['disas'] }
+capstone = { workspace = true, optional = true }
+termcolor = { workspace = true, optional = true }
+gimli = { workspace = true, optional = true }
+pulley-interpreter = { workspace = true, optional = true }
 
 async-trait = { workspace = true }
 trait-variant = { workspace = true }
@@ -382,6 +388,7 @@ rustls = "0.22.0"
 webpki-roots = "0.26.0"
 itertools = "0.14.0"
 base64 = "0.22.1"
+termcolor = "1.4.1"
 
 # =============================================================================
 #
@@ -407,6 +414,7 @@ default = [
   "wast",
   "config",
   "completion",
+  "objdump",
 
   # On-by-default WASI features
   "wasi-nn",
@@ -514,6 +522,14 @@ run = [
   "wasmtime-cli-flags/async",
 ]
 completion = ["dep:clap_complete"]
+objdump = [
+  'dep:object',
+  'dep:cranelift-codegen',
+  'dep:capstone',
+  'dep:termcolor',
+  'dep:gimli',
+  'pulley-interpreter/disas',
+]
 
 [[test]]
 name = "disas"

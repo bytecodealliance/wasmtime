@@ -3,7 +3,7 @@
 use anyhow::{bail, Result};
 use std::fs::File;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::{Command, ExitStatus, Output, Stdio};
 use tempfile::{NamedTempFile, TempDir};
 
@@ -20,26 +20,7 @@ pub fn run_wasmtime_for_output(args: &[&str], stdin: Option<&Path>) -> Result<Ou
 
 /// Get the Wasmtime CLI as a [Command].
 pub fn get_wasmtime_command() -> Result<Command> {
-    // Figure out the Wasmtime binary from the current executable.
-    let bin = get_wasmtime_path()?;
-    let runner = std::env::vars()
-        .filter(|(k, _v)| k.starts_with("CARGO_TARGET") && k.ends_with("RUNNER"))
-        .next();
-
-    // If we're running tests with a "runner" then we might be doing something
-    // like cross-emulation, so spin up the emulator rather than the tests
-    // itself, which may not be natively executable.
-    let mut cmd = if let Some((_, runner)) = runner {
-        let mut parts = runner.split_whitespace();
-        let mut cmd = Command::new(parts.next().unwrap());
-        for arg in parts {
-            cmd.arg(arg);
-        }
-        cmd.arg(&bin);
-        cmd
-    } else {
-        Command::new(&bin)
-    };
+    let mut cmd = wasmtime_test_util::command(get_wasmtime_path());
 
     // Ignore this if it's specified in the environment to allow tests to run in
     // "default mode" by default.
@@ -48,12 +29,8 @@ pub fn get_wasmtime_command() -> Result<Command> {
     Ok(cmd)
 }
 
-fn get_wasmtime_path() -> Result<PathBuf> {
-    let mut path = std::env::current_exe()?;
-    path.pop(); // chop off the file name
-    path.pop(); // chop off `deps`
-    path.push("wasmtime");
-    Ok(path)
+fn get_wasmtime_path() -> &'static str {
+    env!("CARGO_BIN_EXE_wasmtime")
 }
 
 // Run the wasmtime CLI with the provided args and, if it succeeds, return
@@ -2170,7 +2147,7 @@ fn profile_with_vtune() -> Result<()> {
         "-user-data-dir",
         &std::env::temp_dir().to_string_lossy(),
         // ...then run Wasmtime with profiling enabled:
-        &get_wasmtime_path()?.to_string_lossy(),
+        get_wasmtime_path(),
         "--profile=vtune",
         "tests/all/cli_tests/simple.wat",
     ]);
