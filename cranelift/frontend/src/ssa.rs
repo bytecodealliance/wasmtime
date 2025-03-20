@@ -67,11 +67,21 @@ pub struct SideEffects {
     /// This field signals if it is the case and return the `Block` to which the initialization has
     /// been added.
     pub instructions_added_to_blocks: Vec<Block>,
+
+    /// When a variable does not have a single, dominating definition of a use,
+    /// we must insert block parameters to control-flow join points. This field
+    /// contains all of the block parameters we inserted, along with the
+    /// variable that they are associated with.
+    pub params_added_to_blocks: Vec<(Value, Variable)>,
 }
 
 impl SideEffects {
     fn is_empty(&self) -> bool {
-        self.instructions_added_to_blocks.is_empty()
+        let Self {
+            instructions_added_to_blocks,
+            params_added_to_blocks,
+        } = self;
+        instructions_added_to_blocks.is_empty() && params_added_to_blocks.is_empty()
     }
 }
 
@@ -308,6 +318,7 @@ impl SSABuilder {
         // find a usable definition. So create one.
         let val = func.dfg.append_block_param(block, ty);
         var_defs[block] = PackedOption::from(val);
+        self.side_effects.params_added_to_blocks.push((val, var));
 
         // Now every predecessor needs to pass its definition of this variable to the newly added
         // block parameter. To do that we have to "recursively" call `use_var`, but there are two

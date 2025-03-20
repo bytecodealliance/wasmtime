@@ -129,6 +129,7 @@ impl DrcHeap {
 
     /// Create a new DRC heap with the given capacity.
     fn with_capacity(capacity: usize) -> Result<Self> {
+        log::trace!("allocating new DRC heap with capacity {capacity:#x}");
         let heap = Mmap::with_at_least(capacity)?;
         let free_list = FreeList::new(heap.len());
         Ok(Self {
@@ -646,7 +647,7 @@ unsafe impl GcHeap for DrcHeap {
             ref_count: UnsafeCell::new(1),
             object_size: size,
         };
-        log::trace!("increment {gc_ref:#p} ref count -> 1");
+        log::trace!("new object: increment {gc_ref:#p} ref count -> 1");
         Ok(Some(gc_ref))
     }
 
