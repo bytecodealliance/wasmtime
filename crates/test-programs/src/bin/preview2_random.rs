@@ -3,7 +3,7 @@ use test_programs::wasi::random;
 fn main() {
     let mut bytes = [0_u8; 256];
     unsafe {
-        wasi::random_get(bytes.as_mut_ptr(), bytes.len()).unwrap();
+        wasip1::random_get(bytes.as_mut_ptr(), bytes.len()).unwrap();
     }
 
     assert!(bytes.iter().any(|x| *x != 0));
