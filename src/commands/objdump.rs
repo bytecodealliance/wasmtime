@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use wasmtime::Engine;
-use wasmtime_environ::{obj, FilePos, Trap};
+use wasmtime_environ::{obj, FilePos, StackMap, Trap};
 
 /// A helper utility in wasmtime to explore the compiled object file format of
 /// a `*.cwasm` file.
@@ -36,11 +36,11 @@ pub struct ObjdumpCommand {
     address_jumps: bool,
 
     /// What functions should be printed (all|wasm|trampoline|builtin|libcall, default: wasm)
-    #[arg(long, value_parser = Func::from_str)]
+    #[arg(long, value_parser = Func::from_str, value_name = "KIND")]
     funcs: Vec<Func>,
 
     /// String filter to apply to function names to only print some functions.
-    #[arg(long)]
+    #[arg(long, value_name = "STR")]
     filter: Option<String>,
 
     /// Whether or not instruction bytes are disassembled.
@@ -52,19 +52,43 @@ pub struct ObjdumpCommand {
     color: ColorChoice,
 
     /// Whether or not to interleave instructions with address maps.
-    #[arg(long)]
-    addrmap: bool,
+    #[arg(long, require_equals = true, value_name = "true|false")]
+    addrmap: Option<Option<bool>>,
 
     /// Column width of how large an address is rendered as.
-    #[arg(long, default_value = "10")]
+    #[arg(long, default_value = "10", value_name = "N")]
     address_width: usize,
 
     /// Whether or not to show information about what instructions can trap.
-    #[arg(long)]
-    traps: bool,
+    #[arg(long, require_equals = true, value_name = "true|false")]
+    traps: Option<Option<bool>>,
+
+    /// Whether or not to show information about stack maps.
+    #[arg(long, require_equals = true, value_name = "true|false")]
+    stack_maps: Option<Option<bool>>,
+}
+
+fn optional_flag_with_default(flag: Option<Option<bool>>, default: bool) -> bool {
+    match flag {
+        None => default,
+        Some(None) => true,
+        Some(Some(val)) => val,
+    }
 }
 
 impl ObjdumpCommand {
+    fn addrmap(&self) -> bool {
+        optional_flag_with_default(self.addrmap, false)
+    }
+
+    fn traps(&self) -> bool {
+        optional_flag_with_default(self.traps, true)
+    }
+
+    fn stack_maps(&self) -> bool {
+        optional_flag_with_default(self.stack_maps, true)
+    }
+
     /// Executes the command.
     pub fn execute(self) -> Result<()> {
         // Setup stdout handling color options. Also build some variables used
@@ -106,6 +130,11 @@ impl ObjdumpCommand {
                 .section_by_name(obj::ELF_WASMTIME_TRAPS)
                 .and_then(|section| section.data().ok())
                 .and_then(|bytes| wasmtime_environ::iterate_traps(bytes))
+                .map(|i| (Box::new(i) as Box<dyn Iterator<Item = _>>).peekable()),
+            stack_maps: elf
+                .section_by_name(obj::ELF_WASMTIME_STACK_MAP)
+                .and_then(|section| section.data().ok())
+                .and_then(|bytes| StackMap::iter(bytes))
                 .map(|i| (Box::new(i) as Box<dyn Iterator<Item = _>>).peekable()),
             objdump: &self,
         };
@@ -485,16 +514,18 @@ struct Decorator<'a> {
     objdump: &'a ObjdumpCommand,
     addrmap: Option<Peekable<Box<dyn Iterator<Item = (u32, FilePos)> + 'a>>>,
     traps: Option<Peekable<Box<dyn Iterator<Item = (u32, Trap)> + 'a>>>,
+    stack_maps: Option<Peekable<Box<dyn Iterator<Item = (u32, StackMap<'a>)> + 'a>>>,
 }
 
 impl Decorator<'_> {
     fn decorate(&mut self, address: u64, list: &mut Vec<String>) {
         self.addrmap(address, list);
         self.traps(address, list);
+        self.stack_maps(address, list);
     }
 
     fn addrmap(&mut self, address: u64, list: &mut Vec<String>) {
-        if !self.objdump.addrmap {
+        if !self.objdump.addrmap() {
             return;
         }
         let Some(addrmap) = &mut self.addrmap else {
@@ -511,7 +542,7 @@ impl Decorator<'_> {
     }
 
     fn traps(&mut self, address: u64, list: &mut Vec<String>) {
-        if !self.objdump.traps {
+        if !self.objdump.traps() {
             return;
         }
         let Some(traps) = &mut self.traps else {
@@ -522,6 +553,27 @@ impl Decorator<'_> {
                 continue;
             }
             list.push(format!("trap: {trap:?}"));
+        }
+    }
+
+    fn stack_maps(&mut self, address: u64, list: &mut Vec<String>) {
+        if !self.objdump.stack_maps() {
+            return;
+        }
+        let Some(stack_maps) = &mut self.stack_maps else {
+            return;
+        };
+        while let Some((addr, stack_map)) =
+            stack_maps.next_if(|(addr, _pos)| u64::from(*addr) <= address)
+        {
+            if u64::from(addr) != address {
+                continue;
+            }
+            list.push(format!(
+                "stack_map: frame_size={}, frame_offsets={:?}",
+                stack_map.frame_size(),
+                stack_map.offsets().collect::<Vec<_>>()
+            ));
         }
     }
 }
