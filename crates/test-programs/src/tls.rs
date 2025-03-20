@@ -1,11 +1,12 @@
 use crate::wasi::clocks::monotonic_clock;
+use crate::wasi::io::error::Error as IoError;
 use crate::wasi::io::streams::StreamError;
 use crate::wasi::tls::types::{ClientConnection, ClientHandshake, InputStream, OutputStream};
 
 const TIMEOUT_NS: u64 = 1_000_000_000;
 
 impl ClientHandshake {
-    pub fn blocking_finish(self) -> Result<(ClientConnection, InputStream, OutputStream), ()> {
+    pub fn blocking_finish(self) -> Result<(ClientConnection, InputStream, OutputStream), IoError> {
         let future = ClientHandshake::finish(self);
         let timeout = monotonic_clock::subscribe_duration(TIMEOUT_NS * 200);
         let pollable = future.subscribe();
