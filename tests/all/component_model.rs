@@ -1,9 +1,9 @@
 use anyhow::Result;
-use component_test_util::{async_engine, engine, TypedFuncExt};
 use std::fmt::Write;
 use std::iter;
 use wasmtime::component::Component;
 use wasmtime_component_util::REALLOC_AND_FREE;
+use wasmtime_test_util::component::{async_engine, engine, TypedFuncExt};
 
 mod aot;
 mod r#async;

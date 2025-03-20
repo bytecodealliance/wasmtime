@@ -20,9 +20,9 @@ test = false
 doctest = false
 
 [dependencies]
-anyhow = "1.0"
-proc-macro2 = "1.0"
-quote = "1.0"
+anyhow = { workspace = true }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
 syn = { workspace = true, features = ["extra-traits"] }
 wasmtime-component-util = { workspace = true }
 wasmtime-wit-bindgen = { workspace = true }

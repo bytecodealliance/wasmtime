@@ -957,6 +957,6 @@ impl ToTokens for StringEncoding {
             StringEncoding::Utf16 => quote!(Utf16),
             StringEncoding::Latin1OrUtf16 => quote!(Latin1OrUtf16),
         };
-        tokens.extend(quote!(component_fuzz_util::StringEncoding::#me));
+        tokens.extend(quote!(wasmtime_test_util::component_fuzz::StringEncoding::#me));
     }
 }

@@ -17,8 +17,8 @@ workspace = true
 
 [dependencies]
 witx = "0.9.1"
-quote = "1.0"
-proc-macro2 = "1.0"
+quote = { workspace = true }
+proc-macro2 = { workspace = true }
 heck = { workspace = true }
 anyhow = { workspace = true }
 syn = { workspace = true, features = ["full"] }

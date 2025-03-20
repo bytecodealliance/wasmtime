@@ -1,0 +1,67 @@
+[package]
+name = "wasmtime-test-util"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+description = "Utilities tests in Wasmtime"
+license = "Apache-2.0 WITH LLVM-exception"
+repository = "https://github.com/bytecodealliance/wasmtime"
+
+[lints]
+workspace = true
+
+[dependencies]
+anyhow = { workspace = true, optional = true }
+serde = { workspace = true, optional = true }
+serde_derive = { workspace = true, optional = true }
+toml = { workspace = true, optional = true }
+arbitrary = { workspace = true, optional = true }
+quote = { workspace = true, optional = true }
+proc-macro2 = { workspace = true, optional = true }
+wasmtime-component-util = { workspace = true, optional = true }
+wasmtime-environ = { workspace = true, optional = true }
+target-lexicon = { workspace = true, optional = true }
+env_logger = { workspace = true, optional = true }
+wasmtime = { workspace = true, optional = true }
+# NB: this crate is compiled both in as a dependency of a proc-macro and as a
+# dependency of tests themselves. That means dependencies of this crate are
+# compiled twice. Try to ensure "big" dependencies are optional and feature
+# gated.
+
+[features]
+wast = [
+  'dep:serde',
+  'dep:anyhow',
+  'dep:toml',
+  'dep:serde_derive',
+]
+wasmtime-wast = [
+  'dep:wasmtime-environ',
+  'wast',
+  'dep:wasmtime',
+  'wasmtime/cranelift',
+  'wasmtime/winch',
+  'wasmtime/gc-drc',
+  'wasmtime/gc-null',
+  'wasmtime/threads',
+  'wasmtime/component-model-async',
+  'dep:target-lexicon',
+]
+component = [
+  'dep:anyhow',
+  'dep:anyhow',
+  'arbitrary/derive',
+  'wast',
+  'dep:env_logger',
+  'dep:wasmtime',
+  'wasmtime/component-model',
+  'wasmtime/async',
+]
+component-fuzz = [
+  'dep:arbitrary',
+  'dep:quote',
+  'dep:proc-macro2',
+  'dep:wasmtime-component-util',
+]

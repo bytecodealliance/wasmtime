@@ -12,13 +12,11 @@ license = "Apache-2.0 WITH LLVM-exception"
 workspace = true
 
 [build-dependencies]
-wasmtime-wast-util = { path = '../wast-util' }
+wasmtime-test-util = { workspace = true, features = ['wast'] }
 
 [dependencies]
 anyhow = { workspace = true }
 arbitrary = { workspace = true, features = ["derive"] }
-component-test-util = { workspace = true }
-component-fuzz-util = { workspace = true }
 env_logger = { workspace = true }
 log = { workspace = true }
 rayon = "1.2.1"
@@ -34,7 +32,7 @@ wasm-mutate = { workspace = true }
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true }
 wasmi = "0.42.0"
 futures = { workspace = true }
-wasmtime-wast-util = { path = '../wast-util' }
+wasmtime-test-util = { workspace = true, features = ['wast', 'component-fuzz', 'component'] }
 
 [dependencies.wasmtime-cli-flags]
 workspace = true

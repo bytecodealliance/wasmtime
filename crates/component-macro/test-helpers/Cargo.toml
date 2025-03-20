@@ -15,5 +15,5 @@ test = false
 doctest = false
 
 [dependencies]
-proc-macro2 = "1.0"
-quote = "1.0"
+proc-macro2 = { workspace = true }
+quote = { workspace = true }

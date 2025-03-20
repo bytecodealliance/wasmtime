@@ -10,7 +10,7 @@ use arbitrary::{Arbitrary, Unstructured};
 use std::sync::Arc;
 use std::time::Duration;
 use wasmtime::{Engine, Module, MpkEnabled, Store};
-use wasmtime_wast_util::{limits, WastConfig, WastTest};
+use wasmtime_test_util::wast::{limits, WastConfig, WastTest};
 
 /// Configuration for `wasmtime::Config` and generated modules for a session of
 /// fuzzing.
@@ -126,7 +126,7 @@ impl Config {
     /// This will additionally update limits in the pooling allocator to be able
     /// to execute all tests.
     pub fn make_wast_test_compliant(&mut self, test: &WastTest) -> WastConfig {
-        let wasmtime_wast_util::TestConfig {
+        let wasmtime_test_util::wast::TestConfig {
             memory64,
             custom_page_sizes,
             multi_memory,
@@ -227,9 +227,9 @@ impl Config {
         // fail or not.
         WastConfig {
             collector: match self.wasmtime.collector {
-                Collector::Null => wasmtime_wast_util::Collector::Null,
+                Collector::Null => wasmtime_test_util::wast::Collector::Null,
                 Collector::DeferredReferenceCounting => {
-                    wasmtime_wast_util::Collector::DeferredReferenceCounting
+                    wasmtime_test_util::wast::Collector::DeferredReferenceCounting
                 }
             },
             pooling: matches!(
@@ -237,9 +237,13 @@ impl Config {
                 InstanceAllocationStrategy::Pooling(_)
             ),
             compiler: match self.wasmtime.compiler_strategy {
-                CompilerStrategy::CraneliftNative => wasmtime_wast_util::Compiler::CraneliftNative,
-                CompilerStrategy::CraneliftPulley => wasmtime_wast_util::Compiler::CraneliftPulley,
-                CompilerStrategy::Winch => wasmtime_wast_util::Compiler::Winch,
+                CompilerStrategy::CraneliftNative => {
+                    wasmtime_test_util::wast::Compiler::CraneliftNative
+                }
+                CompilerStrategy::CraneliftPulley => {
+                    wasmtime_test_util::wast::Compiler::CraneliftPulley
+                }
+                CompilerStrategy::Winch => wasmtime_test_util::wast::Compiler::Winch,
             },
         }
     }

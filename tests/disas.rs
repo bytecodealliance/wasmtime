@@ -152,7 +152,7 @@ impl Test {
     fn new(path: &Path) -> Result<Test> {
         let contents =
             std::fs::read_to_string(path).with_context(|| format!("failed to read {path:?}"))?;
-        let config: TestConfig = wasmtime_wast_util::parse_test_config(&contents)
+        let config: TestConfig = wasmtime_test_util::wast::parse_test_config(&contents)
             .context("failed to parse test configuration as TOML")?;
         let mut flags = vec!["wasmtime"];
         match &config.flags {

@@ -102,8 +102,7 @@ wat = { workspace = true }
 rayon = "1.5.0"
 wasmtime-wast = { workspace = true, features = ['component-model'] }
 wasmtime-component-util = { workspace = true }
-component-macro-test = { path = "crates/misc/component-macro-test" }
-component-test-util = { workspace = true }
+wasmtime-test-util = { workspace = true, features = ['wasmtime-wast', 'component'] }
 bstr = "1.6.0"
 libc = { workspace = true }
 serde = { workspace = true }
@@ -122,7 +121,6 @@ capstone = { workspace = true }
 object = { workspace = true, features = ['std'] }
 wasmtime-test-macros = { path = "crates/test-macros" }
 pulley-interpreter = { workspace = true, features = ["disas"] }
-wasmtime-wast-util = { path = 'crates/wast-util' }
 wasm-encoder = { workspace = true }
 cranelift-native = { workspace = true }
 
@@ -246,8 +244,6 @@ wasmtime-asm-macros = { path = "crates/asm-macros", version = "=32.0.0" }
 wasmtime-versioned-export-macros = { path = "crates/versioned-export-macros", version = "=32.0.0" }
 wasmtime-slab = { path = "crates/slab", version = "=32.0.0" }
 wasmtime-wasi-tls = { path = "crates/wasi-tls", version = "32.0.0" }
-component-test-util = { path = "crates/misc/component-test-util" }
-component-fuzz-util = { path = "crates/misc/component-fuzz-util" }
 wiggle = { path = "crates/wiggle", version = "=32.0.0", default-features = false }
 wiggle-macro = { path = "crates/wiggle/macro", version = "=32.0.0" }
 wiggle-generate = { path = "crates/wiggle/generate", version = "=32.0.0" }
@@ -257,6 +253,7 @@ wasmtime-jit-icache-coherence = { path = "crates/jit-icache-coherence", version 
 wasmtime-wit-bindgen = { path = "crates/wit-bindgen", version = "=32.0.0" }
 wasmtime-math = { path = "crates/math", version = "=32.0.0" }
 test-programs-artifacts = { path = 'crates/test-programs/artifacts' }
+wasmtime-test-util = { path = "crates/test-util" }
 
 pulley-interpreter = { path = 'pulley', version = "=32.0.0" }
 pulley-interpreter-fuzz = { path = 'pulley/fuzz' }
@@ -368,6 +365,8 @@ futures = { version = "0.3.27", default-features = false }
 indexmap = { version = "2.0.0", default-features = false }
 pretty_env_logger = "0.5.0"
 syn = "2.0.25"
+quote = "1.0"
+proc-macro2 = "1.0"
 test-log = { version = "0.2", default-features = false, features = ["trace"] }
 tracing-subscriber = { version = "0.3.1", default-features = false, features = ['fmt', 'env-filter', 'ansi', 'tracing-log'] }
 url = "2.3.1"
