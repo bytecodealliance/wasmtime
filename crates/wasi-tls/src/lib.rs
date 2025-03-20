@@ -180,6 +180,8 @@ impl From<io::Error> for TlsError {
             return Self::msg("underlying transport closed abruptly");
         }
 
+        // Errors from underlying transport.
+        // These have been wrapped inside `io::Error`s by our wasi-to-tokio stream transformer below.
         let error = match error.downcast::<StreamError>() {
             Ok(StreamError::LastOperationFailed(e)) => return Self::Io(e),
             Ok(StreamError::Trap(e)) => return Self::Trap(e),
@@ -187,13 +189,14 @@ impl From<io::Error> for TlsError {
             Err(e) => e,
         };
 
+        // Errors from `rustls`.
+        // These have been wrapped inside `io::Error`s by `tokio-rustls`.
         let error = match error.downcast::<rustls::Error>() {
             Ok(e) => return Self::Tls(e),
             Err(e) => e,
         };
 
-        // All wasi-tls errors should come from either the underlying stream or
-        // the TLS implementation (rustls + tokio-rustls).
+        // All errors should have been handled by the clauses above.
         Self::Trap(anyhow::Error::new(error).context("unknown wasi-tls error"))
     }
 }
