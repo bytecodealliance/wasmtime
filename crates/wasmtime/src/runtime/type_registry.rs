@@ -343,15 +343,12 @@ impl RegisteredType {
     ///
     /// This will prevent the associated type from being unregistered as long as
     /// the returned `RegisteredType` is kept alive.
-    ///
-    /// Returns `None` if `index` is not registered in the given engine's
-    /// registry.
-    pub fn root(engine: &Engine, index: VMSharedTypeIndex) -> Option<RegisteredType> {
+    pub fn root(engine: &Engine, index: VMSharedTypeIndex) -> RegisteredType {
         let (entry, ty, layout) = {
             let id = shared_type_index_to_slab_id(index);
             let inner = engine.signatures().0.read();
 
-            let ty = inner.types.get(id)?.clone();
+            let ty = inner.types[id].clone();
             let entry = inner.type_to_rec_group[index].clone().unwrap();
             let layout = inner.type_to_gc_layout.get(index).and_then(|l| l.clone());
 
@@ -366,13 +363,7 @@ impl RegisteredType {
             (entry, ty, layout)
         };
 
-        Some(RegisteredType::from_parts(
-            engine.clone(),
-            entry,
-            index,
-            ty,
-            layout,
-        ))
+        RegisteredType::from_parts(engine.clone(), entry, index, ty, layout)
     }
 
     /// Construct a new `RegisteredType`.
