@@ -265,6 +265,7 @@ fn assert_output(test: &Test, output: CompileOutput) -> Result<()> {
             cmd.arg("objdump")
                 .arg("--address-width=4")
                 .arg("--address-jumps")
+                .arg("--stack-maps")
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());

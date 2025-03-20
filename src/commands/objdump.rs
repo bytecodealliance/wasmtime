@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::str::FromStr;
 use termcolor::{Color, ColorChoice, ColorSpec, StandardStream, WriteColor};
 use wasmtime::Engine;
-use wasmtime_environ::{obj, FilePos, Trap};
+use wasmtime_environ::{obj, FilePos, StackMap, Trap};
 
 /// A helper utility in wasmtime to explore the compiled object file format of
 /// a `*.cwasm` file.
@@ -62,6 +62,10 @@ pub struct ObjdumpCommand {
     /// Whether or not to show information about what instructions can trap.
     #[arg(long)]
     traps: bool,
+
+    /// Whether or not to show information about stack maps.
+    #[arg(long)]
+    stack_maps: bool,
 }
 
 impl ObjdumpCommand {
@@ -106,6 +110,11 @@ impl ObjdumpCommand {
                 .section_by_name(obj::ELF_WASMTIME_TRAPS)
                 .and_then(|section| section.data().ok())
                 .and_then(|bytes| wasmtime_environ::iterate_traps(bytes))
+                .map(|i| (Box::new(i) as Box<dyn Iterator<Item = _>>).peekable()),
+            stack_maps: elf
+                .section_by_name(obj::ELF_WASMTIME_STACK_MAP)
+                .and_then(|section| section.data().ok())
+                .and_then(|bytes| StackMap::iter(bytes))
                 .map(|i| (Box::new(i) as Box<dyn Iterator<Item = _>>).peekable()),
             objdump: &self,
         };
@@ -485,12 +494,14 @@ struct Decorator<'a> {
     objdump: &'a ObjdumpCommand,
     addrmap: Option<Peekable<Box<dyn Iterator<Item = (u32, FilePos)> + 'a>>>,
     traps: Option<Peekable<Box<dyn Iterator<Item = (u32, Trap)> + 'a>>>,
+    stack_maps: Option<Peekable<Box<dyn Iterator<Item = (u32, StackMap<'a>)> + 'a>>>,
 }
 
 impl Decorator<'_> {
     fn decorate(&mut self, address: u64, list: &mut Vec<String>) {
         self.addrmap(address, list);
         self.traps(address, list);
+        self.stack_maps(address, list);
     }
 
     fn addrmap(&mut self, address: u64, list: &mut Vec<String>) {
@@ -522,6 +533,27 @@ impl Decorator<'_> {
                 continue;
             }
             list.push(format!("trap: {trap:?}"));
+        }
+    }
+
+    fn stack_maps(&mut self, address: u64, list: &mut Vec<String>) {
+        if !self.objdump.stack_maps {
+            return;
+        }
+        let Some(stack_maps) = &mut self.stack_maps else {
+            return;
+        };
+        while let Some((addr, stack_map)) =
+            stack_maps.next_if(|(addr, _pos)| u64::from(*addr) <= address)
+        {
+            if u64::from(addr) != address {
+                continue;
+            }
+            list.push(format!(
+                "stack_map: frame_size={}, frame_offsets={:?}",
+                stack_map.frame_size(),
+                stack_map.offsets().collect::<Vec<_>>()
+            ));
         }
     }
 }
