@@ -265,12 +265,16 @@ fn assert_output(test: &Test, output: CompileOutput) -> Result<()> {
             cmd.arg("objdump")
                 .arg("--address-width=4")
                 .arg("--address-jumps")
-                .arg("--stack-maps")
                 .stdin(Stdio::piped())
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
-            if let Some(args) = &test.config.objdump {
-                cmd.args(args.to_vec());
+            match &test.config.objdump {
+                Some(args) => {
+                    cmd.args(args.to_vec());
+                }
+                None => {
+                    cmd.arg("--traps=false");
+                }
             }
 
             let mut child = cmd.spawn().context("failed to run wasmtime")?;

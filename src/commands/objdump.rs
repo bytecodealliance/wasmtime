@@ -36,11 +36,11 @@ pub struct ObjdumpCommand {
     address_jumps: bool,
 
     /// What functions should be printed (all|wasm|trampoline|builtin|libcall, default: wasm)
-    #[arg(long, value_parser = Func::from_str)]
+    #[arg(long, value_parser = Func::from_str, value_name = "KIND")]
     funcs: Vec<Func>,
 
     /// String filter to apply to function names to only print some functions.
-    #[arg(long)]
+    #[arg(long, value_name = "STR")]
     filter: Option<String>,
 
     /// Whether or not instruction bytes are disassembled.
@@ -52,23 +52,43 @@ pub struct ObjdumpCommand {
     color: ColorChoice,
 
     /// Whether or not to interleave instructions with address maps.
-    #[arg(long)]
-    addrmap: bool,
+    #[arg(long, require_equals = true, value_name = "true|false")]
+    addrmap: Option<Option<bool>>,
 
     /// Column width of how large an address is rendered as.
-    #[arg(long, default_value = "10")]
+    #[arg(long, default_value = "10", value_name = "N")]
     address_width: usize,
 
     /// Whether or not to show information about what instructions can trap.
-    #[arg(long)]
-    traps: bool,
+    #[arg(long, require_equals = true, value_name = "true|false")]
+    traps: Option<Option<bool>>,
 
     /// Whether or not to show information about stack maps.
-    #[arg(long)]
-    stack_maps: bool,
+    #[arg(long, require_equals = true, value_name = "true|false")]
+    stack_maps: Option<Option<bool>>,
+}
+
+fn optional_flag_with_default(flag: Option<Option<bool>>, default: bool) -> bool {
+    match flag {
+        None => default,
+        Some(None) => true,
+        Some(Some(val)) => val,
+    }
 }
 
 impl ObjdumpCommand {
+    fn addrmap(&self) -> bool {
+        optional_flag_with_default(self.addrmap, false)
+    }
+
+    fn traps(&self) -> bool {
+        optional_flag_with_default(self.traps, true)
+    }
+
+    fn stack_maps(&self) -> bool {
+        optional_flag_with_default(self.stack_maps, true)
+    }
+
     /// Executes the command.
     pub fn execute(self) -> Result<()> {
         // Setup stdout handling color options. Also build some variables used
@@ -505,7 +525,7 @@ impl Decorator<'_> {
     }
 
     fn addrmap(&mut self, address: u64, list: &mut Vec<String>) {
-        if !self.objdump.addrmap {
+        if !self.objdump.addrmap() {
             return;
         }
         let Some(addrmap) = &mut self.addrmap else {
@@ -522,7 +542,7 @@ impl Decorator<'_> {
     }
 
     fn traps(&mut self, address: u64, list: &mut Vec<String>) {
-        if !self.objdump.traps {
+        if !self.objdump.traps() {
             return;
         }
         let Some(traps) = &mut self.traps else {
@@ -537,7 +557,7 @@ impl Decorator<'_> {
     }
 
     fn stack_maps(&mut self, address: u64, list: &mut Vec<String>) {
-        if !self.objdump.stack_maps {
+        if !self.objdump.stack_maps() {
             return;
         }
         let Some(stack_maps) = &mut self.stack_maps else {
