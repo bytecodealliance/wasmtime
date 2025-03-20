@@ -246,13 +246,27 @@ pub fn instantiate_many(
     config: &generators::Config,
     commands: &[Command],
 ) {
+    log::debug!("instantiate_many: {commands:#?}");
+
     assert!(!config.module_config.config.allow_start_export);
 
     let engine = Engine::new(&config.to_wasmtime()).unwrap();
 
     let modules = modules
         .iter()
-        .filter_map(|bytes| compile_module(&engine, bytes, known_valid, config))
+        .enumerate()
+        .filter_map(
+            |(i, bytes)| match compile_module(&engine, bytes, known_valid, config) {
+                Some(m) => {
+                    log::debug!("successfully compiled module {i}");
+                    Some(m)
+                }
+                None => {
+                    log::debug!("failed to compile module {i}");
+                    None
+                }
+            },
+        )
         .collect::<Vec<_>>();
 
     // If no modules were valid, we're done
