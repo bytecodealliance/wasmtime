@@ -50,4 +50,4 @@ jobs:
         name: Trigger release branch CI weekly
         env:
           GH_TOKEN: ${{ github.token }}
-        if: github.event.schedule == '34 2 * * 1'
+        if: "github.event.schedule == '34 2 * * 1' || !github.event.schedule"
