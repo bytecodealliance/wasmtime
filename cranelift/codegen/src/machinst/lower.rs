@@ -21,9 +21,9 @@ use crate::machinst::{
 };
 use crate::settings::Flags;
 use crate::{trace, CodegenError, CodegenResult};
+use crate::{FxHashMap, FxHashSet};
 use alloc::vec::Vec;
 use cranelift_control::ControlPlane;
-use rustc_hash::{FxHashMap, FxHashSet};
 use smallvec::{smallvec, SmallVec};
 use std::fmt::Debug;
 
