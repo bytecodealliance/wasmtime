@@ -1033,7 +1033,7 @@ jobs:
     name: Miri
     runs-on: ubuntu-latest
     env:
-      CARGO_NEXTEST_VERSION: 0.9.67
+      CARGO_NEXTEST_VERSION: 0.9.88
     steps:
     - uses: actions/checkout@v4
       with:
