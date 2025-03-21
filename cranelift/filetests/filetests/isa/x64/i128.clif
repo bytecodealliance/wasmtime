@@ -1112,20 +1112,19 @@ block2(v8: i128):
 ;   movq    %rsp, %rbp
 ; block0:
 ;   xorq    %rax, %rax, %rax
-;   xorq    %r8, %r8, %r8
 ;   testb   %dl, %dl
 ;   jnz     label2; j label1
 ; block1:
 ;   addq    %rax, $2, %rax
-;   movq    %r8, %rdx
-;   adcq    %rdx, $0, %rdx
+;   setb    %dil
+;   movzbq  %dil, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
 ; block2:
-;   movq    %r8, %rdx
 ;   addq    %rax, $1, %rax
-;   adcq    %rdx, $0, %rdx
+;   setb    %cl
+;   movzbq  %cl, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1136,20 +1135,19 @@ block2(v8: i128):
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
 ;   xorq %rax, %rax
-;   xorq %r8, %r8
 ;   testb %dl, %dl
-;   jne 0x22
-; block2: ; offset 0x12
+;   jne 0x20
+; block2: ; offset 0xf
 ;   addq $2, %rax
-;   movq %r8, %rdx
-;   adcq $0, %rdx
+;   setb %dil
+;   movzbq %dil, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
-; block3: ; offset 0x22
-;   movq %r8, %rdx
+; block3: ; offset 0x20
 ;   addq $1, %rax
-;   adcq $0, %rdx
+;   setb %cl
+;   movzbq %cl, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -2047,10 +2045,10 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   xorq    %rdx, %rdx, %rdx
 ;   movq    %rsi, %rax
 ;   addq    %rax, 0(%rdi), %rax
-;   adcq    %rdx, $0, %rdx
+;   setb    %r8b
+;   movzbq  %r8b, %rdx
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -2060,10 +2058,10 @@ block0(v0: i64, v1: i64):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   xorq %rdx, %rdx
 ;   movq %rsi, %rax
 ;   addq (%rdi), %rax ; trap: heap_oob
-;   adcq $0, %rdx
+;   setb %r8b
+;   movzbq %r8b, %rdx
 ;   movq %rbp, %rsp
 ;   popq %rbp
 ;   retq
@@ -2180,4 +2178,38 @@ block0(v0: i128, v1: i128):
 ;   addb %ah, (%rax, %rax)
 ;   addb %al, (%rax)
 ;   addb %al, (%rax)
+
+function %uadd_overflow_as_i128(i64, i64) -> i64, i64 {
+block0(v0: i64, v1: i64):
+    v2 = uextend.i128 v0
+    v3 = uextend.i128 v1
+    v4 = iadd v2, v3
+    v5, v6 = isplit v4
+    return v5, v6
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   movq    %rdi, %rax
+;   addq    %rax, %rsi, %rax
+;   setb    %r8b
+;   movzbq  %r8b, %rdx
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   movq %rdi, %rax
+;   addq %rsi, %rax
+;   setb %r8b
+;   movzbq %r8b, %rdx
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
 
