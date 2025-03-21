@@ -423,6 +423,8 @@ impl Config {
     /// WebAssembly will execute and what compute resources will be allotted to
     /// it. If Wasmtime doesn't support exactly what you'd like just yet, please
     /// feel free to open an issue!
+    ///
+    /// This feature is `false` by default.
     #[cfg(feature = "async")]
     pub fn async_support(&mut self, enable: bool) -> &mut Self {
         self.async_support = enable;
@@ -837,13 +839,11 @@ impl Config {
     /// Embeddings of Wasmtime are able to build their own custom threading
     /// scheme on top of the core wasm threads proposal, however.
     ///
-    /// The default value for this option is whether the `threads`
-    /// crate feature of Wasmtime is enabled or not. By default this crate
-    /// feature is enabled.
+    /// This feature is enabled by default as long as the `threads` crate feature
+    /// (enabled by default) is also enabled.
     ///
     /// [threads]: https://github.com/webassembly/threads
     /// [wasi-threads]: https://github.com/webassembly/wasi-threads
-    #[cfg(feature = "threads")]
     pub fn wasm_threads(&mut self, enable: bool) -> &mut Self {
         self.wasm_feature(WasmFeatures::THREADS, enable);
         self
@@ -865,7 +865,6 @@ impl Config {
     /// and thus may cause `Engine::new` fail if the `bulk_memory` feature is disabled.
     ///
     /// [proposal]: https://github.com/webassembly/reference-types
-    #[cfg(feature = "gc")]
     pub fn wasm_reference_types(&mut self, enable: bool) -> &mut Self {
         self.wasm_feature(WasmFeatures::REFERENCE_TYPES, enable);
         self
@@ -884,7 +883,6 @@ impl Config {
     /// This feature is `false` by default.
     ///
     /// [proposal]: https://github.com/WebAssembly/function-references
-    #[cfg(feature = "gc")]
     pub fn wasm_function_references(&mut self, enable: bool) -> &mut Self {
         self.wasm_feature(WasmFeatures::FUNCTION_REFERENCES, enable);
         self
@@ -916,7 +914,6 @@ impl Config {
     /// progress and generally not ready for primetime.**
     ///
     /// [proposal]: https://github.com/WebAssembly/gc
-    #[cfg(feature = "gc")]
     pub fn wasm_gc(&mut self, enable: bool) -> &mut Self {
         self.wasm_feature(WasmFeatures::GC, enable);
         self
@@ -1100,12 +1097,10 @@ impl Config {
     /// [`Component`](crate::component::Component) instead of
     /// [`Module`](crate::Module) for example anyway.
     ///
-    /// The default value for this option is whether the `component-model`
-    /// crate feature of Wasmtime is enabled or not. By default this crate
-    /// feature is enabled.
+    /// This feature is enabled by default as long as the `component-model` crate
+    /// feature (enabled by default) is also enabled.
     ///
     /// [proposal]: https://github.com/webassembly/component-model
-    #[cfg(feature = "component-model")]
     pub fn wasm_component_model(&mut self, enable: bool) -> &mut Self {
         self.wasm_feature(WasmFeatures::COMPONENT_MODEL, enable);
         self
@@ -1118,7 +1113,6 @@ impl Config {
     /// Please note that Wasmtime's support for this feature is _very_ incomplete.
     ///
     /// [proposal]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Async.md
-    #[cfg(feature = "component-model-async")]
     pub fn wasm_component_model_async(&mut self, enable: bool) -> &mut Self {
         self.wasm_feature(WasmFeatures::COMPONENT_MODEL_ASYNC, enable);
         self
@@ -1837,8 +1831,8 @@ impl Config {
     /// Disabling this will result in a single thread being used to compile
     /// the wasm bytecode.
     ///
-    /// By default parallel compilation is enabled.
-    #[cfg(feature = "parallel-compilation")]
+    /// This feature is enabled by default as long as the `parallel-compilation`
+    /// crate feature (enabled by default) is also enabled.
     pub fn parallel_compilation(&mut self, parallel: bool) -> &mut Self {
         self.parallel_compilation = parallel;
         self
@@ -2163,6 +2157,26 @@ impl Config {
         #[cfg(not(feature = "wmemcheck"))]
         if self.wmemcheck {
             bail!("wmemcheck (memory checker) was requested but is not enabled in this build");
+        }
+
+        #[cfg(not(feature = "component-model"))]
+        if features.component_model() {
+            bail!("component-model support was requested but is not enabled in this build (requires the `component-model` crate feature)");
+        }
+
+        #[cfg(not(feature = "component-model-async"))]
+        if features.component_model_async() {
+            bail!("component-model-async support was requested but is not enabled in this build (requires the `component-model-async` crate feature)");
+        }
+
+        #[cfg(not(feature = "gc"))]
+        if features.gc_types() || features.gc() {
+            bail!("gc support was requested but is not enabled in this build (requires the `gc` crate feature)");
+        }
+
+        #[cfg(not(feature = "threads"))]
+        if features.threads() {
+            bail!("threads support was requested but is not enabled in this build (requires the `threads` crate feature)");
         }
 
         let mut tunables = Tunables::default_for_target(&self.compiler_target())?;
