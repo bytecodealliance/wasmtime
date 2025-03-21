@@ -1173,7 +1173,7 @@ fn drc_transitive_drop_nested_arrays_tree() -> Result<()> {
 }
 
 #[test]
-#[cfg_attr(miri, skip)]
+#[cfg_attr(miri, ignore)]
 fn drc_traces_the_correct_number_of_gc_refs_in_arrays() -> Result<()> {
     let _ = env_logger::try_init();
 
