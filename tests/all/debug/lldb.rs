@@ -244,6 +244,9 @@ c
 v x
 c
 v x
+b codegen-optimized.cpp:38
+c
+v a
 c"#,
     )?;
 
@@ -255,6 +258,43 @@ check: stop reason = breakpoint 2.1
 check: x = 42
 check: stop reason = breakpoint 3.1
 check: x = <variable not available>
+check: stop reason = breakpoint 4.1
+check: a = 43
+check: exited with status = 0
+"#,
+    )?;
+    Ok(())
+}
+
+#[test]
+#[ignore]
+pub fn test_debug_codegen_optimized_wasm_optimized_lldb() -> Result<()> {
+    let output = lldb_with_script(
+        &[
+            "-Ccache=n",
+            "-Ddebug-info",
+            "-Oopt-level=2",
+            assets::CODEGEN_OPTIMIZED_WASM_OPTIMIZED_WASM_PATH,
+        ],
+        r#"b InitializeTest
+r
+b codegen-optimized-wasm-optimized.cpp:21
+b codegen-optimized-wasm-optimized.cpp:27
+c
+v b
+c
+v b
+c"#,
+    )?;
+
+    check_lldb_output(
+        &output,
+        r#"
+check: stop reason = breakpoint 1.1
+check: stop reason = breakpoint 2.1
+check: b = 42
+check: stop reason = breakpoint 3.1
+check: b = 43
 check: exited with status = 0
 "#,
     )?;
