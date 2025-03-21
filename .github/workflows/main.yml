@@ -654,7 +654,7 @@ jobs:
     strategy:
       fail-fast: true
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-24.04, macos-14, windows-2025]
 
     steps:
     - uses: actions/checkout@v4
@@ -813,9 +813,9 @@ jobs:
     strategy:
       matrix:
         feature: ["openvino"]
-        os: ["ubuntu-latest", "windows-latest"]
+        os: ["ubuntu-24.04", "windows-2025"]
         include:
-          - os: windows-latest
+          - os: windows-2025
             feature: winml
     name: Test wasi-nn (${{ matrix.feature }}, ${{ matrix.os }})
     runs-on: ${{ matrix.os }}
