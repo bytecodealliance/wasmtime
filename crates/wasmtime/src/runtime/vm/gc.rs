@@ -22,9 +22,9 @@ pub use i31::*;
 
 use crate::prelude::*;
 use crate::runtime::vm::GcHeapAllocationIndex;
-use core::alloc::Layout;
 use core::any::Any;
 use core::mem::MaybeUninit;
+use core::{alloc::Layout, num::NonZeroU32};
 use wasmtime_environ::{GcArrayLayout, GcStructLayout, VMGcKind, VMSharedTypeIndex};
 
 /// GC-related data that is one-to-one with a `wasmtime::Store`.
@@ -138,9 +138,8 @@ impl GcStore {
     /// Returns the raw representation of this GC ref, ready to be passed to
     /// Wasm.
     #[must_use]
-    pub fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef) -> u32 {
-        let raw = gc_ref.as_raw_u32();
-        debug_assert_ne!(raw, 0);
+    pub fn expose_gc_ref_to_wasm(&mut self, gc_ref: VMGcRef) -> NonZeroU32 {
+        let raw = gc_ref.as_raw_non_zero_u32();
         if !gc_ref.is_i31() {
             log::trace!("exposing GC ref to Wasm: {gc_ref:p}");
             self.gc_heap.expose_gc_ref_to_wasm(gc_ref);

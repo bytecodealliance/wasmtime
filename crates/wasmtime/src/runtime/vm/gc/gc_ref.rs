@@ -243,6 +243,12 @@ impl VMGcRef {
         }
     }
 
+    /// Get this GC reference as a raw, non-zero u32 value, regardless whether
+    /// it is actually a reference to a GC object or is an `i31ref`.
+    pub fn as_raw_non_zero_u32(&self) -> NonZeroU32 {
+        self.0
+    }
+
     /// Get this GC reference as a raw u32 value, regardless whether it is
     /// actually a reference to a GC object or is an `i31ref`.
     pub fn as_raw_u32(&self) -> u32 {

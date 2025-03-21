@@ -2051,8 +2051,7 @@ impl FuncEnvironment<'_> {
             libcall,
             &[vmctx, interned_type_index, data_index, data_offset, len],
         );
-        let result = builder.func.dfg.first_result(call_inst);
-        Ok(builder.ins().ireduce(ir::types::I32, result))
+        Ok(builder.func.dfg.first_result(call_inst))
     }
 
     pub fn translate_array_new_elem(
@@ -2074,8 +2073,7 @@ impl FuncEnvironment<'_> {
             libcall,
             &[vmctx, interned_type_index, elem_index, elem_offset, len],
         );
-        let result = builder.func.dfg.first_result(call_inst);
-        Ok(builder.ins().ireduce(ir::types::I32, result))
+        Ok(builder.func.dfg.first_result(call_inst))
     }
 
     pub fn translate_array_copy(

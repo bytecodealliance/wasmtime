@@ -22,6 +22,7 @@ use crate::runtime::vm::sys::traphandlers;
 use crate::runtime::vm::{Instance, InterpreterRef, VMContext, VMStoreContext};
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
+use core::num::NonZeroU32;
 use core::ops::Range;
 use core::ptr::{self, NonNull};
 
@@ -266,6 +267,14 @@ unsafe impl HostResultHasUnwindSentinel for () {
     const SENTINEL: bool = false;
     fn into_abi(self) -> bool {
         true
+    }
+}
+
+unsafe impl HostResultHasUnwindSentinel for NonZeroU32 {
+    type Abi = u32;
+    const SENTINEL: Self::Abi = 0;
+    fn into_abi(self) -> Self::Abi {
+        self.get()
     }
 }
 
