@@ -112,6 +112,23 @@
           (iadd128 (value_regs_get_gpr x 0) (value_regs_get_gpr x 1)
                    y (RegMemImm.Imm 0))))
 
+;; Specialized lowering rule for `iadd` of two 64-bit unsigned integers, meaning
+;; that we can skip the `adc` and instead use `setb`. This is in some sense a
+;; way of modeling `uadd_overflow`.
+(rule 4 (lower (has_type $I128 (iadd (uextend x) (uextend y @ (value_type $I64)))))
+        (let (
+            (x Gpr (extend_to_gpr x $I64 (ExtendKind.Zero)))
+            (ret ValueRegs (with_flags (x64_add_with_flags_paired $I64 x y)
+                                       (x64_setcc_paired (CC.B))))
+          )
+          ;; FIXME: this `movzx` ideally would happen before the `add` itself to
+          ;; zero out the destination register with `xor %dst,%dst` and then
+          ;; the `setb` would just write to the lower bytes. That would probably
+          ;; require modeling this as a pseudo-inst which isn't quite worth it
+          ;; at this time.
+          (value_regs (value_regs_get ret 0)
+                      (x64_movzx (ExtMode.BQ) (value_regs_get ret 1)))))
+
 ;; Helper for lowering 128-bit addition with the 64-bit halves of the lhs/rhs
 ;; already split. The first two arguments are lo/hi for the lhs and the second
 ;; two are lo/hi for the rhs.
