@@ -61,7 +61,7 @@ make_vendor "wasi-http" "
 
 make_vendor "wasi-tls" "
   io@v0.2.3
-  tls@v0.2.0-draft+73b0a0f
+  tls@v0.2.0-draft+d6fbdc7
 "
 
 make_vendor "wasi-config" "config@f4d699b"

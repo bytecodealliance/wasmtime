@@ -280,7 +280,8 @@ pub use wasmtime::component::{ResourceTable, ResourceTableError};
 // users of this crate depend on them at these names.
 pub use wasmtime_wasi_io::poll::{subscribe, DynFuture, DynPollable, MakeFuture, Pollable};
 pub use wasmtime_wasi_io::streams::{
-    DynInputStream, DynOutputStream, InputStream, OutputStream, StreamError, StreamResult,
+    DynInputStream, DynOutputStream, Error as IoError, InputStream, OutputStream, StreamError,
+    StreamResult,
 };
 pub use wasmtime_wasi_io::{IoImpl, IoView};
 

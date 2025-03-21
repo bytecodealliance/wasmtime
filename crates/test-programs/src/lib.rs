@@ -48,3 +48,11 @@ pub mod proxy {
         },
     });
 }
+
+impl std::fmt::Display for wasi::io::error::Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.to_debug_string())
+    }
+}
+
+impl std::error::Error for wasi::io::error::Error {}
