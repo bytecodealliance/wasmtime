@@ -47,11 +47,15 @@ impl fmt::Display for Features {
 /// processors. It consists of two sub-modes:
 /// - __64-bit mode__: uses the full 64-bit address space
 /// - __compatibility mode__: allows use of legacy 32-bit code
+///
+/// Other features listed here should match the __CPUID Feature Flags__ column
+/// of the instruction tables of the x64 reference manual.
 #[derive(Clone, Copy, PartialEq)]
 #[allow(non_camel_case_types, reason = "makes DSL definitions easier to read")]
 pub enum Feature {
     _64b,
     compat,
+    sse,
 }
 
 /// List all CPU features.
@@ -61,13 +65,14 @@ pub enum Feature {
 /// transcribe each variant to an `enum` available in the generated layer above.
 /// If this list is incomplete, we will (fortunately) see compile errors for
 /// generated functions that use the missing variants.
-pub const ALL_FEATURES: &[Feature] = &[Feature::_64b, Feature::compat];
+pub const ALL_FEATURES: &[Feature] = &[Feature::_64b, Feature::compat, Feature::sse];
 
 impl fmt::Display for Feature {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             Feature::_64b => write!(f, "_64b"),
             Feature::compat => write!(f, "compat"),
+            Feature::sse => write!(f, "sse"),
         }
     }
 }
@@ -88,5 +93,13 @@ impl BitOr for Feature {
     type Output = Features;
     fn bitor(self, rhs: Self) -> Self::Output {
         Features(vec![self, rhs])
+    }
+}
+
+impl BitOr<Feature> for Features {
+    type Output = Features;
+    fn bitor(mut self, rhs: Feature) -> Self::Output {
+        self.0.push(rhs);
+        self
     }
 }
