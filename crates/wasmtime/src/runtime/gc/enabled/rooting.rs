@@ -969,7 +969,7 @@ impl<T: GcRef> Rooted<T> {
     ) -> Result<()> {
         let gc_ref = self.inner.try_clone_gc_ref(store)?;
         let raw = store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
-        ptr.write(val_raw(raw));
+        ptr.write(val_raw(raw.get()));
         Ok(())
     }
 
@@ -1757,7 +1757,7 @@ where
     ) -> Result<()> {
         let gc_ref = self.try_clone_gc_ref(store)?;
         let raw = store.gc_store_mut()?.expose_gc_ref_to_wasm(gc_ref);
-        ptr.write(val_raw(raw));
+        ptr.write(val_raw(raw.get()));
         Ok(())
     }
 

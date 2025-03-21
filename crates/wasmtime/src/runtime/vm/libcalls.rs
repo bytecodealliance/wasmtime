@@ -470,7 +470,7 @@ unsafe fn gc(store: &mut dyn VMStore, _instance: &mut Instance, gc_ref: u32) -> 
                 .store_opaque_mut()
                 .unwrap_gc_store_mut()
                 .expose_gc_ref_to_wasm(r);
-            Ok(raw)
+            Ok(raw.get())
         }
     }
 }
@@ -486,7 +486,7 @@ unsafe fn gc_alloc_raw(
     module_interned_type_index: u32,
     size: u32,
     align: u32,
-) -> Result<u32> {
+) -> Result<core::num::NonZeroU32> {
     use crate::{vm::VMGcHeader, GcHeapOutOfMemory};
     use core::alloc::Layout;
     use wasmtime_environ::{ModuleInternedTypeIndex, VMGcKind};
@@ -604,7 +604,7 @@ unsafe fn array_new_data(
     data_index: u32,
     src: u32,
     len: u32,
-) -> Result<u32> {
+) -> Result<core::num::NonZeroU32> {
     use crate::{ArrayType, GcHeapOutOfMemory};
     use wasmtime_environ::ModuleInternedTypeIndex;
 
@@ -764,7 +764,7 @@ unsafe fn array_new_elem(
     elem_index: u32,
     src: u32,
     len: u32,
-) -> Result<u32> {
+) -> Result<core::num::NonZeroU32> {
     use crate::{
         store::AutoAssertNoGc,
         vm::const_expr::{ConstEvalContext, ConstExprEvaluator},
