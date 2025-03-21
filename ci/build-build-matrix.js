@@ -10,58 +10,58 @@ const array = [
     // Wasmtime's github releases.
     "build": "x86_64-linux",
     // The GitHub Actions platform that this build runs on
-    "os": "ubuntu-latest",
+    "os": "ubuntu-22.04",
     // The Rust target that will be used for the build.
     "target": "x86_64-unknown-linux-gnu",
   },
   {
     "build": "aarch64-linux",
-    "os": "ubuntu-latest",
+    "os": "ubuntu-22.04",
     "target": "aarch64-unknown-linux-gnu",
   },
   {
     "build": "s390x-linux",
-    "os": "ubuntu-latest",
+    "os": "ubuntu-22.04",
     "target": "s390x-unknown-linux-gnu",
   },
   {
     "build": "riscv64gc-linux",
-    "os": "ubuntu-latest",
+    "os": "ubuntu-22.04",
     "target": "riscv64gc-unknown-linux-gnu",
   },
   {
     "build": "x86_64-macos",
-    "os": "macos-latest",
+    "os": "macos-15",
     "target": "x86_64-apple-darwin",
   },
   {
     "build": "aarch64-macos",
-    "os": "macos-latest",
+    "os": "macos-15",
     "target": "aarch64-apple-darwin",
   },
   {
     "build": "x86_64-windows",
-    "os": "windows-latest",
+    "os": "windows-2022",
     "target": "x86_64-pc-windows-msvc",
   },
   {
     "build": "x86_64-mingw",
-    "os": "windows-latest",
+    "os": "windows-2022",
     "target": "x86_64-pc-windows-gnu",
   },
   {
     "build": "aarch64-android",
-    "os": "ubuntu-latest",
+    "os": "ubuntu-22.04",
     "target": "aarch64-linux-android",
   },
   {
     "build": "x86_64-android",
-    "os": "ubuntu-latest",
+    "os": "ubuntu-22.04",
     "target": "x86_64-linux-android",
   },
   {
     "build": "x86_64-musl",
-    "os": "ubuntu-latest",
+    "os": "ubuntu-22.04",
     "target": "x86_64-unknown-linux-musl",
   },
 ];

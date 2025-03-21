@@ -78,7 +78,7 @@ jobs:
   # Note that `wasmtime-platform.h` is excluded here as it's auto-generated.
   clangformat:
     name: Clang format
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
       with:
