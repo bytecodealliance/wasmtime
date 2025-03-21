@@ -78,7 +78,7 @@ jobs:
   # Note that `wasmtime-platform.h` is excluded here as it's auto-generated.
   clangformat:
     name: Clang format
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - uses: actions/checkout@v4
       with:
@@ -694,7 +694,7 @@ jobs:
     strategy:
       matrix:
         feature: ["openvino", "onnx"]
-        os: ["ubuntu-latest", "windows-latest"]
+        os: ["ubuntu-22.04", "windows-2022"]
         include:
           - os: windows-latest
             feature: winml
@@ -987,7 +987,7 @@ jobs:
     name: Miri
     runs-on: ubuntu-latest
     env:
-      CARGO_NEXTEST_VERSION: 0.9.67
+      CARGO_NEXTEST_VERSION: 0.9.88
     steps:
     - uses: actions/checkout@v4
       with:
