@@ -1137,12 +1137,11 @@ fn emit_array_size(
     func_env: &mut FuncEnvironment<'_>,
     builder: &mut FunctionBuilder<'_>,
     array_layout: &GcArrayLayout,
-    init: ArrayInit<'_>,
+    len: ir::Value,
 ) -> ir::Value {
     let base_size = builder
         .ins()
         .iconst(ir::types::I32, i64::from(array_layout.base_size));
-    let len = init.len(&mut builder.cursor());
 
     // `elems_size = len * elem_size`
     //
@@ -1155,6 +1154,7 @@ fn emit_array_size(
     // i64 values, doing a 64-bit multiplication, and then checking the high
     // 32 bits of the multiplication's result. If the high 32 bits are not
     // all zeros, then the multiplication overflowed.
+    debug_assert_eq!(builder.func.dfg.value_type(len), ir::types::I32);
     let len = builder.ins().uextend(ir::types::I64, len);
     let elems_size_64 = builder
         .ins()

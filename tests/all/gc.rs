@@ -1171,3 +1171,61 @@ fn drc_transitive_drop_nested_arrays_tree() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+#[cfg_attr(miri, skip)]
+fn drc_traces_the_correct_number_of_gc_refs_in_arrays() -> Result<()> {
+    let _ = env_logger::try_init();
+
+    let mut config = Config::new();
+    config.wasm_function_references(true);
+    config.wasm_gc(true);
+    config.collector(Collector::DeferredReferenceCounting);
+
+    let engine = Engine::new(&config)?;
+    let mut store = Store::new(&engine, ());
+
+    // The DRC collector was mistakenly reporting that arrays of GC refs had
+    // `size_of(elems)` outgoing edges, rather than `len(elems)` edges. None of
+    // our existing tests happened to trigger this bug because although we were
+    // tricking the collector into tracing unallocated GC heap memory, it was
+    // all zeroed out and was treated as null GC references. We can avoid that
+    // in this regression test by first painting the heap with a large poison
+    // value before we start allocating arrays, so that if the GC tries tracing
+    // bogus heap memory, it finds very large GC ref heap indices and ultimately
+    // tries to follow them outside the bounds of the GC heap, which (before
+    // this bug was fixed) would lead to a panic.
+
+    let array_i8_ty = ArrayType::new(&engine, FieldType::new(Mutability::Var, StorageType::I8));
+    let array_i8_pre = ArrayRefPre::new(&mut store, array_i8_ty);
+
+    {
+        let mut store = RootScope::new(&mut store);
+
+        // Spray a poison pattern across the heap.
+        let len = 1_000_000;
+        let _poison = ArrayRef::new(&mut store, &array_i8_pre, &Val::I32(-1), len);
+    }
+
+    // Make sure the poison array is collected.
+    store.gc();
+
+    // Allocate and then collect an array of GC refs from Wasm. This should not
+    // trick the collector into tracing any poison and panicking.
+    let module = Module::new(
+        &engine,
+        r#"
+            (module
+                (type $ty (array (mut anyref)))
+                (start $f)
+                (func $f
+                    (drop (array.new $ty (ref.null any) (i32.const 1_000)))
+                )
+            )
+        "#,
+    )?;
+    let _instance = Instance::new(&mut store, &module, &[])?;
+    store.gc();
+
+    Ok(())
+}

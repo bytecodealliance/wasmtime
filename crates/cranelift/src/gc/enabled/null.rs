@@ -166,7 +166,8 @@ impl GcCompiler for NullCompiler {
 
         // First, compute the array's total size from its base size, element
         // size, and length.
-        let size = emit_array_size(func_env, builder, &array_layout, init);
+        let len = init.len(&mut builder.cursor());
+        let size = emit_array_size(func_env, builder, &array_layout, len);
 
         // Next, allocate the array.
         assert!(align.is_power_of_two());
