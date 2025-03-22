@@ -2406,4 +2406,349 @@ block3:
             "#,
         );
     }
+
+    fn import_func(
+        builder: &mut FunctionBuilder,
+        params: impl IntoIterator<Item = ir::Type>,
+        results: impl IntoIterator<Item = ir::Type>,
+    ) -> ir::FuncRef {
+        let index = u32::try_from(builder.func.dfg.ext_funcs.len()).unwrap();
+
+        let name = builder
+            .func
+            .declare_imported_user_function(ir::UserExternalName {
+                namespace: 0,
+                index,
+            });
+        let name = ir::ExternalName::user(name);
+
+        let mut signature = Signature::new(CallConv::SystemV);
+        signature
+            .params
+            .extend(params.into_iter().map(|ty| AbiParam::new(ty)));
+        signature
+            .returns
+            .extend(results.into_iter().map(|ty| AbiParam::new(ty)));
+        let signature = builder.func.import_signature(signature);
+
+        builder.import_function(ir::ExtFuncData {
+            name,
+            signature,
+            colocated: true,
+        })
+    }
+
+    #[test]
+    fn issue_10397_stack_map_vars_and_indirect_block_params() {
+        let _ = env_logger::try_init();
+
+        let mut sig = Signature::new(CallConv::SystemV);
+        if false {
+            sig.params.push(AbiParam::new(ir::types::I32));
+        }
+
+        let mut fn_ctx = FunctionBuilderContext::new();
+        let mut func = Function::with_name_signature(ir::UserFuncName::testcase("f"), sig);
+        let mut builder = FunctionBuilder::new(&mut func, &mut fn_ctx);
+
+        let alloc_struct = import_func(&mut builder, None, Some(ir::types::I32));
+        let alloc_array = import_func(&mut builder, None, Some(ir::types::I32));
+        let array_init_elem = import_func(&mut builder, Some(ir::types::I32), None);
+        let type_of = import_func(&mut builder, Some(ir::types::I32), Some(ir::types::I32));
+        let ref_test = import_func(
+            &mut builder,
+            vec![ir::types::I32, ir::types::I32],
+            Some(ir::types::I32),
+        );
+        let access_array = import_func(&mut builder, Some(ir::types::I32), None);
+        let should_continue_inner_loop = import_func(&mut builder, None, Some(ir::types::I32));
+        let access_struct = import_func(&mut builder, Some(ir::types::I32), None);
+        let should_return = import_func(&mut builder, None, Some(ir::types::I32));
+
+        // This test exercises the combination of declaring stack maps and when
+        // we need to insert block params during SSA construction. The following
+        // CLIF uses vars in such a way that it will ultimately require that we
+        // insert block params. However, some of the inserted block params are
+        // only ever used in such a way that they are passed as arguments to
+        // *other* blocks. That is, there are regions where we never use them
+        // directly, and therefore, if we are only declaring that the variable's
+        // values need inclusion in stack maps on direct uses, we will
+        // completely miss these inserted block params. That leads to incomplete
+        // stack maps, which leads to collecting objects too early, which leads
+        // to use-after-free bugs.
+        //
+        // After inserting safepoint spills and stack map annotations to the
+        // following pseudo-CLIF, we should have stack map entries for the
+        // `live: {...}` annotations (or an over-approximation of that
+        // annotation).
+        //
+        //     block_entry:
+        //       v0 = call alloc_struct()                          ;; live: {}
+        //       define var_struct = v0
+        //       jump block_outer_loop_head
+        //
+        //     block_outer_loop_head:
+        //       v1 = call alloc_array()                           ;; live: {struct}
+        //       define var_array = v1
+        //       v2 = iconst.i32 0
+        //       jump block_array_init_loop_head(v2)
+        //
+        //     block_array_init_loop_head(v3):
+        //       v4 = iconst.i32 1
+        //       v5 = icmp ult v3, v4
+        //       br_if v5, block_array_init_loop_body, block_array_init_loop_done
+        //
+        //     block_array_init_loop_body:
+        //       call array_init_elem(v1, v4)                      ;; live: {struct, array}
+        //       v6 = iconst.i32 1
+        //       v7 = iadd v4, v6
+        //       jump block_array_init_loop_head(v7)
+        //
+        //     block_array_init_loop_done:
+        //       jump block_inner_loop_head
+        //
+        //     block_inner_loop_head:
+        //       v8 = use var_array
+        //       v9 = iconst.i32 0
+        //       v10 = icmp eq v8, v9
+        //       br_if v10, block_ref_test_done(v9), block_ref_test_non_null
+        //
+        //     block_ref_test_non_null:
+        //       v11 = call type_of(v8)                            ;; live: {struct, array}
+        //       v12 = iconst.i32 0xbeefbeef
+        //       v13 = icmp eq v11, v12
+        //       v14 = iconst.i31 1
+        //       br_if v13, block_ref_test_done(v14), block_ref_test_slow
+        //
+        //     block_ref_test_slow:
+        //       v15 = call ref_test(v8, v12)                      ;; live: {struct, array}
+        //       jump block_ref_test_done(v15)
+        //
+        //     block_ref_test_done(v16):
+        //       trapz v16, user1
+        //       define var_array = v8
+        //       call access_array(v8)                             ;; live: {struct}
+        //       v17 = call should_continue_inner_loop()           ;; live: {struct}
+        //       br_if v17, block_inner_loop_head, block_after_inner_loop
+        //
+        //     block_after_inner_loop:
+        //       v18 = use var_struct
+        //       call access_struct(v18)                           ;; live: {struct}
+        //       v19 = call should_return()                        ;; live: {struct}
+        //       br_if v19, block_return, block_outer_loop_head
+        //
+        //     block_return:
+        //       return
+
+        let var_struct = Variable::from_u32(0);
+        builder.declare_var(var_struct, cranelift_codegen::ir::types::I32);
+        builder.declare_var_needs_stack_map(var_struct);
+
+        let var_array = Variable::from_u32(1);
+        builder.declare_var(var_array, cranelift_codegen::ir::types::I32);
+        builder.declare_var_needs_stack_map(var_array);
+
+        let block_entry = builder.create_block();
+        let block_outer_loop_head = builder.create_block();
+        let block_array_init_loop_head = builder.create_block();
+        let block_array_init_loop_body = builder.create_block();
+        let block_array_init_loop_done = builder.create_block();
+        let block_inner_loop_head = builder.create_block();
+        let block_ref_test_non_null = builder.create_block();
+        let block_ref_test_slow = builder.create_block();
+        let block_ref_test_done = builder.create_block();
+        let block_after_inner_loop = builder.create_block();
+        let block_return = builder.create_block();
+
+        builder.append_block_params_for_function_params(block_entry);
+        builder.switch_to_block(block_entry);
+        builder.seal_block(block_entry);
+        let call_inst = builder.ins().call(alloc_struct, &[]);
+        let v0 = builder.func.dfg.first_result(call_inst);
+        builder.def_var(var_struct, v0);
+        builder.ins().jump(block_outer_loop_head, &[]);
+
+        builder.switch_to_block(block_outer_loop_head);
+        let call_inst = builder.ins().call(alloc_array, &[]);
+        let v1 = builder.func.dfg.first_result(call_inst);
+        builder.def_var(var_array, v1);
+        let v2 = builder.ins().iconst(ir::types::I32, 0);
+        builder.ins().jump(block_array_init_loop_head, &[v2]);
+
+        builder.switch_to_block(block_array_init_loop_head);
+        let v3 = builder.append_block_param(block_array_init_loop_head, ir::types::I32);
+        let v4 = builder.ins().iconst(ir::types::I32, 1);
+        let v5 = builder
+            .ins()
+            .icmp(ir::condcodes::IntCC::UnsignedLessThan, v3, v4);
+        builder.ins().brif(
+            v5,
+            block_array_init_loop_body,
+            &[],
+            block_array_init_loop_done,
+            &[],
+        );
+
+        builder.switch_to_block(block_array_init_loop_body);
+        builder.seal_block(block_array_init_loop_body);
+        builder.ins().call(array_init_elem, &[v1, v4]);
+        let v6 = builder.ins().iconst(ir::types::I32, 1);
+        let v7 = builder.ins().iadd(v4, v6);
+        builder.ins().jump(block_array_init_loop_head, &[v7]);
+        builder.seal_block(block_array_init_loop_head);
+
+        builder.switch_to_block(block_array_init_loop_done);
+        builder.seal_block(block_array_init_loop_done);
+        builder.ins().jump(block_inner_loop_head, &[]);
+
+        builder.switch_to_block(block_inner_loop_head);
+        let v8 = builder.use_var(var_array);
+        let v9 = builder.ins().iconst(ir::types::I32, 0);
+        let v10 = builder.ins().icmp(ir::condcodes::IntCC::Equal, v8, v9);
+        builder.ins().brif(
+            v10,
+            block_ref_test_done,
+            &[v9],
+            block_ref_test_non_null,
+            &[],
+        );
+
+        builder.switch_to_block(block_ref_test_non_null);
+        builder.seal_block(block_ref_test_non_null);
+        let call_inst = builder.ins().call(type_of, &[v8]);
+        let v11 = builder.func.dfg.first_result(call_inst);
+        let v12 = builder.ins().iconst(ir::types::I32, 0xbeefbeef);
+        let v13 = builder.ins().icmp(ir::condcodes::IntCC::Equal, v11, v12);
+        let v14 = builder.ins().iconst(ir::types::I32, 1);
+        builder
+            .ins()
+            .brif(v13, block_ref_test_done, &[v14], block_ref_test_slow, &[]);
+
+        builder.switch_to_block(block_ref_test_slow);
+        builder.seal_block(block_ref_test_slow);
+        let call_inst = builder.ins().call(ref_test, &[v8, v12]);
+        let v15 = builder.func.dfg.first_result(call_inst);
+        builder.ins().jump(block_ref_test_done, &[v15]);
+
+        builder.switch_to_block(block_ref_test_done);
+        let v16 = builder.append_block_param(block_ref_test_done, ir::types::I32);
+        builder.seal_block(block_ref_test_done);
+        builder.ins().trapz(v16, ir::TrapCode::user(1).unwrap());
+        builder.def_var(var_array, v8);
+        builder.ins().call(access_array, &[v8]);
+        let call_inst = builder.ins().call(should_continue_inner_loop, &[]);
+        let v17 = builder.func.dfg.first_result(call_inst);
+        builder
+            .ins()
+            .brif(v17, block_inner_loop_head, &[], block_after_inner_loop, &[]);
+        builder.seal_block(block_inner_loop_head);
+
+        builder.switch_to_block(block_after_inner_loop);
+        builder.seal_block(block_after_inner_loop);
+        let v18 = builder.use_var(var_struct);
+        builder.ins().call(access_struct, &[v18]);
+        let call_inst = builder.ins().call(should_return, &[]);
+        let v19 = builder.func.dfg.first_result(call_inst);
+        builder
+            .ins()
+            .brif(v19, block_return, &[], block_outer_loop_head, &[]);
+        builder.seal_block(block_outer_loop_head);
+
+        builder.switch_to_block(block_return);
+        builder.seal_block(block_return);
+        builder.ins().return_(&[]);
+
+        builder.finalize();
+        assert_eq_output!(
+            func.display().to_string(),
+            r#"
+function %f() system_v {
+    ss0 = explicit_slot 4, align = 4
+    ss1 = explicit_slot 4, align = 4
+    ss2 = explicit_slot 4, align = 4
+    sig0 = () -> i32 system_v
+    sig1 = () -> i32 system_v
+    sig2 = (i32) system_v
+    sig3 = (i32) -> i32 system_v
+    sig4 = (i32, i32) -> i32 system_v
+    sig5 = (i32) system_v
+    sig6 = () -> i32 system_v
+    sig7 = (i32) system_v
+    sig8 = () -> i32 system_v
+    fn0 = colocated u0:0 sig0
+    fn1 = colocated u0:1 sig1
+    fn2 = colocated u0:2 sig2
+    fn3 = colocated u0:3 sig3
+    fn4 = colocated u0:4 sig4
+    fn5 = colocated u0:5 sig5
+    fn6 = colocated u0:6 sig6
+    fn7 = colocated u0:7 sig7
+    fn8 = colocated u0:8 sig8
+
+block0:
+    v0 = call fn0()
+    jump block1(v0)
+
+block1(v22: i32):
+    v21 -> v22
+    stack_store v22, ss1
+    v1 = call fn1(), stack_map=[i32 @ ss1+0]
+    v8 -> v1
+    v18 -> v1
+    stack_store v1, ss0
+    v2 = iconst.i32 0
+    jump block2(v2)  ; v2 = 0
+
+block2(v3: i32):
+    v4 = iconst.i32 1
+    v5 = icmp ult v3, v4  ; v4 = 1
+    brif v5, block3, block4
+
+block3:
+    v24 = stack_load.i32 ss0
+    call fn2(v24, v4), stack_map=[i32 @ ss0+0, i32 @ ss1+0]  ; v4 = 1
+    v6 = iconst.i32 1
+    v7 = iadd.i32 v4, v6  ; v4 = 1, v6 = 1
+    jump block2(v7)
+
+block4:
+    v26 = stack_load.i32 ss1
+    jump block5(v26)
+
+block5(v20: i32):
+    v19 -> v20
+    stack_store v20, ss2
+    v9 = iconst.i32 0
+    v10 = icmp.i32 eq v8, v9  ; v9 = 0
+    brif v10, block8(v9), block6  ; v9 = 0
+
+block6:
+    v11 = call fn3(v8), stack_map=[i32 @ ss0+0, i32 @ ss2+0]
+    v12 = iconst.i32 -1091584273
+    v13 = icmp eq v11, v12  ; v12 = -1091584273
+    v14 = iconst.i32 1
+    brif v13, block8(v14), block7  ; v14 = 1
+
+block7:
+    v15 = call fn4(v8, v12), stack_map=[i32 @ ss0+0, i32 @ ss2+0]  ; v12 = -1091584273
+    jump block8(v15)
+
+block8(v16: i32):
+    trapz v16, user1
+    call fn5(v8), stack_map=[i32 @ ss0+0, i32 @ ss2+0]
+    v17 = call fn6(), stack_map=[i32 @ ss0+0, i32 @ ss2+0]
+    brif v17, block5(v19), block9
+
+block9:
+    v25 = stack_load.i32 ss2
+    call fn7(v25), stack_map=[i32 @ ss2+0]
+    v23 = call fn8(), stack_map=[i32 @ ss2+0]
+    brif v23, block10, block1(v19)
+
+block10:
+    return
+}
+            "#,
+        );
+    }
 }

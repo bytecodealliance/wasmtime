@@ -473,10 +473,10 @@ impl<'a> FunctionBuilder<'a> {
         };
         self.handle_ssa_side_effects(side_effects);
 
-        // If the variable was declared as needing stack maps, then propagate
-        // that requirement to all values derived from using the variable.
-        if self.func_ctx.stack_map_vars.contains(var) {
-            self.declare_value_needs_stack_map(val);
+        // If the variable was declared as needing stack maps, then we should
+        // have propagated that to the value as well.
+        if cfg!(debug_assertions) && self.func_ctx.stack_map_vars.contains(var) {
+            assert!(self.func_ctx.stack_map_values.contains(val));
         }
 
         Ok(val)
@@ -1178,9 +1178,24 @@ impl<'a> FunctionBuilder<'a> {
     }
 
     fn handle_ssa_side_effects(&mut self, side_effects: SideEffects) {
-        for modified_block in side_effects.instructions_added_to_blocks {
+        let SideEffects {
+            instructions_added_to_blocks,
+            params_added_to_blocks,
+        } = side_effects;
+
+        for modified_block in instructions_added_to_blocks {
             if self.is_pristine(modified_block) {
                 self.func_ctx.status[modified_block] = BlockStatus::Partial;
+            }
+        }
+
+        // Propagate needs-inclusion-in-stack-maps metadata from variables to
+        // their block parameter SSA values.
+        if !self.func_ctx.stack_map_vars.is_empty() {
+            for (val, var) in params_added_to_blocks {
+                if self.func_ctx.stack_map_vars.contains(var) {
+                    self.func_ctx.stack_map_values.insert(val);
+                }
             }
         }
     }
