@@ -14,10 +14,14 @@ pub fn rust_param_raw(op: &Operand) -> String {
                 format!("u{bits}")
             }
         }
-        OperandKind::RegMem(rm) => match rm.bits() {
-            128 => "&XmmMemAligned".to_string(),
-            _ => "&GprMem".to_string(),
-        },
+        OperandKind::RegMem(rm) => {
+            let reg = match rm.bits() {
+                128 => "Xmm",
+                _ => "Gpr",
+            };
+            let aligned = if op.align { "Aligned" } else { "" };
+            format!("&{reg}Mem{aligned}")
+        }
         OperandKind::Reg(r) => match r.bits() {
             128 => "Xmm".to_string(),
             _ => "Gpr".to_string(),
@@ -203,10 +207,14 @@ pub fn isle_param_raw(op: &Operand) -> String {
             _ => "Gpr".to_string(),
         },
         OperandKind::FixedReg(_) => "Gpr".to_string(),
-        OperandKind::RegMem(rm) => match rm.bits() {
-            128 => "XmmMemAligned".to_string(),
-            _ => "GprMem".to_string(),
-        },
+        OperandKind::RegMem(rm) => {
+            let reg = match rm.bits() {
+                128 => "Xmm",
+                _ => "Gpr",
+            };
+            let aligned = if op.align { "Aligned" } else { "" };
+            format!("{reg}Mem{aligned}")
+        }
     }
 }
 

@@ -193,10 +193,11 @@ impl Inst {
 
             Inst::External { inst } => {
                 use cranelift_assembler_x64::Feature::*;
-                let features = smallvec![];
+                let mut features = smallvec![];
                 for f in inst.features() {
                     match f {
                         _64b | compat => {}
+                        sse => features.push(InstructionSet::SSE),
                     }
                 }
                 features
