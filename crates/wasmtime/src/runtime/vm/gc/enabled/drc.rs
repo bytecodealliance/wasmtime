@@ -50,6 +50,7 @@ use crate::runtime::vm::{
     GcHeapObject, GcProgress, GcRootsIter, GcRuntime, Mmap, TypedGcRef, VMExternRef, VMGcHeader,
     VMGcRef,
 };
+use crate::vm::SendSyncPtr;
 use core::{
     alloc::Layout,
     any::Any,
@@ -473,12 +474,6 @@ struct VMDrcHeader {
     object_size: u32,
 }
 
-// Although this contains an `UnsafeCell`, that is just for allowing the field
-// to be written to by JIT code, and it is only read/modified when we have
-// access to an appropriate borrow of the heap.
-unsafe impl Send for VMDrcHeader {}
-unsafe impl Sync for VMDrcHeader {}
-
 unsafe impl GcHeapObject for VMDrcHeader {
     #[inline]
     fn is(_header: &VMGcHeader) -> bool {
@@ -872,13 +867,13 @@ struct VMGcRefTableAlloc {
     /// Bump-allocation finger within the `chunk`.
     ///
     /// NB: this is written to by compiled Wasm code.
-    next: NonNull<TableElem>,
+    next: SendSyncPtr<TableElem>,
 
     /// Pointer to just after the `chunk`.
     ///
     /// This is *not* within the current chunk and therefore is not a valid
     /// place to insert a reference!
-    end: NonNull<TableElem>,
+    end: SendSyncPtr<TableElem>,
 
     /// Bump allocation chunk that stores fast-path insertions.
     ///
@@ -897,8 +892,8 @@ impl Default for VMGcRefTableAlloc {
         let next = chunk.as_mut_ptr();
         let end = unsafe { next.add(chunk.len()) };
         VMGcRefTableAlloc {
-            next: NonNull::new(next).unwrap(),
-            end: NonNull::new(end).unwrap(),
+            next: SendSyncPtr::new(NonNull::new(next).unwrap()),
+            end: SendSyncPtr::new(NonNull::new(end).unwrap()),
             chunk,
         }
     }
@@ -918,16 +913,12 @@ impl VMGcRefTableAlloc {
     /// Reset this bump region, retaining any underlying allocation, but moving
     /// the bump pointer and limit to their default positions.
     fn reset(&mut self) {
-        self.next = NonNull::new(self.chunk.as_mut_ptr()).unwrap();
-        self.end = NonNull::new(unsafe { self.chunk.as_mut_ptr().add(self.chunk.len()) }).unwrap();
+        self.next = SendSyncPtr::new(NonNull::new(self.chunk.as_mut_ptr()).unwrap());
+        self.end = SendSyncPtr::new(
+            NonNull::new(unsafe { self.chunk.as_mut_ptr().add(self.chunk.len()) }).unwrap(),
+        );
     }
 }
-
-// This gets around the usage of `NonNull` throughout the internals of this
-// type, but the storage should all be Send/Sync and synchronization isn't
-// necessary since operations require `&mut self`.
-unsafe impl Send for VMGcRefTableAlloc {}
-unsafe impl Sync for VMGcRefTableAlloc {}
 
 fn _assert_send_sync() {
     fn _assert<T: Send + Sync>() {}
@@ -988,14 +979,14 @@ impl VMGcRefActivationsTable {
             }
 
             debug_assert_eq!(
-                self.alloc.next.read(),
+                self.alloc.next.as_non_null().read(),
                 0,
                 "slots >= the `next` bump finger are always `None`"
             );
-            self.alloc.next.write(gc_ref.as_raw_u32());
+            self.alloc.next.as_non_null().write(gc_ref.as_raw_u32());
 
-            let next = NonNull::new(self.alloc.next.as_ptr().add(1)).unwrap();
-            debug_assert!(next <= self.alloc.end);
+            let next = SendSyncPtr::new(NonNull::new(self.alloc.next.as_ptr().add(1)).unwrap());
+            debug_assert!(next.as_ptr() <= self.alloc.end.as_ptr());
             self.alloc.next = next;
 
             Ok(())
