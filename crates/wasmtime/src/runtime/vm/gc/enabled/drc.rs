@@ -42,7 +42,7 @@
 //! <https://openresearch-repository.anu.edu.au/bitstream/1885/42030/2/hon-thesis.pdf>
 
 use super::free_list::FreeList;
-use super::{VMArrayRef, VMGcObjectDataMut, VMStructRef};
+use super::{VMArrayRef, VMStructRef};
 use crate::hash_set::HashSet;
 use crate::prelude::*;
 use crate::runtime::vm::{
@@ -659,43 +659,6 @@ unsafe impl GcHeap for DrcHeap {
 
     fn dealloc_uninit_struct(&mut self, structref: VMStructRef) {
         self.dealloc(structref.into());
-    }
-
-    fn gc_object_data(&mut self, gc_ref: &VMGcRef) -> VMGcObjectDataMut<'_> {
-        let range = self.object_range(gc_ref);
-        let data = &mut self.heap_slice_mut()[range];
-        VMGcObjectDataMut::new(data)
-    }
-
-    fn gc_object_data_pair(
-        &mut self,
-        a: &VMGcRef,
-        b: &VMGcRef,
-    ) -> (VMGcObjectDataMut<'_>, VMGcObjectDataMut<'_>) {
-        assert_ne!(a, b);
-
-        let a_range = self.object_range(a);
-        let b_range = self.object_range(b);
-
-        // Assert that the two objects do not overlap.
-        assert!(a_range.start <= a_range.end);
-        assert!(b_range.start <= b_range.end);
-        assert!(a_range.end <= b_range.start || b_range.end <= a_range.start);
-
-        let (a_data, b_data) = if a_range.start < b_range.start {
-            let (a_half, b_half) = self.heap_slice_mut().split_at_mut(b_range.start);
-            let b_len = b_range.end - b_range.start;
-            (&mut a_half[a_range], &mut b_half[..b_len])
-        } else {
-            let (b_half, a_half) = self.heap_slice_mut().split_at_mut(a_range.start);
-            let a_len = a_range.end - a_range.start;
-            (&mut a_half[..a_len], &mut b_half[b_range])
-        };
-
-        (
-            VMGcObjectDataMut::new(a_data),
-            VMGcObjectDataMut::new(b_data),
-        )
     }
 
     fn alloc_uninit_array(

@@ -60,40 +60,46 @@ impl PodValType<{ mem::size_of::<V128>() }> for V128 {
 /// for preserving the memory safety of indexed GC heaps in the face of (for
 /// example) collector bugs, but the latter is just a defensive technique to
 /// catch bugs early and prevent action at a distance as much as possible.
-pub struct VMGcObjectDataMut<'a> {
-    data: &'a mut [u8],
+pub struct VMGcObjectData<T> {
+    data: T,
 }
 
 macro_rules! impl_pod_methods {
-    ( $( $t:ty, $read:ident, $write:ident; )* ) => {
+    ( < $T:ident > $( $U:ty, $read:ident, $write:ident; )* ) => {
         $(
             /// Read a `
-            #[doc = stringify!($t)]
+            #[doc = stringify!($U)]
             /// ` field this object.
             ///
             /// Panics on out-of-bounds accesses.
             #[inline]
-            pub fn $read(&self, offset: u32) -> $t {
-                self.read_pod::<{ mem::size_of::<$t>() }, $t>(offset)
+            pub fn $read(&self, offset: u32) -> $U
+            where $T:
+                AsRef<[u8]>,
+            {
+                self.read_pod::<{ mem::size_of::<$U>() }, $U>(offset)
             }
 
             /// Write a `
-            #[doc = stringify!($t)]
+            #[doc = stringify!($U)]
             /// ` into this object.
             ///
             /// Panics on out-of-bounds accesses.
             #[inline]
-            pub fn $write(&mut self, offset: u32, val: $t) {
-                self.write_pod::<{ mem::size_of::<$t>() }, $t>(offset, val);
+            pub fn $write(&mut self, offset: u32, val: $U)
+            where $T:
+                AsMut<[u8]>,
+            {
+                self.write_pod::<{ mem::size_of::<$U>() }, $U>(offset, val);
             }
         )*
     };
 }
 
-impl<'a> VMGcObjectDataMut<'a> {
+impl<T> VMGcObjectData<T> {
     /// Construct a `VMStructDataMut` from the given slice of bytes.
     #[inline]
-    pub fn new(data: &'a mut [u8]) -> Self {
+    pub fn new(data: T) -> Self {
         Self { data }
     }
 
@@ -104,15 +110,20 @@ impl<'a> VMGcObjectDataMut<'a> {
     /// Don't generally use this method, use `read_u8`, `read_i64`,
     /// etc... instead.
     #[inline]
-    fn read_pod<const N: usize, T>(&self, offset: u32) -> T
+    fn read_pod<const N: usize, U>(&self, offset: u32) -> U
     where
-        T: PodValType<N>,
+        T: AsRef<[u8]>,
+        U: PodValType<N>,
     {
-        assert_eq!(N, mem::size_of::<T>());
+        assert_eq!(N, mem::size_of::<U>());
         let offset = usize::try_from(offset).unwrap();
         let end = offset.checked_add(N).unwrap();
-        let bytes = self.data.get(offset..end).expect("out of bounds field");
-        T::read_le(bytes.try_into().unwrap())
+        let bytes = self
+            .data
+            .as_ref()
+            .get(offset..end)
+            .expect("out of bounds field");
+        U::read_le(bytes.try_into().unwrap())
     }
 
     /// Read a POD field out of this object.
@@ -122,18 +133,19 @@ impl<'a> VMGcObjectDataMut<'a> {
     /// Don't generally use this method, use `write_u8`, `write_i64`,
     /// etc... instead.
     #[inline]
-    fn write_pod<const N: usize, T>(&mut self, offset: u32, val: T)
+    fn write_pod<const N: usize, U>(&mut self, offset: u32, val: U)
     where
-        T: PodValType<N>,
+        T: AsMut<[u8]>,
+        U: PodValType<N>,
     {
-        assert_eq!(N, mem::size_of::<T>());
+        assert_eq!(N, mem::size_of::<U>());
         let offset = usize::try_from(offset).unwrap();
         let end = offset.checked_add(N).unwrap();
-        let into = match self.data.get_mut(offset..end) {
+        let into = match self.data.as_mut().get_mut(offset..end) {
             Some(into) => into,
             None => panic!(
                 "out of bounds field! field range = {offset:#x}..{end:#x}; object len = {:#x}",
-                self.data.len(),
+                self.data.as_mut().len(),
             ),
         };
         val.write_le(into.try_into().unwrap());
@@ -143,36 +155,56 @@ impl<'a> VMGcObjectDataMut<'a> {
     ///
     /// Panics on out-of-bounds accesses.
     #[inline]
-    pub fn slice(&self, offset: u32, len: u32) -> &[u8] {
+    pub fn slice(&self, offset: u32, len: u32) -> &[u8]
+    where
+        T: AsRef<[u8]>,
+    {
         let start = usize::try_from(offset).unwrap();
         let len = usize::try_from(len).unwrap();
         let end = start.checked_add(len).unwrap();
-        self.data.get(start..end).expect("out of bounds slice")
+        self.data
+            .as_ref()
+            .get(start..end)
+            .expect("out of bounds slice")
     }
 
     /// Get a mutable slice of this object's data.
     ///
     /// Panics on out-of-bounds accesses.
     #[inline]
-    pub fn slice_mut(&mut self, offset: u32, len: u32) -> &mut [u8] {
+    pub fn slice_mut(&mut self, offset: u32, len: u32) -> &mut [u8]
+    where
+        T: AsMut<[u8]>,
+    {
         let start = usize::try_from(offset).unwrap();
         let len = usize::try_from(len).unwrap();
         let end = start.checked_add(len).unwrap();
-        self.data.get_mut(start..end).expect("out of bounds slice")
+        self.data
+            .as_mut()
+            .get_mut(start..end)
+            .expect("out of bounds slice")
     }
 
     /// Copy the given slice into this object's data at the given offset.
     ///
     /// Panics on out-of-bounds accesses.
     #[inline]
-    pub fn copy_from_slice(&mut self, offset: u32, src: &[u8]) {
+    pub fn copy_from_slice(&mut self, offset: u32, src: &[u8])
+    where
+        T: AsMut<[u8]>,
+    {
         let offset = usize::try_from(offset).unwrap();
         let end = offset.checked_add(src.len()).unwrap();
-        let into = self.data.get_mut(offset..end).expect("out of bounds copy");
+        let into = self
+            .data
+            .as_mut()
+            .get_mut(offset..end)
+            .expect("out of bounds copy");
         into.copy_from_slice(src);
     }
 
     impl_pod_methods! {
+        <T>
         u8, read_u8, write_u8;
         u16, read_u16, write_u16;
         u32, read_u32, write_u32;
