@@ -58,7 +58,6 @@ use core::{
     num::NonZeroUsize,
     ops::{Deref, DerefMut, Range},
     ptr::NonNull,
-    slice,
 };
 use wasmtime_environ::drc::DrcTypeLayouts;
 use wasmtime_environ::{GcArrayLayout, GcStructLayout, GcTypeLayouts, VMGcKind, VMSharedTypeIndex};
@@ -773,15 +772,13 @@ unsafe impl GcHeap for DrcHeap {
     }
 
     fn heap_slice(&self) -> &[u8] {
-        let ptr = self.heap.as_ptr();
         let len = self.heap.len();
-        unsafe { slice::from_raw_parts(ptr, len) }
+        unsafe { self.heap.slice(0..len) }
     }
 
     fn heap_slice_mut(&mut self) -> &mut [u8] {
-        let ptr = self.heap.as_mut_ptr();
         let len = self.heap.len();
-        unsafe { slice::from_raw_parts_mut(ptr, len) }
+        unsafe { self.heap.slice_mut(0..len) }
     }
 }
 
