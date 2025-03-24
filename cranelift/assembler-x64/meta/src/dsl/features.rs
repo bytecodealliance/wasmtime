@@ -13,6 +13,13 @@ use std::ops::BitOr;
 /// let fs = Feature::_64b | Feature::compat;
 /// assert_eq!(fs.to_string(), "_64b | compat");
 /// ```
+///
+/// Duplicate features are not allowed and will cause a panic.
+///
+/// ```should_panic
+/// # use cranelift_assembler_x64_meta::dsl::Feature;
+/// let fs = Feature::_64b | Feature::_64b;
+/// ```
 #[derive(PartialEq)]
 pub struct Features(Vec<Feature>);
 
@@ -50,7 +57,7 @@ impl fmt::Display for Features {
 ///
 /// Other features listed here should match the __CPUID Feature Flags__ column
 /// of the instruction tables of the x64 reference manual.
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 #[allow(non_camel_case_types, reason = "makes DSL definitions easier to read")]
 pub enum Feature {
     _64b,
@@ -92,6 +99,7 @@ impl From<Option<Feature>> for Features {
 impl BitOr for Feature {
     type Output = Features;
     fn bitor(self, rhs: Self) -> Self::Output {
+        assert_ne!(self, rhs, "duplicate feature: {self:?}");
         Features(vec![self, rhs])
     }
 }
@@ -99,6 +107,7 @@ impl BitOr for Feature {
 impl BitOr<Feature> for Features {
     type Output = Features;
     fn bitor(mut self, rhs: Feature) -> Self::Output {
+        assert!(!self.0.contains(&rhs), "duplicate feature: {rhs:?}");
         self.0.push(rhs);
         self
     }
