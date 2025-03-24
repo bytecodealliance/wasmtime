@@ -336,6 +336,9 @@ pub struct Module {
     /// Number of imported or aliased tags in the module.
     pub num_imported_tags: usize,
 
+    /// Does this module need a GC heap to run?
+    pub needs_gc_heap: bool,
+
     /// Number of functions that "escape" from this module may need to have a
     /// `VMFuncRef` constructed for them.
     ///
@@ -616,6 +619,7 @@ impl TypeTrace for Module {
             num_imported_globals: _,
             num_imported_tags: _,
             num_escaped_funcs: _,
+            needs_gc_heap: _,
             functions,
             tables,
             memories: _,
@@ -665,6 +669,7 @@ impl TypeTrace for Module {
             num_imported_globals: _,
             num_imported_tags: _,
             num_escaped_funcs: _,
+            needs_gc_heap: _,
             functions,
             tables,
             memories: _,

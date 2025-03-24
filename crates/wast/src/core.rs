@@ -1,11 +1,15 @@
+use crate::WastContext;
 use anyhow::{anyhow, bail, Context, Result};
 use std::fmt::{Display, LowerHex};
-use wasmtime::{AnyRef, ExternRef, Store, Val};
+use wasmtime::{AnyRef, ExternRef, GcHeapOutOfMemory, Store, Val};
 use wast::core::{AbstractHeapType, HeapType, NanPattern, V128Pattern, WastArgCore, WastRetCore};
 use wast::token::{F32, F64};
 
 /// Translate from a `script::Value` to a `RuntimeValue`.
-pub fn val<T>(store: &mut Store<T>, v: &WastArgCore<'_>) -> Result<Val> {
+pub fn val<T>(ctx: &mut WastContext<T>, v: &WastArgCore<'_>) -> Result<Val>
+where
+    T: Send,
+{
     use wast::core::WastArgCore::*;
 
     Ok(match v {
@@ -30,10 +34,36 @@ pub fn val<T>(store: &mut Store<T>, v: &WastArgCore<'_>) -> Result<Val> {
             shared: false,
             ty: AbstractHeapType::None,
         }) => Val::AnyRef(None),
-        RefExtern(x) => Val::ExternRef(Some(ExternRef::new(store, *x)?)),
+        RefExtern(x) => Val::ExternRef(Some(match ExternRef::new(&mut ctx.store, *x) {
+            Ok(x) => x,
+            Err(e) => match e.downcast::<GcHeapOutOfMemory<u32>>() {
+                Ok(oom) => {
+                    let (x, oom) = oom.take_inner();
+                    match &ctx.async_runtime {
+                        Some(rt) => rt.block_on(ctx.store.gc_async(Some(&oom))),
+                        None => ctx.store.gc(Some(&oom)),
+                    }
+                    ExternRef::new(&mut ctx.store, x)?
+                }
+                Err(e) => return Err(e),
+            },
+        })),
         RefHost(x) => {
-            let x = ExternRef::new(&mut *store, *x)?;
-            let x = AnyRef::convert_extern(&mut *store, x)?;
+            let x = match ExternRef::new(&mut ctx.store, *x) {
+                Ok(x) => x,
+                Err(e) => match e.downcast::<GcHeapOutOfMemory<u32>>() {
+                    Ok(oom) => {
+                        let (x, oom) = oom.take_inner();
+                        match &ctx.async_runtime {
+                            Some(rt) => rt.block_on(ctx.store.gc_async(Some(&oom))),
+                            None => ctx.store.gc(Some(&oom)),
+                        }
+                        ExternRef::new(&mut ctx.store, x)?
+                    }
+                    Err(e) => return Err(e),
+                },
+            };
+            let x = AnyRef::convert_extern(&mut ctx.store, x)?;
             Val::AnyRef(Some(x))
         }
         other => bail!("couldn't convert {:?} to a runtime value", other),

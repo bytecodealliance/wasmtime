@@ -963,7 +963,11 @@ async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
 
     let mut store = Store::new(&engine, None);
     let mut linker = Linker::<Option<F>>::new(&engine);
-    linker.func_wrap("", "gc", |mut cx: Caller<'_, _>| cx.gc())?;
+    linker.func_wrap_async("", "gc", |mut cx: Caller<'_, _>, ()| {
+        Box::new(async move {
+            cx.gc_async(None).await;
+        })
+    })?;
     linker.func_wrap(
         "",
         "test",
@@ -981,7 +985,7 @@ async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
         |mut cx: Caller<'_, Option<F>>, (val,): (i32,)| {
             let func = cx.data().clone().unwrap();
             Box::new(async move {
-                let r = Some(ExternRef::new(&mut cx, val)?);
+                let r = Some(crate::new_externref_async(&mut cx, val).await?);
                 Ok(func.call_async(&mut cx, (val, r)).await)
             })
         },
@@ -990,7 +994,7 @@ async fn gc_preserves_externref_on_historical_async_stacks() -> Result<()> {
     let func: F = instance.get_typed_func(&mut store, "run")?;
     *store.data_mut() = Some(func.clone());
 
-    let r = Some(ExternRef::new(&mut store, 5)?);
+    let r = Some(crate::new_externref_async(&mut store, 5).await?);
     func.call_async(&mut store, (5, r)).await?;
 
     Ok(())
@@ -1036,13 +1040,15 @@ async fn async_gc_with_func_new_and_func_wrap() -> Result<()> {
     )?;
 
     let mut linker = Linker::new(&engine);
-    linker.func_wrap("", "a", |mut cx: Caller<'_, _>| {
-        Ok(Some(ExternRef::new(&mut cx, 100)?))
+    linker.func_wrap_async("", "a", |mut cx: Caller<'_, _>, ()| {
+        Box::new(async move { Ok(Some(crate::new_externref_async(&mut cx, 100).await?)) })
     })?;
     let ty = FuncType::new(&engine, [], [ValType::EXTERNREF]);
-    linker.func_new("", "b", ty, |mut cx, _, results| {
-        results[0] = ExternRef::new(&mut cx, 100)?.into();
-        Ok(())
+    linker.func_new_async("", "b", ty, |mut cx, _, results| {
+        Box::new(async move {
+            results[0] = crate::new_externref_async(&mut cx, 100).await?.into();
+            Ok(())
+        })
     })?;
 
     let mut store = Store::new(&engine, ());

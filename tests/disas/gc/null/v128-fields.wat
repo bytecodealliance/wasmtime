@@ -16,24 +16,23 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
+;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
+;;     gv5 = load.i64 notrap aligned readonly can_move gv4+24
+;;     gv6 = load.i64 notrap aligned gv4+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0022                               trapz v2, user16
-;; @0022                               v9 = uextend.i64 v2
-;; @0022                               v10 = iconst.i64 16
-;; @0022                               v11 = uadd_overflow_trap v9, v10, user1  ; v10 = 16
-;;                                     v31 = iconst.i64 48
-;; @0022                               v13 = uadd_overflow_trap v9, v31, user1  ; v31 = 48
-;; @0022                               v8 = load.i64 notrap aligned readonly can_move v0+48
-;; @0022                               v14 = icmp ule v13, v8
-;; @0022                               trapz v14, user1
-;; @0022                               v6 = load.i64 notrap aligned readonly can_move v0+40
-;; @0022                               v15 = iadd v6, v11
-;; @0022                               v16 = load.i8x16 notrap aligned little v15
+;; @0022                               v17 = load.i64 notrap aligned readonly can_move v0+8
+;; @0022                               v5 = load.i64 notrap aligned readonly can_move v17+24
+;; @0022                               v4 = uextend.i64 v2
+;; @0022                               v6 = iadd v5, v4
+;; @0022                               v7 = iconst.i64 16
+;; @0022                               v8 = iadd v6, v7  ; v7 = 16
+;; @0022                               v9 = load.i8x16 notrap aligned little v8
 ;; @002e                               jump block1
 ;;
 ;;                                 block1:
-;; @002c                               v30 = bxor.i8x16 v16, v16
-;; @002e                               return v30
+;; @002c                               v16 = bxor.i8x16 v9, v9
+;; @002e                               return v16
 ;; }

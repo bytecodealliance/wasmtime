@@ -406,7 +406,12 @@ impl MemoryImageSlot {
         tunables: &Tunables,
     ) -> Result<()> {
         assert!(!self.dirty);
-        assert!(initial_size_bytes <= self.static_size);
+        assert!(
+            initial_size_bytes <= self.static_size,
+            "initial_size_bytes <= self.static_size failed: \
+             initial_size_bytes={initial_size_bytes}, self.static_size={}",
+            self.static_size
+        );
         let initial_size_bytes_page_aligned =
             HostAlignedByteCount::new_rounded_up(initial_size_bytes)?;
 

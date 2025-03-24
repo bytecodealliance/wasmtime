@@ -44,8 +44,18 @@ impl NullCompiler {
         size: ir::Value,
         align: ir::Value,
     ) -> (ir::Value, ir::Value) {
+        log::trace!("emit_inline_alloc(kind={kind:?}, ty={ty:?}, size={size}, align={align})");
+
         assert_eq!(builder.func.dfg.value_type(size), ir::types::I32);
         assert_eq!(builder.func.dfg.value_type(align), ir::types::I32);
+
+        let current_block = builder.current_block().unwrap();
+        let continue_block = builder.create_block();
+        let grow_block = builder.create_block();
+
+        builder.ensure_inserted_block();
+        builder.insert_block_after(continue_block, current_block);
+        builder.insert_block_after(grow_block, continue_block);
 
         // Check that the size fits in the unused bits of a `VMGcKind`, since
         // the null collector stores the object's size there.
@@ -93,21 +103,44 @@ impl NullCompiler {
         let end_of_object =
             func_env.uadd_overflow_trap(builder, aligned, size, crate::TRAP_ALLOCATION_TOO_LARGE);
         let uext_end_of_object = uextend_i32_to_pointer_type(builder, pointer_type, end_of_object);
-        let (base, bound) = func_env.get_gc_heap_base_bound(builder);
+        let bound = func_env.get_gc_heap_bound(builder);
         let is_in_bounds = builder.ins().icmp(
             ir::condcodes::IntCC::UnsignedLessThanOrEqual,
             uext_end_of_object,
             bound,
         );
-        func_env.trapz(builder, is_in_bounds, crate::TRAP_ALLOCATION_TOO_LARGE);
+        builder
+            .ins()
+            .brif(is_in_bounds, continue_block, &[], grow_block, &[]);
+
+        log::trace!("emit_inline_alloc: grow_block");
+        builder.switch_to_block(grow_block);
+        builder.seal_block(grow_block);
+        builder.set_cold_block(grow_block);
+        let grow_gc_heap_builtin = func_env.builtin_functions.grow_gc_heap(builder.func);
+        let vmctx = func_env.vmctx_val(&mut builder.cursor());
+        let bytes_needed = builder.ins().isub(uext_end_of_object, bound);
+        let bytes_needed = match func_env.pointer_type() {
+            ir::types::I32 => builder.ins().uextend(ir::types::I64, bytes_needed),
+            ir::types::I64 => bytes_needed,
+            _ => unreachable!(),
+        };
+        builder
+            .ins()
+            .call(grow_gc_heap_builtin, &[vmctx, bytes_needed]);
+        builder.ins().jump(continue_block, &[]);
 
         // Write the header, update the bump "pointer", and return the newly
         // allocated object.
-        //
+        log::trace!("emit_inline_alloc: continue_block");
+        builder.switch_to_block(continue_block);
+        builder.seal_block(continue_block);
+
         // TODO: Ideally we would use a single `i64` store to write both the
         // header and the type index, but that requires generating different
         // code for big-endian architectures, and I haven't bothered doing that
         // yet.
+        let base = func_env.get_gc_heap_base(builder);
         let uext_aligned = uextend_i32_to_pointer_type(builder, pointer_type, aligned);
         let ptr_to_object = builder.ins().iadd(base, uext_aligned);
         let kind = builder
@@ -137,6 +170,7 @@ impl NullCompiler {
             .ins()
             .store(ir::MemFlags::trusted(), end_of_object, ptr_to_next, 0);
 
+        log::trace!("emit_inline_alloc(..) -> ({aligned}, {ptr_to_object})");
         (aligned, ptr_to_object)
     }
 }

@@ -21,7 +21,7 @@
 ;;       mov     w0, w16
 ;;       mov     x16, #0
 ;;       mov     w1, w16
-;;       ldur    x2, [x9, #0x50]
+;;       ldur    x2, [x9, #0x40]
 ;;       add     x2, x2, x1, uxtx
 ;;       stur    w0, [x2]
 ;;       add     x28, x28, #0x10

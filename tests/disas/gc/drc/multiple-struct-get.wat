@@ -16,28 +16,26 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
+;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
+;;     gv5 = load.i64 notrap aligned readonly can_move gv4+24
+;;     gv6 = load.i64 notrap aligned gv4+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32):
 ;; @0023                               trapz v2, user16
-;; @0023                               v10 = uextend.i64 v2
-;; @0023                               v11 = iconst.i64 16
-;; @0023                               v12 = uadd_overflow_trap v10, v11, user1  ; v11 = 16
-;;                                     v32 = iconst.i64 24
-;; @0023                               v14 = uadd_overflow_trap v10, v32, user1  ; v32 = 24
-;; @0023                               v9 = load.i64 notrap aligned readonly can_move v0+48
-;; @0023                               v15 = icmp ule v14, v9
-;; @0023                               trapz v15, user1
-;; @0023                               v7 = load.i64 notrap aligned readonly can_move v0+40
-;; @0023                               v16 = iadd v7, v12
-;; @0023                               v17 = load.f32 notrap aligned little v16
-;; @0029                               v24 = iconst.i64 20
-;; @0029                               v25 = uadd_overflow_trap v10, v24, user1  ; v24 = 20
-;; @0029                               v29 = iadd v7, v25
-;; @0029                               v30 = load.i8 notrap aligned little v29
+;; @0023                               v18 = load.i64 notrap aligned readonly can_move v0+8
+;; @0023                               v6 = load.i64 notrap aligned readonly can_move v18+24
+;; @0023                               v5 = uextend.i64 v2
+;; @0023                               v7 = iadd v6, v5
+;; @0023                               v8 = iconst.i64 16
+;; @0023                               v9 = iadd v7, v8  ; v8 = 16
+;; @0023                               v10 = load.f32 notrap aligned little v9
+;; @0029                               v14 = iconst.i64 20
+;; @0029                               v15 = iadd v7, v14  ; v14 = 20
+;; @0029                               v16 = load.i8 notrap aligned little v15
 ;; @002d                               jump block1
 ;;
 ;;                                 block1:
-;; @0029                               v31 = sextend.i32 v30
-;; @002d                               return v17, v31
+;; @0029                               v17 = sextend.i32 v16
+;; @002d                               return v10, v17
 ;; }

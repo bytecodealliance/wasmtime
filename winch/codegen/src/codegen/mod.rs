@@ -1143,7 +1143,7 @@ where
     /// Emits a series of instructions that load the `fuel_consumed` field from
     /// `VMStoreContext`.
     fn emit_load_fuel_consumed(&mut self, fuel_reg: Reg) -> Result<()> {
-        let limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
+        let limits_offset = self.env.vmoffsets.ptr.vmctx_store_context();
         let fuel_offset = self.env.vmoffsets.ptr.vmstore_context_fuel_consumed();
         self.masm.load_ptr(
             self.masm.address_at_vmctx(u32::from(limits_offset))?,
@@ -1221,7 +1221,7 @@ where
         epoch_counter_reg: Reg,
     ) -> Result<()> {
         let epoch_ptr_offset = self.env.vmoffsets.ptr.vmctx_epoch_ptr();
-        let runtime_limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
+        let runtime_limits_offset = self.env.vmoffsets.ptr.vmctx_store_context();
         let epoch_deadline_offset = self.env.vmoffsets.ptr.vmstore_context_epoch_deadline();
 
         // Load the current epoch value into `epoch_counter_var`.
@@ -1262,7 +1262,7 @@ where
             return Ok(());
         }
 
-        let limits_offset = self.env.vmoffsets.ptr.vmctx_runtime_limits();
+        let limits_offset = self.env.vmoffsets.ptr.vmctx_store_context();
         let fuel_offset = self.env.vmoffsets.ptr.vmstore_context_fuel_consumed();
         let limits_reg = self.context.any_gpr(self.masm)?;
 

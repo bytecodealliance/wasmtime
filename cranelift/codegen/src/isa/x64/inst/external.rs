@@ -131,7 +131,8 @@ fn enc_gpr(gpr: &Gpr) -> u8 {
     if let Some(real) = gpr.to_reg().to_real_reg() {
         real.hw_enc()
     } else {
-        unreachable!()
+        0
+        // unreachable!() TODO FITZGEN
     }
 }
 
