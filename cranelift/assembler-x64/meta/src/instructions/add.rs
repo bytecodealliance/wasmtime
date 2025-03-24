@@ -1,4 +1,4 @@
-use crate::dsl::{fmt, inst, r, rex, rw, sxl, sxq};
+use crate::dsl::{align, fmt, inst, r, rex, rw, sxl, sxq};
 use crate::dsl::{Feature::*, Inst, Location::*};
 
 pub fn list() -> Vec<Inst> {
@@ -21,9 +21,6 @@ pub fn list() -> Vec<Inst> {
         inst("addw", fmt("RM", [rw(r16), r(rm16)]), rex([0x66, 0x3]).r(), _64b | compat),
         inst("addl", fmt("RM", [rw(r32), r(rm32)]), rex(0x3).r(), _64b | compat),
         inst("addq", fmt("RM", [rw(r64), r(rm64)]), rex(0x3).w().r(), _64b),
-        // SSE vector instructions
-        inst("addps", fmt("A", [rw(xmm), r(rm128)]), rex([0x0F, 0x58]).r(), _64b),
-        inst("addpd", fmt("A", [rw(xmm), r(rm128)]), rex([0x66, 0x0F, 0x58]).r(), _64b),
         // Add with carry.
         inst("adcb", fmt("I", [rw(al), r(imm8)]), rex(0x14).ib(), _64b | compat),
         inst("adcw", fmt("I", [rw(ax), r(imm16)]), rex([0x66, 0x15]).iw(), _64b | compat),
@@ -43,5 +40,8 @@ pub fn list() -> Vec<Inst> {
         inst("adcw", fmt("RM", [rw(r16), r(rm16)]), rex([0x66, 0x13]).r(), _64b | compat),
         inst("adcl", fmt("RM", [rw(r32), r(rm32)]), rex(0x13).r(), _64b | compat),
         inst("adcq", fmt("RM", [rw(r64), r(rm64)]), rex(0x13).w().r(), _64b),
+        // Vector instructions.
+        inst("addps", fmt("A", [rw(xmm), r(align(rm128))]), rex([0x0F, 0x58]).r(), _64b | compat | sse),
+        inst("addpd", fmt("A", [rw(xmm), r(align(rm128))]), rex([0x66, 0x0F, 0x58]).r(), _64b | compat | sse),
     ]
 }
