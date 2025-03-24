@@ -312,6 +312,7 @@ pub unsafe trait InstanceAllocatorImpl {
     #[cfg(feature = "gc")]
     fn allocate_gc_heap(
         &self,
+        engine: &crate::Engine,
         gc_runtime: &dyn GcRuntime,
     ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)>;
 

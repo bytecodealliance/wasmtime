@@ -116,7 +116,7 @@ fn common_array_layout(
 
 /// Common code to define a GC struct's layout, given the size and alignment of
 /// the collector's GC header and its expected offset of the array length field.
-#[cfg(feature = "gc-null")]
+#[cfg(any(feature = "gc-null", feature = "gc-drc"))]
 fn common_struct_layout(
     ty: &WasmStructType,
     header_size: u32,
@@ -127,11 +127,12 @@ fn common_struct_layout(
 
     // Process each field, aligning it to its natural alignment.
     //
-    // We don't try and do any fancy field reordering to minimize padding
-    // (yet?) because (a) the toolchain probably already did that and (b)
-    // we're just doing the simple thing first. We can come back and improve
-    // things here if we find that (a) isn't actually holding true in
-    // practice.
+    // We don't try and do any fancy field reordering to minimize padding (yet?)
+    // because (a) the toolchain probably already did that and (b) we're just
+    // doing the simple thing first, and (c) this is tricky in the presence of
+    // subtyping where we need a subtype's fields to be assigned the same
+    // offsets as its supertype's fields. We can come back and improve things
+    // here if we find that (a) isn't actually holding true in practice.
     let mut size = header_size;
     let mut align = header_align;
 

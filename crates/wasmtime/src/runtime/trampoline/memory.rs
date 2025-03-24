@@ -244,6 +244,7 @@ unsafe impl InstanceAllocatorImpl for SingleMemoryInstance<'_> {
     #[cfg(feature = "gc")]
     fn allocate_gc_heap(
         &self,
+        _engine: &crate::Engine,
         _gc_runtime: &dyn crate::runtime::vm::GcRuntime,
     ) -> Result<(
         crate::runtime::vm::GcHeapAllocationIndex,

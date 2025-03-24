@@ -216,9 +216,13 @@ unsafe impl InstanceAllocatorImpl for OnDemandInstanceAllocator {
     #[cfg(feature = "gc")]
     fn allocate_gc_heap(
         &self,
+        engine: &crate::Engine,
         gc_runtime: &dyn GcRuntime,
     ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)> {
-        Ok((GcHeapAllocationIndex::default(), gc_runtime.new_gc_heap()?))
+        Ok((
+            GcHeapAllocationIndex::default(),
+            gc_runtime.new_gc_heap(engine)?,
+        ))
     }
 
     #[cfg(feature = "gc")]

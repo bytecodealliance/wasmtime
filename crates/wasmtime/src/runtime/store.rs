@@ -1423,7 +1423,7 @@ impl StoreOpaque {
             );
             let (index, heap) = engine
                 .allocator()
-                .allocate_gc_heap(&**engine.gc_runtime()?)?;
+                .allocate_gc_heap(engine, &**engine.gc_runtime()?)?;
             Ok(GcStore::new(index, heap))
         }
 

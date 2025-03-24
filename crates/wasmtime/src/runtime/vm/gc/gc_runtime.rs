@@ -36,7 +36,7 @@ pub unsafe trait GcRuntime: 'static + Send + Sync {
 
     /// Construct a new GC heap.
     #[cfg(feature = "gc")]
-    fn new_gc_heap(&self) -> Result<Box<dyn GcHeap>>;
+    fn new_gc_heap(&self, engine: &crate::Engine) -> Result<Box<dyn GcHeap>>;
 }
 
 /// A heap that manages garbage-collected objects.
