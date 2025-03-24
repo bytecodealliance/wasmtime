@@ -2204,19 +2204,19 @@ impl<T> Caller<'_, T> {
     ///
     /// Same as [`Store::gc`](crate::Store::gc).
     #[cfg(feature = "gc")]
-    pub fn gc(&mut self) {
-        self.store.gc()
+    pub fn gc(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) {
+        self.store.gc(why)
     }
 
     /// Perform garbage collection asynchronously.
     ///
     /// Same as [`Store::gc_async`](crate::Store::gc_async).
     #[cfg(all(feature = "async", feature = "gc"))]
-    pub async fn gc_async(&mut self)
+    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>)
     where
         T: Send,
     {
-        self.store.gc_async().await;
+        self.store.gc_async(why).await;
     }
 
     /// Returns the remaining fuel in the store.

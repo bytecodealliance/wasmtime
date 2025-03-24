@@ -22,9 +22,9 @@
 ;;     v5 = load.i64 notrap aligned v0+16
 ;;     v6 = get_frame_pointer.i64 
 ;;     v7 = load.i64 notrap aligned v6
-;;     store notrap aligned v7, v5+24
+;;     store notrap aligned v7, v5+40
 ;;     v8 = get_return_address.i64 
-;;     store notrap aligned v8, v5+32
+;;     store notrap aligned v8, v5+48
 ;;     v10 = load.i64 notrap aligned readonly v0+8
 ;;     v11 = load.i64 notrap aligned readonly v10+16
 ;;     v9 = iconst.i32 0
@@ -35,7 +35,7 @@
 ;;
 ;; block1 cold:
 ;;     v15 = load.i64 notrap aligned readonly v1+16
-;;     v16 = load.i64 notrap aligned readonly v15+312
+;;     v16 = load.i64 notrap aligned readonly v15+320
 ;;     call_indirect sig1, v16(v1)
 ;;     trap user1
 ;;

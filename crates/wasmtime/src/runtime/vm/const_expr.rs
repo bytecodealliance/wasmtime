@@ -136,6 +136,8 @@ impl ConstExprEvaluator {
     ///
     /// # Unsafety
     ///
+    /// When async is enabled, this may only be executed on a fiber stack.
+    ///
     /// The given const expression must be valid within the given context,
     /// e.g. the const expression must be well-typed and the context must return
     /// global values of the expected types. This evaluator operates directly on

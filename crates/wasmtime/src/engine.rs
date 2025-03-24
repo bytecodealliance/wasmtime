@@ -122,7 +122,17 @@ impl Engine {
                 #[cfg(any(feature = "cranelift", feature = "winch"))]
                 compiler,
                 #[cfg(feature = "runtime")]
-                allocator: config.build_allocator(&tunables)?,
+                allocator: {
+                    let allocator = config.build_allocator(&tunables)?;
+                    #[cfg(feature = "gc")]
+                    {
+                        let mem_ty = tunables.gc_heap_memory_type();
+                        allocator.validate_memory(&mem_ty).context(
+                            "instance allocator cannot support configured GC heap memory",
+                        )?;
+                    }
+                    allocator
+                },
                 #[cfg(feature = "runtime")]
                 gc_runtime: config.build_gc_runtime()?,
                 #[cfg(feature = "runtime")]

@@ -227,7 +227,7 @@ impl ExternRef {
                 .gc_store_mut()?
                 .alloc_externref(value)
                 .context("unrecoverable error when allocating new `externref`")?
-                .map_err(|x| GcHeapOutOfMemory::<T>::new(*x.downcast().unwrap()))
+                .map_err(|(x, n)| GcHeapOutOfMemory::<T>::new(*x.downcast().unwrap(), n))
                 .context("failed to allocate `externref`")
         })?;
 

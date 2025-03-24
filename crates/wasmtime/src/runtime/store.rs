@@ -785,10 +785,18 @@ impl<T> Store<T> {
     /// automatically happen according to various internal heuristics. This is
     /// provided if fine-grained control over the GC is desired.
     ///
+    /// If you are calling this method after an attempted allocation failed, you
+    /// may pass in the [`GcHeapOutOfMemory`][crate::GcHeapOutOfMemory] error.
+    /// When you do so, this method will attempt to create enough space in the
+    /// GC heap for that allocation, so that it will succeed on the next
+    /// attempt.
+    ///
     /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
-    pub fn gc(&mut self) {
-        self.inner.gc()
+    pub fn gc(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) {
+        assert!(!self.inner.async_support());
+        self.inner
+            .grow_or_collect_gc_heap(why.map(|e| e.bytes_needed()));
     }
 
     /// Returns the amount fuel in this [`Store`]. When fuel is enabled, it must
@@ -1006,8 +1014,10 @@ impl<'a, T> StoreContextMut<'a, T> {
     ///
     /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
-    pub fn gc(&mut self) {
-        self.0.gc()
+    pub fn gc(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>) {
+        assert!(!self.0.async_support());
+        self.0
+            .grow_or_collect_gc_heap(why.map(|e| e.bytes_needed()));
     }
 
     /// Returns remaining fuel in this store.
@@ -1260,11 +1270,16 @@ impl StoreOpaque {
         handle: InstanceHandle,
         module_id: RegisteredModuleId,
     ) -> InstanceId {
+        let id = InstanceId(self.instances.len());
+        log::trace!(
+            "Adding instance to store: store={:?}, module={module_id:?}, instance={id:?}",
+            self.id()
+        );
         self.instances.push(StoreInstance {
             handle: handle.clone(),
             kind: StoreInstanceKind::Real { module_id },
         });
-        InstanceId(self.instances.len() - 1)
+        id
     }
 
     /// Add a dummy instance that to the store.
@@ -1273,11 +1288,16 @@ impl StoreOpaque {
     /// else (e.g. host-created memories that are not actually defined in any
     /// Wasm module) and therefore shouldn't show up in things like core dumps.
     pub unsafe fn add_dummy_instance(&mut self, handle: InstanceHandle) -> InstanceId {
+        let id = InstanceId(self.instances.len());
+        log::trace!(
+            "Adding dummy instance to store: store={:?}, instance={id:?}",
+            self.id()
+        );
         self.instances.push(StoreInstance {
             handle: handle.clone(),
             kind: StoreInstanceKind::Dummy,
         });
-        InstanceId(self.instances.len() - 1)
+        id
     }
 
     pub fn instance(&self, id: InstanceId) -> &InstanceHandle {
@@ -1420,25 +1440,72 @@ impl StoreOpaque {
 
     #[inline(never)]
     pub(crate) fn allocate_gc_heap(&mut self) -> Result<()> {
+        log::trace!("allocating GC heap for store {:?}", self.id());
+
         assert!(self.gc_store.is_none());
-        let gc_store = allocate_gc_store(self.engine())?;
+        assert_eq!(
+            self.vm_store_context.gc_heap.base.as_non_null(),
+            NonNull::dangling(),
+        );
+        assert_eq!(self.vm_store_context.gc_heap.current_length(), 0);
+
+        let vmstore = self.traitobj();
+        let gc_store = allocate_gc_store(self.engine(), vmstore, self.get_pkey())?;
+        self.vm_store_context.gc_heap = gc_store.vmmemory_definition();
         self.gc_store = Some(gc_store);
         return Ok(());
 
         #[cfg(feature = "gc")]
-        fn allocate_gc_store(engine: &Engine) -> Result<GcStore> {
+        fn allocate_gc_store(
+            engine: &Engine,
+            vmstore: NonNull<dyn crate::vm::VMStore>,
+            pkey: Option<ProtectionKey>,
+        ) -> Result<GcStore> {
             ensure!(
                 engine.features().gc_types(),
                 "cannot allocate a GC store when GC is disabled at configuration time"
             );
-            let (index, heap) = engine
-                .allocator()
-                .allocate_gc_heap(engine, &**engine.gc_runtime()?)?;
+
+            // First, allocate the memory that will be our GC heap's storage.
+            let mut request = InstanceAllocationRequest {
+                runtime_info: &ModuleRuntimeInfo::bare(Arc::new(
+                    wasmtime_environ::Module::default(),
+                )),
+                imports: crate::vm::Imports::default(),
+                host_state: Box::new(()),
+                store: StorePtr::new(vmstore),
+                wmemcheck: false,
+                pkey,
+                tunables: engine.tunables(),
+            };
+            let mem_ty = engine.tunables().gc_heap_memory_type();
+            let tunables = engine.tunables();
+
+            // SAFETY: We validated the GC heap's memory type during engine creation.
+            let (mem_alloc_index, mem) = unsafe {
+                engine
+                    .allocator()
+                    .allocate_memory(&mut request, &mem_ty, tunables, None)?
+            };
+
+            // Then, allocate the actual GC heap, passing in that memory
+            // storage.
+            let (index, heap) = engine.allocator().allocate_gc_heap(
+                engine,
+                &**engine.gc_runtime()?,
+                mem_alloc_index,
+                mem,
+            )?;
+
             Ok(GcStore::new(index, heap))
         }
 
         #[cfg(not(feature = "gc"))]
-        fn allocate_gc_store(_engine: &Engine) -> Result<GcStore> {
+        fn allocate_gc_store(
+            _engine: &Engine,
+            _vmstore: NonNull<dyn crate::vm::VMStore>,
+            _pkey: Option<ProtectionKey>,
+        ) -> Result<GcStore> {
             bail!("cannot allocate a GC store: the `gc` feature was disabled at compile time")
         }
     }
@@ -1605,8 +1672,98 @@ impl StoreOpaque {
         Ok(root)
     }
 
+    /// TODO FITZGEN
+    ///
+    /// FIBER NONSENSE
+    pub(crate) fn maybe_async_grow_gc_heap(&mut self, bytes_needed: u64) -> Result<()> {
+        assert!(bytes_needed > 0);
+
+        // Take the GC heap's underlying memory out of the GC heap, attempt to
+        // grow it, then replace it.
+        let mut memory = self.unwrap_gc_store_mut().gc_heap.take_memory();
+        let mut delta_bytes_grown = 0;
+        let grow_result: Result<()> = (|| {
+            let page_size = self.engine().tunables().gc_heap_memory_type().page_size();
+
+            let current_size_in_bytes = u64::try_from(memory.byte_size()).unwrap();
+            let current_size_in_pages = current_size_in_bytes / page_size;
+
+            // Aim to double the heap size, amortizing the cost of growth.
+            let doubled_size_in_pages = current_size_in_pages.saturating_mul(2);
+            assert!(doubled_size_in_pages >= current_size_in_pages);
+            let delta_pages_for_doubling = doubled_size_in_pages - current_size_in_pages;
+
+            // When doubling our size, saturate at the maximum memory size in pages.
+            //
+            // TODO: we should consult the instance allocator for its configured
+            // maximum memory size, if any, rather than assuming the index
+            // type's maximum size.
+            let max_size_in_bytes = 1 << 32;
+            let max_size_in_pages = max_size_in_bytes / page_size;
+            let delta_to_max_size_in_pages = max_size_in_pages - current_size_in_pages;
+            let delta_pages_for_alloc = delta_pages_for_doubling.min(delta_to_max_size_in_pages);
+
+            // But always make sure we are attempting to grow at least as many pages
+            // as needed by the requested allocation. This must happen *after* the
+            // max-size saturation, so that if we are at the max already, we do not
+            // succeed in growing by zero delta pages, and then return successfully
+            // to our caller, who would be assuming that there is now capacity for
+            // their allocation.
+            let pages_needed = bytes_needed.div_ceil(page_size);
+            assert!(pages_needed > 0);
+            let delta_pages_for_alloc = delta_pages_for_alloc.max(pages_needed);
+            assert!(delta_pages_for_alloc > 0);
+
+            // Safety: we must take care to pair growing the GC heap with
+            // updating its associated `VMMemoryDefinition` in the
+            // `VMStoreContext` immediately afterwards.
+            unsafe {
+                memory
+                    .grow(delta_pages_for_alloc, Some(self.traitobj().as_mut()))?
+                    .ok_or_else(|| anyhow!("failed to grow GC heap"))?;
+            }
+            self.vm_store_context.gc_heap = memory.vmmemory();
+
+            let new_size_in_bytes = u64::try_from(memory.byte_size()).unwrap();
+            assert!(new_size_in_bytes > current_size_in_bytes);
+            delta_bytes_grown = new_size_in_bytes - current_size_in_bytes;
+            let delta_bytes_for_alloc = delta_pages_for_alloc.checked_mul(page_size).unwrap();
+            assert!(
+                delta_bytes_grown >= delta_bytes_for_alloc,
+                "{delta_bytes_grown} should be greater than or equal to {delta_bytes_for_alloc}"
+            );
+            Ok(())
+        })();
+
+        // Regardless whether growing succeeded or failed, place the memory back
+        // inside the GC heap.
+        self.unwrap_gc_store_mut()
+            .gc_heap
+            .replace_memory(memory, delta_bytes_grown);
+
+        grow_result
+    }
+
+    #[cfg(feature = "gc")]
+    pub fn grow_or_collect_gc_heap(&mut self, bytes_needed: Option<u64>) {
+        assert!(!self.async_support());
+
+        if let Some(bytes_needed) = bytes_needed {
+            if self.maybe_async_grow_gc_heap(bytes_needed).is_ok() {
+                return;
+            }
+        }
+
+        self.gc();
+    }
+
     #[cfg(feature = "gc")]
     pub fn gc(&mut self) {
+        assert!(
+            !self.async_support(),
+            "must use `store.gc_async()` instead of `store.gc()` for async stores"
+        );
+
         // If the GC heap hasn't been initialized, there is nothing to collect.
         if self.gc_store.is_none() {
             return;
@@ -2167,6 +2324,17 @@ unsafe impl<T> crate::runtime::vm::VMStore for StoreInner<T> {
         Ok(root)
     }
 
+    #[cfg(feature = "gc")]
+    fn maybe_async_grow_gc_heap(&mut self, bytes_needed: u64) -> Result<()> {
+        self.store_opaque_mut()
+            .maybe_async_grow_gc_heap(bytes_needed)
+    }
+
+    #[cfg(not(feature = "gc"))]
+    fn maybe_async_grow_gc_heap(&mut self) -> Result<()> {
+        unreachable!()
+    }
+
     #[cfg(feature = "component-model")]
     fn component_calls(&mut self) -> &mut crate::runtime::vm::component::CallContexts {
         &mut self.component_calls
@@ -2257,20 +2425,30 @@ impl Drop for StoreOpaque {
         unsafe {
             let allocator = self.engine.allocator();
             let ondemand = OnDemandInstanceAllocator::default();
-            for instance in self.instances.iter_mut() {
+            let store_id = self.id();
+
+            #[cfg(feature = "gc")]
+            if let Some(gc_store) = self.gc_store.take() {
+                let gc_alloc_index = gc_store.allocation_index;
+                log::trace!("store {store_id:?} is deallocating GC heap {gc_alloc_index:?}");
+                debug_assert!(self.engine.features().gc_types());
+                let (mem_alloc_index, mem) =
+                    allocator.deallocate_gc_heap(gc_alloc_index, gc_store.gc_heap);
+                allocator.deallocate_memory(None, mem_alloc_index, mem);
+            }
+
+            for (idx, instance) in self.instances.iter_mut().enumerate() {
+                let id = InstanceId::from_index(idx);
+                log::trace!("store {store_id:?} is deallocating {id:?}");
                 if let StoreInstanceKind::Dummy = instance.kind {
                     ondemand.deallocate_module(&mut instance.handle);
                 } else {
                     allocator.deallocate_module(&mut instance.handle);
                 }
             }
-            ondemand.deallocate_module(&mut self.default_caller);
 
-            #[cfg(feature = "gc")]
-            if let Some(gc_store) = self.gc_store.take() {
-                debug_assert!(self.engine.features().gc_types());
-                allocator.deallocate_gc_heap(gc_store.allocation_index, gc_store.gc_heap);
-            }
+            log::trace!("store {store_id:?} is deallocating its default caller instance");
+            ondemand.deallocate_module(&mut self.default_caller);
 
             #[cfg(feature = "component-model")]
             {

@@ -438,6 +438,19 @@ unsafe fn drop_gc_ref(store: &mut dyn VMStore, _instance: &mut Instance, gc_ref:
         .drop_gc_ref(gc_ref);
 }
 
+/// Grow the GC heap.
+#[cfg(feature = "gc-null")]
+unsafe fn grow_gc_heap(
+    store: &mut dyn VMStore,
+    _instance: &mut Instance,
+    bytes_needed: u64,
+) -> Result<()> {
+    store
+        .maybe_async_grow_gc_heap(bytes_needed)
+        .context("failed to grow the GC heap")
+        .context(crate::Trap::AllocationTooLarge)
+}
+
 /// Do a GC, keeping `gc_ref` rooted and returning the updated `gc_ref`
 /// reference.
 #[cfg(feature = "gc-drc")]
@@ -492,7 +505,7 @@ unsafe fn gc_alloc_raw(
     use wasmtime_environ::{ModuleInternedTypeIndex, VMGcKind};
 
     let kind = VMGcKind::from_high_bits_of_u32(kind_and_reserved);
-    log::trace!("gc_alloc_raw(kind={kind:?}, size={size}, align={align})",);
+    log::trace!("gc_alloc_raw(kind={kind:?}, size={size}, align={align})");
 
     let module = instance
         .runtime_module()
@@ -520,16 +533,19 @@ unsafe fn gc_alloc_raw(
         .unwrap_gc_store_mut()
         .alloc_raw(header, layout)?
     {
-        Some(r) => r,
-        None => {
-            // If the allocation failed, do a GC to hopefully clean up space.
-            store.maybe_async_gc(None)?;
+        Ok(r) => r,
+        Err(bytes_needed) => {
+            // If the allocation failed, try to grow the GC heap as neccessary,
+            // and if that also fails, then do a GC to hopefully clean up space.
+            store
+                .traitobj_mut()
+                .maybe_async_grow_or_collect_gc_heap(bytes_needed)?;
 
             // And then try again.
             store
                 .unwrap_gc_store_mut()
                 .alloc_raw(header, layout)?
-                .ok_or_else(|| GcHeapOutOfMemory::new(()))?
+                .map_err(|bytes_needed| GcHeapOutOfMemory::new((), bytes_needed))?
         }
     };
 
@@ -650,16 +666,19 @@ unsafe fn array_new_data(
         .unwrap_gc_store_mut()
         .alloc_uninit_array(shared_ty, len, &array_layout)?
     {
-        Some(a) => a,
-        None => {
-            // Collect garbage to hopefully free up space, then try the
-            // allocation again.
-            store.maybe_async_gc(None)?;
+        Ok(a) => a,
+        Err(bytes_needed) => {
+            // If the allocation failed, try to grow the GC heap as neccessary,
+            // and if that also fails, then do a GC to hopefully clean up space.
+            store
+                .traitobj_mut()
+                .maybe_async_grow_or_collect_gc_heap(bytes_needed)?;
+
             store
                 .store_opaque_mut()
                 .unwrap_gc_store_mut()
                 .alloc_uninit_array(shared_ty, u32::try_from(byte_len).unwrap(), &array_layout)?
-                .ok_or_else(|| GcHeapOutOfMemory::new(()))?
+                .map_err(|bytes_needed| GcHeapOutOfMemory::new((), bytes_needed))?
         }
     };
 

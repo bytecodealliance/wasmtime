@@ -363,7 +363,7 @@ impl StructRef {
             .gc_store_mut()?
             .alloc_uninit_struct(allocator.type_index(), &allocator.layout())
             .context("unrecoverable error when allocating new `structref`")?
-            .ok_or_else(|| GcHeapOutOfMemory::new(()))?;
+            .map_err(|n| GcHeapOutOfMemory::new((), n))?;
 
         // From this point on, if we get any errors, then the struct is not
         // fully initialized, so we need to eagerly deallocate it before the

@@ -14,41 +14,39 @@
 ;;     gv1 = load.i64 notrap aligned readonly gv0+8
 ;;     gv2 = load.i64 notrap aligned gv1+16
 ;;     gv3 = vmctx
+;;     gv4 = load.i64 notrap aligned readonly can_move gv3+8
+;;     gv5 = load.i64 notrap aligned readonly can_move gv4+24
+;;     gv6 = load.i64 notrap aligned gv4+32
 ;;     stack_limit = gv2
 ;;
 ;;                                 block0(v0: i64, v1: i64, v2: i32, v3: i32):
 ;; @0022                               trapz v2, user16
-;; @0022                               v9 = uextend.i64 v2
-;; @0022                               v10 = iconst.i64 16
-;; @0022                               v11 = uadd_overflow_trap v9, v10, user1  ; v10 = 16
-;; @0022                               v12 = iconst.i64 4
-;; @0022                               v13 = uadd_overflow_trap v11, v12, user1  ; v12 = 4
-;; @0022                               v8 = load.i64 notrap aligned readonly can_move v0+48
-;; @0022                               v14 = icmp ule v13, v8
-;; @0022                               trapz v14, user1
-;; @0022                               v6 = load.i64 notrap aligned readonly can_move v0+40
-;; @0022                               v15 = iadd v6, v11
-;; @0022                               v16 = load.i32 notrap aligned readonly v15
-;; @0022                               v17 = icmp ult v3, v16
-;; @0022                               trapz v17, user17
-;; @0022                               v19 = uextend.i64 v16
-;;                                     v41 = iconst.i64 32
-;; @0022                               v21 = ushr v19, v41  ; v41 = 32
-;; @0022                               trapnz v21, user1
-;; @0022                               v23 = iconst.i32 20
-;; @0022                               v24 = uadd_overflow_trap v16, v23, user1  ; v23 = 20
-;; @0022                               v35 = uextend.i64 v24
-;;                                     v49 = iadd v9, v35
-;; @0022                               v37 = icmp ule v49, v8
-;; @0022                               trapz v37, user1
-;; @0022                               v27 = iadd v3, v23  ; v23 = 20
-;; @0022                               v33 = uextend.i64 v27
-;;                                     v48 = iadd v9, v33
-;; @0022                               v38 = iadd v6, v48
-;; @0022                               v39 = load.i8 notrap aligned little v38
+;; @0022                               v31 = load.i64 notrap aligned readonly can_move v0+8
+;; @0022                               v6 = load.i64 notrap aligned readonly can_move v31+24
+;; @0022                               v5 = uextend.i64 v2
+;; @0022                               v7 = iadd v6, v5
+;; @0022                               v8 = iconst.i64 16
+;; @0022                               v9 = iadd v7, v8  ; v8 = 16
+;; @0022                               v10 = load.i32 notrap aligned readonly v9
+;; @0022                               v11 = icmp ult v3, v10
+;; @0022                               trapz v11, user17
+;; @0022                               v13 = uextend.i64 v10
+;;                                     v33 = iconst.i64 32
+;; @0022                               v15 = ushr v13, v33  ; v33 = 32
+;; @0022                               trapnz v15, user1
+;; @0022                               v17 = iconst.i32 20
+;; @0022                               v18 = uadd_overflow_trap v10, v17, user1  ; v17 = 20
+;; @0022                               v22 = uadd_overflow_trap v2, v18, user1
+;; @0022                               v23 = uextend.i64 v22
+;; @0022                               v25 = iadd v6, v23
+;; @0022                               v21 = iadd v3, v17  ; v17 = 20
+;; @0022                               v26 = isub v18, v21
+;; @0022                               v27 = uextend.i64 v26
+;; @0022                               v28 = isub v25, v27
+;; @0022                               v29 = load.i8 notrap aligned little v28
 ;; @0025                               jump block1
 ;;
 ;;                                 block1:
-;; @0022                               v40 = sextend.i32 v39
-;; @0025                               return v40
+;; @0022                               v30 = sextend.i32 v29
+;; @0025                               return v30
 ;; }

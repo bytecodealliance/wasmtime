@@ -22,12 +22,6 @@ mod null;
 #[cfg(feature = "gc-null")]
 pub use null::*;
 
-/// The default GC heap capacity.
-//
-// Note that this is a bit smaller for miri to avoid overheads.
-#[cfg(any(feature = "gc-drc", feature = "gc-null"))]
-const DEFAULT_GC_HEAP_CAPACITY: usize = if cfg!(miri) { 1 << 16 } else { 1 << 19 };
-
 // Explicit methods with `#[allow]` to clearly indicate that truncation is
 // desired when used.
 #[allow(clippy::cast_possible_truncation)]

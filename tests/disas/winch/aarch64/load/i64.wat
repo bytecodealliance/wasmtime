@@ -21,14 +21,14 @@
 ;;       ldur    x0, [x28]
 ;;       mov     x16, #8
 ;;       mov     w1, w16
-;;       ldur    x2, [x9, #0x50]
+;;       ldur    x2, [x9, #0x40]
 ;;       add     x2, x2, x1, uxtx
 ;;       sub     sp, x28, #8
 ;;       sturb   w0, [x2]
 ;;       mov     sp, x28
 ;;       mov     x16, #8
 ;;       mov     w0, w16
-;;       ldur    x1, [x9, #0x50]
+;;       ldur    x1, [x9, #0x40]
 ;;       add     x1, x1, x0, uxtx
 ;;       sub     sp, x28, #8
 ;;       ldursb  x0, [x1]

@@ -1,6 +1,10 @@
 #![expect(clippy::allow_attributes_without_reason, reason = "crate not migrated")]
 #![cfg_attr(miri, allow(dead_code, unused_imports))]
 
+use wasmtime::{
+    ArrayRef, ArrayRefPre, AsContextMut, ExternRef, Result, Rooted, StructRef, StructRefPre, Val,
+};
+
 mod arrays;
 mod async_functions;
 mod call_hook;
@@ -108,7 +112,7 @@ pub(crate) fn small_pool_config() -> wasmtime::PoolingAllocationConfig {
     config
 }
 
-pub(crate) fn gc_store() -> wasmtime::Result<wasmtime::Store<()>> {
+pub(crate) fn gc_store() -> Result<wasmtime::Store<()>> {
     let _ = env_logger::try_init();
 
     let mut config = wasmtime::Config::new();
@@ -117,6 +121,99 @@ pub(crate) fn gc_store() -> wasmtime::Result<wasmtime::Store<()>> {
 
     let engine = wasmtime::Engine::new(&config)?;
     Ok(wasmtime::Store::new(&engine, ()))
+}
+
+pub(crate) fn retry_after_gc<S, T, U>(
+    store: &mut S,
+    value: T,
+    mut f: impl FnMut(&mut S, T) -> Result<U>,
+) -> Result<U>
+where
+    T: Send + Sync + 'static,
+    S: AsContextMut,
+{
+    match f(store, value) {
+        Ok(x) => Ok(x),
+        Err(e) => match e.downcast::<wasmtime::GcHeapOutOfMemory<T>>() {
+            Ok(oom) => {
+                let (value, oom) = oom.take_inner();
+                store.as_context_mut().gc(Some(&oom));
+                f(store, value)
+            }
+            Err(e) => Err(e),
+        },
+    }
+}
+
+pub(crate) async fn retry_after_gc_async<S, T, U>(
+    store: &mut S,
+    value: T,
+    mut f: impl FnMut(&mut S, T) -> Result<U>,
+) -> Result<U>
+where
+    T: Send + Sync + 'static,
+    S: AsContextMut,
+    S::Data: Send + Sync + 'static,
+{
+    match f(store, value) {
+        Ok(x) => Ok(x),
+        Err(e) => match e.downcast::<wasmtime::GcHeapOutOfMemory<T>>() {
+            Ok(oom) => {
+                let (value, oom) = oom.take_inner();
+                store.as_context_mut().gc_async(Some(&oom)).await;
+                f(store, value)
+            }
+            Err(e) => Err(e),
+        },
+    }
+}
+
+pub(crate) fn new_externref<T>(store: &mut impl AsContextMut, value: T) -> Result<Rooted<ExternRef>>
+where
+    T: Send + Sync + 'static,
+{
+    retry_after_gc(store, value, |store, value| {
+        ExternRef::new(store.as_context_mut(), value)
+    })
+}
+
+pub(crate) async fn new_externref_async<S, T>(store: &mut S, value: T) -> Result<Rooted<ExternRef>>
+where
+    T: Send + Sync + 'static,
+    S: AsContextMut,
+    S::Data: Send + Sync + 'static,
+{
+    retry_after_gc_async(store, value, |store, value| {
+        ExternRef::new(store.as_context_mut(), value)
+    })
+    .await
+}
+
+pub(crate) fn new_struct(
+    store: &mut impl AsContextMut,
+    pre: &StructRefPre,
+    fields: &[Val],
+) -> Result<Rooted<StructRef>> {
+    retry_after_gc(store, (), |store, ()| StructRef::new(store, pre, fields))
+}
+
+pub(crate) fn new_array(
+    store: &mut impl AsContextMut,
+    pre: &ArrayRefPre,
+    elem: &Val,
+    len: u32,
+) -> Result<Rooted<ArrayRef>> {
+    retry_after_gc(store, (), |store, ()| ArrayRef::new(store, pre, elem, len))
+}
+
+pub(crate) fn new_fixed_array(
+    store: &mut impl AsContextMut,
+    pre: &ArrayRefPre,
+    elems: &[Val],
+) -> Result<Rooted<ArrayRef>> {
+    retry_after_gc(store, (), |store, ()| {
+        ArrayRef::new_fixed(store, pre, elems)
+    })
 }
 
 trait ErrorExt {

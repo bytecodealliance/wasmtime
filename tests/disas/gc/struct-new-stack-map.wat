@@ -18,30 +18,31 @@
 ;;       movq    0x10(%r10), %r10
 ;;       addq    $0x50, %r10
 ;;       cmpq    %rsp, %r10
-;;       ja      0xe4
+;;       ja      0xcf
 ;;   19: subq    $0x40, %rsp
-;;       movq    %r13, 0x20(%rsp)
-;;       movq    %r14, 0x28(%rsp)
-;;       movq    %r15, 0x30(%rsp)
-;;       movq    %rdx, %r15
+;;       movq    %r12, 0x20(%rsp)
+;;       movq    %r13, 0x28(%rsp)
+;;       movq    %r14, 0x30(%rsp)
+;;       movq    %rdx, %r14
 ;;       movdqu  %xmm0, 8(%rsp)
-;;       leaq    (%rsp), %r14
-;;       movl    %ecx, (%r14)
+;;       leaq    (%rsp), %r13
+;;       movl    %ecx, (%r13)
 ;;       movl    $0xb0000000, %esi
 ;;       xorl    %edx, %edx
 ;;       movl    $0x20, %ecx
 ;;       movl    $8, %r8d
-;;       movq    %rdi, %r13
-;;       callq   0x183
-;;       movq    0x28(%r13), %r9
+;;       movq    %rdi, %r12
+;;       callq   0x168
+;;       movq    8(%r12), %r8
 ;;       ╰─╼ stack_map: frame_size=64, frame_offsets=[0]
-;;       movq    %rax, %r8
-;;       movl    %r8d, %r10d
+;;       movq    0x18(%r8), %r8
+;;       movq    %rax, %r9
+;;       movl    %r9d, %r10d
 ;;       movdqu  8(%rsp), %xmm0
-;;       movss   %xmm0, 0x10(%r9, %r10)
-;;       movq    %r15, %rdx
-;;       movb    %dl, 0x14(%r9, %r10)
-;;       movl    (%r14), %r11d
+;;       movss   %xmm0, 0x10(%r8, %r10)
+;;       movq    %r14, %rdx
+;;       movb    %dl, 0x14(%r8, %r10)
+;;       movl    (%r13), %r11d
 ;;       movq    %r11, %rdx
 ;;       andl    $1, %edx
 ;;       testl   %r11d, %r11d
@@ -49,28 +50,19 @@
 ;;       movzbl  %sil, %esi
 ;;       orl     %esi, %edx
 ;;       testl   %edx, %edx
-;;       jne     0xc1
-;;   93: movl    %r11d, %edi
-;;       addq    $8, %rdi
-;;       jb      0xe6
-;;   a0: movq    %rdi, %rcx
-;;       addq    $8, %rcx
-;;       jb      0xe8
-;;   ad: cmpq    0x30(%r13), %rcx
-;;       ja      0xea
-;;   b7: movl    $1, %r11d
-;;       addq    %r11, (%r9, %rdi)
-;;       movl    (%r14), %r11d
-;;       movl    %r11d, 0x18(%r9, %r10)
-;;       movq    %r8, %rax
-;;       movq    0x20(%rsp), %r13
-;;       movq    0x28(%rsp), %r14
-;;       movq    0x30(%rsp), %r15
+;;       jne     0xab
+;;   9a: movl    %r11d, %ecx
+;;       leaq    (%r8, %rcx), %rax
+;;       movl    $1, %eax
+;;       addq    %rax, 8(%r8, %rcx)
+;;       movl    (%r13), %edx
+;;       movl    %edx, 0x18(%r8, %r10)
+;;       movq    %r9, %rax
+;;       movq    0x20(%rsp), %r12
+;;       movq    0x28(%rsp), %r13
+;;       movq    0x30(%rsp), %r14
 ;;       addq    $0x40, %rsp
 ;;       movq    %rbp, %rsp
 ;;       popq    %rbp
 ;;       retq
-;;   e4: ud2
-;;   e6: ud2
-;;   e8: ud2
-;;   ea: ud2
+;;   cf: ud2

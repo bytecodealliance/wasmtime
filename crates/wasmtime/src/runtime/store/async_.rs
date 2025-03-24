@@ -134,11 +134,13 @@ impl<T> Store<T> {
     ///
     /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
-    pub async fn gc_async(&mut self)
+    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>)
     where
         T: Send,
     {
-        self.inner.gc_async().await;
+        self.inner
+            .grow_or_collect_gc_heap_async(why.map(|e| e.bytes_needed()))
+            .await;
     }
 
     /// Configures epoch-deadline expiration to yield to the async
@@ -177,11 +179,14 @@ impl<'a, T> StoreContextMut<'a, T> {
     ///
     /// This method is only available when the `gc` Cargo feature is enabled.
     #[cfg(feature = "gc")]
-    pub async fn gc_async(&mut self)
+    pub async fn gc_async(&mut self, why: Option<&crate::GcHeapOutOfMemory<()>>)
     where
         T: Send,
     {
-        self.0.gc_async().await;
+        assert!(self.0.async_support());
+        self.0
+            .grow_or_collect_gc_heap_async(why.map(|e| e.bytes_needed()))
+            .await;
     }
 
     /// Configures epoch-deadline expiration to yield to the async
@@ -604,6 +609,22 @@ impl StoreOpaque {
                 Err(e) => Err(e),
             },
         }
+    }
+
+    #[cfg(feature = "gc")]
+    pub async fn grow_or_collect_gc_heap_async(&mut self, bytes_needed: Option<u64>) {
+        assert!(self.async_support());
+        if let Some(bytes_needed) = bytes_needed {
+            if self
+                .on_fiber(|store| store.maybe_async_grow_gc_heap(bytes_needed).is_ok())
+                .await
+                .unwrap_or(false)
+            {
+                return;
+            }
+        }
+
+        self.gc_async().await;
     }
 
     #[cfg(feature = "gc")]

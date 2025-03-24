@@ -1,14 +1,48 @@
 use super::index_allocator::{SimpleIndexAllocator, SlotId};
 use super::GcHeapAllocationIndex;
 use crate::runtime::vm::{GcHeap, GcRuntime, PoolingInstanceAllocatorConfig, Result};
+use crate::vm::{Memory, MemoryAllocationIndex};
 use crate::{prelude::*, Engine};
 use std::sync::Mutex;
+
+enum HeapSlot {
+    /// The is available for use, and we may or may not have lazily allocated
+    /// its associated GC heap yet.
+    Free(Option<Box<dyn GcHeap>>),
+
+    /// The slot's heap is currently in use, and it is backed by this memory
+    /// allocation index.
+    InUse(MemoryAllocationIndex),
+}
+
+impl HeapSlot {
+    fn alloc(&mut self, memory_alloc_index: MemoryAllocationIndex) -> Option<Box<dyn GcHeap>> {
+        match self {
+            HeapSlot::Free(gc_heap) => {
+                let gc_heap = gc_heap.take();
+                *self = HeapSlot::InUse(memory_alloc_index);
+                gc_heap
+            }
+            HeapSlot::InUse(_) => panic!("already in use"),
+        }
+    }
+
+    fn dealloc(&mut self, heap: Box<dyn GcHeap>) -> MemoryAllocationIndex {
+        match *self {
+            HeapSlot::Free(_) => panic!("already free"),
+            HeapSlot::InUse(memory_alloc_index) => {
+                *self = HeapSlot::Free(Some(heap));
+                memory_alloc_index
+            }
+        }
+    }
+}
 
 /// A pool of reusable GC heaps.
 pub struct GcHeapPool {
     max_gc_heaps: usize,
     index_allocator: SimpleIndexAllocator,
-    heaps: Mutex<Vec<Option<Box<dyn GcHeap>>>>,
+    heaps: Mutex<Box<[HeapSlot]>>,
 }
 
 impl std::fmt::Debug for GcHeapPool {
@@ -29,7 +63,7 @@ impl GcHeapPool {
 
         // Each individual GC heap in the pool is lazily allocated. See the
         // `allocate` method.
-        let heaps = Mutex::new((0..max_gc_heaps).map(|_| None).collect());
+        let heaps = Mutex::new((0..max_gc_heaps).map(|_| HeapSlot::Free(None)).collect());
 
         Ok(Self {
             max_gc_heaps,
@@ -49,6 +83,8 @@ impl GcHeapPool {
         &self,
         engine: &Engine,
         gc_runtime: &dyn GcRuntime,
+        memory_alloc_index: MemoryAllocationIndex,
+        memory: Memory,
     ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)> {
         let allocation_index = self
             .index_allocator
@@ -62,9 +98,9 @@ impl GcHeapPool {
             })?;
         debug_assert_ne!(allocation_index, GcHeapAllocationIndex::default());
 
-        let heap = match {
+        let mut heap = match {
             let mut heaps = self.heaps.lock().unwrap();
-            heaps[allocation_index.index()].take()
+            heaps[allocation_index.index()].alloc(memory_alloc_index)
         } {
             // If we already have a heap at this slot, reuse it.
             Some(heap) => heap,
@@ -73,24 +109,33 @@ impl GcHeapPool {
             None => gc_runtime.new_gc_heap(engine)?,
         };
 
+        debug_assert!(!heap.is_attached());
+        heap.attach(memory);
+
         Ok((allocation_index, heap))
     }
 
     /// Deallocate a previously-allocated GC heap.
-    pub fn deallocate(&self, allocation_index: GcHeapAllocationIndex, mut heap: Box<dyn GcHeap>) {
+    pub fn deallocate(
+        &self,
+        allocation_index: GcHeapAllocationIndex,
+        mut heap: Box<dyn GcHeap>,
+    ) -> (MemoryAllocationIndex, Memory) {
         debug_assert_ne!(allocation_index, GcHeapAllocationIndex::default());
-        heap.reset();
+
+        let memory = heap.detach();
 
         // NB: Replace the heap before freeing the index. If we did it in the
         // opposite order, a concurrent allocation request could reallocate the
         // index before we have replaced the heap.
 
-        {
+        let memory_alloc_index = {
             let mut heaps = self.heaps.lock().unwrap();
-            let old_entry = std::mem::replace(&mut heaps[allocation_index.index()], Some(heap));
-            debug_assert!(old_entry.is_none());
-        }
+            heaps[allocation_index.index()].dealloc(heap)
+        };
 
         self.index_allocator.free(SlotId(allocation_index.0));
+
+        (memory_alloc_index, memory)
     }
 }

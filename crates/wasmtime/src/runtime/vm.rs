@@ -202,6 +202,21 @@ pub unsafe trait VMStore {
     /// as a trap to clean up Wasm execution.
     unsafe fn maybe_async_gc(&mut self, root: Option<VMGcRef>) -> Result<Option<VMGcRef>>;
 
+    /// TODO FITZGEN
+    fn maybe_async_grow_gc_heap(&mut self, bytes_needed: u64) -> Result<()>;
+
+    /// TODO FITZGEN
+    ///
+    /// TODO FITZGEN: not guaranteed to have space after this
+    fn maybe_async_grow_or_collect_gc_heap(&mut self, bytes_needed: u64) -> Result<()> {
+        self.maybe_async_grow_gc_heap(bytes_needed)
+            .or_else(|err| -> Result<()> {
+                self.maybe_async_gc(None).context(err)?;
+                Ok(())
+            })?;
+        Ok(())
+    }
+
     /// Metadata required for resources for the component model.
     #[cfg(feature = "component-model")]
     fn component_calls(&mut self) -> &mut component::CallContexts;
