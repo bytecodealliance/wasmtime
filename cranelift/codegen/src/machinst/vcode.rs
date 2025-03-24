@@ -19,7 +19,7 @@
 
 use crate::ir::pcc::*;
 use crate::ir::{self, types, Constant, ConstantData, ValueLabel};
-use crate::machinst::*;
+use crate::{machinst::*, trace_log_enabled};
 use crate::ranges::Ranges;
 use crate::timing;
 use crate::trace;
@@ -1145,10 +1145,24 @@ impl<I: VCodeInst> VCode<I> {
             return ValueLabelsRanges::default();
         }
 
+        if trace_log_enabled!() {
+            trace!("Debug value ranges as computed by lowering:");
+            for (vreg, start, end, label) in &self.debug_value_labels {
+                trace!(
+                    "{:?} in {}: [Inst {}..Inst {})",
+                    ValueLabel::from_u32(*label),
+                    vreg,
+                    start.index(),
+                    end.index()
+                );
+            }
+        }
+
         let mut value_labels_ranges: ValueLabelsRanges = HashMap::new();
         for &(label, from, to, alloc) in &regalloc.debug_locations {
+            let label = ValueLabel::from_u32(label);
             let ranges = value_labels_ranges
-                .entry(ValueLabel::from_u32(label))
+                .entry(label)
                 .or_insert_with(|| vec![]);
             let from_offset = inst_offsets[from.inst().index()];
             let to_offset = if to.inst().index() == inst_offsets.len() {
@@ -1202,7 +1216,7 @@ impl<I: VCodeInst> VCode<I> {
             if let Some(last_loc_range) = ranges.last_mut() {
                 if last_loc_range.loc == loc && last_loc_range.end == start {
                     trace!(
-                        "Extending debug range for VL{} in {:?} to {}",
+                        "Extending debug range for {:?} in {:?} to {}",
                         label,
                         loc,
                         end
@@ -1213,7 +1227,7 @@ impl<I: VCodeInst> VCode<I> {
             }
 
             trace!(
-                "Recording debug range for VL{} in {:?}: [Inst {}..Inst {}) [{}..{})",
+                "Recording debug range for {:?} in {:?}: [Inst {}..Inst {}) [{}..{})",
                 label,
                 loc,
                 from.inst().index(),

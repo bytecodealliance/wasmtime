@@ -79,7 +79,7 @@ pub(crate) type SourceLocs = SecondaryMap<Inst, RelSourceLoc>;
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "enable-serde", derive(Serialize, Deserialize))]
 pub struct ValueLabel(u32);
-entity_impl!(ValueLabel, "val");
+entity_impl!(ValueLabel, "VL");
 
 /// A label of a Value.
 #[derive(Debug, Clone, PartialEq, Hash)]

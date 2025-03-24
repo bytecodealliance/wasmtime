@@ -105,4 +105,13 @@ macro_rules! trace {
     };
 }
 
+/// Dynamic check for whether trace logging is enabled.
+#[macro_export]
+macro_rules! trace_log_enabled {
+    () => {
+        cfg!(any(feature = "trace-log", debug_assertions))
+            && ::log::log_enabled!(::log::Level::Trace)
+    };
+}
+
 include!(concat!(env!("OUT_DIR"), "/version.rs"));
