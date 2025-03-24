@@ -53,11 +53,10 @@ use crate::runtime::vm::{
 use core::{
     alloc::Layout,
     any::Any,
-    cell::UnsafeCell,
     mem,
     num::NonZeroUsize,
     ops::{Deref, DerefMut, Range},
-    ptr::{self, NonNull},
+    ptr::NonNull,
     slice,
 };
 use wasmtime_environ::drc::DrcTypeLayouts;
@@ -168,17 +167,12 @@ impl DrcHeap {
         let drc_ref = drc_ref(gc_ref);
         let header = self.index_mut(&drc_ref);
         debug_assert_ne!(
-            *header.ref_count.get_mut(),
-            0,
+            header.ref_count, 0,
             "{:#p} is supposedly live; should have nonzero ref count",
             *gc_ref
         );
-        *header.ref_count.get_mut() += 1;
-        log::trace!(
-            "increment {:#p} ref count -> {}",
-            *gc_ref,
-            header.ref_count.get_mut()
-        );
+        header.ref_count += 1;
+        log::trace!("increment {:#p} ref count -> {}", *gc_ref, header.ref_count);
     }
 
     /// Decrement the ref count for the associated object.
@@ -193,18 +187,13 @@ impl DrcHeap {
         let drc_ref = drc_ref(gc_ref);
         let header = self.index_mut(drc_ref);
         debug_assert_ne!(
-            *header.ref_count.get_mut(),
-            0,
+            header.ref_count, 0,
             "{:#p} is supposedly live; should have nonzero ref count",
             *gc_ref
         );
-        *header.ref_count.get_mut() -= 1;
-        log::trace!(
-            "decrement {:#p} ref count -> {}",
-            *gc_ref,
-            header.ref_count.get_mut()
-        );
-        *header.ref_count.get_mut() == 0
+        header.ref_count -= 1;
+        log::trace!("decrement {:#p} ref count -> {}", *gc_ref, header.ref_count);
+        header.ref_count == 0
     }
 
     /// Decrement the ref count for the associated object.
@@ -269,15 +258,7 @@ impl DrcHeap {
             .chunks(mem::size_of::<u32>())
             .filter_map(|chunk| {
                 assert_eq!(chunk.len(), 4);
-
-                let bytes = unsafe {
-                    [
-                        *chunk[0].get(),
-                        *chunk[1].get(),
-                        *chunk[2].get(),
-                        *chunk[3].get(),
-                    ]
-                };
+                let bytes = [chunk[0], chunk[1], chunk[2], chunk[3]];
 
                 // Values are always little-endian inside the GC heap.
                 let raw = u32::from_le_bytes(bytes);
@@ -329,7 +310,7 @@ impl DrcHeap {
             }
 
             debug_assert_ne!(
-                *self.index_mut(drc_ref(&gc_ref)).ref_count.get_mut(),
+                self.index_mut(drc_ref(&gc_ref)).ref_count,
                 0,
                 "{gc_ref:#p} is on the Wasm stack and therefore should be held \
                  by the activations table; should have nonzero ref count",
@@ -353,10 +334,7 @@ impl DrcHeap {
             .chunk
             .iter_mut()
             .take(num_filled)
-            .map(|slot| {
-                let raw = *slot.get_mut();
-                VMGcRef::from_raw_u32(raw).expect("non-null")
-            })
+            .map(|slot| VMGcRef::from_raw_u32(*slot).expect("non-null"))
     }
 
     #[inline(never)]
@@ -383,14 +361,14 @@ impl DrcHeap {
         // borrows.
         let mut alloc = mem::take(&mut self.activations_table.alloc);
         for slot in alloc.chunk.iter_mut().take(num_filled) {
-            let raw = mem::take(slot.get_mut());
+            let raw = mem::take(slot);
             let gc_ref = VMGcRef::from_raw_u32(raw).expect("non-null");
             f(self, gc_ref);
-            *slot.get_mut() = 0;
+            *slot = 0;
         }
 
         debug_assert!(
-            alloc.chunk.iter_mut().all(|slot| *slot.get_mut() == 0),
+            alloc.chunk.iter().all(|slot| *slot == 0),
             "after sweeping the bump chunk, all slots should be empty",
         );
 
@@ -491,7 +469,7 @@ fn externref_to_drc(externref: &VMExternRef) -> &TypedGcRef<VMDrcExternRef> {
 #[repr(C)]
 struct VMDrcHeader {
     header: VMGcHeader,
-    ref_count: UnsafeCell<u64>,
+    ref_count: u64,
     object_size: u32,
 }
 
@@ -644,7 +622,7 @@ unsafe impl GcHeap for DrcHeap {
 
         *self.index_mut(drc_ref(&gc_ref)) = VMDrcHeader {
             header,
-            ref_count: UnsafeCell::new(1),
+            ref_count: 1,
             object_size: size,
         };
         log::trace!("new object: increment {gc_ref:#p} ref count -> 1");
@@ -799,8 +777,8 @@ unsafe impl GcHeap for DrcHeap {
         debug_assert!(dec_ref_stack.as_ref().is_some_and(|s| s.is_empty()));
     }
 
-    fn heap_slice(&self) -> &[UnsafeCell<u8>] {
-        let ptr = self.heap.as_ptr().cast();
+    fn heap_slice(&self) -> &[u8] {
+        let ptr = self.heap.as_ptr();
         let len = self.heap.len();
         unsafe { slice::from_raw_parts(ptr, len) }
     }
@@ -850,7 +828,7 @@ impl<'a> GarbageCollection<'a> for DrcCollection<'a> {
 /// The type of `VMGcRefActivationsTable`'s bump region's elements.
 ///
 /// These are written to by Wasm.
-type TableElem = UnsafeCell<u32>;
+type TableElem = u32;
 
 /// A table that over-approximizes the set of `VMGcRef`s that any Wasm
 /// activation on this thread is currently using.
@@ -893,9 +871,8 @@ struct VMGcRefActivationsTable {
 struct VMGcRefTableAlloc {
     /// Bump-allocation finger within the `chunk`.
     ///
-    /// NB: this is an `UnsafeCell` because it is written to by compiled Wasm
-    /// code.
-    next: UnsafeCell<NonNull<TableElem>>,
+    /// NB: this is written to by compiled Wasm code.
+    next: NonNull<TableElem>,
 
     /// Pointer to just after the `chunk`.
     ///
@@ -920,7 +897,7 @@ impl Default for VMGcRefTableAlloc {
         let next = chunk.as_mut_ptr();
         let end = unsafe { next.add(chunk.len()) };
         VMGcRefTableAlloc {
-            next: UnsafeCell::new(NonNull::new(next).unwrap()),
+            next: NonNull::new(next).unwrap(),
             end: NonNull::new(end).unwrap(),
             chunk,
         }
@@ -934,20 +911,20 @@ impl VMGcRefTableAlloc {
     /// Force the lazy allocation of this bump region.
     fn force_allocation(&mut self) {
         assert!(self.chunk.is_empty());
-        self.chunk = (0..Self::CHUNK_SIZE).map(|_| UnsafeCell::new(0)).collect();
+        self.chunk = (0..Self::CHUNK_SIZE).map(|_| 0).collect();
         self.reset();
     }
 
     /// Reset this bump region, retaining any underlying allocation, but moving
     /// the bump pointer and limit to their default positions.
     fn reset(&mut self) {
-        self.next = UnsafeCell::new(NonNull::new(self.chunk.as_mut_ptr()).unwrap());
+        self.next = NonNull::new(self.chunk.as_mut_ptr()).unwrap();
         self.end = NonNull::new(unsafe { self.chunk.as_mut_ptr().add(self.chunk.len()) }).unwrap();
     }
 }
 
-// This gets around the usage of `UnsafeCell` throughout the internals of this
-// allocator, but the storage should all be Send/Sync and synchronization isn't
+// This gets around the usage of `NonNull` throughout the internals of this
+// type, but the storage should all be Send/Sync and synchronization isn't
 // necessary since operations require `&mut self`.
 unsafe impl Send for VMGcRefTableAlloc {}
 unsafe impl Sync for VMGcRefTableAlloc {}
@@ -990,8 +967,8 @@ impl VMGcRefActivationsTable {
     #[inline]
     fn bump_capacity_remaining(&self) -> usize {
         let end = self.alloc.end.as_ptr() as usize;
-        let next = unsafe { *self.alloc.next.get() };
-        end - next.as_ptr() as usize
+        let next = self.alloc.next.as_ptr() as usize;
+        end - next
     }
 
     /// Try and insert a `VMGcRef` into this table.
@@ -1006,21 +983,20 @@ impl VMGcRefActivationsTable {
     #[inline]
     fn try_insert(&mut self, gc_ref: VMGcRef) -> Result<(), VMGcRef> {
         unsafe {
-            let next = *self.alloc.next.get();
-            if next == self.alloc.end {
+            if self.alloc.next == self.alloc.end {
                 return Err(gc_ref);
             }
 
             debug_assert_eq!(
-                (*next.as_ref().get()),
+                self.alloc.next.read(),
                 0,
                 "slots >= the `next` bump finger are always `None`"
             );
-            ptr::write(next.as_ptr(), UnsafeCell::new(gc_ref.as_raw_u32()));
+            self.alloc.next.write(gc_ref.as_raw_u32());
 
-            let next = NonNull::new_unchecked(next.as_ptr().add(1));
+            let next = NonNull::new(self.alloc.next.as_ptr().add(1)).unwrap();
             debug_assert!(next <= self.alloc.end);
-            *self.alloc.next.get() = next;
+            self.alloc.next = next;
 
             Ok(())
         }
@@ -1040,7 +1016,7 @@ impl VMGcRefActivationsTable {
     }
 
     fn num_filled_in_bump_chunk(&self) -> usize {
-        let next = unsafe { *self.alloc.next.get() };
+        let next = self.alloc.next;
         let bytes_unused = (self.alloc.end.as_ptr() as usize) - (next.as_ptr() as usize);
         let slots_unused = bytes_unused / mem::size_of::<TableElem>();
         self.alloc.chunk.len().saturating_sub(slots_unused)
@@ -1055,7 +1031,7 @@ impl VMGcRefActivationsTable {
         // filled-in slots.
         let num_filled = self.num_filled_in_bump_chunk();
         for slot in self.alloc.chunk.iter().take(num_filled) {
-            if let Some(elem) = VMGcRef::from_raw_u32(unsafe { *slot.get() }) {
+            if let Some(elem) = VMGcRef::from_raw_u32(*slot) {
                 f(&elem);
             }
         }
@@ -1124,7 +1100,7 @@ mod tests {
     fn ref_count_is_at_correct_offset() {
         let extern_data = VMDrcHeader {
             header: VMGcHeader::externref(),
-            ref_count: UnsafeCell::new(0),
+            ref_count: 0,
             object_size: 0,
         };
 
