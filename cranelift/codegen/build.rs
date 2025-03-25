@@ -63,6 +63,7 @@ fn main() {
     let crate_dir = cur_dir.as_path();
 
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-env-changed=ISLE_SOURCE_DIR");
 
     let isle_dir = if let Ok(path) = std::env::var("ISLE_SOURCE_DIR") {
         // This will canonicalize any relative path in terms of the
