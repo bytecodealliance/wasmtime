@@ -279,6 +279,7 @@ fn expand(test_config: &TestConfig, func: Fn) -> Result<TokenStream> {
             #should_panic
             #(#attrs)*
             #asyncness fn #test_name() {
+                let _ = env_logger::try_init();
                 let mut config = Config::new();
                 wasmtime_test_util::wasmtime_wast::apply_test_config(
                     &mut config,

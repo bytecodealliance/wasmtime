@@ -43,6 +43,8 @@ pub struct FunctionWithIsa {
 
 impl FunctionWithIsa {
     pub fn generate(u: &mut Unstructured) -> anyhow::Result<Self> {
+        let _ = env_logger::try_init();
+
         // We filter out targets that aren't supported in the current build
         // configuration after randomly choosing one, instead of randomly choosing
         // a supported one, so that the same fuzz input works across different build

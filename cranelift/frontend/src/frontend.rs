@@ -473,12 +473,6 @@ impl<'a> FunctionBuilder<'a> {
         };
         self.handle_ssa_side_effects(side_effects);
 
-        // If the variable was declared as needing stack maps, then we should
-        // have propagated that to the value as well.
-        if cfg!(debug_assertions) && self.func_ctx.stack_map_vars.contains(var) {
-            assert!(self.func_ctx.stack_map_values.contains(val));
-        }
-
         Ok(val)
     }
 
@@ -494,6 +488,8 @@ impl<'a> FunctionBuilder<'a> {
     /// an error if the value supplied does not match the type the variable was
     /// declared to have.
     pub fn try_def_var(&mut self, var: Variable, val: Value) -> Result<(), DefVariableError> {
+        log::trace!("try_def_var: {var:?} = {val:?}");
+
         let var_ty = *self
             .func_ctx
             .types
@@ -501,11 +497,6 @@ impl<'a> FunctionBuilder<'a> {
             .ok_or(DefVariableError::DefinedBeforeDeclared(var))?;
         if var_ty != self.func.dfg.value_type(val) {
             return Err(DefVariableError::TypeMismatch(var, val));
-        }
-
-        // If `var` needs inclusion in stack maps, then `val` does too.
-        if self.func_ctx.stack_map_vars.contains(var) {
-            self.declare_value_needs_stack_map(val);
         }
 
         self.func_ctx.ssa.def_var(var, val, self.position.unwrap());
@@ -720,6 +711,19 @@ impl<'a> FunctionBuilder<'a> {
             }
         }
 
+        // Propagate the needs-stack-map bit from variables to each of their
+        // associated values.
+        for var in self.func_ctx.stack_map_vars.iter() {
+            for val in self.func_ctx.ssa.values_for_var(var) {
+                log::trace!("propagating needs-stack-map from {var:?} to {val:?}");
+                debug_assert_eq!(self.func.dfg.value_type(val), self.func_ctx.types[var]);
+                self.func_ctx.stack_map_values.insert(val);
+            }
+        }
+
+        // If we have any values that need inclusion in stack maps, then we need
+        // to run our pass to spill those values to the stack at safepoints and
+        // generate stack maps.
         if !self.func_ctx.stack_map_values.is_empty() {
             self.func_ctx
                 .safepoints
@@ -1180,22 +1184,11 @@ impl<'a> FunctionBuilder<'a> {
     fn handle_ssa_side_effects(&mut self, side_effects: SideEffects) {
         let SideEffects {
             instructions_added_to_blocks,
-            params_added_to_blocks,
         } = side_effects;
 
         for modified_block in instructions_added_to_blocks {
             if self.is_pristine(modified_block) {
                 self.func_ctx.status[modified_block] = BlockStatus::Partial;
-            }
-        }
-
-        // Propagate needs-inclusion-in-stack-maps metadata from variables to
-        // their block parameter SSA values.
-        if !self.func_ctx.stack_map_vars.is_empty() {
-            for (val, var) in params_added_to_blocks {
-                if self.func_ctx.stack_map_vars.contains(var) {
-                    self.func_ctx.stack_map_values.insert(val);
-                }
             }
         }
     }
