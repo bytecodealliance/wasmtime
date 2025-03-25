@@ -12,7 +12,7 @@ use crate::{
         GcHeap, GcHeapObject, GcProgress, GcRootsIter, GcRuntime, Mmap, SendSyncUnsafeCell,
         TypedGcRef, VMGcHeader, VMGcRef,
     },
-    GcHeapOutOfMemory,
+    Engine, GcHeapOutOfMemory,
 };
 use core::ptr::NonNull;
 use core::{
@@ -36,7 +36,7 @@ unsafe impl GcRuntime for NullCollector {
         &self.layouts
     }
 
-    fn new_gc_heap(&self) -> Result<Box<dyn GcHeap>> {
+    fn new_gc_heap(&self, _: &Engine) -> Result<Box<dyn GcHeap>> {
         let heap = NullHeap::new()?;
         Ok(Box::new(heap) as _)
     }

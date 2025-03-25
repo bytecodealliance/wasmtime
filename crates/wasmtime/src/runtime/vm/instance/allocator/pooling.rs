@@ -687,9 +687,10 @@ unsafe impl InstanceAllocatorImpl for PoolingInstanceAllocator {
     #[cfg(feature = "gc")]
     fn allocate_gc_heap(
         &self,
+        engine: &crate::Engine,
         gc_runtime: &dyn GcRuntime,
     ) -> Result<(GcHeapAllocationIndex, Box<dyn GcHeap>)> {
-        self.gc_heaps.allocate(gc_runtime)
+        self.gc_heaps.allocate(engine, gc_runtime)
     }
 
     #[cfg(feature = "gc")]

@@ -509,7 +509,11 @@ unsafe fn gc_alloc_raw(
 
     let size = usize::try_from(size).unwrap();
     let align = usize::try_from(align).unwrap();
-    let layout = Layout::from_size_align(size, align).unwrap();
+    assert!(align.is_power_of_two());
+    let layout = Layout::from_size_align(size, align).map_err(|e| {
+        let err = Error::from(crate::Trap::AllocationTooLarge);
+        err.context(e)
+    })?;
 
     let gc_ref = match store
         .store_opaque_mut()
