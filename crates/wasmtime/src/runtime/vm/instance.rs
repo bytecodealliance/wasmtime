@@ -171,7 +171,7 @@ impl InstanceAndStore {
 /// A type that roughly corresponds to a WebAssembly instance, but is also used
 /// for host-defined objects.
 ///
-/// This structure is is never allocated directly but is instead managed through
+/// This structure is never allocated directly but is instead managed through
 /// an `InstanceHandle`. This structure ends with a `VMContext` which has a
 /// dynamic size corresponding to the `module` configured within. Memory
 /// management of this structure is always externalized.

@@ -1,6 +1,6 @@
 //! Synchronization primitives for Wasmtime for `no_std`.
 //!
-//! These primitives are intended for use in `no_std` contexts are are not as
+//! These primitives are intended for use in `no_std` contexts are not as
 //! full-featured as the `std` brethren. Namely these panic and/or return an
 //! error on contention. This serves to continue to be correct in the face of
 //! actual multiple threads, but if a system actually has multiple threads then
