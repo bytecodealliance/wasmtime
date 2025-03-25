@@ -2,6 +2,7 @@
 
 use crate::keys::Keys;
 use crate::EntityRef;
+use core::fmt;
 use core::marker::PhantomData;
 use cranelift_bitset::CompoundBitSet;
 
@@ -9,7 +10,7 @@ use cranelift_bitset::CompoundBitSet;
 ///
 /// The `EntitySet` data structure uses the dense index space to implement a set with a bitvector.
 /// Like `SecondaryMap`, an `EntitySet` is used to associate secondary information with entities.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 #[cfg_attr(
     feature = "enable-serde",
     derive(serde_derive::Serialize, serde_derive::Deserialize)
@@ -20,6 +21,15 @@ where
 {
     bitset: CompoundBitSet,
     unused: PhantomData<K>,
+}
+
+impl<K: fmt::Debug> fmt::Debug for EntitySet<K>
+where
+    K: EntityRef,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_set().entries(self.keys()).finish()
+    }
 }
 
 impl<K: EntityRef> Default for EntitySet<K> {
@@ -85,6 +95,9 @@ where
     }
 
     /// Insert the element at `k`.
+    ///
+    /// Returns `true` if `k` was not present in the set, i.e. this is a
+    /// newly-added element. Returns `false` otherwise.
     pub fn insert(&mut self, k: K) -> bool {
         let index = k.index();
         self.bitset.insert(index)
