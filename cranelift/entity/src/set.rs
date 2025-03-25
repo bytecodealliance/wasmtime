@@ -79,9 +79,54 @@ where
         self.bitset.clear()
     }
 
-    /// Iterate over all the keys in this set.
+    /// Iterate over all the keys up to the maximum in this set.
+    ///
+    /// This will yield intermediate keys on the way up to the max key, even if
+    /// they are not contained within the set.
+    ///
+    /// ```
+    /// use cranelift_entity::{entity_impl, EntityRef, EntitySet};
+    ///
+    /// #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    /// struct Entity(u32);
+    /// entity_impl!(Entity);
+    ///
+    /// let mut set = EntitySet::new();
+    /// set.insert(Entity::new(2));
+    ///
+    /// let mut keys = set.keys();
+    /// assert_eq!(keys.next(), Some(Entity::new(0)));
+    /// assert_eq!(keys.next(), Some(Entity::new(1)));
+    /// assert_eq!(keys.next(), Some(Entity::new(2)));
+    /// assert!(keys.next().is_none());
+    /// ```
     pub fn keys(&self) -> Keys<K> {
         Keys::with_len(self.bitset.max().map_or(0, |x| x + 1))
+    }
+
+    /// Iterate over the elements of this set.
+    ///
+    /// ```
+    /// use cranelift_entity::{entity_impl, EntityRef, EntitySet};
+    ///
+    /// #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+    /// struct Entity(u32);
+    /// entity_impl!(Entity);
+    ///
+    /// let mut set = EntitySet::new();
+    /// set.insert(Entity::new(2));
+    /// set.insert(Entity::new(3));
+    ///
+    /// let mut iter = set.iter();
+    /// assert_eq!(iter.next(), Some(Entity::new(2)));
+    /// assert_eq!(iter.next(), Some(Entity::new(3)));
+    /// assert!(iter.next().is_none());
+    /// ```
+    pub fn iter(&self) -> SetIter<K> {
+        SetIter {
+            inner: self.bitset.iter(),
+            _phantom: PhantomData,
+        }
     }
 
     /// Insert the element at `k`.
@@ -94,6 +139,25 @@ where
     pub fn pop(&mut self) -> Option<K> {
         let index = self.bitset.pop()?;
         Some(K::new(index))
+    }
+}
+
+/// An iterator over the elements in an `EntitySet`.
+pub struct SetIter<'a, K> {
+    inner: cranelift_bitset::compound::Iter<'a>,
+    _phantom: PhantomData<K>,
+}
+
+impl<K> Iterator for SetIter<'_, K>
+where
+    K: EntityRef,
+{
+    type Item = K;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        let k = self.inner.next()?;
+        Some(K::new(k))
     }
 }
 

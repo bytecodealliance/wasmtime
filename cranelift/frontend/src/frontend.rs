@@ -713,8 +713,9 @@ impl<'a> FunctionBuilder<'a> {
 
         // Propagate the needs-stack-map bit from variables to each of their
         // associated values.
-        for var in self.func_ctx.stack_map_vars.keys() {
+        for var in self.func_ctx.stack_map_vars.iter() {
             for val in self.func_ctx.ssa.values_for_var(var) {
+                log::trace!("propagating needs-stack-map from {var:?} to {val:?}");
                 debug_assert_eq!(self.func.dfg.value_type(val), self.func_ctx.types[var]);
                 self.func_ctx.stack_map_values.insert(val);
             }
