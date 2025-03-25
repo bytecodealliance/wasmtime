@@ -93,50 +93,43 @@ impl dsl::Inst {
         } else {
             "_"
         };
-        f.add_block(
-            &format!("pub fn encode(&self, buf: &mut impl CodeSink, {off}: &impl KnownOffsetTable)"),
-            |f| {
-                // Emit trap.
-                if let Some(op) = self.format.uses_memory() {
-                    use dsl::OperandKind::*;
-                    f.comment("Emit trap.");
-                    match op.kind() {
-                        Mem(_) => {
-                            f.add_block(&format!("if let Some(trap_code) = self.{op}.trap_code()"), |f| {
+        f.add_block(&format!("pub fn encode(&self, buf: &mut impl CodeSink, {off}: &impl KnownOffsetTable)"), |f| {
+            // Emit trap.
+            if let Some(op) = self.format.uses_memory() {
+                use dsl::OperandKind::*;
+                f.comment("Emit trap.");
+                match op.kind() {
+                    Mem(_) => {
+                        f.add_block(&format!("if let Some(trap_code) = self.{op}.trap_code()"), |f| {
+                            fmtln!(f, "buf.add_trap(trap_code);");
+                        });
+                    }
+                    RegMem(_) => {
+                        let ty = match op.bits() {
+                            128 => "XmmMem",
+                            _ => "GprMem",
+                        };
+                        f.add_block(&format!("if let {ty}::Mem({op}) = &self.{op}"), |f| {
+                            f.add_block(&format!("if let Some(trap_code) = {op}.trap_code()"), |f| {
                                 fmtln!(f, "buf.add_trap(trap_code);");
                             });
-                        }
-                        RegMem(_) => {
-                            let ty = match op.bits() {
-                                128 => "XmmMem",
-                                _ => "GprMem",
-                            };
-                            f.add_block(&format!("if let {ty}::Mem({op}) = &self.{op}"), |f| {
-                                f.add_block(&format!("if let Some(trap_code) = {op}.trap_code()"), |f| {
-                                    fmtln!(f, "buf.add_trap(trap_code);");
-                                });
-                            });
-                        }
-                        _ => unreachable!(),
+                        });
                     }
+                    _ => unreachable!(),
                 }
+            }
 
-                match &self.encoding {
-                    dsl::Encoding::Rex(rex) => self.format.generate_rex_encoding(f, rex),
-                    dsl::Encoding::Vex(_) => todo!(),
-                }
-            },
-        );
+            match &self.encoding {
+                dsl::Encoding::Rex(rex) => self.format.generate_rex_encoding(f, rex),
+                dsl::Encoding::Vex(_) => todo!(),
+            }
+        });
     }
 
     /// `fn visit(&self, ...) { ... }`
     fn generate_visit_function(&self, f: &mut Formatter) {
         use dsl::OperandKind::*;
-        let extra_generic_bound = if self.requires_generic() {
-            ""
-        } else {
-            "<R: Registers>"
-        };
+        let extra_generic_bound = if self.requires_generic() { "" } else { "<R: Registers>" };
         f.add_block(
             &format!("pub fn visit{extra_generic_bound}(&mut self, visitor: &mut impl RegisterVisitor<R>)"),
             |f| {

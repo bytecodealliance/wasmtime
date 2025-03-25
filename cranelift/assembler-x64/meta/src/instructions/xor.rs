@@ -23,20 +23,10 @@ pub fn list() -> Vec<Inst> {
         inst("xorq", fmt("RM", [rw(r64), r(rm64)]), rex(0x33).w().r(), _64b),
         // `LOCK`-prefixed memory-writing instructions.
         inst("lock_xorb", fmt("MI", [rw(m8), r(imm8)]), rex([0xf0, 0x80]).digit(6).ib(), _64b | compat),
-        inst(
-            "lock_xorw",
-            fmt("MI", [rw(m16), r(imm16)]),
-            rex([0xf0, 0x66, 0x81]).digit(6).iw(),
-            _64b | compat,
-        ),
+        inst("lock_xorw", fmt("MI", [rw(m16), r(imm16)]), rex([0xf0, 0x66, 0x81]).digit(6).iw(), _64b | compat),
         inst("lock_xorl", fmt("MI", [rw(m32), r(imm32)]), rex([0xf0, 0x81]).digit(6).id(), _64b | compat),
         inst("lock_xorq", fmt("MI_SXL", [rw(m64), sxq(imm32)]), rex([0xf0, 0x81]).w().digit(6).id(), _64b),
-        inst(
-            "lock_xorl",
-            fmt("MI_SXB", [rw(m32), sxl(imm8)]),
-            rex([0xf0, 0x83]).digit(6).ib(),
-            _64b | compat,
-        ),
+        inst("lock_xorl", fmt("MI_SXB", [rw(m32), sxl(imm8)]), rex([0xf0, 0x83]).digit(6).ib(), _64b | compat),
         inst("lock_xorq", fmt("MI_SXB", [rw(m64), sxq(imm8)]), rex([0xf0, 0x83]).w().digit(6).ib(), _64b),
         inst("lock_xorb", fmt("MR", [rw(m8), r(r8)]), rex([0xf0, 0x30]).r(), _64b | compat),
         inst("lock_xorw", fmt("MR", [rw(m16), r(r16)]), rex([0xf0, 0x66, 0x31]).r(), _64b | compat),

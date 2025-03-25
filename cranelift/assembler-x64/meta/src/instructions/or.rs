@@ -23,12 +23,7 @@ pub fn list() -> Vec<Inst> {
         inst("orq", fmt("RM", [rw(r64), r(rm64)]), rex(0x0B).w().r(), _64b),
         // `LOCK`-prefixed memory-writing instructions.
         inst("lock_orb", fmt("MI", [rw(m8), r(imm8)]), rex([0xf0, 0x80]).digit(1).ib(), _64b | compat),
-        inst(
-            "lock_orw",
-            fmt("MI", [rw(m16), r(imm16)]),
-            rex([0xf0, 0x66, 0x81]).digit(1).iw(),
-            _64b | compat,
-        ),
+        inst("lock_orw", fmt("MI", [rw(m16), r(imm16)]), rex([0xf0, 0x66, 0x81]).digit(1).iw(), _64b | compat),
         inst("lock_orl", fmt("MI", [rw(m32), r(imm32)]), rex([0xf0, 0x81]).digit(1).id(), _64b | compat),
         inst("lock_orq", fmt("MI_SXL", [rw(m64), sxq(imm32)]), rex([0xf0, 0x81]).w().digit(1).id(), _64b),
         inst("lock_orl", fmt("MI_SXB", [rw(m32), sxl(imm8)]), rex([0xf0, 0x83]).digit(1).ib(), _64b | compat),

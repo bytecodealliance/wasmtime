@@ -188,11 +188,11 @@ impl Rex {
 
         if self.opcodes.prefixes.has_operand_size_override() {
             assert!(
-                operands.iter().all(|&op| matches!(
-                    op.location.kind(),
-                    OperandKind::Imm(_) | OperandKind::FixedReg(_)
-                ) || op.location.bits() == 16
-                    || op.location.bits() == 128),
+                operands
+                    .iter()
+                    .all(|&op| matches!(op.location.kind(), OperandKind::Imm(_) | OperandKind::FixedReg(_))
+                        || op.location.bits() == 16
+                        || op.location.bits() == 128),
                 "when we encode the 66 prefix, we expect all operands to be 16-bit wide"
             );
         }
