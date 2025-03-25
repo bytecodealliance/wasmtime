@@ -206,7 +206,7 @@ impl<'a, T> LowerContext<'a, T> {
     /// # Unsafety
     ///
     /// This function is unsafe as it needs to be guaranteed by the caller that
-    /// the `instance` here is is valid within `store` and is a valid component
+    /// the `instance` here is valid within `store` and is a valid component
     /// instance.
     pub unsafe fn new(
         store: StoreContextMut<'a, T>,
