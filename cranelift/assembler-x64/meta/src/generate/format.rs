@@ -25,7 +25,7 @@ impl dsl::Format {
     }
 
     pub fn generate_rex_encoding(&self, f: &mut Formatter, rex: &dsl::Rex) {
-        self.generate_legacy_prefix(f, rex);
+        self.generate_prefixes(f, rex);
         self.generate_rex_prefix(f, rex);
         self.generate_opcodes(f, rex);
         self.generate_modrm_byte(f, rex);
@@ -33,26 +33,22 @@ impl dsl::Format {
     }
 
     /// `buf.put1(...);`
-    fn generate_legacy_prefix(&self, f: &mut Formatter, rex: &dsl::Rex) {
-        use dsl::LegacyPrefix::*;
-        if rex.opcodes.prefix != NoPrefix {
+    fn generate_prefixes(&self, f: &mut Formatter, rex: &dsl::Rex) {
+        if !rex.opcodes.prefixes.is_empty() {
             f.empty_line();
-            f.comment("Emit legacy prefixes.");
-            match rex.opcodes.prefix {
-                NoPrefix => unreachable!(),
-                _66 => fmtln!(f, "buf.put1(0x66);"),
-                _F0 => fmtln!(f, "buf.put1(0xf0);"),
-                _66F0 => {
-                    fmtln!(f, "buf.put1(0x66);");
-                    fmtln!(f, "buf.put1(0xf0);");
-                }
-                _F2 => fmtln!(f, "buf.put1(0xf2);"),
-                _F3 => fmtln!(f, "buf.put1(0xf3);"),
-                _66F3 => {
-                    fmtln!(f, "buf.put1(0x66);");
-                    fmtln!(f, "buf.put1(0xf3);");
-                }
-            }
+            f.comment("Emit prefixes.");
+        }
+        if let Some(group1) = &rex.opcodes.prefixes.group1 {
+            fmtln!(f, "buf.put1({group1});");
+        }
+        if let Some(group2) = &rex.opcodes.prefixes.group2 {
+            fmtln!(f, "buf.put1({group2});");
+        }
+        if let Some(group3) = &rex.opcodes.prefixes.group3 {
+            fmtln!(f, "buf.put1({group3});");
+        }
+        if let Some(group4) = &rex.opcodes.prefixes.group4 {
+            fmtln!(f, "buf.put1({group4});");
         }
     }
 
