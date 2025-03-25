@@ -637,7 +637,8 @@ pub fn translate_array_fill(
     );
 
     // Calculate the end address, just after the filled region.
-    let fill_size = uextend_i32_to_pointer_type(builder, func_env.pointer_type(), offset_in_elems);
+    let fill_size = builder.ins().imul(n, one_elem_size);
+    let fill_size = uextend_i32_to_pointer_type(builder, func_env.pointer_type(), fill_size);
     let fill_end = builder.ins().iadd(elem_addr, fill_size);
 
     let one_elem_size =
@@ -657,9 +658,9 @@ pub fn translate_array_fill(
                 .element_type;
             write_field_at_addr(func_env, builder, elem_ty, elem_addr, value)
         },
-    )?;
+    );
     log::trace!("translate_array_fill(..) -> {result:?}");
-    Ok(result)
+    result
 }
 
 pub fn translate_array_len(
