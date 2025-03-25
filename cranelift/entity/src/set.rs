@@ -85,6 +85,9 @@ where
     }
 
     /// Insert the element at `k`.
+    ///
+    /// Returns `true` if `k` was not present in the set, i.e. this is a
+    /// newly-added element. Returns `false` otherwise.
     pub fn insert(&mut self, k: K) -> bool {
         let index = k.index();
         self.bitset.insert(index)
