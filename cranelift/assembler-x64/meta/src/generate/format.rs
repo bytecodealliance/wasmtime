@@ -120,7 +120,7 @@ impl dsl::Format {
             }
             [Mem(dst), Reg(src)] => {
                 fmtln!(f, "let {src} = self.{src}.enc();");
-                fmtln!(f, "{dst}.emit_rex_prefix(rex, {src}, buf);");
+                fmtln!(f, "self.{dst}.emit_rex_prefix(rex, {src}, buf);");
             }
             [RegMem(dst), Reg(src)]
             | [RegMem(dst), Reg(src), Imm(_)]
