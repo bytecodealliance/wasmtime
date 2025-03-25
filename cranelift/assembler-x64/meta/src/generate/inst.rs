@@ -98,22 +98,27 @@ impl dsl::Inst {
             |f| {
                 // Emit trap.
                 if let Some(op) = self.format.uses_memory() {
-                    f.empty_line();
+                    use dsl::OperandKind::*;
                     f.comment("Emit trap.");
-                    match op {
-                        crate::dsl::Location::rm128 => {
-                            fmtln!(f, "if let XmmMem::Mem({op}) = &self.{op} {{");
+                    match op.kind() {
+                        Mem(_) => {
+                            f.add_block(&format!("if let Some(trap_code) = self.{op}.trap_code()"), |f| {
+                                fmtln!(f, "buf.add_trap(trap_code);");
+                            });
                         }
-                        _ => {
-                            fmtln!(f, "if let GprMem::Mem({op}) = &self.{op} {{");
+                        RegMem(_) => {
+                            let ty = match op.bits() {
+                                128 => "XmmMem",
+                                _ => "GprMem",
+                            };
+                            f.add_block(&format!("if let {ty}::Mem({op}) = &self.{op}"), |f| {
+                                f.add_block(&format!("if let Some(trap_code) = {op}.trap_code()"), |f| {
+                                    fmtln!(f, "buf.add_trap(trap_code);");
+                                });
+                            });
                         }
+                        _ => unreachable!(),
                     }
-                    f.indent(|f| {
-                        f.add_block(&format!("if let Some(trap_code) = {op}.trap_code()"), |f| {
-                            fmtln!(f, "buf.add_trap(trap_code);");
-                        });
-                    });
-                    fmtln!(f, "}}");
                 }
 
                 match &self.encoding {
@@ -182,6 +187,12 @@ impl dsl::Inst {
                             }
                         };
                     }
+                    Mem(m) => {
+                        fmtln!(
+                            f,
+                            "self.{m}.registers_mut().iter_mut().for_each(|r| visitor.read(r));"
+                        );
+                    }
                 }
             }
         });
@@ -211,7 +222,13 @@ impl dsl::Inst {
                     let to_string = location.generate_to_string(op.extension);
                     fmtln!(f, "let {location} = {to_string};");
                 }
-                let inst_name = &self.mnemonic;
+                // Fix up the mnemonic for locked instructions: we want to print
+                // "lock <inst>", not "lock_<inst>".
+                let inst_name = if self.mnemonic.starts_with("lock_") {
+                    &format!("lock {}", &self.mnemonic[5..])
+                } else {
+                    &self.mnemonic
+                };
                 let ordered_ops = self.format.generate_att_style_operands();
                 fmtln!(f, "write!(f, \"{inst_name} {ordered_ops}\")");
             });

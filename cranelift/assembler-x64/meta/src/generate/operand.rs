@@ -22,6 +22,7 @@ impl dsl::Operand {
                 128 => Some(format!("XmmMem<R::{}Xmm, R::ReadGpr>", self.mutability.generate_type())),
                 _ => Some(format!("GprMem<R::{}Gpr, R::ReadGpr>", self.mutability.generate_type())),
             },
+            Mem(_) => Some(format!("Amode<R::ReadGpr>")),
         }
     }
 }
@@ -49,7 +50,7 @@ impl dsl::Location {
                 Some(size) => format!("self.{self}.to_string({size})"),
                 None => unreachable!(),
             },
-            xmm | rm128 => format!("self.{self}.to_string()"),
+            xmm | rm128 | m8 | m16 | m32 | m64 => format!("self.{self}.to_string()"),
         }
     }
 
@@ -63,7 +64,12 @@ impl dsl::Location {
             r16 | rm16 => Some("Size::Word"),
             r32 | rm32 => Some("Size::Doubleword"),
             r64 | rm64 => Some("Size::Quadword"),
-            xmm | rm128 => panic!("no need to generate a size for XMM-sized access"),
+            m8 | m16 | m32 | m64 => {
+                panic!("no need to generate a size for memory-only access")
+            }
+            xmm | rm128 => {
+                panic!("no need to generate a size for XMM-sized access")
+            }
         }
     }
 
@@ -74,7 +80,8 @@ impl dsl::Location {
         match self {
             al | ax | eax | rax => Some("gpr::enc::RAX"),
             cl => Some("gpr::enc::RCX"),
-            imm8 | imm16 | imm32 | r8 | r16 | r32 | r64 | xmm | rm8 | rm16 | rm32 | rm64 | rm128 => None,
+            imm8 | imm16 | imm32 | r8 | r16 | r32 | r64 | xmm | rm8 | rm16 | rm32 | rm64 | rm128 | m8
+            | m16 | m32 | m64 => None,
         }
     }
 }

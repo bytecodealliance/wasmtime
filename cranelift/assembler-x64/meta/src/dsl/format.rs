@@ -243,6 +243,11 @@ pub enum Location {
     rm32,
     rm64,
     rm128,
+
+    m8,
+    m16,
+    m32,
+    m64,
 }
 
 impl Location {
@@ -251,10 +256,10 @@ impl Location {
     pub fn bits(&self) -> u8 {
         use Location::*;
         match self {
-            al | cl | imm8 | r8 | rm8 => 8,
-            ax | imm16 | r16 | rm16 => 16,
-            eax | imm32 | r32 | rm32 => 32,
-            rax | r64 | rm64 => 64,
+            al | cl | imm8 | r8 | rm8 | m8 => 8,
+            ax | imm16 | r16 | rm16 | m16 => 16,
+            eax | imm32 | r32 | rm32 | m32 => 32,
+            rax | r64 | rm64 | m64 => 64,
             xmm | rm128 => 128,
         }
     }
@@ -271,7 +276,7 @@ impl Location {
         use Location::*;
         match self {
             al | cl | ax | eax | rax | imm8 | imm16 | imm32 | r8 | r16 | r32 | r64 | xmm => false,
-            rm8 | rm16 | rm32 | rm64 | rm128 => true,
+            rm8 | rm16 | rm32 | rm64 | rm128 | m8 | m16 | m32 | m64 => true,
         }
     }
 
@@ -282,7 +287,7 @@ impl Location {
         use Location::*;
         match self {
             al | ax | eax | rax | cl | imm8 | imm16 | imm32 => false,
-            r8 | r16 | r32 | r64 | xmm | rm8 | rm16 | rm32 | rm64 | rm128 => true,
+            r8 | r16 | r32 | r64 | xmm | rm8 | rm16 | rm32 | rm64 | rm128 | m8 | m16 | m32 | m64 => true,
         }
     }
 
@@ -295,6 +300,7 @@ impl Location {
             imm8 | imm16 | imm32 => OperandKind::Imm(*self),
             r8 | r16 | r32 | r64 | xmm => OperandKind::Reg(*self),
             rm8 | rm16 | rm32 | rm64 | rm128 => OperandKind::RegMem(*self),
+            m8 | m16 | m32 | m64 => OperandKind::Mem(*self),
         }
     }
 }
@@ -326,6 +332,11 @@ impl core::fmt::Display for Location {
             rm32 => write!(f, "rm32"),
             rm64 => write!(f, "rm64"),
             rm128 => write!(f, "rm128"),
+
+            m8 => write!(f, "m8"),
+            m16 => write!(f, "m16"),
+            m32 => write!(f, "m32"),
+            m64 => write!(f, "m64"),
         }
     }
 }
@@ -342,6 +353,7 @@ pub enum OperandKind {
     Imm(Location),
     Reg(Location),
     RegMem(Location),
+    Mem(Location),
 }
 
 /// x64 operands can be mutable or not.
