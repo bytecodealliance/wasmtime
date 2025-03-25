@@ -220,7 +220,7 @@ impl GcStore {
     /// Get the data for the given object reference.
     ///
     /// Panics when the structref and its size is out of the GC heap bounds.
-    pub fn gc_object_data(&mut self, gc_ref: &VMGcRef) -> VMGcObjectData<&'_ mut [u8]> {
+    pub fn gc_object_data(&mut self, gc_ref: &VMGcRef) -> &mut VMGcObjectData {
         self.gc_heap.gc_object_data_mut(gc_ref)
     }
 
@@ -231,7 +231,7 @@ impl GcStore {
         &mut self,
         a: &VMGcRef,
         b: &VMGcRef,
-    ) -> (VMGcObjectData<&'_ mut [u8]>, VMGcObjectData<&'_ mut [u8]>) {
+    ) -> (&mut VMGcObjectData, &mut VMGcObjectData) {
         assert_ne!(a, b);
         self.gc_heap.gc_object_data_pair(a, b)
     }

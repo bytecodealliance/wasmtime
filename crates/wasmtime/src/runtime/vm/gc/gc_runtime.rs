@@ -457,10 +457,10 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// # Panics
     ///
     /// Panics on out-of-bounds accesses or if the `gc_ref` is an `i31ref`.
-    fn gc_object_data(&self, gc_ref: &VMGcRef) -> VMGcObjectData<&'_ [u8]> {
+    fn gc_object_data(&self, gc_ref: &VMGcRef) -> &VMGcObjectData {
         let range = self.object_range(gc_ref);
         let data = &self.heap_slice()[range];
-        VMGcObjectData::new(data)
+        data.into()
     }
 
     /// Get a mutable borrow of the given object's data.
@@ -468,10 +468,10 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
     /// # Panics
     ///
     /// Panics on out-of-bounds accesses or if the `gc_ref` is an `i31ref`.
-    fn gc_object_data_mut(&mut self, gc_ref: &VMGcRef) -> VMGcObjectData<&'_ mut [u8]> {
+    fn gc_object_data_mut(&mut self, gc_ref: &VMGcRef) -> &mut VMGcObjectData {
         let range = self.object_range(gc_ref);
         let data = &mut self.heap_slice_mut()[range];
-        VMGcObjectData::new(data)
+        data.into()
     }
 
     /// Get a pair of mutable borrows of the given objects' data.
@@ -484,7 +484,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
         &mut self,
         a: &VMGcRef,
         b: &VMGcRef,
-    ) -> (VMGcObjectData<&'_ mut [u8]>, VMGcObjectData<&'_ mut [u8]>) {
+    ) -> (&mut VMGcObjectData, &mut VMGcObjectData) {
         assert_ne!(a, b);
 
         let a_range = self.object_range(a);
@@ -505,7 +505,7 @@ pub unsafe trait GcHeap: 'static + Send + Sync {
             (&mut a_half[..a_len], &mut b_half[b_range])
         };
 
-        (VMGcObjectData::new(a_data), VMGcObjectData::new(b_data))
+        (a_data.into(), b_data.into())
     }
 }
 
