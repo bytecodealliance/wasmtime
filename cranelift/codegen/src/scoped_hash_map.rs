@@ -1,17 +1,16 @@
 //! `ScopedHashMap`
 //!
-//! This module defines a struct `ScopedHashMap<K, V>` which defines a `FxHashMap`-like
-//! container that has a concept of scopes that can be entered and exited, such that
-//! values inserted while inside a scope aren't visible outside the scope.
+//! This module defines a struct `ScopedHashMap<C, K, V>` which
+//! defines a `FxHashMap`-like container that has a concept of scopes
+//! that can be entered and exited, such that values inserted while
+//! inside a scope aren't visible outside the scope.
+//!
+//! The context type `C` is given to `CtxEq` and `CtxHash` methods on
+//! the key values so that keys do not need to be fully
+//! self-contained.
 
-use core::hash::Hash;
-use rustc_hash::FxHashMap;
+use crate::ctxhash::{CtxEq, CtxHash, CtxHashMap};
 use smallvec::{smallvec, SmallVec};
-
-#[cfg(not(feature = "std"))]
-use crate::fx::FxHasher;
-#[cfg(not(feature = "std"))]
-type Hasher = core::hash::BuildHasherDefault<FxHasher>;
 
 struct Val<V> {
     value: V,
@@ -21,7 +20,7 @@ struct Val<V> {
 
 /// A view into an occupied entry in a `ScopedHashMap`. It is part of the `Entry` enum.
 pub struct OccupiedEntry<'a, K: 'a, V: 'a> {
-    entry: super::hash_map::OccupiedEntry<'a, K, Val<V>>,
+    entry: crate::ctxhash::OccupiedEntry<'a, K, Val<V>>,
 }
 
 impl<'a, K, V> OccupiedEntry<'a, K, V> {
@@ -41,8 +40,8 @@ pub struct VacantEntry<'a, K: 'a, V: 'a> {
 /// Where to insert from a `VacantEntry`. May be vacant or occupied in
 /// the underlying map because of lazy (generation-based) deletion.
 enum InsertLoc<'a, K: 'a, V: 'a> {
-    Vacant(super::hash_map::VacantEntry<'a, K, Val<V>>),
-    Occupied(super::hash_map::OccupiedEntry<'a, K, Val<V>>),
+    Vacant(crate::ctxhash::VacantEntry<'a, K, Val<V>>),
+    Occupied(crate::ctxhash::OccupiedEntry<'a, K, Val<V>>),
 }
 
 impl<'a, K, V> VacantEntry<'a, K, V> {
@@ -58,7 +57,7 @@ impl<'a, K, V> VacantEntry<'a, K, V> {
                 v.insert(val);
             }
             InsertLoc::Occupied(mut o) => {
-                o.insert(val);
+                *o.get_mut() = val;
             }
         }
     }
@@ -78,30 +77,25 @@ pub enum Entry<'a, K: 'a, V: 'a> {
 /// Shadowing, where one scope has entries with the same keys as a containing scope,
 /// is not supported in this implementation.
 pub struct ScopedHashMap<K, V> {
-    map: FxHashMap<K, Val<V>>,
+    map: CtxHashMap<K, Val<V>>,
     generation_by_depth: SmallVec<[u32; 8]>,
     generation: u32,
 }
 
 impl<K, V> ScopedHashMap<K, V>
 where
-    K: PartialEq + Eq + Hash + Clone,
+    K: Clone,
 {
     /// Creates an empty `ScopedHashMap`.
+    #[allow(dead_code)] // Used in testing.
     pub fn new() -> Self {
-        Self {
-            map: FxHashMap::default(),
-            generation: 0,
-            generation_by_depth: smallvec![0],
-        }
+        Self::with_capacity(16)
     }
 
     /// Creates an empty `ScopedHashMap` with some pre-allocated capacity.
     pub fn with_capacity(cap: usize) -> Self {
-        let mut map = FxHashMap::default();
-        map.reserve(cap);
         Self {
-            map,
+            map: CtxHashMap::with_capacity(cap),
             generation: 0,
             generation_by_depth: smallvec![0],
         }
@@ -109,18 +103,23 @@ where
 
     /// Similar to `FxHashMap::entry`, gets the given key's corresponding entry in the map for
     /// in-place manipulation.
-    pub fn entry<'a>(&'a mut self, key: K) -> Entry<'a, K, V> {
-        self.entry_with_depth(key, self.depth())
+    pub fn entry<'a, C>(&'a mut self, ctx: &C, key: K) -> Entry<'a, K, V>
+    where
+        C: CtxEq<K, K> + CtxHash<K>,
+    {
+        self.entry_with_depth(ctx, key, self.depth())
     }
 
     /// Get the entry, setting the scope depth at which to insert.
-    pub fn entry_with_depth<'a>(&'a mut self, key: K, depth: usize) -> Entry<'a, K, V> {
+    pub fn entry_with_depth<'a, C>(&'a mut self, ctx: &C, key: K, depth: usize) -> Entry<'a, K, V>
+    where
+        C: CtxEq<K, K> + CtxHash<K>,
+    {
         debug_assert!(depth <= self.generation_by_depth.len());
         let generation = self.generation_by_depth[depth];
         let depth = depth as u32;
-        use super::hash_map::Entry::*;
-        match self.map.entry(key) {
-            Occupied(entry) => {
+        match self.map.entry(key, ctx) {
+            crate::ctxhash::Entry::Occupied(entry) => {
                 let entry_generation = entry.get().generation;
                 let entry_depth = entry.get().level as usize;
                 if self.generation_by_depth.get(entry_depth).cloned() == Some(entry_generation) {
@@ -133,7 +132,7 @@ where
                     })
                 }
             }
-            Vacant(entry) => Entry::Vacant(VacantEntry {
+            crate::ctxhash::Entry::Vacant(entry) => Entry::Vacant(VacantEntry {
                 entry: InsertLoc::Vacant(entry),
                 depth,
                 generation,
@@ -142,9 +141,12 @@ where
     }
 
     /// Get a value from a key, if present.
-    pub fn get<'a>(&'a self, key: &K) -> Option<&'a V> {
+    pub fn get<'a, C>(&'a self, ctx: &C, key: &K) -> Option<&'a V>
+    where
+        C: CtxEq<K, K> + CtxHash<K>,
+    {
         self.map
-            .get(key)
+            .get(key, ctx)
             .filter(|entry| {
                 let level = entry.level as usize;
                 self.generation_by_depth.get(level).cloned() == Some(entry.generation)
@@ -153,14 +155,20 @@ where
     }
 
     /// Insert a key-value pair if absent. No-op if already exists.
-    pub fn insert_if_absent(&mut self, key: K, value: V) {
-        self.insert_if_absent_with_depth(key, value, self.depth());
+    pub fn insert_if_absent<C>(&mut self, ctx: &C, key: K, value: V)
+    where
+        C: CtxEq<K, K> + CtxHash<K>,
+    {
+        self.insert_if_absent_with_depth(ctx, key, value, self.depth());
     }
 
     /// Insert a key-value pair if absent, using the given depth for
     /// the insertion. No-op if already exists.
-    pub fn insert_if_absent_with_depth(&mut self, key: K, value: V, depth: usize) {
-        match self.entry_with_depth(key, depth) {
+    pub fn insert_if_absent_with_depth<C>(&mut self, ctx: &C, key: K, value: V, depth: usize)
+    where
+        C: CtxEq<K, K> + CtxHash<K>,
+    {
+        match self.entry_with_depth(ctx, key, depth) {
             Entry::Vacant(v) => {
                 v.insert(value);
             }
@@ -168,6 +176,21 @@ where
                 // Nothing.
             }
         }
+    }
+
+    /// Insert a key-value pair, using the given depth for the
+    /// insertion. Removes existing entry and overwrites if already
+    /// existed.
+    pub fn insert_with_depth<C>(&mut self, ctx: &C, key: K, value: V, depth: usize)
+    where
+        C: CtxEq<K, K> + CtxHash<K>,
+    {
+        let val = Val {
+            value,
+            level: depth as u32,
+            generation: self.generation_by_depth[depth],
+        };
+        self.map.insert(key, val, ctx);
     }
 
     /// Enter a new scope.
@@ -193,67 +216,68 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ctxhash::NullCtx;
 
     #[test]
     fn basic() {
         let mut map: ScopedHashMap<i32, i32> = ScopedHashMap::new();
 
-        match map.entry(0) {
+        match map.entry(&NullCtx, 0) {
             Entry::Occupied(_entry) => panic!(),
             Entry::Vacant(entry) => entry.insert(1),
         }
-        match map.entry(2) {
+        match map.entry(&NullCtx, 2) {
             Entry::Occupied(_entry) => panic!(),
             Entry::Vacant(entry) => entry.insert(8),
         }
-        match map.entry(2) {
+        match map.entry(&NullCtx, 2) {
             Entry::Occupied(entry) => assert!(*entry.get() == 8),
             Entry::Vacant(_entry) => panic!(),
         }
         map.increment_depth();
-        match map.entry(2) {
+        match map.entry(&NullCtx, 2) {
             Entry::Occupied(entry) => assert!(*entry.get() == 8),
             Entry::Vacant(_entry) => panic!(),
         }
-        match map.entry(1) {
+        match map.entry(&NullCtx, 1) {
             Entry::Occupied(_entry) => panic!(),
             Entry::Vacant(entry) => entry.insert(3),
         }
-        match map.entry(1) {
+        match map.entry(&NullCtx, 1) {
             Entry::Occupied(entry) => assert!(*entry.get() == 3),
             Entry::Vacant(_entry) => panic!(),
         }
-        match map.entry(0) {
+        match map.entry(&NullCtx, 0) {
             Entry::Occupied(entry) => assert!(*entry.get() == 1),
             Entry::Vacant(_entry) => panic!(),
         }
-        match map.entry(2) {
+        match map.entry(&NullCtx, 2) {
             Entry::Occupied(entry) => assert!(*entry.get() == 8),
             Entry::Vacant(_entry) => panic!(),
         }
         map.decrement_depth();
-        match map.entry(0) {
+        match map.entry(&NullCtx, 0) {
             Entry::Occupied(entry) => assert!(*entry.get() == 1),
             Entry::Vacant(_entry) => panic!(),
         }
-        match map.entry(2) {
+        match map.entry(&NullCtx, 2) {
             Entry::Occupied(entry) => assert!(*entry.get() == 8),
             Entry::Vacant(_entry) => panic!(),
         }
         map.increment_depth();
-        match map.entry(2) {
+        match map.entry(&NullCtx, 2) {
             Entry::Occupied(entry) => assert!(*entry.get() == 8),
             Entry::Vacant(_entry) => panic!(),
         }
-        match map.entry(1) {
+        match map.entry(&NullCtx, 1) {
             Entry::Occupied(_entry) => panic!(),
             Entry::Vacant(entry) => entry.insert(4),
         }
-        match map.entry(1) {
+        match map.entry(&NullCtx, 1) {
             Entry::Occupied(entry) => assert!(*entry.get() == 4),
             Entry::Vacant(_entry) => panic!(),
         }
-        match map.entry(2) {
+        match map.entry(&NullCtx, 2) {
             Entry::Occupied(entry) => assert!(*entry.get() == 8),
             Entry::Vacant(_entry) => panic!(),
         }
@@ -261,30 +285,30 @@ mod tests {
         map.increment_depth();
         map.increment_depth();
         map.increment_depth();
-        match map.entry(2) {
+        match map.entry(&NullCtx, 2) {
             Entry::Occupied(entry) => assert!(*entry.get() == 8),
             Entry::Vacant(_entry) => panic!(),
         }
-        match map.entry(1) {
+        match map.entry(&NullCtx, 1) {
             Entry::Occupied(_entry) => panic!(),
             Entry::Vacant(entry) => entry.insert(5),
         }
-        match map.entry(1) {
+        match map.entry(&NullCtx, 1) {
             Entry::Occupied(entry) => assert!(*entry.get() == 5),
             Entry::Vacant(_entry) => panic!(),
         }
-        match map.entry(2) {
+        match map.entry(&NullCtx, 2) {
             Entry::Occupied(entry) => assert!(*entry.get() == 8),
             Entry::Vacant(_entry) => panic!(),
         }
         map.decrement_depth();
         map.decrement_depth();
         map.decrement_depth();
-        match map.entry(2) {
+        match map.entry(&NullCtx, 2) {
             Entry::Occupied(entry) => assert!(*entry.get() == 8),
             Entry::Vacant(_entry) => panic!(),
         }
-        match map.entry(1) {
+        match map.entry(&NullCtx, 1) {
             Entry::Occupied(_entry) => panic!(),
             Entry::Vacant(entry) => entry.insert(3),
         }
@@ -293,18 +317,18 @@ mod tests {
     #[test]
     fn insert_arbitrary_depth() {
         let mut map: ScopedHashMap<i32, i32> = ScopedHashMap::new();
-        map.insert_if_absent(1, 2);
-        assert_eq!(map.get(&1), Some(&2));
+        map.insert_if_absent(&NullCtx, 1, 2);
+        assert_eq!(map.get(&NullCtx, &1), Some(&2));
         map.increment_depth();
-        assert_eq!(map.get(&1), Some(&2));
-        map.insert_if_absent(3, 4);
-        assert_eq!(map.get(&3), Some(&4));
+        assert_eq!(map.get(&NullCtx, &1), Some(&2));
+        map.insert_if_absent(&NullCtx, 3, 4);
+        assert_eq!(map.get(&NullCtx, &3), Some(&4));
         map.decrement_depth();
-        assert_eq!(map.get(&3), None);
+        assert_eq!(map.get(&NullCtx, &3), None);
         map.increment_depth();
-        map.insert_if_absent_with_depth(3, 4, 0);
-        assert_eq!(map.get(&3), Some(&4));
+        map.insert_if_absent_with_depth(&NullCtx, 3, 4, 0);
+        assert_eq!(map.get(&NullCtx, &3), Some(&4));
         map.decrement_depth();
-        assert_eq!(map.get(&3), Some(&4));
+        assert_eq!(map.get(&NullCtx, &3), Some(&4));
     }
 }

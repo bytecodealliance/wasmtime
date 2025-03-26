@@ -112,8 +112,8 @@
 ;;                                     v16 = iconcat.i64 v2, v3
 ;;                                     v17 = iconcat.i64 v4, v5
 ;;                                     v18 = icmp slt v16, v17
-;;                                     v20 = uextend.i32 v18
-;; @0034                               return v20
+;;                                     v26 = uextend.i32 v18
+;; @0034                               return v26
 ;; }
 ;;
 ;; function u0:1(i64 vmctx, i64, i64, i64, i64, i64) -> i32 tail {
@@ -129,8 +129,8 @@
 ;;                                     v16 = iconcat.i64 v2, v3
 ;;                                     v17 = iconcat.i64 v4, v5
 ;;                                     v18 = icmp ult v16, v17
-;;                                     v20 = uextend.i32 v18
-;; @0047                               return v20
+;;                                     v26 = uextend.i32 v18
+;; @0047                               return v26
 ;; }
 ;;
 ;; function u0:2(i64 vmctx, i64, i64, i64, i64, i64) -> i32 tail {
@@ -146,8 +146,8 @@
 ;;                                     v16 = iconcat.i64 v2, v3
 ;;                                     v17 = iconcat.i64 v4, v5
 ;;                                     v18 = icmp sle v16, v17
-;;                                     v20 = uextend.i32 v18
-;; @005a                               return v20
+;;                                     v26 = uextend.i32 v18
+;; @005a                               return v26
 ;; }
 ;;
 ;; function u0:3(i64 vmctx, i64, i64, i64, i64, i64) -> i32 tail {
@@ -163,8 +163,8 @@
 ;;                                     v16 = iconcat.i64 v2, v3
 ;;                                     v17 = iconcat.i64 v4, v5
 ;;                                     v18 = icmp ule v16, v17
-;;                                     v20 = uextend.i32 v18
-;; @006d                               return v20
+;;                                     v26 = uextend.i32 v18
+;; @006d                               return v26
 ;; }
 ;;
 ;; function u0:4(i64 vmctx, i64, i64, i64, i64, i64) -> i32 tail {
@@ -180,8 +180,8 @@
 ;;                                     v16 = iconcat.i64 v2, v3
 ;;                                     v17 = iconcat.i64 v4, v5
 ;;                                     v18 = icmp sgt v16, v17
-;;                                     v20 = uextend.i32 v18
-;; @0080                               return v20
+;;                                     v26 = uextend.i32 v18
+;; @0080                               return v26
 ;; }
 ;;
 ;; function u0:5(i64 vmctx, i64, i64, i64, i64, i64) -> i32 tail {
@@ -197,8 +197,8 @@
 ;;                                     v16 = iconcat.i64 v2, v3
 ;;                                     v17 = iconcat.i64 v4, v5
 ;;                                     v18 = icmp ugt v16, v17
-;;                                     v20 = uextend.i32 v18
-;; @0093                               return v20
+;;                                     v26 = uextend.i32 v18
+;; @0093                               return v26
 ;; }
 ;;
 ;; function u0:6(i64 vmctx, i64, i64, i64, i64, i64) -> i32 tail {
@@ -214,8 +214,8 @@
 ;;                                     v16 = iconcat.i64 v2, v3
 ;;                                     v17 = iconcat.i64 v4, v5
 ;;                                     v18 = icmp sge v16, v17
-;;                                     v20 = uextend.i32 v18
-;; @00a6                               return v20
+;;                                     v26 = uextend.i32 v18
+;; @00a6                               return v26
 ;; }
 ;;
 ;; function u0:7(i64 vmctx, i64, i64, i64, i64, i64) -> i32 tail {
@@ -231,6 +231,6 @@
 ;;                                     v16 = iconcat.i64 v2, v3
 ;;                                     v17 = iconcat.i64 v4, v5
 ;;                                     v18 = icmp uge v16, v17
-;;                                     v20 = uextend.i32 v18
-;; @00b9                               return v20
+;;                                     v26 = uextend.i32 v18
+;; @00b9                               return v26
 ;; }
