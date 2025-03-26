@@ -196,36 +196,7 @@ impl<'a, T: OperandVisitor> asm::RegisterVisitor<CraneliftRegisters> for Regallo
 impl Into<asm::Amode<Gpr>> for SyntheticAmode {
     fn into(self) -> asm::Amode<Gpr> {
         match self {
-            SyntheticAmode::Real(amode) => match amode {
-                Amode::ImmReg {
-                    simm32,
-                    base,
-                    flags,
-                } => asm::Amode::ImmReg {
-                    simm32: asm::AmodeOffsetPlusKnownOffset {
-                        simm32: simm32.into(),
-                        offset: None,
-                    },
-                    base: Gpr::unwrap_new(base),
-                    trap: flags.trap_code().map(Into::into),
-                },
-                Amode::ImmRegRegShift {
-                    simm32,
-                    base,
-                    index,
-                    shift,
-                    flags,
-                } => asm::Amode::ImmRegRegShift {
-                    base,
-                    index: asm::NonRspGpr::new(index),
-                    scale: asm::Scale::new(shift),
-                    simm32: simm32.into(),
-                    trap: flags.trap_code().map(Into::into),
-                },
-                Amode::RipRelative { target } => asm::Amode::RipRelative {
-                    target: asm::DeferredTarget::Label(asm::Label(target.as_u32())),
-                },
-            },
+            SyntheticAmode::Real(amode) => amode.into(),
             SyntheticAmode::IncomingArg { offset } => asm::Amode::ImmReg {
                 base: Gpr::unwrap_new(regs::rbp()),
                 simm32: asm::AmodeOffsetPlusKnownOffset {
@@ -244,6 +215,41 @@ impl Into<asm::Amode<Gpr>> for SyntheticAmode {
             },
             SyntheticAmode::ConstantOffset(vcode_constant) => asm::Amode::RipRelative {
                 target: asm::DeferredTarget::Constant(asm::Constant(vcode_constant.as_u32())),
+            },
+        }
+    }
+}
+
+impl Into<asm::Amode<Gpr>> for Amode {
+    fn into(self) -> asm::Amode<Gpr> {
+        match self {
+            Amode::ImmReg {
+                simm32,
+                base,
+                flags,
+            } => asm::Amode::ImmReg {
+                simm32: asm::AmodeOffsetPlusKnownOffset {
+                    simm32: simm32.into(),
+                    offset: None,
+                },
+                base: Gpr::unwrap_new(base),
+                trap: flags.trap_code().map(Into::into),
+            },
+            Amode::ImmRegRegShift {
+                simm32,
+                base,
+                index,
+                shift,
+                flags,
+            } => asm::Amode::ImmRegRegShift {
+                base,
+                index: asm::NonRspGpr::new(index),
+                scale: asm::Scale::new(shift),
+                simm32: simm32.into(),
+                trap: flags.trap_code().map(Into::into),
+            },
+            Amode::RipRelative { target } => asm::Amode::RipRelative {
+                target: asm::DeferredTarget::Label(asm::Label(target.as_u32())),
             },
         }
     }
