@@ -94,13 +94,13 @@ wasmtime_environ::foreach_builtin_function!(declare_function_signatures);
 pub struct FuncEnvironment<'module_environment> {
     compiler: &'module_environment Compiler,
     isa: &'module_environment (dyn TargetIsa + 'module_environment),
-    pub(crate) module: &'module_environment Module,
-    pub(crate) types: &'module_environment ModuleTypesBuilder,
+    module: &'module_environment Module,
+    types: &'module_environment ModuleTypesBuilder,
     wasm_func_ty: &'module_environment WasmFuncType,
     sig_ref_to_ty: SecondaryMap<ir::SigRef, Option<&'module_environment WasmFuncType>>,
 
     #[cfg(feature = "gc")]
-    pub(crate) ty_to_gc_layout: std::collections::HashMap<
+    ty_to_gc_layout: std::collections::HashMap<
         wasmtime_environ::ModuleInternedTypeIndex,
         wasmtime_environ::GcLayout,
     >,
@@ -122,12 +122,12 @@ pub struct FuncEnvironment<'module_environment> {
     pcc_vmctx_memtype: Option<ir::MemoryType>,
 
     /// Caches of signatures for builtin functions.
-    pub(crate) builtin_functions: BuiltinFunctions,
+    builtin_functions: BuiltinFunctions,
 
     /// Offsets to struct fields accessed by JIT code.
     pub(crate) offsets: VMOffsets<u8>,
 
-    pub(crate) tunables: &'module_environment Tunables,
+    tunables: &'module_environment Tunables,
 
     /// A function-local variable which stores the cached value of the amount of
     /// fuel remaining to execute. If used this is modified frequently so it's
