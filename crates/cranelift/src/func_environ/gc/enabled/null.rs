@@ -5,8 +5,7 @@
 //! anything.
 
 use super::*;
-use crate::gc::gc_compiler;
-use crate::{func_environ::FuncEnvironment, gc::GcCompiler};
+use crate::func_environ::FuncEnvironment;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;
 use wasmtime_environ::VMSharedTypeIndex;

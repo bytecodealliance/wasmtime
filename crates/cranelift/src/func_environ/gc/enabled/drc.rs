@@ -2,9 +2,8 @@
 //! barriers.
 
 use super::*;
-use crate::gc::gc_compiler;
 use crate::translate::TargetEnvironment;
-use crate::{func_environ::FuncEnvironment, gc::GcCompiler, TRAP_INTERNAL_ASSERT};
+use crate::{func_environ::FuncEnvironment, TRAP_INTERNAL_ASSERT};
 use cranelift_codegen::ir::condcodes::IntCC;
 use cranelift_codegen::ir::{self, InstBuilder};
 use cranelift_frontend::FunctionBuilder;

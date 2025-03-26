@@ -34,7 +34,6 @@ mod builder;
 mod compiler;
 mod debug;
 mod func_environ;
-mod gc;
 mod translate;
 
 use self::compiler::Compiler;
