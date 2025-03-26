@@ -1,6 +1,5 @@
-use super::GcCompiler;
+use super::{ArrayInit, GcCompiler};
 use crate::func_environ::{Extension, FuncEnvironment};
-use crate::gc::ArrayInit;
 use crate::translate::{StructFieldsVec, TargetEnvironment};
 use crate::TRAP_INTERNAL_ASSERT;
 use cranelift_codegen::{
