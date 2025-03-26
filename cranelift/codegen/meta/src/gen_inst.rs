@@ -214,8 +214,8 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
             argument value to some other value before the instructions
             are compared. This allows various forms of canonicalization.
         "#);
-        fmt.add_block("pub fn eq<F: Fn(Value) -> Value>(&self, other: &Self, pool: &ir::ValueListPool, mapper: F) -> bool",|fmt| {
-            fmt.add_block("if ::core::mem::discriminant(self) != ::core::mem::discriminant(other)",|fmt| {
+        fmt.add_block("pub fn eq(&self, other: &Self, pool: &ir::ValueListPool) -> bool", |fmt| {
+            fmt.add_block("if ::core::mem::discriminant(self) != ::core::mem::discriminant(other)", |fmt| {
                 fmt.line("return false;");
             });
 
@@ -226,13 +226,13 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
 
                     let args_eq = if format.has_value_list {
                         members.push("args");
-                        Some("args1.as_slice(pool).iter().zip(args2.as_slice(pool).iter()).all(|(a, b)| mapper(*a) == mapper(*b))")
+                        Some("args1.as_slice(pool).iter().zip(args2.as_slice(pool).iter()).all(|(a, b)| a == b)")
                     } else if format.num_value_operands == 1 {
                         members.push("arg");
-                        Some("mapper(*arg1) == mapper(*arg2)")
+                        Some("arg1 == arg2")
                     } else if format.num_value_operands > 0 {
                         members.push("args");
-                        Some("args1.iter().zip(args2.iter()).all(|(a, b)| mapper(*a) == mapper(*b))")
+                        Some("args1.iter().zip(args2.iter()).all(|(a, b)| a == b)")
                     } else {
                         None
                     };
@@ -283,7 +283,7 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
             argument value to some other value before it is hashed. This
             allows various forms of canonicalization.
         "#);
-        fmt.add_block("pub fn hash<H: ::core::hash::Hasher, F: Fn(Value) -> Value>(&self, state: &mut H, pool: &ir::ValueListPool, mapper: F)",|fmt| {
+        fmt.add_block("pub fn hash<H: ::core::hash::Hasher>(&self, state: &mut H, pool: &ir::ValueListPool)",|fmt| {
             fmt.add_block("match *self",|fmt| {
                 for format in formats {
                     let name = format!("Self::{}", format.name);
@@ -291,15 +291,15 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
 
                     let (args, len) = if format.has_value_list {
                         members.push("ref args");
-                        ("args.as_slice(pool)", "args.len(pool)")
+                        (Some("args.as_slice(pool)"), "args.len(pool)")
                     } else if format.num_value_operands == 1 {
                         members.push("ref arg");
-                        ("std::slice::from_ref(arg)", "1")
+                        (Some("std::slice::from_ref(arg)"), "1")
                     } else if format.num_value_operands > 0 {
                         members.push("ref args");
-                        ("args", "args.len()")
+                        (Some("args"), "args.len()")
                     } else {
-                        ("&[]", "0")
+                        (None, "0")
                     };
 
                     let blocks = match format.num_block_operands {
@@ -326,17 +326,17 @@ fn gen_instruction_data_impl(formats: &[Rc<InstructionFormat>], fmt: &mut Format
                             fmtln!(fmt, "::core::hash::Hash::hash(&{}, state);", field.member);
                         }
                         fmtln!(fmt, "::core::hash::Hash::hash(&{}, state);", len);
-                        fmt.add_block(&format!("for &arg in {args}"), |fmt| {
-                            fmtln!(fmt, "let arg = mapper(arg);");
-                            fmtln!(fmt, "::core::hash::Hash::hash(&arg, state);");
-                        });
+                        if let Some(args) = args {
+                            fmt.add_block(&format!("for &arg in {args}"), |fmt| {
+                                fmtln!(fmt, "::core::hash::Hash::hash(&arg, state);");
+                            });
+                        }
 
                         if let Some((blocks, len)) = blocks {
                             fmtln!(fmt, "::core::hash::Hash::hash(&{len}, state);");
                             fmt.add_block(&format!("for &block in {blocks}"), |fmt| {
                                 fmtln!(fmt, "::core::hash::Hash::hash(&block.block(pool), state);");
                                 fmt.add_block("for &arg in block.args_slice(pool)", |fmt| {
-                                    fmtln!(fmt, "let arg = mapper(arg);");
                                     fmtln!(fmt, "::core::hash::Hash::hash(&arg, state);");
                                 });
                             });

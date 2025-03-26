@@ -82,7 +82,6 @@ mod ranges;
 mod remove_constant_phis;
 mod result;
 mod scoped_hash_map;
-mod unionfind;
 mod unreachable_code;
 mod value_label;
 
