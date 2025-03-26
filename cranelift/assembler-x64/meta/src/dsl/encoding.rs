@@ -339,7 +339,7 @@ impl Prefixes {
     /// configured [`Prefixes`] as well as any remaining bytes.
     fn parse(mut bytes: &[u8]) -> (Self, &[u8]) {
         let mut prefixes = Self::default();
-        while prefixes.try_assign(bytes[0]).is_ok() {
+        while !bytes.is_empty() && prefixes.try_assign(bytes[0]).is_ok() {
             bytes = &bytes[1..];
         }
         (prefixes, bytes)
