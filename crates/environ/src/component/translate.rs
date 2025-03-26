@@ -3,8 +3,8 @@ use crate::prelude::*;
 use crate::ScopeVec;
 use crate::{
     EngineOrModuleTypeIndex, EntityIndex, ModuleEnvironment, ModuleInternedTypeIndex,
-    ModuleTranslation, ModuleTypesBuilder, PrimaryMap, Tunables, TypeConvert, WasmHeapType,
-    WasmResult, WasmValType,
+    ModuleTranslation, ModuleTypesBuilder, PrimaryMap, TagIndex, Tunables, TypeConvert,
+    WasmHeapType, WasmResult, WasmValType,
 };
 use anyhow::anyhow;
 use anyhow::{bail, Result};
@@ -321,6 +321,7 @@ enum LocalInitializer<'data> {
     AliasExportTable(ModuleInstanceIndex, &'data str),
     AliasExportGlobal(ModuleInstanceIndex, &'data str),
     AliasExportMemory(ModuleInstanceIndex, &'data str),
+    AliasExportTag(ModuleInstanceIndex, &'data str),
     AliasComponentExport(ComponentInstanceIndex, &'data str),
     AliasModule(ClosedOverModule),
     AliasComponent(ClosedOverComponent),
@@ -1039,9 +1040,10 @@ impl<'a, 'data> Translator<'a, 'data> {
                     let index = GlobalIndex::from_u32(export.index);
                     EntityIndex::Global(index)
                 }
-
-                // doesn't get past validation
-                wasmparser::ExternalKind::Tag => unimplemented!("wasm exceptions"),
+                wasmparser::ExternalKind::Tag => {
+                    let index = TagIndex::from_u32(export.index);
+                    EntityIndex::Tag(index)
+                }
             };
             map.insert(export.name, idx);
         }
@@ -1123,9 +1125,7 @@ impl<'a, 'data> Translator<'a, 'data> {
             wasmparser::ExternalKind::Memory => LocalInitializer::AliasExportMemory(instance, name),
             wasmparser::ExternalKind::Table => LocalInitializer::AliasExportTable(instance, name),
             wasmparser::ExternalKind::Global => LocalInitializer::AliasExportGlobal(instance, name),
-            wasmparser::ExternalKind::Tag => {
-                unimplemented!("wasm exceptions");
-            }
+            wasmparser::ExternalKind::Tag => LocalInitializer::AliasExportTag(instance, name),
         }
     }
 

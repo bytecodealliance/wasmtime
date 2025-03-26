@@ -204,6 +204,7 @@ struct InlinerFrame<'a> {
     memories: PrimaryMap<MemoryIndex, dfg::CoreExport<EntityIndex>>,
     tables: PrimaryMap<TableIndex, dfg::CoreExport<EntityIndex>>,
     globals: PrimaryMap<GlobalIndex, dfg::CoreExport<EntityIndex>>,
+    tags: PrimaryMap<GlobalIndex, dfg::CoreExport<EntityIndex>>,
     modules: PrimaryMap<ModuleIndex, ModuleDef<'a>>,
 
     // component model index spaces
@@ -1164,6 +1165,15 @@ impl<'a> Inliner<'a> {
                 );
             }
 
+            AliasExportTag(instance, name) => {
+                frame.tags.push(
+                    match self.core_def_of_module_instance_export(frame, *instance, *name) {
+                        dfg::CoreDef::Export(e) => e,
+                        _ => unreachable!(),
+                    },
+                );
+            }
+
             AliasComponentExport(instance, name) => {
                 match &frame.component_instances[*instance] {
                     // Aliasing an export from an imported instance means that
@@ -1480,6 +1490,7 @@ impl<'a> InlinerFrame<'a> {
             memories: Default::default(),
             tables: Default::default(),
             globals: Default::default(),
+            tags: Default::default(),
 
             component_instances: Default::default(),
             component_funcs: Default::default(),
