@@ -30,7 +30,7 @@ wasm-encoder = { workspace = true }
 wasm-smith = { workspace = true }
 wasm-mutate = { workspace = true }
 wasm-spec-interpreter = { path = "./wasm-spec-interpreter", optional = true }
-wasmi = "0.42.1"
+wasmi = { version = "0.43.0", default-features = false, features = ["std", "simd"] }
 futures = { workspace = true }
 wasmtime-test-util = { workspace = true, features = ['wast', 'component-fuzz', 'component'] }
 
