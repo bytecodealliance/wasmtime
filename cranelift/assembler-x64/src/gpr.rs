@@ -79,6 +79,11 @@ impl<R: AsReg> NonRspGpr<R> {
         Self(reg)
     }
 
+    /// See [`Gpr::to_string`].
+    pub fn to_string(&self, size: Size) -> String {
+        self.0.to_string(Some(size))
+    }
+
     /// See [`Gpr::enc`].
     ///
     /// # Panics
