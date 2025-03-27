@@ -25,11 +25,16 @@ actively supported at this time.
 
 | Version    | LTS | Branch Date | Release Date | EOL Date |
 |------------|-----|-------------|--------------|----------|
-<!-- JS edits in the table -->
+
+<noscript>
+JavaScript is disabled so the table above is empty.
+</noscript>
 
 In more visual form this is a gantt chart of the current release trains:
 
-<!-- JS edits in the chart -->
+<noscript>
+JavaScript is disabled there is no gantt chart to show.
+</noscript>
 
 </div>
 
