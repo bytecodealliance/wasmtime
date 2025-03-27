@@ -2383,3 +2383,25 @@ fn numeric_args() -> Result<()> {
     assert_eq!(output.stdout, b"42\n");
     Ok(())
 }
+
+#[test]
+fn compilation_logs() -> Result<()> {
+    let temp = tempfile::NamedTempFile::new()?;
+    let output = get_wasmtime_command()?
+        .args(&[
+            "compile",
+            "-Wgc",
+            "tests/all/cli_tests/issue-10353.wat",
+            "--output",
+            &temp.path().display().to_string(),
+        ])
+        .env("WASMTIME_LOG", "trace")
+        .env("RUST_BACKTRACE", "1")
+        .output()?;
+    if !output.status.success() {
+        println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+        println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
+        panic!("wasmtime compilation failed when logs requested");
+    }
+    Ok(())
+}
