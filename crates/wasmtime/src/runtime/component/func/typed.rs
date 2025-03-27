@@ -903,7 +903,7 @@ integers! {
 }
 
 macro_rules! floats {
-    ($($float:ident/$get_float:ident = $ty:ident with abi:$abi:ident $integer:ident)*) => ($(const _: () = {
+    ($($float:ident/$get_float:ident = $ty:ident with abi:$abi:ident)*) => ($(const _: () = {
         unsafe impl ComponentType for $float {
             type Lower = ValRaw;
 
@@ -961,23 +961,18 @@ macro_rules! floats {
                 // This should all have already been verified in terms of
                 // alignment and sizing meaning that these assertions here are
                 // not truly necessary but are instead double-checks.
-                //
-                // Note that we're casting a `[u8]` slice to `[$integer]` (with
-                // $integer having the same size as Self) with `align_to_mut`
-                // which is not safe in general but is safe in our specific
-                // case as all `u8` patterns are valid `$integer` patterns
-                // since `$integer` is an integral type.
                 let dst = &mut cx.as_slice_mut()[offset..][..items.len() * Self::SIZE32];
-                let (before, middle, end) = unsafe { dst.align_to_mut::<$integer>() };
-                assert!(before.is_empty() && end.is_empty());
-                assert_eq!(middle.len(), items.len());
+                assert!(dst.as_ptr().cast::<Self>().is_aligned());
 
                 // And with all that out of the way perform the copying loop.
                 // This is not a `copy_from_slice` because endianness needs to
                 // be handled here, but LLVM should pretty easily transform this
                 // into a memcpy on little-endian platforms.
-                for (dst, src) in iter::zip(middle, items) {
-                    *dst = src.to_bits().to_le();
+                // TODO use `as_chunks` when https://github.com/rust-lang/rust/issues/74985
+                // is stabilized
+                for (dst, src) in iter::zip(dst.chunks_exact_mut(Self::SIZE32), items) {
+                    let dst: &mut [u8; Self::SIZE32] = dst.try_into().unwrap();
+                    *dst = src.to_le_bytes();
                 }
                 Ok(())
             }
@@ -999,33 +994,21 @@ macro_rules! floats {
 
             fn load_list(cx: &mut LiftContext<'_>, list: &WasmList<Self>) -> Result<Vec<Self>> where Self: Sized {
                 // See comments in `WasmList::get` for the panicking indexing
-                let byte_size = list.len * mem::size_of::<$integer>();
+                let byte_size = list.len * mem::size_of::<Self>();
                 let bytes = &cx.memory()[list.ptr..][..byte_size];
 
                 // The canonical ABI requires that everything is aligned to its
-                // own size, so this should be an aligned array. Furthermore the
-                // alignment of primitive integers for hosts should be smaller
-                // than or equal to the size of the primitive itself, meaning
-                // that a wasm canonical-abi-aligned list is also aligned for
-                // the host. That should mean that the head/tail slices here are
-                // empty.
-                //
-                // Also note that the `unsafe` here is needed since the type
-                // we're aligning to isn't guaranteed to be valid, but in our
-                // case it's just integers and bytes so this should be safe.
-
-                let slice = unsafe {
-                    let (head, body, tail) = bytes.align_to::<$integer>();
-                    assert!(head.is_empty() && tail.is_empty());
-                    body
-                };
+                // own size, so this should be an aligned array.
+                assert!(bytes.as_ptr().cast::<Self>().is_aligned());
 
                 // Copy the resulting slice to a new Vec, handling endianness
                 // in the process
+                // TODO use `as_chunks` when https://github.com/rust-lang/rust/issues/74985
+                // is stabilized
                 Ok(
-                    slice
-                        .iter()
-                        .map(|i| $float::from_bits($integer::from_le(*i)))
+                    bytes
+                        .chunks_exact(Self::SIZE32)
+                        .map(|i| $float::from_le_bytes(i.try_into().unwrap()))
                         .collect()
                 )
             }
@@ -1034,8 +1017,8 @@ macro_rules! floats {
 }
 
 floats! {
-    f32/get_f32 = Float32 with abi:SCALAR4 u32
-    f64/get_f64 = Float64 with abi:SCALAR8 u64
+    f32/get_f32 = Float32 with abi:SCALAR4
+    f64/get_f64 = Float64 with abi:SCALAR8
 }
 
 unsafe impl ComponentType for bool {
