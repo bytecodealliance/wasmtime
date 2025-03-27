@@ -8,11 +8,11 @@ use crate::{AsContextMut, StoreContext, StoreContextMut, ValRaw};
 use alloc::borrow::Cow;
 use alloc::sync::Arc;
 use core::fmt;
+use core::iter;
 use core::marker;
 use core::mem::{self, MaybeUninit};
 use core::ptr::NonNull;
 use core::str;
-use std::iter;
 use wasmtime_environ::component::{
     CanonicalAbiInfo, ComponentTypes, InterfaceType, StringEncoding, VariantInfo, MAX_FLAT_PARAMS,
     MAX_FLAT_RESULTS,
