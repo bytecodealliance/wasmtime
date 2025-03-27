@@ -132,3 +132,15 @@ the repository. Management of this file looks like:
 This means that `RELEASES.md` only has release notes for the release branch that
 it is on. Historical release notes can be found through links at the bottom to
 previous copies of `RELEASES.md`
+
+## Keeping Old release branch CI up-to-date
+
+Over time CI configuration goes out of date and may need to be updated. The
+Wasmtime repository has a cron job via GitHub Actions to run release CI on all
+supported release branches on a weekly basis to try to weed out these problems.
+If a release branch CI fails it'll open an issue and maintainers should resolve
+it expediently.
+
+Where possible old release branch CI should not update software to fix CI. Try
+to pin to older versions if something wasn't pinned already for example.
+Sometimes though updates are inevitable and may be required.
