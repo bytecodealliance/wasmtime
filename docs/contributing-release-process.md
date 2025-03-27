@@ -73,6 +73,18 @@ carry on its way.
 
 ## Releasing a patch version
 
+Wasmtime does not currently have a cadence for patch version nor a strict set
+of criteria. It's done on an as-needed basis. Two requirements, however are:
+
+* All changes must land on `main` first (if applicable) and then get backported
+  to an older branch. Release branches should already exist from the above
+  major release steps.
+
+* When a patch release is made it must be applied to [all supported
+  versions](./stability-release.md#current-versions) that need the patch.
+  Wasmtime will not release a patch release until all versions have been
+  equally patched to ensure that releases remain consistent.
+
 Making a patch release is somewhat more manual than a major version, but like
 before there's automation to help guide the process as well and take care of
 more mundane bits.
@@ -82,9 +94,6 @@ Like above human interaction is indicated with **bold** text in these steps.
 
 1. **Necessary changes are backported to the `release-2.0.0` branch from
    `main`**
-   * All changes must land on `main` first (if applicable) and then get
-     backported to an older branch. Release branches should already exist from
-     the above major release steps.
    * CI may not have been run in some time for release branches so it may be
      necessary to backport CI fixes and updates from `main` as well.
    * When merging backports maintainers need to double-check that the
