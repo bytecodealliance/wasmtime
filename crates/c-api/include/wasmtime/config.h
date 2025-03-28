@@ -542,6 +542,43 @@ wasmtime_config_host_memory_creator_set(wasm_config_t *,
  */
 WASMTIME_CONFIG_PROP(void, memory_init_cow, bool)
 
+typedef uint8_t mpk_enabled_t;
+
+enum mpk_enabled_enum
+{
+  MPK_ENABLED_AUTO,
+  MPK_ENABLED_ENABLE,
+  MPK_ENABLED_DISABLE,
+};
+
+typedef struct
+{
+  uint32_t max_unused_warm_slots;
+  size_t decommit_batch_size;
+  size_t async_stack_keep_resident;
+  size_t linear_memory_keep_resident;
+  size_t table_keep_resident;
+  uint32_t total_component_instances;
+  size_t max_component_instance_size;
+  uint32_t max_core_instances_per_component;
+  uint32_t max_memories_per_component;
+  uint32_t max_tables_per_component;
+  uint32_t total_memories;
+  uint32_t total_tables;
+  uint32_t total_stacks;
+  uint32_t total_core_instances;
+  size_t max_core_instance_size;
+  uint32_t max_tables_per_module;
+  size_t table_elements;
+  uint32_t max_memories_per_module;
+  size_t max_memory_size;
+  mpk_enabled_t memory_protection_keys;
+  size_t max_memory_protection_keys;
+  uint32_t total_gc_heaps;
+} pooling_instance_allocator_config_t;
+
+WASM_API_EXTERN void wasmtime_pooling_allocation_strategy_set(wasm_config_t *, pooling_instance_allocator_config_t);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif

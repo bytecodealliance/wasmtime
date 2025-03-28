@@ -7,8 +7,12 @@ use std::os::raw::c_char;
 use std::ptr;
 use std::{ffi::CStr, sync::Arc};
 use wasmtime::{
-    Config, LinearMemory, MemoryCreator, OptLevel, ProfilingStrategy, Result, Strategy,
+    Config, InstanceAllocationStrategy, LinearMemory, MemoryCreator, OptLevel, ProfilingStrategy,
+    Result, Strategy,
 };
+
+#[cfg(feature = "pooling-allocator")]
+use wasmtime::PoolingAllocationConfig;
 
 #[repr(C)]
 #[derive(Clone)]
@@ -443,4 +447,88 @@ pub extern "C" fn wasmtime_config_memory_init_cow_set(c: &mut wasm_config_t, ena
 #[unsafe(no_mangle)]
 pub extern "C" fn wasmtime_config_wasm_wide_arithmetic_set(c: &mut wasm_config_t, enable: bool) {
     c.config.wasm_wide_arithmetic(enable);
+}
+
+#[repr(u8)]
+#[derive(Clone)]
+pub enum mpk_enabled_t {
+    Auto,
+    Enable,
+    Disable,
+}
+
+#[repr(C)]
+#[derive(Clone)]
+pub struct pooling_instance_allocator_config_t {
+    max_unused_warm_slots: u32,
+    decommit_batch_size: usize,
+    async_stack_keep_resident: usize,
+    linear_memory_keep_resident: usize,
+    table_keep_resident: usize,
+    total_component_instances: u32,
+    max_component_instance_size: usize,
+    max_core_instances_per_component: u32,
+    max_memories_per_component: u32,
+    max_tables_per_component: u32,
+    total_memories: u32,
+    total_tables: u32,
+    total_stacks: u32,
+    total_core_instances: u32,
+    max_core_instance_size: usize,
+    max_tables_per_module: u32,
+    table_elements: usize,
+    max_memories_per_module: u32,
+    max_memory_size: usize,
+    memory_protection_keys: mpk_enabled_t,
+    max_memory_protection_keys: usize,
+    total_gc_heaps: u32,
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn wasmtime_pooling_allocation_strategy_set(
+    c: &mut wasm_config_t,
+    pc: pooling_instance_allocator_config_t,
+) {
+    let mut pooling_config = PoolingAllocationConfig::new();
+    pooling_config
+        .max_unused_warm_slots(pc.max_unused_warm_slots)
+        .decommit_batch_size(pc.decommit_batch_size)
+        .linear_memory_keep_resident(pc.linear_memory_keep_resident)
+        .table_keep_resident(pc.table_keep_resident)
+        .total_component_instances(pc.total_component_instances)
+        .max_component_instance_size(pc.max_component_instance_size)
+        .max_core_instances_per_component(pc.max_core_instances_per_component)
+        .max_memories_per_component(pc.max_memories_per_component)
+        .max_tables_per_component(pc.max_tables_per_component)
+        .total_memories(pc.total_memories)
+        .total_tables(pc.total_tables)
+        .total_core_instances(pc.total_core_instances)
+        .max_core_instance_size(pc.max_core_instance_size)
+        .max_tables_per_module(pc.max_tables_per_module)
+        .table_elements(pc.table_elements)
+        .max_memories_per_module(pc.max_memories_per_module)
+        .max_memory_size(pc.max_memory_size);
+    #[cfg(feature = "async")]
+    {
+        pooling_config
+            .async_stack_keep_resident(pc.async_stack_keep_resident)
+            .total_stacks(pc.total_stacks);
+    }
+    #[cfg(feature = "memory-protection-keys")]
+    {
+        pooling_config
+            .memory_protection_keys(match pc.memory_protection_keys {
+                mpk_enabled_t::Auto => wasmtime::MpkEnabled::Auto,
+                mpk_enabled_t::Enable => wasmtime::MpkEnabled::Enable,
+                mpk_enabled_t::Disable => wasmtime::MpkEnabled::Disable,
+            })
+            .max_memory_protection_keys(pc.max_memory_protection_keys);
+    }
+    #[cfg(feature = "gc")]
+    {
+        pooling_config.total_gc_heaps(pc.total_gc_heaps);
+    }
+    c.config
+        .allocation_strategy(InstanceAllocationStrategy::Pooling(pooling_config));
 }
