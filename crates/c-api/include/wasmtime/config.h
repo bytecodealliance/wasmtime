@@ -544,15 +544,13 @@ WASMTIME_CONFIG_PROP(void, memory_init_cow, bool)
 
 typedef uint8_t mpk_enabled_t;
 
-enum mpk_enabled_enum
-{
+enum mpk_enabled_enum {
   MPK_ENABLED_AUTO,
   MPK_ENABLED_ENABLE,
   MPK_ENABLED_DISABLE,
 };
 
-typedef struct
-{
+typedef struct {
   uint32_t max_unused_warm_slots;
   size_t decommit_batch_size;
   size_t async_stack_keep_resident;
@@ -577,7 +575,9 @@ typedef struct
   uint32_t total_gc_heaps;
 } pooling_instance_allocator_config_t;
 
-WASM_API_EXTERN void wasmtime_pooling_allocation_strategy_set(wasm_config_t *, pooling_instance_allocator_config_t);
+WASM_API_EXTERN void
+wasmtime_pooling_allocation_strategy_set(wasm_config_t *,
+                                         pooling_instance_allocator_config_t);
 
 #ifdef __cplusplus
 } // extern "C"
