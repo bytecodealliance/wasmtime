@@ -3,7 +3,6 @@
 use crate::api::{AsReg, CodeSink, Constant, KnownOffset, KnownOffsetTable, Label, TrapCode};
 use crate::gpr::{self, NonRspGpr, Size};
 use crate::rex::{encode_modrm, encode_sib, Imm, RexFlags};
-use crate::xmm;
 
 /// x64 memory addressing modes.
 #[derive(Clone, Debug)]
@@ -165,11 +164,12 @@ pub enum DeferredTarget {
 
 impl<R: AsReg> std::fmt::Display for Amode<R> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let pointer_width = Size::Quadword;
         match self {
             Amode::ImmReg { simm32, base, .. } => {
                 // Note: size is always 8; the address is 64 bits,
                 // even if the addressed operand is smaller.
-                let base = gpr::enc::to_string(base.enc(), Size::Quadword);
+                let base = base.to_string(Some(pointer_width));
                 write!(f, "{simm32:x}({base})")
             }
             Amode::ImmRegRegShift {
@@ -179,8 +179,8 @@ impl<R: AsReg> std::fmt::Display for Amode<R> {
                 scale,
                 ..
             } => {
-                let base = gpr::enc::to_string(base.enc(), Size::Quadword);
-                let index = gpr::enc::to_string(index.enc(), Size::Quadword);
+                let base = base.to_string(Some(pointer_width));
+                let index = index.to_string(pointer_width);
                 let shift = scale.shift();
                 if shift > 1 {
                     write!(f, "{simm32:x}({base}, {index}, {shift})")
@@ -289,7 +289,7 @@ impl<R: AsReg, M: AsReg> XmmMem<R, M> {
     /// Pretty-print the operand.
     pub fn to_string(&self) -> String {
         match self {
-            XmmMem::Xmm(xmm) => xmm::enc::to_string(xmm.enc()).to_owned(),
+            XmmMem::Xmm(xmm) => xmm.to_string(None),
             XmmMem::Mem(amode) => amode.to_string(),
         }
     }
