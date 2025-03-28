@@ -449,86 +449,207 @@ pub extern "C" fn wasmtime_config_wasm_wide_arithmetic_set(c: &mut wasm_config_t
     c.config.wasm_wide_arithmetic(enable);
 }
 
-#[repr(u8)]
-#[derive(Clone)]
-pub enum mpk_enabled_t {
-    Auto,
-    Enable,
-    Disable,
-}
-
 #[repr(C)]
 #[derive(Clone)]
-pub struct pooling_instance_allocator_config_t {
-    max_unused_warm_slots: u32,
-    decommit_batch_size: usize,
-    async_stack_keep_resident: usize,
-    linear_memory_keep_resident: usize,
-    table_keep_resident: usize,
-    total_component_instances: u32,
-    max_component_instance_size: usize,
-    max_core_instances_per_component: u32,
-    max_memories_per_component: u32,
-    max_tables_per_component: u32,
-    total_memories: u32,
-    total_tables: u32,
-    total_stacks: u32,
-    total_core_instances: u32,
-    max_core_instance_size: usize,
-    max_tables_per_module: u32,
-    table_elements: usize,
-    max_memories_per_module: u32,
-    max_memory_size: usize,
-    memory_protection_keys: mpk_enabled_t,
-    max_memory_protection_keys: usize,
-    total_gc_heaps: u32,
+#[cfg(feature = "pooling-allocator")]
+pub struct pooling_allocation_config_t {
+    pub(crate) config: PoolingAllocationConfig,
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_new() -> Box<pooling_allocation_config_t> {
+    Box::new(pooling_allocation_config_t {
+        config: PoolingAllocationConfig::default(),
+    })
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_max_unused_warm_slots_set(
+    c: &mut pooling_allocation_config_t,
+    max: u32,
+) {
+    c.config.max_unused_warm_slots(max);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_decommit_batch_size_set(
+    c: &mut pooling_allocation_config_t,
+    batch_size: usize,
+) {
+    c.config.decommit_batch_size(batch_size);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(all(feature = "pooling-allocator", feature = "async"))]
+pub extern "C" fn pooling_allocation_config_async_stack_keep_resident_set(
+    c: &mut pooling_allocation_config_t,
+    size: usize,
+) {
+    c.config.async_stack_keep_resident(size);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_linear_memory_keep_resident_set(
+    c: &mut pooling_allocation_config_t,
+    size: usize,
+) {
+    c.config.linear_memory_keep_resident(size);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_table_keep_resident_set(
+    c: &mut pooling_allocation_config_t,
+    size: usize,
+) {
+    c.config.table_keep_resident(size);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_total_component_instances_set(
+    c: &mut pooling_allocation_config_t,
+    count: u32,
+) {
+    c.config.total_component_instances(count);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_max_component_instance_size_set(
+    c: &mut pooling_allocation_config_t,
+    size: usize,
+) {
+    c.config.max_component_instance_size(size);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_max_core_instances_per_component_set(
+    c: &mut pooling_allocation_config_t,
+    count: u32,
+) {
+    c.config.max_core_instances_per_component(count);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_max_memories_per_component_set(
+    c: &mut pooling_allocation_config_t,
+    count: u32,
+) {
+    c.config.max_memories_per_component(count);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_max_tables_per_component_set(
+    c: &mut pooling_allocation_config_t,
+    count: u32,
+) {
+    c.config.max_tables_per_component(count);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_total_memories_set(
+    c: &mut pooling_allocation_config_t,
+    count: u32,
+) {
+    c.config.total_memories(count);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_total_tables_set(
+    c: &mut pooling_allocation_config_t,
+    count: u32,
+) {
+    c.config.total_tables(count);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(all(feature = "pooling-allocator", feature = "async"))]
+pub extern "C" fn pooling_allocation_config_total_stacks_set(
+    c: &mut pooling_allocation_config_t,
+    count: u32,
+) {
+    c.config.total_stacks(count);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_total_core_instances_set(
+    c: &mut pooling_allocation_config_t,
+    count: u32,
+) {
+    c.config.total_core_instances(count);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_max_core_instance_size_set(
+    c: &mut pooling_allocation_config_t,
+    size: usize,
+) {
+    c.config.max_core_instance_size(size);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_max_tables_per_module_set(
+    c: &mut pooling_allocation_config_t,
+    tables: u32,
+) {
+    c.config.max_tables_per_module(tables);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_table_elements_set(
+    c: &mut pooling_allocation_config_t,
+    elements: usize,
+) {
+    c.config.table_elements(elements);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_max_memories_per_module_set(
+    c: &mut pooling_allocation_config_t,
+    memories: u32,
+) {
+    c.config.max_memories_per_module(memories);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_max_memory_size_set(
+    c: &mut pooling_allocation_config_t,
+    bytes: usize,
+) {
+    c.config.max_memory_size(bytes);
+}
+
+#[unsafe(no_mangle)]
+#[cfg(all(feature = "pooling-allocator", feature = "gc"))]
+pub extern "C" fn pooling_allocation_config_total_gc_heaps_set(
+    c: &mut pooling_allocation_config_t,
+    count: u32,
+) {
+    c.config.total_gc_heaps(count);
 }
 
 #[unsafe(no_mangle)]
 #[cfg(feature = "pooling-allocator")]
 pub extern "C" fn wasmtime_pooling_allocation_strategy_set(
     c: &mut wasm_config_t,
-    pc: pooling_instance_allocator_config_t,
+    pc: &pooling_allocation_config_t,
 ) {
-    let mut pooling_config = PoolingAllocationConfig::new();
-    pooling_config
-        .max_unused_warm_slots(pc.max_unused_warm_slots)
-        .decommit_batch_size(pc.decommit_batch_size)
-        .linear_memory_keep_resident(pc.linear_memory_keep_resident)
-        .table_keep_resident(pc.table_keep_resident)
-        .total_component_instances(pc.total_component_instances)
-        .max_component_instance_size(pc.max_component_instance_size)
-        .max_core_instances_per_component(pc.max_core_instances_per_component)
-        .max_memories_per_component(pc.max_memories_per_component)
-        .max_tables_per_component(pc.max_tables_per_component)
-        .total_memories(pc.total_memories)
-        .total_tables(pc.total_tables)
-        .total_core_instances(pc.total_core_instances)
-        .max_core_instance_size(pc.max_core_instance_size)
-        .max_tables_per_module(pc.max_tables_per_module)
-        .table_elements(pc.table_elements)
-        .max_memories_per_module(pc.max_memories_per_module)
-        .max_memory_size(pc.max_memory_size);
-    #[cfg(feature = "async")]
-    {
-        pooling_config
-            .async_stack_keep_resident(pc.async_stack_keep_resident)
-            .total_stacks(pc.total_stacks);
-    }
-    #[cfg(feature = "memory-protection-keys")]
-    {
-        pooling_config
-            .memory_protection_keys(match pc.memory_protection_keys {
-                mpk_enabled_t::Auto => wasmtime::MpkEnabled::Auto,
-                mpk_enabled_t::Enable => wasmtime::MpkEnabled::Enable,
-                mpk_enabled_t::Disable => wasmtime::MpkEnabled::Disable,
-            })
-            .max_memory_protection_keys(pc.max_memory_protection_keys);
-    }
-    #[cfg(feature = "gc")]
-    {
-        pooling_config.total_gc_heaps(pc.total_gc_heaps);
-    }
     c.config
-        .allocation_strategy(InstanceAllocationStrategy::Pooling(pooling_config));
+        .allocation_strategy(InstanceAllocationStrategy::Pooling(pc.config.clone()));
 }

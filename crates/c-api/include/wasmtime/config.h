@@ -542,42 +542,200 @@ wasmtime_config_host_memory_creator_set(wasm_config_t *,
  */
 WASMTIME_CONFIG_PROP(void, memory_init_cow, bool)
 
-typedef uint8_t mpk_enabled_t;
+#ifdef WASMTIME_FEATURE_POOLING_ALLOCATOR
 
-enum mpk_enabled_enum {
-  MPK_ENABLED_AUTO,
-  MPK_ENABLED_ENABLE,
-  MPK_ENABLED_DISABLE,
-};
+typedef struct pooling_allocation_config_t pooling_allocation_config_t;
 
-typedef struct {
-  uint32_t max_unused_warm_slots;
-  size_t decommit_batch_size;
-  size_t async_stack_keep_resident;
-  size_t linear_memory_keep_resident;
-  size_t table_keep_resident;
-  uint32_t total_component_instances;
-  size_t max_component_instance_size;
-  uint32_t max_core_instances_per_component;
-  uint32_t max_memories_per_component;
-  uint32_t max_tables_per_component;
-  uint32_t total_memories;
-  uint32_t total_tables;
-  uint32_t total_stacks;
-  uint32_t total_core_instances;
-  size_t max_core_instance_size;
-  uint32_t max_tables_per_module;
-  size_t table_elements;
-  uint32_t max_memories_per_module;
-  size_t max_memory_size;
-  mpk_enabled_t memory_protection_keys;
-  size_t max_memory_protection_keys;
-  uint32_t total_gc_heaps;
-} pooling_instance_allocator_config_t;
+WASM_API_EXTERN pooling_allocation_config_t *pooling_allocation_config_new();
+
+#define POOLING_ALLOCATION_CONFIG_PROP(name, ty)                               \
+  WASM_API_EXTERN void pooling_allocation_config_##name##_set(                 \
+      pooling_allocation_config_t *, ty);
+
+/**
+ * \brief Configures the maximum number of “unused warm slots” to retain in the
+ * pooling allocator.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.max_unused_warm_slots.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(max_unused_warm_slots, uint32_t)
+
+/**
+ * \brief The target number of decommits to do per batch.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.decommit_batch_size.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(decommit_batch_size, size_t)
+
+#ifdef WASMTIME_FEATURE_ASYNC
+/**
+ * \brief How much memory, in bytes, to keep resident for async stacks allocated
+ * with the pooling allocator.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.async_stack_keep_resident.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(async_stack_keep_resident, size_t)
+#endif
+
+/**
+ * \brief How much memory, in bytes, to keep resident for each linear memory
+ * after deallocation.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.linear_memory_keep_resident.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(linear_memory_keep_resident, size_t)
+
+/**
+ * \brief How much memory, in bytes, to keep resident for each table after
+ * deallocation.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.table_keep_resident.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(table_keep_resident, size_t)
+
+/**
+ * \brief The maximum number of concurrent component instances supported
+ * (default is 1000).
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.total_component_instances.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(total_component_instances, uint32_t)
+
+/**
+ * \brief The maximum size, in bytes, allocated for a component instance’s
+ * VMComponentContext metadata.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.max_component_instance_size.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(max_component_instance_size, size_t)
+
+/**
+ * \brief The maximum number of core instances a single component may contain
+ * (default is unlimited).
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.max_core_instances_per_component.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(max_core_instances_per_component, uint32_t)
+
+/**
+ * \brief The maximum number of Wasm linear memories that a single component may
+ * transitively contain (default is unlimited).
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.max_memories_per_component.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(max_memories_per_component, uint32_t)
+
+/**
+ * \brief The maximum number of tables that a single component may transitively
+ * contain (default is unlimited).
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.max_tables_per_component.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(max_tables_per_component, uint32_t)
+
+/**
+ * \brief The maximum number of concurrent Wasm linear memories supported
+ * (default is 1000).
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.total_memories.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(total_memories, uint32_t)
+
+/**
+ * \brief The maximum number of concurrent tables supported (default is 1000).
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.total_tables.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(total_tables, uint32_t)
+
+#ifdef WASMTIME_FEATURE_ASYNC
+/**
+ * \brief The maximum number of execution stacks allowed for asynchronous
+ * execution, when enabled (default is 1000).
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.total_stacks.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(total_stacks, uint32_t)
+#endif
+
+/**
+ * \brief The maximum number of concurrent core instances supported (default is
+ * 1000).
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.total_core_instances.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(total_core_instances, uint32_t)
+
+/**
+ * \brief The maximum size, in bytes, allocated for a core instance’s VMContext
+ * metadata.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.max_core_instance_size.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(max_core_instance_size, size_t)
+
+/**
+ * \brief The maximum number of defined tables for a core module (default is 1).
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.max_tables_per_module.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(max_tables_per_module, uint32_t)
+
+/**
+ * \brief The maximum table elements for any table defined in a module (default
+ * is 20000).
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.table_elements.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(table_elements, size_t)
+
+/**
+ * \brief The maximum number of defined linear memories for a module (default is
+ * 1).
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.max_memories_per_module.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(max_memories_per_module, uint32_t)
+
+/**
+ * \brief The maximum byte size that any WebAssembly linear memory may grow to.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.max_memory_size.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(max_memory_size, size_t)
+
+/**
+ * \brief The maximum number of concurrent GC heaps supported (default is 1000).
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html#method.total_gc_heaps.
+ */
+POOLING_ALLOCATION_CONFIG_PROP(total_gc_heaps, uint32_t)
 
 WASM_API_EXTERN void
 wasmtime_pooling_allocation_strategy_set(wasm_config_t *,
-                                         pooling_instance_allocator_config_t);
+                                         pooling_allocation_config_t *);
+
+#endif
 
 #ifdef __cplusplus
 } // extern "C"
