@@ -119,7 +119,7 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock addq    %rsi, 0(%rdi)
+;   lock addq %rsi, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -144,7 +144,7 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock addl    %esi, 0(%rdi)
+;   lock addl %esi, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -169,7 +169,7 @@ block0(v0: i64, v1: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock addw    %si, 0(%rdi)
+;   lock addw %si, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -194,7 +194,7 @@ block0(v0: i64, v1: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock addb    %sil, 0(%rdi)
+;   lock addb %sil, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -335,7 +335,7 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock subq    %rsi, 0(%rdi)
+;   lock subq %rsi, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -360,7 +360,7 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock subl    %esi, 0(%rdi)
+;   lock subl %esi, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -385,7 +385,7 @@ block0(v0: i64, v1: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock subw    %si, 0(%rdi)
+;   lock subw %si, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -410,7 +410,7 @@ block0(v0: i64, v1: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock subb    %sil, 0(%rdi)
+;   lock subb %sil, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -551,7 +551,7 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock andq    %rsi, 0(%rdi)
+;   lock andq %rsi, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -576,7 +576,7 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock andl    %esi, 0(%rdi)
+;   lock andl %esi, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -601,7 +601,7 @@ block0(v0: i64, v1: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock andw    %si, 0(%rdi)
+;   lock andw %si, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -626,7 +626,7 @@ block0(v0: i64, v1: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock andb    %sil, 0(%rdi)
+;   lock andb %sil, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -887,7 +887,7 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock orq     %rsi, 0(%rdi)
+;   lock orq %rsi, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -912,7 +912,7 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock orl     %esi, 0(%rdi)
+;   lock orl %esi, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -937,7 +937,7 @@ block0(v0: i64, v1: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock orw     %si, 0(%rdi)
+;   lock orw %si, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -962,7 +962,7 @@ block0(v0: i64, v1: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock orb     %sil, 0(%rdi)
+;   lock orb %sil, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1103,7 +1103,7 @@ block0(v0: i64, v1: i64):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock xorq    %rsi, 0(%rdi)
+;   lock xorq %rsi, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1128,7 +1128,7 @@ block0(v0: i64, v1: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock xorl    %esi, 0(%rdi)
+;   lock xorl %esi, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1153,7 +1153,7 @@ block0(v0: i64, v1: i16):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock xorw    %si, 0(%rdi)
+;   lock xorw %si, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret
@@ -1178,7 +1178,7 @@ block0(v0: i64, v1: i8):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   lock xorb    %sil, 0(%rdi)
+;   lock xorb %sil, (%rdi)
 ;   movq    %rbp, %rsp
 ;   popq    %rbp
 ;   ret

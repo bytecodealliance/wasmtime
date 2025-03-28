@@ -56,7 +56,8 @@ fn generate_derive(f: &mut Formatter) {
 /// Adds a custom bound to the `Arbitrary` implementation which ensures that
 /// the associated registers are all `Arbitrary` as well.
 fn generate_derive_arbitrary_bounds(f: &mut Formatter) {
-    fmtln!(f,
+    fmtln!(
+        f,
         "#[cfg_attr(any(test, feature = \"fuzz\"), arbitrary(bound = \"R: crate::fuzz::RegistersArbitrary\"))]"
     );
 }

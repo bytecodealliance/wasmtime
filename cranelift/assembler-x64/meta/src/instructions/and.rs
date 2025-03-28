@@ -28,6 +28,17 @@ pub fn list() -> Vec<Inst> {
         inst("andw", fmt("RM", [rw(r16), r(rm16)]), rex([0x66, 0x23]).r(), _64b | compat),
         inst("andl", fmt("RM", [rw(r32), r(rm32)]), rex(0x23).r(), _64b | compat),
         inst("andq", fmt("RM", [rw(r64), r(rm64)]), rex(0x23).w().r(), _64b),
+        // `LOCK`-prefixed memory-writing instructions.
+        inst("lock_andb", fmt("MI", [rw(m8), r(imm8)]), rex([0xf0, 0x80]).digit(4).ib(), _64b | compat),
+        inst("lock_andw", fmt("MI", [rw(m16), r(imm16)]), rex([0xf0, 0x66, 0x81]).digit(4).iw(), _64b | compat),
+        inst("lock_andl", fmt("MI", [rw(m32), r(imm32)]), rex([0xf0, 0x81]).digit(4).id(), _64b | compat),
+        inst("lock_andq", fmt("MI_SXL", [rw(m64), sxq(imm32)]), rex([0xf0, 0x81]).w().digit(4).id(), _64b),
+        inst("lock_andl", fmt("MI_SXB", [rw(m32), sxl(imm8)]), rex([0xf0, 0x83]).digit(4).ib(), _64b | compat),
+        inst("lock_andq", fmt("MI_SXB", [rw(m64), sxq(imm8)]), rex([0xf0, 0x83]).w().digit(4).ib(), _64b),
+        inst("lock_andb", fmt("MR", [rw(m8), r(r8)]), rex([0xf0, 0x20]).r(), _64b | compat),
+        inst("lock_andw", fmt("MR", [rw(m16), r(r16)]), rex([0xf0, 0x66, 0x21]).r(), _64b | compat),
+        inst("lock_andl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x21]).r(), _64b | compat),
+        inst("lock_andq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x21]).w().r(), _64b),
         // Vector instructions.
         inst("andps", fmt("A", [rw(xmm), r(align(rm128))]), rex([0x0F, 0x54]).r(), _64b | compat | sse),
         inst("andpd", fmt("A", [rw(xmm), r(align(rm128))]), rex([0x66, 0x0F, 0x54]).r(), _64b | compat | sse),

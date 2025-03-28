@@ -467,6 +467,13 @@
 (rule (side_effect_concat (SideEffectNoResult.Inst2 inst1 inst2) (SideEffectNoResult.Inst inst3))
       (SideEffectNoResult.Inst3 inst1 inst2 inst3))
 
+;; In certain cases (e.g., RMW lowerings) it can be useful to emit an invalid
+;; register after a side-effectful instruction.
+(decl side_effect_as_invalid (SideEffectNoResult) InstOutput)
+(rule (side_effect_as_invalid inst)
+      (let ((_ InstOutput (side_effect inst)))
+        (invalid_reg)))
+
 ;;;; Helpers for Working with Flags ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 ;; Newtype wrapper around `MInst` for instructions that are used for their
