@@ -358,6 +358,8 @@ wasmtime_option_group! {
         pub tail_call: Option<bool>,
         /// Configure support for the threads proposal.
         pub threads: Option<bool>,
+        /// Configure support for the shared-everything-threads proposal.
+        pub shared_everything_threads: Option<bool>,
         /// Configure support for the memory64 proposal.
         pub memory64: Option<bool>,
         /// Configure support for the component-model proposal.
@@ -991,6 +993,7 @@ impl CommonOptions {
             ("component-model", component_model, wasm_component_model)
             ("component-model-async", component_model_async, wasm_component_model_async)
             ("threads", threads, wasm_threads)
+            ("shared-everything-threads", shared_everything_threads, wasm_shared_everything_threads)
             ("gc", gc, wasm_gc)
             ("gc", reference_types, wasm_reference_types)
             ("gc", function_references, wasm_function_references)
