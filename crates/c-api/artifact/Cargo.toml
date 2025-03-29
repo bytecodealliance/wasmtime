@@ -39,6 +39,7 @@ default = [
   'cranelift',
   'winch',
   'debug-builtins',
+  'pooling-allocator',
   # ... if you add a line above this be sure to change the other locations
   # marked WASMTIME_FEATURE_LIST
 ]
@@ -60,5 +61,6 @@ gc-null = ["wasmtime-c-api/gc-null"]
 cranelift = ["wasmtime-c-api/cranelift"]
 winch = ["wasmtime-c-api/winch"]
 debug-builtins = ["wasmtime-c-api/debug-builtins"]
+pooling-allocator = ["wasmtime-c-api/pooling-allocator"]
 # ... if you add a line above this be sure to read the comment at the end of
 # `default`
