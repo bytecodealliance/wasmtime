@@ -14,7 +14,6 @@ impl WasmiEngine {
     pub(crate) fn new(config: &mut Config) -> Self {
         let config = &mut config.module_config.config;
         // Force generated Wasm modules to never have features that Wasmi doesn't support.
-        config.relaxed_simd_enabled = false;
         config.threads_enabled = false;
         config.exceptions_enabled = false;
         config.gc_enabled = false;
@@ -35,6 +34,7 @@ impl WasmiEngine {
             .wasm_custom_page_sizes(config.custom_page_sizes_enabled)
             .wasm_memory64(config.memory64_enabled)
             .wasm_simd(config.simd_enabled)
+            .wasm_relaxed_simd(config.relaxed_simd_enabled)
             .wasm_wide_arithmetic(config.wide_arithmetic_enabled);
         Self {
             engine: wasmi::Engine::new(&wasmi_config),
