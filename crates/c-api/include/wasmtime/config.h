@@ -548,6 +548,9 @@ typedef struct pooling_allocation_config_t pooling_allocation_config_t;
 
 WASM_API_EXTERN pooling_allocation_config_t *pooling_allocation_config_new();
 
+WASM_API_EXTERN void
+pooling_allocation_config_delete(pooling_allocation_config_t *);
+
 #define POOLING_ALLOCATION_CONFIG_PROP(name, ty)                               \
   WASM_API_EXTERN void pooling_allocation_config_##name##_set(                 \
       pooling_allocation_config_t *, ty);

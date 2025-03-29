@@ -466,6 +466,10 @@ pub extern "C" fn pooling_allocation_config_new() -> Box<pooling_allocation_conf
 
 #[unsafe(no_mangle)]
 #[cfg(feature = "pooling-allocator")]
+pub extern "C" fn pooling_allocation_config_delete(_: Box<pooling_allocation_config_t>) {}
+
+#[unsafe(no_mangle)]
+#[cfg(feature = "pooling-allocator")]
 pub extern "C" fn pooling_allocation_config_max_unused_warm_slots_set(
     c: &mut pooling_allocation_config_t,
     max: u32,
