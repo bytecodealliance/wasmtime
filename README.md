@@ -40,6 +40,10 @@ Windows or otherwise interested users can download installers and
 binaries directly from the [GitHub
 Releases](https://github.com/bytecodealliance/wasmtime/releases) page.
 
+Documentation on Wasmtime's currently supported versions can be found [in the
+online book
+documentation](https://docs.wasmtime.dev/stability-release.html#current-versions).
+
 ## Example
 
 If you've got the [Rust compiler
