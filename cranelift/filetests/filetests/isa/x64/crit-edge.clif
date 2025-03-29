@@ -1,0 +1,82 @@
+test compile precise-output
+target x86_64
+
+function %f(i32) -> i32 {
+    block0(v0: i32):
+        v1 = iadd_imm.i32 v0, 1
+        brif v0, block1(v0), block2(v1)
+
+    block1(v2: i32):
+        brif v2, block3(v0), block4(v1)
+
+    block2(v3: i32):
+        brif v3, block3(v1), block4(v0)
+
+    block3(v4: i32):
+        return v4
+
+    block4(v5: i32):
+        return v5
+}
+
+; VCode:
+;   pushq   %rbp
+;   movq    %rsp, %rbp
+; block0:
+;   lea     1(%rdi), %eax
+;   testl   %edi, %edi
+;   jnz     label4; j label1
+; block1:
+;   testl   %eax, %eax
+;   jnz     label2; j label3
+; block2:
+;   jmp     label8
+; block3:
+;   movq    %rdi, %rax
+;   jmp     label7
+; block4:
+;   testl   %edi, %edi
+;   jnz     label5; j label6
+; block5:
+;   movq    %rdi, %rax
+;   jmp     label8
+; block6:
+;   jmp     label7
+; block7:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+; block8:
+;   movq    %rbp, %rsp
+;   popq    %rbp
+;   ret
+;
+; Disassembled:
+; block0: ; offset 0x0
+;   pushq %rbp
+;   movq %rsp, %rbp
+; block1: ; offset 0x4
+;   leal 1(%rdi), %eax
+;   testl %edi, %edi
+;   jne 0x1f
+; block2: ; offset 0xf
+;   testl %eax, %eax
+;   jne 0x34
+; block3: ; offset 0x17
+;   movq %rdi, %rax
+;   jmp 0x2f
+; block4: ; offset 0x1f
+;   testl %edi, %edi
+;   je 0x2f
+; block5: ; offset 0x27
+;   movq %rdi, %rax
+;   jmp 0x34
+; block6: ; offset 0x2f
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+; block7: ; offset 0x34
+;   movq %rbp, %rsp
+;   popq %rbp
+;   retq
+
