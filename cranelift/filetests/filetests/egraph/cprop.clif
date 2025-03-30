@@ -252,10 +252,10 @@ block0(v0: i32, v1: i32):
     return v7
 }
 
-; check: v11 = iconst.i32 333
-; check: v12 = iadd v1, v11
-; check: v15 = icmp eq v0, v12
-; nextln: return v15
+; check: v9 = iconst.i32 333
+; check: v19 = iadd v1, v9
+; check: v20 = icmp eq v0, v19
+; nextln: return v20
 
 function %ireduce_iconst() -> i8 {
 block0:
