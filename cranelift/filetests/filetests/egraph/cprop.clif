@@ -231,6 +231,58 @@ block0:
 ; check: v3 = iconst.i8 0
 ; nextln: return v3
 
+function %icmp_sums_same_addend(i32, i32, i32) -> i8 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = iadd v0, v2
+    v4 = iadd v1, v2
+    v5 = icmp eq v3, v4
+    return v5
+}
+
+; check: v6 = icmp eq v0, v1
+; nextln: return v6
+
+function %icmp_subs_same_minuend(i32, i32, i32) -> i8 {
+block0(v0: i32, v1: i32, v2: i32):
+    v3 = isub v0, v1
+    v4 = isub v0, v2
+    v5 = icmp eq v3, v4
+    return v5
+}
+
+; check: v9 = icmp eq v2, v1
+; nextln: return v9
+
+function %icmp_sums_const_addends(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v3 = iconst.i32 123
+    v4 = iconst.i32 456
+    v5 = iadd v0, v3
+    v6 = iadd v1, v4
+    v7 = icmp eq v5, v6
+    return v7
+}
+
+; check: v9 = iconst.i32 333
+; check: v19 = iadd v1, v9
+; check: v20 = icmp eq v0, v19
+; nextln: return v20
+
+function %icmp_subs_const_addends(i32, i32) -> i8 {
+block0(v0: i32, v1: i32):
+    v3 = iconst.i32 123
+    v4 = iconst.i32 456
+    v5 = isub v3, v0
+    v6 = isub v4, v1
+    v7 = icmp eq v5, v6
+    return v7
+}
+
+; check: v42 = iconst.i32 333
+; check: v51 = iadd v0, v42
+; check: v52 = icmp eq v1, v51
+; nextln: return v52
+
 function %ireduce_iconst() -> i8 {
 block0:
     v1 = iconst.i16 -10

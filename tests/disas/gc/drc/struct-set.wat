@@ -110,43 +110,42 @@
 ;; @004a                               trapz v30, user1
 ;; @004a                               v31 = iadd.i64 v6, v27
 ;; @004a                               v32 = load.i64 notrap aligned v31
-;;                                     v77 = iconst.i64 1
-;; @004a                               v33 = iadd v32, v77  ; v77 = 1
+;;                                     v84 = iconst.i64 1
+;; @004a                               v33 = iadd v32, v84  ; v84 = 1
 ;; @004a                               store notrap aligned v33, v31
 ;; @004a                               jump block3
 ;;
 ;;                                 block3:
 ;; @004a                               store.i32 notrap aligned little v3, v15
-;;                                     v83 = iconst.i32 1
-;;                                     v84 = band.i32 v16, v83  ; v83 = 1
-;;                                     v85 = iconst.i32 0
-;;                                     v86 = icmp.i32 eq v16, v85  ; v85 = 0
-;; @004a                               v47 = uextend.i32 v86
-;; @004a                               v48 = bor v84, v47
+;;                                     v96 = iconst.i32 1
+;;                                     v97 = band.i32 v16, v96  ; v96 = 1
+;;                                     v98 = iconst.i32 0
+;;                                     v99 = icmp.i32 eq v16, v98  ; v98 = 0
+;; @004a                               v47 = uextend.i32 v99
+;; @004a                               v48 = bor v97, v47
 ;; @004a                               brif v48, block7, block4
 ;;
 ;;                                 block4:
 ;; @004a                               v53 = uextend.i64 v16
-;;                                     v87 = iconst.i64 8
-;; @004a                               v55 = uadd_overflow_trap v53, v87, user1  ; v87 = 8
-;; @004a                               v57 = uadd_overflow_trap v55, v87, user1  ; v87 = 8
+;;                                     v100 = iconst.i64 8
+;; @004a                               v55 = uadd_overflow_trap v53, v100, user1  ; v100 = 8
+;; @004a                               v57 = uadd_overflow_trap v55, v100, user1  ; v100 = 8
 ;; @004a                               v58 = icmp ule v57, v8
 ;; @004a                               trapz v58, user1
 ;; @004a                               v59 = iadd.i64 v6, v55
 ;; @004a                               v60 = load.i64 notrap aligned v59
-;;                                     v80 = iconst.i64 -1
-;; @004a                               v61 = iadd v60, v80  ; v80 = -1
-;;                                     v81 = iconst.i64 0
-;; @004a                               v62 = icmp eq v61, v81  ; v81 = 0
-;; @004a                               brif v62, block5, block6
+;;                                     v101 = iconst.i64 1
+;;                                     v94 = icmp eq v60, v101  ; v101 = 1
+;; @004a                               brif v94, block5, block6
 ;;
 ;;                                 block5 cold:
 ;; @004a                               call fn0(v0, v16)
 ;; @004a                               jump block7
 ;;
 ;;                                 block6:
-;;                                     v88 = iadd.i64 v60, v80  ; v80 = -1
-;; @004a                               store notrap aligned v88, v59
+;;                                     v80 = iconst.i64 -1
+;; @004a                               v61 = iadd.i64 v60, v80  ; v80 = -1
+;; @004a                               store notrap aligned v61, v59
 ;; @004a                               jump block7
 ;;
 ;;                                 block7:

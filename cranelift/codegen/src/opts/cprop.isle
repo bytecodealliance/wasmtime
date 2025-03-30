@@ -172,6 +172,24 @@
 (rule (simplify (select ty (iconst_u _ 0) _ y))
       (subsume y))
 
+;; Reassociate across `==`/`!=` when we can simplify a constant
+;; `x + K1 == K2` --> `x == K2 - K1`
+(rule (simplify (eq ty1 (iadd ty2 x k1@(iconst _ _)) k2@(iconst _ _)))
+      (eq ty1 x (isub ty2 k2 k1)))
+(rule (simplify (ne ty1 (iadd ty2 x k1@(iconst _ _)) k2@(iconst _ _)))
+      (ne ty1 x (isub ty2 k2 k1)))
+;; `x - K1 == K2` --> `x == K2 + K1`
+(rule (simplify (eq ty1 (isub ty2 x k1@(iconst _ _)) k2@(iconst _ _)))
+      (eq ty1 x (iadd ty2 k2 k1)))
+(rule (simplify (ne ty1 (isub ty2 x k1@(iconst _ _)) k2@(iconst _ _)))
+      (ne ty1 x (iadd ty2 k2 k1)))
+;; `x + K1 == y + K2` --> `x == y + (K2 - K1)`
+(rule (simplify (eq ty1 (iadd ty2 x k1@(iconst _ _)) (iadd ty3 y k2@(iconst _ _))))
+      (eq ty1 x (iadd ty2 y (isub ty3 k2 k1))))
+(rule (simplify (ne ty1 (iadd ty2 x k1@(iconst _ _)) (iadd ty3 y k2@(iconst _ _))))
+      (ne ty1 x (iadd ty2 y (isub ty3 k2 k1))))
+;; An icmp rule normalizes (eq sub sub), so we don't need to handle it here.
+
 ;; Replace subtraction by a "negative" constant with addition.
 ;; Notably, this gives `x - (-1) == x + 1`, so other patterns don't have to
 ;; match the subtract-negative-one version too.
