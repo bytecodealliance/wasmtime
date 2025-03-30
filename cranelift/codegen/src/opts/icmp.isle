@@ -13,6 +13,18 @@
 (rule (simplify (slt (ty_int ty) x x)) (subsume (iconst_u ty 0)))
 (rule (simplify (sle (ty_int ty) x x)) (subsume (iconst_u ty 1)))
 
+;; For integers, adding or subtracting the same thing on both sides of an
+;; equality check (or inequality check) doesn't change the result
+
+(rule (simplify (eq ty (iadd _ a k) (iadd _ b k)))
+      (eq ty a b))
+(rule (simplify (eq ty (isub _ a k) (isub _ b k)))
+      (eq ty a b))
+(rule (simplify (ne ty (iadd _ a k) (iadd _ b k)))
+      (ne ty a b))
+(rule (simplify (ne ty (isub _ a k) (isub _ b k)))
+      (ne ty a b))
+
 ;; Optimize icmp-of-icmp.
 ;; ne(icmp(ty, cc, x, y), 0) == icmp(ty, cc, x, y)
 ;; e.g. neq(ugt(x, y), 0) == ugt(x, y)

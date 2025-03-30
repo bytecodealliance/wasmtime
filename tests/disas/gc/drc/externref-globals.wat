@@ -108,46 +108,45 @@
 ;; @003b                               v39 = load.i64 notrap aligned readonly can_move v0+40
 ;; @003b                               v20 = iadd v39, v16
 ;; @003b                               v21 = load.i64 notrap aligned v20
-;;                                     v67 = iconst.i64 1
-;; @003b                               v22 = iadd v21, v67  ; v67 = 1
+;;                                     v73 = iconst.i64 1
+;; @003b                               v22 = iadd v21, v73  ; v73 = 1
 ;; @003b                               store notrap aligned v22, v20
 ;; @003b                               jump block3
 ;;
 ;;                                 block3:
-;;                                     v72 = iadd.i64 v0, v64  ; v64 = 80
-;; @003b                               store.i32 notrap aligned v2, v72
-;;                                     v73 = iconst.i32 1
-;;                                     v74 = band.i32 v5, v73  ; v73 = 1
-;;                                     v75 = iconst.i32 0
-;;                                     v76 = icmp.i32 eq v5, v75  ; v75 = 0
-;; @003b                               v36 = uextend.i32 v76
-;; @003b                               v37 = bor v74, v36
+;;                                     v85 = iadd.i64 v0, v64  ; v64 = 80
+;; @003b                               store.i32 notrap aligned v2, v85
+;;                                     v86 = iconst.i32 1
+;;                                     v87 = band.i32 v5, v86  ; v86 = 1
+;;                                     v88 = iconst.i32 0
+;;                                     v89 = icmp.i32 eq v5, v88  ; v88 = 0
+;; @003b                               v36 = uextend.i32 v89
+;; @003b                               v37 = bor v87, v36
 ;; @003b                               brif v37, block7, block4
 ;;
 ;;                                 block4:
 ;; @003b                               v42 = uextend.i64 v5
-;;                                     v77 = iconst.i64 8
-;; @003b                               v44 = uadd_overflow_trap v42, v77, user1  ; v77 = 8
-;; @003b                               v46 = uadd_overflow_trap v44, v77, user1  ; v77 = 8
-;;                                     v78 = load.i64 notrap aligned readonly can_move v0+48
-;; @003b                               v47 = icmp ule v46, v78
+;;                                     v90 = iconst.i64 8
+;; @003b                               v44 = uadd_overflow_trap v42, v90, user1  ; v90 = 8
+;; @003b                               v46 = uadd_overflow_trap v44, v90, user1  ; v90 = 8
+;;                                     v91 = load.i64 notrap aligned readonly can_move v0+48
+;; @003b                               v47 = icmp ule v46, v91
 ;; @003b                               trapz v47, user1
-;;                                     v79 = load.i64 notrap aligned readonly can_move v0+40
-;; @003b                               v48 = iadd v79, v44
+;;                                     v92 = load.i64 notrap aligned readonly can_move v0+40
+;; @003b                               v48 = iadd v92, v44
 ;; @003b                               v49 = load.i64 notrap aligned v48
-;;                                     v70 = iconst.i64 -1
-;; @003b                               v50 = iadd v49, v70  ; v70 = -1
-;;                                     v71 = iconst.i64 0
-;; @003b                               v51 = icmp eq v50, v71  ; v71 = 0
-;; @003b                               brif v51, block5, block6
+;;                                     v93 = iconst.i64 1
+;;                                     v83 = icmp eq v49, v93  ; v93 = 1
+;; @003b                               brif v83, block5, block6
 ;;
 ;;                                 block5 cold:
 ;; @003b                               call fn0(v0, v5)
 ;; @003b                               jump block7
 ;;
 ;;                                 block6:
-;;                                     v80 = iadd.i64 v49, v70  ; v70 = -1
-;; @003b                               store notrap aligned v80, v48
+;;                                     v70 = iconst.i64 -1
+;; @003b                               v50 = iadd.i64 v49, v70  ; v70 = -1
+;; @003b                               store notrap aligned v50, v48
 ;; @003b                               jump block7
 ;;
 ;;                                 block7:
