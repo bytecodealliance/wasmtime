@@ -323,7 +323,10 @@ impl WasmBacktrace {
                 // `Display` to indicate that more detailed information
                 // in a trap may be available.
                 let has_unparsed_debuginfo = module.compiled_module().has_unparsed_debuginfo();
-                if has_unparsed_debuginfo && wasm_backtrace_details_env_used {
+                if has_unparsed_debuginfo
+                    && wasm_backtrace_details_env_used
+                    && cfg!(feature = "addr2line")
+                {
                     hint_wasm_backtrace_details_env = true;
                 }
             }
