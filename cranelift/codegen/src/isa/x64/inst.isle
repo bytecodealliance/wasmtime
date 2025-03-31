@@ -20,13 +20,6 @@
                 (src2 GprMemImm)
                 (dst WritableGpr))
 
-       ;; Integer arithmetic read-modify-write on memory.
-       (AluRM (size OperandSize) ;; 1, 2, 4 or 8
-              (op AluRmiROpcode)
-              (src1_dst SyntheticAmode)
-              (src2 Gpr)
-              (lock bool))
-
        ;; Integer arithmetic binary op that relies on the VEX prefix.
        ;; NOTE: we don't currently support emitting VEX instructions with memory
        ;; arguments, so `src2` is artificially constrained to be a Gpr.
@@ -5031,12 +5024,6 @@
 (rule 1 (x64_pcmpgtq x y)
         (if-let true (use_avx))
         (xmm_rmir_vex (AvxOpcode.Vpcmpgtq) x y))
-
-;; Helpers for read-modify-write ALU form (AluRM).
-(decl alu_rm (Type AluRmiROpcode Amode Gpr) SideEffectNoResult)
-(rule (alu_rm ty opcode src1_dst src2)
-      (let ((size OperandSize (operand_size_of_type_32_64 ty)))
-        (SideEffectNoResult.Inst (MInst.AluRM size opcode src1_dst src2 false))))
 
 (decl x64_add_mem (Type Amode Gpr) SideEffectNoResult)
 (spec (x64_add_mem ty addr val)

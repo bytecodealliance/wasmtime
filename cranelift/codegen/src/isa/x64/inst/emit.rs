@@ -250,47 +250,6 @@ pub(crate) fn emit(
             );
         }
 
-        Inst::AluRM {
-            size,
-            src1_dst,
-            src2,
-            op,
-            lock,
-        } => {
-            let src2 = src2.to_reg();
-            let src1_dst = src1_dst.finalize(state.frame_layout(), sink).clone();
-
-            let opcode = match op {
-                AluRmiROpcode::Add => 0x01,
-                AluRmiROpcode::Sub => 0x29,
-                AluRmiROpcode::And => 0x21,
-                AluRmiROpcode::Or => 0x09,
-                AluRmiROpcode::Xor => 0x31,
-                _ => panic!("Unsupported read-modify-write ALU opcode"),
-            };
-
-            let prefix = match (size, lock) {
-                (OperandSize::Size16, false) => LegacyPrefixes::_66,
-                (OperandSize::Size16, true) => LegacyPrefixes::_66F0,
-                (_, false) => LegacyPrefixes::None,
-                (_, true) => LegacyPrefixes::_F0,
-            };
-            let opcode = if *size == OperandSize::Size8 {
-                opcode - 1
-            } else {
-                opcode
-            };
-
-            let mut rex = RexFlags::from(*size);
-            if *size == OperandSize::Size8 {
-                debug_assert!(src2.is_real());
-                rex.always_emit_if_8bit_needed(src2);
-            }
-
-            let enc_g = int_reg_enc(src2);
-            emit_std_enc_mem(sink, prefix, opcode, 1, enc_g, &src1_dst, rex, 0);
-        }
-
         Inst::AluRmRVex {
             size,
             op,
