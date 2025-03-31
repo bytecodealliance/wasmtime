@@ -70,9 +70,9 @@ impl std::ops::Deref for Graph {
 /// https://github.com/WebAssembly/wasi-nn/pull/70).
 #[derive(Clone, PartialEq)]
 pub struct Tensor {
-    dimensions: Vec<u32>,
-    ty: wit::TensorType,
-    data: Vec<u8>,
+    pub dimensions: Vec<u32>,
+    pub ty: wit::TensorType,
+    pub data: Vec<u8>,
 }
 impl fmt::Debug for Tensor {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
