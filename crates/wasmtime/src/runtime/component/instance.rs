@@ -601,6 +601,8 @@ impl<'a> Instantiator<'a> {
                     self.data.state.set_lowering(*index, func.lowering());
                 }
 
+                GlobalInitializer::ExtractTable(table) => self.extract_table(store.0, table),
+
                 GlobalInitializer::ExtractMemory(mem) => self.extract_memory(store.0, mem),
 
                 GlobalInitializer::ExtractRealloc(realloc) => {
@@ -676,6 +678,16 @@ impl<'a> Instantiator<'a> {
         self.data
             .state
             .set_runtime_post_return(post_return.index, func_ref);
+    }
+
+    fn extract_table(&mut self, store: &mut StoreOpaque, table: &ExtractTable) {
+        let export = match self.data.lookup_export(store, &table.export) {
+            crate::runtime::vm::Export::Table(t) => t,
+            _ => unreachable!(),
+        };
+        self.data
+            .state
+            .set_runtime_table(table.index, export.definition);
     }
 
     fn build_imports<'b>(
