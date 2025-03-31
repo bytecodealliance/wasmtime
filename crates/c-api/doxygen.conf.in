@@ -942,6 +942,7 @@ EXCLUDE_SYMBOLS        = assertions \
                          WASMTIME_DECLARE_OWN \
                          WASI_DECLARE_OWN \
                          WASMTIME_CONFIG_PROP \
+                         WASMTIME_POOLING_ALLOCATION_CONFIG_PROP \
                          own \
                          wasm_*_enum
 
