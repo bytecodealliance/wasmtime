@@ -8,6 +8,7 @@
 //      trampoline_func_refs: [VMFuncRef; component.num_trampolines],
 //      lowerings: [VMLowering; component.num_lowerings],
 //      memories: [*mut VMMemoryDefinition; component.num_runtime_memories],
+//      tables: [*mut VMTableDefinition; component.num_runtime_tables],
 //      reallocs: [*mut VMFuncRef; component.num_runtime_reallocs],
 //      post_returns: [*mut VMFuncRef; component.num_runtime_post_returns],
 //      resource_destructors: [*mut VMFuncRef; component.num_resources],
