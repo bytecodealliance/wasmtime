@@ -295,7 +295,7 @@ impl ComponentInstance {
     ///
     /// This can only be called after `idx` has been initialized at runtime
     /// during the instantiation process of a component.
-    pub fn runtime_table(&self, idx: RuntimeTableIndex) -> *mut VMMemoryDefinition {
+    pub fn runtime_table(&self, idx: RuntimeTableIndex) -> *mut VMTableDefinition {
         unsafe {
             let ret = *self.vmctx_plus_offset::<VmPtr<_>>(self.offsets.runtime_table(idx));
             debug_assert!(ret.as_ptr() as usize != INVALID_PTR);
