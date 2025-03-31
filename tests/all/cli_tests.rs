@@ -2418,6 +2418,7 @@ fn big_table_in_pooling_allocator() -> Result<()> {
         None,
     )?;
     assert!(!output.status.success());
+    println!("{}", String::from_utf8_lossy(&output.stderr));
     assert!(String::from_utf8_lossy(&output.stderr).contains("pooling allocator"));
 
     // Does work with `-Wmax-table-elements`
