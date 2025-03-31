@@ -544,12 +544,26 @@ WASMTIME_CONFIG_PROP(void, memory_init_cow, bool)
 
 #ifdef WASMTIME_FEATURE_POOLING_ALLOCATOR
 
+/**
+ * \brief A type containing configuration options for the pooling allocator.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.PoolingAllocationConfig.html
+ */
 typedef struct wasmtime_pooling_allocation_config_t
     wasmtime_pooling_allocation_config_t;
 
+/**
+ * \brief Creates a new pooling allocation configuration object. Must be
+ * deallocated with a call to wasmtime_pooling_allocation_config_delete.
+ */
 WASM_API_EXTERN wasmtime_pooling_allocation_config_t *
 wasmtime_pooling_allocation_config_new();
 
+/**
+ * \brief Deallocates a pooling allocation configuration object created with a
+ * call to wasmtime_pooling_allocation_config_new.
+ */
 WASM_API_EXTERN void wasmtime_pooling_allocation_config_delete(
     wasmtime_pooling_allocation_config_t *);
 
@@ -737,10 +751,18 @@ WASMTIME_POOLING_ALLOCATION_CONFIG_PROP(max_memory_size, size_t)
  */
 WASMTIME_POOLING_ALLOCATION_CONFIG_PROP(total_gc_heaps, uint32_t)
 
+/**
+ * \brief Sets the Wasmtime allocation strategy to use the pooling allocator. It
+ * does not take ownership of the pooling allocation configuration object, which
+ * must be deleted with a call to wasmtime_pooling_allocation_config_delete.
+ *
+ * For more information see the Rust documentation at
+ * https://docs.wasmtime.dev/api/wasmtime/struct.Config.html#method.allocation_strategy.
+ */
 WASM_API_EXTERN void wasmtime_pooling_allocation_strategy_set(
-    wasm_config_t *, wasmtime_pooling_allocation_config_t *);
+    wasm_config_t *, const wasmtime_pooling_allocation_config_t *);
 
-#endif
+#endif // WASMTIME_FEATURE_POOLING_ALLOCATOR
 
 #ifdef __cplusplus
 } // extern "C"
