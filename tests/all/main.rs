@@ -118,3 +118,17 @@ pub(crate) fn gc_store() -> wasmtime::Result<wasmtime::Store<()>> {
     let engine = wasmtime::Engine::new(&config)?;
     Ok(wasmtime::Store::new(&engine, ()))
 }
+
+trait ErrorExt {
+    fn assert_contains(&self, msg: &str);
+}
+
+impl ErrorExt for anyhow::Error {
+    fn assert_contains(&self, msg: &str) {
+        if self.chain().any(|e| e.to_string().contains(msg)) {
+            return;
+        }
+
+        panic!("failed to find {msg:?} within error message {self:?}")
+    }
+}
