@@ -209,143 +209,6 @@ impl<T> StoreInner<T> {
 
 #[doc(hidden)]
 impl StoreOpaque {
-    #[cfg(feature = "gc")]
-    pub async fn gc_async(&mut self) {
-        assert!(
-            self.async_support(),
-            "cannot use `gc_async` without enabling async support in the config",
-        );
-
-        // If the GC heap hasn't been initialized, there is nothing to collect.
-        if self.gc_store.is_none() {
-            return;
-        }
-
-        log::trace!("============ Begin Async GC ===========");
-
-        // Take the GC roots out of `self` so we can borrow it mutably but still
-        // call mutable methods on `self`.
-        let mut roots = core::mem::take(&mut self.gc_roots_list);
-
-        self.trace_roots_async(&mut roots).await;
-        self.unwrap_gc_store_mut()
-            .gc_async(unsafe { roots.iter() })
-            .await;
-
-        // Restore the GC roots for the next GC.
-        roots.clear();
-        self.gc_roots_list = roots;
-
-        log::trace!("============ End Async GC ===========");
-    }
-
-    #[inline]
-    #[cfg(not(feature = "gc"))]
-    pub async fn gc_async(&mut self) {
-        // Nothing to collect.
-        //
-        // Note that this is *not* a public method, this is just defined for the
-        // crate-internal `StoreOpaque` type. This is a convenience so that we
-        // don't have to `cfg` every call site.
-    }
-
-    #[cfg(feature = "gc")]
-    async fn trace_roots_async(&mut self, gc_roots_list: &mut crate::runtime::vm::GcRootsList) {
-        use crate::runtime::vm::Yield;
-
-        log::trace!("Begin trace GC roots");
-
-        // We shouldn't have any leftover, stale GC roots.
-        assert!(gc_roots_list.is_empty());
-
-        self.trace_wasm_stack_roots(gc_roots_list);
-        Yield::new().await;
-        self.trace_vmctx_roots(gc_roots_list);
-        Yield::new().await;
-        self.trace_user_roots(gc_roots_list);
-
-        log::trace!("End trace GC roots")
-    }
-
-    /// Yields the async context, assuming that we are executing on a fiber and
-    /// that fiber is not in the process of dying. This function will return
-    /// None in the latter case (the fiber is dying), and panic if
-    /// `async_support()` is false.
-    #[inline]
-    pub fn async_cx(&self) -> Option<AsyncCx> {
-        assert!(self.async_support());
-
-        let poll_cx_box_ptr = self.async_state.current_poll_cx.get();
-        if poll_cx_box_ptr.is_null() {
-            return None;
-        }
-
-        let poll_cx_inner_ptr = unsafe { *poll_cx_box_ptr };
-        if poll_cx_inner_ptr.future_context.is_null() {
-            return None;
-        }
-
-        Some(AsyncCx {
-            current_suspend: self.async_state.current_suspend.get(),
-            current_poll_cx: unsafe { &raw mut (*poll_cx_box_ptr).future_context },
-            track_pkey_context_switch: self.pkey.is_some(),
-        })
-    }
-
-    /// Yields execution to the caller on out-of-gas or epoch interruption.
-    ///
-    /// This only works on async futures and stores, and assumes that we're
-    /// executing on a fiber. This will yield execution back to the caller once.
-    pub fn async_yield_impl(&mut self) -> Result<()> {
-        use crate::runtime::vm::Yield;
-
-        let mut future = Yield::new();
-
-        // When control returns, we have a `Result<()>` passed
-        // in from the host fiber. If this finished successfully then
-        // we were resumed normally via a `poll`, so keep going.  If
-        // the future was dropped while we were yielded, then we need
-        // to clean up this fiber. Do so by raising a trap which will
-        // abort all wasm and get caught on the other side to clean
-        // things up.
-        unsafe {
-            self.async_cx()
-                .expect("attempted to pull async context during shutdown")
-                .block_on(Pin::new_unchecked(&mut future))
-        }
-    }
-
-    fn allocate_fiber_stack(&mut self) -> Result<wasmtime_fiber::FiberStack> {
-        if let Some(stack) = self.async_state.last_fiber_stack.take() {
-            return Ok(stack);
-        }
-        self.engine().allocator().allocate_fiber_stack()
-    }
-
-    fn deallocate_fiber_stack(&mut self, stack: wasmtime_fiber::FiberStack) {
-        self.flush_fiber_stack();
-        self.async_state.last_fiber_stack = Some(stack);
-    }
-
-    /// Releases the last fiber stack to the underlying instance allocator, if
-    /// present.
-    pub fn flush_fiber_stack(&mut self) {
-        if let Some(stack) = self.async_state.last_fiber_stack.take() {
-            unsafe {
-                self.engine.allocator().deallocate_fiber_stack(stack);
-            }
-        }
-    }
-
-    pub(crate) fn async_guard_range(&self) -> Range<*mut u8> {
-        unsafe {
-            let ptr = self.async_state.current_poll_cx.get();
-            (*ptr).guard_range_start..(*ptr).guard_range_end
-        }
-    }
-}
-
-impl<T> StoreContextMut<'_, T> {
     /// Executes a synchronous computation `func` asynchronously on a new fiber.
     ///
     /// This function will convert the synchronous `func` into an asynchronous
@@ -357,20 +220,17 @@ impl<T> StoreContextMut<'_, T> {
     /// that the various comments are illuminating as to what's going on here.
     pub(crate) async fn on_fiber<R>(
         &mut self,
-        func: impl FnOnce(&mut StoreContextMut<'_, T>) -> R + Send,
-    ) -> Result<R>
-    where
-        T: Send,
-    {
+        func: impl FnOnce(&mut Self) -> R + Send,
+    ) -> Result<R> {
         let config = self.engine().config();
-        debug_assert!(self.0.async_support());
+        debug_assert!(self.async_support());
         debug_assert!(config.async_stack_size > 0);
 
         let mut slot = None;
         let mut future = {
-            let current_poll_cx = self.0.async_state.current_poll_cx.get();
-            let current_suspend = self.0.async_state.current_suspend.get();
-            let stack = self.0.allocate_fiber_stack()?;
+            let current_poll_cx = self.async_state.current_poll_cx.get();
+            let current_suspend = self.async_state.current_suspend.get();
+            let stack = self.allocate_fiber_stack()?;
 
             let engine = self.engine().clone();
             let slot = &mut slot;
@@ -411,7 +271,7 @@ impl<T> StoreContextMut<'_, T> {
         let stack = future.fiber.take().map(|f| f.into_stack());
         drop(future);
         if let Some(stack) = stack {
-            self.0.deallocate_fiber_stack(stack);
+            self.deallocate_fiber_stack(stack);
         }
 
         return Ok(slot.unwrap());
@@ -644,6 +504,159 @@ impl<T> StoreContextMut<'_, T> {
                 }
             }
         }
+    }
+
+    #[cfg(feature = "gc")]
+    pub async fn gc_async(&mut self) {
+        assert!(
+            self.async_support(),
+            "cannot use `gc_async` without enabling async support in the config",
+        );
+
+        // If the GC heap hasn't been initialized, there is nothing to collect.
+        if self.gc_store.is_none() {
+            return;
+        }
+
+        log::trace!("============ Begin Async GC ===========");
+
+        // Take the GC roots out of `self` so we can borrow it mutably but still
+        // call mutable methods on `self`.
+        let mut roots = core::mem::take(&mut self.gc_roots_list);
+
+        self.trace_roots_async(&mut roots).await;
+        self.unwrap_gc_store_mut()
+            .gc_async(unsafe { roots.iter() })
+            .await;
+
+        // Restore the GC roots for the next GC.
+        roots.clear();
+        self.gc_roots_list = roots;
+
+        log::trace!("============ End Async GC ===========");
+    }
+
+    #[inline]
+    #[cfg(not(feature = "gc"))]
+    pub async fn gc_async(&mut self) {
+        // Nothing to collect.
+        //
+        // Note that this is *not* a public method, this is just defined for the
+        // crate-internal `StoreOpaque` type. This is a convenience so that we
+        // don't have to `cfg` every call site.
+    }
+
+    #[cfg(feature = "gc")]
+    async fn trace_roots_async(&mut self, gc_roots_list: &mut crate::runtime::vm::GcRootsList) {
+        use crate::runtime::vm::Yield;
+
+        log::trace!("Begin trace GC roots");
+
+        // We shouldn't have any leftover, stale GC roots.
+        assert!(gc_roots_list.is_empty());
+
+        self.trace_wasm_stack_roots(gc_roots_list);
+        Yield::new().await;
+        self.trace_vmctx_roots(gc_roots_list);
+        Yield::new().await;
+        self.trace_user_roots(gc_roots_list);
+
+        log::trace!("End trace GC roots")
+    }
+
+    /// Yields the async context, assuming that we are executing on a fiber and
+    /// that fiber is not in the process of dying. This function will return
+    /// None in the latter case (the fiber is dying), and panic if
+    /// `async_support()` is false.
+    #[inline]
+    pub fn async_cx(&self) -> Option<AsyncCx> {
+        assert!(self.async_support());
+
+        let poll_cx_box_ptr = self.async_state.current_poll_cx.get();
+        if poll_cx_box_ptr.is_null() {
+            return None;
+        }
+
+        let poll_cx_inner_ptr = unsafe { *poll_cx_box_ptr };
+        if poll_cx_inner_ptr.future_context.is_null() {
+            return None;
+        }
+
+        Some(AsyncCx {
+            current_suspend: self.async_state.current_suspend.get(),
+            current_poll_cx: unsafe { &raw mut (*poll_cx_box_ptr).future_context },
+            track_pkey_context_switch: self.pkey.is_some(),
+        })
+    }
+
+    /// Yields execution to the caller on out-of-gas or epoch interruption.
+    ///
+    /// This only works on async futures and stores, and assumes that we're
+    /// executing on a fiber. This will yield execution back to the caller once.
+    pub fn async_yield_impl(&mut self) -> Result<()> {
+        use crate::runtime::vm::Yield;
+
+        let mut future = Yield::new();
+
+        // When control returns, we have a `Result<()>` passed
+        // in from the host fiber. If this finished successfully then
+        // we were resumed normally via a `poll`, so keep going.  If
+        // the future was dropped while we were yielded, then we need
+        // to clean up this fiber. Do so by raising a trap which will
+        // abort all wasm and get caught on the other side to clean
+        // things up.
+        unsafe {
+            self.async_cx()
+                .expect("attempted to pull async context during shutdown")
+                .block_on(Pin::new_unchecked(&mut future))
+        }
+    }
+
+    fn allocate_fiber_stack(&mut self) -> Result<wasmtime_fiber::FiberStack> {
+        if let Some(stack) = self.async_state.last_fiber_stack.take() {
+            return Ok(stack);
+        }
+        self.engine().allocator().allocate_fiber_stack()
+    }
+
+    fn deallocate_fiber_stack(&mut self, stack: wasmtime_fiber::FiberStack) {
+        self.flush_fiber_stack();
+        self.async_state.last_fiber_stack = Some(stack);
+    }
+
+    /// Releases the last fiber stack to the underlying instance allocator, if
+    /// present.
+    pub fn flush_fiber_stack(&mut self) {
+        if let Some(stack) = self.async_state.last_fiber_stack.take() {
+            unsafe {
+                self.engine.allocator().deallocate_fiber_stack(stack);
+            }
+        }
+    }
+
+    pub(crate) fn async_guard_range(&self) -> Range<*mut u8> {
+        unsafe {
+            let ptr = self.async_state.current_poll_cx.get();
+            (*ptr).guard_range_start..(*ptr).guard_range_end
+        }
+    }
+}
+
+impl<T> StoreContextMut<'_, T> {
+    /// Executes a synchronous computation `func` asynchronously on a new fiber.
+    pub(crate) async fn on_fiber<R>(
+        &mut self,
+        func: impl FnOnce(&mut StoreContextMut<'_, T>) -> R + Send,
+    ) -> Result<R>
+    where
+        T: Send,
+    {
+        self.0
+            .on_fiber(|opaque| {
+                let store = unsafe { opaque.traitobj().cast::<StoreInner<T>>().as_mut() };
+                func(&mut StoreContextMut(store))
+            })
+            .await
     }
 }
 
