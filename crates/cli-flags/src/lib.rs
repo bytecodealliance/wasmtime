@@ -826,7 +826,9 @@ impl CommonOptions {
                     if let Some(limit) = self.opts.pooling_total_tables {
                         cfg.total_tables(limit);
                     }
-                    if let Some(limit) = self.opts.pooling_table_elements {
+                    if let Some(limit) = self.opts.pooling_table_elements
+                        .or(self.wasm.max_table_elements)
+                    {
                         cfg.table_elements(limit);
                     }
                     if let Some(limit) = self.opts.pooling_max_core_instance_size {
@@ -837,7 +839,9 @@ impl CommonOptions {
                         limit => cfg.total_stacks(limit),
                         _ => err,
                     }
-                    if let Some(max) = self.opts.pooling_max_memory_size {
+                    if let Some(max) = self.opts.pooling_max_memory_size
+                        .or(self.wasm.max_memory_size)
+                    {
                         cfg.max_memory_size(max);
                     }
                     if let Some(size) = self.opts.pooling_decommit_batch_size {
