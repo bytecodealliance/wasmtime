@@ -418,10 +418,10 @@ impl ComponentInstance {
         }
     }
 
-    /// Stores the runtime memory pointer at the index specified.
+    /// Stores the runtime table pointer at the index specified.
     ///
     /// This is intended to be called during the instantiation process of a
-    /// component once a memory is available, which may not be until part-way
+    /// component once a table is available, which may not be until part-way
     /// through component instantiation.
     ///
     /// Note that it should be a property of the component model that the `ptr`
@@ -552,6 +552,11 @@ impl ComponentInstance {
             for i in 0..self.offsets.num_resources {
                 let i = ResourceIndex::from_u32(i);
                 let offset = self.offsets.resource_destructor(i);
+                *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
+            }
+            for i in 0..self.offsets.num_runtime_tables {
+                let i = RuntimeTableIndex::from_u32(i);
+                let offset = self.offsets.runtime_table(i);
                 *self.vmctx_plus_offset_mut(offset) = INVALID_PTR;
             }
         }
