@@ -115,5 +115,8 @@ Wasmtime can do for you or help answer your questions about Wasmtime. If you're
 curious in contributing to Wasmtime, [it can also help you do
 that][contributing]!
 
+For information on supported versions of Wasmtime see [the corresponding online book
+documentation](https://docs.wasmtime.dev/stability-release.html#current-versions).
+
 [contributing]: https://bytecodealliance.github.io/wasmtime/contributing.html
 [guide]: https://bytecodealliance.github.io/wasmtime
