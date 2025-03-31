@@ -243,7 +243,13 @@ impl<T: ScalarBitSetStorage> CompoundBitSet<T> {
     /// ```
     #[inline]
     pub fn ensure_capacity(&mut self, n: usize) {
-        let (word, _bit) = Self::word_and_bit(n);
+        // Subtract one from the capacity to get the maximum bit that we might
+        // set. If `n` is 0 then nothing need be done as no capacity needs to be
+        // allocated.
+        let (word, _bit) = Self::word_and_bit(match n.checked_sub(1) {
+            None => return,
+            Some(n) => n,
+        });
         if word >= self.elems.len() {
             assert!(word < usize::try_from(isize::MAX).unwrap());
 
@@ -550,5 +556,18 @@ impl<T: ScalarBitSetStorage> Iterator for Iter<'_, T> {
 
             self.sub = Some(self.bitset.elems.get(self.word)?.iter());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn zero_capacity_no_allocs() {
+        let set = CompoundBitSet::<u32>::with_capacity(0);
+        assert_eq!(set.capacity(), 0);
+        let set = CompoundBitSet::new();
+        assert_eq!(set.capacity(), 0);
     }
 }
