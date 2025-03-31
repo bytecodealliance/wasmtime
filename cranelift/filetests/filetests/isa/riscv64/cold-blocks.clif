@@ -16,8 +16,8 @@ block2:
 
 ; VCode:
 ; block0:
-;   sext.w a5,a0
-;   bne a5,zero,taken(label1),not_taken(label2)
+;   sext.w a4,a0
+;   bne a4,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block2:
@@ -28,8 +28,8 @@ block2:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   sext.w a5, a0
-;   bnez a5, 8
+;   sext.w a4, a0
+;   bnez a4, 8
 ; block1: ; offset 0x8
 ;   addi a0, zero, 0x61
 ; block2: ; offset 0xc
@@ -49,8 +49,8 @@ block2 cold:
 
 ; VCode:
 ; block0:
-;   sext.w a5,a0
-;   bne a5,zero,taken(label1),not_taken(label2)
+;   sext.w a4,a0
+;   bne a4,zero,taken(label1),not_taken(label2)
 ; block1:
 ;   j label3
 ; block3:
@@ -61,8 +61,8 @@ block2 cold:
 ;
 ; Disassembled:
 ; block0: ; offset 0x0
-;   sext.w a5, a0
-;   beqz a5, 8
+;   sext.w a4, a0
+;   beqz a4, 8
 ; block1: ; offset 0x8
 ;   ret
 ; block2: ; offset 0xc

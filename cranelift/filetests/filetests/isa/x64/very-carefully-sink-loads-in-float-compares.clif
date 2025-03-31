@@ -184,8 +184,8 @@ block1(v8: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   0(%rdi), %xmm1
-;   ucomiss %xmm1, %xmm0
+;   movss   0(%rdi), %xmm6
+;   ucomiss %xmm6, %xmm0
 ;   jp,nz   label2; j label1
 ; block1:
 ;   movq    %rsi, %rax
@@ -203,8 +203,8 @@ block1(v8: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movss (%rdi), %xmm1
-;   ucomiss %xmm1, %xmm0
+;   movss (%rdi), %xmm6
+;   ucomiss %xmm6, %xmm0
 ;   jp 0x1f
 ;   jne 0x1f
 ; block2: ; offset 0x17
@@ -230,8 +230,8 @@ block1(v8: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   0(%rdi), %xmm1
-;   ucomiss %xmm0, %xmm1
+;   movss   0(%rdi), %xmm6
+;   ucomiss %xmm0, %xmm6
 ;   jp,nz   label2; j label1
 ; block1:
 ;   movq    %rsi, %rax
@@ -249,8 +249,8 @@ block1(v8: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movss (%rdi), %xmm1
-;   ucomiss %xmm0, %xmm1
+;   movss (%rdi), %xmm6
+;   ucomiss %xmm0, %xmm6
 ;   jp 0x1f
 ;   jne 0x1f
 ; block2: ; offset 0x17
@@ -278,8 +278,8 @@ block2(v7: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   0(%rdi), %xmm3
-;   ucomiss %xmm3, %xmm0
+;   movss   0(%rdi), %xmm7
+;   ucomiss %xmm7, %xmm0
 ;   jp,nz   label2; j label1
 ; block1:
 ;   movq    %rsi, %rax
@@ -288,7 +288,7 @@ block2(v7: i32):
 ;   movq    %rdx, %rax
 ;   jmp     label3
 ; block3:
-;   ucomiss %xmm3, %xmm0
+;   ucomiss %xmm7, %xmm0
 ;   jp,nz   label5; j label4
 ; block4:
 ;   jmp     label6
@@ -305,8 +305,8 @@ block2(v7: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movss (%rdi), %xmm3
-;   ucomiss %xmm3, %xmm0
+;   movss (%rdi), %xmm7
+;   ucomiss %xmm7, %xmm0
 ;   jp 0x1f
 ;   jne 0x1f
 ; block2: ; offset 0x17
@@ -315,7 +315,7 @@ block2(v7: i32):
 ; block3: ; offset 0x1f
 ;   movq %rdx, %rax
 ; block4: ; offset 0x22
-;   ucomiss %xmm3, %xmm0
+;   ucomiss %xmm7, %xmm0
 ;   jp 0x31
 ;   je 0x34
 ; block5: ; offset 0x31
@@ -340,8 +340,8 @@ block2(v7: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   0(%rdi), %xmm3
-;   ucomiss %xmm0, %xmm3
+;   movss   0(%rdi), %xmm7
+;   ucomiss %xmm0, %xmm7
 ;   jp,nz   label2; j label1
 ; block1:
 ;   movq    %rsi, %rax
@@ -350,7 +350,7 @@ block2(v7: i32):
 ;   movq    %rdx, %rax
 ;   jmp     label3
 ; block3:
-;   ucomiss %xmm0, %xmm3
+;   ucomiss %xmm0, %xmm7
 ;   jp,nz   label5; j label4
 ; block4:
 ;   jmp     label6
@@ -367,8 +367,8 @@ block2(v7: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movss (%rdi), %xmm3
-;   ucomiss %xmm0, %xmm3
+;   movss (%rdi), %xmm7
+;   ucomiss %xmm0, %xmm7
 ;   jp 0x1f
 ;   jne 0x1f
 ; block2: ; offset 0x17
@@ -377,7 +377,7 @@ block2(v7: i32):
 ; block3: ; offset 0x1f
 ;   movq %rdx, %rax
 ; block4: ; offset 0x22
-;   ucomiss %xmm0, %xmm3
+;   ucomiss %xmm0, %xmm7
 ;   jp 0x31
 ;   je 0x34
 ; block5: ; offset 0x31
@@ -401,12 +401,12 @@ block1(v7: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   0(%rdi), %xmm2
-;   ucomiss %xmm2, %xmm0
+;   movss   0(%rdi), %xmm1
+;   ucomiss %xmm1, %xmm0
 ;   movq    %rsi, %rax
 ;   cmovpl  %edx, %eax, %eax
 ;   cmovnzl %edx, %eax, %eax
-;   ucomiss %xmm2, %xmm0
+;   ucomiss %xmm1, %xmm0
 ;   jp,nz   label2; j label1
 ; block1:
 ;   jmp     label3
@@ -423,12 +423,12 @@ block1(v7: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movss (%rdi), %xmm2
-;   ucomiss %xmm2, %xmm0
+;   movss (%rdi), %xmm1
+;   ucomiss %xmm1, %xmm0
 ;   movq %rsi, %rax
 ;   cmovpl %edx, %eax
 ;   cmovnel %edx, %eax
-;   ucomiss %xmm2, %xmm0
+;   ucomiss %xmm1, %xmm0
 ;   jp 0x23
 ;   je 0x26
 ; block2: ; offset 0x23
@@ -452,12 +452,12 @@ block1(v7: i32):
 ;   pushq   %rbp
 ;   movq    %rsp, %rbp
 ; block0:
-;   movss   0(%rdi), %xmm2
-;   ucomiss %xmm0, %xmm2
+;   movss   0(%rdi), %xmm1
+;   ucomiss %xmm0, %xmm1
 ;   movq    %rsi, %rax
 ;   cmovpl  %edx, %eax, %eax
 ;   cmovnzl %edx, %eax, %eax
-;   ucomiss %xmm0, %xmm2
+;   ucomiss %xmm0, %xmm1
 ;   jp,nz   label2; j label1
 ; block1:
 ;   jmp     label3
@@ -474,12 +474,12 @@ block1(v7: i32):
 ;   pushq %rbp
 ;   movq %rsp, %rbp
 ; block1: ; offset 0x4
-;   movss (%rdi), %xmm2
-;   ucomiss %xmm0, %xmm2
+;   movss (%rdi), %xmm1
+;   ucomiss %xmm0, %xmm1
 ;   movq %rsi, %rax
 ;   cmovpl %edx, %eax
 ;   cmovnel %edx, %eax
-;   ucomiss %xmm0, %xmm2
+;   ucomiss %xmm0, %xmm1
 ;   jp 0x23
 ;   je 0x26
 ; block2: ; offset 0x23
