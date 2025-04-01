@@ -114,7 +114,7 @@ impl dsl::Inst {
 
             match &self.encoding {
                 dsl::Encoding::Rex(rex) => self.format.generate_rex_encoding(f, rex),
-                dsl::Encoding::Vex(_) => todo!(),
+                dsl::Encoding::Vex(vex) => self.format.generate_vex_encoding(f, vex),
             }
         });
     }

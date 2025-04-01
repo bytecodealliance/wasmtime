@@ -177,6 +177,7 @@ impl Registers for FuzzRegs {
     type ReadWriteGpr = FuzzReg;
     type ReadXmm = FuzzReg;
     type ReadWriteXmm = FuzzReg;
+    type WriteXmm = FuzzReg;
 }
 
 /// A simple `u8` register type for fuzzing only.
@@ -242,6 +243,7 @@ pub trait RegistersArbitrary:
     ReadWriteGpr: for<'a> Arbitrary<'a>,
     ReadXmm: for<'a> Arbitrary<'a>,
     ReadWriteXmm: for<'a> Arbitrary<'a>,
+    WriteXmm: for<'a> Arbitrary<'a>,
 >
 {
 }
@@ -253,6 +255,7 @@ where
     R::ReadWriteGpr: for<'a> Arbitrary<'a>,
     R::ReadXmm: for<'a> Arbitrary<'a>,
     R::ReadWriteXmm: for<'a> Arbitrary<'a>,
+    R::WriteXmm: for<'a> Arbitrary<'a>,
 {
 }
 
@@ -274,6 +277,6 @@ mod test {
         .budget_ms(1_000);
 
         // This will run the `roundtrip` fuzzer for one second. To repeatably
-        // test a single input, append `.seed(0x<failing seed>)`.
+        // test a single0 input, append `.seed(0x<failing seed>)`.
     }
 }

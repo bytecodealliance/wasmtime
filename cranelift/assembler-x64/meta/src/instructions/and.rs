@@ -40,7 +40,7 @@ pub fn list() -> Vec<Inst> {
         inst("lock_andl", fmt("MR", [rw(m32), r(r32)]), rex([0xf0, 0x21]).r(), _64b | compat),
         inst("lock_andq", fmt("MR", [rw(m64), r(r64)]), rex([0xf0, 0x21]).w().r(), _64b),
         // Vector instructions.
-        inst("andps", fmt("A", [rw(xmm), r(align(rm128))]), rex([0x0F, 0x54]).r(), _64b | compat | sse),
-        inst("andpd", fmt("A", [rw(xmm), r(align(rm128))]), rex([0x66, 0x0F, 0x54]).r(), _64b | compat | sse),
+        inst("andps", fmt("A", [rw(xmm1), r(align(rm128))]), rex([0x0F, 0x54]).r(), _64b | compat | sse),
+        inst("andpd", fmt("A", [rw(xmm1), r(align(rm128))]), rex([0x66, 0x0F, 0x54]).r(), _64b | compat | sse),
     ]
 }

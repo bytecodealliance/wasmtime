@@ -297,6 +297,9 @@ impl<R: AsReg, M: AsReg> XmmMem<R, M> {
             XmmMem::Mem(amode) => amode.to_string(),
         }
     }
+    pub fn default() -> Self {
+        XmmMem::Xmm(R::new(0))
+    }
 }
 
 /// Emit the ModRM/SIB/displacement sequence for a memory operand.

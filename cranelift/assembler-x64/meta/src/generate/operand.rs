@@ -23,8 +23,12 @@ impl dsl::Operand {
             }
             r8 | r16 | r32 | r64 => format!("Gpr<R::{}Gpr>", self.mutability.generate_camel_case()),
             rm8 | rm16 | rm32 | rm64 => format!("GprMem<R::{}Gpr, R::ReadGpr>", self.mutability.generate_camel_case()),
-            xmm => format!("Xmm<R::{}Xmm>", self.mutability.generate_camel_case()),
-            rm128 => format!("XmmMem<R::{}Xmm, R::ReadGpr>", self.mutability.generate_camel_case()),
+            xmm1 | xmm2 | xmm3 | ymm1 | ymm2 | ymm3 | zmm1 | zmm2 | zmm3 => {
+                format!("Xmm<R::{}Xmm>", self.mutability.generate_camel_case())
+            }
+            xmm_m128 | ymm_m256 | zmm_m512 | rm128 => {
+                format!("XmmMem<R::{}Xmm, R::ReadGpr>", self.mutability.generate_camel_case())
+            }
             m8 | m16 | m32 | m64 => format!("Amode<R::ReadGpr>"),
         }
     }
@@ -37,7 +41,9 @@ impl dsl::Location {
         use dsl::Location::*;
         match self {
             al | ax | eax | rax | cl | r8 | r16 | r32 | r64 | rm8 | rm16 | rm32 | rm64 => Some("Gpr"),
-            xmm | rm128 => Some("Xmm"),
+            xmm1 | xmm2 | xmm3 | ymm1 | ymm2 | ymm3 | zmm1 | zmm2 | zmm3 | xmm_m128 | ymm_m256 | zmm_m512 | rm128 => {
+                Some("Xmm")
+            }
             // Do not generate a register class for memory-only access or
             // immediates.
             imm8 | imm16 | imm32 | m8 | m16 | m32 | m64 => None,
@@ -66,7 +72,8 @@ impl dsl::Location {
                 Some(size) => format!("self.{self}.to_string({size})"),
                 None => unreachable!(),
             },
-            xmm | rm128 | m8 | m16 | m32 | m64 => format!("self.{self}.to_string()"),
+            xmm1 | xmm2 | xmm3 | ymm1 | ymm2 | ymm3 | zmm1 | zmm2 | zmm3 | xmm_m128 | ymm_m256 | zmm_m512 | rm128
+            | m8 | m16 | m32 | m64 => format!("self.{self}.to_string()"),
         }
     }
 
@@ -83,7 +90,7 @@ impl dsl::Location {
             m8 | m16 | m32 | m64 => {
                 panic!("no need to generate a size for memory-only access")
             }
-            xmm | rm128 => {
+            xmm1 | xmm2 | xmm3 | ymm1 | ymm2 | ymm3 | zmm1 | zmm2 | zmm3 | xmm_m128 | ymm_m256 | zmm_m512 | rm128 => {
                 panic!("no need to generate a size for XMM-sized access")
             }
         }
@@ -96,6 +103,7 @@ impl dsl::Mutability {
         match self {
             dsl::Mutability::Read => "Read",
             dsl::Mutability::ReadWrite => "ReadWrite",
+            dsl::Mutability::Write => "Write",
         }
     }
 
@@ -104,6 +112,7 @@ impl dsl::Mutability {
         match self {
             dsl::Mutability::Read => "read",
             dsl::Mutability::ReadWrite => "read_write",
+            dsl::Mutability::Write => "write",
         }
     }
 }
