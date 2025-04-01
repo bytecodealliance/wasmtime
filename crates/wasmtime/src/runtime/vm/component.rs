@@ -9,7 +9,7 @@
 use crate::prelude::*;
 use crate::runtime::vm::{
     SendSyncPtr, VMArrayCallFunction, VMContext, VMFuncRef, VMGlobalDefinition, VMMemoryDefinition,
-    VMOpaqueContext, VMStore, VMStoreRawPtr, VMTableDefinition, VMTableImport, VMWasmCallFunction,
+    VMOpaqueContext, VMStore, VMStoreRawPtr, VMTable, VMTableDefinition, VMWasmCallFunction,
     ValRaw, VmPtr, VmSafe,
 };
 use alloc::alloc::Layout;
@@ -295,12 +295,9 @@ impl ComponentInstance {
     ///
     /// This can only be called after `idx` has been initialized at runtime
     /// during the instantiation process of a component.
-    ///
-    /// Note that we use a `VMTableImport` here because of its structure, not
-    /// because these tables are actually imports.
-    pub fn runtime_table(&self, idx: RuntimeTableIndex) -> VMTableImport {
+    pub fn runtime_table(&self, idx: RuntimeTableIndex) -> VMTable {
         unsafe {
-            let ret = *self.vmctx_plus_offset::<VMTableImport>(self.offsets.runtime_table(idx));
+            let ret = *self.vmctx_plus_offset::<VMTable>(self.offsets.runtime_table(idx));
             debug_assert!(ret.from.as_ptr() as usize != INVALID_PTR);
             debug_assert!(ret.vmctx.as_ptr() as usize != INVALID_PTR);
             ret
@@ -436,14 +433,11 @@ impl ComponentInstance {
         ptr: NonNull<VMTableDefinition>,
         vmctx: NonNull<VMContext>,
     ) {
-        // Note that we use a `VMTableImport` here because of its structure, not
-        // because these tables are actually imports.
         unsafe {
-            let storage =
-                self.vmctx_plus_offset_mut::<VMTableImport>(self.offsets.runtime_table(idx));
+            let storage = self.vmctx_plus_offset_mut::<VMTable>(self.offsets.runtime_table(idx));
             debug_assert!((*storage).vmctx.as_ptr() as usize == INVALID_PTR);
             debug_assert!((*storage).from.as_ptr() as usize == INVALID_PTR);
-            *storage = VMTableImport {
+            *storage = VMTable {
                 vmctx: vmctx.into(),
                 from: ptr.into(),
             };

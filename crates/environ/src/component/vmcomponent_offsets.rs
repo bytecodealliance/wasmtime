@@ -8,7 +8,7 @@
 //      trampoline_func_refs: [VMFuncRef; component.num_trampolines],
 //      lowerings: [VMLowering; component.num_lowerings],
 //      memories: [*mut VMMemoryDefinition; component.num_runtime_memories],
-//      tables: [VMTableImport; component.num_runtime_tables],
+//      tables: [VMTable; component.num_runtime_tables],
 //      reallocs: [*mut VMFuncRef; component.num_runtime_reallocs],
 //      post_returns: [*mut VMFuncRef; component.num_runtime_post_returns],
 //      resource_destructors: [*mut VMFuncRef; component.num_resources],
@@ -151,7 +151,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             size(trampoline_func_refs) = cmul(ret.num_trampolines, ret.ptr.size_of_vm_func_ref()),
             size(lowerings) = cmul(ret.num_lowerings, ret.ptr.size() * 2),
             size(memories) = cmul(ret.num_runtime_memories, ret.ptr.size()),
-            size(tables) = cmul(ret.num_runtime_tables, ret.size_of_vmtable_import()),
+            size(tables) = cmul(ret.num_runtime_tables, ret.size_of_vmtable()),
             size(reallocs) = cmul(ret.num_runtime_reallocs, ret.ptr.size()),
             size(callbacks) = cmul(ret.num_runtime_callbacks, ret.ptr.size()),
             size(post_returns) = cmul(ret.num_runtime_post_returns, ret.ptr.size()),
@@ -279,13 +279,13 @@ impl<P: PtrSize> VMComponentOffsets<P> {
     #[inline]
     pub fn runtime_table(&self, index: RuntimeTableIndex) -> u32 {
         assert!(index.as_u32() < self.num_runtime_tables);
-        self.runtime_tables() + index.as_u32() * u32::from(self.size_of_vmtable_import())
+        self.runtime_tables() + index.as_u32() * u32::from(self.size_of_vmtable())
     }
 
-    /// Return the size of `VMTableImport`, used here to hold the pointers to
-    /// the `VMTableDefinition` and `VMContext` (not because this is an import).
+    /// Return the size of `VMTable`, used here to hold the pointers to
+    /// the `VMTableDefinition` and `VMContext`.
     #[inline]
-    pub fn size_of_vmtable_import(&self) -> u8 {
+    pub fn size_of_vmtable(&self) -> u8 {
         2 * self.pointer_size()
     }
 

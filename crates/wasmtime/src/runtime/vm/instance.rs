@@ -8,8 +8,8 @@ use crate::runtime::vm::memory::{Memory, RuntimeMemoryCreator};
 use crate::runtime::vm::table::{Table, TableElement, TableElementType};
 use crate::runtime::vm::vmcontext::{
     VMBuiltinFunctionsArray, VMContext, VMFuncRef, VMFunctionImport, VMGlobalDefinition,
-    VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext, VMStoreContext,
-    VMTableDefinition, VMTableImport, VMTagDefinition, VMTagImport,
+    VMGlobalImport, VMMemoryDefinition, VMMemoryImport, VMOpaqueContext, VMStoreContext, VMTable,
+    VMTableDefinition, VMTagDefinition, VMTagImport,
 };
 use crate::runtime::vm::{
     ExportFunction, ExportGlobal, ExportMemory, ExportTable, ExportTag, GcStore, Imports,
@@ -428,8 +428,8 @@ impl Instance {
         unsafe { &*self.vmctx_plus_offset(self.offsets().vmctx_vmfunction_import(index)) }
     }
 
-    /// Return the index `VMTableImport`.
-    fn imported_table(&self, index: TableIndex) -> &VMTableImport {
+    /// Return the index `VMTable`.
+    fn imported_table(&self, index: TableIndex) -> &VMTable {
         unsafe { &*self.vmctx_plus_offset(self.offsets().vmctx_vmtable_import(index)) }
     }
 
