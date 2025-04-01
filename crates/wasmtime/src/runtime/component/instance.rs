@@ -687,7 +687,7 @@ impl<'a> Instantiator<'a> {
         };
         self.data
             .state
-            .set_runtime_table(table.index, export.definition);
+            .set_runtime_table(table.index, export.definition, export.vmctx);
     }
 
     fn build_imports<'b>(

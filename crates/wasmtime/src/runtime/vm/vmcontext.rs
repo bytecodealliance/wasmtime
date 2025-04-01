@@ -1486,3 +1486,47 @@ impl VMOpaqueContext {
         ptr.cast()
     }
 }
+
+/// The fields a component needs to access to use a WebAssembly table imported
+/// from another instance; see the identically-defined [`VMTableImport`].
+#[derive(Debug, Copy, Clone)]
+#[repr(C)]
+pub struct VMTableUse {
+    /// A pointer to the imported table description.
+    pub from: VmPtr<VMTableDefinition>,
+
+    /// A pointer to the `VMContext` that owns the table description.
+    pub vmctx: VmPtr<VMContext>,
+}
+
+// SAFETY: the above structure is repr(C) and only contains `VmSafe` fields.
+unsafe impl VmSafe for VMTableUse {}
+
+#[cfg(test)]
+mod test_vmtable_use {
+    use super::VMTableUse;
+    use core::mem::offset_of;
+    use std::mem::size_of;
+    use wasmtime_environ::{
+        component::{Component, VMComponentOffsets},
+        HostPtr, PtrSize,
+    };
+
+    #[test]
+    fn check_vmtable_use_offsets() {
+        let component = Component::default();
+        let offsets = VMComponentOffsets::new(HostPtr, &component);
+        assert_eq!(
+            size_of::<VMTableUse>(),
+            usize::from(offsets.size_of_vmtable_use())
+        );
+        assert_eq!(
+            offset_of!(VMTableUse, from),
+            usize::from(0 * offsets.ptr.size())
+        );
+        assert_eq!(
+            offset_of!(VMTableUse, vmctx),
+            usize::from(1 * offsets.ptr.size())
+        );
+    }
+}
