@@ -144,6 +144,8 @@ impl Config {
             hogs_memory: _,
             nan_canonicalization: _,
             gc_types: _,
+            component_model_async_builtins: _,
+            component_model_async_stackful: _,
         } = test.config;
 
         // Enable/disable some proposals that aren't configurable in wasm-smith
