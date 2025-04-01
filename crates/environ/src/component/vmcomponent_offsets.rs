@@ -8,7 +8,7 @@
 //      trampoline_func_refs: [VMFuncRef; component.num_trampolines],
 //      lowerings: [VMLowering; component.num_lowerings],
 //      memories: [*mut VMMemoryDefinition; component.num_runtime_memories],
-//      tables: [VMTableUse; component.num_runtime_tables],
+//      tables: [VMTableImport; component.num_runtime_tables],
 //      reallocs: [*mut VMFuncRef; component.num_runtime_reallocs],
 //      post_returns: [*mut VMFuncRef; component.num_runtime_post_returns],
 //      resource_destructors: [*mut VMFuncRef; component.num_resources],
@@ -151,7 +151,7 @@ impl<P: PtrSize> VMComponentOffsets<P> {
             size(trampoline_func_refs) = cmul(ret.num_trampolines, ret.ptr.size_of_vm_func_ref()),
             size(lowerings) = cmul(ret.num_lowerings, ret.ptr.size() * 2),
             size(memories) = cmul(ret.num_runtime_memories, ret.ptr.size()),
-            size(tables) = cmul(ret.num_runtime_tables, ret.size_of_vmtable_use()),
+            size(tables) = cmul(ret.num_runtime_tables, ret.size_of_vmtable_import()),
             size(reallocs) = cmul(ret.num_runtime_reallocs, ret.ptr.size()),
             size(callbacks) = cmul(ret.num_runtime_callbacks, ret.ptr.size()),
             size(post_returns) = cmul(ret.num_runtime_post_returns, ret.ptr.size()),
@@ -275,19 +275,17 @@ impl<P: PtrSize> VMComponentOffsets<P> {
         self.tables
     }
 
-    /// The offset of the `VMTableUse` for the runtime index provided.
+    /// The offset of the table for the runtime index provided.
     #[inline]
     pub fn runtime_table(&self, index: RuntimeTableIndex) -> u32 {
         assert!(index.as_u32() < self.num_runtime_tables);
-        self.runtime_tables() + index.as_u32() * u32::from(self.size_of_vmtable_use())
+        self.runtime_tables() + index.as_u32() * u32::from(self.size_of_vmtable_import())
     }
 
-    /// Return the size of `VMTableUse`.
-    ///
-    /// This is identical to `VMTableImport` but with a different use (i.e.,
-    /// component table access).
+    /// Return the size of `VMTableImport`, used here to hold the pointers to
+    /// the `VMTableDefinition` and `VMContext` (not because this is an import).
     #[inline]
-    pub fn size_of_vmtable_use(&self) -> u8 {
+    pub fn size_of_vmtable_import(&self) -> u8 {
         2 * self.pointer_size()
     }
 

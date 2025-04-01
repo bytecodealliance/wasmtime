@@ -90,13 +90,13 @@ pub use crate::runtime::vm::sys::unwind::UnwindRegistration;
 pub use crate::runtime::vm::table::{Table, TableElement};
 pub use crate::runtime::vm::traphandlers::*;
 pub use crate::runtime::vm::unwind::*;
+#[cfg(feature = "component-model")]
+pub use crate::runtime::vm::vmcontext::VMTableDefinition;
 pub use crate::runtime::vm::vmcontext::{
     VMArrayCallFunction, VMArrayCallHostFuncContext, VMContext, VMFuncRef, VMFunctionBody,
     VMFunctionImport, VMGlobalDefinition, VMGlobalImport, VMMemoryDefinition, VMMemoryImport,
     VMOpaqueContext, VMStoreContext, VMTableImport, VMTagImport, VMWasmCallFunction, ValRaw,
 };
-#[cfg(feature = "component-model")]
-pub use crate::runtime::vm::vmcontext::{VMTableDefinition, VMTableUse};
 pub use send_sync_ptr::SendSyncPtr;
 
 mod module_id;
