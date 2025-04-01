@@ -27,10 +27,10 @@ use std::path;
 use std::sync::{Arc, Mutex};
 use wasmparser::{FuncValidatorAllocations, FunctionBody};
 use wasmtime_environ::{
-    AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, DefinedFuncIndex, FlagValue,
-    FunctionBodyData, FunctionLoc, HostCall, ModuleTranslation, ModuleTypesBuilder, PtrSize,
-    RelocationTarget, StackMapSection, StaticModuleIndex, TrapEncodingBuilder, TrapSentinel,
-    TripleExt, Tunables, VMOffsets, WasmFuncType, WasmValType,
+    AddressMapSection, BuiltinFunctionIndex, CacheStore, CompileError, CompiledFunctionBody,
+    DefinedFuncIndex, FlagValue, FunctionBodyData, FunctionLoc, HostCall, ModuleTranslation,
+    ModuleTypesBuilder, PtrSize, RelocationTarget, StackMapSection, StaticModuleIndex,
+    TrapEncodingBuilder, TrapSentinel, TripleExt, Tunables, VMOffsets, WasmFuncType, WasmValType,
 };
 
 #[cfg(feature = "component-model")]
@@ -187,7 +187,7 @@ impl wasmtime_environ::Compiler for Compiler {
         func_index: DefinedFuncIndex,
         input: FunctionBodyData<'_>,
         types: &ModuleTypesBuilder,
-    ) -> Result<Box<dyn Any + Send>, CompileError> {
+    ) -> Result<CompiledFunctionBody, CompileError> {
         let isa = &*self.isa;
         let module = &translation.module;
         let func_index = module.func_index(func_index);
@@ -284,7 +284,10 @@ impl wasmtime_environ::Compiler for Compiler {
         log::debug!("{:?} translated in {:?}", func_index, timing.total());
         log::trace!("{:?} timing info\n{}", func_index, timing);
 
-        Ok(Box::new(func))
+        Ok(CompiledFunctionBody {
+            code: Box::new(func),
+            needs_gc_heap: func_env.needs_gc_heap(),
+        })
     }
 
     fn compile_array_to_wasm_trampoline(
@@ -292,7 +295,7 @@ impl wasmtime_environ::Compiler for Compiler {
         translation: &ModuleTranslation<'_>,
         types: &ModuleTypesBuilder,
         def_func_index: DefinedFuncIndex,
-    ) -> Result<Box<dyn Any + Send>, CompileError> {
+    ) -> Result<CompiledFunctionBody, CompileError> {
         let func_index = translation.module.func_index(def_func_index);
         let sig = translation.module.functions[func_index]
             .signature
@@ -359,16 +362,16 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.ins().return_(&[true_return]);
         builder.finalize();
 
-        Ok(Box::new(compiler.finish(&format!(
-            "array_to_wasm_{}",
-            func_index.as_u32(),
-        ))?))
+        Ok(CompiledFunctionBody {
+            code: Box::new(compiler.finish(&format!("array_to_wasm_{}", func_index.as_u32(),))?),
+            needs_gc_heap: false,
+        })
     }
 
     fn compile_wasm_to_array_trampoline(
         &self,
         wasm_func_ty: &WasmFuncType,
-    ) -> Result<Box<dyn Any + Send>, CompileError> {
+    ) -> Result<CompiledFunctionBody, CompileError> {
         let isa = &*self.isa;
         let pointer_type = isa.pointer_type();
         let wasm_call_sig = wasm_call_signature(isa, wasm_func_ty, &self.tunables);
@@ -432,9 +435,10 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.ins().return_(&results);
         builder.finalize();
 
-        Ok(Box::new(compiler.finish(&format!(
-            "wasm_to_array_trampoline_{wasm_func_ty}"
-        ))?))
+        Ok(CompiledFunctionBody {
+            code: Box::new(compiler.finish(&format!("wasm_to_array_trampoline_{wasm_func_ty}"))?),
+            needs_gc_heap: false,
+        })
     }
 
     fn append_code(
@@ -582,7 +586,7 @@ impl wasmtime_environ::Compiler for Compiler {
     fn compile_wasm_to_builtin(
         &self,
         index: BuiltinFunctionIndex,
-    ) -> Result<Box<dyn Any + Send>, CompileError> {
+    ) -> Result<CompiledFunctionBody, CompileError> {
         let isa = &*self.isa;
         let ptr_size = isa.pointer_bytes();
         let pointer_type = isa.pointer_type();
@@ -651,9 +655,10 @@ impl wasmtime_environ::Compiler for Compiler {
         builder.ins().return_(&results);
         builder.finalize();
 
-        Ok(Box::new(
-            compiler.finish(&format!("wasm_to_builtin_{}", index.name()))?,
-        ))
+        Ok(CompiledFunctionBody {
+            code: Box::new(compiler.finish(&format!("wasm_to_builtin_{}", index.name()))?),
+            needs_gc_heap: false,
+        })
     }
 
     fn compiled_function_relocation_targets<'a>(

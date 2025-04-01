@@ -21,7 +21,11 @@ mod drc;
 mod null;
 
 /// Get the default GC compiler.
-pub fn gc_compiler(func_env: &FuncEnvironment<'_>) -> WasmResult<Box<dyn GcCompiler>> {
+pub fn gc_compiler(func_env: &mut FuncEnvironment<'_>) -> WasmResult<Box<dyn GcCompiler>> {
+    // If this function requires a GC compiler, that is not too bad of an
+    // over-approximation for it requiring a GC heap.
+    func_env.needs_gc_heap = true;
+
     match func_env.tunables.collector {
         #[cfg(feature = "gc-drc")]
         Some(Collector::DeferredReferenceCounting) => Ok(Box::new(drc::DrcCompiler::default())),

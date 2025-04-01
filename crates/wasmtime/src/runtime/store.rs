@@ -1453,15 +1453,30 @@ impl StoreOpaque {
     /// If this store is configured with a GC heap, return a mutable reference
     /// to it. Otherwise, return `None`.
     #[inline]
-    pub(crate) fn optional_gc_store_mut(&mut self) -> Result<Option<&mut GcStore>> {
+    pub(crate) fn optional_gc_store_mut(&mut self) -> Option<&mut GcStore> {
         if cfg!(not(feature = "gc")) || !self.engine.features().gc_types() {
-            Ok(None)
+            debug_assert!(self.gc_store.is_none());
+            None
         } else {
-            Ok(Some(self.gc_store_mut()?))
+            self.gc_store.as_mut()
+        }
+    }
+
+    /// If this store is configured with a GC heap, return a shared reference to
+    /// it. Otherwise, return `None`.
+    #[inline]
+    #[cfg(feature = "gc")]
+    pub(crate) fn optional_gc_store(&self) -> Option<&GcStore> {
+        if cfg!(not(feature = "gc")) || !self.engine.features().gc_types() {
+            debug_assert!(self.gc_store.is_none());
+            None
+        } else {
+            self.gc_store.as_ref()
         }
     }
 
     #[inline]
+    #[track_caller]
     #[cfg(feature = "gc")]
     pub(crate) fn unwrap_gc_store(&self) -> &GcStore {
         self.gc_store
@@ -1470,6 +1485,7 @@ impl StoreOpaque {
     }
 
     #[inline]
+    #[track_caller]
     pub(crate) fn unwrap_gc_store_mut(&mut self) -> &mut GcStore {
         self.gc_store
             .as_mut()

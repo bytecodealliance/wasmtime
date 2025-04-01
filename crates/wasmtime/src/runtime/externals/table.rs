@@ -109,7 +109,7 @@ impl Table {
         unsafe {
             let table = Table::from_wasmtime_table(wasmtime_export, store);
             let wasmtime_table = table.wasmtime_table(store, iter::empty());
-            (*wasmtime_table).fill(store.optional_gc_store_mut()?, 0, init, ty.minimum())?;
+            (*wasmtime_table).fill(store.optional_gc_store_mut(), 0, init, ty.minimum())?;
             Ok(table)
         }
     }
@@ -155,7 +155,7 @@ impl Table {
     pub fn get(&self, mut store: impl AsContextMut, index: u64) -> Option<Ref> {
         let mut store = AutoAssertNoGc::new(store.as_context_mut().0);
         let table = self.wasmtime_table(&mut store, iter::once(index));
-        let gc_store = store.optional_gc_store_mut().ok().and_then(|s| s);
+        let gc_store = store.optional_gc_store_mut();
         unsafe {
             match (*table).get(gc_store, index)? {
                 runtime::TableElement::FuncRef(f) => {
@@ -334,7 +334,7 @@ impl Table {
         let src_table = src_table.wasmtime_table(store, src_range);
         unsafe {
             runtime::Table::copy(
-                store.optional_gc_store_mut()?,
+                store.optional_gc_store_mut(),
                 dst_table,
                 src_table,
                 dst_index,
@@ -368,7 +368,7 @@ impl Table {
 
         let table = self.wasmtime_table(store, iter::empty());
         unsafe {
-            (*table).fill(store.optional_gc_store_mut()?, dst, val, len)?;
+            (*table).fill(store.optional_gc_store_mut(), dst, val, len)?;
         }
 
         Ok(())
