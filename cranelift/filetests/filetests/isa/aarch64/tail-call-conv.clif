@@ -380,6 +380,15 @@ block0:
 ; VCode:
 ;   stp fp, lr, [sp, #-16]!
 ;   mov fp, sp
+;   stp x27, x28, [sp, #-16]!
+;   stp x25, x26, [sp, #-16]!
+;   stp x23, x24, [sp, #-16]!
+;   stp x21, x22, [sp, #-16]!
+;   stp x19, x20, [sp, #-16]!
+;   stp d14, d15, [sp, #-16]!
+;   stp d12, d13, [sp, #-16]!
+;   stp d10, d11, [sp, #-16]!
+;   stp d8, d9, [sp, #-16]!
 ;   sub sp, sp, #240
 ; block0:
 ;   mov x8, sp
@@ -387,6 +396,15 @@ block0:
 ;   blr x12
 ;   ldr x2, [sp, #232]
 ;   add sp, sp, #240
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
+;   ldp x19, x20, [sp], #16
+;   ldp x21, x22, [sp], #16
+;   ldp x23, x24, [sp], #16
+;   ldp x25, x26, [sp], #16
+;   ldp x27, x28, [sp], #16
 ;   ldp fp, lr, [sp], #16
 ;   ret
 ;
@@ -394,11 +412,20 @@ block0:
 ; block0: ; offset 0x0
 ;   stp x29, x30, [sp, #-0x10]!
 ;   mov x29, sp
+;   stp x27, x28, [sp, #-0x10]!
+;   stp x25, x26, [sp, #-0x10]!
+;   stp x23, x24, [sp, #-0x10]!
+;   stp x21, x22, [sp, #-0x10]!
+;   stp x19, x20, [sp, #-0x10]!
+;   stp d14, d15, [sp, #-0x10]!
+;   stp d12, d13, [sp, #-0x10]!
+;   stp d10, d11, [sp, #-0x10]!
+;   stp d8, d9, [sp, #-0x10]!
 ;   sub sp, sp, #0xf0
-; block1: ; offset 0xc
+; block1: ; offset 0x30
 ;   mov x8, sp
-;   ldr x12, #0x18
-;   b #0x20
+;   ldr x12, #0x3c
+;   b #0x44
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_rets 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   blr x12
@@ -434,6 +461,15 @@ block0:
 ;   stur x9, [sp, #0xe8]
 ;   ldur x2, [sp, #0xe8]
 ;   add sp, sp, #0xf0
+;   ldp d8, d9, [sp], #0x10
+;   ldp d10, d11, [sp], #0x10
+;   ldp d12, d13, [sp], #0x10
+;   ldp d14, d15, [sp], #0x10
+;   ldp x19, x20, [sp], #0x10
+;   ldp x21, x22, [sp], #0x10
+;   ldp x23, x24, [sp], #0x10
+;   ldp x25, x26, [sp], #0x10
+;   ldp x27, x28, [sp], #0x10
 ;   ldp x29, x30, [sp], #0x10
 ;   ret
 
@@ -612,6 +648,10 @@ block0:
 ;   stp x23, x24, [sp, #-16]!
 ;   stp x21, x22, [sp, #-16]!
 ;   stp x19, x20, [sp, #-16]!
+;   stp d14, d15, [sp, #-16]!
+;   stp d12, d13, [sp, #-16]!
+;   stp d10, d11, [sp, #-16]!
+;   stp d8, d9, [sp, #-16]!
 ;   sub sp, sp, #400
 ; block0:
 ;   movz x2, #10
@@ -665,6 +705,10 @@ block0:
 ;   blr x10
 ;   ldr x2, [sp, #392]
 ;   add sp, sp, #400
+;   ldp d8, d9, [sp], #16
+;   ldp d10, d11, [sp], #16
+;   ldp d12, d13, [sp], #16
+;   ldp d14, d15, [sp], #16
 ;   ldp x19, x20, [sp], #16
 ;   ldp x21, x22, [sp], #16
 ;   ldp x23, x24, [sp], #16
@@ -682,8 +726,12 @@ block0:
 ;   stp x23, x24, [sp, #-0x10]!
 ;   stp x21, x22, [sp, #-0x10]!
 ;   stp x19, x20, [sp, #-0x10]!
+;   stp d14, d15, [sp, #-0x10]!
+;   stp d12, d13, [sp, #-0x10]!
+;   stp d10, d11, [sp, #-0x10]!
+;   stp d8, d9, [sp, #-0x10]!
 ;   sub sp, sp, #0x190
-; block1: ; offset 0x20
+; block1: ; offset 0x30
 ;   mov x2, #0xa
 ;   mov x3, #0xf
 ;   mov x4, #0x14
@@ -731,8 +779,8 @@ block0:
 ;   stur x20, [sp, #0x90]
 ;   stur x22, [sp, #0x98]
 ;   add x8, sp, #0xa0
-;   ldr x10, #0xe4
-;   b #0xec
+;   ldr x10, #0xf4
+;   b #0xfc
 ;   .byte 0x00, 0x00, 0x00, 0x00 ; reloc_external Abs8 %tail_callee_stack_args_and_rets 0
 ;   .byte 0x00, 0x00, 0x00, 0x00
 ;   blr x10
@@ -769,6 +817,10 @@ block0:
 ;   str x9, [sp, #0x188]
 ;   ldr x2, [sp, #0x188]
 ;   add sp, sp, #0x190
+;   ldp d8, d9, [sp], #0x10
+;   ldp d10, d11, [sp], #0x10
+;   ldp d12, d13, [sp], #0x10
+;   ldp d14, d15, [sp], #0x10
 ;   ldp x19, x20, [sp], #0x10
 ;   ldp x21, x22, [sp], #0x10
 ;   ldp x23, x24, [sp], #0x10

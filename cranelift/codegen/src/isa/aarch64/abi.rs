@@ -1094,6 +1094,7 @@ impl ABIMachineSpec for AArch64MachineDeps {
                 caller_conv: call_conv,
                 callee_conv: call_conv,
                 callee_pop_size: 0,
+                has_non_abi_defs: false,
             }),
         });
         insts

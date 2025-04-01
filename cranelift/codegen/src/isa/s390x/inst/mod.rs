@@ -1069,7 +1069,9 @@ impl MachInst for Inst {
         // registers.
         match self {
             &Inst::Args { .. } => false,
-            &Inst::Call { ref info, .. } => info.caller_conv != info.callee_conv,
+            &Inst::Call { ref info, .. } => {
+                info.caller_conv != info.callee_conv || info.has_non_abi_defs
+            }
             &Inst::CallInd { ref info, .. } => info.caller_conv != info.callee_conv,
             &Inst::ElfTlsGetOffset { .. } => false,
             _ => true,
