@@ -1120,7 +1120,7 @@ impl Config {
     /// [proposal]: https://github.com/WebAssembly/component-model/blob/main/design/mvp/Async.md
     #[cfg(feature = "component-model-async")]
     pub fn wasm_component_model_async(&mut self, enable: bool) -> &mut Self {
-        self.wasm_feature(WasmFeatures::COMPONENT_MODEL_ASYNC, enable);
+        self.wasm_feature(WasmFeatures::CM_ASYNC, enable);
         self
     }
 

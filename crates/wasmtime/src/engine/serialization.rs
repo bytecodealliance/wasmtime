@@ -227,9 +227,11 @@ impl Metadata<'_> {
             gc,
             custom_page_sizes,
             shared_everything_threads,
-            component_model_values,
-            component_model_nested_names,
-            component_model_async,
+            cm_async,
+            cm_async_builtins,
+            cm_async_stackful,
+            cm_nested_names,
+            cm_values,
             legacy_exceptions,
             gc_types,
             stack_switching,
@@ -246,8 +248,10 @@ impl Metadata<'_> {
         // above so that once we do implement support for them, we won't
         // silently ignore them during serialization.
         assert!(!memory_control);
-        assert!(!component_model_values);
-        assert!(!component_model_nested_names);
+        assert!(!cm_async_builtins);
+        assert!(!cm_async_stackful);
+        assert!(!cm_nested_names);
+        assert!(!cm_values);
         assert!(!shared_everything_threads);
         assert!(!legacy_exceptions);
 
@@ -272,10 +276,10 @@ impl Metadata<'_> {
                 function_references,
                 gc,
                 custom_page_sizes,
-                component_model_async,
                 gc_types,
                 wide_arithmetic,
                 stack_switching,
+                component_model_async: cm_async,
             },
         }
     }
@@ -562,7 +566,7 @@ impl Metadata<'_> {
         )?;
         Self::check_bool(
             component_model_async,
-            other.contains(F::COMPONENT_MODEL_ASYNC),
+            other.contains(F::CM_ASYNC),
             "WebAssembly component model support for async lifts/lowers, futures, streams, and errors",
         )?;
         Self::check_cfg_bool(
