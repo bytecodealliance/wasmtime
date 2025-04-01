@@ -345,7 +345,7 @@ impl ValType {
             WasmValType::Ref(r) => Self::Ref(RefType::from_wasm_type(engine, r)),
         }
     }
-    ///
+    /// Construct a default value. Returns None for non-nullable Ref types, which have no default.
     pub fn default_value(&self) -> Option<Val> {
         match self {
             ValType::I32 => Some(Val::I32(0)),
@@ -1248,7 +1248,7 @@ impl ExternType {
             EntityType::Tag(ty) => TagType::from_wasmtime_tag(engine, ty).into(),
         }
     }
-    ///
+    /// Construct a default value, if possible for the underlying type. Tags do not have a default value.
     pub fn default_value(&self, store: impl AsContextMut) -> Option<Extern> {
         match self {
             ExternType::Func(func_ty) => func_ty.default_value(store).map(Extern::Func),
@@ -2433,7 +2433,7 @@ impl FuncType {
         debug_assert!(registered_type.is_func());
         Self { registered_type }
     }
-    ///
+    /// Construct a func which returns results of default value, if each result type has a default value.
     pub fn default_value(&self, mut store: impl AsContextMut) -> Option<Func> {
         let dummy_results = self
             .results()

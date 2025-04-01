@@ -1143,7 +1143,7 @@ pub fn call_async(wasm: &[u8], config: &generators::Config, mut poll_amts: &[u32
             other_ty => match other_ty.default_value(&mut store) {
                 Some(item) => item,
                 None => {
-                    // log::warn!("couldn't create import: {}", e);
+                    log::warn!("couldn't create import for {import:?}");
                     return;
                 }
             },
