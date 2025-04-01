@@ -160,6 +160,7 @@ mod test_vmtable_import {
     use super::VMTableImport;
     use core::mem::offset_of;
     use std::mem::size_of;
+    use wasmtime_environ::component::{Component, VMComponentOffsets};
     use wasmtime_environ::{HostPtr, Module, VMOffsets};
 
     #[test]
@@ -177,6 +178,21 @@ mod test_vmtable_import {
         assert_eq!(
             offset_of!(VMTableImport, vmctx),
             usize::from(offsets.vmtable_import_vmctx())
+        );
+    }
+
+    #[test]
+    fn ensure_sizes_match() {
+        // Because we use `VMTableImport` for recording tables used by
+        // components, we want to make sure that the size calculations between
+        // `VMOffsets` and `VMComponentOffsets` stay the same.
+        let module = Module::new();
+        let vm_offsets = VMOffsets::new(HostPtr, &module);
+        let component = Component::default();
+        let vm_component_offsets = VMComponentOffsets::new(HostPtr, &component);
+        assert_eq!(
+            vm_offsets.size_of_vmtable_import(),
+            vm_component_offsets.size_of_vmtable_import()
         );
     }
 }
