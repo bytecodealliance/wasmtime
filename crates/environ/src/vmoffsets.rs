@@ -107,7 +107,7 @@ pub trait PtrSize {
     /// Returns the pointer size, in bytes, for the target.
     fn size(&self) -> u8;
 
-    /// The offset of the `VMContext::runtime_limits` field
+    /// The offset of the `VMContext::store_context` field
     fn vmcontext_store_context(&self) -> u8 {
         u8::try_from(align(
             u32::try_from(core::mem::size_of::<u32>()).unwrap(),
@@ -247,14 +247,14 @@ pub trait PtrSize {
 
     /// Return the offset to the `VMStoreContext` structure
     #[inline]
-    fn vmctx_runtime_limits(&self) -> u8 {
+    fn vmctx_store_context(&self) -> u8 {
         self.vmctx_magic() + self.size()
     }
 
     /// Return the offset to the `VMBuiltinFunctionsArray` structure
     #[inline]
     fn vmctx_builtin_functions(&self) -> u8 {
-        self.vmctx_runtime_limits() + self.size()
+        self.vmctx_store_context() + self.size()
     }
 
     /// Return the offset to the `callee` member in this `VMContext`.

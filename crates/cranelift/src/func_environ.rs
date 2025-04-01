@@ -314,7 +314,7 @@ impl<'module_environment> FuncEnvironment<'module_environment> {
         let pointer_type = self.pointer_type();
         let vmctx = self.vmctx(builder.func);
         let base = builder.ins().global_value(pointer_type, vmctx);
-        let offset = i32::from(self.offsets.ptr.vmctx_runtime_limits());
+        let offset = i32::from(self.offsets.ptr.vmctx_store_context());
         debug_assert!(self.vmstore_context_ptr.is_reserved_value());
         self.vmstore_context_ptr = builder.ins().load(
             pointer_type,
