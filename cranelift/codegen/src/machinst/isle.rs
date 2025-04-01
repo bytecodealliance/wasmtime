@@ -889,25 +889,18 @@ pub fn gen_call_common<M: ABIMachineSpec>(
     gen_call_common_args(ctx, &mut caller, args);
 
     // Handle retvals prior to emitting call, so the
-    // constraints are on the call instruction; but buffer the
-    // instructions till after the call.
+    // constraints are on the call instruction.
     let mut outputs = InstOutput::new();
-    let mut retval_insts = crate::machinst::abi::SmallInstVec::new();
     // We take the *last* `num_rets` returns of the sig:
     // this skips a StructReturn, if any, that is present.
     let sigdata_num_rets = caller.num_rets(ctx.sigs());
     debug_assert!(num_rets <= sigdata_num_rets);
     for i in (sigdata_num_rets - num_rets)..sigdata_num_rets {
-        let (retval_inst, retval_regs) = caller.gen_retval(ctx, i);
-        retval_insts.extend(retval_inst.into_iter());
+        let retval_regs = caller.gen_retval(ctx, i);
         outputs.push(retval_regs);
     }
 
     caller.emit_call(ctx);
-
-    for inst in retval_insts {
-        ctx.emit(inst);
-    }
 
     outputs
 }

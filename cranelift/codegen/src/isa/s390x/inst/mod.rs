@@ -879,9 +879,14 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             }
             let mut clobbers = *clobbers;
             clobbers.add(link.to_reg().to_real_reg().unwrap().into());
-            for CallRetPair { vreg, preg } in defs {
-                clobbers.remove(PReg::from(preg.to_real_reg().unwrap()));
-                collector.reg_fixed_def(vreg, *preg);
+            for CallRetPair { vreg, location } in defs {
+                match location {
+                    RetLocation::Reg(preg) => {
+                        clobbers.remove(PReg::from(preg.to_real_reg().unwrap()));
+                        collector.reg_fixed_def(vreg, *preg);
+                    }
+                    RetLocation::Stack(..) => collector.any_def(vreg),
+                }
             }
             collector.reg_clobbers(clobbers);
         }
@@ -899,9 +904,14 @@ fn s390x_get_operands(inst: &mut Inst, collector: &mut DenyReuseVisitor<impl Ope
             }
             let mut clobbers = *clobbers;
             clobbers.add(link.to_reg().to_real_reg().unwrap().into());
-            for CallRetPair { vreg, preg } in defs {
-                clobbers.remove(PReg::from(preg.to_real_reg().unwrap()));
-                collector.reg_fixed_def(vreg, *preg);
+            for CallRetPair { vreg, location } in defs {
+                match location {
+                    RetLocation::Reg(preg) => {
+                        clobbers.remove(PReg::from(preg.to_real_reg().unwrap()));
+                        collector.reg_fixed_def(vreg, *preg);
+                    }
+                    RetLocation::Stack(..) => collector.any_def(vreg),
+                }
             }
             collector.reg_clobbers(clobbers);
         }

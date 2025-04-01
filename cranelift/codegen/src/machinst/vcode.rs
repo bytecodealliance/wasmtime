@@ -933,17 +933,19 @@ impl<I: VCodeInst> VCode<I> {
                             let mut allocs = regalloc.inst_allocs(iix).iter();
                             self.insts[iix.index()].get_operands(
                                 &mut |reg: &mut Reg, constraint, _kind, _pos| {
-                                    let alloc = allocs
-                                        .next()
-                                        .expect("enough allocations for all operands")
-                                        .as_reg()
-                                        .expect("only register allocations, not stack allocations")
-                                        .into();
+                                    let alloc =
+                                        allocs.next().expect("enough allocations for all operands");
 
-                                    if let OperandConstraint::FixedReg(rreg) = constraint {
-                                        debug_assert_eq!(Reg::from(rreg), alloc);
+                                    if let Some(alloc) = alloc.as_reg() {
+                                        let alloc: Reg = alloc.into();
+                                        if let OperandConstraint::FixedReg(rreg) = constraint {
+                                            debug_assert_eq!(Reg::from(rreg), alloc);
+                                        }
+                                        *reg = alloc;
+                                    } else if let Some(alloc) = alloc.as_stack() {
+                                        let alloc: Reg = alloc.into();
+                                        *reg = alloc;
                                     }
-                                    *reg = alloc;
                                 },
                             );
                             debug_assert!(allocs.next().is_none());

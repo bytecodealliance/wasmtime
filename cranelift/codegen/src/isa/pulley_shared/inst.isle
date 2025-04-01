@@ -89,6 +89,9 @@
     ;; emit this instruction and auto-generated methods for other various
     ;; bits and pieces of boilerplate in the backend.
     (Raw (raw RawInst))
+
+    ;; Island generation prior to variable-length instructions.
+    (EmitIsland (space_needed u32))
   )
 )
 

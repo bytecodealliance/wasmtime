@@ -1624,6 +1624,17 @@ pub(crate) fn emit(
                 )
                 .emit(sink, info, state);
             }
+
+            // Load any stack-carried return values.
+            call_info.emit_retval_loads::<X64ABIMachineSpec, _, _>(
+                // Use r11 as a temp if needed: clobbered anyway, and
+                // not otherwise used as a return value in any of our
+                // supported calling conventions.
+                Writable::from_reg(regs::r11()),
+                state.frame_layout().stackslots_size,
+                |inst| inst.emit(sink, info, state),
+                |_space_needed| None,
+            );
         }
 
         Inst::ReturnCallKnown { info: call_info } => {
@@ -1706,6 +1717,17 @@ pub(crate) fn emit(
                 )
                 .emit(sink, info, state);
             }
+
+            // Load any stack-carried return values.
+            call_info.emit_retval_loads::<X64ABIMachineSpec, _, _>(
+                // Use r11 as a temp if needed: clobbered anyway, and
+                // not otherwise used as a return value in any of our
+                // supported calling conventions.
+                Writable::from_reg(regs::r11()),
+                state.frame_layout().stackslots_size,
+                |inst| inst.emit(sink, info, state),
+                |_space_needed| None,
+            );
         }
 
         Inst::Args { .. } => {}

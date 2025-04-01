@@ -210,6 +210,7 @@ impl Inst {
             // some cases.
             Inst::VecLoad { vstate, .. }
             | Inst::VecStore { vstate, .. } => Some(vstate),
+            Inst::EmitIsland { .. } => None,
         }
     }
 }
@@ -1133,6 +1134,18 @@ impl Inst {
                         inst.emit(sink, emit_info, state);
                     }
                 }
+
+                // Load any stack-carried return values.
+                info.emit_retval_loads::<Riscv64MachineDeps, _, _>(
+                    // Use x12 as a temp if needed: clobbered, not a
+                    // retval.
+                    Writable::from_reg(regs::x_reg(12)),
+                    state.frame_layout().stackslots_size,
+                    |inst| inst.emit(sink, emit_info, state),
+                    |needed_space| Some(Inst::EmitIsland { needed_space }),
+                );
+
+                *start_off = sink.cur_offset();
             }
             &Inst::CallInd { ref info } => {
                 Inst::Jalr {
@@ -1155,6 +1168,18 @@ impl Inst {
                         inst.emit(sink, emit_info, state);
                     }
                 }
+
+                // Load any stack-carried return values.
+                info.emit_retval_loads::<Riscv64MachineDeps, _, _>(
+                    // Use x12 as a temp if needed: clobbered, not a
+                    // retval.
+                    Writable::from_reg(regs::x_reg(12)),
+                    state.frame_layout().stackslots_size,
+                    |inst| inst.emit(sink, emit_info, state),
+                    |needed_space| Some(Inst::EmitIsland { needed_space }),
+                );
+
+                *start_off = sink.cur_offset();
             }
 
             &Inst::ReturnCall { ref info } => {
@@ -2577,7 +2602,14 @@ impl Inst {
                     to.nf(),
                 ));
             }
-        };
+
+            Inst::EmitIsland { needed_space } => {
+                let jump_around_label = sink.get_label();
+                Inst::gen_jump(jump_around_label).emit(sink, emit_info, state);
+                sink.emit_island(needed_space + 4, &mut state.ctrl_plane);
+                sink.bind_label(jump_around_label, &mut state.ctrl_plane);
+            }
+        }
     }
 }
 

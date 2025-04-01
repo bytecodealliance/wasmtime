@@ -345,6 +345,10 @@
       (flags MemFlags)
       (mask VecOpMasking)
       (vstate VState))
+
+    (EmitIsland
+     ;; The needed space before the next deadline.
+     (needed_space u32))
 ))
 
 (type AtomicOP (enum
