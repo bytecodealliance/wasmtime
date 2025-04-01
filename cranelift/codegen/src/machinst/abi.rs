@@ -2540,6 +2540,7 @@ impl<T> CallInfo<T> {
                         ));
                     }
                 } else {
+                    assert_ne!(*vreg, temp);
                     emit(M::gen_load_stack(*amode, *vreg, *ty));
                 }
             }
