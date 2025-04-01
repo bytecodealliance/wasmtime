@@ -332,7 +332,7 @@ fn compile_module(
                 // when arbitrary table element limits have been exceeded as
                 // there is currently no way to constrain the generated module
                 // table types.
-                let string = e.to_string();
+                let string = format!("{e:?}");
                 if string.contains("minimum element size") {
                     return None;
                 }
