@@ -337,6 +337,9 @@ impl<R: AsReg, M: AsReg> XmmMem<R, M> {
             }
         }
     }
+    pub fn default() -> Self {
+        XmmMem::Xmm(R::new(0))
+    }
 }
 
 impl<R: AsReg, M: AsReg> From<R> for XmmMem<R, M> {
@@ -352,7 +355,7 @@ impl<R: AsReg, M: AsReg> From<Amode<M>> for XmmMem<R, M> {
 }
 
 /// Emit the ModRM/SIB/displacement sequence for a memory operand.
-fn emit_modrm_sib_disp<R: AsReg>(
+pub fn emit_modrm_sib_disp<R: AsReg>(
     sink: &mut impl CodeSink,
     offsets: &impl KnownOffsetTable,
     enc_g: u8,

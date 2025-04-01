@@ -1,7 +1,6 @@
 //! Generate format-related Rust code; this also includes generation of encoding
 //! Rust code.
-
-use super::{Formatter, fmtln};
+use super::{fmtln, Formatter};
 use crate::dsl;
 
 impl dsl::Format {
@@ -46,6 +45,10 @@ impl dsl::Format {
         self.generate_opcodes(f, rex);
         self.generate_modrm_byte(f, rex);
         self.generate_immediate(f);
+    }
+
+    pub fn generate_vex_encoding(&self, f: &mut Formatter, vex: &dsl::Vex) {
+        self.generate_vex(f, vex);
     }
 
     /// `buf.put1(...);`
@@ -137,6 +140,31 @@ impl dsl::Format {
         }
 
         fmtln!(f, "rex.encode(buf);");
+    }
+
+    fn generate_vex(&self, f: &mut Formatter, vex: &dsl::Vex) {
+        f.empty_line();
+        f.comment("Emit VEX prefix.");
+        fmtln!(
+            f,
+            "let mut vex: VexInstruction<R> = vex_instruction(0x{:0x});",
+            vex.opcodes.primary
+        );
+        fmtln!(f, "vex.reg = self.xmm1.enc();");
+        f.add_block("match &self.xmm_m128", |f| {
+            fmtln!(
+                f,
+                "XmmMem::Xmm(r) => {{vex.rm =  Some(XmmMem::Xmm(r.clone()));}}"
+            );
+            fmtln!(
+                f,
+                "XmmMem::Mem(m) => {{vex.rm =  Some(XmmMem::Mem(m.clone()));}}"
+            );
+        });
+        fmtln!(f, "vex.vvvv = Some(self.xmm2.enc());");
+        fmtln!(f, "vex.prefix = LegacyPrefix::{};", vex.pp.to_string());
+        fmtln!(f, "vex.map = OpcodeMap::{};", vex.mmmmm.to_string());
+        fmtln!(f, "vex.encode(buf, off);");
     }
 
     fn generate_modrm_byte(&self, f: &mut Formatter, rex: &dsl::Rex) {

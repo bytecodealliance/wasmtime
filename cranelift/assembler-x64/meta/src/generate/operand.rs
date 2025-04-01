@@ -25,8 +25,10 @@ impl dsl::Operand {
             }
             r8 | r16 | r32 | r64 => format!("Gpr<R::{mut_}Gpr>"),
             rm8 | rm16 | rm32 | rm64 => format!("GprMem<R::{mut_}Gpr, R::ReadGpr>"),
-            xmm => format!("Xmm<R::{mut_}Xmm>"),
-            xmm_m32 | xmm_m64 | xmm_m128 => {
+            xmm1 | xmm2 | xmm3 | ymm1 | ymm2 | ymm3 | zmm1 | zmm2 | zmm3 => {
+                format!("Xmm<R::{mut_}Xmm>")
+            }
+            xmm_m32 | xmm_m64 | xmm_m128 | ymm_m256 | zmm_m512 => {
                 format!("XmmMem<R::{mut_}Xmm, R::ReadGpr>")
             }
             m8 | m16 | m32 | m64 => format!("Amode<R::ReadGpr>"),
@@ -53,7 +55,8 @@ impl dsl::Location {
                 Some(size) => format!("self.{self}.to_string({size})"),
                 None => unreachable!(),
             },
-            xmm | xmm_m32 | xmm_m64 | xmm_m128 | m8 | m16 | m32 | m64 => {
+            xmm_m32 | xmm_m64 | xmm1 | xmm2 | xmm3 | ymm1 | ymm2 | ymm3 | zmm1 | zmm2 | zmm3
+            | xmm_m128 | ymm_m256 | zmm_m512 | m8 | m16 | m32 | m64 => {
                 format!("self.{self}.to_string()")
             }
         }
@@ -72,7 +75,8 @@ impl dsl::Location {
             m8 | m16 | m32 | m64 => {
                 panic!("no need to generate a size for memory-only access")
             }
-            xmm | xmm_m32 | xmm_m64 | xmm_m128 => {
+            xmm_m32 | xmm_m64 | xmm1 | xmm2 | xmm3 | ymm1 | ymm2 | ymm3 | zmm1 | zmm2 | zmm3
+            | xmm_m128 | ymm_m256 | zmm_m512 => {
                 panic!("no need to generate a size for XMM-sized access")
             }
         }
