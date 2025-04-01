@@ -1,7 +1,10 @@
+#[cfg(feature = "component-model")]
+use crate::component::Component;
 use crate::instantiate::CompiledModule;
 use crate::prelude::*;
 use crate::runtime::vm::Backtrace;
 use crate::{AsContext, CallHook, Module};
+use core::cmp::Ordering;
 use fxprof_processed_profile::debugid::DebugId;
 use fxprof_processed_profile::{
     CategoryHandle, Frame, FrameFlags, FrameInfo, LibraryInfo, MarkerLocation, MarkerSchema,
@@ -78,7 +81,14 @@ pub struct GuestProfiler {
     start: Instant,
 }
 
-type Modules = Vec<(Range<usize>, fxprof_processed_profile::LibraryHandle)>;
+#[derive(Debug)]
+struct ProfiledModule {
+    module: Module,
+    fxprof_libhandle: fxprof_processed_profile::LibraryHandle,
+    text_range: Range<usize>,
+}
+
+type Modules = Vec<ProfiledModule>;
 
 impl GuestProfiler {
     /// Begin profiling a new guest. When this function is called, the current
@@ -96,21 +106,42 @@ impl GuestProfiler {
     /// host code or functions from other modules will be omitted. See the
     /// "Security" section of the [`GuestProfiler`] documentation for guidance
     /// on what modules should not be included in this list.
-    pub fn new(module_name: &str, interval: Duration, modules: Vec<(String, Module)>) -> Self {
+    pub fn new(
+        module_name: &str,
+        interval: Duration,
+        modules: impl IntoIterator<Item = (String, Module)>,
+    ) -> Self {
         let zero = ReferenceTimestamp::from_millis_since_unix_epoch(0.0);
         let mut profile = Profile::new(module_name, zero, interval.into());
 
+        // Past this point, we just need to think about modules as we pull out
+        // the disparate module information from components.
         let mut modules: Vec<_> = modules
             .into_iter()
             .filter_map(|(name, module)| {
                 let compiled = module.compiled_module();
-                let text = compiled.text().as_ptr_range();
-                let address_range = text.start as usize..text.end as usize;
-                module_symbols(name, compiled).map(|lib| (address_range, profile.add_lib(lib)))
+                let text_range = {
+                    // Assumption: within text, the code for a given module is packed linearly and
+                    // is non-overlapping; if this is violated, it should be safe but might result
+                    // in incorrect profiling results.
+                    let start =
+                        compiled.finished_functions().next()?.1.as_ptr_range().start as usize;
+                    let end = compiled.finished_functions().last()?.1.as_ptr_range().end as usize;
+                    start..end
+                };
+
+                module_symbols(name, compiled).map(|lib| {
+                    let libhandle = profile.add_lib(lib);
+                    ProfiledModule {
+                        module,
+                        fxprof_libhandle: libhandle,
+                        text_range,
+                    }
+                })
             })
             .collect();
 
-        modules.sort_unstable_by_key(|(range, _)| range.start);
+        modules.sort_unstable_by_key(|m| m.text_range.start);
 
         profile.set_reference_timestamp(std::time::SystemTime::now().into());
         let process = profile.add_process(module_name, 0, Timestamp::from_nanos_since_reference(0));
@@ -123,6 +154,26 @@ impl GuestProfiler {
             thread,
             start,
         }
+    }
+
+    /// Create a new profiler for the provided component
+    ///
+    /// See [`GuestProfiler::new`] for additional information; this function
+    /// works identically except that it takes a component and sets up
+    /// instrumentation to track calls in each of its constituent modules.
+    #[cfg(feature = "component-model")]
+    pub fn new_component(
+        component_name: &str,
+        interval: Duration,
+        component: Component,
+        extra_modules: impl IntoIterator<Item = (String, Module)>,
+    ) -> Self {
+        let modules = component
+            .static_modules()
+            .into_iter()
+            .map(|m| (m.name().unwrap_or("<unknown>").to_string(), m.clone()))
+            .chain(extra_modules);
+        Self::new(component_name, interval, modules)
     }
 
     /// Add a sample to the profile. This function collects a backtrace from
@@ -236,21 +287,29 @@ fn lookup_frames<'a>(
         // first, so iterate in reverse.
         .rev()
         .filter_map(|frame| {
-            // Find the first module whose start address includes this PC.
-            let module_idx = modules.partition_point(|(range, _)| range.start > frame.pc());
-            if let Some((range, lib)) = modules.get(module_idx) {
-                if range.contains(&frame.pc()) {
-                    return Some(FrameInfo {
-                        frame: Frame::RelativeAddressFromReturnAddress(
-                            *lib,
-                            u32::try_from(frame.pc() - range.start).unwrap(),
-                        ),
-                        category_pair: CategoryHandle::OTHER.into(),
-                        flags: FrameFlags::empty(),
-                    });
-                }
-            }
-            None
+            let idx = modules
+                .binary_search_by(|probe| {
+                    if probe.text_range.contains(&frame.pc()) {
+                        Ordering::Equal
+                    } else {
+                        probe.text_range.start.cmp(&frame.pc())
+                    }
+                })
+                .ok()?;
+            let module = modules.get(idx)?;
+
+            // We need to point to the modules full text (not just its functions) as
+            // the offset for the final phase; these can be different for component
+            // model modules.
+            let module_text_start = module.module.text().as_ptr_range().start as usize;
+            return Some(FrameInfo {
+                frame: Frame::RelativeAddressFromReturnAddress(
+                    module.fxprof_libhandle,
+                    u32::try_from(frame.pc() - module_text_start).unwrap(),
+                ),
+                category_pair: CategoryHandle::OTHER.into(),
+                flags: FrameFlags::empty(),
+            });
         })
 }
 

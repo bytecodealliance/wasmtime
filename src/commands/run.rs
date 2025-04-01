@@ -181,28 +181,30 @@ impl RunCommand {
             .unwrap_or(std::time::Duration::MAX);
         let result = runtime.block_on(async {
             tokio::time::timeout(dur, async {
-                // Load the preload wasm modules.
-                let mut modules = Vec::new();
+                let mut profiled_modules: Vec<(String, Module)> = Vec::new();
                 if let RunTarget::Core(m) = &main {
-                    modules.push((String::new(), m.clone()));
+                    profiled_modules.push(("".to_string(), m.clone()));
                 }
+
+                // Load the preload wasm modules.
                 for (name, path) in self.preloads.iter() {
                     // Read the wasm module binary either as `*.wat` or a raw binary
-                    let module = match self.run.load_module(&engine, path)? {
+                    let preload_target = self.run.load_module(&engine, path)?;
+                    let preload_module = match preload_target {
                         RunTarget::Core(m) => m,
                         #[cfg(feature = "component-model")]
                         RunTarget::Component(_) => {
                             bail!("components cannot be loaded with `--preload`")
                         }
                     };
-                    modules.push((name.clone(), module.clone()));
+                    profiled_modules.push((name.to_string(), preload_module.clone()));
 
                     // Add the module's functions to the linker.
                     match &mut linker {
                         #[cfg(feature = "cranelift")]
                         CliLinker::Core(linker) => {
                             linker
-                                .module_async(&mut store, name, &module)
+                                .module_async(&mut store, name, &preload_module)
                                 .await
                                 .context(format!(
                                     "failed to process preload `{}` at `{}`",
@@ -221,7 +223,7 @@ impl RunCommand {
                     }
                 }
 
-                self.load_main_module(&mut store, &mut linker, &main, modules)
+                self.load_main_module(&mut store, &mut linker, &main, profiled_modules)
                     .await
                     .with_context(|| {
                         format!(
@@ -295,14 +297,21 @@ impl RunCommand {
     fn setup_epoch_handler(
         &self,
         store: &mut Store<Host>,
-        modules: Vec<(String, Module)>,
+        main_target: &RunTarget,
+        profiled_modules: Vec<(String, Module)>,
     ) -> Result<Box<dyn FnOnce(&mut Store<Host>)>> {
         if let Some(Profile::Guest { path, interval }) = &self.run.profile {
             #[cfg(feature = "profiling")]
-            return Ok(self.setup_guest_profiler(store, modules, path, *interval));
+            return Ok(self.setup_guest_profiler(
+                store,
+                main_target,
+                profiled_modules,
+                path,
+                *interval,
+            ));
             #[cfg(not(feature = "profiling"))]
             {
-                let _ = (modules, path, interval);
+                let _ = (profiled_modules, path, interval);
                 bail!("support for profiling disabled at compile time");
             }
         }
@@ -323,15 +332,27 @@ impl RunCommand {
     fn setup_guest_profiler(
         &self,
         store: &mut Store<Host>,
-        modules: Vec<(String, Module)>,
+        main_target: &RunTarget,
+        profiled_modules: Vec<(String, Module)>,
         path: &str,
         interval: std::time::Duration,
     ) -> Box<dyn FnOnce(&mut Store<Host>)> {
         use wasmtime::{AsContext, GuestProfiler, StoreContext, StoreContextMut, UpdateDeadline};
 
         let module_name = self.module_and_args[0].to_str().unwrap_or("<main module>");
-        store.data_mut().guest_profiler =
-            Some(Arc::new(GuestProfiler::new(module_name, interval, modules)));
+        store.data_mut().guest_profiler = match main_target {
+            RunTarget::Core(_m) => Some(Arc::new(GuestProfiler::new(
+                module_name,
+                interval,
+                profiled_modules,
+            ))),
+            RunTarget::Component(component) => Some(Arc::new(GuestProfiler::new_component(
+                module_name,
+                interval,
+                component.clone(),
+                profiled_modules,
+            ))),
+        };
 
         fn sample(
             mut store: StoreContextMut<Host>,
@@ -400,19 +421,19 @@ impl RunCommand {
         &self,
         store: &mut Store<Host>,
         linker: &mut CliLinker,
-        module: &RunTarget,
-        modules: Vec<(String, Module)>,
+        main_target: &RunTarget,
+        profiled_modules: Vec<(String, Module)>,
     ) -> Result<()> {
         // The main module might be allowed to have unknown imports, which
         // should be defined as traps:
         if self.run.common.wasm.unknown_imports_trap == Some(true) {
             match linker {
                 CliLinker::Core(linker) => {
-                    linker.define_unknown_imports_as_traps(module.unwrap_core())?;
+                    linker.define_unknown_imports_as_traps(main_target.unwrap_core())?;
                 }
                 #[cfg(feature = "component-model")]
                 CliLinker::Component(linker) => {
-                    linker.define_unknown_imports_as_traps(module.unwrap_component())?;
+                    linker.define_unknown_imports_as_traps(main_target.unwrap_component())?;
                 }
             }
         }
@@ -421,17 +442,21 @@ impl RunCommand {
         if self.run.common.wasm.unknown_imports_default == Some(true) {
             match linker {
                 CliLinker::Core(linker) => {
-                    linker.define_unknown_imports_as_default_values(store, module.unwrap_core())?;
+                    linker.define_unknown_imports_as_default_values(
+                        store,
+                        main_target.unwrap_core(),
+                    )?;
                 }
                 _ => bail!("cannot use `--default-values-unknown-imports` with components"),
             }
         }
 
-        let finish_epoch_handler = self.setup_epoch_handler(store, modules)?;
+        let finish_epoch_handler =
+            self.setup_epoch_handler(store, main_target, profiled_modules)?;
 
         let result = match linker {
             CliLinker::Core(linker) => {
-                let module = module.unwrap_core();
+                let module = main_target.unwrap_core();
                 let instance = linker
                     .instantiate_async(&mut *store, &module)
                     .await
@@ -473,7 +498,7 @@ impl RunCommand {
                     bail!("using `--invoke` with components is not supported");
                 }
 
-                let component = module.unwrap_component();
+                let component = main_target.unwrap_component();
 
                 let command = wasmtime_wasi::bindings::Command::instantiate_async(
                     &mut *store,

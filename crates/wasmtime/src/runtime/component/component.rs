@@ -470,6 +470,11 @@ impl Component {
         &self.inner.static_modules[idx]
     }
 
+    #[cfg_attr(not(feature = "profiling"), allow(dead_code))]
+    pub(crate) fn static_modules(&self) -> impl Iterator<Item = &Module> {
+        self.inner.static_modules.values()
+    }
+
     #[inline]
     pub(crate) fn types(&self) -> &Arc<ComponentTypes> {
         self.inner.component_types()
