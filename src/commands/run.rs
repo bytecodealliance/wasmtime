@@ -514,9 +514,28 @@ impl RunCommand {
             Val,
         };
 
-        let invoke = self.invoke.as_ref().unwrap();
-        let untyped_call = UntypedFuncCall::parse(invoke)
-            .with_context(|| format!("parsing invoke \"{invoke}\""))?;
+        let invoke: &String = self.invoke.as_ref().unwrap();
+
+        // Check if the input lacks parentheses
+        let lacks_parens = !invoke.contains("()");
+        
+        // Construct the suggestion
+        let suggestion = format!(r#""{}()""#, invoke.trim_matches('"'));
+        
+        let untyped_call = UntypedFuncCall::parse(invoke).with_context(|| {
+            if lacks_parens {
+                format!(
+                    "failed to parse invoke '{invoke}': invoked function calls must include parentheses after the function name in quoted wave syntax (e.g., {suggestion}).\n\
+                    Note: If your function takes a string argument, ensure that double quotes inside the argument are escaped using \\\" (e.g., \"compress(\\\"hello\\\")\")."
+                )
+            } else {
+                format!(
+                    "failed to parse invoke '{invoke}'.\n\
+                    Note: If your function takes a string argument, ensure that double quotes inside the argument are escaped using \\\" (e.g., \"compress(\\\"hello\\\")\")."
+                )
+            }
+        })?;
+
         let name = untyped_call.name();
         let matches = component
             .exports_rec(None)

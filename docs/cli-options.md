@@ -45,11 +45,24 @@ as well as the text format for WebAssembly (`*.wat`):
 $ wasmtime foo.wat
 ```
 
-The `run` command accepts an optional `invoke` argument which is the name of
+The `run` command accepts an optional `--invoke` argument which is the name of
 an exported function of the module to run.
 
 ```sh
-$ wasmtime run foo.wasm --invoke initialize
+$ wasmtime run --invoke "initialize()" foo.wasm
+```
+
+The function name is enclosed in double quotes. This ensures the function name 
+is treated as a single argument by the CLI, preventing issues with shell interpretation.
+The presence of the `()` parenthesis signifies that the function is being invoked.
+As apposed to the function name just being referenced.
+This convention helps to distinguish function calls from other kinds of string arguments.
+
+**Note:** If your function takes a string argument, ensure that double quotes inside the 
+argument are escaped:
+
+```sh
+$ wasmtime run --invoke "initialize(\"hello\")" foo.wasm
 ```
 
 ## `serve`
