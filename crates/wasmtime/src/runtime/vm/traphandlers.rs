@@ -19,6 +19,7 @@ use crate::prelude::*;
 use crate::runtime::module::lookup_code;
 use crate::runtime::store::{ExecutorRef, StoreOpaque};
 use crate::runtime::vm::sys::traphandlers;
+use crate::runtime::vm::sys::vm::get_page_size;
 use crate::runtime::vm::{i8x16, Instance, InterpreterRef, VMContext, VMStoreContext};
 use crate::{StoreContextMut, WasmBacktrace};
 use core::cell::Cell;
@@ -702,8 +703,16 @@ impl CallThreadState {
             return TrapTest::NotWasm;
         };
 
+        // Test whether the trapping address is in the stack guard region,
+        // which indicates a stack overflow. We test for this by testing
+        // whether the trapping address is either within a page below the
+        // stack pointer to allow for redzone usage, or within a page
+        // above the stack pointer. We shouldn't ever have to look more
+        // than a page up, as compilers should insert stack probes for
+        // large stack frames.
+        let page_size = get_page_size();
         let stack_overflow_trap = if let Some(faulting_address) = faulting_addr {
-            (regs.sp - 128 <= faulting_address && faulting_address <= regs.sp + 4096)
+            (regs.sp - page_size <= faulting_address && faulting_address <= regs.sp + page_size)
                 .then_some(wasmtime_environ::Trap::StackOverflow)
         } else {
             None
